@@ -6,8 +6,8 @@ from torch.autograd import grad
 
 from pyro.distributions import Exponential, Gamma
 from pyro.distributions.testing.rejection_exponential import RejectionExponential
-from pyro.distributions.testing.rejection_gamma import RejectionGamma, RejectionStandardGamma, ShapeAugmentedGamma
-from pyro.distributions.testing.rejection_gamma import ShapeAugmentedBeta
+from pyro.distributions.testing.rejection_gamma import (RejectionGamma, RejectionStandardGamma, ShapeAugmentedBeta,
+                                                        ShapeAugmentedGamma)
 from tests.common import assert_equal
 
 SIZES = list(map(torch.Size, [[], [1], [2], [3], [1, 1], [1, 2], [2, 3, 4]]))
@@ -34,10 +34,10 @@ def test_rejection_exponential_sample_shape(sample_shape, batch_shape):
 
 def compute_elbo_grad(model, guide, variables):
     x = guide.rsample()
-    model_log_pdf = model.log_prob(x)
-    guide_log_pdf, score_function, entropy_term = guide.score_parts(x)
-    log_r = model_log_pdf - guide_log_pdf
-    surrogate_elbo = model_log_pdf + log_r.detach() * score_function - entropy_term
+    model_log_prob = model.log_prob(x)
+    guide_log_prob, score_function, entropy_term = guide.score_parts(x)
+    log_r = model_log_prob - guide_log_prob
+    surrogate_elbo = model_log_prob + log_r.detach() * score_function - entropy_term
     return grad(surrogate_elbo.sum(), variables, create_graph=True)
 
 
@@ -153,5 +153,5 @@ def test_shape_augmented_beta(alpha, beta):
     mean_beta_grad = betas.grad.mean().item()
     expected_alpha_grad = beta / (alpha + beta) ** 2
     expected_beta_grad = -alpha / (alpha + beta) ** 2
-    assert_equal(mean_alpha_grad, expected_alpha_grad, prec=0.01, msg='bad grad for alpha')
-    assert_equal(mean_beta_grad, expected_beta_grad, prec=0.01, msg='bad grad for beta')
+    assert_equal(mean_alpha_grad, expected_alpha_grad, prec=0.02, msg='bad grad for alpha')
+    assert_equal(mean_beta_grad, expected_beta_grad, prec=0.02, msg='bad grad for beta')

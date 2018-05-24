@@ -2,23 +2,22 @@ from __future__ import absolute_import, division, print_function
 
 import argparse
 import cProfile
-
 import os
+import re
 from collections import namedtuple
 
 import pytest
-import re
 import torch
 
 import pyro
+import pyro.contrib.gp as gp
 import pyro.distributions as dist
-from pyro.distributions.testing import fakes
-from pyro.infer import SVI
 import pyro.optim as optim
+from pyro.distributions.testing import fakes
+from pyro.infer import SVI, EmpiricalMarginal, Trace_ELBO, TraceGraph_ELBO
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.nuts import NUTS
-
 
 Model = namedtuple('TestModel', ['model', 'model_args', 'model_id'])
 
@@ -41,18 +40,18 @@ def register_model(**model_kwargs):
     return register_fn
 
 
-@register_model(reparameterized=True, trace_graph=True, id='PoissonGamma::reparam=True_tracegraph=True')
-@register_model(reparameterized=True, trace_graph=False, id='PoissonGamma::reparam=True_tracegraph=False')
-@register_model(reparameterized=False, trace_graph=True, id='PoissonGamma::reparam=False_tracegraph=True')
-@register_model(reparameterized=False, trace_graph=False, id='PoissonGamma::reparam=False_tracegraph=False')
-def poisson_gamma_model(reparameterized, trace_graph):
+@register_model(reparameterized=True, Elbo=TraceGraph_ELBO, id='PoissonGamma::reparam=True_TraceGraph')
+@register_model(reparameterized=True, Elbo=Trace_ELBO, id='PoissonGamma::reparam=True_Trace')
+@register_model(reparameterized=False, Elbo=TraceGraph_ELBO, id='PoissonGamma::reparam=False_TraceGraph')
+@register_model(reparameterized=False, Elbo=Trace_ELBO, id='PoissonGamma::reparam=False_Trace')
+def poisson_gamma_model(reparameterized, Elbo):
     alpha0 = torch.tensor(1.0)
     beta0 = torch.tensor(1.0)
     data = torch.tensor([1.0, 2.0, 3.0])
     n_data = len(data)
     data_sum = data.sum(0)
     alpha_n = alpha0 + data_sum  # posterior alpha
-    beta_n = beta0 + torch.tensor(n_data)  # posterior beta
+    beta_n = beta0 + torch.tensor(float(n_data))  # posterior beta
     log_alpha_n = torch.log(alpha_n)
     log_beta_n = torch.log(beta_n)
 
@@ -82,7 +81,7 @@ def poisson_gamma_model(reparameterized, trace_graph):
         pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
 
     adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
-    svi = SVI(model, guide, adam, loss="ELBO", trace_graph=trace_graph)
+    svi = SVI(model, guide, adam, loss=Elbo())
     for k in range(3000):
         svi.step()
 
@@ -94,17 +93,40 @@ def bernoulli_beta_hmc(**kwargs):
         alpha = pyro.param('alpha', torch.tensor([1.1, 1.1]))
         beta = pyro.param('beta', torch.tensor([1.1, 1.1]))
         p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
-        pyro.observe("obs", dist.Bernoulli(p_latent), data)
+        pyro.sample("obs", dist.Bernoulli(p_latent), obs=data)
         return p_latent
+
+    true_probs = torch.tensor([0.9, 0.1])
+    data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     kernel = kwargs.pop('kernel')
     num_samples = kwargs.pop('num_samples')
     mcmc_kernel = kernel(model, **kwargs)
-    mcmc_run = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100)
-    posterior = []
-    true_probs = torch.tensor([0.9, 0.1])
-    data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    for trace, _ in mcmc_run._traces(data):
-        posterior.append(trace.nodes['p_latent']['value'])
+    mcmc_run = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100).run(data)
+    return EmpiricalMarginal(mcmc_run, sites='p_latent')
+
+
+@register_model(num_steps=2000, whiten=False, id='SVGP::MultiClass_whiten=False')
+@register_model(num_steps=2000, whiten=True, id='SVGP::MultiClass_whiten=True')
+def svgp_multiclass(num_steps, whiten):
+    # adapted from http://gpflow.readthedocs.io/en/latest/notebooks/multiclass.html
+    X = torch.rand(100, 1)
+    K = (-0.5 * (X - X.t()).pow(2) / 0.01).exp() + torch.eye(100) * 1e-6
+    f = K.potrf(upper=False).matmul(torch.randn(100, 3))
+    y = f.argmax(dim=-1)
+
+    kernel = gp.kernels.Matern32(1).add(
+        gp.kernels.WhiteNoise(1, variance=torch.tensor(0.01)))
+    likelihood = gp.likelihoods.MultiClass(num_classes=3)
+    Xu = X[::5].clone()
+
+    gpmodel = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood,
+                                            latent_shape=torch.Size([3]),
+                                            whiten=whiten)
+
+    gpmodel.fix_param("Xu")
+    gpmodel.kernel.get_subkernel("WhiteNoise").fix_param("variance")
+
+    gpmodel.optimize(optim.Adam({"lr": 0.0001}), num_steps=num_steps)
 
 
 @pytest.mark.parametrize('model, model_args, id', TEST_MODELS, ids=MODEL_IDS)
@@ -112,6 +134,7 @@ def bernoulli_beta_hmc(**kwargs):
     min_rounds=5,
     disable_gc=True,
 )
+@pytest.mark.disable_validation()
 def test_benchmark(benchmark, model, model_args, id):
     print("Running - {}".format(id))
     benchmark(model, **model_args)

@@ -1,9 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
+
 import torch
+from torch.distributions import constraints
 
 from pyro.distributions.torch_distribution import TorchDistribution
-from pyro.distributions.util import broadcast_shape
+from pyro.distributions.util import sum_rightmost
 
 
 class Delta(TorchDistribution):
@@ -15,38 +18,45 @@ class Delta(TorchDistribution):
     be used with MCMC based inference, as doing so produces incorrect results.
 
     :param torch.Tensor v: The single support element.
+    :param torch.Tensor log_density: An optional density for this Delta. This
+        is useful to keep the class of :class:`Delta` distributions closed
+        under differentiable transformation.
+    :param int event_dim: Optional event dimension, defaults to zero.
     """
     has_rsample = True
-    has_enumerate_support = True
-    event_shape = torch.Size()
+    arg_constraints = {'v': constraints.real, 'log_density': constraints.real}
+    support = constraints.real
 
-    def __init__(self, v, *args, **kwargs):
+    def __init__(self, v, log_density=0.0, event_dim=0, validate_args=None):
+        if event_dim > v.dim():
+            raise ValueError('Expected event_dim <= v.dim(), actual {} vs {}'.format(event_dim, v.dim()))
+        batch_dim = v.dim() - event_dim
+        batch_shape = v.shape[:batch_dim]
+        event_shape = v.shape[batch_dim:]
+        if isinstance(log_density, numbers.Number):
+            log_density = v.new_empty(batch_shape).fill_(log_density)
+        elif log_density.shape != batch_shape:
+            raise ValueError('Expected log_density.shape = {}, actual {}'.format(
+                log_density.shape, batch_shape))
         self.v = v
-        super(Delta, self).__init__(*args, **kwargs)
+        self.log_density = log_density
+        super(Delta, self).__init__(batch_shape, event_shape, validate_args=validate_args)
 
-    @property
-    def batch_shape(self):
-        return self.v.size()
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        v = self.v.expand(batch_shape + self.event_shape)
+        log_density = self.log_density.expand(batch_shape)
+        return Delta(v, log_density, self.event_dim, validate_args=validate_args)
 
     def rsample(self, sample_shape=torch.Size()):
-        shape = sample_shape + self.v.size()
+        shape = sample_shape + self.v.shape
         return self.v.expand(shape)
 
     def log_prob(self, x):
-        v = self.v
-        v = v.expand(broadcast_shape(self.shape(), x.size()))
-        return torch.eq(x, v).float().log()
-
-    def enumerate_support(self, v=None):
-        """
-        Returns the delta distribution's support, as a tensor along the first dimension.
-
-        :param v: torch tensor where each element of the tensor represents the point at
-            which the delta distribution is concentrated.
-        :return: torch tensor enumerating the support of the delta distribution.
-        :rtype: torch.Tensor.
-        """
-        return torch.tensor(self.v.data.unsqueeze(0))
+        v = self.v.expand(self.shape())
+        log_prob = x.new_tensor(x == v).log()
+        log_prob = sum_rightmost(log_prob, self.event_dim)
+        return log_prob + self.log_density
 
     @property
     def mean(self):

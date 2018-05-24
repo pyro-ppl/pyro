@@ -1,9 +1,8 @@
 <div align="center">
-  <a href="http://pyro.ai"> <img width="150px" height="150px" src="docs/source/_static/img/pyro_logo.png"></a>
+  <a href="http://pyro.ai"> <img width="220px" height="220px" src="docs/source/_static/img/pyro_logo_with_text.png"></a>
 </div>
 
-
-----------------------------------------------------------------
+-----------------------------------------
 
 [![Build Status](https://travis-ci.org/uber/pyro.svg?branch=dev)](https://travis-ci.org/uber/pyro)
 [![Latest Version](https://badge.fury.io/py/pyro-ppl.svg)](https://pypi.python.org/pypi/pyro-ppl)
@@ -59,7 +58,7 @@ pip install pyro-ppl[extras]  # for running examples/tutorials
 
 For recent features you can install Pyro from source.
 
-To install a compatible CPU version of Pytorch on OSX / Linux, you
+To install a compatible CPU version of PyTorch on OSX / Linux, you
 could use the PyTorch install helper script.
 
 ```
@@ -71,7 +70,7 @@ Alternatively, build PyTorch following instructions in the PyTorch
 ```sh
 git clone --recursive https://github.com/pytorch/pytorch
 cd pytorch
-git checkout e40425f  # <---- a well-tested commit
+git checkout 200fb22  # <---- a well-tested commit
 ```
 On Linux:
 ```sh

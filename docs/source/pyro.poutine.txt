@@ -1,79 +1,79 @@
-Poutine
--------
+Messenger
+__________
 
-.. automodule:: pyro.poutine.poutine
+.. automodule:: pyro.poutine.messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-BlockPoutine
-------------
+BlockMessenger
+_______________
 
-.. automodule:: pyro.poutine.block_poutine
+.. automodule:: pyro.poutine.block_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-ConditionPoutine
-----------------
+BroadcastMessenger
+__________________
 
-.. automodule:: pyro.poutine.condition_poutine
+.. automodule:: pyro.poutine.broadcast_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-EscapePoutine
--------------
+ConditionMessenger
+___________________
 
-.. automodule:: pyro.poutine.escape_poutine
+.. automodule:: pyro.poutine.condition_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-IndepPoutine
-------------
+EscapeMessenger
+________________
 
-.. automodule:: pyro.poutine.indep_poutine
+.. automodule:: pyro.poutine.escape_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-LiftPoutine
------------
+IndepMessenger
+_______________
 
-.. automodule:: pyro.poutine.lift_poutine
+.. automodule:: pyro.poutine.indep_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-ReplayPoutine
--------------
+LiftMessenger
+______________
 
-.. automodule:: pyro.poutine.replay_poutine
+.. automodule:: pyro.poutine.lift_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-ScalePoutine
-------------
+ReplayMessenger
+________________
 
-.. automodule:: pyro.poutine.scale_poutine
+.. automodule:: pyro.poutine.replay_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-Trace
------
+ScaleMessenger
+_______________
 
-.. automodule:: pyro.poutine.trace
+.. automodule:: pyro.poutine.scale_messenger
     :members:
     :undoc-members:
     :show-inheritance:
 
-TracePoutine
-------------
+TraceMessenger
+_______________
 
-.. automodule:: pyro.poutine.trace_poutine
+.. automodule:: pyro.poutine.trace_messenger
     :members:
     :undoc-members:
     :show-inheritance:

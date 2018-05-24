@@ -4,8 +4,9 @@ import math
 
 import numpy as np
 import torch
+from torch.distributions.utils import logits_to_probs
 
-from pyro.distributions.util import get_probs_and_logits, broadcast_shape
+from pyro.distributions.util import broadcast_shape
 
 SINGLE_TEST_DATUM_IDX = [0]
 BATCH_TEST_DATA_IDX = [-1]
@@ -73,8 +74,8 @@ class Fixture(object):
         if 'logits' in dist_params:
             logits = torch.tensor(dist_params.pop('logits'))
             is_multidimensional = self.get_test_distribution_name() != 'Bernoulli'
-            ps, _ = get_probs_and_logits(logits=logits, is_multidimensional=is_multidimensional)
-            dist_params['ps'] = list(ps.detach().cpu().numpy())
+            probs = logits_to_probs(logits, is_binary=not is_multidimensional)
+            dist_params['probs'] = list(probs.detach().cpu().numpy())
         return dist_params
 
     def get_scipy_logpdf(self, idx):
@@ -84,10 +85,10 @@ class Fixture(object):
         dist_params = self._convert_logits_to_ps(dist_params)
         args, kwargs = self.scipy_arg_fn(**dist_params)
         if self.is_discrete:
-            log_pdf = self.scipy_dist.logpmf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
+            log_prob = self.scipy_dist.logpmf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
         else:
-            log_pdf = self.scipy_dist.logpdf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
-        return np.sum(log_pdf)
+            log_prob = self.scipy_dist.logpdf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
+        return np.sum(log_prob)
 
     def get_scipy_batch_logpdf(self, idx):
         if not self.scipy_arg_fn:
@@ -98,7 +99,7 @@ class Fixture(object):
         test_data = self.get_test_data(idx, wrap_tensor=False)
         test_data_wrapped = self.get_test_data(idx)
         shape = broadcast_shape(self.pyro_dist(**dist_params_wrapped).shape(), test_data_wrapped.size())
-        batch_log_pdf = []
+        log_prob = []
         for i in range(len(test_data)):
             batch_params = {}
             for k in dist_params:
@@ -106,21 +107,17 @@ class Fixture(object):
                 batch_params[k] = param[i]
             args, kwargs = self.scipy_arg_fn(**batch_params)
             if self.is_discrete:
-                batch_log_pdf.append(self.scipy_dist.logpmf(test_data[i],
-                                                            *args,
-                                                            **kwargs))
+                log_prob.append(self.scipy_dist.logpmf(test_data[i], *args, **kwargs))
             else:
-                batch_log_pdf.append(self.scipy_dist.logpdf(test_data[i],
-                                                            *args,
-                                                            **kwargs))
-        return batch_log_pdf
+                log_prob.append(self.scipy_dist.logpdf(test_data[i], *args, **kwargs))
+        return log_prob
 
     def get_num_samples(self, idx):
         """
         Number of samples needed to estimate the population variance within the tolerance limit
         Sample variance is normally distributed http://stats.stackexchange.com/a/105338/71884
         (see warning below).
-        Var(s^2) /approx 1/n * (\mu_4 - \sigma^4)
+        Var(s^2) /approx 1/n * (\loc_4 - \scale^4)
         Adjust n as per the tolerance needed to estimate the sample variance
         warning: does not work for some distributions like bernoulli - https://stats.stackexchange.com/a/104911
         use the min_samples for explicitly controlling the number of samples to be drawn

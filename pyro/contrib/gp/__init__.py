@@ -1,9 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
+from pyro.contrib.gp import kernels, likelihoods, models, util
 
-from . import kernels
-from . import likelihoods
-from . import models
-from . import util
-
-# flake8: noqa
+__all__ = [
+    "kernels",
+    "likelihoods",
+    "models",
+    "util",
+]

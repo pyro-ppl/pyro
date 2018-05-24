@@ -8,11 +8,52 @@ import pytest
 
 from tests.common import EXAMPLES_DIR, requires_cuda
 
-CPU_EXAMPLES = []
-CUDA_EXAMPLES = []
+pytestmark = pytest.mark.stage('test_examples')
 
 
-def discover_examples():
+CPU_EXAMPLES = [
+    ['air/main.py', '--num-steps=1'],
+    ['baseball.py', '--num-samples=200', '--warmup-steps=100'],
+    ['bayesian_regression.py', '--num-epochs=1'],
+    ['contrib/gp/sv-dkl.py', '--epochs=1', '--num-inducing=4'],
+    ['contrib/named/mixture.py', '--num-epochs=1'],
+    ['contrib/named/tree_data.py', '--num-epochs=1'],
+    ['dmm/dmm.py', '--num-epochs=1'],
+    ['dmm/dmm.py', '--num-epochs=1', '--num-iafs=1'],
+    ['inclined_plane.py', '--num-samples=1'],
+    ['sparse_gamma_def.py', '--num-epochs=1'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--aux-loss'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--enum-discrete=parallel'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--enum-discrete=sequential'],
+    ['vae/vae.py', '--num-epochs=1'],
+    ['vae/vae_comparison.py', '--num-epochs=1'],
+]
+
+CUDA_EXAMPLES = [
+    ['air/main.py', '--num-steps=1', '--cuda'],
+    ['bayesian_regression.py', '--num-epochs=1', '--cuda'],
+    ['contrib/gp/sv-dkl.py', '--epochs=1', '--num-inducing=4', '--cuda'],
+    ['dmm/dmm.py', '--num-epochs=1', '--cuda'],
+    ['dmm/dmm.py', '--num-epochs=1', '--num-iafs=1', '--cuda'],
+    ['vae/vae.py', '--num-epochs=1', '--cuda'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--cuda'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--aux-loss', '--cuda'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--enum-discrete=parallel', '--cuda'],
+    ['vae/ss_vae_M2.py', '--num-epochs=1', '--enum-discrete=sequential', '--cuda'],
+]
+
+CPU_EXAMPLES = [(example[0], example[1:]) for example in sorted(CPU_EXAMPLES)]
+CUDA_EXAMPLES = [(example[0], example[1:]) for example in sorted(CUDA_EXAMPLES)]
+
+
+def make_ids(examples):
+    return ['{} {}'.format(example, ' '.join(args)) for example, args in examples]
+
+
+def test_coverage():
+    cpu_tests = set([name for name, _ in CPU_EXAMPLES])
+    cuda_tests = set([name for name, _ in CUDA_EXAMPLES])
     for root, dirs, files in os.walk(EXAMPLES_DIR):
         for basename in files:
             if not basename.endswith('.py'):
@@ -20,41 +61,14 @@ def discover_examples():
             path = os.path.join(root, basename)
             with open(path) as f:
                 text = f.read()
-            if '--num-epochs' in text:
-                args = ['--num-epochs=1']
-            elif '--num-steps' in text:
-                args = ['--num-steps=1']
-            elif '--num-samples' in text:
-                args = ['--num-samples=1']
-            else:
-                # Either this is not a main file, or we don't know how to run it cheaply.
-                continue
             example = os.path.relpath(path, EXAMPLES_DIR)
-            # TODO: May be worth whitelisting the set of arguments to test
-            # for each example.
-            CPU_EXAMPLES.append((example, args))
-            if '--aux-loss' in text:
-                CPU_EXAMPLES.append((example, args + ['--aux-loss']))
-            if '--enum-discrete' in text:
-                CPU_EXAMPLES.append((example, args + ['--enum-discrete=sequential']))
-                # TODO fix examples to work with --enum-discrete=parallel
-                # CPU_EXAMPLES.append((example, args + ['--enum-discrete=parallel']))
-            if '--num-iafs' in text:
-                CPU_EXAMPLES.append((example, args + ['--num-iafs=1']))
-            if '--cuda' in text:
-                CUDA_EXAMPLES.append((example, args + ['--cuda']))
-    CPU_EXAMPLES.sort()
-    CUDA_EXAMPLES.sort()
+            if '__main__' in text:
+                if example not in cpu_tests:
+                    pytest.fail('Example: {} not covered in CPU_TESTS.'.format(example))
+                if '--cuda' in text and example not in cuda_tests:
+                    pytest.fail('Example: {} not covered by CUDA_TESTS.'.format(example))
 
 
-discover_examples()
-
-
-def make_ids(examples):
-    return ['{} {}'.format(example, ' '.join(args)) for example, args in examples]
-
-
-@pytest.mark.stage("test_examples")
 @pytest.mark.parametrize('example,args', CPU_EXAMPLES, ids=make_ids(CPU_EXAMPLES))
 def test_cpu(example, args):
     example = os.path.join(EXAMPLES_DIR, example)
@@ -62,7 +76,6 @@ def test_cpu(example, args):
 
 
 @requires_cuda
-@pytest.mark.stage("test_examples")
 @pytest.mark.parametrize('example,args', CUDA_EXAMPLES, ids=make_ids(CUDA_EXAMPLES))
 def test_cuda(example, args):
     example = os.path.join(EXAMPLES_DIR, example)

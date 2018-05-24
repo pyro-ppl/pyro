@@ -6,8 +6,8 @@ import numpy as np
 import torch
 
 import pyro
-from pyro.distributions import Uniform, Normal
-from pyro.infer import Importance, Marginal
+from pyro.distributions import Normal, Uniform
+from pyro.infer import EmpiricalMarginal, Importance
 
 """
 Samantha really likes physics---but she likes Pyro even more. Instead of using
@@ -31,16 +31,16 @@ time_measurement_sigma = 0.02  # observation noise in seconds (known quantity)
 # in steps of size dt, and optionally includes measurement noise
 
 def simulate(mu, length=2.0, phi=np.pi / 6.0, dt=0.005, noise_sigma=None):
-    T = torch.zeros(1)
-    velocity = torch.zeros(1)
-    displacement = torch.zeros(1)
-    acceleration = torch.tensor([little_g * np.sin(phi)]) - \
-        torch.tensor([little_g * np.cos(phi)]) * mu
+    T = torch.zeros(())
+    velocity = torch.zeros(())
+    displacement = torch.zeros(())
+    acceleration = torch.tensor(little_g * np.sin(phi)) - \
+        torch.tensor(little_g * np.cos(phi)) * mu
 
-    if acceleration.item() <= 0.0:             # the box doesn't slide if the friction is too large
-        return torch.tensor([1.0e5])  # return a very large time instead of infinity
+    if acceleration.numpy() <= 0.0:  # the box doesn't slide if the friction is too large
+        return torch.tensor(1.0e5)   # return a very large time instead of infinity
 
-    while displacement.item() < length:  # otherwise slide to the end of the inclined plane
+    while displacement.numpy() < length:  # otherwise slide to the end of the inclined plane
         displacement += velocity * dt
         velocity += acceleration * dt
         T += dt
@@ -48,7 +48,7 @@ def simulate(mu, length=2.0, phi=np.pi / 6.0, dt=0.005, noise_sigma=None):
     if noise_sigma is None:
         return T
     else:
-        return T + noise_sigma * torch.randn(1)
+        return T + noise_sigma * torch.randn(())
 
 
 # analytic formula that the simulator above is computing via
@@ -64,20 +64,20 @@ def analytic_T(mu, length=2.0, phi=np.pi / 6.0):
 print("generating simulated data using the true coefficient of friction %.3f" % mu0)
 N_obs = 20
 torch.manual_seed(2)
-observed_data = torch.cat([simulate(torch.tensor([mu0]), noise_sigma=time_measurement_sigma)
-                           for _ in range(N_obs)])
+observed_data = torch.tensor([simulate(torch.tensor(mu0), noise_sigma=time_measurement_sigma)
+                              for _ in range(N_obs)])
 observed_mean = np.mean([T.item() for T in observed_data])
 
 
 # define model with uniform prior on mu and gaussian noise on the descent time
 def model(observed_data):
-    mu_prior = Uniform(torch.zeros(1), torch.ones(1))
+    mu_prior = Uniform(0.0, 1.0)
     mu = pyro.sample("mu", mu_prior)
 
     def observe_T(T_obs, obs_name):
         T_simulated = simulate(mu)
-        T_obs_dist = Normal(T_simulated, torch.tensor([time_measurement_sigma]))
-        pyro.observe(obs_name, T_obs_dist, T_obs)
+        T_obs_dist = Normal(T_simulated, torch.tensor(time_measurement_sigma))
+        pyro.sample(obs_name, T_obs_dist, obs=T_obs)
 
     for i, T_obs in enumerate(observed_data):
         observe_T(T_obs, "obs_%d" % i)
@@ -87,16 +87,15 @@ def model(observed_data):
 
 def main(args):
     # create an importance sampler (the prior is used as the proposal distribution)
-    posterior = Importance(model, guide=None, num_samples=args.num_samples)
-    # create a marginal object that consumes the raw execution traces provided by the importance sampler
-    marginal = Marginal(posterior)
+    importance = Importance(model, guide=None, num_samples=args.num_samples)
     # get posterior samples of mu (which is the return value of model)
+    # from the raw execution traces provided by the importance sampler.
     print("doing importance sampling...")
-    posterior_samples = [marginal(observed_data) for i in range(args.num_samples)]
+    emp_marginal = EmpiricalMarginal(importance.run(observed_data))
 
     # calculate statistics over posterior samples
-    posterior_mean = torch.mean(torch.cat(posterior_samples))
-    posterior_std_dev = torch.std(torch.cat(posterior_samples), 0)
+    posterior_mean = emp_marginal.mean
+    posterior_std_dev = emp_marginal.variance.sqrt()
 
     # report results
     inferred_mu = posterior_mean.item()
@@ -125,5 +124,4 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-samples', default=500, type=int)
     args = parser.parse_args()
-
     main(args)

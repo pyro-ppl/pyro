@@ -57,13 +57,12 @@ def get_gpu_type(t):
 @contextlib.contextmanager
 def tensors_default_to(host):
     """
-    Context manager to temporarily use Cpu or Cuda tensors in Pytorch.
+    Context manager to temporarily use Cpu or Cuda tensors in PyTorch.
 
     :param str host: Either "cuda" or "cpu".
     """
     assert host in ('cpu', 'cuda'), host
-    old_module = torch.Tensor.__module__
-    name = torch.Tensor.__name__
+    old_module, name = torch.Tensor().type().rsplit('.', 1)
     new_module = 'torch.cuda' if host == 'cuda' else 'torch'
     torch.set_default_tensor_type('{}.{}'.format(new_module, name))
     try:

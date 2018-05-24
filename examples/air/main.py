@@ -7,24 +7,22 @@ Processing Systems. 2016.
 """
 from __future__ import division
 
+import argparse
 import math
 import os
 import time
-import argparse
 from functools import partial
-from observations import multi_mnist
-import numpy as np
 
+import numpy as np
 import torch
+import visdom
+from observations import multi_mnist
 
 import pyro
 import pyro.optim as optim
 import pyro.poutine as poutine
-from pyro.infer import SVI
-
-import visdom
-
 from air import AIR, latents_to_tensor
+from pyro.infer import SVI, TraceGraph_ELBO
 from viz import draw_many, tensor_to_objs
 
 
@@ -53,7 +51,7 @@ def count_accuracy(X, true_counts, air, batch_size):
         error_latents.append(latents_to_tensor((z_where, z_pres)).index_select(0, error_ix))
         error_indicators.append(error_ind)
 
-    acc = counts.diag().sum() / X.size(0)
+    acc = counts.diag().sum().float() / X.size(0)
     error_indices = torch.cat(error_indicators).nonzero().squeeze()
     if X.is_cuda:
         error_indices = error_indices.cuda()
@@ -202,8 +200,7 @@ def main(**kwargs):
 
     svi = SVI(air.model, air.guide,
               optim.Adam(per_param_optim_args),
-              loss='ELBO',
-              trace_graph=True)
+              loss=TraceGraph_ELBO())
 
     # Do inference.
     t0 = time.time()
@@ -222,7 +219,7 @@ def main(**kwargs):
 
         if args.viz and i % args.viz_every == 0:
             trace = poutine.trace(air.guide).get_trace(examples_to_viz, None)
-            z, recons = poutine.replay(air.prior, trace)(examples_to_viz.size(0))
+            z, recons = poutine.replay(air.prior, trace=trace)(examples_to_viz.size(0))
             z_wheres = tensor_to_objs(latents_to_tensor(z))
 
             # Show data with inferred objection positions.

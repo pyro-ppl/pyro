@@ -6,11 +6,10 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer.util import torch_data_sum
 from pyro.ops.integrator import single_step_velocity_verlet
+from pyro.util import torch_isnan
 
-from .hmc import HMC
-
+from pyro.infer.mcmc.hmc import HMC
 
 # sum_accept_probs and num_proposals are used to calculate
 # the statistic accept_prob for Dual Averaging scheme;
@@ -24,14 +23,23 @@ _TreeInfo = namedtuple("TreeInfo", ["z_left", "r_left", "z_left_grads",
 
 class NUTS(HMC):
     """
-    No-U-Turn Sampler kernel, where ``step_size`` need to be explicitly specified by the user.
+    No-U-Turn Sampler kernel, which provides an efficient and convenient way
+    to run Hamiltonian Monte Carlo. The number of steps taken by the
+    integrator is dynamically adjusted on each call to ``sample`` to ensure
+    an optimal length for the Hamiltonian trajectory [1]. As such, the samples
+    generated will typically have lower autocorrelation than those generated
+    by the :class:`~pyro.infer.mcmc.HMC` kernel. Optionally, the NUTS kernel
+    also provides the ability to adapt step size during the warmup phase.
 
-    References
+    Refer to the `baseball example <https://github.com/uber/pyro/blob/dev/examples/baseball.py>`_
+    to see how to do Bayesian inference in Pyro using NUTS.
+
+    **References**
 
     [1] `The No-U-turn sampler: adaptively setting path lengths in Hamiltonian Monte Carlo`,
     Matthew D. Hoffman, and Andrew Gelman
 
-    :param model: Python callable containing pyro primitives.
+    :param model: Python callable containing Pyro primitives.
     :param float step_size: Determines the size of a single step taken by the
         verlet integrator while computing the trajectory using Hamiltonian
         dynamics. If not specified, it will be set to 1.
@@ -44,23 +52,24 @@ class NUTS(HMC):
         automatic transformations will be applied, as specified in
         :mod:`torch.distributions.constraint_registry`.
 
-    Example::
+    Example:
 
-        true_coefs = torch.arange(1, 4)
-        data = torch.randn(2000, 3)
-        labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
-
-        def model(data):
-            coefs_mean = torch.zeros(dim, requires_grad=True)
-            coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
-            y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
-            return y
-
-        nuts_kernel = NUTS(model, step_size=0.0855)
-        mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100)
-        posterior = []
-        for trace, _ in mcmc_run._traces(data):
-            posterior.append(trace.nodes['beta']['value'])
+        >>> true_coefs = torch.tensor([1., 2., 3.])
+        >>> data = torch.randn(2000, 3)
+        >>> dim = 3
+        >>> labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
+        >>>
+        >>> def model(data):
+        ...     coefs_mean = torch.zeros(dim)
+        ...     coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
+        ...     y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
+        ...     return y
+        >>>
+        >>> nuts_kernel = NUTS(model, adapt_step_size=True)
+        >>> mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=300).run(data)
+        >>> posterior = EmpiricalMarginal(mcmc_run, 'beta')
+        >>> posterior.mean  # doctest: +SKIP
+        tensor([ 0.9221,  1.9464,  2.9228])
     """
 
     def __init__(self, model, step_size=None, adapt_step_size=False, transforms=None):
@@ -81,12 +90,13 @@ class NUTS(HMC):
         self._max_sliced_energy = 1000
 
     def _is_turning(self, z_left, r_left, z_right, r_right):
-        z_left = torch.stack([z_left[name] for name in self._r_dist])
-        r_left = torch.stack([r_left[name] for name in self._r_dist])
-        z_right = torch.stack([z_right[name] for name in self._r_dist])
-        r_right = torch.stack([r_right[name] for name in self._r_dist])
-        dz = z_right - z_left
-        return (torch_data_sum(dz * r_left) < 0) or (torch_data_sum(dz * r_right) < 0)
+        diff_left = 0
+        diff_right = 0
+        for name in self._r_dist:
+            dz = z_right[name] - z_left[name]
+            diff_left += (dz * r_left[name]).sum()
+            diff_right += (dz * r_right[name]).sum()
+        return diff_left < 0 or diff_right < 0
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size
@@ -100,9 +110,17 @@ class NUTS(HMC):
         # Due to this elimination (and stop doubling conditions),
         #     the size of binary tree might not equal to 2^tree_depth.
         tree_size = 1 if sliced_energy <= 0 else 0
-        diverging = sliced_energy >= self._max_sliced_energy
-        delta_energy = energy_new - energy_current
-        accept_prob = (-delta_energy).exp().clamp(max=1)
+        # Special case: Set diverging to True and accept prob to 0 if the
+        # diverging trajectory returns `NaN` energy (e.g. in the case of
+        # evaluating log prob of a value simulated using a large step size
+        # for a constrained sample site).
+        if torch_isnan(energy_new):
+            diverging = True
+            accept_prob = energy_new.new_tensor(0.0)
+        else:
+            diverging = (sliced_energy >= self._max_sliced_energy)
+            delta_energy = energy_new - energy_current
+            accept_prob = (-delta_energy).exp().clamp(max=1)
         return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads,
                          z_new, tree_size, False, diverging, accept_prob, 1)
 
@@ -146,7 +164,7 @@ class NUTS(HMC):
         if tree_size != 0:
             other_half_tree_prob = other_half_tree.size / tree_size
             is_other_half_tree = pyro.sample("is_other_halftree",
-                                             dist.Bernoulli(ps=torch.ones(1) * other_half_tree_prob))
+                                             dist.Bernoulli(probs=torch.ones(1) * other_half_tree_prob))
             if int(is_other_half_tree.item()) == 1:
                 z_proposal = other_half_tree.z_proposal
 
@@ -197,8 +215,12 @@ class NUTS(HMC):
         #     `Slice sampling` by Radford M. Neal.
         # For another version of NUTS which uses multinomial sampling instead of slice sampling, see
         #     `A Conceptual Introduction to Hamiltonian Monte Carlo` by Michael Betancourt.
-        slice_var = pyro.sample("slicevar_t={}".format(self._t),
-                                dist.Uniform(torch.zeros(1), torch.exp(-energy_current)))
+        joint_prob = torch.exp(-energy_current)
+        if joint_prob == 0:
+            slice_var = energy_current.new_tensor(0.0)
+        else:
+            slice_var = pyro.sample("slicevar_t={}".format(self._t),
+                                    dist.Uniform(torch.zeros(1), joint_prob))
         log_slice = slice_var.log()
 
         z_left = z_right = z
@@ -207,41 +229,45 @@ class NUTS(HMC):
         tree_size = 1
         accepted = False
 
-        # doubling process, stop when turning or diverging
-        for tree_depth in range(self._max_tree_depth + 1):
-            direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
-                                    dist.Bernoulli(ps=torch.ones(1) * 0.5))
-            direction = int(direction.item())
-            if direction == 1:  # go to the right, start from the right leaf of current tree
-                new_tree = self._build_tree(z_right, r_right, z_right_grads, log_slice,
-                                            direction, tree_depth, energy_current)
-                # update leaf for the next doubling process
-                z_right = new_tree.z_right
-                r_right = new_tree.r_right
-                z_right_grads = new_tree.z_right_grads
-            else:  # go the the left, start from the left leaf of current tree
-                new_tree = self._build_tree(z_left, r_left, z_left_grads, log_slice,
-                                            direction, tree_depth, energy_current)
-                z_left = new_tree.z_left
-                r_left = new_tree.r_left
-                z_left_grads = new_tree.z_left_grads
+        # Temporarily disable distributions args checking as
+        # NaNs are expected during step size adaptation.
+        dist_arg_check = False if self._adapt_phase else pyro.distributions.is_validation_enabled()
+        with dist.validation_enabled(dist_arg_check):
+            # doubling process, stop when turning or diverging
+            for tree_depth in range(self._max_tree_depth + 1):
+                direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
+                                        dist.Bernoulli(probs=torch.ones(1) * 0.5))
+                direction = int(direction.item())
+                if direction == 1:  # go to the right, start from the right leaf of current tree
+                    new_tree = self._build_tree(z_right, r_right, z_right_grads, log_slice,
+                                                direction, tree_depth, energy_current)
+                    # update leaf for the next doubling process
+                    z_right = new_tree.z_right
+                    r_right = new_tree.r_right
+                    z_right_grads = new_tree.z_right_grads
+                else:  # go the the left, start from the left leaf of current tree
+                    new_tree = self._build_tree(z_left, r_left, z_left_grads, log_slice,
+                                                direction, tree_depth, energy_current)
+                    z_left = new_tree.z_left
+                    r_left = new_tree.r_left
+                    z_left_grads = new_tree.z_left_grads
 
-            if new_tree.turning or new_tree.diverging:  # stop doubling
-                break
+                if new_tree.turning or new_tree.diverging:  # stop doubling
+                    break
 
-            rand = pyro.sample("rand_t={}_treedepth={}".format(self._t, tree_depth),
-                               dist.Uniform(torch.zeros(1), torch.ones(1)))
-            if rand < new_tree.size / tree_size:
-                accepted = True
-                z = new_tree.z_proposal
+                rand = pyro.sample("rand_t={}_treedepth={}".format(self._t, tree_depth),
+                                   dist.Uniform(torch.zeros(1), torch.ones(1)))
+                if rand < new_tree.size / tree_size:
+                    accepted = True
+                    z = new_tree.z_proposal
 
-            if self._is_turning(z_left, r_left, z_right, r_right):  # stop doubling
-                break
-            else:  # update tree_size
-                tree_size += new_tree.size
+                if self._is_turning(z_left, r_left, z_right, r_right):  # stop doubling
+                    break
+                else:  # update tree_size
+                    tree_size += new_tree.size
 
-        if self.adapt_step_size:
-            accept_prob = new_tree.sum_accept_probs.item() / new_tree.num_proposals
+        if self._adapt_phase:
+            accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
             self._adapt_step_size(accept_prob)
 
         if accepted:

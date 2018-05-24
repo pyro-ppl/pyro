@@ -1,95 +1,206 @@
 from __future__ import absolute_import, division, print_function
 
-import numbers
-
 import torch
 
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 
-# These distributions require custom wrapping.
-# TODO rename parameters so these can be imported automatically.
-
 
 class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
-    def __init__(self, ps=None, logits=None):
-        super(Bernoulli, self).__init__(probs=ps, logits=logits)
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        if 'probs' in self.__dict__:
+            probs = self.probs.expand(batch_shape)
+            return Bernoulli(probs=probs, validate_args=validate_args)
+        else:
+            logits = self.logits.expand(batch_shape)
+            return Bernoulli(logits=logits, validate_args=validate_args)
 
 
 class Beta(torch.distributions.Beta, TorchDistributionMixin):
-    def __init__(self, alpha, beta):
-        super(Beta, self).__init__(alpha, beta)
-
-
-class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
-    def __init__(self, n, ps):
-        super(Binomial, self).__init__(n, ps)
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        concentration1 = self.concentration1.expand(batch_shape)
+        concentration0 = self.concentration0.expand(batch_shape)
+        return Beta(concentration1, concentration0, validate_args=validate_args)
 
 
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
-    def __init__(self, ps=None, logits=None):
-        super(Categorical, self).__init__(probs=ps, logits=logits)
+    def expand(self, batch_shape):
+        batch_shape = torch.Size(batch_shape)
+        validate_args = self.__dict__.get('validate_args')
+        if 'probs' in self.__dict__:
+            probs = self.probs.expand(batch_shape + self.probs.shape[-1:])
+            return Categorical(probs=probs, validate_args=validate_args)
+        else:
+            logits = self.logits.expand(batch_shape + self.logits.shape[-1:])
+            return Categorical(logits=logits, validate_args=validate_args)
 
 
 class Cauchy(torch.distributions.Cauchy, TorchDistributionMixin):
-    def __init__(self, mu, gamma):
-        super(Cauchy, self).__init__(mu, gamma)
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        loc = self.loc.expand(batch_shape)
+        scale = self.scale.expand(batch_shape)
+        return Cauchy(loc, scale, validate_args=validate_args)
+
+
+class Chi2(torch.distributions.Chi2, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        df = self.df.expand(batch_shape)
+        return Chi2(df, validate_args=validate_args)
 
 
 class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
-    def __init__(self, alpha):
-        super(Dirichlet, self).__init__(alpha)
+    def expand(self, batch_shape):
+        batch_shape = torch.Size(batch_shape)
+        validate_args = self.__dict__.get('validate_args')
+        concentration = self.concentration.expand(batch_shape + self.event_shape)
+        return Dirichlet(concentration, validate_args=validate_args)
 
 
 class Exponential(torch.distributions.Exponential, TorchDistributionMixin):
-    def __init__(self, lam):
-        super(Exponential, self).__init__(lam)
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        rate = self.rate.expand(batch_shape)
+        return Exponential(rate, validate_args=validate_args)
 
 
 class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
-    def __init__(self, alpha, beta):
-        super(Gamma, self).__init__(alpha, beta)
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        concentration = self.concentration.expand(batch_shape)
+        rate = self.rate.expand(batch_shape)
+        return Gamma(concentration, rate, validate_args=validate_args)
+
+
+class Geometric(torch.distributions.Geometric, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        if 'probs' in self.__dict__:
+            probs = self.probs.expand(batch_shape)
+            return Geometric(probs=probs, validate_args=validate_args)
+        else:
+            logits = self.logits.expand(batch_shape)
+            return Geometric(logits=logits, validate_args=validate_args)
+
+
+class Gumbel(torch.distributions.Gumbel, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        loc = self.loc.expand(batch_shape)
+        scale = self.scale.expand(batch_shape)
+        return Gumbel(loc, scale, validate_args=validate_args)
+
+
+class Independent(torch.distributions.Independent, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        batch_shape = torch.Size(batch_shape)
+        validate_args = self.__dict__.get('validate_args')
+        extra_shape = self.base_dist.event_shape[:self.reinterpreted_batch_ndims]
+        base_dist = self.base_dist.expand(batch_shape + extra_shape)
+        return Independent(base_dist, self.reinterpreted_batch_ndims, validate_args=validate_args)
+
+
+class Laplace(torch.distributions.Laplace, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        loc = self.loc.expand(batch_shape)
+        scale = self.scale.expand(batch_shape)
+        return Laplace(loc, scale, validate_args=validate_args)
 
 
 class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
-    def __init__(self, mu, sigma):
-        self.mu = mu
-        self.sigma = sigma
-        super(LogNormal, self).__init__(mu, sigma)
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        loc = self.loc.expand(batch_shape)
+        scale = self.scale.expand(batch_shape)
+        return LogNormal(loc, scale, validate_args=validate_args)
 
 
 class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
-    def __init__(self, ps, n=1):
-        if not isinstance(n, numbers.Number):
-            if n.max() != n.min():
-                raise NotImplementedError('inhomogeneous n is not supported')
-            n = n.data.view(-1)[0]
-        n = int(n)
-        super(Multinomial, self).__init__(n, probs=ps)
+    def expand(self, batch_shape):
+        batch_shape = torch.Size(batch_shape)
+        validate_args = self.__dict__.get('validate_args')
+        if 'probs' in self.__dict__:
+            probs = self.probs.expand(batch_shape + self.event_shape)
+            return Multinomial(self.total_count, probs=probs, validate_args=validate_args)
+        else:
+            logits = self.logits.expand(batch_shape + self.event_shape)
+            return Multinomial(self.total_count, logits=logits, validate_args=validate_args)
+
+
+class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        batch_shape = torch.Size(batch_shape)
+        validate_args = self.__dict__.get('validate_args')
+        loc = self.loc.expand(batch_shape + self.event_shape)
+        if 'scale_tril' in self.__dict__:
+            scale_tril = self.scale_tril.expand(batch_shape + self.event_shape + self.event_shape)
+            return MultivariateNormal(loc, scale_tril=scale_tril, validate_args=validate_args)
+        elif 'covariance_matrix' in self.__dict__:
+            covariance_matrix = self.covariance_matrix.expand(batch_shape + self.event_shape + self.event_shape)
+            return MultivariateNormal(loc, covariance_matrix=covariance_matrix, validate_args=validate_args)
+        else:
+            precision_matrix = self.precision_matrix.expand(batch_shape + self.event_shape + self.event_shape)
+            return MultivariateNormal(loc, precision_matrix=precision_matrix, validate_args=validate_args)
 
 
 class Normal(torch.distributions.Normal, TorchDistributionMixin):
-    def __init__(self, mu, sigma):
-        super(Normal, self).__init__(mu, sigma)
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        loc = self.loc.expand(batch_shape)
+        scale = self.scale.expand(batch_shape)
+        return Normal(loc, scale, validate_args=validate_args)
 
 
 class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistributionMixin):
-    def __init__(self, ps=None, logits=None):
-        super(OneHotCategorical, self).__init__(probs=ps, logits=logits)
+    def expand(self, batch_shape):
+        batch_shape = torch.Size(batch_shape)
+        validate_args = self.__dict__.get('validate_args')
+        if 'probs' in self.__dict__:
+            probs = self.probs.expand(batch_shape + self.event_shape)
+            return OneHotCategorical(probs=probs, validate_args=validate_args)
+        else:
+            logits = self.logits.expand(batch_shape + self.event_shape)
+            return OneHotCategorical(logits=logits, validate_args=validate_args)
 
 
 class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
-    def __init__(self, lam):
-        super(Poisson, self).__init__(lam)
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        rate = self.rate.expand(batch_shape)
+        return Poisson(rate, validate_args=validate_args)
+
+
+class StudentT(torch.distributions.StudentT, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        df = self.df.expand(batch_shape)
+        loc = self.loc.expand(batch_shape)
+        scale = self.scale.expand(batch_shape)
+        return StudentT(df, loc, scale, validate_args=validate_args)
+
+
+class TransformedDistribution(torch.distributions.TransformedDistribution, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        base_dist = self.base_dist.expand(batch_shape)
+        return TransformedDistribution(base_dist, self.transforms)
 
 
 class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
-    def __init__(self, a, b):
-        super(Uniform, self).__init__(a, b)
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        low = self.low.expand(batch_shape)
+        high = self.high.expand(batch_shape)
+        return Uniform(low, high, validate_args=validate_args)
 
 
-# Programmatically load all remaining distributions.
+# Programmatically load all distributions from PyTorch.
 __all__ = []
 for _name, _Dist in torch.distributions.__dict__.items():
+    if _name == 'Binomial':
+        continue
     if not isinstance(_Dist, type):
         continue
     if not issubclass(_Dist, torch.distributions.Distribution):
@@ -121,7 +232,7 @@ __doc__ = '\n\n'.join([
     '''
     {0}
     ----------------------------------------------------------------
-    .. autoclass:: {0}
+    .. autoclass:: pyro.distributions.{0}
     '''.format(_name)
     for _name in sorted(__all__)
 ])

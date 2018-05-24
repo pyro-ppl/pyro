@@ -16,7 +16,7 @@ class DualAveraging(object):
     This class implements a dual averaging scheme which is adapted for Markov chain
     Monte Carlo (MCMC) algorithms. To be more precise, we will replace subgradients
     by some statistics calculated during an MCMC trajectory. In addition,
-    introducing some free parameters such as ``t0`` and ``kappa``is helpful and
+    introducing some free parameters such as ``t0`` and ``kappa`` is helpful and
     still guarantees the convergence of the scheme.
 
     References
@@ -59,8 +59,8 @@ class DualAveraging(object):
         # g_avg = (g_1 + ... + g_t) / t
         self._g_avg = (1 - 1/(self._t + self.t0)) * self._g_avg + g / (self._t + self.t0)
         # According to formula (3.4) of [1], we have
-        #     x_t = argmin{ g_avg . x + mu_t . |x - x0|^2 },
-        # where mu_t := beta_t / t, beta_t := (gamma/2) * sqrt(t)
+        #     x_t = argmin{ g_avg . x + loc_t . |x - x0|^2 },
+        # where loc_t := beta_t / t, beta_t := (gamma/2) * sqrt(t)
         self._x_t = self.prox_center - (self._t ** 0.5) / self.gamma * self._g_avg
         # weight for the new x_t
         weight_t = self._t ** (-self.kappa)

@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from .poutine import _PYRO_STACK
-
 
 def site_is_subsample(site):
     """
@@ -21,34 +19,10 @@ def prune_subsample_sites(trace):
     return trace
 
 
-class NonlocalExit(Exception):
-    """
-    Exception for exiting nonlocally from poutine execution.
-
-    Used by poutine.EscapePoutine to return site information.
-    """
-    def __init__(self, site, *args, **kwargs):
-        """
-        :param site: message at a pyro site
-
-        constructor.  Just stores the input site.
-        """
-        super(NonlocalExit, self).__init__(*args, **kwargs)
-        self.site = site
-
-    def reset_stack(self):
-        """
-        Reset the state of the frames remaining in the stack.
-        Necessary for multiple re-executions in poutine.queue.
-        """
-        for frame in _PYRO_STACK:
-            frame._reset()
-
-
 def enum_extend(trace, msg, num_samples=None):
     """
     :param trace: a partial trace
-    :param msg: the message at a pyro primitive site
+    :param msg: the message at a Pyro primitive site
     :param num_samples: maximum number of extended traces to return.
     :returns: a list of traces, copies of input trace with one extra site
 
@@ -75,7 +49,7 @@ def enum_extend(trace, msg, num_samples=None):
 def mc_extend(trace, msg, num_samples=None):
     """
     :param trace: a partial trace
-    :param msg: the message at a pyro primitive site
+    :param msg: the message at a Pyro primitive site
     :param num_samples: maximum number of extended traces to return.
     :returns: a list of traces, copies of input trace with one extra site
 
@@ -100,29 +74,29 @@ def mc_extend(trace, msg, num_samples=None):
 def discrete_escape(trace, msg):
     """
     :param trace: a partial trace
-    :param msg: the message at a pyro primitive site
+    :param msg: the message at a Pyro primitive site
     :returns: boolean decision value
 
     Utility function that checks if a sample site is discrete and not already in a trace.
 
-    Used by EscapePoutine to decide whether to do a nonlocal exit at a site.
+    Used by EscapeMessenger to decide whether to do a nonlocal exit at a site.
     Subroutine for integrating out discrete variables for variance reduction.
     """
     return (msg["type"] == "sample") and \
         (not msg["is_observed"]) and \
         (msg["name"] not in trace) and \
-        (getattr(msg["fn"], "enumerable", False))
+        (getattr(msg["fn"], "has_enumerate_support", False))
 
 
 def all_escape(trace, msg):
     """
     :param trace: a partial trace
-    :param msg: the message at a pyro primitive site
+    :param msg: the message at a Pyro primitive site
     :returns: boolean decision value
 
     Utility function that checks if a site is not already in a trace.
 
-    Used by EscapePoutine to decide whether to do a nonlocal exit at a site.
+    Used by EscapeMessenger to decide whether to do a nonlocal exit at a site.
     Subroutine for approximately integrating out variables for variance reduction.
     """
     return (msg["type"] == "sample") and \

@@ -35,7 +35,6 @@ class ParamStoreDict(object):
         """
         self._params = {}  # dictionary from param name to param
         self._param_to_name = {}  # dictionary from unconstrained param to param name
-        self._active_params = set()  # set of all currently active params
         self._constraints = {}  # dictionary from param name to constraint object
 
     def clear(self):
@@ -44,7 +43,6 @@ class ParamStoreDict(object):
         """
         self._params = {}
         self._param_to_name = {}
-        self._active_params = set()
         self._constraints = {}
 
     def named_parameters(self):
@@ -59,33 +57,6 @@ class ParamStoreDict(object):
         Get all parameter names in the ParamStore
         """
         return self._params.keys()
-
-    def get_active_params(self):
-        """
-        :returns: all active params in the ParamStore
-        :rtype: set
-        """
-        return self._active_params
-
-    def mark_params_active(self, params):
-        """
-        :param params: iterable of params the user wishes to mark as active in the ParamStore.
-            this information is used to determine which parameters are being optimized,
-            e.g. in the context of pyro.infer.SVI
-        """
-        assert(all([p in self._param_to_name for p in params])), \
-            "some of these parameters are not in the ParamStore"
-        self._active_params.update(set(params))
-
-    def mark_params_inactive(self, params):
-        """
-        :param params: iterable of params the user wishes to mark as inactive in the ParamStore.
-            this information is used to determine which parameters are being optimized,
-            e.g. in the context of pyro.infer.SVI
-        """
-        assert(all([p in self._param_to_name for p in params])), \
-            "some of these parameters are not in the ParamStore"
-        self._active_params.difference_update(set(params))
 
     def replace_param(self, param_name, new_param, old_param):
         """
@@ -128,12 +99,17 @@ class ParamStoreDict(object):
             # store the unconstrained value and constraint
             with torch.no_grad():
                 unconstrained_param = transform_to(constraint).inv(init_tensor)
-            unconstrained_param.requires_grad = True
+            unconstrained_param.requires_grad_(True)
             self._params[name] = unconstrained_param
             self._constraints[name] = constraint
 
             # keep track of each tensor and it's name
             self._param_to_name[unconstrained_param] = name
+
+        elif init_tensor is not None and not callable(init_tensor):
+            if self._params[name].shape != init_tensor.shape:
+                raise ValueError("param {} init tensor shape does not match existing value: {} vs {}".format(
+                    name, init_tensor.shape, self._params[name].shape))
 
         # get the guaranteed to exist param
         unconstrained_param = self._params[name]
@@ -204,3 +180,21 @@ class ParamStoreDict(object):
         with open(filename, "rb") as input_file:
             state = torch.load(input_file)
         self.set_state(state)
+
+
+# used to create fully-formed param names, e.g. mymodule$$$mysubmodule.weight
+_MODULE_NAMESPACE_DIVIDER = "$$$"
+
+
+def param_with_module_name(pyro_name, param_name):
+    return _MODULE_NAMESPACE_DIVIDER.join([pyro_name, param_name])
+
+
+def module_from_param_with_module_name(param_name):
+    return param_name.split(_MODULE_NAMESPACE_DIVIDER)[0]
+
+
+def user_param_name(param_name):
+    if _MODULE_NAMESPACE_DIVIDER in param_name:
+        return param_name.split(_MODULE_NAMESPACE_DIVIDER)[1]
+    return param_name

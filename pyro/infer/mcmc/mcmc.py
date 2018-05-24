@@ -3,8 +3,6 @@ from __future__ import absolute_import, division, print_function
 import logging
 import math
 
-import torch
-
 from pyro.infer import TracePosterior
 
 
@@ -38,7 +36,8 @@ class MCMC(TracePosterior):
         for t in range(1, self.warmup_steps + self.num_samples + 1):
             trace = self.kernel.sample(trace)
             if t % logging_interval == 0:
-                self.logger.info("Iteration: {}.".format(t))
+                stage = "WARMUP" if t <= self.warmup_steps else "SAMPLE"
+                self.logger.info("Iteration: {} [{}]".format(t, stage))
                 diagnostic_info = self.kernel.diagnostics()
                 if diagnostic_info is not None:
                     self.logger.info(diagnostic_info)
@@ -46,5 +45,5 @@ class MCMC(TracePosterior):
                 if t == self.warmup_steps:
                     self.kernel.end_warmup()
                 continue
-            yield (trace, torch.tensor([1.0]))
+            yield (trace, 1.0)
         self.kernel.cleanup()

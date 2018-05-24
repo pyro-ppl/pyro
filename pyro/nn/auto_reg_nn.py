@@ -4,8 +4,6 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from pyro.distributions.util import torch_multinomial
-
 
 class MaskedLinear(nn.Linear):
     """
@@ -67,7 +65,7 @@ class AutoRegressiveNN(nn.Module):
 
         if mask_encoding is None:
             # the dependency structure is chosen at random
-            self.mask_encoding = 1 + torch_multinomial(torch.ones(input_dim - 1) / (input_dim - 1),
+            self.mask_encoding = 1 + torch.multinomial(torch.ones(input_dim - 1) / (input_dim - 1),
                                                        num_samples=hidden_dim, replacement=True)
         else:
             # the dependency structure is given by the user
@@ -75,7 +73,7 @@ class AutoRegressiveNN(nn.Module):
 
         if permutation is None:
             # a permutation is chosen at random
-            self.permutation = torch.randperm(input_dim)
+            self.permutation = torch.randperm(input_dim, device=torch.device('cpu'))
         else:
             # the permutation is chosen by the user
             self.permutation = permutation

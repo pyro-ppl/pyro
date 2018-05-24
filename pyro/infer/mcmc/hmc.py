@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import OrderedDict
 import math
+from collections import OrderedDict
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -11,8 +11,8 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.ops.dual_averaging import DualAveraging
-from pyro.ops.integrator import velocity_verlet, single_step_velocity_verlet
-from pyro.util import is_nan, is_inf
+from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
+from pyro.util import torch_isinf, torch_isnan
 
 
 class HMC(TraceKernel):
@@ -20,12 +20,12 @@ class HMC(TraceKernel):
     Simple Hamiltonian Monte Carlo kernel, where ``step_size`` and ``num_steps``
     need to be explicitly specified by the user.
 
-    References
+    **References**
 
     [1] `MCMC Using Hamiltonian Dynamics`,
     Radford M. Neal
 
-    :param model: Python callable containing pyro primitives.
+    :param model: Python callable containing Pyro primitives.
     :param float step_size: Determines the size of a single step taken by the
         verlet integrator while computing the trajectory using Hamiltonian
         dynamics. If not specified, it will be set to 1.
@@ -44,6 +44,25 @@ class HMC(TraceKernel):
         If not specified and the model has sites with constrained support,
         automatic transformations will be applied, as specified in
         :mod:`torch.distributions.constraint_registry`.
+
+    Example:
+
+        >>> true_coefs = torch.tensor([1., 2., 3.])
+        >>> data = torch.randn(2000, 3)
+        >>> dim = 3
+        >>> labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
+        >>>
+        >>> def model(data):
+        ...     coefs_mean = torch.zeros(dim)
+        ...     coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
+        ...     y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
+        ...     return y
+        >>>
+        >>> hmc_kernel = HMC(model, step_size=0.0855, num_steps=4)
+        >>> mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
+        >>> posterior = EmpiricalMarginal(mcmc_run, 'beta')
+        >>> posterior.mean  # doctest: +SKIP
+        tensor([ 0.9819,  1.9258,  2.9737])
     """
 
     def __init__(self, model, step_size=None, trajectory_length=None,
@@ -75,7 +94,7 @@ class HMC(TraceKernel):
         return trace_poutine.trace
 
     def _kinetic_energy(self, r):
-        return 0.5 * torch.sum(torch.stack([r[name]**2 for name in r]))
+        return 0.5 * sum(x.pow(2).sum() for x in r.values())
 
     def _potential_energy(self, z):
         # Since the model is specified in the constrained space, transform the
@@ -84,7 +103,7 @@ class HMC(TraceKernel):
         for name, transform in self.transforms.items():
             z_constrained[name] = transform.inv(z_constrained[name])
         trace = self._get_trace(z_constrained)
-        potential_energy = -trace.log_pdf()
+        potential_energy = -trace.log_prob_sum()
         # adjust by the jacobian for this transformation.
         for name, transform in self.transforms.items():
             potential_energy += transform.log_abs_det_jacobian(z_constrained[name], z[name]).sum()
@@ -100,6 +119,7 @@ class HMC(TraceKernel):
         self._args = None
         self._kwargs = None
         self._prototype_trace = None
+        self._adapt_phase = False
         self._adapted_scheme = None
 
     def _find_reasonable_step_size(self, z):
@@ -119,7 +139,11 @@ class HMC(TraceKernel):
             z, r, self._potential_energy, step_size)
         energy_new = potential_energy + self._kinetic_energy(r_new)
         delta_energy = energy_new - energy_current
-        # direction=1 means keep increasing step_size, otherwise decreasing step_size
+        # direction=1 means keep increasing step_size, otherwise decreasing step_size.
+        # Note that the direction is -1 if delta_energy is `NaN` which may be the
+        # case for a diverging trajectory (e.g. in the case of evaluating log prob
+        # of a value simulated using a large step size for a constrained sample
+        # site).
         direction = 1 if target_accept_logprob < -delta_energy else -1
 
         # define scale for step_size: 2 for increasing, 1/2 for decreasing
@@ -145,8 +169,8 @@ class HMC(TraceKernel):
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
 
     def _validate_trace(self, trace):
-        trace_log_pdf = trace.log_pdf()
-        if is_nan(trace_log_pdf) or is_inf(trace_log_pdf):
+        trace_log_prob_sum = trace.log_prob_sum()
+        if torch_isnan(trace_log_prob_sum) or torch_isinf(trace_log_prob_sum):
             raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")
 
     def initial_trace(self):
@@ -159,28 +183,32 @@ class HMC(TraceKernel):
         # and dict object used by the integrator
         trace = poutine.trace(self.model).get_trace(*args, **kwargs)
         self._prototype_trace = trace
-        # momenta distribution - currently standard normal
+        if self._automatic_transform_enabled:
+            self.transforms = {}
         for name, node in sorted(trace.iter_stochastic_nodes(), key=lambda x: x[0]):
-            r_mu = torch.zeros_like(node["value"])
-            r_sigma = torch.ones_like(node["value"])
-            self._r_dist[name] = dist.Normal(mu=r_mu, sigma=r_sigma)
+            site_value = node["value"]
             if node["fn"].support is not constraints.real and self._automatic_transform_enabled:
                 self.transforms[name] = biject_to(node["fn"].support).inv
+                site_value = self.transforms[name](node["value"])
+            r_loc = site_value.new_zeros(site_value.shape)
+            r_scale = site_value.new_ones(site_value.shape)
+            self._r_dist[name] = dist.Normal(loc=r_loc, scale=r_scale)
         self._validate_trace(trace)
 
         if self.adapt_step_size:
+            self._adapt_phase = True
             z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
             for name, transform in self.transforms.items():
                 z[name] = transform(z[name])
             self.step_size = self._find_reasonable_step_size(z)
             self.num_steps = max(1, int(self.trajectory_length / self.step_size))
             # make prox-center for Dual Averaging scheme
-            mu = math.log(10 * self.step_size)
-            self._adapted_scheme = DualAveraging(prox_center=mu)
+            loc = math.log(10 * self.step_size)
+            self._adapted_scheme = DualAveraging(prox_center=loc)
 
     def end_warmup(self):
         if self.adapt_step_size:
-            self.adapt_step_size = False
+            self._adapt_phase = False
             _, log_step_size_avg = self._adapted_scheme.get_state()
             self.step_size = math.exp(log_step_size_avg)
             self.num_steps = max(1, int(self.trajectory_length / self.step_size))
@@ -196,21 +224,30 @@ class HMC(TraceKernel):
         r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name])
              for name in self._r_dist}
 
-        z_new, r_new = velocity_verlet(z, r,
-                                       self._potential_energy,
-                                       self.step_size,
-                                       self.num_steps)
-        # apply Metropolis correction.
-        energy_proposal = self._energy(z_new, r_new)
-        energy_current = self._energy(z, r)
+        # Temporarily disable distributions args checking as
+        # NaNs are expected during step size adaptation
+        dist_arg_check = False if self._adapt_phase else pyro.distributions.is_validation_enabled()
+        with dist.validation_enabled(dist_arg_check):
+            z_new, r_new = velocity_verlet(z, r,
+                                           self._potential_energy,
+                                           self.step_size,
+                                           self.num_steps)
+            # apply Metropolis correction.
+            energy_proposal = self._energy(z_new, r_new)
+            energy_current = self._energy(z, r)
         delta_energy = energy_proposal - energy_current
         rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(torch.zeros(1), torch.ones(1)))
         if rand < (-delta_energy).exp():
             self._accept_cnt += 1
             z = z_new
 
-        if self.adapt_step_size:
-            accept_prob = (-delta_energy).exp().clamp(max=1).item()
+        if self._adapt_phase:
+            # Set accept prob to 0.0 if delta_energy is `NaN` which may be
+            # the case for a diverging trajectory when using a large step size.
+            if torch_isnan(delta_energy):
+                accept_prob = delta_energy.new_tensor(0.0)
+            else:
+                accept_prob = (-delta_energy).exp().clamp(max=1).item()
             self._adapt_step_size(accept_prob)
 
         self._t += 1
@@ -220,5 +257,5 @@ class HMC(TraceKernel):
         return self._get_trace(z)
 
     def diagnostics(self):
-        return "Step size: {:.6f} | Acceptance rate: {:.6f}".format(
+        return "Step size: {:.6f} \t Acceptance rate: {:.6f}".format(
             self.step_size, self._accept_cnt / self._t)

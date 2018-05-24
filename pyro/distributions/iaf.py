@@ -14,12 +14,12 @@ class InverseAutoregressiveFlow(Transform):
     An implementation of an Inverse Autoregressive Flow. Together with the `TransformedDistribution` this
     provides a way to create richer variational approximations.
 
-    Example usage::
+    Example usage:
 
-    >>> base_dist = Normal(...)
-    >>> iaf = InverseAutoregressiveFlow(...)
-    >>> pyro.module("my_iaf", iaf.module)
-    >>> iaf_dist = TransformedDistribution(base_dist, [iaf])
+    >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
+    >>> iaf = InverseAutoregressiveFlow(10, 40)
+    >>> iaf_module = pyro.module("my_iaf", iaf.module)
+    >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf])
 
     Note that this implementation is only meant to be used in settings where the inverse of the Bijector
     is never explicitly computed (rather the result is cached from the forward call). In the context of
@@ -79,11 +79,12 @@ class InverseAutoregressiveFlow(Transform):
         sample from the base distribution (or the output of a previous flow)
         """
         hidden = self.module.arn(x)
-        sigma = self.module.sigmoid(hidden[:, 0:self.input_dim] + self.module.sigmoid_bias.type_as(hidden))
+        scale = self.module.sigmoid(hidden[:, 0:self.input_dim] +
+                                    hidden.new_tensor(self.module.sigmoid_bias))
         mean = hidden[:, self.input_dim:]
-        y = sigma * x + (torch.ones(sigma.size()).type_as(sigma) - sigma) * mean
+        y = scale * x + (1 - scale) * mean
         self._add_intermediate_to_cache(x, y, 'x')
-        self._add_intermediate_to_cache(sigma, y, 'sigma')
+        self._add_intermediate_to_cache(scale, y, 'scale')
         return y
 
     def _inverse(self, y):
@@ -114,9 +115,9 @@ class InverseAutoregressiveFlow(Transform):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        if (y, 'sigma') in self._intermediates_cache:
-            sigma = self._intermediates_cache.pop((y, 'sigma'))
+        if (y, 'scale') in self._intermediates_cache:
+            scale = self._intermediates_cache.pop((y, 'scale'))
         else:
             raise KeyError("Bijector InverseAutoregressiveFlow expected to find" +
                            "key in intermediates cache but didn't")
-        return sigma.log()
+        return scale.log()

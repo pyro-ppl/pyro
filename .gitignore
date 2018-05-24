@@ -2,10 +2,15 @@ run_outputs*
 .DS_Store
 .benchmarks
 data
-examples/processed
-examples/results
-examples/raw
+results
+examples/*/processed
+examples/*/results
+examples/*/raw
 examples/dmm/*.pkl
+pyro/contrib/examples/processed
+pyro/contrib/examples/results
+pyro/contrib/examples/raw
+pyro/_version.py
 processed
 raw
 
@@ -65,6 +70,7 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+.pytest_cache
 nosetests.xml
 coverage.xml
 *,cover

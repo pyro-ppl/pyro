@@ -7,9 +7,12 @@ env:
         - PYTHONPATH=$PWD:$PYTHONPATH
 
 install:
-    # Install PyTorch wheel using the install script
-    - bash scripts/install_pytorch.sh
-    - pip install -e .[test]
+    - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then
+          pip install http://download.pytorch.org/whl/cpu/torch-0.4.0-cp27-cp27mu-linux_x86_64.whl;
+      else
+          pip install http://download.pytorch.org/whl/cpu/torch-0.4.0-cp35-cp35m-linux_x86_64.whl;
+      fi
+    - pip install .[test]
     - pip freeze
 
 branches:
@@ -34,13 +37,13 @@ jobs:
           script:
               - pip install -r docs/requirements.txt
               - make docs
+              - make doctest
         - stage: perf
-          if: type = cron
           python: 2.7
           env: STAGE=perf
           script:
               - pip install -e .[profile]
-              - make perf-test
+              - pytest -vs --benchmark-disable tests/perf/test_benchmark.py
         - python: 3.5
           if: type = cron
           env: STAGE=perf
@@ -61,7 +64,8 @@ jobs:
           env: STAGE=examples
           script:
               - pytest -vs --cov=pyro --stage test_examples
-              - grep -l smoke_test tutorial/source/*.ipynb | xargs pytest -v --nbval-lax
+              - CI=1 grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
+                  | xargs pytest -vx --nbval-lax --current-env
         - python: 3.5
           env: STAGE=unit
           script: pytest -vs --cov=pyro --stage unit --durations 20

@@ -19,7 +19,8 @@ class HalfCauchy(TransformedDistribution):
     :param torch.Tensor loc: lower bound of the distribution.
     :param torch.Tensor scale: half width at half maximum.
     """
-    params = Cauchy.params
+    arg_constraints = Cauchy.arg_constraints
+    support = Cauchy.support
 
     def __init__(self, loc, scale):
         loc, scale = broadcast_all(loc, scale)
@@ -46,3 +47,8 @@ class HalfCauchy(TransformedDistribution):
 
     def entropy(self):
         return self.base_dist.entropy() - math.log(2)
+
+    def expand(self, batch_shape):
+        loc = self.loc.expand(batch_shape)
+        scale = self.scale.expand(batch_shape)
+        return HalfCauchy(loc, scale)
