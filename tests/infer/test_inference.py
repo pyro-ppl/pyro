@@ -333,6 +333,7 @@ class SafetyTests(TestCase):
         self.model = model
         self.guide = guide
 
+    @pytest.mark.xfail(reason="does not apply with strict=False")
     def test_duplicate_names(self):
         pyro.clear_param_store()
 
@@ -351,6 +352,7 @@ class SafetyTests(TestCase):
         with pytest.warns(Warning):
             svi.step()
 
+    @pytest.mark.xfail(reason="does not apply with strict=False")
     def test_duplicate_obs_name(self):
         pyro.clear_param_store()
 
