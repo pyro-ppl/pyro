@@ -1,6 +1,11 @@
+"""
+``pyro.contrib.autoname.scoping`` contains the implementation of
+:func:`pyro.contrib.autoname.scope`, a tool for automatically appending
+a semantically meaningful prefix to names of sample sites.
+"""
 import functools
 
-from .messenger import Messenger
+from pyro.poutine.messenger import Messenger
 
 
 class ScopeMessenger(Messenger):
@@ -26,3 +31,16 @@ class ScopeMessenger(Messenger):
     def _pyro_sample(self, msg):
         msg["name"] = "{}/{}".format(self.prefix, msg["name"])
         return None
+
+
+def scope(fn=None, prefix=None):
+    """
+    scope
+    """
+    msngr = ScopeMessenger(prefix=prefix)
+    return msngr(fn) if fn is not None else msngr
+
+
+__all__ = [
+    "scope",
+]

@@ -65,7 +65,6 @@ from .lift_messenger import LiftMessenger
 from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
-from .scope_messenger import ScopeMessenger
 from .trace_messenger import TraceMessenger
 
 
@@ -331,14 +330,6 @@ def scale(fn=None, scale=None):
     msngr = ScaleMessenger(scale=scale)
     # XXX temporary compatibility fix
     return msngr(fn) if callable(fn) else msngr
-
-
-def scope(fn=None, prefix=None):
-    """
-    scope
-    """
-    msngr = ScopeMessenger(prefix=prefix)
-    return msngr(fn) if fn is not None else msngr
 
 
 def indep(fn=None, name=None, size=None, dim=None):

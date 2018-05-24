@@ -2,7 +2,7 @@ import pyro
 import pyro.poutine as poutine
 import pyro.distributions.torch as dist
 
-from pyro.poutine import scope
+from pyro.contrib.autoname import scope
 
 
 def test_recur_multi():
