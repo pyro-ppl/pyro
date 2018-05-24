@@ -16,4 +16,11 @@ Named Data Structures
     :show-inheritance:
     :member-order: bysource
 
+Scoping
+-------
 
+.. automodule:: pyro.contrib.autoname.scoping
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
