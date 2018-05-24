@@ -69,11 +69,11 @@ class BlockMessenger(Messenger):
 
     A site is hidden if at least one of the following holds:
 
-        0. hide_fn(msg) is True
-        1. msg["name"] in hide
-        2. msg["type"] in hide_types
-        3. msg["name"] not in expose and msg["type"] not in expose_types
-        4. hide_all == True and hide, hide_types, and expose_types are all None
+        0. ``hide_fn(msg) is True`` or ``(not expose_fn(msg)) is True``
+        1. ``msg["name"] in hide``
+        2. ``msg["type"] in hide_types``
+        3. ``msg["name"] not in expose and msg["type"] not in expose_types``
+        4. ``hide``, ``hide_types``, and ``expose_types`` are all ``None``
 
 
     For example, suppose the stochastic function fn has two sample sites "a" and "b".
@@ -106,6 +106,10 @@ class BlockMessenger(Messenger):
 
     :param: hide_fn: function that takes a site and returns True to hide the site
       or False/None to expose it.  If specified, all other parameters are ignored.
+      Only specify one of hide_fn or expose_fn, not both.
+    :param: expose_fn: function that takes a site and returns True to expose the site
+      or False/None to hide it.  If specified, all other parameters are ignored.
+      Only specify one of hide_fn or expose_fn, not both.
     :param bool hide_all: hide all sites
     :param bool expose_all: expose all sites normally
     :param list hide: list of site names to hide, rest will be exposed normally
@@ -114,13 +118,17 @@ class BlockMessenger(Messenger):
     :param list expose_types: list of site types to expose normally, rest will be hidden
     """
 
-    def __init__(self, hide_fn=None,
+    def __init__(self, hide_fn=None, expose_fn=None,
                  hide_all=True, expose_all=False,
                  hide=None, expose=None,
                  hide_types=None, expose_types=None):
         super(BlockMessenger, self).__init__()
+        if not (hide_fn is None or expose_fn is None):
+            raise ValueError("Only specify one of hide_fn or expose_fn")
         if hide_fn is not None:
             self.hide_fn = hide_fn
+        elif expose_fn is not None:
+            self.hide_fn = lambda msg: not expose_fn(msg)
         else:
             self.hide_fn = _make_default_hide_fn(hide_all, expose_all,
                                                  hide, expose,
