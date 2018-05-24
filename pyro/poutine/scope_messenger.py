@@ -8,6 +8,11 @@ class ScopeMessenger(Messenger):
         super(ScopeMessenger, self).__init__()
         self.prefix = prefix
 
+    def __enter__(self):
+        if self.prefix is None:
+            raise ValueError("no prefix was provided")
+        return super(ScopeMessenger, self).__enter__()
+
     def __call__(self, fn):
         if self.prefix is None:
             self.prefix = fn.__name__
