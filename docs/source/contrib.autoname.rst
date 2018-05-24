@@ -1,4 +1,4 @@
-.. automodule:: pyro.contrib.named
+.. automodule:: pyro.contrib.autoname
     :members:
     :undoc-members:
     :show-inheritance:
