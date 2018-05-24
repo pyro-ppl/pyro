@@ -20,10 +20,19 @@ def test_recur_multi():
     def model2():
         return pyro.sample("y", dist.Normal(0.0, 1.0))
 
+    true_samples = set(["model1/model2/y",
+                        "model1/inter/model2/y",
+                        "model1/model2/y_0",
+                        "model1/inter/model1/model2/y",
+                        "model1/inter/model1/inter/model2/y",
+                        "model1/inter/model1/model2/y_0"])
+
     tr = poutine.trace(model1).get_trace()
-    print(tr)
-    for name in tr:
-        print(name)
+
+    samples = set(name for name, node in tr.nodes.items()
+                  if node["type"] == "sample")
+
+    assert true_samples == samples
 
 
 def test_only_withs():

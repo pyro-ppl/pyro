@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
-
 from .messenger import Messenger
 from .trace_struct import Trace
 from .util import site_is_subsample
