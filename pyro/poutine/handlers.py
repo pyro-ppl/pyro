@@ -166,13 +166,14 @@ def lift(fn=None, prior=None):
     return msngr(fn) if fn is not None else msngr
 
 
-def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
+def block(fn=None, hide_fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
     """
     This handler selectively hides Pyro primitive sites from the outside world.
     Default behavior: block everything.
 
     A site is hidden if at least one of the following holds:
 
+        0. ``hide_fn(msg) is True``
         1. ``msg["name"] in hide``
         2. ``msg["type"] in hide_types``
         3. ``msg["name"] not in expose and msg["type"] not in expose_types``
@@ -199,6 +200,8 @@ def block(fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
         True
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
+    :param: hide_fn: function that takes a site and returns True to hide the site
+      or False/None to expose it.  If specified, all other parameters are ignored.
     :param hide: list of site names to hide
     :param expose: list of site names to be exposed while all others hidden
     :param hide_types: list of site types to be hidden
