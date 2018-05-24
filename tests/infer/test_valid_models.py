@@ -168,6 +168,7 @@ def test_irange_ok(subsample_size, Elbo):
     assert_ok(model, guide, Elbo())
 
 
+@pytest.mark.xfail(reason="not expected behavior with non-strict trace")
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_irange_variable_clash_error(Elbo):
 
