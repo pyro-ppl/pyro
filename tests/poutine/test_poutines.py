@@ -113,6 +113,16 @@ class ReplayHandlerTests(NormalNormalNormalHandlerTestCase):
 
 class BlockHandlerTests(NormalNormalNormalHandlerTestCase):
 
+    def test_block_hide_fn(self):
+        model_trace = poutine.trace(
+            poutine.block(self.model,
+                          hide_fn=lambda msg: "latent" in msg["name"],
+                          expose=["latent1"])
+        ).get_trace()
+        assert "latent1" not in model_trace
+        assert "latent2" not in model_trace
+        assert "obs" in model_trace
+
     def test_block_full(self):
         model_trace = poutine.trace(poutine.block(self.model)).get_trace()
         guide_trace = poutine.trace(poutine.block(self.guide)).get_trace()
