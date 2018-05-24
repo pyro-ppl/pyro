@@ -7,6 +7,9 @@ Automatic Name Generation
     :show-inheritance:
     :member-order: bysource
 
+Named Data Structures
+---------------------
+
 .. automodule:: pyro.contrib.autoname.named
     :members:
     :undoc-members:
