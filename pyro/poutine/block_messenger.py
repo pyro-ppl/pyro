@@ -135,5 +135,5 @@ class BlockMessenger(Messenger):
                                                  hide_types, expose_types)
 
     def _process_message(self, msg):
-        msg["stop"] = self.hide_fn(msg)
+        msg["stop"] = bool(self.hide_fn(msg))
         return None
