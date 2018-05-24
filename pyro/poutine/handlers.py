@@ -65,6 +65,7 @@ from .lift_messenger import LiftMessenger
 from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
+from .scope_messenger import ScopeMessenger
 from .trace_messenger import TraceMessenger
 
 
@@ -73,7 +74,7 @@ from .trace_messenger import TraceMessenger
 ############################################
 
 
-def trace(fn=None, graph_type=None, param_only=None):
+def trace(fn=None, graph_type=None, param_only=None, strict=None):
     """
     Return a handler that records the inputs and outputs of primitive calls
     and their dependencies.
@@ -98,7 +99,7 @@ def trace(fn=None, graph_type=None, param_only=None):
     :param param_only: if true, only records params and not samples
     :returns: stochastic function decorated with a :class:`~pyro.poutine.trace_messenger.TraceMessenger`
     """
-    msngr = TraceMessenger(graph_type=graph_type, param_only=param_only)
+    msngr = TraceMessenger(graph_type=graph_type, param_only=param_only, strict=strict)
     return msngr(fn) if fn is not None else msngr
 
 
@@ -330,6 +331,14 @@ def scale(fn=None, scale=None):
     msngr = ScaleMessenger(scale=scale)
     # XXX temporary compatibility fix
     return msngr(fn) if callable(fn) else msngr
+
+
+def scope(fn=None, prefix=None):
+    """
+    scope
+    """
+    msngr = ScopeMessenger(prefix=prefix)
+    return msngr(fn) if fn is not None else msngr
 
 
 def indep(fn=None, name=None, size=None, dim=None):
