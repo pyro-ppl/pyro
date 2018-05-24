@@ -208,7 +208,7 @@ def block(fn=None, hide_fn=None, hide=None, expose=None, hide_types=None, expose
     :param expose_types: list of site types to be exposed while all others hidden
     :returns: stochastic function decorated with a :class:`~pyro.poutine.block_messenger.BlockMessenger`
     """
-    msngr = BlockMessenger(hide=hide, expose=expose,
+    msngr = BlockMessenger(hide_fn=hide_fn, hide=hide, expose=expose,
                            hide_types=hide_types, expose_types=expose_types)
     return msngr(fn) if fn is not None else msngr
 
