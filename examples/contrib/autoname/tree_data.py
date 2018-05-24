@@ -7,7 +7,7 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib import named
+from pyro.contrib.autoname import named
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
 
