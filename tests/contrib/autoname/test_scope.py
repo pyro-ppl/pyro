@@ -58,7 +58,7 @@ def test_recur_multi():
                     "model1/inter/model1/model2/y",
                     "model1/inter/model1/inter/model2/y",
                     "model1/inter/model1/model2/y_0",
-                    "model1/model2/y_0",]
+                    "model1/model2/y_0"]
 
     tr = poutine.trace(model1).get_trace()
 
