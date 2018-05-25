@@ -2,7 +2,40 @@ import pyro
 import pyro.poutine as poutine
 import pyro.distributions.torch as dist
 
-from pyro.contrib.autoname import scope
+from pyro.contrib.autoname import outer_scope, scope
+
+
+def test_multi_nested():
+
+    @outer_scope
+    def model1(r=True):
+        model2()
+        model2()
+        with scope(prefix="inter"):
+            model2()
+            if r:
+                model1(r=False)
+        model2()
+
+    @outer_scope
+    def model2():
+        return pyro.sample("y", dist.Normal(0.0, 1.0))
+
+    true_samples = ["model1/model2/y",
+                    "model1/model2_0/y",
+                    "model1/inter/model2/y",
+                    "model1/inter/model1/model2/y",
+                    "model1/inter/model1/model2_0/y",
+                    "model1/inter/model1/inter/model2/y",
+                    "model1/inter/model1/model2_1/y",
+                    "model1/model2_1/y"]
+
+    tr = poutine.trace(model1).get_trace(r=True)
+
+    samples = [name for name, node in tr.nodes.items()
+               if node["type"] == "sample"]
+    print(samples)
+    assert true_samples == samples
 
 
 def test_recur_multi():
@@ -20,18 +53,18 @@ def test_recur_multi():
     def model2():
         return pyro.sample("y", dist.Normal(0.0, 1.0))
 
-    true_samples = set(["model1/model2/y",
-                        "model1/inter/model2/y",
-                        "model1/model2/y_0",
-                        "model1/inter/model1/model2/y",
-                        "model1/inter/model1/inter/model2/y",
-                        "model1/inter/model1/model2/y_0"])
+    true_samples = ["model1/model2/y",
+                    "model1/inter/model2/y",
+                    "model1/inter/model1/model2/y",
+                    "model1/inter/model1/inter/model2/y",
+                    "model1/inter/model1/model2/y_0",
+                    "model1/model2/y_0",]
 
     tr = poutine.trace(model1).get_trace()
 
-    samples = set(name for name, node in tr.nodes.items()
-                  if node["type"] == "sample")
-
+    samples = [name for name, node in tr.nodes.items()
+               if node["type"] == "sample"]
+    print(samples)
     assert true_samples == samples
 
 

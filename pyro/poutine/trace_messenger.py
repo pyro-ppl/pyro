@@ -69,6 +69,10 @@ class TraceMessenger(Messenger):
         Adds appropriate edges based on cond_indep_stack information
         upon exiting the context.
         """
+        for node in list(self.trace.nodes.values()):
+            if node.get("PRUNE"):
+                self.trace.remove_node(node["name"])
+            node.pop("PRUNE", None)
         if self.param_only:
             for node in list(self.trace.nodes.values()):
                 if node["type"] != "param":
