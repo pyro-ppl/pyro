@@ -12,7 +12,7 @@ import pyro.poutine as poutine
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
-from pyro.ops.welford import WelfordOnlineStatistics
+from pyro.ops.welford import WelfordCovariance
 from pyro.util import torch_isinf, torch_isnan
 
 
@@ -45,6 +45,8 @@ class HMC(TraceKernel):
     :param bool adapt_mass: A flag to decide if we want to adapt a diagonal
         mass matrix using the sample-variance from the second half of the
         warm-up phase.
+    :param str mass_structure: Structure of the mass matrix (one of 'identity',
+        'diagonal', 'dense').
     :param dict transforms: Optional dictionary that specifies a transform
         for a sample site with constrained support to unconstrained space. The
         transform should be invertible, and implement `log_abs_det_jacobian`.
@@ -72,7 +74,8 @@ class HMC(TraceKernel):
     """
 
     def __init__(self, model, step_size=None, trajectory_length=None,
-                 num_steps=None, adapt_step_size=False, adapt_mass=False, transforms=None):
+                 num_steps=None, adapt_step_size=False, adapt_mass=False,
+                 mass_structure='identity', transforms=None):
         self.model = model
 
         self.step_size = step_size if step_size is not None else 1  # from Stan
@@ -84,7 +87,9 @@ class HMC(TraceKernel):
             self.trajectory_length = 2 * math.pi  # from Stan
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
         self.adapt_step_size = adapt_step_size
-        self.adapt_mass = adapt_mass
+        self.mass_structure = mass_structure
+        # Don't need to adapt mass if the mass structure is identity.
+        self.adapt_mass = adapt_mass and self.mass_structure != 'identity'
         self._target_accept_prob = 0.8  # from Stan
 
         self.transforms = {} if transforms is None else transforms
@@ -131,7 +136,8 @@ class HMC(TraceKernel):
         self._adaptation_window = None
         self._adapted_scheme = None
         self._warmup_steps = None
-        self._window_statistics = None
+        self._mass = None
+        self._mass_estimator = None
 
     def _find_reasonable_step_size(self, z):
         step_size = self.step_size
@@ -185,6 +191,16 @@ class HMC(TraceKernel):
             loc = math.log(10 * self.step_size)
             self._adapted_scheme = DualAveraging(prox_center=loc)
         if self.adapt_mass:
+            if self.mass_structure == 'identity':
+                self._mass_estimator = None
+            elif self.mass_structure == 'diagonal':
+                self._mass_estimator = WelfordCovariance(diagonal=True)
+            elif self.mass_structure == 'dense':
+                self._mass_estimator = WelfordCovariance(diagonal=False)
+            else:
+                raise ValueError(
+                        "mass_type must be one of: 'identity', 'diagonal', 'dense' (got '{}')".format(
+                                self.mass_structure))
             # Buffer and window sizes from stan
             start_buffer = 75
             end_buffer = 25
@@ -207,13 +223,15 @@ class HMC(TraceKernel):
     def _adapt_parameters(self, accept_prob, z):
         if self._t in self._adaptation_schedule:
             self._adaptation_window = self._adaptation_schedule[self._t]
-            # Reset the window statistics at the beginning of each mass adaptation window.
-            if self._adaptation_window.adapt_mass:
-                self._window_statistics = WelfordOnlineStatistics()
+            if self._adaptation_window.adapt_mass and self._mass_estimator:
+                # Update mass and reset online estimator's memory.
+                if self._mass_estimator.n_samples > 1:
+                    self._mass = self._mass_estimator.get_estimates()
+                self._mass_estimator.reset()
         if self._adaptation_window.adapt_step_size:
             self._adapt_step_size(accept_prob)
         if self._adaptation_window.adapt_mass:
-            self._window_statistics.update_statistics(z)
+            self._mass_estimator.update(z)
 
     def _adapt_step_size(self, accept_prob):
         # calculate a statistic for Dual Averaging scheme
@@ -259,13 +277,13 @@ class HMC(TraceKernel):
             self.step_size = math.exp(log_step_size_avg)
             self.num_steps = max(1, int(self.trajectory_length / self.step_size))
         if self.adapt_mass:
-            self._mass = self._window_statistics.get_variances()
+            self._mass = self._mass_estimator.get_estimates()
 
     def cleanup(self):
         self._reset()
 
     def sample(self, trace):
-        z = {name: node["value"].detach() for name, node in trace.iter_stochastic_nodes()}
+        z = OrderedDict((name, node["value"].detach()) for name, node in trace.iter_stochastic_nodes())
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
