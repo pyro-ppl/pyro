@@ -45,6 +45,11 @@ class NUTS(HMC):
         dynamics. If not specified, it will be set to 1.
     :param bool adapt_step_size: A flag to decide if we want to adapt step_size
         during warm-up phase using Dual Averaging scheme.
+    :param bool adapt_mass: A flag to decide if we want to adapt a diagonal
+        mass matrix using the sample-variance from the second half of the
+        warm-up phase.
+    :param str mass_structure: Structure of the mass matrix (one of 'identity',
+        'diagonal', 'dense').
     :param dict transforms: Optional dictionary that specifies a transform
         for a sample site with constrained support to unconstrained space. The
         transform should be invertible, and implement `log_abs_det_jacobian`.
@@ -71,8 +76,10 @@ class NUTS(HMC):
         print(posterior.mean)
     """
 
-    def __init__(self, model, step_size=None, adapt_step_size=False, transforms=None):
+    def __init__(self, model, step_size=None, adapt_step_size=False, adapt_mass=False,
+                 mass_structure='identity', transforms=None):
         super(NUTS, self).__init__(model, step_size, adapt_step_size=adapt_step_size,
+                                   adapt_mass=adapt_mass, mass_structure=mass_structure,
                                    transforms=transforms)
 
         self._max_tree_depth = 10  # from Stan
@@ -267,7 +274,7 @@ class NUTS(HMC):
 
         if self._adapt_phase:
             accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
-            self._adapt_step_size(accept_prob)
+            self._adapt_parameters(accept_prob, z)
 
         if accepted:
             self._accept_cnt += 1

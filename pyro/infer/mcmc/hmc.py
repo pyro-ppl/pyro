@@ -204,19 +204,13 @@ class HMC(TraceKernel):
             self._adaptation_schedule[start_buffer + mass_adaptation_period] = adaptation_window(
                     adapt_step_size=self.adapt_step_size, adapt_mass=False)
 
-    def _adapt_parameters(self, delta_energy, z):
+    def _adapt_parameters(self, accept_prob, z):
         if self._t in self._adaptation_schedule:
             self._adaptation_window = self._adaptation_schedule[self._t]
             # Reset the window statistics at the beginning of each mass adaptation window.
             if self._adaptation_window.adapt_mass:
                 self._window_statistics = WelfordOnlineStatistics()
         if self._adaptation_window.adapt_step_size:
-            # Set accept prob to 0.0 if delta_energy is `NaN` which may be
-            # the case for a diverging trajectory when using a large step size.
-            if torch_isnan(delta_energy):
-                accept_prob = delta_energy.new_tensor(0.0)
-            else:
-                accept_prob = (-delta_energy).exp().clamp(max=1).item()
             self._adapt_step_size(accept_prob)
         if self._adaptation_window.adapt_mass:
             self._window_statistics.update_statistics(z)
@@ -295,7 +289,13 @@ class HMC(TraceKernel):
             self._accept_cnt += 1
             z = z_new
         if self._adapt_phase:
-            self._adapt_parameters(delta_energy, z)
+            # Set accept prob to 0.0 if delta_energy is `NaN` which may be
+            # the case for a diverging trajectory when using a large step size.
+            if torch_isnan(delta_energy):
+                accept_prob = delta_energy.new_tensor(0.0)
+            else:
+                accept_prob = (-delta_energy).exp().clamp(max=1).item()
+            self._adapt_parameters(accept_prob, z)
         self._t += 1
         # get trace with the constrained values for `z`.
         for name, transform in self.transforms.items():
