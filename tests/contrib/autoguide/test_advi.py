@@ -194,3 +194,11 @@ def test_guide_list(auto_class):
     guide.add(auto_class(poutine.block(model, expose=["x"]), prefix="auto_x"))
     guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
     guide()
+
+
+def test_empty_model_error():
+    def model():
+        pass
+    guide = AutoDiagonalNormal(model)
+    with pytest.raises(RuntimeError):
+        guide()

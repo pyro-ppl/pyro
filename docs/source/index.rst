@@ -30,8 +30,8 @@ Pyro Documentation
    :caption: Contributed Code:
 
    contrib.autoguide
+   contrib.autoname
    contrib.gp
-   contrib.named
 
 
 Indices and tables

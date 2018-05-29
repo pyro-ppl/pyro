@@ -37,6 +37,7 @@ jobs:
           script:
               - pip install -r docs/requirements.txt
               - make docs
+              - make doctest
         - stage: perf
           python: 2.7
           env: STAGE=perf
