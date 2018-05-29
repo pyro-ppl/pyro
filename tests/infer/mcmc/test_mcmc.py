@@ -24,7 +24,7 @@ class PriorKernel(TraceKernel):
         self.model = model
         self.data = None
 
-    def setup(self, data):
+    def setup(self, warmup_steps, data):
         self.data = data
 
     def cleanup(self):
