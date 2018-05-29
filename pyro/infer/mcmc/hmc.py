@@ -15,7 +15,6 @@ from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
 from pyro.ops.welford import WelfordCovariance
 from pyro.util import torch_isinf, torch_isnan
 
-
 adaptation_window = namedtuple('adaptation_window', ['adapt_step_size', 'adapt_mass'])
 
 

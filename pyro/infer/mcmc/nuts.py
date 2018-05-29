@@ -6,10 +6,9 @@ import torch
 
 import pyro
 import pyro.distributions as dist
+from pyro.infer.mcmc.hmc import HMC
 from pyro.ops.integrator import single_step_velocity_verlet
 from pyro.util import torch_isnan
-
-from pyro.infer.mcmc.hmc import HMC
 
 # sum_accept_probs and num_proposals are used to calculate
 # the statistic accept_prob for Dual Averaging scheme;

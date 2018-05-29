@@ -1,4 +1,5 @@
 import weakref
+
 import torch
 
 import pyro

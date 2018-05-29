@@ -54,8 +54,8 @@ from six.moves import xrange
 
 from pyro.poutine import util
 
-from .broadcast_messenger import BroadcastMessenger
 from .block_messenger import BlockMessenger
+from .broadcast_messenger import BroadcastMessenger
 from .condition_messenger import ConditionMessenger
 from .enumerate_messenger import EnumerateMessenger
 from .escape_messenger import EscapeMessenger
@@ -66,7 +66,6 @@ from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
 from .trace_messenger import TraceMessenger
-
 
 ############################################
 # Begin primitive operations
