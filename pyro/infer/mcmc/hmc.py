@@ -106,7 +106,16 @@ class HMC(TraceKernel):
         return trace_poutine.trace
 
     def _kinetic_energy(self, r):
-        return 0.5 * sum(x.pow(2).sum() for x in r.values())
+        if self._mass is not None:
+            unrolled_r = torch.cat([site_value.view(-1) for site_name, site_value in r.items()])
+            if self.mass_structure == 'diagonal':
+                k = 0.5 * unrolled_r.pow(2).matmul(self._mass)
+            else:
+                k = 0.5 * unrolled_r.matmul(self._mass).matmul(unrolled_r)
+        # If no mass has been calculated, assume the mass matrix is the identity matrix.
+        else:
+            k = 0.5 * sum(x.pow(2).sum() for x in r.values())
+        return k
 
     def _potential_energy(self, z):
         # Since the model is specified in the constrained space, transform the
