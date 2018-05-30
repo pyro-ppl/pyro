@@ -113,6 +113,15 @@ class AutoGuide(object):
                 else:
                     raise NotImplementedError("AutoGuideList does not support pyro.irange")
 
+    def median(self, *args, **kwargs):
+        """
+        Returns the posterior median value of each latent variable.
+
+        :return: A dict mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        raise NotImplementedError
+
 
 class AutoGuideList(AutoGuide):
     """
@@ -174,6 +183,18 @@ class AutoGuideList(AutoGuide):
         result = {}
         for part in self.parts:
             result.update(part(*args, **kwargs))
+        return result
+
+    def median(self, *args, **kwargs):
+        """
+        Returns the posterior median value of each latent variable.
+
+        :return: A dict mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        result = {}
+        for part in self.parts:
+            result.update(part.median(*args, **kwargs))
         return result
 
 
