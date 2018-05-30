@@ -34,8 +34,6 @@ if six.PY3:
 else:
     import imp
 
-from .quoting import to_source  # noqa: E402
-
 
 def compile_file(source, globals_=None):
     """
@@ -59,12 +57,12 @@ def compile_file(source, globals_=None):
     # Write source to temporary file
     tempdir = tempfile.mkdtemp()
     uuid = str(uuid4().hex[:4])
-    tmpname = os.path.join(tempdir, 'pyro_autoname_%s.py' % uuid)
+    tmpname = os.path.join(tempdir, 'autoname_%s.py' % uuid)
     with open(tmpname, 'w') as f:
         f.write(source)
 
     # Load the temporary file as a module
-    module_name = 'pyro_autoname_%s' % uuid
+    module_name = 'autoname_%s' % uuid
     if six.PY3:
         spec = util.spec_from_file_location(module_name, tmpname)
         m = util.module_from_spec(spec)

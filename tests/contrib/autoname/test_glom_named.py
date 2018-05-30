@@ -4,38 +4,46 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 
-from pyro.contrib.autoname.glom_named import sample, dynamic_scope
+from pyro.contrib.autoname import glom_name
+
+
+class B(object):
+    def __init__(self):
+        b = 3
 
 
 def test_dynamic_simple():
 
-    def submodel():
-        y = sample(dist.Bernoulli(0.5))
-        return y
-
-    class B(object):
-        def __init__(self):
-            b = 3
-
-    @dynamic_scope
+    @glom_name
     def model():
-        x = sample(dist.Bernoulli(0.5))
-        y = sample(dist.Bernoulli(0.5))
-        # xx = submodel()
-        z = [x, y, None, None]
-        i = 3
-        z[i] = sample(dist.Bernoulli(0.5))
+
+        x = pyro.sample(dist.Bernoulli(0.5))
+        y = pyro.sample(dist.Bernoulli(0.5))
+        z = [x, y, None]
+        i = 2
+        z[i] = pyro.sample(dist.Bernoulli(0.5))
         zz = {}
-        zz["a"] = sample(dist.Bernoulli(0.5))
+        zz["a"] = pyro.sample(dist.Bernoulli(0.5))
         ab = B()
-        ab.b = sample(dist.Bernoulli(0.5))
-        # yy = submodel()
-        # xyz = [sample(dist.Bernoulli(0.5)) for i in range(3)]
-        # z[-1] = submodel()
-        # for i in range(3):
-        #     zi = sample(dist.Bernoulli(0.5))
-        #     z.append(zi)
-        return z
+        ab.b = pyro.sample(dist.Bernoulli(0.5))
+        zz["c"] = [B(), None, None, None]
+        zz["c"][0].b = pyro.sample(dist.Bernoulli(0.5))
+        for j in range(1, 3):
+            zz["c"][j] = pyro.sample(dist.Bernoulli(0.5))
+
+    expected_names = [
+        "x",
+        "y",
+        "z[2]",
+        "zz['a']",
+        "ab.b",
+        "zz['c'][0].b",
+        "zz['c'][1]",
+        "zz['c'][2]",
+    ]
 
     tr = poutine.trace(model).get_trace()
+    actual_names = [k for k, v in tr.nodes.items() if v["type"] == "sample"]
     print(tr.nodes)
+
+    assert actual_names == expected_names

@@ -1,11 +1,14 @@
 import copy
-import glom
+from glom import T as _TTT  # noqa: F401
 import gast
+import functools
 from .compilation import quote, unquote, compile_function, parse_function
 
 
 class PrimitiveDetector(gast.NodeVisitor):
-
+    """
+    Checks whether a Call node contains ``pyro.sample`` or ``pyro.param``
+    """
     def __init__(self):
         self._ret = False
 
@@ -27,7 +30,19 @@ class NameRewriter(gast.NodeTransformer):
     def _make_glom(self, node):
         new_node = copy.copy(node)
         new_node.ctx = gast.Load()
-        return quote("str(glom.T." + unquote(new_node) + ")[6:]")
+        return quote("str(_TTT." + unquote(new_node) + ")[2:]")
+
+    def visit_FunctionDef(self, node):
+        node = self.generic_visit(node)
+        def is_glom_decorator(d):
+            if isinstance(d, gast.Name):
+                return d.id == 'glom_name'
+            elif isinstance(d, gast.Attribute):
+                return is_glom_decorator(d.attr)
+            return d == 'glom'
+        node.decorator_list = list(filter(lambda d: not is_glom_decorator(d),
+                                          node.decorator_list))
+        return node
 
     def visit_Assign(self, node):
         if isinstance(node.value, gast.Call) and \
@@ -41,7 +56,7 @@ class NameRewriter(gast.NodeTransformer):
         return node
 
 
-def name(fn):
+def glom_name(fn):
     node = NameRewriter().visit(parse_function(fn))
-    g = {"glom": glom}.update(fn.__globals__)
-    return compile_function(node, g)
+    fn.__globals__.update({"_TTT": _TTT})
+    return functools.wraps(fn)(compile_function(node, globals_=fn.__globals__))
