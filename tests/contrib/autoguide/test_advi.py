@@ -85,11 +85,19 @@ def test_irange_smoke(auto_class, Elbo):
     infer.step()
 
 
+def auto_guide_list_x(model):
+    guide = AutoGuideList(model)
+    guide.add(AutoDelta(poutine.block(model, expose=["x"])))
+    guide.add(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    return guide
+
+
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    auto_guide_list_x,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_median(auto_class, Elbo):
@@ -100,7 +108,7 @@ def test_median(auto_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = auto_class(model)
-    infer = SVI(model, guide, Adam({'lr': 0.05}), Elbo(strict_enumeration_warning=False))
+    infer = SVI(model, guide, Adam({'lr': 0.02}), Elbo(strict_enumeration_warning=False))
     for _ in range(100):
         infer.step()
 
