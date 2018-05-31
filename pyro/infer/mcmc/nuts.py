@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import namedtuple
+from collections import OrderedDict, namedtuple
 
 import torch
 
@@ -201,7 +201,7 @@ class NUTS(HMC):
                          tree_size, turning, diverging, sum_accept_probs, num_proposals)
 
     def sample(self, trace):
-        z = {name: node["value"].detach() for name, node in trace.iter_stochastic_nodes()}
+        z = OrderedDict((name, node["value"].detach()) for name, node in trace.iter_stochastic_nodes())
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
