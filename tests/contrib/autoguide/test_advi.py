@@ -7,7 +7,8 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.autoguide import (AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
+from pyro.contrib.autoguide import (AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel,
+                                    AutoGuideList, AutoTransformedNormal,
                                     AutoLowRankMultivariateNormal, AutoMultivariateNormal)
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.optim import Adam

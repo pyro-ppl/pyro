@@ -519,6 +519,53 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         return loc, scale
 
 
+class AutoTransformedNormal(AutoContinuous):
+    """
+    This implementation of :class:`AutoContinuous` uses a Transformed
+    Normal distribution via a IAF to construct a guide
+    over the entire latent space. The guide does not depend on the model's
+    ``*args, **kwargs``.
+
+    Usage::
+
+        guide = AutoTransformed(model, rank=10)
+        svi = SVI(model, guide, ...)
+
+    :param callable model: a generative model
+    :param int rank: the rank of the low-rank part of the covariance matrix
+    :param str prefix: a prefix that will be prefixed to all param internal sites
+    """
+    def __init__(self, model, prefix="auto", rank=1):
+        if not isinstance(rank, numbers.Number) or not rank > 0:
+            raise ValueError("Expected rank >= 0 but got {}".format(rank))
+        self.rank = rank
+        super(AutoLowRankMultivariateNormal, self).__init__(model, prefix)
+
+    def sample_latent(self, *args, **kwargs):
+        """
+        Samples the (single) multivariate normal latent used in the auto guide.
+        """
+        loc = pyro.param("{}_loc".format(self.prefix),
+                         lambda: torch.zeros(self.latent_dim))
+        W_term = pyro.param("{}_W_term".format(self.prefix),
+                            lambda: torch.randn(self.rank, self.latent_dim) * (0.5 / self.rank) ** 0.5)
+        D_term = pyro.param("{}_D_term".format(self.prefix),
+                            lambda: torch.ones(self.latent_dim) * 0.5,
+                            constraint=constraints.positive)
+        iaf = dist.InverseAutoregressiveFlow(10, 40)
+        pyro.module("iaf", iaf.module)
+        iaf_dist = dist.TransformedDistribution(dist.LowRankMultivariateNormal(loc, W_term, D_term), [iaf])
+        return pyro.sample("_{}_latent".format(self.prefix),
+                           af_dist,
+                           infer={"is_auxiliary": True})
+
+    def _loc_scale(self, *args, **kwargs):
+        loc = pyro.param("{}_loc".format(self.prefix))
+        W_term = pyro.param("{}_W_term".format(self.prefix))
+        D_term = pyro.param("{}_D_term".format(self.prefix))
+        return loc, scale
+
+
 class AutoDiscreteParallel(AutoGuide):
     """
     A discrete mean-field guide that learns a latent discrete distribution for
