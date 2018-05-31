@@ -1,5 +1,6 @@
 from collections import OrderedDict
 
+import numpy as np
 import pytest
 import torch
 
@@ -7,8 +8,8 @@ from pyro.ops.welford import WelfordCovariance
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize('n_samples,dim_size', [(10000, 1),
-                                                (10000, 7),
+@pytest.mark.parametrize('n_samples,dim_size', [(1000, 1),
+                                                (1000, 7),
                                                 pytest.mark.xfail((1, 10))])  # Insufficient samples
 @pytest.mark.init(rng_seed=7)
 def test_welford_diagonal(n_samples, dim_size):
@@ -17,16 +18,19 @@ def test_welford_diagonal(n_samples, dim_size):
     cov_diagonal = torch.rand(dim_size)
     cov = torch.diag(cov_diagonal)
     dist = torch.distributions.MultivariateNormal(loc=loc, covariance_matrix=cov)
+    samples = []
     for _ in range(n_samples):
-        sample = OrderedDict((i, v) for i, v in enumerate(dist.sample()))
-        w.update(sample)
+        sample = dist.sample()
+        samples.append(sample)
+        w.update(OrderedDict((i, v) for i, v in enumerate(sample)))
+
+    sample_variance = torch.stack(samples).var(dim=0, unbiased=True)
     estimates = w.get_estimates(regularize=False).squeeze(-1)
-    # Since Welford is in estimation, allow for a reasonable margin of error
-    assert_equal(cov_diagonal, estimates, prec=1e-1)
+    assert_equal(estimates, sample_variance)
 
 
-@pytest.mark.parametrize('n_samples,dim_size', [(20000, 1),
-                                                (20000, 7),
+@pytest.mark.parametrize('n_samples,dim_size', [(1000, 1),
+                                                (1000, 7),
                                                 pytest.mark.xfail((1, 10))])
 @pytest.mark.init(rng_seed=7)
 def test_welford_dense(n_samples, dim_size):
@@ -35,8 +39,12 @@ def test_welford_dense(n_samples, dim_size):
     cov = torch.randn(dim_size, dim_size)
     cov = torch.mm(cov, cov.t())
     dist = torch.distributions.MultivariateNormal(loc=loc, covariance_matrix=cov)
+    samples = []
     for _ in range(n_samples):
-        sample = OrderedDict((i, v) for i, v in enumerate(dist.sample()))
-        w.update(sample)
-    estimates = w.get_estimates(regularize=False)
-    assert_equal(cov, estimates, prec=3e-1)
+        sample = dist.sample()
+        samples.append(sample)
+        w.update(OrderedDict((i, v) for i, v in enumerate(sample)))
+
+    sample_cov = np.cov(torch.stack(samples).data.numpy(), bias=False, rowvar=False)
+    estimates = w.get_estimates(regularize=False).data.numpy()
+    assert_equal(estimates, sample_cov)
