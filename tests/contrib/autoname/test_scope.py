@@ -2,12 +2,12 @@ import pyro
 import pyro.poutine as poutine
 import pyro.distributions.torch as dist
 
-from pyro.contrib.autoname import outer_scope, scope
+from pyro.contrib.autoname import scope
 
 
 def test_multi_nested():
 
-    @outer_scope
+    @scope
     def model1(r=True):
         model2()
         model2()
@@ -17,7 +17,7 @@ def test_multi_nested():
                 model1(r=False)
         model2()
 
-    @outer_scope
+    @scope
     def model2():
         return pyro.sample("y", dist.Normal(0.0, 1.0))
 
@@ -40,7 +40,7 @@ def test_multi_nested():
 
 def test_recur_multi():
 
-    @scope
+    @scope(inner=True)
     def model1(r=True):
         model2()
         with scope(prefix="inter"):
@@ -49,7 +49,7 @@ def test_recur_multi():
                 model1(r=False)
         model2()
 
-    @scope
+    @scope(inner=True)
     def model2():
         return pyro.sample("y", dist.Normal(0.0, 1.0))
 

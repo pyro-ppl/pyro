@@ -60,23 +60,17 @@ class OuterScopeMessenger(ScopeMessenger):
         return super(OuterScopeMessenger, self).__enter__()
 
 
-def scope(fn=None, prefix=None):
+def scope(fn=None, prefix=None, inner=None):
     """
-    inner scope
+    scope
     """
-    msngr = ScopeMessenger(prefix=prefix)
-    return msngr(fn) if fn is not None else msngr
-
-
-def outer_scope(fn=None, prefix=None):
-    """
-    outer scope
-    """
-    msngr = OuterScopeMessenger(prefix=prefix)
+    if inner:
+        msngr = ScopeMessenger(prefix=prefix)
+    else:
+        msngr = OuterScopeMessenger(prefix=prefix)
     return msngr(fn) if fn is not None else msngr
 
 
 __all__ = [
-    "outer_scope",
     "scope",
 ]
