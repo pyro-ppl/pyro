@@ -20,6 +20,9 @@ class InverseAutoregressiveFlow(Transform):
     >>> iaf = InverseAutoregressiveFlow(10, 40)
     >>> iaf_module = pyro.module("my_iaf", iaf.module)
     >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf])
+    >>> iaf_dist.sample()  # doctest: +SKIP
+        tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
+                0.1389, -0.4629,  0.0986])
 
     Note that this implementation is only meant to be used in settings where the inverse of the Bijector
     is never explicitly computed (rather the result is cached from the forward call). In the context of
@@ -79,9 +82,9 @@ class InverseAutoregressiveFlow(Transform):
         sample from the base distribution (or the output of a previous flow)
         """
         hidden = self.module.arn(x)
-        scale = self.module.sigmoid(hidden[:, 0:self.input_dim] +
+        scale = self.module.sigmoid(hidden[..., 0:self.input_dim] +
                                     hidden.new_tensor(self.module.sigmoid_bias))
-        mean = hidden[:, self.input_dim:]
+        mean = hidden[..., self.input_dim:]
         y = scale * x + (1 - scale) * mean
         self._add_intermediate_to_cache(x, y, 'x')
         self._add_intermediate_to_cache(scale, y, 'scale')
