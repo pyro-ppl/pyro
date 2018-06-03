@@ -34,6 +34,7 @@ except ImportError:
     from contextlib2 import ExitStack  # python 2
 
 __all__ = [
+    'AutoCallable',
     'AutoContinuous',
     'AutoDelta',
     'AutoDiagonalNormal',
@@ -157,7 +158,8 @@ class AutoGuideList(AutoGuide):
         have been created by blocking the model to restrict to a subset of
         sample sites. No two parts should operate on any one sample site.
 
-        :param AutoGuide part: a partial guide to add
+        :param part: a partial guide to add
+        :type part: AutoGuide or callable
         """
         if not isinstance(part, AutoGuide):
             part = AutoCallable(self.model, part)
