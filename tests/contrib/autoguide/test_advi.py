@@ -3,11 +3,12 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import pytest
 import torch
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.autoguide import (AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
+from pyro.contrib.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
                                     AutoLowRankMultivariateNormal, AutoMultivariateNormal)
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.optim import Adam
@@ -92,12 +93,28 @@ def auto_guide_list_x(model):
     return guide
 
 
+def auto_guide_callable(model):
+    def guide_x():
+        x_loc = pyro.param("x_loc", torch.tensor(1.))
+        x_scale = pyro.param("x_scale", torch.tensor(2.), constraint=constraints.positive)
+        pyro.sample("x", dist.Normal(x_loc, x_scale))
+
+    def median_x():
+        return {"x": pyro.param("x_loc", torch.tensor(1.))}
+
+    guide = AutoGuideList(model)
+    guide.add(AutoCallable(model, guide_x, median_x))
+    guide.add(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    return guide
+
+
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
     auto_guide_list_x,
+    auto_guide_callable,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_median(auto_class, Elbo):
@@ -202,6 +219,53 @@ def test_guide_list(auto_class):
     guide.add(auto_class(poutine.block(model, expose=["x"]), prefix="auto_x"))
     guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
     guide()
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+])
+def test_callable(auto_class):
+
+    def model():
+        pyro.sample("x", dist.Normal(0., 1.))
+        pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
+
+    def guide_x():
+        x_loc = pyro.param("x_loc", torch.tensor(0.))
+        pyro.sample("x", dist.Delta(x_loc))
+
+    guide = AutoGuideList(model)
+    guide.add(guide_x)
+    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    values = guide()
+    assert set(values) == set(["y"])
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+])
+def test_callable_return_dict(auto_class):
+
+    def model():
+        pyro.sample("x", dist.Normal(0., 1.))
+        pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
+
+    def guide_x():
+        x_loc = pyro.param("x_loc", torch.tensor(0.))
+        x = pyro.sample("x", dist.Delta(x_loc))
+        return {"x": x}
+
+    guide = AutoGuideList(model)
+    guide.add(guide_x)
+    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    values = guide()
+    assert set(values) == set(["x", "y"])
 
 
 def test_empty_model_error():

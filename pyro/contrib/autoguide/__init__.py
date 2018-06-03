@@ -159,7 +159,8 @@ class AutoGuideList(AutoGuide):
 
         :param AutoGuide part: a partial guide to add
         """
-        assert isinstance(part, AutoGuide), type(part)
+        if not isinstance(part, AutoGuide):
+            part = AutoCallable(self.model, part)
         self.parts.append(part)
         assert part.master is None
         part.master = weakref.ref(self)
@@ -196,6 +197,45 @@ class AutoGuideList(AutoGuide):
         for part in self.parts:
             result.update(part.median(*args, **kwargs))
         return result
+
+
+class AutoCallable(AutoGuide):
+    """
+    :class:`AutoGuide` wrapper for simple callable guides.
+
+    This is used internally for composing autoguides with custom user-defined
+    guides that are simple callables, e.g.::
+
+        def my_local_guide(*args, **kwargs):
+            ...
+
+        guide = AutoGuideList(model)
+        guide.add(AutoDelta(poutine.block(model, expose=['my_global_param']))
+        guide.add(my_local_guide)  # automatically wrapped in an AutoCallable
+
+    To specify a median callable, you can instead::
+
+        def my_local_median(*args, **kwargs)
+            ...
+
+        guide.add(AutoCallable(model, my_local_guide, my_local_median))
+
+    For more complex guides that need e.g. access to iaranges, users should
+    instead subclass ``AutoGuide``.
+
+    :param callable model: a Pyro model
+    :param callable guide: a Pyro guide (typically over only part of the model)
+    :param callable median: an optional callable returning a dict mapping
+        sample site name to computed median tensor.
+    """
+    def __init__(self, model, guide, median=lambda *args, **kwargs: {}):
+        super(AutoCallable, self).__init__(model, prefix="")
+        self._guide = guide
+        self.median = median
+
+    def __call__(self, *args, **kwargs):
+        result = self._guide(*args, **kwargs)
+        return {} if result is None else result
 
 
 class AutoDelta(AutoGuide):
