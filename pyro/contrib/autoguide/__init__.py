@@ -520,7 +520,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         return loc, scale
 
 
-class AutoTransformedNormal(AutoLowRankMultivariateNormal):
+class AutoTransformedNormal(AutoContinuous):
     """
     This implementation of :class:`AutoContinuous` uses a Transformed
     Low Rank MV Normal distribution via a IAF to construct a guide
@@ -537,8 +537,11 @@ class AutoTransformedNormal(AutoLowRankMultivariateNormal):
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
     def __init__(self, model, hidden_dim=None, prefix="auto", rank=1):
+        if not isinstance(rank, numbers.Number) or not rank > 0:
+            raise ValueError("Expected rank >= 0 but got {}".format(rank))
         self.hidden_dim = hidden_dim
-        super(AutoTransformedNormal, self).__init__(model, prefix, rank)
+        self.rank = rank
+        super(AutoTransformedNormal, self).__init__(model, prefix)
 
     def sample_latent(self, *args, **kwargs):
         """
@@ -556,6 +559,13 @@ class AutoTransformedNormal(AutoLowRankMultivariateNormal):
         pyro.module("{}_iaf".format(self.prefix), iaf.module)
         iaf_dist = dist.TransformedDistribution(dist.LowRankMultivariateNormal(loc, W_term, D_term), [iaf])
         return pyro.sample("_{}_latent".format(self.prefix), iaf_dist, infer={"is_auxiliary": True})
+
+    def _loc_scale(self, *args, **kwargs):
+        loc = pyro.param("{}_loc".format(self.prefix))
+        W_term = pyro.param("{}_W_term".format(self.prefix))
+        D_term = pyro.param("{}_D_term".format(self.prefix))
+        scale = (W_term.pow(2).sum(0) + D_term).sqrt()
+        return loc, scale
 
 
 class AutoDiscreteParallel(AutoGuide):
