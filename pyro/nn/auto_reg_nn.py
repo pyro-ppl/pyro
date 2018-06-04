@@ -83,8 +83,11 @@ class AutoRegressiveNN(nn.Module):
         self.mask2 = torch.zeros(input_dim * self.output_dim_multiplier, hidden_dim)
 
         for k in range(hidden_dim):
-            # fill in mask1
-            m_k = self.mask_encoding[k].item()
+            if self.mask_encoding.dim():
+                # fill in mask1
+                m_k = self.mask_encoding[k].item()
+            else:
+                m_k = self.mask_encoding.item()
             slice_k = torch.cat([torch.ones(m_k), torch.zeros(input_dim - m_k)])
             for j in range(input_dim):
                 self.mask1[k, self.permutation[j]] = slice_k[j]
