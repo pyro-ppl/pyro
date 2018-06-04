@@ -65,7 +65,7 @@ class AutoRegressiveNN(nn.Module):
 
         if mask_encoding is None:
             # the dependency structure is chosen at random
-            self.mask_encoding = 1 + torch.multinomial(torch.ones(input_dim - 1) / (input_dim - 1),
+            self.mask_encoding = 1 + torch.multinomial(torch.tensor(input_dim - 1).fill_(1.).float(),
                                                        num_samples=hidden_dim, replacement=True)
         else:
             # the dependency structure is given by the user
