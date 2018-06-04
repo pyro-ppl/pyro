@@ -59,6 +59,14 @@ AutoLowRankMultivariateNormal
     :special-members: __call__
     :show-inheritance:
 
+AutoTransformedNormal
+-----------------------------
+.. autoclass:: pyro.contrib.autoguide.AutoTransformedNormal
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+
 AutoDiscreteParallel
 --------------------
 .. autoclass:: pyro.contrib.autoguide.AutoDiscreteParallel
