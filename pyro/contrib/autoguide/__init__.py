@@ -536,7 +536,8 @@ class AutoTransformedNormal(AutoLowRankMultivariateNormal):
     :param int rank: the rank of the low-rank part of the covariance matrix
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
-    def __init__(self, model, prefix="auto", rank=1):
+    def __init__(self, model, hidden_dim=None, prefix="auto", rank=1):
+        self.hidden_dim = hidden_dim
         super(AutoTransformedNormal, self).__init__(model, prefix, rank)
 
     def sample_latent(self, *args, **kwargs):
@@ -550,7 +551,8 @@ class AutoTransformedNormal(AutoLowRankMultivariateNormal):
         D_term = pyro.param("{}_D_term".format(self.prefix),
                             lambda: torch.ones(self.latent_dim) * 0.5,
                             constraint=constraints.positive)
-        iaf = dist.InverseAutoregressiveFlow(self.latent_dim, 10*self.latent_dim)
+        hidden_dim = self.hidden_dim if self.hidden_dim is not None else self.latent_dim
+        iaf = dist.InverseAutoregressiveFlow(self.latent_dim, hidden_dim)
         pyro.module("{}_iaf".format(self.prefix), iaf.module)
         iaf_dist = dist.TransformedDistribution(dist.LowRankMultivariateNormal(loc, W_term, D_term), [iaf])
         return pyro.sample("_{}_latent".format(self.prefix), iaf_dist, infer={"is_auxiliary": True})
