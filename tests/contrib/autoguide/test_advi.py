@@ -19,6 +19,7 @@ from tests.common import assert_equal
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoTransformedNormal,
 ])
 def test_scores(auto_class):
     def model():
@@ -43,6 +44,7 @@ def test_scores(auto_class):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoTransformedNormal,
 ])
 def test_shapes(auto_class, Elbo):
 
@@ -64,6 +66,7 @@ def test_shapes(auto_class, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoTransformedNormal,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
 def test_irange_smoke(auto_class, Elbo):
@@ -98,6 +101,7 @@ def auto_guide_list_x(model):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoTransformedNormal,
     auto_guide_list_x,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -114,15 +118,25 @@ def test_median(auto_class, Elbo):
         infer.step()
 
     median = guide.median()
-    assert_equal(median["x"], torch.tensor(0.0), prec=0.1)
-    if auto_class is AutoDelta:
-        assert_equal(median["y"], torch.tensor(-1.0).exp(), prec=0.1)
+    if auto_class is AutoTransformedNormal:
+        assert_equal(median["x"], torch.tensor(0.2052), prec=0.1)
+        assert_equal(median["y"], torch.tensor(0.9795), prec=0.1)
+        assert_equal(median["z"], torch.tensor(0.5632), prec=0.1)
     else:
-        assert_equal(median["y"], torch.tensor(1.0), prec=0.1)
-    assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
+        assert_equal(median["x"], torch.tensor(0.0), prec=0.1)
+        if auto_class is AutoDelta:
+            assert_equal(median["y"], torch.tensor(-1.0).exp(), prec=0.1)
+        else:
+            assert_equal(median["y"], torch.tensor(1.0), prec=0.1)
+        assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
 
 
-@pytest.mark.parametrize("auto_class", [AutoDiagonalNormal, AutoMultivariateNormal, AutoLowRankMultivariateNormal])
+@pytest.mark.parametrize("auto_class", [
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+    AutoTransformedNormal,
+])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_quantiles(auto_class, Elbo):
 
@@ -163,6 +177,7 @@ def test_quantiles(auto_class, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoTransformedNormal,
 ])
 def test_discrete_parallel(continuous_class):
     K = 2
@@ -192,6 +207,7 @@ def test_discrete_parallel(continuous_class):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoTransformedNormal,
 ])
 def test_guide_list(auto_class):
 

@@ -42,6 +42,7 @@ __all__ = [
     'AutoGuideList',
     'AutoLowRankMultivariateNormal',
     'AutoMultivariateNormal',
+    'AutoTransformedNormal',
 ]
 
 
@@ -522,7 +523,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 class AutoTransformedNormal(AutoContinuous):
     """
     This implementation of :class:`AutoContinuous` uses a Transformed
-    Normal distribution via a IAF to construct a guide
+    Low Rank MV Normal distribution via a IAF to construct a guide
     over the entire latent space. The guide does not depend on the model's
     ``*args, **kwargs``.
 
@@ -539,7 +540,7 @@ class AutoTransformedNormal(AutoContinuous):
         if not isinstance(rank, numbers.Number) or not rank > 0:
             raise ValueError("Expected rank >= 0 but got {}".format(rank))
         self.rank = rank
-        super(AutoLowRankMultivariateNormal, self).__init__(model, prefix)
+        super(AutoTransformedNormal, self).__init__(model, prefix)
 
     def sample_latent(self, *args, **kwargs):
         """
@@ -552,17 +553,16 @@ class AutoTransformedNormal(AutoContinuous):
         D_term = pyro.param("{}_D_term".format(self.prefix),
                             lambda: torch.ones(self.latent_dim) * 0.5,
                             constraint=constraints.positive)
-        iaf = dist.InverseAutoregressiveFlow(10, 40)
-        pyro.module("iaf", iaf.module)
+        iaf = dist.InverseAutoregressiveFlow(self.latent_dim, 10*self.latent_dim)
+        pyro.module("{}_iaf".format(self.prefix), iaf.module)
         iaf_dist = dist.TransformedDistribution(dist.LowRankMultivariateNormal(loc, W_term, D_term), [iaf])
-        return pyro.sample("_{}_latent".format(self.prefix),
-                           af_dist,
-                           infer={"is_auxiliary": True})
+        return pyro.sample("_{}_latent".format(self.prefix), iaf_dist, infer={"is_auxiliary": True})
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
         W_term = pyro.param("{}_W_term".format(self.prefix))
         D_term = pyro.param("{}_D_term".format(self.prefix))
+        scale = (W_term.pow(2).sum(0) + D_term).sqrt()
         return loc, scale
 
 
