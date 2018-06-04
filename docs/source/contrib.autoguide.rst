@@ -19,6 +19,14 @@ AutoGuideList
     :special-members: __call__
     :show-inheritance:
 
+AutoCallable
+------------
+.. autoclass:: pyro.contrib.autoguide.AutoCallable
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+
 AutoDelta
 ---------
 .. autoclass:: pyro.contrib.autoguide.AutoDelta
