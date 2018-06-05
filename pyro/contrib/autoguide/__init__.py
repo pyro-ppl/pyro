@@ -590,19 +590,19 @@ class AutoTransformedNormal(AutoContinuous):
         """
         Samples the (single) multivariate normal latent used in the auto guide.
         """
-        hidden_dim = self.hidden_dim if self.hidden_dim is not None else self.latent_dim
-        self.iaf = dist.InverseAutoregressiveFlow(self.latent_dim, hidden_dim, sigmoid_bias=self.sigmoid_bias)
+        if self.hidden_dim is None:
+            self.hidden_dim = self.latent_dim
+        self.iaf = dist.InverseAutoregressiveFlow(self.latent_dim, self.hidden_dim, sigmoid_bias=self.sigmoid_bias)
         pyro.module("{}_iaf".format(self.prefix), self.iaf.module)
-        iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([hidden_dim]), self.iaf)
+        iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.hidden_dim]), self.iaf)
         loc = pyro.sample("{}_loc".format(self.prefix), iaf_dist.independent(1), infer={"is_auxiliary": True})
         scale = pyro.param("{}_scale".format(self.prefix), lambda: torch.ones(self.latent_dim))
         return pyro.sample("_{}_latent".format(self.prefix), dist.Normal(loc, scale).independent(1),
                            infer={"is_auxiliary": True})
 
     def _loc_scale(self, *args, **kwargs):
-        hidden_dim = self.hidden_dim if self.hidden_dim is not None else self.latent_dim
         prototype = pyro.param("{}_scale".format(self.prefix))
-        loc = self.iaf(prototype.new_zeros(hidden_dim))
+        loc = self.iaf(prototype.new_zeros(self.hidden_dim))
         scale = None  # no analytical solution
         return loc, scale
 
