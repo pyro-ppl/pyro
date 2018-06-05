@@ -133,7 +133,7 @@ def test_median(auto_class, Elbo):
     if auto_class is AutoTransformedNormal:
         lr = 0.005
     infer = SVI(model, guide, Adam({'lr': lr}), Elbo(strict_enumeration_warning=False))
-    for _ in range(200):
+    for _ in range(1000):
         infer.step()
 
     median = guide.median()
