@@ -45,7 +45,7 @@ def test_subsample_gradient(Elbo, reparameterized, subsample):
     optim = Adam({"lr": 0.1})
     elbo = Elbo(max_iarange_nesting=1,
                 num_particles=50000,
-                auto_vectorize=True,
+                vectorize_particles=True,
                 strict_enumeration_warning=False)
     inference = SVI(model, guide, optim, loss=elbo)
     if subsample_size == 1:
@@ -114,7 +114,7 @@ def test_iarange(Elbo, reparameterized):
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-def test_iarange_elbo_auto_vectorized(Elbo, reparameterized):
+def test_iarange_elbo_vectorized_particles(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     num_particles = 20000
@@ -145,7 +145,7 @@ def test_iarange_elbo_auto_vectorized(Elbo, reparameterized):
     optim = Adam({"lr": 0.1})
     loss = Elbo(max_iarange_nesting=1,
                 num_particles=num_particles,
-                auto_vectorize=True,
+                vectorize_particles=True,
                 strict_enumeration_warning=False)
     inference = SVI(model, guide, optim, loss=loss)
     inference.loss_and_grads(model, guide)

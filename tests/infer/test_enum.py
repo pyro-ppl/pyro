@@ -304,7 +304,7 @@ def test_elbo_berns(enumerate1, enumerate2, enumerate3):
 
     elbo = TraceEnum_ELBO(max_iarange_nesting=1,
                           num_particles=num_particles,
-                          auto_vectorize=True,
+                          vectorize_particles=True,
                           strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
     actual_loss = elbo.loss_and_grads(model, guide)
     actual_grad = q.grad
@@ -493,7 +493,7 @@ def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enum
 
     elbo = TraceEnum_ELBO(max_iarange_nesting=3,
                           num_particles=num_particles,
-                          auto_vectorize=True,
+                          vectorize_particles=True,
                           strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
     actual_loss = elbo.loss_and_grads(model, guide)
     actual_grad = pyro.param('q').grad

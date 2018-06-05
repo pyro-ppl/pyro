@@ -23,7 +23,7 @@ class ELBO(object):
         :func:`pyro.iarange` contexts. This is only required to enumerate over
         sample sites in parallel, e.g. if a site sets
         ``infer={"enumerate": "parallel"}``.
-    :param bool auto_vectorize: Vectorize ELBO computation over `num_particles`.
+    :param bool vectorize_particles: Vectorize ELBO computation over `num_particles`.
         In addition, this wraps the model and guide inside a
         :class:`~pyro.poutine.broadcast` poutine for automatic broadcasting of
         sample site batch shapes. This requires specifying a finite value for
@@ -45,17 +45,16 @@ class ELBO(object):
     def __init__(self,
                  num_particles=1,
                  max_iarange_nesting=float('inf'),
-                 auto_vectorize=False,
+                 vectorize_particles=False,
                  strict_enumeration_warning=True):
         self.num_particles = num_particles
         self.max_iarange_nesting = max_iarange_nesting
-        self.auto_vectorize = auto_vectorize
-        if self.auto_vectorize:
-            if self.num_particles > 1:
-                if self.max_iarange_nesting == float('inf'):
-                    raise ValueError("Automatic vectorization over num_particles requires " +
-                                     "a finite value for `max_iarange_nesting` arg.")
-                self.max_iarange_nesting += 1
+        self.vectorize_particles = vectorize_particles
+        if self.vectorize_particles:
+            if self.num_particles > 1 and self.max_iarange_nesting == float('inf'):
+                raise ValueError("Automatic vectorization over num_particles requires " +
+                                 "a finite value for `max_iarange_nesting` arg.")
+            self.max_iarange_nesting += 1
         self.strict_enumeration_warning = strict_enumeration_warning
 
     def _vectorized_num_particles(self, fn):
@@ -100,7 +99,7 @@ class ELBO(object):
         Runs the guide and runs the model against the guide with
         the result packaged as a trace generator.
         """
-        if self.auto_vectorize:
+        if self.vectorize_particles:
             yield self._get_vectorized_trace(model, guide, *args, **kwargs)
         else:
             for i in range(self.num_particles):

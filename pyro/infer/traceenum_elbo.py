@@ -108,7 +108,7 @@ class TraceEnum_ELBO(ELBO):
         Runs the guide and runs the model against the guide with
         the result packaged as a trace generator.
         """
-        if self.auto_vectorize:
+        if self.vectorize_particles:
             # enable parallel enumeration over the vectorized guide.
             guide = poutine.enum(self._vectorized_num_particles(guide),
                                  first_available_dim=self.max_iarange_nesting)

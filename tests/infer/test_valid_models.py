@@ -928,6 +928,7 @@ def test_dim_allocation_error(Elbo):
     assert_error(model, guide, Elbo())
 
 
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_vectorized_num_particles(Elbo):
     data = torch.ones(1000, 2)
 
@@ -945,7 +946,7 @@ def test_vectorized_num_particles(Elbo):
     pyro.clear_param_store()
     guide = config_enumerate(guide) if Elbo is TraceEnum_ELBO else guide
     assert_ok(model, guide, Elbo(num_particles=10,
-                                 auto_vectorize=True,
+                                 vectorize_particles=True,
                                  max_iarange_nesting=2,
                                  strict_enumeration_warning=False))
 
@@ -976,5 +977,5 @@ def test_enum_discrete_vectorized_num_particles(enumerate_):
 
     assert_ok(model, model, TraceEnum_ELBO(max_iarange_nesting=2,
                                            num_particles=num_particles,
-                                           auto_vectorize=True,
+                                           vectorize_particles=True,
                                            strict_enumeration_warning=(enumerate_ == "parallel")))
