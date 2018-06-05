@@ -418,8 +418,6 @@ class AutoContinuous(AutoGuide):
         :rtype: dict
         """
         loc, scale = self._loc_scale(*args, **kwargs)
-        if loc is None or scale is None:
-            raise ValueError('loc and scale cannot be None')
         quantiles = loc.new_tensor(quantiles).unsqueeze(-1)
         latents = dist.Normal(loc, scale).icdf(quantiles)
         result = {}
@@ -605,6 +603,9 @@ class AutoTransformedNormal(AutoContinuous):
         loc = self.iaf(prototype.new_zeros(self.hidden_dim))
         scale = None  # no analytical solution
         return loc, scale
+
+    def quantiles(self, quantiles, *args, **kwargs):
+        raise NotImplementedError('scale cannot be computed analytically')
 
 
 class AutoDiscreteParallel(AutoGuide):
