@@ -142,3 +142,23 @@ def test_basic_scope():
     tr2 = poutine.trace(f2).get_trace()
     assert "f2/f1/x" in tr2.nodes
     assert "f2/y" in tr2.nodes
+
+
+def test_nested_traces():
+
+    @scope
+    def f1():
+        return pyro.sample("x", dist.Bernoulli(0.5))
+
+    @scope
+    def f2():
+        f1()
+        f1()
+        f1()
+        return pyro.sample("y", dist.Bernoulli(0.5))
+
+    expected_names = ["f2/f1/x", "f2/f1_0/x", "f2/f1_1/x", "f2/y"]
+    tr2 = poutine.trace(poutine.trace(f2)).get_trace()
+    actual_names = [name for name, node in tr2.nodes.items()
+                    if node['type'] == "sample"]
+    assert expected_names == actual_names
