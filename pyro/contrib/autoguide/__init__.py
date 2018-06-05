@@ -402,7 +402,7 @@ class AutoContinuous(AutoGuide):
         :return: A dict mapping sample site name to median tensor.
         :rtype: dict
         """
-        loc, scale = self._loc_scale(*args, **kwargs)
+        loc, _ = self._loc_scale(*args, **kwargs)
         return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
                 for site, unconstrained_value in self._unpack_latent(loc)}
 
@@ -418,6 +418,8 @@ class AutoContinuous(AutoGuide):
         :rtype: dict
         """
         loc, scale = self._loc_scale(*args, **kwargs)
+        if loc is None or scale is None:
+            raise ValueError('loc and scale cannot be None')
         quantiles = loc.new_tensor(quantiles).unsqueeze(-1)
         latents = dist.Normal(loc, scale).icdf(quantiles)
         result = {}
@@ -571,7 +573,7 @@ class AutoTransformedNormal(AutoContinuous):
 
     Usage::
 
-        guide = AutoTransformed(model, rank=10)
+        guide = AutoTransformedNormal(model, rank=10)
         svi = SVI(model, guide, ...)
 
     :param callable model: a generative model
@@ -581,8 +583,8 @@ class AutoTransformedNormal(AutoContinuous):
     def __init__(self, model, hidden_dim=None, sigmoid_bias=2.0, prefix="auto", rank=1):
         if not isinstance(rank, numbers.Number) or not rank > 0:
             raise ValueError("Expected rank >= 0 but got {}".format(rank))
-        self.hidden_dim = hidden_dim
         self.sigmoid_bias = sigmoid_bias
+        self.hidden_dim = hidden_dim
         self.rank = rank
         super(AutoTransformedNormal, self).__init__(model, prefix)
 
@@ -590,26 +592,20 @@ class AutoTransformedNormal(AutoContinuous):
         """
         Samples the (single) multivariate normal latent used in the auto guide.
         """
-        loc = pyro.param("{}_loc".format(self.prefix),
-                         lambda: torch.zeros(self.latent_dim))
-        W_term = pyro.param("{}_W_term".format(self.prefix),
-                            lambda: torch.randn(self.rank, self.latent_dim) * (0.5 / self.rank) ** 0.5)
-        D_term = pyro.param("{}_D_term".format(self.prefix),
-                            lambda: torch.ones(self.latent_dim) * 0.5,
-                            constraint=constraints.positive)
         hidden_dim = self.hidden_dim if self.hidden_dim is not None else self.latent_dim
-        iaf = dist.InverseAutoregressiveFlow(self.latent_dim, hidden_dim, sigmoid_bias=self.sigmoid_bias)
-        pyro.module("{}_iaf".format(self.prefix), iaf.module)
-        self.iaf_dist = dist.TransformedDistribution(dist.LowRankMultivariateNormal(loc, W_term, D_term), [iaf])
-        return pyro.sample("_{}_latent".format(self.prefix), self.iaf_dist, infer={"is_auxiliary": True})
+        self.iaf = dist.InverseAutoregressiveFlow(self.latent_dim, hidden_dim, sigmoid_bias=self.sigmoid_bias)
+        pyro.module("{}_iaf".format(self.prefix), self.iaf.module)
+        iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([hidden_dim]), self.iaf)
+        loc = pyro.sample("{}_loc".format(self.prefix), iaf_dist.independent(1), infer={"is_auxiliary": True})
+        scale = pyro.param("{}_scale".format(self.prefix), lambda: torch.ones(self.latent_dim))
+        return pyro.sample("_{}_latent".format(self.prefix), dist.Normal(loc, scale).independent(1),
+                           infer={"is_auxiliary": True})
 
     def _loc_scale(self, *args, **kwargs):
-        loc = pyro.param("{}_loc".format(self.prefix))
-        W_term = pyro.param("{}_W_term".format(self.prefix))
-        D_term = pyro.param("{}_D_term".format(self.prefix))
-        scale = (W_term.pow(2).sum(0) + D_term).sqrt()
-        transform = biject_to(self.iaf_dist.support)
-        loc, scale = transform(loc), transform(scale)
+        hidden_dim = self.hidden_dim if self.hidden_dim is not None else self.latent_dim
+        prototype = pyro.param("{}_scale".format(self.prefix))
+        loc = self.iaf(prototype.new_zeros(hidden_dim))
+        scale = None  # no analytical solution
         return loc, scale
 
 

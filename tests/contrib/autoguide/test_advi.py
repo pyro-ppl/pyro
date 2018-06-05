@@ -149,7 +149,6 @@ def test_median(auto_class, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
-    AutoTransformedNormal,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_quantiles(auto_class, Elbo):
