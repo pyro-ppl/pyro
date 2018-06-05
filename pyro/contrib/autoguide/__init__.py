@@ -567,7 +567,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 class AutoTransformedNormal(AutoContinuous):
     """
     This implementation of :class:`AutoContinuous` uses a Transformed
-    Low Rank MV Normal distribution via a IAF to construct a guide
+    Diagonal Normal distribution parameterized via an IAF to construct a guide
     over the entire latent space. The guide does not depend on the model's
     ``*args, **kwargs``.
 
@@ -577,15 +577,13 @@ class AutoTransformedNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     :param callable model: a generative model
-    :param int rank: the rank of the low-rank part of the covariance matrix
+    :param int hidden_dim: number of hidden dimensions in the IAF
+    :param float sigmoid_bias: sigmoid bias in the IAF. Defaults to ``2.0``
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
-    def __init__(self, model, hidden_dim=None, sigmoid_bias=2.0, prefix="auto", rank=1):
-        if not isinstance(rank, numbers.Number) or not rank > 0:
-            raise ValueError("Expected rank >= 0 but got {}".format(rank))
+    def __init__(self, model, hidden_dim=None, sigmoid_bias=2.0, prefix="auto"):
         self.sigmoid_bias = sigmoid_bias
         self.hidden_dim = hidden_dim
-        self.rank = rank
         super(AutoTransformedNormal, self).__init__(model, prefix)
 
     def sample_latent(self, *args, **kwargs):
