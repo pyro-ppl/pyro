@@ -107,7 +107,7 @@ class TraceMessenger(Messenger):
         self.trace = tr
         super(TraceMessenger, self)._reset()
 
-    def _process_message(self, msg):
+    def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.
         :returns: updated message
@@ -121,25 +121,15 @@ class TraceMessenger(Messenger):
         and return the return value.
         """
         name = msg["name"]
-        if self.strict:
-            if name in self.trace:
-                site = self.trace.nodes[name]
-                if site['type'] == msg['type']:
-                    # Cannot sample or observe after a param statement.
-                    raise RuntimeError("{} is already in the trace as a {}".format(name, site['type']))
-                else:
-                    # Cannot sample after a previous sample statement.
-                    raise RuntimeError("Multiple {} sites named '{}'".format(msg['type'], name))
-        else:
-            if name in self.trace and msg["type"] == "sample":
-                split_name = name.split("_")
-                if "_" in name and split_name[-1].isdigit():
-                    counter = int(split_name[-1]) + 1
-                    new_name = "_".join(split_name[:-1] + [str(counter)])
-                else:
-                    new_name = name + "_0"
-                msg["name"] = new_name
-                self._process_message(msg)  # recursively update name
+        if not self.strict and name in self.trace:  # and msg["type"] == "sample":
+            split_name = name.split("_")
+            if "_" in name and split_name[-1].isdigit():
+                counter = int(split_name[-1]) + 1
+                new_name = "_".join(split_name[:-1] + [str(counter)])
+            else:
+                new_name = name + "_0"
+            msg["name"] = new_name
+            self._pyro_sample(msg)  # recursively update name
         return None
 
     def _postprocess_message(self, msg):
