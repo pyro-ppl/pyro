@@ -192,12 +192,12 @@ class Trace(object):
         but raises an error when attempting to add a duplicate node
         instead of silently overwriting.
         """
-        if kwargs["type"] != "param" and site_name in self:
+        if site_name in self:
             site = self.nodes[site_name]
-            if site['type'] == kwargs['type']:
+            if site['type'] != kwargs['type']:
                 # Cannot sample or observe after a param statement.
                 raise RuntimeError("{} is already in the trace as a {}".format(site_name, site['type']))
-            else:
+            elif kwargs['type'] != "param":
                 # Cannot sample after a previous sample statement.
                 raise RuntimeError("Multiple {} sites named '{}'".format(kwargs['type'], site_name))
 
