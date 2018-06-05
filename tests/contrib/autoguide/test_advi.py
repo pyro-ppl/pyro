@@ -113,22 +113,22 @@ def test_median(auto_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = auto_class(model)
-    infer = SVI(model, guide, Adam({'lr': 0.02}), Elbo(strict_enumeration_warning=False))
-    for _ in range(100):
+    steps = 100
+    lr = 0.02
+    if auto_class is AutoTransformedNormal:
+        steps = 500
+        lr = 0.005
+    infer = SVI(model, guide, Adam({'lr': lr}), Elbo(strict_enumeration_warning=False))
+    for _ in range(steps):
         infer.step()
 
     median = guide.median()
-    if auto_class is AutoTransformedNormal:
-        assert_equal(median["x"], torch.tensor(0.2052), prec=0.1)
-        assert_equal(median["y"], torch.tensor(0.9795), prec=0.1)
-        assert_equal(median["z"], torch.tensor(0.5632), prec=0.1)
+    assert_equal(median["x"], torch.tensor(0.0), prec=0.1)
+    if auto_class is AutoDelta:
+        assert_equal(median["y"], torch.tensor(-1.0).exp(), prec=0.1)
     else:
-        assert_equal(median["x"], torch.tensor(0.0), prec=0.1)
-        if auto_class is AutoDelta:
-            assert_equal(median["y"], torch.tensor(-1.0).exp(), prec=0.1)
-        else:
-            assert_equal(median["y"], torch.tensor(1.0), prec=0.1)
-        assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
+        assert_equal(median["y"], torch.tensor(1.0), prec=0.1)
+    assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
 
 
 @pytest.mark.parametrize("auto_class", [
