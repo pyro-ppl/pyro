@@ -269,3 +269,32 @@ def test_normal_gamma_with_dual_averaging():
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_std, prec=0.05)
+
+
+@pytest.mark.parametrize('adapt_step_size,adapt_mass,warmup_steps', [(False, True, 200),
+                                                                     (True, False, 10),
+                                                                     pytest.mark.xfail((False, True, 10))])
+@pytest.mark.init(rng_seed=7)
+@pytest.mark.filterwarnings("ignore:Encountered NAN")
+def test_adaptation_scheduling(adapt_step_size, adapt_mass, warmup_steps):
+    start_buffer = 75
+    end_buffer = 25
+
+    def model(data):
+        mu = pyro.sample('mu', dist.Normal(0, 1))
+        sigma = torch.exp(pyro.sample('log_sigma', dist.Normal(1, 0.1)))
+        pyro.sample('obs', dist.Normal(mu, sigma), obs=data)
+        return mu, sigma
+    data = torch.randn(10)
+
+    hmc_kernel = HMC(model, adapt_step_size=adapt_step_size, adapt_mass=adapt_mass, mass_structure='diagonal')
+    hmc_kernel.setup(warmup_steps, data=data)
+    trace = hmc_kernel.initial_trace()
+    for t in range(warmup_steps):
+        trace = hmc_kernel.sample(trace)
+        assert (hmc_kernel._adaptation_window.adapt_step_size == adapt_step_size)
+        if t >= start_buffer and t < (warmup_steps - end_buffer):
+            assert (hmc_kernel._adaptation_window.adapt_mass == adapt_mass)
+        else:
+            assert (hmc_kernel._adaptation_window.adapt_mass is False)
+    hmc_kernel.cleanup()
