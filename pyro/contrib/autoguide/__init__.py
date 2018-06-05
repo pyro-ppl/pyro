@@ -536,10 +536,11 @@ class AutoTransformedNormal(AutoContinuous):
     :param int rank: the rank of the low-rank part of the covariance matrix
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
-    def __init__(self, model, hidden_dim=None, prefix="auto", rank=1):
+    def __init__(self, model, hidden_dim=None, sigmoid_bias=2.0, prefix="auto", rank=1):
         if not isinstance(rank, numbers.Number) or not rank > 0:
             raise ValueError("Expected rank >= 0 but got {}".format(rank))
         self.hidden_dim = hidden_dim
+        self.sigmoid_bias = sigmoid_bias
         self.rank = rank
         super(AutoTransformedNormal, self).__init__(model, prefix)
 
@@ -555,16 +556,18 @@ class AutoTransformedNormal(AutoContinuous):
                             lambda: torch.ones(self.latent_dim) * 0.5,
                             constraint=constraints.positive)
         hidden_dim = self.hidden_dim if self.hidden_dim is not None else self.latent_dim
-        iaf = dist.InverseAutoregressiveFlow(self.latent_dim, hidden_dim)
+        iaf = dist.InverseAutoregressiveFlow(self.latent_dim, hidden_dim, sigmoid_bias=self.sigmoid_bias)
         pyro.module("{}_iaf".format(self.prefix), iaf.module)
-        iaf_dist = dist.TransformedDistribution(dist.LowRankMultivariateNormal(loc, W_term, D_term), [iaf])
-        return pyro.sample("_{}_latent".format(self.prefix), iaf_dist, infer={"is_auxiliary": True})
+        self.iaf_dist = dist.TransformedDistribution(dist.LowRankMultivariateNormal(loc, W_term, D_term), [iaf])
+        return pyro.sample("_{}_latent".format(self.prefix), self.iaf_dist, infer={"is_auxiliary": True})
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
         W_term = pyro.param("{}_W_term".format(self.prefix))
         D_term = pyro.param("{}_D_term".format(self.prefix))
         scale = (W_term.pow(2).sum(0) + D_term).sqrt()
+        transform = biject_to(self.iaf_dist.support)
+        loc, scale = transform(loc), transform(scale)
         return loc, scale
 
 
