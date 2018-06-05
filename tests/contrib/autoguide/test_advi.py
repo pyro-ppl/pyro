@@ -126,7 +126,7 @@ def test_median(auto_class, Elbo):
 
     guide = auto_class(model)
     infer = SVI(model, guide, Adam({'lr': 0.02}), Elbo(strict_enumeration_warning=False))
-    for _ in range(250):
+    for _ in range(1000):
         infer.step()
 
     median = guide.median()
