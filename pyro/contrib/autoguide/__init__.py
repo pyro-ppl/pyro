@@ -565,7 +565,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 class AutoTransformedNormal(AutoContinuous):
     """
     This implementation of :class:`AutoContinuous` uses a Transformed
-    Diagonal Normal distribution parameterized via an IAF to construct a guide
+    Diagonal Normal distribution via an IAF to construct a guide
     over the entire latent space. The guide does not depend on the model's
     ``*args, **kwargs``.
 
@@ -585,27 +585,24 @@ class AutoTransformedNormal(AutoContinuous):
         super(AutoTransformedNormal, self).__init__(model, prefix)
 
     def sample_latent(self, *args, **kwargs):
-        """
-        Samples the (single) multivariate normal latent used in the auto guide.
-        """
         if self.hidden_dim is None:
             self.hidden_dim = self.latent_dim
-        self.iaf = dist.InverseAutoregressiveFlow(self.latent_dim, self.hidden_dim, sigmoid_bias=self.sigmoid_bias)
-        pyro.module("{}_iaf".format(self.prefix), self.iaf.module)
-        iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.hidden_dim]), self.iaf)
-        loc = pyro.sample("{}_loc".format(self.prefix), iaf_dist.independent(1), infer={"is_auxiliary": True})
-        scale = pyro.param("{}_scale".format(self.prefix), lambda: torch.ones(self.latent_dim))
-        return pyro.sample("_{}_latent".format(self.prefix), dist.Normal(loc, scale).independent(1),
+        loc = pyro.param("{}_loc".format(self.prefix),
+                         lambda: torch.zeros(self.latent_dim))
+        scale = pyro.param("{}_scale".format(self.prefix),
+                           lambda: torch.ones(self.latent_dim),
+                           constraint=constraints.positive)
+        iaf = dist.InverseAutoregressiveFlow(self.latent_dim, self.hidden_dim,
+                                             sigmoid_bias=self.sigmoid_bias)
+        pyro.module("{}_iaf".format(self.prefix), iaf.module)
+        self.iaf_dist = dist.TransformedDistribution(dist.Normal(loc, scale), [iaf])
+        return pyro.sample("_{}_latent".format(self.prefix), self.iaf_dist.independent(1),
                            infer={"is_auxiliary": True})
 
     def _loc_scale(self, *args, **kwargs):
-        prototype = pyro.param("{}_scale".format(self.prefix))
-        loc = self.iaf(prototype.new_zeros(self.hidden_dim))
-        scale = None  # no analytical solution
+        loc = pyro.param("{}_loc".format(self.prefix))
+        scale = pyro.param("{}_scale".format(self.prefix))
         return loc, scale
-
-    def quantiles(self, quantiles, *args, **kwargs):
-        raise NotImplementedError('scale cannot be computed analytically')
 
 
 class AutoDiscreteParallel(AutoGuide):
