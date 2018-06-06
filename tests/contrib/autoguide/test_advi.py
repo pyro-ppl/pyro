@@ -129,11 +129,8 @@ def test_median(auto_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = auto_class(model)
-    lr = 0.02
-    if auto_class is AutoTransformedNormal:
-        lr = 0.005
-    infer = SVI(model, guide, Adam({'lr': lr}), Elbo(strict_enumeration_warning=False))
-    for _ in range(1000):
+    infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
+    for _ in range(800):
         infer.step()
 
     median = guide.median()
