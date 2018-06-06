@@ -121,6 +121,7 @@ def test_iarange_elbo_vectorized_particles(Elbo, reparameterized):
     precision = 0.06
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
+    @poutine.broadcast
     def model():
         data_iarange = pyro.iarange("data", len(data))
 
@@ -132,6 +133,7 @@ def test_iarange_elbo_vectorized_particles(Elbo, reparameterized):
             pyro.sample("x", Normal(z, 1), obs=data)
         pyro.sample("nuisance_c", Normal(4, 5))
 
+    @poutine.broadcast
     def guide():
         loc = pyro.param("loc", torch.zeros(len(data)))
         scale = pyro.param("scale", torch.tensor([1.]))
