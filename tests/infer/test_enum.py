@@ -288,9 +288,9 @@ def test_elbo_berns(enumerate1, enumerate2, enumerate3):
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
 
     def model():
-            pyro.sample("x1", dist.Bernoulli(0.1))
-            pyro.sample("x2", dist.Bernoulli(0.2))
-            pyro.sample("x3", dist.Bernoulli(0.3))
+        pyro.sample("x1", dist.Bernoulli(0.1))
+        pyro.sample("x2", dist.Bernoulli(0.2))
+        pyro.sample("x3", dist.Bernoulli(0.3))
 
     def guide():
         q = pyro.param("q")
@@ -302,7 +302,7 @@ def test_elbo_berns(enumerate1, enumerate2, enumerate3):
     expected_loss = kl.item()
     expected_grad = grad(kl, [q])[0]
 
-    elbo = TraceEnum_ELBO(max_iarange_nesting=1,
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
                           num_particles=num_particles,
                           vectorize_particles=True,
                           strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
@@ -462,10 +462,11 @@ def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enum
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
+    @poutine.broadcast
     def model():
         d = dist.Bernoulli(p)
-        context1 = pyro.iarange("outer", outer_dim, dim=-2)
-        context2 = pyro.iarange("inner", inner_dim, dim=-3)
+        context1 = pyro.iarange("outer", outer_dim, dim=-1)
+        context2 = pyro.iarange("inner", inner_dim, dim=-2)
         pyro.sample("w", d)
         with context1:
             pyro.sample("x", d)
@@ -474,10 +475,11 @@ def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enum
         with context1, context2:
             pyro.sample("z", d)
 
+    @poutine.broadcast
     def guide():
         d = dist.Bernoulli(pyro.param("q"))
-        context1 = pyro.iarange("outer", outer_dim, dim=-2)
-        context2 = pyro.iarange("inner", inner_dim, dim=-3)
+        context1 = pyro.iarange("outer", outer_dim, dim=-1)
+        context2 = pyro.iarange("inner", inner_dim, dim=-2)
         pyro.sample("w", d, infer={"enumerate": enumerate1})
         with context1:
             pyro.sample("x", d, infer={"enumerate": enumerate2})

@@ -51,10 +51,11 @@ class ELBO(object):
         self.max_iarange_nesting = max_iarange_nesting
         self.vectorize_particles = vectorize_particles
         if self.vectorize_particles:
-            if self.num_particles > 1 and self.max_iarange_nesting == float('inf'):
-                raise ValueError("Automatic vectorization over num_particles requires " +
-                                 "a finite value for `max_iarange_nesting` arg.")
-            self.max_iarange_nesting += 1
+            if self.num_particles > 1:
+                if self.max_iarange_nesting == float('inf'):
+                    raise ValueError("Automatic vectorization over num_particles requires " +
+                                     "a finite value for `max_iarange_nesting` arg.")
+                self.max_iarange_nesting += 1
         self.strict_enumeration_warning = strict_enumeration_warning
 
     def _vectorized_num_particles(self, fn):
