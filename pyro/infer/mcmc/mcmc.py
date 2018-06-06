@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-import logging
 import math
 
+import pyro
 from pyro.infer import TracePosterior
 
 
@@ -25,22 +25,21 @@ class MCMC(TracePosterior):
         self.kernel = kernel
         self.warmup_steps = warmup_steps
         self.num_samples = num_samples
-        self.logger = logging.getLogger(__name__)
         super(MCMC, self).__init__()
 
     def _traces(self, *args, **kwargs):
         self.kernel.setup(*args, **kwargs)
         trace = self.kernel.initial_trace()
-        self.logger.info("Starting MCMC using kernel - {} ...".format(self.kernel.__class__.__name__))
+        pyro.log.info("Starting MCMC using kernel - {} ...".format(self.kernel.__class__.__name__))
         logging_interval = math.ceil((self.warmup_steps + self.num_samples) / 20)
         for t in range(1, self.warmup_steps + self.num_samples + 1):
             trace = self.kernel.sample(trace)
             if t % logging_interval == 0:
                 stage = "WARMUP" if t <= self.warmup_steps else "SAMPLE"
-                self.logger.info("Iteration: {} [{}]".format(t, stage))
+                pyro.log.info("Iteration: {} [{}]".format(t, stage))
                 diagnostic_info = self.kernel.diagnostics()
                 if diagnostic_info is not None:
-                    self.logger.info(diagnostic_info)
+                    pyro.log.info(diagnostic_info)
             if t <= self.warmup_steps:
                 if t == self.warmup_steps:
                     self.kernel.end_warmup()

@@ -1,5 +1,3 @@
-import logging
-
 import torch
 
 import pyro
@@ -9,10 +7,6 @@ from pyro.infer import EmpiricalMarginal
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from tests.common import assert_equal
-
-logging.basicConfig()
-# Change the logging level to DEBUG to see the output of the MCMC logger
-logging.getLogger().setLevel(logging.ERROR)
 
 
 class PriorKernel(TraceKernel):

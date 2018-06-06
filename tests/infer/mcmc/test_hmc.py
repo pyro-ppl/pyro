@@ -14,9 +14,7 @@ from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
 from tests.common import assert_equal
 
-logging.basicConfig(format='%(levelname)s %(message)s')
-logger = logging.getLogger('pyro')
-logger.setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class GaussianChain(object):
