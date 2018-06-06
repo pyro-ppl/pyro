@@ -43,7 +43,7 @@ __all__ = [
     'AutoGuideList',
     'AutoLowRankMultivariateNormal',
     'AutoMultivariateNormal',
-    'AutoTransformedNormal',
+    'AutoIAFNormal',
 ]
 
 
@@ -562,16 +562,16 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         return loc, scale
 
 
-class AutoTransformedNormal(AutoContinuous):
+class AutoIAFNormal(AutoContinuous):
     """
-    This implementation of :class:`AutoContinuous` uses a Transformed
-    Diagonal Normal distribution via an IAF to construct a guide
+    This implementation of :class:`AutoContinuous` uses a Diagonal Normal
+    distribution transformed via an IAF to construct a guide
     over the entire latent space. The guide does not depend on the model's
     ``*args, **kwargs``.
 
     Usage::
 
-        guide = AutoTransformedNormal(model, rank=10)
+        guide = AutoIAFNormal(model, hidden_dim=latent_dim)
         svi = SVI(model, guide, ...)
 
     :param callable model: a generative model
@@ -582,27 +582,17 @@ class AutoTransformedNormal(AutoContinuous):
     def __init__(self, model, hidden_dim=None, sigmoid_bias=2.0, prefix="auto"):
         self.sigmoid_bias = sigmoid_bias
         self.hidden_dim = hidden_dim
-        super(AutoTransformedNormal, self).__init__(model, prefix)
+        super(AutoIAFNormal, self).__init__(model, prefix)
 
     def sample_latent(self, *args, **kwargs):
         if self.hidden_dim is None:
             self.hidden_dim = self.latent_dim
-        loc = pyro.param("{}_loc".format(self.prefix),
-                         lambda: torch.zeros(self.latent_dim))
-        scale = pyro.param("{}_scale".format(self.prefix),
-                           lambda: torch.ones(self.latent_dim),
-                           constraint=constraints.positive)
         iaf = dist.InverseAutoregressiveFlow(self.latent_dim, self.hidden_dim,
                                              sigmoid_bias=self.sigmoid_bias)
         pyro.module("{}_iaf".format(self.prefix), iaf.module)
-        self.iaf_dist = dist.TransformedDistribution(dist.Normal(loc, scale), [iaf])
+        self.iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand(self.latent_dim), [iaf])
         return pyro.sample("_{}_latent".format(self.prefix), self.iaf_dist.independent(1),
                            infer={"is_auxiliary": True})
-
-    def _loc_scale(self, *args, **kwargs):
-        loc = pyro.param("{}_loc".format(self.prefix))
-        scale = pyro.param("{}_scale".format(self.prefix))
-        return loc, scale
 
 
 class AutoDiscreteParallel(AutoGuide):

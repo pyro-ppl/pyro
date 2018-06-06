@@ -9,7 +9,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
-                                    AutoLowRankMultivariateNormal, AutoMultivariateNormal, AutoTransformedNormal)
+                                    AutoLowRankMultivariateNormal, AutoMultivariateNormal, AutoIAFNormal)
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.optim import Adam
 from tests.common import assert_equal
@@ -19,7 +19,7 @@ from tests.common import assert_equal
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
-    AutoTransformedNormal,
+    AutoIAFNormal,
 ])
 def test_scores(auto_class):
     def model():
@@ -44,7 +44,7 @@ def test_scores(auto_class):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
-    AutoTransformedNormal,
+    AutoIAFNormal,
 ])
 def test_shapes(auto_class, Elbo):
 
@@ -66,7 +66,7 @@ def test_shapes(auto_class, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
-    AutoTransformedNormal,
+    AutoIAFNormal,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
 def test_irange_smoke(auto_class, Elbo):
@@ -116,7 +116,6 @@ def auto_guide_callable(model):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
-    AutoTransformedNormal,
     auto_guide_list_x,
     auto_guide_callable,
 ])
@@ -146,7 +145,6 @@ def test_median(auto_class, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
-    AutoTransformedNormal,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_quantiles(auto_class, Elbo):
@@ -188,7 +186,7 @@ def test_quantiles(auto_class, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
-    AutoTransformedNormal,
+    AutoIAFNormal,
 ])
 def test_discrete_parallel(continuous_class):
     K = 2
@@ -218,7 +216,7 @@ def test_discrete_parallel(continuous_class):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
-    AutoTransformedNormal,
+    AutoIAFNormal,
 ])
 def test_guide_list(auto_class):
 
