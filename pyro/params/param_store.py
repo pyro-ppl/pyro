@@ -99,12 +99,17 @@ class ParamStoreDict(object):
             # store the unconstrained value and constraint
             with torch.no_grad():
                 unconstrained_param = transform_to(constraint).inv(init_tensor)
-            unconstrained_param.requires_grad = True
+            unconstrained_param.requires_grad_(True)
             self._params[name] = unconstrained_param
             self._constraints[name] = constraint
 
             # keep track of each tensor and it's name
             self._param_to_name[unconstrained_param] = name
+
+        elif init_tensor is not None and not callable(init_tensor):
+            if self._params[name].shape != init_tensor.shape:
+                raise ValueError("param {} init tensor shape does not match existing value: {} vs {}".format(
+                    name, init_tensor.shape, self._params[name].shape))
 
         # get the guaranteed to exist param
         unconstrained_param = self._params[name]

@@ -1,7 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 import warnings
+import weakref
 
+import torch
+
+import pyro
+import pyro.ops.jit
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
@@ -38,6 +43,10 @@ def _compute_dice_elbo(model_trace, guide_trace):
     elbo = 0.0
     for ordinal, cost in costs.items():
         dice_prob = dice.in_context(cost.shape, ordinal)
+        mask = dice_prob > 0
+        if torch.is_tensor(mask) and not mask.all():
+            dice_prob = dice_prob[mask]
+            cost = cost[mask]
         # TODO use score_parts.entropy_term to "stick the landing"
         elbo = elbo + (dice_prob * cost).sum()
     return elbo
@@ -141,9 +150,49 @@ class TraceEnum_ELBO(ELBO):
 
             if trainable_params and elbo_particle.requires_grad:
                 loss_particle = -elbo_particle
-                (loss_particle / self.num_particles).backward()
+                (loss_particle / self.num_particles).backward(retain_graph=True)
 
         loss = -elbo
+        if torch_isnan(loss):
+            warnings.warn('Encountered NAN loss')
+        return loss
+
+
+class JitTraceEnum_ELBO(TraceEnum_ELBO):
+    """
+    Like :class:`TraceEnum_ELBO` but uses :func:`pyro.ops.jit.compile` to
+    compile :meth:`loss_and_grads`.
+
+    This works only for a limited set of models:
+
+    -   Models must have static structure.
+    -   Models must not depend on any global data (except the param store).
+    -   All model inputs that are tensors must be passed in via ``*args``.
+    -   All model inputs that are *not* tensors must be passed in via
+        ``*kwargs``, and these will be fixed to their values on the first
+        call to :meth:`jit_loss_and_grads`.
+
+    .. warning:: Experimental. Interface subject to change.
+    """
+    def loss_and_grads(self, model, guide, *args, **kwargs):
+        if getattr(self, '_differentiable_loss', None) is None:
+
+            weakself = weakref.ref(self)
+
+            @pyro.ops.jit.compile(nderivs=1)
+            def differentiable_loss(*args):
+                self = weakself()
+                elbo = 0.0
+                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+                    elbo += _compute_dice_elbo(model_trace, guide_trace)
+                return elbo * (-1.0 / self.num_particles)
+
+            self._differentiable_loss = differentiable_loss
+
+        differentiable_loss = self._differentiable_loss(*args)
+        differentiable_loss.backward()  # this line triggers jit compilation
+        loss = differentiable_loss.item()
+
         if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss

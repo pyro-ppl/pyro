@@ -22,7 +22,7 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
     Example::
 
         >>> m = Binomial(100, torch.Tensor([0 , .2, .8, 1]))
-        >>> x = m.sample()
+        >>> m.sample()  # doctest: +SKIP
          0
          22
          71
@@ -30,7 +30,7 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
         [torch.FloatTensor of size 4]]
 
         >>> m = Binomial(torch.Tensor([[5.], [10.]]), torch.Tensor([0.5, 0.8]))
-        >>> x = m.sample()
+        >>> m.sample()  # doctest: +SKIP
          4  5
          7  6
         [torch.FloatTensor of size (2,2)]
@@ -119,3 +119,13 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
         values = values.view((-1,) + (1,) * len(self._batch_shape))
         values = values.expand((-1,) + self._batch_shape)
         return values
+
+    def expand(self, batch_shape):
+        validate_args = self.__dict__.get('validate_args')
+        total_count = self.total_count.expand(batch_shape)
+        if 'probs' in self.__dict__:
+            probs = self.probs.expand(batch_shape)
+            return Binomial(total_count, probs=probs, validate_args=validate_args)
+        else:
+            logits = self.logits.expand(batch_shape)
+            return Binomial(total_count, logits=logits, validate_args=validate_args)

@@ -45,23 +45,24 @@ class HMC(TraceKernel):
         automatic transformations will be applied, as specified in
         :mod:`torch.distributions.constraint_registry`.
 
-    Example::
+    Example:
 
-        true_coefs = torch.tensor([1., 2., 3.])
-        data = torch.randn(2000, 3)
-        dim = 3
-        labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
-
-        def model(data):
-            coefs_mean = torch.zeros(dim)
-            coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
-            y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
-            return y
-
-        hmc_kernel = HMC(model, step_size=0.0855, num_steps=4)
-        mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
-        posterior = EmpiricalMarginal(mcmc_run, 'beta')
-        print(posterior.mean)
+        >>> true_coefs = torch.tensor([1., 2., 3.])
+        >>> data = torch.randn(2000, 3)
+        >>> dim = 3
+        >>> labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
+        >>>
+        >>> def model(data):
+        ...     coefs_mean = torch.zeros(dim)
+        ...     coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
+        ...     y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
+        ...     return y
+        >>>
+        >>> hmc_kernel = HMC(model, step_size=0.0855, num_steps=4)
+        >>> mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
+        >>> posterior = EmpiricalMarginal(mcmc_run, 'beta')
+        >>> posterior.mean  # doctest: +SKIP
+        tensor([ 0.9819,  1.9258,  2.9737])
     """
 
     def __init__(self, model, step_size=None, trajectory_length=None,
@@ -185,11 +186,13 @@ class HMC(TraceKernel):
         if self._automatic_transform_enabled:
             self.transforms = {}
         for name, node in sorted(trace.iter_stochastic_nodes(), key=lambda x: x[0]):
-            r_loc = torch.zeros_like(node["value"])
-            r_scale = torch.ones_like(node["value"])
-            self._r_dist[name] = dist.Normal(loc=r_loc, scale=r_scale)
+            site_value = node["value"]
             if node["fn"].support is not constraints.real and self._automatic_transform_enabled:
                 self.transforms[name] = biject_to(node["fn"].support).inv
+                site_value = self.transforms[name](node["value"])
+            r_loc = site_value.new_zeros(site_value.shape)
+            r_scale = site_value.new_ones(site_value.shape)
+            self._r_dist[name] = dist.Normal(loc=r_loc, scale=r_scale)
         self._validate_trace(trace)
 
         if self.adapt_step_size:

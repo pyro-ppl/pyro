@@ -175,16 +175,7 @@ class Combination(Kernel):
 
         active_dims = set(kern0.active_dims)
         if isinstance(kern1, Kernel):
-            active_dims1 = set(kern1.active_dims)
-            if active_dims == active_dims1:  # on the same active_dims
-                pass
-            elif len(active_dims & active_dims1) == 0:  # on disjoint active_dims
-                active_dims = active_dims | active_dims1
-            else:
-                raise ValueError("Sub-kernels must act on the same active dimensions "
-                                 "or disjoint active dimensions (to create direct sum "
-                                 "or tensor product of kernels).")
-
+            active_dims |= set(kern1.active_dims)
         active_dims = sorted(active_dims)
         input_dim = len(active_dims)
         super(Combination, self).__init__(input_dim, active_dims, name)
@@ -316,8 +307,8 @@ class Warping(Transforming):
     learning architecture. For example:
 
         >>> linear = torch.nn.Linear(10, 3)
-        # register its parameters to Pyro's ParamStore and wrap it by lambda
-        # to call the primitive pyro.module each time we use the linear function
+        >>> # register its parameters to Pyro's ParamStore and wrap it by lambda
+        >>> # to call the primitive pyro.module each time we use the linear function
         >>> pyro_linear_fn = lambda x: pyro.module("linear", linear)(x)
         >>> kernel = gp.kernels.Matern52(input_dim=3, lengthscale=torch.ones(3))
         >>> warped_kernel = gp.kernels.Warping(kernel, pyro_linear_fn)

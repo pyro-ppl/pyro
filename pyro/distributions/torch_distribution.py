@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
+
 import torch
 from torch.distributions import constraints
 
@@ -62,10 +64,48 @@ class TorchDistributionMixin(Distribution):
         """
         return sample_shape + self.batch_shape + self.event_shape
 
+    def expand(self, batch_shape):
+        """
+        Expands a distribution to a desired
+        :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
+
+        Note that this is more general than :meth:`expand_by` because
+        ``d.expand_by(sample_shape)`` can be reduced to
+        ``d.expand(sample_shape + d.batch_shape)``.
+
+        :param torch.Size batch_shape: The target ``batch_shape``. This must
+            compatible with ``self.batch_shape`` similar to the requirements
+            of :func:`torch.Tensor.expand`: the target ``batch_shape`` must
+            be at least as long as ``self.batch_shape``, and for each
+            non-singleton dim of ``self.batch_shape``, ``batch_shape`` must
+            either agree or be set to ``-1``.
+        :return: An expanded version of this distribution.
+        :rtype: :class:`ReshapedDistribution`
+        """
+        batch_shape = list(batch_shape)
+        if len(batch_shape) < len(self.batch_shape):
+            raise ValueError("Expected len(batch_shape) >= len(self.batch_shape), "
+                             "actual {} vs {}".format(len(batch_shape), len(self.batch_shape)))
+        # check sizes of existing dims
+        for dim in range(-1, -1 - len(self.batch_shape), -1):
+            if batch_shape[dim] == -1:
+                batch_shape[dim] = self.batch_shape[dim]
+            elif batch_shape[dim] != self.batch_shape[dim]:
+                if self.batch_shape[dim] != 1:
+                    raise ValueError("Cannot broadcast dim {} of size {} to size {}".format(
+                        dim, self.batch_shape[dim], batch_shape[dim]))
+                else:
+                    raise NotImplementedError("https://github.com/uber/pyro/issues/1119")
+        sample_shape = batch_shape[:len(batch_shape) - len(self.batch_shape)]
+        return self.expand_by(sample_shape)
+
     def expand_by(self, sample_shape):
         """
         Expands a distribution by adding ``sample_shape`` to the left side of
         its :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
+
+        To expand internal dims of ``self.batch_shape`` from 1 to something
+        larger, use :meth:`expand` instead.
 
         :param torch.Size sample_shape: The size of the iid batch to be drawn
             from the distribution.
@@ -86,16 +126,24 @@ class TorchDistributionMixin(Distribution):
         as event dims, adding them to the left side of
         :attr:`~torch.distributions.distribution.Distribution.event_shape`.
 
-        Example::
+        Example:
+
+            .. doctest::
+               :hide:
+
+               >>> d0 = dist.Normal(torch.zeros(2, 3, 4, 5), torch.ones(2, 3, 4, 5))
+               >>> [d0.batch_shape, d0.event_shape]
+               [torch.Size([2, 3, 4, 5]), torch.Size([])]
+               >>> d1 = d0.independent(2)
 
             >>> [d1.batch_shape, d1.event_shape]
-            [torch.Size((2, 3)), torch.Size((4, 5))]
+            [torch.Size([2, 3]), torch.Size([4, 5])]
             >>> d2 = d1.independent(1)
             >>> [d2.batch_shape, d2.event_shape]
-            [torch.Size((2,)), torch.Size((3, 4, 5))]
+            [torch.Size([2]), torch.Size([3, 4, 5])]
             >>> d3 = d1.independent(2)
             >>> [d3.batch_shape, d3.event_shape]
-            [torch.Size(()), torch.Size((2, 3, 4, 5))]
+            [torch.Size([]), torch.Size([2, 3, 4, 5])]
 
         :param int reinterpreted_batch_ndims: The number of batch dimensions
             to reinterpret as event dimensions.
@@ -104,6 +152,7 @@ class TorchDistributionMixin(Distribution):
         """
         if reinterpreted_batch_ndims is None:
             reinterpreted_batch_ndims = len(self.batch_shape)
+        # TODO return pyro.distributions.torch.Independent(self, reinterpreted_batch_ndims)
         return ReshapedDistribution(self, reinterpreted_batch_ndims=reinterpreted_batch_ndims)
 
     def mask(self, mask):
@@ -242,13 +291,17 @@ class ReshapedDistribution(TorchDistribution):
         return self.base_dist.rsample(sample_shape + self.sample_shape)
 
     def log_prob(self, value):
-        return sum_rightmost(self.base_dist.log_prob(value), self.reinterpreted_batch_ndims)
+        shape = broadcast_shape(self.batch_shape, value.shape[:value.dim() - self.event_dim])
+        return sum_rightmost(self.base_dist.log_prob(value), self.reinterpreted_batch_ndims).expand(shape)
 
     def score_parts(self, value):
+        shape = broadcast_shape(self.batch_shape, value.shape[:value.dim() - self.event_dim])
         log_prob, score_function, entropy_term = self.base_dist.score_parts(value)
-        log_prob = sum_rightmost(log_prob, self.reinterpreted_batch_ndims)
-        score_function = sum_rightmost(score_function, self.reinterpreted_batch_ndims)
-        entropy_term = sum_rightmost(entropy_term, self.reinterpreted_batch_ndims)
+        log_prob = sum_rightmost(log_prob, self.reinterpreted_batch_ndims).expand(shape)
+        if not isinstance(score_function, numbers.Number):
+            score_function = sum_rightmost(score_function, self.reinterpreted_batch_ndims).expand(shape)
+        if not isinstance(entropy_term, numbers.Number):
+            entropy_term = sum_rightmost(entropy_term, self.reinterpreted_batch_ndims).expand(shape)
         return ScoreParts(log_prob, score_function, entropy_term)
 
     def enumerate_support(self):

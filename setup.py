@@ -59,6 +59,7 @@ EXTRAS_REQUIRE = [
     'torchvision',
     'visdom>=0.1.4',
     'pandas',
+    'wget',
 ]
 
 setup(
@@ -84,7 +85,7 @@ setup(
         'extras': EXTRAS_REQUIRE,
         'test': EXTRAS_REQUIRE + [
             'nbval',
-            'pytest',
+            'pytest>=3.5',
             'pytest-cov',
             'scipy>=0.19.0',
         ],

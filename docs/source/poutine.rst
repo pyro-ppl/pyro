@@ -12,6 +12,8 @@ Handlers
 
 .. autofunction:: pyro.poutine.block
 
+.. autofunction:: pyro.poutine.broadcast
+
 .. autofunction:: pyro.poutine.condition
 
 .. autofunction:: pyro.poutine.do

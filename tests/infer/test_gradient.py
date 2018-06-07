@@ -10,9 +10,11 @@ import torch.optim
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.testing import fakes
-from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
+from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
+                        TraceGraph_ELBO)
 from pyro.optim import Adam
-from tests.common import assert_equal
+import pyro.poutine as poutine
+from tests.common import assert_equal, xfail_param
 
 logger = logging.getLogger(__name__)
 
@@ -71,28 +73,28 @@ def test_iarange(Elbo, reparameterized):
     precision = 0.06
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
+    @poutine.broadcast
     def model():
-        x = data.unsqueeze(-1).expand(-1, num_particles)
-        data_iarange = pyro.iarange("data", len(data), dim=-2)
-        particles_iarange = pyro.iarange("particles", num_particles, dim=-1)
+        particles_iarange = pyro.iarange("particles", num_particles, dim=-2)
+        data_iarange = pyro.iarange("data", len(data), dim=-1)
 
         pyro.sample("nuisance_a", Normal(0, 1))
         with particles_iarange, data_iarange:
-            z = pyro.sample("z", Normal(0, 1).expand_by(x.shape))
+            z = pyro.sample("z", Normal(0, 1))
         pyro.sample("nuisance_b", Normal(2, 3))
         with data_iarange, particles_iarange:
-            pyro.sample("x", Normal(z, 1), obs=x)
+            pyro.sample("x", Normal(z, 1), obs=data)
         pyro.sample("nuisance_c", Normal(4, 5))
 
+    @poutine.broadcast
     def guide():
-        loc = pyro.param("loc", lambda: torch.zeros(len(data), requires_grad=True))
-        scale = pyro.param("scale", lambda: torch.tensor([1.0], requires_grad=True))
-        mus = loc.unsqueeze(-1).expand(-1, num_particles)
+        loc = pyro.param("loc", torch.zeros(len(data)))
+        scale = pyro.param("scale", torch.tensor([1.]))
 
         pyro.sample("nuisance_c", Normal(4, 5))
-        with pyro.iarange("particles", num_particles):
-            with pyro.iarange("data", len(data)):
-                pyro.sample("z", Normal(mus, scale))
+        with pyro.iarange("particles", num_particles, dim=-2):
+            with pyro.iarange("data", len(data), dim=-1):
+                pyro.sample("z", Normal(loc, scale))
         pyro.sample("nuisance_b", Normal(2, 3))
         pyro.sample("nuisance_a", Normal(0, 1))
 
@@ -112,7 +114,17 @@ def test_iarange(Elbo, reparameterized):
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo", [
+    Trace_ELBO,
+    TraceGraph_ELBO,
+    TraceEnum_ELBO,
+    xfail_param(JitTrace_ELBO,
+                reason="jit RuntimeError: Unsupported op descriptor: index-2"),
+    xfail_param(JitTraceGraph_ELBO,
+                reason="jit RuntimeError: Unsupported op descriptor: index-2"),
+    xfail_param(JitTraceEnum_ELBO,
+                reason="jit RuntimeError: Unsupported op descriptor: index-2"),
+])
 def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
@@ -134,11 +146,15 @@ def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
             pyro.sample("z", Normal(loc[ind], scale))
 
     optim = Adam({"lr": 0.1})
-    elbo = Elbo(num_particles=num_particles, strict_enumeration_warning=False)
-    inference = SVI(model, guide, optim, loss=elbo)
-    inference.loss_and_grads(model, guide)
+    elbo = Elbo(num_particles=10, strict_enumeration_warning=False)
+    inference = SVI(model, guide, optim, elbo)
+    iters = num_particles // 10
+    for _ in range(iters):
+        inference.loss_and_grads(model, guide)
+
     params = dict(pyro.get_param_store().named_parameters())
-    actual_grads = {name: param.grad.detach().cpu().numpy() for name, param in params.items()}
+    actual_grads = {name: param.grad.detach().cpu().numpy() / iters
+                    for name, param in params.items()}
 
     expected_grads = {'loc': np.array([0.5, -2.0]), 'scale': np.array([2.0])}
     for name in sorted(params):

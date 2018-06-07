@@ -29,6 +29,16 @@ Abstract Distribution
     :special-members: __call__
     :show-inheritance:
 
+TorchDistributionMixin
+----------------------
+
+.. autoclass:: pyro.distributions.torch_distribution.TorchDistributionMixin
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+    :member-order: bysource
+
 TorchDistribution
 -----------------
 
@@ -38,6 +48,13 @@ TorchDistribution
     :special-members: __call__
     :show-inheritance:
     :member-order: bysource
+
+AVFMultivariateNormal
+---------------------
+.. autoclass:: pyro.distributions.AVFMultivariateNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 Binomial
 --------

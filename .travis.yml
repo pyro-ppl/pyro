@@ -7,6 +7,7 @@ env:
         - PYTHONPATH=$PWD:$PYTHONPATH
 
 install:
+    - pip install -U pip
     - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then
           pip install http://download.pytorch.org/whl/cpu/torch-0.4.0-cp27-cp27mu-linux_x86_64.whl;
       else
@@ -37,13 +38,13 @@ jobs:
           script:
               - pip install -r docs/requirements.txt
               - make docs
+              - make doctest
         - stage: perf
-          if: type = cron
           python: 2.7
           env: STAGE=perf
           script:
               - pip install -e .[profile]
-              - make perf-test
+              - pytest -vs --benchmark-disable tests/perf/test_benchmark.py
         - python: 3.5
           if: type = cron
           env: STAGE=perf
