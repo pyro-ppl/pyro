@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
+
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -59,6 +61,8 @@ class AutoRegressiveNN(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1,
                  mask_encoding=None, permutation=None):
         super(AutoRegressiveNN, self).__init__()
+        if input_dim == 1:
+            warnings.warn('AutoRegressiveNN input_dim = 1. Consider using an affine transformation instead.')
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim_multiplier = output_dim_multiplier
