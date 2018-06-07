@@ -585,6 +585,8 @@ class AutoIAFNormal(AutoContinuous):
         super(AutoIAFNormal, self).__init__(model, prefix)
 
     def sample_latent(self, *args, **kwargs):
+        if self.latent_dim == 1:
+            raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
         if self.hidden_dim is None:
             self.hidden_dim = self.latent_dim
         iaf = dist.InverseAutoregressiveFlow(self.latent_dim, self.hidden_dim,
