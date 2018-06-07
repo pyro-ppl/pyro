@@ -28,28 +28,26 @@ class RelaxedOneHotCategoricalStraightThrough(RelaxedOneHotCategorical):
     def __init__(self, temperature, probs=None, logits=None, validate_args=None):
         super(RelaxedOneHotCategoricalStraightThrough, self).__init__(temperature=temperature, probs=probs,
                                                                       logits=logits, validate_args=validate_args)
-        self._unquantize = {}
 
     def rsample(self, sample_shape=torch.Size()):
         soft_sample = super(RelaxedOneHotCategoricalStraightThrough, self).rsample(sample_shape)
         hard_sample = QuantizeCategorical.apply(soft_sample)
-        self._unquantize[id(hard_sample)] = soft_sample
         return hard_sample
 
     def log_prob(self, value):
-        value = self._unquantize.get(id(value), value)
+        value = getattr(value, '_unquantize', value)
         return super(RelaxedOneHotCategoricalStraightThrough, self).log_prob(value)
 
 
 class QuantizeCategorical(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, input):
-        argmax = input.max(-1)[1]
-        result = input.new_zeros(input.shape)
-        # result[argmax] = 1
-        if argmax.dim() < result.dim():
+    def forward(ctx, soft_value):
+        argmax = soft_value.max(-1)[1]
+        hard_value = soft_value.new_zeros(soft_value.shape)
+        hard_value._unquantize = soft_value
+        if argmax.dim() < hard_value.dim():
             argmax = argmax.unsqueeze(-1)
-        return result.scatter_(-1, argmax, 1)
+        return hard_value.scatter_(-1, argmax, 1)
 
     @staticmethod
     def backward(ctx, grad):
