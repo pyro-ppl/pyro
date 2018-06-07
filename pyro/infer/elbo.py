@@ -24,7 +24,7 @@ class ELBO(object):
         sample sites in parallel, e.g. if a site sets
         ``infer={"enumerate": "parallel"}``.
     :param bool vectorize_particles: Whether to vectorize the ELBO computation
-        over num_particles. Defaults to False. This requires static structure
+        over `num_particles`. Defaults to False. This requires static structure
         in model and guide. In addition, this wraps the model and guide inside a
         :class:`~pyro.poutine.broadcast` poutine for automatic broadcasting of
         sample site batch shapes, and requires specifying a finite value for
