@@ -1,46 +1,71 @@
 from __future__ import absolute_import, division, print_function
 
-from unittest import TestCase
-
-import numpy as np
-import pytest
-import scipy.stats as sp
 import torch
 from torch.autograd import grad
+from torch.distributions import OneHotCategorical, RelaxedOneHotCategorical, constraints
 
-import pyro.distributions as dist
+import pyro
+import pyro.optim as optim
+import pytest
+from pyro.distributions import RelaxedOneHotCategoricalStraightThrough
+from pyro.infer import SVI, Trace_ELBO
 from tests.common import assert_equal
 
 PROBS = [
-	[0.25, 0.75],
-	[0.25, 0.5, 0.25],
-	[[0.25, 0.75], [0.75, 0.25]],
-	[[[0.25, 0.75]], [[0.75, 0.25]]],
-	[0.1] * 10,
+        [0.25, 0.75],
+        [0.25, 0.5, 0.25],
+        [[0.25, 0.75], [0.75, 0.25]],
+        [[[0.25, 0.75]], [[0.75, 0.25]]],
+        [0.1] * 10,
 ]
 
 
 @pytest.mark.parametrize('probs', PROBS)
 def test_shapes(probs):
-	temperature = torch.tensor(0.5)
-	probs = torch.tensor(probs, requires_grad=True)
-	d = dist.RelaxedCategoricalStraightThrough(temperature, probs=probs)
-	sample = d.rsample()
-	log_prob = d.log_prob(sample)
-	grad_probs = grad(log_prob.sum(), [probs])[0]
-	#import pdb as pdb; pdb.set_trace()
-	assert grad_probs.shape == probs.shape
+        temperature = torch.tensor(0.5)
+        probs = torch.tensor(probs, requires_grad=True)
+        d = RelaxedOneHotCategoricalStraightThrough(temperature, probs=probs)
+        sample = d.rsample()
+        log_prob = d.log_prob(sample)
+        grad_probs = grad(log_prob.sum(), [probs])[0]
+        assert grad_probs.shape == probs.shape
 
 
-@pytest.mark.xfail(reason='numerical approximation to categorical when reducing temperature does not hold up')
-@pytest.mark.parametrize('probs', PROBS)
-def test_temperature(probs):
-	temperature = torch.tensor(0.02)
-	probs = torch.tensor(probs, requires_grad=True)
-	d = dist.RelaxedCategoricalStraightThrough(temperature, probs=probs)
-	d2 = dist.OneHotCategorical(probs=probs)
-	sample = d.rsample()
-	assert (sample.sum(-1) == 1).all(), 'not one-hot: {}'.format(sample)
-	log_prob = d.log_prob(sample)
-	log_prob2 = d2.log_prob(sample)
-	assert_equal(log_prob, log_prob2, prec=0.01, msg='{} vs {}'.format(log_prob, log_prob2))
+@pytest.mark.parametrize('temp', [0.2, 0.5, 1.0])
+def test_entropy_grad(temp):
+    num_samples = 1000000
+    q = torch.tensor([0.1, 0.2, 0.3, 0.4], requires_grad=True)
+    temp = torch.tensor(temp)
+
+    dist_q = RelaxedOneHotCategorical(temperature=temp, probs=q)
+    z = dist_q.rsample(sample_shape=(num_samples,))
+    expected = grad(dist_q.log_prob(z).sum(), [q])[0] / num_samples
+
+    dist_q = RelaxedOneHotCategoricalStraightThrough(temperature=temp, probs=q)
+    z = dist_q.rsample(sample_shape=(num_samples,))
+    actual = grad(dist_q.log_prob(z).sum(), [q])[0] / num_samples
+
+    assert_equal(expected, actual, prec=0.1,
+                 msg='bad grad for RelaxedOneHotCategoricalStraightThrough (expected {}, got {})'.
+                 format(expected, actual))
+
+
+def test_svi_usage():
+
+    def model():
+        p = torch.tensor([0.25] * 4)
+        pyro.sample('z', OneHotCategorical(probs=p))
+
+    def guide():
+        q = pyro.param('q', torch.tensor([0.1, 0.2, 0.3, 0.4]), constraint=constraints.simplex)
+        temp = torch.tensor(0.15)
+        pyro.sample('z', RelaxedOneHotCategoricalStraightThrough(temperature=temp, probs=q))
+
+    adam = optim.Adam({"lr": .001, "betas": (0.95, 0.999)})
+    svi = SVI(model, guide, adam, loss=Trace_ELBO())
+
+    for k in range(5000):
+        svi.step()
+
+    assert_equal(pyro.param('q'), torch.tensor([0.25] * 4), prec=0.01,
+                 msg='test svi usage of RelaxedOneHotCategoricalStraightThrough failed')
