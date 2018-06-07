@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import logging
-
+from pyro.logger import log
 import pyro.poutine as poutine
 from pyro.poutine import condition, do
 from pyro.primitives import (clear_param_store, enable_validation, get_param_store, iarange, irange, module, param,
@@ -16,10 +15,6 @@ try:
 except ImportError:
     __version__ = version_prefix
 
-# Default logger to prevent 'No handler found' warning.
-logging.getLogger(__name__).addHandler(logging.NullHandler())
-
-
 __all__ = [
     "__version__",
     "clear_param_store",
@@ -29,6 +24,7 @@ __all__ = [
     "get_param_store",
     "iarange",
     "irange",
+    "log",
     "module",
     "param",
     "poutine",
