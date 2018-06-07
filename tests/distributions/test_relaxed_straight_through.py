@@ -45,7 +45,7 @@ def test_entropy_grad(temp):
     z = dist_q.rsample(sample_shape=(num_samples,))
     actual = grad(dist_q.log_prob(z).sum(), [q])[0] / num_samples
 
-    assert_equal(expected, actual, prec=0.1,
+    assert_equal(expected, actual, prec=0.08,
                  msg='bad grad for RelaxedOneHotCategoricalStraightThrough (expected {}, got {})'.
                  format(expected, actual))
 
@@ -58,13 +58,13 @@ def test_svi_usage():
 
     def guide():
         q = pyro.param('q', torch.tensor([0.1, 0.2, 0.3, 0.4]), constraint=constraints.simplex)
-        temp = torch.tensor(0.15)
+        temp = torch.tensor(0.10)
         pyro.sample('z', RelaxedOneHotCategoricalStraightThrough(temperature=temp, probs=q))
 
     adam = optim.Adam({"lr": .001, "betas": (0.95, 0.999)})
     svi = SVI(model, guide, adam, loss=Trace_ELBO())
 
-    for k in range(5000):
+    for k in range(6000):
         svi.step()
 
     assert_equal(pyro.param('q'), torch.tensor([0.25] * 4), prec=0.01,

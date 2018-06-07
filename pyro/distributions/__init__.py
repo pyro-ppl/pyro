@@ -22,6 +22,7 @@ __all__ = [
     "enable_validation",
     "is_validation_enabled",
     "validation_enabled",
+    "AVFMultivariateNormal",
     "Binomial",
     "Delta",
     "Distribution",
@@ -30,11 +31,10 @@ __all__ = [
     "InverseAutoregressiveFlow",
     "LowRankMultivariateNormal",
     "OMTMultivariateNormal",
-    "AVFMultivariateNormal",
     "Rejector",
+    "RelaxedOneHotCategoricalStraightThrough",
     "TorchDistribution",
     "VonMises",
-    "RelaxedOneHotCategoricalStraightThrough"
 ]
 
 # Import all torch distributions from `pyro.distributions.torch_distribution`
