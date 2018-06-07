@@ -23,10 +23,11 @@ class ELBO(object):
         :func:`pyro.iarange` contexts. This is only required to enumerate over
         sample sites in parallel, e.g. if a site sets
         ``infer={"enumerate": "parallel"}``.
-    :param bool vectorize_particles: Vectorize ELBO computation over `num_particles`.
-        In addition, this wraps the model and guide inside a
+    :param bool vectorize_particles: Whether to vectorize the ELBO computation
+        over num_particles. Defaults to False. This requires static structure
+        in model and guide. In addition, this wraps the model and guide inside a
         :class:`~pyro.poutine.broadcast` poutine for automatic broadcasting of
-        sample site batch shapes. This requires specifying a finite value for
+        sample site batch shapes, and requires specifying a finite value for
         `max_iarange_nesting`.
     :param bool strict_enumeration_warning: Whether to warn about possible
         misuse of enumeration, i.e. that
