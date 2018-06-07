@@ -67,9 +67,9 @@ AutoLowRankMultivariateNormal
     :special-members: __call__
     :show-inheritance:
 
-AutoTransformedNormal
+AutoIAFNormal
 -----------------------------
-.. autoclass:: pyro.contrib.autoguide.AutoTransformedNormal
+.. autoclass:: pyro.contrib.autoguide.AutoIAFNormal
     :members:
     :undoc-members:
     :special-members: __call__
