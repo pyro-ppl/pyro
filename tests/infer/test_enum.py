@@ -288,26 +288,26 @@ def test_elbo_berns(enumerate1, enumerate2, enumerate3):
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
 
     def model():
-        with pyro.iarange("particles", num_particles):
-            pyro.sample("x1", dist.Bernoulli(0.1).expand_by([num_particles]))
-            pyro.sample("x2", dist.Bernoulli(0.2).expand_by([num_particles]))
-            pyro.sample("x3", dist.Bernoulli(0.3).expand_by([num_particles]))
+        pyro.sample("x1", dist.Bernoulli(0.1))
+        pyro.sample("x2", dist.Bernoulli(0.2))
+        pyro.sample("x3", dist.Bernoulli(0.3))
 
     def guide():
         q = pyro.param("q")
-        with pyro.iarange("particles", num_particles):
-            pyro.sample("x1", dist.Bernoulli(q).expand_by([num_particles]), infer={"enumerate": enumerate1})
-            pyro.sample("x2", dist.Bernoulli(q).expand_by([num_particles]), infer={"enumerate": enumerate2})
-            pyro.sample("x3", dist.Bernoulli(q).expand_by([num_particles]), infer={"enumerate": enumerate3})
+        pyro.sample("x1", dist.Bernoulli(q), infer={"enumerate": enumerate1})
+        pyro.sample("x2", dist.Bernoulli(q), infer={"enumerate": enumerate2})
+        pyro.sample("x3", dist.Bernoulli(q), infer={"enumerate": enumerate3})
 
     kl = sum(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p)) for p in [0.1, 0.2, 0.3])
     expected_loss = kl.item()
     expected_grad = grad(kl, [q])[0]
 
-    elbo = TraceEnum_ELBO(max_iarange_nesting=1,
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
+                          num_particles=num_particles,
+                          vectorize_particles=True,
                           strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
-    actual_loss = elbo.loss_and_grads(model, guide) / num_particles
-    actual_grad = q.grad / num_particles
+    actual_loss = elbo.loss_and_grads(model, guide)
+    actual_grad = q.grad
 
     assert_equal(actual_loss, expected_loss, prec=prec, msg="".join([
         "\nexpected loss = {}".format(expected_loss),
@@ -462,31 +462,31 @@ def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enum
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
+    @poutine.broadcast
     def model():
         d = dist.Bernoulli(p)
-        with pyro.iarange("particles", num_particles):
-            context1 = pyro.iarange("outer", outer_dim, dim=-2)
-            context2 = pyro.iarange("inner", inner_dim, dim=-3)
-            pyro.sample("w", d.expand_by([num_particles]))
-            with context1:
-                pyro.sample("x", d.expand_by([outer_dim, num_particles]))
-            with context2:
-                pyro.sample("y", d.expand_by([inner_dim, 1, num_particles]))
-            with context1, context2:
-                pyro.sample("z", d.expand_by([inner_dim, outer_dim, num_particles]))
+        context1 = pyro.iarange("outer", outer_dim, dim=-1)
+        context2 = pyro.iarange("inner", inner_dim, dim=-2)
+        pyro.sample("w", d)
+        with context1:
+            pyro.sample("x", d)
+        with context2:
+            pyro.sample("y", d)
+        with context1, context2:
+            pyro.sample("z", d)
 
+    @poutine.broadcast
     def guide():
         d = dist.Bernoulli(pyro.param("q"))
-        with pyro.iarange("particles", num_particles):
-            context1 = pyro.iarange("outer", outer_dim, dim=-2)
-            context2 = pyro.iarange("inner", inner_dim, dim=-3)
-            pyro.sample("w", d.expand_by([num_particles]), infer={"enumerate": enumerate1})
-            with context1:
-                pyro.sample("x", d.expand_by([outer_dim, num_particles]), infer={"enumerate": enumerate2})
-            with context2:
-                pyro.sample("y", d.expand_by([inner_dim, 1, num_particles]), infer={"enumerate": enumerate3})
-            with context1, context2:
-                pyro.sample("z", d.expand_by([inner_dim, outer_dim, num_particles]), infer={"enumerate": enumerate4})
+        context1 = pyro.iarange("outer", outer_dim, dim=-1)
+        context2 = pyro.iarange("inner", inner_dim, dim=-2)
+        pyro.sample("w", d, infer={"enumerate": enumerate1})
+        with context1:
+            pyro.sample("x", d, infer={"enumerate": enumerate2})
+        with context2:
+            pyro.sample("y", d, infer={"enumerate": enumerate3})
+        with context1, context2:
+            pyro.sample("z", d, infer={"enumerate": enumerate4})
 
     kl_node = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
     kl = (1 + outer_dim + inner_dim + outer_dim * inner_dim) * kl_node
@@ -494,9 +494,11 @@ def test_elbo_iarange_iarange(outer_dim, inner_dim, enumerate1, enumerate2, enum
     expected_grad = grad(kl, [q])[0]
 
     elbo = TraceEnum_ELBO(max_iarange_nesting=3,
+                          num_particles=num_particles,
+                          vectorize_particles=True,
                           strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
-    actual_loss = elbo.loss_and_grads(model, guide) / num_particles
-    actual_grad = pyro.param('q').grad / num_particles
+    actual_loss = elbo.loss_and_grads(model, guide)
+    actual_grad = pyro.param('q').grad
 
     assert_equal(actual_loss, expected_loss, prec=0.1, msg="".join([
         "\nexpected loss = {}".format(expected_loss),
