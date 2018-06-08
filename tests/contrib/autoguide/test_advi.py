@@ -9,7 +9,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
-                                    AutoLowRankMultivariateNormal, AutoMultivariateNormal)
+                                    AutoLowRankMultivariateNormal, AutoMultivariateNormal, AutoIAFNormal)
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.optim import Adam
 from tests.common import assert_equal
@@ -19,10 +19,14 @@ from tests.common import assert_equal
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoIAFNormal,
 ])
 def test_scores(auto_class):
     def model():
-        pyro.sample("z", dist.Normal(0.0, 1.0))
+        if auto_class is AutoIAFNormal:
+            pyro.sample("z", dist.Normal(0.0, 1.0).expand(10))
+        else:
+            pyro.sample("z", dist.Normal(0.0, 1.0))
 
     guide = auto_class(model)
     guide_trace = poutine.trace(guide).get_trace()
@@ -43,6 +47,7 @@ def test_scores(auto_class):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoIAFNormal,
 ])
 def test_shapes(auto_class, Elbo):
 
@@ -64,6 +69,7 @@ def test_shapes(auto_class, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoIAFNormal,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
 def test_irange_smoke(auto_class, Elbo):
@@ -125,8 +131,8 @@ def test_median(auto_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = auto_class(model)
-    infer = SVI(model, guide, Adam({'lr': 0.02}), Elbo(strict_enumeration_warning=False))
-    for _ in range(200):
+    infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
+    for _ in range(800):
         infer.step()
 
     median = guide.median()
@@ -138,7 +144,11 @@ def test_median(auto_class, Elbo):
     assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
 
 
-@pytest.mark.parametrize("auto_class", [AutoDiagonalNormal, AutoMultivariateNormal, AutoLowRankMultivariateNormal])
+@pytest.mark.parametrize("auto_class", [
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_quantiles(auto_class, Elbo):
 
@@ -179,6 +189,7 @@ def test_quantiles(auto_class, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoIAFNormal,
 ])
 def test_discrete_parallel(continuous_class):
     K = 2
@@ -208,11 +219,12 @@ def test_discrete_parallel(continuous_class):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoIAFNormal,
 ])
 def test_guide_list(auto_class):
 
     def model():
-        pyro.sample("x", dist.Normal(0., 1.))
+        pyro.sample("x", dist.Normal(0., 1.).expand(2))
         pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
 
     guide = AutoGuideList(model)

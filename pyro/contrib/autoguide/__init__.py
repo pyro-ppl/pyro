@@ -43,6 +43,7 @@ __all__ = [
     'AutoGuideList',
     'AutoLowRankMultivariateNormal',
     'AutoMultivariateNormal',
+    'AutoIAFNormal',
 ]
 
 
@@ -401,7 +402,7 @@ class AutoContinuous(AutoGuide):
         :return: A dict mapping sample site name to median tensor.
         :rtype: dict
         """
-        loc, scale = self._loc_scale(*args, **kwargs)
+        loc, _ = self._loc_scale(*args, **kwargs)
         return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
                 for site, unconstrained_value in self._unpack_latent(loc)}
 
@@ -559,6 +560,41 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         D_term = pyro.param("{}_D_term".format(self.prefix))
         scale = (W_term.pow(2).sum(0) + D_term).sqrt()
         return loc, scale
+
+
+class AutoIAFNormal(AutoContinuous):
+    """
+    This implementation of :class:`AutoContinuous` uses a Diagonal Normal
+    distribution transformed via a :class:`~pyro.distributions.iaf.InverseAutoregressiveFlow`
+    to construct a guide over the entire latent space. The guide does not depend on the model's
+    ``*args, **kwargs``.
+
+    Usage::
+
+        guide = AutoIAFNormal(model, hidden_dim=latent_dim)
+        svi = SVI(model, guide, ...)
+
+    :param callable model: a generative model
+    :param int hidden_dim: number of hidden dimensions in the IAF
+    :param float sigmoid_bias: sigmoid bias in the IAF. Defaults to ``2.0``
+    :param str prefix: a prefix that will be prefixed to all param internal sites
+    """
+    def __init__(self, model, hidden_dim=None, sigmoid_bias=2.0, prefix="auto"):
+        self.sigmoid_bias = sigmoid_bias
+        self.hidden_dim = hidden_dim
+        super(AutoIAFNormal, self).__init__(model, prefix)
+
+    def sample_latent(self, *args, **kwargs):
+        if self.latent_dim == 1:
+            raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
+        if self.hidden_dim is None:
+            self.hidden_dim = self.latent_dim
+        iaf = dist.InverseAutoregressiveFlow(self.latent_dim, self.hidden_dim,
+                                             sigmoid_bias=self.sigmoid_bias)
+        pyro.module("{}_iaf".format(self.prefix), iaf.module)
+        self.iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand(self.latent_dim), [iaf])
+        return pyro.sample("_{}_latent".format(self.prefix), self.iaf_dist.independent(1),
+                           infer={"is_auxiliary": True})
 
 
 class AutoDiscreteParallel(AutoGuide):
