@@ -240,7 +240,7 @@ class HMC(TraceKernel):
         if self._adaptation_window.adapt_step_size:
             self._adapt_step_size(accept_prob)
         if self._adaptation_window.adapt_mass:
-            self._mass_estimator.update(z)
+            self._mass_estimator.update(z.values())
 
     def _adapt_step_size(self, accept_prob):
         # calculate a statistic for Dual Averaging scheme

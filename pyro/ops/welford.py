@@ -1,4 +1,4 @@
-from collections import OrderedDict
+from collections import defaultdict
 
 import torch
 
@@ -18,47 +18,47 @@ class WelfordCovariance(object):
         self.reset()
 
     def _deltas(self, z):
-        deltas = OrderedDict()
-        for site_name, site_value in z.items():
-            mean = self.means.get(site_name, 0.)
-            delta_pre = site_value - mean
+        deltas = []
+        for i, x in enumerate(z):
+            if i > len(self.means) - 1:
+                self.means.append(0.)
+            mean = self.means[i]
+            delta_pre = x - mean
             updated_mean = mean + delta_pre / self.n_samples
-            delta_post = site_value - updated_mean
-            deltas[site_name] = (updated_mean, delta_pre, delta_post)
+            delta_post = x - updated_mean
+            deltas.append((updated_mean, delta_pre, delta_post))
         return deltas
 
     def _unroll(self, z):
-        unrolled = OrderedDict()
-        for site_name, rolled in z.items():
-            for i, x in enumerate(rolled.view(-1)):
-                unrolled["{}_{}".format(site_name, i)] = x
+        unrolled = []
+        for rolled in z:
+            unrolled.extend(rolled.reshape(-1).data.tolist())
         return unrolled
 
     def reset(self):
-        self.means = OrderedDict()
-        self.variances = OrderedDict()
+        self.means = []
+        self.variances = defaultdict(float)
         self.n_samples = 0
 
     def update(self, z):
         self.n_samples += 1
         deltas = self._deltas(self._unroll(z))
-        for i, (site_x, (mean_x, delta_x_pre, delta_x_post)) in enumerate(deltas.items()):
-            self.means[site_x] = mean_x
-            for j, (site_y, (mean_y, delta_y_pre, delta_y_post)) in enumerate(deltas.items()):
+        for i, (mean_x, delta_x_pre, delta_x_post) in enumerate(deltas):
+            self.means[i] = mean_x
+            for j, (mean_y, delta_y_pre, delta_y_post) in enumerate(deltas):
                 # Only compute the upper triangular covariance.
                 if i == j or (i < j and not self.diagonal):
-                    self.variances[(site_x, site_y)] = self.variances.get((site_x, site_y), 0.) + \
-                                                       delta_x_pre * delta_y_post
+                    self.variances[(i, j)] += delta_x_pre * delta_y_post
 
     def get_estimates(self, regularize=True):
         if self.n_samples < 2:
             raise RuntimeError('Insufficient samples to estimate covariance')
         rows = []
-        for i, site_x in enumerate(self.means.keys()):
+        for i in range(len(self.means)):
             row = []
-            for j, site_y in enumerate(self.means.keys()):
+            for j in range(len(self.means)):
                 if i == j or not self.diagonal:
-                    key = (site_x, site_y) if i <= j else (site_y, site_x)
+                    key = (i, j) if i <= j else (j, i)
                     estimate = self.variances[key] / (self.n_samples - 1)
                     if regularize:
                         # Regularization from stan

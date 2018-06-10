@@ -1,5 +1,3 @@
-from collections import OrderedDict
-
 import numpy as np
 import pytest
 import torch
@@ -10,7 +8,7 @@ from tests.common import assert_equal
 
 @pytest.mark.parametrize('n_samples,dim_size', [(1000, 1),
                                                 (1000, 7),
-                                                pytest.mark.xfail((1, 10))])  # Insufficient samples
+                                                pytest.mark.xfail((1, 1))])  # Insufficient samples
 @pytest.mark.init(rng_seed=7)
 def test_welford_diagonal(n_samples, dim_size):
     w = WelfordCovariance(diagonal=True)
@@ -22,7 +20,7 @@ def test_welford_diagonal(n_samples, dim_size):
     for _ in range(n_samples):
         sample = dist.sample()
         samples.append(sample)
-        w.update(OrderedDict((i, v) for i, v in enumerate(sample)))
+        w.update([x for x in sample])
 
     sample_variance = torch.stack(samples).var(dim=0, unbiased=True)
     estimates = w.get_estimates(regularize=False).squeeze(-1)
@@ -31,7 +29,7 @@ def test_welford_diagonal(n_samples, dim_size):
 
 @pytest.mark.parametrize('n_samples,dim_size', [(1000, 1),
                                                 (1000, 7),
-                                                pytest.mark.xfail((1, 10))])
+                                                pytest.mark.xfail((1, 1))])
 @pytest.mark.init(rng_seed=7)
 def test_welford_dense(n_samples, dim_size):
     w = WelfordCovariance(diagonal=False)
@@ -43,7 +41,7 @@ def test_welford_dense(n_samples, dim_size):
     for _ in range(n_samples):
         sample = dist.sample()
         samples.append(sample)
-        w.update(OrderedDict((i, v) for i, v in enumerate(sample)))
+        w.update([x for x in sample])
 
     sample_cov = np.cov(torch.stack(samples).data.numpy(), bias=False, rowvar=False)
     estimates = w.get_estimates(regularize=False).data.numpy()
