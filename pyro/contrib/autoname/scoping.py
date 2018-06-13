@@ -11,7 +11,7 @@ from pyro.poutine.runtime import apply_stack
 
 class ScopeMessenger(Messenger):
     """
-    TODO docs
+    ``ScopeMessenger`` is the implementation of :func:`pyro.contrib.autoname.scope`
     """
     def __init__(self, prefix=None, inner=None):
         super(ScopeMessenger, self).__init__()
@@ -59,7 +59,7 @@ class ScopeMessenger(Messenger):
 
 def scope(fn=None, prefix=None, inner=None):
     """
-    scope
+    TODO docs
     """
     msngr = ScopeMessenger(prefix=prefix, inner=inner)
     return msngr(fn) if fn is not None else msngr

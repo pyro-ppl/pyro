@@ -1,3 +1,5 @@
+import torch
+
 import pyro
 import pyro.poutine as poutine
 import pyro.distributions.torch as dist
@@ -161,4 +163,21 @@ def test_nested_traces():
     tr2 = poutine.trace(poutine.trace(f2)).get_trace()
     actual_names = [name for name, node in tr2.nodes.items()
                     if node['type'] == "sample"]
+    assert expected_names == actual_names
+
+
+def test_no_param():
+
+    pyro.clear_param_store()
+
+    @scope
+    def model():
+        a = pyro.param("a", torch.tensor(0.5))
+        return pyro.sample("b", dist.Bernoulli(a))
+
+    expected_names = ["a", "model/b"]
+    tr = poutine.trace(model).get_trace()
+    actual_names = [name for name, node in tr.nodes.items()
+                    if node['type'] in ('param', 'sample')]
+
     assert expected_names == actual_names
