@@ -16,11 +16,13 @@ from pyro.distributions.torch import *  # noqa F403
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
 from pyro.distributions.von_mises import VonMises
+from pyro.distributions.relaxed_straight_through import RelaxedOneHotCategoricalStraightThrough
 
 __all__ = [
     "enable_validation",
     "is_validation_enabled",
     "validation_enabled",
+    "AVFMultivariateNormal",
     "Binomial",
     "Delta",
     "Distribution",
@@ -29,8 +31,8 @@ __all__ = [
     "InverseAutoregressiveFlow",
     "LowRankMultivariateNormal",
     "OMTMultivariateNormal",
-    "AVFMultivariateNormal",
     "Rejector",
+    "RelaxedOneHotCategoricalStraightThrough",
     "TorchDistribution",
     "VonMises",
 ]

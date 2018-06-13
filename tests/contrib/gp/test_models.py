@@ -19,9 +19,7 @@ from pyro.infer.mcmc.mcmc import MCMC
 from pyro.params import param_with_module_name
 from tests.common import assert_equal
 
-logging.basicConfig(format='%(levelname)s %(message)s')
-logger = logging.getLogger('pyro')
-logger.setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 T = namedtuple("TestGPModel", ["model_class", "X", "y", "kernel", "likelihood"])
 
