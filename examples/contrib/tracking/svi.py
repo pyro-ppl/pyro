@@ -27,8 +27,30 @@ def wrap_displacement(state):
 
 
 class PartialMatching(dist.TorchDistribution):
-    def __init__(self, exists, assign_logits):
-        raise NotImplementedError
+    """
+    Approximate partial matching distribution.
+    :meth:`sample` is exact, but :meth:`log_prob` is approximate.
+    """
+    def __init__(self, args, observations):
+        self.args = args
+        self.observations = observations
+        self.p_real = args.expected_num_objects / (args.expected_num_objects + args.expected_num_false_alarms)
+
+    def sample(self, sample_shape=torch.Size()):
+        is_real = dist.Bernoulli(self.p_real).sample(sample_shape)
+        uniform = torch.ones(args.max_num_objects) / args.max_num_objects
+        assign = torch.empty(args.num_frames, self.max_num_detections)  # FIXME
+        assign.fill_(args.max_num_objects)  # spurious by default
+        for t in range(args.num_frames):
+            num_objects = int(is_real[t].sum())
+            assign[t, is_real.byte()] = torch.multinomial(uniform, num_objects, replacement=False)
+        return assign
+
+    def log_prob(self, value):
+        # This is a mean field approximate log prob.
+        args = self.args
+        is_real = (value != args.max_num_objects).float()
+        return dist.Bernoulli(self.p_real).log_prob(is_real)
 
 
 # This models multiple objects randomly walking around the unit 2-torus,
@@ -57,7 +79,7 @@ def state_model(args):
 
 
 @poutine.broadcast
-def assignment_model(args, exists, states, observations):
+def assignment_model(args, exists, observations=None):
     max_num_detections = max(map(len, observations))
     assign_logits = torch.empty(args.num_frames, max_num_detections, args.max_num_objects + 1)
     assign_logits[..., :-1] = -float('inf')
@@ -93,13 +115,13 @@ def detection_model(args, exists, states, assign, observations=None):
     else:
         with pyro.scale(None, is_real.float()):
             if VON_MISES_HAS_SAMPLE:
-                real_observations = pyro.sample('real_observations',
-                                                dist.VonMises(augmented_states[assign], args.emission_noise_scale),
-                                                obs=observations)
+                pyro.sample('real_observations',
+                            dist.VonMises(augmented_states[assign], args.emission_noise_scale),
+                            obs=observations)
             else:
-                emission_noise = pyro.sample('emission_noise',
-                                             dist.Normal(0., args.emission_noise_scale),
-                                             obs=wrap_displacement(states - observations))
+                pyro.sample('emission_noise',
+                            dist.Normal(0., args.emission_noise_scale),
+                            obs=wrap_displacement(states - observations))
         with pyro.scale(None, (~is_real).float()):
             pyro.sample('spurious_observations', dist.Uniform(0., 1.).expand([2]),
                         obs=observations)
@@ -109,7 +131,7 @@ def detection_model(args, exists, states, assign, observations=None):
 
 def model(args, observations=None):
     exists, states = state_model(args)
-    assign = assignment_model(args, exists, states, observations)
+    assign = assignment_model(args, exists, observations)
     observations = detection_model(args, exists, states, assign, observations)
     return exists, states, assign, observations
 
@@ -120,7 +142,9 @@ def model(args, observations=None):
 @poutine.broadcast
 def guide(args, observations):
     # Initialize from the prior.
-    states = pyro.param('states_param', lambda: poutine.block(state_model)(args))
+    states_loc = pyro.param('states_loc', lambda: poutine.block(state_model)(args)[1])
+    states_scale = pyro.param('states_scale', torch.ones(states_loc.shape))
+    states = pyro.sample('states', dist.Normal(states_loc, states_scale))
     states = wrap_position(states)  # Account for drift during optimization.
 
     # Solve soft assignment problem.
@@ -142,7 +166,8 @@ def guide(args, observations):
 
     with pyro.iarange('time', observations.shape[0], dim=-2):
         with pyro.iarange('detections', observations.shape[1], dim=-1):
-            pyro.sample('assign', assignment.assignment_dist)
+            pyro.sample('assign', assignment.assignment_dist,
+                        infer={'enumerate': 'parallel'})
 
 
 def main(args):
