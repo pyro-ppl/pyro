@@ -280,16 +280,18 @@ class ReshapedDistribution(TorchDistribution):
         super(ReshapedDistribution, self).__init__(batch_shape, event_shape)
 
     def expand(self, batch_shape):
+        batch_shape = torch.Size(batch_shape)
         proposed_shape = broadcast_shape(self.batch_shape, batch_shape)
         if tuple(reversed(proposed_shape)) > tuple(reversed(batch_shape)):
             raise ValueError("Existing batch shape {} cannot be expanded" +
                              "to the new batch shape {}."
                              .format(self.batch_shape, batch_shape))
         base_dist = self.base_dist
+        base_batch_shape = batch_shape + self.event_shape[:self.reinterpreted_batch_ndims]
         try:
-            sample_shape = self.base_dist._sample_shape(batch_shape)
+            sample_shape = self.base_dist._sample_shape(base_batch_shape)
         except ShapeMismatchError:
-            base_dist = self.base_dist.expand(batch_shape)
+            base_dist = self.base_dist.expand(base_batch_shape)
             assert not isinstance(base_dist, ReshapedDistribution)
             sample_shape = torch.Size(())
         reinterpreted_batch_ndims = self.reinterpreted_batch_ndims
