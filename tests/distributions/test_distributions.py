@@ -178,5 +178,4 @@ def test_expand_error(dist, initial_shape, proposed_shape):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
         medium = small.expand(torch.Size(initial_shape) + small.batch_shape)
         proposed_batch_shape = torch.Size(proposed_shape) + small.batch_shape
-        with pytest.raises(ValueError):
-            medium.expand(proposed_batch_shape)
+        medium.expand(proposed_batch_shape)

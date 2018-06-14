@@ -88,8 +88,8 @@ class TorchDistributionMixin(Distribution):
         if right == self.batch_shape:
             return self.expand_by(left)
         else:
-            raise NotImplementedError("`TorchDistributionMixin.expand()` cannot expand " 
-                                      "distribution's existing batch shape. Consider " 
+            raise NotImplementedError("`TorchDistributionMixin.expand()` cannot expand "
+                                      "distribution's existing batch shape. Consider "
                                       "overriding the default implementation for the "
                                       "distribution class.")
 
@@ -258,7 +258,7 @@ class ReshapedDistribution(TorchDistribution):
         # e.g. (2, 4) -> (2, 1)
         proposed_shape = broadcast_shape(self.batch_shape, batch_shape)
         if tuple(reversed(proposed_shape)) > tuple(reversed(batch_shape)):
-            raise ValueError("Existing batch shape {} cannot be expanded " 
+            raise ValueError("Existing batch shape {} cannot be expanded "
                              "to the new batch shape {}."
                              .format(self.batch_shape, batch_shape))
         # Adjust existing sample shape if possible.
