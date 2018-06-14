@@ -110,7 +110,7 @@ def scope(fn=None, prefix=None, inner=None):
         ... def model():
         ...     return pyro.sample("x", dist.Bernoulli(0.5))
         ...
-        >>> assert "model/x" in trace(model).get_trace()
+        >>> assert "model/x" in poutine.trace(model).get_trace()
     """
     msngr = ScopeMessenger(prefix=prefix, inner=inner)
     return msngr(fn) if fn is not None else msngr
