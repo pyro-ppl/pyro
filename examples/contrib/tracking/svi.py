@@ -83,10 +83,13 @@ def assignment_model(args, exists, observations=None):
                 with poutine.scale(scale=is_observed.float()):
                     # This ignores dependency on exists, but should only be off by a constant factor.
                     assign = pyro.sample("assign", dist.Categorical(torch.ones(args.max_num_objects + 1)))
+                    assert assign.shape == (args.max_num_objects + 1, 1, args.num_frames, max_num_detections)
                 assign[~is_observed] = -1
         with pyro.iarange("objects", args.max_num_objects):
             with pyro.iarange("time_emitted", args.num_frames):
-                emitted = (is_observed & (assign != args.max_num_objects)).float()
+                emitted = torch.zeros(assign.shape[:-1] + (args.max_num_objects + 1,))
+                emitted[assign] = 1
+                emitted = emitted[..., :-1]
                 # TODO(fritzo,alicanb) Remove dependence on both of (assign,exists).
                 pyro.sample("emitted", dist.Bernoulli(args.emission_prob * exists.float()),
                             obs=emitted)

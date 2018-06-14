@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 import math
+import numbers
 
 import torch
 
@@ -13,6 +14,12 @@ def _product(factors):
     for factor in factors:
         result *= factor
     return result
+
+
+def _exp(value):
+    if isinstance(value, numbers.Number):
+        return math.exp(value)
+    return value.exp()
 
 
 class MarginalAssignmentPersistent(object):
@@ -33,27 +40,27 @@ class MarginalAssignmentPersistent(object):
     :param torch.Tensor exists_logits: a tensor of shape `[num_objects]`
         representing per-object factors for existence of each potential object.
     :param torch.Tensor assign_logits: a tensor of shape
-        `[num_objects, num_frames, num_detections]` representing per-edge
+        `[num_frames, num_detections, num_objects]` representing per-edge
         factors of assignment probability, where each edge denotes that at a
         given time frame a given detection associates with a single object.
     :param int bp_iters: option number of belief propagation iterations. If
         unspecified or ``None`` an expensive exact algorithm will be used.
-    :ivar int num_objects: the number of (potentially existing) objects
     :ivar int num_frames: the number of time frames
     :ivar int num_detections: the (maximum) number of detections per frame
+    :ivar int num_objects: the number of (potentially existing) objects
     :ivar pyro.distributions.Bernoulli exists_dist: a mean field distribution
         over object existence.
     :ivar pyro.distributions.Categorical assign_dist: a mean field distribution
         over the object (or None) to which each detection associates.
-        This has ``.event_shape == (num_objects + 1)`` where the final element
+        This has ``.event_shape == (num_objects + 1,)`` where the final element
         denotes spurious detection, and
         ``.batch_shape == (num_frames, num_detections)``.
     """
     def __init__(self, exists_logits, assign_logits, bp_iters=None):
         assert exists_logits.dim() == 1, exists_logits.shape
         assert assign_logits.dim() == 3, assign_logits.shape
-        assert assign_logits.shape[0] == exists_logits.shape[0]
-        self.num_objects, self.num_frames, self.num_detections = assign_logits.shape
+        assert assign_logits.shape[-1] == exists_logits.shape[-1]
+        self.num_frames, self.num_detections, self.num_objects = assign_logits.shape
 
         # Clamp to avoid NANs.
         self.exists_logits = exists_logits.clamp(min=-40, max=40)
@@ -67,11 +74,10 @@ class MarginalAssignmentPersistent(object):
 
         # Wrap the results in Distribution objects.
         # This adds a final logit=0 element denoting spurious detection.
-        padded_assign = torch.nn.functional.pad(self.assign.permute([1, 2, 0]), (0, 1), "constant", 0.0)
+        padded_assign = torch.nn.functional.pad(assign, (0, 1), "constant", 0.0)
         self.assign_dist = dist.Categorical(logits=padded_assign)
         self.exists_dist = dist.Bernoulli(logits=exists)
-        assert self.assign_dist.event_shape == (self.num_objects + 1,)
-        assert self.assign_dist.batch_shape == (self.num_frames, self.num_detection)
+        assert self.assign_dist.batch_shape == (self.num_frames, self.num_detections)
         assert self.exists_dist.batch_shape == (self.num_objects,)
 
 
@@ -80,46 +86,44 @@ def compute_marginals_persistent(exists_logits, assign_logits):
     This implements exact inference of pairwise marginals via
     enumeration. This is very expensive and is only useful for testing.
     """
-    num_objects, num_frames, num_detections = assign_logits.shape
+    num_frames, num_detections, num_objects = assign_logits.shape
     assert exists_logits.shape == (num_objects,)
-    with torch.no_grad():
 
-        total = 0
-        exists_probs = exists_logits.new_zeros(num_objects)
-        assign_probs = assign_logits.new_zeros(num_objects, num_frames, num_detections)
-        for exists in itertools.product([0, 1], repeat=num_objects):
-            exists = [i for i, e in enumerate(exists) if e]
-            exists_part = math.exp(sum(exists_logits[i].item() for i in exists))
+    total = 0
+    exists_probs = exists_logits.new_zeros(num_objects)
+    assign_probs = assign_logits.new_zeros(num_frames, num_detections, num_objects)
+    for exists in itertools.product([0, 1], repeat=num_objects):
+        exists = [i for i, e in enumerate(exists) if e]
+        exists_part = _exp(sum(exists_logits[i] for i in exists))
 
-            # The remaining variables are conditionally independent conditioned on exists.
-            assign_parts = []
-            assign_sums = []
-            for t in range(num_frames):
-                assign_map = {}
-                for n in range(1 + min(len(exists), num_detections)):
-                    for objects in itertools.combinations(range(num_objects), n):
-                        for detections in itertools.permutations(range(num_detections), n):
-                            assign = tuple(zip(objects, detections))
-                            assign_map[assign] = math.exp(sum(assign_logits[i, t, j].item()
-                                                              for i, j in assign))
-                assign_parts.append(assign_map)
-                assign_sums.append(sum(assign_map.values()))
+        # The remaining variables are conditionally independent conditioned on exists.
+        assign_parts = []
+        assign_sums = []
+        for t in range(num_frames):
+            assign_map = {}
+            for n in range(1 + min(len(exists), num_detections)):
+                for objects in itertools.combinations(range(num_objects), n):
+                    for detections in itertools.permutations(range(num_detections), n):
+                        assign = tuple(zip(objects, detections))
+                        assign_map[assign] = _exp(sum(assign_logits[t, j, i] for i, j in assign))
+            assign_parts.append(assign_map)
+            assign_sums.append(sum(assign_map.values()))
 
-            prob = exists_part * _product(assign_sums)
-            total += prob
-            for i in exists:
-                exists_probs[i] += prob
-            for t in range(num_frames):
-                other_part = exists_part * _product(assign_sums[:t] + assign_sums[t + 1:])
-                for assign, assign_part in assign_parts[t].items():
-                    prob = other_part * assign_part
-                    for i, j in assign:
-                        assign_probs[i, t, j] += prob
+        prob = exists_part * _product(assign_sums)
+        total += prob
+        for i in exists:
+            exists_probs[i] += prob
+        for t in range(num_frames):
+            other_part = exists_part * _product(assign_sums[:t] + assign_sums[t + 1:])
+            for assign, assign_part in assign_parts[t].items():
+                prob = other_part * assign_part
+                for i, j in assign:
+                    assign_probs[t, j, i] += prob
 
-        # convert from probs to logits
-        exists = exists_probs.log() - (total - exists_probs).log()
-        assign = assign_probs.log() - (total - assign_probs.sum(0, True)).log()
-        return exists, assign
+    # convert from probs to logits
+    exists = exists_probs.log() - (total - exists_probs).log()
+    assign = assign_probs.log() - (total - assign_probs.sum(-1, True)).log()
+    return exists, assign
 
 
 def compute_marginals_persistent_bp(exists_logits, assign_logits, bp_iters):
