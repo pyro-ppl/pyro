@@ -22,10 +22,14 @@ class ScopeMessenger(Messenger):
         if self.prefix is None:
             raise ValueError("no prefix was provided")
         if not self.inner:
+            # to accomplish adding a counter to duplicate scopes,
+            # we will treat ScopeMessenger.__enter__ like a sample statement
+            # so that the same mechanism that adds counters to sample names
+            # can be used to add a counter to a scope name
             msg = {
                 "type": "sample",
                 "name": self.prefix,
-                "fn": lambda: 0.,
+                "fn": lambda: True,
                 "is_observed": False,
                 "args": (),
                 "kwargs": {},
@@ -36,7 +40,7 @@ class ScopeMessenger(Messenger):
                 "done": False,
                 "stop": False,
                 "continuation": None,
-                "PRUNE": True
+                "PRUNE": True  # this keeps the dummy node from appearing in the trace
             }
             apply_stack(msg)
             self.prefix = msg["name"].split("/")[-1]
@@ -59,7 +63,54 @@ class ScopeMessenger(Messenger):
 
 def scope(fn=None, prefix=None, inner=None):
     """
-    TODO docs
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
+    :param prefix: a string to prepend to sample names (optional if ``fn`` is provided)
+    :param inner: switch to determine where duplicate name counters appear
+    :returns: ``fn`` decorated with a :class:`~pyro.contrib.autoname.scoping.ScopeMessenger`
+
+    ``scope`` prepends a prefix followed by a ``/`` to the name at a Pyro sample site.
+    It works much like TensorFlow's ``name_scope`` and ``variable_scope``,
+    and can be used as a context manager, a decorator, or a higher-order function.
+
+    ``scope`` is very useful for aligning compositional models with guides or data.
+
+    Example::
+
+        >>> @scope(prefix="a")
+        ... def model():
+        ...     return pyro.sample("x", ...)
+        ...
+        >>> assert "a/x" in poutine.trace(model).get_trace()
+
+
+    Example::
+
+        >>> def model():
+        ...     with scope(prefix="a"):
+        ...         return pyro.sample("x", ...)
+        ...
+        >>> assert "a/x" in poutine.trace(model).get_trace()
+
+    Scopes compose as expected, with outer scopes appearing before inner scopes in names::
+
+        >>> @scope(prefix="b")
+        ... def model():
+        ...     with scope(prefix="a"):
+        ...         return pyro.sample("x", ...)
+        ...
+        >>> assert "b/a/x" in poutine.trace(model).get_trace()
+
+    When used as a decorator or higher-order function,
+    ``scope`` will use the name of the input function as the prefix
+    if no user-specified prefix is provided.
+
+    Example::
+
+        >>> @scope
+        ... def model():
+        ...     return pyro.sample("x", ...)
+        ...
+        >>> assert "model/x" in trace(model).get_trace()
     """
     msngr = ScopeMessenger(prefix=prefix, inner=inner)
     return msngr(fn) if fn is not None else msngr
