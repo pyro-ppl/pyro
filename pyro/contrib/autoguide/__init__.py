@@ -592,7 +592,7 @@ class AutoIAFNormal(AutoContinuous):
         iaf = dist.InverseAutoregressiveFlow(self.latent_dim, self.hidden_dim,
                                              sigmoid_bias=self.sigmoid_bias)
         pyro.module("{}_iaf".format(self.prefix), iaf.module)
-        self.iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand(self.latent_dim), [iaf])
+        self.iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
         return pyro.sample("_{}_latent".format(self.prefix), self.iaf_dist.independent(1),
                            infer={"is_auxiliary": True})
 

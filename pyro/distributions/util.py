@@ -230,3 +230,7 @@ def validation_enabled(is_validate=True):
         yield
     finally:
         enable_validation(distribution_validation_status)
+
+
+class ShapeMismatchError(ValueError):
+    pass

@@ -7,6 +7,7 @@ from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
 from pyro.distributions import TorchDistribution
+from pyro.distributions.util import ShapeMismatchError
 
 
 def _eval_poly(y, coef):
@@ -65,7 +66,11 @@ class VonMises(TorchDistribution):
         return log_prob
 
     def expand(self, batch_shape):
-        validate_args = self.__dict__.get('validate_args')
-        loc = self.loc.expand(batch_shape)
-        concentration = self.concentration.expand(batch_shape)
-        return VonMises(loc, concentration, validate_args=validate_args)
+        try:
+            sample_shape = self._sample_shape(batch_shape)
+            return self.expand_by(sample_shape)
+        except ShapeMismatchError:
+            validate_args = self.__dict__.get('validate_args')
+            loc = self.loc.expand(batch_shape)
+            concentration = self.concentration.expand(batch_shape)
+            return VonMises(loc, concentration, validate_args=validate_args)

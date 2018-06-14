@@ -6,6 +6,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
+from pyro.distributions.torch_distribution import ReshapedDistribution
 from pyro.distributions.util import broadcast_shape
 from tests.common import assert_equal, xfail_if_not_implemented
 
@@ -99,7 +100,9 @@ def test_distribution_validate_args(dist_class, args, validate_args):
 
 
 def check_sample_shapes(small, large):
-    if isinstance(small, dist.LogNormal):
+    if isinstance(small, dist.LogNormal) or (
+            isinstance(small, ReshapedDistribution) and
+            isinstance(small.base_dist, dist.LogNormal)):
         # Ignore broadcasting bug in LogNormal:
         # https://github.com/pytorch/pytorch/pull/7269
         return
@@ -148,13 +151,32 @@ def test_expand_existing_dim(dist, shape_type):
             check_sample_shapes(small, large)
 
 
-def test_expand_twice(dist):
+@pytest.mark.parametrize("sample_shapes", [
+    [(2, 1), (2, 3)],
+    [(2, 1, 1), (2, 1, 3), (2, 5, 3)],
+])
+def test_subsequent_expands_ok(dist, sample_shapes):
+    for idx in range(dist.get_num_test_data()):
+        d = dist.pyro_dist(**dist.get_dist_params(idx))
+        original_batch_shape = d.batch_shape
+        for shape in sample_shapes:
+            proposed_batch_shape = torch.Size(shape) + original_batch_shape
+            with xfail_if_not_implemented():
+                n = d.expand(proposed_batch_shape)
+            assert n.batch_shape == proposed_batch_shape
+            check_sample_shapes(d, n)
+            d = n
+
+
+@pytest.mark.parametrize("initial_shape, proposed_shape", [
+    [(2, 1), (4, 3)],
+    [(2, 4), (2, 2, 1)],
+    [(1, 2, 1), (2, 1)],
+])
+def test_expand_error(dist, initial_shape, proposed_shape):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
-        medium = small.expand(torch.Size((2, 1)) + small.batch_shape)
-        batch_shape = torch.Size((2, 3)) + small.batch_shape
-        with xfail_if_not_implemented():
-            large = medium.expand(batch_shape)
-        assert large.batch_shape == batch_shape
-        check_sample_shapes(small, large)
-        check_sample_shapes(medium, large)
+        medium = small.expand(torch.Size(initial_shape) + small.batch_shape)
+        proposed_batch_shape = torch.Size(proposed_shape) + small.batch_shape
+        with pytest.raises(ValueError):
+            medium.expand(proposed_batch_shape)

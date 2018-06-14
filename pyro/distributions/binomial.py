@@ -6,6 +6,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all, lazy_property, logits_to_probs, probs_to_logits
 
+from pyro.distributions.util import ShapeMismatchError
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 
 
@@ -121,11 +122,15 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
         return values
 
     def expand(self, batch_shape):
-        validate_args = self.__dict__.get('validate_args')
-        total_count = self.total_count.expand(batch_shape)
-        if 'probs' in self.__dict__:
-            probs = self.probs.expand(batch_shape)
-            return Binomial(total_count, probs=probs, validate_args=validate_args)
-        else:
-            logits = self.logits.expand(batch_shape)
-            return Binomial(total_count, logits=logits, validate_args=validate_args)
+        try:
+            sample_shape = self._sample_shape(batch_shape)
+            return self.expand_by(sample_shape)
+        except ShapeMismatchError:
+            validate_args = self.__dict__.get('validate_args')
+            total_count = self.total_count.expand(batch_shape)
+            if 'probs' in self.__dict__:
+                probs = self.probs.expand(batch_shape)
+                return Binomial(total_count, probs=probs, validate_args=validate_args)
+            else:
+                logits = self.logits.expand(batch_shape)
+                return Binomial(total_count, logits=logits, validate_args=validate_args)
