@@ -18,7 +18,7 @@ def _product(factors):
 class MarginalAssignmentPersistent(object):
     """
     This computes marginal distributions of a multi-frame multi-object
-    data association problem with an unknown number of objects.
+    data association problem with an unknown number of persistennt objects.
 
     The inputs are factors in a factor graph (existence probabilites for each
     potential object and assignment probabilities for each object-detection
