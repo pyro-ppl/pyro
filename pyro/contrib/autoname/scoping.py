@@ -78,7 +78,7 @@ def scope(fn=None, prefix=None, inner=None):
 
         >>> @scope(prefix="a")
         ... def model():
-        ...     return pyro.sample("x", ...)
+        ...     return pyro.sample("x", dist.Bernoulli(0.5))
         ...
         >>> assert "a/x" in poutine.trace(model).get_trace()
 
@@ -87,7 +87,7 @@ def scope(fn=None, prefix=None, inner=None):
 
         >>> def model():
         ...     with scope(prefix="a"):
-        ...         return pyro.sample("x", ...)
+        ...         return pyro.sample("x", dist.Bernoulli(0.5))
         ...
         >>> assert "a/x" in poutine.trace(model).get_trace()
 
@@ -96,7 +96,7 @@ def scope(fn=None, prefix=None, inner=None):
         >>> @scope(prefix="b")
         ... def model():
         ...     with scope(prefix="a"):
-        ...         return pyro.sample("x", ...)
+        ...         return pyro.sample("x", dist.Bernoulli(0.5))
         ...
         >>> assert "b/a/x" in poutine.trace(model).get_trace()
 
@@ -108,7 +108,7 @@ def scope(fn=None, prefix=None, inner=None):
 
         >>> @scope
         ... def model():
-        ...     return pyro.sample("x", ...)
+        ...     return pyro.sample("x", dist.Bernoulli(0.5))
         ...
         >>> assert "model/x" in trace(model).get_trace()
     """
