@@ -59,7 +59,7 @@ class Cauchy(torch.distributions.Cauchy, TorchDistributionMixin):
 class Chi2(torch.distributions.Chi2, TorchDistributionMixin):
     def expand(self, batch_shape):
         try:
-            return super(Chi2).expand_by(batch_shape)
+            return super(Chi2, self).expand_by(batch_shape)
         except NotImplementedError:
             validate_args = self.__dict__.get('validate_args')
             df = self.df.expand(batch_shape)
