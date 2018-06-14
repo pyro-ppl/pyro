@@ -22,7 +22,7 @@ def model(data, k):
     locs = pyro.param("locs", torch.zeros(k))
     scales = pyro.param("scales", torch.ones(k), constraint=constraints.positive)
 
-    # Observe all the data. We pass a local latent in to the local_model.
+    # Observe all the data
     for x in data:
         local_model(probs, locs, scales, obs=x)
 
@@ -35,7 +35,7 @@ def local_model(ps, locs, scales, obs=None):
 
 def guide(data, k):
     for i, x in enumerate(data):
-        # We pass a local latent in to the local_guide.
+        # We pass a local param in to the local_guide since scopes only affect sample
         probs = pyro.param("probs_{}".format(i),
                            torch.ones(k) / k, constraint=constraints.positive)
         local_guide(k, probs)
