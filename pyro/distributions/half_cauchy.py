@@ -6,7 +6,6 @@ from torch.distributions import constraints
 from torch.distributions.transforms import AbsTransform, AffineTransform
 from torch.distributions.utils import broadcast_all
 
-from pyro.distributions.util import ShapeMismatchError
 from pyro.distributions.torch import Cauchy, TransformedDistribution
 
 
@@ -51,9 +50,8 @@ class HalfCauchy(TransformedDistribution):
 
     def expand(self, batch_shape):
         try:
-            sample_shape = self._sample_shape(batch_shape)
-            return self.expand_by(sample_shape)
-        except ShapeMismatchError:
+            return super(HalfCauchy, self).expand(batch_shape)
+        except NotImplementedError:
             loc = self.loc.expand(batch_shape)
             scale = self.scale.expand(batch_shape)
-            return HalfCauchy(loc, scale)
+            return type(self)(loc, scale)

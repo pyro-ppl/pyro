@@ -7,7 +7,7 @@ from torch.distributions import constraints
 
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.score_parts import ScoreParts
-from pyro.distributions.util import broadcast_shape, sum_rightmost, ShapeMismatchError
+from pyro.distributions.util import broadcast_shape, sum_rightmost
 
 
 class TorchDistributionMixin(Distribution):
@@ -64,35 +64,6 @@ class TorchDistributionMixin(Distribution):
         """
         return sample_shape + self.batch_shape + self.event_shape
 
-    def _sample_shape(self, batch_shape):
-        """
-        Returns the sample shape that must be added to the left of a
-        distribution's existing
-        :attr:`~torch.distributions.distribution.Distribution.batch_shape`,
-        so as to change to the new `batch_shape`.
-
-        :param batch_shape: new batch shape
-        :return: sample shape corresponding to the leftmost dims
-        """
-        batch_shape = list(batch_shape)
-        if len(batch_shape) < len(self.batch_shape):
-            raise ValueError("Expected len(batch_shape) >= len(self.batch_shape), "
-                             "actual {} vs {}".format(len(batch_shape), len(self.batch_shape)))
-        # check sizes of existing dims
-        for dim in range(-1, -1 - len(self.batch_shape), -1):
-            if batch_shape[dim] == -1:
-                batch_shape[dim] = self.batch_shape[dim]
-            elif batch_shape[dim] != self.batch_shape[dim]:
-                if self.batch_shape[dim] != 1:
-                    raise ValueError("Cannot broadcast dim {} of size {} to size {}".format(
-                        dim, self.batch_shape[dim], batch_shape[dim]))
-                else:
-                    raise ShapeMismatchError("The rightmost dimensions of the existing batch " +
-                                             "shape {} must match the new batch shape {}."
-                                             .format(self.batch_shape, batch_shape))
-        sample_shape = batch_shape[:len(batch_shape) - len(self.batch_shape)]
-        return torch.Size(sample_shape)
-
     def expand(self, batch_shape):
         """
         Expands a distribution to a desired
@@ -111,12 +82,14 @@ class TorchDistributionMixin(Distribution):
         :return: An expanded version of this distribution.
         :rtype: :class:`ReshapedDistribution`
         """
-        try:
-            sample_shape = self._sample_shape(batch_shape)
-            return self.expand_by(sample_shape)
-        except ShapeMismatchError:
-            raise NotImplementedError("`TorchDistributionMixin.expand()` cannot expand " +
-                                      "distribution's existing batch shape. Consider " +
+        batch_shape = torch.Size(batch_shape)
+        cut = len(batch_shape) - len(self.batch_shape)
+        left, right = batch_shape[:cut], batch_shape[cut:]
+        if right == self.batch_shape:
+            return self.expand_by(left)
+        else:
+            raise NotImplementedError("`TorchDistributionMixin.expand()` cannot expand " 
+                                      "distribution's existing batch shape. Consider " 
                                       "overriding the default implementation for the "
                                       "distribution class.")
 
@@ -281,21 +254,27 @@ class ReshapedDistribution(TorchDistribution):
 
     def expand(self, batch_shape):
         batch_shape = torch.Size(batch_shape)
+        # Raise error if existing batch shape is being shrunk.
+        # e.g. (2, 4) -> (2, 1)
         proposed_shape = broadcast_shape(self.batch_shape, batch_shape)
         if tuple(reversed(proposed_shape)) > tuple(reversed(batch_shape)):
-            raise ValueError("Existing batch shape {} cannot be expanded" +
+            raise ValueError("Existing batch shape {} cannot be expanded " 
                              "to the new batch shape {}."
                              .format(self.batch_shape, batch_shape))
+        # Adjust existing sample shape if possible.
         base_dist = self.base_dist
         base_batch_shape = batch_shape + self.event_shape[:self.reinterpreted_batch_ndims]
-        try:
-            sample_shape = self.base_dist._sample_shape(base_batch_shape)
-        except ShapeMismatchError:
+        cut = len(base_batch_shape) - len(base_dist.batch_shape)
+        left, right = base_batch_shape[:cut], base_batch_shape[cut:]
+        if right == base_dist.batch_shape:
+            sample_shape = left
+        # Modify the base distribution's batch shape,
+        # if existing sample shape cannot be adjusted.
+        else:
             base_dist = self.base_dist.expand(base_batch_shape)
             assert not isinstance(base_dist, ReshapedDistribution)
             sample_shape = torch.Size(())
-        reinterpreted_batch_ndims = self.reinterpreted_batch_ndims
-        return ReshapedDistribution(base_dist, sample_shape, reinterpreted_batch_ndims)
+        return ReshapedDistribution(base_dist, sample_shape, self.reinterpreted_batch_ndims)
 
     def expand_by(self, sample_shape):
         base_dist = self.base_dist
