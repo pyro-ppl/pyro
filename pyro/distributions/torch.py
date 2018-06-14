@@ -7,7 +7,16 @@ from pyro.distributions.torch_distribution import TorchDistributionMixin
 
 class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
     def expand(self, batch_shape):
-        return super(Bernoulli, self).expand(batch_shape)
+        try:
+            return super(Bernoulli, self).expand(batch_shape)
+        except NotImplementedError:
+            validate_args = self.__dict__.get('validate_args')
+            if 'probs' in self.__dict__:
+                probs = self.probs.expand(batch_shape)
+                return type(self)(probs=probs, validate_args=validate_args)
+            else:
+                logits = self.logits.expand(batch_shape)
+                return type(self)(logits=logits, validate_args=validate_args)
 
 
 class Beta(torch.distributions.Beta, TorchDistributionMixin):
