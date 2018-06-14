@@ -176,6 +176,39 @@ def test_subsequent_expands_ok(dist, sample_shapes):
 def test_expand_error(dist, initial_shape, proposed_shape):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
-        medium = small.expand(torch.Size(initial_shape) + small.batch_shape)
+        large = small.expand(torch.Size(initial_shape) + small.batch_shape)
         proposed_batch_shape = torch.Size(proposed_shape) + small.batch_shape
-        medium.expand(proposed_batch_shape)
+        with pytest.raises(ValueError):
+            large.expand(proposed_batch_shape)
+
+
+@pytest.mark.parametrize("extra_event_dims,expand_shape", [
+    (0, [4, 3, 2, 1]),
+    (0, [4, 3, 2, 2]),
+    (1, [5, 4, 3, 2]),
+    (2, [5, 4, 3]),
+])
+def test_expand_reshaped_distribution(extra_event_dims, expand_shape):
+    probs = torch.ones(1, 6) / 6
+    d = dist.OneHotCategorical(probs)
+    reshaped_dist = d.expand_by([4, 1, 1]).independent(extra_event_dims)
+    full_shape = torch.Size([4, 1, 1, 1, 6])
+    cut = 4 - extra_event_dims
+    batch_shape, event_shape = full_shape[:cut], full_shape[cut:]
+    assert reshaped_dist.batch_shape == batch_shape
+    assert reshaped_dist.event_shape == event_shape
+    large = reshaped_dist.expand(expand_shape)
+    assert large.batch_shape == torch.Size(expand_shape)
+    assert large.event_shape == torch.Size(event_shape)
+
+    # Change base_dist only if sample_shape cannot be adjusted.
+    if extra_event_dims >= 1:
+        assert large.base_dist == reshaped_dist.base_dist
+    else:
+        if expand_shape[-1] == 1:
+            assert large.base_dist == reshaped_dist.base_dist
+        else:
+            assert large.base_dist.batch_shape == torch.Size(expand_shape)
+
+    with pytest.raises(ValueError):
+        reshaped_dist.expand(expand_shape + [3])
