@@ -107,6 +107,8 @@ def guide(args, observations):
         with pyro.iarange("time", args.num_frames):
             pyro.sample("assign", assignment.assign_dist, infer={"enumerate": "parallel"})
 
+    return assignment
+
 
 def main(args):
     assert args.max_num_objects >= args.expected_num_objects
@@ -141,7 +143,6 @@ if __name__ == "__main__":
     parser.add_argument("--expected-num-objects", default=2.0, type=float)
     parser.add_argument("--expected-num-spurious", default=1.0, type=float)
     parser.add_argument("--emission-prob", default=0.8, type=float)
-    parser.add_argument("--transition-noise-scale", default=0.1, type=float)
     parser.add_argument("--emission-noise-scale", default=0.1, type=float)
     args = parser.parse_args()
     main(args)
