@@ -19,7 +19,6 @@ CPU_EXAMPLES = [
     ['contrib/autoname/tree_data.py', '--num-epochs=1'],
     ['contrib/gp/sv-dkl.py', '--epochs=1', '--num-inducing=4'],
     ['contrib/tracking/linear.py', '--num-epochs=2'],
-    ['contrib/tracking/svi.py', '--num-epochs=2'],
     ['dmm/dmm.py', '--num-epochs=1'],
     ['dmm/dmm.py', '--num-epochs=1', '--num-iafs=1'],
     ['inclined_plane.py', '--num-samples=1'],
