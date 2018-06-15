@@ -56,8 +56,9 @@ def model(args, observations):
     with pyro.iarange("detections", observations.shape[1]):
         with pyro.iarange("time", args.num_frames):
             # The combinatorial part of the log prob is approximated to allow independence.
-            assign = pyro.sample("assign", dist.Categorical(torch.ones(args.max_num_objects + 1)))
             is_observed = (observations[..., -1] > 0)
+            with poutine.scale(scale=is_observed.float()):
+                assign = pyro.sample("assign", dist.Categorical(torch.ones(args.max_num_objects + 1)))
             is_spurious = (assign == args.max_num_objects)
             is_real = is_observed & ~is_spurious
             num_observed = is_observed.float().sum(-1, True)
@@ -87,16 +88,22 @@ def model(args, observations):
 def guide(args, observations):
     # Initialize states randomly from the prior.
     states_loc = pyro.param("states_loc", lambda: torch.randn(args.max_num_objects, 2))
-    states_scale = pyro.param("states_scale", lambda: torch.ones(states_loc.shape),
+    states_scale = pyro.param("states_scale",
+                              lambda: torch.ones(states_loc.shape) * args.emission_noise_scale,
                               constraint=constraints.positive)
     positions = get_dynamics(args.num_frames).mm(states_loc.t())
 
     # Solve soft assignment problem.
     real_dist = dist.Normal(positions.unsqueeze(-2), args.emission_noise_scale)
     spurious_dist = dist.Normal(0., 1.)
+    is_observed = (observations[..., -1] > 0)
     observed_positions = observations[..., 0].unsqueeze(-1)
-    assign_logits = real_dist.log_prob(observed_positions) - spurious_dist.log_prob(observed_positions)
-    exists_logits = torch.empty(args.max_num_objects).fill_(math.log(args.max_num_objects / args.expected_num_objects))
+    assign_logits = (real_dist.log_prob(observed_positions) -
+                     spurious_dist.log_prob(observed_positions) +
+                     math.log(args.expected_num_objects * args.emission_prob / args.expected_num_spurious))
+    assign_logits[~is_observed] = -float('inf')
+    exists_logits = torch.empty(args.max_num_objects).fill_(
+        math.log(args.max_num_objects / args.expected_num_objects))
     assignment = MarginalAssignmentPersistent(exists_logits, assign_logits)
 
     with pyro.iarange("objects", args.max_num_objects):
@@ -104,8 +111,9 @@ def guide(args, observations):
         with poutine.scale(scale=exists):
             pyro.sample("states", dist.Normal(states_loc, states_scale).independent(1))
     with pyro.iarange("detections", observations.shape[1]):
-        with pyro.iarange("time", args.num_frames):
-            pyro.sample("assign", assignment.assign_dist, infer={"enumerate": "parallel"})
+        with poutine.scale(scale=is_observed.float()):
+            with pyro.iarange("time", args.num_frames):
+                pyro.sample("assign", assignment.assign_dist, infer={"enumerate": "parallel"})
 
     return assignment
 
@@ -132,6 +140,8 @@ def main(args):
         print("epoch {: >4d} loss = {}".format(step, loss))
 
     # Evaluate.
+    assignment = guide(args, observations)
+    print("predicted {:0.2g} objects".format(assignment.exists_dist.probs.sum()))
     # TODO(alicanb) compute MOTP, MOTA
 
 
@@ -139,7 +149,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-n", "--num-epochs", default=100, type=int)
     parser.add_argument("--num-frames", default=5, type=int)
-    parser.add_argument("--max-num-objects", default=4, type=int)
+    parser.add_argument("--max-num-objects", default=3, type=int)
     parser.add_argument("--expected-num-objects", default=2.0, type=float)
     parser.add_argument("--expected-num-spurious", default=1.0, type=float)
     parser.add_argument("--emission-prob", default=0.8, type=float)

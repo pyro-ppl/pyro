@@ -3,10 +3,18 @@ from __future__ import absolute_import, division, print_function
 import itertools
 import math
 import numbers
+import warnings
 
 import torch
 
 import pyro.distributions as dist
+
+
+def _warn_if_nan(tensor, name):
+    if torch.isnan(tensor).any():
+        warnings.warn('Encountered nan elements in {}'.format(name))
+    if tensor.requires_grad:
+        tensor.register_hook(lambda x: _warn_if_nan(x, name))
 
 
 def _product(factors):
@@ -63,8 +71,8 @@ class MarginalAssignmentPersistent(object):
         self.num_frames, self.num_detections, self.num_objects = assign_logits.shape
 
         # Clamp to avoid NANs.
-        self.exists_logits = exists_logits.clamp(min=-40, max=40)
-        self.assign_logits = assign_logits.clamp(min=-40, max=40)
+        exists_logits = exists_logits.clamp(min=-40, max=40)
+        assign_logits = assign_logits.clamp(min=-40, max=40)
 
         # This does all the work.
         if bp_iters is None:
@@ -123,6 +131,8 @@ def compute_marginals_persistent(exists_logits, assign_logits):
     # convert from probs to logits
     exists = exists_probs.log() - (total - exists_probs).log()
     assign = assign_probs.log() - (total - assign_probs.sum(-1, True)).log()
+    _warn_if_nan(exists, 'exists')
+    _warn_if_nan(assign, 'assign')
     return exists, assign
 
 
