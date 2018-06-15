@@ -210,5 +210,10 @@ def test_expand_reshaped_distribution(extra_event_dims, expand_shape):
         else:
             assert large.base_dist.batch_shape == torch.Size(expand_shape)
 
+    # Throws error when batch shape cannot be broadcasted
     with pytest.raises(ValueError):
         reshaped_dist.expand(expand_shape + [3])
+
+    # Throws error when trying to shrink existing batch shape
+    with pytest.raises(ValueError):
+        large.expand(expand_shape[1:])
