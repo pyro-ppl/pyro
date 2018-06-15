@@ -33,7 +33,7 @@ def _exp(value):
 class MarginalAssignmentPersistent(object):
     """
     This computes marginal distributions of a multi-frame multi-object
-    data association problem with an unknown number of persistennt objects.
+    data association problem with an unknown number of persistent objects.
 
     The inputs are factors in a factor graph (existence probabilites for each
     potential object and assignment probabilities for each object-detection
@@ -51,7 +51,7 @@ class MarginalAssignmentPersistent(object):
         `[num_frames, num_detections, num_objects]` representing per-edge
         factors of assignment probability, where each edge denotes that at a
         given time frame a given detection associates with a single object.
-    :param int bp_iters: option number of belief propagation iterations. If
+    :param int bp_iters: optional number of belief propagation iterations. If
         unspecified or ``None`` an expensive exact algorithm will be used.
     :ivar int num_frames: the number of time frames
     :ivar int num_detections: the (maximum) number of detections per frame
