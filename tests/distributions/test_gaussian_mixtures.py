@@ -16,7 +16,7 @@ from tests.common import assert_equal
 @pytest.mark.parametrize('flat_logits', [True, False])
 @pytest.mark.parametrize('cost_function', ['quadratic'])
 def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
-    n_samples = 1000 * 1000
+    n_samples = 2000 * 1000
     if batch_mode:
         sample_shape = torch.Size(())
     else:
