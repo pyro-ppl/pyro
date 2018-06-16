@@ -110,7 +110,7 @@ def compute_marginals_persistent(exists_logits, assign_logits):
         for t in range(num_frames):
             assign_map = {}
             for n in range(1 + min(len(exists), num_detections)):
-                for objects in itertools.combinations(range(num_objects), n):
+                for objects in itertools.combinations(exists, n):
                     for detections in itertools.permutations(range(num_detections), n):
                         assign = tuple(zip(objects, detections))
                         assign_map[assign] = _exp(sum(assign_logits[t, j, i] for i, j in assign))
