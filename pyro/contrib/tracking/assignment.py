@@ -18,9 +18,9 @@ def _warn_if_nan(tensor, name):
 
 
 def _product(factors):
-    result = 1
+    result = 1.
     for factor in factors:
-        result *= factor
+        result = result * factor
     return result
 
 
@@ -220,6 +220,8 @@ def compute_marginals(exists_logits, assign_logits):
     assign = assign_probs.log()
     exists = exists[1] - exists[0]
     assign = assign[:, :-1] - assign[:, -1:]
+    _warn_if_nan(exists, 'exists')
+    _warn_if_nan(assign, 'assign')
     return exists, assign
 
 

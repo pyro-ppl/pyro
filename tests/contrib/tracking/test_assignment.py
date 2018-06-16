@@ -161,8 +161,8 @@ def test_persistent_smoke(bp_iters):
     for assign in assign_dist.enumerate_support():
         log_prob = assign_dist.log_prob(assign).sum()
         e_grad, a_grad = grad(log_prob, [exists_logits, assign_logits], create_graph=True)
-        assert_finite(e_grad, 'dexists_probs/dexists_logits')
-        assert_finite(a_grad, 'dexists_probs/dassign_logits')
+        assert_finite(e_grad, 'dassign_probs/dexists_logits')
+        assert_finite(a_grad, 'dassign_probs/dassign_logits')
 
 
 @pytest.mark.parametrize('e', [-1., 0., 1.])
@@ -216,7 +216,6 @@ def test_flat_exact_2_2(e1, e2, a11, a12, a22):
     assert_equal(expected.assign_dist.probs, actual.assign_dist.probs)
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize('num_frames', [1, 2, 3, 4])
 @pytest.mark.parametrize('num_objects', [1, 2, 3, 4])
 def test_flat_vs_persistent_exact(num_objects, num_frames):
@@ -225,8 +224,8 @@ def test_flat_vs_persistent_exact(num_objects, num_frames):
     exists_flat, assign_flat = compute_marginals(exists_logits, assign_logits)
     exists_full, assign_full = compute_marginals_persistent(exists_logits, assign_logits.unsqueeze(-2))
     assert_equal(exists_flat, exists_full)
-    assert assign_full.shape == (num_objects, num_frames, 1)
-    assert_equal(assign_flat, assign_full.squeeze(-1))
+    assert assign_full.shape == (num_frames, 1, num_objects)
+    assert_equal(assign_flat, assign_full.squeeze(1))
 
 
 @pytest.mark.parametrize('num_detections', [1, 2, 3, 4])
