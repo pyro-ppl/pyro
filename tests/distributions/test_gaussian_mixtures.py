@@ -22,16 +22,21 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
     else:
         sample_shape = torch.Size((n_samples,))
     locs = torch.tensor(torch.rand(K, D), requires_grad=True)
+    assert locs.shape == (K, D)
     sigmas = torch.ones(D) + 0.5 * torch.rand(D)
     sigmas = torch.tensor(sigmas, requires_grad=True)
+    assert sigmas.shape == (D,)
     if not flat_logits:
         logits = torch.tensor(1.5 * torch.rand(K), requires_grad=True)
     else:
         logits = torch.tensor(0.1 * torch.rand(K), requires_grad=True)
+    assert logits.shape == (K,)
     omega = torch.tensor(0.2 * torch.ones(D) + 0.1 * torch.rand(D), requires_grad=False)
+    assert omega.shape == (D,)
 
     _pis = torch.exp(logits)
     pis = _pis / _pis.sum()
+    assert pis.shape == (K,)
 
     if cost_function == 'cosine':
         analytic1 = torch.cos((omega * locs).sum(-1))
@@ -41,12 +46,16 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
     elif cost_function == 'quadratic':
         analytic = torch.pow(sigmas, 2.0).sum(-1) + torch.pow(locs, 2.0).sum(-1)
         analytic = (pis * analytic).sum()
+        assert analytic.shape == ()
         analytic.backward()
 
     analytic_grads = {}
     analytic_grads['locs'] = locs.grad.clone()
     analytic_grads['sigmas'] = sigmas.grad.clone()
     analytic_grads['logits'] = logits.grad.clone()
+    assert locs.grad.shape == locs.shape
+    assert sigmas.grad.shape == sigmas.shape
+    assert logits.grad.shape == logits.shape
 
     sigmas.grad.zero_()
     logits.grad.zero_()
@@ -56,24 +65,30 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
         params = {'locs': locs, 'sigmas': sigmas, 'logits': logits}
         if batch_mode:
             locs = locs.unsqueeze(0).expand(n_samples, K, D)
+            assert locs.shape == (n_samples, K, D)
             sigmas = sigmas.unsqueeze(0).expand(n_samples, D)
+            assert sigmas.shape == (n_samples, D)
             logits = logits.unsqueeze(0).expand(n_samples, K)
+            assert logits.shape == (n_samples, K)
             dist_params = {'locs': locs, 'sigmas': sigmas, 'logits': logits}
         else:
             dist_params = params.copy()
 
     dist = mix_dist(*list(dist_params.values()))
     z = dist.rsample(sample_shape=sample_shape)
+    assert z.shape == (n_samples, D)
     if cost_function == 'cosine':
         cost = torch.cos((omega * z).sum(-1)).sum() / float(n_samples)
     elif cost_function == 'quadratic':
         cost = torch.pow(z, 2.0).sum() / float(n_samples)
+        assert cost.shape == ()
     cost.backward()
 
     assert_equal(analytic, cost, prec=0.1,
                  msg='bad cost function evaluation for {} test (expected {}, got {})'.format(
                      mix_dist.__name__, analytic.item(), cost.item()))
     print("analytic_grads_logit", analytic_grads['logits'].detach().numpy())
+    print("*** analytic, cost  = {} ,  {} ***".format(analytic, cost))
 
     for param_name, param in params.items():
         assert_equal(param.grad, analytic_grads[param_name], prec=0.06,
