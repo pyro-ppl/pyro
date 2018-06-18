@@ -4,6 +4,7 @@ import torch
 
 from pyro.distributions.torch import RelaxedOneHotCategorical, RelaxedBernoulli
 from pyro.distributions.util import copy_docs_from
+from torch.distributions.utils import clamp_probs
 
 
 @copy_docs_from(RelaxedOneHotCategorical)
@@ -31,6 +32,7 @@ class RelaxedOneHotCategoricalStraightThrough(RelaxedOneHotCategorical):
 
     def rsample(self, sample_shape=torch.Size()):
         soft_sample = super(RelaxedOneHotCategoricalStraightThrough, self).rsample(sample_shape)
+        soft_sample = clamp_probs(soft_sample)
         hard_sample = QuantizeCategorical.apply(soft_sample)
         return hard_sample
 
@@ -79,6 +81,7 @@ class RelaxedBernoulliStraightThrough(RelaxedBernoulli):
 
     def rsample(self, sample_shape=torch.Size()):
         soft_sample = super(RelaxedBernoulliStraightThrough, self).rsample(sample_shape)
+        soft_sample = clamp_probs(soft_sample)
         hard_sample = QuantizeBernoulli.apply(soft_sample)
         return hard_sample
 
