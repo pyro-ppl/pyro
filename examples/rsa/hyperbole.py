@@ -149,30 +149,9 @@ import torch
 import collections
 
 import pyro
-from pyro.infer import EmpiricalMarginal, TracePosterior
-from pyro.infer.enum import iter_discrete_traces
+from pyro.infer import EmpiricalMarginal
 import pyro.distributions as dist
 import pyro.poutine as poutine
-
-
-########################
-# Exact Search inference
-########################
-
-class Search(TracePosterior):
-    def __init__(self, model, **kwargs):
-        self.model = model
-        super(Search, self).__init__(**kwargs)
-
-    def _traces(self, *args, **kwargs):
-        for tr in iter_discrete_traces("flat", self.model, *args, **kwargs):
-            yield tr, tr.log_prob_sum()
-
-
-def factor(name, value):
-    value = value if torch.is_tensor(value) else torch.tensor(value)
-    d = dist.Bernoulli(logits=value)
-    pyro.sample(name, d, obs=torch.ones(value.size()))
 
 
 ######################################

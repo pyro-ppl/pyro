@@ -1,80 +1,10 @@
 import torch
 
-import queue
 import collections
-import functools
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import EmpiricalMarginal, TracePosterior
-import pyro.poutine as poutine
-from pyro.poutine.runtime import NonlocalExit
-
-
-###############################################
-# Inference
-###############################################
-
-def is_observed(name, site):
-    return site["is_observed"]
-
-
-def sample_escape(tr, site):
-    return (site["name"] not in tr) and \
-        (site["type"] == "sample") and \
-        (not site["is_observed"])
-
-
-def pqueue(fn, queue):
-
-    def _fn(*args, **kwargs):
-
-        for i in range(int(1e6)):
-            assert not queue.empty(), \
-                "trying to get() from an empty queue will deadlock"
-
-            priority, next_trace = queue.get()
-            try:
-                ftr = poutine.trace(poutine.escape(poutine.replay(fn, next_trace),
-                                                   functools.partial(sample_escape,
-                                                                     next_trace)))
-                return ftr(*args, **kwargs)
-            except NonlocalExit as site_container:
-                site_container.reset_stack()
-                for tr in poutine.util.enum_extend(ftr.trace.copy(),
-                                                   site_container.site):
-                    # add a little bit of noise to the priority to break ties...
-                    queue.put((tr.log_prob_sum().item() - torch.rand(1).item() * 1e-2, tr))
-
-        raise ValueError("max tries ({}) exceeded".format(str(1e6)))
-
-    return _fn
-
-
-class BestFirstSearch(TracePosterior):
-    def __init__(self, model, num_samples=None, **kwargs):
-        if num_samples is None:
-            num_samples = 100
-        self.num_samples = num_samples
-        self.model = model
-        super(BestFirstSearch, self).__init__(**kwargs)
-
-    def _traces(self, *args, **kwargs):
-        q = queue.PriorityQueue()
-        # add a little bit of noise to the priority to break ties...
-        q.put((torch.zeros(1).item() - torch.rand(1).item() * 1e-2, poutine.Trace()))
-        q_fn = pqueue(self.model, queue=q)
-        for i in range(self.num_samples):
-            if q.empty():
-                # num_samples was too large!
-                break
-            tr = poutine.trace(q_fn).get_trace(*args, **kwargs)  # XXX should block
-            yield tr, tr.log_prob_sum()
-
-
-def factor(name, value):
-    d = dist.Bernoulli(logits=value)
-    pyro.sample(name, d, obs=torch.ones(value.size()))
+from pyro.infer import EmpiricalMarginal
 
 
 ###################################################################
