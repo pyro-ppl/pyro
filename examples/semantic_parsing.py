@@ -44,7 +44,7 @@ def pqueue(fn, queue):
                 for tr in poutine.util.enum_extend(ftr.trace.copy(),
                                                    site_container.site):
                     # add a little bit of noise to the priority to break ties...
-                    queue.put((tr.log_prob_sum()[0] - torch.rand(1)[0] * 1e-2, tr))
+                    queue.put((tr.log_prob_sum().item() - torch.rand(1).item() * 1e-2, tr))
 
         raise ValueError("max tries ({}) exceeded".format(str(1e6)))
 
@@ -62,13 +62,13 @@ class BestFirstSearch(TracePosterior):
     def _traces(self, *args, **kwargs):
         q = queue.PriorityQueue()
         # add a little bit of noise to the priority to break ties...
-        q.put((torch.zeros(1)[0] - torch.rand(1)[0] * 1e-2, poutine.Trace()))
+        q.put((torch.zeros(1).item() - torch.rand(1).item() * 1e-2, poutine.Trace()))
         q_fn = pqueue(self.model, queue=q)
         for i in range(self.num_samples):
             if q.empty():
                 # num_samples was too large!
                 break
-            tr = poutine.trace(q_fn).get_trace(*args, **kwargs)
+            tr = poutine.trace(q_fn).get_trace(*args, **kwargs)  # XXX should block
             yield tr, tr.log_prob_sum()
 
 
