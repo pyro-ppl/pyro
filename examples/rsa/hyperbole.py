@@ -149,9 +149,10 @@ import torch
 import collections
 
 import pyro
-from pyro.infer import EmpiricalMarginal
 import pyro.distributions as dist
 import pyro.poutine as poutine
+
+from .search_inference import factor, HashingMarginal, Search
 
 
 ######################################
@@ -234,7 +235,7 @@ def speaker(qudValue, qud):
     alpha = 1
     utterance = utterance_prior()
     with poutine.scale(scale=torch.tensor(alpha)):
-        literal_marginal = EmpiricalMarginal(
+        literal_marginal = HashingMarginal(
             Search(literal_listener).run(utterance, qud))
         pyro.sample("listener", literal_marginal, obs=qudValue)
     return utterance
@@ -249,13 +250,13 @@ def pragmatic_listener(utterance):
     # model
     state = State(price=price, valence=valence)
     qudValue = qud_fns[qud](state)
-    speaker_marginal = EmpiricalMarginal(Search(speaker).run(qudValue, qud))
+    speaker_marginal = HashingMarginal(Search(speaker).run(qudValue, qud))
     pyro.sample("speaker", speaker_marginal, obs=utterance)
     return state
 
 
 def main():
-    listener_posterior = EmpiricalMarginal(Search(pragmatic_listener).run(10000))
+    listener_posterior = HashingMarginal(Search(pragmatic_listener).run(10000))
     print(listener_posterior)
 
 

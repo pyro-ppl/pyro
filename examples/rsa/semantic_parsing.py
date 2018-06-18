@@ -4,7 +4,8 @@ import collections
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import EmpiricalMarginal
+
+from .search_inference import HashingMarginal, BestFirstSearch, factor
 
 
 ###################################################################
@@ -279,14 +280,14 @@ def utterance_prior():
 
 def speaker(world):
     utterance = utterance_prior()
-    L = EmpiricalMarginal(BestFirstSearch(literal_listener_raw, num_samples=100).run(utterance))
+    L = HashingMarginal(BestFirstSearch(literal_listener_raw, num_samples=100).run(utterance))
     pyro.observe("speaker_constraint", L, world)
     return utterance
 
 
 def rsa_listener(utterance, qud):
     world = world_prior(2, meaning(utterance))
-    S = EmpiricalMarginal(BestFirstSearch(speaker, num_samples=100).run(world))
+    S = HashingMarginal(BestFirstSearch(speaker, num_samples=100).run(world))
     pyro.observe("listener_constraint", S, utterance)
     return qud(world)
 
@@ -294,7 +295,7 @@ def rsa_listener(utterance, qud):
 def main():
 
     def mll(utterance, qud):
-        return EmpiricalMarginal(BestFirstSearch(literal_listener, num_samples=100).run(utterance, qud))
+        return HashingMarginal(BestFirstSearch(literal_listener, num_samples=100).run(utterance, qud))
 
     def is_any_qud(world):
         return any(map(lambda obj: obj.nice, world))
@@ -314,7 +315,7 @@ def main():
         return m
 
     def rsa(utterance, qud):
-        return EmpiricalMarginal(BestFirstSearch(rsa_listener, num_samples=100).run(utterance, qud))
+        return HashingMarginal(BestFirstSearch(rsa_listener, num_samples=100).run(utterance, qud))
 
     print(rsa("some of the blond people are nice", is_all_qud))
 

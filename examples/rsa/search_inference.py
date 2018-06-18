@@ -73,10 +73,11 @@ class HashingMarginal(dist.Distribution):
     has_enumerate_support = True
 
     # @memoize
-    def _dist_and_values(self, *args, **kwargs):
+    def _dist_and_values(self):
         # XXX currently this whole object is very inefficient
         values_map, logits = collections.OrderedDict(), collections.OrderedDict()
-        for value, logit in self._gen_weighted_samples(*args, **kwargs):
+        for value, logit in zip(self.trace_dist.exec_traces[self.sites],
+                                self.trace_dist.log_weights):
             if torch.is_tensor(value):
                 value_hash = hash(value.cpu().contiguous().numpy().tobytes())
             else:
@@ -94,39 +95,33 @@ class HashingMarginal(dist.Distribution):
         d = dist.Categorical(logits=logits)
         return d, values_map
 
-    def _gen_weighted_samples(self, *args, **kwargs):
-        for tr, log_w in poutine.block(self.trace_dist._traces)(*args, **kwargs):
-            if self.sites == "_RETURN":
-                val = tr.nodes["_RETURN"]["value"]
-            else:
-                val = {name: tr.nodes[name]["value"]
-                       for name in self.sites}
-            yield (val, log_w)
-
-    def sample(self, *args, **kwargs):
-        sample_shape = kwargs.pop("sample_shape", None)
-        if sample_shape:
-            raise ValueError("Arbitrary `sample_shape` not supported by Histogram class.")
-        d, values_map = self._dist_and_values(*args, **kwargs)
+    def sample(self):
+        d, values_map = self._dist_and_values()
         ix = d.sample()
         return list(values_map.values())[ix]
 
-    def log_prob(self, val, *args, **kwargs):
-        d, values_map = self._dist_and_values(*args, **kwargs)
+    def log_prob(self, val):
+        d, values_map = self._dist_and_values()
         if torch.is_tensor(val):
             value_hash = hash(val.cpu().contiguous().numpy().tobytes())
         else:
             value_hash = hash(val)
         return d.log_prob(torch.tensor([values_map.keys().index(value_hash)]))
 
-    def enumerate_support(self, *args, **kwargs):
-        d, values_map = self._dist_and_values(*args, **kwargs)
+    def enumerate_support(self):
+        d, values_map = self._dist_and_values()
         return list(values_map.values())[:]
 
 
 ########################
 # Exact Search inference
 ########################
+
+def factor(name, value):
+    value = value if torch.is_tensor(value) else torch.tensor(value)
+    d = dist.Bernoulli(logits=value)
+    pyro.sample(name, d, obs=torch.ones(value.size()))
+
 
 class Search(TracePosterior):
     def __init__(self, model, **kwargs):
@@ -139,15 +134,8 @@ class Search(TracePosterior):
 
 
 ###############################################
-# Inference
+# Best-first Search Inference
 ###############################################
-
-
-def factor(name, value):
-    value = value if torch.is_tensor(value) else torch.tensor(value)
-    d = dist.Bernoulli(logits=value)
-    pyro.sample(name, d, obs=torch.ones(value.size()))
-
 
 def is_observed(name, site):
     return site["is_observed"]
