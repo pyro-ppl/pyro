@@ -74,6 +74,11 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
         else:
             dist_params = params.copy()
 
+    print("\n *** GOING TO CREATE DISTRIBUTION (batch_mode={}, K={}, D={})***\n".format(batch_mode,K,D))
+    for k,v in dist_params.items():
+        print("{}.shape == {}".format(k,v.shape))
+    print("\n ************************************\n")
+
     dist = mix_dist(*list(dist_params.values()))
     z = dist.rsample(sample_shape=sample_shape)
     assert z.shape == (n_samples, D)
