@@ -15,6 +15,7 @@ Automatic guides can also be combined using :func:`pyro.poutine.block` and
 
 from __future__ import absolute_import, division, print_function
 
+import numbers
 import weakref
 
 import torch
@@ -33,12 +34,16 @@ except ImportError:
     from contextlib2 import ExitStack  # python 2
 
 __all__ = [
-    'AutoGuide',
-    'AutoGuideList',
+    'AutoCallable',
     'AutoContinuous',
-    'AutoMultivariateNormal',
+    'AutoDelta',
     'AutoDiagonalNormal',
     'AutoDiscreteParallel',
+    'AutoGuide',
+    'AutoGuideList',
+    'AutoLowRankMultivariateNormal',
+    'AutoMultivariateNormal',
+    'AutoIAFNormal',
 ]
 
 
@@ -60,11 +65,16 @@ class AutoGuide(object):
 
     Auto guides can be used individually or combined in an
     :class:`AutoGuideList` object.
+
+    :param callable model: a pyro model
+    :param str prefix: a prefix that will be prefixed to all param internal sites
     """
-    def __init__(self, model):
+    def __init__(self, model, prefix="auto"):
         self.master = None
         self.model = model
+        self.prefix = prefix
         self.prototype_trace = None
+        self._iaranges = {}
 
     def __call__(self, *args, **kwargs):
         """
@@ -88,6 +98,32 @@ class AutoGuide(object):
         return {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
                 for frame in sorted(self._iaranges.values())}
 
+    def _setup_prototype(self, *args, **kwargs):
+        # run the model so we can inspect its structure
+        self.prototype_trace = poutine.block(poutine.trace(self.model).get_trace)(*args, **kwargs)
+        self.prototype_trace = prune_subsample_sites(self.prototype_trace)
+        if self.master is not None:
+            self.master()._check_prototype(self.prototype_trace)
+
+        self._iaranges = {}
+        for name, site in self.prototype_trace.nodes.items():
+            if site["type"] != "sample" or site["is_observed"]:
+                continue
+            for frame in site["cond_indep_stack"]:
+                if frame.vectorized:
+                    self._iaranges[frame.name] = frame
+                else:
+                    raise NotImplementedError("AutoGuideList does not support pyro.irange")
+
+    def median(self, *args, **kwargs):
+        """
+        Returns the posterior median value of each latent variable.
+
+        :return: A dict mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        raise NotImplementedError
+
 
 class AutoGuideList(AutoGuide):
     """
@@ -101,11 +137,11 @@ class AutoGuideList(AutoGuide):
         svi = SVI(model, guide, optim, Trace_ELBO())
 
     :param callable model: a Pyro model
+    :param str prefix: a prefix that will be prefixed to all param internal sites
     """
-    def __init__(self, model):
-        super(AutoGuideList, self).__init__(model)
+    def __init__(self, model, prefix="auto"):
+        super(AutoGuideList, self).__init__(model, prefix)
         self.parts = []
-        self._iaranges = {}
         self.iaranges = {}
 
     def _check_prototype(self, part_trace):
@@ -123,9 +159,11 @@ class AutoGuideList(AutoGuide):
         have been created by blocking the model to restrict to a subset of
         sample sites. No two parts should operate on any one sample site.
 
-        :param AutoGuide part: a partial guide to add
+        :param part: a partial guide to add
+        :type part: AutoGuide or callable
         """
-        assert isinstance(part, AutoGuide), type(part)
+        if not isinstance(part, AutoGuide):
+            part = AutoCallable(self.model, part)
         self.parts.append(part)
         assert part.master is None
         part.master = weakref.ref(self)
@@ -151,20 +189,112 @@ class AutoGuideList(AutoGuide):
             result.update(part(*args, **kwargs))
         return result
 
-    def _setup_prototype(self, *args, **kwargs):
-        # run the model so we can inspect its structure
-        self.prototype_trace = poutine.block(poutine.trace(self.model).get_trace)(*args, **kwargs)
-        self.prototype_trace = prune_subsample_sites(self.prototype_trace)
+    def median(self, *args, **kwargs):
+        """
+        Returns the posterior median value of each latent variable.
 
-        self._iaranges = {}
+        :return: A dict mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        result = {}
+        for part in self.parts:
+            result.update(part.median(*args, **kwargs))
+        return result
+
+
+class AutoCallable(AutoGuide):
+    """
+    :class:`AutoGuide` wrapper for simple callable guides.
+
+    This is used internally for composing autoguides with custom user-defined
+    guides that are simple callables, e.g.::
+
+        def my_local_guide(*args, **kwargs):
+            ...
+
+        guide = AutoGuideList(model)
+        guide.add(AutoDelta(poutine.block(model, expose=['my_global_param']))
+        guide.add(my_local_guide)  # automatically wrapped in an AutoCallable
+
+    To specify a median callable, you can instead::
+
+        def my_local_median(*args, **kwargs)
+            ...
+
+        guide.add(AutoCallable(model, my_local_guide, my_local_median))
+
+    For more complex guides that need e.g. access to iaranges, users should
+    instead subclass ``AutoGuide``.
+
+    :param callable model: a Pyro model
+    :param callable guide: a Pyro guide (typically over only part of the model)
+    :param callable median: an optional callable returning a dict mapping
+        sample site name to computed median tensor.
+    """
+    def __init__(self, model, guide, median=lambda *args, **kwargs: {}):
+        super(AutoCallable, self).__init__(model, prefix="")
+        self._guide = guide
+        self.median = median
+
+    def __call__(self, *args, **kwargs):
+        result = self._guide(*args, **kwargs)
+        return {} if result is None else result
+
+
+class AutoDelta(AutoGuide):
+    """
+    This implementation of :class:`AutoGuide` uses Delta distributions to
+    construct a MAP guide over the entire latent space. The guide does not
+    depend on the model's ``*args, **kwargs``.
+
+    Usage::
+
+        guide = AutoDelta(model)
+        svi = SVI(model, guide, ...)
+
+    By default latent variables are randomly initialized by the model.  To
+    change this default behavior the user should call :func:`pyro.param` before
+    beginning inference, with ``"auto_"`` prefixed to the targetd sample site
+    names e.g. for sample sites named "level" and "concentration", initialize
+    via::
+
+        pyro.param("auto_level", torch.tensor([-1., 0., 1.]))
+        pyro.param("auto_concentration", torch.ones(k),
+                   constraint=constraints.positive)
+    """
+    def __call__(self, *args, **kwargs):
+        """
+        An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        :return: A dict mapping sample site name to sampled value.
+        :rtype: dict
+        """
+        # if we've never run the model before, do so now so we can inspect the model structure
+        if self.prototype_trace is None:
+            self._setup_prototype(*args, **kwargs)
+
+        iaranges = self._create_iaranges()
+        result = {}
         for name, site in self.prototype_trace.nodes.items():
             if site["type"] != "sample" or site["is_observed"]:
                 continue
-            for frame in site["cond_indep_stack"]:
-                if frame.vectorized:
-                    self._iaranges[frame.name] = frame
-                else:
-                    raise NotImplementedError("AutoGuideList does not support pyro.irange")
+            with ExitStack() as stack:
+                for frame in site["cond_indep_stack"]:
+                    if frame.vectorized:
+                        stack.enter_context(iaranges[frame.name])
+                value = pyro.param("{}_{}".format(self.prefix, name), site["value"].detach(),
+                                   constraint=site["fn"].support)
+                result[name] = pyro.sample(name, dist.Delta(value, event_dim=site["fn"].event_dim))
+        return result
+
+    def median(self, *args, **kwargs):
+        """
+        Returns the posterior median value of each latent variable.
+
+        :return: A dict mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        return self(*args, **kwargs)
 
 
 class AutoContinuous(AutoGuide):
@@ -186,31 +316,23 @@ class AutoContinuous(AutoGuide):
         Blei
     """
     def _setup_prototype(self, *args, **kwargs):
-        # run the model so we can inspect its structure
-        self.prototype_trace = poutine.block(poutine.trace(self.model).get_trace)(*args, **kwargs)
-        self.prototype_trace = prune_subsample_sites(self.prototype_trace)
-        if self.master is not None:
-            self.master()._check_prototype(self.prototype_trace)
-
+        super(AutoContinuous, self)._setup_prototype(*args, **kwargs)
         self._unconstrained_shapes = {}
         self._cond_indep_stacks = {}
-        self._iaranges = {}
         for name, site in self.prototype_trace.nodes.items():
             if site["type"] != "sample" or site["is_observed"]:
                 continue
 
-            # collect the shapes of unconstrained values, which may differ from the shapes of constrained values
+            # Collect the shapes of unconstrained values.
+            # These may differ from the shapes of constrained values.
             self._unconstrained_shapes[name] = biject_to(site["fn"].support).inv(site["value"]).shape
 
-            # collect independence contexts
+            # Collect independence contexts.
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
-            for frame in site["cond_indep_stack"]:
-                if frame.vectorized:
-                    self._iaranges[frame.name] = frame
-                else:
-                    raise NotImplementedError("AutoContinuous does not support pyro.irange")
 
         self.latent_dim = sum(_product(shape) for shape in self._unconstrained_shapes.values())
+        if self.latent_dim == 0:
+            raise RuntimeError('{} found no latent variables; Use an empty guide instead'.format(type(self).__name__))
 
     def sample_latent(self, *args, **kwargs):
         """
@@ -266,6 +388,44 @@ class AutoContinuous(AutoGuide):
 
         return result
 
+    def _loc_scale(self, *args, **kwargs):
+        """
+        :returns: a tuple ``(loc, scale)`` used by :meth:`median` and
+            :meth:`quantiles`
+        """
+        raise NotImplementedError
+
+    def median(self, *args, **kwargs):
+        """
+        Returns the posterior median value of each latent variable.
+
+        :return: A dict mapping sample site name to median tensor.
+        :rtype: dict
+        """
+        loc, _ = self._loc_scale(*args, **kwargs)
+        return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
+                for site, unconstrained_value in self._unpack_latent(loc)}
+
+    def quantiles(self, quantiles, *args, **kwargs):
+        """
+        Returns posterior quantiles each latent variable. Example::
+
+            print(guide.quantiles([0.05, 0.5, 0.95]))
+
+        :param quantiles: A list of requested quantiles between 0 and 1.
+        :type quantiles: torch.Tensor or list
+        :return: A dict mapping sample site name to a list of quantile values.
+        :rtype: dict
+        """
+        loc, scale = self._loc_scale(*args, **kwargs)
+        quantiles = loc.new_tensor(quantiles).unsqueeze(-1)
+        latents = dist.Normal(loc, scale).icdf(quantiles)
+        result = {}
+        for latent in latents:
+            for site, unconstrained_value in self._unpack_latent(latent):
+                result.setdefault(site["name"], []).append(biject_to(site["fn"].support)(unconstrained_value))
+        return result
+
 
 class AutoMultivariateNormal(AutoContinuous):
     """
@@ -292,44 +452,19 @@ class AutoMultivariateNormal(AutoContinuous):
         """
         Samples the (single) multivariate normal latent used in the auto guide.
         """
-        loc = pyro.param("auto_loc", torch.zeros(self.latent_dim))
-        scale_tril = pyro.param("auto_scale_tril", torch.eye(self.latent_dim),
+        loc = pyro.param("{}_loc".format(self.prefix),
+                         lambda: torch.zeros(self.latent_dim))
+        scale_tril = pyro.param("{}_scale_tril".format(self.prefix),
+                                lambda: torch.eye(self.latent_dim),
                                 constraint=constraints.lower_cholesky)
-        return pyro.sample("_auto_latent", dist.MultivariateNormal(loc, scale_tril=scale_tril),
+        return pyro.sample("_{}_latent".format(self.prefix),
+                           dist.MultivariateNormal(loc, scale_tril=scale_tril),
                            infer={"is_auxiliary": True})
 
-    def median(self, *args, **kwargs):
-        """
-        Returns the posterior median value of each latent variable.
-
-        :return: A dict mapping sample site name to median tensor.
-        :rtype: dict
-        """
-        latent = pyro.param("auto_loc")
-        return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
-                for site, unconstrained_value in self._unpack_latent(latent)}
-
-    def quantiles(self, quantiles, *args, **kwargs):
-        """
-        Returns posterior quantiles each latent variable. Example::
-
-            print(guide.quantiles([0.05, 0.5, 0.95]))
-
-        :param quantiles: A list of requested quantiles between 0 and 1.
-        :type quantiles: torch.Tensor or list
-        :return: A dict mapping sample site name to a list of quantile values.
-        :rtype: dict
-        """
-        loc = pyro.param("auto_loc")
-        scale = pyro.param("auto_scale_tril").diag()
-        quantiles = loc.new_tensor(quantiles).unsqueeze(-1)
-        latents = dist.Normal(loc, scale).icdf(quantiles)
-
-        result = {}
-        for latent in latents:
-            for site, unconstrained_value in self._unpack_latent(latent):
-                result.setdefault(site["name"], []).append(biject_to(site["fn"].support)(unconstrained_value))
-        return result
+    def _loc_scale(self, *args, **kwargs):
+        loc = pyro.param("{}_loc".format(self.prefix))
+        scale = pyro.param("{}_scale_tril".format(self.prefix)).diag()
+        return loc, scale
 
 
 class AutoDiagonalNormal(AutoContinuous):
@@ -356,44 +491,110 @@ class AutoDiagonalNormal(AutoContinuous):
         """
         Samples the (single) diagnoal normal latent used in the auto guide.
         """
-        loc = pyro.param("auto_loc", torch.zeros(self.latent_dim))
-        scale = pyro.param("auto_scale", torch.ones(self.latent_dim),
+        loc = pyro.param("{}_loc".format(self.prefix),
+                         lambda: torch.zeros(self.latent_dim))
+        scale = pyro.param("{}_scale".format(self.prefix),
+                           lambda: torch.ones(self.latent_dim),
                            constraint=constraints.positive)
-        return pyro.sample("_auto_latent", dist.Normal(loc, scale).independent(1),
+        return pyro.sample("_{}_latent".format(self.prefix),
+                           dist.Normal(loc, scale).independent(1),
                            infer={"is_auxiliary": True})
 
-    def median(self, *args, **kwargs):
+    def _loc_scale(self, *args, **kwargs):
+        loc = pyro.param("{}_loc".format(self.prefix))
+        scale = pyro.param("{}_scale".format(self.prefix))
+        return loc, scale
+
+
+class AutoLowRankMultivariateNormal(AutoContinuous):
+    """
+    This implementation of :class:`AutoContinuous` uses a low rank plus
+    diagonal Multivariate Normal distribution to construct a guide
+    over the entire latent space. The guide does not depend on the model's
+    ``*args, **kwargs``.
+
+    Usage::
+
+        guide = AutoLowRankMultivariateNormal(model, rank=10)
+        svi = SVI(model, guide, ...)
+
+    By default the ``D_term`` is initialized to 1/2 and the ``W_term`` is
+    intialized randomly such that ``W_term.t().matmul(W_term)`` is half the
+    identity matrix. To change this default behavior the user
+    should call :func:`pyro.param` before beginning inference, e.g.::
+
+        latent_dim = 10
+        pyro.param("auto_loc", torch.randn(latent_dim))
+        pyro.param("auto_W_term", torch.randn(latent_dim)))
+        pyro.param("auto_D_term", torch.randn(latent_dim).exp()),
+                   constraint=constraints.positive)
+
+    :param callable model: a generative model
+    :param int rank: the rank of the low-rank part of the covariance matrix
+    :param str prefix: a prefix that will be prefixed to all param internal sites
+    """
+    def __init__(self, model, prefix="auto", rank=1):
+        if not isinstance(rank, numbers.Number) or not rank > 0:
+            raise ValueError("Expected rank >= 0 but got {}".format(rank))
+        self.rank = rank
+        super(AutoLowRankMultivariateNormal, self).__init__(model, prefix)
+
+    def sample_latent(self, *args, **kwargs):
         """
-        Returns the posterior median value of each latent variable.
-
-        :return: A dict mapping sample site name to median tensor.
-        :rtype: dict
+        Samples the (single) multivariate normal latent used in the auto guide.
         """
-        latent = pyro.param("auto_loc")
-        return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
-                for site, unconstrained_value in self._unpack_latent(latent)}
+        loc = pyro.param("{}_loc".format(self.prefix),
+                         lambda: torch.zeros(self.latent_dim))
+        W_term = pyro.param("{}_W_term".format(self.prefix),
+                            lambda: torch.randn(self.rank, self.latent_dim) * (0.5 / self.rank) ** 0.5)
+        D_term = pyro.param("{}_D_term".format(self.prefix),
+                            lambda: torch.ones(self.latent_dim) * 0.5,
+                            constraint=constraints.positive)
+        return pyro.sample("_{}_latent".format(self.prefix),
+                           dist.LowRankMultivariateNormal(loc, W_term, D_term),
+                           infer={"is_auxiliary": True})
 
-    def quantiles(self, quantiles, *args, **kwargs):
-        """
-        Returns posterior quantiles each latent variable. Example::
+    def _loc_scale(self, *args, **kwargs):
+        loc = pyro.param("{}_loc".format(self.prefix))
+        W_term = pyro.param("{}_W_term".format(self.prefix))
+        D_term = pyro.param("{}_D_term".format(self.prefix))
+        scale = (W_term.pow(2).sum(0) + D_term).sqrt()
+        return loc, scale
 
-            print(guide.quantiles([0.05, 0.5, 0.95]))
 
-        :param quantiles: A list of requested quantiles between 0 and 1.
-        :type quantiles: torch.Tensor or list
-        :return: A dict mapping sample site name to a list of quantile values.
-        :rtype: dict
-        """
-        loc = pyro.param("auto_loc")
-        scale = pyro.param("auto_scale")
-        quantiles = loc.new_tensor(quantiles).unsqueeze(-1)
-        latents = dist.Normal(loc, scale).icdf(quantiles)
+class AutoIAFNormal(AutoContinuous):
+    """
+    This implementation of :class:`AutoContinuous` uses a Diagonal Normal
+    distribution transformed via a :class:`~pyro.distributions.iaf.InverseAutoregressiveFlow`
+    to construct a guide over the entire latent space. The guide does not depend on the model's
+    ``*args, **kwargs``.
 
-        result = {}
-        for latent in latents:
-            for site, unconstrained_value in self._unpack_latent(latent):
-                result.setdefault(site["name"], []).append(biject_to(site["fn"].support)(unconstrained_value))
-        return result
+    Usage::
+
+        guide = AutoIAFNormal(model, hidden_dim=latent_dim)
+        svi = SVI(model, guide, ...)
+
+    :param callable model: a generative model
+    :param int hidden_dim: number of hidden dimensions in the IAF
+    :param float sigmoid_bias: sigmoid bias in the IAF. Defaults to ``2.0``
+    :param str prefix: a prefix that will be prefixed to all param internal sites
+    """
+    def __init__(self, model, hidden_dim=None, sigmoid_bias=2.0, prefix="auto"):
+        self.sigmoid_bias = sigmoid_bias
+        self.hidden_dim = hidden_dim
+        super(AutoIAFNormal, self).__init__(model, prefix)
+
+    def sample_latent(self, *args, **kwargs):
+        if self.latent_dim == 1:
+            raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
+        if self.hidden_dim is None:
+            self.hidden_dim = self.latent_dim
+        iaf = dist.InverseAutoregressiveFlow(self.latent_dim, self.hidden_dim,
+                                             sigmoid_bias=self.sigmoid_bias)
+        pyro.module("{}_iaf".format(self.prefix), iaf.module)
+        self.iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
+        return pyro.sample("_{}_latent".format(self.prefix), self.iaf_dist.independent(1),
+                           infer={"is_auxiliary": True})
 
 
 class AutoDiscreteParallel(AutoGuide):
@@ -454,7 +655,7 @@ class AutoDiscreteParallel(AutoGuide):
         for site, Dist, param_spec in self._discrete_sites:
             name = site["name"]
             dist_params = {
-                param_name: pyro.param("auto_discrete_{}_{}".format(name, param_name), param_init,
+                param_name: pyro.param("{}_{}_{}".format(self.prefix, name, param_name), param_init,
                                        constraint=param_constraint)
                 for param_name, param_init, param_constraint in param_spec
             }

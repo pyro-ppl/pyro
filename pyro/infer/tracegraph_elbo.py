@@ -137,7 +137,7 @@ def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
             param_name = "__baseline_avg_downstream_cost_" + node
             with torch.no_grad():
                 avg_downstream_cost_old = pyro.param(param_name,
-                                                     torch.tensor(0.0).expand(dc_shape).clone())
+                                                     guide_site['value'].new_zeros(dc_shape))
                 avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
                     baseline_beta * avg_downstream_cost_old
             pyro.get_param_store().replace_param(param_name, avg_downstream_cost_new,
@@ -187,32 +187,30 @@ class TraceGraph_ELBO(ELBO):
         Andriy Mnih, Karol Gregor
     """
 
-    def _get_traces(self, model, guide, *args, **kwargs):
+    def _get_trace(self, model, guide, *args, **kwargs):
         """
-        runs the guide and runs the model against the guide with
-        the result packaged as a tracegraph generator
+        Returns a single trace from the guide, and the model that is run
+        against it.
         """
+        guide_trace = poutine.trace(guide,
+                                    graph_type="dense").get_trace(*args, **kwargs)
+        model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
+                                    graph_type="dense").get_trace(*args, **kwargs)
+        if is_validation_enabled():
+            check_model_guide_match(model_trace, guide_trace)
+            enumerated_sites = [name for name, site in guide_trace.nodes.items()
+                                if site["type"] == "sample" and site["infer"].get("enumerate")]
+            if enumerated_sites:
+                warnings.warn('\n'.join([
+                    'TraceGraph_ELBO found sample sites configured for enumeration:'
+                    ', '.join(enumerated_sites),
+                    'If you want to enumerate sites, you need to use TraceEnum_ELBO instead.']))
 
-        for i in range(self.num_particles):
-            guide_trace = poutine.trace(guide,
-                                        graph_type="dense").get_trace(*args, **kwargs)
-            model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
-                                        graph_type="dense").get_trace(*args, **kwargs)
-            if is_validation_enabled():
-                check_model_guide_match(model_trace, guide_trace)
-                enumerated_sites = [name for name, site in guide_trace.nodes.items()
-                                    if site["type"] == "sample" and site["infer"].get("enumerate")]
-                if enumerated_sites:
-                    warnings.warn('\n'.join([
-                        'TraceGraph_ELBO found sample sites configured for enumeration:'
-                        ', '.join(enumerated_sites),
-                        'If you want to enumerate sites, you need to use TraceEnum_ELBO instead.']))
+        guide_trace = prune_subsample_sites(guide_trace)
+        model_trace = prune_subsample_sites(model_trace)
 
-            guide_trace = prune_subsample_sites(guide_trace)
-            model_trace = prune_subsample_sites(model_trace)
-
-            weight = 1.0 / self.num_particles
-            yield weight, model_trace, guide_trace
+        weight = 1.0 / self.num_particles
+        return weight, model_trace, guide_trace
 
     def loss(self, model, guide, *args, **kwargs):
         """

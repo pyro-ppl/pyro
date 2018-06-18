@@ -21,6 +21,9 @@ scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python -m nbstripout --keep-output --keep-count
 	find tutorial -name "*.ipynb" | xargs python tutorial/source/cleannb.py
 
+doctest: FORCE
+	python -m pytest --doctest-modules -p tests.doctest_fixtures -p no:warnings pyro
+
 format: FORCE
 	isort --recursive *.py pyro/ examples/ tests/ profiler/*.py docs/source/conf.py
 
@@ -32,7 +35,7 @@ profile: ref=dev
 profile: FORCE
 	bash scripts/profile_model.sh ${ref} ${models}
 
-test: lint docs FORCE
+test: lint docs doctest FORCE
 	pytest -vx -n auto --stage unit
 
 test-examples: lint FORCE

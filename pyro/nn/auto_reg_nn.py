@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
+
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -59,13 +61,15 @@ class AutoRegressiveNN(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1,
                  mask_encoding=None, permutation=None):
         super(AutoRegressiveNN, self).__init__()
+        if input_dim == 1:
+            warnings.warn('AutoRegressiveNN input_dim = 1. Consider using an affine transformation instead.')
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim_multiplier = output_dim_multiplier
 
         if mask_encoding is None:
             # the dependency structure is chosen at random
-            self.mask_encoding = 1 + torch.multinomial(torch.ones(input_dim - 1) / (input_dim - 1),
+            self.mask_encoding = 1 + torch.multinomial(torch.tensor(input_dim - 1).fill_(1.).float(),
                                                        num_samples=hidden_dim, replacement=True)
         else:
             # the dependency structure is given by the user
@@ -83,8 +87,11 @@ class AutoRegressiveNN(nn.Module):
         self.mask2 = torch.zeros(input_dim * self.output_dim_multiplier, hidden_dim)
 
         for k in range(hidden_dim):
-            # fill in mask1
-            m_k = self.mask_encoding[k].item()
+            if self.mask_encoding.dim():
+                # fill in mask1
+                m_k = self.mask_encoding[k].item()
+            else:
+                m_k = self.mask_encoding.item()
             slice_k = torch.cat([torch.ones(m_k), torch.zeros(input_dim - m_k)])
             for j in range(input_dim):
                 self.mask1[k, self.permutation[j]] = slice_k[j]

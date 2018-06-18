@@ -49,6 +49,13 @@ TorchDistribution
     :show-inheritance:
     :member-order: bysource
 
+AVFMultivariateNormal
+---------------------
+.. autoclass:: pyro.distributions.AVFMultivariateNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Binomial
 --------
 

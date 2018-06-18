@@ -148,30 +148,34 @@ def sum_leftmost(value, dim):
 
 def scale_tensor(tensor, scale):
     """
-    Safely scale a tensor without increasing its ``.shape``.
-    This avoids NANs by assuming ``inf * 0 = 0 * inf = 0``.
+    Safely scale a tensor, avoiding NANs by assuming::
+
+        inf * 0 = 0 * inf = 0
     """
+    # Check for trivial cases.
     if isinstance(tensor, numbers.Number):
-        if isinstance(scale, numbers.Number):
-            return tensor * scale
-        elif tensor == 0:
-            return torch.zeros_like(scale)
-        elif tensor == 1:
-            return scale
-        else:
+        if tensor == 0:
+            if isinstance(scale, numbers.Number):
+                return 0.0
+            return scale.new_zeros(scale.shape)
+        if tensor == 1:
             return scale
     if isinstance(scale, numbers.Number):
         if scale == 0:
-            return torch.zeros_like(tensor)
-        elif scale == 1:
+            if isinstance(tensor, numbers.Number):
+                return 0.0
+            return tensor.new_zeros(tensor.shape)
+        if scale == 1:
             return tensor
-        else:
-            return tensor * scale
+
     result = tensor * scale
-    result[(scale == 0).expand_as(result)] = 0  # avoid NANs
-    if result.shape != tensor.shape:
-        raise ValueError("Broadcasting error: scale is incompatible with tensor: "
-                         "{} vs {}".format(scale.shape, tensor.shape))
+
+    # avoid NANs
+    if not isinstance(scale, numbers.Number):
+        result[(scale == 0).expand_as(result)] = 0
+    if not isinstance(tensor, numbers.Number):
+        result[(tensor == 0).expand_as(result)] = 0
+
     return result
 
 

@@ -22,6 +22,7 @@ Pyro Documentation
    nn
    optimization
    poutine
+   ops
 
 .. toctree::
    :glob:
@@ -29,8 +30,9 @@ Pyro Documentation
    :caption: Contributed Code:
 
    contrib.autoguide
+   contrib.autoname
    contrib.gp
-   contrib.named
+   contrib.tracking
 
 
 Indices and tables

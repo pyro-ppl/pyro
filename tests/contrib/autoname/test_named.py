@@ -5,7 +5,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.contrib import named
+from pyro.contrib.autoname import named
 
 
 def get_sample_names(tr):

@@ -22,7 +22,11 @@ class Messenger(object):
         pass
 
     def __call__(self, fn):
-        return Handler(self, fn)
+        def _wraps(*args, **kwargs):
+            with self:
+                return fn(*args, **kwargs)
+        _wraps.msngr = self
+        return _wraps
 
     def __enter__(self):
         """
@@ -120,37 +124,3 @@ class Messenger(object):
 
     def _pyro_param(self, msg):
         return None
-
-
-class Handler(object):
-    """
-    Wrapper class created by ``Messenger.__call__``
-    """
-
-    def __init__(self, msngr, fn):
-        """
-        :param msngr: messenger to be used for inference
-        :param fn: a stochastic function (callable containing Pyro primitive calls)
-        """
-        self.msngr = msngr
-        self.fn = fn
-
-    def __call__(self, *args, **kwargs):
-        """
-        Installs its messenger onto the global effect stack,
-        then calls the stored stochastic function with the given varargs,
-        then uninstalls its messenger from the stack and returns the above value.
-
-        Guaranteed to have the same call signature (input/output type)
-        as the stored function.
-        """
-        with self.msngr:
-            return self.fn(*args, **kwargs)
-
-    def _reset(self):
-        """
-        Resets the computation to the beginning, un-sampling all sample sites.
-
-        By default, does nothing, but overridden in derived classes.
-        """
-        self.msngr._reset()

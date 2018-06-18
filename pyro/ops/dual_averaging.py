@@ -16,7 +16,7 @@ class DualAveraging(object):
     This class implements a dual averaging scheme which is adapted for Markov chain
     Monte Carlo (MCMC) algorithms. To be more precise, we will replace subgradients
     by some statistics calculated during an MCMC trajectory. In addition,
-    introducing some free parameters such as ``t0`` and ``kappa``is helpful and
+    introducing some free parameters such as ``t0`` and ``kappa`` is helpful and
     still guarantees the convergence of the scheme.
 
     References

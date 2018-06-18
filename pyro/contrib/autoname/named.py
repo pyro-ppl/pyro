@@ -1,7 +1,4 @@
 """
-Named Data Structures
----------------------
-
 The ``pyro.contrib.named`` module is a thin syntactic layer on top of Pyro.  It
 allows Pyro models to be written to look like programs with operating on Python
 data structures like ``latent.x.sample_(...)``, rather than programs with
@@ -38,8 +35,8 @@ alias Pyro statements. For example::
     >>> state = named.Object("state")
     >>> loc = state.loc.param_(torch.zeros(1, requires_grad=True))
     >>> scale = state.scale.param_(torch.ones(1, requires_grad=True))
-    >>> z = state.z.sample_(dist.normal, loc, scale)
-    >>> state.x.observe_(dist.normal, z, loc, scale)
+    >>> z = state.z.sample_(dist.Normal(loc, scale))
+    >>> obs = state.x.sample_(dist.Normal(loc, scale), obs=z)
 
 For deeper examples of how these can be used in model code, see the
 `Tree Data <https://github.com/uber/pyro/blob/dev/examples/contrib/named/tree_data.py>`_

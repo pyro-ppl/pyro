@@ -9,7 +9,7 @@ import pyro.distributions as dist
 from pyro.ops.integrator import single_step_velocity_verlet
 from pyro.util import torch_isnan
 
-from .hmc import HMC
+from pyro.infer.mcmc.hmc import HMC
 
 # sum_accept_probs and num_proposals are used to calculate
 # the statistic accept_prob for Dual Averaging scheme;
@@ -52,23 +52,24 @@ class NUTS(HMC):
         automatic transformations will be applied, as specified in
         :mod:`torch.distributions.constraint_registry`.
 
-    Example::
+    Example:
 
-        true_coefs = torch.tensor([1., 2., 3.])
-        data = torch.randn(2000, 3)
-        dim = 3
-        labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
-
-        def model(data):
-            coefs_mean = torch.zeros(dim)
-            coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
-            y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
-            return y
-
-        nuts_kernel = NUTS(model, adapt_step_size=True)
-        mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=300).run(data)
-        posterior = EmpiricalMarginal(mcmc_run, 'beta')
-        print(posterior.mean)
+        >>> true_coefs = torch.tensor([1., 2., 3.])
+        >>> data = torch.randn(2000, 3)
+        >>> dim = 3
+        >>> labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
+        >>>
+        >>> def model(data):
+        ...     coefs_mean = torch.zeros(dim)
+        ...     coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(3)))
+        ...     y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
+        ...     return y
+        >>>
+        >>> nuts_kernel = NUTS(model, adapt_step_size=True)
+        >>> mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=300).run(data)
+        >>> posterior = EmpiricalMarginal(mcmc_run, 'beta')
+        >>> posterior.mean  # doctest: +SKIP
+        tensor([ 0.9221,  1.9464,  2.9228])
     """
 
     def __init__(self, model, step_size=None, adapt_step_size=False, transforms=None):

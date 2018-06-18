@@ -27,19 +27,29 @@ class GPLVM(Parameterized):
     its posterior by a multivariate normal distribution with two variational
     parameters: ``X_loc`` and ``X_scale_tril``.
 
-    For example, we can do dimensional reduction on Iris dataset as follows::
+    For example, we can do dimensional reduction on Iris dataset as follows:
 
-        # With y is the 2D Iris data of shape 150x4 and we want to reduce its dimension
-        # to a tensor X of shape 150x2, we will use GPLVM.
-        # First, define the initial values for X_loc parameter:
+        >>> # With y as the 2D Iris data of shape 150x4 and we want to reduce its dimension
+        >>> # to a tensor X of shape 150x2, we will use GPLVM.
+
+        .. doctest::
+           :hide:
+
+            >>> # Simulating iris data.
+            >>> y = torch.stack([dist.Normal(4.8, 0.1).sample((150,)),
+            ...                 dist.Normal(3.2, 0.3).sample((150,)),
+            ...                 dist.Normal(1.5, 0.4).sample((150,)),
+            ...                 dist.Exponential(0.5).sample((150,))])
+
+        >>> # First, define the initial values for X_loc parameter:
         >>> X_loc = torch.zeros(150, 2)
-        # Then, define a Gaussian Process model with input X_loc and output y:
+        >>> # Then, define a Gaussian Process model with input X_loc and output y:
         >>> kernel = gp.kernels.RBF(input_dim=2, lengthscale=torch.ones(2))
         >>> Xu = torch.zeros(20, 2)  # initial inducing inputs of sparse model
         >>> gpmodel = gp.models.SparseGPRegression(X_loc, y, kernel, Xu)
-        # Finally, wrap gpmodel by GPLVM, optimize, and get the "learned" mean of X:
+        >>> # Finally, wrap gpmodel by GPLVM, optimize, and get the "learned" mean of X:
         >>> gplvm = gp.models.GPLVM(gpmodel)
-        >>> gplvm.optimize()
+        >>> gplvm.optimize()  # doctest: +SKIP
         >>> X = gplvm.get_param("X_loc")
 
     Reference:

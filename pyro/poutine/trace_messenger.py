@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from .messenger import Handler, Messenger
+from .messenger import Messenger
 from .trace_struct import Trace
 from .util import site_is_subsample
 
@@ -152,7 +152,7 @@ class TraceMessenger(Messenger):
         return None
 
 
-class TraceHandler(Handler):
+class TraceHandler(object):
     """
     Execution trace poutine.
 
@@ -163,6 +163,10 @@ class TraceHandler(Handler):
 
     We can also use this for visualization.
     """
+    def __init__(self, msngr, fn):
+        self.fn = fn
+        self.msngr = msngr
+
     def __call__(self, *args, **kwargs):
         """
         Runs the stochastic function stored in this poutine,

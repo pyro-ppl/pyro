@@ -10,7 +10,7 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.contrib.autoguide import AutoDiagonalNormal, AutoMultivariateNormal
+from pyro.contrib.autoguide import AutoDiagonalNormal, AutoLowRankMultivariateNormal, AutoMultivariateNormal
 from pyro.infer import SVI, Trace_ELBO
 from tests.common import assert_equal
 from tests.integration_tests.test_conjugate_gaussian_models import GaussianChain
@@ -71,7 +71,7 @@ class AutoGaussianChain(GaussianChain):
                      msg="guide covariance off")
 
 
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal])
+@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal, AutoLowRankMultivariateNormal])
 def test_auto_diagonal_gaussians(auto_class):
     n_steps = 3501 if auto_class == AutoDiagonalNormal else 6001
 
@@ -79,7 +79,10 @@ def test_auto_diagonal_gaussians(auto_class):
         pyro.sample("x", dist.Normal(-0.2, 1.2))
         pyro.sample("y", dist.Normal(0.2, 0.7))
 
-    guide = auto_class(model)
+    if auto_class is AutoLowRankMultivariateNormal:
+        guide = auto_class(model, rank=1)
+    else:
+        guide = auto_class(model)
     adam = optim.Adam({"lr": .001, "betas": (0.95, 0.999)})
     svi = SVI(model, guide, adam, loss=Trace_ELBO())
 
@@ -87,26 +90,24 @@ def test_auto_diagonal_gaussians(auto_class):
         loss = svi.step()
         assert np.isfinite(loss), loss
 
-    if auto_class == AutoMultivariateNormal:
-        L = pyro.param("auto_scale_tril")
-        diag_cov = torch.mm(L, L.t()).diag()
-    else:
-        diag_cov = torch.pow(pyro.param("auto_scale"), 2.0)
-
-    assert_equal(pyro.param("auto_loc"), torch.tensor([-0.2, 0.2]), prec=0.05,
+    loc, scale = guide._loc_scale()
+    assert_equal(loc, torch.tensor([-0.2, 0.2]), prec=0.05,
                  msg="guide mean off")
-    assert_equal(diag_cov, torch.tensor([1.44, 0.49]), prec=0.08,
+    assert_equal(scale, torch.tensor([1.21, 0.71]), prec=0.08,
                  msg="guide covariance off")
 
 
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal])
+@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal, AutoLowRankMultivariateNormal])
 def test_auto_transform(auto_class):
     n_steps = 3500
 
     def model():
         pyro.sample("x", dist.LogNormal(0.2, 0.7))
 
-    guide = auto_class(model)
+    if auto_class is AutoLowRankMultivariateNormal:
+        guide = auto_class(model, rank=1)
+    else:
+        guide = auto_class(model)
     adam = optim.Adam({"lr": .001, "betas": (0.90, 0.999)})
     svi = SVI(model, guide, adam, loss=Trace_ELBO())
 
@@ -114,19 +115,14 @@ def test_auto_transform(auto_class):
         loss = svi.step()
         assert np.isfinite(loss), loss
 
-    if auto_class == AutoMultivariateNormal:
-        L = pyro.param("auto_scale_tril")
-        diag_cov = torch.mm(L, L.t()).diag()
-    else:
-        diag_cov = torch.pow(pyro.param("auto_scale"), 2.0)
-
-    assert_equal(pyro.param("auto_loc"), torch.tensor([0.2]), prec=0.04,
+    loc, scale = guide._loc_scale()
+    assert_equal(loc, torch.tensor([0.2]), prec=0.04,
                  msg="guide mean off")
-    assert_equal(diag_cov, torch.tensor([0.49]), prec=0.04,
+    assert_equal(scale, torch.tensor([0.71]), prec=0.04,
                  msg="guide covariance off")
 
 
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal])
+@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal, AutoLowRankMultivariateNormal])
 def test_auto_dirichlet(auto_class):
     num_steps = 2000
     prior = torch.tensor([0.5, 1.0, 1.5, 3.0])
