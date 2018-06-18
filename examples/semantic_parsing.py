@@ -74,7 +74,7 @@ class BestFirstSearch(TracePosterior):
 
 def factor(name, value):
     d = dist.Bernoulli(logits=value)
-    pyro.sample(name, d, obs=Variable(torch.ones(value.size())))
+    pyro.sample(name, d, obs=torch.ones(value.size()))
 
 
 ###################################################################
@@ -82,8 +82,7 @@ def factor(name, value):
 ###################################################################
 
 def flip(name, p):
-    tp = Variable(torch.Tensor([p]))
-    return pyro.sample(name, dist.Bernoulli(tp)).data[0] == 1
+    return pyro.sample(name, dist.Bernoulli(p)) == 1
 
 
 obj = collections.namedtuple("Obj", ["name", "blond", "nice", "tall"])
@@ -228,12 +227,12 @@ class CompoundMeaning(Meaning):
 
 def heuristic(is_good):
     if is_good:
-        return Variable(torch.zeros(1))
-    return Variable(torch.Tensor([-100.0]))
+        return torch.tensor(0.)
+    return torch.tensor(-100.0)
 
 
 def world_prior(num_objs, meaning_fn):
-    prev_factor = Variable(torch.zeros(1))
+    prev_factor = torch.tensor(0.)
     world = []
     for i in range(num_objs):
         world.append(Obj("obj_{}".format(i)))
@@ -296,8 +295,8 @@ def combine_meaning(meanings, c):
     possible_combos = can_apply(meanings)
     N = len(possible_combos)
     ix = pyro.sample("ix_{}".format(c),
-                     dist.Categorical(Variable(torch.ones(N) / N)))
-    i = possible_combos[int(ix.data[0])]
+                     dist.Categorical(torch.ones(N) / N))
+    i = possible_combos[ix]
     s = meanings[i].syn()
     if s["dir"] == "L":
         f = meanings[i].sem
@@ -344,8 +343,8 @@ def utterance_prior():
     utterances = ["some of the blond people are nice",
                   "all of the blond people are nice",
                   "none of the blond people are nice"]
-    ix = pyro.sample("utterance", dist.Categorical(Variable(torch.ones(3) / 3.0)))
-    return utterances[int(ix[0])]
+    ix = pyro.sample("utterance", dist.Categorical(torch.ones(3) / 3.0))
+    return utterances[ix]
 
 
 def speaker(world):
@@ -363,7 +362,9 @@ def rsa_listener(utterance, qud):
 
 
 def main():
-    mll = lambda utterance, qud: EmpiricalMarginal(BestFirstSearch(literal_listener, num_samples=100).run(utterance, qud))
+
+    def mll(utterance, qud):
+        return EmpiricalMarginal(BestFirstSearch(literal_listener, num_samples=100).run(utterance, qud))
 
     def is_any_qud(world):
         return any(map(lambda obj: obj.nice, world))
@@ -382,7 +383,8 @@ def main():
                 m = m and True
         return m
 
-    rsa = lambda utterance, qud: EmpiricalMarginal(BestFirstSearch(rsa_listener, num_samples=100).run(utterance, qud))
+    def rsa(utterance, qud):
+        return EmpiricalMarginal(BestFirstSearch(rsa_listener, num_samples=100).run(utterance, qud))
 
     print(rsa("some of the blond people are nice", is_all_qud))
 
