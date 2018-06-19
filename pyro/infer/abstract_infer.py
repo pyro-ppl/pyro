@@ -80,9 +80,10 @@ class TracePosterior(object):
         :param kwargs: optional keywords args taken by `self._traces`.
         """
         self._init()
-        for tr, logit in poutine.block(self._traces)(*args, **kwargs):
-            self.exec_traces.append(tr)
-            self.log_weights.append(logit)
+        with poutine.block():
+            for tr, logit in self._traces(*args, **kwargs):
+                self.exec_traces.append(tr)
+                self.log_weights.append(logit)
         self._categorical = Categorical(logits=torch.tensor(self.log_weights))
         return self
 
