@@ -115,11 +115,17 @@ def main():
     eggsPosterior = listener1("generic is true", laysEggsERP)
     femalePosterior = listener1("generic is true", areFemaleERP)
 
-
+    # truth judgments
     malariaSpeaker = speaker2(0.1, carriesMalariaERP)
     eggSpeaker = speaker2(0.6, laysEggsERP)
     femaleSpeaker = speaker2(0.5, areFemaleERP)
     lionSpeaker = speaker2(0.01, laysEggsERP)
+    speakers = {"malaria": malariaSpeaker, "egg": eggSpeaker,
+                "female": femaleSpeaker, "lion": lionSpeaker}
+
+    for name, speaker in speakers.items():
+        for elt in speaker.enumerate_support():
+            print(name, elt, speaker.log_prob(elt).exp().item())
 
 
 if __name__ == "__main__":
