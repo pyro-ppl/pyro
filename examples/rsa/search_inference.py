@@ -37,9 +37,10 @@ def memoize(fn):
 
     def _fn(*args, **kwargs):
         kwargs_tuple = _dict_to_tuple(kwargs)
-        if (args, kwargs_tuple) not in mem:
-            mem[(args, kwargs_tuple)] = fn(*args, **kwargs)
-        return mem[(args, kwargs_tuple)]
+        hashed = hash((args, kwargs_tuple))
+        if hashed not in mem:
+            mem[hashed] = fn(*args, **kwargs)
+        return mem[hashed]
     return _fn
 
 
@@ -67,7 +68,6 @@ class HashingMarginal(dist.Distribution):
 
     has_enumerate_support = True
 
-    @memoize
     def _dist_and_values(self):
         # XXX currently this whole object is very inefficient
         values_map, logits = collections.OrderedDict(), collections.OrderedDict()

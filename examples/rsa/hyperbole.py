@@ -6,7 +6,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 
-from search_inference import factor, HashingMarginal, Search
+from search_inference import factor, HashingMarginal, memoize, Search
 
 torch.set_default_dtype(torch.float64)
 
@@ -82,23 +82,30 @@ def utterance_prior():
     return utterances[ix]
 
 
-def literal_listener(utterance, qud):
+def literal_listener_model(utterance, qud):
     price = price_prior()
     state = State(price=price, valence=valence_prior(price))
     factor("literal_meaning", 0. if meaning(utterance, price) else -999999.)
     return qud_fns[qud](state)
 
 
-def speaker(qudValue, qud):
+literal_listener = memoize(
+    lambda *args: HashingMarginal(Search(literal_listener_model).run(*args)))
+
+
+def speaker_model(qudValue, qud):
     alpha = 1.
     utterance = utterance_prior()
     with poutine.block():
-        literal_marginal = HashingMarginal(
-            Search(literal_listener).run(utterance, qud))
+        literal_marginal = literal_listener(utterance, qud)
     with poutine.scale(scale=torch.tensor(alpha)):
         # print(qudValue, qud, literal_marginal.log_prob(qudValue))
         pyro.sample("listener", literal_marginal, obs=qudValue)
     return utterance
+
+
+speaker = memoize(
+    lambda *args: HashingMarginal(Search(speaker_model).run(*args)))
 
 
 def pragmatic_listener(utterance):
@@ -111,9 +118,7 @@ def pragmatic_listener(utterance):
     state = State(price=price, valence=valence)
     qudValue = qud_fns[qud](state)
     with poutine.block():
-        speaker_marginal = HashingMarginal(Search(speaker).run(qudValue, qud))
-    # import pdb; pdb.set_trace()
-    # print("aa")
+        speaker_marginal = speaker(qudValue, qud)
     pyro.sample("speaker", speaker_marginal, obs=utterance)
     return state
 
