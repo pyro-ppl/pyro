@@ -61,17 +61,13 @@ class HashingMarginal(dist.Distribution):
         assert isinstance(sites, (str, list)), \
             "sites must be either '_RETURN' or list"
 
-        if isinstance(sites, str):
-            assert sites in ("_RETURN",), \
-                "sites string must be '_RETURN'"
-
         self.sites = sites
         super(HashingMarginal, self).__init__()
         self.trace_dist = trace_dist
 
     has_enumerate_support = True
 
-    # @memoize
+    @memoize
     def _dist_and_values(self):
         # XXX currently this whole object is very inefficient
         values_map, logits = collections.OrderedDict(), collections.OrderedDict()
@@ -81,6 +77,8 @@ class HashingMarginal(dist.Distribution):
                 value = tr.nodes[self.sites]["value"]
             else:
                 value = {site: tr.nodes[site]["value"] for site in self.sites}
+            if not torch.is_tensor(logit):
+                logit = torch.tensor(logit)
 
             if torch.is_tensor(value):
                 value_hash = hash(value.cpu().contiguous().numpy().tobytes())
@@ -119,6 +117,24 @@ class HashingMarginal(dist.Distribution):
     def enumerate_support(self):
         d, values_map = self._dist_and_values()
         return list(values_map.values())[:]
+
+    def _weighted_mean(self, value, dim=0):
+        weights = self._dist_and_values()[0].logits
+        for _ in range(value.dim() - 1):
+            weights = weights.unsqueeze(-1)
+        max_val = weights.max(dim)[0]
+        return max_val.exp() * (value * (weights - max_val.unsqueeze(-1)).exp()).sum(dim=dim)
+
+    @property
+    def mean(self):
+        samples = torch.stack(list(self._dist_and_values()[1].values()))
+        return self._weighted_mean(samples) / self._weighted_mean(samples.new_tensor([1.]))
+
+    @property
+    def variance(self):
+        samples = torch.stack(list(self._dist_and_values()[1].values()))
+        deviation_squared = torch.pow(samples - self.mean, 2)
+        return self._weighted_mean(deviation_squared) / self._weighted_mean(samples.new_tensor([1.]))
 
 
 ########################
