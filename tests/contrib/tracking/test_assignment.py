@@ -9,7 +9,7 @@ from pyro.contrib.tracking.assignment import (MarginalAssignment, MarginalAssign
                                               compute_marginals_persistent_bp)
 from torch.autograd import grad
 
-from tests.common import assert_equal, xfail_if_not_implemented
+from tests.common import assert_equal
 
 INF = float('inf')
 
@@ -141,8 +141,7 @@ def test_persistent_smoke(bp_iters):
                                   [[-1., -1., 1.],
                                    [1., 1., -1.]]], requires_grad=True)
 
-    with xfail_if_not_implemented():
-        assignment = MarginalAssignmentPersistent(exists_logits, assign_logits, bp_iters=bp_iters)
+    assignment = MarginalAssignmentPersistent(exists_logits, assign_logits, bp_iters=bp_iters)
     assert assignment.num_frames == 4
     assert assignment.num_detections == 2
     assert assignment.num_objects == 3
@@ -236,7 +235,6 @@ def test_persistent_exact(num_objects, num_frames, num_detections):
     exists_logits = -2 * torch.rand(num_objects)
     assign_logits = -2 * torch.rand(num_frames, num_detections, num_objects)
     expected_exists, expected_assign = compute_marginals_persistent(exists_logits, assign_logits)
-    with xfail_if_not_implemented():
-        actual_exists, actual_assign = compute_marginals_persistent_bp(exists_logits, assign_logits, 10)
-    assert_equal(expected_exists, actual_exists)
-    assert_equal(expected_assign, actual_assign)
+    actual_exists, actual_assign = compute_marginals_persistent_bp(exists_logits, assign_logits, 10)
+    assert_equal(expected_exists, actual_exists, prec=0.5)
+    assert_equal(expected_assign, actual_assign, prec=0.5)
