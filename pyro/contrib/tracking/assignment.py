@@ -374,7 +374,7 @@ def compute_marginals_persistent_bp(exists_logits, assign_logits, bp_iters):
         odds_a = (assign_logits + message_b_to_a).exp()
         message_a_to_b = assign_logits - (odds_a.sum(1, True) - odds_a).log1p()
         message_b_to_e = (message_a_to_b.exp().sum(1).reciprocal() + 1).reciprocal().log1p()
-        message_e_to_b = message_b_to_e.sum(0) - message_b_to_e + exists_logits
+        message_e_to_b = exists_logits + message_b_to_e.sum(0) - message_b_to_e
         odds_b = (message_a_to_b * message_e_to_b.unsqueeze(1)).exp()
         message_b_to_a = message_e_to_b.unsqueeze(1) - (odds_b.sum(2, True) - odds_b).log1p()
 
