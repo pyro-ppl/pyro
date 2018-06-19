@@ -360,34 +360,28 @@ def compute_marginals_persistent_bp(exists_logits, assign_logits, bp_iters, bp_m
     #     e[i] ~ Bernonulli, whether each object exists
     #
     # Only assign = a and exists = e are returned.
-    assert 0 <= bp_momentum < 1, bp_momentum
-    old, new = bp_momentum, 1 - bp_momentum
     num_frames, num_detections, num_objects = assign_logits.shape
-    message_b_to_a = assign_logits.new_zeros(num_frames, num_detections, num_objects)
     message_a_to_b = assign_logits.new_zeros(num_frames, num_detections, num_objects)
+    message_b_to_a = assign_logits.new_zeros(num_frames, num_detections, num_objects)
     message_b_to_e = assign_logits.new_zeros(num_frames, num_objects)
     message_e_to_b = assign_logits.new_zeros(num_frames, num_objects)
 
     for i in range(bp_iters):
         odds_a = (assign_logits + message_b_to_a).exp()
-        message_a_to_b = (old * message_a_to_b +
-                          new * (assign_logits - (odds_a.sum(2, True) - odds_a).log1p()))
-        message_b_to_e = (old * message_b_to_e +
-                          new * message_a_to_b.exp().sum(1).log1p())
-        message_e_to_b = (old * message_e_to_b +
-                          new * (exists_logits + message_b_to_e.sum(0) - message_b_to_e))
-        odds_b = message_a_to_b.exp()
-        message_b_to_a = (old * message_b_to_a -
-                          new * ((-message_e_to_b).exp().unsqueeze(1) + (1 + odds_b.sum(1, True) - odds_b)).log())
+        message_a_to_b = assign_logits - (odds_a.sum(1, True) - odds_a).log1p()
+        message_b_to_e = (message_a_to_b.exp().sum(1).reciprocal() + 1).reciprocal().log1p()
+        message_e_to_b = message_b_to_e.sum(0) - message_b_to_e + exists_logits
+        odds_b = (message_a_to_b * message_e_to_b.unsqueeze(1)).exp()
+        message_b_to_a = message_e_to_b.unsqueeze(1) - (odds_b.sum(2, True) - odds_b).log1p()
 
-        warn_if_nan(message_a_to_b, 'message_a_to_b iter {}'.format(i))
-        warn_if_nan(message_b_to_e, 'message_b_to_e iter {}'.format(i))
-        warn_if_nan(message_e_to_b, 'message_e_to_b iter {}'.format(i))
-        warn_if_nan(message_b_to_a, 'message_b_to_a iter {}'.format(i))
+        _warn_if_nan(message_a_to_b, 'message_a_to_b iter {}'.format(i))
+        _warn_if_nan(message_b_to_e, 'message_b_to_e iter {}'.format(i))
+        _warn_if_nan(message_e_to_b, 'message_e_to_b iter {}'.format(i))
+        _warn_if_nan(message_b_to_a, 'message_b_to_a iter {}'.format(i))
 
     # Convert from probs to logits.
     exists = exists_logits + message_b_to_e.sum(0)
     assign = assign_logits + message_b_to_a
-    warn_if_nan(exists, 'exists')
-    warn_if_nan(assign, 'assign')
+    _warn_if_nan(exists, 'exists')
+    _warn_if_nan(assign, 'assign')
     return exists, assign
