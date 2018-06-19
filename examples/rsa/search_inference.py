@@ -77,9 +77,15 @@ class HashingMarginal(dist.Distribution):
         values_map, logits = collections.OrderedDict(), collections.OrderedDict()
         for tr, logit in zip(self.trace_dist.exec_traces,
                              self.trace_dist.log_weights):
-            value = tr.nodes[self.sites]["value"]
+            if isinstance(self.sites, str):
+                value = tr.nodes[self.sites]["value"]
+            else:
+                value = {site: tr.nodes[site]["value"] for site in self.sites}
+
             if torch.is_tensor(value):
                 value_hash = hash(value.cpu().contiguous().numpy().tobytes())
+            elif isinstance(value, dict):
+                value_hash = hash(_dict_to_tuple(value))
             else:
                 value_hash = hash(value)
             if value_hash in logits:
@@ -104,6 +110,8 @@ class HashingMarginal(dist.Distribution):
         d, values_map = self._dist_and_values()
         if torch.is_tensor(val):
             value_hash = hash(val.cpu().contiguous().numpy().tobytes())
+        elif isinstance(val, dict):
+            value_hash = hash(_dict_to_tuple(val))
         else:
             value_hash = hash(val)
         return d.log_prob(torch.tensor([list(values_map.keys()).index(value_hash)]))
