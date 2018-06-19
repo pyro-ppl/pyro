@@ -4,8 +4,9 @@ import collections
 
 import pyro
 import pyro.distributions as dist
+import pyro.poutine as poutine
 
-from .search_inference import HashingMarginal, BestFirstSearch, factor
+from search_inference import HashingMarginal, BestFirstSearch, factor
 
 
 ###################################################################
@@ -13,7 +14,7 @@ from .search_inference import HashingMarginal, BestFirstSearch, factor
 ###################################################################
 
 def flip(name, p):
-    return pyro.sample(name, dist.Bernoulli(p)) == 1
+    return pyro.sample(name, dist.Bernoulli(p)).item() == 1
 
 
 obj = collections.namedtuple("Obj", ["name", "blond", "nice", "tall"])
@@ -280,22 +281,24 @@ def utterance_prior():
 
 def speaker(world):
     utterance = utterance_prior()
-    L = HashingMarginal(BestFirstSearch(literal_listener_raw, num_samples=100).run(utterance))
-    pyro.observe("speaker_constraint", L, world)
+    with poutine.block():
+        L = HashingMarginal(BestFirstSearch(literal_listener_raw, num_samples=100).run(utterance))
+    pyro.sample("speaker_constraint", L, obs=world)
     return utterance
 
 
 def rsa_listener(utterance, qud):
     world = world_prior(2, meaning(utterance))
-    S = HashingMarginal(BestFirstSearch(speaker, num_samples=100).run(world))
-    pyro.observe("listener_constraint", S, utterance)
+    with poutine.block():
+        S = HashingMarginal(BestFirstSearch(speaker, num_samples=100).run(world))
+    pyro.sample("listener_constraint", S, obs=utterance)
     return qud(world)
 
 
 def main():
 
     def mll(utterance, qud):
-        return HashingMarginal(BestFirstSearch(literal_listener, num_samples=100).run(utterance, qud))
+        return HashingMarginal(BestFirstSearch(literal_listener, num_samples=100).run(utterance, qud))()
 
     def is_any_qud(world):
         return any(map(lambda obj: obj.nice, world))
@@ -315,7 +318,7 @@ def main():
         return m
 
     def rsa(utterance, qud):
-        return HashingMarginal(BestFirstSearch(rsa_listener, num_samples=100).run(utterance, qud))
+        return HashingMarginal(BestFirstSearch(rsa_listener, num_samples=100).run(utterance, qud))()
 
     print(rsa("some of the blond people are nice", is_all_qud))
 

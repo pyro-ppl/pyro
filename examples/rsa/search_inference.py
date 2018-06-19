@@ -76,8 +76,9 @@ class HashingMarginal(dist.Distribution):
     def _dist_and_values(self):
         # XXX currently this whole object is very inefficient
         values_map, logits = collections.OrderedDict(), collections.OrderedDict()
-        for value, logit in zip(self.trace_dist.exec_traces[self.sites],
-                                self.trace_dist.log_weights):
+        for tr, logit in zip(self.trace_dist.exec_traces,
+                             self.trace_dist.log_weights):
+            value = tr.nodes[self.sites]["value"]
             if torch.is_tensor(value):
                 value_hash = hash(value.cpu().contiguous().numpy().tobytes())
             else:
@@ -106,7 +107,7 @@ class HashingMarginal(dist.Distribution):
             value_hash = hash(val.cpu().contiguous().numpy().tobytes())
         else:
             value_hash = hash(val)
-        return d.log_prob(torch.tensor([values_map.keys().index(value_hash)]))
+        return d.log_prob(torch.tensor([list(values_map.keys()).index(value_hash)]))
 
     def enumerate_support(self):
         d, values_map = self._dist_and_values()
@@ -124,12 +125,18 @@ def factor(name, value):
 
 
 class Search(TracePosterior):
-    def __init__(self, model, **kwargs):
+    def __init__(self, model, max_tries=int(1e6), **kwargs):
         self.model = model
+        self.max_tries = max_tries
         super(Search, self).__init__(**kwargs)
 
     def _traces(self, *args, **kwargs):
-        for tr in iter_discrete_traces("flat", self.model, *args, **kwargs):
+        self.queue = queue.Queue()
+        self.queue.put(poutine.Trace())
+        p = poutine.trace(
+            poutine.queue(self.model, queue=self.queue, max_tries=self.max_tries))
+        while not self.queue.empty():
+            tr = p.get_trace(*args, **kwargs)
             yield tr, tr.log_prob_sum()
 
 
