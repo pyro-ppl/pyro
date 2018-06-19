@@ -41,7 +41,7 @@ class TraceMessenger(Messenger):
     We can also use this for visualization.
     """
 
-    def __init__(self, graph_type=None, param_only=None, strict=None):
+    def __init__(self, graph_type=None, param_only=None, strict_names=None):
         """
         :param string graph_type: string that specifies the type of graph
             to construct (currently only "flat" or "dense" supported)
@@ -52,12 +52,12 @@ class TraceMessenger(Messenger):
             graph_type = "flat"
         if param_only is None:
             param_only = False
-        if strict is None:
-            strict = True
+        if strict_names is None:
+            strict_names = True
         assert graph_type in ("flat", "dense")
         self.graph_type = graph_type
         self.param_only = param_only
-        self.strict = strict
+        self.strict_names = strict_names
         self.trace = Trace(graph_type=self.graph_type)
 
     def __enter__(self):
@@ -121,7 +121,7 @@ class TraceMessenger(Messenger):
         and return the return value.
         """
         name = msg["name"]
-        if not self.strict and name in self.trace:  # and msg["type"] == "sample":
+        if not self.strict_names and name in self.trace:  # and msg["type"] == "sample":
             split_name = name.split("_")
             if "_" in name and split_name[-1].isdigit():
                 counter = int(split_name[-1]) + 1
