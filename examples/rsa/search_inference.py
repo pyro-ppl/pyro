@@ -2,9 +2,13 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
+import six
 from six.moves import queue
 import collections
-import functools
+if six.PY3:
+    import functools
+else:
+    import functools32 as functools
 
 import pyro
 import pyro.distributions as dist
@@ -26,22 +30,10 @@ def _dict_to_tuple(d):
         return d
 
 
-def memoize(fn):
-    """
-    https://stackoverflow.com/questions/1988804/what-is-memoization-and-how-can-i-use-it-in-python
-    unbounded memoize
-    alternate in py3: https://docs.python.org/3/library/functools.html
-    lru_cache
-    """
-    mem = {}
-
-    def _fn(*args, **kwargs):
-        kwargs_tuple = _dict_to_tuple(kwargs)
-        hashed = hash((args, kwargs_tuple))
-        if hashed not in mem:
-            mem[hashed] = fn(*args, **kwargs)
-        return mem[hashed]
-    return _fn
+def memoize(fn=None, **kwargs):
+    if fn is None:
+        return lambda _fn: memoize(_fn, **kwargs)
+    return functools.lru_cache(**kwargs)(fn)
 
 
 class HashingMarginal(dist.Distribution):
@@ -68,6 +60,7 @@ class HashingMarginal(dist.Distribution):
 
     has_enumerate_support = True
 
+    @memoize(maxsize=10)
     def _dist_and_values(self):
         # XXX currently this whole object is very inefficient
         values_map, logits = collections.OrderedDict(), collections.OrderedDict()
