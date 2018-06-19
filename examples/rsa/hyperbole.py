@@ -6,8 +6,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 
-from search_inference import factor, HashingMarginal  # , Search
-from search_inference import BestFirstSearch as Search
+from search_inference import factor, HashingMarginal, Search
 
 torch.set_default_dtype(torch.float64)
 
@@ -94,8 +93,8 @@ def speaker(qudValue, qud):
     alpha = 1.
     utterance = utterance_prior()
     with poutine.block():
-        literal_posterior = Search(literal_listener).run(utterance, qud)
-        literal_marginal = HashingMarginal(literal_posterior)
+        literal_marginal = HashingMarginal(
+            Search(literal_listener).run(utterance, qud))
     with poutine.scale(scale=torch.tensor(alpha)):
         # print(qudValue, qud, literal_marginal.log_prob(qudValue))
         pyro.sample("listener", literal_marginal, obs=qudValue)
@@ -112,8 +111,7 @@ def pragmatic_listener(utterance):
     state = State(price=price, valence=valence)
     qudValue = qud_fns[qud](state)
     with poutine.block():
-        speaker_posterior = Search(speaker).run(qudValue, qud)
-        speaker_marginal = HashingMarginal(speaker_posterior)
+        speaker_marginal = HashingMarginal(Search(speaker).run(qudValue, qud))
     # import pdb; pdb.set_trace()
     # print("aa")
     pyro.sample("speaker", speaker_marginal, obs=utterance)
@@ -134,19 +132,20 @@ def test_truth():
 
 
 def main():
-    literal_posterior = HashingMarginal(Search(
+
+    literal_marginal = HashingMarginal(Search(
         lambda utterance: literal_listener(utterance, qud_prior())).run(10000))
-    ld, lv = literal_posterior._dist_and_values()
-    print([(s, literal_posterior.log_prob(s).exp().item())
-           for s in literal_posterior.enumerate_support()])
+
+    ld, lv = literal_marginal._dist_and_values()
+    print([(s, literal_marginal.log_prob(s).exp().item())
+           for s in literal_marginal.enumerate_support()])
 
     pragmatic_posterior = Search(pragmatic_listener).run(10000)
     pragmatic_marginal = HashingMarginal(pragmatic_posterior)
-    print(pragmatic_marginal())
+
     pd, pv = pragmatic_marginal._dist_and_values()
     print([(s, pragmatic_marginal.log_prob(s).exp().item())
            for s in pragmatic_marginal.enumerate_support()])
-    import pdb; pdb.set_trace()
 
 
 if __name__ == "__main__":
