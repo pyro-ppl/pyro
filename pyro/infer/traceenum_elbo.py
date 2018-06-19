@@ -4,6 +4,7 @@ import warnings
 import weakref
 
 import torch
+from torch.distributions.utils import broadcast_all
 
 import pyro
 import pyro.ops.jit
@@ -45,6 +46,7 @@ def _compute_dice_elbo(model_trace, guide_trace):
         dice_prob = dice.in_context(cost.shape, ordinal)
         mask = dice_prob > 0
         if torch.is_tensor(mask) and not mask.all():
+            cost, dice_prob, mask = broadcast_all(cost, dice_prob, mask)
             dice_prob = dice_prob[mask]
             cost = cost[mask]
         # TODO use score_parts.entropy_term to "stick the landing"
