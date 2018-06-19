@@ -82,7 +82,6 @@ class HashingMarginal(dist.Distribution):
 
             if torch.is_tensor(value):
                 value_hash = hash(value.cpu().contiguous().numpy().tobytes())
-                print("here")
             elif isinstance(value, dict):
                 value_hash = hash(_dict_to_tuple(value))
             else:
