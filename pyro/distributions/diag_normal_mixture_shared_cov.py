@@ -12,8 +12,19 @@ from pyro.distributions.util import sum_leftmost
 
 
 class MixtureOfDiagNormalsSharedCovariance(TorchDistribution):
-    """Mixture of normal distributions with diagonal covariance matrices.
-    This distribution supports pathwise derivatives.
+    """Mixture of Normal distributions with diagonal covariance matrices. That is,
+    this distribution is a mixture with K components, where each component distribution
+    is a D-dimensional Normal distribution with a D-dimensional mean parameter loc and a D-dimensional
+    diagonal covariance matrix specified by a scale parameter `scale`. The K different component means
+    are gathered into the parameter `locs` and the scale parameter is shared between all K
+    components. The mixture weights are controlled by a K-dimensional vector of softmax logits,
+    `logits`. This distribution implements pathwise derivatives for samples from the distribution.
+
+    See reference [1] for details on the implementations of the pathwise derivative. Please consider
+    citing this reference if you use the pathwise derivative in your research.
+
+    [1] Pathwise Derivatives for Multivariate Distributions, Martin Jankowiak & Theofanis Karaletsos.
+        arXiv:1806.01856
 
     :param torch.Tensor locs: K x D mean matrix
     :param torch.Tensor scale: shared D-dimensional scale vector
