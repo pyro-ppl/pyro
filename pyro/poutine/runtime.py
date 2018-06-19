@@ -64,13 +64,13 @@ class NonlocalExit(Exception):
 
     Used by poutine.EscapeMessenger to return site information.
     """
-    def __init__(self, site, *args, **kwargs):
+    def __init__(self, site):
         """
         :param site: message at a pyro site
 
         constructor.  Just stores the input site.
         """
-        super(NonlocalExit, self).__init__(*args, **kwargs)
+        super(NonlocalExit, self).__init__()
         self.site = site
 
     def reset_stack(self):
@@ -80,6 +80,8 @@ class NonlocalExit(Exception):
         """
         for frame in _PYRO_STACK:
             frame._reset()
+            if type(frame).__name__ == "BlockMessenger" and frame.hide_fn(self.site):
+                break
 
 
 def validate_message(msg):
