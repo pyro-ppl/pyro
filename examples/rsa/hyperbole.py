@@ -90,22 +90,20 @@ def literal_listener_model(utterance, qud):
 
 
 literal_listener = memoize(
-    lambda *args: HashingMarginal(Search(literal_listener_model).run(*args)))
+    lambda *args: HashingMarginal(poutine.block(Search(literal_listener_model).run)(*args)))
 
 
 def speaker_model(qudValue, qud):
     alpha = 1.
     utterance = utterance_prior()
-    with poutine.block():
-        literal_marginal = literal_listener(utterance, qud)
+    literal_marginal = literal_listener(utterance, qud)
     with poutine.scale(scale=torch.tensor(alpha)):
-        # print(qudValue, qud, literal_marginal.log_prob(qudValue))
         pyro.sample("listener", literal_marginal, obs=qudValue)
     return utterance
 
 
 speaker = memoize(
-    lambda *args: HashingMarginal(Search(speaker_model).run(*args)))
+    lambda *args: HashingMarginal(poutine.block(Search(speaker_model).run)(*args)))
 
 
 def pragmatic_listener(utterance):
@@ -117,8 +115,7 @@ def pragmatic_listener(utterance):
     # model
     state = State(price=price, valence=valence)
     qudValue = qud_fns[qud](state)
-    with poutine.block():
-        speaker_marginal = speaker(qudValue, qud)
+    speaker_marginal = speaker(qudValue, qud)
     pyro.sample("speaker", speaker_marginal, obs=utterance)
     return state
 
