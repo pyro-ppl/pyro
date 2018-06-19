@@ -53,7 +53,7 @@ class TraceMessenger(Messenger):
         if param_only is None:
             param_only = False
         if strict is None:
-            strict = False
+            strict = True
         assert graph_type in ("flat", "dense")
         self.graph_type = graph_type
         self.param_only = param_only
