@@ -84,6 +84,7 @@ class HashingMarginal(dist.Distribution):
 
             if torch.is_tensor(value):
                 value_hash = hash(value.cpu().contiguous().numpy().tobytes())
+                print("here")
             elif isinstance(value, dict):
                 value_hash = hash(_dict_to_tuple(value))
             else:
@@ -96,7 +97,6 @@ class HashingMarginal(dist.Distribution):
                 values_map[value_hash] = value
 
         logits = torch.stack(list(logits.values())).contiguous().view(-1)
-        logits -= dist.util.log_sum_exp(logits)
         logits = logits - dist.util.log_sum_exp(logits)
         d = dist.Categorical(logits=logits)
         return d, values_map

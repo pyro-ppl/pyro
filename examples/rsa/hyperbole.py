@@ -8,6 +8,8 @@ import pyro.poutine as poutine
 
 from search_inference import factor, HashingMarginal, Search
 
+torch.set_default_dtype(torch.float64)
+
 
 ######################################
 # models
@@ -20,9 +22,9 @@ State = collections.namedtuple("State", ["price", "valence"])
 def approx(x, b=None):
     if b is None:
         b = 10.
-    div = x/b
-    rounded = float(int(div)) + 1 if div - float(int(div)) >= 0.5 else div
-    return b * rounded
+    div = float(x)/b
+    rounded = int(div) + 1 if div - float(int(div)) >= 0.5 else int(div)
+    return int(b) * rounded
 
 
 def price_prior():
@@ -45,7 +47,7 @@ def valence_prior(price):
         10000: 0.9864,
         10001: 0.9864
     }
-    return pyro.sample("valence", dist.Bernoulli(probs[price])).item() == 1
+    return pyro.sample("valence", dist.Bernoulli(probs=probs[price])).item() == 1
 
 
 def meaning(utterance, price):
@@ -54,7 +56,7 @@ def meaning(utterance, price):
 
 qud_fns = {
     "price": lambda state: State(price=state.price, valence=None),
-    "valence": lambda state: State(valence=state.valence, price=None),
+    "valence": lambda state: State(price=None, valence=state.valence),
     "priceValence": lambda state: State(price=state.price, valence=state.valence),
     "approxPrice": lambda state: State(price=approx(state.price), valence=None),
     "approxPriceValence": lambda state: State(price=approx(state.price), valence=state.valence),
@@ -63,26 +65,27 @@ qud_fns = {
 
 def qud_prior():
     values = ["price", "valence", "priceValence", "approxPrice", "approxPriceValence"]
-    ix = pyro.sample("qud", dist.Categorical(torch.ones(len(values)) / len(values)))
+    ix = pyro.sample("qud", dist.Categorical(probs=torch.ones(len(values)) / len(values)))
     return values[ix]
 
 
 def utterance_cost(numberUtt):
-    preciseNumberCost = 1
-    return 0 if approx(numberUtt) == numberUtt else preciseNumberCost
+    preciseNumberCost = 1.
+    return 0. if approx(numberUtt) == numberUtt else preciseNumberCost
 
 
 def utterance_prior():
     utterances = [50, 51, 500, 501, 1000, 1001, 5000, 5001, 10000, 10001]
-    utteranceProbs = torch.exp(-torch.tensor(utterances, dtype=torch.float32))
-    ix = pyro.sample("utterance", dist.Categorical(probs=utteranceProbs))
+    utteranceLogits = -torch.tensor(list(map(utterance_cost, utterances)),
+                                    dtype=torch.float64)
+    ix = pyro.sample("utterance", dist.Categorical(logits=utteranceLogits))
     return utterances[ix]
 
 
 def literal_listener(utterance, qud):
     price = price_prior()
     state = State(price=price, valence=valence_prior(price))
-    factor("literal_meaning", 0. if meaning(utterance, state.price) else -9999.)
+    factor("literal_meaning", 0. if meaning(utterance, price) else -999999.)
     return qud_fns[qud](state)
 
 
@@ -93,6 +96,7 @@ def speaker(qudValue, qud):
         literal_marginal = HashingMarginal(
             Search(literal_listener).run(utterance, qud))
     with poutine.scale(scale=torch.tensor(alpha)):
+        # print(qudValue, qud, literal_marginal.log_prob(qudValue))
         pyro.sample("listener", literal_marginal, obs=qudValue)
     return utterance
 
@@ -112,11 +116,25 @@ def pragmatic_listener(utterance):
     return state
 
 
+def truth():
+    # {"probs":[0.0018655171404222354,0.1512643329444101,0.0030440475496016296,0.23182161303428897,0.00003854830096338984,0.01502495595927897,0.00003889558295405101,0.015160315922876075,0.00016425635615857924,0.026788637869123822,0.00017359794987375924,0.028312162297699582,0.0008164336950199063,0.060558944822420434,0.0008088460212743665,0.05999612935009309,0.01925106279557206,0.17429720083660782,0.02094455861717477,0.18962994295418778],"support":[{"price":10001,"valence":false},{"price":10001,"valence":true},{"price":10000,"valence":false},{"price":10000,"valence":true},{"price":5001,"valence":false},{"price":5001,"valence":true},{"price":5000,"valence":false},{"price":5000,"valence":true},{"price":1001,"valence":false},{"price":1001,"valence":true},{"price":1000,"valence":false},{"price":1000,"valence":true},{"price":501,"valence":false},{"price":501,"valence":true},{"price":500,"valence":false},{"price":500,"valence":true},{"price":51,"valence":false},{"price":51,"valence":true},{"price":50,"valence":false},{"price":50,"valence":true}]}
+    pass
+
+
 def main():
-    listener_posterior = HashingMarginal(Search(pragmatic_listener).run(10000))
-    print(listener_posterior())
-    dd, vv = listener_posterior._dist_and_values()
-    print(dd.probs)
+    literal_posterior = HashingMarginal(Search(
+        lambda utterance: literal_listener(utterance, qud_prior())).run(10000))
+    ld, lv = literal_posterior._dist_and_values()
+    print([(s, literal_posterior.log_prob(s).exp().item())
+           for s in literal_posterior.enumerate_support()])
+
+    pragmatic_posterior = Search(pragmatic_listener).run(10000)
+    pragmatic_marginal = HashingMarginal(pragmatic_posterior)
+    print(pragmatic_marginal())
+    pd, pv = pragmatic_marginal._dist_and_values()
+    print([(s, pragmatic_marginal.log_prob(s).exp().item())
+           for s in pragmatic_marginal.enumerate_support()])
+    import pdb; pdb.set_trace()
 
 
 if __name__ == "__main__":
