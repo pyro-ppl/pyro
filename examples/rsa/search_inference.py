@@ -11,7 +11,6 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 
 from pyro.infer.abstract_infer import TracePosterior
-from pyro.infer.enum import iter_discrete_traces
 from pyro.poutine.runtime import NonlocalExit
 
 
@@ -131,11 +130,11 @@ class Search(TracePosterior):
         super(Search, self).__init__(**kwargs)
 
     def _traces(self, *args, **kwargs):
-        self.queue = queue.Queue()
-        self.queue.put(poutine.Trace())
+        q = queue.Queue()
+        q.put(poutine.Trace())
         p = poutine.trace(
-            poutine.queue(self.model, queue=self.queue, max_tries=self.max_tries))
-        while not self.queue.empty():
+            poutine.queue(self.model, queue=q, max_tries=self.max_tries))
+        while not q.empty():
             tr = p.get_trace(*args, **kwargs)
             yield tr, tr.log_prob_sum()
 
