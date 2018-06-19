@@ -4,6 +4,9 @@ import pytest
 import torch
 from torch.autograd import grad
 
+import pyro
+import pyro.distributions as dist
+from pyro.contrib.tracking.assignment import MarginalAssignment, MarginalAssignmentPersistent, MarginalAssignmentSparse
 from tests.common import assert_equal
 
 INF = float('inf')
@@ -226,7 +229,7 @@ def test_flat_bp_vs_exact(num_objects, num_detections):
 
 @pytest.mark.parametrize('num_frames', [1, 2, 3, 4])
 @pytest.mark.parametrize('num_objects', [1, 2, 3, 4])
-@pytest.mark.parametrize('bp_iters', [None, 30], ids=['enum', 'bp'])
+@pytest.mark.parametrize('bp_iters', [None, 10], ids=['enum', 'bp'])
 def test_flat_vs_persistent(num_objects, num_frames, bp_iters):
     exists_logits = -2 * torch.rand(num_objects)
     assign_logits = -2 * torch.rand(num_frames, num_objects)
@@ -242,7 +245,7 @@ def test_flat_vs_persistent(num_objects, num_frames, bp_iters):
 def test_persistent_bp_vs_exact(num_objects, num_frames, num_detections):
     exists_logits = -2 * torch.rand(num_objects)
     assign_logits = -2 * torch.rand(num_frames, num_detections, num_objects)
-    expected_exists, expected_assign = compute_marginals_persistent(exists_logits, assign_logits)
-    actual_exists, actual_assign = compute_marginals_persistent_bp(exists_logits, assign_logits, 10)
-    assert_equal(expected_exists, actual_exists, prec=0.5)
-    assert_equal(expected_assign, actual_assign, prec=0.5)
+    expected = MarginalAssignmentPersistent(exists_logits, assign_logits, None)
+    actual = MarginalAssignmentPersistent(exists_logits, assign_logits, 10)
+    assert_equal(expected.exists_dist.probs, actual.exists_dist.probs, prec=0.1)
+    assert_equal(expected.assign_dist.probs, actual.assign_dist.probs, prec=0.1)
