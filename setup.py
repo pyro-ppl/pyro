@@ -60,8 +60,10 @@ EXTRAS_REQUIRE = [
     'visdom>=0.1.4',
     'pandas',
     'wget',
-    'functools32',
 ]
+
+if sys.version_info[0] == 2:
+    EXTRAS_REQUIRE.append('functools32')
 
 setup(
     name='pyro-ppl',
