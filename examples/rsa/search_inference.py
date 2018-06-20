@@ -24,6 +24,15 @@ def memoize(fn=None, **kwargs):
     return functools.lru_cache(**kwargs)(fn)
 
 
+def factor(name, value):
+    """
+    Like factor in webPPL, adds a scalar weight to the log-probability of the trace
+    """
+    value = value if torch.is_tensor(value) else torch.tensor(value)
+    d = dist.Bernoulli(logits=value)
+    pyro.sample(name, d, obs=torch.ones(value.size()))
+
+
 class HashingMarginal(dist.Distribution):
     """
     :param trace_dist: a TracePosterior instance representing a Monte Carlo posterior
@@ -131,15 +140,6 @@ class HashingMarginal(dist.Distribution):
 ########################
 # Exact Search inference
 ########################
-
-def factor(name, value):
-    """
-    Like factor in webPPL, adds a scalar weight to the log-probability of the trace
-    """
-    value = value if torch.is_tensor(value) else torch.tensor(value)
-    d = dist.Bernoulli(logits=value)
-    pyro.sample(name, d, obs=torch.ones(value.size()))
-
 
 class Search(TracePosterior):
     """
