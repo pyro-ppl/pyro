@@ -12,19 +12,24 @@ from pyro.distributions.util import sum_leftmost
 
 
 class MixtureOfDiagNormalsSharedCovariance(TorchDistribution):
-    """Mixture of Normal distributions with diagonal covariance matrices. That is,
-    this distribution is a mixture with K components, where each component distribution
-    is a D-dimensional Normal distribution with a D-dimensional mean parameter loc and a D-dimensional
-    diagonal covariance matrix specified by a scale parameter `scale`. The K different component means
-    are gathered into the parameter `locs` and the scale parameter is shared between all K
-    components. The mixture weights are controlled by a K-dimensional vector of softmax logits,
-    `logits`. This distribution implements pathwise derivatives for samples from the distribution.
+    """
+    Mixture of Normal distributions with diagonal covariance matrices.
 
-    See reference [1] for details on the implementations of the pathwise derivative. Please consider
-    citing this reference if you use the pathwise derivative in your research.
+    That is, this distribution is a mixture with K components, where each
+    component distribution is a D-dimensional Normal distribution with a
+    D-dimensional mean parameter loc and a D-dimensional diagonal covariance
+    matrix specified by a scale parameter `scale`. The K different component
+    means are gathered into the parameter `locs` and the scale parameter is
+    shared between all K components. The mixture weights are controlled by a
+    K-dimensional vector of softmax logits, `logits`. This distribution
+    implements pathwise derivatives for samples from the distribution.
 
-    [1] Pathwise Derivatives for Multivariate Distributions, Martin Jankowiak & Theofanis Karaletsos.
-        arXiv:1806.01856
+    See reference [1] for details on the implementations of the pathwise
+    derivative. Please consider citing this reference if you use the pathwise
+    derivative in your research.
+
+    [1] Pathwise Derivatives for Multivariate Distributions, Martin Jankowiak &
+    Theofanis Karaletsos. arXiv:1806.01856
 
     :param torch.Tensor locs: K x D mean matrix
     :param torch.Tensor scale: shared D-dimensional scale vector
@@ -60,7 +65,7 @@ class MixtureOfDiagNormalsSharedCovariance(TorchDistribution):
         scale = self.scale.unsqueeze(-2) if self.batch_mode else self.scale
         epsilon = (value.unsqueeze(-2) - self.locs) / scale  # L B K D
         eps_sqr = 0.5 * torch.pow(epsilon, 2.0).sum(-1)  # L B K
-        eps_sqr_min = torch.min(eps_sqr, -1)[0]  # L B K
+        eps_sqr_min = torch.min(eps_sqr, -1)[0]  # L B
         result = self.probs * torch.exp(-eps_sqr + eps_sqr_min.unsqueeze(-1))  # L B K
         result = torch.log(result.sum(-1))  # L B
         result -= 0.5 * math.log(2.0 * math.pi) * float(self.dim)
