@@ -1,3 +1,9 @@
+"""
+Inference algorithms and utilities used in the RSA example models.
+
+Adapted from: http://dippl.org/chapters/03-enumeration.html
+"""
+
 from __future__ import absolute_import, division, print_function
 
 import torch
