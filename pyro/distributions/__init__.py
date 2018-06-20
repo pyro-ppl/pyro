@@ -17,6 +17,7 @@ from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
 from pyro.distributions.von_mises import VonMises
 from pyro.distributions.relaxed_straight_through import RelaxedOneHotCategoricalStraightThrough
+from pyro.distributions.relaxed_straight_through import RelaxedBernoulliStraightThrough
 
 __all__ = [
     "enable_validation",
@@ -32,6 +33,7 @@ __all__ = [
     "LowRankMultivariateNormal",
     "OMTMultivariateNormal",
     "Rejector",
+    "RelaxedBernoulliStraightThrough",
     "RelaxedOneHotCategoricalStraightThrough",
     "TorchDistribution",
     "VonMises",
