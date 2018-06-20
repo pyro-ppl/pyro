@@ -33,7 +33,7 @@ def test_shapes(probs):
 
 @pytest.mark.parametrize('temp', [0.2, 0.5, 1.0])
 def test_entropy_grad(temp):
-    num_samples = 1000000
+    num_samples = 2000000
     q = torch.tensor([0.1, 0.2, 0.3, 0.4], requires_grad=True)
     temp = torch.tensor(temp)
 
