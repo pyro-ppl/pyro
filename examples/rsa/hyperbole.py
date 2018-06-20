@@ -1,6 +1,7 @@
 import torch
 
 import collections
+import argparse
 
 import pyro
 import pyro.distributions as dist
@@ -132,11 +133,11 @@ def test_truth():
             pragmatic_marginal.log_prob(elt).exp().item()))
 
 
-def main():
+def main(args):
 
     # test_truth()
 
-    pragmatic_marginal = pragmatic_listener(10000)
+    pragmatic_marginal = pragmatic_listener(args.price)
 
     pd, pv = pragmatic_marginal._dist_and_values()
     print([(s, pragmatic_marginal.log_prob(s).exp().item())
@@ -144,4 +145,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-samples', default=10, type=int)
+    parser.add_argument('--price', default=10000, type=int)
+    args = parser.parse_args()
+    main(args)

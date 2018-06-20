@@ -1,5 +1,6 @@
 import torch
 
+import argparse
 import collections
 
 import pyro
@@ -294,10 +295,10 @@ def rsa_listener(utterance, qud):
     return qud(world)
 
 
-def main():
+def main(args):
 
     def mll(utterance, qud):
-        return HashingMarginal(BestFirstSearch(literal_listener, num_samples=100).run(utterance, qud))()
+        return HashingMarginal(BestFirstSearch(literal_listener, num_samples=args.num_samples).run(utterance, qud))()
 
     def is_any_qud(world):
         return any(map(lambda obj: obj.nice, world))
@@ -317,10 +318,13 @@ def main():
         return m
 
     def rsa(utterance, qud):
-        return HashingMarginal(BestFirstSearch(rsa_listener, num_samples=100).run(utterance, qud))()
+        return HashingMarginal(BestFirstSearch(rsa_listener, num_samples=args.num_samples).run(utterance, qud))()
 
     print(rsa("some of the blond people are nice", is_all_qud))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-samples', default=10, type=int)
+    args = parser.parse_args()
+    main(args)

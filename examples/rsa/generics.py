@@ -1,5 +1,6 @@
 import torch
 
+import argparse
 import numbers
 import collections
 
@@ -113,7 +114,7 @@ def speaker2(prevalence, prior):
     return utterance
 
 
-def main():
+def main(args):
     hasWingsERP = structured_prior_model(Params(theta=0.5, gamma=0.99, delta=10.))
     laysEggsERP = structured_prior_model(Params(theta=0.5, gamma=0.5, delta=10.))
     carriesMalariaERP = structured_prior_model(Params(theta=0.1, gamma=0.01, delta=2.))
@@ -145,4 +146,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-samples', default=10, type=int)
+    args = parser.parse_args()
+    main(args)
