@@ -22,7 +22,8 @@ def logit(p):
 
 def dense_to_sparse(assign_logits):
     num_detections, num_objects = assign_logits.shape
-    edges = torch.LongTensor([[j, i] for j in range(num_detections) for i in range(num_objects)]).t()
+    edges = assign_logits.new_tensor([[j, i] for j in range(num_detections) for i in range(num_objects)],
+                                     dtype=torch.long).t()
     assign_logits = assign_logits[edges[0], edges[1]]
     return edges, assign_logits
 
@@ -64,10 +65,10 @@ def test_sparse_smoke():
     num_detections = 2
     pyro.set_rng_seed(0)
     exists_logits = torch.zeros(num_objects)
-    edges = torch.LongTensor([
+    edges = exists_logits.new_tensor([
         [0, 0, 1, 0, 1, 0],
         [0, 1, 1, 2, 2, 3],
-    ])
+    ], dtype=torch.long)
     assign_logits = logit(torch.tensor([0.99, 0.8, 0.2, 0.2, 0.8, 0.9]))
     assert assign_logits.shape == edges.shape[1:]
 
@@ -112,16 +113,17 @@ def test_sparse_grid_smoke():
                     detection_id = detections[x + dx][y + dy]
                     edges.append((detection_id, object_id))
                     edge_coords.append((x, y, x + dx, y + dy))
-    edges = torch.LongTensor(edges).t()
-    assert edges.shape == (2, 4 * 4)
 
     exists_logits = torch.empty(num_objects)
+    edges = exists_logits.new_tensor(edges, dtype=torch.long).t()
+    assert edges.shape == (2, 4 * 4)
+
     for x in range(2):
         for y in range(2):
             object_id = objects[x][y]
             exists_logits[object_id] = my_existence_prior(x, y)
-    assign_logits = torch.tensor([my_assign_prior(ox, oy, dx, dy)
-                                  for ox, oy, dx, dy in edge_coords])
+    assign_logits = exists_logits.new_tensor([my_assign_prior(ox, oy, dx, dy)
+                                              for ox, oy, dx, dy in edge_coords])
     assign = MarginalAssignmentSparse(num_objects, num_detections, edges,
                                       exists_logits, assign_logits, bp_iters=10)
     assert isinstance(assign.assign_dist, dist.Categorical)

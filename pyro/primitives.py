@@ -449,9 +449,11 @@ def validation_enabled(is_validate=True):
     """
     infer_validation_status = infer.is_validation_enabled()
     distribution_validation_status = dist.is_validation_enabled()
+    poutine_validation_status = poutine.is_validation_enabled()
     try:
         enable_validation(is_validate)
         yield
     finally:
         dist.enable_validation(distribution_validation_status)
         infer.enable_validation(infer_validation_status)
+        poutine.enable_validation(poutine_validation_status)

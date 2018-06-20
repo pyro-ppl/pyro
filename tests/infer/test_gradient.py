@@ -119,7 +119,7 @@ def test_iarange(Elbo, reparameterized):
 def test_iarange_elbo_vectorized_particles(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
-    num_particles = 100000
+    num_particles = 200000
     precision = 0.06
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 

@@ -15,6 +15,7 @@ CPU_EXAMPLES = [
     ['air/main.py', '--num-steps=1'],
     ['baseball.py', '--num-samples=200', '--warmup-steps=100'],
     ['bayesian_regression.py', '--num-epochs=1'],
+    ['contrib/autoname/scoping_mixture.py', '--num-epochs=1'],
     ['contrib/autoname/mixture.py', '--num-epochs=1'],
     ['contrib/autoname/tree_data.py', '--num-epochs=1'],
     ['contrib/gp/sv-dkl.py', '--epochs=1', '--num-inducing=4'],
