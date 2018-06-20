@@ -218,6 +218,7 @@ def test_flat_exact_2_2(e1, e2, a11, a12, a22):
 @pytest.mark.parametrize('num_detections', [1, 2, 3, 4])
 @pytest.mark.parametrize('num_objects', [1, 2, 3, 4])
 def test_flat_bp_vs_exact(num_objects, num_detections):
+    pyro.set_rng_seed(0)
     exists_logits = -2 * torch.rand(num_objects)
     assign_logits = -2 * torch.rand(num_detections, num_objects)
     expected = MarginalAssignment(exists_logits, assign_logits, None)
@@ -243,9 +244,11 @@ def test_flat_vs_persistent(num_objects, num_frames, bp_iters):
 @pytest.mark.parametrize('num_frames', [1, 2, 3, 4])
 @pytest.mark.parametrize('num_objects', [1, 2, 3, 4])
 def test_persistent_bp_vs_exact(num_objects, num_frames, num_detections):
+    pyro.set_rng_seed(0)
     exists_logits = -2 * torch.rand(num_objects)
     assign_logits = -2 * torch.rand(num_frames, num_detections, num_objects)
     expected = MarginalAssignmentPersistent(exists_logits, assign_logits, None)
     actual = MarginalAssignmentPersistent(exists_logits, assign_logits, 10)
-    assert_equal(expected.exists_dist.probs, actual.exists_dist.probs, prec=0.1)
-    assert_equal(expected.assign_dist.probs, actual.assign_dist.probs, prec=0.1)
+    # these should only approximately agree
+    assert_equal(expected.exists_dist.probs, actual.exists_dist.probs, prec=0.01)
+    assert_equal(expected.assign_dist.probs, actual.assign_dist.probs, prec=0.01)
