@@ -8,10 +8,9 @@ from torch.distributions import constraints, transforms
 
 import pyro
 import pyro.distributions as dist
+from data import J, sigma, y
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
-
-from data import J, sigma, y
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 data = torch.stack([y, sigma], dim=1)
