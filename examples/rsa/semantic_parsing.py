@@ -4,9 +4,10 @@ import collections
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
 
 from search_inference import HashingMarginal, BestFirstSearch, factor
+
+torch.set_default_dtype(torch.float64)
 
 
 ###################################################################
@@ -281,16 +282,14 @@ def utterance_prior():
 
 def speaker(world):
     utterance = utterance_prior()
-    with poutine.block():
-        L = HashingMarginal(BestFirstSearch(literal_listener_raw, num_samples=100).run(utterance))
+    L = HashingMarginal(BestFirstSearch(literal_listener_raw, num_samples=100).run(utterance))
     pyro.sample("speaker_constraint", L, obs=world)
     return utterance
 
 
 def rsa_listener(utterance, qud):
     world = world_prior(2, meaning(utterance))
-    with poutine.block():
-        S = HashingMarginal(BestFirstSearch(speaker, num_samples=100).run(world))
+    S = HashingMarginal(BestFirstSearch(speaker, num_samples=100).run(world))
     pyro.sample("listener_constraint", S, obs=utterance)
     return qud(world)
 

@@ -9,21 +9,29 @@ import pyro.poutine as poutine
 
 from search_inference import factor, HashingMarginal, memoize, Search
 
-torch.set_default_dtype(torch.float64)
+torch.set_default_dtype(torch.float64)  # double precision for numerical stability
+
+
+def Marginal(fn):
+    return memoize(lambda *args: HashingMarginal(Search(fn).run(*args)))
+
+
+#######################
+# models
+#######################
 
 # hashable params
 Params = collections.namedtuple("Params", ["theta", "gamma", "delta"])
 
 
-Marginal = lambda fn: memoize(lambda *args: HashingMarginal(Search(fn).run(*args)))
-bins = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99]
-
-
-def discretize_beta_pdf(gamma, delta):
+def discretize_beta_pdf(bins, gamma, delta):
+    """
+    discretized version of the Beta pdf used for approximately integrating via Search
+    """
     shape_alpha = gamma * delta
     shape_beta = (1.-gamma) * delta
-    beta_pdf = lambda x: (x ** (shape_alpha-1)) * ((1.-x)**(shape_beta-1))
-    return torch.tensor([beta_pdf(b) for b in bins])
+    return torch.tensor(
+        list(map(lambda x: (x ** (shape_alpha-1)) * ((1.-x)**(shape_beta-1)), bins)))
 
 
 @Marginal
@@ -31,8 +39,11 @@ def structured_prior_model(params):
     propertyIsPresent = pyro.sample("propertyIsPresent",
                                     dist.Bernoulli(params.theta)).item() == 1
     if propertyIsPresent:
-        ix = pyro.sample("bin", dist.Categorical(probs=discretize_beta_pdf(params.gamma, params.delta)))
-        return bins[ix]
+        # approximately integrate over a beta by enumerating over bins
+        beta_bins = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99]
+        ix = pyro.sample("bin", dist.Categorical(
+            probs=discretize_beta_pdf(beta_bins, params.gamma, params.delta)))
+        return beta_bins[ix]
     else:
         return 0
 
@@ -105,15 +116,20 @@ def speaker2(prevalence, prior):
 def main():
     hasWingsERP = structured_prior_model(Params(theta=0.5, gamma=0.99, delta=10.))
     laysEggsERP = structured_prior_model(Params(theta=0.5, gamma=0.5, delta=10.))
-    carriesMalariaERP = structured_prior_model(
-        Params(theta=0.1, gamma=0.01, delta=2.))
+    carriesMalariaERP = structured_prior_model(Params(theta=0.1, gamma=0.01, delta=2.))
     areFemaleERP = structured_prior_model(Params(theta=0.99, gamma=0.5, delta=50.))
 
-
     # listener interpretation of generics
+    wingsPosterior = listener1("generic is true", hasWingsERP)
     malariaPosterior = listener1("generic is true", carriesMalariaERP)
     eggsPosterior = listener1("generic is true", laysEggsERP)
     femalePosterior = listener1("generic is true", areFemaleERP)
+    listeners = {"wings": wingsPosterior, "malaria": malariaPosterior,
+                 "eggs": eggsPosterior, "female": femalePosterior}
+
+    for name, listener in listeners.items():
+        for elt in listener.enumerate_support():
+            print(name, elt, listener.log_prob(elt).exp().item())
 
     # truth judgments
     malariaSpeaker = speaker2(0.1, carriesMalariaERP)

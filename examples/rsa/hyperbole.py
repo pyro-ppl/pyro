@@ -8,7 +8,11 @@ import pyro.poutine as poutine
 
 from search_inference import factor, HashingMarginal, memoize, Search
 
-torch.set_default_dtype(torch.float64)
+torch.set_default_dtype(torch.float64)  # double precision for numerical stability
+
+
+def Marginal(fn):
+    return memoize(lambda *args: HashingMarginal(Search(fn).run(*args)))
 
 
 ######################################
@@ -82,18 +86,16 @@ def utterance_prior():
     return utterances[ix]
 
 
-def literal_listener_model(utterance, qud):
+@Marginal
+def literal_listener(utterance, qud):
     price = price_prior()
     state = State(price=price, valence=valence_prior(price))
     factor("literal_meaning", 0. if meaning(utterance, price) else -999999.)
     return qud_fns[qud](state)
 
 
-literal_listener = memoize(
-    lambda *args: HashingMarginal(poutine.block(Search(literal_listener_model).run)(*args)))
-
-
-def speaker_model(qudValue, qud):
+@Marginal
+def speaker(qudValue, qud):
     alpha = 1.
     utterance = utterance_prior()
     literal_marginal = literal_listener(utterance, qud)
@@ -102,10 +104,7 @@ def speaker_model(qudValue, qud):
     return utterance
 
 
-speaker = memoize(
-    lambda *args: HashingMarginal(poutine.block(Search(speaker_model).run)(*args)))
-
-
+@Marginal
 def pragmatic_listener(utterance):
     # priors
     price = price_prior()
@@ -126,7 +125,7 @@ def test_truth():
         "support": list(map(lambda d: State(**d), [{"price":10001,"valence":False},{"price":10001,"valence":True},{"price":10000,"valence":False},{"price":10000,"valence":True},{"price":5001,"valence":False},{"price":5001,"valence":True},{"price":5000,"valence":False},{"price":5000,"valence":True},{"price":1001,"valence":False},{"price":1001,"valence":True},{"price":1000,"valence":False},{"price":1000,"valence":True},{"price":501,"valence":False},{"price":501,"valence":True},{"price":500,"valence":False},{"price":500,"valence":True},{"price":51,"valence":False},{"price":51,"valence":True},{"price":50,"valence":False},{"price":50,"valence":True}]))  # noqa: E231,E501
     }
 
-    pragmatic_marginal = HashingMarginal(Search(pragmatic_listener).run(10000))
+    pragmatic_marginal = pragmatic_listener(10000)
     for i, elt in enumerate(true_vals["support"]):
         print("{}: true prob {} pyro prob {}".format(
             elt, true_vals["probs"][i].item(),
@@ -135,15 +134,9 @@ def test_truth():
 
 def main():
 
-    literal_marginal = HashingMarginal(Search(
-        lambda utterance: literal_listener(utterance, qud_prior())).run(10000))
+    # test_truth()
 
-    ld, lv = literal_marginal._dist_and_values()
-    print([(s, literal_marginal.log_prob(s).exp().item())
-           for s in literal_marginal.enumerate_support()])
-
-    pragmatic_posterior = Search(pragmatic_listener).run(10000)
-    pragmatic_marginal = HashingMarginal(pragmatic_posterior)
+    pragmatic_marginal = pragmatic_listener(10000)
 
     pd, pv = pragmatic_marginal._dist_and_values()
     print([(s, pragmatic_marginal.log_prob(s).exp().item())
@@ -151,5 +144,4 @@ def main():
 
 
 if __name__ == "__main__":
-    test_truth()
-    # main()
+    main()
