@@ -83,7 +83,6 @@ class Trace(networkx.DiGraph):
         Constructor. Currently identical to :meth:`networkx.DiGraph.__init__`,
         except for storing the graph_type attribute
         """
-        # self._graph = DiGraph(*args, **kwargs)
         graph_type = kwargs.pop("graph_type", "flat")
         assert graph_type in ("flat", "dense"), \
             "{} not a valid graph type".format(graph_type)

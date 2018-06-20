@@ -76,7 +76,7 @@ setup(
         # add them to `docs/requirements.txt`
         'contextlib2',
         'graphviz>=0.8',
-        'networkx>=2.0.0',
+        'networkx>=2.2',
         'numpy>=1.7',
         'six>=1.10.0',
         'torch>=0.4.0',
