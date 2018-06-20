@@ -193,10 +193,14 @@ class Trace(object):
         but raises an error when attempting to add a duplicate node
         instead of silently overwriting.
         """
-        # XXX should do more validation than this
-        if kwargs["type"] != "param":
-            assert site_name not in self, \
-                "site {} already in trace".format(site_name)
+        if site_name in self:
+            site = self.nodes[site_name]
+            if site['type'] != kwargs['type']:
+                # Cannot sample or observe after a param statement.
+                raise RuntimeError("{} is already in the trace as a {}".format(site_name, site['type']))
+            elif kwargs['type'] != "param":
+                # Cannot sample after a previous sample statement.
+                raise RuntimeError("Multiple {} sites named '{}'".format(kwargs['type'], site_name))
 
         # XXX should copy in case site gets mutated, or dont bother?
         self._graph.add_node(site_name, *args, **kwargs)

@@ -41,7 +41,7 @@ class TraceMessenger(Messenger):
     We can also use this for visualization.
     """
 
-    def __init__(self, graph_type=None, param_only=None):
+    def __init__(self, graph_type=None, param_only=None, strict_names=None):
         """
         :param string graph_type: string that specifies the type of graph
             to construct (currently only "flat" or "dense" supported)
@@ -52,9 +52,12 @@ class TraceMessenger(Messenger):
             graph_type = "flat"
         if param_only is None:
             param_only = False
+        if strict_names is None:
+            strict_names = True
         assert graph_type in ("flat", "dense")
         self.graph_type = graph_type
         self.param_only = param_only
+        self.strict_names = strict_names
         self.trace = Trace(graph_type=self.graph_type)
 
     def __enter__(self):
@@ -66,6 +69,10 @@ class TraceMessenger(Messenger):
         Adds appropriate edges based on cond_indep_stack information
         upon exiting the context.
         """
+        for node in list(self.trace.nodes.values()):
+            if node.get("PRUNE"):
+                self.trace.remove_node(node["name"])
+            node.pop("PRUNE", None)
         if self.param_only:
             for node in list(self.trace.nodes.values()):
                 if node["type"] != "param":
@@ -114,32 +121,15 @@ class TraceMessenger(Messenger):
         and return the return value.
         """
         name = msg["name"]
-        if name in self.trace:
-            site = self.trace.nodes[name]
-            if site['type'] == 'param':
-                # Cannot sample or observe after a param statement.
-                raise RuntimeError("{} is already in the trace as a param".format(name))
-            elif site['type'] == 'sample':
-                # Cannot sample after a previous sample statement.
-                raise RuntimeError("Multiple pyro.sample sites named '{}'".format(name))
-        return None
-
-    def _pyro_param(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: updated message
-
-        Implements default pyro.param Handler behavior with an additional side effect:
-        queries the parameter store with the site name and varargs
-        and returns the result of the query.
-
-        If the parameter doesn't exist, create it using the site varargs.
-        If it does exist, grab it from the parameter store.
-        Store the parameter in self.trace, and then return the parameter.
-        """
-        if msg["name"] in self.trace:
-            if self.trace.nodes[msg['name']]['type'] == "sample":
-                raise RuntimeError("{} is already in the trace as a sample".format(msg['name']))
+        if not self.strict_names and name in self.trace:  # and msg["type"] == "sample":
+            split_name = name.split("_")
+            if "_" in name and split_name[-1].isdigit():
+                counter = int(split_name[-1]) + 1
+                new_name = "_".join(split_name[:-1] + [str(counter)])
+            else:
+                new_name = name + "_0"
+            msg["name"] = new_name
+            self._pyro_sample(msg)  # recursively update name
         return None
 
     def _postprocess_message(self, msg):
