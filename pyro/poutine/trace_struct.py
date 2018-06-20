@@ -7,6 +7,7 @@ import networkx
 import torch
 
 from pyro.distributions.util import scale_tensor
+from pyro.poutine.util import is_validation_enabled
 from pyro.util import torch_isinf, torch_isnan
 
 
@@ -232,7 +233,8 @@ class Trace(object):
                     site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
                     site_log_p = scale_tensor(site_log_p, site["scale"]).sum()
                     site["log_prob_sum"] = site_log_p
-                    _warn_if_nan(name, site_log_p)
+                    if is_validation_enabled():
+                        _warn_if_nan(name, site_log_p)
                 log_p += site_log_p
         return log_p
 
@@ -253,7 +255,8 @@ class Trace(object):
                     site_log_p = scale_tensor(site_log_p, site["scale"])
                     site["log_prob"] = site_log_p
                     site["log_prob_sum"] = site_log_p.sum()
-                    _warn_if_nan(name, site["log_prob_sum"])
+                    if is_validation_enabled():
+                        _warn_if_nan(name, site["log_prob_sum"])
 
     def compute_score_parts(self):
         """
@@ -270,7 +273,8 @@ class Trace(object):
                 site["score_parts"] = value
                 site["log_prob"] = value[0]
                 site["log_prob_sum"] = value[0].sum()
-                _warn_if_nan(name, site["log_prob_sum"])
+                if is_validation_enabled():
+                    _warn_if_nan(name, site["log_prob_sum"])
 
     @property
     def observation_nodes(self):
