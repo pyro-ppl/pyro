@@ -21,6 +21,8 @@ CPU_EXAMPLES = [
     ['contrib/gp/sv-dkl.py', '--epochs=1', '--num-inducing=4'],
     ['dmm/dmm.py', '--num-epochs=1'],
     ['dmm/dmm.py', '--num-epochs=1', '--num-iafs=1'],
+    ['eight_schools/mcmc.py', '--num-samples=500', '--warmup-steps=100'],
+    ['eight_schools/svi.py', '--num-epochs=1'],
     ['inclined_plane.py', '--num-samples=1'],
     ['sparse_gamma_def.py', '--num-epochs=1'],
     ['vae/ss_vae_M2.py', '--num-epochs=1'],
