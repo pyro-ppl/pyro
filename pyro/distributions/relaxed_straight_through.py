@@ -10,14 +10,17 @@ from torch.distributions.utils import clamp_probs
 @copy_docs_from(RelaxedOneHotCategorical)
 class RelaxedOneHotCategoricalStraightThrough(RelaxedOneHotCategorical):
     """
-    An implementation of RelaxedOneHotCategorical with a straight-through gradient estimator.
+    An implementation of
+    :class:`~torch.distributions.relaxed_categorical.RelaxedOneHotCategorical`
+    with a straight-through gradient estimator.
 
     This distribution has the following properties:
-    -- the samples returned by the `rsample` method are discrete/quantized
-    -- the `log_prob` method returns the log probability of the relaxed/unquantized sample
-       using the GumbelSoftmax distribution
-    -- in the backward pass the gradient of the sample with respect to the parameters of the
-       distribution uses the relaxed/unquantized sample
+
+    - The samples returned by the :meth:`rsample` method are discrete/quantized.
+    - The :meth:`log_prob` method returns the log probability of the
+      relaxed/unquantized sample using the GumbelSoftmax distribution.
+    - In the backward pass the gradient of the sample with respect to the
+      parameters of the distribution uses the relaxed/unquantized sample.
 
     References:
 
@@ -59,14 +62,17 @@ class QuantizeCategorical(torch.autograd.Function):
 @copy_docs_from(RelaxedBernoulli)
 class RelaxedBernoulliStraightThrough(RelaxedBernoulli):
     """
-    An implementation of RelaxedBernoulli with a straight-through gradient estimator.
+    An implementation of
+    :class:`~torch.distributions.relaxed_bernoulli.RelaxedBernoulli`
+    with a straight-through gradient estimator.
 
     This distribution has the following properties:
-    -- the samples returned by the `rsample` method are discrete/quantized
-    -- the `log_prob` method returns the log probability of the relaxed/unquantized sample
-       using the GumbelSoftmax distribution
-    -- in the backward pass the gradient of the sample with respect to the parameters of the
-       distribution uses the relaxed/unquantized sample
+
+    - The samples returned by the :meth:`rsample` method are discrete/quantized.
+    - The :meth:`log_prob` method returns the log probability of the
+      relaxed/unquantized sample using the GumbelSoftmax distribution.
+    - In the backward pass the gradient of the sample with respect to the
+      parameters of the distribution uses the relaxed/unquantized sample.
 
     References:
 
