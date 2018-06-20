@@ -60,6 +60,7 @@ EXTRAS_REQUIRE = [
     'visdom>=0.1.4',
     'pandas',
     'wget',
+    'functools32',
 ]
 
 setup(

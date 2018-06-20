@@ -2,14 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-import six
-from six.moves import queue
-import collections
-if six.PY3:
-    import functools
-else:
-    import functools32 as functools
-
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
@@ -17,17 +9,13 @@ import pyro.poutine as poutine
 from pyro.infer.abstract_infer import TracePosterior
 from pyro.poutine.runtime import NonlocalExit
 
-
-def _dict_to_tuple(d):
-    """
-    Recursively converts a dictionary to a list of key-value tuples
-    Only intended for use as a helper function inside memoize!!
-    May break when keys cant be sorted, but that is not an expected use-case
-    """
-    if isinstance(d, dict):
-        return tuple([(k, _dict_to_tuple(d[k])) for k in sorted(d.keys())])
-    else:
-        return d
+import six
+from six.moves import queue
+import collections
+if six.PY3:
+    import functools
+else:
+    import functools32 as functools
 
 
 def memoize(fn=None, **kwargs):
@@ -76,7 +64,7 @@ class HashingMarginal(dist.Distribution):
             if torch.is_tensor(value):
                 value_hash = hash(value.cpu().contiguous().numpy().tobytes())
             elif isinstance(value, dict):
-                value_hash = hash(_dict_to_tuple(value))
+                value_hash = hash(self._dict_to_tuple(value))
             else:
                 value_hash = hash(value)
             if value_hash in logits:
@@ -101,7 +89,7 @@ class HashingMarginal(dist.Distribution):
         if torch.is_tensor(val):
             value_hash = hash(val.cpu().contiguous().numpy().tobytes())
         elif isinstance(val, dict):
-            value_hash = hash(_dict_to_tuple(val))
+            value_hash = hash(self._dict_to_tuple(val))
         else:
             value_hash = hash(val)
         return d.log_prob(torch.tensor([list(values_map.keys()).index(value_hash)]))
@@ -109,6 +97,17 @@ class HashingMarginal(dist.Distribution):
     def enumerate_support(self):
         d, values_map = self._dist_and_values()
         return list(values_map.values())[:]
+
+    def _dict_to_tuple(self, d):
+        """
+        Recursively converts a dictionary to a list of key-value tuples
+        Only intended for use as a helper function inside HashingMarginal!!
+        May break when keys cant be sorted, but that is not an expected use-case
+        """
+        if isinstance(d, dict):
+            return tuple([(k, self._dict_to_tuple(d[k])) for k in sorted(d.keys())])
+        else:
+            return d
 
     def _weighted_mean(self, value, dim=0):
         weights = self._dist_and_values()[0].logits
@@ -134,12 +133,18 @@ class HashingMarginal(dist.Distribution):
 ########################
 
 def factor(name, value):
+    """
+    Like factor in webPPL, adds a scalar weight to the log-probability of the trace
+    """
     value = value if torch.is_tensor(value) else torch.tensor(value)
     d = dist.Bernoulli(logits=value)
     pyro.sample(name, d, obs=torch.ones(value.size()))
 
 
 class Search(TracePosterior):
+    """
+    Exact inference by enumerating over all possible executions
+    """
     def __init__(self, model, max_tries=int(1e6), **kwargs):
         self.model = model
         self.max_tries = max_tries
@@ -159,17 +164,13 @@ class Search(TracePosterior):
 # Best-first Search Inference
 ###############################################
 
-def is_observed(name, site):
-    return site["is_observed"]
-
-
-def sample_escape(tr, site):
-    return (site["name"] not in tr) and \
-        (site["type"] == "sample") and \
-        (not site["is_observed"])
-
 
 def pqueue(fn, queue):
+
+    def sample_escape(tr, site):
+        return (site["name"] not in tr) and \
+            (site["type"] == "sample") and \
+            (not site["is_observed"])
 
     def _fn(*args, **kwargs):
 
@@ -196,6 +197,10 @@ def pqueue(fn, queue):
 
 
 class BestFirstSearch(TracePosterior):
+    """
+    Inference by enumerating executions ordered by their probabilities.
+    Exact (and results equivalent to Search) if all executions are enumerated.
+    """
     def __init__(self, model, num_samples=None, **kwargs):
         if num_samples is None:
             num_samples = 100
