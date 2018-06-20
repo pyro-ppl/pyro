@@ -357,4 +357,33 @@ def compute_marginals_persistent_bp(exists_logits, assign_logits, bp_iters):
         A Complete Variational Tracker
         https://papers.nips.cc/paper/5572-a-complete-variational-tracker.pdf
     """
-    raise NotImplementedError
+    # This implements forward-backward message passing among three sets of variables:
+    #
+    #   a[t,j] ~ Categorical(num_objects + 1), detection -> object assignment
+    #   b[t,i] ~ Categorical(num_detections + 1), object -> detection assignment
+    #     e[i] ~ Bernonulli, whether each object exists
+    #
+    # Only assign = a and exists = e are returned.
+    num_frames, num_detections, num_objects = assign_logits.shape
+    message_b_to_a = assign_logits.new_zeros(num_frames, num_detections, num_objects)
+    message_b_to_e = assign_logits.new_zeros(num_frames, num_objects)
+
+    for i in range(bp_iters):
+        odds_a = (assign_logits + message_b_to_a).exp()
+        message_a_to_b = assign_logits - (odds_a.sum(2, True) - odds_a).log1p()
+        message_b_to_e = message_a_to_b.exp().sum(1).log1p()
+        message_e_to_b = exists_logits + message_b_to_e.sum(0) - message_b_to_e
+        odds_b = message_a_to_b.exp()
+        message_b_to_a = -((-message_e_to_b).exp().unsqueeze(1) + (1 + odds_b.sum(1, True) - odds_b)).log()
+
+        _warn_if_nan(message_a_to_b, 'message_a_to_b iter {}'.format(i))
+        _warn_if_nan(message_b_to_e, 'message_b_to_e iter {}'.format(i))
+        _warn_if_nan(message_e_to_b, 'message_e_to_b iter {}'.format(i))
+        _warn_if_nan(message_b_to_a, 'message_b_to_a iter {}'.format(i))
+
+    # Convert from probs to logits.
+    exists = exists_logits + message_b_to_e.sum(0)
+    assign = assign_logits + message_b_to_a
+    _warn_if_nan(exists, 'exists')
+    _warn_if_nan(assign, 'assign')
+    return exists, assign
