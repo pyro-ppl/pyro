@@ -24,7 +24,7 @@ from tests.common import assert_equal
 def test_scores(auto_class):
     def model():
         if auto_class is AutoIAFNormal:
-            pyro.sample("z", dist.Normal(0.0, 1.0).expand(10))
+            pyro.sample("z", dist.Normal(0.0, 1.0).expand([10]))
         else:
             pyro.sample("z", dist.Normal(0.0, 1.0))
 
@@ -224,7 +224,7 @@ def test_discrete_parallel(continuous_class):
 def test_guide_list(auto_class):
 
     def model():
-        pyro.sample("x", dist.Normal(0., 1.).expand(2))
+        pyro.sample("x", dist.Normal(0., 1.).expand([2]))
         pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
 
     guide = AutoGuideList(model)

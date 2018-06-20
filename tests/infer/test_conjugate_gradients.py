@@ -16,7 +16,7 @@ class ConjugateChainGradientTests(GaussianChain):
         pyro.clear_param_store()
         self.setup_chain(N)
 
-        elbo = TraceGraph_ELBO(num_particles=10000, vectorize_particles=True, max_iarange_nesting=1)
+        elbo = TraceGraph_ELBO(num_particles=100000, vectorize_particles=True, max_iarange_nesting=1)
         elbo.loss_and_grads(self.model, self.guide, reparameterized=reparameterized)
 
         for i in range(1, N + 1):

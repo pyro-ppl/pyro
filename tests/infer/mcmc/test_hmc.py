@@ -252,7 +252,6 @@ def test_bernoulli_beta_with_dual_averaging():
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
-@pytest.mark.filterwarnings("ignore:Encountered NAN")
 def test_normal_gamma_with_dual_averaging():
     def model(data):
         rate = torch.tensor([1.0, 1.0])

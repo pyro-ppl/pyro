@@ -73,7 +73,7 @@ from .trace_messenger import TraceMessenger
 ############################################
 
 
-def trace(fn=None, graph_type=None, param_only=None):
+def trace(fn=None, graph_type=None, param_only=None, strict_names=None):
     """
     Return a handler that records the inputs and outputs of primitive calls
     and their dependencies.
@@ -98,7 +98,7 @@ def trace(fn=None, graph_type=None, param_only=None):
     :param param_only: if true, only records params and not samples
     :returns: stochastic function decorated with a :class:`~pyro.poutine.trace_messenger.TraceMessenger`
     """
-    msngr = TraceMessenger(graph_type=graph_type, param_only=param_only)
+    msngr = TraceMessenger(graph_type=graph_type, param_only=param_only, strict_names=strict_names)
     return msngr(fn) if fn is not None else msngr
 
 
