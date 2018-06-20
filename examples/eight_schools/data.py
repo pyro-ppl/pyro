@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
 import torch
+
 
 J = 8
 y = torch.tensor([28,  8, -3,  7, -1,  1, 18, 12]).type(torch.Tensor)
