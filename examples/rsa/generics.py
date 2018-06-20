@@ -1,3 +1,11 @@
+"""
+Interpreting generic statements with RSA models of pragmatics.
+
+Taken from:
+[0] http://forestdb.org/models/generics.html
+[1] https://gscontras.github.io/probLang/chapters/07-generics.html
+"""
+
 import torch
 
 import argparse

@@ -1,3 +1,9 @@
+"""
+Combining models of RSA pragmatics and CCG-based compositional semantics.
+
+Taken from: http://dippl.org/examples/zSemanticPragmaticMashup.html
+"""
+
 import torch
 
 import argparse
@@ -6,9 +12,15 @@ import collections
 import pyro
 import pyro.distributions as dist
 
-from search_inference import HashingMarginal, BestFirstSearch, factor
+from search_inference import HashingMarginal, BestFirstSearch, factor, memoize
 
 torch.set_default_dtype(torch.float64)
+
+
+def Marginal(fn=None, **kwargs):
+    if fn is None:
+        return lambda _fn: Marginal(_fn, **kwargs)
+    return lambda *args: memoize(HashingMarginal(BestFirstSearch(fn, **kwargs).run(*args)))
 
 
 ###################################################################
@@ -19,6 +31,7 @@ def flip(name, p):
     return pyro.sample(name, dist.Bernoulli(p)).item() == 1
 
 
+# hashable state
 obj = collections.namedtuple("Obj", ["name", "blond", "nice", "tall"])
 
 
@@ -259,14 +272,8 @@ def meaning(utterance):
     return combine_meanings(list(defined))
 
 
-def literal_listener(utterance, qud):
-    m = meaning(utterance)
-    world = world_prior(3, m)
-    factor("world_constraint", heuristic(m(world)) * 1000)
-    return qud(world)
-
-
-def literal_listener_raw(utterance):
+@Marginal(num_samples=100)
+def literal_listener(utterance):
     m = meaning(utterance)
     world = world_prior(2, m)
     factor("world_constraint", heuristic(m(world)) * 1000)
@@ -281,9 +288,10 @@ def utterance_prior():
     return utterances[ix]
 
 
+@Marginal(num_samples=100)
 def speaker(world):
     utterance = utterance_prior()
-    L = HashingMarginal(BestFirstSearch(literal_listener_raw, num_samples=100).run(utterance))
+    L = literal_listener(utterance)
     pyro.sample("speaker_constraint", L, obs=world)
     return utterance
 
@@ -295,15 +303,21 @@ def rsa_listener(utterance, qud):
     return qud(world)
 
 
+def literal_listener_raw(utterance, qud):
+    m = meaning(utterance)
+    world = world_prior(3, m)
+    factor("world_constraint", heuristic(m(world)) * 1000)
+    return qud(world)
+
+
 def main(args):
 
-    def mll(utterance, qud):
-        return HashingMarginal(BestFirstSearch(literal_listener, num_samples=args.num_samples).run(utterance, qud))()
+    mll = Marginal(literal_listener_raw, num_samples=args.num_samples)
 
     def is_any_qud(world):
         return any(map(lambda obj: obj.nice, world))
 
-    print(mll("all blond people are nice", is_any_qud))
+    print(mll("all blond people are nice", is_any_qud)())
 
     def is_all_qud(world):
         m = True
@@ -317,10 +331,9 @@ def main(args):
                 m = m and True
         return m
 
-    def rsa(utterance, qud):
-        return HashingMarginal(BestFirstSearch(rsa_listener, num_samples=args.num_samples).run(utterance, qud))()
+    rsa = Marginal(rsa_listener, num_samples=args.num_samples)
 
-    print(rsa("some of the blond people are nice", is_all_qud))
+    print(rsa("some of the blond people are nice", is_all_qud)())
 
 
 if __name__ == "__main__":

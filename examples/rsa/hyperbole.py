@@ -1,3 +1,9 @@
+"""
+Interpreting hyperbole with RSA models of pragmatics.
+
+Taken from: https://gscontras.github.io/probLang/chapters/03-nonliteral.html
+"""
+
 import torch
 
 import collections
