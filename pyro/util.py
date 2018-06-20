@@ -5,6 +5,7 @@ import numbers
 import random
 import warnings
 from collections import defaultdict
+from contextlib import contextmanager
 
 import graphviz
 import torch
@@ -280,6 +281,18 @@ def check_traceenum_requirements(model_trace, guide_trace):
             irange_counters[name] = irange_counter
             if name in enumerated_sites:
                 enumerated_contexts[context].add(name)
+
+
+@contextmanager
+def optional(context_manager, condition):
+    """
+    Optionally wrap inside `context_manager` if condition is `True`.
+    """
+    if condition:
+        with context_manager:
+            yield
+    else:
+        yield
 
 
 def deep_getattr(obj, name):

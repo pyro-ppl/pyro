@@ -80,6 +80,8 @@ class NonlocalExit(Exception):
         """
         for frame in _PYRO_STACK:
             frame._reset()
+            if type(frame).__name__ == "BlockMessenger" and frame.hide_fn(self.site):
+                break
 
 
 def validate_message(msg):

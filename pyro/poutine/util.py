@@ -1,6 +1,18 @@
 from __future__ import absolute_import, division, print_function
 
 
+_VALIDATION_ENABLED = False
+
+
+def enable_validation(is_validate):
+    global _VALIDATION_ENABLED
+    _VALIDATION_ENABLED = is_validate
+
+
+def is_validation_enabled():
+    return _VALIDATION_ENABLED
+
+
 def site_is_subsample(site):
     """
     Determines whether a trace site originated from a subsample statement inside an `iarange`.
