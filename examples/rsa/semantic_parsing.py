@@ -20,7 +20,7 @@ torch.set_default_dtype(torch.float64)
 def Marginal(fn=None, **kwargs):
     if fn is None:
         return lambda _fn: Marginal(_fn, **kwargs)
-    return lambda *args: memoize(HashingMarginal(BestFirstSearch(fn, **kwargs).run(*args)))
+    return memoize(lambda *args: HashingMarginal(BestFirstSearch(fn, **kwargs).run(*args)))
 
 
 ###################################################################
@@ -298,7 +298,7 @@ def speaker(world):
 
 def rsa_listener(utterance, qud):
     world = world_prior(2, meaning(utterance))
-    S = HashingMarginal(BestFirstSearch(speaker, num_samples=100).run(world))
+    S = speaker(world)
     pyro.sample("listener_constraint", S, obs=utterance)
     return qud(world)
 
