@@ -156,6 +156,8 @@ class MarginalAssignmentPersistent(object):
         given time frame a given detection associates with a single object.
     :param int bp_iters: optional number of belief propagation iterations. If
         unspecified or ``None`` an expensive exact algorithm will be used.
+    :param float bp_momentum: optional momentum to use for belief propagation.
+        Should be in the interval ``[0,1)``.
 
     :ivar int num_frames: the number of time frames
     :ivar int num_detections: the (maximum) number of detections per frame
@@ -168,7 +170,7 @@ class MarginalAssignmentPersistent(object):
         final element denotes spurious detection, and
         ``.batch_shape == (num_frames, num_detections)``.
     """
-    def __init__(self, exists_logits, assign_logits, bp_iters=None):
+    def __init__(self, exists_logits, assign_logits, bp_iters=None, bp_momentum=0.5):
         assert exists_logits.dim() == 1, exists_logits.shape
         assert assign_logits.dim() == 3, assign_logits.shape
         assert assign_logits.shape[-1] == exists_logits.shape[-1]
@@ -182,7 +184,8 @@ class MarginalAssignmentPersistent(object):
         if bp_iters is None:
             exists, assign = compute_marginals_persistent(exists_logits, assign_logits)
         else:
-            exists, assign = compute_marginals_persistent_bp(exists_logits, assign_logits, bp_iters)
+            exists, assign = compute_marginals_persistent_bp(
+                exists_logits, assign_logits, bp_iters, bp_momentum)
 
         # Wrap the results in Distribution objects.
         # This adds a final logit=0 element denoting spurious detection.
@@ -342,7 +345,7 @@ def compute_marginals_persistent(exists_logits, assign_logits):
     return exists, assign
 
 
-def compute_marginals_persistent_bp(exists_logits, assign_logits, bp_iters):
+def compute_marginals_persistent_bp(exists_logits, assign_logits, bp_iters, bp_momentum=0.5):
     """
     This implements approximate inference of pairwise marginals via
     loopy belief propagation, adapting the approach of [1], [2].
@@ -364,17 +367,25 @@ def compute_marginals_persistent_bp(exists_logits, assign_logits, bp_iters):
     #     e[i] ~ Bernonulli, whether each object exists
     #
     # Only assign = a and exists = e are returned.
+    assert 0 <= bp_momentum < 1, bp_momentum
+    old, new = bp_momentum, 1 - bp_momentum
     num_frames, num_detections, num_objects = assign_logits.shape
     message_b_to_a = assign_logits.new_zeros(num_frames, num_detections, num_objects)
+    message_a_to_b = assign_logits.new_zeros(num_frames, num_detections, num_objects)
     message_b_to_e = assign_logits.new_zeros(num_frames, num_objects)
+    message_e_to_b = assign_logits.new_zeros(num_frames, num_objects)
 
     for i in range(bp_iters):
         odds_a = (assign_logits + message_b_to_a).exp()
-        message_a_to_b = assign_logits - (odds_a.sum(2, True) - odds_a).log1p()
-        message_b_to_e = message_a_to_b.exp().sum(1).log1p()
-        message_e_to_b = exists_logits + message_b_to_e.sum(0) - message_b_to_e
+        message_a_to_b = (old * message_a_to_b +
+                          new * (assign_logits - (odds_a.sum(2, True) - odds_a).log1p()))
+        message_b_to_e = (old * message_b_to_e +
+                          new * message_a_to_b.exp().sum(1).log1p())
+        message_e_to_b = (old * message_e_to_b +
+                          new * (exists_logits + message_b_to_e.sum(0) - message_b_to_e))
         odds_b = message_a_to_b.exp()
-        message_b_to_a = -((-message_e_to_b).exp().unsqueeze(1) + (1 + odds_b.sum(1, True) - odds_b)).log()
+        message_b_to_a = (old * message_b_to_a -
+                          new * ((-message_e_to_b).exp().unsqueeze(1) + (1 + odds_b.sum(1, True) - odds_b)).log())
 
         _warn_if_nan(message_a_to_b, 'message_a_to_b iter {}'.format(i))
         _warn_if_nan(message_b_to_e, 'message_b_to_e iter {}'.format(i))
