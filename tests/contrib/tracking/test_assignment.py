@@ -218,7 +218,6 @@ def test_flat_exact_2_2(e1, e2, a11, a12, a22):
 @pytest.mark.parametrize('num_detections', [1, 2, 3, 4])
 @pytest.mark.parametrize('num_objects', [1, 2, 3, 4])
 def test_flat_bp_vs_exact(num_objects, num_detections):
-    pyro.set_rng_seed(0)
     exists_logits = -2 * torch.rand(num_objects)
     assign_logits = -2 * torch.rand(num_detections, num_objects)
     expected = MarginalAssignment(exists_logits, assign_logits, None)
@@ -230,7 +229,7 @@ def test_flat_bp_vs_exact(num_objects, num_detections):
 
 @pytest.mark.parametrize('num_frames', [1, 2, 3, 4])
 @pytest.mark.parametrize('num_objects', [1, 2, 3, 4])
-@pytest.mark.parametrize('bp_iters', [None, 10], ids=['enum', 'bp'])
+@pytest.mark.parametrize('bp_iters', [None, 30], ids=['enum', 'bp'])
 def test_flat_vs_persistent(num_objects, num_frames, bp_iters):
     exists_logits = -2 * torch.rand(num_objects)
     assign_logits = -2 * torch.rand(num_frames, num_objects)
@@ -244,11 +243,32 @@ def test_flat_vs_persistent(num_objects, num_frames, bp_iters):
 @pytest.mark.parametrize('num_frames', [1, 2, 3, 4])
 @pytest.mark.parametrize('num_objects', [1, 2, 3, 4])
 def test_persistent_bp_vs_exact(num_objects, num_frames, num_detections):
-    pyro.set_rng_seed(0)
     exists_logits = -2 * torch.rand(num_objects)
-    assign_logits = -2 * torch.rand(num_frames, num_detections, num_objects)
+    assign_logits = 2 * torch.rand(num_frames, num_detections, num_objects) - 1
     expected = MarginalAssignmentPersistent(exists_logits, assign_logits, None)
-    actual = MarginalAssignmentPersistent(exists_logits, assign_logits, 10)
+    actual = MarginalAssignmentPersistent(exists_logits, assign_logits, 30)
     # these should only approximately agree
-    assert_equal(expected.exists_dist.probs, actual.exists_dist.probs, prec=0.01)
-    assert_equal(expected.assign_dist.probs, actual.assign_dist.probs, prec=0.01)
+    assert_equal(expected.exists_dist.probs, actual.exists_dist.probs, prec=0.05)
+    assert_equal(expected.assign_dist.probs, actual.assign_dist.probs, prec=0.05)
+
+
+@pytest.mark.parametrize('e1', [-1., 1.])
+@pytest.mark.parametrize('e2', [-1., 1.])
+@pytest.mark.parametrize('e3', [-1., 1.])
+@pytest.mark.parametrize('bp_iters, bp_momentum', [(3, 0.), (30, 0.5)], ids=['momentum', 'none'])
+def test_persistent_exact_5_4_3(e1, e2, e3, bp_iters, bp_momentum):
+    exists_logits = torch.tensor([e1, e2, e3])
+    assign_logits = 2 * torch.rand(5, 4, 3) - 1
+    # this has tree-shaped connectivity and should lead to exact inference
+    mask = torch.tensor([[[1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0]],
+                         [[1, 0, 0], [0, 1, 1], [0, 0, 1], [1, 0, 0]],
+                         [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0]],
+                         [[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 1, 0]],
+                         [[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 1]]], dtype=torch.uint8)
+    assign_logits[~mask] = -INF
+    expected = MarginalAssignmentPersistent(exists_logits, assign_logits, None)
+    actual = MarginalAssignmentPersistent(exists_logits, assign_logits, bp_iters, bp_momentum)
+    assert_equal(expected.exists_dist.probs, actual.exists_dist.probs)
+    assert_equal(expected.assign_dist.probs, actual.assign_dist.probs)
+    print(actual.exists_dist.probs)
+    print(actual.assign_dist.probs)

@@ -99,6 +99,20 @@ OMTMultivariateNormal
     :undoc-members:
     :show-inheritance:
 
+RelaxedBernoulliStraightThrough
+-------------------------------
+.. autoclass:: pyro.distributions.RelaxedBernoulliStraightThrough
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+RelaxedOneHotCategoricalStraightThrough
+---------------------------------------
+.. autoclass:: pyro.distributions.RelaxedOneHotCategoricalStraightThrough
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Rejector
 --------
 .. autoclass:: pyro.distributions.Rejector
