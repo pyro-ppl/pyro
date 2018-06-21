@@ -174,7 +174,6 @@ class MarginalAssignmentPersistent(object):
         assert exists_logits.dim() == 1, exists_logits.shape
         assert assign_logits.dim() == 3, assign_logits.shape
         assert assign_logits.shape[-1] == exists_logits.shape[-1]
-        assert 0 <= bp_momentum < 1, bp_momentum
         self.num_frames, self.num_detections, self.num_objects = assign_logits.shape
 
         # Clamp to avoid NANs.
