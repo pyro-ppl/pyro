@@ -17,9 +17,9 @@ class WelfordCovariance(object):
         self.diagonal = diagonal
         self.reset()
 
-    def _deltas(self, z):
+    def _deltas(self, sample):
         deltas = []
-        for i, x in enumerate(z):
+        for i, x in enumerate(sample):
             if i > len(self.means) - 1:
                 self.means.append(0.)
             mean = self.means[i]
@@ -29,9 +29,9 @@ class WelfordCovariance(object):
             deltas.append((updated_mean, delta_pre, delta_post))
         return deltas
 
-    def _unroll(self, z):
+    def _unroll(self, sample):
         unrolled = []
-        for rolled in z:
+        for rolled in sample:
             unrolled.extend(rolled.reshape(-1).data.tolist())
         return unrolled
 
@@ -40,9 +40,9 @@ class WelfordCovariance(object):
         self.variances = defaultdict(float)
         self.n_samples = 0
 
-    def update(self, z):
+    def update(self, sample):
         self.n_samples += 1
-        deltas = self._deltas(self._unroll(z))
+        deltas = self._deltas(self._unroll(sample))
         for i, (mean_x, delta_x_pre, delta_x_post) in enumerate(deltas):
             self.means[i] = mean_x
             for j, (mean_y, delta_y_pre, delta_y_post) in enumerate(deltas):
