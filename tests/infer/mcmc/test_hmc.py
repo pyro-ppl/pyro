@@ -14,9 +14,7 @@ from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
 from tests.common import assert_equal
 
-logging.basicConfig(format='%(levelname)s %(message)s')
-logger = logging.getLogger('pyro')
-logger.setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class GaussianChain(object):
@@ -254,7 +252,6 @@ def test_bernoulli_beta_with_dual_averaging():
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
-@pytest.mark.filterwarnings("ignore:Encountered NAN")
 def test_normal_gamma_with_dual_averaging():
     def model(data):
         rate = torch.tensor([1.0, 1.0])

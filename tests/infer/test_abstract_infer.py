@@ -27,3 +27,20 @@ def test_posterior_predictive():
     posterior_predictive = TracePredictive(model, mcmc_run, num_samples=10000).run(num_trials)
     marginal_return_vals = EmpiricalMarginal(posterior_predictive)
     assert_equal(marginal_return_vals.mean, torch.ones(5) * 700, prec=30)
+
+
+def test_nesting():
+    def nested():
+        true_probs = torch.ones(5) * 0.7
+        num_trials = torch.ones(5) * 1000
+        num_success = dist.Binomial(num_trials, true_probs).sample()
+        conditioned_model = poutine.condition(model, data={"obs": num_success})
+        nuts_kernel = NUTS(conditioned_model, adapt_step_size=True)
+        mcmc_run = MCMC(nuts_kernel, num_samples=10, warmup_steps=2).run(num_trials)
+        return mcmc_run
+
+    with poutine.trace() as tp:
+        nested()
+        nested()
+
+    assert len(tp.trace.nodes) == 0

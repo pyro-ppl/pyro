@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import copy
-import logging
 import numbers
 import warnings
 from collections import OrderedDict
@@ -17,9 +16,6 @@ from pyro.distributions.distribution import Distribution
 from pyro.params import param_with_module_name
 from pyro.poutine.runtime import _DIM_ALLOCATOR, _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
-
-# Default logger to prevent 'No handler found' warning.
-logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 
 def get_param_store():
@@ -453,9 +449,11 @@ def validation_enabled(is_validate=True):
     """
     infer_validation_status = infer.is_validation_enabled()
     distribution_validation_status = dist.is_validation_enabled()
+    poutine_validation_status = poutine.is_validation_enabled()
     try:
         enable_validation(is_validate)
         yield
     finally:
         dist.enable_validation(distribution_validation_status)
         infer.enable_validation(infer_validation_status)
+        poutine.enable_validation(poutine_validation_status)

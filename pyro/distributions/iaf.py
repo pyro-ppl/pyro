@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 import torch.nn as nn
 from torch.distributions.transforms import Transform
+from torch.distributions import constraints
 
 from pyro.distributions.util import copy_docs_from
 from pyro.nn import AutoRegressiveNN
@@ -52,6 +53,8 @@ class InverseAutoregressiveFlow(Transform):
     3. MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]
     Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle
     """
+
+    codomain = constraints.real
 
     def __init__(self, input_dim, hidden_dim, sigmoid_bias=2.0, permutation=None):
         super(InverseAutoregressiveFlow, self).__init__()

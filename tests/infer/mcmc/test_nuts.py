@@ -15,9 +15,7 @@ from tests.common import assert_equal
 
 from .test_hmc import TEST_CASES, TEST_IDS, T, rmse
 
-logging.basicConfig(format='%(levelname)s %(message)s')
-logger = logging.getLogger('pyro')
-logger.setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 T2 = T(*TEST_CASES[2].values)._replace(num_samples=800, warmup_steps=200)
 TEST_CASES[2] = pytest.param(*T2, marks=pytest.mark.skipif(
@@ -151,7 +149,6 @@ def test_bernoulli_beta_with_dual_averaging():
     assert_equal(posterior.mean, true_probs, prec=0.03)
 
 
-@pytest.mark.filterwarnings("ignore:Encountered NAN")
 def test_categorical_dirichlet():
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])

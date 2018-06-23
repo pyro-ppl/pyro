@@ -26,28 +26,30 @@ class _DimAllocator(object):
         if name in self._stack:
             raise ValueError('duplicate iarange "{}"'.format(name))
         if dim is None:
-            # Automatically allocate the rightmost dimension to the left of all existing dims.
-            self._stack.append(name)
-            dim = -len(self._stack)
+            # Automatically designate the rightmost available dim for allocation.
+            dim = -1
+            while -dim <= len(self._stack) and self._stack[-1 - dim] is not None:
+                dim -= 1
         elif dim >= 0:
             raise ValueError('Expected dim < 0 to index from the right, actual {}'.format(dim))
-        else:
-            # Allocate the requested dimension.
-            while dim < -len(self._stack):
-                self._stack.append(None)
-            if self._stack[-1 - dim] is not None:
-                raise ValueError('\n'.join([
-                    'at iaranges "{}" and "{}", collide at dim={}'.format(name, self._stack[-1 - dim], dim),
-                    '\nTry moving the dim of one iarange to the left, e.g. dim={}'.format(dim - 1)]))
-            self._stack[-1 - dim] = name
+
+        # Allocate the requested dimension.
+        while dim < -len(self._stack):
+            self._stack.append(None)
+        if self._stack[-1 - dim] is not None:
+            raise ValueError('\n'.join([
+                'at iaranges "{}" and "{}", collide at dim={}'.format(name, self._stack[-1 - dim], dim),
+                '\nTry moving the dim of one iarange to the left, e.g. dim={}'.format(dim - 1)]))
+        self._stack[-1 - dim] = name
         return dim
 
     def free(self, name, dim):
         """
         Free a dimension.
         """
-        assert self._stack[-1 - dim] == name
-        self._stack[-1 - dim] = None
+        free_idx = -1 - dim  # stack index to free
+        assert self._stack[free_idx] == name
+        self._stack[free_idx] = None
         while self._stack and self._stack[-1] is None:
             self._stack.pop()
 
@@ -78,6 +80,8 @@ class NonlocalExit(Exception):
         """
         for frame in _PYRO_STACK:
             frame._reset()
+            if type(frame).__name__ == "BlockMessenger" and frame.hide_fn(self.site):
+                break
 
 
 def validate_message(msg):

@@ -49,6 +49,9 @@ class HalfCauchy(TransformedDistribution):
         return self.base_dist.entropy() - math.log(2)
 
     def expand(self, batch_shape):
-        loc = self.loc.expand(batch_shape)
-        scale = self.scale.expand(batch_shape)
-        return HalfCauchy(loc, scale)
+        try:
+            return super(HalfCauchy, self).expand(batch_shape)
+        except NotImplementedError:
+            loc = self.loc.expand(batch_shape)
+            scale = self.scale.expand(batch_shape)
+            return type(self)(loc, scale)
