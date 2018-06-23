@@ -30,20 +30,34 @@ def set_rng_seed(rng_seed):
 
 def torch_isnan(x):
     """
-    A convenient function to check if a Tensor contains all nan; also works with numbers
+    A convenient function to check if a Tensor contains any nan; also works with numbers
     """
     if isinstance(x, numbers.Number):
         return x != x
-    return torch.isnan(x).all()
+    return torch.isnan(x).any()
 
 
 def torch_isinf(x):
     """
-    A convenient function to check if a Tensor contains all inf; also works with numbers
+    A convenient function to check if a Tensor contains any inf; also works with numbers
     """
     if isinstance(x, numbers.Number):
         return x == float('inf')
-    return (x == float('inf')).all()
+    return (x == float('inf')).any()
+
+
+def warn_if_nan(name, value):
+    """
+    A convenient function to warn if a Tensor or its grad contains any nan or inf,
+    also works with numbers.
+    """
+    if torch.is_tensor(value) and value.requires_grad:
+            value.register_hook(lambda x: warn_if_nan(name, x))
+    if torch_isnan(value):
+        warnings.warn("Encountered NAN in {}".format(name))
+    if torch_isinf(value) and value > 0:
+        warnings.warn("Encountered +inf in {}".format(name))
+    # Note that -inf log_prob_sum is fine: it is merely a zero-probability event.
 
 
 def save_visualization(trace, graph_output):
