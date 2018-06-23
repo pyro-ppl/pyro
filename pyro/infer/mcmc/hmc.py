@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import math
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -12,7 +12,10 @@ import pyro.poutine as poutine
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
+from pyro.ops.welford import WelfordCovariance
 from pyro.util import torch_isinf, torch_isnan, optional
+
+adaptation_window = namedtuple('adaptation_window', ['adapt_step_size', 'adapt_mass'])
 
 
 class HMC(TraceKernel):
@@ -38,6 +41,11 @@ class HMC(TraceKernel):
         ``int(trajectory_length / step_size)``.
     :param bool adapt_step_size: A flag to decide if we want to adapt step_size
         during warm-up phase using Dual Averaging scheme.
+    :param bool adapt_mass: A flag to decide if we want to adapt a diagonal
+        mass matrix using the sample-variance from the second half of the
+        warm-up phase.
+    :param str mass_structure: Structure of the mass matrix (one of 'identity',
+        'diagonal', 'dense').
     :param dict transforms: Optional dictionary that specifies a transform
         for a sample site with constrained support to unconstrained space. The
         transform should be invertible, and implement `log_abs_det_jacobian`.
@@ -66,7 +74,8 @@ class HMC(TraceKernel):
     """
 
     def __init__(self, model, step_size=None, trajectory_length=None,
-                 num_steps=None, adapt_step_size=False, transforms=None):
+                 num_steps=None, adapt_step_size=False, adapt_mass=False,
+                 mass_structure='identity', transforms=None):
         self.model = model
 
         self.step_size = step_size if step_size is not None else 1  # from Stan
@@ -78,6 +87,9 @@ class HMC(TraceKernel):
             self.trajectory_length = 2 * math.pi  # from Stan
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
         self.adapt_step_size = adapt_step_size
+        self.mass_structure = mass_structure
+        # Don't need to adapt mass if the mass structure is identity.
+        self.adapt_mass = adapt_mass and self.mass_structure != 'identity'
         self._target_accept_prob = 0.8  # from Stan
 
         self.transforms = {} if transforms is None else transforms
@@ -94,7 +106,16 @@ class HMC(TraceKernel):
         return trace_poutine.trace
 
     def _kinetic_energy(self, r):
-        return 0.5 * sum(x.pow(2).sum() for x in r.values())
+        if self._mass is not None:
+            unrolled_r = torch.cat([site_value.view(-1) for site_name, site_value in r.items()])
+            if self.mass_structure == 'diagonal':
+                k = 0.5 * unrolled_r.pow(2).matmul(self._mass)
+            else:
+                k = 0.5 * unrolled_r.matmul(self._mass).matmul(unrolled_r)
+        # If no mass has been calculated, assume the mass matrix is the identity matrix.
+        else:
+            k = 0.5 * sum(x.pow(2).sum() for x in r.values())
+        return k
 
     def _potential_energy(self, z):
         # Since the model is specified in the constrained space, transform the
@@ -120,7 +141,12 @@ class HMC(TraceKernel):
         self._kwargs = None
         self._prototype_trace = None
         self._adapt_phase = False
+        self._adaptation_schedule = None
+        self._adaptation_window = None
         self._adapted_scheme = None
+        self._warmup_steps = None
+        self._mass = None
+        self._mass_estimator = None
 
     def _find_reasonable_step_size(self, z):
         step_size = self.step_size
@@ -160,6 +186,62 @@ class HMC(TraceKernel):
             direction_new = 1 if target_accept_logprob < -delta_energy else -1
         return step_size
 
+    def _configure_adaptation(self, prototype_trace):
+        self._adapt_phase = True
+        # Setup up the schedule for parameter adaptation.
+        self._adaptation_schedule = {0: adaptation_window(adapt_step_size=self.adapt_step_size, adapt_mass=False)}
+        if self.adapt_step_size:
+            z = {name: node["value"] for name, node in prototype_trace.iter_stochastic_nodes()}
+            for name, transform in self.transforms.items():
+                z[name] = transform(z[name])
+            self.step_size = self._find_reasonable_step_size(z)
+            self.num_steps = max(1, int(self.trajectory_length / self.step_size))
+            # make prox-center for Dual Averaging scheme
+            loc = math.log(10 * self.step_size)
+            self._adapted_scheme = DualAveraging(prox_center=loc)
+        if self.adapt_mass:
+            if self.mass_structure == 'identity':
+                self._mass_estimator = None
+            elif self.mass_structure == 'diagonal':
+                self._mass_estimator = WelfordCovariance(diagonal=True)
+            elif self.mass_structure == 'dense':
+                self._mass_estimator = WelfordCovariance(diagonal=False)
+            else:
+                raise ValueError(
+                        "mass_type must be one of: 'identity', 'diagonal', 'dense' (got '{}')".format(
+                                self.mass_structure))
+            # Buffer and window sizes from stan
+            start_buffer = 75
+            end_buffer = 25
+            initial_window = 50
+            total = start_buffer + end_buffer + initial_window
+            if self._warmup_steps < total:
+                raise ValueError(
+                        'mass adaptation requires at least {} warmup steps (got {})'.format(total, self._warmup_steps))
+            # Divide the mass-adaptation portion of the warmup into expanding windows.
+            mass_adaptation_period = self._warmup_steps - start_buffer - end_buffer
+            mass_adaptation_windows = [start_buffer]
+            mass_adaptation_windows.extend([start_buffer + initial_window * (2 ** i)
+                                            for i in range(int((math.log2(mass_adaptation_period / initial_window))))])
+            self._adaptation_schedule.update({
+                i: adaptation_window(adapt_step_size=self.adapt_step_size, adapt_mass=True)
+                for i in mass_adaptation_windows})
+            self._adaptation_schedule[start_buffer + mass_adaptation_period] = adaptation_window(
+                    adapt_step_size=self.adapt_step_size, adapt_mass=False)
+
+    def _adapt_parameters(self, accept_prob, z):
+        if self._t in self._adaptation_schedule:
+            self._adaptation_window = self._adaptation_schedule[self._t]
+            if self._adaptation_window.adapt_mass and self._mass_estimator:
+                # Update mass and reset online estimator's memory.
+                if self._mass_estimator.n_samples > 1:
+                    self._mass = self._mass_estimator.get_estimates()
+                self._mass_estimator.reset()
+        if self._adaptation_window.adapt_step_size:
+            self._adapt_step_size(accept_prob)
+        if self._adaptation_window.adapt_mass:
+            self._mass_estimator.update(z.values())
+
     def _adapt_step_size(self, accept_prob):
         # calculate a statistic for Dual Averaging scheme
         H = self._target_accept_prob - accept_prob
@@ -176,7 +258,8 @@ class HMC(TraceKernel):
     def initial_trace(self):
         return self._prototype_trace
 
-    def setup(self, *args, **kwargs):
+    def setup(self, warmup_steps, *args, **kwargs):
+        self._warmup_steps = warmup_steps
         self._args = args
         self._kwargs = kwargs
         # set the trace prototype to inter-convert between trace object
@@ -194,30 +277,22 @@ class HMC(TraceKernel):
             r_scale = site_value.new_ones(site_value.shape)
             self._r_dist[name] = dist.Normal(loc=r_loc, scale=r_scale)
         self._validate_trace(trace)
+        self._configure_adaptation(trace)
 
-        if self.adapt_step_size:
-            self._adapt_phase = True
-            z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
-            for name, transform in self.transforms.items():
-                z[name] = transform(z[name])
-            self.step_size = self._find_reasonable_step_size(z)
-            self.num_steps = max(1, int(self.trajectory_length / self.step_size))
-            # make prox-center for Dual Averaging scheme
-            loc = math.log(10 * self.step_size)
-            self._adapted_scheme = DualAveraging(prox_center=loc)
-
-    def end_warmup(self):
+    def _end_warmup(self):
         if self.adapt_step_size:
             self._adapt_phase = False
             _, log_step_size_avg = self._adapted_scheme.get_state()
             self.step_size = math.exp(log_step_size_avg)
             self.num_steps = max(1, int(self.trajectory_length / self.step_size))
+        if self.adapt_mass:
+            self._mass = self._mass_estimator.get_estimates()
 
     def cleanup(self):
         self._reset()
 
     def sample(self, trace):
-        z = {name: node["value"].detach() for name, node in trace.iter_stochastic_nodes()}
+        z = OrderedDict((name, node["value"].detach()) for name, node in trace.iter_stochastic_nodes())
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
@@ -239,7 +314,6 @@ class HMC(TraceKernel):
         if rand < (-delta_energy).exp():
             self._accept_cnt += 1
             z = z_new
-
         if self._adapt_phase:
             # Set accept prob to 0.0 if delta_energy is `NaN` which may be
             # the case for a diverging trajectory when using a large step size.
@@ -247,12 +321,13 @@ class HMC(TraceKernel):
                 accept_prob = delta_energy.new_tensor(0.0)
             else:
                 accept_prob = (-delta_energy).exp().clamp(max=1).item()
-            self._adapt_step_size(accept_prob)
-
+            self._adapt_parameters(accept_prob, z)
         self._t += 1
         # get trace with the constrained values for `z`.
         for name, transform in self.transforms.items():
             z[name] = transform.inv(z[name])
+        if self._t == self._warmup_steps:
+            self._end_warmup()
         return self._get_trace(z)
 
     def diagnostics(self):

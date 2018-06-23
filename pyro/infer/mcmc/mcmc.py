@@ -28,7 +28,7 @@ class MCMC(TracePosterior):
         super(MCMC, self).__init__()
 
     def _traces(self, *args, **kwargs):
-        self.kernel.setup(*args, **kwargs)
+        self.kernel.setup(self.warmup_steps, *args, **kwargs)
         trace = self.kernel.initial_trace()
         pyro.log.info("Starting MCMC using kernel - {} ...".format(self.kernel.__class__.__name__))
         logging_interval = math.ceil((self.warmup_steps + self.num_samples) / 20)
@@ -41,8 +41,6 @@ class MCMC(TracePosterior):
                 if diagnostic_info is not None:
                     pyro.log.info(diagnostic_info)
             if t <= self.warmup_steps:
-                if t == self.warmup_steps:
-                    self.kernel.end_warmup()
                 continue
             yield (trace, 1.0)
         self.kernel.cleanup()

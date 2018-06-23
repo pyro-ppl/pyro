@@ -9,11 +9,11 @@ import torch.optim
 
 import pyro
 import pyro.distributions as dist
+import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
                         TraceGraph_ELBO)
 from pyro.optim import Adam
-import pyro.poutine as poutine
 from tests.common import assert_equal, xfail_param
 
 logger = logging.getLogger(__name__)

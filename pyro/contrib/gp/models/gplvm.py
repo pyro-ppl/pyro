@@ -5,10 +5,10 @@ from torch.distributions import constraints
 from torch.nn import Parameter
 
 import pyro
-from pyro.contrib.gp.util import Parameterized
 import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.optim as optim
+from pyro.contrib.gp.util import Parameterized
 from pyro.params import param_with_module_name
 
 

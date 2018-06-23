@@ -3,8 +3,8 @@ import pytest
 import torch
 
 import pyro
-import pyro.contrib.gp as gp
 import pyro.contrib.autoname.named as named
+import pyro.contrib.gp as gp
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import EmpiricalMarginal

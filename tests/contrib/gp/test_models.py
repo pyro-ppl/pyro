@@ -9,10 +9,9 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.contrib.gp.kernels import Cosine, Matern32, RBF, WhiteNoise
+from pyro.contrib.gp.kernels import RBF, Cosine, Matern32, WhiteNoise
 from pyro.contrib.gp.likelihoods import Gaussian
-from pyro.contrib.gp.models import (GPLVM, GPRegression, SparseGPRegression,
-                                    VariationalGP, VariationalSparseGP)
+from pyro.contrib.gp.models import GPLVM, GPRegression, SparseGPRegression, VariationalGP, VariationalSparseGP
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
