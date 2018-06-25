@@ -45,6 +45,7 @@ def register_model(**model_kwargs):
 @register_model(reparameterized=False, Elbo=TraceGraph_ELBO, id='PoissonGamma::reparam=False_TraceGraph')
 @register_model(reparameterized=False, Elbo=Trace_ELBO, id='PoissonGamma::reparam=False_Trace')
 def poisson_gamma_model(reparameterized, Elbo):
+    pyro.set_rng_seed(0)
     alpha0 = torch.tensor(1.0)
     beta0 = torch.tensor(1.0)
     data = torch.tensor([1.0, 2.0, 3.0])
@@ -96,6 +97,7 @@ def bernoulli_beta_hmc(**kwargs):
         pyro.sample("obs", dist.Bernoulli(p_latent), obs=data)
         return p_latent
 
+    pyro.set_rng_seed(0)
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     kernel = kwargs.pop('kernel')
@@ -109,6 +111,7 @@ def bernoulli_beta_hmc(**kwargs):
 @register_model(num_steps=2000, whiten=True, id='SVGP::MultiClass_whiten=True')
 def svgp_multiclass(num_steps, whiten):
     # adapted from http://gpflow.readthedocs.io/en/latest/notebooks/multiclass.html
+    pyro.set_rng_seed(0)
     X = torch.rand(100, 1)
     K = (-0.5 * (X - X.t()).pow(2) / 0.01).exp() + torch.eye(100) * 1e-6
     f = K.potrf(upper=False).matmul(torch.randn(100, 3))
