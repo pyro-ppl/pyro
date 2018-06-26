@@ -1,14 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
-
 import torch
 from torch.autograd import grad
 
-
-def _warn_if_nan(tensor, name):
-    if torch.isnan(tensor).any():
-        warnings.warn('Encountered nan elements in {}'.format(name))
+from pyro.util import warn_if_nan
 
 
 def newton_step_2d(loss, x, trust_radius=None):
@@ -62,8 +57,8 @@ def newton_step_2d(loss, x, trust_radius=None):
                      grad(g[..., 1].sum(), [x], create_graph=True)[0]], -1)
     assert g.shape[-1:] == (2,)
     assert H.shape[-2:] == (2, 2)
-    _warn_if_nan(g, 'g')
-    _warn_if_nan(H, 'H')
+    warn_if_nan(g, 'g')
+    warn_if_nan(H, 'H')
 
     if trust_radius is not None:
         # regularize to keep update within ball of given trust_radius
@@ -71,7 +66,7 @@ def newton_step_2d(loss, x, trust_radius=None):
         mean_eig = (H[..., 0, 0] + H[..., 1, 1]) / 2
         min_eig = mean_eig - (mean_eig ** 2 - detH).sqrt()
         regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
-        _warn_if_nan(regularizer, 'regularizer')
+        warn_if_nan(regularizer, 'regularizer')
         H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new([[1.0, 0.0], [0.0, 1.0]])
 
     # compute newton update
@@ -82,7 +77,7 @@ def newton_step_2d(loss, x, trust_radius=None):
     Hinv[..., 1, 0] = -H[..., 1, 0]
     Hinv[..., 1, 1] = H[..., 0, 0]
     Hinv = Hinv / detH.unsqueeze(-1).unsqueeze(-1)
-    _warn_if_nan(Hinv, 'Hinv')
+    warn_if_nan(Hinv, 'Hinv')
 
     # apply update
     x_new = x.detach() - (Hinv * g.unsqueeze(-2)).sum(-1)

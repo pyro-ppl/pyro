@@ -3,18 +3,11 @@ from __future__ import absolute_import, division, print_function
 import itertools
 import math
 import numbers
-import warnings
 
 import torch
 
 import pyro.distributions as dist
-
-
-def _warn_if_nan(tensor, name):
-    if torch.isnan(tensor).any():
-        warnings.warn('Encountered nan elements in {}'.format(name))
-    if tensor.requires_grad:
-        tensor.register_hook(lambda x: _warn_if_nan(x, name))
+from pyro.util import warn_if_nan
 
 
 def _product(factors):
@@ -223,8 +216,8 @@ def compute_marginals(exists_logits, assign_logits):
     assign = assign_probs.log()
     exists = exists[1] - exists[0]
     assign = assign[:, :-1] - assign[:, -1:]
-    _warn_if_nan(exists, 'exists')
-    _warn_if_nan(assign, 'assign')
+    warn_if_nan(exists, 'exists')
+    warn_if_nan(assign, 'assign')
     return exists, assign
 
 
@@ -246,14 +239,14 @@ def compute_marginals_bp(exists_logits, assign_logits, bp_iters):
         message_e_to_a = -(message_a_to_e - message_a_to_e.sum(0, True) - exists_logits).exp().log1p()
         joint = (assign_logits + message_e_to_a).exp()
         message_a_to_e = (assign_logits - torch.log1p(joint.sum(1, True) - joint)).exp().log1p()
-        _warn_if_nan(message_e_to_a, 'message_e_to_a iter {}'.format(i))
-        _warn_if_nan(message_a_to_e, 'message_a_to_e iter {}'.format(i))
+        warn_if_nan(message_e_to_a, 'message_e_to_a iter {}'.format(i))
+        warn_if_nan(message_a_to_e, 'message_a_to_e iter {}'.format(i))
 
     # Convert from probs to logits.
     exists = exists_logits + message_a_to_e.sum(0)
     assign = assign_logits + message_e_to_a
-    _warn_if_nan(exists, 'exists')
-    _warn_if_nan(assign, 'assign')
+    warn_if_nan(exists, 'exists')
+    warn_if_nan(assign, 'assign')
     return exists, assign
 
 
@@ -285,14 +278,14 @@ def compute_marginals_sparse_bp(num_objects, num_detections, edges,
         message_e_to_a = -(message_a_to_e - sparse_sum(message_a_to_e, 0, True) - exists_factor).exp().log1p()
         joint = (assign_logits + message_e_to_a).exp()
         message_a_to_e = (assign_logits - torch.log1p(sparse_sum(joint, 1, True) - joint)).exp().log1p()
-        _warn_if_nan(message_e_to_a, 'message_e_to_a iter {}'.format(i))
-        _warn_if_nan(message_a_to_e, 'message_a_to_e iter {}'.format(i))
+        warn_if_nan(message_e_to_a, 'message_e_to_a iter {}'.format(i))
+        warn_if_nan(message_a_to_e, 'message_a_to_e iter {}'.format(i))
 
     # Convert from probs to logits.
     exists = exists_logits + sparse_sum(message_a_to_e, 0)
     assign = assign_logits + message_e_to_a
-    _warn_if_nan(exists, 'exists')
-    _warn_if_nan(assign, 'assign')
+    warn_if_nan(exists, 'exists')
+    warn_if_nan(assign, 'assign')
     return exists, assign
 
 
@@ -340,8 +333,8 @@ def compute_marginals_persistent(exists_logits, assign_logits):
     # Convert from probs to logits.
     exists = exists_probs.log() - (total - exists_probs).log()
     assign = assign_probs.log() - (total - assign_probs.sum(-1, True)).log()
-    _warn_if_nan(exists, 'exists')
-    _warn_if_nan(assign, 'assign')
+    warn_if_nan(exists, 'exists')
+    warn_if_nan(assign, 'assign')
     return exists, assign
 
 
@@ -387,14 +380,14 @@ def compute_marginals_persistent_bp(exists_logits, assign_logits, bp_iters, bp_m
         message_b_to_a = (old * message_b_to_a -
                           new * ((-message_e_to_b).exp().unsqueeze(1) + (1 + odds_b.sum(1, True) - odds_b)).log())
 
-        _warn_if_nan(message_a_to_b, 'message_a_to_b iter {}'.format(i))
-        _warn_if_nan(message_b_to_e, 'message_b_to_e iter {}'.format(i))
-        _warn_if_nan(message_e_to_b, 'message_e_to_b iter {}'.format(i))
-        _warn_if_nan(message_b_to_a, 'message_b_to_a iter {}'.format(i))
+        warn_if_nan(message_a_to_b, 'message_a_to_b iter {}'.format(i))
+        warn_if_nan(message_b_to_e, 'message_b_to_e iter {}'.format(i))
+        warn_if_nan(message_e_to_b, 'message_e_to_b iter {}'.format(i))
+        warn_if_nan(message_b_to_a, 'message_b_to_a iter {}'.format(i))
 
     # Convert from probs to logits.
     exists = exists_logits + message_b_to_e.sum(0)
     assign = assign_logits + message_b_to_a
-    _warn_if_nan(exists, 'exists')
-    _warn_if_nan(assign, 'assign')
+    warn_if_nan(exists, 'exists')
+    warn_if_nan(assign, 'assign')
     return exists, assign
