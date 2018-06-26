@@ -6,6 +6,60 @@ from torch.autograd import grad
 from pyro.util import warn_if_nan
 
 
+def _determinant_3d(H):
+    diag_terms = H[..., 0, 0] * H[..., 1, 1] * H[..., 2, 2]
+    diag_terms = diag_terms + H[..., 0, 1] * H[..., 1, 2] * H[..., 2, 0]
+    diag_terms = diag_terms + H[..., 1, 0] * H[..., 2, 1] * H[..., 0, 2]
+    antidiag_terms = H[..., 2, 0] * H[..., 1, 1] * H[..., 0, 2]
+    antidiag_terms = antidiag_terms + H[..., 0, 1] * H[..., 1, 0] * H[..., 2, 2]
+    antidiag_terms = antidiag_terms + H[..., 0, 0] * H[..., 2, 1] * H[..., 1, 2]
+    detH = diag_terms - antidiag_terms
+    return detH
+
+
+def _eig_3d(H):
+    p1 = H[..., 0, 1].pow(2) + H[..., 0, 2].pow(2) + H[..., 1, 2].pow(2)
+    if p1 == 0:
+        # A is diagonal.
+        eig1 = H[..., 0, 0]
+        eig2 = H[..., 1, 1]
+        eig3 = H[..., 2, 2]
+    else:
+        q = (H[..., 0, 0] + H[..., 1, 1] + H[..., 2, 2]) / 3
+        p2 = (H[..., 0, 0] - q).pow(2) + (H[..., 1, 1] - q).pow(2) + (H[..., 2, 2] - q).pow(2) + 2 * p1
+        p = torch.sqrt(p2 / 6)
+        B = (1 / p) * (H - q * I)
+        r = _determinant_3d(B) / 2
+
+
+    if r <= -1:
+       phi = pi / 3
+    elif r >= 1:
+       phi = 0
+    else:
+       phi = acos(r) / 3
+
+       # eig3 <= eig2 <= eig1
+       eig1 = q + 2 * p * cos(phi)
+       eig3 = q + 2 * p * cos(phi + (2*pi/3))
+       eig2 = 3 * q - eig1 - eig3
+    return eig1, eig2, eig3
+
+
+def _inv_3d(H):
+    Hinv = H.new(H.shape)
+    Hinv[..., 0, 0] = H[..., 1, 1] * H[..., 2, 2] - H[..., 1, 2] * H[..., 2, 1]
+    Hinv[..., 0, 1] = H[..., 0, 2] * H[..., 2, 1] - H[..., 0, 1] * H[..., 2, 2]
+    Hinv[..., 0, 2] = H[..., 0, 1] * H[..., 1, 2] - H[..., 0, 2] * H[..., 1, 1]
+    Hinv[..., 1, 0] = H[..., 1, 2] * H[..., 2, 0] - H[..., 1, 0] * H[..., 2, 2]
+    Hinv[..., 1, 1] = H[..., 0, 0] * H[..., 2, 2] - H[..., 0, 2] * H[..., 2, 0]
+    Hinv[..., 1, 2] = H[..., 0, 2] * H[..., 1, 0] - H[..., 0, 0] * H[..., 1, 2]
+    Hinv[..., 2, 0] = H[..., 1, 0] * H[..., 2, 1] - H[..., 1, 1] * H[..., 2, 0]
+    Hinv[..., 2, 1] = H[..., 0, 1] * H[..., 2, 0] - H[..., 0, 0] * H[..., 2, 1]
+    Hinv[..., 2, 2] = H[..., 0, 0] * H[..., 1, 1] - H[..., 0, 1] * H[..., 1, 0]
+    return Hinv
+
+
 def newton_step_2d(loss, x, trust_radius=None):
     """
     Performs a Newton update step to minimize loss on a batch of 2-dimensional
@@ -67,7 +121,7 @@ def newton_step_2d(loss, x, trust_radius=None):
         min_eig = mean_eig - (mean_eig ** 2 - detH).sqrt()
         regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
         warn_if_nan(regularizer, 'regularizer')
-        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new([[1.0, 0.0], [0.0, 1.0]])
+        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new(torch.eye(2))
 
     # compute newton update
     detH = H[..., 0, 0] * H[..., 1, 1] - H[..., 0, 1] * H[..., 1, 0]
@@ -81,5 +135,59 @@ def newton_step_2d(loss, x, trust_radius=None):
 
     # apply update
     x_new = x.detach() - (Hinv * g.unsqueeze(-2)).sum(-1)
+    assert x_new.shape == x.shape
+    return x_new, Hinv
+
+
+def newton_step_3d(loss, x, trust_radius=None):
+    """
+    Performs a Newton update step to minimize loss on a batch of 3-dimensional
+    variables, optionally regularizing to constrain to a trust region.
+
+    See :meth:`pyro.ops.newton.newton_step2d`.
+
+    :param torch.Tensor loss: A scalar function of ``x`` to be minimized.
+    :param torch.Tensor x: A dependent variable with rightmost size of 2.
+    :param float trust_radius: An optional trust region trust_radius. The
+        updated value ``mode`` of this function will be within
+        ``trust_radius`` of the input ``x``.
+    :return: A pair ``(mode, cov)`` where ``mode`` is an updated tensor
+        of the same shape as the original value ``x``, and ``cov`` is an
+        esitmate of the covariance 3x3 matrix with
+        ``cov.shape == x.shape[:-1] + (3,3)``.
+    :rtype: tuple
+    """
+    if loss.shape != ():
+        raise ValueError('Expected loss to be a scalar, actual shape {}'.format(loss.shape))
+    if x.dim() < 1 or x.shape[-1] != 3:
+        raise ValueError('Expected x to have rightmost size 3, actual shape {}'.format(x.shape))
+
+    # compute derivatives
+    g = grad(loss, [x], create_graph=True)[0]
+    H = torch.stack([grad(g[..., 0].sum(), [x], create_graph=True)[0],
+                     grad(g[..., 1].sum(), [x], create_graph=True)[0]],
+                     grad(g[..., 2].sum(), [x], create_graph=True)[0]], -1)
+    assert g.shape[-1:] == (3,)
+    assert H.shape[-2:] == (3, 3)
+    warn_if_nan(g, 'g')
+    warn_if_nan(H, 'H')
+
+    if trust_radius is not None:
+        # regularize to keep update within ball of given trust_radius
+        detH = _determinant_3d(H)
+        # calculate eigenvalues of symmetric matrix
+        min_eig, _, _ = _eig_3d(H)
+        regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
+        warn_if_nan(regularizer, 'regularizer')
+        H = H + regularizer.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1) * H.new(torch.eye(3))
+
+    # compute newton update
+    detH = _determinant_3d(H)
+    Hinv = _inv_3d(H)
+    Hinv = Hinv / detH.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+    warn_if_nan(Hinv, 'Hinv')
+
+    # apply update
+    x_new = x.detach() - (Hinv * g.unsqueeze(-3)).sum(-1)
     assert x_new.shape == x.shape
     return x_new, Hinv
