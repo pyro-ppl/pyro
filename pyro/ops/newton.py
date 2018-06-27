@@ -31,7 +31,6 @@ def _eig_3d(H):
         B = (1 / p) * (H - q * I)
         r = _determinant_3d(B) / 2
 
-
     if r <= -1:
        phi = pi / 3
     elif r >= 1:
@@ -60,18 +59,21 @@ def _inv_3d(H):
     return Hinv
 
 
-def newton_step_2d(loss, x, trust_radius=None):
+def newton_step(loss, x, trust_radius=None):
     """
-    Performs a Newton update step to minimize loss on a batch of 2-dimensional
-    variables, optionally regularizing to constrain to a trust region.
+    Performs a Newton update step to minimize loss on a batch of variables,
+    optionally constraining to a trust region [1].
 
-    ``loss`` must be twice-differentiable as a function of ``x``. If ``loss``
-    is ``2+d``-times differentiable, then the return value of this function is
-    ``d``-times differentiable.
+    This is especially usful because the final solution of newton iteration
+    is differentiable wrt the inputs, even when all but the final ``x`` is
+    detached, due to this method's quadratic convergence [2]. ``loss`` must be
+    twice-differentiable as a function of ``x``. If ``loss`` is ``2+d``-times
+    differentiable, then the return value of this function is ``d``-times
+    differentiable.
 
     When ``loss`` is interpreted as a negative log probability density, then
-    the return value of this function can be used to construct a Laplace
-    approximation ``MultivariateNormal(mode,cov)``.
+    the return values ``mode,cov`` of this function can be used to construct a
+    Laplace approximation ``MultivariateNormal(mode,cov)``.
 
     .. warning:: Take care to detach the result of this function when used in
         an optimization loop. If you forget to detach the result of this
@@ -86,8 +88,91 @@ def newton_step_2d(loss, x, trust_radius=None):
             x = x.detach()          # block gradients through previous steps
             x.requires_grad = True  # ensure loss is differentiable wrt x
             loss = my_loss_function(x)
-            x = newton_step_2d(loss, x, trust_radius=1.0)
+            x = newton_step(loss, x, trust_radius=1.0)
         # the final x is still differentiable
+
+    [1] Yuan, Ya-xiang. Iciam. Vol. 99. 2000.
+        "A review of trust region algorithms for optimization."
+        ftp://ftp.cc.ac.cn/pub/yyx/papers/p995.pdf
+    [2] Christianson, Bruce. Optimization Methods and Software 3.4 (1994)
+        "Reverse accumulation and attractive fixed points."
+        http://uhra.herts.ac.uk/bitstream/handle/2299/4338/903839.pdf
+
+    :param torch.Tensor loss: A scalar function of ``x`` to be minimized.
+    :param torch.Tensor x: A dependent variable of shape ``(N, D)``
+        where ``N`` is the batch size and ``D`` is a small number.
+    :param float trust_radius: An optional trust region trust_radius. The
+        updated value ``mode`` of this function will be within
+        ``trust_radius`` of the input ``x``.
+    :return: A pair ``(mode, cov)`` where ``mode`` is an updated tensor
+        of the same shape as the original value ``x``, and ``cov`` is an
+        esitmate of the covariance DxD matrix with
+        ``cov.shape == x.shape[:-1] + (D,D)``.
+    :rtype: tuple
+    """
+    if x.dim() < 1:
+        raise ValueError('Expected x to have at least one dimension, actual shape {}'.format(x.shape))
+    dim = x.shape[-1]
+    if dim == 1:
+        return newton_step_1d(loss, x, trust_radius)
+    elif dim == 2:
+        return newton_step_2d(loss, x, trust_radius)
+    elif dim == 3:
+        return newton_step_3d(loss, x, trust_radius)
+    else:
+        raise NotImplementedError('newton_step_nd is not implemented')
+
+
+def newton_step_1d(loss, x, trust_radius=None):
+    """
+    Performs a Newton update step to minimize loss on a batch of 1-dimensional
+    variables, optionally regularizing to constrain to a trust region.
+
+    See :func:`newton_step` for details.
+
+    :param torch.Tensor loss: A scalar function of ``x`` to be minimized.
+    :param torch.Tensor x: A dependent variable with rightmost size of 1.
+    :param float trust_radius: An optional trust region trust_radius. The
+        updated value ``mode`` of this function will be within
+        ``trust_radius`` of the input ``x``.
+    :return: A pair ``(mode, cov)`` where ``mode`` is an updated tensor
+        of the same shape as the original value ``x``, and ``cov`` is an
+        esitmate of the covariance 1x1 matrix with
+        ``cov.shape == x.shape[:-1] + (1,1)``.
+    :rtype: tuple
+    """
+    if loss.shape != ():
+        raise ValueError('Expected loss to be a scalar, actual shape {}'.format(loss.shape))
+    if x.dim() < 1 or x.shape[-1] != 1:
+        raise ValueError('Expected x to have rightmost size 1, actual shape {}'.format(x.shape))
+
+    # compute derivatives
+    g = grad(loss, [x], create_graph=True)[0]
+    H = grad(g.sum(), [x], create_graph=True)[0]
+    warn_if_nan(g, 'g')
+    warn_if_nan(H, 'H')
+
+    if trust_radius is not None:
+        # regularize to keep update within ball of given trust_radius
+        regularizer = (torch.abs(g) / trust_radius - H).clamp_(min=1e-8)
+        warn_if_nan(regularizer, 'regularizer')
+        H = H + regularizer
+
+    # compute newton update
+    Hinv = H.reciprocal()
+
+    # apply update
+    x_new = x.detach() - g * Hinv
+    assert x_new.shape == x.shape
+    return x_new, Hinv.unsqueeze(-1)
+
+
+def newton_step_2d(loss, x, trust_radius=None):
+    """
+    Performs a Newton update step to minimize loss on a batch of 2-dimensional
+    variables, optionally regularizing to constrain to a trust region.
+
+    See :func:`newton_step` for details.
 
     :param torch.Tensor loss: A scalar function of ``x`` to be minimized.
     :param torch.Tensor x: A dependent variable with rightmost size of 2.
@@ -144,7 +229,7 @@ def newton_step_3d(loss, x, trust_radius=None):
     Performs a Newton update step to minimize loss on a batch of 3-dimensional
     variables, optionally regularizing to constrain to a trust region.
 
-    See :meth:`pyro.ops.newton.newton_step2d`.
+    See :func:`newton_step` for details.
 
     :param torch.Tensor loss: A scalar function of ``x`` to be minimized.
     :param torch.Tensor x: A dependent variable with rightmost size of 2.
@@ -165,7 +250,7 @@ def newton_step_3d(loss, x, trust_radius=None):
     # compute derivatives
     g = grad(loss, [x], create_graph=True)[0]
     H = torch.stack([grad(g[..., 0].sum(), [x], create_graph=True)[0],
-                     grad(g[..., 1].sum(), [x], create_graph=True)[0]],
+                     grad(g[..., 1].sum(), [x], create_graph=True)[0],
                      grad(g[..., 2].sum(), [x], create_graph=True)[0]], -1)
     assert g.shape[-1:] == (3,)
     assert H.shape[-2:] == (3, 3)
