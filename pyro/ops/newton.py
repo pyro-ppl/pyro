@@ -21,27 +21,26 @@ def _determinant_3d(H):
 
 def _eig_3d(H):
     p1 = H[..., 0, 1].pow(2) + H[..., 0, 2].pow(2) + H[..., 1, 2].pow(2)
-    if p1 == 0:
-        # A is diagonal.
-        eig1 = H[..., 0, 0]
-        eig2 = H[..., 1, 1]
-        eig3 = H[..., 2, 2]
+    q = (H[..., 0, 0] + H[..., 1, 1] + H[..., 2, 2]) / 3
+    p2 = (H[..., 0, 0] - q).pow(2) + (H[..., 1, 1] - q).pow(2) + (H[..., 2, 2] - q).pow(2) + 2 * p1
+    p = torch.sqrt(p2 / 6)
+    print("H", H.shape)
+    print("P",q.shape)
+    if q.shape == ():
+        B = (1 / p) * (H - q * torch.eye(3))
     else:
-        q = (H[..., 0, 0] + H[..., 1, 1] + H[..., 2, 2]) / 3
-        p2 = (H[..., 0, 0] - q).pow(2) + (H[..., 1, 1] - q).pow(2) + (H[..., 2, 2] - q).pow(2) + 2 * p1
-        p = torch.sqrt(p2 / 6)
-        B = (1 / p) * (H - q * torch.eye(3).expand_as(H))
-        r = _determinant_3d(B) / 2
-        phi = H.new_ones(H.size())
-        phi[r <= -1] = np.pi / 3
-        phi[r >= 1] = 0.
-        phi[phi == 1] = torch.acos(r[-1 < r < 1]) / 3
+        B = (1 / p).unsqueeze(-1).unsqueeze(-1) * (H - q.unsqueeze(-1).unsqueeze(-1) * torch.eye(3))
+    r = _determinant_3d(B) / 2
+    phi = H.new_ones(H.size())
+    phi[r <= -1] = np.pi / 3
+    phi[r >= 1] = 0.
+    phi[phi == 1] = torch.acos(r[-1 < r < 1]) / 3
 
-        # eig3 <= eig2 <= eig1
-        eig1 = q + 2 * p * torch.cos(phi)
-        eig3 = q + 2 * p * torch.cos(phi + (2 * np.pi/3))
-        eig2 = 3 * q - eig1 - eig3
-    return eig1, eig2, eig3
+    # eig3 <= eig2 <= eig1
+    eig1 = q + 2 * p * torch.cos(phi)
+    eig2 = q + 2 * p * torch.cos(phi + (2 * np.pi/3))
+    eig3 = 3 * q - eig1 - eig2
+    return eig3, eig2, eig1
 
 
 def _inv_3d(H):
@@ -263,15 +262,16 @@ def newton_step_3d(loss, x, trust_radius=None):
         min_eig, _, _ = _eig_3d(H)
         regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
         warn_if_nan(regularizer, 'regularizer')
-        H = H + regularizer.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1) * H.new(torch.eye(3))
+#         H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new(torch.eye(3))
+        H = H + regularizer * H.new(torch.eye(3))
 
     # compute newton update
     detH = _determinant_3d(H)
     Hinv = _inv_3d(H)
-    Hinv = Hinv / detH.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+    Hinv = Hinv / detH.unsqueeze(-1).unsqueeze(-1)
     warn_if_nan(Hinv, 'Hinv')
 
     # apply update
-    x_new = x.detach() - (Hinv * g.unsqueeze(-3)).sum(-1)
-    assert x_new.shape == x.shape
+    x_new = x.detach() - (Hinv * g.unsqueeze(-2)).sum(-1)
+    assert x_new.shape == x.shape, "{} {}".format(x_new.shape, x.shape)
     return x_new, Hinv
