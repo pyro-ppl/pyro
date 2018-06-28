@@ -12,12 +12,9 @@ def _determinant_3d(H):
     """
     Returns the determinants of a batched 3-D matrix
     """
-    detH = H[..., 0, 0] * H[..., 1, 1] * H[..., 2, 2] - \
-        H[..., 2, 0] * H[..., 1, 1] * H[..., 0, 2] + \
-        H[..., 0, 1] * H[..., 1, 2] * H[..., 2, 0] - \
-        H[..., 0, 1] * H[..., 1, 0] * H[..., 2, 2] + \
-        H[..., 1, 0] * H[..., 2, 1] * H[..., 0, 2] - \
-        H[..., 0, 0] * H[..., 2, 1] * H[..., 1, 2]
+    detH = (H[..., 0, 0] * (H[..., 1, 1] * H[..., 2, 2] - H[..., 2, 1] * H[..., 1, 2]) +
+            H[..., 0, 1] * (H[..., 1, 2] * H[..., 2, 0] - H[..., 1, 0] * H[..., 2, 2]) +
+            H[..., 0, 2] * (H[..., 1, 0] * H[..., 2, 1] - H[..., 2, 0] * H[..., 1, 1]))
     return detH
 
 
@@ -42,7 +39,7 @@ def _eig_3d(H):
     return eig2, eig3, eig1
 
 
-def _inv_3d(H):
+def _inv_symmetric_3d(H):
     """
     Calculates the inverse of a batched 3-D matrix
     """
@@ -269,7 +266,7 @@ def newton_step_3d(loss, x, trust_radius=None):
         H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new(torch.eye(3))
 
     # compute newton update
-    Hinv = _inv_3d(H)
+    Hinv = _inv_symmetric_3d(H)
     warn_if_nan(Hinv, 'Hinv')
 
     # apply update
