@@ -35,10 +35,9 @@ def _eig_3d(H):
     else:
         B = (1 / p).unsqueeze(-1).unsqueeze(-1) * (H - q.unsqueeze(-1).unsqueeze(-1) * torch.eye(3))
     r = _determinant_3d(B) / 2
-    phi = H.new_ones(H.size())
-    phi[r <= -1] = np.pi / 3
-    phi[r >= 1] = 0.
-    phi[phi == 1] = torch.acos(r[(r < 1) & (r > -1)]).unsqueeze(-1).expand(-1, 9).reshape(-1) / 3
+    phi = r.acos().unsqueeze(-1).unsqueeze(-1).expand(r.shape + (3, 3)) / 3
+    phi[r < -1 + 1e-6] = np.pi / 3
+    phi[r > 1 - 1e-6] = 0.
 
     eig1 = q + 2 * p * torch.cos(phi[..., 0, 0])
     eig2 = q + 2 * p * torch.cos(phi[..., 0, 0] + (2 * np.pi/3))
@@ -156,18 +155,14 @@ def newton_step_1d(loss, x, trust_radius=None):
     H = grad(g.sum(), [x], create_graph=True)[0]
     warn_if_nan(g, 'g')
     warn_if_nan(H, 'H')
-
+    Hinv = H.clamp(min=1e-8).reciprocal()
+    dx = -g * Hinv
+    dx[~(dx == dx)] = 0
     if trust_radius is not None:
-        # regularize to keep update within ball of given trust_radius
-        regularizer = (torch.abs(g) / trust_radius - H).clamp_(min=1e-8)
-        warn_if_nan(regularizer, 'regularizer')
-        H = H + regularizer
-
-    # compute newton update
-    Hinv = H.reciprocal()
+        dx.clamp_(min=-trust_radius, max=trust_radius)
 
     # apply update
-    x_new = x.detach() - g * Hinv
+    x_new = x.detach() + dx
     assert x_new.shape == x.shape
     return x_new, Hinv.unsqueeze(-1)
 

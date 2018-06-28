@@ -22,7 +22,7 @@ def random_inside_unit_circle(shape, requires_grad=False):
 
 @pytest.mark.parametrize('batch_shape', [(), (1,), (2,), (10,), (3, 2), (2, 3)])
 @pytest.mark.parametrize('trust_radius', [None, 2.0, 100.0])
-@pytest.mark.parametrize('dims', [2, 3])
+@pytest.mark.parametrize('dims', [1, 2, 3])
 def test_newton_step(batch_shape, trust_radius, dims):
     batch_shape = torch.Size(batch_shape)
     mode = 0.5 * random_inside_unit_circle(batch_shape + (dims,), requires_grad=True)
@@ -70,12 +70,12 @@ def test_newton_step(batch_shape, trust_radius, dims):
 
 
 @pytest.mark.parametrize('trust_radius', [None, 0.1, 1.0, 10.0])
-@pytest.mark.parametrize('dims', [2, 3])
+@pytest.mark.parametrize('dims', [1, 2, 3])
 def test_newton_step_trust(trust_radius, dims):
     batch_size = 100
     batch_shape = torch.Size((batch_size,))
-    mode = random_inside_unit_circle(batch_shape + (dims,), requires_grad=True) - 1
-    x = random_inside_unit_circle(batch_shape + (dims,), requires_grad=True) + 1
+    mode = random_inside_unit_circle(batch_shape + (dims,), requires_grad=True) + 1
+    x = random_inside_unit_circle(batch_shape + (dims,), requires_grad=True) - 1
 
     # create a quadratic loss function
     noise = torch.randn(batch_size, dims, dims)
@@ -94,11 +94,11 @@ def test_newton_step_trust(trust_radius, dims):
     if trust_radius is None:
         assert ((x - x_updated).pow(2).sum(-1) > 1.0).any(), 'test is too weak'
     else:
-        assert ((x - x_updated).pow(2).sum(-1) <= trust_radius**2).all(), 'trust region violated'
+        assert ((x - x_updated).pow(2).sum(-1) <= 1e-8 + trust_radius**2).all(), 'trust region violated'
 
 
 @pytest.mark.parametrize('trust_radius', [None, 0.1, 1.0, 10.0])
-@pytest.mark.parametrize('dims', [2, 3])
+@pytest.mark.parametrize('dims', [1, 2, 3])
 def test_newton_step_converges(trust_radius, dims):
     batch_size = 100
     batch_shape = torch.Size((batch_size,))
