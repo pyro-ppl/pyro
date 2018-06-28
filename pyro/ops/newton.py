@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
+import math
 
 import torch
 from torch.autograd import grad
@@ -12,13 +12,12 @@ def _determinant_3d(H):
     """
     Returns the determinants of a batched 3-D matrix
     """
-    diag_terms = H[..., 0, 0] * H[..., 1, 1] * H[..., 2, 2]
-    diag_terms = diag_terms + H[..., 0, 1] * H[..., 1, 2] * H[..., 2, 0]
-    diag_terms = diag_terms + H[..., 1, 0] * H[..., 2, 1] * H[..., 0, 2]
-    antidiag_terms = H[..., 2, 0] * H[..., 1, 1] * H[..., 0, 2]
-    antidiag_terms = antidiag_terms + H[..., 0, 1] * H[..., 1, 0] * H[..., 2, 2]
-    antidiag_terms = antidiag_terms + H[..., 0, 0] * H[..., 2, 1] * H[..., 1, 2]
-    detH = diag_terms - antidiag_terms
+    detH = H[..., 0, 0] * H[..., 1, 1] * H[..., 2, 2] - \
+        H[..., 2, 0] * H[..., 1, 1] * H[..., 0, 2] + \
+        H[..., 0, 1] * H[..., 1, 2] * H[..., 2, 0] - \
+        H[..., 0, 1] * H[..., 1, 0] * H[..., 2, 2] + \
+        H[..., 1, 0] * H[..., 2, 1] * H[..., 0, 2] - \
+        H[..., 0, 0] * H[..., 2, 1] * H[..., 1, 2]
     return detH
 
 
@@ -30,17 +29,14 @@ def _eig_3d(H):
     q = (H[..., 0, 0] + H[..., 1, 1] + H[..., 2, 2]) / 3
     p2 = (H[..., 0, 0] - q).pow(2) + (H[..., 1, 1] - q).pow(2) + (H[..., 2, 2] - q).pow(2) + 2 * p1
     p = torch.sqrt(p2 / 6)
-    if q.shape == ():
-        B = (1 / p) * (H - q * torch.eye(3))
-    else:
-        B = (1 / p).unsqueeze(-1).unsqueeze(-1) * (H - q.unsqueeze(-1).unsqueeze(-1) * torch.eye(3))
+    B = (1 / p).unsqueeze(-1).unsqueeze(-1) * (H - q.unsqueeze(-1).unsqueeze(-1) * torch.eye(3))
     r = _determinant_3d(B) / 2
-    phi = r.acos().unsqueeze(-1).unsqueeze(-1).expand(r.shape + (3, 3)) / 3
-    phi[r < -1 + 1e-6] = np.pi / 3
+    phi = (r.acos() / 3).unsqueeze(-1).unsqueeze(-1).expand(r.shape + (3, 3))
+    phi[r < -1 + 1e-6] = math.pi / 3
     phi[r > 1 - 1e-6] = 0.
 
     eig1 = q + 2 * p * torch.cos(phi[..., 0, 0])
-    eig2 = q + 2 * p * torch.cos(phi[..., 0, 0] + (2 * np.pi/3))
+    eig2 = q + 2 * p * torch.cos(phi[..., 0, 0] + (2 * math.pi/3))
     eig3 = 3 * q - eig1 - eig2
     # eig2 <= eig3 <= eig1
     return eig2, eig3, eig1
@@ -50,16 +46,23 @@ def _inv_3d(H):
     """
     Calculates the inverse of a batched 3-D matrix
     """
+    detH = _determinant_3d(H)
     Hinv = H.new(H.shape)
     Hinv[..., 0, 0] = H[..., 1, 1] * H[..., 2, 2] - H[..., 1, 2] * H[..., 2, 1]
-    Hinv[..., 0, 1] = H[..., 0, 2] * H[..., 2, 1] - H[..., 0, 1] * H[..., 2, 2]
-    Hinv[..., 0, 2] = H[..., 0, 1] * H[..., 1, 2] - H[..., 0, 2] * H[..., 1, 1]
-    Hinv[..., 1, 0] = H[..., 1, 2] * H[..., 2, 0] - H[..., 1, 0] * H[..., 2, 2]
     Hinv[..., 1, 1] = H[..., 0, 0] * H[..., 2, 2] - H[..., 0, 2] * H[..., 2, 0]
-    Hinv[..., 1, 2] = H[..., 0, 2] * H[..., 1, 0] - H[..., 0, 0] * H[..., 1, 2]
-    Hinv[..., 2, 0] = H[..., 1, 0] * H[..., 2, 1] - H[..., 1, 1] * H[..., 2, 0]
-    Hinv[..., 2, 1] = H[..., 0, 1] * H[..., 2, 0] - H[..., 0, 0] * H[..., 2, 1]
     Hinv[..., 2, 2] = H[..., 0, 0] * H[..., 1, 1] - H[..., 0, 1] * H[..., 1, 0]
+
+    Hinv01 = H[..., 0, 2] * H[..., 2, 1] - H[..., 0, 1] * H[..., 2, 2]
+    Hinv02 = H[..., 0, 1] * H[..., 1, 2] - H[..., 0, 2] * H[..., 1, 1]
+    Hinv12 = H[..., 0, 2] * H[..., 1, 0] - H[..., 0, 0] * H[..., 1, 2]
+
+    Hinv[..., 0, 1] = Hinv01
+    Hinv[..., 1, 0] = Hinv01
+    Hinv[..., 0, 2] = Hinv02
+    Hinv[..., 2, 0] = Hinv02
+    Hinv[..., 1, 2] = Hinv12
+    Hinv[..., 2, 1] = Hinv12
+    Hinv = Hinv / detH.unsqueeze(-1).unsqueeze(-1)
     return Hinv
 
 
@@ -259,20 +262,14 @@ def newton_step_3d(loss, x, trust_radius=None):
 
     if trust_radius is not None:
         # regularize to keep update within ball of given trust_radius
-        detH = _determinant_3d(H)
         # calculate eigenvalues of symmetric matrix
         min_eig, _, _ = _eig_3d(H)
         regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
         warn_if_nan(regularizer, 'regularizer')
-        if regularizer.shape == ():
-            H = H + regularizer * H.new(torch.eye(3))
-        else:
-            H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new(torch.eye(3))
+        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new(torch.eye(3))
 
     # compute newton update
-    detH = _determinant_3d(H)
     Hinv = _inv_3d(H)
-    Hinv = Hinv / detH.unsqueeze(-1).unsqueeze(-1)
     warn_if_nan(Hinv, 'Hinv')
 
     # apply update
