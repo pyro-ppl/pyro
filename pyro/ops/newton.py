@@ -8,6 +8,29 @@ from torch.autograd import grad
 from pyro.util import warn_if_nan
 
 
+def _map_across_batch(H, f):
+    """
+    Maps a function across a batched matrix
+
+    :param torch.Tensor H: (b, n, n) or (n, n) matrix to apply ``f`` to.
+    :param callable f: function to apply
+    """
+    out = H.new(H.shape)
+    if H.dim() == 3:
+        for i in range(H.shape[0]):
+            if f.__name__ == 'eig':
+                n = H.shape[-1]
+                out[i] = f(H[i])[0][:, 0].expand(n, n)
+            else:
+                out[i] = f(H[i])
+        return out
+    elif H.dim() == 2:
+        if f.__name__ == 'eig':
+            return out(H)[0][:, 0]
+        return f(H)
+    raise ValueError('H should have shape (n, n) or (batch, n, n) but was {}'.format(H.shape))
+
+
 def _determinant_3d(H):
     """
     Returns the determinants of a batched 3-D matrix
@@ -124,7 +147,7 @@ def newton_step(loss, x, trust_radius=None):
     elif dim == 3:
         return newton_step_3d(loss, x, trust_radius)
     else:
-        raise NotImplementedError('newton_step_nd is not implemented')
+        return newton_step_nd(loss, x, trust_radius)
 
 
 def newton_step_1d(loss, x, trust_radius=None):
@@ -273,6 +296,66 @@ def newton_step_3d(loss, x, trust_radius=None):
     detH = _determinant_3d(H)
     Hinv = _inv_3d(H)
     Hinv = Hinv / detH.unsqueeze(-1).unsqueeze(-1)
+    warn_if_nan(Hinv, 'Hinv')
+
+    # apply update
+    x_new = x.detach() - (Hinv * g.unsqueeze(-2)).sum(-1)
+    assert x_new.shape == x.shape, "{} {}".format(x_new.shape, x.shape)
+    return x_new, Hinv
+
+
+def newton_step_nd(loss, x, trust_radius=None):
+    """
+    Performs a Newton update step to minimize loss on a batch of n-dimensional
+    variables, optionally regularizing to constrain to a trust region.
+    Note that currently, only batches of dim 1 is supported ``(batch, n, n)``.
+
+    See :func:`newton_step` for details.
+
+    :param torch.Tensor loss: A scalar function of ``x`` to be minimized.
+    :param torch.Tensor x: A dependent variable with rightmost size of 2.
+    :param float trust_radius: An optional trust region trust_radius. The
+        updated value ``mode`` of this function will be within
+        ``trust_radius`` of the input ``x``.
+    :return: A pair ``(mode, cov)`` where ``mode`` is an updated tensor
+        of the same shape as the original value ``x``, and ``cov`` is an
+        esitmate of the covariance nxn matrix with
+        ``cov.shape == x.shape[:-1] + (n,n)``.
+    :rtype: tuple
+    """
+    if loss.shape != ():
+        raise ValueError('Expected loss to be a scalar, actual shape {}'.format(loss.shape))
+    if x.dim() > 3 or x.shape[-1] < 4:
+        raise ValueError('Expected x to have shape (batch, n, n) but was {}'.format(x.shape))
+
+    n = x.shape[-1]
+    # compute derivatives
+    g = grad(loss, [x], create_graph=True)[0]
+    H_list = []
+    for i in range(n):
+        H_list.append(grad(g[..., i].sum(), [x], create_graph=True)[0])
+    H = torch.stack(H_list, -1)
+    assert g.shape[-1:] == (n,)
+    assert H.shape[-2:] == (n, n)
+    warn_if_nan(g, 'g')
+    warn_if_nan(H, 'H')
+
+    if trust_radius is not None:
+        # regularize to keep update within ball of given trust_radius
+        detH = _map_across_batch(H, torch.det)
+        # calculate eigenvalues of symmetric matrix
+        min_eig = _map_across_batch(H, torch.eig).min()
+        regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
+        warn_if_nan(regularizer, 'regularizer')
+        if regularizer.shape == ():
+            H = H + regularizer * H.new(torch.eye(n))
+        else:
+            H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new(torch.eye(n))
+
+    # compute newton update
+    detH = _map_across_batch(H, torch.det)
+    Hinv = _map_across_batch(H, torch.inverse)
+    Hinv = Hinv / detH
     warn_if_nan(Hinv, 'Hinv')
 
     # apply update
