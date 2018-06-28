@@ -22,8 +22,10 @@ def random_inside_unit_circle(shape, requires_grad=False):
 
 @pytest.mark.parametrize('batch_shape', [(), (1,), (2,), (10,), (3, 2), (2, 3)])
 @pytest.mark.parametrize('trust_radius', [None, 2.0, 100.0])
-@pytest.mark.parametrize('dims', [1, 2, 3])
+@pytest.mark.parametrize('dims', [1, 2, 3, 5, 10])
 def test_newton_step(batch_shape, trust_radius, dims):
+    if dims > 3 and len(batch_shape) > 1:
+        return
     batch_shape = torch.Size(batch_shape)
     mode = 0.5 * random_inside_unit_circle(batch_shape + (dims,), requires_grad=True)
     x = 0.5 * random_inside_unit_circle(batch_shape + (dims,), requires_grad=True)
@@ -70,7 +72,7 @@ def test_newton_step(batch_shape, trust_radius, dims):
 
 
 @pytest.mark.parametrize('trust_radius', [None, 0.1, 1.0, 10.0])
-@pytest.mark.parametrize('dims', [1, 2, 3])
+@pytest.mark.parametrize('dims', [1, 2, 3, 10])
 def test_newton_step_trust(trust_radius, dims):
     batch_size = 100
     batch_shape = torch.Size((batch_size,))
@@ -98,7 +100,7 @@ def test_newton_step_trust(trust_radius, dims):
 
 
 @pytest.mark.parametrize('trust_radius', [None, 0.1, 1.0, 10.0])
-@pytest.mark.parametrize('dims', [1, 2, 3])
+@pytest.mark.parametrize('dims', [1, 2, 3, 4, 5])
 def test_newton_step_converges(trust_radius, dims):
     batch_size = 100
     batch_shape = torch.Size((batch_size,))
