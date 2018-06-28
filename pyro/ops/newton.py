@@ -9,6 +9,9 @@ from pyro.util import warn_if_nan
 
 
 def _determinant_3d(H):
+    """
+    Returns the determinants of a batched 3-D matrix
+    """
     diag_terms = H[..., 0, 0] * H[..., 1, 1] * H[..., 2, 2]
     diag_terms = diag_terms + H[..., 0, 1] * H[..., 1, 2] * H[..., 2, 0]
     diag_terms = diag_terms + H[..., 1, 0] * H[..., 2, 1] * H[..., 0, 2]
@@ -20,7 +23,9 @@ def _determinant_3d(H):
 
 
 def _eig_3d(H):
-    # Assumes H is symmetric
+    """
+    Returns the eigenvalues of a symmetric batched 3-D matrix
+    """
     p1 = H[..., 0, 1].pow(2) + H[..., 0, 2].pow(2) + H[..., 1, 2].pow(2)
     q = (H[..., 0, 0] + H[..., 1, 1] + H[..., 2, 2]) / 3
     p2 = (H[..., 0, 0] - q).pow(2) + (H[..., 1, 1] - q).pow(2) + (H[..., 2, 2] - q).pow(2) + 2 * p1
@@ -31,7 +36,6 @@ def _eig_3d(H):
         B = (1 / p).unsqueeze(-1).unsqueeze(-1) * (H - q.unsqueeze(-1).unsqueeze(-1) * torch.eye(3))
     r = _determinant_3d(B) / 2
     phi = H.new_ones(H.size())
-    # FIXME: disgusting floating point errors.
     phi[r <= -1] = np.pi / 3
     phi[r >= 1] = 0.
     phi[phi == 1] = torch.acos(r[(r < 1) & (r > -1)]).unsqueeze(-1).expand(-1, 9).reshape(-1) / 3
@@ -39,11 +43,14 @@ def _eig_3d(H):
     eig1 = q + 2 * p * torch.cos(phi[..., 0, 0])
     eig2 = q + 2 * p * torch.cos(phi[..., 0, 0] + (2 * np.pi/3))
     eig3 = 3 * q - eig1 - eig2
-    # eig3 <= eig2 <= eig1
+    # eig2 <= eig3 <= eig1
     return eig2, eig3, eig1
 
 
 def _inv_3d(H):
+    """
+    Calculates the inverse of a batched 3-D matrix
+    """
     Hinv = H.new(H.shape)
     Hinv[..., 0, 0] = H[..., 1, 1] * H[..., 2, 2] - H[..., 1, 2] * H[..., 2, 1]
     Hinv[..., 0, 1] = H[..., 0, 2] * H[..., 2, 1] - H[..., 0, 1] * H[..., 2, 2]
