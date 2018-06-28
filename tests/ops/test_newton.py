@@ -20,13 +20,13 @@ def random_inside_unit_circle(shape, requires_grad=False):
     return x
 
 
-@pytest.mark.parametrize('batch_shape', [(), (1,), (2,), (3,), (3, 2), (2, 3)])
+@pytest.mark.parametrize('batch_shape', [(), (1,), (2,), (10,), (3, 2), (2, 3)])
 @pytest.mark.parametrize('trust_radius', [None, 2.0, 100.0])
 @pytest.mark.parametrize('dims', [2, 3])
 def test_newton_step(batch_shape, trust_radius, dims):
     batch_shape = torch.Size(batch_shape)
-    mode = random_inside_unit_circle(batch_shape + (dims,), requires_grad=True)
-    x = random_inside_unit_circle(batch_shape + (dims,), requires_grad=True)
+    mode = 0.5 * random_inside_unit_circle(batch_shape + (dims,), requires_grad=True)
+    x = 0.5 * random_inside_unit_circle(batch_shape + (dims,), requires_grad=True)
     if trust_radius is not None:
         assert trust_radius >= 2, '(x, mode) may be farther apart than trust_radius'
 

@@ -20,27 +20,27 @@ def _determinant_3d(H):
 
 
 def _eig_3d(H):
+    # Assumes H is symmetric
     p1 = H[..., 0, 1].pow(2) + H[..., 0, 2].pow(2) + H[..., 1, 2].pow(2)
     q = (H[..., 0, 0] + H[..., 1, 1] + H[..., 2, 2]) / 3
     p2 = (H[..., 0, 0] - q).pow(2) + (H[..., 1, 1] - q).pow(2) + (H[..., 2, 2] - q).pow(2) + 2 * p1
     p = torch.sqrt(p2 / 6)
-    print("H", H.shape)
-    print("P",q.shape)
     if q.shape == ():
         B = (1 / p) * (H - q * torch.eye(3))
     else:
         B = (1 / p).unsqueeze(-1).unsqueeze(-1) * (H - q.unsqueeze(-1).unsqueeze(-1) * torch.eye(3))
     r = _determinant_3d(B) / 2
     phi = H.new_ones(H.size())
+    # FIXME: disgusting floating point errors.
     phi[r <= -1] = np.pi / 3
     phi[r >= 1] = 0.
-    phi[phi == 1] = torch.acos(r[-1 < r < 1]) / 3
+    phi[phi == 1] = torch.acos(r[(r < 1) & (r > -1)]).unsqueeze(-1).expand(-1, 9).reshape(-1) / 3
 
-    # eig3 <= eig2 <= eig1
-    eig1 = q + 2 * p * torch.cos(phi)
-    eig2 = q + 2 * p * torch.cos(phi + (2 * np.pi/3))
+    eig1 = q + 2 * p * torch.cos(phi[..., 0, 0])
+    eig2 = q + 2 * p * torch.cos(phi[..., 0, 0] + (2 * np.pi/3))
     eig3 = 3 * q - eig1 - eig2
-    return eig3, eig2, eig1
+    # eig3 <= eig2 <= eig1
+    return eig2, eig3, eig1
 
 
 def _inv_3d(H):
@@ -262,8 +262,10 @@ def newton_step_3d(loss, x, trust_radius=None):
         min_eig, _, _ = _eig_3d(H)
         regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
         warn_if_nan(regularizer, 'regularizer')
-#         H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new(torch.eye(3))
-        H = H + regularizer * H.new(torch.eye(3))
+        if regularizer.shape == ():
+            H = H + regularizer * H.new(torch.eye(3))
+        else:
+            H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new(torch.eye(3))
 
     # compute newton update
     detH = _determinant_3d(H)
