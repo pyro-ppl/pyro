@@ -26,7 +26,7 @@ def _map_across_batch(H, f):
         return out
     elif H.dim() == 2:
         if f.__name__ == 'eig':
-            return out(H)[0][:, 0]
+            return f(H)[0][:, 0]
         return f(H)
     raise ValueError('H should have shape (n, n) or (batch, n, n) but was {}'.format(H.shape))
 
