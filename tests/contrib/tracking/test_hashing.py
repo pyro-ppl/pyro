@@ -30,7 +30,7 @@ def test_lsh_add(scale):
 
 @pytest.mark.parametrize('scale', [0.1, 1, 10, 100])
 def test_lsh_hash_nearby(scale):
-    k = 10
+    k = 5
     lsh = LSH(scale)
     a = -2 * scale + torch.rand(k) * scale * 0.49
     b = -1 * scale + torch.rand(k) * scale * 0.49
