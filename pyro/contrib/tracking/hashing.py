@@ -1,11 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-import heapq
 import itertools
 from collections import defaultdict
 from numbers import Number
-
-import torch
 
 
 class LSH(object):
@@ -14,7 +11,7 @@ class LSH(object):
     """
     def __init__(self, scale):
         assert scale > 0 if isinstance(scale, Number) else (scale > 0).all(), \
-            "scale must be greater than 0, given:{}".format(scale)
+            "scale must be greater than 0, given: {}".format(scale)
         self._scale = scale
         self._hash_to_key = defaultdict(set)
         self._key_to_hash = {}
@@ -25,6 +22,8 @@ class LSH(object):
 
     def add(self, key, point):
         _hash = self._hash(point)
+        if key in self._key_to_hash.keys():
+            self.remove(key)
         self._key_to_hash[key] = _hash
         self._hash_to_key[_hash].add(key)
 
@@ -46,6 +45,8 @@ class ApproxSet(object):
     Queries low-dimensional euclidean space for approximate occupancy.
     """
     def __init__(self, scale):
+        assert scale > 0 if isinstance(scale, Number) else (scale > 0).all(), \
+            "scale must be greater than 0, given: {}".format(scale)
         self._scale = scale
         self._bins = set()
 
