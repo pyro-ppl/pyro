@@ -33,7 +33,7 @@ class LSH(object):
         set(['a', 'c'])
         >>> lsh.remove('b')
         >>> lsh.nearby('a')
-        set()
+        set([])
 
 
     :param float radius: Scaling parameter used in hash function. Determines the size of the neighbourhood.
