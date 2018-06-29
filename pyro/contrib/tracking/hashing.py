@@ -30,7 +30,7 @@ class LSH(object):
         >>> lsh.nearby('a') # even though c is within 2radius of a
         set(['b'])
         >>> lsh.nearby('b')
-        set(['a','c'])
+        set(['a', 'c'])
         >>> lsh.remove('b')
         >>> lsh.nearby('a')
         set()
