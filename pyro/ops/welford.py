@@ -15,12 +15,6 @@ class WelfordCovariance(object):
         self.diagonal = diagonal
         self.reset()
 
-    def _unroll(self, sample):
-        unrolled = []
-        for rolled in sample:
-            unrolled.extend(rolled.reshape(-1).data.tolist())
-        return unrolled
-
     def reset(self):
         self._mean = 0.
         self._m2 = 0.
