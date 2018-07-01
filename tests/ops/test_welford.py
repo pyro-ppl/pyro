@@ -23,7 +23,7 @@ def test_welford_diagonal(n_samples, dim_size):
         w.update(sample)
 
     sample_variance = torch.stack(samples).var(dim=0, unbiased=True)
-    estimates = w.get_estimates(regularize=False)
+    estimates = w.get_covariance(regularize=False)
     assert_equal(estimates, sample_variance)
 
 
@@ -44,5 +44,5 @@ def test_welford_dense(n_samples, dim_size):
         w.update(sample)
 
     sample_cov = np.cov(torch.stack(samples).data.numpy(), bias=False, rowvar=False)
-    estimates = w.get_estimates(regularize=False).data.numpy()
+    estimates = w.get_covariance(regularize=False).data.numpy()
     assert_equal(estimates, sample_cov)

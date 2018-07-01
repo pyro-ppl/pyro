@@ -22,25 +22,25 @@ class WelfordCovariance(object):
         return unrolled
 
     def reset(self):
-        self.means = 0.
-        self.variances = 0.
+        self._mean = 0.
+        self._m2 = 0.
         self.n_samples = 0
 
     def update(self, sample):
         self.n_samples += 1
-        delta_pre = sample - self.means
-        self.means = self.means + delta_pre / self.n_samples
-        delta_post = sample - self.means
+        delta_pre = sample - self._mean
+        self._mean = self._mean + delta_pre / self.n_samples
+        delta_post = sample - self._mean
 
         if self.diagonal:
-            self.variances += delta_pre * delta_post
+            self._m2 += delta_pre * delta_post
         else:
-            self.variances += delta_pre * delta_post.reshape(-1, 1)
+            self._m2 += delta_pre * delta_post.reshape(-1, 1)
 
-    def get_estimates(self, regularize=True):
+    def get_covariance(self, regularize=True):
         if self.n_samples < 2:
             raise RuntimeError('Insufficient samples to estimate covariance')
-        cov = self.variances / (self.n_samples - 1)
+        cov = self._m2 / (self.n_samples - 1)
         if regularize:
             # Regularization from stan
             scaled_cov = (self.n_samples / (self.n_samples + 5.)) * cov
