@@ -8,11 +8,11 @@ def cleannb(nbfile):
     with io.open(nbfile, "r", encoding="utf8") as f:
         nb = nbformat.read(f, as_version=nbformat.NO_CONVERT)
 
-    nb["metadata"]["kernelspec"]["display_name"] = "Python 2"
-    nb["metadata"]["kernelspec"]["name"] = "python2"
-    nb["metadata"]["language_info"]["codemirror_mode"]["version"] = 2
-    nb["metadata"]["language_info"]["pygments_lexer"] = "ipython2"
-    nb["metadata"]["language_info"]["version"] = "2.7.14"
+    nb["metadata"]["kernelspec"]["display_name"] = "Python 3"
+    nb["metadata"]["kernelspec"]["name"] = "python3"
+    nb["metadata"]["language_info"]["codemirror_mode"]["version"] = 3
+    nb["metadata"]["language_info"]["pygments_lexer"] = "ipython3"
+    nb["metadata"]["language_info"]["version"] = "3.6.2"
 
     with io.open(nbfile, "w", encoding="utf8") as f:
         nbformat.write(nb, f)

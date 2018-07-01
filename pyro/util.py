@@ -30,20 +30,46 @@ def set_rng_seed(rng_seed):
 
 def torch_isnan(x):
     """
-    A convenient function to check if a Tensor contains all nan; also works with numbers
+    A convenient function to check if a Tensor contains any nan; also works with numbers
     """
     if isinstance(x, numbers.Number):
         return x != x
-    return torch.isnan(x).all()
+    return torch.isnan(x).any()
 
 
 def torch_isinf(x):
     """
-    A convenient function to check if a Tensor contains all inf; also works with numbers
+    A convenient function to check if a Tensor contains any +inf; also works with numbers
     """
     if isinstance(x, numbers.Number):
-        return x == float('inf')
-    return (x == float('inf')).all()
+        return x == float('inf') or x == -float('inf')
+    return (x == float('inf')).any() or (x == -float('inf')).any()
+
+
+def warn_if_nan(value, msg=""):
+    """
+    A convenient function to warn if a Tensor or its grad contains any nan,
+    also works with numbers.
+    """
+    if torch.is_tensor(value) and value.requires_grad:
+        value.register_hook(lambda x: warn_if_nan(x, msg))
+    if torch_isnan(value):
+        warnings.warn("Encountered NaN{}".format((': ' if msg else '.') + msg))
+
+
+def warn_if_inf(value, msg="", allow_posinf=False, allow_neginf=False):
+    """
+    A convenient function to warn if a Tensor or its grad contains any inf,
+    also works with numbers.
+    """
+    if torch.is_tensor(value) and value.requires_grad:
+            value.register_hook(lambda x: warn_if_inf(x, msg, allow_posinf, allow_neginf))
+    if (not allow_posinf) and (value == float('inf') if isinstance(value, numbers.Number)
+                               else (value == float('inf')).any()):
+        warnings.warn("Encountered +inf{}".format((': ' if msg else '.') + msg))
+    if (not allow_neginf) and (value == -float('inf') if isinstance(value, numbers.Number)
+                               else (value == -float('inf')).any()):
+        warnings.warn("Encountered -inf{}".format((': ' if msg else '.') + msg))
 
 
 def save_visualization(trace, graph_output):
