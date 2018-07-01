@@ -1,5 +1,3 @@
-from collections import defaultdict
-
 import torch
 
 
@@ -17,18 +15,6 @@ class WelfordCovariance(object):
         self.diagonal = diagonal
         self.reset()
 
-    def _deltas(self, sample):
-        deltas = []
-        for i, x in enumerate(sample):
-            if i > len(self.means) - 1:
-                self.means.append(0.)
-            mean = self.means[i]
-            delta_pre = x - mean
-            updated_mean = mean + delta_pre / self.n_samples
-            delta_post = x - updated_mean
-            deltas.append((updated_mean, delta_pre, delta_post))
-        return deltas
-
     def _unroll(self, sample):
         unrolled = []
         for rolled in sample:
@@ -36,35 +22,31 @@ class WelfordCovariance(object):
         return unrolled
 
     def reset(self):
-        self.means = []
-        self.variances = defaultdict(float)
+        self.means = 0.
+        self.variances = 0.
         self.n_samples = 0
 
     def update(self, sample):
         self.n_samples += 1
-        deltas = self._deltas(self._unroll(sample))
-        for i, (mean_x, delta_x_pre, delta_x_post) in enumerate(deltas):
-            self.means[i] = mean_x
-            for j, (mean_y, delta_y_pre, delta_y_post) in enumerate(deltas):
-                # Only compute the upper triangular covariance.
-                if i == j or (i < j and not self.diagonal):
-                    self.variances[(i, j)] += delta_x_pre * delta_y_post
+        delta_pre = sample - self.means
+        self.means = self.means + delta_pre / self.n_samples
+        delta_post = sample - self.means
+
+        if self.diagonal:
+            self.variances += delta_pre * delta_post
+        else:
+            self.variances += delta_pre * delta_post.reshape(-1, 1)
 
     def get_estimates(self, regularize=True):
         if self.n_samples < 2:
             raise RuntimeError('Insufficient samples to estimate covariance')
-        rows = []
-        for i in range(len(self.means)):
-            row = []
-            for j in range(len(self.means)):
-                if i == j or not self.diagonal:
-                    key = (i, j) if i <= j else (j, i)
-                    estimate = self.variances[key] / (self.n_samples - 1)
-                    if regularize:
-                        # Regularization from stan
-                        scaled_estimate = (self.n_samples / (self.n_samples + 5.)) * estimate
-                        shrinkage = 1e-3 * (5. / (self.n_samples + 5.0)) if i == j else 0.
-                        estimate = scaled_estimate + shrinkage
-                    row.append(estimate)
-            rows.append(row)
-        return torch.tensor(rows)
+        cov = self.variances / (self.n_samples - 1)
+        if regularize:
+            # Regularization from stan
+            scaled_cov = (self.n_samples / (self.n_samples + 5.)) * cov
+            shrinkage = 1e-3 * (5. / (self.n_samples + 5.0))
+            if self.diagonal:
+                cov = scaled_cov + shrinkage
+            else:
+                cov = scaled_cov + torch.diagflat(shrinkage)
+        return cov
