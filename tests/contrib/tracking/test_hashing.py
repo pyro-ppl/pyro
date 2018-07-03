@@ -9,15 +9,8 @@ from tests.common import assert_equal
 
 @pytest.mark.parametrize('scale', [-1., 0., -1 * torch.ones(2, 2)])
 def test_lsh_init(scale):
-    num_error = 0
-    try:
+    with pytest.raises(ValueError):
         LSH(scale)
-    except AssertionError:
-        num_error += 1
-    else:
-        pass
-    finally:
-        assert num_error > 0
 
 
 @pytest.mark.parametrize('scale', [0.1, 1, 10, 100])
@@ -85,20 +78,13 @@ def test_lsh_remove():
 
 
 @pytest.mark.parametrize('scale', [-1., 0., -1 * torch.ones(2, 2)])
-def test_as_init(scale):
-    num_error = 0
-    try:
+def test_aps_init(scale):
+    with pytest.raises(ValueError):
         ApproxSet(scale)
-    except AssertionError:
-        num_error += 1
-    else:
-        pass
-    finally:
-        assert num_error > 0
 
 
 @pytest.mark.parametrize('scale', [0.1, 1, 10, 100])
-def test_as_hash(scale):
+def test_aps_hash(scale):
     k = 10
     aps = ApproxSet(scale)
     a = -2 * scale + torch.rand(k) * scale * 0.49
@@ -117,7 +103,7 @@ def test_as_hash(scale):
 
 
 @pytest.mark.parametrize('scale', [0.1, 1, 10, 100])
-def test_as_try_add(scale):
+def test_aps_try_add(scale):
     k = 10
     aps = ApproxSet(scale)
     a = torch.rand(k) * scale * 0.49

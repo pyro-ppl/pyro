@@ -7,7 +7,7 @@ from numbers import Number
 
 class LSH(object):
     """
-    Implements locality-sensitive hashing.
+    Implements locality-sensitive hashing for low-dimensional euclidean space.
 
 
     Allows to efficiently find neighbours of a point. Provides 2 guarantees:
@@ -40,8 +40,8 @@ class LSH(object):
 
     """
     def __init__(self, radius):
-        assert radius > 0 if isinstance(radius, Number) else (radius > 0).all(), \
-            "radius must be greater than 0, given: {}".format(radius)
+        if not (isinstance(radius, Number) and radius > 0):
+            raise ValueError("radius must be float greater than 0, given: {}".format(radius))
         self._radius = radius
         self._hash_to_key = defaultdict(set)
         self._key_to_hash = {}
@@ -108,8 +108,8 @@ class ApproxSet(object):
                          See :class:`LSH` for details.
     """
     def __init__(self, radius):
-        assert radius > 0 if isinstance(radius, Number) else (radius > 0).all(), \
-            "radius must be greater than 0, given: {}".format(radius)
+        if not (isinstance(radius, Number) and radius > 0):
+            raise ValueError("radius must be float greater than 0, given: {}".format(radius))
         self._radius = radius
         self._bins = set()
 
