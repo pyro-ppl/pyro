@@ -44,7 +44,7 @@ def _inv_symmetric_3d(H):
     Calculates the inverse of a batched 3-D matrix
     """
     detH = _determinant_3d(H)
-    Hinv = H.new(H.shape)
+    Hinv = H.new_empty(H.shape)
     Hinv[..., 0, 0] = H[..., 1, 1] * H[..., 2, 2] - H[..., 1, 2] * H[..., 2, 1]
     Hinv[..., 1, 1] = H[..., 0, 0] * H[..., 2, 2] - H[..., 0, 2] * H[..., 2, 0]
     Hinv[..., 2, 2] = H[..., 0, 0] * H[..., 1, 1] - H[..., 0, 1] * H[..., 1, 0]
@@ -206,11 +206,11 @@ def newton_step_2d(loss, x, trust_radius=None):
         min_eig = mean_eig - (mean_eig ** 2 - detH).sqrt()
         regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
         warn_if_nan(regularizer, 'regularizer')
-        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new(torch.eye(2))
+        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new_tensor(torch.eye(2))
 
     # compute newton update
     detH = H[..., 0, 0] * H[..., 1, 1] - H[..., 0, 1] * H[..., 1, 0]
-    Hinv = H.new(H.shape)
+    Hinv = H.new_empty(H.shape)
     Hinv[..., 0, 0] = H[..., 1, 1]
     Hinv[..., 0, 1] = -H[..., 0, 1]
     Hinv[..., 1, 0] = -H[..., 1, 0]
@@ -263,7 +263,7 @@ def newton_step_3d(loss, x, trust_radius=None):
         min_eig, _, _ = _eig_3d(H)
         regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
         warn_if_nan(regularizer, 'regularizer')
-        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new(torch.eye(3))
+        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new_tensor(torch.eye(3))
 
     # compute newton update
     Hinv = _inv_symmetric_3d(H)

@@ -22,7 +22,7 @@ class HalfCauchy(TransformedDistribution):
     arg_constraints = Cauchy.arg_constraints
     support = Cauchy.support
 
-    def __init__(self, loc, scale):
+    def __init__(self, loc=0, scale=1):
         loc, scale = broadcast_all(loc, scale)
         base_dist = Cauchy(0, scale)
         transforms = [AbsTransform(), AffineTransform(loc, 1)]

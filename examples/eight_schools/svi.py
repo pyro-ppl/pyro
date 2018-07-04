@@ -22,7 +22,7 @@ def model(data):
 
     eta = pyro.sample('eta', dist.Normal(torch.zeros(J), torch.ones(J)))
     mu = pyro.sample('mu', dist.Normal(torch.zeros(1), 10 * torch.ones(1)))
-    tau = pyro.sample('tau', dist.HalfCauchy(torch.zeros(1), 25 * torch.ones(1)))
+    tau = pyro.sample('tau', dist.HalfCauchy(scale=25 * torch.ones(1)))
 
     theta = mu + tau * eta
 
