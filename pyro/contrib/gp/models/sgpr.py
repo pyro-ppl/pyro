@@ -7,7 +7,6 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.gp.models.model import GPModel
-from pyro.distributions.util import matrix_triangular_solve_compat
 from pyro.params import param_with_module_name
 
 
@@ -133,7 +132,7 @@ class SparseGPRegression(GPModel):
         Kuu.view(-1, M * M)[:, ::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.potrf(upper=False)
         Kuf = self.kernel(Xu, self.X)
-        W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
+        W = Kuf.trtrs(Luu, upper=False)[0]
 
         D = noise.expand(W.shape[1])
         trace_term = 0
@@ -211,8 +210,8 @@ class SparseGPRegression(GPModel):
         Kus = self.kernel(Xu, Xnew)
         Kuf = self.kernel(Xu, self.X)
 
-        W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
-        Ws = matrix_triangular_solve_compat(Kus, Luu, upper=False)
+        W = Kuf.trtrs(Luu, upper=False)[0]
+        Ws = Kus.trtrs(Luu, upper=False)[0]
         D = noise.expand(N)
         if self.approx == "FITC":
             Kffdiag = self.kernel(self.X, diag=True)
@@ -221,7 +220,7 @@ class SparseGPRegression(GPModel):
 
         W_Dinv = W / D
         K = W_Dinv.matmul(W.t()).contiguous()
-        K.view(-1, M * M)[:, ::M + 1] += 1  # add 1 to the diagonal
+        K.view(-1, M * M)[:, ::M + 1] += 1  # add identity matrix to K
         L = K.potrf(upper=False)
 
         # get y_residual and convert it into 2D tensor for packing
@@ -229,7 +228,7 @@ class SparseGPRegression(GPModel):
         y_2D = y_residual.reshape(-1, N).t()
         W_Dinv_y = W_Dinv.matmul(y_2D)
         pack = torch.cat((W_Dinv_y, Ws), dim=1)
-        Linv_pack = matrix_triangular_solve_compat(pack, L, upper=False)
+        Linv_pack = pack.trtrs(L, upper=False)[0]
         # unpack
         Linv_W_Dinv_y = Linv_pack[:, :W_Dinv_y.shape[1]]
         Linv_Ws = Linv_pack[:, W_Dinv_y.shape[1]:]
