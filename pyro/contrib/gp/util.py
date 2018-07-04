@@ -211,7 +211,8 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
     latent_shape = f_loc.shape[:-1]
 
     if Lff is None:
-        Kff = kernel(X) + torch.eye(N, out=X.new_empty(N, N)) * jitter
+        Kff = kernel(X).contiguous()
+        Kff.view(-1, N * N)[:, ::N + 1] += jitter  # add jitter to diagonal
         Lff = Kff.potrf(upper=False)
     Kfs = kernel(X, Xnew)
 

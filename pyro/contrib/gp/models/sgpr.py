@@ -129,7 +129,8 @@ class SparseGPRegression(GPModel):
         # trace_term is added into log_prob
 
         M = Xu.shape[0]
-        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new_empty(M, M)) * self.jitter
+        Kuu = self.kernel(Xu).contiguous()
+        Kuu.view(-1, M * M)[:, ::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.potrf(upper=False)
         Kuf = self.kernel(Xu, self.X)
         W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
@@ -204,7 +205,8 @@ class SparseGPRegression(GPModel):
         N = self.X.shape[0]
         M = Xu.shape[0]
 
-        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new_empty(M, M)) * self.jitter
+        Kuu = self.kernel(Xu).contiguous()
+        Kuu.view(-1, M * M)[:, ::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.potrf(upper=False)
         Kus = self.kernel(Xu, Xnew)
         Kuf = self.kernel(Xu, self.X)
@@ -218,8 +220,8 @@ class SparseGPRegression(GPModel):
             D = D + Kffdiag - Qffdiag
 
         W_Dinv = W / D
-        Id = torch.eye(M, M, out=W.new_empty(M, M))
-        K = Id + W_Dinv.matmul(W.t())
+        K = W_Dinv.matmul(W.t()).contiguous()
+        K.view(-1, M * M)[:, ::M + 1] += 1  # add 1 to the diagonal
         L = K.potrf(upper=False)
 
         # get y_residual and convert it into 2D tensor for packing
@@ -236,15 +238,16 @@ class SparseGPRegression(GPModel):
         loc = Linv_W_Dinv_y.t().matmul(Linv_Ws).reshape(loc_shape)
 
         if full_cov:
-            Kss = self.kernel(Xnew)
+            Kss = self.kernel(Xnew).contiguous()
             if not noiseless:
-                Kss = Kss + noise.expand(Xnew.shape[0]).diag()
+                C = Xnew.shape[0]
+                Kss.view(-1, C * C)[:, ::C + 1] += noise  # add noise to the diagonal
             Qss = Ws.t().matmul(Ws)
             cov = Kss - Qss + Linv_Ws.t().matmul(Linv_Ws)
         else:
             Kssdiag = self.kernel(Xnew, diag=True)
             if not noiseless:
-                Kssdiag = Kssdiag + noise.expand(Xnew.shape[0])
+                Kssdiag = Kssdiag + noise
             Qssdiag = Ws.pow(2).sum(dim=0)
             cov = Kssdiag - Qssdiag + Linv_Ws.pow(2).sum(dim=0)
 
