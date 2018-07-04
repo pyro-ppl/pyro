@@ -29,13 +29,11 @@ class RenyiELBO(ELBO):
     .. warning:: Mini-batch training is not supported yet.
 
     :param float alpha: The order of :math:`\alpha`-divergence. Here
-        :math:`\alpha \neq 1`.
+        :math:`\alpha \neq 1`. Default is 0.
     :param num_particles: The number of particles/samples used to form the ELBO
-        (gradient) estimators.
-    :param int max_iarange_nesting: Optional bound on max number of nested
-        :func:`pyro.iarange` contexts. This is only required to enumerate over
-        sample sites in parallel, e.g. if a site sets
-        ``infer={"enumerate": "parallel"}``.
+        (gradient) estimators. Default is 2.
+    :param int max_iarange_nesting: Bound on max number of nested
+        :func:`pyro.iarange` contexts. Default is 2.
     :param bool strict_enumeration_warning: Whether to warn about possible
         misuse of enumeration, i.e. that
         :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO` is used iff there
@@ -50,12 +48,13 @@ class RenyiELBO(ELBO):
         Yuri Burda, Roger Grosse, Ruslan Salakhutdinov
     """
 
-    def __init__(self, alpha, num_particles=1, max_iarange_nesting=float('inf'),
+    def __init__(self, alpha=0., num_particles=2, max_iarange_nesting=2,
                  strict_enumeration_warning=True):
         if alpha == 1:
             raise ValueError("The order alpha should not be equal to 1. Please use Trace_ELBO class"
                              "for the case alpha = 1.")
-        super(RenyiELBO, self).__init__(num_particles, max_iarange_nesting, vectorize_particle=True,
+        self.alpha = alpha
+        super(RenyiELBO, self).__init__(num_particles, max_iarange_nesting, vectorize_particles=True,
                                         strict_enumeration_warning=True)
 
     def _get_trace(self, model, guide, *args, **kwargs):
@@ -96,7 +95,7 @@ class RenyiELBO(ELBO):
 
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
-        model_trace, guide_trace = self._get_traces(model, guide, *args, **kwargs).next()
+        model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
         elbo_particle = 0
         for name, site in model_trace.nodes.items():
             if site["type"] == "sample":
@@ -130,7 +129,7 @@ class RenyiELBO(ELBO):
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         """
         # grab a vectorized trace from the generator
-        model_trace, guide_trace = self._get_traces(model, guide, *args, **kwargs).next()
+        model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
         elbo_particle = 0
         surrogate_elbo_particle = 0
         # compute elbo and surrogate elbo

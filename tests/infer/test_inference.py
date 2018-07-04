@@ -13,7 +13,7 @@ import pyro.optim as optim
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
-                        TraceGraph_ELBO)
+                        TraceGraph_ELBO, RenyiELBO)
 from tests.common import assert_equal, xfail_param
 
 
@@ -47,12 +47,18 @@ class NormalNormalTests(TestCase):
         self.batch_size = 4
 
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 5000)
+        self.do_elbo_test(True, 5000, Trace_ELBO())
 
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 15000)
+        self.do_elbo_test(False, 15000, Trace_ELBO())
 
-    def do_elbo_test(self, reparameterized, n_steps):
+    def test_renyi_reparameterized(self):
+        self.do_elbo_test(True, 100, RenyiELBO())
+
+    def test_renyi_nonreparameterized(self):
+        self.do_elbo_test(False, 1000, RenyiELBO())
+
+    def do_elbo_test(self, reparameterized, n_steps, loss):
         pyro.clear_param_store()
 
         def model():
@@ -76,7 +82,7 @@ class NormalNormalTests(TestCase):
             pyro.sample("loc_latent", Normal(loc_q, sig_q).independent(1))
 
         adam = optim.Adam({"lr": .001})
-        svi = SVI(model, guide, adam, loss=Trace_ELBO())
+        svi = SVI(model, guide, adam, loss=loss)
 
         for k in range(n_steps):
             svi.step()
@@ -171,12 +177,18 @@ class PoissonGammaTests(TestCase):
         self.beta_n = self.beta0 + torch.tensor(float(self.n_data))  # posterior beta
 
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 10000)
+        self.do_elbo_test(True, 10000, Trace_ELBO())
 
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 25000)
+        self.do_elbo_test(False, 25000, Trace_ELBO())
 
-    def do_elbo_test(self, reparameterized, n_steps):
+    def test_renyi_reparameterized(self):
+        self.do_elbo_test(True, 1000, RenyiELBO())
+
+    def test_renyi_nonreparameterized(self):
+        self.do_elbo_test(False, 10000, RenyiELBO(alpha=0.8))
+
+    def do_elbo_test(self, reparameterized, n_steps, loss):
         pyro.clear_param_store()
         Gamma = dist.Gamma if reparameterized else fakes.NonreparameterizedGamma
 
@@ -194,7 +206,7 @@ class PoissonGammaTests(TestCase):
             pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
 
         adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
-        svi = SVI(model, guide, adam, loss=Trace_ELBO())
+        svi = SVI(model, guide, adam, loss)
 
         for k in range(n_steps):
             svi.step()
@@ -213,6 +225,7 @@ class PoissonGammaTests(TestCase):
     Trace_ELBO,
     TraceGraph_ELBO,
     TraceEnum_ELBO,
+    xfail_param(RenyiELBO, reason="Assertation errors at alpha_q, beta_q", run=False),
 ])
 @pytest.mark.parametrize('gamma_dist,n_steps', [
     (dist.Gamma, 5000),
@@ -273,12 +286,20 @@ class BernoulliBetaTests(TestCase):
         self.log_beta_n = torch.log(self.beta_n)
 
     def test_elbo_reparameterized(self):
-        self.do_elbo_test(True, 10000)
+        self.do_elbo_test(True, 10000, Trace_ELBO())
 
     def test_elbo_nonreparameterized(self):
-        self.do_elbo_test(False, 10000)
+        self.do_elbo_test(False, 10000, Trace_ELBO())
 
-    def do_elbo_test(self, reparameterized, n_steps):
+    @pytest.mark.xfail(reason='Assertation failed for alpha_error')
+    def test_renyi1_reparameterized(self):
+        self.do_elbo_test(True, 1000, RenyiELBO())
+
+    @pytest.mark.xfail(reason='Assertation failed for alpha_error')
+    def test_renyi1_nonreparameterized(self):
+        self.do_elbo_test(False, 1000, RenyiELBO())
+
+    def do_elbo_test(self, reparameterized, n_steps, loss):
         pyro.clear_param_store()
         Beta = dist.Beta if reparameterized else fakes.NonreparameterizedBeta
 
@@ -297,7 +318,7 @@ class BernoulliBetaTests(TestCase):
             pyro.sample("p_latent", Beta(alpha_q, beta_q))
 
         adam = optim.Adam({"lr": .001, "betas": (0.97, 0.999)})
-        svi = SVI(model, guide, adam, loss=Trace_ELBO())
+        svi = SVI(model, guide, adam, loss=loss)
 
         for k in range(n_steps):
             svi.step()
