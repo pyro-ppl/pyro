@@ -127,7 +127,7 @@ class Empirical(TorchDistribution):
             return self._log_weights.new_zeros(torch.Size()).log()
         idxs = torch.arange(self.sample_size)[selection_mask.min(dim=-1)[0]]
         log_probs = self._categorical.log_prob(idxs)
-        return log_sum_exp(log_probs)
+        return log_sum_exp(log_probs, dim=-1)
 
     def _weighted_mean(self, value, dim=0):
         weights = self._log_weights
