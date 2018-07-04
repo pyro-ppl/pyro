@@ -12,22 +12,49 @@ from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
 
 
 class RenyiELBO(ELBO):
-    u"""
-    A trace implementation of ELBO-based SVI. The estimator is constructed
-    along the lines of references [1] and [2]. There are no restrictions on the
-    dependency structure of the model or the guide.
+    r"""
+    An implementation of Renyi's :math:`\alpha`-divergence variational inference
+    follows reference [1].
+
+    To have a lower bound, we require :math:`\alpha \ge 0`. However, according to
+    reference [1], depending on the dataset, :math:`\alpha < 0` might give better
+    results. In the special case :math:`\alpha = 0`, we have important weighted
+    lower bound derived in reference [2].
+
+    .. note:: Setting :math:`\alpha < 1` gives a better bound than the usual ELBO.
+        For :math:`\alpha = 1`, it is better to use
+        :class:`~pyro.infer.trace_elbo.Trace_ELBO` class because it helps reducing
+        variances of gradient estimations.
+
+    .. warning:: Mini-batch training is not supported yet.
+
+    :param float alpha: The order of :math:`\alpha`-divergence. Here
+        :math:`\alpha \neq 1`.
+    :param num_particles: The number of particles/samples used to form the ELBO
+        (gradient) estimators.
+    :param int max_iarange_nesting: Optional bound on max number of nested
+        :func:`pyro.iarange` contexts. This is only required to enumerate over
+        sample sites in parallel, e.g. if a site sets
+        ``infer={"enumerate": "parallel"}``.
+    :param bool strict_enumeration_warning: Whether to warn about possible
+        misuse of enumeration, i.e. that
+        :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO` is used iff there
+        are enumerated sample sites.
 
     References:
 
-    [1] `R\00e9nyi Divergence Variational Inference`,
+    [1] `Renyi Divergence Variational Inference`,
         Yingzhen Li, Richard E. Turner
 
     [2] `Importance Weighted Autoencoders`,
         Yuri Burda, Roger Grosse, Ruslan Salakhutdinov
     """
-    
-    def __init__(self, num_particles=1, max_iarange_nesting=float('inf'),
+
+    def __init__(self, alpha, num_particles=1, max_iarange_nesting=float('inf'),
                  strict_enumeration_warning=True):
+        if alpha == 1:
+            raise ValueError("The order alpha should not be equal to 1. Please use Trace_ELBO class"
+                             "for the case alpha = 1.")
         super(RenyiELBO, self).__init__(num_particles, max_iarange_nesting, vectorize_particle=True,
                                         strict_enumeration_warning=True)
 
@@ -69,12 +96,27 @@ class RenyiELBO(ELBO):
 
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
-        elbo = 0.0
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            elbo_particle = torch_item(model_trace.log_prob_sum()) - torch_item(guide_trace.log_prob_sum())
-            elbo += elbo_particle / self.num_particles
+        model_trace, guide_trace = self._get_traces(model, guide, *args, **kwargs).next()
+        elbo_particle = 0
+        for name, site in model_trace.nodes.items():
+            if site["type"] == "sample":
+                elbo_particle = elbo_particle + site["log_prob"].detach()
 
-        loss = -elbo
+        for name, site in guide_trace.nodes.items():
+            if site["type"] == "sample":
+                log_prob, score_function_term, entropy_term = site["score_parts"]
+                elbo_particle = elbo_particle - log_prob.detach()
+
+        if is_identically_zero(elbo_particle):
+            return 0.
+
+        elbo_particle_scaled = (1. - self.alpha) * elbo_particle
+        if self.num_particles == 1:
+            elbo_scaled = elbo_particle_scaled
+        else:
+            elbo_scaled = log_sum_exp(elbo_particle_scaled, dim=0) - math.log(self.num_particles)
+
+        loss = elbo_scaled.sum().item() / (self.alpha - 1.)
         if torch_isnan(loss):
             warnings.warn('Encountered NAN loss')
         return loss
@@ -107,7 +149,8 @@ class RenyiELBO(ELBO):
                     surrogate_elbo_particle = surrogate_elbo_particle - entropy_term
 
                 if not is_identically_zero(score_function_term):
-                    surrogate_elbo_particle = surrogate_elbo_particle + (self.alpha / (1. - self.alpha)) * score_function_term
+                    surrogate_elbo_particle = (surrogate_elbo_particle +
+                                               (self.alpha / (1. - self.alpha)) * score_function_term)
 
         if is_identically_zero(elbo_particle):
             return 0.
@@ -127,7 +170,7 @@ class RenyiELBO(ELBO):
             if self.num_particles == 1:
                 weights = 1.
             else:
-                weights = torch.exp(elbo_particle_scaled - elbo_scaled)
+                weights = (elbo_particle_scaled - elbo_scaled).exp()
             surrogate_loss = - (weights * surrogate_elbo_particle).sum() / self.num_particles
             surrogate_loss.backward()
 
