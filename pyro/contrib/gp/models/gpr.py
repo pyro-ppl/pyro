@@ -78,7 +78,7 @@ class GPRegression(GPModel):
 
         N = self.X.shape[0]
         Kff = self.kernel(self.X)
-        Kff.view(-1, N * N)[:, ::N + 1] += noise  # add noise to diagonal
+        Kff.view(-1)[::N + 1] += noise  # add noise to diagonal
         Lff = Kff.potrf(upper=False)
 
         zero_loc = self.X.new_zeros(self.X.shape[0])
@@ -126,7 +126,7 @@ class GPRegression(GPModel):
 
         N = self.X.shape[0]
         Kff = self.kernel(self.X).contiguous()
-        Kff.view(-1, N * N)[:, ::N + 1] += noise  # add noise to the diagonal
+        Kff.view(-1)[::N + 1] += noise  # add noise to the diagonal
         Lff = Kff.potrf(upper=False)
 
         y_residual = self.y - self.mean_function(self.X)

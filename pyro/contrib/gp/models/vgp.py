@@ -89,7 +89,7 @@ class VariationalGP(GPModel):
 
         N = self.X.shape[0]
         Kff = self.kernel(self.X).contiguous()
-        Kff.view(-1, N * N)[:, ::N + 1] += self.jitter  # add jitter to the diagonal
+        Kff.view(-1)[::N + 1] += self.jitter  # add jitter to the diagonal
         Lff = Kff.potrf(upper=False)
 
         zero_loc = self.X.new_zeros(f_loc.shape)

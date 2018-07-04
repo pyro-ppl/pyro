@@ -129,7 +129,7 @@ class SparseGPRegression(GPModel):
 
         M = Xu.shape[0]
         Kuu = self.kernel(Xu).contiguous()
-        Kuu.view(-1, M * M)[:, ::M + 1] += self.jitter  # add jitter to the diagonal
+        Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.potrf(upper=False)
         Kuf = self.kernel(Xu, self.X)
         W = Kuf.trtrs(Luu, upper=False)[0]
@@ -205,7 +205,7 @@ class SparseGPRegression(GPModel):
         M = Xu.shape[0]
 
         Kuu = self.kernel(Xu).contiguous()
-        Kuu.view(-1, M * M)[:, ::M + 1] += self.jitter  # add jitter to the diagonal
+        Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.potrf(upper=False)
         Kus = self.kernel(Xu, Xnew)
         Kuf = self.kernel(Xu, self.X)
@@ -220,7 +220,7 @@ class SparseGPRegression(GPModel):
 
         W_Dinv = W / D
         K = W_Dinv.matmul(W.t()).contiguous()
-        K.view(-1, M * M)[:, ::M + 1] += 1  # add identity matrix to K
+        K.view(-1)[::M + 1] += 1  # add identity matrix to K
         L = K.potrf(upper=False)
 
         # get y_residual and convert it into 2D tensor for packing
@@ -239,8 +239,7 @@ class SparseGPRegression(GPModel):
         if full_cov:
             Kss = self.kernel(Xnew).contiguous()
             if not noiseless:
-                C = Xnew.shape[0]
-                Kss.view(-1, C * C)[:, ::C + 1] += noise  # add noise to the diagonal
+                Kss.view(-1)[::Xnew.shape[0] + 1] += noise  # add noise to the diagonal
             Qss = Ws.t().matmul(Ws)
             cov = Kss - Qss + Linv_Ws.t().matmul(Linv_Ws)
         else:

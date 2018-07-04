@@ -211,7 +211,7 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
 
     if Lff is None:
         Kff = kernel(X).contiguous()
-        Kff.view(-1, N * N)[:, ::N + 1] += jitter  # add jitter to diagonal
+        Kff.view(-1)[::N + 1] += jitter  # add jitter to diagonal
         Lff = Kff.potrf(upper=False)
     Kfs = kernel(X, Xnew)
 

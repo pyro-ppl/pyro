@@ -114,7 +114,7 @@ class VariationalSparseGP(GPModel):
 
         M = Xu.shape[0]
         Kuu = self.kernel(Xu).contiguous()
-        Kuu.view(-1, M * M)[:, ::M + 1] += self.jitter  # add jitter to the diagonal
+        Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.potrf(upper=False)
 
         zero_loc = Xu.new_zeros(u_loc.shape)
