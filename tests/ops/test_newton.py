@@ -6,7 +6,7 @@ import pytest
 import torch
 from torch.autograd import grad
 
-from pyro.ops.newton import newton_step_2d
+from pyro.ops.newton import newton_step, _inv_symmetric_3d
 from tests.common import assert_equal
 
 
@@ -20,26 +20,36 @@ def random_inside_unit_circle(shape, requires_grad=False):
     return x
 
 
+def test_inverse():
+    A = torch.tensor([[1., 2, 0], [2, -2, 4], [0, 4, 5]])
+    assert_equal(_inv_symmetric_3d(A), torch.inverse(A), prec=1e-8)
+    assert_equal(torch.mm(A, _inv_symmetric_3d(A)), torch.eye(3), prec=1e-8)
+    batched_A = A.unsqueeze(0).unsqueeze(0).expand(5, 4, 3, 3)
+    expected_A = torch.inverse(A).unsqueeze(0).unsqueeze(0).expand(5, 4, 3, 3)
+    assert_equal(_inv_symmetric_3d(batched_A), expected_A, prec=1e-8)
+
+
+@pytest.mark.parametrize('batch_shape', [(), (1,), (2,), (10,), (3, 2), (2, 3)])
 @pytest.mark.parametrize('trust_radius', [None, 2.0, 100.0])
-@pytest.mark.parametrize('batch_shape', [(), (1,), (2,), (3,), (3, 2), (2, 3)])
-def test_newton_step_2d(batch_shape, trust_radius):
+@pytest.mark.parametrize('dims', [1, 2, 3])
+def test_newton_step(batch_shape, trust_radius, dims):
     batch_shape = torch.Size(batch_shape)
-    mode = random_inside_unit_circle(batch_shape + (2,), requires_grad=True)
-    x = random_inside_unit_circle(batch_shape + (2,), requires_grad=True)
+    mode = 0.5 * random_inside_unit_circle(batch_shape + (dims,), requires_grad=True)
+    x = 0.5 * random_inside_unit_circle(batch_shape + (dims,), requires_grad=True)
     if trust_radius is not None:
         assert trust_radius >= 2, '(x, mode) may be farther apart than trust_radius'
 
     # create a quadratic loss function
-    flat_x = x.reshape(-1, 2)
-    flat_mode = mode.reshape(-1, 2)
-    noise = torch.randn(flat_x.shape[0], 2, 1)
-    flat_hessian = noise.matmul(noise.transpose(-1, -2)) + torch.eye(2, 2)
-    hessian = flat_hessian.reshape(batch_shape + (2, 2))
+    flat_x = x.reshape(-1, dims)
+    flat_mode = mode.reshape(-1, dims)
+    noise = torch.randn(flat_x.shape[0], dims, 1)
+    flat_hessian = noise.matmul(noise.transpose(-1, -2)) + torch.eye(dims)
+    hessian = flat_hessian.reshape(batch_shape + (dims, dims))
     diff = (flat_x - flat_mode).unsqueeze(-2)
     loss = 0.5 * diff.bmm(flat_hessian).bmm(diff.transpose(-1, -2)).sum()
 
     # run method under test
-    x_updated, cov = newton_step_2d(loss, x, trust_radius=trust_radius)
+    x_updated, cov = newton_step(loss, x, trust_radius=trust_radius)
 
     # check shapes
     assert x_updated.shape == x.shape
@@ -52,7 +62,7 @@ def test_newton_step_2d(batch_shape, trust_radius):
     assert_equal(flat_cov, flat_cov.transpose(-1, -2),
                  msg='covariance is not symmetric: {}'.format(flat_cov))
     actual_eye = torch.bmm(flat_cov, flat_hessian)
-    expected_eye = torch.eye(2, 2).expand(actual_eye.shape)
+    expected_eye = torch.eye(dims).expand(actual_eye.shape)
     assert_equal(actual_eye, expected_eye, prec=1e-4,
                  msg='bad covariance {}'.format(actual_eye))
 
@@ -69,20 +79,21 @@ def test_newton_step_2d(batch_shape, trust_radius):
 
 
 @pytest.mark.parametrize('trust_radius', [None, 0.1, 1.0, 10.0])
-def test_newton_step_2d_trust(trust_radius):
+@pytest.mark.parametrize('dims', [1, 2, 3])
+def test_newton_step_trust(trust_radius, dims):
     batch_size = 100
     batch_shape = torch.Size((batch_size,))
-    mode = random_inside_unit_circle(batch_shape + (2,), requires_grad=True) - 1
-    x = random_inside_unit_circle(batch_shape + (2,), requires_grad=True) + 1
+    mode = random_inside_unit_circle(batch_shape + (dims,), requires_grad=True) + 1
+    x = random_inside_unit_circle(batch_shape + (dims,), requires_grad=True) - 1
 
     # create a quadratic loss function
-    noise = torch.randn(batch_size, 2, 2)
+    noise = torch.randn(batch_size, dims, dims)
     hessian = noise + noise.transpose(-1, -2)
     diff = (x - mode).unsqueeze(-2)
     loss = 0.5 * diff.bmm(hessian).bmm(diff.transpose(-1, -2)).sum()
 
     # run method under test
-    x_updated, cov = newton_step_2d(loss, x, trust_radius=trust_radius)
+    x_updated, cov = newton_step(loss, x, trust_radius=trust_radius)
 
     # check shapes
     assert x_updated.shape == x.shape
@@ -92,19 +103,20 @@ def test_newton_step_2d_trust(trust_radius):
     if trust_radius is None:
         assert ((x - x_updated).pow(2).sum(-1) > 1.0).any(), 'test is too weak'
     else:
-        assert ((x - x_updated).pow(2).sum(-1) <= trust_radius**2).all(), 'trust region violated'
+        assert ((x - x_updated).pow(2).sum(-1) <= 1e-8 + trust_radius**2).all(), 'trust region violated'
 
 
 @pytest.mark.parametrize('trust_radius', [None, 0.1, 1.0, 10.0])
-def test_newton_step_2d_converges(trust_radius):
+@pytest.mark.parametrize('dims', [1, 2, 3])
+def test_newton_step_converges(trust_radius, dims):
     batch_size = 100
     batch_shape = torch.Size((batch_size,))
-    mode = random_inside_unit_circle(batch_shape + (2,), requires_grad=True) - 1
-    x = random_inside_unit_circle(batch_shape + (2,), requires_grad=True) + 1
+    mode = random_inside_unit_circle(batch_shape + (dims,), requires_grad=True) - 1
+    x = random_inside_unit_circle(batch_shape + (dims,), requires_grad=True) + 1
 
     # create a quadratic loss function
-    noise = torch.randn(batch_size, 2, 1)
-    hessian = noise.matmul(noise.transpose(-1, -2)) + 0.01 * torch.eye(2, 2)
+    noise = torch.randn(batch_size, dims, 1)
+    hessian = noise.matmul(noise.transpose(-1, -2)) + 0.01 * torch.eye(dims)
 
     def loss_fn(x):
         diff = (x - mode).unsqueeze(-2)
@@ -115,7 +127,7 @@ def test_newton_step_2d_converges(trust_radius):
         x = x.detach()
         x.requires_grad = True
         loss = loss_fn(x)
-        x, cov = newton_step_2d(loss, x, trust_radius=trust_radius)
+        x, cov = newton_step(loss, x, trust_radius=trust_radius)
         if ((x - mode).pow(2).sum(-1) < 1e-4).all():
             print('Newton iteration converged after {} steps'.format(2 + i))
             return

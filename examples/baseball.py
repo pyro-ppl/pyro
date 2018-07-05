@@ -102,7 +102,7 @@ def partially_pooled(at_bats):
     """
     num_players = at_bats.shape[0]
     loc = pyro.sample("loc", Normal(at_bats.new_tensor(-1), at_bats.new_tensor(1)))
-    scale = pyro.sample("scale", HalfCauchy(at_bats.new_tensor(0), at_bats.new_tensor(1)))
+    scale = pyro.sample("scale", HalfCauchy(scale=at_bats.new_tensor(1)))
     alpha = pyro.sample("alpha", Normal(loc, scale).expand_by([num_players]).independent(1))
     return pyro.sample("obs", Binomial(at_bats, logits=alpha))
 
@@ -208,7 +208,7 @@ def evaluate_log_predictive_density(model, model_trace_posterior, baseball_datas
         trace_log_pdf.append(tr.log_prob_sum())
     # Use LogSumExp trick to evaluate $log(1/num_samples \sum_i p(new_data | \theta^{i})) $,
     # where $\theta^{i}$ are parameter samples from the model's posterior.
-    posterior_pred_density = log_sum_exp(torch.stack(trace_log_pdf)) - math.log(len(trace_log_pdf))
+    posterior_pred_density = log_sum_exp(torch.stack(trace_log_pdf), dim=-1) - math.log(len(trace_log_pdf))
     logging.info("\nLog posterior predictive density")
     logging.info("---------------------------------")
     logging.info("{:.4f}\n".format(posterior_pred_density))

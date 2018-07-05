@@ -113,7 +113,8 @@ class VariationalSparseGP(GPModel):
         u_scale_tril = self.get_param("u_scale_tril")
 
         M = Xu.shape[0]
-        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new_empty(M, M)) * self.jitter
+        Kuu = self.kernel(Xu).contiguous()
+        Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.potrf(upper=False)
 
         zero_loc = Xu.new_zeros(u_loc.shape)

@@ -62,6 +62,9 @@ EXTRAS_REQUIRE = [
     'wget',
 ]
 
+if sys.version_info[0] == 2:
+    EXTRAS_REQUIRE.append('functools32')
+
 setup(
     name='pyro-ppl',
     version=version,

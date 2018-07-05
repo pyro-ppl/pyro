@@ -22,7 +22,7 @@ class HalfCauchy(TransformedDistribution):
     arg_constraints = Cauchy.arg_constraints
     support = Cauchy.support
 
-    def __init__(self, loc, scale):
+    def __init__(self, loc=0, scale=1):
         loc, scale = broadcast_all(loc, scale)
         base_dist = Cauchy(0, scale)
         transforms = [AbsTransform(), AffineTransform(loc, 1)]
@@ -49,6 +49,9 @@ class HalfCauchy(TransformedDistribution):
         return self.base_dist.entropy() - math.log(2)
 
     def expand(self, batch_shape):
-        loc = self.loc.expand(batch_shape)
-        scale = self.scale.expand(batch_shape)
-        return HalfCauchy(loc, scale)
+        try:
+            return super(HalfCauchy, self).expand(batch_shape)
+        except NotImplementedError:
+            loc = self.loc.expand(batch_shape)
+            scale = self.scale.expand(batch_shape)
+            return type(self)(loc, scale)

@@ -174,6 +174,14 @@ class ParamStoreDict(object):
         """
         Loads parameters from disk
 
+        .. note::
+
+           If using :meth:`pyro.module` on parameters loaded from
+           disk, be sure to set the ``update_module_params`` flag::
+
+               pyro.get_param_store().load('saved_params.save')
+               pyro.module('module', nn, update_module_params=True)
+
         :param filename: file name to load from
         :type name: str
         """
