@@ -93,7 +93,7 @@ LowRankMultivariateNormal
     :show-inheritance:
 
 MixtureOfDiagNormalsSharedCovariance
--------------------------
+------------------------------------
 .. autoclass:: pyro.distributions.MixtureOfDiagNormalsSharedCovariance
     :members:
     :undoc-members:
