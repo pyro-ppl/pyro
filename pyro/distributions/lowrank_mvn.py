@@ -7,7 +7,18 @@ from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
 from pyro.distributions.torch_distribution import TorchDistribution
-from pyro.distributions.util import matrix_triangular_solve_compat
+
+
+def _matrix_triangular_solve_compat(b, A, upper=True):
+    """
+    Computes the solution to the linear equation AX = b,
+    where A is a triangular matrix.
+
+    :param b: A 1D or 2D tensor of size N or N x C.
+    :param A: A 2D tensor of size N X N.
+    :param upper: A flag if A is a upper triangular matrix or not.
+    """
+    return b.view(b.shape[0], -1).trtrs(A, upper=upper)[0].view(b.shape)
 
 
 class LowRankMultivariateNormal(TorchDistribution):
@@ -109,7 +120,7 @@ class LowRankMultivariateNormal(TorchDistribution):
         else:
             raise NotImplementedError("SparseMultivariateNormal distribution does not support "
                                       "computing log_prob for a tensor with more than 2 dimensionals.")
-        Linv_W_Dinv_y = matrix_triangular_solve_compat(W_Dinv_y, L, upper=False)
+        Linv_W_Dinv_y = _matrix_triangular_solve_compat(W_Dinv_y, L, upper=False)
         if y.dim() == 2:
             Linv_W_Dinv_y = Linv_W_Dinv_y.t()
 

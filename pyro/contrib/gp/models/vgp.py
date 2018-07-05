@@ -88,8 +88,8 @@ class VariationalGP(GPModel):
         f_scale_tril = self.get_param("f_scale_tril")
 
         N = self.X.shape[0]
-        Kff = self.kernel(self.X) + (torch.eye(N, out=self.X.new_empty(N, N)) *
-                                     self.jitter)
+        Kff = self.kernel(self.X).contiguous()
+        Kff.view(-1)[::N + 1] += self.jitter  # add jitter to the diagonal
         Lff = Kff.potrf(upper=False)
 
         zero_loc = self.X.new_zeros(f_loc.shape)

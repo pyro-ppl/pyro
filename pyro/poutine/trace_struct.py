@@ -1,23 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 import collections
-import warnings
 
 import networkx
-import torch
 
 from pyro.distributions.util import scale_tensor
-from pyro.util import torch_isinf, torch_isnan
-
-
-def _warn_if_nan(name, value):
-    if torch.is_tensor(value):
-        value = value.item()
-    if torch_isnan(value):
-        warnings.warn("Encountered NAN log_prob_sum at site '{}'".format(name))
-    if torch_isinf(value) and value > 0:
-        warnings.warn("Encountered +inf log_prob_sum at site '{}'".format(name))
-    # Note that -inf log_prob_sum is fine: it is merely a zero-probability event.
+from pyro.poutine.util import is_validation_enabled
+from pyro.util import warn_if_nan, warn_if_inf
 
 
 class DiGraph(networkx.DiGraph):
@@ -192,10 +181,14 @@ class Trace(object):
         but raises an error when attempting to add a duplicate node
         instead of silently overwriting.
         """
-        # XXX should do more validation than this
-        if kwargs["type"] != "param":
-            assert site_name not in self, \
-                "site {} already in trace".format(site_name)
+        if site_name in self:
+            site = self.nodes[site_name]
+            if site['type'] != kwargs['type']:
+                # Cannot sample or observe after a param statement.
+                raise RuntimeError("{} is already in the trace as a {}".format(site_name, site['type']))
+            elif kwargs['type'] != "param":
+                # Cannot sample after a previous sample statement.
+                raise RuntimeError("Multiple {} sites named '{}'".format(kwargs['type'], site_name))
 
         # XXX should copy in case site gets mutated, or dont bother?
         self._graph.add_node(site_name, *args, **kwargs)
@@ -232,7 +225,9 @@ class Trace(object):
                     site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
                     site_log_p = scale_tensor(site_log_p, site["scale"]).sum()
                     site["log_prob_sum"] = site_log_p
-                    _warn_if_nan(name, site_log_p)
+                    if is_validation_enabled():
+                        warn_if_nan(site_log_p, "log_prob_sum at site '{}'".format(name))
+                        warn_if_inf(site_log_p, "log_prob_sum at site '{}'".format(name), allow_neginf=True)
                 log_p += site_log_p
         return log_p
 
@@ -253,7 +248,9 @@ class Trace(object):
                     site_log_p = scale_tensor(site_log_p, site["scale"])
                     site["log_prob"] = site_log_p
                     site["log_prob_sum"] = site_log_p.sum()
-                    _warn_if_nan(name, site["log_prob_sum"])
+                    if is_validation_enabled():
+                        warn_if_nan(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name))
+                        warn_if_inf(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name), allow_neginf=True)
 
     def compute_score_parts(self):
         """
@@ -270,7 +267,9 @@ class Trace(object):
                 site["score_parts"] = value
                 site["log_prob"] = value[0]
                 site["log_prob_sum"] = value[0].sum()
-                _warn_if_nan(name, site["log_prob_sum"])
+                if is_validation_enabled():
+                    warn_if_nan(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name))
+                    warn_if_inf(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name), allow_neginf=True)
 
     @property
     def observation_nodes(self):

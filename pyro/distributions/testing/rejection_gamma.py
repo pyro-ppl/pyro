@@ -60,8 +60,8 @@ class RejectionStandardGamma(Rejector):
 class RejectionGamma(Gamma):
     has_rsample = True
 
-    def __init__(self, concentration, rate):
-        super(RejectionGamma, self).__init__(concentration, rate)
+    def __init__(self, concentration, rate, validate_args=None):
+        super(RejectionGamma, self).__init__(concentration, rate, validate_args=validate_args)
         self._standard_gamma = RejectionStandardGamma(concentration)
         self.rate = rate
 
@@ -85,10 +85,10 @@ class ShapeAugmentedGamma(Gamma):
     """
     has_rsample = True
 
-    def __init__(self, concentration, rate, boost=1):
+    def __init__(self, concentration, rate, boost=1, validate_args=None):
         if concentration.min() + boost < 1:
             raise ValueError('Need to boost at least once for concentration < 1')
-        super(ShapeAugmentedGamma, self).__init__(concentration, rate)
+        super(ShapeAugmentedGamma, self).__init__(concentration, rate, validate_args=validate_args)
         self.concentration = concentration
         self._boost = boost
         self._rejection_gamma = RejectionGamma(concentration + boost, rate)
@@ -120,8 +120,8 @@ class ShapeAugmentedDirichlet(Dirichlet):
     This naive implementation has stochastic reparameterized gradients, which
     have higher variance than PyTorch's ``Dirichlet`` implementation.
     """
-    def __init__(self, concentration, boost=1):
-        super(ShapeAugmentedDirichlet, self).__init__(concentration)
+    def __init__(self, concentration, boost=1, validate_args=None):
+        super(ShapeAugmentedDirichlet, self).__init__(concentration, validate_args=validate_args)
         self._gamma = ShapeAugmentedGamma(concentration, torch.ones_like(concentration), boost)
 
     def rsample(self, sample_shape=torch.Size()):
@@ -137,8 +137,8 @@ class ShapeAugmentedBeta(Beta):
     This naive implementation has stochastic reparameterized gradients, which
     have higher variance than PyTorch's ``rate`` implementation.
     """
-    def __init__(self, concentration1, concentration0, boost=1):
-        super(ShapeAugmentedBeta, self).__init__(concentration1, concentration0)
+    def __init__(self, concentration1, concentration0, boost=1, validate_args=None):
+        super(ShapeAugmentedBeta, self).__init__(concentration1, concentration0, validate_args=validate_args)
         alpha_beta = torch.stack([concentration1, concentration0], -1)
         self._gamma = ShapeAugmentedGamma(alpha_beta, torch.ones_like(alpha_beta), boost)
 

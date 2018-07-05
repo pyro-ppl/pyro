@@ -57,7 +57,7 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
         if is_scalar:
             batch_shape = torch.Size()
         else:
-            batch_shape = self._param.size()
+            batch_shape = self._param.shape
         super(Binomial, self).__init__(batch_shape, validate_args=validate_args)
 
     def _new(self, *args, **kwargs):
@@ -85,7 +85,7 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
 
     @property
     def param_shape(self):
-        return self._param.size()
+        return self._param.shape
 
     def sample(self, sample_shape=torch.Size()):
         with torch.no_grad():
@@ -121,11 +121,14 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
         return values
 
     def expand(self, batch_shape):
-        validate_args = self.__dict__.get('validate_args')
-        total_count = self.total_count.expand(batch_shape)
-        if 'probs' in self.__dict__:
-            probs = self.probs.expand(batch_shape)
-            return Binomial(total_count, probs=probs, validate_args=validate_args)
-        else:
-            logits = self.logits.expand(batch_shape)
-            return Binomial(total_count, logits=logits, validate_args=validate_args)
+        try:
+            return super(Binomial, self).expand(batch_shape)
+        except NotImplementedError:
+            validate_args = self.__dict__.get('validate_args')
+            total_count = self.total_count.expand(batch_shape)
+            if 'probs' in self.__dict__:
+                probs = self.probs.expand(batch_shape)
+                return type(self)(total_count, probs=probs, validate_args=validate_args)
+            else:
+                logits = self.logits.expand(batch_shape)
+                return type(self)(total_count, logits=logits, validate_args=validate_args)
