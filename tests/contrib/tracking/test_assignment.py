@@ -325,9 +325,11 @@ def test_persistent_replica_symmetry(num_objects, num_frames, num_detections, bp
     assignment = MarginalAssignmentPersistent(exists_logits, assign_logits, bp_iters)
     expected_exists_probs = assignment.exists_dist.probs
 
-    # solve the same problem replicated by 2
-    exists_logits_2 = torch.cat([exists_logits] * 2) - math.log(2)
-    assign_logits_2 = torch.cat([assign_logits] * 2, dim=-1)
+    # solve the same problem replicated by 2, with appropriately adjusted logits
+    R = 2
+    scaled = ((exists_logits.exp() + 1).pow(1. / R) - 1).log()
+    exists_logits_2 = torch.cat([scaled] * R)
+    assign_logits_2 = torch.cat([assign_logits] * R, dim=-1) - math.log(R)
     assignment_2 = MarginalAssignmentPersistent(exists_logits_2, assign_logits_2, bp_iters)
     exists_probs_2 = assignment_2.exists_dist.probs
     assign_probs_2 = assignment_2.assign_dist.probs
