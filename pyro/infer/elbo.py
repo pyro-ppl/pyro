@@ -12,10 +12,13 @@ import pyro.poutine as poutine
 class ELBO(object):
     """
     :class:`ELBO` is the top-level interface for stochastic variational
-    inference via optimization of the evidence lower bound. Most users will not
-    interact with :class:`ELBO` directly; instead they will interact with `SVI`.
-    `ELBO` dispatches to `Trace_ELBO` and `TraceGraph_ELBO`, where the internal
-    implementations live.
+    inference via optimization of the evidence lower bound.
+
+    Most users will not interact with this base class :class:`ELBO` directly;
+    instead they will create instances of derived classes:
+    :class:`~pyro.infer.trace_elbo.Trace_ELBO`,
+    :class:`~pyro.infer.tracegraph_elbo.TraceGraph_ELBO`, or
+    :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO`.
 
     :param num_particles: The number of particles/samples used to form the ELBO
         (gradient) estimators.
