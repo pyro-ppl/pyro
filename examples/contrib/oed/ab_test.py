@@ -36,7 +36,7 @@ regression_model = RegressionModel(p)
 def model(design):
     # Create unit normal priors over the parameters
     loc = torch.zeros(1, p)
-    scale = torch.linspace(1, p, p)
+    scale = torch.Tensor([1, .1])
     w_prior = dist.Normal(loc, scale).independent(1)
     priors = {'linear.weight': w_prior}
     # lift module parameters to random variables sampled from the priors
@@ -56,7 +56,7 @@ def guide(design):
     # define our variational parameters
     w_loc = torch.zeros(1, p)
     # note that we initialize our scales to be pretty narrow
-    w_log_sig = torch.tensor(-3.0 * torch.ones(1, 1) + 0.05 * torch.randn(1, 1))
+    w_log_sig = -3*torch.ones(1, p)
     # register learnable params in the param store
     mw_param = pyro.param("guide_mean_weight", w_loc)
     sw_param = softplus(pyro.param("guide_log_scale_weight", w_log_sig))
@@ -82,14 +82,14 @@ def design_to_matrix(design):
 
 
 if __name__ == '__main__':
-    ns = [10, 20, 30, 40, 50, 60, 70, 80, 90]
-    true= []
+    ns = [10, 50]
+    true = []
     est = []
     for n1 in ns:
         print(n1)
         point = torch.Tensor([n1, N - n1])
-        est.append(ContinuousEIG(model, guide, point))
-        true.append(0.5*np.log(n1*(N - n1) + n1*1 + (N- n1)*2))
+        est.append(ContinuousEIG(model, guide, point, vi=True))
+        true.append(ContinuousEIG(model, guide, point, vi=False))
 
     print(est)
     print(true)
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     est = np.array(est)
     true = np.array(true)
     plt.scatter(ns, est)
-    plt.plot(ns, -true)
+    plt.scatter(ns, true, color='r')
     plt.show()
 
 
