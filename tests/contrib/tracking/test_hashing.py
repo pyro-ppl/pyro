@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import pytest
 import torch
 
-from pyro.contrib.tracking.hashing import LSH, ApproxSet
+from pyro.contrib.tracking.hashing import LSH, ApproxSet, merge_points
 from tests.common import assert_equal
 
 
@@ -115,3 +115,37 @@ def test_aps_try_add(scale):
     assert_equal(aps.try_add(b), False)
     assert_equal(aps.try_add(c), True)
     assert_equal(aps.try_add(d), False)
+
+
+def test_merge_points_small():
+    points = torch.tensor([
+        [0., 0.],
+        [0., 1.],
+        [2., 0.],
+        [2., 0.5],
+        [2., 1.0],
+    ])
+    merged_points, groups = merge_points(points, radius=1.0)
+
+    assert len(merged_points) == 3
+    assert set(map(frozenset, groups)) == set(map(frozenset, [[0], [1], [2, 3, 4]]))
+    assert_equal(merged_points[0], points[0])
+    assert_equal(merged_points[1], points[1])
+    assert merged_points[2, 0] == 2
+    assert 0.325 <= merged_points[2, 1] <= 0.625
+
+
+@pytest.mark.parametrize('radius', [0.01, 0.1, 1., 10., 100.])
+@pytest.mark.parametrize('dim', [1, 2, 3])
+def test_merge_points_large(dim, radius):
+    points = 10 * torch.randn(200, dim)
+    merged_points, groups = merge_points(points, radius)
+    print('merged {} -> {}'.format(len(points), len(merged_points)))
+
+    assert merged_points.dim() == 2
+    assert merged_points.shape[-1] == dim
+    assert len(groups) == len(merged_points)
+    assert sum(len(g) for g in groups) == len(points)
+    assert set(sum(groups, ())) == set(range(len(points)))
+    d2 = (merged_points.unsqueeze(-2) - merged_points.unsqueeze(-3)).pow(2).sum(-1)
+    assert d2.min() < radius ** 2
