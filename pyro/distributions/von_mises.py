@@ -68,7 +68,7 @@ class VonMises(TorchDistribution):
         try:
             return super(VonMises, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             loc = self.loc.expand(batch_shape)
             concentration = self.concentration.expand(batch_shape)
             return type(self)(loc, concentration, validate_args=validate_args)

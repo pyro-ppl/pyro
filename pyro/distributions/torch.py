@@ -10,7 +10,7 @@ class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
         try:
             return super(Bernoulli, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             if 'probs' in self.__dict__:
                 probs = self.probs.expand(batch_shape)
                 return type(self)(probs=probs, validate_args=validate_args)
@@ -24,7 +24,7 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
         try:
             return super(Beta, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             concentration1 = self.concentration1.expand(batch_shape)
             concentration0 = self.concentration0.expand(batch_shape)
             return type(self)(concentration1, concentration0, validate_args=validate_args)
@@ -36,7 +36,7 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
             return super(Categorical, self).expand(batch_shape)
         except NotImplementedError:
             batch_shape = torch.Size(batch_shape)
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             if 'probs' in self.__dict__:
                 probs = self.probs.expand(batch_shape + self.probs.shape[-1:])
                 return type(self)(probs=probs, validate_args=validate_args)
@@ -50,7 +50,7 @@ class Cauchy(torch.distributions.Cauchy, TorchDistributionMixin):
         try:
             return super(Cauchy, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             loc = self.loc.expand(batch_shape)
             scale = self.scale.expand(batch_shape)
             return type(self)(loc, scale, validate_args=validate_args)
@@ -61,7 +61,7 @@ class Chi2(torch.distributions.Chi2, TorchDistributionMixin):
         try:
             return super(Chi2, self).expand_by(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             df = self.df.expand(batch_shape)
             return type(self)(df, validate_args=validate_args)
 
@@ -72,7 +72,7 @@ class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
             return super(Dirichlet, self).expand(batch_shape)
         except NotImplementedError:
             batch_shape = torch.Size(batch_shape)
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             concentration = self.concentration.expand(batch_shape + self.event_shape)
             return type(self)(concentration, validate_args=validate_args)
 
@@ -82,7 +82,7 @@ class Exponential(torch.distributions.Exponential, TorchDistributionMixin):
         try:
             return super(Exponential, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             rate = self.rate.expand(batch_shape)
             return type(self)(rate, validate_args=validate_args)
 
@@ -92,7 +92,7 @@ class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
         try:
             return super(Gamma, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             concentration = self.concentration.expand(batch_shape)
             rate = self.rate.expand(batch_shape)
             return type(self)(concentration, rate, validate_args=validate_args)
@@ -103,7 +103,7 @@ class Geometric(torch.distributions.Geometric, TorchDistributionMixin):
         try:
             return super(Geometric, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             if 'probs' in self.__dict__:
                 probs = self.probs.expand(batch_shape)
                 return type(self)(probs=probs, validate_args=validate_args)
@@ -117,7 +117,7 @@ class Gumbel(torch.distributions.Gumbel, TorchDistributionMixin):
         try:
             return super(Gumbel, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             loc = self.loc.expand(batch_shape)
             scale = self.scale.expand(batch_shape)
             return type(self)(loc, scale, validate_args=validate_args)
@@ -126,7 +126,7 @@ class Gumbel(torch.distributions.Gumbel, TorchDistributionMixin):
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
     def expand(self, batch_shape):
         batch_shape = torch.Size(batch_shape)
-        validate_args = self.__dict__.get('validate_args')
+        validate_args = self.__dict__.get('_validate_args')
         extra_shape = self.base_dist.event_shape[:self.reinterpreted_batch_ndims]
         base_dist = self.base_dist.expand(batch_shape + extra_shape)
         return Independent(base_dist, self.reinterpreted_batch_ndims, validate_args=validate_args)
@@ -137,7 +137,7 @@ class Laplace(torch.distributions.Laplace, TorchDistributionMixin):
         try:
             return super(Laplace, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             loc = self.loc.expand(batch_shape)
             scale = self.scale.expand(batch_shape)
             return type(self)(loc, scale, validate_args=validate_args)
@@ -148,7 +148,7 @@ class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
         try:
             return super(LogNormal, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             loc = self.loc.expand(batch_shape)
             scale = self.scale.expand(batch_shape)
             return type(self)(loc, scale, validate_args=validate_args)
@@ -160,7 +160,7 @@ class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
             return super(Multinomial, self).expand(batch_shape)
         except NotImplementedError:
             batch_shape = torch.Size(batch_shape)
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             if 'probs' in self.__dict__:
                 probs = self.probs.expand(batch_shape + self.event_shape)
                 return type(self)(self.total_count, probs=probs, validate_args=validate_args)
@@ -175,7 +175,7 @@ class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributi
             return super(MultivariateNormal, self).expand(batch_shape)
         except NotImplementedError:
             batch_shape = torch.Size(batch_shape)
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             loc = self.loc.expand(batch_shape + self.event_shape)
             if 'scale_tril' in self.__dict__:
                 scale_tril = self.scale_tril.expand(batch_shape + self.event_shape + self.event_shape)
@@ -193,7 +193,7 @@ class Normal(torch.distributions.Normal, TorchDistributionMixin):
         try:
             return super(Normal, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             loc = self.loc.expand(batch_shape)
             scale = self.scale.expand(batch_shape)
             return type(self)(loc, scale, validate_args=validate_args)
@@ -205,7 +205,7 @@ class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistribution
             return super(OneHotCategorical, self).expand(batch_shape)
         except NotImplementedError:
             batch_shape = torch.Size(batch_shape)
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             if 'probs' in self.__dict__:
                 probs = self.probs.expand(batch_shape + self.event_shape)
                 return type(self)(probs=probs, validate_args=validate_args)
@@ -219,7 +219,7 @@ class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
         try:
             return super(Poisson, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             rate = self.rate.expand(batch_shape)
             return type(self)(rate, validate_args=validate_args)
 
@@ -229,7 +229,7 @@ class StudentT(torch.distributions.StudentT, TorchDistributionMixin):
         try:
             return super(StudentT, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             df = self.df.expand(batch_shape)
             loc = self.loc.expand(batch_shape)
             scale = self.scale.expand(batch_shape)
@@ -247,7 +247,7 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
         try:
             return super(Uniform, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             low = self.low.expand(batch_shape)
             high = self.high.expand(batch_shape)
             return type(self)(low, high, validate_args=validate_args)
