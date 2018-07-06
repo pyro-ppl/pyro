@@ -12,6 +12,12 @@ class VonMises3D(TorchDistribution):
     """
     Spherical von Mises distribution.
     https://en.wikipedia.org/wiki/Von_Mises%E2%80%93Fisher_distribution
+
+    Currently only :meth:`log_prob` is implemented.
+
+    :param torch.Tensor concentration: A combined location-and-concentration
+        vector. The direction of this vector is the location, and its
+        magnitude is the contration.
     """
     arg_constraints = {'concentration': constraints.real}
     support = constraints.real  # TODO implement constraints.sphere or similar
