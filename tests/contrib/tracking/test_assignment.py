@@ -314,28 +314,35 @@ def test_persistent_independent_subproblems(num_objects, num_frames, num_detecti
 
 
 @pytest.mark.xfail(reason='misunderstanding')
+@pytest.mark.parametrize('num_objects', [1, 2, 3])
 @pytest.mark.parametrize('num_detections', [1, 2, 3])
 @pytest.mark.parametrize('num_frames', [1, 2, 3])
-@pytest.mark.parametrize('num_objects', [1, 2, 3])
 @pytest.mark.parametrize('bp_iters,R', [
     (None, 1),
     (None, 2),
     (30, 1),
     (30, 2),
     (30, 10),
-], ids=['enum-1', 'enum-2', 'bp-1', 'bp-2', 'bp-10'])
+], ids=[
+    'enum-1',
+    'enum-2',
+    'bp-1',
+    'bp-2',
+    'bp-10',
+])
 def test_persistent_replica_symmetry(num_objects, num_frames, num_detections, bp_iters, R):
     # solve a random assignment problem
     exists_logits = -2 * torch.rand(num_objects)
     assign_logits = 2 * torch.rand(num_frames, num_detections, num_objects) - 1
     assignment = MarginalAssignmentPersistent(exists_logits, assign_logits, bp_iters)
     expected_exists_probs = assignment.exists_dist.probs
+    expected_assign_probs = assignment.assign_dist.probs
 
-    # solve the same problem replicated by 2, with appropriately adjusted logits
+    # solve the same problem replicated by 2, with appropriately scaled logits
     scaled_exists_logits = ((exists_logits.exp() + 1).pow(1. / R) - 1).log()
-    exists_logits_2 = torch.cat([scaled_exists_logits] * R)
     scaled_assign_logits = (assign_logits - math.log(R) +
                             (-scaled_exists_logits).exp().log1p() - (-exists_logits).exp().log1p())
+    exists_logits_2 = torch.cat([scaled_exists_logits] * R)
     assign_logits_2 = torch.cat([scaled_assign_logits] * R, dim=-1)
     assignment_2 = MarginalAssignmentPersistent(exists_logits_2, assign_logits_2, bp_iters)
     exists_probs_2 = assignment_2.exists_dist.probs
@@ -347,6 +354,12 @@ def test_persistent_replica_symmetry(num_objects, num_frames, num_detections, bp
         assert_equal(assign_probs_2[..., :num_objects], assign_probs_2[..., num_objects:num_objects*2])
 
     # and should quotient down to the original problem
-    actual_exists_probs = 1 - (1 - exists_probs_2).reshape(num_objects, R).prod(-1)
+    actual_exists_probs = 1 - (1 - exists_probs_2).reshape(R, num_objects).prod(-2)
+    actual_assign_probs = torch.cat([
+        assign_probs_2[:, :, :-1].reshape(num_frames, num_detections, R, num_objects).sum(-2),
+        assign_probs_2[:, :, -1:],
+    ], dim=-1)
     assert_equal(expected_exists_probs, actual_exists_probs,
                  msg='Expected:\n{}\nActual:\n{}'.format(expected_exists_probs, actual_exists_probs))
+    assert_equal(expected_assign_probs, actual_assign_probs,
+                 msg='Expected:\n{}\nActual:\n{}'.format(expected_assign_probs, actual_assign_probs))
