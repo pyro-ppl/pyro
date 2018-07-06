@@ -163,6 +163,7 @@ def merge_points(points, radius):
     # setup data structures to cheaply search for nearest pairs
     lsh = LSH(radius)
     priority_queue = []
+    groups = [(i,) for i in range(len(points))]
     for i, point in enumerate(points):
         lsh.add(i, point)
         for j in lsh.nearby(i):
@@ -170,13 +171,12 @@ def merge_points(points, radius):
             if d2 < threshold:
                 heapq.heappush(priority_queue, (d2, j, i))
     if not priority_queue:
-        groups = [(i,) for i in range(len(points))]
         return points, groups
 
     # convert from dense to sparse representation
     next_id = len(points)
     points = dict(enumerate(points))
-    groups = {i: (i,) for i in range(len(points))}
+    groups = dict(enumerate(groups))
 
     # greedily merge
     while priority_queue:
