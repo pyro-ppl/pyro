@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import pytest
 import torch
 
-from pyro.contrib.tracking.hashing import LSH, ApproxSet
+from pyro.contrib.tracking.hashing import LSH, ApproxSet, merge_points
 from tests.common import assert_equal
 
 
@@ -115,3 +115,20 @@ def test_aps_try_add(scale):
     assert_equal(aps.try_add(b), False)
     assert_equal(aps.try_add(c), True)
     assert_equal(aps.try_add(d), False)
+
+
+def test_merge_points():
+    points = torch.tensor([
+        [0., 0.],
+        [0., 1.],
+        [2., 0.],
+        [2., 0.5],
+        [2., 1.0],
+    ])
+    merged_points, groups = merge_points(points, radius=1.0)
+    assert len(merged_points) == 3
+    assert set(map(frozenset, groups)) == set(map(frozenset, [[0], [1], [2, 3, 4]]))
+    assert_equal(merged_points[0], points[0])
+    assert_equal(merged_points[1], points[1])
+    assert merged_points[2, 0] == 2
+    assert 0.325 <= merged_points[2, 1] <= 0.625
