@@ -17,8 +17,8 @@ class SVI(object):
     :param loss: an instance of a subclass of :class:`~pyro.infer.elbo.ELBO`.
         Pyro provides three built-in losses:
         :class:`~pyro.infer.trace_elbo.Trace_ELBO`,
-        :class:`~pyro.infer.tracegraph_elbo.Trace_ELBO`, and
-        :class:`~pyro.infer.traceenum_elbo.Trace_ELBO`.
+        :class:`~pyro.infer.tracegraph_elbo.TraceGraph_ELBO`, and
+        :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO`.
         See the :class:`~pyro.infer.elbo.ELBO` docs to learn how to implement
         a custom loss.
     :type loss: pyro.infer.elbo.ELBO
