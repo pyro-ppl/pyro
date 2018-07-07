@@ -53,10 +53,10 @@ class NormalNormalTests(TestCase):
         self.do_elbo_test(False, 15000, Trace_ELBO())
 
     def test_renyi_reparameterized(self):
-        self.do_elbo_test(True, 100, RenyiELBO())
+        self.do_elbo_test(True, 2500, RenyiELBO())
 
     def test_renyi_nonreparameterized(self):
-        self.do_elbo_test(False, 1000, RenyiELBO())
+        self.do_elbo_test(False, 7500, RenyiELBO())
 
     def do_elbo_test(self, reparameterized, n_steps, loss):
         pyro.clear_param_store()
@@ -183,10 +183,10 @@ class PoissonGammaTests(TestCase):
         self.do_elbo_test(False, 25000, Trace_ELBO())
 
     def test_renyi_reparameterized(self):
-        self.do_elbo_test(True, 1000, RenyiELBO())
+        self.do_elbo_test(True, 5000, RenyiELBO())
 
     def test_renyi_nonreparameterized(self):
-        self.do_elbo_test(False, 10000, RenyiELBO(alpha=0.8))
+        self.do_elbo_test(False, 12500, RenyiELBO(alpha=0.2))
 
     def do_elbo_test(self, reparameterized, n_steps, loss):
         pyro.clear_param_store()
@@ -225,7 +225,7 @@ class PoissonGammaTests(TestCase):
     Trace_ELBO,
     TraceGraph_ELBO,
     TraceEnum_ELBO,
-    xfail_param(RenyiELBO, reason="Assertation errors at alpha_q, beta_q", run=False),
+    RenyiELBO,
 ])
 @pytest.mark.parametrize('gamma_dist,n_steps', [
     (dist.Gamma, 5000),
@@ -256,7 +256,12 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
         pyro.sample("lambda_latent", gamma_dist(alpha_q, beta_q))
 
     adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
-    elbo = elbo_impl(strict_enumeration_warning=False)
+    if elbo_impl is RenyiELBO:
+        elbo = elbo_impl(alpha=0.2, num_particles=3, strict_enumeration_warning=False)
+        if gamma_dist is ShapeAugmentedGamma:
+            pytest.skip("Assertation errors at beta_q!")
+    else:
+        elbo = elbo_impl(strict_enumeration_warning=False)
     svi = SVI(model, guide, adam, loss=elbo, max_iarange_nesting=1)
 
     for k in range(n_steps):
@@ -291,13 +296,11 @@ class BernoulliBetaTests(TestCase):
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(False, 10000, Trace_ELBO())
 
-    @pytest.mark.xfail(reason='Assertation failed for alpha_error')
-    def test_renyi1_reparameterized(self):
-        self.do_elbo_test(True, 1000, RenyiELBO())
+    def test_renyi_reparameterized(self):
+        self.do_elbo_test(True, 5000, RenyiELBO())
 
-    @pytest.mark.xfail(reason='Assertation failed for alpha_error')
-    def test_renyi1_nonreparameterized(self):
-        self.do_elbo_test(False, 1000, RenyiELBO())
+    def test_renyi_nonreparameterized(self):
+        self.do_elbo_test(False, 5000, RenyiELBO(alpha=0.2))
 
     def do_elbo_test(self, reparameterized, n_steps, loss):
         pyro.clear_param_store()

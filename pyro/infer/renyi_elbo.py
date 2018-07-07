@@ -48,14 +48,18 @@ class RenyiELBO(ELBO):
         Yuri Burda, Roger Grosse, Ruslan Salakhutdinov
     """
 
-    def __init__(self, alpha=0., num_particles=2, max_iarange_nesting=2,
+    def __init__(self,
+                 alpha=0,
+                 num_particles=1,
+                 max_iarange_nesting=float('inf'),
+                 vectorize_particles=False,
                  strict_enumeration_warning=True):
         if alpha == 1:
             raise ValueError("The order alpha should not be equal to 1. Please use Trace_ELBO class"
                              "for the case alpha = 1.")
         self.alpha = alpha
-        super(RenyiELBO, self).__init__(num_particles, max_iarange_nesting, vectorize_particles=True,
-                                        strict_enumeration_warning=True)
+        super(RenyiELBO, self).__init__(num_particles, max_iarange_nesting, vectorize_particles,
+                                        strict_enumeration_warning)
 
     def _get_trace(self, model, guide, *args, **kwargs):
         """
@@ -135,21 +139,23 @@ class RenyiELBO(ELBO):
         # compute elbo and surrogate elbo
         for name, site in model_trace.nodes.items():
             if site["type"] == "sample":
-                elbo_particle = elbo_particle + site["log_prob"].detach()
-                surrogate_elbo_particle = surrogate_elbo_particle + site["log_prob"]
+                log_prob_sum = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                elbo_particle = elbo_particle + log_prob_sum.detach()
+                surrogate_elbo_particle = surrogate_elbo_particle + log_prob_sum
 
         for name, site in guide_trace.nodes.items():
             if site["type"] == "sample":
                 log_prob, score_function_term, entropy_term = site["score_parts"]
+                log_prob_sum = log_prob.reshape(self.num_particles, -1).sum(-1)
 
-                elbo_particle = elbo_particle - log_prob.detach()
+                elbo_particle = elbo_particle - log_prob_sum.detach()
 
                 if not is_identically_zero(entropy_term):
-                    surrogate_elbo_particle = surrogate_elbo_particle - entropy_term
+                    surrogate_elbo_particle = surrogate_elbo_particle - log_prob_sum
 
                 if not is_identically_zero(score_function_term):
                     surrogate_elbo_particle = (surrogate_elbo_particle +
-                                               (self.alpha / (1. - self.alpha)) * score_function_term)
+                                               (self.alpha / (1. - self.alpha)) * log_prob_sum)
 
         if is_identically_zero(elbo_particle):
             return 0.
@@ -170,6 +176,7 @@ class RenyiELBO(ELBO):
                 weights = 1.
             else:
                 weights = (elbo_particle_scaled - elbo_scaled).exp()
+
             surrogate_loss = - (weights * surrogate_elbo_particle).sum() / self.num_particles
             surrogate_loss.backward()
 
