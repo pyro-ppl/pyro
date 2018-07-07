@@ -76,7 +76,9 @@ class GPRegression(GPModel):
 
         noise = self.get_param("noise")
 
-        Kff = self.kernel(self.X) + noise.expand(self.X.shape[0]).diag()
+        N = self.X.shape[0]
+        Kff = self.kernel(self.X)
+        Kff.view(-1)[::N + 1] += noise  # add noise to diagonal
         Lff = Kff.potrf(upper=False)
 
         zero_loc = self.X.new_zeros(self.X.shape[0])
@@ -122,7 +124,9 @@ class GPRegression(GPModel):
         self._check_Xnew_shape(Xnew)
         noise = self.guide()
 
-        Kff = self.kernel(self.X) + noise.expand(self.X.shape[0]).diag()
+        N = self.X.shape[0]
+        Kff = self.kernel(self.X).contiguous()
+        Kff.view(-1)[::N + 1] += noise  # add noise to the diagonal
         Lff = Kff.potrf(upper=False)
 
         y_residual = self.y - self.mean_function(self.X)
@@ -130,8 +134,10 @@ class GPRegression(GPModel):
                                full_cov, jitter=self.jitter)
 
         if full_cov and not noiseless:
-            cov = cov + noise.expand(Xnew.shape[0]).diag()
+            M = Xnew.shape[0]
+            cov = cov.contiguous()
+            cov.view(-1, M * M)[:, ::M + 1] += noise  # add noise to the diagonal
         if not full_cov and not noiseless:
-            cov = cov + noise.expand(Xnew.shape[0])
+            cov = cov + noise
 
         return loc + self.mean_function(Xnew), cov

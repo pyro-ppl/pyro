@@ -34,6 +34,7 @@ Welcome to Pyro Examples and Tutorials!
    gmm
    gp
    bo
+   tracking_1d
 
 
 Indices and tables

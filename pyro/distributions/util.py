@@ -188,18 +188,6 @@ def torch_sign(value):
     return torch.sign(value)
 
 
-def matrix_triangular_solve_compat(b, A, upper=True):
-    """
-    Computes the solution to the linear equation AX = b,
-    where A is a triangular matrix.
-
-    :param b: A 1D or 2D tensor of size N or N x C.
-    :param A: A 2D tensor of size N X N.
-    :param upper: A flag if A is a upper triangular matrix or not.
-    """
-    return b.view(b.shape[0], -1).trtrs(A, upper=upper)[0].view(b.shape)
-
-
 def log_sum_exp(tensor, dim=-1):
     """
     Numerically stable implementation for the `LogSumExp` operation. The

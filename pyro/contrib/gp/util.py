@@ -5,7 +5,6 @@ import torch.nn as nn
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.util import matrix_triangular_solve_compat
 from pyro.params import param_with_module_name
 
 
@@ -211,7 +210,8 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
     latent_shape = f_loc.shape[:-1]
 
     if Lff is None:
-        Kff = kernel(X) + torch.eye(N, out=X.new_empty(N, N)) * jitter
+        Kff = kernel(X).contiguous()
+        Kff.view(-1)[::N + 1] += jitter  # add jitter to diagonal
         Lff = Kff.potrf(upper=False)
     Kfs = kernel(X, Xnew)
 
@@ -227,7 +227,7 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
 
     if whiten:
         v_2D = f_loc_2D
-        W = matrix_triangular_solve_compat(Kfs, Lff, upper=False)
+        W = Kfs.trtrs(Lff, upper=False)[0]
         if f_scale_tril is not None:
             S_2D = f_scale_tril_2D
     else:
@@ -235,7 +235,7 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
         if f_scale_tril is not None:
             pack = torch.cat((pack, f_scale_tril_2D), dim=1)
 
-        Lffinv_pack = matrix_triangular_solve_compat(pack, Lff, upper=False)
+        Lffinv_pack = pack.trtrs(Lff, upper=False)[0]
         # unpack
         v_2D = Lffinv_pack[:, :f_loc_2D.shape[1]]
         W = Lffinv_pack[:, f_loc_2D.shape[1]:f_loc_2D.shape[1] + M]

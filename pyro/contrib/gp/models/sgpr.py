@@ -7,7 +7,6 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.gp.models.model import GPModel
-from pyro.distributions.util import matrix_triangular_solve_compat
 from pyro.params import param_with_module_name
 
 
@@ -129,10 +128,11 @@ class SparseGPRegression(GPModel):
         # trace_term is added into log_prob
 
         M = Xu.shape[0]
-        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new_empty(M, M)) * self.jitter
+        Kuu = self.kernel(Xu).contiguous()
+        Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.potrf(upper=False)
         Kuf = self.kernel(Xu, self.X)
-        W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
+        W = Kuf.trtrs(Luu, upper=False)[0]
 
         D = noise.expand(W.shape[1])
         trace_term = 0
@@ -204,13 +204,14 @@ class SparseGPRegression(GPModel):
         N = self.X.shape[0]
         M = Xu.shape[0]
 
-        Kuu = self.kernel(Xu) + torch.eye(M, out=Xu.new_empty(M, M)) * self.jitter
+        Kuu = self.kernel(Xu).contiguous()
+        Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.potrf(upper=False)
         Kus = self.kernel(Xu, Xnew)
         Kuf = self.kernel(Xu, self.X)
 
-        W = matrix_triangular_solve_compat(Kuf, Luu, upper=False)
-        Ws = matrix_triangular_solve_compat(Kus, Luu, upper=False)
+        W = Kuf.trtrs(Luu, upper=False)[0]
+        Ws = Kus.trtrs(Luu, upper=False)[0]
         D = noise.expand(N)
         if self.approx == "FITC":
             Kffdiag = self.kernel(self.X, diag=True)
@@ -218,8 +219,8 @@ class SparseGPRegression(GPModel):
             D = D + Kffdiag - Qffdiag
 
         W_Dinv = W / D
-        Id = torch.eye(M, M, out=W.new_empty(M, M))
-        K = Id + W_Dinv.matmul(W.t())
+        K = W_Dinv.matmul(W.t()).contiguous()
+        K.view(-1)[::M + 1] += 1  # add identity matrix to K
         L = K.potrf(upper=False)
 
         # get y_residual and convert it into 2D tensor for packing
@@ -227,7 +228,7 @@ class SparseGPRegression(GPModel):
         y_2D = y_residual.reshape(-1, N).t()
         W_Dinv_y = W_Dinv.matmul(y_2D)
         pack = torch.cat((W_Dinv_y, Ws), dim=1)
-        Linv_pack = matrix_triangular_solve_compat(pack, L, upper=False)
+        Linv_pack = pack.trtrs(L, upper=False)[0]
         # unpack
         Linv_W_Dinv_y = Linv_pack[:, :W_Dinv_y.shape[1]]
         Linv_Ws = Linv_pack[:, W_Dinv_y.shape[1]:]
@@ -236,15 +237,15 @@ class SparseGPRegression(GPModel):
         loc = Linv_W_Dinv_y.t().matmul(Linv_Ws).reshape(loc_shape)
 
         if full_cov:
-            Kss = self.kernel(Xnew)
+            Kss = self.kernel(Xnew).contiguous()
             if not noiseless:
-                Kss = Kss + noise.expand(Xnew.shape[0]).diag()
+                Kss.view(-1)[::Xnew.shape[0] + 1] += noise  # add noise to the diagonal
             Qss = Ws.t().matmul(Ws)
             cov = Kss - Qss + Linv_Ws.t().matmul(Linv_Ws)
         else:
             Kssdiag = self.kernel(Xnew, diag=True)
             if not noiseless:
-                Kssdiag = Kssdiag + noise.expand(Xnew.shape[0])
+                Kssdiag = Kssdiag + noise
             Qssdiag = Ws.pow(2).sum(dim=0)
             cov = Kssdiag - Qssdiag + Linv_Ws.pow(2).sum(dim=0)
 

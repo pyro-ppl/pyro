@@ -57,7 +57,7 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
         if is_scalar:
             batch_shape = torch.Size()
         else:
-            batch_shape = self._param.size()
+            batch_shape = self._param.shape
         super(Binomial, self).__init__(batch_shape, validate_args=validate_args)
 
     def _new(self, *args, **kwargs):
@@ -85,7 +85,7 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
 
     @property
     def param_shape(self):
-        return self._param.size()
+        return self._param.shape
 
     def sample(self, sample_shape=torch.Size()):
         with torch.no_grad():
