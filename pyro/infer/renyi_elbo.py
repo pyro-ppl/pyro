@@ -151,7 +151,7 @@ class RenyiELBO(ELBO):
         if self.num_particles == 1:
             elbo_scaled = elbo_particles_scaled
         else:
-            elbo_scaled = log_sum_exp(elbo_particle_scaled, dim=0) - math.log(self.num_particles)
+            elbo_scaled = log_sum_exp(elbo_particles_scaled, dim=0) - math.log(self.num_particles)
 
         loss = elbo_scaled.sum().item() / (self.alpha - 1.)
         warn_if_nan(loss, "loss")
