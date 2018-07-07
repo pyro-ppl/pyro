@@ -3,12 +3,14 @@ from __future__ import absolute_import, division, print_function
 import math
 import warnings
 
+import torch
+
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero, log_sum_exp
 from pyro.infer.elbo import ELBO
 from pyro.infer.util import is_validation_enabled
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
+from pyro.util import check_model_guide_match, check_site_shape, warn_if_nan
 
 
 class RenyiELBO(ELBO):
@@ -23,7 +25,7 @@ class RenyiELBO(ELBO):
 
     .. note:: Setting :math:`\alpha < 1` gives a better bound than the usual ELBO.
         For :math:`\alpha = 1`, it is better to use
-        :class:`~pyro.infer.trace_elbo.Trace_ELBO` class because it helps reducing
+        :class:`~pyro.infer.trace_elbo.Trace_ELBO` class because it helps reduce
         variances of gradient estimations.
 
     .. warning:: Mini-batch training is not supported yet.
@@ -99,29 +101,60 @@ class RenyiELBO(ELBO):
 
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
-        model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
-        elbo_particle = 0
-        for name, site in model_trace.nodes.items():
-            if site["type"] == "sample":
-                elbo_particle = elbo_particle + site["log_prob"].detach()
+        elbo_list = []
+        tensor_holder = None
 
-        for name, site in guide_trace.nodes.items():
-            if site["type"] == "sample":
-                log_prob, score_function_term, entropy_term = site["score_parts"]
-                elbo_particle = elbo_particle - log_prob.detach()
+        # grab a vectorized trace from the generator
+        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+            elbo_particle = 0
 
-        if is_identically_zero(elbo_particle):
+            # compute elbo
+            for name, site in model_trace.nodes.items():
+                if site["type"] == "sample":
+                    if self.vectorize_particles and self.num_particles > 1:
+                        log_prob_sum = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                    else:
+                        log_prob_sum = site["log_prob_sum"]
+                    elbo_particle = elbo_particle + log_prob_sum.detach()
+
+            for name, site in guide_trace.nodes.items():
+                if site["type"] == "sample":
+                    log_prob, score_function_term, entropy_term = site["score_parts"]
+                    if self.vectorize_particles and self.num_particles > 1:
+                        log_prob_sum = log_prob.reshape(self.num_particles, -1).sum(-1)
+                    else:
+                        log_prob_sum = site["log_prob_sum"]
+
+                    elbo_particle = elbo_particle - log_prob_sum.detach()
+
+            if is_identically_zero(elbo_particle):
+                if tensor_holder is not None:
+                    elbo_particle = tensor_holder.new_zeros(tensor_holder.shape)
+            else:  # elbo_particle is not None
+                if tensor_holder is None:
+                    tensor_holder = elbo_particle.new_empty(elbo_particle.shape)
+                    # change types of previous `elbo_particle`s
+                    for i in range(len(elbo_list)):
+                        elbo_list[i] = tensor_holder.new_zeros(tensor_holder.shape)
+
+            elbo_list.append(elbo_particle)
+
+        if tensor_holder is None:
             return 0.
 
-        elbo_particle_scaled = (1. - self.alpha) * elbo_particle
+        if (not self.vectorize_particles) and self.num_particles > 1:
+            elbo_particles = torch.stack(elbo_list)
+        else:
+            elbo_particles = elbo_list[0]
+
+        elbo_particles_scaled = (1. - self.alpha) * elbo_particles
         if self.num_particles == 1:
-            elbo_scaled = elbo_particle_scaled
+            elbo_scaled = elbo_particles_scaled
         else:
             elbo_scaled = log_sum_exp(elbo_particle_scaled, dim=0) - math.log(self.num_particles)
 
         loss = elbo_scaled.sum().item() / (self.alpha - 1.)
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return loss
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
@@ -132,55 +165,87 @@ class RenyiELBO(ELBO):
         Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         """
+        elbo_list = []
+        surrogate_elbo_list = []
+        tensor_holder = None
+
         # grab a vectorized trace from the generator
-        model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
-        elbo_particle = 0
-        surrogate_elbo_particle = 0
-        # compute elbo and surrogate elbo
-        for name, site in model_trace.nodes.items():
-            if site["type"] == "sample":
-                log_prob_sum = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
-                elbo_particle = elbo_particle + log_prob_sum.detach()
-                surrogate_elbo_particle = surrogate_elbo_particle + log_prob_sum
+        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+            elbo_particle = 0
+            surrogate_elbo_particle = 0
 
-        for name, site in guide_trace.nodes.items():
-            if site["type"] == "sample":
-                log_prob, score_function_term, entropy_term = site["score_parts"]
-                log_prob_sum = log_prob.reshape(self.num_particles, -1).sum(-1)
+            # compute elbo and surrogate elbo
+            for name, site in model_trace.nodes.items():
+                if site["type"] == "sample":
+                    if self.vectorize_particles and self.num_particles > 1:
+                        log_prob_sum = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                    else:
+                        log_prob_sum = site["log_prob_sum"]
+                    elbo_particle = elbo_particle + log_prob_sum.detach()
+                    surrogate_elbo_particle = surrogate_elbo_particle + log_prob_sum
 
-                elbo_particle = elbo_particle - log_prob_sum.detach()
+            for name, site in guide_trace.nodes.items():
+                if site["type"] == "sample":
+                    log_prob, score_function_term, entropy_term = site["score_parts"]
+                    if self.vectorize_particles and self.num_particles > 1:
+                        log_prob_sum = log_prob.reshape(self.num_particles, -1).sum(-1)
+                    else:
+                        log_prob_sum = site["log_prob_sum"]
 
-                if not is_identically_zero(entropy_term):
-                    surrogate_elbo_particle = surrogate_elbo_particle - log_prob_sum
+                    elbo_particle = elbo_particle - log_prob_sum.detach()
 
-                if not is_identically_zero(score_function_term):
-                    surrogate_elbo_particle = (surrogate_elbo_particle +
-                                               (self.alpha / (1. - self.alpha)) * log_prob_sum)
+                    if not is_identically_zero(entropy_term):
+                        surrogate_elbo_particle = surrogate_elbo_particle - log_prob_sum
 
-        if is_identically_zero(elbo_particle):
+                    if not is_identically_zero(score_function_term):
+                        surrogate_elbo_particle = (surrogate_elbo_particle +
+                                                   (self.alpha / (1. - self.alpha)) * log_prob_sum)
+
+            if is_identically_zero(elbo_particle):
+                if tensor_holder is not None:
+                    elbo_particle = tensor_holder.new_zeros(tensor_holder.shape)
+                    surrogate_elbo_particle = tensor_holder.new_zeros(tensor_holder.shape)
+            else:  # elbo_particle is not None
+                if tensor_holder is None:
+                    tensor_holder = elbo_particle.new_empty(elbo_particle.shape)
+                    # change types of previous `elbo_particle`s
+                    for i in range(len(elbo_list)):
+                        elbo_list[i] = tensor_holder.new_zeros(tensor_holder.shape)
+                        surrogate_elbo_list[i] = tensor_holder.new_zeros(tensor_holder.shape)
+
+            elbo_list.append(elbo_particle)
+            surrogate_elbo_list.append(surrogate_elbo_particle)
+
+        if tensor_holder is None:
             return 0.
 
-        elbo_particle_scaled = (1. - self.alpha) * elbo_particle
-        if self.num_particles == 1:
-            elbo_scaled = elbo_particle_scaled
+        if (not self.vectorize_particles) and self.num_particles > 1:
+            elbo_particles = torch.stack(elbo_list)
+            surrogate_elbo_particles = torch.stack(surrogate_elbo_list)
         else:
-            elbo_scaled = log_sum_exp(elbo_particle_scaled, dim=0) - math.log(self.num_particles)
+            elbo_particles = elbo_list[0]
+            surrogate_elbo_particles = surrogate_elbo_list[0]
+
+        elbo_particles_scaled = (1. - self.alpha) * elbo_particles
+        if self.num_particles == 1:
+            elbo_scaled = elbo_particles_scaled
+        else:
+            elbo_scaled = log_sum_exp(elbo_particles_scaled, dim=0) - math.log(self.num_particles)
 
         # collect parameters to train from model and guide
         trainable_params = any(site["type"] == "param"
                                for trace in (model_trace, guide_trace)
                                for site in trace.nodes.values())
 
-        if trainable_params and getattr(surrogate_elbo_particle, 'requires_grad', False):
+        if trainable_params and getattr(surrogate_elbo_particles, 'requires_grad', False):
             if self.num_particles == 1:
                 weights = 1.
             else:
-                weights = (elbo_particle_scaled - elbo_scaled).exp()
+                weights = (elbo_particles_scaled - elbo_scaled).exp()
 
-            surrogate_loss = - (weights * surrogate_elbo_particle).sum() / self.num_particles
+            surrogate_loss = - (weights * surrogate_elbo_particles).sum() / self.num_particles
             surrogate_loss.backward()
 
         loss = elbo_scaled.sum().item() / (self.alpha - 1.)
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return loss
