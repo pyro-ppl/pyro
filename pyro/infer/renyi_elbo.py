@@ -112,7 +112,7 @@ class RenyiELBO(ELBO):
             for name, site in model_trace.nodes.items():
                 if site["type"] == "sample":
                     if is_vectorized:
-                        log_prob_sum = site["log_prob"].reshape(self.num_particles, -1).sum(-1).detach()
+                        log_prob_sum = site["log_prob"].detach().reshape(self.num_particles, -1).sum(-1)
                     else:
                         log_prob_sum = torch_item(site["log_prob_sum"])
 
@@ -122,7 +122,7 @@ class RenyiELBO(ELBO):
                 if site["type"] == "sample":
                     log_prob, score_function_term, entropy_term = site["score_parts"]
                     if is_vectorized:
-                        log_prob_sum = log_prob.reshape(self.num_particles, -1).sum(-1).detach()
+                        log_prob_sum = log_prob.detach().reshape(self.num_particles, -1).sum(-1)
                     else:
                         log_prob_sum = torch_item(site["log_prob_sum"])
 
@@ -140,7 +140,7 @@ class RenyiELBO(ELBO):
 
             elbo_particles_scaled = (1. - self.alpha) * elbo_particles
             elbo_scaled = log_sum_exp(elbo_particles_scaled, dim=0) - math.log(self.num_particles)
-            elbo = elbo_scaled.sum().item() / (1 - self.alpha)
+            elbo = elbo_scaled.sum().item() / (1. - self.alpha)
 
         loss = -elbo
         warn_if_nan(loss, "loss")
@@ -211,7 +211,7 @@ class RenyiELBO(ELBO):
 
         if self.num_particles == 1:
             elbo = elbo_trace[0]
-            surrogate_elbo = surrogate_elbo_trace[0]
+            surrogate_elbo_particles = surrogate_elbo_trace[0]
         else:
             if is_vectorized:
                 elbo_particles = elbo_trace[0]
@@ -222,7 +222,7 @@ class RenyiELBO(ELBO):
 
             elbo_particles_scaled = (1. - self.alpha) * elbo_particles
             elbo_scaled = log_sum_exp(elbo_particles_scaled, dim=0) - math.log(self.num_particles)
-            elbo = elbo_scaled.sum().item() / (1 - self.alpha)
+            elbo = elbo_scaled.sum().item() / (1. - self.alpha)
 
         # collect parameters to train from model and guide
         trainable_params = any(site["type"] == "param"
