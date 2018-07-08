@@ -297,12 +297,18 @@ class BernoulliBetaTests(TestCase):
         self.do_elbo_test(False, 10000, Trace_ELBO())
 
     def test_renyi_reparameterized(self):
-        self.do_elbo_test(True, 5000, RenyiELBO(num_particles=2, vectorize_particles=True,
-                                                max_iarange_nesting=2))
+        self.do_elbo_test(True, 5000, RenyiELBO(num_particles=2))
 
     def test_renyi_nonreparameterized(self):
+        self.do_elbo_test(False, 5000, RenyiELBO(alpha=0.2, num_particles=2))
+
+    def test_renyi_reparameterized_vectorized(self):
+        self.do_elbo_test(True, 5000, RenyiELBO(num_particles=2, vectorize_particles=True,
+                                                max_iarange_nesting=1))
+
+    def test_renyi_nonreparameterized_vectorized(self):
         self.do_elbo_test(False, 5000, RenyiELBO(alpha=0.2, num_particles=2, vectorize_particles=True,
-                                                 max_iarange_nesting=2))
+                                                 max_iarange_nesting=1))
 
     def do_elbo_test(self, reparameterized, n_steps, loss):
         pyro.clear_param_store()
