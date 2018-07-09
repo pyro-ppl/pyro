@@ -259,6 +259,7 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
     if elbo_impl is RenyiELBO:
         elbo = elbo_impl(alpha=0.2, num_particles=3, strict_enumeration_warning=False)
         if gamma_dist is ShapeAugmentedGamma:
+            # link to the issue: https://github.com/uber/pyro/issues/1222
             pytest.skip("RenyiELBO currently does not work with Rejector!")
     else:
         elbo = elbo_impl(strict_enumeration_warning=False)
