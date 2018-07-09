@@ -12,62 +12,40 @@ from pyro.contrib.oed.eig import ContinuousEIG
 # Inspired by Bayesian regression example
 ###################################################
 
-
-# NN with one linear layer
-class RegressionModel(nn.Module):
-    def __init__(self, p):
-        super(RegressionModel, self).__init__()
-        # Won't need a bias with our one-hot setup
-        self.linear = nn.Linear(p, 1, bias=False)
-
-    def forward(self, x):
-        # x * w + b
-        return self.linear(x)
-
 # Set up regression model dimensions
 N = 100  # number of participants
 p_treatments = 2 # number of treatment groups
 p = p_treatments  # number of features
 
 softplus = torch.nn.Softplus()
-regression_model = RegressionModel(p)
 
 
 def model(design):
-    # Create unit normal priors over the parameters
-    loc = torch.zeros(1, p)
+    # Create normal priors over the parameters
+    design_shape = design.size()
+    loc = torch.zeros(*design_shape[:-2], 1, design_shape[-1])
     scale = torch.Tensor([1, .1])
     w_prior = dist.Normal(loc, scale).independent(1)
-    priors = {'linear.weight': w_prior}
-    # lift module parameters to random variables sampled from the priors
-    lifted_module = pyro.random_module("module", regression_model, priors)
-    # sample a regressor (which also samples w and b)
-    lifted_reg_model = lifted_module()
+    w = pyro.sample('w', w_prior).transpose(-1, -2)
 
-    X = design_to_matrix(design)
-
-    with pyro.iarange("map", N, subsample=X):
+    with pyro.iarange("map", N, subsample=design):
         # run the regressor forward conditioned on inputs
-        prediction_mean = lifted_reg_model(X).squeeze(-1)
-        pyro.sample("y", dist.Normal(prediction_mean, 1))
+        prediction_mean = torch.matmul(design, w).squeeze(-1)
+        y = pyro.sample("y", dist.Normal(prediction_mean, 1))
 
 
 def guide(design):
+    design_shape = design.size()
     # define our variational parameters
-    w_loc = torch.zeros(1, p)
+    w_loc = torch.zeros(*design_shape[:-2], 1, design_shape[-1])
     # note that we initialize our scales to be pretty narrow
-    w_sig = -3*torch.ones(1, p)
+    w_sig = -3*torch.ones(*design_shape[:-2], 1, design_shape[-1])
     # register learnable params in the param store
     mw_param = pyro.param("guide_mean_weight", w_loc)
     sw_param = softplus(pyro.param("guide_scale_weight", w_sig))
     # guide distributions for w 
     w_dist = dist.Normal(mw_param, sw_param).independent(1)
-    dists = {'linear.weight': w_dist}
-    # overload the parameters in the module with random samples
-    # from the guide distributions
-    lifted_module = pyro.random_module("module", regression_model, dists)
-    # sample a regressor (which also samples w and b)
-    lifted_reg_model = lifted_module()
+    w = pyro.sample('w', w_dist).transpose(-1, -2)
 
 
 def design_to_matrix(design):
@@ -76,20 +54,19 @@ def design_to_matrix(design):
     t = 0
     for col, i in enumerate(design):
         i = int(i)
-        X[t:t+i, col] = 1.
+        if i > 0:
+            X[t:t+i, col] = 1.
         t += i
     return X
 
 
 if __name__ == '__main__':
-    ns = [40, 45, 50, 55, 60, 65]
-    true = []
-    est = []
-    for n1 in ns:
-        print(n1)
-        point = torch.Tensor([n1, N - n1])
-        est.append(ContinuousEIG(model, guide, point, vi=True))
-        true.append(ContinuousEIG(model, guide, point, vi=False))
+    ns = [50, 100]
+    designs = [design_to_matrix(torch.Tensor([n1, N-n1])) for n1 in ns]
+    X = torch.stack(designs)
+
+    est = ContinuousEIG(model, guide, X, vi=True)
+    true = ContinuousEIG(model, guide, X, vi=False)
 
     print(est)
     print(true)
