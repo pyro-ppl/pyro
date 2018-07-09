@@ -64,7 +64,7 @@ def design_to_matrix(design):
         t += i
     return X
 
-def ContinuousEIG(model, guide, d, n_steps=100, n_samples=100, vi=True):
+def ContinuousEIG(model, guide, d, n_steps=3000, n_samples=1, vi=True):
     # TODO handle pyro parameter right
     # design = pyro.param("design", d)
     def entropy(y_dist, design):
@@ -72,26 +72,25 @@ def ContinuousEIG(model, guide, d, n_steps=100, n_samples=100, vi=True):
         y = pyro.sample("conditioning_y", y_dist)
         if vi:
             conditioned_model = pyro.condition(model, data={"y": y})
-            optim = Adam({"lr": 0.25})
-            posterior = SVI(model, guide, optim, loss=Trace_ELBO())
+            optim = Adam({"lr": 0.0025})
+            posterior = SVI(conditioned_model, guide, optim, loss=Trace_ELBO())
             with pyro.poutine.block():
                 for _ in range(n_steps):
                     posterior.step(design)
             # Recover the entropy
             # TODO: Limited to Normal case atm
             mw_param = pyro.param("guide_mean_weight")
-            sw_param = softplus(pyro.param("guide_log_scale_weight"))
-            # guide distributions for w 
+            sw_param = softplus(pyro.param("guide_scale_weight"))**2
             # Cannot use the pyro dist :(
             p = int(mw_param.size()[0])
-
             posterior_cov = sw_param*torch.eye(2)
+            print(posterior_cov)
             w_dist = torch.distributions.MultivariateNormal(mw_param, posterior_cov)
             return w_dist.entropy()
         
         # Compare: compute entropy of posterior analytically
         else:
-            prior_cov = torch.Tensor([[1, 0], [0, .1]])
+            prior_cov = torch.Tensor([[1, 0], [0, .01]])
             X = design_to_matrix(design)
             posterior_cov =  prior_cov - prior_cov.mm(X.t().mm(torch.inverse(X.mm(prior_cov.mm(X.t())) + torch.eye(100)).mm(X.mm(prior_cov))))
             print(posterior_cov)

@@ -56,10 +56,10 @@ def guide(design):
     # define our variational parameters
     w_loc = torch.zeros(1, p)
     # note that we initialize our scales to be pretty narrow
-    w_log_sig = -3*torch.ones(1, p)
+    w_sig = -3*torch.ones(1, p)
     # register learnable params in the param store
     mw_param = pyro.param("guide_mean_weight", w_loc)
-    sw_param = softplus(pyro.param("guide_log_scale_weight", w_log_sig))
+    sw_param = softplus(pyro.param("guide_scale_weight", w_sig))
     # guide distributions for w 
     w_dist = dist.Normal(mw_param, sw_param).independent(1)
     dists = {'linear.weight': w_dist}
@@ -82,7 +82,7 @@ def design_to_matrix(design):
 
 
 if __name__ == '__main__':
-    ns = [10, 50]
+    ns = [40, 45, 50, 55, 60, 65]
     true = []
     est = []
     for n1 in ns:
