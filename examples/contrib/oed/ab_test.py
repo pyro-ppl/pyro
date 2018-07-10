@@ -28,10 +28,10 @@ def model(design):
     w_prior = dist.Normal(loc, scale).independent(1)
     w = pyro.sample('w', w_prior).transpose(-1, -2)
 
-    # with pyro.iarange("map", N, subsample=design):
-    # run the regressor forward conditioned on inputs
-    prediction_mean = torch.matmul(design, w).squeeze(-1)
-    y = pyro.sample("y", dist.Normal(prediction_mean, 1))
+    with pyro.iarange("map", N, dim=-2):
+        # run the regressor forward conditioned on inputs
+        prediction_mean = torch.matmul(design, w).squeeze(-1)
+        y = pyro.sample("y", dist.Normal(prediction_mean, 1))
 
 
 def guide(design):
@@ -61,7 +61,7 @@ def design_to_matrix(design):
 
 
 if __name__ == '__main__':
-    ns = range(0, 100, 5)
+    ns = range(0, N, 5)
     designs = [design_to_matrix(torch.Tensor([n1, N-n1])) for n1 in ns]
     X = torch.stack(designs)
 
