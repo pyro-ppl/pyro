@@ -40,11 +40,11 @@ class PlateMessenger(IndepMessenger):
         self.sites = sites
         self._installed = False
 
-    def __iter__(self):
-        for i in xrange(self.size):
-            self.next_context()
-            with self:
-                yield i if isinstance(i, numbers.Number) else i.item()
+    # def __iter__(self):
+    #     for i in xrange(self.size):
+    #         self.next_context()
+    #         with self:
+    #             yield i if isinstance(i, numbers.Number) else i.item()
 
     def __len__(self):
         return self.size
