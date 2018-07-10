@@ -171,6 +171,10 @@ class SubsampleMessenger(PlateMessenger):
         super(SubsampleMessenger, self).__enter__()
         return self.subsample
 
+    def _reset(self):
+        self.subsample = None
+        super(SubsampleMessenger, self)._reset()
+
     def _process_message(self, msg):
         super(SubsampleMessenger, self)._process_message(msg)
         if self._installed:
