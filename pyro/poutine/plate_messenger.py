@@ -40,16 +40,14 @@ class PlateMessenger(IndepMessenger):
         self.sites = sites
         self._installed = False
 
-    # def __iter__(self):
-    #     for i in xrange(self.size):
-    #         self.next_context()
-    #         with self:
-    #             yield i if isinstance(i, numbers.Number) else i.item()
+    def __iter__(self):
+        for i in xrange(self.size):
+            self.next_context()
+            with self:
+                yield i if isinstance(i, numbers.Number) else i.item()
 
-    def __enter__(self):
-        # XXX only defined to pass tests that expect indices to be returned
-        super(PlateMessenger, self).__enter__()
-        return list(xrange(self.size)) if self.size is not None else self
+    def __len__(self):
+        return self.size
 
     def __exit__(self, *args):
         if self._installed:
@@ -124,6 +122,7 @@ class SubsampleMessenger(PlateMessenger):
 
     def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None, use_cuda=None, sites=None):
         super(SubsampleMessenger, self).__init__(name, size, dim, sites)
+        self._size = size
         self.subsample_size = subsample_size
         self.subsample = subsample
         self.use_cuda = use_cuda
@@ -166,12 +165,13 @@ class SubsampleMessenger(PlateMessenger):
         return size, subsample_size, subsample
 
     def __enter__(self):
-        self.size, self.subsample_size, self.subsample = self._do_subsample(
-            self.name, self.size, self.subsample_size, self.subsample, self.use_cuda)
+        self._size, self.subsample_size, self.subsample = self._do_subsample(
+            self.name, self._size, self.subsample_size, self.subsample, self.use_cuda)
+        self.size = self.subsample_size
         super(SubsampleMessenger, self).__enter__()
         return self.subsample
 
     def _process_message(self, msg):
-        super(PlateMessenger, self)._process_message(msg)
+        super(SubsampleMessenger, self)._process_message(msg)
         if self._installed:
             msg["scale"] = (self.size / self.subsample_size) * msg["scale"]
