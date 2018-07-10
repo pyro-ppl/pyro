@@ -344,6 +344,9 @@ class ReshapedDistribution(TorchDistribution):
     def variance(self):
         return self.base_dist.variance.expand(self.batch_shape + self.event_shape)
 
+    def entropy(self):
+        return sum_rightmost(self.base_dist.entropy(), self.reinterpreted_batch_ndims)
+
 
 class MaskedDistribution(TorchDistribution):
     """

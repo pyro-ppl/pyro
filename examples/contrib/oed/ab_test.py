@@ -4,9 +4,9 @@ import numpy as np
 
 import pyro
 import pyro.distributions as dist
-from pyro import poutine
+from pyro import poutine, optim
 from pyro.infer import EmpiricalMarginal, Importance
-from pyro.contrib.oed.eig import ContinuousEIG, naiveRainforth
+from pyro.contrib.oed.eig import vi_eig
 
 
 ###################################################
@@ -48,6 +48,8 @@ def guide(design):
     w_dist = dist.Normal(mw_param, sw_param).independent(1)
     w = pyro.sample('w', w_dist).transpose(-1, -2)
 
+    pyro.iarange("map", N, dim=-2)
+
 
 def design_to_matrix(design):
     n, p = int(torch.sum(design)), int(design.size()[0])
@@ -67,22 +69,19 @@ if __name__ == '__main__':
     designs = [design_to_matrix(torch.Tensor([n1, N-n1])) for n1 in ns]
     X = torch.stack(designs)
 
-    rainforth = naiveRainforth(model, X, observation_labels="y", M=100, N=2000)
-    est = ContinuousEIG(model, guide, X, vi=True)
-    true = ContinuousEIG(model, guide, X, vi=False)
+    est = vi_eig(model, X, observation_labels="y", vi_parameters={
+        "guide": guide, "optim": optim.Adam({"lr": 0.0025}), "num_steps":3000
+        }, is_parameters={"num_samples": 2})
     
-
-    print(est)
-    print(true)
-    print(rainforth)
+    # TODO compute the analytical loss function and plot it for comparison
 
     import matplotlib.pyplot as plt
     ns = np.array(ns)
     est = np.array(est.detach())
-    true = np.array(true.detach())
+    # true = np.array(true.detach())
     plt.scatter(ns, est)
-    plt.scatter(ns, true, color='r')
-    plt.scatter(ns, rainforth, color='g')
+    # plt.scatter(ns, true, color='r')
+    # plt.scatter(ns, rainforth, color='g')
     plt.show()
 
 

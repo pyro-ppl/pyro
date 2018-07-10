@@ -25,3 +25,4 @@ class Search(TracePosterior):
         while not q.empty():
             tr = p.get_trace(*args, **kwargs)
             yield tr, tr.log_prob_sum()
+            
