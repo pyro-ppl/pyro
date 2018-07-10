@@ -124,7 +124,7 @@ class Binomial(torch.distributions.Distribution, TorchDistributionMixin):
         try:
             return super(Binomial, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('validate_args')
+            validate_args = self.__dict__.get('_validate_args')
             total_count = self.total_count.expand(batch_shape)
             if 'probs' in self.__dict__:
                 probs = self.probs.expand(batch_shape)
