@@ -4,8 +4,9 @@ import numpy as np
 
 import pyro
 import pyro.distributions as dist
+from pyro import poutine
 from pyro.infer import EmpiricalMarginal, Importance
-from pyro.contrib.oed.eig import ContinuousEIG
+from pyro.contrib.oed.eig import ContinuousEIG, naiveRainforth
 
 
 ###################################################
@@ -31,7 +32,7 @@ def model(design):
     with pyro.iarange("map", N, dim=-2):
         # run the regressor forward conditioned on inputs
         prediction_mean = torch.matmul(design, w).squeeze(-1)
-        y = pyro.sample("y", dist.Normal(prediction_mean, 1))
+        y = pyro.sample("y", dist.Normal(prediction_mean, 1).independent(1))
 
 
 def guide(design):
@@ -61,15 +62,19 @@ def design_to_matrix(design):
 
 
 if __name__ == '__main__':
+
     ns = range(0, N, 5)
     designs = [design_to_matrix(torch.Tensor([n1, N-n1])) for n1 in ns]
     X = torch.stack(designs)
 
+    rainforth = naiveRainforth(model, X, observation_labels="y", M=100, N=2000)
     est = ContinuousEIG(model, guide, X, vi=True)
     true = ContinuousEIG(model, guide, X, vi=False)
+    
 
     print(est)
     print(true)
+    print(rainforth)
 
     import matplotlib.pyplot as plt
     ns = np.array(ns)
@@ -77,6 +82,7 @@ if __name__ == '__main__':
     true = np.array(true.detach())
     plt.scatter(ns, est)
     plt.scatter(ns, true, color='r')
+    plt.scatter(ns, rainforth, color='g')
     plt.show()
 
 
