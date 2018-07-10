@@ -10,10 +10,9 @@ from pyro.infer import EmpiricalMarginal, Importance, SVI, Trace_ELBO
 
 def guide_entropy(guide, *args):
     # TODO: strong assumptions being made here!
-    trace = poutine.trace(guide).get_trace(*args)
+    trace = poutine.util.prune_subsample_sites(poutine.trace(guide).get_trace(*args))
     entropy = 0.
     for name, site in trace.nodes.items():
-        print(name, site)
         if site["type"] == "sample":
             entropy += site["fn"].entropy()
     return entropy.squeeze() # .squeeze() necessary?

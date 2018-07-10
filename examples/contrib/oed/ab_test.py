@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import matplotlib.pyplot as plt
 
 import pyro
 import pyro.distributions as dist
@@ -17,6 +18,7 @@ from pyro.contrib.oed.eig import vi_eig
 N = 100  # number of participants
 p_treatments = 2 # number of treatment groups
 p = p_treatments  # number of features
+prior_stdevs = torch.Tensor([1, .5])
 
 softplus = torch.nn.Softplus()
 
@@ -25,7 +27,7 @@ def model(design):
     # Create normal priors over the parameters
     design_shape = design.size()
     loc = torch.zeros(*design_shape[:-2], 1, design_shape[-1])
-    scale = torch.Tensor([1, .5])
+    scale = prior_stdevs
     w_prior = dist.Normal(loc, scale).independent(1)
     w = pyro.sample('w', w_prior).transpose(-1, -2)
 
@@ -63,43 +65,35 @@ def design_to_matrix(design):
     return X
 
 
+def analytic_posterior_entropy(prior_cov, x):
+    posterior_cov =  prior_cov - prior_cov.mm(x.t().mm(torch.inverse(
+        x.mm(prior_cov.mm(x.t())) + torch.eye(N)).mm(x.mm(prior_cov))))
+    return 0.5*torch.logdet(2*np.pi*np.e*posterior_cov)
+
+
 if __name__ == '__main__':
 
     ns = range(0, N, 5)
     designs = [design_to_matrix(torch.Tensor([n1, N-n1])) for n1 in ns]
     X = torch.stack(designs)
 
-    est = vi_eig(model, X, observation_labels="y", vi_parameters={
-        "guide": guide, "optim": optim.Adam({"lr": 0.0025}), "num_steps":3000
-        }, is_parameters={"num_samples": 2})
+    # Estimated loss (linear transform of EIG)
+    est_eig = vi_eig(model, X, observation_labels="y", vi_parameters={
+                "guide": guide, "optim": optim.Adam({"lr": 0.0025}), "num_steps":3000
+                }, is_parameters={"num_samples": 2})
     
-    # TODO compute the analytical loss function and plot it for comparison
-
-    import matplotlib.pyplot as plt
+    # Analytic loss
+    true_eig = []
+    prior_cov = torch.diag(prior_stdevs**2)
+    for i in range(len(ns)):
+        x = X[i, :, :]
+        true_eig.append(analytic_posterior_entropy(prior_cov, x))
+    
+    # Plot to compare
     ns = np.array(ns)
-    est = np.array(est.detach())
-    # true = np.array(true.detach())
-    plt.scatter(ns, est)
-    # plt.scatter(ns, true, color='r')
-    # plt.scatter(ns, rainforth, color='g')
+    est_eig = np.array(est_eig.detach())
+    true_eig = np.array(true_eig)
+    plt.scatter(ns, est_eig)
+    plt.scatter(ns, true_eig, color='r')
     plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
