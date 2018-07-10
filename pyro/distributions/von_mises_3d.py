@@ -11,13 +11,20 @@ from pyro.distributions import TorchDistribution
 class VonMises3D(TorchDistribution):
     """
     Spherical von Mises distribution.
-    https://en.wikipedia.org/wiki/Von_Mises%E2%80%93Fisher_distribution
+
+    This implementation combines the direction parameter and concentration
+    parameter into a single combined parameter that contains both direction and
+    magnitude. The ``value`` arg is represented in cartesian coordinates: it
+    must be a normalized 3-vector that lies on the 2-sphere.
+
+    See :class:`~pyro.distributions.VonMises` for a 2D polar coordinate cousin
+    of this distribution.
 
     Currently only :meth:`log_prob` is implemented.
 
     :param torch.Tensor concentration: A combined location-and-concentration
         vector. The direction of this vector is the location, and its
-        magnitude is the contration.
+        magnitude is the concentration.
     """
     arg_constraints = {'concentration': constraints.real}
     support = constraints.real  # TODO implement constraints.sphere or similar

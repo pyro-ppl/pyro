@@ -45,6 +45,13 @@ class VonMises(TorchDistribution):
     """
     A circular von Mises distribution.
 
+    This implementation uses polar coordinates. The ``loc`` and ``value`` args
+    can be any real number (to facilitate unconstrained optimization), but are
+    interpreted as angles modulo 2 pi.
+
+    See :class:`~pyro.distributions.VonMises3D` for a 3D cartesian coordinate
+    cousin of this distribution.
+
     Currently only :meth:`log_prob` is implemented.
 
     :param torch.Tensor loc: an angle in radians.
