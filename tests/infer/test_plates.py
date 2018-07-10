@@ -15,7 +15,8 @@ from pyro.poutine.plate_messenger import PlateMessenger
 
 logger = logging.getLogger(__name__)
 
-# This file tests a variety of model,guide pairs with valid and invalid structure.
+# This file tests a variety of model,guide pairs with valid and invalid structure
+# with PlateMessenger in place of pyro.iarange
 
 
 def assert_ok(model, guide, elbo):

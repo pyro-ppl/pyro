@@ -46,6 +46,11 @@ class PlateMessenger(IndepMessenger):
     #         with self:
     #             yield i if isinstance(i, numbers.Number) else i.item()
 
+    def __enter__(self):
+        # XXX only defined to pass tests that expect indices to be returned
+        super(PlateMessenger, self).__enter__()
+        return list(xrange(self.size)) if self.size is not None else self
+
     def __exit__(self, *args):
         if self._installed:
             _DIM_ALLOCATOR.free(self.name, self.dim)
@@ -167,6 +172,6 @@ class SubsampleMessenger(PlateMessenger):
         return self.subsample
 
     def _process_message(self, msg):
-        super(PlateMessenger, self)._process_message(self, msg)
+        super(PlateMessenger, self)._process_message(msg)
         if self._installed:
             msg["scale"] = (self.size / self.subsample_size) * msg["scale"]
