@@ -14,7 +14,7 @@ from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
                         TraceGraph_ELBO, RenyiELBO)
-from tests.common import assert_equal, xfail_param
+from tests.common import assert_equal, xfail_param, xfail_if_not_implemented
 
 
 def param_mse(name, target):
@@ -258,15 +258,13 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
     adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
     if elbo_impl is RenyiELBO:
         elbo = elbo_impl(alpha=0.2, num_particles=3, strict_enumeration_warning=False)
-        if gamma_dist is ShapeAugmentedGamma:
-            # link to the issue: https://github.com/uber/pyro/issues/1222
-            pytest.skip("RenyiELBO currently does not work with Rejector!")
     else:
         elbo = elbo_impl(strict_enumeration_warning=False)
     svi = SVI(model, guide, adam, loss=elbo, max_iarange_nesting=1)
 
-    for k in range(n_steps):
-        svi.step(alpha0, beta0, alpha_n, beta_n)
+    with xfail_if_not_implemented():
+        for k in range(n_steps):
+            svi.step(alpha0, beta0, alpha_n, beta_n)
 
     assert_equal(pyro.param("alpha_q"), alpha_n, prec=0.15, msg='{} vs {}'.format(
         pyro.param("alpha_q").detach().cpu().numpy(), alpha_n.detach().cpu().numpy()))
