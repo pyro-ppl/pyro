@@ -80,7 +80,7 @@ def ContinuousEIG(model, guide, d, n_steps=3000, n_samples=2, vi=True):
             # p = int(mw_param.size()[0])
             # posterior_cov = sw_param*torch.eye(2)
             # w_dist = torch.distributions.MultivariateNormal(mw_param, posterior_cov)
-            print(sw_param)
+            print(sw_param**2)
             w_dist = dist.Normal(mw_param, sw_param)
             e = w_dist.entropy().sum(-2).sum(-1)
             return e
@@ -90,7 +90,7 @@ def ContinuousEIG(model, guide, d, n_steps=3000, n_samples=2, vi=True):
             entropies = []
             batch = int(design.size()[0])
             for i in range(batch):
-                prior_cov = torch.Tensor([[1, 0], [0, .01]])
+                prior_cov = torch.Tensor([[1, 0], [0, .25]])
                 X = design[i,:, :]
                 posterior_cov =  prior_cov - prior_cov.mm(X.t().mm(torch.inverse(X.mm(prior_cov.mm(X.t())) + torch.eye(100)).mm(X.mm(prior_cov))))
                 print(posterior_cov)

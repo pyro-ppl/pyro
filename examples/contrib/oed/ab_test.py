@@ -24,14 +24,14 @@ def model(design):
     # Create normal priors over the parameters
     design_shape = design.size()
     loc = torch.zeros(*design_shape[:-2], 1, design_shape[-1])
-    scale = torch.Tensor([1, .1])
+    scale = torch.Tensor([1, .5])
     w_prior = dist.Normal(loc, scale).independent(1)
     w = pyro.sample('w', w_prior).transpose(-1, -2)
 
-    with pyro.iarange("map", N, subsample=design):
-        # run the regressor forward conditioned on inputs
-        prediction_mean = torch.matmul(design, w).squeeze(-1)
-        y = pyro.sample("y", dist.Normal(prediction_mean, 1))
+    # with pyro.iarange("map", N, subsample=design):
+    # run the regressor forward conditioned on inputs
+    prediction_mean = torch.matmul(design, w).squeeze(-1)
+    y = pyro.sample("y", dist.Normal(prediction_mean, 1))
 
 
 def guide(design):
@@ -61,7 +61,7 @@ def design_to_matrix(design):
 
 
 if __name__ == '__main__':
-    ns = [50, 100]
+    ns = range(0, 100, 5)
     designs = [design_to_matrix(torch.Tensor([n1, N-n1])) for n1 in ns]
     X = torch.stack(designs)
 
@@ -73,8 +73,8 @@ if __name__ == '__main__':
 
     import matplotlib.pyplot as plt
     ns = np.array(ns)
-    est = np.array(est)
-    true = np.array(true)
+    est = np.array(est.detach())
+    true = np.array(true.detach())
     plt.scatter(ns, est)
     plt.scatter(ns, true, color='r')
     plt.show()
