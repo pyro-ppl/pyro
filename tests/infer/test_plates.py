@@ -10,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, config_enumerate
 from pyro.optim import Adam
-import pyro.poutine as poutine
+# import pyro.poutine as poutine
 from pyro.poutine.plate_messenger import PlateMessenger
 
 logger = logging.getLogger(__name__)

@@ -35,6 +35,7 @@ class PlateMessenger(IndepMessenger):
         self._allocated = False
 
     def __enter__(self):
+        # XXX just defined this to return so it passes tests
         super(PlateMessenger, self).__enter__()
         return [i for i in range(self.size)] if self.size is not None else self
 
