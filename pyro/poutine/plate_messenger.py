@@ -125,7 +125,7 @@ class _Subsample(Distribution):
 
 class SubsampleMessenger(PlateMessenger):
     """
-    Drop-in replacement for irange and iarange
+    Drop-in replacement for irange and iarange, including subsampling!
     """
 
     def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None, use_cuda=None, sites=None):
