@@ -62,6 +62,7 @@ from .escape_messenger import EscapeMessenger
 from .indep_messenger import IndepMessenger
 from .infer_config_messenger import InferConfigMessenger
 from .lift_messenger import LiftMessenger
+from .plate_messenger import PlateMessenger
 from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
@@ -363,6 +364,35 @@ def enum(fn=None, first_available_dim=None):
         dimension and all dimensions left may be used internally by Pyro.
     """
     msngr = EnumerateMessenger(first_available_dim=first_available_dim)
+    return msngr(fn) if fn is not None else msngr
+
+
+def plate(fn=None, name=None, size=None, dim=None, sites=None):
+    """
+    Annotate a model with a plate as in graphical models
+
+    Example::
+
+        @plate(name="outer", sites=["x_noise", "xy_noise"], size=320, dim=-1)
+        @plate(name="inner", sites=["y_noise", "xy_noise"], size=200, dim=-2)
+        def model():
+            x_noise = sample("x_noise", dist.Normal(0., 1.).expand_by([320]))
+            y_noise = sample("y_noise", dist.Normal(0., 1.).expand_by([200, 1]))
+            xy_noise = sample("xy_noise", dist.Normal(0., 1.).expand_by([200, 320]))
+
+    Example::
+
+        x_axis = plate('outer', 320, dim=-1)
+        y_axis = plate('inner', 200, dim=-2)
+        with x_axis:
+            x_noise = sample("x_noise", dist.Normal(loc, scale).expand_by([320]))
+        with y_axis:
+            y_noise = sample("y_noise", dist.Normal(loc, scale).expand_by([200, 1]))
+        with x_axis, y_axis:
+            xy_noise = sample("xy_noise", dist.Normal(loc, scale).expand_by([200, 320]))
+
+    """
+    msngr = PlateMessenger(name=name, size=size, dim=dim, sites=sites)
     return msngr(fn) if fn is not None else msngr
 
 

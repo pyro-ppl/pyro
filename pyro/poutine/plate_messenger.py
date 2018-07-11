@@ -41,6 +41,7 @@ class PlateMessenger(IndepMessenger):
         self._installed = False
         self._vectorized = True
         if size == 0:
+            # XXX hack to pass poutine tests
             raise ZeroDivisionError("size cannot be zero")
 
     def __iter__(self):
