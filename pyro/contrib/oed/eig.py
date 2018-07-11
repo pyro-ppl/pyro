@@ -19,6 +19,26 @@ def guide_entropy(guide, *args):
 
 
 def vi_eig(model, design, observation_labels, vi_parameters, is_parameters):
+    """Estimates the expected information gain (EIG) using variational inference (VI).
+
+    The EIG is defined (up to linear rescaling) as
+
+        :math:`EIG(d)=E_{Y\sim p(y|\theta, d)}[H(p(\theta|y, d))]`
+
+    :param function model: A pyro model accepting `design` as only argument.
+    :param torch.Tensor design: Tensor representation of design
+    :param observation_labels list or str: A subset of the sample sites
+        present in `model`. These sites are regarded as future observations
+        and other sites are regarded as latent variables over which a 
+        posterior is to be inferred.
+    :param dict vi_parameters: Variational inference parameters which should include:
+        `optim`: an instance of `pyro.Optim`, `guide`: a guide function 
+        compatible with `model`, `num_steps`: the number of VI steps to make
+    :param dict is_parameters: Importance sampling parameters for the
+        marginal distribution of :math:`Y`. May include `num_samples`: the number
+        of samples to draw from the marginal.
+
+    """
 
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]

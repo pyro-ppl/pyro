@@ -5,14 +5,10 @@ import matplotlib.pyplot as plt
 
 import pyro
 import pyro.distributions as dist
-from pyro import poutine, optim
+from pyro import optim
 from pyro.infer import EmpiricalMarginal, Importance
 from pyro.contrib.oed.eig import vi_eig
 
-
-###################################################
-# Inspired by Bayesian regression example
-###################################################
 
 # Set up regression model dimensions
 N = 100  # number of participants
@@ -54,6 +50,15 @@ def guide(design):
 
 
 def design_to_matrix(design):
+    """Converts a one-dimensional tensor listing group sizes into a
+    two-dimensional binary tensor of indicator variables.
+
+    :return: A :math:`n \times p` binary matrix where :math:`p` is
+        the length of `design` and :math:`n` is its sum. There are
+        :math:`n_i` ones in the :math:`i`th column.
+    :rtype: torch.Tensor
+
+    """
     n, p = int(torch.sum(design)), int(design.size()[0])
     X = torch.zeros(n, p)
     t = 0
