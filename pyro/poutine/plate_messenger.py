@@ -40,6 +40,8 @@ class PlateMessenger(IndepMessenger):
         self.sites = sites
         self._installed = False
         self._vectorized = True
+        if size == 0:
+            raise ZeroDivisionError("size cannot be zero")
 
     def __iter__(self):
         self._vectorized = False
@@ -135,11 +137,10 @@ class SubsampleMessenger(PlateMessenger):
         self.subsample = subsample
         self.use_cuda = use_cuda
 
-        if am_i_wrapped():
-            self._size, self.subsample_size, self.subsample = self._do_subsample(
-                self.name, self._size, self.subsample_size,
-                self.subsample, self.use_cuda)
-            self.size = self.subsample_size
+        self._size, self.subsample_size, self.subsample = self._do_subsample(
+            self.name, self._size, self.subsample_size,
+            self.subsample, self.use_cuda)
+        self.size = self.subsample_size
 
     def _do_subsample(self, name, size=None, subsample_size=None, subsample=None, use_cuda=None):
         """
@@ -187,8 +188,9 @@ class SubsampleMessenger(PlateMessenger):
                 yield i if isinstance(i, numbers.Number) else i.item()
 
     def __enter__(self):
-        # self._size, self.subsample_size, self.subsample = self._do_subsample(
-        #     self.name, self._size, self.subsample_size, self.subsample, self.use_cuda)
+        if self.subsample is None:
+            self._size, self.subsample_size, self.subsample = self._do_subsample(
+                self.name, self._size, self.subsample_size, self.subsample, self.use_cuda)
         self.size = self.subsample_size
         super(SubsampleMessenger, self).__enter__()
         return self.subsample
@@ -200,4 +202,4 @@ class SubsampleMessenger(PlateMessenger):
     def _process_message(self, msg):
         super(SubsampleMessenger, self)._process_message(msg)
         if self._installed:
-            msg["scale"] = (self.size / self.subsample_size) * msg["scale"]
+            msg["scale"] = (self._size / self.subsample_size) * msg["scale"]
