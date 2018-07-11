@@ -4,6 +4,7 @@ from pyro.infer.abstract_infer import EmpiricalMarginal, TracePosterior, TracePr
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import config_enumerate
 from pyro.infer.importance import Importance
+from pyro.infer.renyi_elbo import RenyiELBO
 from pyro.infer.svi import SVI
 from pyro.infer.trace_elbo import JitTrace_ELBO, Trace_ELBO
 from pyro.infer.traceenum_elbo import JitTraceEnum_ELBO, TraceEnum_ELBO
@@ -20,6 +21,7 @@ __all__ = [
     "JitTraceEnum_ELBO",
     "JitTraceGraph_ELBO",
     "JitTrace_ELBO",
+    "RenyiELBO",
     "SVI",
     "TraceEnum_ELBO",
     "TraceGraph_ELBO",
