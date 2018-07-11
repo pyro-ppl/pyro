@@ -49,6 +49,7 @@ class LowRankMultivariateNormal(TorchDistribution):
     has_rsample = True
 
     def __init__(self, loc, W_term, D_term, trace_term=None):
+        W_term = W_term.t()
         if loc.shape[-1] != D_term.shape[0]:
             raise ValueError("Expected loc.shape == D_term.shape, but got {} vs {}".format(
                 loc.shape, D_term.shape))
