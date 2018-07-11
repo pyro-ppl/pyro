@@ -12,7 +12,7 @@ from pyro.contrib.oed.eig import vi_ape
 
 # Set up regression model dimensions
 N = 100  # number of participants
-p_treatments = 2 # number of treatment groups
+p_treatments = 2  # number of treatment groups
 p = p_treatments  # number of features
 prior_stdevs = torch.Tensor([1, .5])
 
@@ -21,8 +21,9 @@ softplus = torch.nn.Softplus()
 
 def model(design):
     # Allow batching of designs
-    design_shape = design.shape
-    loc = torch.zeros(*design_shape[:-2], 1, design_shape[-1])
+    loc_shape = design.shape.copy()
+    loc_shape[-2] = 1
+    loc = torch.zeros(loc_shape)
     scale = prior_stdevs
     # Place a normal prior on the regression coefficient
     # w is 1 x p: hence use .independent(2)

@@ -24,40 +24,39 @@ def basic_model(batch_tensor, design):
 
 
 def h(p):
-    if p==0. or p==1.:
+    if p == 0. or p == 1.:
         return 0.
     return -p*np.log(p) - (1-p)*np.log(1-p)
 
 
 @pytest.mark.parametrize("guide,args,expected_entropy", [
-    (mean_field_guide, (torch.Tensor([0.]), None), torch.Tensor([h(0.2)+h(0.5)])),
-    (mean_field_guide, (torch.eye(2), None), (h(0.2)+h(0.5))*torch.ones(2,2))   
+    (mean_field_guide, (torch.Tensor([0.]), None), torch.Tensor([h(0.2) + h(0.5)])),
+    (mean_field_guide, (torch.eye(2), None), (h(0.2) + h(0.5))*torch.ones(2, 2))
 ])
 def test_guide_entropy(guide, args, expected_entropy):
     assert_equal(guide_entropy(guide, *args), expected_entropy)
 
 
-# Test without running any steps- should get entropy at initialization value
 @pytest.mark.parametrize("model,arg,design,guide,expected_ape,n_steps", [
-    (basic_model, torch.Tensor([0.0]), torch.Tensor([0.3, 0.4]), 
+    # Test without running any steps- should get entropy at initialization value
+    (basic_model, torch.Tensor([0.0]), torch.Tensor([0.3, 0.4]),
      mean_field_guide, torch.Tensor([h(0.2)+h(0.5)]), 0),
-    (basic_model, torch.Tensor([0.0]), torch.Tensor([0.3, 0.4]), 
+    # These two learn the design (50 steps sufficient for SVI)
+    (basic_model, torch.Tensor([0.0]), torch.Tensor([0.3, 0.4]),
      mean_field_guide, torch.Tensor([h(0.3)+h(0.4)]), 50),
-    (basic_model, torch.Tensor([0.0]), torch.Tensor([0.3, 0.5]), 
+    (basic_model, torch.Tensor([0.0]), torch.Tensor([0.3, 0.5]),
      mean_field_guide, torch.Tensor([h(0.3)+h(0.5)]), 50)
 ])
 def test_ape_svi(model, arg, design, guide, expected_ape, n_steps):
     # Reset seed: deals with noise in SVI etc
     pyro.set_rng_seed(42)
-    g = lambda d: guide(arg, d)
     vi_parameters = {
-        "guide": g,
+        "guide": lambda d: guide(arg, d),
         # Note: exact details irrelevant, taking 0 steps
         "optim": optim.Adam({"lr": 0.01}),
         "num_steps": n_steps
     }
     is_parameters = {"num_samples": 1}
-    m = lambda d: model(arg, d)
-    ape = vi_ape(m, design, "y", vi_parameters, is_parameters)
+    ape = vi_ape(lambda d: model(arg, d), design, "y", vi_parameters, 
+        is_parameters)
     assert_equal(ape, expected_ape, prec=1e-4)
-

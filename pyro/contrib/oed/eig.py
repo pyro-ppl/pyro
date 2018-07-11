@@ -1,8 +1,4 @@
-import torch
-import numpy as np
-
 import pyro
-import pyro.distributions as dist
 from pyro import poutine
 from pyro.contrib.oed.search import Search
 from pyro.infer import EmpiricalMarginal, Importance, SVI, Trace_ELBO
@@ -20,7 +16,7 @@ def guide_entropy(guide, *args):
 
 
 def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
-    """Estimates the average posterior entropy (APE) loss function using 
+    """Estimates the average posterior entropy (APE) loss function using
     variational inference (VI).
 
     The APE loss function estimated by this method is defined as
@@ -37,10 +33,10 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
     :param torch.Tensor design: Tensor representation of design
     :param observation_labels list or str: A subset of the sample sites
         present in `model`. These sites are regarded as future observations
-        and other sites are regarded as latent variables over which a 
+        and other sites are regarded as latent variables over which a
         posterior is to be inferred.
     :param dict vi_parameters: Variational inference parameters which should include:
-        `optim`: an instance of `pyro.Optim`, `guide`: a guide function 
+        `optim`: an instance of `pyro.Optim`, `guide`: a guide function
         compatible with `model`, `num_steps`: the number of VI steps to make
     :param dict is_parameters: Importance sampling parameters for the
         marginal distribution of :math:`Y`. May include `num_samples`: the number
@@ -75,4 +71,3 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
     loss = loss_dist.mean
 
     return loss
-

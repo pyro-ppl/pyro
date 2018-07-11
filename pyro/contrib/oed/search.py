@@ -1,12 +1,12 @@
 from pyro.infer.abstract_infer import TracePosterior
 import pyro.poutine as poutine
 
-import six
 from six.moves import queue
 
 ###################################
 # Search borrowed from RSA example
 ###################################
+
 
 class Search(TracePosterior):
     """
@@ -25,4 +25,3 @@ class Search(TracePosterior):
         while not q.empty():
             tr = p.get_trace(*args, **kwargs)
             yield tr, tr.log_prob_sum()
-            

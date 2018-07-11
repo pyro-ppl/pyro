@@ -50,7 +50,7 @@ def test_batch_entropy_shape(dist):
         dist_params = dist.get_dist_params(idx)
         d = dist.pyro_dist(**dist_params)
         with xfail_if_not_implemented():
-            # Get log_prob shape after broadcasting.
+            # Get entropy shape after broadcasting.
             expected_shape = _log_prob_shape(d)
             entropy_obj = d.entropy()
             assert entropy_obj.size() == expected_shape
