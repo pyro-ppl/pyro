@@ -137,10 +137,11 @@ class SubsampleMessenger(PlateMessenger):
         self.subsample = subsample
         self.use_cuda = use_cuda
 
-        self._size, self.subsample_size, self.subsample = self._do_subsample(
-            self.name, self._size, self.subsample_size,
-            self.subsample, self.use_cuda)
-        self.size = self.subsample_size
+        if am_i_wrapped():
+            self._size, self.subsample_size, self.subsample = self._do_subsample(
+                self.name, self._size, self.subsample_size,
+                self.subsample, self.use_cuda)
+            self.size = self.subsample_size
 
     def _do_subsample(self, name, size=None, subsample_size=None, subsample=None, use_cuda=None):
         """
@@ -182,13 +183,15 @@ class SubsampleMessenger(PlateMessenger):
     def __iter__(self):
         self._vectorized = False
         self.dim = None
+        self._size, self.subsample_size, self.subsample = self._do_subsample(
+            self.name, self._size, self.subsample_size, self.subsample, self.use_cuda)
         for i in self.subsample:
             self.next_context()
             with self:
                 yield i if isinstance(i, numbers.Number) else i.item()
 
     def __enter__(self):
-        if self.subsample is None:
+        if self.subsample is None and self.size is None:
             self._size, self.subsample_size, self.subsample = self._do_subsample(
                 self.name, self._size, self.subsample_size, self.subsample, self.use_cuda)
         self.size = self.subsample_size

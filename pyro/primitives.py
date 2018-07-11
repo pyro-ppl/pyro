@@ -167,14 +167,6 @@ class irange(SubsampleMessenger):
     def __call__(self, fn):
         raise NotImplementedError
 
-    def __iter__(self):
-        self._vectorized = False
-        self.dim = None
-        for i in self.subsample:
-            self.next_context()
-            with self:
-                yield i if isinstance(i, numbers.Number) else i.item()
-
 
 class _iarange(object):
     """
