@@ -10,20 +10,28 @@ from pyro.infer import EmpiricalMarginal, Importance, SVI, Trace_ELBO
 
 def guide_entropy(guide, *args):
     # TODO: strong assumptions being made here!
-    trace = poutine.util.prune_subsample_sites(poutine.trace(guide).get_trace(*args))
+    trace = poutine.trace(guide).get_trace(*args)
     entropy = 0.
     for name, site in trace.nodes.items():
         if site["type"] == "sample":
-            entropy += site["fn"].entropy()
-    return entropy.squeeze() # .squeeze() necessary?
+            if not poutine.util.site_is_subsample(site):
+                entropy += site["fn"].entropy()
+    return entropy
 
 
-def vi_eig(model, design, observation_labels, vi_parameters, is_parameters):
-    """Estimates the expected information gain (EIG) using variational inference (VI).
+def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
+    """Estimates the average posterior entropy (APE) loss function using 
+    variational inference (VI).
 
-    The EIG is defined (up to linear rescaling) as
+    The APE loss function estimated by this method is defined as
 
-        :math:`EIG(d)=E_{Y\sim p(y|\theta, d)}[H(p(\theta|y, d))]`
+        :math:`APE(d)=E_{Y\sim p(y|\theta, d)}[H(p(\theta|y, d))]`
+
+    This is related to expected information gain (EIG) by the equation
+
+        :math:`EIG(d)=H[p(\theta)]-APE(d)`
+
+    in particular, minimising the loss is equivalent to maximising EIG.
 
     :param function model: A pyro model accepting `design` as only argument.
     :param torch.Tensor design: Tensor representation of design
@@ -37,6 +45,8 @@ def vi_eig(model, design, observation_labels, vi_parameters, is_parameters):
     :param dict is_parameters: Importance sampling parameters for the
         marginal distribution of :math:`Y`. May include `num_samples`: the number
         of samples to draw from the marginal.
+    :return: Loss function estimate
+    :rtype: `torch.Tensor`
 
     """
 

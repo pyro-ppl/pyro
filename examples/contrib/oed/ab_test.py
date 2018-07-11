@@ -7,7 +7,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import optim
 from pyro.infer import EmpiricalMarginal, Importance
-from pyro.contrib.oed.eig import vi_eig
+from pyro.contrib.oed.eig import vi_ape
 
 
 # Set up regression model dimensions
@@ -20,21 +20,24 @@ softplus = torch.nn.Softplus()
 
 
 def model(design):
-    # Create normal priors over the parameters
-    design_shape = design.size()
+    # Allow batching of designs
+    design_shape = design.shape
     loc = torch.zeros(*design_shape[:-2], 1, design_shape[-1])
     scale = prior_stdevs
-    w_prior = dist.Normal(loc, scale).independent(1)
+    # Place a normal prior on the regression coefficient
+    # w is 1 x p: hence use .independent(2)
+    w_prior = dist.Normal(loc, scale).independent(2)
     w = pyro.sample('w', w_prior).transpose(-1, -2)
 
     with pyro.iarange("map", N, dim=-2):
-        # run the regressor forward conditioned on inputs
+        # Run the regressor forward conditioned on inputs
         prediction_mean = torch.matmul(design, w).squeeze(-1)
+        # y is an n-vector: hence use .independent(1)
         y = pyro.sample("y", dist.Normal(prediction_mean, 1).independent(1))
 
 
 def guide(design):
-    design_shape = design.size()
+    design_shape = design.shape
     # define our variational parameters
     w_loc = torch.zeros(*design_shape[:-2], 1, design_shape[-1])
     # note that we initialize our scales to be pretty narrow
@@ -43,8 +46,8 @@ def guide(design):
     mw_param = pyro.param("guide_mean_weight", w_loc)
     sw_param = softplus(pyro.param("guide_scale_weight", w_sig))
     # guide distributions for w 
-    w_dist = dist.Normal(mw_param, sw_param).independent(1)
-    w = pyro.sample('w', w_dist).transpose(-1, -2)
+    w_dist = dist.Normal(mw_param, sw_param).independent(2)
+    pyro.sample('w', w_dist)
 
     pyro.iarange("map", N, dim=-2)
 
@@ -83,9 +86,15 @@ if __name__ == '__main__':
     X = torch.stack(designs)
 
     # Estimated loss (linear transform of EIG)
-    est_eig = vi_eig(model, X, observation_labels="y", vi_parameters={
-                "guide": guide, "optim": optim.Adam({"lr": 0.0025}), "num_steps":3000
-                }, is_parameters={"num_samples": 2})
+    est_eig = vi_ape(
+        model, 
+        X, 
+        observation_labels="y", 
+        vi_parameters={
+            "guide": guide, "optim": optim.Adam({"lr": 0.0025}), 
+            "num_steps":3000},
+        is_parameters={"num_samples": 2}
+    )
     
     # Analytic loss
     true_eig = []
