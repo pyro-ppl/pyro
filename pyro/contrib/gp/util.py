@@ -194,15 +194,15 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
     # v = inv(Lff) @ f_loc  <- whitened f_loc
     # S = inv(Lff) @ f_scale_tril  <- whitened f_scale_tril
     # Denote:
-    #     W = inv(Lff) @ Kf*
-    #     K = W.T @ S @ S.T @ W
-    #     Q** = K*f @ inv(Kff) @ Kf* = W.T @ W
-    # loc = K*f @ inv(Kff) @ f_loc = W.T @ v
+    #     W = (inv(Lff) @ Kf*).T
+    #     K = W @ S @ S.T @ W.T
+    #     Q** = K*f @ inv(Kff) @ Kf* = W @ W.T
+    # loc = K*f @ inv(Kff) @ f_loc = W @ v
     # Case 1: f_scale_tril = None
     #     cov = K** - K*f @ inv(Kff) @ Kf* = K** - Q**
     # Case 2: f_scale_tril != None
     #     cov = K** - Q** + K*f @ inv(Kff) @ f_cov @ inv(Kff) @ Kf*
-    #         = K** - Q** + W.T @ S @ S.T @ W
+    #         = K** - Q** + W @ S @ S.T @ W.T
     #         = K** - Q** + K
 
     N = X.shape[0]
@@ -227,7 +227,7 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
 
     if whiten:
         v_2D = f_loc_2D
-        W = Kfs.trtrs(Lff, upper=False)[0]
+        W = Kfs.trtrs(Lff, upper=False)[0].t()
         if f_scale_tril is not None:
             S_2D = f_scale_tril_2D
     else:
@@ -238,34 +238,34 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
         Lffinv_pack = pack.trtrs(Lff, upper=False)[0]
         # unpack
         v_2D = Lffinv_pack[:, :f_loc_2D.shape[1]]
-        W = Lffinv_pack[:, f_loc_2D.shape[1]:f_loc_2D.shape[1] + M]
+        W = Lffinv_pack[:, f_loc_2D.shape[1]:f_loc_2D.shape[1] + M].t()
         if f_scale_tril is not None:
             S_2D = Lffinv_pack[:, -f_scale_tril_2D.shape[1]:]
 
     loc_shape = latent_shape + (M,)
-    loc = v_2D.t().matmul(W).reshape(loc_shape)
+    loc = W.matmul(v_2D).t().reshape(loc_shape)
 
     if full_cov:
         Kss = kernel(Xnew)
-        Qss = W.t().matmul(W)
+        Qss = W.matmul(W.t())
         cov = Kss - Qss
     else:
         Kssdiag = kernel(Xnew, diag=True)
-        Qssdiag = W.pow(2).sum(dim=0)
+        Qssdiag = W.pow(2).sum(dim=-1)
         var = Kssdiag - Qssdiag
 
     if f_scale_tril is not None:
-        Wt_S_shape = (Xnew.shape[0],) + f_scale_tril.shape[1:]
-        Wt_S = W.t().matmul(S_2D).reshape(Wt_S_shape)
-        # convert Wt_S_shape from M x N x latent_shape to latent_shape x M x N
-        Wt_S = Wt_S.permute(list(range(2, Wt_S.dim())) + [0, 1])
+        W_S_shape = (Xnew.shape[0],) + f_scale_tril.shape[1:]
+        W_S = W.matmul(S_2D).reshape(W_S_shape)
+        # convert W_S_shape from M x N x latent_shape to latent_shape x M x N
+        W_S = W_S.permute(list(range(2, W_S.dim())) + [0, 1])
 
         if full_cov:
-            St_W = Wt_S.transpose(-2, -1)
-            K = Wt_S.matmul(St_W)
+            St_Wt = W_S.transpose(-2, -1)
+            K = W_S.matmul(St_Wt)
             cov = cov + K
         else:
-            Kdiag = Wt_S.pow(2).sum(dim=-1)
+            Kdiag = W_S.pow(2).sum(dim=-1)
             var = var + Kdiag
     else:
         if full_cov:
