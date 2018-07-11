@@ -39,38 +39,46 @@ class PlateMessenger(IndepMessenger):
         super(PlateMessenger, self).__init__(name, size, dim)
         self.sites = sites
         self._installed = False
+        self._vectorized = True
 
-    # def __iter__(self):
-    #     for i in xrange(self.size):
-    #         self.next_context()
-    #         with self:
-    #             yield i if isinstance(i, numbers.Number) else i.item()
+    def __iter__(self):
+        self._vectorized = False
+        self.dim = None
+        for i in xrange(self.size):
+            self.next_context()
+            with self:
+                yield i if isinstance(i, numbers.Number) else i.item()
 
     def __len__(self):
         return self.size
 
     def __exit__(self, *args):
         if self._installed:
-            _DIM_ALLOCATOR.free(self.name, self.dim)
+            if self._vectorized:
+                _DIM_ALLOCATOR.free(self.name, self.dim)
             self._installed = False
         self.counter = 0
         return super(PlateMessenger, self).__exit__(*args)
 
     def _reset(self):
         if self._installed:
-            _DIM_ALLOCATOR.free(self.name, self.dim)
+            if self._vectorized:
+                _DIM_ALLOCATOR.free(self.name, self.dim)
         self._installed = False
+        self._vectorized = True
         self.counter = 0
 
     def _process_message(self, msg):
         if self.sites is None or msg["name"] in self.sites:
             if not self._installed:
-                self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
+                if self._vectorized:
+                    self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
                 self._installed = True
             super(PlateMessenger, self)._process_message(msg)
         elif self.sites is not None and msg["name"] not in self.sites:
             if self._installed:
-                _DIM_ALLOCATOR.free(self.name, self.dim)
+                if self._vectorized:
+                    _DIM_ALLOCATOR.free(self.name, self.dim)
                 self._installed = False
 
 

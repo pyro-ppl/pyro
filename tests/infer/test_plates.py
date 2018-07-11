@@ -16,7 +16,7 @@ from pyro.poutine.plate_messenger import PlateMessenger
 logger = logging.getLogger(__name__)
 
 # This file tests a variety of model,guide pairs with valid and invalid structure
-# with PlateMessenger in place of pyro.iarange
+# with PlateMessenger in place of pyro.iarange and pyro.irange
 
 
 def assert_ok(model, guide, elbo):
@@ -75,10 +75,10 @@ def test_three_indep_iarange_at_different_depths_ok():
     def model():
         p = torch.tensor(0.5)
         inner_iarange = PlateMessenger("iarange1", 10)
-        for i in pyro.irange("irange0", 2):
+        for i in PlateMessenger("irange0", 2):
             pyro.sample("x_%d" % i, dist.Bernoulli(p))
             if i == 0:
-                for j in pyro.irange("irange1", 2):
+                for j in PlateMessenger("irange1", 2):
                     with inner_iarange as ind:
                         pyro.sample("y_%d" % j, dist.Bernoulli(p).expand_by([len(ind)]))
             elif i == 1:
@@ -88,10 +88,10 @@ def test_three_indep_iarange_at_different_depths_ok():
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         inner_iarange = PlateMessenger("iarange1", 10)
-        for i in pyro.irange("irange0", 2):
+        for i in PlateMessenger("irange0", 2):
             pyro.sample("x_%d" % i, dist.Bernoulli(p))
             if i == 0:
-                for j in pyro.irange("irange1", 2):
+                for j in PlateMessenger("irange1", 2):
                     with inner_iarange as ind:
                         pyro.sample("y_%d" % j, dist.Bernoulli(p).expand_by([len(ind)]))
             elif i == 1:
