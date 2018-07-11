@@ -197,7 +197,7 @@ def log_sum_exp(tensor, dim=-1):
     :param dim: Dimension to be summed out.
     """
     max_val = tensor.max(dim)[0]
-    return max_val + (tensor - max_val.unsqueeze(-1)).exp().sum(dim=dim).log()
+    return max_val + (tensor - max_val.unsqueeze(dim)).exp().sum(dim=dim).log()
 
 
 def enable_validation(is_validate):

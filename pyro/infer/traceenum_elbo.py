@@ -14,7 +14,7 @@ from pyro.infer.elbo import ELBO
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.util import Dice, is_validation_enabled
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, torch_isnan
+from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, warn_if_nan
 
 
 def _dict_iadd(dict_, key, value):
@@ -140,8 +140,7 @@ class TraceEnum_ELBO(ELBO):
             elbo += elbo_particle.item() / self.num_particles
 
         loss = -elbo
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return loss
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
@@ -170,8 +169,7 @@ class TraceEnum_ELBO(ELBO):
                 (loss_particle / self.num_particles).backward(retain_graph=True)
 
         loss = -elbo
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return loss
 
 
@@ -210,6 +208,5 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
         differentiable_loss.backward()  # this line triggers jit compilation
         loss = differentiable_loss.item()
 
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return loss

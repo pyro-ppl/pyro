@@ -15,7 +15,7 @@ from pyro.infer import ELBO
 from pyro.infer.util import (MultiFrameTensor, detach_iterable, get_iarange_stacks, is_validation_enabled,
                              torch_backward, torch_item)
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
+from pyro.util import check_model_guide_match, check_site_shape, warn_if_nan
 
 
 def _get_baseline_options(site):
@@ -225,8 +225,7 @@ class TraceGraph_ELBO(ELBO):
             elbo += weight * elbo_particle
 
         loss = -elbo
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return loss
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
@@ -278,8 +277,7 @@ class TraceGraph_ELBO(ELBO):
             torch_backward(weight * (surrogate_loss + baseline_loss))
 
         loss = -torch_item(elbo)
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return weight * loss
 
 
@@ -345,6 +343,5 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
         surrogate_loss.backward()  # this line triggers jit compilation
         loss = loss.item()
 
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return loss

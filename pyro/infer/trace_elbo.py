@@ -10,7 +10,7 @@ from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, is_validation_enabled, torch_item
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
+from pyro.util import check_model_guide_match, check_site_shape, warn_if_nan
 
 
 def _compute_log_r(model_trace, guide_trace):
@@ -89,8 +89,7 @@ class Trace_ELBO(ELBO):
             elbo += elbo_particle / self.num_particles
 
         loss = -elbo
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return loss
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
@@ -141,8 +140,7 @@ class Trace_ELBO(ELBO):
                 surrogate_loss_particle.backward()
 
         loss = -elbo
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return loss
 
 
@@ -210,6 +208,5 @@ class JitTrace_ELBO(Trace_ELBO):
         surrogate_loss.backward()  # this line triggers jit compilation
         loss = loss.item()
 
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return loss
