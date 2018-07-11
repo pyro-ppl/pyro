@@ -1,12 +1,10 @@
 import torch
-import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 
 import pyro
 import pyro.distributions as dist
 from pyro import optim
-from pyro.infer import EmpiricalMarginal, Importance
 from pyro.contrib.oed.eig import vi_ape
 
 
@@ -34,19 +32,20 @@ def model(design):
         # Run the regressor forward conditioned on inputs
         prediction_mean = torch.matmul(design, w).squeeze(-1)
         # y is an n-vector: hence use .independent(1)
-        y = pyro.sample("y", dist.Normal(prediction_mean, 1).independent(1))
+        pyro.sample("y", dist.Normal(prediction_mean, 1).independent(1))
 
 
 def guide(design):
-    design_shape = design.shape
+    loc_shape = design.shape.copy()
+    loc_shape[-2] = 1
     # define our variational parameters
-    w_loc = torch.zeros(*design_shape[:-2], 1, design_shape[-1])
+    w_loc = torch.zeros(loc_shape)
     # note that we initialize our scales to be pretty narrow
-    w_sig = -3*torch.ones(*design_shape[:-2], 1, design_shape[-1])
+    w_sig = -3*torch.ones(loc_shape)
     # register learnable params in the param store
     mw_param = pyro.param("guide_mean_weight", w_loc)
     sw_param = softplus(pyro.param("guide_scale_weight", w_sig))
-    # guide distributions for w 
+    # guide distributions for w
     w_dist = dist.Normal(mw_param, sw_param).independent(2)
     pyro.sample('w', w_dist)
 
@@ -75,7 +74,7 @@ def design_to_matrix(design):
 
 
 def analytic_posterior_entropy(prior_cov, x):
-    posterior_cov =  prior_cov - prior_cov.mm(x.t().mm(torch.inverse(
+    posterior_cov = prior_cov - prior_cov.mm(x.t().mm(torch.inverse(
         x.mm(prior_cov.mm(x.t())) + torch.eye(N)).mm(x.mm(prior_cov))))
     return 0.5*torch.logdet(2*np.pi*np.e*posterior_cov)
 
@@ -88,22 +87,22 @@ if __name__ == '__main__':
 
     # Estimated loss (linear transform of EIG)
     est_eig = vi_ape(
-        model, 
-        X, 
-        observation_labels="y", 
+        model,
+        X,
+        observation_labels="y",
         vi_parameters={
-            "guide": guide, "optim": optim.Adam({"lr": 0.0025}), 
-            "num_steps":3000},
+            "guide": guide, "optim": optim.Adam({"lr": 0.0025}),
+            "num_steps": 3000},
         is_parameters={"num_samples": 2}
     )
-    
+
     # Analytic loss
     true_eig = []
     prior_cov = torch.diag(prior_stdevs**2)
     for i in range(len(ns)):
         x = X[i, :, :]
         true_eig.append(analytic_posterior_entropy(prior_cov, x))
-    
+
     # Plot to compare
     ns = np.array(ns)
     est_eig = np.array(est_eig.detach())
@@ -111,4 +110,3 @@ if __name__ == '__main__':
     plt.scatter(ns, est_eig)
     plt.scatter(ns, true_eig, color='r')
     plt.show()
-
