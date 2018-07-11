@@ -7,7 +7,7 @@ import torch
 from pyro.distributions.distribution import Distribution
 
 from .indep_messenger import IndepMessenger
-from .runtime import _DIM_ALLOCATOR, apply_stack
+from .runtime import _DIM_ALLOCATOR, am_i_wrapped, apply_stack
 
 
 class PlateMessenger(IndepMessenger):
@@ -57,7 +57,7 @@ class PlateMessenger(IndepMessenger):
             if self._vectorized:
                 _DIM_ALLOCATOR.free(self.name, self.dim)
             self._installed = False
-        self.counter = 0
+        # self.counter = 0
         return super(PlateMessenger, self).__exit__(*args)
 
     def _reset(self):
@@ -135,6 +135,12 @@ class SubsampleMessenger(PlateMessenger):
         self.subsample = subsample
         self.use_cuda = use_cuda
 
+        if am_i_wrapped():
+            self._size, self.subsample_size, self.subsample = self._do_subsample(
+                self.name, self._size, self.subsample_size,
+                self.subsample, self.use_cuda)
+            self.size = self.subsample_size
+
     def _do_subsample(self, name, size=None, subsample_size=None, subsample=None, use_cuda=None):
         """
         Helper function for subsampling
@@ -172,9 +178,17 @@ class SubsampleMessenger(PlateMessenger):
 
         return size, subsample_size, subsample
 
+    def __iter__(self):
+        self._vectorized = False
+        self.dim = None
+        for i in self.subsample:
+            self.next_context()
+            with self:
+                yield i if isinstance(i, numbers.Number) else i.item()
+
     def __enter__(self):
-        self._size, self.subsample_size, self.subsample = self._do_subsample(
-            self.name, self._size, self.subsample_size, self.subsample, self.use_cuda)
+        # self._size, self.subsample_size, self.subsample = self._do_subsample(
+        #     self.name, self._size, self.subsample_size, self.subsample, self.use_cuda)
         self.size = self.subsample_size
         super(SubsampleMessenger, self).__enter__()
         return self.subsample

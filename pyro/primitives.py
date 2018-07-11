@@ -15,6 +15,7 @@ import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import param_with_module_name
 from pyro.poutine.runtime import _DIM_ALLOCATOR, _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack
+from pyro.poutine.plate_messenger import SubsampleMessenger
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 
 
@@ -147,7 +148,35 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
     return size, subsample_size, subsample
 
 
-class iarange(object):
+class iarange(SubsampleMessenger):
+
+    def __enter__(self):
+        super(iarange, self).__enter__()
+        return self.subsample
+
+    def __call__(self, fn):
+        raise NotImplementedError
+
+
+class irange(SubsampleMessenger):
+
+    def __init__(self, *args, **kwargs):
+        super(irange, self).__init__(*args, **kwargs)
+        self._vectorized = False
+
+    def __call__(self, fn):
+        raise NotImplementedError
+
+    def __iter__(self):
+        self._vectorized = False
+        self.dim = None
+        for i in self.subsample:
+            self.next_context()
+            with self:
+                yield i if isinstance(i, numbers.Number) else i.item()
+
+
+class _iarange(object):
     """
     Context manager for conditionally independent ranges of variables.
 
@@ -258,7 +287,7 @@ class iarange(object):
         _DIM_ALLOCATOR.free(self.name, self.dim)
 
 
-class irange(object):
+class _irange(object):
     """
     Non-vectorized version of :class:`iarange`. See :class:`iarange` for details.
 
