@@ -1,5 +1,4 @@
 import pyro
-from pyro import poutine
 from pyro.contrib.oed.search import Search
 from pyro.infer import EmpiricalMarginal, Importance, SVI, Trace_ELBO
 from pyro.contrib.autoguide import mean_field_guide_entropy

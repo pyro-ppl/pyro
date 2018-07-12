@@ -1,12 +1,11 @@
 import torch
-import numpy as np
+import scipy.special as sc
 import pytest
 
 import pyro
 import pyro.distributions as dist
 from pyro import optim
 from pyro.contrib.oed.eig import vi_ape
-from pyro.contrib.autoguide import mean_field_guide_entropy
 from tests.common import assert_equal
 
 
@@ -25,17 +24,7 @@ def basic_model(batch_tensor, design):
 
 
 def h(p):
-    if p == 0. or p == 1.:
-        return 0.
-    return -p*np.log(p) - (1-p)*np.log(1-p)
-
-
-@pytest.mark.parametrize("guide,args,expected_entropy", [
-    (mean_field_guide, (torch.Tensor([0.]), None), torch.Tensor([h(0.2) + h(0.5)])),
-    (mean_field_guide, (torch.eye(2), None), (h(0.2) + h(0.5))*torch.ones(2, 2))
-])
-def test_guide_entropy(guide, args, expected_entropy):
-    assert_equal(mean_field_guide_entropy(guide, *args), expected_entropy)
+    return -(sc.xlogy(p, p) + sc.xlog1py(1 - p, -p))
 
 
 @pytest.mark.parametrize("model,arg,design,guide,expected_ape,n_steps", [
@@ -51,6 +40,7 @@ def test_guide_entropy(guide, args, expected_entropy):
 def test_ape_svi(model, arg, design, guide, expected_ape, n_steps):
     # Reset seed: deals with noise in SVI etc
     pyro.set_rng_seed(42)
+    pyro.clear_param_store()
     vi_parameters = {
         "guide": lambda d: guide(arg, d),
         # Note: exact details irrelevant, taking 0 steps
