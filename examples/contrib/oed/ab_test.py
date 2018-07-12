@@ -19,7 +19,7 @@ softplus = torch.nn.Softplus()
 
 def model(design):
     # Allow batching of designs
-    loc_shape = design.shape.copy()
+    loc_shape = list(design.shape)
     loc_shape[-2] = 1
     loc = torch.zeros(loc_shape)
     scale = prior_stdevs
@@ -36,7 +36,7 @@ def model(design):
 
 
 def guide(design):
-    loc_shape = design.shape.copy()
+    loc_shape = list(design.shape)
     loc_shape[-2] = 1
     # define our variational parameters
     w_loc = torch.zeros(loc_shape)
