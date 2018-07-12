@@ -519,13 +519,13 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the ``D_term`` is initialized to 1/2 and the ``W_term`` is
-    intialized randomly such that ``W_term.t().matmul(W_term)`` is half the
+    intialized randomly such that ``W_term.matmul(W_term.t())`` is half the
     identity matrix. To change this default behavior the user
     should call :func:`pyro.param` before beginning inference, e.g.::
 
         latent_dim = 10
         pyro.param("auto_loc", torch.randn(latent_dim))
-        pyro.param("auto_W_term", torch.randn(latent_dim)))
+        pyro.param("auto_W_term", torch.randn(latent_dim, rank)))
         pyro.param("auto_D_term", torch.randn(latent_dim).exp()),
                    constraint=constraints.positive)
 
@@ -535,7 +535,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
     """
     def __init__(self, model, prefix="auto", rank=1):
         if not isinstance(rank, numbers.Number) or not rank > 0:
-            raise ValueError("Expected rank >= 0 but got {}".format(rank))
+            raise ValueError("Expected rank > 0 but got {}".format(rank))
         self.rank = rank
         super(AutoLowRankMultivariateNormal, self).__init__(model, prefix)
 
@@ -546,7 +546,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
         W_term = pyro.param("{}_W_term".format(self.prefix),
-                            lambda: torch.randn(self.rank, self.latent_dim) * (0.5 / self.rank) ** 0.5)
+                            lambda: torch.randn(self.latent_dim, self.rank) * (0.5 / self.rank) ** 0.5)
         D_term = pyro.param("{}_D_term".format(self.prefix),
                             lambda: torch.ones(self.latent_dim) * 0.5,
                             constraint=constraints.positive)
@@ -558,7 +558,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         loc = pyro.param("{}_loc".format(self.prefix))
         W_term = pyro.param("{}_W_term".format(self.prefix))
         D_term = pyro.param("{}_D_term".format(self.prefix))
-        scale = (W_term.pow(2).sum(0) + D_term).sqrt()
+        scale = (W_term.pow(2).sum(-1) + D_term).sqrt()
         return loc, scale
 
 
