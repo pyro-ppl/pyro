@@ -4,11 +4,12 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
+from pyro.infer.abstract_infer import TracePosterior
 from pyro.infer.elbo import ELBO
 from pyro.infer.util import torch_item
 
 
-class SVI(object):
+class SVI(TracePosterior):
     """
     :param model: the model (callable containing Pyro primitives)
     :param guide: the guide (callable containing Pyro primitives)
@@ -33,10 +34,15 @@ class SVI(object):
                  optim,
                  loss,
                  loss_and_grads=None,
+                 num_steps=0,
+                 num_samples=10,
                  **kwargs):
         self.model = model
         self.guide = guide
         self.optim = optim
+        self.num_steps = num_steps
+        self.num_samples = num_samples
+        super(SVI, self).__init__(**kwargs)
 
         if isinstance(loss, ELBO):
             self.loss = loss.loss
@@ -50,6 +56,19 @@ class SVI(object):
                 loss_and_grads = _loss_and_grads
             self.loss = loss
             self.loss_and_grads = loss_and_grads
+
+    def run(self, *args, **kwargs):
+        if self.num_steps > 0:
+            with poutine.block():
+                for i in range(self.num_steps):
+                    self.step(*args, **kwargs)
+        return super(SVI, self).run(*args, **kwargs)
+
+    def _traces(self, *args, **kwargs):
+        for i in range(self.num_samples):
+            guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
+            model_trace = poutine.trace(poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
+            yield model_trace, (model_trace.log_prob_sum() - guide_trace.log_prob_sum())
 
     def evaluate_loss(self, *args, **kwargs):
         """
