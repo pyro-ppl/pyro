@@ -10,22 +10,24 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
 
     The APE loss function estimated by this method is defined as
 
-        :math:`APE(d)=E_{Y\sim p(y|\theta, d)}[H(p(\theta|y, d))]`
+        :math:`APE(d)=E_{Y\\sim p(y|\\theta, d)}[H(p(\\theta|Y, d))]`
 
-    This is related to expected information gain (EIG) by the equation
+    where :math:`H[p(x)]` is the `differential entropy
+    <https://en.wikipedia.org/wiki/Differential_entropy>`_.
+    The APE is related to expected information gain (EIG) by the equation
 
-        :math:`EIG(d)=H[p(\theta)]-APE(d)`
+        :math:`EIG(d)=H[p(\\theta)]-APE(d)`
 
-    in particular, minimising the loss is equivalent to maximising EIG.
+    in particular, minimising the APE is equivalent to maximising EIG.
 
     :param function model: A pyro model accepting `design` as only argument.
     :param torch.Tensor design: Tensor representation of design
-    :param observation_labels list or str: A subset of the sample sites
+    :param list observation_labels: A subset of the sample sites
         present in `model`. These sites are regarded as future observations
         and other sites are regarded as latent variables over which a
         posterior is to be inferred.
     :param dict vi_parameters: Variational inference parameters which should include:
-        `optim`: an instance of `pyro.Optim`, `guide`: a guide function
+        `optim`: an instance of :class:`pyro.Optim`, `guide`: a guide function
         compatible with `model`, `num_steps`: the number of VI steps to make
     :param dict is_parameters: Importance sampling parameters for the
         marginal distribution of :math:`Y`. May include `num_samples`: the number
