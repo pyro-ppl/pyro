@@ -153,7 +153,7 @@ continuous_dists = [
     Fixture(pyro_dist=dist.LowRankMultivariateNormal,
             scipy_dist=sp.multivariate_normal,
             examples=[
-                {'loc': [2.0, 1.0], 'D_term': [0.5, 0.5], 'W_term': [[1.0, 0.5]],
+                {'loc': [2.0, 1.0], 'D_term': [0.5, 0.5], 'W_term': [[1.0], [0.5]],
                  'test_data': [[2.0, 1.0], [9.0, 3.4]]},
             ],
             scipy_arg_fn=lambda loc, D_term=None, W_term=None:
