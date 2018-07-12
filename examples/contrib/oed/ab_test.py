@@ -1,7 +1,6 @@
 import argparse
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
 
 import pyro
 import pyro.distributions as dist
@@ -112,7 +111,7 @@ def main(num_steps):
     X = torch.stack(designs)
 
     # Estimated loss (linear transform of EIG)
-    est_eig = vi_ape(
+    est_ape = vi_ape(
         model,
         X,
         observation_labels="y",
@@ -123,19 +122,25 @@ def main(num_steps):
     )
 
     # Analytic loss
-    true_eig = []
+    true_ape = []
     prior_cov = torch.diag(prior_stdevs**2)
     for i in range(len(ns)):
         x = X[i, :, :]
-        true_eig.append(analytic_posterior_entropy(prior_cov, x))
+        true_ape.append(analytic_posterior_entropy(prior_cov, x))
 
-    # Plot to compare
-    ns = np.array(ns)
-    est_eig = np.array(est_eig.detach())
-    true_eig = np.array(true_eig)
-    plt.scatter(ns, est_eig)
-    plt.scatter(ns, true_eig, color='r')
-    plt.show()
+    print("Estimated APE values")
+    print(est_ape)
+    print("True APE values")
+    print(true_ape)
+
+    # # Plot to compare
+    # import matplotlib.pyplot as plt
+    # ns = np.array(ns)
+    # est_ape = np.array(est_ape.detach())
+    # true_ape = np.array(true_ape)
+    # plt.scatter(ns, est_ape)
+    # plt.scatter(ns, true_ape, color='r')
+    # plt.show()
 
 
 if __name__ == "__main__":
