@@ -34,8 +34,8 @@ class SVI(TracePosterior):
                  optim,
                  loss,
                  loss_and_grads=None,
-                 num_steps=0,
                  num_samples=10,
+                 num_steps=0,
                  **kwargs):
         self.model = model
         self.guide = guide
