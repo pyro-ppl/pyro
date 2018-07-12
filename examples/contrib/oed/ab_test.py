@@ -1,6 +1,5 @@
 import argparse
 import torch
-from torch.distributions import constraints
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -38,6 +37,8 @@ p_treatments = 2  # number of treatment groups
 p = p_treatments  # number of features
 prior_stdevs = torch.tensor([1, .5])
 
+softplus = torch.nn.functional.softplus
+
 
 def model(design):
     # Allow batching of designs
@@ -68,7 +69,7 @@ def guide(design):
     w_sig = -3*torch.ones(loc_shape)
     # register learnable params in the param store
     mw_param = pyro.param("guide_mean_weight", w_loc)
-    sw_param = pyro.param("guide_scale_weight", w_sig, constraint=constraints.positive)
+    sw_param = softplus(pyro.param("guide_scale_weight", w_sig))
     # guide distributions for w
     w_dist = dist.Normal(mw_param, sw_param).independent(2)
     pyro.sample('w', w_dist)
@@ -141,4 +142,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
     parser.add_argument("-n", "--num-steps", nargs="?", default=3000, type=int)
     args = parser.parse_args()
-    main(*args)
+    main(args.num_steps)
