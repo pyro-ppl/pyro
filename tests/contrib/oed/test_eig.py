@@ -5,7 +5,8 @@ import pytest
 import pyro
 import pyro.distributions as dist
 from pyro import optim
-from pyro.contrib.oed.eig import vi_ape, guide_entropy
+from pyro.contrib.oed.eig import vi_ape
+from pyro.contrib.autoguide import mean_field_guide_entropy
 from tests.common import assert_equal
 
 
@@ -34,7 +35,7 @@ def h(p):
     (mean_field_guide, (torch.eye(2), None), (h(0.2) + h(0.5))*torch.ones(2, 2))
 ])
 def test_guide_entropy(guide, args, expected_entropy):
-    assert_equal(guide_entropy(guide, *args), expected_entropy)
+    assert_equal(mean_field_guide_entropy(guide, *args), expected_entropy)
 
 
 @pytest.mark.parametrize("model,arg,design,guide,expected_ape,n_steps", [

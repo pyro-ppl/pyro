@@ -667,3 +667,20 @@ class AutoDiscreteParallel(AutoGuide):
                 result[name] = pyro.sample(name, discrete_dist, infer={"enumerate": "parallel"})
 
         return result
+
+
+def mean_field_guide_entropy(guide, *args):
+    """Computes the entropy of a guide program, assuming
+    that the guide is fully mean-field (i.e. all sample sites
+    in the guide are independent).
+
+    The entropy is simply the sum of the entropies at the
+    individual sites.
+    """
+    trace = poutine.trace(guide).get_trace(*args)
+    entropy = 0.
+    for name, site in trace.nodes.items():
+        if site["type"] == "sample":
+            if not poutine.util.site_is_subsample(site):
+                entropy += site["fn"].entropy()
+    return entropy

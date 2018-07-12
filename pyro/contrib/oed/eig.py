@@ -2,17 +2,7 @@ import pyro
 from pyro import poutine
 from pyro.contrib.oed.search import Search
 from pyro.infer import EmpiricalMarginal, Importance, SVI, Trace_ELBO
-
-
-def guide_entropy(guide, *args):
-    # TODO: strong assumptions being made here!
-    trace = poutine.trace(guide).get_trace(*args)
-    entropy = 0.
-    for name, site in trace.nodes.items():
-        if site["type"] == "sample":
-            if not poutine.util.site_is_subsample(site):
-                entropy += site["fn"].entropy()
-    return entropy
+from pyro.contrib.autoguide import mean_field_guide_entropy
 
 
 def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
@@ -60,7 +50,7 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
             for _ in range(vi_parameters["num_steps"]):
                 posterior.step(design)
         # Recover the entropy
-        return guide_entropy(vi_parameters["guide"], design)
+        return mean_field_guide_entropy(vi_parameters["guide"], design)
 
     y_dist = EmpiricalMarginal(
         Importance(model, num_samples=is_parameters.get("num_samples", None)).run(design),
