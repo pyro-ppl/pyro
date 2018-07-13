@@ -37,7 +37,9 @@ class NUTS(HMC):
     **References**
 
     [1] `The No-U-turn sampler: adaptively setting path lengths in Hamiltonian Monte Carlo`,
-    Matthew D. Hoffman, and Andrew Gelman
+    Matthew D. Hoffman, and Andrew Gelman.
+    [2] `A Conceptual Introduction to Hamiltonian Monte Carlo`, Michael Betancourt
+    [3] `Slice Sampling`, Radford M. Neal
 
     :param model: Python callable containing Pyro primitives.
     :param float step_size: Determines the size of a single step taken by the
@@ -211,17 +213,17 @@ class NUTS(HMC):
         #     first sampling u from initial state (z_0, r_0) according to u ~ Uniform(0, p(z_0, r_0)),
         #     then sampling state (z, r) from the integrator trajectory according to
         #         (z, r) ~ Uniform({(z', r') in trajectory | p(z', r') >= u}).
-        # For more information about slice sampling method, see
-        #     `Slice sampling` by Radford M. Neal.
+        #
+        # For more information about slice sampling method, see [3].
         # For another version of NUTS which uses multinomial sampling instead of slice sampling, see
-        #     `A Conceptual Introduction to Hamiltonian Monte Carlo` by Michael Betancourt.
-        joint_prob = torch.exp(-energy_current)
-        if joint_prob == 0:
-            slice_var = energy_current.new_tensor(0.0)
-        else:
-            slice_var = pyro.sample("slicevar_t={}".format(self._t),
-                                    dist.Uniform(torch.zeros(1), joint_prob))
-        log_slice = slice_var.log()
+        # [2].
+
+        # Rather than sampling the slice variable from `Uniform(0, exp(-energy))`, we can
+        # sample log_slice directly using `energy`, so as to avoid potential underflow or
+        # overflow issues ([2]).
+        slice_exp_term = pyro.sample("slicevar_exp_t={}".format(self._t),
+                                     dist.Exponential(energy_current.new_tensor(1.)))
+        log_slice = -energy_current - slice_exp_term
 
         z_left = z_right = z
         r_left = r_right = r

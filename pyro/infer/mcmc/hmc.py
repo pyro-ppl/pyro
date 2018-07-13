@@ -200,7 +200,8 @@ class HMC(TraceKernel):
             z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
             for name, transform in self.transforms.items():
                 z[name] = transform(z[name])
-            self.step_size = self._find_reasonable_step_size(z)
+            with pyro.validation_enabled(False):
+                self.step_size = self._find_reasonable_step_size(z)
             self.num_steps = max(1, int(self.trajectory_length / self.step_size))
             # make prox-center for Dual Averaging scheme
             loc = math.log(10 * self.step_size)
