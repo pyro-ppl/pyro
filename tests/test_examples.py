@@ -19,6 +19,7 @@ CPU_EXAMPLES = [
     ['contrib/autoname/mixture.py', '--num-epochs=1'],
     ['contrib/autoname/tree_data.py', '--num-epochs=1'],
     ['contrib/gp/sv-dkl.py', '--epochs=1', '--num-inducing=4'],
+    ['contrib/oed/ab_test.py', '--num-steps=500'],
     ['dmm/dmm.py', '--num-epochs=1'],
     ['dmm/dmm.py', '--num-epochs=1', '--num-iafs=1'],
     ['eight_schools/mcmc.py', '--num-samples=500', '--warmup-steps=100'],
