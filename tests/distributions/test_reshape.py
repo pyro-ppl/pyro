@@ -4,6 +4,7 @@ import pytest
 import torch
 
 from pyro.distributions.torch import Bernoulli
+from tests.common import assert_equal
 
 
 def test_sample_shape_order():
@@ -119,3 +120,9 @@ def test_extra_event_dim_overflow(sample_dim, batch_dim, event_dim):
     for extra_event_dims in range(1 + sample_dim + batch_dim, 20):
         with pytest.raises(ValueError):
             dist0.expand_by(sample_shape).independent(extra_event_dims)
+
+
+def test_independent_entropy():
+    dist_univ = Bernoulli(0.5)
+    dist_multi = Bernoulli(torch.Tensor([0.5, 0.5])).independent(1)
+    assert_equal(dist_multi.entropy(), 2*dist_univ.entropy())
