@@ -171,7 +171,7 @@ def test_logistic_regression():
     assert_equal(rmse(true_coefs, beta_posterior.mean).item(), 0.0, prec=0.1)
 
 
-def test_bernoulli_beta():
+def test_beta_bernoulli():
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
         beta = torch.tensor([1.1, 1.1])
@@ -187,7 +187,7 @@ def test_bernoulli_beta():
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
-def test_normal_gamma():
+def test_gamma_normal():
     def model(data):
         rate = torch.tensor([1.0, 1.0])
         concentration = torch.tensor([1.0, 1.0])
@@ -203,7 +203,7 @@ def test_normal_gamma():
     assert_equal(posterior.mean, true_std, prec=0.05)
 
 
-def test_categorical_dirichlet():
+def test_dirichlet_categorical():
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
         p_latent = pyro.sample('p_latent', dist.Dirichlet(concentration))
@@ -236,7 +236,7 @@ def test_logistic_regression_with_dual_averaging():
     assert_equal(rmse(posterior.mean, true_coefs).item(), 0.0, prec=0.1)
 
 
-def test_bernoulli_beta_with_dual_averaging():
+def test_beta_bernoulli_with_dual_averaging():
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
         beta = torch.tensor([1.1, 1.1])
@@ -252,7 +252,7 @@ def test_bernoulli_beta_with_dual_averaging():
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
-def test_normal_gamma_with_dual_averaging():
+def test_gamma_normal_with_dual_averaging():
     def model(data):
         rate = torch.tensor([1.0, 1.0])
         concentration = torch.tensor([1.0, 1.0])
