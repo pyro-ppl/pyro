@@ -20,8 +20,11 @@ logger = logging.getLogger(__name__)
 T2 = T(*TEST_CASES[2].values)._replace(num_samples=800, warmup_steps=200)
 TEST_CASES[2] = pytest.param(*T2, marks=pytest.mark.skipif(
     'CI' in os.environ and os.environ['CI'] == 'true', reason='Slow test - skip on CI'))
-T3 = T(*TEST_CASES[3].values)._replace(num_samples=700, warmup_steps=100)
-TEST_CASES[3] = T3
+T3 = T(*TEST_CASES[3].values)._replace(num_samples=1000, warmup_steps=200)
+TEST_CASES[3] = pytest.param(*T3, marks=[
+    pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
+                       reason='Slow test - skip on CI')]
+)
 
 
 @pytest.mark.parametrize(
@@ -82,7 +85,7 @@ def test_logistic_regression():
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
 
 
-def test_bernoulli_beta():
+def test_beta_bernoulli():
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
         beta = torch.tensor([1.1, 1.1])
@@ -98,7 +101,7 @@ def test_bernoulli_beta():
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
-def test_normal_gamma():
+def test_gamma_normal():
     def model(data):
         rate = torch.tensor([1.0, 1.0])
         concentration = torch.tensor([1.0, 1.0])
@@ -132,8 +135,7 @@ def test_logistic_regression_with_dual_averaging():
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
 
 
-@pytest.mark.filterwarnings("ignore:Encountered NAN")
-def test_bernoulli_beta_with_dual_averaging():
+def test_beta_bernoulli_with_dual_averaging():
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
         beta = torch.tensor([1.1, 1.1])
@@ -149,7 +151,7 @@ def test_bernoulli_beta_with_dual_averaging():
     assert_equal(posterior.mean, true_probs, prec=0.03)
 
 
-def test_categorical_dirichlet():
+def test_dirichlet_categorical():
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
         p_latent = pyro.sample('p_latent', dist.Dirichlet(concentration))
@@ -162,3 +164,18 @@ def test_categorical_dirichlet():
     mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_probs, prec=0.02)
+
+
+def test_gamma_beta():
+    def model(data):
+        alpha_prior = pyro.sample('alpha', dist.Gamma(concentration=1., rate=1.))
+        beta_prior = pyro.sample('beta', dist.Gamma(concentration=1., rate=1.))
+        pyro.sample('x', dist.Beta(concentration1=alpha_prior, concentration0=beta_prior), obs=data)
+
+    true_alpha = torch.tensor(5.)
+    true_beta = torch.tensor(1.)
+    data = dist.Beta(concentration1=true_alpha, concentration0=true_beta).sample(torch.Size((5000,)))
+    nuts_kernel = NUTS(model, adapt_step_size=True)
+    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=200).run(data)
+    posterior = EmpiricalMarginal(mcmc_run, sites=['alpha', 'beta'])
+    assert_equal(posterior.mean, torch.stack([true_alpha, true_beta]), prec=0.05)
