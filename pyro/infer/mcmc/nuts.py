@@ -220,7 +220,9 @@ class NUTS(HMC):
 
         # Rather than sampling the slice variable from `Uniform(0, exp(-energy))`, we can sample
         # log_slice directly using `energy`, so as to avoid underflow issues ([2]).
-        log_slice = -energy_current - dist.Exponential(energy_current.new_tensor(1.)).sample()
+        slice_exp_term = pyro.sample("slicevar_exp_t={}".format(self._t),
+                                     dist.Exponential(energy_current.new_tensor(1.)))
+        log_slice = -energy_current - slice_exp_term
 
         z_left = z_right = z
         r_left = r_right = r
