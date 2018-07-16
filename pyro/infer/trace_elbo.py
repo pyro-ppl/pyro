@@ -1,16 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
 import weakref
 
 import pyro
 import pyro.ops.jit
-import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
+from pyro.infer.enum import get_importance_trace
 from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, is_validation_enabled, torch_item
-from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, warn_if_nan
+from pyro.util import check_if_enumerated, warn_if_nan
 
 
 def _compute_log_r(model_trace, guide_trace):
@@ -50,30 +48,10 @@ class Trace_ELBO(ELBO):
         Returns a single trace from the guide, and the model that is run
         against it.
         """
-        guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
-        model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(*args, **kwargs)
+        model_trace, guide_trace = get_importance_trace(
+            "flat", self.max_iarange_nesting, model, guide, *args, **kwargs)
         if is_validation_enabled():
-            check_model_guide_match(model_trace, guide_trace)
-            enumerated_sites = [name for name, site in guide_trace.nodes.items()
-                                if site["type"] == "sample" and site["infer"].get("enumerate")]
-            if enumerated_sites:
-                warnings.warn('\n'.join([
-                    'Trace_ELBO found sample sites configured for enumeration:'
-                    ', '.join(enumerated_sites),
-                    'If you want to enumerate sites, you need to use TraceEnum_ELBO instead.']))
-        guide_trace = prune_subsample_sites(guide_trace)
-        model_trace = prune_subsample_sites(model_trace)
-
-        model_trace.compute_log_prob()
-        guide_trace.compute_score_parts()
-        if is_validation_enabled():
-            for site in model_trace.nodes.values():
-                if site["type"] == "sample":
-                    check_site_shape(site, self.max_iarange_nesting)
-            for site in guide_trace.nodes.values():
-                if site["type"] == "sample":
-                    check_site_shape(site, self.max_iarange_nesting)
-
+            check_if_enumerated(guide_trace)
         return model_trace, guide_trace
 
     def loss(self, model, guide, *args, **kwargs):

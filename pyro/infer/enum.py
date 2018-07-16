@@ -5,15 +5,19 @@ from six.moves.queue import LifoQueue
 from pyro import poutine
 from pyro.poutine import Trace
 
+from pyro.infer.util import is_validation_enabled
+from pyro.poutine.util import prune_subsample_sites
+from pyro.util import check_model_guide_match, check_site_shape
 
-def _iter_discrete_escape(trace, msg):
+
+def iter_discrete_escape(trace, msg):
     return ((msg["type"] == "sample") and
             (not msg["is_observed"]) and
             (msg["infer"].get("enumerate") == "sequential") and  # only sequential
             (msg["name"] not in trace))
 
 
-def _iter_discrete_extend(trace, site, **ignored):
+def iter_discrete_extend(trace, site, **ignored):
     values = site["fn"].enumerate_support()
     for i, value in enumerate(values):
         extended_site = site.copy()
@@ -23,6 +27,33 @@ def _iter_discrete_extend(trace, site, **ignored):
         extended_trace = trace.copy()
         extended_trace.add_node(site["name"], **extended_site)
         yield extended_trace
+
+
+def get_importance_trace(graph_type, max_iarange_nesting, model, guide, *args, **kwargs):
+    """
+    Returns a single trace from the guide, and the model that is run
+    against it.
+    """
+    guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
+    model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
+                                graph_type=graph_type).get_trace(*args, **kwargs)
+    if is_validation_enabled():
+        check_model_guide_match(model_trace, guide_trace, max_iarange_nesting)
+
+    guide_trace = prune_subsample_sites(guide_trace)
+    model_trace = prune_subsample_sites(model_trace)
+
+    model_trace.compute_log_prob()
+    guide_trace.compute_score_parts()
+    if is_validation_enabled():
+        for site in model_trace.nodes.values():
+            if site["type"] == "sample":
+                check_site_shape(site, max_iarange_nesting)
+        for site in guide_trace.nodes.values():
+            if site["type"] == "sample":
+                check_site_shape(site, max_iarange_nesting)
+
+    return model_trace, guide_trace
 
 
 def iter_discrete_traces(graph_type, fn, *args, **kwargs):
@@ -42,7 +73,7 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
     queue = LifoQueue()
     queue.put(Trace())
     traced_fn = poutine.trace(
-        poutine.queue(fn, queue, escape_fn=_iter_discrete_escape, extend_fn=_iter_discrete_extend),
+        poutine.queue(fn, queue, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend),
         graph_type=graph_type)
     while not queue.empty():
         yield traced_fn.get_trace(*args, **kwargs)
