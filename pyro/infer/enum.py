@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
-
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
@@ -40,14 +38,8 @@ def _get_importance_trace(graph_type, max_iarange_nesting, model, guide, *args, 
     model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                 graph_type=graph_type).get_trace(*args, **kwargs)
     if is_validation_enabled():
-        check_model_guide_match(model_trace, guide_trace)
-        enumerated_sites = [name for name, site in guide_trace.nodes.items()
-                            if site["type"] == "sample" and site["infer"].get("enumerate")]
-        if enumerated_sites:
-            warnings.warn('\n'.join([
-                'Trace_ELBO found sample sites configured for enumeration:'
-                ', '.join(enumerated_sites),
-                'If you want to enumerate sites, you need to use TraceEnum_ELBO instead.']))
+        check_model_guide_match(model_trace, guide_trace, max_iarange_nesting)
+
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
 

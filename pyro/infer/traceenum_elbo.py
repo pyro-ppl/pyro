@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 import weakref
+from six.moves import queue
 
 import torch
 from torch.distributions.utils import broadcast_all
@@ -11,10 +12,9 @@ import pyro.ops.jit
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
-from pyro.infer.enum import iter_discrete_traces
+from pyro.infer.enum import _get_importance_trace, _iter_discrete_escape, _iter_discrete_extend
 from pyro.infer.util import Dice, is_validation_enabled
-from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, check_traceenum_requirements, warn_if_nan
+from pyro.util import check_traceenum_requirements, warn_if_nan
 
 
 def _dict_iadd(dict_, key, value):
@@ -74,55 +74,52 @@ class TraceEnum_ELBO(ELBO):
         Returns a single trace from the guide, and the model that is run
         against it.
         """
-        for guide_trace in iter_discrete_traces("flat", guide, *args, **kwargs):
-            model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
-                                        graph_type="flat").get_trace(*args, **kwargs)
+        model_trace, guide_trace = _get_importance_trace(
+            "flat", self.max_iarange_nesting, model, guide, *args, **kwargs)
 
-            if is_validation_enabled():
-                check_model_guide_match(model_trace, guide_trace, self.max_iarange_nesting)
-            guide_trace = prune_subsample_sites(guide_trace)
-            model_trace = prune_subsample_sites(model_trace)
-            if is_validation_enabled():
-                check_traceenum_requirements(model_trace, guide_trace)
+        if is_validation_enabled():
+            check_traceenum_requirements(model_trace, guide_trace)
 
-            model_trace.compute_log_prob()
-            guide_trace.compute_score_parts()
-            if is_validation_enabled():
-                for site in model_trace.nodes.values():
-                    if site["type"] == "sample":
-                        check_site_shape(site, self.max_iarange_nesting)
-                any_enumerated = False
-                for site in guide_trace.nodes.values():
-                    if site["type"] == "sample":
-                        check_site_shape(site, self.max_iarange_nesting)
-                        if site["infer"].get("enumerate"):
-                            any_enumerated = True
-                if self.strict_enumeration_warning and not any_enumerated:
-                    warnings.warn('TraceEnum_ELBO found no sample sites configured for enumeration. '
-                                  'If you want to enumerate sites, you need to @config_enumerate or set '
-                                  'infer={"enumerate": "sequential"} or infer={"enumerate": "parallel"}? '
-                                  'If you do not want to enumerate, consider using Trace_ELBO instead.')
+            enumerated_sites = [name for name, site in guide_trace.nodes.items()
+                                if site["type"] == "sample"
+                                and site["infer"].get("enumerate", None)]
 
-            yield model_trace, guide_trace
+            if self.strict_enumeration_warning and len(enumerated_sites) == 0:
+                warnings.warn('TraceEnum_ELBO found no sample sites configured for enumeration. '
+                              'If you want to enumerate sites, you need to @config_enumerate or set '
+                              'infer={"enumerate": "sequential"} or infer={"enumerate": "parallel"}? '
+                              'If you do not want to enumerate, consider using Trace_ELBO instead.')
+
+        return model_trace, guide_trace
 
     def _get_traces(self, model, guide, *args, **kwargs):
         """
         Runs the guide and runs the model against the guide with
         the result packaged as a trace generator.
         """
+        q = queue.LifoQueue()
+
         if self.vectorize_particles:
             # enable parallel enumeration over the vectorized guide.
             guide = poutine.enum(self._vectorized_num_particles(guide),
                                  first_available_dim=self.max_iarange_nesting)
             model = self._vectorized_num_particles(model)
-            for model_trace, guide_trace in self._get_trace(model, guide, *args, **kwargs):
-                yield model_trace, guide_trace
+            q.put(poutine.Trace())
+            guide = poutine.queue(guide, q,
+                                  escape_fn=_iter_discrete_escape,
+                                  extend_fn=_iter_discrete_extend)
+            while not q.empty():
+                yield self._get_trace(model, guide, *args, **kwargs)
         else:
             # enable parallel enumeration.
             guide = poutine.enum(guide, first_available_dim=self.max_iarange_nesting)
+            guide = poutine.queue(guide, q,
+                                  escape_fn=_iter_discrete_escape,
+                                  extend_fn=_iter_discrete_extend)
             for i in range(self.num_particles):
-                for model_trace, guide_trace in self._get_trace(model, guide, *args, **kwargs):
-                    yield model_trace, guide_trace
+                q.put(poutine.Trace())
+                while not q.empty():
+                    yield self._get_trace(model, guide, *args, **kwargs)
 
     def loss(self, model, guide, *args, **kwargs):
         """
