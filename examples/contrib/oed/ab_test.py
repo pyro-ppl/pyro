@@ -5,6 +5,7 @@ import numpy as np
 import pyro
 import pyro.distributions as dist
 from pyro import optim
+from pyro.infer import Trace_ELBO
 from pyro.contrib.oed.eig import vi_ape
 
 """
@@ -116,7 +117,9 @@ def main(num_steps):
         X,
         observation_labels="y",
         vi_parameters={
-            "guide": guide, "optim": optim.Adam({"lr": 0.0025}),
+            "guide": guide,
+            "optim": optim.Adam({"lr": 0.0025}),
+            "loss": Trace_ELBO(),
             "num_steps": num_steps},
         is_parameters={"num_samples": 2}
     )
