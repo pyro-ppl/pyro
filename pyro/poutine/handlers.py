@@ -62,7 +62,6 @@ from .escape_messenger import EscapeMessenger
 from .indep_messenger import IndepMessenger
 from .infer_config_messenger import InferConfigMessenger
 from .lift_messenger import LiftMessenger
-from .plate_messenger import PlateMessenger
 from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
@@ -341,7 +340,7 @@ def scale(fn=None, scale=None):
     return msngr(fn) if callable(fn) else msngr
 
 
-def indep(fn=None, name=None, size=None, dim=None):
+def indep(fn=None, name=None, size=None, dim=None, sites=None):
     """
     .. note:: Low-level; use :class:`~pyro.iarange` instead.
 
@@ -349,27 +348,6 @@ def indep(fn=None, name=None, size=None, dim=None):
     nested ``irange`` and ``iarange`` contexts. This information is stored in
     a ``cond_indep_stack`` at each sample/observe site for consumption by
     :class:`~pyro.poutine.trace_messenger.TraceMessenger`.
-    """
-    msngr = IndepMessenger(name=name, size=size, dim=dim)
-    return msngr(fn) if fn is not None else msngr
-
-
-def enum(fn=None, first_available_dim=None):
-    """
-    Enumerates in parallel over discrete sample sites marked
-    ``infer={"enumerate": "parallel"}``.
-
-    :param int first_available_dim: The first tensor dimension (counting
-        from the right) that is available for parallel enumeration. This
-        dimension and all dimensions left may be used internally by Pyro.
-    """
-    msngr = EnumerateMessenger(first_available_dim=first_available_dim)
-    return msngr(fn) if fn is not None else msngr
-
-
-def plate(fn=None, name=None, size=None, dim=None, sites=None):
-    """
-    Annotate a model with a plate as in graphical models
 
     Example::
 
@@ -390,9 +368,21 @@ def plate(fn=None, name=None, size=None, dim=None, sites=None):
             y_noise = sample("y_noise", dist.Normal(loc, scale).expand_by([200, 1]))
         with x_axis, y_axis:
             xy_noise = sample("xy_noise", dist.Normal(loc, scale).expand_by([200, 320]))
-
     """
-    msngr = PlateMessenger(name=name, size=size, dim=dim, sites=sites)
+    msngr = IndepMessenger(name=name, size=size, dim=dim, sites=sites)
+    return msngr(fn) if fn is not None else msngr
+
+
+def enum(fn=None, first_available_dim=None):
+    """
+    Enumerates in parallel over discrete sample sites marked
+    ``infer={"enumerate": "parallel"}``.
+
+    :param int first_available_dim: The first tensor dimension (counting
+        from the right) that is available for parallel enumeration. This
+        dimension and all dimensions left may be used internally by Pyro.
+    """
+    msngr = EnumerateMessenger(first_available_dim=first_available_dim)
     return msngr(fn) if fn is not None else msngr
 
 
