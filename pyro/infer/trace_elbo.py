@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
 import weakref
 
 import pyro
@@ -9,7 +8,7 @@ from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import _get_importance_trace
 from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, is_validation_enabled, torch_item
-from pyro.util import warn_if_nan
+from pyro.util import check_if_enumerated, warn_if_nan
 
 
 def _compute_log_r(model_trace, guide_trace):
@@ -52,14 +51,7 @@ class Trace_ELBO(ELBO):
         model_trace, guide_trace = _get_importance_trace(
             "flat", self.max_iarange_nesting, model, guide, *args, **kwargs)
         if is_validation_enabled():
-            enumerated_sites = [name for name, site in guide_trace.nodes.items()
-                                if site["type"] == "sample" and site["infer"].get("enumerate")]
-            if enumerated_sites:
-                warnings.warn('\n'.join([
-                    'Trace_ELBO found sample sites configured for enumeration:'
-                    ', '.join(enumerated_sites),
-                    'If you want to enumerate sites, you need to use TraceEnum_ELBO instead.']))
-
+            check_if_enumerated(guide_trace)
         return model_trace, guide_trace
 
     def loss(self, model, guide, *args, **kwargs):
