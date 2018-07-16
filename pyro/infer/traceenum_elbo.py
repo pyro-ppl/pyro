@@ -97,29 +97,20 @@ class TraceEnum_ELBO(ELBO):
         Runs the guide and runs the model against the guide with
         the result packaged as a trace generator.
         """
-        q = queue.LifoQueue()
-
         if self.vectorize_particles:
-            # enable parallel enumeration over the vectorized guide.
-            guide = poutine.enum(self._vectorized_num_particles(guide),
-                                 first_available_dim=self.max_iarange_nesting)
+            guide = self._vectorized_num_particles(guide)
             model = self._vectorized_num_particles(model)
+
+        # enable parallel enumeration over the vectorized guide.
+        guide = poutine.enum(guide, first_available_dim=self.max_iarange_nesting)
+        q = queue.LifoQueue()
+        guide = poutine.queue(guide, q,
+                              escape_fn=_iter_discrete_escape,
+                              extend_fn=_iter_discrete_extend)
+        for i in range(1 if self.vectorize_particles else self.num_particles):
             q.put(poutine.Trace())
-            guide = poutine.queue(guide, q,
-                                  escape_fn=_iter_discrete_escape,
-                                  extend_fn=_iter_discrete_extend)
             while not q.empty():
                 yield self._get_trace(model, guide, *args, **kwargs)
-        else:
-            # enable parallel enumeration.
-            guide = poutine.enum(guide, first_available_dim=self.max_iarange_nesting)
-            guide = poutine.queue(guide, q,
-                                  escape_fn=_iter_discrete_escape,
-                                  extend_fn=_iter_discrete_extend)
-            for i in range(self.num_particles):
-                q.put(poutine.Trace())
-                while not q.empty():
-                    yield self._get_trace(model, guide, *args, **kwargs)
 
     def loss(self, model, guide, *args, **kwargs):
         """
