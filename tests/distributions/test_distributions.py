@@ -45,6 +45,17 @@ def test_batch_log_prob_shape(dist):
             assert log_p_obj.size() == expected_shape
 
 
+def test_batch_entropy_shape(dist):
+    for idx in range(dist.get_num_test_data()):
+        dist_params = dist.get_dist_params(idx)
+        d = dist.pyro_dist(**dist_params)
+        with xfail_if_not_implemented():
+            # Get entropy shape after broadcasting.
+            expected_shape = _log_prob_shape(d)
+            entropy_obj = d.entropy()
+            assert entropy_obj.size() == expected_shape
+
+
 def test_score_errors_event_dim_mismatch(dist):
     for idx in dist.get_batch_data_indices():
         dist_params = dist.get_dist_params(idx)
