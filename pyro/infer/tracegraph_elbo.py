@@ -281,7 +281,8 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
                 self = weakself()
                 loss = 0.0
                 surrogate_loss = 0.0
-                for weight, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+                weight = 1.0 / self.num_particles
+                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
                     # compute elbo for reparameterized nodes
                     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
                     elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes)
