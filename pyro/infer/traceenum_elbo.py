@@ -12,7 +12,7 @@ import pyro.ops.jit
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
-from pyro.infer.enum import _get_importance_trace, _iter_discrete_escape, _iter_discrete_extend
+from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
 from pyro.infer.util import Dice, is_validation_enabled
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
@@ -74,7 +74,7 @@ class TraceEnum_ELBO(ELBO):
         Returns a single trace from the guide, and the model that is run
         against it.
         """
-        model_trace, guide_trace = _get_importance_trace(
+        model_trace, guide_trace = get_importance_trace(
             "flat", self.max_iarange_nesting, model, guide, *args, **kwargs)
 
         if is_validation_enabled():
@@ -105,8 +105,8 @@ class TraceEnum_ELBO(ELBO):
         guide = poutine.enum(guide, first_available_dim=self.max_iarange_nesting)
         q = queue.LifoQueue()
         guide = poutine.queue(guide, q,
-                              escape_fn=_iter_discrete_escape,
-                              extend_fn=_iter_discrete_extend)
+                              escape_fn=iter_discrete_escape,
+                              extend_fn=iter_discrete_extend)
         for i in range(1 if self.vectorize_particles else self.num_particles):
             q.put(poutine.Trace())
             while not q.empty():

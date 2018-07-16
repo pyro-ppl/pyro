@@ -6,7 +6,7 @@ import torch
 
 from pyro.distributions.util import is_identically_zero, log_sum_exp
 from pyro.infer.elbo import ELBO
-from pyro.infer.enum import _get_importance_trace
+from pyro.infer.enum import get_importance_trace
 from pyro.infer.util import is_validation_enabled, torch_item
 from pyro.util import check_if_enumerated, warn_if_nan
 
@@ -66,7 +66,7 @@ class RenyiELBO(ELBO):
         Returns a single trace from the guide, and the model that is run
         against it.
         """
-        model_trace, guide_trace = _get_importance_trace(
+        model_trace, guide_trace = get_importance_trace(
             "flat", self.max_iarange_nesting, model, guide, *args, **kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)

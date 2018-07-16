@@ -10,14 +10,14 @@ from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape
 
 
-def _iter_discrete_escape(trace, msg):
+def iter_discrete_escape(trace, msg):
     return ((msg["type"] == "sample") and
             (not msg["is_observed"]) and
             (msg["infer"].get("enumerate") == "sequential") and  # only sequential
             (msg["name"] not in trace))
 
 
-def _iter_discrete_extend(trace, site, **ignored):
+def iter_discrete_extend(trace, site, **ignored):
     values = site["fn"].enumerate_support()
     for i, value in enumerate(values):
         extended_site = site.copy()
@@ -29,7 +29,7 @@ def _iter_discrete_extend(trace, site, **ignored):
         yield extended_trace
 
 
-def _get_importance_trace(graph_type, max_iarange_nesting, model, guide, *args, **kwargs):
+def get_importance_trace(graph_type, max_iarange_nesting, model, guide, *args, **kwargs):
     """
     Returns a single trace from the guide, and the model that is run
     against it.
@@ -73,7 +73,7 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
     queue = LifoQueue()
     queue.put(Trace())
     traced_fn = poutine.trace(
-        poutine.queue(fn, queue, escape_fn=_iter_discrete_escape, extend_fn=_iter_discrete_extend),
+        poutine.queue(fn, queue, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend),
         graph_type=graph_type)
     while not queue.empty():
         yield traced_fn.get_trace(*args, **kwargs)

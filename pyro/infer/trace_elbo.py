@@ -6,7 +6,7 @@ import pyro
 import pyro.ops.jit
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
-from pyro.infer.enum import _get_importance_trace
+from pyro.infer.enum import get_importance_trace
 from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, is_validation_enabled, torch_item
 from pyro.util import check_if_enumerated, warn_if_nan
 
@@ -48,7 +48,7 @@ class Trace_ELBO(ELBO):
         Returns a single trace from the guide, and the model that is run
         against it.
         """
-        model_trace, guide_trace = _get_importance_trace(
+        model_trace, guide_trace = get_importance_trace(
             "flat", self.max_iarange_nesting, model, guide, *args, **kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
