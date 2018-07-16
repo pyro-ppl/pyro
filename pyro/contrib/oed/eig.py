@@ -28,7 +28,8 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
         posterior is to be inferred.
     :param dict vi_parameters: Variational inference parameters which should include:
         `optim`: an instance of :class:`pyro.Optim`, `guide`: a guide function
-        compatible with `model`, `num_steps`: the number of VI steps to make
+        compatible with `model`, `num_steps`: the number of VI steps to make,
+        and `loss`: the loss function to use for VI
     :param dict is_parameters: Importance sampling parameters for the
         marginal distribution of :math:`Y`. May include `num_samples`: the number
         of samples to draw from the marginal.
