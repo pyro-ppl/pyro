@@ -70,7 +70,7 @@ class SVI(TracePosterior):
         for i in range(self.num_samples):
             guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
             model_trace = poutine.trace(poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
-            yield model_trace, (model_trace.log_prob_sum() - guide_trace.log_prob_sum())
+            yield model_trace, 1.0
 
     def evaluate_loss(self, *args, **kwargs):
         """

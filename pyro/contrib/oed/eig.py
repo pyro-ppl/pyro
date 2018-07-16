@@ -46,7 +46,7 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
         y = pyro.sample("conditioning_y", y_dist)
         y_dict = {label: y[i, ...] for i, label in enumerate(observation_labels)}
         conditioned_model = pyro.condition(model, data=y_dict)
-        posterior = SVI(conditioned_model, **vi_parameters).run(design)  # noqa: F841
+        SVI(conditioned_model, **vi_parameters).run(design)
         # Recover the entropy
         return mean_field_guide_entropy(vi_parameters["guide"], design)
 
