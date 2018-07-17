@@ -44,6 +44,7 @@ class Delta(TorchDistribution):
 
     def expand(self, batch_shape):
         validate_args = self.__dict__.get('_validate_args')
+        batch_shape = torch.Size(batch_shape)
         v = self.v.expand(batch_shape + self.event_shape)
         log_density = self.log_density.expand(batch_shape)
         return Delta(v, log_density, self.event_dim, validate_args=validate_args)

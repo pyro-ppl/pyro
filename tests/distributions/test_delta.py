@@ -61,3 +61,10 @@ def test_shapes(batch_dim, event_dim, has_log_density):
     x = d.rsample()
     assert (x == v).all()
     assert (d.log_prob(x) == log_density).all()
+
+
+@pytest.mark.parametrize('batch_shape', [(), [], (2,), [2], torch.Size([2]), [2, 3]])
+def test_expand(batch_shape):
+    d1 = dist.Delta(torch.tensor(1.234))
+    d2 = d1.expand(batch_shape)
+    assert d2.batch_shape == torch.Size(batch_shape)
