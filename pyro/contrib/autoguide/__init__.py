@@ -24,6 +24,7 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.contrib.autoguide.laplace import AutoLaplace
 from pyro.distributions.util import sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.poutine.util import prune_subsample_sites
@@ -41,6 +42,7 @@ __all__ = [
     'AutoDiscreteParallel',
     'AutoGuide',
     'AutoGuideList',
+    'AutoLaplace',
     'AutoLowRankMultivariateNormal',
     'AutoMultivariateNormal',
     'AutoIAFNormal',
@@ -252,7 +254,7 @@ class AutoDelta(AutoGuide):
         guide = AutoDelta(model)
         svi = SVI(model, guide, ...)
 
-    By default latent variables are randomly initialized by the model.  To
+    By default latent variables are randomly initialized by the model. To
     change this default behavior the user should call :func:`pyro.param` before
     beginning inference, with ``"auto_"`` prefixed to the targetd sample site
     names e.g. for sample sites named "level" and "concentration", initialize
