@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-from pyro.ops.newton import newton_step_2d
+from pyro.ops.newton import newton_step
 from pyro.optim.optim import PyroOptim
 
 
@@ -22,9 +22,10 @@ class MultiOptimizer(object):
     Example::
 
         tr = poutine.trace(model).get_trace(*args, **kwargs)
-        loss = -tr.log_prob()
-        params = {name: pyro.param(name).unconstrained()
-                  for name in pyro.get_param_store().get_all_param_names()}
+        loss = -tr.log_prob_sum()
+        params = {name: site['value'].unconstrained()
+                  for name, site in tr.nodes.items()
+                  if site['type'] == 'param'}
         optim.step(loss, params)
     """
     def step(self, loss, params):
@@ -35,8 +36,7 @@ class MultiOptimizer(object):
         Note that this detaches the updated tensors.
 
         :param torch.Tensor loss: A differentiable tensor to be minimized.
-            Some optimizers require this to be differentiable multiple
-            times.
+            Some optimizers require this to be differentiable multiple times.
         :param dict params: A dictionary mapping param name to unconstrained
             value as stored in the param store.
         """
@@ -53,8 +53,7 @@ class MultiOptimizer(object):
         Note that this preserves derivatives on the updated tensors.
 
         :param torch.Tensor loss: A differentiable tensor to be minimized.
-            Some optimizers require this to be differentiable multiple
-            times.
+            Some optimizers require this to be differentiable multiple times.
         :param dict params: A dictionary mapping param name to unconstrained
             value as stored in the param store.
         :return: A dictionary mapping param name to updated unconstrained
@@ -116,11 +115,12 @@ class MixedMultiOptimizer(MultiOptimizer):
         return updated_values
 
 
-class Newton2d(MultiOptimizer):
+class Newton(MultiOptimizer):
     """
     Implementation of :class:`MultiOptimizer` that performs a Newton update
-    on batched 2d variables, optionally regularizing via a per-parameter
-    ``trust_radius``. See :func:`~pyro.ops.newton.newton_step_2d` for details.
+    on batched low-dimensional variables, optionally regularizing via a
+    per-parameter ``trust_radius``. See :func:`~pyro.ops.newton.newton_step`
+    for details.
 
     :param dict trust_radii: a dict mapping parameter name to radius of trust
         region. Missing names will use unregularized Newton update, equivalent
@@ -133,6 +133,6 @@ class Newton2d(MultiOptimizer):
         updated_values = {}
         for name, value in params.items():
             trust_radius = self.trust_radii.get(name)
-            updated_value, cov = newton_step_2d(loss, value, trust_radius)
+            updated_value, cov = newton_step(loss, value, trust_radius)
             updated_values[name] = updated_value.detach()
         return updated_values
