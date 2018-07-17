@@ -85,6 +85,12 @@ class AutoGuide(object):
         """
         raise NotImplementedError
 
+    def get_posterior(self, *args, **kwargs):
+        """
+        Returns the posterior distribution.
+        """
+        pass
+
     def sample_latent(*args, **kwargs):
         """
         Samples an encoded latent given the same ``*args, **kwargs`` as the
@@ -302,7 +308,7 @@ class AutoContinuous(AutoGuide):
     Base class for implementations of continuous-valued Automatic
     Differentiation Variational Inference [1].
 
-    Each derived class implements its own :meth:`sample_latent` method.
+    Each derived class implements its own :meth:`get_posterior` method.
 
     Assumes model structure and latent dimension are fixed, and all latent
     variables are continuous.
@@ -334,12 +340,19 @@ class AutoContinuous(AutoGuide):
         if self.latent_dim == 0:
             raise RuntimeError('{} found no latent variables; Use an empty guide instead'.format(type(self).__name__))
 
+    def get_posterior(self, *args, **kwargs):
+        """
+        Returns the posterior distribution.
+        """
+        raise NotImplementedError
+
     def sample_latent(self, *args, **kwargs):
         """
         Samples an encoded latent given the same ``*args, **kwargs`` as the
         base ``model``.
         """
-        raise NotImplementedError
+        pos_dist = self.get_posterior(*args, **kwargs)
+        return pyro.sample("_{}_latent".format(self.prefix), pos_dist, infer={"is_auxiliary": True})
 
     def _unpack_latent(self, latent):
         """
@@ -448,7 +461,7 @@ class AutoMultivariateNormal(AutoContinuous):
         pyro.param("auto_scale_tril", torch.tril(torch.rand(latent_dim)),
                    constraint=constraints.lower_cholesky)
     """
-    def sample_latent(self, *args, **kwargs):
+    def get_posterior(self, *args, **kwargs):
         """
         Samples the (single) multivariate normal latent used in the auto guide.
         """
@@ -457,9 +470,7 @@ class AutoMultivariateNormal(AutoContinuous):
         scale_tril = pyro.param("{}_scale_tril".format(self.prefix),
                                 lambda: torch.eye(self.latent_dim),
                                 constraint=constraints.lower_cholesky)
-        return pyro.sample("_{}_latent".format(self.prefix),
-                           dist.MultivariateNormal(loc, scale_tril=scale_tril),
-                           infer={"is_auxiliary": True})
+        return dist.MultivariateNormal(loc, scale_tril=scale_tril)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
@@ -487,7 +498,7 @@ class AutoDiagonalNormal(AutoContinuous):
         pyro.param("auto_scale", torch.ones(latent_dim),
                    constraint=constraints.positive)
     """
-    def sample_latent(self, *args, **kwargs):
+    def get_posterior(self, *args, **kwargs):
         """
         Samples the (single) diagnoal normal latent used in the auto guide.
         """
@@ -496,9 +507,7 @@ class AutoDiagonalNormal(AutoContinuous):
         scale = pyro.param("{}_scale".format(self.prefix),
                            lambda: torch.ones(self.latent_dim),
                            constraint=constraints.positive)
-        return pyro.sample("_{}_latent".format(self.prefix),
-                           dist.Normal(loc, scale).independent(1),
-                           infer={"is_auxiliary": True})
+        return dist.Normal(loc, scale).independent(1)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
@@ -539,7 +548,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         self.rank = rank
         super(AutoLowRankMultivariateNormal, self).__init__(model, prefix)
 
-    def sample_latent(self, *args, **kwargs):
+    def get_posterior(self, *args, **kwargs):
         """
         Samples the (single) multivariate normal latent used in the auto guide.
         """
@@ -550,9 +559,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         D_term = pyro.param("{}_D_term".format(self.prefix),
                             lambda: torch.ones(self.latent_dim) * 0.5,
                             constraint=constraints.positive)
-        return pyro.sample("_{}_latent".format(self.prefix),
-                           dist.LowRankMultivariateNormal(loc, W_term, D_term),
-                           infer={"is_auxiliary": True})
+        return dist.LowRankMultivariateNormal(loc, W_term, D_term)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
@@ -584,7 +591,7 @@ class AutoIAFNormal(AutoContinuous):
         self.hidden_dim = hidden_dim
         super(AutoIAFNormal, self).__init__(model, prefix)
 
-    def sample_latent(self, *args, **kwargs):
+    def get_posterior(self, *args, **kwargs):
         if self.latent_dim == 1:
             raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
         if self.hidden_dim is None:
@@ -592,9 +599,8 @@ class AutoIAFNormal(AutoContinuous):
         iaf = dist.InverseAutoregressiveFlow(self.latent_dim, self.hidden_dim,
                                              sigmoid_bias=self.sigmoid_bias)
         pyro.module("{}_iaf".format(self.prefix), iaf.module)
-        self.iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
-        return pyro.sample("_{}_latent".format(self.prefix), self.iaf_dist.independent(1),
-                           infer={"is_auxiliary": True})
+        iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
+        return iaf_dist.independent(1)
 
 
 class AutoDiscreteParallel(AutoGuide):
