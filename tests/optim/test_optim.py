@@ -109,6 +109,9 @@ def test_dynamic_lr(scheduler, num_steps):
             assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
             assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
 
+    # the resulting parametrization is expected not to be equal to the initial parametrization after multiple steps of optimization
+    assert not torch.equal(pyro.param('loc'), torch.tensor(0.))
+    assert not torch.equal(pyro.param('scale'), torch.tensor(0.5))
 
 @pytest.mark.parametrize('factory', [optim.Adam, optim.ClippedAdam, optim.RMSprop, optim.SGD])
 def test_autowrap(factory):
