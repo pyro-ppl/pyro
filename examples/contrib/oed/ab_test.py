@@ -114,7 +114,7 @@ def bayes_opt(f, num_steps=10):
     y = f(X)
     y.detach()
     gpmodel = gp.models.GPRegression(X, y, gp.kernels.Matern52(input_dim=1, lengthscale=torch.tensor(5.)),
-                                     noise=torch.tensor(0.1), jitter=1.0e-4)
+                                     noise=torch.tensor(0.1), jitter=0.)
     gpmodel.optimize()
     y -= torch.mean(y)
     print(X, y)
@@ -122,9 +122,10 @@ def bayes_opt(f, num_steps=10):
     def update_posterior(x_new):
         pyro.clear_param_store()
         y = f(x_new) # evaluate f at new point.
+        print(x_new, y)
         X = torch.cat([gpmodel.X, x_new]) # incorporate new evaluation
         y = torch.cat([gpmodel.y, y])
-        y -= torch.mean(y)
+        #y -= torch.mean(y)
         gpmodel.set_data(X, y)
         gpmodel.optimize()  # optimize the GP hyperparameters using default settings
         return X, y
@@ -232,6 +233,23 @@ def main(num_steps):
             is_parameters={"num_samples": 2}
         )
         return est_ape
+
+
+
+    def g(ns):
+        true_ape = []
+        prior_cov = torch.diag(prior_stdevs**2)
+        designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
+        for i in range(len(ns)):
+            x = designs[i]
+            true_ape.append(analytic_posterior_entropy(prior_cov, x))
+        return torch.tensor(true_ape)
+
+    # plt.figure()
+    # ns = torch.linspace(0., 100., 100)
+    # output = f(ns)
+    # plt.plot(ns.numpy(), output.numpy())
+    # plt.show()
 
     bayes_opt(f)
 
