@@ -115,7 +115,7 @@ class Trace_ELBO(ELBO):
 
             if trainable_params and getattr(surrogate_elbo_particle, 'requires_grad', False):
                 surrogate_loss_particle = -surrogate_elbo_particle / self.num_particles
-                surrogate_loss_particle.backward()
+                surrogate_loss_particle.backward(retain_graph=True)
 
         loss = -elbo
         warn_if_nan(loss, "loss")
