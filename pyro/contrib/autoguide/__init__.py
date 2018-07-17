@@ -24,7 +24,6 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.autoguide.laplace import AutoLaplace
 from pyro.distributions.util import sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.poutine.util import prune_subsample_sites
@@ -108,9 +107,7 @@ class AutoGuide(object):
             self.master()._check_prototype(self.prototype_trace)
 
         self._iaranges = {}
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] != "sample" or site["is_observed"]:
-                continue
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
             for frame in site["cond_indep_stack"]:
                 if frame.vectorized:
                     self._iaranges[frame.name] = frame
@@ -277,9 +274,7 @@ class AutoDelta(AutoGuide):
 
         iaranges = self._create_iaranges()
         result = {}
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] != "sample" or site["is_observed"]:
-                continue
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
             with ExitStack() as stack:
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
@@ -297,6 +292,59 @@ class AutoDelta(AutoGuide):
         :rtype: dict
         """
         return self(*args, **kwargs)
+
+
+def _hessian(y, xs):
+    dys = torch.autograd.grad(y, xs, create_graph=True)
+    flat_dy = torch.cat([dy.reshape(-1) for dy in dys])
+    H = []
+    for dyi in flat_dy:
+        Hi = torch.cat([Hij.reshape(-1) for Hij in torch.autograd.grad(dyi, xs, retain_graph=True)])
+        H.append(Hi)
+    H = torch.stack(H)
+    return H
+
+
+class AutoLaplace(AutoDelta):
+    """
+    Laplace approximation (quadratic approximation) approximates the posterior
+    :math:`log p(z | x)` by a multivariate normal distribution. Under the hood,
+    it uses Delta distributions to construct a MAP guide over the entire latent
+    space. Its covariance is given by the inverse of the hessian of
+    :math:`-\log p(x, z)` at the MAP point of `z`.
+
+    .. note:: The support of posterior is always real.
+
+    Usage::
+
+        guide = AutoLaplace(model)
+        svi = SVI(model, guide, ...)
+        posterior = guide.get_posterior()
+
+    By default latent variables are randomly initialized by the model. To
+    change this default behavior the user should call :func:`pyro.param` before
+    beginning inference, with ``"auto_"`` prefixed to the targetd sample site
+    names e.g. for sample sites named "level" and "concentration", initialize
+    via::
+
+        pyro.param("auto_level", torch.tensor([-1., 0., 1.]))
+        pyro.param("auto_concentration", torch.ones(k),
+                   constraint=constraints.positive)
+    """
+
+    def get_posterior(self, *args, **kwargs):
+        guide_trace = poutine.trace(self).get_trace(*args, **kwargs)
+        model_trace = poutine.trace(
+            poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
+        loss = -model_trace.log_prob_sum()
+
+        latents = []
+        for _, site in guide_trace.iter_stochastic_nodes():
+            latents.append(site["value"])
+
+        flat_latent = torch.cat([latent.reshape(-1) for latent in latents])
+        H = _hessian(loss, latents)
+        return dist.MultivariateNormal(loc=flat_latent, precision_matrix=H)
 
 
 class AutoContinuous(AutoGuide):
@@ -321,10 +369,7 @@ class AutoContinuous(AutoGuide):
         super(AutoContinuous, self)._setup_prototype(*args, **kwargs)
         self._unconstrained_shapes = {}
         self._cond_indep_stacks = {}
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] != "sample" or site["is_observed"]:
-                continue
-
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
             # Collect the shapes of unconstrained values.
             # These may differ from the shapes of constrained values.
             self._unconstrained_shapes[name] = biject_to(site["fn"].support).inv(site["value"]).shape
@@ -350,13 +395,12 @@ class AutoContinuous(AutoGuide):
             (site, unconstrained_value)
         """
         pos = 0
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] == "sample" and not site["is_observed"]:
-                unconstrained_shape = self._unconstrained_shapes[name]
-                size = _product(unconstrained_shape)
-                unconstrained_value = latent[pos:pos + size].view(unconstrained_shape)
-                yield site, unconstrained_value
-                pos += size
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            unconstrained_shape = self._unconstrained_shapes[name]
+            size = _product(unconstrained_shape)
+            unconstrained_value = latent[pos:pos + size].view(unconstrained_shape)
+            yield site, unconstrained_value
+            pos += size
         assert pos == len(latent)
 
     def __call__(self, *args, **kwargs):
@@ -615,9 +659,7 @@ class AutoDiscreteParallel(AutoGuide):
         self._discrete_sites = []
         self._cond_indep_stacks = {}
         self._iaranges = {}
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] != "sample" or site["is_observed"]:
-                continue
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
             if site["infer"].get("enumerate") != "parallel":
                 raise NotImplementedError('Expected sample site "{}" to be discrete and '
                                           'configured for parallel enumeration'.format(name))
