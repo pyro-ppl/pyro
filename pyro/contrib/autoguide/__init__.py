@@ -463,7 +463,7 @@ class AutoMultivariateNormal(AutoContinuous):
     """
     def get_posterior(self, *args, **kwargs):
         """
-        Samples the (single) multivariate normal latent used in the auto guide.
+        Returns a MultivariateNormal posterior distribution.
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
@@ -500,7 +500,7 @@ class AutoDiagonalNormal(AutoContinuous):
     """
     def get_posterior(self, *args, **kwargs):
         """
-        Samples the (single) diagnoal normal latent used in the auto guide.
+        Returns a diagonal Normal posterior distribution.
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
@@ -550,7 +550,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 
     def get_posterior(self, *args, **kwargs):
         """
-        Samples the (single) multivariate normal latent used in the auto guide.
+        Returns a LowRankMultivariateNormal posterior distribution.
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
@@ -592,6 +592,10 @@ class AutoIAFNormal(AutoContinuous):
         super(AutoIAFNormal, self).__init__(model, prefix)
 
     def get_posterior(self, *args, **kwargs):
+        """
+        Returns a diagonal Normal posterior distribution transformed by
+        :class:`~pyro.distributions.iaf.InverseAutoregressiveFlow`.
+        """
         if self.latent_dim == 1:
             raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
         if self.hidden_dim is None:
