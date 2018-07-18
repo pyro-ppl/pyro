@@ -57,6 +57,12 @@ class PyroOptim(object):
             # actually perform the step for the optim object
             self.optim_objs[p].step(*args, **kwargs)
 
+            # if optim object was a scheduler, perform an actual optim step
+            if isinstance(self.optim_objs[p], torch.optim.lr_scheduler._LRScheduler):
+                optim_kwargs = kwargs.copy()
+                optim_kwargs.pop('epoch', None)
+                self.optim_objs[p].optimizer.step(*args, **optim_kwargs)
+
     def get_state(self):
         """
         Get state associated with all the optimizers in the form of a dictionary with
