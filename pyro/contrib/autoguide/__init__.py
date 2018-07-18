@@ -85,12 +85,6 @@ class AutoGuide(object):
         """
         raise NotImplementedError
 
-    def get_posterior(self, *args, **kwargs):
-        """
-        Returns the posterior distribution.
-        """
-        pass
-
     def sample_latent(*args, **kwargs):
         """
         Samples an encoded latent given the same ``*args, **kwargs`` as the
