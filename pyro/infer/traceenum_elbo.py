@@ -114,7 +114,7 @@ class TraceEnum_ELBO(ELBO):
 
     def loss(self, model, guide, *args, **kwargs):
         """
-        :returns: returns an estimate of the ELBO
+        :returns: an estimate of the ELBO
         :rtype: float
 
         Estimates the ELBO using ``num_particles`` many samples (particles).
@@ -131,9 +131,36 @@ class TraceEnum_ELBO(ELBO):
         warn_if_nan(loss, "loss")
         return loss
 
+    def differentiable_loss(self, model, guide, *args, **kwargs):
+        """
+        :returns: a differentiable estimate of the ELBO
+        :rtype: torch.Tensor
+        :raises ValueError: if the ELBO is not differentiable (e.g. is
+            identically zero)
+
+        Estimates a differentiable ELBO using ``num_particles`` many samples
+        (particles).  The result should be infinitely differentiable (as long
+        as underlying derivatives have been implemented).
+        """
+        elbo = 0.0
+        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+            elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
+            if is_identically_zero(elbo_particle):
+                continue
+
+            elbo = elbo + elbo_particle
+        elbo = elbo / self.num_particles
+
+        if not torch.is_tensor(elbo) or not elbo.requires_grad:
+            raise ValueError('ELBO is cannot be differentiated: {}'.format(elbo))
+
+        loss = -elbo
+        warn_if_nan(loss, "loss")
+        return loss
+
     def loss_and_grads(self, model, guide, *args, **kwargs):
         """
-        :returns: returns an estimate of the ELBO
+        :returns: an estimate of the ELBO
         :rtype: float
 
         Estimates the ELBO using ``num_particles`` many samples (particles).
