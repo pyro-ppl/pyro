@@ -2,10 +2,11 @@ import torch
 from matplotlib import pyplot
 
 
-def plot_solution(observations, p_exists, positions, true_positions, args, message=''):
+def plot_solution(observations, p_exists, positions, true_positions, args, message='', fig=None):
     with torch.no_grad():
-        fig = pyplot.figure(figsize=(12, 6))
-        fig.patch.set_color('white')
+        if fig is None:
+            fig = pyplot.figure(figsize=(12, 6))
+            fig.patch.set_color('white')
         pyplot.plot(true_positions.numpy(), 'k--')
         confidence = observations[..., -1]
         is_observed = (confidence > 0)
