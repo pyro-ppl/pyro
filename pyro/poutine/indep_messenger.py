@@ -13,10 +13,12 @@ class CondIndepStackFrame(namedtuple("CondIndepStackFrame", ["name", "dim", "siz
 
 class IndepMessenger(Messenger):
     """
+    .. note:: Low-level; use :class:`~pyro.iarange` instead.
+
     This messenger keeps track of stack of independence information declared by
     nested ``irange`` and ``iarange`` contexts. This information is stored in
     a ``cond_indep_stack`` at each sample/observe site for consumption by
-    ``TraceMessenger``.
+    :class:`~pyro.poutine.trace_messenger.TraceMessenger`.
     """
     def __init__(self, name, size, dim=None):
         """

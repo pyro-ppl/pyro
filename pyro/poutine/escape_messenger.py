@@ -6,7 +6,15 @@ from .runtime import NonlocalExit
 
 class EscapeMessenger(Messenger):
     """
-    Messenger that does a nonlocal exit by raising a util.NonlocalExit exception
+    Given a callable that contains Pyro primitive calls,
+    evaluate escape_fn on each site, and if the result is True,
+    raise a :class:`~pyro.poutine.runtime.NonlocalExit` exception that stops execution
+    and returns the offending site.
+
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
+    :param escape_fn: function that takes a partial trace and a site,
+        and returns a boolean value to decide whether to exit at that site
+    :returns: stochastic function decorated with :class:`~pyro.poutine.escape_messenger.EscapeMessenger`
     """
     def __init__(self, escape_fn):
         """

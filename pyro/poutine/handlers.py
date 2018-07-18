@@ -49,6 +49,7 @@ in just a few lines of code::
 from __future__ import absolute_import, division, print_function
 
 import functools
+import types
 
 from six.moves import xrange
 
@@ -68,308 +69,40 @@ from .scale_messenger import ScaleMessenger
 from .trace_messenger import TraceMessenger
 
 
-############################################
-# Begin primitive operations
-############################################
+class Handler(object):
+
+    def __init__(self, messenger):
+        self._impl = messenger
+
+    def __call__(self, fn=None, *args, **kwargs):
+        if isinstance(self._impl, types.FunctionType):
+            msngr = lambda _fn: self._impl(_fn, *args, **kwargs)  # noqa: E731
+        else:
+            msngr = self._impl(*args, **kwargs)
+        return msngr(fn) if fn is not None else msngr
+
+    @property
+    def __doc__(self):
+        return getattr(self._impl, "__doc__", None)
+
+    def set(self, messenger):
+        self._impl = messenger
 
 
-def trace(fn=None, graph_type=None, param_only=None, strict_names=None):
-    """
-    Return a handler that records the inputs and outputs of primitive calls
-    and their dependencies.
-
-    Consider the following Pyro program:
-
-        >>> def model(x):
-        ...     s = pyro.param("s", torch.tensor(0.5))
-        ...     z = pyro.sample("z", dist.Normal(x, s))
-        ...     return z ** 2
-
-    We can record its execution using ``trace``
-    and use the resulting data structure to compute the log-joint probability
-    of all of the sample sites in the execution or extract all parameters.
-
-        >>> trace = trace(model).get_trace(0.0)
-        >>> logp = trace.log_prob_sum()
-        >>> params = [trace.nodes[name]["value"].unconstrained() for name in trace.param_nodes]
-
-    :param fn: a stochastic function (callable containing Pyro primitive calls)
-    :param graph_type: string that specifies the kind of graph to construct
-    :param param_only: if true, only records params and not samples
-    :returns: stochastic function decorated with a :class:`~pyro.poutine.trace_messenger.TraceMessenger`
-    """
-    msngr = TraceMessenger(graph_type=graph_type, param_only=param_only, strict_names=strict_names)
-    return msngr(fn) if fn is not None else msngr
+broadcast = Handler(messenger=BroadcastMessenger)
+block = Handler(messenger=BlockMessenger)
+condition = Handler(messenger=ConditionMessenger)
+enum = Handler(messenger=EnumerateMessenger)
+escape = Handler(messenger=EscapeMessenger)
+indep = Handler(messenger=IndepMessenger)
+infer_config = Handler(messenger=InferConfigMessenger)
+lift = Handler(messenger=LiftMessenger)
+replay = Handler(messenger=ReplayMessenger)
+scale = Handler(messenger=ScaleMessenger)
+trace = Handler(messenger=TraceMessenger)
 
 
-def replay(fn=None, trace=None, params=None):
-    """
-    Given a callable that contains Pyro primitive calls,
-    return a callable that runs the original, reusing the values at sites in trace
-    at those sites in the new trace
-
-    Consider the following Pyro program:
-
-        >>> def model(x):
-        ...     s = pyro.param("s", torch.tensor(0.5))
-        ...     z = pyro.sample("z", dist.Normal(x, s))
-        ...     return z ** 2
-
-    ``replay`` makes ``sample`` statements behave as if they had sampled the values
-    at the corresponding sites in the trace:
-
-        >>> old_trace = trace(model).get_trace(1.0)
-        >>> replayed_model = replay(model, trace=old_trace)
-        >>> bool(replayed_model(0.0) == old_trace.nodes["_RETURN"]["value"])
-        True
-
-    :param fn: a stochastic function (callable containing Pyro primitive calls)
-    :param trace: a :class:`~pyro.poutine.Trace` data structure to replay against
-    :param params: dict of names of param sites and constrained values
-        in fn to replay against
-    :returns: a stochastic function decorated with a :class:`~pyro.poutine.replay_messenger.ReplayMessenger`
-    """
-    msngr = ReplayMessenger(trace=trace, params=params)
-    return msngr(fn) if fn is not None else msngr
-
-
-def lift(fn=None, prior=None):
-    """
-    Given a stochastic function with param calls and a prior distribution,
-    create a stochastic function where all param calls are replaced by sampling from prior.
-    Prior should be a callable or a dict of names to callables.
-
-    Consider the following Pyro program:
-
-        >>> def model(x):
-        ...     s = pyro.param("s", torch.tensor(0.5))
-        ...     z = pyro.sample("z", dist.Normal(x, s))
-        ...     return z ** 2
-        >>> lifted_model = lift(model, prior={"s": dist.Exponential(0.3)})
-
-    ``lift`` makes ``param`` statements behave like ``sample`` statements
-    using the distributions in ``prior``.  In this example, site `s` will now behave
-    as if it was replaced with ``s = pyro.sample("s", dist.Exponential(0.3))``:
-
-        >>> tr = trace(lifted_model).get_trace(0.0)
-        >>> tr.nodes["s"]["type"] == "sample"
-        True
-        >>> tr2 = trace(lifted_model).get_trace(0.0)
-        >>> bool((tr2.nodes["s"]["value"] == tr.nodes["s"]["value"]).all())
-        False
-
-    :param fn: function whose parameters will be lifted to random values
-    :param prior: prior function in the form of a Distribution or a dict of stochastic fns
-    :returns: ``fn`` decorated with a :class:`~pyro.poutine.lift_messenger.LiftMessenger`
-    """
-    msngr = LiftMessenger(prior=prior)
-    return msngr(fn) if fn is not None else msngr
-
-
-def block(fn=None, hide_fn=None, expose_fn=None, hide=None, expose=None, hide_types=None, expose_types=None):
-    """
-    This handler selectively hides Pyro primitive sites from the outside world.
-    Default behavior: block everything.
-
-    A site is hidden if at least one of the following holds:
-
-        0. ``hide_fn(msg) is True`` or ``(not expose_fn(msg)) is True``
-        1. ``msg["name"] in hide``
-        2. ``msg["type"] in hide_types``
-        3. ``msg["name"] not in expose and msg["type"] not in expose_types``
-        4. ``hide``, ``hide_types``, and ``expose_types`` are all ``None``
-
-    For example, suppose the stochastic function fn has two sample sites "a" and "b".
-    Then any effect outside of ``BlockMessenger(fn, hide=["a"])``
-    will not be applied to site "a" and will only see site "b":
-
-        >>> def fn():
-        ...     a = pyro.sample("a", dist.Normal(0., 1.))
-        ...     return pyro.sample("b", dist.Normal(a, 1.))
-        >>> fn_inner = trace(fn)
-        >>> fn_outer = trace(block(fn_inner, hide=["a"]))
-        >>> trace_inner = fn_inner.get_trace()
-        >>> trace_outer  = fn_outer.get_trace()
-        >>> "a" in trace_inner
-        True
-        >>> "a" in trace_outer
-        False
-        >>> "b" in trace_inner
-        True
-        >>> "b" in trace_outer
-        True
-
-    :param fn: a stochastic function (callable containing Pyro primitive calls)
-    :param: hide_fn: function that takes a site and returns True to hide the site
-      or False/None to expose it.  If specified, all other parameters are ignored.
-      Only specify one of hide_fn or expose_fn, not both.
-    :param: expose_fn: function that takes a site and returns True to expose the site
-      or False/None to hide it.  If specified, all other parameters are ignored.
-      Only specify one of hide_fn or expose_fn, not both.
-    :param hide: list of site names to hide
-    :param expose: list of site names to be exposed while all others hidden
-    :param hide_types: list of site types to be hidden
-    :param expose_types: list of site types to be exposed while all others hidden
-    :returns: stochastic function decorated with a :class:`~pyro.poutine.block_messenger.BlockMessenger`
-    """
-    msngr = BlockMessenger(hide_fn=hide_fn, expose_fn=expose_fn,
-                           hide=hide, expose=expose,
-                           hide_types=hide_types, expose_types=expose_types)
-    return msngr(fn) if fn is not None else msngr
-
-
-def broadcast(fn=None):
-    """
-    Automatically broadcasts the batch shape of the stochastic function
-    at a sample site when inside a single or nested iarange context.
-    The existing `batch_shape` must be broadcastable with the size
-    of the :class:`~pyro.iarange` contexts installed in the
-    `cond_indep_stack`.
-
-    Notice how `model_automatic_broadcast` below automates expanding of
-    distribution batch shapes. This makes it easy to modularize a
-    Pyro model as the sub-components are agnostic of the wrapping
-    :class:`~pyro.iarange` contexts.
-
-    >>> def model_broadcast_by_hand():
-    ...     with pyro.iarange("batch", 100, dim=-2):
-    ...         with pyro.iarange("components", 3, dim=-1):
-    ...             sample = pyro.sample("sample", dist.Bernoulli(torch.ones(3) * 0.5)
-    ...                                                .expand_by(100))
-    ...             assert sample.shape == torch.Size((100, 3))
-    ...     return sample
-
-    >>> @poutine.broadcast
-    ... def model_automatic_broadcast():
-    ...     with pyro.iarange("batch", 100, dim=-2):
-    ...         with pyro.iarange("components", 3, dim=-1):
-    ...             sample = pyro.sample("sample", dist.Bernoulli(torch.tensor(0.5)))
-    ...             assert sample.shape == torch.Size((100, 3))
-    ...     return sample
-    """
-    msngr = BroadcastMessenger()
-    return msngr(fn) if fn is not None else msngr
-
-
-def escape(fn=None, escape_fn=None):
-    """
-    Given a callable that contains Pyro primitive calls,
-    evaluate escape_fn on each site, and if the result is True,
-    raise a :class:`~pyro.poutine.runtime.NonlocalExit` exception that stops execution
-    and returns the offending site.
-
-    :param fn: a stochastic function (callable containing Pyro primitive calls)
-    :param escape_fn: function that takes a partial trace and a site,
-        and returns a boolean value to decide whether to exit at that site
-    :returns: stochastic function decorated with :class:`~pyro.poutine.escape_messenger.EscapeMessenger`
-    """
-    msngr = EscapeMessenger(escape_fn)
-    return msngr(fn) if fn is not None else msngr
-
-
-def condition(fn=None, data=None):
-    """
-    Given a stochastic function with some sample statements
-    and a dictionary of observations at names,
-    change the sample statements at those names into observes
-    with those values.
-
-    Consider the following Pyro program:
-
-        >>> def model(x):
-        ...     s = pyro.param("s", torch.tensor(0.5))
-        ...     z = pyro.sample("z", dist.Normal(x, s))
-        ...     return z ** 2
-
-    To observe a value for site `z`, we can write
-
-        >>> conditioned_model = condition(model, data={"z": torch.tensor(1.)})
-
-    This is equivalent to adding `obs=value` as a keyword argument
-    to `pyro.sample("z", ...)` in `model`.
-
-    :param fn: a stochastic function (callable containing Pyro primitive calls)
-    :param data: a dict or a :class:`~pyro.poutine.Trace`
-    :returns: stochastic function decorated with a :class:`~pyro.poutine.condition_messenger.ConditionMessenger`
-    """
-    msngr = ConditionMessenger(data=data)
-    return msngr(fn) if fn is not None else msngr
-
-
-def infer_config(fn=None, config_fn=None):
-    """
-    Given a callable that contains Pyro primitive calls
-    and a callable taking a trace site and returning a dictionary,
-    updates the value of the infer kwarg at a sample site to config_fn(site).
-
-    :param fn: a stochastic function (callable containing Pyro primitive calls)
-    :param config_fn: a callable taking a site and returning an infer dict
-    :returns: stochastic function decorated with :class:`~pyro.poutine.infer_config_messenger.InferConfigMessenger`
-    """
-    msngr = InferConfigMessenger(config_fn)
-    return msngr(fn) if fn is not None else msngr
-
-
-def scale(fn=None, scale=None):
-    """
-    Given a stochastic function with some sample statements and a positive
-    scale factor, scale the score of all sample and observe sites in the
-    function.
-
-    Consider the following Pyro program:
-
-        >>> def model(x):
-        ...     s = pyro.param("s", torch.tensor(0.5))
-        ...     z = pyro.sample("z", dist.Normal(x, s), obs=1.0)
-        ...     return z ** 2
-
-    ``scale`` multiplicatively scales the log-probabilities of sample sites:
-
-        >>> scaled_model = scale(model, scale=0.5)
-        >>> scaled_tr = trace(scaled_model).get_trace(0.0)
-        >>> unscaled_tr = trace(model).get_trace(0.0)
-        >>> bool((scaled_tr.log_prob_sum() == 0.5 * unscaled_tr.log_prob_sum()).all())
-        True
-
-    :param fn: a stochastic function (callable containing Pyro primitive calls)
-    :param scale: a positive scaling factor
-    :returns: stochastic function decorated with a :class:`~pyro.poutine.scale_messenger.ScaleMessenger`
-    """
-    msngr = ScaleMessenger(scale=scale)
-    # XXX temporary compatibility fix
-    return msngr(fn) if callable(fn) else msngr
-
-
-def indep(fn=None, name=None, size=None, dim=None):
-    """
-    .. note:: Low-level; use :class:`~pyro.iarange` instead.
-
-    This messenger keeps track of stack of independence information declared by
-    nested ``irange`` and ``iarange`` contexts. This information is stored in
-    a ``cond_indep_stack`` at each sample/observe site for consumption by
-    :class:`~pyro.poutine.trace_messenger.TraceMessenger`.
-    """
-    msngr = IndepMessenger(name=name, size=size, dim=dim)
-    return msngr(fn) if fn is not None else msngr
-
-
-def enum(fn=None, first_available_dim=None):
-    """
-    Enumerates in parallel over discrete sample sites marked
-    ``infer={"enumerate": "parallel"}``.
-
-    :param int first_available_dim: The first tensor dimension (counting
-        from the right) that is available for parallel enumeration. This
-        dimension and all dimensions left may be used internally by Pyro.
-    """
-    msngr = EnumerateMessenger(first_available_dim=first_available_dim)
-    return msngr(fn) if fn is not None else msngr
-
-
-#########################################
-# Begin composite operations
-#########################################
-
+@Handler
 def do(fn=None, data=None):
     """
     Given a stochastic function with some sample statements
@@ -397,11 +130,10 @@ def do(fn=None, data=None):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.block_messenger.BlockMessenger`
       and :class:`pyro.poutine.condition_messenger.ConditionMessenger`
     """
-    def wrapper(wrapped):
-        return block(condition(wrapped, data=data), hide=list(data.keys()))
-    return wrapper(fn) if fn is not None else wrapper
+    return block(condition(fn, data=data), hide=list(data.keys()))
 
 
+@Handler
 def queue(fn=None, queue=None, max_tries=None,
           extend_fn=None, escape_fn=None, num_samples=None):
     """
@@ -433,26 +165,23 @@ def queue(fn=None, queue=None, max_tries=None,
     if num_samples is None:
         num_samples = -1
 
-    def wrapper(wrapped):
-        def _fn(*args, **kwargs):
+    def _fn(*args, **kwargs):
 
-            for i in xrange(max_tries):
-                assert not queue.empty(), \
-                    "trying to get() from an empty queue will deadlock"
+        for i in xrange(max_tries):
+            assert not queue.empty(), \
+                "trying to get() from an empty queue will deadlock"
 
-                next_trace = queue.get()
-                try:
-                    ftr = trace(escape(replay(wrapped, trace=next_trace),
-                                       escape_fn=functools.partial(escape_fn,
-                                                                   next_trace)))
-                    return ftr(*args, **kwargs)
-                except NonlocalExit as site_container:
-                    site_container.reset_stack()
-                    for tr in extend_fn(ftr.trace.copy(), site_container.site,
-                                        num_samples=num_samples):
-                        queue.put(tr)
+            next_trace = queue.get()
+            try:
+                ftr = trace(escape(replay(fn, trace=next_trace),
+                                   escape_fn=functools.partial(escape_fn,
+                                                               next_trace)))
+                return ftr(*args, **kwargs)
+            except NonlocalExit as site_container:
+                site_container.reset_stack()
+                for tr in extend_fn(ftr.trace.copy(), site_container.site,
+                                    num_samples=num_samples):
+                    queue.put(tr)
 
-            raise ValueError("max tries ({}) exceeded".format(str(max_tries)))
-        return _fn
-
-    return wrapper(fn) if fn is not None else wrapper
+        raise ValueError("max tries ({}) exceeded".format(str(max_tries)))
+    return _fn
