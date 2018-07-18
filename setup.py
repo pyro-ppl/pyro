@@ -53,6 +53,7 @@ long_description = '\n'.join(
 # examples/tutorials
 EXTRAS_REQUIRE = [
     'jupyter>=1.0.0',
+    'ipywidgets==7.2.0',
     'matplotlib>=1.3',
     'observations>=0.1.4',
     'pillow',
