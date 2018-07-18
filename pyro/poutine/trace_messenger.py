@@ -129,7 +129,26 @@ class TraceMessenger(Messenger):
 
 
 class MultiTraceMessenger(TraceMessenger):
+    """
+    Like ``TraceMessenger``, but instead of raising an error when seeing a sample
+    site with a name that has already appeared, adds a counter suffix to the name.
 
+    Consider the following Pyro program, which would raise an exception with ``TraceMessenger``:
+
+        >>> def submodel(x):
+        ...     z = pyro.sample("z", dist.Normal(x, 1.))
+        ...     return z ** 2
+        ...
+        >>> def model():
+        ...     z1 = submodel(0.5)
+        ...     z2 = submodel(1.0)
+        ...     return z1 + z2
+        ...
+        >>> tr = MultiTraceMessenger()(model).get_trace()
+        >>> assert "z" in tr  # from the first call to submodel
+        >>> assert "z_0" in tr  # from the second call to submodel
+
+    """
     def _pyro_sample(self, msg):
         name = msg["name"]
         if name in self.trace:  # and msg["type"] == "sample":
