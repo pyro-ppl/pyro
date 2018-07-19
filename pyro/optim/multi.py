@@ -70,6 +70,8 @@ class PyroMultiOptimizer(MultiOptimizer):
     in a :class:`MultiOptimizer` interface.
     """
     def __init__(self, optim):
+        if not isinstance(optim, PyroOptim):
+            raise TypeError('Expected a PyroOptim object but got a {}'.format(type(optim)))
         self.optim = optim
 
     def step(self, loss, params):
@@ -97,12 +99,23 @@ class MixedMultiOptimizer(MultiOptimizer):
 
     :param list parts: A list of ``(names, optim)`` pairs, where each
         ``names`` is a list of parameter names, and each ``optim`` is a
-        :class:`MultiOptimizer` object to be used for the named parameters.
-        Together the ``names`` should partition up all desired parameters to
-        optimize.
+        :class:`MultiOptimizer` or :class:`~pyro.optim.optim.PyroOptim` object
+        to be used for the named parameters. Together the ``names`` should
+        partition up all desired parameters to optimize.
+    :raises ValueError: if any name is optimized by multiple optimizers.
     """
     def __init__(self, parts):
-        self.parts = list(parts)
+        optim_dict = {}
+        self.parts = []
+        for names_part, optim in parts:
+            if isinstance(optim, PyroOptim):
+                optim = PyroMultiOptimizer(optim)
+            for name in names_part:
+                if name in optim_dict:
+                    raise ValueError("Attempted to optimize parameter '{}' by two different optimizers: "
+                                     "{} vs {}" .format(name, optim_dict[name], optim))
+                optim_dict[name] = optim
+            self.parts.append((names_part, optim))
 
     def step(self, loss, params):
         for names_part, optim in self.parts:
