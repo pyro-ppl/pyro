@@ -193,8 +193,10 @@ def test_svi_multi():
     optim = MixedMultiOptimizer([(['noise_scale'], adam),
                                  (['objects_loc'], newton)])
     for svi_step in range(50):
-        loss = elbo.differentiable_loss(model, guide, detections, args)
-        optim.step(loss, {'objects_loc': pyro.param('objects_loc'),
-                          'noise_scale': pyro.param('noise_scale').unconstrained()})
+        with poutine.trace(param_only=True) as param_capture:
+            loss = elbo.differentiable_loss(model, guide, detections, args)
+        params = {name: pyro.param(name).unconstrained()
+                  for name in param_capture.trace.nodes.keys()}
+        optim.step(loss, params)
         print('step {: >2d}, loss = {:0.6f}, noise_scale = {:0.6f}'.format(
             svi_step, loss.item(), pyro.param('noise_scale').item()))
