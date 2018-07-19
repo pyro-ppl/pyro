@@ -12,7 +12,7 @@ import pyro.poutine as poutine
 from pyro.contrib.tracking.assignment import MarginalAssignment
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
-from pyro.optim.multi import MixedMultiOptimizer, Newton, PyroMultiOptimizer
+from pyro.optim.multi import MixedMultiOptimizer, Newton
 
 
 def make_args():
@@ -188,7 +188,7 @@ def test_svi_multi():
 
     # Learn object_loc via Newton and noise_scale via Adam.
     elbo = TraceEnum_ELBO(max_iarange_nesting=2)
-    adam = PyroMultiOptimizer(Adam({'lr': 0.1}))
+    adam = Adam({'lr': 0.1})
     newton = Newton(trust_radii={'objects_loc': 1.0})
     optim = MixedMultiOptimizer([(['noise_scale'], adam),
                                  (['objects_loc'], newton)])
