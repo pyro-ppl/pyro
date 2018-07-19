@@ -16,6 +16,8 @@ class PyroLRScheduler(PyroOptim):
 
         optimizer = torch.optim.SGD
         pyro_scheduler = pyro.optim.ExponentialLR({'optimizer': optimizer, 'optim_args': {'lr': 0.01}, 'gamma': 0.1})
+        svi = SVI(model, guide, pyro_scheduler, loss=TraceGraph_ELBO())
+        svi.step()
     """
     def __init__(self, scheduler_constructor, optim_args):
         # pytorch scheduler
