@@ -4,7 +4,6 @@ import math
 
 import pytest
 import torch
-from torch.autograd import grad
 from torch.distributions import constraints
 
 import pyro
@@ -13,14 +12,14 @@ import pyro.poutine as poutine
 from pyro.contrib.tracking.assignment import MarginalAssignment
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
-from pyro.optim.multi import Newton
+from pyro.optim.multi import MixedMultiOptimizer, Newton, PyroMultiOptimizer
 
 
 def make_args():
     args = type('Args', (), {})  # A fake ArgumentParser.parse_args()
     args.max_num_objects = 4
-    args.num_real_detections = 5
-    args.num_fake_detections = 5
+    args.num_real_detections = 13
+    args.num_fake_detections = 3
     args.expected_num_objects = 2
     args.init_noise_scale = 0.1
 
@@ -125,7 +124,7 @@ def generate_data(args):
 
 
 @pytest.mark.parametrize('assignment_grad', [False, True])
-def test_em_smoke(assignment_grad):
+def test_em(assignment_grad):
     args = make_args()
     args.assignment_grad = assignment_grad
     detections = generate_data(args)
@@ -143,11 +142,11 @@ def test_em_smoke(assignment_grad):
         objects_loc = pyro.param('objects_loc').detach_().requires_grad_()
         loss = elbo.differentiable_loss(model, guide, detections, args)  # E-step
         newton.step(loss, {'objects_loc': objects_loc})  # M-step
-        print('em step {}, loss = {}'.format(step, loss.item()))
+        print('step {}, loss = {}'.format(step, loss.item()))
 
 
 @pytest.mark.parametrize('assignment_grad', [False, True])
-def test_svi_em_smoke(assignment_grad):
+def test_em_nested_in_svi(assignment_grad):
     args = make_args()
     args.assignment_grad = assignment_grad
     detections = generate_data(args)
@@ -166,8 +165,37 @@ def test_svi_em_smoke(assignment_grad):
     for svi_step in range(50):
         for em_step in range(2):
             objects_loc = pyro.param('objects_loc').detach_().requires_grad_()
+            assert pyro.param('objects_loc').grad_fn is None
             loss = elbo.differentiable_loss(model, guide, detections, args)  # E-step
-            newton.step(loss, {'objects_loc': objects_loc})  # M-step
+            updated = newton.get_step(loss, {'objects_loc': objects_loc})  # M-step
+            assert updated['objects_loc'].grad_fn is not None
+            pyro.get_param_store().replace_param('objects_loc', updated['objects_loc'], objects_loc)
+            assert pyro.param('objects_loc').grad_fn is not None
         loss = svi.step(detections, args)
-        print('svi step {: >2d}, loss = {:0.6f}, noise_scale = {:0.6f}'.format(
+        print('step {: >2d}, loss = {:0.6f}, noise_scale = {:0.6f}'.format(
             svi_step, loss, pyro.param('noise_scale').item()))
+
+
+@pytest.mark.parametrize('assignment_grad', [False, True])
+def test_svi_multi(assignment_grad):
+    args = make_args()
+    args.assignment_grad = assignment_grad
+    detections = generate_data(args)
+
+    pyro.clear_param_store()
+    pyro.param('noise_scale', torch.tensor(args.init_noise_scale),
+               constraint=constraints.positive)
+    pyro.param('objects_loc', torch.randn(args.max_num_objects, 1))
+
+    # Learn object_loc via Newton and noise_scale via Adam.
+    elbo = TraceEnum_ELBO(max_iarange_nesting=2)
+    adam = PyroMultiOptimizer(Adam({'lr': 0.1}))
+    newton = Newton(trust_radii={'objects_loc': 1.0})
+    optim = MixedMultiOptimizer([(['noise_scale'], adam),
+                                 (['objects_loc'], newton)])
+    for svi_step in range(50):
+        loss = elbo.differentiable_loss(model, guide, detections, args)
+        optim.step(loss, {'objects_loc': pyro.param('objects_loc'),
+                          'noise_scale': pyro.param('noise_scale').unconstrained()})
+        print('step {: >2d}, loss = {:0.6f}, noise_scale = {:0.6f}'.format(
+            svi_step, loss.item(), pyro.param('noise_scale').item()))

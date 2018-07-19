@@ -43,7 +43,8 @@ class MultiOptimizer(object):
         updated_values = self.get_step(loss, params)
         for name, value in params.items():
             with torch.no_grad():
-                value[...] = updated_values[name]
+                # we need to detach because updated_value may depend on value
+                value.copy_(updated_values[name].detach())
 
     def get_step(self, loss, params):
         """
@@ -122,6 +123,9 @@ class Newton(MultiOptimizer):
     per-parameter ``trust_radius``. See :func:`~pyro.ops.newton.newton_step`
     for details.
 
+    The result of :meth:`get_step` will be differentiable, however the
+    updated values from :meth:`step` will be detached.
+
     :param dict trust_radii: a dict mapping parameter name to radius of trust
         region. Missing names will use unregularized Newton update, equivalent
         to infinite trust radius.
@@ -134,5 +138,5 @@ class Newton(MultiOptimizer):
         for name, value in params.items():
             trust_radius = self.trust_radii.get(name)
             updated_value, cov = newton_step(loss, value, trust_radius)
-            updated_values[name] = updated_value.detach()
+            updated_values[name] = updated_value
         return updated_values
