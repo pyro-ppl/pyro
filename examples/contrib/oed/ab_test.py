@@ -11,8 +11,7 @@ from pyro.infer import Trace_ELBO
 from pyro.contrib.oed.eig import vi_ape
 import pyro.contrib.gp as gp
 
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
+from gp_bayes_opt import GPBayesOptimizer
 
 """
 Example builds on the Bayesian regression tutorial [1]. It demonstrates how
@@ -108,114 +107,12 @@ def analytic_posterior_entropy(prior_cov, x):
     return 0.5*torch.logdet(2*np.pi*np.e*posterior_cov)
 
 
-def bayes_opt(f, num_steps=10):
-    # initialize the model with some points
-    X = torch.tensor([25., 75.])
-    y = f(X)
-    y.detach()
-    gpmodel = gp.models.GPRegression(X, y, gp.kernels.Matern52(input_dim=1, lengthscale=torch.tensor(5.)),
-                                     noise=torch.tensor(0.1), jitter=0.)
-    gpmodel.optimize()
-    y -= torch.mean(y)
-    print(X, y)
-
-    def update_posterior(x_new):
-        pyro.clear_param_store()
-        y = f(x_new) # evaluate f at new point.
-        print(x_new, y)
-        X = torch.cat([gpmodel.X, x_new]) # incorporate new evaluation
-        y = torch.cat([gpmodel.y, y])
-        #y -= torch.mean(y)
-        gpmodel.set_data(X, y)
-        gpmodel.optimize()  # optimize the GP hyperparameters using default settings
-        return X, y
-
-    def lower_confidence_bound(x, kappa=2):
-        mu, variance = gpmodel(x, full_cov=False, noiseless=False)
-        sigma = variance.sqrt()
-        return mu - kappa * sigma
-
-    def find_a_candidate(x_init, lower_bound=0, upper_bound=1):
-        # transform x to an unconstrained domain
-        constraint = constraints.interval(lower_bound, upper_bound)
-        unconstrained_x_init = transform_to(constraint).inv(x_init)
-        unconstrained_x = torch.tensor(unconstrained_x_init, requires_grad=True)
-        minimizer = torch.optim.LBFGS([unconstrained_x])
-
-        def closure():
-            minimizer.zero_grad()
-            x = transform_to(constraint)(unconstrained_x)
-            y = lower_confidence_bound(x)
-            autograd.backward(unconstrained_x, autograd.grad(y, unconstrained_x))
-            return y
-
-        minimizer.step(closure)
-        # after finding a candidate in the unconstrained domain,
-        # convert it back to original domain.
-        x = transform_to(constraint)(unconstrained_x)
-        return x.detach()
-
-    def next_x(lower_bound=0, upper_bound=1, num_candidates=5):
-        candidates = []
-        values = []
-
-        x_init = gpmodel.X[-1:]
-        for i in range(num_candidates):
-            x = find_a_candidate(x_init, lower_bound, upper_bound)
-            y = lower_confidence_bound(x)
-            candidates.append(x)
-            values.append(y)
-            x_init = x.new_empty(1).uniform_(lower_bound, upper_bound)
-
-        argmin = torch.min(torch.cat(values), dim=0)[1].item()
-        return candidates[argmin]
-
-    def plot(gs, xmin, xlabel=None, with_title=True):
-        xlabel = "xmin" if xlabel is None else "x{}".format(xlabel)
-        Xnew = torch.linspace(-1., 101.)
-        ax1 = plt.subplot(gs[0])
-        ax1.plot(list(gpmodel.X), list(gpmodel.y), "kx")  # plot all observed data
-        with torch.no_grad():
-            loc, var = gpmodel(Xnew, full_cov=False, noiseless=False)
-            sd = var.sqrt()
-            ax1.plot(Xnew.numpy(), loc.numpy(), "r", lw=2)  # plot predictive mean
-            ax1.fill_between(Xnew.numpy(), loc.numpy() - 2*sd.numpy(), loc.numpy() + 2*sd.numpy(),
-                             color="C0", alpha=0.3)  # plot uncertainty intervals
-        ax1.set_xlim(-1., 101.)
-        ax1.set_title("Find {}".format(xlabel))
-        if with_title:
-            ax1.set_ylabel("Gaussian Process Regression")
-
-        ax2 = plt.subplot(gs[1])
-        with torch.no_grad():
-            # plot the acquisition function
-            ax2.plot(Xnew.numpy(), lower_confidence_bound(Xnew).numpy())
-            # plot the new candidate point
-            ax2.plot(xmin.numpy(), lower_confidence_bound(xmin).numpy(), "^", markersize=10,
-                     label="{} = {:.5f}".format(xlabel, xmin.item()))
-        ax2.set_xlim(-1., 101.)
-        if with_title:
-            ax2.set_ylabel("Acquisition Function")
-        ax2.legend(loc=1)
-
-    plt.figure(figsize=(12, 20))
-    outer_gs = gridspec.GridSpec(5, 2)
-    gpmodel.optimize()
-    for i in range(num_steps):
-        xmin = next_x(upper_bound=100)
-        print(xmin)
-        gs = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=outer_gs[i])
-        plot(gs, xmin, xlabel=i+1, with_title=(i % 2 == 0))
-        update_posterior(xmin)
-    plt.show()
-
-
 
 
 
 def main(num_steps):
 
-    pyro.set_rng_seed(42)
+    pyro.set_rng_seed(420)
     pyro.clear_param_store()
 
     def f(ns):
@@ -251,7 +148,15 @@ def main(num_steps):
     # plt.plot(ns.numpy(), output.numpy())
     # plt.show()
 
-    bayes_opt(f)
+    X = torch.tensor([25., 75.])
+    y = f(X)
+    pyro.clear_param_store()
+    gpmodel = gp.models.GPRegression(
+        X, y, gp.kernels.Matern52(input_dim=1, lengthscale=torch.tensor(5.)),
+        noise=torch.tensor(0.1), jitter=1e-6)
+    gpmodel.optimize()
+    gpbo = GPBayesOptimizer(f, constraints.interval(0, 100), gpmodel)
+    print(gpbo.run(num_steps=8, num_acquisitions=10))
 
     # # Estimated loss (linear transform of EIG)
     # est_ape = vi_ape(
