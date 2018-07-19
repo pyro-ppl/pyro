@@ -176,10 +176,9 @@ def test_em_nested_in_svi(assignment_grad):
             svi_step, loss, pyro.param('noise_scale').item()))
 
 
-@pytest.mark.parametrize('assignment_grad', [False, True])
-def test_svi_multi(assignment_grad):
+def test_svi_multi():
     args = make_args()
-    args.assignment_grad = assignment_grad
+    args.assignment_grad = True
     detections = generate_data(args)
 
     pyro.clear_param_store()
