@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import math
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -9,10 +9,13 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.distributions.util import log_sum_exp
+from pyro.infer import config_enumerate, is_validation_enabled
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
-from pyro.util import torch_isinf, torch_isnan, optional
+from pyro.primitives import _Subsample
+from pyro.util import torch_isinf, torch_isnan, optional, check_site_shape
 
 
 class HMC(TraceKernel):
@@ -44,6 +47,9 @@ class HMC(TraceKernel):
         If not specified and the model has sites with constrained support,
         automatic transformations will be applied, as specified in
         :mod:`torch.distributions.constraint_registry`.
+    :param int max_iarange_nesting: Optional bound on max number of nested
+        :func:`pyro.iarange` contexts. This is required if model contains
+        discrete sample sites that can be enumerated over in parallel.
 
     Example:
 
@@ -65,10 +71,18 @@ class HMC(TraceKernel):
         tensor([ 0.9819,  1.9258,  2.9737])
     """
 
-    def __init__(self, model, step_size=None, trajectory_length=None,
-                 num_steps=None, adapt_step_size=False, transforms=None):
-        self.model = model
-
+    def __init__(self,
+                 model,
+                 step_size=None,
+                 trajectory_length=None,
+                 num_steps=None,
+                 adapt_step_size=False,
+                 transforms=None,
+                 max_iarange_nesting=float("inf")):
+        # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
+        # No-op if model does not have any discrete latents.
+        self.model = poutine.enum(config_enumerate(model, default="parallel"),
+                                  first_available_dim=max_iarange_nesting)
         self.step_size = step_size if step_size is not None else 1  # from Stan
         if trajectory_length is not None:
             self.trajectory_length = trajectory_length
@@ -81,6 +95,7 @@ class HMC(TraceKernel):
         self._target_accept_prob = 0.8  # from Stan
 
         self.transforms = {} if transforms is None else transforms
+        self.max_iarange_nesting = max_iarange_nesting
         self._automatic_transform_enabled = True if transforms is None else False
         self._reset()
         super(HMC, self).__init__()
@@ -93,6 +108,35 @@ class HMC(TraceKernel):
         trace_poutine(*self._args, **self._kwargs)
         return trace_poutine.trace
 
+    @staticmethod
+    def _iter_latent_nodes(trace):
+        for name, node in sorted(trace.iter_stochastic_nodes(), key=lambda x: x[0]):
+            if not (node["fn"].has_enumerate_support or isinstance(node["fn"], _Subsample)):
+                yield (name, node)
+
+    def _compute_trace_log_prob(self, model_trace):
+        if not self._has_enumerable_sites:
+            return model_trace.log_prob_sum()
+        if self.max_iarange_nesting == float("inf"):
+            raise ValueError("Finite value required for `max_iarange_nesting` when model "
+                             "has discrete (enumerable) sites.")
+        model_trace.compute_log_prob()
+        ordering = {name: frozenset(f for f in site["cond_indep_stack"])
+                    for name, site in model_trace.nodes.items()
+                    if site["type"] == "sample"}
+
+        log_probs = defaultdict(float)
+        for name, site in model_trace.nodes.items():
+            if site["type"] == "sample":
+                log_probs[ordering[name]] = log_probs[ordering[name]] + site["log_prob"]
+
+        log_prob_sum = 0.
+        for log_prob in log_probs.values():
+            while log_prob.dim() > self.max_iarange_nesting:
+                log_prob = log_sum_exp(log_prob, dim=0)
+            log_prob_sum += log_prob.sum()
+        return log_prob_sum
+
     def _kinetic_energy(self, r):
         return 0.5 * sum(x.pow(2).sum() for x in r.values())
 
@@ -103,7 +147,7 @@ class HMC(TraceKernel):
         for name, transform in self.transforms.items():
             z_constrained[name] = transform.inv(z_constrained[name])
         trace = self._get_trace(z_constrained)
-        potential_energy = -trace.log_prob_sum()
+        potential_energy = -self._compute_trace_log_prob(trace)
         # adjust by the jacobian for this transformation.
         for name, transform in self.transforms.items():
             potential_energy += transform.log_abs_det_jacobian(z_constrained[name], z[name]).sum()
@@ -121,6 +165,7 @@ class HMC(TraceKernel):
         self._prototype_trace = None
         self._adapt_phase = False
         self._adapted_scheme = None
+        self._has_enumerable_sites = False
 
     def _find_reasonable_step_size(self, z):
         step_size = self.step_size
@@ -169,9 +214,14 @@ class HMC(TraceKernel):
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
 
     def _validate_trace(self, trace):
-        trace_log_prob_sum = trace.log_prob_sum()
+        trace_log_prob_sum = self._compute_trace_log_prob(trace)
         if torch_isnan(trace_log_prob_sum) or torch_isinf(trace_log_prob_sum):
             raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")
+        # If model has enumerable sites, check for correct `iarange` placement.
+        if self._has_enumerable_sites and is_validation_enabled():
+            for site in trace.nodes.values():
+                if site["type"] == "sample":
+                    check_site_shape(site, self.max_iarange_nesting)
 
     def initial_trace(self):
         return self._prototype_trace
@@ -185,7 +235,12 @@ class HMC(TraceKernel):
         self._prototype_trace = trace
         if self._automatic_transform_enabled:
             self.transforms = {}
-        for name, node in sorted(trace.iter_stochastic_nodes(), key=lambda x: x[0]):
+        for name, node in trace.iter_stochastic_nodes():
+            if isinstance(node["fn"], _Subsample):
+                continue
+            if node["fn"].has_enumerate_support:
+                self._has_enumerable_sites = True
+                continue
             site_value = node["value"]
             if node["fn"].support is not constraints.real and self._automatic_transform_enabled:
                 self.transforms[name] = biject_to(node["fn"].support).inv
@@ -197,7 +252,7 @@ class HMC(TraceKernel):
 
         if self.adapt_step_size:
             self._adapt_phase = True
-            z = {name: node["value"] for name, node in trace.iter_stochastic_nodes()}
+            z = {name: node["value"] for name, node in self._iter_latent_nodes(trace)}
             for name, transform in self.transforms.items():
                 z[name] = transform(z[name])
             with pyro.validation_enabled(False):
@@ -218,7 +273,7 @@ class HMC(TraceKernel):
         self._reset()
 
     def sample(self, trace):
-        z = {name: node["value"].detach() for name, node in trace.iter_stochastic_nodes()}
+        z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])

@@ -53,6 +53,9 @@ class NUTS(HMC):
         If not specified and the model has sites with constrained support,
         automatic transformations will be applied, as specified in
         :mod:`torch.distributions.constraint_registry`.
+    :param int max_iarange_nesting: Optional bound on max number of nested
+        :func:`pyro.iarange` contexts. This is required if model contains
+        discrete sample sites that can be enumerated over in parallel.
 
     Example:
 
@@ -74,9 +77,17 @@ class NUTS(HMC):
         tensor([ 0.9221,  1.9464,  2.9228])
     """
 
-    def __init__(self, model, step_size=None, adapt_step_size=False, transforms=None):
-        super(NUTS, self).__init__(model, step_size, adapt_step_size=adapt_step_size,
-                                   transforms=transforms)
+    def __init__(self,
+                 model,
+                 step_size=None,
+                 adapt_step_size=False,
+                 transforms=None,
+                 max_iarange_nesting=float("inf")):
+        super(NUTS, self).__init__(model,
+                                   step_size,
+                                   adapt_step_size=adapt_step_size,
+                                   transforms=transforms,
+                                   max_iarange_nesting=max_iarange_nesting)
 
         self._max_tree_depth = 10  # from Stan
         # There are three conditions to stop doubling process:
@@ -197,7 +208,7 @@ class NUTS(HMC):
                          tree_size, turning, diverging, sum_accept_probs, num_proposals)
 
     def sample(self, trace):
-        z = {name: node["value"].detach() for name, node in trace.iter_stochastic_nodes()}
+        z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
