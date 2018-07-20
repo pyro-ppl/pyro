@@ -1,13 +1,15 @@
 import argparse
 import torch
-from torch.distributions import constraints, transform_to
-import torch.autograd as autograd
+from torch.distributions import constraints
 import numpy as np
 
 import pyro
 import pyro.distributions as dist
 from pyro import optim
+<<<<<<< HEAD
 from pyro.infer import Trace_ELBO
+=======
+>>>>>>> Lint
 from pyro.contrib.oed.eig import vi_ape
 import pyro.contrib.gp as gp
 
@@ -133,23 +135,15 @@ def main(num_steps):
         )
         return est_ape
 
-
-
-    def g(ns):
-        ns = torch.max(torch.min(ns, torch.tensor(99.)), torch.tensor(1.))
-        true_ape = []
-        prior_cov = torch.diag(prior_stdevs**2)
-        designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
-        for i in range(len(ns)):
-            x = designs[i]
-            true_ape.append(analytic_posterior_entropy(prior_cov, x))
-        return torch.tensor(true_ape)
-
-    # plt.figure()
-    # ns = torch.linspace(0., 100., 100)
-    # output = f(ns)
-    # plt.plot(ns.numpy(), output.numpy())
-    # plt.show()
+    # def g(ns):
+    #     ns = torch.max(torch.min(ns, torch.tensor(99.)), torch.tensor(1.))
+    #     true_ape = []
+    #     prior_cov = torch.diag(prior_stdevs**2)
+    #     designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
+    #     for i in range(len(ns)):
+    #         x = designs[i]
+    #         true_ape.append(analytic_posterior_entropy(prior_cov, x))
+    #     return torch.tensor(true_ape)
 
     X = torch.tensor([25., 75.])
     y = f(X)
@@ -160,39 +154,6 @@ def main(num_steps):
     gpmodel.optimize()
     gpbo = GPBayesOptimizer(f, constraints.interval(0, 100), gpmodel)
     print(gpbo.run(num_steps=6, num_acquisitions=20))
-
-    # # Estimated loss (linear transform of EIG)
-    # est_ape = vi_ape(
-    #     model,
-    #     X,
-    #     observation_labels="y",
-    #     vi_parameters={
-    #         "guide": guide, "optim": optim.Adam({"lr": 0.0025}),
-    #         "num_steps": num_steps},
-    #     is_parameters={"num_samples": 2}
-    # )
-
-    # # Analytic loss
-    # true_ape = []
-    # prior_cov = torch.diag(prior_stdevs**2)
-    # for i in range(len(ns)):
-    #     x = X[i, :, :]
-    #     true_ape.append(analytic_posterior_entropy(prior_cov, x))
-    # true_ape = torch.tensor(true_ape)
-
-    # print("Estimated APE values")
-    # print(est_ape)
-    # print("True APE values")
-    # print(true_ape)
-
-    # # Plot to compare
-    # import matplotlib.pyplot as plt
-    # ns = np.array(ns)
-    # est_ape = np.array(est_ape.detach())
-    # true_ape = np.array(true_ape)
-    # plt.scatter(ns, est_ape)
-    # plt.scatter(ns, true_ape, color='r')
-    # plt.show()
 
 
 if __name__ == "__main__":
