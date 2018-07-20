@@ -200,24 +200,23 @@ class GPRegression(GPModel):
             d = normal.Normal(torch.tensor(0.), torch.tensor(1.))
             # Reparametrize explicitly - aids autograd
             ynew = (loc + self.mean_function(xnew)) + d.sample()*cov.sqrt()
-            
+
             # Update kernel matrix
-            Kffnew = Kff.new_empty(N+1,N+1)
+            Kffnew = Kff.new_empty(N+1, N+1)
             Kffnew[:N, :N] = Kff
             cross = self.kernel(X, xnew).squeeze()
             end = self.kernel(xnew, xnew).squeeze()
             Kffnew[N, :N] = cross
             Kffnew[:N, N] = cross
             # No noise, just jitter for numerical stability
-            Kffnew[N, N] = end + self.jitter 
+            Kffnew[N, N] = end + self.jitter
             # Heuristic to avoid adding degenerate points
             if Kffnew.logdet() > -15.:
                 Kff = Kffnew
-                N+=1
+                N += 1
                 X = torch.cat((X, xnew))
                 y = torch.cat((y, ynew))
 
             return ynew
 
         return sample_next
-
