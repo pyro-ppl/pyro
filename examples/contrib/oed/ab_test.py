@@ -6,10 +6,7 @@ import numpy as np
 import pyro
 import pyro.distributions as dist
 from pyro import optim
-<<<<<<< HEAD
 from pyro.infer import Trace_ELBO
-=======
->>>>>>> Lint
 from pyro.contrib.oed.eig import vi_ape
 import pyro.contrib.gp as gp
 
@@ -127,7 +124,7 @@ def main(num_steps):
             X,
             observation_labels="y",
             vi_parameters={
-                "guide": guide, 
+                "guide": guide,
                 "optim": optim.Adam({"lr": 0.0025}),
                 "loss": Trace_ELBO(),
                 "num_steps": num_steps},
