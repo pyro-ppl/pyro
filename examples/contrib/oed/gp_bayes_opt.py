@@ -41,11 +41,11 @@ class GPBayesOptimizer:
         # transform x to an unconstrained domain
         unconstrained_x_init = transform_to(self.constraints).inv(x_init)
         unconstrained_x = torch.tensor(unconstrained_x_init, requires_grad=True)
-        minimizer = optim.LBFGS([unconstrained_x])
+        minimizer = optim.LBFGS([unconstrained_x], max_eval=20)
 
         def closure():
             minimizer.zero_grad()
-            if (torch.log(torch.abs(unconstrained_x)) > 15.).any():
+            if (torch.log(torch.abs(unconstrained_x)) > 25.).any():
                 return torch.tensor(float('inf'))
             x = transform_to(self.constraints)(unconstrained_x)
             y = differentiable(x)

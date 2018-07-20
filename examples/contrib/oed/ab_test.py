@@ -111,7 +111,7 @@ def analytic_posterior_entropy(prior_cov, x):
     return y
 
 
-def main(num_steps):
+def main(num_vi_steps, num_acquisitions, num_bo_steps):
 
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
@@ -127,13 +127,12 @@ def main(num_steps):
                 "guide": guide,
                 "optim": optim.Adam({"lr": 0.0025}),
                 "loss": Trace_ELBO(),
-                "num_steps": num_steps},
-            is_parameters={"num_samples": 2}
+                "num_steps": num_vi_steps},
+            is_parameters={"num_samples": 1}
         )
         return est_ape
 
     def true_ape(ns):
-        ns = torch.max(torch.min(ns, torch.tensor(99.)), torch.tensor(1.))
         true_ape = []
         prior_cov = torch.diag(prior_stdevs**2)
         designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
@@ -142,7 +141,7 @@ def main(num_steps):
             true_ape.append(analytic_posterior_entropy(prior_cov, x))
         return torch.tensor(true_ape)
 
-    for f in [estimated_ape, true_ape]:
+    for f in [true_ape, estimated_ape]:
         X = torch.tensor([25., 75.])
         y = f(X)
         pyro.clear_param_store()
@@ -151,11 +150,13 @@ def main(num_steps):
             noise=torch.tensor(0.1), jitter=1e-6)
         gpmodel.optimize()
         gpbo = GPBayesOptimizer(f, constraints.interval(0, 100), gpmodel)
-        print(gpbo.run(num_steps=6, num_acquisitions=20))
+        print(gpbo.run(num_steps=num_bo_steps, num_acquisitions=num_acquisitions))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
-    parser.add_argument("-n", "--num-steps", nargs="?", default=5000, type=int)
+    parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
+    parser.add_argument('--num-acquisitions', nargs="?", default=10, type=int)
+    parser.add_argument('--num-bo-steps', nargs="?", default=6, type=int)
     args = parser.parse_args()
-    main(args.num_steps)
+    main(args.num_vi_steps, args.num_acquisitions, args.num_bo_steps)
