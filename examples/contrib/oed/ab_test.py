@@ -40,7 +40,7 @@ to optimal experiment design within probabilistic programs.
 N = 100  # number of participants
 p_treatments = 2  # number of treatment groups
 p = p_treatments  # number of features
-prior_stdevs = torch.tensor([1, .5])
+prior_stdevs = torch.tensor([10., 2.5])
 
 softplus = torch.nn.functional.softplus
 
@@ -98,21 +98,23 @@ def design_to_matrix(design):
         if i > 0:
             X[t:t+i, col] = 1.
         t += i
+    if t < n:
+        X[t:, -1] = 1.
     return X
 
 
 def analytic_posterior_entropy(prior_cov, x):
-    posterior_cov = prior_cov - prior_cov.mm(x.t().mm(torch.inverse(
-        x.mm(prior_cov.mm(x.t())) + torch.eye(N)).mm(x.mm(prior_cov))))
-    return 0.5*torch.logdet(2*np.pi*np.e*posterior_cov)
-
-
-
+    # Use some kernel trick magic
+    SigmaXX = prior_cov.mm(x.t().mm(x))
+    posterior_cov = prior_cov - torch.inverse(
+        SigmaXX + torch.eye(p)).mm(SigmaXX.mm(prior_cov))
+    y = 0.5*torch.logdet(2*np.pi*np.e*posterior_cov)
+    return y
 
 
 def main(num_steps):
 
-    pyro.set_rng_seed(420)
+    pyro.set_rng_seed(42)
     pyro.clear_param_store()
 
     def f(ns):
@@ -134,6 +136,7 @@ def main(num_steps):
 
 
     def g(ns):
+        ns = torch.max(torch.min(ns, torch.tensor(99.)), torch.tensor(1.))
         true_ape = []
         prior_cov = torch.diag(prior_stdevs**2)
         designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
@@ -156,7 +159,7 @@ def main(num_steps):
         noise=torch.tensor(0.1), jitter=1e-6)
     gpmodel.optimize()
     gpbo = GPBayesOptimizer(f, constraints.interval(0, 100), gpmodel)
-    print(gpbo.run(num_steps=8, num_acquisitions=10))
+    print(gpbo.run(num_steps=6, num_acquisitions=20))
 
     # # Estimated loss (linear transform of EIG)
     # est_ape = vi_ape(
@@ -194,6 +197,6 @@ def main(num_steps):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
-    parser.add_argument("-n", "--num-steps", nargs="?", default=3000, type=int)
+    parser.add_argument("-n", "--num-steps", nargs="?", default=5000, type=int)
     args = parser.parse_args()
     main(args.num_steps)

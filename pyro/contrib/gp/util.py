@@ -236,9 +236,18 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
             pack = torch.cat((pack, f_scale_tril_2D), dim=1)
 
         Lffinv_pack = pack.trtrs(Lff, upper=False)[0]
+        # print('f_loc_2D', f_loc_2D, 'f_loc', f_loc)
+        # print('Kfs', Kfs)
+        # print('lffinv', Lffinv_pack)
+        # print('AX', Lff.mm(Lffinv_pack))
+        # print('b', pack)
+
         # unpack
         v_2D = Lffinv_pack[:, :f_loc_2D.shape[1]]
         W = Lffinv_pack[:, f_loc_2D.shape[1]:f_loc_2D.shape[1] + M].t()
+        # print(W)
+        # print(W.mm(W.t()))
+        # print(kernel(Xnew))
         if f_scale_tril is not None:
             S_2D = Lffinv_pack[:, -f_scale_tril_2D.shape[1]:]
 
