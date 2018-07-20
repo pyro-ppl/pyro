@@ -298,8 +298,8 @@ def test_bernoulli_latent_model():
     @poutine.broadcast
     def model(data):
         y_prob = pyro.sample("y_prob", dist.Beta(1.1, 1.1))
+        y = pyro.sample("y", dist.Bernoulli(y_prob))
         with pyro.iarange("data", data.shape[0]):
-            y = pyro.sample("y", dist.Bernoulli(y_prob))
             z = pyro.sample("z", dist.Bernoulli(0.65 * y + 0.1))
             pyro.sample("obs", dist.Normal(2. * z, 1.), obs=data)
 

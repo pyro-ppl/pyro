@@ -12,6 +12,7 @@ import pyro.poutine as poutine
 from pyro.distributions.util import log_sum_exp
 from pyro.infer import config_enumerate, is_validation_enabled
 from pyro.infer.mcmc.trace_kernel import TraceKernel
+from pyro.infer.util import Dice
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
 from pyro.primitives import _Subsample
@@ -121,20 +122,25 @@ class HMC(TraceKernel):
             raise ValueError("Finite value required for `max_iarange_nesting` when model "
                              "has discrete (enumerable) sites.")
         model_trace.compute_log_prob()
+        model_trace.compute_score_parts()
         ordering = {name: frozenset(site["cond_indep_stack"])
                     for name, site in model_trace.nodes.items()
                     if site["type"] == "sample"}
 
         log_probs = defaultdict(float)
         for name, site in model_trace.nodes.items():
-            if site["type"] == "sample":
+            if site["type"] == "sample" and not site["fn"].has_enumerate_support:
                 log_probs[ordering[name]] = log_probs[ordering[name]] + site["log_prob"]
 
         log_prob_sum = 0.
-        for log_prob in log_probs.values():
+        dice = Dice(model_trace, ordering)
+        for ordinal, log_prob in log_probs.items():
             enum_dim = log_prob.dim() - self.max_iarange_nesting
+            dice_weights = dice.in_context(log_prob.shape, ordinal)
+            log_prob = log_prob + dice_weights.log()
             if enum_dim > 0:
-                log_prob = log_sum_exp(log_prob.reshape(-1, *log_prob.shape[enum_dim:]), dim=0)
+                log_prob = log_sum_exp(log_prob.reshape(-1, *log_prob.shape[enum_dim:]),
+                                       dim=0)
             log_prob_sum += log_prob.sum()
         return log_prob_sum
 
