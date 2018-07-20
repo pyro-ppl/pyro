@@ -121,7 +121,7 @@ class HMC(TraceKernel):
             raise ValueError("Finite value required for `max_iarange_nesting` when model "
                              "has discrete (enumerable) sites.")
         model_trace.compute_log_prob()
-        ordering = {name: frozenset(f for f in site["cond_indep_stack"])
+        ordering = {name: frozenset(site["cond_indep_stack"])
                     for name, site in model_trace.nodes.items()
                     if site["type"] == "sample"}
 
@@ -132,8 +132,9 @@ class HMC(TraceKernel):
 
         log_prob_sum = 0.
         for log_prob in log_probs.values():
-            while log_prob.dim() > self.max_iarange_nesting:
-                log_prob = log_sum_exp(log_prob, dim=0)
+            enum_dim = log_prob.dim() - self.max_iarange_nesting
+            if enum_dim > 0:
+                log_prob = log_sum_exp(log_prob.reshape(-1, *log_prob.shape[enum_dim:]), dim=0)
             log_prob_sum += log_prob.sum()
         return log_prob_sum
 
