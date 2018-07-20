@@ -119,7 +119,7 @@ def main(num_steps):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
 
-    def f(ns):
+    def estimated_ape(ns):
         designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
         X = torch.stack(designs)
         est_ape = vi_ape(
@@ -135,25 +135,26 @@ def main(num_steps):
         )
         return est_ape
 
-    # def g(ns):
-    #     ns = torch.max(torch.min(ns, torch.tensor(99.)), torch.tensor(1.))
-    #     true_ape = []
-    #     prior_cov = torch.diag(prior_stdevs**2)
-    #     designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
-    #     for i in range(len(ns)):
-    #         x = designs[i]
-    #         true_ape.append(analytic_posterior_entropy(prior_cov, x))
-    #     return torch.tensor(true_ape)
+    def true_ape(ns):
+        ns = torch.max(torch.min(ns, torch.tensor(99.)), torch.tensor(1.))
+        true_ape = []
+        prior_cov = torch.diag(prior_stdevs**2)
+        designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
+        for i in range(len(ns)):
+            x = designs[i]
+            true_ape.append(analytic_posterior_entropy(prior_cov, x))
+        return torch.tensor(true_ape)
 
-    X = torch.tensor([25., 75.])
-    y = f(X)
-    pyro.clear_param_store()
-    gpmodel = gp.models.GPRegression(
-        X, y, gp.kernels.Matern52(input_dim=1, lengthscale=torch.tensor(5.)),
-        noise=torch.tensor(0.1), jitter=1e-6)
-    gpmodel.optimize()
-    gpbo = GPBayesOptimizer(f, constraints.interval(0, 100), gpmodel)
-    print(gpbo.run(num_steps=6, num_acquisitions=20))
+    for f in [estimated_ape, true_ape]:
+        X = torch.tensor([25., 75.])
+        y = f(X)
+        pyro.clear_param_store()
+        gpmodel = gp.models.GPRegression(
+            X, y, gp.kernels.Matern52(input_dim=1, lengthscale=torch.tensor(5.)),
+            noise=torch.tensor(0.1), jitter=1e-6)
+        gpmodel.optimize()
+        gpbo = GPBayesOptimizer(f, constraints.interval(0, 100), gpmodel)
+        print(gpbo.run(num_steps=6, num_acquisitions=20))
 
 
 if __name__ == "__main__":
