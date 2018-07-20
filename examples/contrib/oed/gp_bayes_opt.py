@@ -24,12 +24,7 @@ class GPBayesOptimizer:
         gpmodel.set_data(X, y)
         gpmodel.optimize()
 
-    def lower_confidence_bound(self, gpmodel, x, kappa=2.):
-        mu, variance = gpmodel(x, full_cov=False, noiseless=False)
-        sigma = variance.sqrt()
-        return mu - kappa * sigma
-
-    def find_a_candidate(self, gpmodel, x_init, **kwargs):
+    def find_a_candidate(self, sampler, x_init):
         # transform x to an unconstrained domain
         unconstrained_x_init = transform_to(self.constraints).inv(x_init)
         unconstrained_x = torch.tensor(unconstrained_x_init, requires_grad=True)
@@ -37,26 +32,33 @@ class GPBayesOptimizer:
 
         def closure():
             minimizer.zero_grad()
+            if (torch.log(torch.abs(unconstrained_x)) > 15.).any():
+                return torch.tensor(float('inf'))
             x = transform_to(self.constraints)(unconstrained_x)
-            y = self.lower_confidence_bound(gpmodel, x, **kwargs)
-            autograd.backward(unconstrained_x, autograd.grad(y, unconstrained_x))
+            y = sampler(x)
+            autograd.backward(unconstrained_x, autograd.grad(y, unconstrained_x, retain_graph=True))
+            # print(x, y, unconstrained_x, unconstrained_x.grad)
             return y
 
+        # print("Starting off minimizer from", unconstrained_x, x_init)
         minimizer.step(closure)
         # after finding a candidate in the unconstrained domain,
         # convert it back to original domain.
         x = transform_to(self.constraints)(unconstrained_x)
-        return x.detach()
+        opt_y = sampler(x)
+        if torch.isnan(opt_y).any():
+            print('opt_y', opt_y)
+            print('x', x)
+        return x.detach(), opt_y.detach()
 
-    def opt_lcb(self, num_candidates=5, kappa=2.):
+    def opt_differentiable(self, differentiable, num_candidates=5):
 
         x_init = self.gpmodel.X[-1:].new_empty(1).uniform_(self.constraints.lower_bound, 
                     self.constraints.upper_bound)
         candidates = []
         values = []
         for j in range(num_candidates):
-            x = self.find_a_candidate(self.gpmodel, x_init)
-            y = self.lower_confidence_bound(self.gpmodel, x, kappa=kappa)
+            x, y = self.find_a_candidate(differentiable, x_init)
             candidates.append(x)
             values.append(y)
             x_init = x.new_empty(1).uniform_(self.constraints.lower_bound, 
@@ -65,42 +67,22 @@ class GPBayesOptimizer:
         mvalue, argmin = torch.min(torch.cat(values), dim=0)
         return candidates[argmin.item()], mvalue
 
-    def acquire(self, method="MaxLB", num_candidates=1, num_acquisitions=1):
+    def acquire(self, method="Thompson", num_candidates=1, num_acquisitions=1):
 
-        if method == "MaxLB":
-
-            # Minimise the upper bound
-            ubm, maxvalue = self.opt_lcb(kappa=-2.)
-            minvalue = self.lower_confidence_bound(self.gpmodel, ubm, kappa=2.)
-            print(maxvalue)
+        if method == "Thompson":
 
             # Initialize the return tensor, add the UCB1 point
             X = torch.zeros(num_acquisitions, *self.gpmodel.X.shape[1:])
-            X[0, ...], _ = self.opt_lcb(kappa=2.)
             
-            nr = num_acquisitions - 1
-            i = 1
-            while nr > 0:
-                x = X[0, ...].new_empty(1).uniform_(self.constraints.lower_bound, 
-                    self.constraints.upper_bound)
-                lb = self.lower_confidence_bound(self.gpmodel, x, kappa=2.)
-                if lb <= maxvalue:
-                    acceptance_probability = (maxvalue - lb)/(maxvalue - minvalue)
-                    p = torch.rand((1,))[0]
-                    if p <= acceptance_probability:
-                        print('accept')
-                        X[i, ...] = x
-                        nr -= 1
-                        i += 1
-                    else:
-                        print('rreject')
-                else:
-                    print('reject')
-            print(X)
+            for i in range(num_acquisitions):
+                sampler = self.gpmodel.iter_sample(noiseless=False)
+                x, _ = self.opt_differentiable(sampler, num_candidates=5)
+                X[i, ...] = x
+
             return X
 
         else:
-            raise NotImplementedError("Only method MaxLB implemented for acquisition")
+            raise NotImplementedError("Only method Thompson implemented for acquisition")
 
     def run(self, num_steps, num_acquisitions):
         plt.figure(figsize=(12, 30))
@@ -115,7 +97,7 @@ class GPBayesOptimizer:
 
         plt.show()
         
-        return self.opt_lcb(kappa=0.)
+        return self.opt_differentiable(lambda x: self.gpmodel(x)[0])
 
 
     def plot(self, gs, xlabel=None, with_title=True):
