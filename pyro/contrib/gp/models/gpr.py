@@ -80,7 +80,6 @@ class GPRegression(GPModel):
         N = self.X.shape[0]
         Kff = self.kernel(self.X)
         Kff.view(-1)[::N + 1] += noise  # add noise to diagonal
-        # print('Kff', Kff, 'self.X', self.X)
         Lff = Kff.potrf(upper=False)
 
         zero_loc = self.X.new_zeros(self.X.shape[0])
