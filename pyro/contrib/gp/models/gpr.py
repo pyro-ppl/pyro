@@ -144,7 +144,7 @@ class GPRegression(GPModel):
 
         return loc + self.mean_function(Xnew), cov
 
-    def iter_sample(self, full_cov=False, noiseless=True):
+    def iter_sample(self, noiseless=True):
         r"""
         Iteratively constructs a sample from the Gaussian Process posterior.
 
@@ -152,56 +152,56 @@ class GPRegression(GPModel):
         multivariate Gaussian distributed with mean and covariance matrix
         given by :func:`forward`.
 
-        This method samples lazily from multivariate Gaussian. The advantage
+        This method samples lazily from this multivariate Gaussian. The advantage
         of this approach is that later query points can depend upon earlier ones.
+        Particularly useful when the querying is to be done by an optimisation
+        routine.
 
         .. note:: The noise parameter ``noise`` (:math:`\epsilon`) together with
             kernel's parameters have been learned from a training procedure (MCMC or
             SVI).
 
-        :param bool noiseless: A flag to decide if we want to include noise in the
-            sample or not.
+        :param bool noiseless: A flag to decide if we want to add sampling noise
+            to the samples beyond the noise inherent in the GP posterior.
         :returns: sampler
         :rtype: function
         """
-        noise = self.guide().detach()
+        # Make these visible in the inner function
         global X, y, Kff, N
+
+        noise = self.guide().detach()
         X = self.X.clone().detach()
         y = self.y.clone().detach()
-
         N = X.shape[0]
         Kff = self.kernel(X).contiguous()
         Kff.view(-1)[::N + 1] += noise  # add noise to the diagonal
 
         def sample_next(xnew):
+            """Repeatedly samples from the Gaussian process posterior,
+            conditioning on previously sampled values.
+            """
             if torch.isnan(xnew).any():
                 raise ValueError("Cannot evaluate GP at value: {}".format(xnew))
 
+            # Variables from outer scope
             global X, y, Kff, N
-            Lff = Kff.potrf(upper=False)
 
+            # Compute Cholesky decomposition of kernel matrix
+            Lff = Kff.potrf(upper=False)
             y_residual = y - self.mean_function(X)
+
+            # Compute conditional mean and variance
             loc, cov = conditional(xnew, X, self.kernel, y_residual, None, Lff,
                                    False, jitter=self.jitter)
-
             if not noiseless:
                 cov = cov + noise
 
             # Todo use pyro.sample
             d = normal.Normal(torch.tensor(0.), torch.tensor(1.))
-            # cov = torch.max(cov, torch.tensor(0.))
-            if torch.isnan(loc) or torch.isnan(cov) or torch.isnan(cov.sqrt()):
-                print('loc', loc)
-                print('cov', cov)
-                print('X', X)
-                print('xnew', xnew)
-                print('Kff', Kff)
-                print('LL^T', Lff.mm(Lff.t()))
-                print('logdet', Kff.logdet())
-                print('N', N)
-                raise
+            # Reparametrize explicitly - aids autograd
             ynew = (loc + self.mean_function(xnew)) + d.sample()*cov.sqrt()
             
+            # Update kernel matrix
             Kffnew = Kff.new_empty(N+1,N+1)
             Kffnew[:N, :N] = Kff
             cross = self.kernel(X, xnew).squeeze()
