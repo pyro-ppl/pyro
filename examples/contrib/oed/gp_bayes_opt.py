@@ -1,5 +1,3 @@
-# import matplotlib.gridspec as gridspec
-# import matplotlib.pyplot as plt
 import torch
 import torch.autograd as autograd
 import torch.optim as optim
@@ -131,34 +129,3 @@ class GPBayesOptimizer:
             self.update_posterior(X, y)
 
         return self.opt_differentiable(lambda x: self.gpmodel(x)[0])
-
-    # def run(self, num_steps, num_acquisitions):
-    #     plt.figure(figsize=(12, 30))
-    #     outer_gs = gridspec.GridSpec(num_steps, 1)
-
-    #     for i in range(num_steps):
-    #         X = self.acquire(num_acquisitions=num_acquisitions)
-    #         y = self.f(X)
-    #         gs = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=outer_gs[i])
-    #         self.plot(gs, xlabel=i+1, with_title=(i % 2 == 0))
-    #         self.update_posterior(self.gpmodel, X, y)
-
-    #     plt.show()
-
-    #     return self.opt_differentiable(lambda x: self.gpmodel(x)[0])
-
-    # def plot(self, gs, xlabel=None, with_title=True):
-    #     xlabel = "xmin" if xlabel is None else "x{}".format(xlabel)
-    #     Xnew = torch.linspace(-1., 101.)
-    #     ax1 = plt.subplot(gs[0])
-    #     ax1.plot(self.gpmodel.X.detach().numpy(), self.gpmodel.y.detach().numpy(), "kx")  # plot all observed data
-    #     with torch.no_grad():
-    #         loc, var = self.gpmodel(Xnew, full_cov=False, noiseless=False)
-    #         sd = var.sqrt()
-    #         ax1.plot(Xnew.numpy(), loc.numpy(), "r", lw=2)  # plot predictive mean
-    #         ax1.fill_between(Xnew.numpy(), loc.numpy() - 2*sd.numpy(), loc.numpy() + 2*sd.numpy(),
-    #                          color="C0", alpha=0.3)  # plot uncertainty intervals
-    #     ax1.set_xlim(-1, 101)
-    #     ax1.set_title("Find {}".format(xlabel))
-    #     if with_title:
-    #         ax1.set_ylabel("Gaussian Process Regression")
