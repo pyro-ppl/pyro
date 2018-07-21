@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.distributions import constraints, normal
+import torch.distributions as torchdist
 from torch.nn import Parameter
 
 import pyro
@@ -70,7 +70,7 @@ class GPRegression(GPModel):
 
         noise = self.X.new_ones(()) if noise is None else noise
         self.noise = Parameter(noise)
-        self.set_constraint("noise", constraints.greater_than(self.jitter))
+        self.set_constraint("noise", torchdist.constraints.greater_than(self.jitter))
 
     def model(self):
         self.set_mode("model")
@@ -195,10 +195,7 @@ class GPRegression(GPModel):
             if not noiseless:
                 cov = cov + noise
 
-            # Todo use pyro.sample
-            d = normal.Normal(torch.tensor(0.), torch.tensor(1.))
-            # Reparametrize explicitly - aids autograd
-            ynew = (loc + self.mean_function(xnew)) + d.sample()*cov.sqrt()
+            ynew = torchdist.Normal(loc + self.mean_function(xnew), cov.sqrt()).rsample()
 
             # Update kernel matrix
             Kffnew = Kff.new_empty(N+1, N+1)
