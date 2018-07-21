@@ -257,10 +257,10 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
 
     adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
     if elbo_impl is RenyiELBO:
-        elbo = elbo_impl(alpha=0.2, num_particles=3, strict_enumeration_warning=False)
+        elbo = elbo_impl(alpha=0.2, num_particles=3, max_iarange_nesting=1, strict_enumeration_warning=False)
     else:
-        elbo = elbo_impl(strict_enumeration_warning=False)
-    svi = SVI(model, guide, adam, loss=elbo, max_iarange_nesting=1)
+        elbo = elbo_impl(max_iarange_nesting=1, strict_enumeration_warning=False)
+    svi = SVI(model, guide, adam, loss=elbo)
 
     with xfail_if_not_implemented():
         for k in range(n_steps):

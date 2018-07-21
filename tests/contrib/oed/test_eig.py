@@ -5,6 +5,7 @@ import pytest
 import pyro
 import pyro.distributions as dist
 from pyro import optim
+from pyro.infer import Trace_ELBO
 from pyro.contrib.oed.eig import vi_ape
 from tests.common import assert_equal
 
@@ -45,6 +46,7 @@ def test_ape_svi(model, arg, design, guide, expected_ape, n_steps):
         "guide": lambda d: guide(arg, d),
         # Note: exact details irrelevant, taking 0 steps
         "optim": optim.Adam({"lr": 0.01}),
+        "loss": Trace_ELBO(),
         "num_steps": n_steps
     }
     is_parameters = {"num_samples": 1}

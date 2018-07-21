@@ -2,10 +2,10 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 import weakref
-from six.moves import queue
+from collections import defaultdict
 
 import torch
-from torch.distributions.utils import broadcast_all
+from six.moves import queue
 
 import pyro
 import pyro.ops.jit
@@ -17,13 +17,6 @@ from pyro.infer.util import Dice, is_validation_enabled
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
 
-def _dict_iadd(dict_, key, value):
-    if key in dict_:
-        dict_[key] = dict_[key] + value
-    else:
-        dict_[key] = value
-
-
 def _compute_dice_elbo(model_trace, guide_trace):
     # y depends on x iff ordering[x] <= ordering[y]
     # TODO refine this coarse dependency ordering.
@@ -32,26 +25,15 @@ def _compute_dice_elbo(model_trace, guide_trace):
                 for name, site in trace.nodes.items()
                 if site["type"] == "sample"}
 
-    costs = {}
+    costs = defaultdict(float)
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
-            _dict_iadd(costs, ordering[name], site["log_prob"])
+            costs[ordering[name]] = costs[ordering[name]] + site["log_prob"]
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample":
-            _dict_iadd(costs, ordering[name], -site["log_prob"])
+            costs[ordering[name]] = costs[ordering[name]] - site["log_prob"]
 
-    dice = Dice(guide_trace, ordering)
-    elbo = 0.0
-    for ordinal, cost in costs.items():
-        dice_prob = dice.in_context(cost.shape, ordinal)
-        mask = dice_prob > 0
-        if torch.is_tensor(mask) and not mask.all():
-            cost, dice_prob, mask = broadcast_all(cost, dice_prob, mask)
-            dice_prob = dice_prob[mask]
-            cost = cost[mask]
-        # TODO use score_parts.entropy_term to "stick the landing"
-        elbo = elbo + (dice_prob * cost).sum()
-    return elbo
+    return Dice(guide_trace, ordering).compute_expectation(costs)
 
 
 class TraceEnum_ELBO(ELBO):
@@ -114,7 +96,7 @@ class TraceEnum_ELBO(ELBO):
 
     def loss(self, model, guide, *args, **kwargs):
         """
-        :returns: returns an estimate of the ELBO
+        :returns: an estimate of the ELBO
         :rtype: float
 
         Estimates the ELBO using ``num_particles`` many samples (particles).
@@ -131,9 +113,36 @@ class TraceEnum_ELBO(ELBO):
         warn_if_nan(loss, "loss")
         return loss
 
+    def differentiable_loss(self, model, guide, *args, **kwargs):
+        """
+        :returns: a differentiable estimate of the ELBO
+        :rtype: torch.Tensor
+        :raises ValueError: if the ELBO is not differentiable (e.g. is
+            identically zero)
+
+        Estimates a differentiable ELBO using ``num_particles`` many samples
+        (particles).  The result should be infinitely differentiable (as long
+        as underlying derivatives have been implemented).
+        """
+        elbo = 0.0
+        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+            elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
+            if is_identically_zero(elbo_particle):
+                continue
+
+            elbo = elbo + elbo_particle
+        elbo = elbo / self.num_particles
+
+        if not torch.is_tensor(elbo) or not elbo.requires_grad:
+            raise ValueError('ELBO is cannot be differentiated: {}'.format(elbo))
+
+        loss = -elbo
+        warn_if_nan(loss, "loss")
+        return loss
+
     def loss_and_grads(self, model, guide, *args, **kwargs):
         """
-        :returns: returns an estimate of the ELBO
+        :returns: an estimate of the ELBO
         :rtype: float
 
         Estimates the ELBO using ``num_particles`` many samples (particles).

@@ -1,6 +1,6 @@
 import pyro
 from pyro.contrib.oed.search import Search
-from pyro.infer import EmpiricalMarginal, Importance, SVI, Trace_ELBO
+from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.contrib.autoguide import mean_field_guide_entropy
 
 
@@ -28,7 +28,8 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
         posterior is to be inferred.
     :param dict vi_parameters: Variational inference parameters which should include:
         `optim`: an instance of :class:`pyro.Optim`, `guide`: a guide function
-        compatible with `model`, `num_steps`: the number of VI steps to make
+        compatible with `model`, `num_steps`: the number of VI steps to make,
+        and `loss`: the loss function to use for VI
     :param dict is_parameters: Importance sampling parameters for the
         marginal distribution of :math:`Y`. May include `num_samples`: the number
         of samples to draw from the marginal.
@@ -45,17 +46,12 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
         y = pyro.sample("conditioning_y", y_dist)
         y_dict = {label: y[i, ...] for i, label in enumerate(observation_labels)}
         conditioned_model = pyro.condition(model, data=y_dict)
-        posterior = SVI(conditioned_model, vi_parameters["guide"],
-                        vi_parameters["optim"], loss=Trace_ELBO())
-        with pyro.poutine.block():
-            for _ in range(vi_parameters["num_steps"]):
-                posterior.step(design)
+        SVI(conditioned_model, **vi_parameters).run(design)
         # Recover the entropy
         return mean_field_guide_entropy(vi_parameters["guide"], design)
 
-    y_dist = EmpiricalMarginal(
-        Importance(model, num_samples=is_parameters.get("num_samples", None)).run(design),
-        sites=observation_labels)
+    y_dist = EmpiricalMarginal(Importance(model, **is_parameters).run(design),
+                               sites=observation_labels)
 
     # Calculate the expected posterior entropy under this distn of y
     loss_dist = EmpiricalMarginal(Search(posterior_entropy).run(y_dist, design))
