@@ -84,12 +84,10 @@ class GPBayesOptimizer:
         mvalue, argmin = torch.min(torch.cat(values), dim=0)
         return candidates[argmin.item()], mvalue
 
-    def acquire(self, method="Thompson", num_acquisitions=1, **opt_params):
+    def acquire_thompson(self, num_acquisitions=1, **opt_params):
         """Selects `num_acquisitions` query points at which to query the
-        original function.
+        original function by Thompson sampling.
 
-        :param str method: the method to use for acquisition. Choose from:
-            Thompson
         :param int num_acquisitions: the number of points to generate
         :param dict opt_params: additional parameters for optimization
             routines
@@ -97,34 +95,31 @@ class GPBayesOptimizer:
         :rtype: torch.Tensor
         """
 
-        if method == "Thompson":
+        # Initialize the return tensor
+        X = torch.zeros(num_acquisitions, *self.gpmodel.X.shape[1:])
 
-            # Initialize the return tensor, add the UCB1 point
-            X = torch.zeros(num_acquisitions, *self.gpmodel.X.shape[1:])
+        for i in range(num_acquisitions):
+            sampler = self.gpmodel.iter_sample(noiseless=False)
+            x, _ = self.opt_differentiable(sampler, **opt_params)
+            X[i, ...] = x
 
-            for i in range(num_acquisitions):
-                sampler = self.gpmodel.iter_sample(noiseless=False)
-                x, _ = self.opt_differentiable(sampler, **opt_params)
-                X[i, ...] = x
+        return X
 
-            return X
-
-        else:
-            raise NotImplementedError("Only method Thompson implemented for acquisition")
-
-    def run(self, num_steps, num_acquisitions):
+    def run(self, num_steps, num_acquisitions, acquisition_func=self.acquire_thompson):
         """
         Optimizes `self.f` in `num_steps` steps, acquiring `num_acquisitions`
         new function evaluations at each step.
 
-        :param int num_steps:
-        :param int num_steps"
+        :param int num_steps: overall number of BO steps to run
+        :param int num_acquisitions: number of points to acquire at each step
+        :param function acquisition_func: a function to generate acquisitions.
+            It should return a torch.Tensor of new points to query.
         :return: the minimiser and the minimum value
         :rtype: tuple
         """
 
         for i in range(num_steps):
-            X = self.acquire(num_acquisitions=num_acquisitions)
+            X = acquisition_func(num_acquisitions=num_acquisitions)
             y = self.f(X)
             self.update_posterior(X, y)
 
