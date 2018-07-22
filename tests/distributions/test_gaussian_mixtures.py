@@ -5,11 +5,11 @@ import math
 import torch
 
 import pytest
-from pyro.distributions import MixtureOfDiagNormalsSharedCovariance
+from pyro.distributions import MixtureOfDiagNormalsSharedCovariance, GaussianScaleMixture
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize('mix_dist', [MixtureOfDiagNormalsSharedCovariance])
+@pytest.mark.parametrize('mix_dist', [MixtureOfDiagNormalsSharedCovariance, GaussianScaleMixture])
 @pytest.mark.parametrize('K', [3])
 @pytest.mark.parametrize('D', [2, 4])
 @pytest.mark.parametrize('batch_mode', [True, False])
@@ -21,9 +21,17 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
         sample_shape = torch.Size(())
     else:
         sample_shape = torch.Size((n_samples,))
-    locs = torch.tensor(torch.rand(K, D), requires_grad=True)
-    sigmas = torch.ones(D) + 0.5 * torch.rand(D)
-    sigmas = torch.tensor(sigmas, requires_grad=True)
+    if mix_dist == GaussianScaleMixture:
+        locs = torch.zeros(K, D, requires_grad=True)
+    else:
+        locs = torch.tensor(torch.rand(K, D), requires_grad=True)
+    if mix_dist == GaussianScaleMixture:
+        lambdas = 1.5 * torch.ones(K) + 0.5 * torch.rand(K)
+        lambdas = torch.tensor(lambdas, requires_grad=True)
+    else:
+        lambdas = torch.ones(K, requires_grad=True)
+    scale = torch.ones(D) + 0.5 * torch.rand(D)
+    scale = torch.tensor(scale, requires_grad=True)
     if not flat_logits:
         logits = torch.tensor(1.5 * torch.rand(K), requires_grad=True)
     else:
@@ -35,33 +43,43 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
 
     if cost_function == 'cosine':
         analytic1 = torch.cos((omega * locs).sum(-1))
-        analytic2 = torch.exp(-0.5 * torch.pow(omega * sigmas, 2.0).sum(-1))
+        analytic2 = torch.exp(-0.5 * torch.pow(omega * scale * lambdas.unsqueeze(-1), 2.0).sum(-1))
         analytic = (pis * analytic1 * analytic2).sum()
         analytic.backward()
     elif cost_function == 'quadratic':
-        analytic = torch.pow(sigmas, 2.0).sum(-1) + torch.pow(locs, 2.0).sum(-1)
+        analytic = torch.pow(scale * lambdas.unsqueeze(-1), 2.0).sum(-1) + torch.pow(locs, 2.0).sum(-1)
         analytic = (pis * analytic).sum()
         analytic.backward()
 
     analytic_grads = {}
     analytic_grads['locs'] = locs.grad.clone()
-    analytic_grads['scale'] = sigmas.grad.clone()
+    analytic_grads['scale'] = scale.grad.clone()
     analytic_grads['logits'] = logits.grad.clone()
-    assert locs.grad.shape == locs.shape
-    assert sigmas.grad.shape == sigmas.shape
-    assert logits.grad.shape == logits.shape
+    analytic_grads['lambdas'] = lambdas.grad.clone()
 
-    sigmas.grad.zero_()
+    assert locs.grad.shape == locs.shape
+    assert scale.grad.shape == scale.shape
+    assert logits.grad.shape == logits.shape
+    assert lambdas.grad.shape == lambdas.shape
+
+    scale.grad.zero_()
     logits.grad.zero_()
     locs.grad.zero_()
+    lambdas.grad.zero_()
 
     if mix_dist == MixtureOfDiagNormalsSharedCovariance:
-        params = {'locs': locs, 'scale': sigmas, 'logits': logits}
+        params = {'locs': locs, 'scale': scale, 'logits': logits}
         if batch_mode:
             locs = locs.unsqueeze(0).expand(n_samples, K, D)
-            sigmas = sigmas.unsqueeze(0).expand(n_samples, D)
+            scale = scale.unsqueeze(0).expand(n_samples, D)
             logits = logits.unsqueeze(0).expand(n_samples, K)
-            dist_params = {'locs': locs, 'scale': sigmas, 'logits': logits}
+            dist_params = {'locs': locs, 'scale': scale, 'logits': logits}
+        else:
+            dist_params = params
+    elif mix_dist == GaussianScaleMixture:
+        params = {'scale': scale, 'logits': logits, 'lambdas': lambdas}
+        if batch_mode:
+            return  # distribution does not support batched parameters
         else:
             dist_params = params
 
@@ -106,3 +124,17 @@ def test_mix_of_diag_normals_shared_cov_log_prob(batch_size):
         correct_log_prob = [correct_log_prob] * batch_size
     correct_log_prob = torch.tensor(correct_log_prob)
     assert_equal(log_prob, correct_log_prob, msg='bad log prob for MixtureOfDiagNormalsSharedCovariance')
+
+
+def test_gsm_log_prob():
+    sigmas = torch.tensor([2.0, 2.0])
+    lambdas = torch.tensor([1.5, 2.5])
+    logits = torch.tensor([math.log(0.25), math.log(0.75)])
+    dist = GaussianScaleMixture(sigmas, logits, lambdas)
+    value = torch.tensor([math.sqrt(0.33), math.sqrt(0.67)])
+    log_prob = dist.log_prob(value).item()
+    correct_log_prob = 0.25 * math.exp(-0.50 / (4.0 * 2.25)) / 2.25
+    correct_log_prob += 0.75 * math.exp(-0.50 / (4.0 * 6.25)) / 6.25
+    correct_log_prob /= (2.0 * math.pi) * 4.0
+    correct_log_prob = math.log(correct_log_prob)
+    assert_equal(log_prob, correct_log_prob, msg='bad log prob for GaussianScaleMixture')
