@@ -49,6 +49,7 @@ def test_scores(auto_class):
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
+    AutoLaplace,
 ])
 def test_shapes(auto_class, Elbo):
 
@@ -71,6 +72,7 @@ def test_shapes(auto_class, Elbo):
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
+    AutoLaplace,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
 def test_irange_smoke(auto_class, Elbo):
@@ -117,10 +119,10 @@ def auto_guide_callable(model):
 
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
-    AutoLaplace,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoLaplace,
     auto_guide_list_x,
     auto_guide_callable,
 ])
@@ -137,9 +139,12 @@ def test_median(auto_class, Elbo):
     for _ in range(800):
         infer.step()
 
+    if auto_class is AutoLaplace:
+        guide = guide.laplace_approximation()
+
     median = guide.median()
     assert_equal(median["x"], torch.tensor(0.0), prec=0.1)
-    if auto_class is AutoDelta or auto_class is AutoLaplace:
+    if auto_class is AutoDelta:
         assert_equal(median["y"], torch.tensor(-1.0).exp(), prec=0.1)
     else:
         assert_equal(median["y"], torch.tensor(1.0), prec=0.1)
@@ -150,6 +155,7 @@ def test_median(auto_class, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoLaplace,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_quantiles(auto_class, Elbo):
@@ -163,6 +169,9 @@ def test_quantiles(auto_class, Elbo):
     infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo(strict_enumeration_warning=False))
     for _ in range(100):
         infer.step()
+
+    if auto_class is AutoLaplace:
+        guide = guide.laplace_approximation()
 
     quantiles = guide.quantiles([0.1, 0.5, 0.9])
     median = guide.median()
@@ -188,11 +197,11 @@ def test_quantiles(auto_class, Elbo):
 
 @pytest.mark.parametrize("continuous_class", [
     AutoDelta,
-    AutoLaplace,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
+    AutoLaplace,
 ])
 def test_discrete_parallel(continuous_class):
     K = 2
@@ -219,11 +228,11 @@ def test_discrete_parallel(continuous_class):
 
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
-    AutoLaplace,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
+    AutoLaplace,
 ])
 def test_guide_list(auto_class):
 
@@ -239,10 +248,10 @@ def test_guide_list(auto_class):
 
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
-    AutoLaplace,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoLaplace,
 ])
 def test_callable(auto_class):
 
@@ -263,10 +272,10 @@ def test_callable(auto_class):
 
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
-    AutoLaplace,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoLaplace,
 ])
 def test_callable_return_dict(auto_class):
 

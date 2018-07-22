@@ -240,6 +240,17 @@ class AutoCallable(AutoGuide):
         return {} if result is None else result
 
 
+def _hessian(y, xs):
+    dys = torch.autograd.grad(y, xs, create_graph=True)
+    flat_dy = torch.cat([dy.reshape(-1) for dy in dys])
+    H = []
+    for dyi in flat_dy:
+        Hi = torch.cat([Hij.reshape(-1) for Hij in torch.autograd.grad(dyi, xs, retain_graph=True)])
+        H.append(Hi)
+    H = torch.stack(H)
+    return H
+
+
 class AutoDelta(AutoGuide):
     """
     This implementation of :class:`AutoGuide` uses Delta distributions to
@@ -293,46 +304,10 @@ class AutoDelta(AutoGuide):
         """
         return self(*args, **kwargs)
 
-
-def _hessian(y, xs):
-    dys = torch.autograd.grad(y, xs, create_graph=True)
-    flat_dy = torch.cat([dy.reshape(-1) for dy in dys])
-    H = []
-    for dyi in flat_dy:
-        Hi = torch.cat([Hij.reshape(-1) for Hij in torch.autograd.grad(dyi, xs, retain_graph=True)])
-        H.append(Hi)
-    H = torch.stack(H)
-    return H
-
-
-class AutoLaplace(AutoDelta):
-    """
-    Laplace approximation (quadratic approximation) approximates the posterior
-    :math:`log p(z | x)` by a multivariate normal distribution. Under the hood,
-    it uses Delta distributions to construct a MAP guide over the entire latent
-    space. Its covariance is given by the inverse of the hessian of
-    :math:`-\log p(x, z)` at the MAP point of `z`.
-
-    .. note:: The support of posterior is always real.
-
-    Usage::
-
-        guide = AutoLaplace(model)
-        svi = SVI(model, guide, ...)
-        posterior = guide.get_posterior()
-
-    By default latent variables are randomly initialized by the model. To
-    change this default behavior the user should call :func:`pyro.param` before
-    beginning inference, with ``"auto_"`` prefixed to the targetd sample site
-    names e.g. for sample sites named "level" and "concentration", initialize
-    via::
-
-        pyro.param("auto_level", torch.tensor([-1., 0., 1.]))
-        pyro.param("auto_concentration", torch.ones(k),
-                   constraint=constraints.positive)
-    """
-
-    def get_posterior(self, *args, **kwargs):
+    def covariance(self, *args, **kwargs):
+        """
+        Returns covariance of latent variables under Laplace (quadratic) approximation.
+        """
         guide_trace = poutine.trace(self).get_trace(*args, **kwargs)
         model_trace = poutine.trace(
             poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
@@ -342,9 +317,8 @@ class AutoLaplace(AutoDelta):
         for _, site in guide_trace.iter_stochastic_nodes():
             latents.append(site["value"])
 
-        flat_latent = torch.cat([latent.reshape(-1) for latent in latents])
         H = _hessian(loss, latents)
-        return dist.MultivariateNormal(loc=flat_latent, precision_matrix=H)
+        return torch.inverse(H)
 
 
 class AutoContinuous(AutoGuide):
@@ -645,6 +619,64 @@ class AutoIAFNormal(AutoContinuous):
         pyro.module("{}_iaf".format(self.prefix), iaf.module)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
         return iaf_dist.independent(1)
+
+
+class AutoLaplace(AutoContinuous):
+    """
+    Laplace approximation (quadratic approximation) approximates the posterior
+    :math:`log p(z | x)` by a multivariate normal distribution. Under the hood,
+    it uses Delta distributions to construct a MAP guide over the entire latent
+    space. Its covariance is given by the inverse of the hessian of
+    :math:`-\log p(x, z)` at the MAP point of `z`.
+
+    .. note:: Different to :class:`AutoDelta`, :class:`AutoLaplace` does MAP
+        inference in unconstrained space.
+
+    Usage::
+
+        guide = AutoLaplace(model)
+        svi = SVI(model, guide, ...)
+        gaussian_guide = guide.laplace_approximation()
+
+    By default the mean vector is initialized to zero. To change this default behavior
+    the user should call :func:`pyro.param` before beginning inference, e.g.::
+
+        latent_dim = 10
+        pyro.param("auto_loc", torch.randn(latent_dim))
+    """
+
+    def get_posterior(self, *args, **kwargs):
+        """
+        Returns a diagonal Normal posterior distribution transformed by
+        :class:`~pyro.distributions.iaf.InverseAutoregressiveFlow`.
+        """
+        loc = pyro.param("{}_loc".format(self.prefix),
+                         lambda: torch.zeros(self.latent_dim))
+        return dist.Delta(loc).independent(1)
+
+    def laplace_approximation(self, *args, **kwargs):
+        guide_trace = poutine.trace(self).get_trace(*args, **kwargs)
+        model_trace = poutine.trace(
+            poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
+        loss = guide_trace.log_prob_sum() - model_trace.log_prob_sum()
+
+        loc = pyro.param("{}_loc".format(self.prefix))
+        H = _hessian(loss, loc.unconstrained())
+        cov = H.inverse()
+        scale_tril = cov.potrf(upper=False)
+
+        # calculate scale_tril from self.guide()
+        param_store = pyro.get_param_store()
+        scale_tril_name = "{}_scale_tril".format(self.prefix)
+        if scale_tril_name in param_store.get_all_param_names():
+            param_store.replace_param(scale_tril_name, scale_tril, pyro.param(scale_tril_name))
+        else:
+            pyro.param(scale_tril_name, lambda: scale_tril.detach(),
+                       constraint=constraints.lower_cholesky)
+
+        gaussian_guide = AutoMultivariateNormal(self.model, prefix=self.prefix)
+        gaussian_guide._setup_prototype(*args, **kwargs)
+        return gaussian_guide
 
 
 class AutoDiscreteParallel(AutoGuide):
