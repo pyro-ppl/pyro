@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 import math
-import numpy as np
 
 import torch
 from torch.autograd import Function
@@ -115,7 +114,7 @@ class _GSMSample(Function):
         scale_product = log_scale.sum().exp()
         lambdas_power = torch.pow(lambdas, float(dim))
 
-        q_j = torch.exp(-0.5 * r_sqr_j) / np.power(2.0 * np.pi, 0.5 * float(dim))  # l j
+        q_j = torch.exp(-0.5 * r_sqr_j) / math.power(2.0 * np.pi, 0.5 * float(dim))  # l j
         q_j /= scale_product * lambdas_power  # l j
         q_tot = (pis * q_j).sum(-1)  # l
         q_tot = q_tot.unsqueeze(-1)  # l 1
@@ -135,7 +134,7 @@ class _GSMSample(Function):
 
         logits_grad = (z.unsqueeze(-2) * Phi_j.unsqueeze(-1) * g).sum(-1)  # l j
         logits_grad /= q_tot
-        logits_grad = sum_leftmost(logits_grad, -1) * np.power(2.0 * np.pi, -0.5 * float(dim))
+        logits_grad = sum_leftmost(logits_grad, -1) * math.power(2.0 * math.pi, -0.5 * float(dim))
         logits_grad = pis * logits_grad / (lambdas_power * scale_product)
         logits_grad = logits_grad - logits_grad.sum() * pis
 
