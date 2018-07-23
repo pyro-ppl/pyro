@@ -38,7 +38,9 @@ class GPBayesOptimizer:
         """
         # transform x to an unconstrained domain
         unconstrained_x_init = transform_to(self.constraints).inv(x_init)
-        unconstrained_x = torch.tensor(unconstrained_x_init, requires_grad=True)
+        unconstrained_x = unconstrained_x_init.new_tensor(
+            unconstrained_x_init, requires_grad=True)
+        # TODO: Use LBFGS with line search by pytorch #8824 merged
         minimizer = optim.LBFGS([unconstrained_x], max_eval=20)
 
         def closure():
@@ -70,16 +72,14 @@ class GPBayesOptimizer:
         :rtype: tuple
         """
 
-        x_init = self.gpmodel.X[-1:].new_empty(1).uniform_(self.constraints.lower_bound,
-                                                           self.constraints.upper_bound)
         candidates = []
         values = []
         for j in range(num_candidates):
+            x_init = self.gpmodel.X.new_empty(1).uniform_(
+                self.constraints.lower_bound, self.constraints.upper_bound)
             x, y = self.find_a_candidate(differentiable, x_init)
             candidates.append(x)
             values.append(y)
-            x_init = x.new_empty(1).uniform_(self.constraints.lower_bound,
-                                             self.constraints.upper_bound)
 
         mvalue, argmin = torch.min(torch.cat(values), dim=0)
         return candidates[argmin.item()], mvalue
@@ -96,7 +96,7 @@ class GPBayesOptimizer:
         """
 
         # Initialize the return tensor
-        X = torch.zeros(num_acquisitions, *self.gpmodel.X.shape[1:])
+        X = self.gpmodel.X.new_empty(num_acquisitions, *self.gpmodel.X.shape[1:])
 
         for i in range(num_acquisitions):
             sampler = self.gpmodel.iter_sample(noiseless=False)
@@ -105,7 +105,7 @@ class GPBayesOptimizer:
 
         return X
 
-    def run(self, num_steps, num_acquisitions, acquisition_func=self.acquire_thompson):
+    def run(self, num_steps, num_acquisitions, acquisition_func=None):
         """
         Optimizes `self.f` in `num_steps` steps, acquiring `num_acquisitions`
         new function evaluations at each step.
@@ -117,6 +117,8 @@ class GPBayesOptimizer:
         :return: the minimiser and the minimum value
         :rtype: tuple
         """
+        if acquisition_func is None:
+            acquisition_func = self.acquire_thompson
 
         for i in range(num_steps):
             X = acquisition_func(num_acquisitions=num_acquisitions)
