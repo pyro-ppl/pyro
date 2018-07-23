@@ -257,6 +257,8 @@ class AutoDelta(AutoGuide):
     construct a MAP guide over the entire latent space. The guide does not
     depend on the model's ``*args, **kwargs``.
 
+    ..note:: This class does MAP inference in constrained space.
+
     Usage::
 
         guide = AutoDelta(model)
@@ -306,7 +308,9 @@ class AutoDelta(AutoGuide):
 
     def covariance(self, *args, **kwargs):
         """
-        Returns covariance of latent variables under Laplace (quadratic) approximation.
+        Returns covariance of the packed latent variable under Laplace (quadratic) approximation.
+        The packed latent variable is packed from the flat versions of latent variables, which are
+        arranged according to their appearance in the base ``model``.
         """
         guide_trace = poutine.trace(self).get_trace(*args, **kwargs)
         model_trace = poutine.trace(
@@ -647,14 +651,17 @@ class AutoLaplace(AutoContinuous):
 
     def get_posterior(self, *args, **kwargs):
         """
-        Returns a diagonal Normal posterior distribution transformed by
-        :class:`~pyro.distributions.iaf.InverseAutoregressiveFlow`.
+        Returns a Delta posterior distribution for MAP inference.
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
         return dist.Delta(loc).independent(1)
 
     def laplace_approximation(self, *args, **kwargs):
+        """
+        Returns a :class:`AutoMultivariateNormal` instance whose posterior's `loc` and
+        `scale_tril` are given by Laplace approximation.
+        """
         guide_trace = poutine.trace(self).get_trace(*args, **kwargs)
         model_trace = poutine.trace(
             poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
