@@ -6,6 +6,65 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+def sample_mask_indices(input_dimension, hidden_dimension, simple=False, conditional=True):
+    """
+    Samples the indices assigned to hidden units during the construction of MADE masks
+
+    :param input_dimension: the dimensionality of the input variable
+    :type input_dimension: int
+    :param hidden_dimension: the dimensionality of the hidden layer
+    :type hidden_dimension: int
+    :param simple: True to sample indices uniformly, false to space indices evenly and round up or down randomly
+    :type simple: bool
+    """
+    start_integer = 0 if conditional else 1
+
+    if simple:
+        return np.random.randint(start_integer, input_dimension, size=(hidden_dimension,))
+    else:
+        mk = np.linspace(start_integer, input_dimension-1, hidden_dimension)
+        ints = np.array(mk, dtype=int)
+
+        # NOTE: Maybe we'd prefer a vector of rand here?
+        ints += (np.random.rand() < mk - ints)
+
+        return ints
+
+def create_mask(input_dimension, observed_dimension, hidden_dimension, num_layers, permutation, output_dim_multiplier):
+    """
+    Creates MADE masks for a conditional distribution
+
+    :param input_dimension: the dimensionality of the input variable
+    :type input_dimension: int
+    :param observed_dimension: the dimensionality of the variable that is conditioned on (for conditional densities)
+    :type observed_dimension: int
+    :param hidden_dimension: the dimensionality of the hidden layer(s)
+    :type hidden_dimension: int
+    :param num_layers: the number of hidden layers for which to create masks
+    :type num_layers: int
+    :param permutation: the order of the input variables
+    :type permutation: np.array
+    :param output_dim_multiplier: tiles the output (e.g. for when a separate mean and scale parameter are desired)
+    :type output_dim_multiplier: int
+    """
+    # Create mask indices for input, hidden layers, and final layer
+    # We use 0 to refer to the elements of the variable being conditioned on, and range(1:(D_latent+1)) for the input variable
+    m_input = np.concatenate((np.zeros(observed_dimension), 1+permutation))
+    m_w = [sample_mask_indices(input_dimension, hidden_dimension, conditional=observed_dimension>0) for i in range(num_layers)]
+    m_v = np.tile(permutation, output_dim_multiplier)
+
+    # Create mask from input to output for the skips connections
+    M_A = (1.0*(np.atleast_2d(m_v).T >= np.atleast_2d(m_input)))
+
+    # Create mask from input to first hidden layer, and between subsequent hidden layers
+    M_W = [(1.0*(np.atleast_2d(m_w[0]).T >= np.atleast_2d(m_input)))]
+    for i in range(1, num_layers):
+        M_W.append(1.0*(np.atleast_2d(m_w[i]).T >= np.atleast_2d(m_w[i-1])))
+
+    # Create mask from last hidden layer to output layer
+    M_V = (1.0*(np.atleast_2d(m_v).T >= np.atleast_2d(m_w[-1])))
+
+    return M_W, M_V, M_A
 
 class MaskedLinear(nn.Linear):
     """
@@ -31,19 +90,18 @@ class MaskedLinear(nn.Linear):
         masked_weight = self.weight * self.mask
         return F.linear(_input, masked_weight, self.bias)
 
-
 class AutoRegressiveNN(nn.Module):
     """
-    A simple implementation of a MADE-like auto-regressive neural network.
+    An implementation of a MADE-like auto-regressive neural network.
 
     Reference:
     MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]
     Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle
 
-    :param input_dim: the dimensionality of the input
-    :type input_dim: int
-    :param hidden_dim: the dimensionality of the hidden units
-    :type hidden_dim: int
+    :param input_dimension: the dimensionality of the input
+    :type input_dimension: int
+    :param hidden_dimension: the dimensionality of the hidden units
+    :type hidden_dimension: int
     :param output_dim_multiplier: the dimensionality of the output is given by input_dim x output_dim_multiplier.
         specifically the shape of the output for a single vector input is [output_dim_multiplier, input_dim].
         for any i, j in range(0, output_dim_multiplier) the subset of outputs [i, :] has identical
@@ -54,62 +112,47 @@ class AutoRegressiveNN(nn.Module):
     :type mask_encoding: torch.LongTensor
     :param permutation: an optional permutation that is applied to the inputs and controls the order of the
         autoregressive factorization. in particular for the identity permutation the autoregressive structure
-        is such that the Jacobian is upper triangular. by default this is chosen at random.
-    :type permutation: torch.LongTensor
+        is such that the Jacobian is upper triangular. By default this is the identity permutation.
+    :type permutation: np.array
     """
 
     def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1,
-                 mask_encoding=None, permutation=None):
+                 permutation=None, skip_connections=False, num_layers=1, nonlinearity=nn.ReLU()):
         super(AutoRegressiveNN, self).__init__()
         if input_dim == 1:
             warnings.warn('AutoRegressiveNN input_dim = 1. Consider using an affine transformation instead.')
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim_multiplier = output_dim_multiplier
-
-        if mask_encoding is None:
-            # the dependency structure is chosen at random
-            self.mask_encoding = 1 + torch.multinomial(torch.ones(input_dim - 1),
-                                                       num_samples=hidden_dim, replacement=True)
-        else:
-            # the dependency structure is given by the user
-            self.mask_encoding = mask_encoding
+        self.num_layers = num_layers
 
         if permutation is None:
-            # a permutation is chosen at random
-            self.permutation = torch.randperm(input_dim, device=torch.device('cpu'))
+            # order the variables in the order that they're given
+            self.permutation = np.arange(input_dim)
         else:
             # the permutation is chosen by the user
             self.permutation = permutation
 
-        # these masks control the autoregressive structure
-        self.mask1 = torch.zeros(hidden_dim, input_dim)
-        self.mask2 = torch.zeros(input_dim * self.output_dim_multiplier, hidden_dim)
+        # Create masks
+        M_W, M_V, M_A = create_mask(input_dimension=input_dim, observed_dimension=0, hidden_dimension=hidden_dim, num_layers=num_layers, permutation=self.permutation, output_dim_multiplier=output_dim_multiplier)
+        self.M_W = [torch.FloatTensor(M) for M in M_W]
+        self.M_V = torch.FloatTensor(M_V)
 
-        for k in range(hidden_dim):
-            if self.mask_encoding.dim():
-                # fill in mask1
-                m_k = self.mask_encoding[k].item()
-            else:
-                m_k = self.mask_encoding.item()
-            slice_k = torch.cat([torch.ones(m_k), torch.zeros(input_dim - m_k)])
-            for j in range(input_dim):
-                self.mask1[k, self.permutation[j]] = slice_k[j]
-            # fill in mask2
-            slice_k = torch.cat([torch.zeros(m_k), torch.ones(input_dim - m_k)])
-            for r in range(self.output_dim_multiplier):
-                for j in range(input_dim):
-                    self.mask2[r * input_dim + self.permutation[j], k] = slice_k[j]
+        # Create masked layers
+        layers = [MaskedLinear(input_dim, hidden_dim, self.M_W[0])]
+        for i in range(1, num_layers):
+            layers.append(MaskedLinear(hidden_dim, hidden_dim, self.M_W[i]))
+        self.layers = nn.ModuleList(layers)
 
-        self.lin1 = MaskedLinear(input_dim, hidden_dim, self.mask1)
-        self.lin2 = MaskedLinear(hidden_dim, input_dim * output_dim_multiplier, self.mask2)
-        self.relu = nn.ReLU()
+        if skip_connections:
+          self.M_A = torch.FloatTensor(M_A)
+          self.skip_p = MaskedLinear(input_dim, input_dim*output_dim_multiplier, self.M_A, bias=False)
+        else:
+          self.skip_p = None
+        self.p = MaskedLinear(hidden_dim, input_dim*output_dim_multiplier, self.M_V)
 
-    def get_mask_encoding(self):
-        """
-        Get the mask encoding associated with the neural network: basically the quantity m(k) in the MADE paper.
-        """
-        return self.mask_encoding
+        # Save the nonlinearity
+        self.f = nonlinearity
 
     def get_permutation(self):
         """
@@ -117,10 +160,17 @@ class AutoRegressiveNN(nn.Module):
         """
         return self.permutation
 
-    def forward(self, z):
+    def forward(self, x):
         """
         the forward method
         """
-        h = self.relu(self.lin1(z))
-        out = self.lin2(h)
-        return out
+        h = x
+        for layer in self.layers:
+          h = self.f(layer(h))
+
+        if self.skip_p is not None:
+          h = self.p(h) + self.skip_p(x)
+        else:
+          h = self.p(h)
+
+        return h
