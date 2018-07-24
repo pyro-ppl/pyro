@@ -123,18 +123,16 @@ class ParamStoreDict(object):
 
         return param
 
-    def get_params(self, name, constraint=constraints.real):
+    def match(self, name):
         """
         Get all parameters that match regex. The parameter must exist.
 
         :param name: regular expression
         :type name: str
-        :param constraint: torch constraint
-        :type constraint: torch.distributions.constraints.Constraint
         :returns: dict with key param name and value torch Tensor
         """
         pattern = re.compile(name)
-        params_dict = {key: self.get_param(key, constraint=constraint) for key in self._params.keys()
+        params_dict = {key: self.get_param(key) for key in self._params.keys()
                        if pattern.match(key)}
         return params_dict
 
