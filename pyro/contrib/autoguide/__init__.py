@@ -686,5 +686,6 @@ def mean_field_guide_entropy(guide, *args):
     for name, site in trace.nodes.items():
         if site["type"] == "sample":
             if not poutine.util.site_is_subsample(site):
+                # TODO: optionally check pattern match here
                 entropy += site["fn"].entropy()
     return entropy

@@ -10,14 +10,12 @@ from pyro.infer import Trace_ELBO
 from pyro.contrib.oed.eig import vi_ape
 import pyro.contrib.gp as gp
 
-from gp_bayes_opt import GPBayesOptimizer
-
 # Number of layers of hierarchy (1 layer- classical linear model)
 layers = 2
 # Parameters controlling the prior variance
 A = 20.
 B = 10.
-beta = 1.
+beta = torch.tensor(1.)
 
 softplus = torch.nn.functional.softplus
 sigmoid = torch.nn.functional.sigmoid
@@ -29,13 +27,12 @@ def model(design_tensor, participant_id):
     :param torch.tensor design_tensor: a `batch_dims x n x p`
         tensor giving the features of the `n` responses (e.g.
         the features of the `n` objects to be given at this time)
-    :param tuple participant_id: a hierarchical list of the groups
+    :param list participant_id: a hierarchical list of the groups
         that the current participant is assigned to. The first element
         indexes the highest level group. For instance, a geographical
-        hierarchy tuple could look like 
-        `("United States", "California", "Santa Barbara")`
+        hierarchy list could look like 
+        `["United States", "California", "Santa Barbara"]`
     """
-    design_tensor, participant_id = design
     # batch x n
     response_shape = list(design_tensor.shape)[:-1]
     # batch x 1 x p
@@ -46,7 +43,7 @@ def model(design_tensor, participant_id):
     coef = torch.zeros(coef_shape)
 
     for layer in range(layers):
-        layer_name = "_".join([layer]+ participant_id[:layer])
+        layer_name = "_".join([str(layer)]+ participant_id[:layer])
         # Prior sds decay exponentially with layer
         intercept_sd = torch.ones(response_shape)*A*torch.exp(-beta*layer)
         intercept_dist = dist.Normal(0., intercept_sd).independent(1)
@@ -56,7 +53,7 @@ def model(design_tensor, participant_id):
         coef_dist = dist.Normal(0., coef_sd).independent(2)
         coef += pyro.sample(layer_name + "_coef", coef_dist)
 
-    logit_p = torch.matmul(design_tensor, coef).squeeze(-1) + intercept
+    logit_p = torch.matmul(design_tensor, coef.t()).squeeze(-1) + intercept
     p = sigmoid(logit_p)
     # Binary outcomes - responses to `n` items shown to given participant
     pyro.sample("y", dist.Bernoulli(p).independent(1))
@@ -71,7 +68,7 @@ def guide(design_tensor, participant_id):
     # define our variational parameters, sample mean-field
     for layer in range(layers):
         # Local intercept
-        layer_name = "_".join([layer]+ participant_id[:layer])
+        layer_name = "_".join([str(layer)]+ participant_id[:layer])
         intercept_mean = pyro.param(layer_name + "_intercept_mean", 
                                     torch.zeros(response_shape))
         intercept_sd = softplus(pyro.param(layer_name + "_intercept_sd",
@@ -89,7 +86,7 @@ def guide(design_tensor, participant_id):
  
 
 def spherical_design_tensor(d):
-    design_tensor = torch.cat([torch.cos(d), -torch.sin(d)], -1)
+    return torch.stack([torch.cos(d), -torch.sin(d)], -1)
 
 
 def main(num_vi_steps, num_acquisitions, num_bo_steps):
@@ -97,30 +94,34 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
 
-    def estimated_ape(designs, participant):
+    def estimated_ape(designs, participant, ydist):
         design_tensor = spherical_design_tensor(designs)
+        print('design tensor', design_tensor.shape)
         est_ape = vi_ape(
             lambda d: model(d, participant),
-            X,
+            design_tensor,
             observation_labels="y",
             vi_parameters={
                 "guide": lambda d: guide(d, participant),
                 "optim": optim.Adam({"lr": 0.0025}),
                 "loss": Trace_ELBO(),
                 "num_steps": num_vi_steps},
-            is_parameters={"num_samples": 10}
+            is_parameters={"num_samples": 10},
+            y_dist=ydist
         )
         return est_ape
 
-    X = torch.tensor([25., 75.])
-    y = estimated_ape(X)
-    pyro.clear_param_store()
-    gpmodel = gp.models.GPRegression(
-        X, y, gp.kernels.Matern52(input_dim=1, lengthscale=torch.tensor(5.)),
-        noise=torch.tensor(0.1), jitter=1e-6)
-    gpmodel.optimize()
-    gpbo = GPBayesOptimizer(estimated_ape, constraints.interval(0, 100), gpmodel)
-    print(gpbo.run(num_steps=num_bo_steps, num_acquisitions=num_acquisitions))
+    participant = ["a"]
+    X = torch.tensor([[0., 0.], [0., 1.5]])
+    y = estimated_ape(X, participant, None)
+    print(y)
+    # pyro.clear_param_store()
+    # gpmodel = gp.models.GPRegression(
+    #     X, y, gp.kernels.Matern52(input_dim=1, lengthscale=torch.tensor(5.)),
+    #     noise=torch.tensor(0.1), jitter=1e-6)
+    # gpmodel.optimize()
+    # gpbo = GPBayesOptimizer(estimated_ape, constraints.interval(0, 6.29), gpmodel)
+    # print(gpbo.run(num_steps=num_bo_steps, num_acquisitions=num_acquisitions))
 
 
 if __name__ == "__main__":
