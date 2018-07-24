@@ -41,10 +41,10 @@ __all__ = [
     'AutoDiscreteParallel',
     'AutoGuide',
     'AutoGuideList',
-    'AutoLaplace',
     'AutoLowRankMultivariateNormal',
     'AutoMultivariateNormal',
     'AutoIAFNormal',
+    'UnconstrainedLaplaceApproximation',
 ]
 
 
@@ -625,22 +625,20 @@ class AutoIAFNormal(AutoContinuous):
         return iaf_dist.independent(1)
 
 
-class AutoLaplace(AutoContinuous):
+class UnconstrainedLaplaceApproximation(AutoContinuous):
     """
-    Laplace approximation (quadratic approximation) approximates the posterior
-    :math:`log p(z | x)` by a multivariate normal distribution. Under the hood,
-    it uses Delta distributions to construct a MAP guide over the entire latent
-    space. Its covariance is given by the inverse of the hessian of
-    :math:`-\log p(x, z)` at the MAP point of `z`.
-
-    .. note:: Different to :class:`AutoDelta`, :class:`AutoLaplace` does MAP
-        inference in unconstrained space.
+    Unconstrained Laplace approximation (quadratic approximation) approximates
+    the posterior math:`log p(z | x)` by a multivariate normal distribution in
+    the unconstrained space. Under the hood, it uses Delta distributions to
+    construct a MAP guide over the entire (unconstrained) latent space. Its
+    covariance is given by the inverse of the hessian of :math:`-\log p(x, z)`
+    at the MAP point of `z`.
 
     Usage::
 
-        guide = AutoLaplace(model)
-        svi = SVI(model, guide, ...)
-        gaussian_guide = guide.laplace_approximation()
+        delta_guide = UnconstrainedLaplaceApproximation(model)
+        svi = SVI(model, delta_guide, ...)
+        guide = delta_guide.laplace_approximation()
 
     By default the mean vector is initialized to zero. To change this default behavior
     the user should call :func:`pyro.param` before beginning inference, e.g.::
