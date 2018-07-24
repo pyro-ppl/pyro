@@ -5,6 +5,7 @@ import warnings
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import numpy as np
 
 def sample_mask_indices(input_dimension, hidden_dimension, simple=False, conditional=True):
     """
