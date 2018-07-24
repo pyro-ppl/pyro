@@ -19,6 +19,7 @@ from pyro.distributions.von_mises import VonMises
 from pyro.distributions.von_mises_3d import VonMises3D
 from pyro.distributions.relaxed_straight_through import RelaxedOneHotCategoricalStraightThrough
 from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNormalsSharedCovariance
+from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
 from pyro.distributions.relaxed_straight_through import RelaxedBernoulliStraightThrough
 
 __all__ = [
@@ -30,6 +31,7 @@ __all__ = [
     "Delta",
     "Distribution",
     "Empirical",
+    "GaussianScaleMixture",
     "HalfCauchy",
     "InverseAutoregressiveFlow",
     "LowRankMultivariateNormal",
