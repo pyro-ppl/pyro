@@ -58,3 +58,38 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
     loss = loss_dist.mean
 
     return loss
+
+
+def donsker_varadhan_loss(model, design, observation_label, target_label,
+                          T, num_particles):
+
+    trace = poutine.trace(model).get_trace(design)
+    y = trace.nodes[observation_label]["value"]
+    theta = trace.nodes[target_label]["value"]
+
+    y_samples = y.new_tensor(num_particles, y.shape)
+    theta_samples = theta.new_tensor(num_particles, theta.shape)
+
+    y_samples[0, ...] = y
+    theta_samples[0, ...] = theta
+    
+    for i in range(1, num_particles):
+        trace = poutine.trace(model).get_trace(design)
+        y = trace.nodes[observation_label]["value"]
+        theta = trace.nodes[target_label]["value"]
+        y_samples[i, ...] = y
+        theta_samples[i, ...] = theta
+
+    fvals = T(y_samples, theta_samples)
+    fshuffled = T(y_samples, shuffle(theta_samples))
+
+    loss = torch.sum(fvals, 0) - torch.logsumexp(f_shuffled, 0)
+    return loss
+
+
+
+
+
+        
+
+
