@@ -3,23 +3,30 @@ import torch.autograd as autograd
 import torch.optim as optim
 from torch.distributions import transform_to
 
+import pyro
 
-class GPBayesOptimizer:
+
+class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
     """Performs Bayesian Optimization using a Gaussian Process as an
     emulator for the unknown function.
     """
 
-    def __init__(self, f, constraints, gpmodel):
+    def __init__(self, constraints, gpmodel, num_acquisitions, acquisition_func=None):
         """
-        :param function f: the objective function which should accept `torch.Tensor`
-            inputs
         :param torch.constraint constraints: constraints defining the domain of `f`
         :param gp.models.GPRegression gpmodel: a (possibly initialized) GP
             regression model. The kernel, etc is specified via `gpmodel`.
+        :param int num_acquisitions: number of points to acquire at each step
+        :param function acquisition_func: a function to generate acquisitions.
+            It should return a torch.Tensor of new points to query.
         """
-        self.f = f
+        if acquisition_func is None:
+            acquisition_func = self.acquire_thompson
+
         self.constraints = constraints
         self.gpmodel = gpmodel
+        self.num_acquisitions = num_acquisitions
+        self.acquisition_func = acquisition_func
 
     def update_posterior(self, X, y):
         X = torch.cat([self.gpmodel.X, X])
@@ -105,24 +112,8 @@ class GPBayesOptimizer:
 
         return X
 
-    def run(self, num_steps, num_acquisitions, acquisition_func=None):
-        """
-        Optimizes `self.f` in `num_steps` steps, acquiring `num_acquisitions`
-        new function evaluations at each step.
-
-        :param int num_steps: overall number of BO steps to run
-        :param int num_acquisitions: number of points to acquire at each step
-        :param function acquisition_func: a function to generate acquisitions.
-            It should return a torch.Tensor of new points to query.
-        :return: the minimiser and the minimum value
-        :rtype: tuple
-        """
-        if acquisition_func is None:
-            acquisition_func = self.acquire_thompson
-
-        for i in range(num_steps):
-            X = acquisition_func(num_acquisitions=num_acquisitions)
-            y = self.f(X)
-            self.update_posterior(X, y)
-
+    def get_step(self, loss, params):
+        X = self.acquisition_func(num_acquisitions=self.num_acquisitions)
+        y = loss(X)
+        self.update_posterior(X, y)
         return self.opt_differentiable(lambda x: self.gpmodel(x)[0])

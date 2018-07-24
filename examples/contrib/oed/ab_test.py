@@ -6,7 +6,7 @@ import numpy as np
 import pyro
 import pyro.distributions as dist
 from pyro import optim
-from pyro.infer import Trace_ELBO
+from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import vi_ape
 import pyro.contrib.gp as gp
 
@@ -126,7 +126,7 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
             vi_parameters={
                 "guide": guide,
                 "optim": optim.Adam({"lr": 0.0025}),
-                "loss": Trace_ELBO(),
+                "loss": TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
                 "num_steps": num_vi_steps},
             is_parameters={"num_samples": 1}
         )
@@ -149,8 +149,12 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
             X, y, gp.kernels.Matern52(input_dim=1, lengthscale=torch.tensor(5.)),
             noise=torch.tensor(0.1), jitter=1e-6)
         gpmodel.optimize()
-        gpbo = GPBayesOptimizer(f, constraints.interval(0, 100), gpmodel)
-        print(gpbo.run(num_steps=num_bo_steps, num_acquisitions=num_acquisitions))
+        gpbo = GPBayesOptimizer(constraints.interval(0, 100), gpmodel,
+                                num_acquisitions=num_acquisitions)
+        for i in range(num_bo_steps):
+            result = gpbo.get_step(f, None)
+
+        print(result)
 
 
 if __name__ == "__main__":

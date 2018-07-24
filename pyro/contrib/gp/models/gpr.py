@@ -9,6 +9,7 @@ import pyro.distributions as dist
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
 from pyro.params import param_with_module_name
+from pyro.util import warn_if_nan
 
 
 class GPRegression(GPModel):
@@ -179,8 +180,7 @@ class GPRegression(GPModel):
             """Repeatedly samples from the Gaussian process posterior,
             conditioning on previously sampled values.
             """
-            if torch.isnan(xnew).any():
-                raise ValueError("Cannot evaluate GP at value: {}".format(xnew))
+            warn_if_nan(xnew)
 
             # Variables from outer scope
             global X, y, Kff, N
