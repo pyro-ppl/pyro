@@ -2,10 +2,11 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-import numpy as np
+
 
 def sample_mask_indices(input_dim, hidden_dim, simple=False, conditional=True):
     """
@@ -23,13 +24,14 @@ def sample_mask_indices(input_dim, hidden_dim, simple=False, conditional=True):
     if simple:
         return np.random.randint(start_integer, input_dim, size=(hidden_dim,))
     else:
-        mk = np.linspace(start_integer, input_dim-1, hidden_dim)
+        mk = np.linspace(start_integer, input_dim - 1, hidden_dim)
         ints = np.array(mk, dtype=int)
 
         # NOTE: Maybe we'd prefer a vector of rand here?
         ints += (np.random.rand() < mk - ints)
 
         return ints
+
 
 def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, output_dim_multiplier):
     """
@@ -49,23 +51,25 @@ def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, ou
     :type output_dim_multiplier: int
     """
     # Create mask indices for input, hidden layers, and final layer
-    # We use 0 to refer to the elements of the variable being conditioned on, and range(1:(D_latent+1)) for the input variable
-    m_input = np.concatenate((np.zeros(observed_dim), 1+permutation))
-    m_w = [sample_mask_indices(input_dim, hidden_dim, conditional=observed_dim>0) for i in range(num_layers)]
+    # We use 0 to refer to the elements of the variable being conditioned on,
+    # and range(1:(D_latent+1)) for the input variable
+    m_input = np.concatenate((np.zeros(observed_dim), 1 + permutation))
+    m_w = [sample_mask_indices(input_dim, hidden_dim, conditional=observed_dim > 0) for i in range(num_layers)]
     m_v = np.tile(permutation, output_dim_multiplier)
 
     # Create mask from input to output for the skips connections
-    M_A = (1.0*(np.atleast_2d(m_v).T >= np.atleast_2d(m_input)))
+    M_A = (1.0 * (np.atleast_2d(m_v).T >= np.atleast_2d(m_input)))
 
     # Create mask from input to first hidden layer, and between subsequent hidden layers
-    M_W = [(1.0*(np.atleast_2d(m_w[0]).T >= np.atleast_2d(m_input)))]
+    M_W = [(1.0 * (np.atleast_2d(m_w[0]).T >= np.atleast_2d(m_input)))]
     for i in range(1, num_layers):
-        M_W.append(1.0*(np.atleast_2d(m_w[i]).T >= np.atleast_2d(m_w[i-1])))
+        M_W.append(1.0 * (np.atleast_2d(m_w[i]).T >= np.atleast_2d(m_w[i - 1])))
 
     # Create mask from last hidden layer to output layer
-    M_V = (1.0*(np.atleast_2d(m_v).T >= np.atleast_2d(m_w[-1])))
+    M_V = (1.0 * (np.atleast_2d(m_v).T >= np.atleast_2d(m_w[-1])))
 
     return M_W, M_V, M_A
+
 
 class MaskedLinear(nn.Linear):
     """
@@ -80,6 +84,7 @@ class MaskedLinear(nn.Linear):
     :param bias: whether or not `MaskedLinear` should include a bias term. defaults to `True`
     :type bias: bool
     """
+
     def __init__(self, in_features, out_features, mask, bias=True):
         super(MaskedLinear, self).__init__(in_features, out_features, bias)
         self.register_buffer('mask', mask.data)
@@ -90,6 +95,7 @@ class MaskedLinear(nn.Linear):
         """
         masked_weight = self.weight * self.mask
         return F.linear(_input, masked_weight, self.bias)
+
 
 class AutoRegressiveNN(nn.Module):
     """
@@ -135,7 +141,8 @@ class AutoRegressiveNN(nn.Module):
             self.permutation = permutation
 
         # Create masks
-        M_W, M_V, M_A = create_mask(input_dim=input_dim, observed_dim=0, hidden_dim=hidden_dim, num_layers=num_layers, permutation=self.permutation, output_dim_multiplier=output_dim_multiplier)
+        M_W, M_V, M_A = create_mask(input_dim=input_dim, observed_dim=0, hidden_dim=hidden_dim,
+                                    num_layers=num_layers, permutation=self.permutation, output_dim_multiplier=output_dim_multiplier)
         self.M_W = [torch.FloatTensor(M) for M in M_W]
         self.M_V = torch.FloatTensor(M_V)
 
@@ -146,11 +153,11 @@ class AutoRegressiveNN(nn.Module):
         self.layers = nn.ModuleList(layers)
 
         if skip_connections:
-          self.M_A = torch.FloatTensor(M_A)
-          self.skip_p = MaskedLinear(input_dim, input_dim*output_dim_multiplier, self.M_A, bias=False)
+            self.M_A = torch.FloatTensor(M_A)
+            self.skip_p = MaskedLinear(input_dim, input_dim * output_dim_multiplier, self.M_A, bias=False)
         else:
-          self.skip_p = None
-        self.p = MaskedLinear(hidden_dim, input_dim*output_dim_multiplier, self.M_V)
+            self.skip_p = None
+        self.p = MaskedLinear(hidden_dim, input_dim * output_dim_multiplier, self.M_V)
 
         # Save the nonlinearity
         self.f = nonlinearity
@@ -167,11 +174,11 @@ class AutoRegressiveNN(nn.Module):
         """
         h = x
         for layer in self.layers:
-          h = self.f(layer(h))
+            h = self.f(layer(h))
 
         if self.skip_p is not None:
-          h = self.p(h) + self.skip_p(x)
+            h = self.p(h) + self.skip_p(x)
         else:
-          h = self.p(h)
+            h = self.p(h)
 
         return h
