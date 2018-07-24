@@ -62,7 +62,8 @@ class MixtureOfDiagNormalsSharedCovariance(TorchDistribution):
         self.coord_scale = coord_scale
         self.component_logits = component_logits
         self.dim = locs.size(-1)
-        assert (self.dim > 1), "This distribution does not support dimension D = 1"
+        if self.dim < 2:
+            raise NotImplementedError('This distribution does not support D = 1')
         self.categorical = Categorical(logits=component_logits)
         self.probs = self.categorical.probs
         super(MixtureOfDiagNormalsSharedCovariance, self).__init__(batch_shape=batch_shape, event_shape=(self.dim,))
