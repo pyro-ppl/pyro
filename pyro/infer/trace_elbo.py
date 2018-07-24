@@ -103,12 +103,14 @@ class Trace_ELBO(ELBO):
         Computes the surrogate loss that can be differentiated with autograd
         to produce gradient estimates for the model and guide parameters
         """
+        loss = 0.
         surrogate_loss = 0.
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             loss_particle, surrogate_loss_particle = self._differentiable_loss_particle(model_trace, guide_trace)
             surrogate_loss += surrogate_loss_particle / self.num_particles
+            loss += loss_particle / self.num_particles
         warn_if_nan(surrogate_loss, "loss")
-        return surrogate_loss
+        return loss + (surrogate_loss - surrogate_loss.detach())
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
         """
