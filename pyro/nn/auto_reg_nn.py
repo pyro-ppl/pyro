@@ -142,7 +142,7 @@ class AutoRegressiveNN(nn.Module):
 
         # Create masks
         M_W, M_V, M_A = create_mask(input_dim=input_dim, observed_dim=0, hidden_dim=hidden_dim,
-                                    num_layers=num_layers, permutation=self.permutation, 
+                                    num_layers=num_layers, permutation=self.permutation,
                                     output_dim_multiplier=output_dim_multiplier)
         self.M_W = [torch.FloatTensor(M) for M in M_W]
         self.M_V = torch.FloatTensor(M_V)
