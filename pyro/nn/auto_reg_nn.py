@@ -7,23 +7,23 @@ import torch.nn as nn
 from torch.nn import functional as F
 import numpy as np
 
-def sample_mask_indices(input_dimension, hidden_dimension, simple=False, conditional=True):
+def sample_mask_indices(input_dim, hidden_dim, simple=False, conditional=True):
     """
     Samples the indices assigned to hidden units during the construction of MADE masks
 
-    :param input_dimension: the dimensionality of the input variable
-    :type input_dimension: int
-    :param hidden_dimension: the dimensionality of the hidden layer
-    :type hidden_dimension: int
+    :param input_dim: the dimensionality of the input variable
+    :type input_dim: int
+    :param hidden_dim: the dimensionality of the hidden layer
+    :type hidden_dim: int
     :param simple: True to sample indices uniformly, false to space indices evenly and round up or down randomly
     :type simple: bool
     """
     start_integer = 0 if conditional else 1
 
     if simple:
-        return np.random.randint(start_integer, input_dimension, size=(hidden_dimension,))
+        return np.random.randint(start_integer, input_dim, size=(hidden_dim,))
     else:
-        mk = np.linspace(start_integer, input_dimension-1, hidden_dimension)
+        mk = np.linspace(start_integer, input_dim-1, hidden_dim)
         ints = np.array(mk, dtype=int)
 
         # NOTE: Maybe we'd prefer a vector of rand here?
@@ -31,16 +31,16 @@ def sample_mask_indices(input_dimension, hidden_dimension, simple=False, conditi
 
         return ints
 
-def create_mask(input_dimension, observed_dimension, hidden_dimension, num_layers, permutation, output_dim_multiplier):
+def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, output_dim_multiplier):
     """
     Creates MADE masks for a conditional distribution
 
-    :param input_dimension: the dimensionality of the input variable
-    :type input_dimension: int
-    :param observed_dimension: the dimensionality of the variable that is conditioned on (for conditional densities)
-    :type observed_dimension: int
-    :param hidden_dimension: the dimensionality of the hidden layer(s)
-    :type hidden_dimension: int
+    :param input_dim: the dimensionality of the input variable
+    :type input_dim: int
+    :param observed_dim: the dimensionality of the variable that is conditioned on (for conditional densities)
+    :type observed_dim: int
+    :param hidden_dim: the dimensionality of the hidden layer(s)
+    :type hidden_dim: int
     :param num_layers: the number of hidden layers for which to create masks
     :type num_layers: int
     :param permutation: the order of the input variables
@@ -50,8 +50,8 @@ def create_mask(input_dimension, observed_dimension, hidden_dimension, num_layer
     """
     # Create mask indices for input, hidden layers, and final layer
     # We use 0 to refer to the elements of the variable being conditioned on, and range(1:(D_latent+1)) for the input variable
-    m_input = np.concatenate((np.zeros(observed_dimension), 1+permutation))
-    m_w = [sample_mask_indices(input_dimension, hidden_dimension, conditional=observed_dimension>0) for i in range(num_layers)]
+    m_input = np.concatenate((np.zeros(observed_dim), 1+permutation))
+    m_w = [sample_mask_indices(input_dim, hidden_dim, conditional=observed_dim>0) for i in range(num_layers)]
     m_v = np.tile(permutation, output_dim_multiplier)
 
     # Create mask from input to output for the skips connections
@@ -99,10 +99,10 @@ class AutoRegressiveNN(nn.Module):
     MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]
     Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle
 
-    :param input_dimension: the dimensionality of the input
-    :type input_dimension: int
-    :param hidden_dimension: the dimensionality of the hidden units
-    :type hidden_dimension: int
+    :param input_dim: the dimensionality of the input
+    :type input_dim: int
+    :param hidden_dim: the dimensionality of the hidden units
+    :type hidden_dim: int
     :param output_dim_multiplier: the dimensionality of the output is given by input_dim x output_dim_multiplier.
         specifically the shape of the output for a single vector input is [output_dim_multiplier, input_dim].
         for any i, j in range(0, output_dim_multiplier) the subset of outputs [i, :] has identical
@@ -135,7 +135,7 @@ class AutoRegressiveNN(nn.Module):
             self.permutation = permutation
 
         # Create masks
-        M_W, M_V, M_A = create_mask(input_dimension=input_dim, observed_dimension=0, hidden_dimension=hidden_dim, num_layers=num_layers, permutation=self.permutation, output_dim_multiplier=output_dim_multiplier)
+        M_W, M_V, M_A = create_mask(input_dim=input_dim, observed_dim=0, hidden_dim=hidden_dim, num_layers=num_layers, permutation=self.permutation, output_dim_multiplier=output_dim_multiplier)
         self.M_W = [torch.FloatTensor(M) for M in M_W]
         self.M_V = torch.FloatTensor(M_V)
 
