@@ -4,7 +4,8 @@ from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.contrib.autoguide import mean_field_guide_entropy
 
 
-def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
+def vi_ape(model, design, observation_labels, vi_parameters, is_parameters,
+           y_dist=None):
     """Estimates the average posterior entropy (APE) loss function using
     variational inference (VI).
 
@@ -33,6 +34,8 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
     :param dict is_parameters: Importance sampling parameters for the
         marginal distribution of :math:`Y`. May include `num_samples`: the number
         of samples to draw from the marginal.
+    :param pyro.distributions.Distribution y_dist: (optional) the distribution
+        assumed for the response variable :math:`Y`
     :return: Loss function estimate
     :rtype: `torch.Tensor`
 
@@ -50,8 +53,9 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
         # Recover the entropy
         return mean_field_guide_entropy(vi_parameters["guide"], design)
 
-    y_dist = EmpiricalMarginal(Importance(model, **is_parameters).run(design),
-                               sites=observation_labels)
+    if y_dist is None:
+        y_dist = EmpiricalMarginal(Importance(model, **is_parameters).run(design),
+                                   sites=observation_labels)
 
     # Calculate the expected posterior entropy under this distn of y
     loss_dist = EmpiricalMarginal(Search(posterior_entropy).run(y_dist, design))
