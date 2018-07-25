@@ -188,7 +188,7 @@ def main(args):
         print('epoch {: >3d} loss = {}, emission_noise_scale = {}'.format(
             epoch, loss, pyro.param("emission_noise_scale").item()))
     if viz is not None:
-        viz.plot(losses)
+        viz.line(losses)
     else:
         pyplot.figure().patch.set_color('white')
         pyplot.plot(losses)
