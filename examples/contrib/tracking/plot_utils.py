@@ -1,8 +1,9 @@
 import torch
 from matplotlib import pyplot
+import visdom
 
 
-def plot_solution(observations, p_exists, positions, true_positions, args, message='', fig=None):
+def plot_solution(observations, p_exists, positions, true_positions, args, message='', fig=None, viz=None):
     with torch.no_grad():
         if fig is None:
             fig = pyplot.figure(figsize=(12, 6))
@@ -30,16 +31,24 @@ def plot_solution(observations, p_exists, positions, true_positions, args, messa
         pyplot.xlabel('time step')
         pyplot.ylabel('position')
         pyplot.tight_layout()
+        if viz is not None:
+            viz.matplot(pyplot)
 
 
-def plot_exists_prob(p_exists):
+def plot_exists_prob(p_exists, viz=None):
     p_exists = p_exists.detach().numpy()
-    pyplot.figure(figsize=(6, 4)).patch.set_color('white')
-    pyplot.plot(sorted(p_exists))
-    pyplot.ylim(0, None)
-    pyplot.xlim(0, len(p_exists))
-    pyplot.ylabel('p_exists')
-    pyplot.xlabel('rank')
-    pyplot.title('Prob(exists) of {} potential objects, total = {:0.2f}'.format(
-        len(p_exists), p_exists.sum()))
-    pyplot.tight_layout()
+    if viz is not None:
+        viz.line(Y=sorted(p_exists),
+                 opts=dict(xlabel='rank', ylabel='p_exists',
+                           title='Prob(exists) of {} potential objects, total = {:0.2f}'.format(len(p_exists),
+                                                                                                p_exists.sum())))
+    else:
+        pyplot.figure(figsize=(6, 4)).patch.set_color('white')
+        pyplot.plot(sorted(p_exists))
+        pyplot.ylim(0, None)
+        pyplot.xlim(0, len(p_exists))
+        pyplot.ylabel('p_exists')
+        pyplot.xlabel('rank')
+        pyplot.title('Prob(exists) of {} potential objects, total = {:0.2f}'.format(
+            len(p_exists), p_exists.sum()))
+        pyplot.tight_layout()
