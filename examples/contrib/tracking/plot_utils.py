@@ -1,6 +1,5 @@
 import torch
 from matplotlib import pyplot
-import visdom
 
 
 def plot_solution(observations, p_exists, positions, true_positions, args, message='', fig=None, viz=None):

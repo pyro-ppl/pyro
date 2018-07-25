@@ -61,9 +61,10 @@ def generate_sensor_data(args):
 
 def vector2raster(vec, args):
     # this is essentially the inverse of histc
-    pos2sensoridx = lambda pos: torch.floor((pos - args.x_min) /
-                                            (args.x_max - args.x_min) *
-                                            args.num_sensors).long()
+    def pos2sensoridx(pos):
+        return torch.floor((pos - args.x_min) /
+                           (args.x_max - args.x_min) *
+                           args.num_sensors).long()
     pos = vec[..., 0]
     sensor_outputs = vec[..., 2]
     raster = torch.zeros(vec.shape[:-3] + (args.num_frames, args.num_sensors))
