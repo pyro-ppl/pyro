@@ -3,12 +3,12 @@ import math
 import pyro.distributions as dist
 
 
-def get_positions(states_loc, num_frames):
+def get_positions(states, num_frames):
     """
     Let's consider a model with deterministic dynamics, say sinusoids with known period but unknown phase and amplitude.
     """
     time = torch.arange(num_frames, dtype=torch.float) * 2 * math.pi / num_frames
-    return torch.stack([time.cos(), time.sin()], -1).mm(states_loc.t())
+    return torch.stack([time.cos(), time.sin()], -1).mm(states.t())
 
 
 def generate_observations(args):
@@ -47,7 +47,7 @@ def generate_sensor_data(args):
     positions = get_positions(states, args.num_frames)
     noise_power = 10 ** (-args.PNR / 10)
     noise_dist = dist.Normal(0, noise_power)
-    # confidence is number of objects indicating sensor senses object/s
+    # confidence is number of objects each sensor is sensing
     for t in range(args.num_frames):
         confidence[t] = torch.histc(positions[t], args.num_sensors, args.x_min, args.x_max)
     # if sensors are saturated: can't diff btw 1 object and multiple objects.
@@ -59,26 +59,57 @@ def generate_sensor_data(args):
     return states, positions, sensor_positions, sensor_outputs, confidence
 
 
-def obs2sensor(obs, args):
-    sensor_outputs = torch.zeros(args.num_frames, args.num_sensors)
+def vector2raster(vec, args):
     # this is essentially the inverse of histc
     pos2sensoridx = lambda pos: torch.floor((pos - args.x_min) /
                                             (args.x_max - args.x_min) *
                                             args.num_sensors).long()
-    for i in range(obs.shape[0]):
-        for j in range(obs.shape[1]):
-            if obs[i, j, 1] >= 0.0:
-                sensor_outputs[i, pos2sensoridx(obs[i, j, 0])] = obs[i, j, 2]
-    return sensor_outputs
+    pos = vec[..., 0]
+    sensor_outputs = vec[..., 2]
+    raster = torch.zeros(vec.shape[:-3] + (args.num_frames, args.num_sensors))
+    raster.scatter_(-1, pos2sensoridx(pos), sensor_outputs)
+    return raster
 
 
-def sensor2obs(sensor_positions, sensor_outputs, confidence, args):
-    observations = torch.zeros(sensor_outputs.shape[-2], args.max_detections_per_frame, 3)
-    for i in range(args.num_frames):
-        k = 0
-        _, idx = torch.sort(confidence[i], descending=True)
-        for j in range(min(sensor_positions.shape[0], int(args.max_detections_per_frame))):
-            observations[i, j, 0] = sensor_positions[idx[j]]
-            observations[i, j, 1] = confidence[i, idx[j]]
-            observations[i, j, 2] = sensor_outputs[i, idx[j]]
-    return observations
+def raster2vector(sensor_positions, sensor_outputs, confidence, args):
+    _, idx = torch.sort(confidence, dim=-1, descending=True)
+    idx = idx[..., :args.max_detections_per_frame]
+    pos = sensor_positions[idx]
+    conf = torch.gather(confidence, -1, idx)
+    out = torch.gather(sensor_outputs, -1, idx)
+    return torch.stack((pos, conf, out), -1)
+
+
+def test_vector2raster():
+    args = type('Args', (object,), {})  # A fake ArgumentParser.parse_args() result.
+    args.num_frames = 40
+    args.max_detections_per_frame = 100
+    args.max_num_objects = 90
+    args.expected_num_objects = 2.
+    args.PNR = 10
+    args.num_sensors = 100
+    args.x_min, args.x_max = -2.5, 2.5
+
+    _, _, sensor_positions, sensor_outputs, true_confidence = generate_sensor_data(args)
+    obs = raster2vector(sensor_positions, sensor_outputs, sensor_outputs, args)
+    obs2 = obs.unsqueeze(0).expand(2, -1, -1, -1)
+    sensor_outputs2 = vector2raster(obs2, args)
+    assert (sensor_outputs2[0] == sensor_outputs).all()
+
+
+def test_raster2vector():
+    args = type('Args', (object,), {})  # A fake ArgumentParser.parse_args() result.
+    args.num_frames = 40
+    args.max_detections_per_frame = 100
+    args.max_num_objects = 90
+    args.expected_num_objects = 2.
+    args.PNR = 10
+    args.num_sensors = 100
+    args.x_min, args.x_max = -2.5, 2.5
+
+    _, _, sensor_positions, sensor_outputs, true_confidence = generate_sensor_data(args)
+    obs = raster2vector(sensor_positions, sensor_outputs, sensor_outputs, args)
+    sensor_outputs = vector2raster(obs, args)
+    obs2 = obs.unsqueeze(0).expand(2, -1, -1, -1)
+    sensor_outputs2 = vector2raster(obs2, args)
+    assert (sensor_outputs2[0] == sensor_outputs).all()
