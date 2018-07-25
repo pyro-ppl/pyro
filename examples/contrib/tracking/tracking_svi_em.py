@@ -5,7 +5,6 @@ import os
 import torch
 
 from torch.distributions import constraints
-from matplotlib import pyplot
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
@@ -172,8 +171,9 @@ def main(args):
     assignment, states_loc = guide(args, observations)
     p_exists = assignment.exists_dist.probs
     positions = get_positions(states_loc, args.num_frames)
-    plot_solution(observations, p_exists, positions, true_positions, args, 'after 10 EM (with merge)', viz=viz)
-    plot_exists_prob(p_exists, viz)
+    if viz is not None:
+        plot_solution(observations, p_exists, positions, true_positions, args, 'after 10 EM (with merge)', viz=viz)
+        plot_exists_prob(p_exists, viz)
 
     pyro.set_rng_seed(1)  # Use a different seed from data generation
     pyro.clear_param_store()
@@ -189,36 +189,34 @@ def main(args):
             epoch, loss, pyro.param("emission_noise_scale").item()))
     if viz is not None:
         viz.line(losses)
-    else:
-        pyplot.figure().patch.set_color('white')
-        pyplot.plot(losses)
 
     assignment, states_loc = guide(args, observations)
     p_exists = assignment.exists_dist.probs
     positions = get_positions(states_loc, args.num_frames)
-    plot_solution(observations, p_exists, positions, true_positions, args,
-                  'after 10 EM (with prune and merge)', viz=viz)
-    plot_exists_prob(p_exists, viz)
+    if viz is not None:
+        plot_solution(observations, p_exists, positions, true_positions, args,
+                      'after 10 EM (with prune and merge)', viz=viz)
+        plot_exists_prob(p_exists, viz)
 
 
 def arg_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_frames', default=40, type=int, help='number of frames')
-    parser.add_argument('--max_num_objects', default=400, type=int, help='maximum number of objects')
-    parser.add_argument('--expected_num_objects', default=2.0, type=float, help='expected number of objects')
-    parser.add_argument('--expected_num_spurious', default=0.2, type=float,
+    parser.add_argument('--num-frames', default=40, type=int, help='number of frames')
+    parser.add_argument('--max-num-objects', default=400, type=int, help='maximum number of objects')
+    parser.add_argument('--expected-num-objects', default=2.0, type=float, help='expected number of objects')
+    parser.add_argument('--expected-num-spurious', default=0.2, type=float,
                         help='expected number of false positives, if this is too small, BP will be unstable.')
-    parser.add_argument('--emission_prob', default=0.8, type=float,
+    parser.add_argument('--emission-prob', default=0.8, type=float,
                         help='emission probability, if this is too large, BP will be unstable.')
-    parser.add_argument('--emission_noise_scale', default=0.1, type=float,
+    parser.add_argument('--emission-noise-scale', default=0.1, type=float,
                         help='emission noise scale, if this is too small, SVI will see flat gradients.')
-    parser.add_argument('--bp_iters', default=50, type=int, help='number of BP iterations')
-    parser.add_argument('--bp_momentum', default=0.5, type=float, help='BP momentum')
-    parser.add_argument('--svi_iters', default=20, type=int, help='number of SVI iterations')
-    parser.add_argument('--em_iters', default=10, type=int, help='number of EM iterations')
-    parser.add_argument('--merge_radius', default=0.5, type=float, help='merge radius')
-    parser.add_argument('--prune_threshold', default=1e-2, type=float, help='prune threshold')
-    parser.add_argument('--no_visdom', action="store_false", dest='visdom', default=True,
+    parser.add_argument('--bp-iters', default=50, type=int, help='number of BP iterations')
+    parser.add_argument('--bp-momentum', default=0.5, type=float, help='BP momentum')
+    parser.add_argument('--svi-iters', default=20, type=int, help='number of SVI iterations')
+    parser.add_argument('--em-iters', default=10, type=int, help='number of EM iterations')
+    parser.add_argument('--merge-radius', default=0.5, type=float, help='merge radius')
+    parser.add_argument('--prune-threshold', default=1e-2, type=float, help='prune threshold')
+    parser.add_argument('--no-visdom', action="store_false", dest='visdom', default=True,
                         help='Whether plotting in visdom is desired')
     return parser
 
@@ -228,7 +226,7 @@ def make_args(args_string):
     return arg_parser().parse_args(split(args_string))
 
 
-@pytest.mark.parametrize("args", ['--no_visdom'])
+@pytest.mark.parametrize("args", ['--no-visdom'])
 def test_data_generation(args):
     if isinstance(args, str):
         args = make_args(args)
@@ -244,7 +242,7 @@ def test_data_generation(args):
         "observations.shape: {}".format(observations.shape)
 
 
-@pytest.mark.parametrize("args", ['--no_visdom'])
+@pytest.mark.parametrize("args", ['--no-visdom'])
 def test_guide(args):
     if isinstance(args, str):
         args = make_args(args)
@@ -259,7 +257,7 @@ def test_guide(args):
     assert positions.shape[0] == args.num_frames
 
 
-@pytest.mark.parametrize("args", ['--no_visdom --svi_iters 2'])
+@pytest.mark.parametrize("args", ['--no-visdom --svi-iters 2'])
 def test_svi(args):
     if isinstance(args, str):
         args = make_args(args)

@@ -1,20 +1,21 @@
 import torch
 from matplotlib import pyplot
 import time
+import warnings
 
 
 def init_visdom(visdom_flag):
     if visdom_flag:
-        try:
-            from visdom import Visdom
-            viz = Visdom()
-            startup_sec = 1
-            while not viz.check_connection() and startup_sec > 0:
-                time.sleep(0.1)
-                startup_sec -= 0.1
-            assert viz.check_connection(), 'No connection could be formed quickly'
+        from visdom import Visdom
+        viz = Visdom()
+        startup_sec = 1
+        while not viz.check_connection() and startup_sec > 0:
+            time.sleep(0.1)
+            startup_sec -= 0.1
+        if viz.check_connection():
             return viz
-        except AssertionError:
+        else:
+            warnings.warn('No connection could be formed quickly')
             return None
     else:
         return None
@@ -56,6 +57,7 @@ def plot_exists_prob(p_exists, viz=None):
     p_exists = p_exists.detach().numpy()
     if viz is not None:
         viz.line(Y=sorted(p_exists),
+                 X=torch.arange(p_exists.size).numpy(),
                  opts=dict(xlabel='rank', ylabel='p_exists',
                            title='Prob(exists) of {} potential objects, total = {:0.2f}'.format(len(p_exists),
                                                                                                 p_exists.sum())))
