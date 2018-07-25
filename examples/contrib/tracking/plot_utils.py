@@ -1,5 +1,6 @@
 import torch
 from matplotlib import pyplot
+import time
 
 
 def init_visdom(visdom_flag):
