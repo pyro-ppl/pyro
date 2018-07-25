@@ -2,6 +2,23 @@ import torch
 from matplotlib import pyplot
 
 
+def init_visdom(visdom_flag):
+    if visdom_flag:
+        try:
+            from visdom import Visdom
+            viz = Visdom()
+            startup_sec = 1
+            while not viz.check_connection() and startup_sec > 0:
+                time.sleep(0.1)
+                startup_sec -= 0.1
+            assert viz.check_connection(), 'No connection could be formed quickly'
+            return viz
+        except AssertionError:
+            return None
+    else:
+        return None
+
+
 def plot_solution(observations, p_exists, positions, true_positions, args, message='', fig=None, viz=None):
     with torch.no_grad():
         if fig is None:
