@@ -1,25 +1,27 @@
 from __future__ import absolute_import, division, print_function
 import math
+import argparse
 import os
 import torch
+
 from torch.distributions import constraints
 from matplotlib import pyplot
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.tracking.assignment import MarginalAssignmentPersistent
-from pyro.contrib.tracking.hashing import LSH, merge_points
+from pyro.contrib.tracking.hashing import merge_points
 from pyro.ops.newton import newton_step
 from pyro.infer import SVI, TraceEnum_ELBO
-from pyro.optim import ClippedAdam, ASGD, SGD
+from pyro.optim import ClippedAdam
 from pyro.util import warn_if_nan
 
 from datagen_utils import generate_observations, get_positions
 from plot_utils import plot_solution, plot_exists_prob, init_visdom
-pyro.enable_validation(True)
+
 import pytest
+pyro.enable_validation(True)
 smoke_test = ('CI' in os.environ)
-import argparse
 
 
 @poutine.broadcast
@@ -43,7 +45,6 @@ def model(args, observations):
                                      dist.Categorical(torch.ones(max_num_objects + 1)))
             is_spurious = (assign == max_num_objects)
             is_real = is_observed & ~is_spurious
-            num_observed = is_observed.float().sum(-1, True)
             # TODO Make these Bernoulli probs more plausible.
             pyro.sample("is_real",
                         dist.Bernoulli(args.expected_num_objects / max_num_objects),
@@ -54,7 +55,6 @@ def model(args, observations):
 
             # The remaining continuous part is exact.
             observed_positions = observations[..., 0]
-            print(observed_positions.shape,is_real.shape)
             with poutine.scale(scale=is_real.float()):
                 bogus_position = positions.new_zeros(args.num_frames, 1)
                 augmented_positions = torch.cat([positions, bogus_position], -1)
@@ -140,8 +140,8 @@ def guide(args, observations):
     with pyro.iarange("objects", states_loc.shape[0]):
         exists = pyro.sample("exists", assignment.exists_dist, infer={"enumerate": "parallel"})
         with poutine.scale(scale=exists):
-            #states_var = states_cov.reshape(states_cov.shape[:-2] + (-1,))[..., ::n+1]
-            #pyro.sample("states", dist.Normal(states_loc, states_var).independent(1))
+            #  states_var = states_cov.reshape(states_cov.shape[:-2] + (-1,))[..., ::n+1]
+            #  pyro.sample("states", dist.Normal(states_loc, states_var).independent(1))
             pyro.sample("states", dist.Delta(states_loc, event_dim=1))
     with pyro.iarange("detections", observations.shape[1]):
         with poutine.scale(scale=is_observed.float()):
@@ -152,7 +152,7 @@ def guide(args, observations):
 
 
 def main(args):
-    if isinstance(obj, str):
+    if isinstance(args, str):
         args = make_args(args)
 
     viz = init_visdom(args.visdom)
@@ -255,6 +255,8 @@ def test_guide(args):
     assignment, states_loc = guide(args, observations)
     p_exists = assignment.exists_dist.probs
     positions = get_positions(states_loc, args.num_frames)
+    assert p_exists.dim() == 1
+    assert positions.shape[0] == args.num_frames
 
 
 @pytest.mark.parametrize("args", ['--no_visdom --svi_iters 2'])
