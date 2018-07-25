@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import math
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -9,10 +9,9 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.distributions.util import log_sum_exp
 from pyro.infer import config_enumerate, is_validation_enabled
 from pyro.infer.mcmc.trace_kernel import TraceKernel
-from pyro.infer.util import Dice
+from pyro.infer.mcmc.util import EnumTraceProbEvaluator
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
 from pyro.primitives import _Subsample
@@ -116,33 +115,13 @@ class HMC(TraceKernel):
                 yield (name, node)
 
     def _compute_trace_log_prob(self, model_trace):
-        if not self._has_enumerable_sites:
-            return model_trace.log_prob_sum()
-        if self.max_iarange_nesting == float("inf"):
-            raise ValueError("Finite value required for `max_iarange_nesting` when model "
-                             "has discrete (enumerable) sites.")
-        model_trace.compute_log_prob()
-        model_trace.compute_score_parts()
-        ordering = {name: frozenset(site["cond_indep_stack"])
-                    for name, site in model_trace.nodes.items()
-                    if site["type"] == "sample"}
-
-        log_probs = defaultdict(float)
-        for name, site in model_trace.nodes.items():
-            if site["type"] == "sample" and not site["fn"].has_enumerate_support:
-                log_probs[ordering[name]] = log_probs[ordering[name]] + site["log_prob"]
-
-        log_prob_sum = 0.
-        dice = Dice(model_trace, ordering)
-        for ordinal, log_prob in log_probs.items():
-            enum_dim = log_prob.dim() - self.max_iarange_nesting
-            dice_weights = dice.in_context(log_prob.shape, ordinal)
-            log_prob = log_prob + dice_weights.log()
-            if enum_dim > 0:
-                log_prob = log_sum_exp(log_prob.reshape(-1, *log_prob.shape[enum_dim:]),
-                                       dim=0)
-            log_prob_sum += log_prob.sum()
-        return log_prob_sum
+        # TODO: Can be expensive. Consider caching this or the potential
+        # energy computation itself so that this does not need to be
+        # recomputed more than once per trace.
+        trace_prob_evaluator = EnumTraceProbEvaluator(model_trace,
+                                                      self._has_enumerable_sites,
+                                                      self.max_iarange_nesting)
+        return trace_prob_evaluator.log_prob()
 
     def _kinetic_energy(self, r):
         return 0.5 * sum(x.pow(2).sum() for x in r.values())
@@ -224,11 +203,6 @@ class HMC(TraceKernel):
         trace_log_prob_sum = self._compute_trace_log_prob(trace)
         if torch_isnan(trace_log_prob_sum) or torch_isinf(trace_log_prob_sum):
             raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")
-        # If model has enumerable sites, check for correct `iarange` placement.
-        if self._has_enumerable_sites and is_validation_enabled():
-            for site in trace.nodes.values():
-                if site["type"] == "sample":
-                    check_site_shape(site, self.max_iarange_nesting)
 
     def initial_trace(self):
         return self._prototype_trace
