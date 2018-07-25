@@ -77,16 +77,18 @@ def guide(design):
 
 
 class DVNeuralNet(nn.Module):
-    def __init__(self, y_dim, theta_dim):
+    def __init__(self, batch_dim, y_dim, theta_dim):
         super(DVNeuralNet, self).__init__()
-        self.linear1 = nn.Linear(y_dim+theta_dim, y_dim+theta_dim)
-        self.linear2 = nn.Linear(y_dim+theta_dim, 1)
+        self.weight1 = nn.Parameter(torch.rand(batch_dim, y_dim+theta_dim, y_dim+theta_dim))
+        self.bias1 = nn.Parameter(torch.rand(batch_dim, 1, y_dim+theta_dim))
+        self.weight2 = nn.Parameter(torch.rand(batch_dim, y_dim+theta_dim, 1))
+        self.bias2 = nn.Parameter(torch.rand(batch_dim, 1, 1))
         self.relu = nn.ReLU()
 
     def forward(self, y, theta):
-        m = torch.cat([y, theta.squeeze(-2)], -1)
-        h1 = self.relu(self.linear1(m))
-        o = self.relu(self.linear2(h1))
+        m = torch.cat([y.unsqueeze(-2), theta], -1)
+        h1 = self.relu(torch.matmul(m, self.weight1)+self.bias1)
+        o = self.relu(torch.matmul(h1, self.weight2)+self.bias2)
         return o
 
 
@@ -125,9 +127,20 @@ def main(num_steps):
     ns = range(0, N, 5)
     designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
     X = torch.stack(designs)
-
+    
     # Donsker varadhan
-    dv_loss_step = donsker_varadhan_loss(model, X, "y", "w", 1000, DVNeuralNet(N, p), 1000)
+    dv_loss_fn = donsker_varadhan_loss(model, X, "y", "w", 1000, 
+                                       DVNeuralNet(len(ns), N, p))
+    params = None
+    opt = optim.Adam({"lr": 0.025})
+    for step in range(1000):
+        if params is not None:
+            pyro.infer.util.zero_grads(params)
+        dv_loss = dv_loss_fn()
+        dv_loss.backward()
+        params = [pyro.param(name).unconstrained()
+                  for name in pyro.get_param_store().get_all_param_names()]
+        opt(params)
 
     # Analytic loss
     true_ape = []

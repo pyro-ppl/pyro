@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 import pyro
 from pyro import poutine
@@ -64,7 +65,7 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
 
 
 def donsker_varadhan_loss(model, design, observation_label, target_label,
-                          num_particles, T, num_steps):
+                          num_particles, T):
 
     trace = poutine.trace(model).get_trace(design)
     y = trace.nodes[observation_label]["value"]
@@ -87,26 +88,22 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
     theta_shuffled_samples = theta_samples[idx, ...]
 
     pyro.module("T", T)
-    params = [pyro.param(name).unconstrained()
-              for name in pyro.get_param_store().get_all_param_names()]
-    minimizer = torch.optim.Adam(params)
 
-    def closure():
-
-        minimizer.zero_grad()
+    def loss_fn():
 
         fvals = T(y_samples, theta_samples)
         fshuffled = T(y_samples, theta_shuffled_samples)
 
-        loss = torch.sum(fvals, 0) - logsumexp(fshuffled, 0)
-        torch.autograd.backward(params, torch.autograd.grad(loss, params, retain_graph=True))
+        loss = torch.sum(fvals, 0)/num_particles - \
+            logsumexp(fshuffled, 0) + np.log(num_particles)
 
-        return loss
+        # Switch sign, sum over batch dimensions for scalar loss
+        print(loss)
+        agg_loss = -loss.sum()
+            
+        return agg_loss
 
-    for step in range(num_steps):
-        mvalue = minimizer.step(closure)
-
-    return mvalue
+    return loss_fn
 
 
 def logsumexp(inputs, dim=None, keepdim=False):
