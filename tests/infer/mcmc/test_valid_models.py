@@ -36,7 +36,7 @@ def print_debug_info(model_trace):
     model_trace.compute_log_prob()
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample" and not isinstance(site["fn"], _Subsample):
-            logger.debug("log_prob( {} ):\n {}".format(name, site["log_prob"].exp()))
+            logger.debug("prob( {} ):\n {}".format(name, site["log_prob"].exp()))
 
 
 @pytest.mark.parametrize("kernel, kwargs", [

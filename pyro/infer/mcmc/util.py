@@ -82,8 +82,8 @@ class EnumTraceProbEvaluator(object):
 
         # Sum up terms from predecessor, and gather leaf nodes.
         leaves_log_probs = {}
-        for target_ordinal, log_prob in self.log_probs.items():
-            leaves_log_probs[target_ordinal] = log_prob
+        for target_ordinal in sorted(self.log_probs.keys()):
+            leaves_log_probs[target_ordinal] = self.log_probs[target_ordinal]
             predecessors, log_factors = self._get_predecessors_log_factors(target_ordinal)
             leaves_log_probs[target_ordinal] = sum(leaves_log_probs[target_ordinal] + log_factors)
             for ordinal in predecessors:
