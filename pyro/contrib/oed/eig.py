@@ -67,6 +67,8 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
 def donsker_varadhan_loss(model, design, observation_label, target_label,
                           num_particles, T):
 
+    global i, y_samples, theta_samples, theta_shuffled_samples, ewma, alpha
+
     trace = poutine.trace(model).get_trace(design)
     y = trace.nodes[observation_label]["value"]
     theta = trace.nodes[target_label]["value"]
@@ -89,13 +91,36 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
 
     pyro.module("T", T)
 
+    i= 0
+    ewma = None
+    alpha = 10.
+
     def loss_fn():
 
-        fvals = T(y_samples, theta_samples)
-        fshuffled = T(y_samples, theta_shuffled_samples)
+        global i, y_samples, theta_samples, theta_shuffled_samples, ewma, alpha
 
-        loss = torch.sum(fvals, 0)/num_particles - \
-            logsumexp(fshuffled, 0) + np.log(num_particles)
+        fvals = T(y_samples, theta_samples, design)
+        fshuffled = T(y_samples, theta_shuffled_samples, design)
+
+        expect_exp = logsumexp(fshuffled, dim=0) - np.log(num_particles)
+        if ewma is None:
+            ewma = torch.exp(expect_exp)
+        else:
+            ewma = (1/(1+alpha))*(torch.exp(expect_exp) + alpha*ewma)
+        expect_exp.grad = 1./ewma
+        loss = torch.sum(fvals, 0)/num_particles - expect_exp
+        # loss = torch.sum(fvals, 0)/num_particles - \
+        #     torch.sum(torch.exp(fshuffled-1.), 0)/num_particles
+
+        for _ in range(20):
+            trace = poutine.trace(model).get_trace(design)
+            y = trace.nodes[observation_label]["value"]
+            theta = trace.nodes[target_label]["value"]
+            y_samples[i, ...] = y
+            theta_samples[i, ...] = theta
+            i = (i+1)%num_particles
+        idx = torch.randperm(num_particles)
+        theta_shuffled_samples = theta_samples[idx, ...]
 
         # Switch sign, sum over batch dimensions for scalar loss
         print(loss)

@@ -79,16 +79,20 @@ def guide(design):
 class DVNeuralNet(nn.Module):
     def __init__(self, batch_dim, y_dim, theta_dim):
         super(DVNeuralNet, self).__init__()
+        self.weight0 = nn.Parameter(torch.rand(batch_dim, y_dim+theta_dim, y_dim+theta_dim))
+        self.bias0 = nn.Parameter(torch.rand(batch_dim, 1, y_dim+theta_dim))
         self.weight1 = nn.Parameter(torch.rand(batch_dim, y_dim+theta_dim, y_dim+theta_dim))
         self.bias1 = nn.Parameter(torch.rand(batch_dim, 1, y_dim+theta_dim))
         self.weight2 = nn.Parameter(torch.rand(batch_dim, y_dim+theta_dim, 1))
         self.bias2 = nn.Parameter(torch.rand(batch_dim, 1, 1))
-        self.relu = nn.ReLU()
+        self.softplus = nn.Softplus()
 
-    def forward(self, y, theta):
-        m = torch.cat([y.unsqueeze(-2), theta], -1)
-        h1 = self.relu(torch.matmul(m, self.weight1)+self.bias1)
-        o = self.relu(torch.matmul(h1, self.weight2)+self.bias2)
+    def forward(self, y, theta, design):
+        suff = torch.matmul(y.unsqueeze(-2), design)
+        m = torch.cat([suff, theta], -1)
+        h1 = self.softplus(torch.matmul(m, self.weight0)+self.bias0)
+        h2 = self.softplus(torch.matmul(h1, self.weight1)+self.bias1)
+        o = self.softplus(torch.matmul(h2, self.weight2)+self.bias2)
         return o
 
 
@@ -124,16 +128,30 @@ def main(num_steps):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
 
-    ns = range(0, N, 5)
+    ns = range(0, N, 15)
     designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
     X = torch.stack(designs)
+
+    # Analytic loss
+    true_ape = []
+    prior_cov = torch.diag(prior_stdevs**2)
+    H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov)
+    for i in range(len(ns)):
+        x = X[i, :, :]
+        true_ape.append(analytic_posterior_entropy(prior_cov, x))
+
+    true_ape = torch.tensor(true_ape)
+    print("True APE")
+    print(true_ape)
+    print("True EIG")
+    print(H_prior - true_ape)
     
     # Donsker varadhan
-    dv_loss_fn = donsker_varadhan_loss(model, X, "y", "w", 1000, 
-                                       DVNeuralNet(len(ns), N, p))
+    dv_loss_fn = donsker_varadhan_loss(model, X, "y", "w", 2000,
+                                       DVNeuralNet(len(ns), p, p))
     params = None
-    opt = optim.Adam({"lr": 0.025})
-    for step in range(1000):
+    opt = optim.Adam({"lr": 0.005})
+    for step in range(300000):
         if params is not None:
             pyro.infer.util.zero_grads(params)
         dv_loss = dv_loss_fn()
@@ -142,15 +160,8 @@ def main(num_steps):
                   for name in pyro.get_param_store().get_all_param_names()]
         opt(params)
 
-    # Analytic loss
-    true_ape = []
-    prior_cov = torch.diag(prior_stdevs**2)
-    for i in range(len(ns)):
-        x = X[i, :, :]
-        true_ape.append(analytic_posterior_entropy(prior_cov, x))
+    # Barber Agakov
 
-    print(torch.tensor(true_ape))
-    raise
 
     # Estimated loss (linear transform of EIG)
     est_ape = vi_ape(
@@ -165,17 +176,8 @@ def main(num_steps):
         is_parameters={"num_samples": 2}
     )
 
-    # Analytic loss
-    true_ape = []
-    prior_cov = torch.diag(prior_stdevs**2)
-    for i in range(len(ns)):
-        x = X[i, :, :]
-        true_ape.append(analytic_posterior_entropy(prior_cov, x))
-
-    print("Estimated APE values")
+    print("Nested VI APE values")
     print(est_ape)
-    print("True APE values")
-    print(true_ape)
 
     # # Plot to compare
     # import matplotlib.pyplot as plt
