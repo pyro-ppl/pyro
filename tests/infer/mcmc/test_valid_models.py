@@ -82,6 +82,29 @@ def test_model_error_enum_dim_clash(kernel, kwargs):
     assert_error(mcmc_kernel)
 
 
+def test_all_discrete_sites_log_prob():
+    p = 0.3
+
+    @poutine.broadcast
+    def model():
+        d = dist.Bernoulli(p)
+        context1 = pyro.iarange("outer", 3, dim=-1)
+        context2 = pyro.iarange("inner", 2, dim=-2)
+        pyro.sample("w", d)
+        with context1:
+            pyro.sample("x", d)
+        with context2:
+            pyro.sample("y", d)
+        with context1, context2:
+            pyro.sample("z", d)
+    model = poutine.enum(config_enumerate(model, default="parallel"),
+                         first_available_dim=2)
+    model_trace = poutine.trace(model).get_trace()
+    print_debug_info(model_trace)
+    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 2)
+    assert_equal(trace_prob_evaluator.log_prob(), torch.tensor(0.))
+
+
 @pytest.mark.parametrize("data, expected_log_prob", [
     (torch.tensor([1.]), torch.tensor(-1.3434)),
     (torch.tensor([0.]), torch.tensor(-1.4189)),
