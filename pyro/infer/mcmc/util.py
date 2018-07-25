@@ -6,25 +6,24 @@ from pyro.util import check_site_shape
 
 
 class EnumTraceProbEvaluator(object):
+    """
+    Computes the log probability density of a trace that possibly contains
+    discrete sample sites enumerated in parallel.
+
+    :param model_trace: execution trace from the model.
+    :param bool has_enumerable_sites: whether the trace contains any
+        discrete enumerable sites.
+    :param int max_iarange_nesting: Optional bound on max number of nested
+        :func:`pyro.iarange` contexts.
+    """
     def __init__(self,
                  model_trace,
                  has_enumerable_sites=False,
                  max_iarange_nesting=float("inf")):
-        """
-        Computes the log probability density of a trace that possibly contains
-        discrete sample sites enumerated in parallel.
-
-        :param model_trace: execution trace from the model.
-        :param bool has_enumerable_sites: whether the trace contains any
-            discrete enumerable sites.
-        :param int max_iarange_nesting: Optional bound on max number of nested
-            :func:`pyro.iarange` contexts.
-        """
         self.model_trace = model_trace
         self.has_enumerable_sites = has_enumerable_sites
         self.max_iarange_nesting = max_iarange_nesting
         self.log_probs = defaultdict(list)
-        self._log_factors_cache = {}
         self._predecessors_cache = {}
 
     def _get_predecessors_log_factors(self, target_ordinal):
@@ -33,8 +32,7 @@ class EnumTraceProbEvaluator(object):
         their log_prob factors.
         """
         if target_ordinal in self._predecessors_cache:
-            return self._predecessors_cache[target_ordinal],\
-                   self._log_factors_cache[target_ordinal]
+            return self._predecessors_cache[target_ordinal]
         log_factors = []
         predecessors = set()
 
@@ -43,8 +41,7 @@ class EnumTraceProbEvaluator(object):
                 log_factors += term
                 predecessors.add(ordinal)
 
-        self._log_factors_cache[target_ordinal] = log_factors
-        self._predecessors_cache[target_ordinal] = predecessors
+        self._predecessors_cache[target_ordinal] = (predecessors, log_factors)
         return predecessors, log_factors
 
     def _compute_log_prob_terms(self):
@@ -83,12 +80,11 @@ class EnumTraceProbEvaluator(object):
         # Sum up terms from predecessor, and gather leaf nodes.
         leaves_log_probs = {}
         for target_ordinal in sorted(self.log_probs.keys()):
+            if any(target_ordinal < other for other in self.log_probs):
+                continue  # not a leaf
             leaves_log_probs[target_ordinal] = self.log_probs[target_ordinal]
             predecessors, log_factors = self._get_predecessors_log_factors(target_ordinal)
             leaves_log_probs[target_ordinal] = sum(leaves_log_probs[target_ordinal] + log_factors)
-            for ordinal in predecessors:
-                if ordinal in leaves_log_probs:
-                    del leaves_log_probs[ordinal]
 
         # Reduce the log prob terms for each leaf node:
         # - taking log_sum_exp of factors in enum dims (i.e.
