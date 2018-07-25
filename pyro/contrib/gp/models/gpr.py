@@ -166,9 +166,6 @@ class GPRegression(GPModel):
         :returns: sampler
         :rtype: function
         """
-        # Make these visible in the inner function
-        global X, y, Kff, N
-
         noise = self.guide().detach()
         X = self.X.clone().detach()
         y = self.y.clone().detach()
@@ -176,14 +173,16 @@ class GPRegression(GPModel):
         Kff = self.kernel(X).contiguous()
         Kff.view(-1)[::N + 1] += noise  # add noise to the diagonal
 
-        def sample_next(xnew):
+        outside_vars = {"X": X, "y": y, "N": N, "Kff": Kff}
+
+        def sample_next(xnew, outside_vars):
             """Repeatedly samples from the Gaussian process posterior,
             conditioning on previously sampled values.
             """
             warn_if_nan(xnew)
 
             # Variables from outer scope
-            global X, y, Kff, N
+            X, y, Kff = outside_vars["X"], outside_vars["y"], outside_vars["Kff"]
 
             # Compute Cholesky decomposition of kernel matrix
             Lff = Kff.potrf(upper=False)
@@ -198,6 +197,7 @@ class GPRegression(GPModel):
             ynew = torchdist.Normal(loc + self.mean_function(xnew), cov.sqrt()).rsample()
 
             # Update kernel matrix
+            N = outside_vars["N"]
             Kffnew = Kff.new_empty(N+1, N+1)
             Kffnew[:N, :N] = Kff
             cross = self.kernel(X, xnew).squeeze()
@@ -208,11 +208,11 @@ class GPRegression(GPModel):
             Kffnew[N, N] = end + self.jitter
             # Heuristic to avoid adding degenerate points
             if Kffnew.logdet() > -15.:
-                Kff = Kffnew
-                N += 1
-                X = torch.cat((X, xnew))
-                y = torch.cat((y, ynew))
+                outside_vars["Kff"] = Kffnew
+                outside_vars["N"] += 1
+                outside_vars["X"] = torch.cat((X, xnew))
+                outside_vars["y"] = torch.cat((y, ynew))
 
             return ynew
 
-        return sample_next
+        return lambda xnew: sample_next(xnew, outside_vars)
