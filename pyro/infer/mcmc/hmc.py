@@ -9,13 +9,13 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import config_enumerate, is_validation_enabled
+from pyro.infer import config_enumerate
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.infer.mcmc.util import EnumTraceProbEvaluator
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
 from pyro.primitives import _Subsample
-from pyro.util import torch_isinf, torch_isnan, optional, check_site_shape
+from pyro.util import torch_isinf, torch_isnan, optional
 
 
 class HMC(TraceKernel):
