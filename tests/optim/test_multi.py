@@ -17,6 +17,8 @@ FACTORIES = [
     lambda: Newton(trust_radii={'z': 0.2}),
     lambda: MixedMultiOptimizer([(['y'], PyroMultiOptimizer(pyro.optim.Adam({'lr': 0.05}))),
                                  (['x', 'z'], Newton())]),
+    lambda: MixedMultiOptimizer([(['y'], pyro.optim.Adam({'lr': 0.05})),
+                                 (['x', 'z'], Newton())]),
 ]
 
 
@@ -49,3 +51,16 @@ def test_optimizers(factory):
         expected = loc.expand(actual.shape)
         assert_equal(actual, expected, prec=1e-2,
                      msg='{} in correct: {} vs {}'.format(name, actual, expected))
+
+
+def test_multi_optimizer_disjoint_ok():
+    parts = [(['w', 'x'], pyro.optim.Adam({'lr': 0.1})),
+             (['y', 'z'], pyro.optim.Adam({'lr': 0.01}))]
+    MixedMultiOptimizer(parts)
+
+
+def test_multi_optimizer_overlap_error():
+    parts = [(['x', 'y'], pyro.optim.Adam({'lr': 0.1})),
+             (['y', 'z'], pyro.optim.Adam({'lr': 0.01}))]
+    with pytest.raises(ValueError):
+        MixedMultiOptimizer(parts)

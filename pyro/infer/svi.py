@@ -53,7 +53,7 @@ class SVI(TracePosterior):
             if loss_and_grads is None:
                 def _loss_and_grads(*args, **kwargs):
                     loss_val = loss(*args, **kwargs)
-                    loss_val.backward()
+                    loss_val.backward(retain_graph=True)
                     return loss_val
                 loss_and_grads = _loss_and_grads
             self.loss = loss
