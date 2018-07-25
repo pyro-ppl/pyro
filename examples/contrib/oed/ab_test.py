@@ -1,12 +1,13 @@
 import argparse
 import torch
+import torch.nn as nn
 import numpy as np
 
 import pyro
 import pyro.distributions as dist
 from pyro import optim
 from pyro.infer import Trace_ELBO
-from pyro.contrib.oed.eig import vi_ape
+from pyro.contrib.oed.eig import vi_ape, donsker_varadhan_loss
 
 """
 Example builds on the Bayesian regression tutorial [1]. It demonstrates how
@@ -75,6 +76,20 @@ def guide(design):
     pyro.sample('w', w_dist)
 
 
+class DVNeuralNet(nn.Module):
+    def __init__(self, y_dim, theta_dim):
+        super(DVNeuralNet, self).__init__()
+        self.linear1 = nn.Linear(y_dim+theta_dim, y_dim+theta_dim)
+        self.linear2 = nn.Linear(y_dim+theta_dim, 1)
+        self.relu = nn.ReLU()
+
+    def forward(self, y, theta):
+        m = torch.cat([y, theta.squeeze(-2)], -1)
+        h1 = self.relu(self.linear1(m))
+        o = self.relu(self.linear2(h1))
+        return o
+
+
 def design_to_matrix(design):
     """Converts a one-dimensional tensor listing group sizes into a
     two-dimensional binary tensor of indicator variables.
@@ -110,6 +125,19 @@ def main(num_steps):
     ns = range(0, N, 5)
     designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
     X = torch.stack(designs)
+
+    # Donsker varadhan
+    dv_loss_step = donsker_varadhan_loss(model, X, "y", "w", 1000, DVNeuralNet(N, p), 1000)
+
+    # Analytic loss
+    true_ape = []
+    prior_cov = torch.diag(prior_stdevs**2)
+    for i in range(len(ns)):
+        x = X[i, :, :]
+        true_ape.append(analytic_posterior_entropy(prior_cov, x))
+
+    print(torch.tensor(true_ape))
+    raise
 
     # Estimated loss (linear transform of EIG)
     est_ape = vi_ape(

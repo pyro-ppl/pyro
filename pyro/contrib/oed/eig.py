@@ -1,4 +1,7 @@
+import torch
+
 import pyro
+from pyro import poutine
 from pyro.contrib.oed.search import Search
 from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.contrib.autoguide import mean_field_guide_entropy
@@ -61,14 +64,14 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
 
 
 def donsker_varadhan_loss(model, design, observation_label, target_label,
-                          T, num_particles):
+                          num_particles, T, num_steps):
 
     trace = poutine.trace(model).get_trace(design)
     y = trace.nodes[observation_label]["value"]
     theta = trace.nodes[target_label]["value"]
 
-    y_samples = y.new_tensor(num_particles, y.shape)
-    theta_samples = theta.new_tensor(num_particles, theta.shape)
+    y_samples = y.new_empty((num_particles, *y.shape))
+    theta_samples = theta.new_empty((num_particles, *theta.shape))
 
     y_samples[0, ...] = y
     theta_samples[0, ...] = theta
@@ -80,16 +83,51 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
         y_samples[i, ...] = y
         theta_samples[i, ...] = theta
 
-    fvals = T(y_samples, theta_samples)
-    fshuffled = T(y_samples, shuffle(theta_samples))
+    idx = torch.randperm(num_particles)
+    theta_shuffled_samples = theta_samples[idx, ...]
 
-    loss = torch.sum(fvals, 0) - torch.logsumexp(f_shuffled, 0)
-    return loss
+    pyro.module("T", T)
+    params = [pyro.param(name).unconstrained()
+              for name in pyro.get_param_store().get_all_param_names()]
+    minimizer = torch.optim.Adam(params)
+
+    def closure():
+
+        minimizer.zero_grad()
+
+        fvals = T(y_samples, theta_samples)
+        fshuffled = T(y_samples, theta_shuffled_samples)
+
+        loss = torch.sum(fvals, 0) - logsumexp(fshuffled, 0)
+        torch.autograd.backward(params, torch.autograd.grad(loss, params, retain_graph=True))
+
+        return loss
+
+    for step in range(num_steps):
+        mvalue = minimizer.step(closure)
+
+    return mvalue
 
 
+def logsumexp(inputs, dim=None, keepdim=False):
+    """Numerically stable logsumexp.
 
+    Args:
+        inputs: A Variable with any shape.
+        dim: An integer.
+        keepdim: A boolean.
 
-
-        
-
-
+    Returns:
+        Equivalent of log(sum(exp(inputs), dim=dim, keepdim=keepdim)).
+    """
+    # For a 1-D array x (any array along a single dimension),
+    # log sum exp(x) = s + log sum exp(x - s)
+    # with s = max(x) being a common choice.
+    if dim is None:
+        inputs = inputs.view(-1)
+        dim = 0
+    s, _ = torch.max(inputs, dim=dim, keepdim=True)
+    outputs = s + (inputs - s).exp().sum(dim=dim, keepdim=True).log()
+    if not keepdim:
+        outputs = outputs.squeeze(dim)
+    return outputs
