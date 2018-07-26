@@ -16,7 +16,8 @@ class MaskedConstraint(constraints.Constraint):
     :param torch.constraints.Constraint constraint0: constraint that holds
         wherever ``mask == 0``
     :param torch.constraints.Constraint constraint1: constraint that holds
-        wherever ``mask == 1`` """
+        wherever ``mask == 1``
+    """
     def __init__(self, mask, constraint0, constraint1):
         self.mask = mask
         self.constraint0 = constraint0
