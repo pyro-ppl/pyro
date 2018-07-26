@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import numbers
 
 import torch
-from torch.distributions import constraints
+from torch.distributions import biject_to, constraints, transform_to
 
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.score_parts import ScoreParts
@@ -225,6 +225,23 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
     pass
 
 
+# TODO move this upstream to torch.distributions
+class IndependentConstraint(constraints.Constraint):
+    def __init__(self, base_constraint, reinterpreted_batch_ndims):
+        self.base_constraint = base_constraint
+        self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
+
+    def check(self, value):
+        result = self.base_constraint.check(value)
+        result = result.reshape(result.shape[:result.dim() - self.reinterpreted_batch_ndims] + (-1,))
+        result = result.min(-1)[0]
+        return result
+
+
+biject_to.register(IndependentConstraint, lambda c: biject_to(c.base_constraint))
+transform_to.register(IndependentConstraint, lambda c: transform_to(c.base_constraint))
+
+
 class ReshapedDistribution(TorchDistribution):
     """
     Reshapes a distribution by adding ``sample_shape`` to its total shape
@@ -300,7 +317,15 @@ class ReshapedDistribution(TorchDistribution):
 
     @constraints.dependent_property
     def support(self):
-        return self.base_dist.support
+        return IndependentConstraint(self.base_dist.support, self.reinterpreted_batch_ndims)
+
+    @property
+    def _validate_args(self):
+        return self.base_dist._validate_args
+
+    @_validate_args.setter
+    def _validate_args(self, value):
+        self.base_dist._validate_args = value
 
     def sample(self, sample_shape=torch.Size()):
         return self.base_dist.sample(sample_shape + self.sample_shape)

@@ -50,7 +50,9 @@ class MaskedMixture(TorchDistribution):
     :param torch.Tensor mask: A byte tensor toggling between ``component0``
         and ``component1``.
     :param pyro.distributions.TorchDistribution component0: a distribution
+        for batch elements ``mask == 0``.
     :param pyro.distributions.TorchDistribution component1: a distribution
+        for batch elements ``mask == 1``.
     """
     arg_constraints = {}  # nothing can be constrained
 
