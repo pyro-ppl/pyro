@@ -55,6 +55,8 @@ class MaskedMixture(TorchDistribution):
     arg_constraints = {}  # nothing can be constrained
 
     def __init__(self, mask, component0, component1, validate_args=None):
+        if not torch.is_tensor(mask) or mask.dtype != torch.uint8:
+            raise ValueError('Expected mask to be a ByteTensor but got {}'.format(type(mask)))
         if component0.event_shape != component1.event_shape:
             raise ValueError('components event_shape disagree: {} vs {}'
                              .format(component0.event_shape, component1.event_shape))
