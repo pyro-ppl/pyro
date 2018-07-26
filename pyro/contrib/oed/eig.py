@@ -64,12 +64,50 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
     return loss
 
 
+def naiveRainforth(model, design, *args, observation_labels="y", N=100, M=10):
+
+    if isinstance(observation_labels, str):
+        observation_labels = [observation_labels]
+
+    # 100 traces using batching
+    eig = 0.
+    for _ in range(N):
+        y_given_theta = 0.
+        y = {}
+        trace = poutine.trace(model).get_trace(design)
+        trace.compute_log_prob()
+        for label in observation_labels:
+            # Valid? Yes, this is log probability conditional on
+            # theta, and any previously sampled y's
+            # Order doesn't matter
+            y_given_theta += trace.nodes[label]["log_prob"]
+            y[label] = trace.nodes[label]["value"]
+
+        lp_shape = y_given_theta.shape
+
+        y_given_other_theta = torch.zeros(*lp_shape, M+1)
+        y_given_other_theta[..., -1] = y_given_theta
+        conditional_model = pyro.condition(model, data=y)
+        for j in range(M):
+            trace = poutine.trace(conditional_model).get_trace(design)
+            trace.compute_log_prob()
+            for label in observation_labels:
+                y_given_other_theta[..., j] += trace.nodes[label]["log_prob"]
+
+        eig += y_given_theta - torch.distributions.utils.log_sum_exp(
+            y_given_other_theta).squeeze() + np.log(M)
+
+    return eig/N
+
+
 def donsker_varadhan_loss(model, design, observation_label, target_label,
                           num_particles, T):
 
     global i, y_samples, theta_samples, theta_shuffled_samples, ewma, alpha
 
+    loss = 0.
     trace = poutine.trace(model).get_trace(design)
+    trace.compute_log_prob()
     y = trace.nodes[observation_label]["value"]
     theta = trace.nodes[target_label]["value"]
 
