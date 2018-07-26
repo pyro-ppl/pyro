@@ -176,6 +176,8 @@ class ParamStoreDict(object):
 
         :param filename: file name to load from
         :type name: str
+        :param load_to_cpu: flag to load CUDA-trained parameters to CPU
+        :type name: bool
         """
         with open(filename, "rb") as input_file:
             if load_to_cpu:
