@@ -4,6 +4,7 @@ import pytest
 import torch
 
 import pyro.distributions as dist
+from pyro.distributions.util import broadcast_shape
 from pyro.util import torch_isnan
 from tests.common import assert_equal
 
@@ -37,6 +38,24 @@ def test_masked_mixture(component0, component1, sample_shape, batch_shape):
     mask = mask.expand(sample_shape + batch_shape)
     assert_equal(log_prob[mask], log_prob_1[mask])
     assert_equal(log_prob[~mask], log_prob_0[~mask])
+
+
+@pytest.mark.parametrize('value_shape', [(), (5, 1, 1, 1), (6, 1, 1, 1, 1)])
+@pytest.mark.parametrize('component1_shape', [(), (4, 1, 1), (6, 1, 1, 1, 1)])
+@pytest.mark.parametrize('component0_shape', [(), (3, 1), (6, 1, 1, 1, 1)])
+@pytest.mark.parametrize('mask_shape', [(), (2,), (6, 1, 1, 1, 1)])
+def test_broadcast(mask_shape, component0_shape, component1_shape, value_shape):
+    mask = torch.ByteTensor(torch.Size(mask_shape)).bernoulli_(0.5)
+    component0 = dist.Normal(torch.zeros(component0_shape), 1.)
+    component1 = dist.Exponential(torch.ones(component1_shape))
+    value = torch.ones(value_shape)
+
+    d = dist.MaskedMixture(mask, component0, component1)
+    d_shape = broadcast_shape(mask_shape, component0_shape, component1_shape)
+    assert d.batch_shape == d_shape
+
+    log_prob_shape = broadcast_shape(d_shape, value_shape)
+    assert d.log_prob(value).shape == log_prob_shape
 
 
 @pytest.mark.parametrize('event_shape', [(), (2,), (2, 3)])

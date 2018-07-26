@@ -5,6 +5,7 @@ from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
 from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.util import broadcast_shape
 
 
 class MaskedConstraint(constraints.Constraint):
@@ -57,19 +58,21 @@ class MaskedMixture(TorchDistribution):
     arg_constraints = {}  # nothing can be constrained
 
     def __init__(self, mask, component0, component1, validate_args=None):
-        if component0.batch_shape != mask.shape:
-            raise ValueError('component0 does not match mask shape: {} vs {}'.format(
-                             component0.batch_shape, mask.shape))
-        if component1.batch_shape != mask.shape:
-            raise ValueError('component1 does not match mask shape: {} vs {}'
-                             .format(component1.batch_shape, mask.shape))
         if component0.event_shape != component1.event_shape:
             raise ValueError('components event_shape disagree: {} vs {}'
                              .format(component0.event_shape, component1.event_shape))
+        batch_shape = broadcast_shape(mask.shape, component0.batch_shape, component1.batch_shape)
+        if mask.shape != batch_shape:
+            mask = mask.expand(batch_shape)
+        if component0.batch_shape != batch_shape:
+            component0 = component0.expand(batch_shape)
+        if component1.batch_shape != batch_shape:
+            component1 = component1.expand(batch_shape)
+
         self.mask = mask
         self.component0 = component0
         self.component1 = component1
-        super(MaskedMixture, self).__init__(component0.batch_shape, component0.event_shape, validate_args)
+        super(MaskedMixture, self).__init__(batch_shape, component0.event_shape, validate_args)
 
         # We need to disable _validate_sample on each component since samples are only valid on the
         # component from which they are drawn. Instead we perform validation using a MaskedConstraint.
@@ -82,6 +85,8 @@ class MaskedMixture(TorchDistribution):
 
     @constraints.dependent_property
     def support(self):
+        if self.component0.support is self.component1.support:
+            return self.component0.support
         return MaskedConstraint(self.mask, self.component0.support, self.component1.support)
 
     def expand(self, batch_shape):
@@ -106,10 +111,15 @@ class MaskedMixture(TorchDistribution):
         return result
 
     def log_prob(self, value):
+        value_shape = broadcast_shape(value.shape, self.batch_shape + self.event_shape)
+        if value.shape != value_shape:
+            value = value.expand(value_shape)
         if self._validate_args:
             self._validate_sample(value)
-        sample_shape = value.shape[:len(value.shape) - len(self.batch_shape) - len(self.event_shape)]
-        mask = self.mask.expand(sample_shape + self.batch_shape) if sample_shape else self.mask
+        mask_shape = value_shape[:len(value_shape) - len(self.event_shape)]
+        mask = self.mask
+        if mask.shape != mask_shape:
+            mask = mask.expand(mask_shape)
         result = self.component0.log_prob(value)
         result[mask] = self.component1.log_prob(value)[mask]
         return result
