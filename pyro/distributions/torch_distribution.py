@@ -227,6 +227,16 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
 
 # TODO move this upstream to torch.distributions
 class IndependentConstraint(constraints.Constraint):
+    """
+    Wraps a constraint by aggregating over ``reinterpreted_batch_ndims``-many
+    dims in :meth:`check`, so that an event is valid only if all its
+    independent entries are valid.
+
+    :param torch.distributions.constraints.Constraint base_constraint: A base
+        constraint whose entries are incidentally indepenent.
+    :param int reinterpreted_batch_ndims: The number of extra event dimensions that will
+        be considered dependent.
+    """
     def __init__(self, base_constraint, reinterpreted_batch_ndims):
         self.base_constraint = base_constraint
         self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
