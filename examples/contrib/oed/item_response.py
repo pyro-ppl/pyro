@@ -1,12 +1,13 @@
 import argparse
 import torch
 from torch.distributions import constraints
+from torch.nn.functional import softplus
 import numpy as np
 
 import pyro
 import pyro.distributions as dist
 from pyro import optim
-from pyro.infer import Trace_ELBO
+from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import vi_ape
 import pyro.contrib.gp as gp
 
@@ -16,9 +17,6 @@ layers = 2
 A = 20.
 B = 10.
 beta = torch.tensor(1.)
-
-softplus = torch.nn.functional.softplus
-sigmoid = torch.nn.functional.sigmoid
 
 
 def model(design_tensor, participant_id):
@@ -31,7 +29,7 @@ def model(design_tensor, participant_id):
         that the current participant is assigned to. The first element
         indexes the highest level group. For instance, a geographical
         hierarchy list could look like 
-        `["United States", "California", "Santa Barbara"]`
+        `["United States", "California", "Santa Rosa"]`
     """
     # batch x n
     response_shape = list(design_tensor.shape)[:-1]
@@ -54,9 +52,8 @@ def model(design_tensor, participant_id):
         coef += pyro.sample(layer_name + "_coef", coef_dist)
 
     logit_p = torch.matmul(design_tensor, coef.t()).squeeze(-1) + intercept
-    p = sigmoid(logit_p)
     # Binary outcomes - responses to `n` items shown to given participant
-    pyro.sample("y", dist.Bernoulli(p).independent(1))
+    return pyro.sample("y", dist.Bernoulli(logits=logit_p).independent(1))
 
 
 def guide(design_tensor, participant_id):
@@ -96,7 +93,6 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
 
     def estimated_ape(designs, participant, ydist):
         design_tensor = spherical_design_tensor(designs)
-        print('design tensor', design_tensor.shape)
         est_ape = vi_ape(
             lambda d: model(d, participant),
             design_tensor,
@@ -104,7 +100,7 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
             vi_parameters={
                 "guide": lambda d: guide(d, participant),
                 "optim": optim.Adam({"lr": 0.0025}),
-                "loss": Trace_ELBO(),
+                "loss": TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
                 "num_steps": num_vi_steps},
             is_parameters={"num_samples": 10},
             y_dist=ydist
