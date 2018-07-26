@@ -170,7 +170,7 @@ class ParamStoreDict(object):
         with open(filename, "wb") as output_file:
             torch.save(self.get_state(), output_file)
 
-    def load(self, filename):
+    def load(self, filename, load_to_cpu=False):
         """
         Loads parameters from disk
 
@@ -178,7 +178,10 @@ class ParamStoreDict(object):
         :type name: str
         """
         with open(filename, "rb") as input_file:
-            state = torch.load(input_file)
+            if load_to_cpu:
+                state = torch.load(input_file, map_location=lambda storage, loc: storage)
+            else:
+                state = torch.load(input_file)
         self.set_state(state)
 
 
