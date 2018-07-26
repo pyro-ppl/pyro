@@ -46,10 +46,6 @@ class MaskedMixture(TorchDistribution):
         with pyro.iarange("data", len(data)):
             pyro.sample("obs", MaskedMixture(mask, dist1, dist2), obs=data)
 
-    Note that :ivar:`support` is set to ``component0.support`` due to lack of
-    programmatic ability to union constraints. To correctly set support of an
-    instance, simply overwrite its :ivar:`support` attribute.
-
     :param torch.Tensor mask: A byte tensor toggling between ``component0``
         and ``component1``.
     :param pyro.distributions.TorchDistribution component0: a distribution
