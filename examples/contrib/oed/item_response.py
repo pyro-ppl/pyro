@@ -1,15 +1,12 @@
 import argparse
 import torch
-from torch.distributions import constraints
 from torch.nn.functional import softplus
-import numpy as np
 
 import pyro
 import pyro.distributions as dist
 from pyro import optim
 from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import vi_ape
-import pyro.contrib.gp as gp
 
 # Number of layers of hierarchy (1 layer- classical linear model)
 layers = 2
@@ -28,7 +25,7 @@ def model(design_tensor, participant_id):
     :param list participant_id: a hierarchical list of the groups
         that the current participant is assigned to. The first element
         indexes the highest level group. For instance, a geographical
-        hierarchy list could look like 
+        hierarchy list could look like
         `["United States", "California", "Santa Rosa"]`
     """
     # batch x n
@@ -41,7 +38,7 @@ def model(design_tensor, participant_id):
     coef = torch.zeros(coef_shape)
 
     for layer in range(layers):
-        layer_name = "_".join([str(layer)]+ participant_id[:layer])
+        layer_name = "_".join([str(layer)] + participant_id[:layer])
         # Prior sds decay exponentially with layer
         intercept_sd = torch.ones(response_shape)*A*torch.exp(-beta*layer)
         intercept_dist = dist.Normal(0., intercept_sd).independent(1)
@@ -65,8 +62,8 @@ def guide(design_tensor, participant_id):
     # define our variational parameters, sample mean-field
     for layer in range(layers):
         # Local intercept
-        layer_name = "_".join([str(layer)]+ participant_id[:layer])
-        intercept_mean = pyro.param(layer_name + "_intercept_mean", 
+        layer_name = "_".join([str(layer)] + participant_id[:layer])
+        intercept_mean = pyro.param(layer_name + "_intercept_mean",
                                     torch.zeros(response_shape))
         intercept_sd = softplus(pyro.param(layer_name + "_intercept_sd",
                                 10.*torch.ones(response_shape)))
@@ -74,19 +71,19 @@ def guide(design_tensor, participant_id):
         pyro.sample(layer_name + "_intercept", intercept_dist)
 
         # Local coefficient
-        coef_mean = pyro.param(layer_name + "_coef_mean", 
+        coef_mean = pyro.param(layer_name + "_coef_mean",
                                torch.zeros(coef_shape))
         coef_sd = softplus(pyro.param(layer_name + "_coef_sd",
                            10.*torch.ones(coef_shape)))
         coef_dist = dist.Normal(coef_mean, coef_sd).independent(2)
         pyro.sample(layer_name + "_coef", coef_dist)
- 
+
 
 def spherical_design_tensor(d):
     return torch.stack([torch.cos(d), -torch.sin(d)], -1)
 
 
-def main(num_vi_steps, num_acquisitions, num_bo_steps):
+def main(num_vi_steps):
 
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
@@ -123,7 +120,7 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Item response experiment design using VI")
     parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
-    parser.add_argument('--num-acquisitions', nargs="?", default=10, type=int)
-    parser.add_argument('--num-bo-steps', nargs="?", default=6, type=int)
+    # parser.add_argument('--num-acquisitions', nargs="?", default=10, type=int)
+    # parser.add_argument('--num-bo-steps', nargs="?", default=6, type=int)
     args = parser.parse_args()
-    main(args.num_vi_steps, args.num_acquisitions, args.num_bo_steps)
+    main(args.num_vi_steps)
