@@ -50,12 +50,11 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.fc3 = nn.Linear(20, 400)
         self.fc4 = nn.Linear(400, 784)
-        self.sigmoid = nn.Sigmoid()
         self.relu = nn.ReLU()
 
     def forward(self, z):
         h3 = self.relu(self.fc3(z))
-        return self.sigmoid(self.fc4(h3))
+        return torch.sigmoid(self.fc4(h3))
 
 
 @add_metaclass(ABCMeta)
