@@ -13,6 +13,7 @@ from pyro.contrib.tracking.assignment import MarginalAssignment
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
 from pyro.optim.multi import MixedMultiOptimizer, Newton
+from tests.common import xfail_param
 
 
 def make_args():
@@ -120,7 +121,10 @@ def generate_data(args):
     return detections
 
 
-@pytest.mark.parametrize('assignment_grad', [False, True])
+@pytest.mark.parametrize('assignment_grad', [
+    False,
+    xfail_param(True, reason="pytorch 0.4.1 RuntimeError: dim() called on undefined Tensor"),
+])
 def test_em(assignment_grad):
     args = make_args()
     args.assignment_grad = assignment_grad
@@ -142,7 +146,10 @@ def test_em(assignment_grad):
         print('step {}, loss = {}'.format(step, loss.item()))
 
 
-@pytest.mark.parametrize('assignment_grad', [False, True])
+@pytest.mark.parametrize('assignment_grad', [
+    False,
+    xfail_param(True, reason="pytorch 0.4.1 RuntimeError: dim() called on undefined Tensor"),
+])
 def test_em_nested_in_svi(assignment_grad):
     args = make_args()
     args.assignment_grad = assignment_grad
@@ -173,6 +180,7 @@ def test_em_nested_in_svi(assignment_grad):
             svi_step, loss, pyro.param('noise_scale').item()))
 
 
+@pytest.mark.xfail(reason="pytorch 0.4.1 RuntimeError: dim() called on undefined Tensor")
 def test_svi_multi():
     args = make_args()
     args.assignment_grad = True
