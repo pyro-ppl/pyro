@@ -204,17 +204,6 @@ continuous_dists = [
                  'test_data': [[0.4], [0.35]]}
             ],
             scipy_arg_fn=lambda loc, scale: ((), {"loc": np.array(loc), "scale": np.array(scale)})),
-    Fixture(pyro_dist=dist.HalfCauchy,
-            scipy_dist=sp.halfcauchy,
-            examples=[
-                {'loc': [0.5], 'scale': [1.2],
-                 'test_data': [1.0]},
-                {'loc': [0.5, -1.5], 'scale': [1.2, 1.2],
-                 'test_data': [[1.0, -1.0], [1.0, -1.0]]},
-                {'loc': [[0.5], [0.3]], 'scale': [[1.2], [1.0]],
-                 'test_data': [[0.54], [0.35]]}
-            ],
-            scipy_arg_fn=lambda loc, scale: ((), {"loc": np.array(loc), "scale": np.array(scale)})),
     Fixture(pyro_dist=dist.VonMises,
             scipy_dist=sp.vonmises,
             examples=[

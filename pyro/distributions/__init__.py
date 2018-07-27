@@ -5,7 +5,6 @@ from pyro.distributions.binomial import Binomial
 from pyro.distributions.delta import Delta
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
-from pyro.distributions.half_cauchy import HalfCauchy
 from pyro.distributions.iaf import InverseAutoregressiveFlow
 from pyro.distributions.lowrank_mvn import LowRankMultivariateNormal
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
@@ -32,7 +31,6 @@ __all__ = [
     "Distribution",
     "Empirical",
     "GaussianScaleMixture",
-    "HalfCauchy",
     "InverseAutoregressiveFlow",
     "LowRankMultivariateNormal",
     "MixtureOfDiagNormalsSharedCovariance",

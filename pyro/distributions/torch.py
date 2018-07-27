@@ -123,6 +123,15 @@ class Gumbel(torch.distributions.Gumbel, TorchDistributionMixin):
             return type(self)(loc, scale, validate_args=validate_args)
 
 
+class HalfCauchy(torch.distributions.HalfCauchy, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        try:
+            return super(HalfCauchy, self).expand(batch_shape)
+        except NotImplementedError:
+            scale = self.scale.expand(batch_shape)
+            return type(self)(scale)
+
+
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
     def expand(self, batch_shape):
         batch_shape = torch.Size(batch_shape)
