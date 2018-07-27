@@ -302,12 +302,12 @@ def test_guide(args):
     assert p_exists.dim() == 1
     assert positions.shape[0] == args.num_frames
 
+
 @pytest.mark.xfail(reason='Nothing works mr. duck :(')
 @pytest.mark.parametrize("args", ['--no-visdom --svi-iters 2'])
 def test_svi(args):
     if isinstance(args, str):
         args = make_args(args)
-
     pyro.set_rng_seed(0)
     true_states, true_positions, sensor_positions, sensor_outputs, true_confidence = generate_sensor_data(args)
 
