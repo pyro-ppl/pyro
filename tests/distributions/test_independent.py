@@ -60,12 +60,12 @@ def test_expand(sample_shape, batch_shape, event_shape):
 
     base_dist = dist.MultivariateNormal(torch.zeros(2).expand(*(event_shape + (2,))),
                                         torch.eye(2).expand(*(event_shape + (2, 2))))
-    if len(event_shape) >= len(base_dist.batch_shape):
+    if len(event_shape) > len(base_dist.batch_shape):
         with pytest.raises(ValueError):
-            base_dist.independent(len(event_shape) + 1).expand(batch_shape)
+            base_dist.independent(len(event_shape)).expand(batch_shape)
     else:
-            expanded = base_dist.independent(len(event_shape) + 1).expand(batch_shape)
+            expanded = base_dist.independent(len(event_shape)).expand(batch_shape)
             assert expanded.batch_shape == batch_shape
-            assert expanded.event_shape == (base_dist.batch_shape[:len(base_dist.batch_shape) -
-                                                                  expanded.reinterpreted_batch_ndims] +
+            assert expanded.event_shape == (base_dist.batch_shape[len(base_dist.batch_shape) -
+                                                                  expanded.reinterpreted_batch_ndims:] +
                                             base_dist.event_shape)

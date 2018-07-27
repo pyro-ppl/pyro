@@ -143,7 +143,7 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
         base_shape = self.base_dist.batch_shape
         reinterpreted_shape = base_shape[len(base_shape) - self.reinterpreted_batch_ndims:]
         base_dist = self.base_dist.expand(batch_shape + reinterpreted_shape)
-        return type(self)(base_dist, self.reinterpreted_batch_ndims, validate_args=validate_args)
+        return type(self)(base_dist, self.reinterpreted_batch_ndims)
 
 
 class Laplace(torch.distributions.Laplace, TorchDistributionMixin):
