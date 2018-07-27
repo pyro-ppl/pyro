@@ -204,6 +204,17 @@ continuous_dists = [
                  'test_data': [[0.4], [0.35]]}
             ],
             scipy_arg_fn=lambda loc, scale: ((), {"loc": np.array(loc), "scale": np.array(scale)})),
+    Fixture(pyro_dist=dist.HalfCauchy,
+            scipy_dist=sp.halfcauchy,
+            examples=[
+                {'scale': [1.2],
+                 'test_data': [1.0]},
+                {'scale': [1.2, 1.2],
+                 'test_data': [[1.0, -1.0], [1.0, -1.0]]},
+                {'scale': [[1.2], [1.0]],
+                 'test_data': [[0.54], [0.35]]}
+            ],
+            scipy_arg_fn=lambda scale: ((), {"scale": np.array(scale)})),
     Fixture(pyro_dist=dist.VonMises,
             scipy_dist=sp.vonmises,
             examples=[
@@ -261,6 +272,24 @@ discrete_dists = [
             is_discrete=True,
             expected_support_non_vec=[[0.], [1.]],
             expected_support=[[[0., 0.], [0., 0.]], [[1., 1.], [1., 1.]]]),
+    Fixture(pyro_dist=dist.Binomial,
+            scipy_dist=sp.binom,
+            examples=[
+                {'probs': [0.6], 'total_count': 8,
+                 'test_data': [4.]},
+                {'probs': [0.3], 'total_count': 8,
+                 'test_data': [[2.], [4.]]},
+                {'probs': [[0.2], [0.4]], 'total_count': 8,
+                 'test_data': [[4.], [3.]]},
+                {'probs': [0.2, 0.4], 'total_count': [0., 0.],
+                 'test_data': [[0., 0.], [0., 0.]]},
+                {'probs': [0.2, 0.4], 'total_count': [[8., 7.], [5., 9.]],
+                 'test_data': [[6., 3.], [2., 8.]]},
+            ],
+            scipy_arg_fn=lambda probs, total_count: ((total_count, probs), {}),
+            prec=0.05,
+            min_samples=10000,
+            is_discrete=True),
     Fixture(pyro_dist=dist.Categorical,
             scipy_dist=sp.multinomial,
             examples=[
