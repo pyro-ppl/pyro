@@ -5,7 +5,7 @@ import numbers
 import torch
 from torch.distributions import biject_to, constraints, transform_to
 
-import pyro.distributions
+import pyro.distributions.torch
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import broadcast_shape, sum_rightmost

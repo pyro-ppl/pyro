@@ -140,7 +140,9 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
     def expand(self, batch_shape):
         batch_shape = torch.Size(batch_shape)
         validate_args = self.__dict__.get('_validate_args')
-        base_dist = self.base_dist.expand(batch_shape + self.event_shape)
+        base_shape = self.base_dist.batch_shape
+        reinterpreted_shape = base_shape[len(base_shape) - self.reinterpreted_batch_ndims:]
+        base_dist = self.base_dist.expand(batch_shape + reinterpreted_shape)
         return type(self)(base_dist, self.reinterpreted_batch_ndims, validate_args=validate_args)
 
 
