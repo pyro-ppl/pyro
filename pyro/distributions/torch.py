@@ -148,6 +148,15 @@ class HalfCauchy(torch.distributions.HalfCauchy, TorchDistributionMixin):
             return type(self)(scale)
 
 
+class HalfNormal(torch.distributions.HalfNormal, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        try:
+            return super(HalfNormal, self).expand(batch_shape)
+        except NotImplementedError:
+            scale = self.scale.expand(batch_shape)
+            return type(self)(scale)
+
+
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
     def expand(self, batch_shape):
         batch_shape = torch.Size(batch_shape)
@@ -239,6 +248,17 @@ class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistribution
             else:
                 logits = self.logits.expand(batch_shape + self.event_shape)
                 return type(self)(logits=logits, validate_args=validate_args)
+
+
+class Pareto(torch.distributions.Pareto, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        try:
+            return super(Pareto, self).expand(batch_shape)
+        except NotImplementedError:
+            validate_args = self.__dict__.get('_validate_args')
+            loc = self.loc.expand(batch_shape)
+            alpha = self.alpha.expand(batch_shape)
+            return type(self)(loc, alpha, validate_args=validate_args)
 
 
 class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
