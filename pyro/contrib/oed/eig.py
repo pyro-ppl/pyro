@@ -64,109 +64,86 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
     return loss
 
 
-def naiveRainforth(model, design, *args, observation_labels="y", N=100, M=10):
+def naive_rainforth(model, design, *args, observation_label="y", target_label="theta",
+                    N=100, M=10):
 
-    if isinstance(observation_labels, str):
-        observation_labels = [observation_labels]
+    expanded_design = design.expand((N, *design.shape))
+    # Run model `num_particles` times vectorized
+    trace = poutine.trace(model).get_trace(expanded_design)
+    reexpanded_design = expanded_design.expand((M, *expanded_design.shape))
+    reexpanded_y = trace.nodes[observation_label]["value"].expand(
+        (M, *trace.nodes[observation_label]["value"].shape))
+    conditional_model = pyro.condition(model, data={observation_label: reexpanded_y})
+    c_trace = poutine.trace(conditional_model).get_trace(reexpanded_design)
+    c_trace.compute_log_prob()
+    base_lp = logsumexp(c_trace.nodes[observation_label]["log_prob"], 0) - np.log(M)
 
-    # 100 traces using batching
-    eig = 0.
-    for _ in range(N):
-        y_given_theta = 0.
-        y = {}
-        trace = poutine.trace(model).get_trace(design)
-        trace.compute_log_prob()
-        for label in observation_labels:
-            # Valid? Yes, this is log probability conditional on
-            # theta, and any previously sampled y's
-            # Order doesn't matter
-            y_given_theta += trace.nodes[label]["log_prob"]
-            y[label] = trace.nodes[label]["value"]
-
-        lp_shape = y_given_theta.shape
-
-        y_given_other_theta = torch.zeros(*lp_shape, M+1)
-        y_given_other_theta[..., -1] = y_given_theta
-        conditional_model = pyro.condition(model, data=y)
-        for j in range(M):
-            trace = poutine.trace(conditional_model).get_trace(design)
-            trace.compute_log_prob()
-            for label in observation_labels:
-                y_given_other_theta[..., j] += trace.nodes[label]["log_prob"]
-
-        eig += y_given_theta - torch.distributions.utils.log_sum_exp(
-            y_given_other_theta).squeeze() + np.log(M)
-
-    return eig/N
+    return (trace.nodes[observation_label]["log_prob"] - base_lp).sum(0)/N
 
 
 def donsker_varadhan_loss(model, design, observation_label, target_label,
-                          num_particles, T):
+                          num_particles, U):
 
-    global i, y_samples, theta_samples, theta_shuffled_samples, ewma, alpha
-
-    loss = 0.
-    trace = poutine.trace(model).get_trace(design)
-    trace.compute_log_prob()
-    y = trace.nodes[observation_label]["value"]
-    theta = trace.nodes[target_label]["value"]
-
-    y_samples = y.new_empty((num_particles, *y.shape))
-    theta_samples = theta.new_empty((num_particles, *theta.shape))
-
-    y_samples[0, ...] = y
-    theta_samples[0, ...] = theta
-    
-    for i in range(1, num_particles):
-        trace = poutine.trace(model).get_trace(design)
-        y = trace.nodes[observation_label]["value"]
-        theta = trace.nodes[target_label]["value"]
-        y_samples[i, ...] = y
-        theta_samples[i, ...] = theta
-
-    idx = torch.randperm(num_particles)
-    theta_shuffled_samples = theta_samples[idx, ...]
-
-    pyro.module("T", T)
-
-    i= 0
+    global ewma
     ewma = None
     alpha = 10.
 
+    expanded_design = design.expand((num_particles, *design.shape))
+    # Run model `num_particles` times vectorized
+
+    pyro.module("U", U)
+
     def loss_fn():
 
-        global i, y_samples, theta_samples, theta_shuffled_samples, ewma, alpha
+        global ewma
 
-        fvals = T(y_samples, theta_samples, design)
-        fshuffled = T(y_samples, theta_shuffled_samples, design)
+        re_n = 1
 
-        expect_exp = logsumexp(fshuffled, dim=0) - np.log(num_particles)
+        trace = poutine.trace(model).get_trace(expanded_design)
+        reexpanded_design = design.expand((re_n, *expanded_design.shape))
+        reexpanded_y = trace.nodes[observation_label]["value"].expand(
+            (re_n, *trace.nodes[observation_label]["value"].shape))
+        conditional_model = pyro.condition(model, data={observation_label: reexpanded_y})
+        c_trace = poutine.trace(conditional_model).get_trace(reexpanded_design)
+        c_trace.compute_log_prob()
+        base_lp = logsumexp(c_trace.nodes[observation_label]["log_prob"], 0)- np.log(re_n)
+        rand_perm = torch.randperm(num_particles)
+        shuffled_trace = shuffle_trace(model, trace, rand_perm, target_label, 
+                                       observation_label, expanded_design)
+
+        # Now compute the log_probs- avoid using replay
+        trace.compute_log_prob()
+        shuffled_trace.compute_log_prob()
+
+        T_unshuffled = U(expanded_design, trace.nodes[observation_label]["value"],
+                         trace.nodes[observation_label]["log_prob"])
+        T_shuffled = U(expanded_design, shuffled_trace.nodes[observation_label]["value"],
+                       shuffled_trace.nodes[observation_label]["log_prob"])
+
+        # Use ewma correction to gradients
+        expect_exp = logsumexp(T_shuffled, dim=0) - np.log(num_particles)
         if ewma is None:
             ewma = torch.exp(expect_exp)
         else:
             ewma = (1/(1+alpha))*(torch.exp(expect_exp) + alpha*ewma)
         expect_exp.grad = 1./ewma
-        loss = torch.sum(fvals, 0)/num_particles - expect_exp
-        # loss = torch.sum(fvals, 0)/num_particles - \
-        #     torch.sum(torch.exp(fshuffled-1.), 0)/num_particles
-
-        for _ in range(20):
-            trace = poutine.trace(model).get_trace(design)
-            y = trace.nodes[observation_label]["value"]
-            theta = trace.nodes[target_label]["value"]
-            y_samples[i, ...] = y
-            theta_samples[i, ...] = theta
-            i = (i+1)%num_particles
-        idx = torch.randperm(num_particles)
-        theta_shuffled_samples = theta_samples[idx, ...]
+        print('ewma', ewma)
 
         # Switch sign, sum over batch dimensions for scalar loss
-        print(loss)
+        loss = torch.sum(T_unshuffled, 0)/num_particles - expect_exp
+        # print(loss)
         agg_loss = -loss.sum()
-            
-        return agg_loss
+        return agg_loss, loss
 
     return loss_fn
+
+
+def shuffle_trace(model, trace, perm, target_label, observation_label, *args):
+    conditional_model = pyro.condition(model, data={
+        observation_label: trace.nodes[observation_label]["value"]
+        })
+    c_trace = poutine.trace(conditional_model).get_trace(*args)
+    return c_trace
 
 
 def logsumexp(inputs, dim=None, keepdim=False):

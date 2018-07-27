@@ -77,22 +77,23 @@ def guide(design):
 
 
 class DVNeuralNet(nn.Module):
-    def __init__(self, batch_dim, y_dim, theta_dim):
+    def __init__(self, design_dim, y_dim):
         super(DVNeuralNet, self).__init__()
-        self.weight0 = nn.Parameter(torch.rand(batch_dim, y_dim+theta_dim, y_dim+theta_dim))
-        self.bias0 = nn.Parameter(torch.rand(batch_dim, 1, y_dim+theta_dim))
-        self.weight1 = nn.Parameter(torch.rand(batch_dim, y_dim+theta_dim, y_dim+theta_dim))
-        self.bias1 = nn.Parameter(torch.rand(batch_dim, 1, y_dim+theta_dim))
-        self.weight2 = nn.Parameter(torch.rand(batch_dim, y_dim+theta_dim, 1))
-        self.bias2 = nn.Parameter(torch.rand(batch_dim, 1, 1))
+        input_dim = design_dim + y_dim + 1
+        self.linear1 = nn.Linear(input_dim, input_dim)
+        self.linear2 = nn.Linear(input_dim + 1, input_dim)
+        self.linear3 = nn.Linear(input_dim, 1)
         self.softplus = nn.Softplus()
 
-    def forward(self, y, theta, design):
+    def forward(self, design, y, lp):
         suff = torch.matmul(y.unsqueeze(-2), design)
-        m = torch.cat([suff, theta], -1)
-        h1 = self.softplus(torch.matmul(m, self.weight0)+self.bias0)
-        h2 = self.softplus(torch.matmul(h1, self.weight1)+self.bias1)
-        o = self.softplus(torch.matmul(h2, self.weight2)+self.bias2)
+        design_suff = design.sum(-2, keepdim=True)
+        lp_unsqueezed = lp.unsqueeze(-1).unsqueeze(-2)
+        m = torch.cat([suff, design_suff, lp_unsqueezed], -1)
+        h1 = self.softplus(self.linear1(m))
+        h2 = torch.cat([h1, lp_unsqueezed], -1)
+        h3 = self.softplus(self.linear2(h2))
+        o = self.linear3(h3).squeeze(-2).squeeze(-1)
         return o
 
 
@@ -148,20 +149,23 @@ def main(num_steps):
     
     # Donsker varadhan
     dv_loss_fn = donsker_varadhan_loss(model, X, "y", "w", 2000,
-                                       DVNeuralNet(len(ns), p, p))
+                                       DVNeuralNet(p, p))
     params = None
+    ewma = None
     opt = optim.Adam({"lr": 0.005})
     for step in range(300000):
         if params is not None:
             pyro.infer.util.zero_grads(params)
-        dv_loss = dv_loss_fn()
-        dv_loss.backward()
+        agg_loss, dv_loss = dv_loss_fn()
+        if ewma is None:
+            ewma = dv_loss
+        else:
+            ewma = (1/(1+100))*(dv_loss + 100*ewma)
+        print(dv_loss)
+        agg_loss.backward()
         params = [pyro.param(name).unconstrained()
                   for name in pyro.get_param_store().get_all_param_names()]
         opt(params)
-
-    # Barber Agakov
-
 
     # Estimated loss (linear transform of EIG)
     est_ape = vi_ape(
