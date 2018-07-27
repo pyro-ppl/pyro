@@ -54,15 +54,12 @@ def model(detections, args):
         assign_probs[-1] = p_fake
         assign = pyro.sample('assign', dist.Categorical(logits=assign_probs))
         is_fake = (assign == assign.shape[-1] - 1)
-        is_real = ~is_fake
-        with poutine.scale(scale=is_real.type_as(assign_probs)):
-            objects_plus_bogus = torch.zeros(max_num_objects + 1)
-            objects_plus_bogus[:max_num_objects] = objects
-            pyro.sample('real_detections', dist.Normal(objects_plus_bogus[assign], noise_scale),
-                        obs=detections)
-        with poutine.scale(scale=is_fake.type_as(assign_probs)):
-            pyro.sample('fake_detections', dist.Normal(0., 1.),
-                        obs=detections)
+        objects_plus_bogus = torch.zeros(max_num_objects + 1)
+        objects_plus_bogus[:max_num_objects] = objects
+        real_dist = dist.Normal(objects_plus_bogus[assign], noise_scale)
+        fake_dist = dist.Normal(0., 1.)
+        pyro.sample('detections', dist.MaskedMixture(is_fake, real_dist, fake_dist),
+                    obs=detections)
 
 
 # This should match detection_model's existence part.
