@@ -1,8 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
+from torch.distributions import constraints
 
-from pyro.distributions.torch_distribution import TorchDistributionMixin
+from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistributionMixin
 
 
 class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
@@ -170,6 +171,8 @@ class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
 
 
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
+    support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
+
     def expand(self, batch_shape):
         try:
             return super(MultivariateNormal, self).expand(batch_shape)
