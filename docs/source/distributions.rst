@@ -56,14 +56,6 @@ AVFMultivariateNormal
     :undoc-members:
     :show-inheritance:
 
-Binomial
---------
-
-.. autoclass:: pyro.distributions.Binomial
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 Delta
 -----
 .. autoclass:: pyro.distributions.Delta

@@ -30,6 +30,21 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
             return type(self)(concentration1, concentration0, validate_args=validate_args)
 
 
+class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        try:
+            return super(Binomial, self).expand(batch_shape)
+        except NotImplementedError:
+            validate_args = self.__dict__.get('_validate_args')
+            total_count = self.total_count.expand(batch_shape)
+            if 'probs' in self.__dict__:
+                probs = self.probs.expand(batch_shape)
+                return type(self)(total_count, probs=probs, validate_args=validate_args)
+            else:
+                logits = self.logits.expand(batch_shape)
+                return type(self)(total_count, logits=logits, validate_args=validate_args)
+
+
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
     def expand(self, batch_shape):
         try:
