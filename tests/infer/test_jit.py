@@ -13,6 +13,8 @@ from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELB
 from pyro.optim import Adam
 from tests.common import assert_equal, xfail_param
 
+pytestmark = pytest.mark.skip(reason="Requires update - https://github.com/uber/pyro/issues/1063")
+
 
 def test_simple():
     y = torch.ones(2)
@@ -82,6 +84,7 @@ def test_grad_expand():
     f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
 
 
+@pytest.mark.skip(reason="https://github.com/uber/pyro/issues/1063")
 @pytest.mark.parametrize('num_particles', [1, 10])
 @pytest.mark.parametrize('Elbo', [
     Trace_ELBO,
