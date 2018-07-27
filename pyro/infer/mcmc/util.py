@@ -24,25 +24,23 @@ class EnumTraceProbEvaluator(object):
         self.has_enumerable_sites = has_enumerable_sites
         self.max_iarange_nesting = max_iarange_nesting
         self.log_probs = defaultdict(list)
-        self._predecessors_cache = {}
+        self._upstream_log_prob_cache = {}
 
-    def _get_predecessors_log_factors(self, target_ordinal):
+    def _get_upstream_log_probs(self, target_ordinal):
         """
-        Returns the list of predecessors for `target_ordinal `and
-        their log_prob factors.
+        Returns the upstream (predecessors) log_probs for the
+        `target_ordinal`.
         """
-        if target_ordinal in self._predecessors_cache:
-            return self._predecessors_cache[target_ordinal]
+        if target_ordinal in self._upstream_log_prob_cache:
+            return self._upstream_log_prob_cache[target_ordinal]
         log_factors = []
-        predecessors = set()
 
         for ordinal, term in self.log_probs.items():
             if ordinal < target_ordinal:
                 log_factors += term
-                predecessors.add(ordinal)
 
-        self._predecessors_cache[target_ordinal] = (predecessors, log_factors)
-        return predecessors, log_factors
+        self._upstream_log_prob_cache[target_ordinal] = log_factors
+        return log_factors
 
     def _compute_log_prob_terms(self):
         """
@@ -83,7 +81,7 @@ class EnumTraceProbEvaluator(object):
             if any(target_ordinal < other for other in self.log_probs):
                 continue  # not a leaf
             leaves_log_probs[target_ordinal] = self.log_probs[target_ordinal]
-            predecessors, log_factors = self._get_predecessors_log_factors(target_ordinal)
+            log_factors = self._get_upstream_log_probs(target_ordinal)
             leaves_log_probs[target_ordinal] = sum(leaves_log_probs[target_ordinal] + log_factors)
 
         # Reduce the log prob terms for each leaf node:
