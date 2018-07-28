@@ -9,6 +9,8 @@ from pyro import optim
 from pyro.infer import Trace_ELBO
 from pyro.contrib.oed.eig import vi_ape, donsker_varadhan_loss
 
+torch.set_default_tensor_type('torch.DoubleTensor')
+
 """
 Example builds on the Bayesian regression tutorial [1]. It demonstrates how
 to estimate the average posterior entropy (APE) under a model and use it to
@@ -81,7 +83,7 @@ class DVNeuralNet(nn.Module):
         super(DVNeuralNet, self).__init__()
         input_dim = design_dim + y_dim + 1
         self.linear1 = nn.Linear(input_dim, input_dim)
-        self.linear2 = nn.Linear(input_dim + 1, input_dim)
+        self.linear2 = nn.Linear(input_dim, input_dim)
         self.linear3 = nn.Linear(input_dim, 1)
         self.softplus = nn.Softplus()
 
@@ -91,9 +93,8 @@ class DVNeuralNet(nn.Module):
         lp_unsqueezed = lp.unsqueeze(-1).unsqueeze(-2)
         m = torch.cat([suff, design_suff, lp_unsqueezed], -1)
         h1 = self.softplus(self.linear1(m))
-        h2 = torch.cat([h1, lp_unsqueezed], -1)
-        h3 = self.softplus(self.linear2(h2))
-        o = self.linear3(h3).squeeze(-2).squeeze(-1)
+        h2 = self.softplus(self.linear2(h1))
+        o = self.linear3(h2).squeeze(-2).squeeze(-1)
         return o
 
 
@@ -148,11 +149,11 @@ def main(num_steps):
     print(H_prior - true_ape)
     
     # Donsker varadhan
-    dv_loss_fn = donsker_varadhan_loss(model, X, "y", "w", 2000,
+    dv_loss_fn = donsker_varadhan_loss(model, X, "y", "w", 500,
                                        DVNeuralNet(p, p))
     params = None
     ewma = None
-    opt = optim.Adam({"lr": 0.005})
+    opt = optim.Adam({"lr": 0.0005})
     for step in range(300000):
         if params is not None:
             pyro.infer.util.zero_grads(params)
@@ -162,6 +163,7 @@ def main(num_steps):
         else:
             ewma = (1/(1+100))*(dv_loss + 100*ewma)
         print(dv_loss)
+        print(ewma)
         agg_loss.backward()
         params = [pyro.param(name).unconstrained()
                   for name in pyro.get_param_store().get_all_param_names()]

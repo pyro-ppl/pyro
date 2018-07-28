@@ -68,17 +68,17 @@ def naive_rainforth(model, design, *args, observation_label="y", target_label="t
                     N=100, M=10):
 
     expanded_design = design.expand((N, *design.shape))
-    # Run model `num_particles` times vectorized
     trace = poutine.trace(model).get_trace(expanded_design)
-    reexpanded_design = expanded_design.expand((M, *expanded_design.shape))
-    reexpanded_y = trace.nodes[observation_label]["value"].expand(
-        (M, *trace.nodes[observation_label]["value"].shape))
-    conditional_model = pyro.condition(model, data={observation_label: reexpanded_y})
-    c_trace = poutine.trace(conditional_model).get_trace(reexpanded_design)
-    c_trace.compute_log_prob()
-    base_lp = logsumexp(c_trace.nodes[observation_label]["log_prob"], 0) - np.log(M)
+    trace.compute_log_prob()
+    y = trace.nodes[observation_label]["value"]
+    conditional_lp = trace.nodes[observation_label]["log_prob"]
 
-    return (trace.nodes[observation_label]["log_prob"] - base_lp).sum(0)/N
+    reexpanded_design = expanded_design.expand((M, *expanded_design.shape))
+    reexp_trace = poutine.trace(model).get_trace(reexpanded_design)
+    marginal_lp = cond_lp(model, y, reexp_trace.nodes[target_label]["value"],
+                             observation_label, target_label)
+
+    return (conditional_lp - marginal_lp).sum(0)/N
 
 
 def donsker_varadhan_loss(model, design, observation_label, target_label,
@@ -89,7 +89,10 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
     alpha = 10.
 
     expanded_design = design.expand((num_particles, *design.shape))
-    # Run model `num_particles` times vectorized
+    # re_n = 10
+    # reexpanded_design = design.expand((re_n, *expanded_design.shape))
+    # trace = poutine.trace(model).get_trace(reexpanded_design)
+    # fixed_theta = trace.nodes[target_label]["value"]
 
     pyro.module("U", U)
 
@@ -97,28 +100,22 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
 
         global ewma
 
-        re_n = 1
-
         trace = poutine.trace(model).get_trace(expanded_design)
-        reexpanded_design = design.expand((re_n, *expanded_design.shape))
-        reexpanded_y = trace.nodes[observation_label]["value"].expand(
-            (re_n, *trace.nodes[observation_label]["value"].shape))
-        conditional_model = pyro.condition(model, data={observation_label: reexpanded_y})
-        c_trace = poutine.trace(conditional_model).get_trace(reexpanded_design)
-        c_trace.compute_log_prob()
-        base_lp = logsumexp(c_trace.nodes[observation_label]["log_prob"], 0)- np.log(re_n)
-        rand_perm = torch.randperm(num_particles)
-        shuffled_trace = shuffle_trace(model, trace, rand_perm, target_label, 
-                                       observation_label, expanded_design)
+        y = trace.nodes[observation_label]["value"]
+        theta = trace.nodes[target_label]["value"]
+        # idx = torch.randperm(num_particles)
+        # shuffled_theta = theta[idx, ...]
 
-        # Now compute the log_probs- avoid using replay
+        # Compute log probabilities
         trace.compute_log_prob()
-        shuffled_trace.compute_log_prob()
+        unshuffled_lp = trace.nodes[observation_label]["log_prob"]
+        # marginal_lp = cond_lp(model, y, fixed_theta, observation_label, 
+        #     target_label, reexpanded_design)
+        shuffled_lp = cond_lp(model, y, None, observation_label, 
+            target_label, expanded_design.unsqueeze(0))
 
-        T_unshuffled = U(expanded_design, trace.nodes[observation_label]["value"],
-                         trace.nodes[observation_label]["log_prob"])
-        T_shuffled = U(expanded_design, shuffled_trace.nodes[observation_label]["value"],
-                       shuffled_trace.nodes[observation_label]["log_prob"])
+        T_unshuffled = unshuffled_lp + U(expanded_design, y, unshuffled_lp)
+        T_shuffled = shuffled_lp + U(expanded_design, y, shuffled_lp)
 
         # Use ewma correction to gradients
         expect_exp = logsumexp(T_shuffled, dim=0) - np.log(num_particles)
@@ -131,19 +128,27 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
 
         # Switch sign, sum over batch dimensions for scalar loss
         loss = torch.sum(T_unshuffled, 0)/num_particles - expect_exp
-        # print(loss)
         agg_loss = -loss.sum()
         return agg_loss, loss
 
     return loss_fn
 
 
-def shuffle_trace(model, trace, perm, target_label, observation_label, *args):
-    conditional_model = pyro.condition(model, data={
-        observation_label: trace.nodes[observation_label]["value"]
-        })
-    c_trace = poutine.trace(conditional_model).get_trace(*args)
-    return c_trace
+def cond_lp(model, observation, target, observation_label, target_label, *args):
+    if target is not None:
+        n = target.shape[0]
+        conditional_model = pyro.condition(model, data={
+            observation_label: observation.unsqueeze(0),
+            target_label: target
+            })
+    else:
+        n = 1
+        conditional_model = pyro.condition(model, data={
+            observation_label: observation.unsqueeze(0),
+            })
+    trace = poutine.trace(conditional_model).get_trace(*args)
+    trace.compute_log_prob()
+    return logsumexp(trace.nodes[observation_label]["log_prob"], 0) - np.log(n)
 
 
 def logsumexp(inputs, dim=None, keepdim=False):
