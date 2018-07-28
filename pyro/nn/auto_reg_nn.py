@@ -2,13 +2,12 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 
-import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
 
-def sample_mask_indices(input_dim, hidden_dim, simple=False, conditional=True):
+def sample_mask_indices(input_dim, hidden_dim, simple=False, conditional=False):
     """
     Samples the indices assigned to hidden units during the construction of MADE masks
 
@@ -18,18 +17,21 @@ def sample_mask_indices(input_dim, hidden_dim, simple=False, conditional=True):
     :type hidden_dim: int
     :param simple: True to sample indices uniformly, false to space indices evenly and round up or down randomly
     :type simple: bool
+    :param conditional: True if sampling indices for a conditional-MADE, false otherwise
+    :type conditional: bool
     """
     start_integer = 0 if conditional else 1
 
     if simple:
-        return np.random.randint(start_integer, input_dim, size=(hidden_dim,))
+        # Simple procedure samples each index i.i.d.
+        return torch.randint(start_integer, input_dim, size=(hidden_dim,))
     else:
-        mk = np.linspace(start_integer, input_dim - 1, hidden_dim)
-        ints = np.array(mk, dtype=int)
+        # "Non-simple" procedure creates fractional indices evenly then rounds at random
+        mk = torch.linspace(start_integer, input_dim - 1, steps=hidden_dim)
 
-        # NOTE: Maybe we'd prefer a vector of rand here?
-        ints += (np.random.rand() < mk - ints)
-
+        # Randomly decide whether to round up or down indices
+        ints = mk.floor()
+        ints += torch.bernoulli(mk - ints)
         return ints
 
 
@@ -46,27 +48,30 @@ def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, ou
     :param num_layers: the number of hidden layers for which to create masks
     :type num_layers: int
     :param permutation: the order of the input variables
-    :type permutation: np.array
+    :type permutation: torch.Tensor
     :param output_dim_multiplier: tiles the output (e.g. for when a separate mean and scale parameter are desired)
     :type output_dim_multiplier: int
     """
     # Create mask indices for input, hidden layers, and final layer
     # We use 0 to refer to the elements of the variable being conditioned on,
     # and range(1:(D_latent+1)) for the input variable
-    m_input = np.concatenate((np.zeros(observed_dim), 1 + permutation))
+    var_index = permutation.clone().type(torch.get_default_dtype())
+    var_index[permutation] = torch.arange(input_dim, dtype=torch.get_default_dtype())
+
+    m_input = torch.cat((torch.zeros(observed_dim), 1 + var_index))
     m_w = [sample_mask_indices(input_dim, hidden_dim, conditional=observed_dim > 0) for i in range(num_layers)]
-    m_v = np.tile(permutation, output_dim_multiplier)
+    m_v = var_index.repeat(output_dim_multiplier)
 
     # Create mask from input to output for the skips connections
-    M_A = (1.0 * (np.atleast_2d(m_v).T >= np.atleast_2d(m_input)))
+    M_A = (m_v.unsqueeze(-1) >= m_input.unsqueeze(0)).type_as(m_v)
 
     # Create mask from input to first hidden layer, and between subsequent hidden layers
-    M_W = [(1.0 * (np.atleast_2d(m_w[0]).T >= np.atleast_2d(m_input)))]
+    M_W = [(m_w[0].unsqueeze(-1) >= m_input.unsqueeze(0)).type_as(m_v)]
     for i in range(1, num_layers):
-        M_W.append(1.0 * (np.atleast_2d(m_w[i]).T >= np.atleast_2d(m_w[i - 1])))
+        M_W.append((m_w[i].unsqueeze(-1) >= m_w[i - 1].unsqueeze(0)).type_as(m_v))
 
     # Create mask from last hidden layer to output layer
-    M_V = (1.0 * (np.atleast_2d(m_v).T >= np.atleast_2d(m_w[-1])))
+    M_V = (m_v.unsqueeze(-1) >= m_w[-1].unsqueeze(0)).type_as(m_v)
 
     return M_W, M_V, M_A
 
@@ -114,17 +119,14 @@ class AutoRegressiveNN(nn.Module):
         for any i, j in range(0, output_dim_multiplier) the subset of outputs [i, :] has identical
         autoregressive structure to [j, :]. defaults to `1`
     :type output_dim_multiplier: int
-    :param mask_encoding: a torch Tensor that controls the autoregressive structure (see reference). by default
-        this is chosen at random.
-    :type mask_encoding: torch.LongTensor
     :param permutation: an optional permutation that is applied to the inputs and controls the order of the
         autoregressive factorization. in particular for the identity permutation the autoregressive structure
         is such that the Jacobian is upper triangular. By default this is the identity permutation.
-    :type permutation: np.array
+    :type permutation: torch.LongTensor
     """
 
-    def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1,
-                 permutation=None, skip_connections=False, num_layers=1, nonlinearity=nn.ReLU()):
+    def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1, permutation=None, skip_connections=False,
+                 num_layers=1, nonlinearity=nn.ReLU()):
         super(AutoRegressiveNN, self).__init__()
         if input_dim == 1:
             warnings.warn('AutoRegressiveNN input_dim = 1. Consider using an affine transformation instead.')
@@ -134,18 +136,16 @@ class AutoRegressiveNN(nn.Module):
         self.num_layers = num_layers
 
         if permutation is None:
-            # order the variables in the order that they're given
-            self.permutation = np.arange(input_dim)
+            # By default set a random permutation of variables, which is important for performance with multiple steps
+            self.permutation = torch.randperm(input_dim)
         else:
-            # the permutation is chosen by the user
-            self.permutation = permutation
+            # The permutation is chosen by the user
+            self.permutation = permutation.type(dtype=torch.int64)
 
         # Create masks
-        M_W, M_V, M_A = create_mask(input_dim=input_dim, observed_dim=0, hidden_dim=hidden_dim,
-                                    num_layers=num_layers, permutation=self.permutation,
-                                    output_dim_multiplier=output_dim_multiplier)
-        self.M_W = [torch.FloatTensor(M) for M in M_W]
-        self.M_V = torch.FloatTensor(M_V)
+        self.M_W, self.M_V, self.M_A = create_mask(input_dim=input_dim, observed_dim=0, hidden_dim=hidden_dim,
+                                                   num_layers=num_layers, permutation=self.permutation,
+                                                   output_dim_multiplier=output_dim_multiplier)
 
         # Create masked layers
         layers = [MaskedLinear(input_dim, hidden_dim, self.M_W[0])]
@@ -154,9 +154,9 @@ class AutoRegressiveNN(nn.Module):
         self.layers = nn.ModuleList(layers)
 
         if skip_connections:
-            self.M_A = torch.FloatTensor(M_A)
             self.skip_p = MaskedLinear(input_dim, input_dim * output_dim_multiplier, self.M_A, bias=False)
         else:
+            self.M_A = None
             self.skip_p = None
         self.p = MaskedLinear(hidden_dim, input_dim * output_dim_multiplier, self.M_V)
 
@@ -171,7 +171,7 @@ class AutoRegressiveNN(nn.Module):
 
     def forward(self, x):
         """
-        the forward method
+        The forward method
         """
         h = x
         for layer in self.layers:

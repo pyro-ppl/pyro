@@ -15,7 +15,7 @@ pytestmark = pytest.mark.init(rng_seed=123)
 
 class InverseAutoregressiveFlowTests(TestCase):
     def setUp(self):
-        self.epsilon = 1.0e-6
+        self.epsilon = 1.0e-3
 
     def _test_jacobian(self, input_dim, hidden_dim):
         jacobian = torch.zeros(input_dim, input_dim)
@@ -32,8 +32,7 @@ class InverseAutoregressiveFlowTests(TestCase):
             for k in range(input_dim):
                 epsilon_vector = torch.zeros(1, input_dim)
                 epsilon_vector[0, j] = self.epsilon
-                iaf_x_eps = iaf(x + epsilon_vector)
-                delta = (iaf_x_eps - iaf_x) / self.epsilon
+                delta = (iaf(x + 0.5 * epsilon_vector) - iaf(x - 0.5 * epsilon_vector)) / self.epsilon
                 jacobian[j, k] = float(delta[0, k].data.sum())
 
         permutation = iaf.arn.get_permutation()
@@ -68,9 +67,8 @@ class InverseAutoregressiveFlowTests(TestCase):
 
 
 class AutoRegressiveNNTests(TestCase):
-
     def setUp(self):
-        self.epsilon = 1.0e-6
+        self.epsilon = 1.0e-3
 
     def _test_jacobian(self, input_dim, hidden_dim, multiplier):
         jacobian = torch.zeros(input_dim, input_dim)
@@ -85,7 +83,7 @@ class AutoRegressiveNNTests(TestCase):
                     x = torch.randn(1, input_dim)
                     epsilon_vector = torch.zeros(1, input_dim)
                     epsilon_vector[0, j] = self.epsilon
-                    delta = (arn(x + epsilon_vector) - arn(x)) / self.epsilon
+                    delta = (arn(x + 0.5 * epsilon_vector) - arn(x - 0.5 * epsilon_vector)) / self.epsilon
                     jacobian[j, k] = float(delta[0, k + output_index * input_dim])
 
             permutation = arn.get_permutation()
@@ -95,6 +93,7 @@ class AutoRegressiveNNTests(TestCase):
                     permuted_jacobian[j, k] = jacobian[permutation[j], permutation[k]]
 
             lower_sum = torch.sum(torch.tril(nonzero(permuted_jacobian), diagonal=0))
+
             assert lower_sum == float(0.0)
 
     def test_jacobians(self):
