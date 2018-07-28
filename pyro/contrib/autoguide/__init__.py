@@ -44,6 +44,7 @@ __all__ = [
     'AutoLowRankMultivariateNormal',
     'AutoMultivariateNormal',
     'AutoIAFNormal',
+    'UnconstrainedLaplaceApproximation',
 ]
 
 
@@ -106,9 +107,7 @@ class AutoGuide(object):
             self.master()._check_prototype(self.prototype_trace)
 
         self._iaranges = {}
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] != "sample" or site["is_observed"]:
-                continue
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
             for frame in site["cond_indep_stack"]:
                 if frame.vectorized:
                     self._iaranges[frame.name] = frame
@@ -241,18 +240,31 @@ class AutoCallable(AutoGuide):
         return {} if result is None else result
 
 
+def _hessian(y, xs):
+    dys = torch.autograd.grad(y, xs, create_graph=True)
+    flat_dy = torch.cat([dy.reshape(-1) for dy in dys])
+    H = []
+    for dyi in flat_dy:
+        Hi = torch.cat([Hij.reshape(-1) for Hij in torch.autograd.grad(dyi, xs, retain_graph=True)])
+        H.append(Hi)
+    H = torch.stack(H)
+    return H
+
+
 class AutoDelta(AutoGuide):
     """
     This implementation of :class:`AutoGuide` uses Delta distributions to
     construct a MAP guide over the entire latent space. The guide does not
     depend on the model's ``*args, **kwargs``.
 
+    ..note:: This class does MAP inference in constrained space.
+
     Usage::
 
         guide = AutoDelta(model)
         svi = SVI(model, guide, ...)
 
-    By default latent variables are randomly initialized by the model.  To
+    By default latent variables are randomly initialized by the model. To
     change this default behavior the user should call :func:`pyro.param` before
     beginning inference, with ``"auto_"`` prefixed to the targetd sample site
     names e.g. for sample sites named "level" and "concentration", initialize
@@ -275,9 +287,7 @@ class AutoDelta(AutoGuide):
 
         iaranges = self._create_iaranges()
         result = {}
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] != "sample" or site["is_observed"]:
-                continue
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
             with ExitStack() as stack:
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
@@ -295,6 +305,24 @@ class AutoDelta(AutoGuide):
         :rtype: dict
         """
         return self(*args, **kwargs)
+
+    def covariance(self, *args, **kwargs):
+        """
+        Returns covariance of the packed latent variable under Laplace (quadratic) approximation.
+        The packed latent variable is packed from the flat versions of latent variables, which are
+        arranged according to their appearance in the base ``model``.
+        """
+        guide_trace = poutine.trace(self).get_trace(*args, **kwargs)
+        model_trace = poutine.trace(
+            poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
+        loss = -model_trace.log_prob_sum()
+
+        latents = []
+        for _, site in guide_trace.iter_stochastic_nodes():
+            latents.append(site["value"])
+
+        H = _hessian(loss, latents)
+        return torch.inverse(H)
 
 
 class AutoContinuous(AutoGuide):
@@ -319,10 +347,7 @@ class AutoContinuous(AutoGuide):
         super(AutoContinuous, self)._setup_prototype(*args, **kwargs)
         self._unconstrained_shapes = {}
         self._cond_indep_stacks = {}
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] != "sample" or site["is_observed"]:
-                continue
-
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
             # Collect the shapes of unconstrained values.
             # These may differ from the shapes of constrained values.
             self._unconstrained_shapes[name] = biject_to(site["fn"].support).inv(site["value"]).shape
@@ -355,13 +380,12 @@ class AutoContinuous(AutoGuide):
             (site, unconstrained_value)
         """
         pos = 0
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] == "sample" and not site["is_observed"]:
-                unconstrained_shape = self._unconstrained_shapes[name]
-                size = _product(unconstrained_shape)
-                unconstrained_value = latent[pos:pos + size].view(unconstrained_shape)
-                yield site, unconstrained_value
-                pos += size
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            unconstrained_shape = self._unconstrained_shapes[name]
+            size = _product(unconstrained_shape)
+            unconstrained_value = latent[pos:pos + size].view(unconstrained_shape)
+            yield site, unconstrained_value
+            pos += size
         assert pos == len(latent)
 
     def __call__(self, *args, **kwargs):
@@ -601,6 +625,65 @@ class AutoIAFNormal(AutoContinuous):
         return iaf_dist.independent(1)
 
 
+class UnconstrainedLaplaceApproximation(AutoContinuous):
+    """
+    Unconstrained Laplace approximation (quadratic approximation) approximates
+    the posterior math:`log p(z | x)` by a multivariate normal distribution in
+    the unconstrained space. Under the hood, it uses Delta distributions to
+    construct a MAP guide over the entire (unconstrained) latent space. Its
+    covariance is given by the inverse of the hessian of :math:`-\log p(x, z)`
+    at the MAP point of `z`.
+
+    Usage::
+
+        delta_guide = UnconstrainedLaplaceApproximation(model)
+        svi = SVI(model, delta_guide, ...)
+        guide = delta_guide.laplace_approximation()
+
+    By default the mean vector is initialized to zero. To change this default behavior
+    the user should call :func:`pyro.param` before beginning inference, e.g.::
+
+        latent_dim = 10
+        pyro.param("auto_loc", torch.randn(latent_dim))
+    """
+
+    def get_posterior(self, *args, **kwargs):
+        """
+        Returns a Delta posterior distribution for MAP inference.
+        """
+        loc = pyro.param("{}_loc".format(self.prefix),
+                         lambda: torch.zeros(self.latent_dim))
+        return dist.Delta(loc).independent(1)
+
+    def laplace_approximation(self, *args, **kwargs):
+        """
+        Returns a :class:`AutoMultivariateNormal` instance whose posterior's `loc` and
+        `scale_tril` are given by Laplace approximation.
+        """
+        guide_trace = poutine.trace(self).get_trace(*args, **kwargs)
+        model_trace = poutine.trace(
+            poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
+        loss = guide_trace.log_prob_sum() - model_trace.log_prob_sum()
+
+        loc = pyro.param("{}_loc".format(self.prefix))
+        H = _hessian(loss, loc.unconstrained())
+        cov = H.inverse()
+        scale_tril = cov.potrf(upper=False)
+
+        # calculate scale_tril from self.guide()
+        param_store = pyro.get_param_store()
+        scale_tril_name = "{}_scale_tril".format(self.prefix)
+        if scale_tril_name in param_store.get_all_param_names():
+            param_store.replace_param(scale_tril_name, scale_tril, pyro.param(scale_tril_name))
+        else:
+            pyro.param(scale_tril_name, lambda: scale_tril.detach(),
+                       constraint=constraints.lower_cholesky)
+
+        gaussian_guide = AutoMultivariateNormal(self.model, prefix=self.prefix)
+        gaussian_guide._setup_prototype(*args, **kwargs)
+        return gaussian_guide
+
+
 class AutoDiscreteParallel(AutoGuide):
     """
     A discrete mean-field guide that learns a latent discrete distribution for
@@ -617,9 +700,7 @@ class AutoDiscreteParallel(AutoGuide):
         self._discrete_sites = []
         self._cond_indep_stacks = {}
         self._iaranges = {}
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] != "sample" or site["is_observed"]:
-                continue
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
             if site["infer"].get("enumerate") != "parallel":
                 raise NotImplementedError('Expected sample site "{}" to be discrete and '
                                           'configured for parallel enumeration'.format(name))
