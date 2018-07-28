@@ -6,7 +6,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
-from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistribution
 
 
 def _matrix_triangular_solve_compat(b, A, upper=True):
@@ -45,7 +45,7 @@ class LowRankMultivariateNormal(TorchDistribution):
     arg_constraints = {"loc": constraints.real,
                        "covariance_matrix_D_term": constraints.positive,
                        "scale_tril": constraints.lower_triangular}
-    support = constraints.real
+    support = IndependentConstraint(constraints.real, 1)
     has_rsample = True
 
     def __init__(self, loc, W_term, D_term, trace_term=None):
