@@ -165,23 +165,23 @@ class ParamStoreDict(object):
         Save parameters to disk
 
         :param filename: file name to save to
-        :type name: str
+        :type filename: str
         """
         with open(filename, "wb") as output_file:
             torch.save(self.get_state(), output_file)
 
-    def load(self, filename, load_to_cpu=False):
+    def load(self, filename, map_location=None):
         """
         Loads parameters from disk
 
         :param filename: file name to load from
-        :type name: str
-        :param load_to_cpu: flag to load CUDA-trained parameters to CPU
-        :type name: bool
+        :type filename: str
+        :param map_location: specifies how to remap storage locations
+        :type map_location: function, torch.device, string or a dict
         """
         with open(filename, "rb") as input_file:
             if load_to_cpu:
-                state = torch.load(input_file, map_location=lambda storage, loc: storage)
+                state = torch.load(input_file, map_location)
             else:
                 state = torch.load(input_file)
         self.set_state(state)
