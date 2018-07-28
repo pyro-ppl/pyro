@@ -203,6 +203,9 @@ except ImportError:
         return max_val + (tensor - max_val.unsqueeze(dim)).exp().sum(dim=dim).log()
 
 
+log_sum_exp = logsumexp  # DEPRECATED
+
+
 def enable_validation(is_validate):
     global _VALIDATION_ENABLED
     _VALIDATION_ENABLED = is_validate
