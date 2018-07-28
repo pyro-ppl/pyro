@@ -7,7 +7,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import optim
 from pyro.infer import Trace_ELBO
-from pyro.contrib.oed.eig import vi_ape, donsker_varadhan_loss
+from pyro.contrib.oed.eig import vi_ape, donsker_varadhan_loss, naive_rainforth
 
 torch.set_default_tensor_type('torch.DoubleTensor')
 
@@ -147,6 +147,10 @@ def main(num_steps):
     print(true_ape)
     print("True EIG")
     print(H_prior - true_ape)
+
+    # rainforth = naive_rainforth(model, X, "y", "w", N=10000, M=100)
+    # print("10000-100 Rainforth estimate")
+    # print(rainforth)
     
     # Donsker varadhan
     dv_loss_fn = donsker_varadhan_loss(model, X, "y", "w", 500,

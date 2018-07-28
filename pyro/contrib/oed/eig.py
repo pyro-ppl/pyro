@@ -64,7 +64,7 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
     return loss
 
 
-def naive_rainforth(model, design, *args, observation_label="y", target_label="theta",
+def naive_rainforth(model, design, observation_label="y", target_label="theta",
                     N=100, M=10):
 
     expanded_design = design.expand((N, *design.shape))
@@ -73,10 +73,10 @@ def naive_rainforth(model, design, *args, observation_label="y", target_label="t
     y = trace.nodes[observation_label]["value"]
     conditional_lp = trace.nodes[observation_label]["log_prob"]
 
-    reexpanded_design = expanded_design.expand((M, *expanded_design.shape))
+    reexpanded_design = design.expand((M, 1, *design.shape))
     reexp_trace = poutine.trace(model).get_trace(reexpanded_design)
     marginal_lp = cond_lp(model, y, reexp_trace.nodes[target_label]["value"],
-                             observation_label, target_label)
+                             observation_label, target_label, design)[0]
 
     return (conditional_lp - marginal_lp).sum(0)/N
 
@@ -111,11 +111,11 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
         unshuffled_lp = trace.nodes[observation_label]["log_prob"]
         # marginal_lp = cond_lp(model, y, fixed_theta, observation_label, 
         #     target_label, reexpanded_design)
-        shuffled_lp = cond_lp(model, y, None, observation_label, 
+        shuffled_lp, _ = cond_lp(model, y, None, observation_label, 
             target_label, expanded_design.unsqueeze(0))
 
-        T_unshuffled = unshuffled_lp + U(expanded_design, y, unshuffled_lp)
-        T_shuffled = shuffled_lp + U(expanded_design, y, shuffled_lp)
+        T_unshuffled = U(expanded_design, y, unshuffled_lp)
+        T_shuffled = U(expanded_design, y, shuffled_lp)
 
         # Use ewma correction to gradients
         expect_exp = logsumexp(T_shuffled, dim=0) - np.log(num_particles)
@@ -148,7 +148,7 @@ def cond_lp(model, observation, target, observation_label, target_label, *args):
             })
     trace = poutine.trace(conditional_model).get_trace(*args)
     trace.compute_log_prob()
-    return logsumexp(trace.nodes[observation_label]["log_prob"], 0) - np.log(n)
+    return logsumexp(trace.nodes[observation_label]["log_prob"], 0) - np.log(n), trace.nodes[target_label]["value"]
 
 
 def logsumexp(inputs, dim=None, keepdim=False):
