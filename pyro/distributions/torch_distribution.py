@@ -5,6 +5,7 @@ import numbers
 import torch
 from torch.distributions import biject_to, constraints, transform_to
 
+import pyro.distributions.torch
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import broadcast_shape, sum_rightmost
@@ -142,12 +143,11 @@ class TorchDistributionMixin(Distribution):
         :param int reinterpreted_batch_ndims: The number of batch dimensions
             to reinterpret as event dimensions.
         :return: A reshaped version of this distribution.
-        :rtype: :class:`ReshapedDistribution`
+        :rtype: :class:`pyro.distributions.torch.Independent`
         """
         if reinterpreted_batch_ndims is None:
             reinterpreted_batch_ndims = len(self.batch_shape)
-        # TODO return pyro.distributions.torch.Independent(self, reinterpreted_batch_ndims)
-        return ReshapedDistribution(self, reinterpreted_batch_ndims=reinterpreted_batch_ndims)
+        return pyro.distributions.torch.Independent(self, reinterpreted_batch_ndims)
 
     def mask(self, mask):
         """
