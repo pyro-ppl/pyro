@@ -180,10 +180,7 @@ class ParamStoreDict(object):
         :type map_location: function, torch.device, string or a dict
         """
         with open(filename, "rb") as input_file:
-            if load_to_cpu:
-                state = torch.load(input_file, map_location)
-            else:
-                state = torch.load(input_file)
+            state = torch.load(input_file, map_location)
         self.set_state(state)
 
 
