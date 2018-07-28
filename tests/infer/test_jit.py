@@ -84,7 +84,6 @@ def test_grad_expand():
     f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
 
 
-@pytest.mark.skip(reason="https://github.com/uber/pyro/issues/1063")
 @pytest.mark.parametrize('num_particles', [1, 10])
 @pytest.mark.parametrize('Elbo', [
     Trace_ELBO,
