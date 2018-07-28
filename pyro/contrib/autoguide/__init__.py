@@ -41,10 +41,10 @@ __all__ = [
     'AutoDiscreteParallel',
     'AutoGuide',
     'AutoGuideList',
+    'AutoIAFNormal',
+    'AutoLaplaceApproximation',
     'AutoLowRankMultivariateNormal',
     'AutoMultivariateNormal',
-    'AutoIAFNormal',
-    'UnconstrainedLaplaceApproximation',
 ]
 
 
@@ -625,19 +625,20 @@ class AutoIAFNormal(AutoContinuous):
         return iaf_dist.independent(1)
 
 
-class UnconstrainedLaplaceApproximation(AutoContinuous):
+class AutoLaplaceApproximation(AutoContinuous):
     """
-    Unconstrained Laplace approximation (quadratic approximation) approximates
-    the posterior math:`log p(z | x)` by a multivariate normal distribution in
-    the unconstrained space. Under the hood, it uses Delta distributions to
+    Laplace approximation (quadratic approximation) approximates the posterior
+    math:`log p(z | x)` by a multivariate normal distribution in the
+    unconstrained space. Under the hood, it uses Delta distributions to
     construct a MAP guide over the entire (unconstrained) latent space. Its
     covariance is given by the inverse of the hessian of :math:`-\log p(x, z)`
     at the MAP point of `z`.
 
     Usage::
 
-        delta_guide = UnconstrainedLaplaceApproximation(model)
+        delta_guide = AutoLaplaceApproximation(model)
         svi = SVI(model, delta_guide, ...)
+        # ...then train the delta_guide...
         guide = delta_guide.laplace_approximation()
 
     By default the mean vector is initialized to zero. To change this default behavior
