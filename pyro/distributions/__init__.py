@@ -2,13 +2,11 @@ from __future__ import absolute_import, division, print_function
 
 import pyro.distributions.torch_patch  # noqa F403
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
-from pyro.distributions.binomial import Binomial
 from pyro.distributions.delta import Delta
 from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNormalsSharedCovariance
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
-from pyro.distributions.half_cauchy import HalfCauchy
 from pyro.distributions.iaf import InverseAutoregressiveFlow
 from pyro.distributions.lowrank_mvn import LowRankMultivariateNormal
 from pyro.distributions.mixture import MaskedMixture
@@ -28,12 +26,10 @@ __all__ = [
     "is_validation_enabled",
     "validation_enabled",
     "AVFMultivariateNormal",
-    "Binomial",
     "Delta",
     "Distribution",
     "Empirical",
     "GaussianScaleMixture",
-    "HalfCauchy",
     "InverseAutoregressiveFlow",
     "LowRankMultivariateNormal",
     "MaskedMixture",

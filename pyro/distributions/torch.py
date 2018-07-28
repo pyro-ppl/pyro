@@ -31,6 +31,21 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
             return type(self)(concentration1, concentration0, validate_args=validate_args)
 
 
+class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        try:
+            return super(Binomial, self).expand(batch_shape)
+        except NotImplementedError:
+            validate_args = self.__dict__.get('_validate_args')
+            total_count = self.total_count.expand(batch_shape)
+            if 'probs' in self.__dict__:
+                probs = self.probs.expand(batch_shape)
+                return type(self)(total_count, probs=probs, validate_args=validate_args)
+            else:
+                logits = self.logits.expand(batch_shape)
+                return type(self)(total_count, logits=logits, validate_args=validate_args)
+
+
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
     def expand(self, batch_shape):
         try:
@@ -122,6 +137,24 @@ class Gumbel(torch.distributions.Gumbel, TorchDistributionMixin):
             loc = self.loc.expand(batch_shape)
             scale = self.scale.expand(batch_shape)
             return type(self)(loc, scale, validate_args=validate_args)
+
+
+class HalfCauchy(torch.distributions.HalfCauchy, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        try:
+            return super(HalfCauchy, self).expand(batch_shape)
+        except NotImplementedError:
+            scale = self.scale.expand(batch_shape)
+            return type(self)(scale)
+
+
+class HalfNormal(torch.distributions.HalfNormal, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        try:
+            return super(HalfNormal, self).expand(batch_shape)
+        except NotImplementedError:
+            scale = self.scale.expand(batch_shape)
+            return type(self)(scale)
 
 
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
@@ -229,6 +262,17 @@ class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistribution
                 return type(self)(logits=logits, validate_args=validate_args)
 
 
+class Pareto(torch.distributions.Pareto, TorchDistributionMixin):
+    def expand(self, batch_shape):
+        try:
+            return super(Pareto, self).expand(batch_shape)
+        except NotImplementedError:
+            validate_args = self.__dict__.get('_validate_args')
+            loc = self.loc.expand(batch_shape)
+            alpha = self.alpha.expand(batch_shape)
+            return type(self)(loc, alpha, validate_args=validate_args)
+
+
 class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
     def expand(self, batch_shape):
         try:
@@ -271,8 +315,6 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
 # Programmatically load all distributions from PyTorch.
 __all__ = []
 for _name, _Dist in torch.distributions.__dict__.items():
-    if _name == 'Binomial':
-        continue
     if not isinstance(_Dist, type):
         continue
     if not issubclass(_Dist, torch.distributions.Distribution):

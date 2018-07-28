@@ -155,8 +155,8 @@ def test_hmc_conjugate_gaussian(fixture,
 
 def test_logistic_regression():
     dim = 3
-    true_coefs = torch.arange(1, dim+1)
     data = torch.randn(2000, dim)
+    true_coefs = torch.arange(1, dim+1).type(data.type())
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):
@@ -220,8 +220,8 @@ def test_dirichlet_categorical():
 
 def test_logistic_regression_with_dual_averaging():
     dim = 3
-    true_coefs = torch.arange(1, dim+1)
     data = torch.randn(2000, dim)
+    true_coefs = torch.arange(1, dim+1).type(data.type())
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):
