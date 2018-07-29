@@ -13,32 +13,30 @@ from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELB
 from pyro.optim import Adam
 from tests.common import assert_equal, xfail_param
 
-pytestmark = pytest.mark.skip(reason="Requires update - https://github.com/uber/pyro/issues/1063")
-
 
 def test_simple():
     y = torch.ones(2)
 
-    @torch.jit.compile(nderivs=0)
+    @torch.jit.trace(y)
     def f(x):
         print('Inside f')
         assert x is y
         return y + 1.0
 
     print('Calling f(y)')
-    assert_equal(f(y), y.new_tensor([2, 2]))
+    assert_equal(f(y), y.new_tensor([2., 2.]))
     print('Calling f(y)')
-    assert_equal(f(y), y.new_tensor([2, 2]))
+    assert_equal(f(y), y.new_tensor([2., 2.]))
     print('Calling f(torch.zeros(2))')
-    assert_equal(f(torch.zeros(2)), y.new_tensor([1, 1]))
-    with pytest.raises(AssertionError):
-        assert_equal(f(torch.ones(5)), y.new_tensor([2, 2, 2, 2, 2]))
+    assert_equal(f(torch.zeros(2)), y.new_tensor([1., 1.]))
+    print('Calling f(torch.zeros(5))')
+    assert_equal(f(torch.ones(5)), y.new_tensor([2., 2., 2., 2., 2.]))
 
 
 def test_backward():
     y = torch.ones(2, requires_grad=True)
 
-    @torch.jit.compile(nderivs=1)
+    @torch.jit.trace(y)
     def f(x):
         print('Inside f')
         assert x is y
@@ -50,13 +48,13 @@ def test_backward():
     f(y)
     print('Calling f(torch.zeros(2))')
     f(torch.zeros(2, requires_grad=True))
-    with pytest.raises(AssertionError):
-        f(torch.ones(5, requires_grad=True))
+    print('Calling f(torch.zeros(5))')
+    f(torch.ones(5, requires_grad=True))
 
 
 def test_grad():
 
-    @torch.jit.compile(nderivs=0)
+    @torch.jit.trace(torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True))
     def f(x, y):
         print('Inside f')
         loss = (x - y).pow(2).sum()
@@ -68,11 +66,9 @@ def test_grad():
     f(torch.zeros(2, requires_grad=True), torch.zeros(2, requires_grad=True))
 
 
-@pytest.mark.xfail(reason='RuntimeError: '
-                          'saved_variables() needed but not implemented in ExpandBackward')
 def test_grad_expand():
 
-    @torch.jit.compile(nderivs=0)
+    @torch.jit.trace(torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True))
     def f(x, y):
         print('Inside f')
         loss = (x - y).pow(2).sum()
@@ -95,7 +91,7 @@ def test_grad_expand():
 ])
 def test_svi(Elbo, num_particles):
     pyro.clear_param_store()
-    data = torch.arange(10)
+    data = torch.arange(10.)
 
     def model(data):
         loc = pyro.param("loc", torch.tensor(0.0))
@@ -115,10 +111,6 @@ def test_svi(Elbo, num_particles):
 @pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
 @pytest.mark.parametrize("irange_dim", [1, 2])
 @pytest.mark.parametrize('Elbo', [
-    Trace_ELBO,
-    JitTrace_ELBO,
-    TraceGraph_ELBO,
-    JitTraceGraph_ELBO,
     TraceEnum_ELBO,
     JitTraceEnum_ELBO,
 ])
@@ -145,9 +137,9 @@ def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
 
     inner_particles = 2
     outer_particles = num_particles // inner_particles
-    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
-                          strict_enumeration_warning=any([enumerate1, enumerate2]),
-                          num_particles=inner_particles)
+    elbo = Elbo(max_iarange_nesting=0,
+                strict_enumeration_warning=any([enumerate1, enumerate2]),
+                num_particles=inner_particles)
     actual_loss = sum(elbo.loss_and_grads(model, guide)
                       for i in range(outer_particles)) / outer_particles
     actual_grad = q.unconstrained().grad / outer_particles
@@ -166,7 +158,7 @@ def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
 @pytest.mark.parametrize('Elbo', [
     TraceEnum_ELBO,
     xfail_param(JitTraceEnum_ELBO,
-                reason="jit RuntimeError: Unsupported op descriptor: stack-2-dim_i"),
+                reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
 ])
 def test_beta_bernoulli(Elbo, vectorized):
     pyro.clear_param_store()
@@ -205,7 +197,8 @@ def test_beta_bernoulli(Elbo, vectorized):
 @pytest.mark.parametrize('vectorized', [False, True])
 @pytest.mark.parametrize('Elbo', [
     TraceEnum_ELBO,
-    xfail_param(JitTraceEnum_ELBO, reason="jit RuntimeError in Dirichlet.rsample"),
+    xfail_param(JitTraceEnum_ELBO,
+                reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
 ])
 def test_dirichlet_bernoulli(Elbo, vectorized):
     pyro.clear_param_store()
