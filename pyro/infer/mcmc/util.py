@@ -1,7 +1,9 @@
+import torch
 from collections import defaultdict
 
 from pyro.distributions.util import log_sum_exp
 from pyro.infer.util import is_validation_enabled
+from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import check_site_shape
 
 
@@ -24,23 +26,8 @@ class EnumTraceProbEvaluator(object):
         self.has_enumerable_sites = has_enumerable_sites
         self.max_iarange_nesting = max_iarange_nesting
         self.log_probs = defaultdict(list)
-        self._upstream_log_prob_cache = {}
-
-    def _get_upstream_log_probs(self, target_ordinal):
-        """
-        Returns the upstream (predecessors) log_probs for the
-        `target_ordinal`.
-        """
-        if target_ordinal in self._upstream_log_prob_cache:
-            return self._upstream_log_prob_cache[target_ordinal]
-        log_factors = []
-
-        for ordinal, term in self.log_probs.items():
-            if ordinal < target_ordinal:
-                log_factors += term
-
-        self._upstream_log_prob_cache[target_ordinal] = log_factors
-        return log_factors
+        self._enum_dims = defaultdict(list)
+        self._sorted_indep_stacks = []
 
     def _compute_log_prob_terms(self):
         """
@@ -50,9 +37,14 @@ class EnumTraceProbEvaluator(object):
         if len(self.log_probs) > 0:
             return
         self.model_trace.compute_log_prob()
-        ordering = {name: frozenset(site["cond_indep_stack"])
-                    for name, site in self.model_trace.nodes.items()
-                    if site["type"] == "sample"}
+        default_cond_stack = (CondIndepStackFrame(name="default", dim=0, size=0, counter=None),)
+        ordering = {}
+        for name, site in self.model_trace.nodes.items():
+            if site["type"] == "sample":
+                if len(site["cond_indep_stack"]) == 0:
+                    ordering[name] = frozenset(default_cond_stack)
+                else:
+                    ordering[name] = frozenset(default_cond_stack + site["cond_indep_stack"])
 
         # Collect log prob terms per independence context.
         for name, site in self.model_trace.nodes.items():
@@ -60,6 +52,19 @@ class EnumTraceProbEvaluator(object):
                 if is_validation_enabled():
                     check_site_shape(site, self.max_iarange_nesting)
                 self.log_probs[ordering[name]].append(site["log_prob"])
+
+        # Compute topological sorting for the indep stacks
+        visited_nodes = set()
+        enum_idx = self.max_iarange_nesting
+        for ordinal in sorted(self.log_probs.keys()):
+            self.log_probs[ordinal] = sum(self.log_probs[ordinal])
+            marginal_dims = ordinal - visited_nodes
+            enum_dims = list(range(-self.log_probs[ordinal].dim(), -enum_idx))
+            enum_idx = max(self.log_probs[ordinal].dim(), enum_idx)
+            self._sorted_indep_stacks += sorted(list(marginal_dims))
+            self._enum_dims[ordinal] = enum_dims
+            visited_nodes = visited_nodes.union(ordinal)
+
 
     def log_prob(self):
         """
@@ -75,25 +80,24 @@ class EnumTraceProbEvaluator(object):
                              "has discrete (enumerable) sites.")
         self._compute_log_prob_terms()
 
-        # Sum up terms from predecessor, and gather leaf nodes.
-        leaves_log_probs = {}
-        for target_ordinal in sorted(self.log_probs.keys()):
-            if any(target_ordinal < other for other in self.log_probs):
-                continue  # not a leaf
-            leaves_log_probs[target_ordinal] = self.log_probs[target_ordinal]
-            log_factors = self._get_upstream_log_probs(target_ordinal)
-            leaves_log_probs[target_ordinal] = sum(leaves_log_probs[target_ordinal] + log_factors)
-
-        # Reduce the log prob terms for each leaf node:
-        # - taking log_sum_exp of factors in enum dims (i.e.
-        # adding up the probability terms).
-        # - summing up the dims within `max_iarange_nesting`.
-        # (i.e. multiplying probs within independent batches).
-        log_prob_sum = 0.
-        for ordinal in leaves_log_probs:
-            log_prob = leaves_log_probs[ordinal]
-            enum_dim = log_prob.dim() - self.max_iarange_nesting
-            if enum_dim > 0:
-                log_prob = log_sum_exp(log_prob.reshape(-1, *log_prob.shape[enum_dim:]), dim=0)
-            log_prob_sum += log_prob.sum()
-        return log_prob_sum
+        # Reduce log_prob dimensions starting from the leaf indep contexts.
+        # Each ordinal is visited once and the ordinal's log prob after
+        # reduction is aggregated into `log_prob`.
+        log_prob = torch.tensor(0.)
+        to_visit = set(self.log_probs.keys())
+        for frame in reversed(self._sorted_indep_stacks):
+            visited = set()
+            for ordinal in to_visit:
+                if frame in ordinal:
+                    # Reduce the log prob terms for each node:
+                    # - taking log_sum_exp of factors in enum dims (i.e.
+                    # adding up the probability terms).
+                    # - summing up the dims within `max_iarange_nesting`.
+                    # (i.e. multiplying probs within independent batches).
+                    log_prob = log_prob + self.log_probs[ordinal]
+                    for enum_dim in self._enum_dims[ordinal]:
+                        log_prob = log_sum_exp(log_prob, dim=enum_dim, keepdim=True)
+                    log_prob = log_prob.sum(dim=frame.dim, keepdim=True)
+                    visited.add(ordinal)
+            to_visit = to_visit - visited
+        return log_prob.sum()

@@ -92,8 +92,8 @@ def test_all_discrete_sites_log_prob():
     @poutine.broadcast
     def model():
         d = dist.Bernoulli(p)
-        context1 = pyro.iarange("outer", 3, dim=-1)
-        context2 = pyro.iarange("inner", 2, dim=-2)
+        context1 = pyro.iarange("outer", 2, dim=-1)
+        context2 = pyro.iarange("inner", 1, dim=-2)
         pyro.sample("w", d)
         with context1:
             pyro.sample("x", d)
@@ -106,6 +106,33 @@ def test_all_discrete_sites_log_prob():
     print_debug_info(model_trace)
     trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 2)
     assert_equal(trace_prob_evaluator.log_prob(), torch.tensor(0.))
+
+
+def test_discrete_sites_correctly_enumerated():
+    p = 0.3
+
+    @poutine.enum(first_available_dim=2)
+    @config_enumerate(default="parallel")
+    @poutine.condition(data={"b": torch.tensor(0.4), "c": torch.tensor(0.4)})
+    @poutine.broadcast
+    def model():
+        d = dist.Bernoulli(p)
+        context1 = pyro.iarange("outer", 3, dim=-1)
+        context2 = pyro.iarange("inner", 2, dim=-2)
+        pyro.sample("w", d)
+        pyro.sample("b", dist.Beta(1.1, 1.1))
+        with context1:
+            pyro.sample("x", d)
+        with context2:
+            pyro.sample("c", dist.Beta(1.1, 1.1))
+            pyro.sample("y", d)
+        with context1, context2:
+            pyro.sample("z", d)
+
+    model_trace = poutine.trace(model).get_trace()
+    print_debug_info(model_trace)
+    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 2)
+    assert_equal(trace_prob_evaluator.log_prob(), torch.tensor(0.16196))  # p_beta(0.3)^3
 
 
 @pytest.mark.parametrize("data, expected_log_prob", [
@@ -251,3 +278,55 @@ def test_enum_log_prob_nested_iarange(data, expected_log_prob):
     assert_equal(trace_prob_evaluator.log_prob(),
                  expected_log_prob,
                  prec=1e-3)
+
+
+def test_log_prob_eval_iterates_in_correct_order():
+    @poutine.enum(first_available_dim=4)
+    @config_enumerate(default="parallel")
+    @poutine.condition(data={"p": torch.tensor(0.4)})
+    @poutine.broadcast
+    def model():
+        outer = pyro.iarange("outer", 3, dim=-1)
+        inner1 = pyro.iarange("inner1", 4, dim=-3)
+        inner2 = pyro.iarange("inner2", 5, dim=-2)
+        inner3 = pyro.iarange("inner3", 6, dim=-4)
+
+        p = pyro.sample("p", dist.Uniform(0., 1.))
+        y = pyro.sample("y", dist.Bernoulli(p))
+        q = 0.5 + 0.25 * y
+        with outer, inner2:
+            z0 = pyro.sample("z0", dist.Bernoulli(q))
+            pyro.sample("obs0", dist.Normal(2 * z0 - 1, 1.), obs=torch.ones(5, 3))
+        with outer:
+            v = pyro.sample("v", dist.Bernoulli(q))
+            r = 0.4 + 0.1 * v
+            with inner1, inner3:
+                z1 = pyro.sample("z1", dist.Bernoulli(r))
+                pyro.sample("obs1", dist.Normal(2 * z1 - 1, 1.), obs=torch.ones(6, 4, 1, 3))
+            with inner2:
+                z2 = pyro.sample("z2", dist.Bernoulli(r))
+                pyro.sample("obs2", dist.Normal(2 * z2 - 1, 1.), obs=torch.ones(5, 3))
+
+    model_trace = poutine.trace(model).get_trace()
+    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 4)
+    trace_prob_evaluator.log_prob()
+    assert_equal([stack.name for stack in reversed(trace_prob_evaluator._sorted_indep_stacks)],
+                 ["inner3", "inner1", "inner2", "outer", "default"])
+
+
+def test_model():
+    @poutine.enum(first_available_dim=1)
+    @config_enumerate(default="parallel")
+    @poutine.condition(data={"p": torch.tensor(0.4)})
+    def model():
+        p = pyro.sample("p", dist.Beta(2., 2.))
+        x = pyro.sample("x", dist.Bernoulli(p))
+        with pyro.iarange("iarange_y", 2, dim=-1):
+            pyro.sample("y", dist.Normal(0, 1), obs=x)
+        with pyro.iarange("iarange_z", 3, dim=-2):
+            pyro.sample("z", dist.Normal(0, 1), obs=x)
+
+    model_trace = poutine.trace(model).get_trace()
+    print_debug_info(model_trace)
+    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 1)
+    print(trace_prob_evaluator.log_prob())
