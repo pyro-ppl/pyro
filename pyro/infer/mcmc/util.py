@@ -26,7 +26,6 @@ class EnumTraceProbEvaluator(object):
         self.has_enumerable_sites = has_enumerable_sites
         self.max_iarange_nesting = max_iarange_nesting
         self.log_probs = defaultdict(list)
-        self._enum_dims = defaultdict(list)
         self._sorted_indep_stacks = []
 
     def _compute_log_prob_terms(self):
@@ -53,18 +52,18 @@ class EnumTraceProbEvaluator(object):
                     check_site_shape(site, self.max_iarange_nesting)
                 self.log_probs[ordering[name]].append(site["log_prob"])
 
-        # Compute topological sorting for the indep stacks
+        # Sort ordinals and compute iarange and enum dims to be marginalized out.
         visited_nodes = set()
-        enum_idx = self.max_iarange_nesting
+        visited_enum_dims = set()
         for ordinal in sorted(self.log_probs.keys()):
-            self.log_probs[ordinal] = sum(self.log_probs[ordinal])
-            marginal_dims = ordinal - visited_nodes
-            enum_dims = list(range(-self.log_probs[ordinal].dim(), -enum_idx))
-            enum_idx = max(self.log_probs[ordinal].dim(), enum_idx)
-            self._sorted_indep_stacks += sorted(list(marginal_dims))
-            self._enum_dims[ordinal] = enum_dims
+            log_prob = sum(self.log_probs[ordinal])
+            self.log_probs[ordinal] = log_prob
+            marginal_dims = sorted([frame.dim for frame in ordinal - visited_nodes])
+            enum_dims = set((i for i in range(-log_prob.dim(), -self.max_iarange_nesting)
+                             if log_prob.shape[i] > 1))
+            self._sorted_indep_stacks.append((ordinal, marginal_dims, sorted(list(enum_dims - visited_enum_dims))))
             visited_nodes = visited_nodes.union(ordinal)
-
+            visited_enum_dims = visited_enum_dims.union(enum_dims)
 
     def log_prob(self):
         """
@@ -84,20 +83,15 @@ class EnumTraceProbEvaluator(object):
         # Each ordinal is visited once and the ordinal's log prob after
         # reduction is aggregated into `log_prob`.
         log_prob = torch.tensor(0.)
-        to_visit = set(self.log_probs.keys())
-        for frame in reversed(self._sorted_indep_stacks):
-            visited = set()
-            for ordinal in to_visit:
-                if frame in ordinal:
-                    # Reduce the log prob terms for each node:
-                    # - taking log_sum_exp of factors in enum dims (i.e.
-                    # adding up the probability terms).
-                    # - summing up the dims within `max_iarange_nesting`.
-                    # (i.e. multiplying probs within independent batches).
-                    log_prob = log_prob + self.log_probs[ordinal]
-                    for enum_dim in self._enum_dims[ordinal]:
-                        log_prob = log_sum_exp(log_prob, dim=enum_dim, keepdim=True)
-                    log_prob = log_prob.sum(dim=frame.dim, keepdim=True)
-                    visited.add(ordinal)
-            to_visit = to_visit - visited
+        for ordinal, marginal_dims, enum_dims in reversed(self._sorted_indep_stacks):
+            # Reduce the log prob terms for each ordinal:
+            # - taking log_sum_exp of factors in enum dims (i.e.
+            # adding up the probability terms).
+            # - summing up the dims within `max_iarange_nesting`.
+            # (i.e. multiplying probs within independent batches).
+            log_prob = log_prob + self.log_probs[ordinal]
+            for enum_dim in enum_dims:
+                log_prob = log_sum_exp(log_prob, dim=enum_dim, keepdim=True)
+            for marginal_dim in marginal_dims:
+                log_prob = log_prob.sum(dim=marginal_dim, keepdim=True)
         return log_prob.sum()

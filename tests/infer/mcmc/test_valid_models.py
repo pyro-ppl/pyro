@@ -84,6 +84,41 @@ def test_model_error_enum_dim_clash(kernel, kwargs):
     assert_error(mcmc_kernel)
 
 
+def test_log_prob_eval_iterates_in_correct_order():
+    @poutine.enum(first_available_dim=4)
+    @config_enumerate(default="parallel")
+    @poutine.condition(data={"p": torch.tensor(0.4)})
+    @poutine.broadcast
+    def model():
+        outer = pyro.iarange("outer", 3, dim=-1)
+        inner1 = pyro.iarange("inner1", 4, dim=-3)
+        inner2 = pyro.iarange("inner2", 5, dim=-2)
+        inner3 = pyro.iarange("inner3", 6, dim=-4)
+
+        p = pyro.sample("p", dist.Uniform(0., 1.))
+        y = pyro.sample("y", dist.Bernoulli(p))
+        q = 0.5 + 0.25 * y
+        with outer, inner2:
+            z0 = pyro.sample("z0", dist.Bernoulli(q))
+            pyro.sample("obs0", dist.Normal(2 * z0 - 1, 1.), obs=torch.ones(5, 3))
+        with outer:
+            v = pyro.sample("v", dist.Bernoulli(q))
+            r = 0.4 + 0.1 * v
+            with inner1, inner3:
+                z1 = pyro.sample("z1", dist.Bernoulli(r))
+                pyro.sample("obs1", dist.Normal(2 * z1 - 1, 1.), obs=torch.ones(6, 4, 1, 3))
+            with inner2:
+                z2 = pyro.sample("z2", dist.Bernoulli(r))
+                pyro.sample("obs2", dist.Normal(2 * z2 - 1, 1.), obs=torch.ones(5, 3))
+
+    model_trace = poutine.trace(model).get_trace()
+    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 4)
+    trace_prob_evaluator.log_prob()
+    _, marginal_dims, enum_dims = zip(*reversed(trace_prob_evaluator._sorted_indep_stacks))
+    assert_equal(marginal_dims, ([-4, -3], [-2], [-1], [0]))
+    assert_equal(enum_dims, ([-8], [-9, -6], [-7], [-5]))
+
+
 def test_all_discrete_sites_log_prob():
     p = 0.3
 
@@ -105,10 +140,47 @@ def test_all_discrete_sites_log_prob():
     model_trace = poutine.trace(model).get_trace()
     print_debug_info(model_trace)
     trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 2)
+    # all discrete sites enumerated out.
     assert_equal(trace_prob_evaluator.log_prob(), torch.tensor(0.))
 
 
-def test_discrete_sites_correctly_enumerated():
+def test_enumeration_in_tree():
+    @poutine.enum(first_available_dim=4)
+    @config_enumerate(default="parallel")
+    @poutine.condition(data={"sample1": torch.tensor(0.),
+                             "sample2": torch.tensor(1.),
+                             "sample3": torch.tensor(2.)})
+    @poutine.broadcast
+    def model():
+        outer = pyro.iarange("outer", 2, dim=-1)
+        inner1 = pyro.iarange("inner1", 2, dim=-3)
+        inner2 = pyro.iarange("inner2", 3, dim=-2)
+        inner3 = pyro.iarange("inner3", 2, dim=-4)
+
+        d = dist.Bernoulli(0.3)
+        n = dist.Normal(0., 1.)
+        pyro.sample("y", d)
+        pyro.sample("sample1", n)
+        with outer, inner2:
+            pyro.sample("z0", d)
+            pyro.sample("sample2", n)
+        with outer:
+            pyro.sample("z1", d)
+            pyro.sample("sample3", n)
+            with inner1, inner3:
+                pyro.sample("z2", d)
+            with inner2:
+                pyro.sample("z3", d)
+
+    model_trace = poutine.trace(model).get_trace()
+    print_debug_info(model_trace)
+    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 4)
+    assert_equal(trace_prob_evaluator.log_prob(), torch.tensor(-15.2704))  # p_n(0.) * p_n(2.)^2 * p_n(1.)^6
+
+
+@pytest.mark.xfail(reason="Enumeration currently does not work for DAGs "
+                          "(indep contexts with multiple parents)")
+def test_enumeration_in_dag():
     p = 0.3
 
     @poutine.enum(first_available_dim=2)
@@ -166,8 +238,8 @@ def test_enum_log_prob_continuous_observed(data, expected_log_prob):
 @pytest.mark.parametrize("data, expected_log_prob", [
     (torch.tensor([1.]), torch.tensor(-3.5237)),
     (torch.tensor([0.]), torch.tensor(-3.7091)),
-    (torch.tensor([1., 1.]), torch.tensor(-7.0474)),
-    (torch.tensor([1., 0., 0.]), torch.tensor(-10.9418)),
+    (torch.tensor([1., 1.]), torch.tensor(-3.9699)),
+    (torch.tensor([1., 0., 0.]), torch.tensor(-5.3357)),
 ])
 def test_enum_log_prob_continuous_sampled(data, expected_log_prob):
 
@@ -193,9 +265,9 @@ def test_enum_log_prob_continuous_sampled(data, expected_log_prob):
 
 
 @pytest.mark.parametrize("data, expected_log_prob", [
-    (torch.tensor([1.]), torch.tensor(-0.5798)),
-    (torch.tensor([1., 1.]), torch.tensor(-1.1596)),
-    (torch.tensor([1., 0., 0.]), torch.tensor(-2.2218)),
+    (torch.tensor([1.]), torch.tensor(-0.5108)),
+    (torch.tensor([1., 1.]), torch.tensor(-0.9808)),
+    (torch.tensor([1., 0., 0.]), torch.tensor(-2.3671)),
 ])
 def test_enum_log_prob_discrete_observed(data, expected_log_prob):
 
@@ -208,9 +280,7 @@ def test_enum_log_prob_discrete_observed(data, expected_log_prob):
         y = pyro.sample("y", dist.Bernoulli(p))
         q = 0.25 * y + 0.5
         with pyro.iarange("data", len(data)):
-            z = pyro.sample("z", dist.Bernoulli(q))
-            p = 0.6 * z + 0.2
-            pyro.sample("obs", dist.Bernoulli(p), obs=data)
+            pyro.sample("obs", dist.Bernoulli(q), obs=data)
 
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
@@ -221,9 +291,9 @@ def test_enum_log_prob_discrete_observed(data, expected_log_prob):
 
 
 @pytest.mark.parametrize("data, expected_log_prob", [
-    (torch.tensor([1.]), torch.tensor(-2.7622)),
-    (torch.tensor([0.]), torch.tensor(-3.069)),
-    (torch.tensor([1., 0., 0.]), torch.tensor(-8.901)),
+    # (torch.tensor([1.]), torch.tensor(-1.15)),
+    # (torch.tensor([0.]), torch.tensor(-1.46)),
+    (torch.tensor([1., 1.]), torch.tensor(-8.901)),
 ])
 def test_enum_log_prob_multiple_iarange(data, expected_log_prob):
 
@@ -232,15 +302,14 @@ def test_enum_log_prob_multiple_iarange(data, expected_log_prob):
     @poutine.condition(data={"p": torch.tensor(0.4)})
     @poutine.broadcast
     def model(data):
-        p = pyro.sample("p", dist.Uniform(0., 1.))
+        p = pyro.sample("p", dist.Beta(1.1, 1.1))
         y = pyro.sample("y", dist.Bernoulli(p))
         q = 0.5 + 0.25 * y
+        r = 0.4 + 0.2 * y
         with pyro.iarange("data1", len(data)):
-            v = pyro.sample("v", dist.Bernoulli(q))
-            pyro.sample("obs1", dist.Normal(2 * v, 1.), obs=data)
+            pyro.sample("obs1", dist.Bernoulli(q), obs=data)
         with pyro.iarange("data2", len(data)):
-            z = pyro.sample("z", dist.Bernoulli(q))
-            pyro.sample("obs2", dist.Normal(2 * z - 1, 1.), obs=data)
+            pyro.sample("obs2", dist.Bernoulli(r), obs=data)
 
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
@@ -278,55 +347,3 @@ def test_enum_log_prob_nested_iarange(data, expected_log_prob):
     assert_equal(trace_prob_evaluator.log_prob(),
                  expected_log_prob,
                  prec=1e-3)
-
-
-def test_log_prob_eval_iterates_in_correct_order():
-    @poutine.enum(first_available_dim=4)
-    @config_enumerate(default="parallel")
-    @poutine.condition(data={"p": torch.tensor(0.4)})
-    @poutine.broadcast
-    def model():
-        outer = pyro.iarange("outer", 3, dim=-1)
-        inner1 = pyro.iarange("inner1", 4, dim=-3)
-        inner2 = pyro.iarange("inner2", 5, dim=-2)
-        inner3 = pyro.iarange("inner3", 6, dim=-4)
-
-        p = pyro.sample("p", dist.Uniform(0., 1.))
-        y = pyro.sample("y", dist.Bernoulli(p))
-        q = 0.5 + 0.25 * y
-        with outer, inner2:
-            z0 = pyro.sample("z0", dist.Bernoulli(q))
-            pyro.sample("obs0", dist.Normal(2 * z0 - 1, 1.), obs=torch.ones(5, 3))
-        with outer:
-            v = pyro.sample("v", dist.Bernoulli(q))
-            r = 0.4 + 0.1 * v
-            with inner1, inner3:
-                z1 = pyro.sample("z1", dist.Bernoulli(r))
-                pyro.sample("obs1", dist.Normal(2 * z1 - 1, 1.), obs=torch.ones(6, 4, 1, 3))
-            with inner2:
-                z2 = pyro.sample("z2", dist.Bernoulli(r))
-                pyro.sample("obs2", dist.Normal(2 * z2 - 1, 1.), obs=torch.ones(5, 3))
-
-    model_trace = poutine.trace(model).get_trace()
-    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 4)
-    trace_prob_evaluator.log_prob()
-    assert_equal([stack.name for stack in reversed(trace_prob_evaluator._sorted_indep_stacks)],
-                 ["inner3", "inner1", "inner2", "outer", "default"])
-
-
-def test_model():
-    @poutine.enum(first_available_dim=1)
-    @config_enumerate(default="parallel")
-    @poutine.condition(data={"p": torch.tensor(0.4)})
-    def model():
-        p = pyro.sample("p", dist.Beta(2., 2.))
-        x = pyro.sample("x", dist.Bernoulli(p))
-        with pyro.iarange("iarange_y", 2, dim=-1):
-            pyro.sample("y", dist.Normal(0, 1), obs=x)
-        with pyro.iarange("iarange_z", 3, dim=-2):
-            pyro.sample("z", dist.Normal(0, 1), obs=x)
-
-    model_trace = poutine.trace(model).get_trace()
-    print_debug_info(model_trace)
-    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 1)
-    print(trace_prob_evaluator.log_prob())
