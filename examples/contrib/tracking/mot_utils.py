@@ -1,11 +1,11 @@
-import pytest
 import torch
 import numpy as np
+import warnings
 import csv
 import os
 
 
-def read_mot(filename):
+def read_mot(filename, zero_based=True):
     '''
     format is stated be to  be 10 columns:
     <frame>, <id>, <bb_left>, <bb_top>, <bb_width>, <bb_height>, <conf>, <x>, <y>, <z>
@@ -19,10 +19,14 @@ def read_mot(filename):
     positions = torch.tensor(data[:, 2:4], requires_grad=False, dtype=torch.float)
     sizes = torch.tensor(data[:, 4:6], requires_grad=False, dtype=torch.float)
     features = {'confidence': torch.tensor(data[:, 6], requires_grad=False, dtype=torch.float)}
+    if zero_based:
+        frames -= 1
+        object_id[object_id > 0] -= 1
+        positions -= 1
     return frames, object_id, positions, sizes, features
 
 
-def write_mot(filename, frames, object_id, positions, sizes, confidence):
+def write_mot(filename, frames, object_id, positions, sizes, confidence, zero_based=True):
     '''
     format is stated be to  be 10 columns:
     <frame>, <id>, <bb_left>, <bb_top>, <bb_width>, <bb_height>, <conf>, <x>, <y>, <z>
@@ -34,17 +38,27 @@ def write_mot(filename, frames, object_id, positions, sizes, confidence):
     assert positions.dim() == 2 and positions.shape[0] == num_rows
     assert sizes.dim() == 2 and sizes.shape[0] == num_rows
     assert confidence.dim() == 1 and confidence.shape[0] == num_rows
-
+    if zero_based:
+        frames += 1
+        object_id += 1
+        positions += 1
     combined = torch.cat([frames.unsqueeze(-1).float(),
                           object_id.unsqueeze(-1).float(),
                           positions.float(),
                           sizes.float(),
                           confidence.unsqueeze(-1).float(),
                           -1 * torch.ones(num_rows, 3, dtype=torch.float)
-                          ], 1).tolist()
+                          ], 1)
+    _, indx, counts = np.unique(combined.detach().numpy()[:, :2], axis=0, return_index=True, return_counts=True)
+    if np.any(counts != 1):
+        warnings.warn("Duplicates entries found, removing...")
+        combined = combined[torch.from_numpy(indx)]
+    combined = combined.tolist()
     with open(filename, 'w', newline='') as data_file:
         writer = csv.writer(data_file)
-        fmt = lambda x: int(x) if x.is_integer() else x
+
+        def fmt(x):
+            return int(x) if x.is_integer() else x
         for i in range(len(combined)):
             writer.writerow(map(fmt, combined[i]))
 
