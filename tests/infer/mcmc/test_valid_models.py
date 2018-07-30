@@ -115,7 +115,7 @@ def test_log_prob_eval_iterates_in_correct_order():
     trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 4)
     trace_prob_evaluator.log_prob(model_trace)
     iarange_dims, enum_dims = [], []
-    for key in reversed(sorted(trace_prob_evaluator._log_probs.keys())):
+    for key in reversed(sorted(trace_prob_evaluator._log_probs.keys(), key=lambda x: (len(x), x))):
         iarange_dims.append(trace_prob_evaluator._iarange_dims[key])
         enum_dims.append(trace_prob_evaluator._enum_dims[key])
     assert iarange_dims == [[-4, -3], [-2], [-1], [0]]
