@@ -20,4 +20,4 @@ Primitives
 .. autofunction:: pyro.validation_enabled
 .. autofunction:: pyro.enable_validation
 
-.. autofunction:: pyro.ops.jit.compile
+.. autofunction:: pyro.ops.jit.trace
