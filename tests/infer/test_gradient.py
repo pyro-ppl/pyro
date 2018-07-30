@@ -171,14 +171,13 @@ def test_iarange_elbo_vectorized_particles(Elbo, reparameterized):
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
 @pytest.mark.parametrize("Elbo", [
-    Trace_ELBO,
-    TraceGraph_ELBO,
-    TraceEnum_ELBO,
+    # Trace_ELBO,
+    # TraceGraph_ELBO,
+    # TraceEnum_ELBO,
     xfail_param(JitTrace_ELBO,
                 reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
     xfail_param(JitTraceGraph_ELBO,
                 reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
-                reason="jit RuntimeError: Unsupported op descriptor: index-2"),
     xfail_param(JitTraceEnum_ELBO,
                 reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
 ])
