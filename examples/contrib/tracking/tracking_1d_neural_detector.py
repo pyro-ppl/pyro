@@ -239,7 +239,8 @@ def main(args):
         plot_utils.plot_exists_prob(p_exists, viz)
 
 
-def arg_parser():
+def parse_args(*args):
+    from shlex import split
     parser = argparse.ArgumentParser()
     parser.add_argument('--num-frames', default=40, type=int, help='number of frames')
     parser.add_argument('--max-detections-per-frame', default=50, type=int, help='max number of detections per frame')
@@ -258,18 +259,15 @@ def arg_parser():
     parser.add_argument('--prune-threshold', default=1e-2, type=float, help='prune threshold')
     parser.add_argument('--no-visdom', action="store_false", dest='visdom', default=True,
                         help='Whether plotting in visdom is desired')
-    return parser
-
-
-def make_args(args_string):
-    from shlex import split
-    return arg_parser().parse_args(split(args_string))
+    if len(args):
+        return parser.parse_args(split(args[0]))
+    return parser.parse_args()
 
 
 @pytest.mark.parametrize("args", ['--no-visdom'])
 def test_data_generation(args):
     if isinstance(args, str):
-        args = make_args(args)
+        args = parse_args(args)
     pyro.set_rng_seed(0)
     true_states, true_positions, sensor_positions, sensor_outputs, true_confidence = generate_sensor_data(args)
     true_num_objects = len(true_states)
@@ -289,7 +287,7 @@ def test_detector(inp):
 @pytest.mark.parametrize("args", ['--no-visdom'])
 def test_guide(args):
     if isinstance(args, str):
-        args = make_args(args)
+        args = parse_args(args)
     pyro.set_rng_seed(0)
     true_states, true_positions, sensor_positions, sensor_outputs, true_confidence = generate_sensor_data(args)
 
@@ -307,7 +305,7 @@ def test_guide(args):
 @pytest.mark.parametrize("args", ['--no-visdom --svi-iters 2'])
 def test_svi(args):
     if isinstance(args, str):
-        args = make_args(args)
+        args = parse_args(args)
     pyro.set_rng_seed(0)
     true_states, true_positions, sensor_positions, sensor_outputs, true_confidence = generate_sensor_data(args)
 
@@ -324,7 +322,7 @@ def test_svi(args):
 
 
 if __name__ == '__main__':
-    args = arg_parser().parse_args()
+    args = args = parse_args()
     assert args.max_num_objects >= args.expected_num_objects
     assert args.x_max > args.x_min
     assert args.max_detections_per_frame >= args.max_num_objects
