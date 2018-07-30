@@ -10,6 +10,7 @@ import pyro
 
 torch.set_default_tensor_type(os.environ.get('PYRO_TENSOR_TYPE', 'torch.DoubleTensor'))
 
+
 def pytest_configure(config):
     config.addinivalue_line("markers",
                             "init(rng_seed): initialize the RNG using the seed provided.")
