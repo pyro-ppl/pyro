@@ -28,7 +28,7 @@ class EnumTraceProbEvaluator(object):
         self.root = frozenset(default_cond_stack)
         # To be populated using the model trace once.
         self._log_probs = {}
-        self._child_nodes = defaultdict(list)
+        self._children = defaultdict(list)
         self._enum_dims = {}
         self._iarange_dims = {}
         self._parse_model_structure(model_trace)
@@ -44,12 +44,11 @@ class EnumTraceProbEvaluator(object):
         sorted_ordinals = sorted(self._log_probs.keys())
         for i in range(len(sorted_ordinals)):
             child_node = sorted_ordinals[i]
-            parent_nodes = set()
             for j in range(i-1, -1, -1):
                 cur_node = sorted_ordinals[j]
-                if cur_node < child_node and not any(cur_node < p for p in parent_nodes):
-                    self._child_nodes[cur_node].append(child_node)
-                    parent_nodes.add(cur_node)
+                if cur_node < child_node:
+                    self._children[cur_node].append(child_node)
+                    break  # at most 1 parent.
         # 2. Populate `marginal_dims` and `enum_dims` for each ordinal.
         self._populate_dims(self.root, frozenset(), set())
 
@@ -64,7 +63,7 @@ class EnumTraceProbEvaluator(object):
                          if log_prob.shape[i] > 1))
         self._iarange_dims[ordinal] = iarange_dims
         self._enum_dims[ordinal] = sorted(list(enum_dims - parent_enum_dims))
-        for c in self._child_nodes[ordinal]:
+        for c in self._children[ordinal]:
             self._populate_dims(c, ordinal, enum_dims)
 
     def _compute_log_prob_terms(self, model_trace):
@@ -117,10 +116,10 @@ class EnumTraceProbEvaluator(object):
         """
         Aggregate the `log_prob` terms using depth first search.
         """
-        if self._child_nodes[ordinal] is None:
+        if self._children[ordinal] is None:
             return self._reduce(ordinal)
         agg_log_prob = torch.tensor(0.)
-        for c in self._child_nodes[ordinal]:
+        for c in self._children[ordinal]:
             agg_log_prob = agg_log_prob + self._aggregate_log_probs(c)
         return self._reduce(ordinal, agg_log_prob)
 
