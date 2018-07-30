@@ -35,7 +35,7 @@ class EnumTraceProbEvaluator(object):
 
     def _parse_model_structure(self, model_trace):
         if not self.has_enumerable_sites:
-            return model_trace.log_prob_sum()
+            return
         if self.max_iarange_nesting == float("inf"):
             raise ValueError("Finite value required for `max_iarange_nesting` when model "
                              "has discrete (enumerable) sites.")
@@ -73,7 +73,6 @@ class EnumTraceProbEvaluator(object):
         in the model trace, and stores the result in `self._log_probs`.
         """
         model_trace.compute_log_prob()
-
         ordering = {}
         for name, site in model_trace.nodes.items():
             if site["type"] == "sample":
@@ -132,5 +131,7 @@ class EnumTraceProbEvaluator(object):
 
         :return: log pdf of the trace.
         """
+        if not self.has_enumerable_sites:
+            return model_trace.log_prob_sum()
         self._compute_log_prob_terms(model_trace)
         return self._aggregate_log_probs(self.root).sum()
