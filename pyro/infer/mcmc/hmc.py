@@ -115,13 +115,7 @@ class HMC(TraceKernel):
                 yield (name, node)
 
     def _compute_trace_log_prob(self, model_trace):
-        # TODO: Can be expensive. Consider caching this or the potential
-        # energy computation itself so that this does not need to be
-        # recomputed more than once per trace.
-        trace_prob_evaluator = EnumTraceProbEvaluator(model_trace,
-                                                      self._has_enumerable_sites,
-                                                      self.max_iarange_nesting)
-        return trace_prob_evaluator.log_prob()
+        return self._trace_prob_evaluator.log_prob(model_trace)
 
     def _kinetic_energy(self, r):
         return 0.5 * sum(x.pow(2).sum() for x in r.values())
@@ -152,6 +146,7 @@ class HMC(TraceKernel):
         self._adapt_phase = False
         self._adapted_scheme = None
         self._has_enumerable_sites = False
+        self._trace_prob_evaluator = None
 
     def _find_reasonable_step_size(self, z):
         step_size = self.step_size
@@ -200,6 +195,9 @@ class HMC(TraceKernel):
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
 
     def _validate_trace(self, trace):
+        self._trace_prob_evaluator = EnumTraceProbEvaluator(trace,
+                                                            self._has_enumerable_sites,
+                                                            self.max_iarange_nesting)
         trace_log_prob_sum = self._compute_trace_log_prob(trace)
         if torch_isnan(trace_log_prob_sum) or torch_isinf(trace_log_prob_sum):
             raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")

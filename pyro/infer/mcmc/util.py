@@ -22,76 +22,115 @@ class EnumTraceProbEvaluator(object):
                  model_trace,
                  has_enumerable_sites=False,
                  max_iarange_nesting=float("inf")):
-        self.model_trace = model_trace
         self.has_enumerable_sites = has_enumerable_sites
         self.max_iarange_nesting = max_iarange_nesting
-        self.log_probs = defaultdict(list)
-        self._sorted_indep_stacks = []
-
-    def _compute_log_prob_terms(self):
-        """
-        Computes the conditional probabilities for each of the sites
-        in the model trace, and stores the result in `self.log_probs`.
-        """
-        if len(self.log_probs) > 0:
-            return
-        self.model_trace.compute_log_prob()
         default_cond_stack = (CondIndepStackFrame(name="default", dim=0, size=0, counter=None),)
-        ordering = {}
-        for name, site in self.model_trace.nodes.items():
-            if site["type"] == "sample":
-                if len(site["cond_indep_stack"]) == 0:
-                    ordering[name] = frozenset(default_cond_stack)
-                else:
-                    ordering[name] = frozenset(default_cond_stack + site["cond_indep_stack"])
+        self.root = frozenset(default_cond_stack)
+        # To be populated using the model trace once.
+        self._log_probs = {}
+        self._child_nodes = defaultdict(list)
+        self._enum_dims = {}
+        self._iarange_dims = {}
+        self._parse_model_structure(model_trace)
 
-        # Collect log prob terms per independence context.
-        for name, site in self.model_trace.nodes.items():
-            if site["type"] == "sample":
-                if is_validation_enabled():
-                    check_site_shape(site, self.max_iarange_nesting)
-                self.log_probs[ordering[name]].append(site["log_prob"])
-
-        # Sort ordinals and compute iarange and enum dims to be marginalized out.
-        visited_nodes = set()
-        visited_enum_dims = set()
-        for ordinal in sorted(self.log_probs.keys()):
-            log_prob = sum(self.log_probs[ordinal])
-            self.log_probs[ordinal] = log_prob
-            marginal_dims = sorted([frame.dim for frame in ordinal - visited_nodes])
-            enum_dims = set((i for i in range(-log_prob.dim(), -self.max_iarange_nesting)
-                             if log_prob.shape[i] > 1))
-            self._sorted_indep_stacks.append((ordinal, marginal_dims, sorted(list(enum_dims - visited_enum_dims))))
-            visited_nodes = visited_nodes.union(ordinal)
-            visited_enum_dims = visited_enum_dims.union(enum_dims)
-
-    def log_prob(self):
-        """
-        Returns the log pdf of `model_trace` by appropriate handling
-        of the enumerated log prob factors.
-
-        :return: log pdf of the trace.
-        """
+    def _parse_model_structure(self, model_trace):
         if not self.has_enumerable_sites:
-            return self.model_trace.log_prob_sum()
+            return model_trace.log_prob_sum()
         if self.max_iarange_nesting == float("inf"):
             raise ValueError("Finite value required for `max_iarange_nesting` when model "
                              "has discrete (enumerable) sites.")
-        self._compute_log_prob_terms()
+        self._compute_log_prob_terms(model_trace)
+        # 1. Infer model structure - compute parent-child relationship.
+        sorted_ordinals = sorted(self._log_probs.keys())
+        for i in range(len(sorted_ordinals)):
+            child_node = sorted_ordinals[i]
+            parent_nodes = set()
+            for j in range(i-1, -1, -1):
+                cur_node = sorted_ordinals[j]
+                if cur_node < child_node and not any(cur_node < p for p in parent_nodes):
+                    self._child_nodes[cur_node].append(child_node)
+                    parent_nodes.add(cur_node)
+        # 2. Populate `marginal_dims` and `enum_dims` for each ordinal.
+        self._populate_dims(self.root, frozenset(), set())
 
-        # Reduce log_prob dimensions starting from the leaf indep contexts.
-        # Each ordinal is visited once and the ordinal's log prob after
-        # reduction is aggregated into `log_prob`.
-        log_prob = torch.tensor(0.)
-        for ordinal, marginal_dims, enum_dims in reversed(self._sorted_indep_stacks):
-            # Reduce the log prob terms for each ordinal:
-            # - taking log_sum_exp of factors in enum dims (i.e.
-            # adding up the probability terms).
-            # - summing up the dims within `max_iarange_nesting`.
-            # (i.e. multiplying probs within independent batches).
-            log_prob = log_prob + self.log_probs[ordinal]
-            for enum_dim in enum_dims:
-                log_prob = log_sum_exp(log_prob, dim=enum_dim, keepdim=True)
-            for marginal_dim in marginal_dims:
-                log_prob = log_prob.sum(dim=marginal_dim, keepdim=True)
-        return log_prob.sum()
+    def _populate_dims(self, ordinal, parent_ordinal, parent_enum_dims):
+        """
+        For each ordinal, populate the `iarange` and `enum` dims to be
+        marginalized out.
+        """
+        log_prob = self._log_probs[ordinal]
+        iarange_dims = sorted([frame.dim for frame in ordinal - parent_ordinal])
+        enum_dims = set((i for i in range(-log_prob.dim(), -self.max_iarange_nesting)
+                         if log_prob.shape[i] > 1))
+        self._iarange_dims[ordinal] = iarange_dims
+        self._enum_dims[ordinal] = sorted(list(enum_dims - parent_enum_dims))
+        for c in self._child_nodes[ordinal]:
+            self._populate_dims(c, ordinal, enum_dims)
+
+    def _compute_log_prob_terms(self, model_trace):
+        """
+        Computes the conditional probabilities for each of the sites
+        in the model trace, and stores the result in `self._log_probs`.
+        """
+        model_trace.compute_log_prob()
+
+        ordering = {}
+        for name, site in model_trace.nodes.items():
+            if site["type"] == "sample":
+                if len(site["cond_indep_stack"]) == 0:
+                    ordering[name] = self.root
+                else:
+                    ordering[name] = frozenset(tuple(self.root) + site["cond_indep_stack"])
+
+        # Collect log prob terms per independence context.
+        log_probs = defaultdict(list)
+        for name, site in model_trace.nodes.items():
+            if site["type"] == "sample":
+                if is_validation_enabled():
+                    check_site_shape(site, self.max_iarange_nesting)
+                log_probs[ordering[name]].append(site["log_prob"])
+
+        for ordinal in log_probs:
+            self._log_probs[ordinal] = sum(log_probs[ordinal])
+
+    def _reduce(self, ordinal, agg_log_prob=torch.tensor(0.)):
+        """
+        Reduce the log prob terms for the given ordinal:
+          - taking log_sum_exp of factors in enum dims (i.e.
+            adding up the probability terms).
+          - summing up the dims within `max_iarange_nesting`.
+            (i.e. multiplying probs within independent batches).
+
+        :param ordinal: node (ordinal)
+        :param torch.Tensor agg_log_prob: aggregated `log_prob`
+            terms from the downstream nodes.
+        :return: `log_prob` with marginalized `iarange` and `enum`
+            dims.
+        """
+        log_prob = self._log_probs[ordinal] + agg_log_prob
+        for enum_dim in self._enum_dims[ordinal]:
+            log_prob = log_sum_exp(log_prob, dim=enum_dim, keepdim=True)
+        for marginal_dim in self._iarange_dims[ordinal]:
+            log_prob = log_prob.sum(dim=marginal_dim, keepdim=True)
+        return log_prob
+
+    def _aggregate_log_probs(self, ordinal):
+        """
+        Aggregate the `log_prob` terms using depth first search.
+        """
+        if self._child_nodes[ordinal] is None:
+            return self._reduce(ordinal)
+        agg_log_prob = torch.tensor(0.)
+        for c in self._child_nodes[ordinal]:
+            agg_log_prob = agg_log_prob + self._aggregate_log_probs(c)
+        return self._reduce(ordinal, agg_log_prob)
+
+    def log_prob(self, model_trace):
+        """
+        Returns the log pdf of `model_trace` by appropriately handling
+        enumerated log prob factors.
+
+        :return: log pdf of the trace.
+        """
+        self._compute_log_prob_terms(model_trace)
+        return self._aggregate_log_probs(self.root).sum()

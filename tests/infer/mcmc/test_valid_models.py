@@ -113,10 +113,13 @@ def test_log_prob_eval_iterates_in_correct_order():
 
     model_trace = poutine.trace(model).get_trace()
     trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 4)
-    trace_prob_evaluator.log_prob()
-    _, marginal_dims, enum_dims = zip(*reversed(trace_prob_evaluator._sorted_indep_stacks))
-    assert_equal(marginal_dims, ([-4, -3], [-2], [-1], [0]))
-    assert_equal(enum_dims, ([-8], [-9, -6], [-7], [-5]))
+    trace_prob_evaluator.log_prob(model_trace)
+    iarange_dims, enum_dims = [], []
+    for key in reversed(sorted(trace_prob_evaluator._log_probs.keys())):
+        iarange_dims.append(trace_prob_evaluator._iarange_dims[key])
+        enum_dims.append(trace_prob_evaluator._enum_dims[key])
+    assert_equal(iarange_dims, [[-4, -3], [-2], [-1], [0]])
+    assert_equal(enum_dims, [[-8], [-9, -6], [-7], [-5]])
 
 
 def test_all_discrete_sites_log_prob():
@@ -141,7 +144,7 @@ def test_all_discrete_sites_log_prob():
     print_debug_info(model_trace)
     trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 2)
     # all discrete sites enumerated out.
-    assert_equal(trace_prob_evaluator.log_prob(), torch.tensor(0.))
+    assert_equal(trace_prob_evaluator.log_prob(model_trace), torch.tensor(0.))
 
 
 def test_enumeration_in_tree():
@@ -175,10 +178,11 @@ def test_enumeration_in_tree():
     model_trace = poutine.trace(model).get_trace()
     print_debug_info(model_trace)
     trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 4)
-    assert_equal(trace_prob_evaluator.log_prob(), torch.tensor(-15.2704))  # p_n(0.) * p_n(2.)^2 * p_n(1.)^6
+    # p_n(0.) * p_n(2.)^2 * p_n(1.)^6
+    assert_equal(trace_prob_evaluator.log_prob(model_trace), torch.tensor(-15.2704), prec=1e-4)
 
 
-@pytest.mark.xfail(reason="Enumeration currently does not work for DAGs "
+@pytest.mark.xfail(reason="Enumeration currently does not work for general DAGs "
                           "(indep contexts with multiple parents)")
 def test_enumeration_in_dag():
     p = 0.3
@@ -204,7 +208,7 @@ def test_enumeration_in_dag():
     model_trace = poutine.trace(model).get_trace()
     print_debug_info(model_trace)
     trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 2)
-    assert_equal(trace_prob_evaluator.log_prob(), torch.tensor(0.16196))  # p_beta(0.3)^3
+    assert_equal(trace_prob_evaluator.log_prob(model_trace), torch.tensor(0.16196))  # p_beta(0.3)^3
 
 
 @pytest.mark.parametrize("data, expected_log_prob", [
@@ -230,7 +234,7 @@ def test_enum_log_prob_continuous_observed(data, expected_log_prob):
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
     trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 1)
-    assert_equal(trace_prob_evaluator.log_prob(),
+    assert_equal(trace_prob_evaluator.log_prob(model_trace),
                  expected_log_prob,
                  prec=1e-3)
 
@@ -259,7 +263,7 @@ def test_enum_log_prob_continuous_sampled(data, expected_log_prob):
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
     trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 1)
-    assert_equal(trace_prob_evaluator.log_prob(),
+    assert_equal(trace_prob_evaluator.log_prob(model_trace),
                  expected_log_prob,
                  prec=1e-3)
 
@@ -285,15 +289,15 @@ def test_enum_log_prob_discrete_observed(data, expected_log_prob):
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
     trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 1)
-    assert_equal(trace_prob_evaluator.log_prob(),
+    assert_equal(trace_prob_evaluator.log_prob(model_trace),
                  expected_log_prob,
                  prec=1e-3)
 
 
 @pytest.mark.parametrize("data, expected_log_prob", [
-    # (torch.tensor([1.]), torch.tensor(-1.15)),
-    # (torch.tensor([0.]), torch.tensor(-1.46)),
-    (torch.tensor([1., 1.]), torch.tensor(-8.901)),
+    (torch.tensor([1.]), torch.tensor(-1.15)),
+    (torch.tensor([0.]), torch.tensor(-1.46)),
+    (torch.tensor([1., 1.]), torch.tensor(-2.1998)),
 ])
 def test_enum_log_prob_multiple_iarange(data, expected_log_prob):
 
@@ -314,7 +318,7 @@ def test_enum_log_prob_multiple_iarange(data, expected_log_prob):
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
     trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 1)
-    assert_equal(trace_prob_evaluator.log_prob(),
+    assert_equal(trace_prob_evaluator.log_prob(model_trace),
                  expected_log_prob,
                  prec=1e-3)
 
@@ -344,6 +348,6 @@ def test_enum_log_prob_nested_iarange(data, expected_log_prob):
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
     trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 2)
-    assert_equal(trace_prob_evaluator.log_prob(),
+    assert_equal(trace_prob_evaluator.log_prob(model_trace),
                  expected_log_prob,
                  prec=1e-3)
