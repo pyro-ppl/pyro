@@ -49,13 +49,14 @@ class EnumTraceProbEvaluator(object):
                 if cur_node < child_node:
                     self._children[cur_node].append(child_node)
                     break  # at most 1 parent.
-        # 2. Populate `marginal_dims` and `enum_dims` for each ordinal.
+        # 2. Populate `iarange_dims` and `enum_dims` to be evaluated/
+        #    enumerated out at each ordinal.
         self._populate_dims(self.root, frozenset(), set())
 
     def _populate_dims(self, ordinal, parent_ordinal, parent_enum_dims):
         """
         For each ordinal, populate the `iarange` and `enum` dims to be
-        marginalized out.
+        evaluated or enumerated out.
         """
         log_prob = self._log_probs[ordinal]
         iarange_dims = sorted([frame.dim for frame in ordinal - parent_ordinal])
