@@ -118,8 +118,8 @@ def test_log_prob_eval_iterates_in_correct_order():
     for key in reversed(sorted(trace_prob_evaluator._log_probs.keys())):
         iarange_dims.append(trace_prob_evaluator._iarange_dims[key])
         enum_dims.append(trace_prob_evaluator._enum_dims[key])
-    assert_equal(iarange_dims, [[-4, -3], [-2], [-1], [0]])
-    assert_equal(enum_dims, [[-8], [-9, -6], [-7], [-5]])
+    assert iarange_dims == [[-4, -3], [-2], [-1], [0]]
+    assert enum_dims, [[-8], [-9, -6], [-7], [-5]]
 
 
 def test_all_discrete_sites_log_prob():
