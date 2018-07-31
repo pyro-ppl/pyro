@@ -1,9 +1,8 @@
 import torch
 from collections import defaultdict
 
-from pyro.distributions.util import log_sum_exp
+from pyro.distributions.util import logsumexp
 from pyro.infer.util import is_validation_enabled
-from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import check_site_shape
 
 
@@ -82,10 +81,10 @@ class EnumTraceProbEvaluator(object):
                     check_site_shape(site, self.max_iarange_nesting)
                 log_probs[ordering[name]].append(site["log_prob"])
 
-        for ordinal in log_probs:
-            self._log_probs[ordinal] = sum(log_probs[ordinal])
+        for ordinal, log_prob in log_probs.items():
+            self._log_probs[ordinal] = sum(log_prob)
 
-    def _reduce(self, ordinal, agg_log_prob=torch.tensor(0.)):
+    def _reduce(self, ordinal, agg_log_prob=0.):
         """
         Reduce the log prob terms for the given ordinal:
           - taking log_sum_exp of factors in enum dims (i.e.
@@ -101,7 +100,7 @@ class EnumTraceProbEvaluator(object):
         """
         log_prob = self._log_probs[ordinal] + agg_log_prob
         for enum_dim in self._enum_dims[ordinal]:
-            log_prob = log_sum_exp(log_prob, dim=enum_dim, keepdim=True)
+            log_prob = logsumexp(log_prob, dim=enum_dim, keepdim=True)
         for marginal_dim in self._iarange_dims[ordinal]:
             log_prob = log_prob.sum(dim=marginal_dim, keepdim=True)
         return log_prob
@@ -110,11 +109,9 @@ class EnumTraceProbEvaluator(object):
         """
         Aggregate the `log_prob` terms using depth first search.
         """
-        if self._children[ordinal] is None:
+        if not self._children[ordinal]:
             return self._reduce(ordinal)
-        agg_log_prob = torch.tensor(0.)
-        for c in self._children[ordinal]:
-            agg_log_prob = agg_log_prob + self._aggregate_log_probs(c)
+        agg_log_prob = sum(map(self._aggregate_log_probs, self._children[ordinal]))
         return self._reduce(ordinal, agg_log_prob)
 
     def log_prob(self, model_trace):
