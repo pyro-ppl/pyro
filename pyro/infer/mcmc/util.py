@@ -25,7 +25,6 @@ class EnumTraceProbEvaluator(object):
         self.has_enumerable_sites = has_enumerable_sites
         self.max_iarange_nesting = max_iarange_nesting
         default_cond_stack = (CondIndepStackFrame(name="default", dim=0, size=0, counter=None),)
-        self.root = frozenset(default_cond_stack)
         # To be populated using the model trace once.
         self._log_probs = {}
         self._children = defaultdict(list)
@@ -51,7 +50,7 @@ class EnumTraceProbEvaluator(object):
                     break  # at most 1 parent.
         # 2. Populate `iarange_dims` and `enum_dims` to be evaluated/
         #    enumerated out at each ordinal.
-        self._populate_cache(self.root, frozenset(), set())
+        self._populate_cache(frozenset(), frozenset(), set())
 
     def _populate_cache(self, ordinal, parent_ordinal, parent_enum_dims):
         """
@@ -73,14 +72,9 @@ class EnumTraceProbEvaluator(object):
         in the model trace, and stores the result in `self._log_probs`.
         """
         model_trace.compute_log_prob()
-        ordering = {}
-        for name, site in model_trace.nodes.items():
-            if site["type"] == "sample":
-                if len(site["cond_indep_stack"]) == 0:
-                    ordering[name] = self.root
-                else:
-                    ordering[name] = frozenset(tuple(self.root) + site["cond_indep_stack"])
-
+        ordering = {name: frozenset(site["cond_indep_stack"])
+                    for name, site in model_trace.nodes.items()
+                    if site["type"] == "sample"}
         # Collect log prob terms per independence context.
         log_probs = defaultdict(list)
         for name, site in model_trace.nodes.items():
@@ -134,4 +128,4 @@ class EnumTraceProbEvaluator(object):
         if not self.has_enumerable_sites:
             return model_trace.log_prob_sum()
         self._compute_log_prob_terms(model_trace)
-        return self._aggregate_log_probs(self.root).sum()
+        return self._aggregate_log_probs(frozenset()).sum()
