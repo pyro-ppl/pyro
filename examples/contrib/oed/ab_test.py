@@ -155,11 +155,12 @@ def main(num_steps):
     print(rainforth)
     
     # Donsker varadhan
-    dv_loss_fn = donsker_varadhan_loss(model, X, "y", "w", 1000,
+    dv_loss_fn = donsker_varadhan_loss(model, X, "y", "w", 100,
                                        DVNeuralNet(p, p))
     params = None
     ewma = None
-    opt = optim.Adam({"lr": 0.0005})
+    alpha=1000.
+    opt = optim.Adam({"lr": 0.0025})
     for step in range(300000):
         if params is not None:
             pyro.infer.util.zero_grads(params)
@@ -167,10 +168,10 @@ def main(num_steps):
         if ewma is None:
             ewma = dv_loss
         else:
-            ewma = (1/(1+100))*(dv_loss + 100*ewma)
-        if step % 100 == 0:
-            print("Instantaneous loss", dv_loss)
-            print("EWMA loss", ewma)
+            ewma = (1/(1+alpha))*(dv_loss + alpha*ewma)
+        if step % 1000 == 0:
+            print("EWMA loss")
+            print(ewma)
         agg_loss.backward()
         params = [pyro.param(name).unconstrained()
                   for name in pyro.get_param_store().get_all_param_names()]
