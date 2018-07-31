@@ -18,7 +18,7 @@ def iter_discrete_escape(trace, msg):
 
 
 def iter_discrete_extend(trace, site, **ignored):
-    values = site["fn"].enumerate_support()
+    values = site["fn"].enumerate_support(expand=False)
     for i, value in enumerate(values):
         extended_site = site.copy()
         extended_site["infer"] = site["infer"].copy()
