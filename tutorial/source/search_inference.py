@@ -12,6 +12,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 
+from pyro.distributions.util import logsumexp
 from pyro.infer.abstract_infer import TracePosterior
 from pyro.poutine.runtime import NonlocalExit
 
@@ -84,13 +85,13 @@ class HashingMarginal(dist.Distribution):
                 value_hash = hash(value)
             if value_hash in logits:
                 # Value has already been seen.
-                logits[value_hash] = dist.util.log_sum_exp(torch.stack([logits[value_hash], logit]))
+                logits[value_hash] = logsumexp(torch.stack([logits[value_hash], logit]), dim=-1)
             else:
                 logits[value_hash] = logit
                 values_map[value_hash] = value
 
         logits = torch.stack(list(logits.values())).contiguous().view(-1)
-        logits = logits - dist.util.log_sum_exp(logits)
+        logits = logits - logsumexp(logits, dim=-1)
         d = dist.Categorical(logits=logits)
         return d, values_map
 

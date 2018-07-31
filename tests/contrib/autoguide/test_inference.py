@@ -10,7 +10,8 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.contrib.autoguide import AutoDiagonalNormal, AutoLowRankMultivariateNormal, AutoMultivariateNormal
+from pyro.contrib.autoguide import (AutoDelta, AutoDiagonalNormal, AutoLaplaceApproximation,
+                                    AutoLowRankMultivariateNormal, AutoMultivariateNormal)
 from pyro.infer import SVI, Trace_ELBO
 from tests.common import assert_equal
 from tests.integration_tests.test_conjugate_gaussian_models import GaussianChain
@@ -71,7 +72,9 @@ class AutoGaussianChain(GaussianChain):
                      msg="guide covariance off")
 
 
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal, AutoLowRankMultivariateNormal])
+@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
+                                        AutoLowRankMultivariateNormal, AutoDelta,
+                                        AutoLaplaceApproximation])
 def test_auto_diagonal_gaussians(auto_class):
     n_steps = 3501 if auto_class == AutoDiagonalNormal else 6001
 
@@ -90,14 +93,24 @@ def test_auto_diagonal_gaussians(auto_class):
         loss = svi.step()
         assert np.isfinite(loss), loss
 
-    loc, scale = guide._loc_scale()
+    if auto_class is AutoDelta:
+        latents = guide.median()
+        loc = torch.tensor([latents["x"], latents["y"]])
+        scale = guide.covariance().diag().sqrt()
+    else:
+        if auto_class is AutoLaplaceApproximation:
+            guide = guide.laplace_approximation()
+
+        loc, scale = guide._loc_scale()
+
     assert_equal(loc, torch.tensor([-0.2, 0.2]), prec=0.05,
                  msg="guide mean off")
-    assert_equal(scale, torch.tensor([1.21, 0.71]), prec=0.08,
+    assert_equal(scale, torch.tensor([1.2, 0.7]), prec=0.08,
                  msg="guide covariance off")
 
 
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal, AutoLowRankMultivariateNormal])
+@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
+                                        AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
 def test_auto_transform(auto_class):
     n_steps = 3500
 
@@ -115,14 +128,18 @@ def test_auto_transform(auto_class):
         loss = svi.step()
         assert np.isfinite(loss), loss
 
+    if auto_class is AutoLaplaceApproximation:
+        guide = guide.laplace_approximation()
+
     loc, scale = guide._loc_scale()
     assert_equal(loc, torch.tensor([0.2]), prec=0.04,
                  msg="guide mean off")
-    assert_equal(scale, torch.tensor([0.71]), prec=0.04,
+    assert_equal(scale, torch.tensor([0.7]), prec=0.04,
                  msg="guide covariance off")
 
 
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal, AutoLowRankMultivariateNormal])
+@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
+                                        AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
 def test_auto_dirichlet(auto_class):
     num_steps = 2000
     prior = torch.tensor([0.5, 1.0, 1.5, 3.0])
