@@ -122,5 +122,4 @@ class EnumTraceProbEvaluator(object):
         if not self.has_enumerable_sites:
             return model_trace.log_prob_sum()
         self._compute_log_prob_terms(model_trace)
-        print(self._aggregate_log_probs(ordinal=frozenset()).shape)
         return self._aggregate_log_probs(ordinal=frozenset()).sum()
