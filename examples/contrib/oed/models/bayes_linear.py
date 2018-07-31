@@ -1,25 +1,19 @@
-import argparse
 import warnings
 import torch
 from torch.nn.functional import softplus
-from torch.distributions import constraints
 import numpy as np
 
 import pyro
 import pyro.distributions as dist
-from pyro import optim
-from pyro.infer import TraceEnum_ELBO
-from pyro.contrib.oed.eig import vi_ape
-import pyro.contrib.gp as gp
 
 
-def bayesian_linear_model(design, w_mean, w_sqrtlambda, obs_sd=None, 
+def bayesian_linear_model(design, w_mean, w_sqrtlambda, obs_sd=None,
                           alpha_0=None, beta_0=None):
     """A Bayesian linear model.
 
     If `obs_sd` is passed, the regression coefficient `w` is samples from
-    a Gaussian with mean `w_mean` and sds `obs_sd / w_sqrtlambda`. 
-    These tensors may be scalar or `p`-dimensional vectors. 
+    a Gaussian with mean `w_mean` and sds `obs_sd / w_sqrtlambda`.
+    These tensors may be scalar or `p`-dimensional vectors.
     `X` is then sampled from a Gaussian with mean `Xw` and sd `obs_sd`.
 
     If `obs_sd=None`, the observation variance is sampled from an inverse
@@ -32,7 +26,7 @@ def bayesian_linear_model(design, w_mean, w_sqrtlambda, obs_sd=None,
         # First, sample tau (observation precision)
         tau_shape = design.shape[:-2]
         # Global variable
-        tau_prior = dist.Gamma(alpha=alpha_0.expand(tau_shape), 
+        tau_prior = dist.Gamma(alpha=alpha_0.expand(tau_shape),
                                beta=beta_0.expand(tau_shape))
         tau = pyro.sample("tau", tau_prior)
         obs_sd = 1./torch.sqrt(tau)
@@ -65,8 +59,8 @@ def normal_inv_gamma_guide(design, obs_sd):
     sd `obs_sd / lambda_param` and the two parameters `mw_param` and `lambda_param`
     are learned.
 
-    If `obs_sd=None`, this is a four-parameter family. The observation precision 
-    `tau` is sampled from a Gamma distribution with parameters `alpha`, `beta` 
+    If `obs_sd=None`, this is a four-parameter family. The observation precision
+    `tau` is sampled from a Gamma distribution with parameters `alpha`, `beta`
     (separate for each batch). We let `obs_sd = 1./torch.sqrt(tau)` and then
     proceed as above.
     """
@@ -85,7 +79,7 @@ def normal_inv_gamma_guide(design, obs_sd):
 
     # Set up mu and lambda
     mw_param = pyro.param("guide_mean", torch.zeros(loc_shape))
-    sqrtlambda_param = softplus(pyro.param("guide_sqrtlambda", 
+    sqrtlambda_param = softplus(pyro.param("guide_sqrtlambda",
                                            3.*torch.ones(loc_shape)))
     # guide distributions for w
     w_dist = dist.Normal(mw_param, obs_sd / sqrtlambda_param).independent(2)
@@ -117,7 +111,7 @@ def group_assignment_matrix(design):
 
 def analytic_posterior_entropy(prior_cov, x, obs_sd):
     """
-    Given a prior covariance matrix and a design matrix `x`, 
+    Given a prior covariance matrix and a design matrix `x`,
     returns the entropy of the posterior under a Bayesian
     linear regression model with design `x` and observation
     noise `obs_sd`.

@@ -2,10 +2,8 @@ import argparse
 from functools import partial
 import torch
 from torch.distributions import constraints
-import numpy as np
 
 import pyro
-import pyro.distributions as dist
 from pyro import optim
 from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import vi_ape
@@ -46,7 +44,7 @@ p = 2    # number of features
 prior_sds = torch.tensor([10., 2.5])
 
 # Model and guide using known obs_sd
-model = partial(bayesian_linear_model, w_mean=torch.tensor(0.), 
+model = partial(bayesian_linear_model, w_mean=torch.tensor(0.),
                 w_sqrtlambda=1/prior_sds, obs_sd=torch.tensor(1.))
 guide = partial(normal_inv_gamma_guide, obs_sd=torch.tensor(1.))
 
@@ -66,6 +64,7 @@ def estimated_ape(ns, num_vi_steps):
         is_parameters={"num_samples": 1}
     )
     return est_ape
+
 
 def true_ape(ns):
     """Analytic APE"""
