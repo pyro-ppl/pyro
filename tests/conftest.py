@@ -1,8 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
+import os
 import warnings
 
+import torch
+
 import pyro
+
+
+torch.set_default_tensor_type(os.environ.get('PYRO_TENSOR_TYPE', 'torch.DoubleTensor'))
 
 
 def pytest_configure(config):

@@ -4,6 +4,7 @@ from unittest import TestCase
 
 import pytest
 import torch
+from torch.distributions import constraints
 
 import pyro
 import pyro.optim as optim
@@ -91,7 +92,7 @@ def test_dynamic_lr(scheduler, num_steps):
 
     def guide():
         loc = pyro.param('loc', torch.tensor(0.))
-        scale = pyro.param('scale', torch.tensor(0.5))
+        scale = pyro.param('scale', torch.tensor(0.5), constraint=constraints.positive)
         pyro.sample('latent', Normal(loc, scale))
 
     svi = SVI(model, guide, scheduler, loss=TraceGraph_ELBO())
@@ -100,8 +101,8 @@ def test_dynamic_lr(scheduler, num_steps):
         for _ in range(num_steps):
             svi.step()
         if epoch == 1:
-            loc = pyro.param('loc')
-            scale = pyro.param('scale')
+            loc = pyro.param('loc').unconstrained()
+            scale = pyro.param('scale').unconstrained()
             opt = scheduler.optim_objs[loc].optimizer
             assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
             assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
@@ -109,7 +110,7 @@ def test_dynamic_lr(scheduler, num_steps):
             assert opt.state_dict()['param_groups'][0]['lr'] == 0.02
             assert opt.state_dict()['param_groups'][0]['initial_lr'] == 0.01
             assert abs(pyro.param('loc').item()) > 1e-5
-            assert abs(pyro.param('scale').item()) - 0.5 > 1e-5
+            assert abs(pyro.param('scale').item() - 0.5) > 1e-5
 
 
 @pytest.mark.parametrize('factory', [optim.Adam, optim.ClippedAdam, optim.RMSprop, optim.SGD])
