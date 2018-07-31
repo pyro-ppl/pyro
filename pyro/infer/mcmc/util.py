@@ -12,7 +12,7 @@ class EnumTraceProbEvaluator(object):
     Computes the log probability density of a trace that possibly contains
     discrete sample sites enumerated in parallel.
 
-    :param model_trace: execution trace from the model.
+    :param model_trace: execution trace from a static model.
     :param bool has_enumerable_sites: whether the trace contains any
         discrete enumerable sites.
     :param int max_iarange_nesting: Optional bound on max number of nested
@@ -51,9 +51,9 @@ class EnumTraceProbEvaluator(object):
                     break  # at most 1 parent.
         # 2. Populate `iarange_dims` and `enum_dims` to be evaluated/
         #    enumerated out at each ordinal.
-        self._populate_dims(self.root, frozenset(), set())
+        self._populate_cache(self.root, frozenset(), set())
 
-    def _populate_dims(self, ordinal, parent_ordinal, parent_enum_dims):
+    def _populate_cache(self, ordinal, parent_ordinal, parent_enum_dims):
         """
         For each ordinal, populate the `iarange` and `enum` dims to be
         evaluated or enumerated out.
@@ -65,7 +65,7 @@ class EnumTraceProbEvaluator(object):
         self._iarange_dims[ordinal] = iarange_dims
         self._enum_dims[ordinal] = sorted(list(enum_dims - parent_enum_dims))
         for c in self._children[ordinal]:
-            self._populate_dims(c, ordinal, enum_dims)
+            self._populate_cache(c, ordinal, enum_dims)
 
     def _compute_log_prob_terms(self, model_trace):
         """
