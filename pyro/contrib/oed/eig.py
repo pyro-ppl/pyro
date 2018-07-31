@@ -76,7 +76,7 @@ def naive_rainforth(model, design, observation_label="y", target_label="theta",
     reexpanded_design = design.expand((M, 1, *design.shape))
     reexp_trace = poutine.trace(model).get_trace(reexpanded_design)
     marginal_lp = cond_lp(model, y, reexp_trace.nodes[target_label]["value"],
-                             observation_label, target_label, design)[0]
+                          observation_label, target_label, design)[0]
 
     return (conditional_lp - marginal_lp).sum(0)/N
 
@@ -86,13 +86,9 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
 
     global ewma
     ewma = None
-    alpha = 10.
+    alpha = 2.
 
     expanded_design = design.expand((num_particles, *design.shape))
-    # re_n = 10
-    # reexpanded_design = design.expand((re_n, *expanded_design.shape))
-    # trace = poutine.trace(model).get_trace(reexpanded_design)
-    # fixed_theta = trace.nodes[target_label]["value"]
 
     pyro.module("U", U)
 
@@ -103,16 +99,13 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
         trace = poutine.trace(model).get_trace(expanded_design)
         y = trace.nodes[observation_label]["value"]
         theta = trace.nodes[target_label]["value"]
-        # idx = torch.randperm(num_particles)
-        # shuffled_theta = theta[idx, ...]
 
         # Compute log probabilities
         trace.compute_log_prob()
         unshuffled_lp = trace.nodes[observation_label]["log_prob"]
-        # marginal_lp = cond_lp(model, y, fixed_theta, observation_label, 
-        #     target_label, reexpanded_design)
+        # Not actually shuffling, resimulate for safety
         shuffled_lp, _ = cond_lp(model, y, None, observation_label, 
-            target_label, expanded_design.unsqueeze(0))
+                                 target_label, expanded_design.unsqueeze(0))
 
         T_unshuffled = U(expanded_design, y, unshuffled_lp)
         T_shuffled = U(expanded_design, y, shuffled_lp)
@@ -124,10 +117,9 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
         else:
             ewma = (1/(1+alpha))*(torch.exp(expect_exp) + alpha*ewma)
         expect_exp.grad = 1./ewma
-        print('ewma', ewma)
 
         # Switch sign, sum over batch dimensions for scalar loss
-        loss = torch.sum(T_unshuffled, 0)/num_particles - expect_exp
+        loss = T_unshuffled.sum(0)/num_particles - expect_exp
         agg_loss = -loss.sum()
         return agg_loss, loss
 
@@ -148,7 +140,8 @@ def cond_lp(model, observation, target, observation_label, target_label, *args):
             })
     trace = poutine.trace(conditional_model).get_trace(*args)
     trace.compute_log_prob()
-    return logsumexp(trace.nodes[observation_label]["log_prob"], 0) - np.log(n), trace.nodes[target_label]["value"]
+    return (logsumexp(trace.nodes[observation_label]["log_prob"], 0) - np.log(n), 
+            trace.nodes[target_label]["value"])
 
 
 def logsumexp(inputs, dim=None, keepdim=False):
