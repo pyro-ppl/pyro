@@ -39,8 +39,7 @@ class EnumTraceProbEvaluator(object):
         self._compute_log_prob_terms(model_trace)
         # 1. Infer model structure - compute parent-child relationship.
         sorted_ordinals = sorted(self._log_probs.keys())
-        for i in range(len(sorted_ordinals)):
-            child_node = sorted_ordinals[i]
+        for i, child_node in enumerate(sorted_ordinals):
             for j in range(i-1, -1, -1):
                 cur_node = sorted_ordinals[j]
                 if cur_node < child_node:
@@ -60,7 +59,7 @@ class EnumTraceProbEvaluator(object):
         enum_dims = set((i for i in range(-log_prob.dim(), -self.max_iarange_nesting)
                          if log_prob.shape[i] > 1))
         self._iarange_dims[ordinal] = iarange_dims
-        self._enum_dims[ordinal] = sorted(list(enum_dims - parent_enum_dims))
+        self._enum_dims[ordinal] = sorted(enum_dims - parent_enum_dims)
         for c in self._children[ordinal]:
             self._populate_cache(c, ordinal, enum_dims)
 
