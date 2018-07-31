@@ -75,8 +75,8 @@ def naive_rainforth(model, design, observation_label="y", target_label="theta",
 
     reexpanded_design = design.expand((M, 1, *design.shape))
     reexp_trace = poutine.trace(model).get_trace(reexpanded_design)
-    marginal_lp = cond_lp(model, y, reexp_trace.nodes[target_label]["value"],
-                          observation_label, target_label, design)[0]
+    marginal_lp = cond_log_prob(model, y, reexp_trace.nodes[target_label]["value"],
+                                observation_label, target_label, design)[0]
 
     return (conditional_lp - marginal_lp).sum(0)/N
 
@@ -104,8 +104,8 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
         trace.compute_log_prob()
         unshuffled_lp = trace.nodes[observation_label]["log_prob"]
         # Not actually shuffling, resimulate for safety
-        shuffled_lp, _ = cond_lp(model, y, None, observation_label, 
-                                 target_label, expanded_design.unsqueeze(0))
+        shuffled_lp, _ = cond_log_prob(model, y, None, observation_label, 
+                                       target_label, expanded_design.unsqueeze(0))
 
         T_unshuffled = U(expanded_design, y, unshuffled_lp)
         T_shuffled = U(expanded_design, y, shuffled_lp)
@@ -126,21 +126,21 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
     return loss_fn
 
 
-def cond_lp(model, observation, target, observation_label, target_label, *args):
+def cond_log_prob(model, observation, target, observation_label, target_label, *args):
     if target is not None:
-        n = target.shape[0]
+        M = target.shape[0]
         conditional_model = pyro.condition(model, data={
             observation_label: observation.unsqueeze(0),
             target_label: target
             })
     else:
-        n = 1
+        M = 1
         conditional_model = pyro.condition(model, data={
             observation_label: observation.unsqueeze(0),
             })
     trace = poutine.trace(conditional_model).get_trace(*args)
     trace.compute_log_prob()
-    return (logsumexp(trace.nodes[observation_label]["log_prob"], 0) - np.log(n), 
+    return (logsumexp(trace.nodes[observation_label]["log_prob"], 0) - np.log(M), 
             trace.nodes[target_label]["value"])
 
 

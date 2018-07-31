@@ -9,7 +9,7 @@ from pyro import optim
 from pyro.infer import Trace_ELBO
 from pyro.contrib.oed.eig import vi_ape, donsker_varadhan_loss, naive_rainforth
 
-torch.set_default_tensor_type('torch.DoubleTensor')
+# torch.set_default_tensor_type('torch.DoubleTensor')
 
 """
 Example builds on the Bayesian regression tutorial [1]. It demonstrates how
@@ -150,9 +150,9 @@ def main(num_steps):
     print("True EIG")
     print(H_prior - true_ape)
     
-    # rainforth = naive_rainforth(model, X, "y", "w", N=10000, M=100)
-    # print("10000-100 Rainforth estimate")
-    # print(rainforth)
+    rainforth = naive_rainforth(model, X, "y", "w", N=10000, M=100)
+    print("10000-100 Rainforth estimate")
+    print(rainforth)
     
     # Donsker varadhan
     dv_loss_fn = donsker_varadhan_loss(model, X, "y", "w", 1000,
@@ -168,8 +168,9 @@ def main(num_steps):
             ewma = dv_loss
         else:
             ewma = (1/(1+100))*(dv_loss + 100*ewma)
-        print(dv_loss)
-        print(ewma)
+        if step % 100 == 0:
+            print("Instantaneous loss", dv_loss)
+            print("EWMA loss", ewma)
         agg_loss.backward()
         params = [pyro.param(name).unconstrained()
                   for name in pyro.get_param_store().get_all_param_names()]
