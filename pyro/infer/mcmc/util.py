@@ -24,7 +24,6 @@ class EnumTraceProbEvaluator(object):
                  max_iarange_nesting=float("inf")):
         self.has_enumerable_sites = has_enumerable_sites
         self.max_iarange_nesting = max_iarange_nesting
-        default_cond_stack = (CondIndepStackFrame(name="default", dim=0, size=0, counter=None),)
         # To be populated using the model trace once.
         self._log_probs = {}
         self._children = defaultdict(list)
@@ -128,4 +127,4 @@ class EnumTraceProbEvaluator(object):
         if not self.has_enumerable_sites:
             return model_trace.log_prob_sum()
         self._compute_log_prob_terms(model_trace)
-        return self._aggregate_log_probs(frozenset()).sum()
+        return self._aggregate_log_probs(ordinal=frozenset()).sum()
