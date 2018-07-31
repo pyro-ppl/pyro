@@ -201,8 +201,9 @@ except ImportError:
         :param keepdim: Whether to retain the dimension
             that is summed out.
         """
-        max_val = tensor.max(dim, keepdim=keepdim)[0]
-        return max_val + (tensor - max_val).exp().sum(dim=dim, keepdim=keepdim).log()
+        max_val = tensor.max(dim, keepdim=True)[0]
+        log_sum_exp = max_val + (tensor - max_val).exp().sum(dim=dim, keepdim=True).log()
+        return log_sum_exp if keepdim else log_sum_exp.squeeze(dim)
 
 
 log_sum_exp = logsumexp  # DEPRECATED
