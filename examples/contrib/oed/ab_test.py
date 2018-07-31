@@ -35,7 +35,7 @@ to optimal experiment design within probabilistic programs.
 """
 
 # Set up regression model dimensions
-N = 100  # number of participants
+N = 10  # number of participants
 p_treatments = 2  # number of treatment groups
 p = p_treatments  # number of features
 prior_stdevs = torch.tensor([1, .5])
@@ -81,17 +81,19 @@ def guide(design):
 class DVNeuralNet(nn.Module):
     def __init__(self, design_dim, y_dim):
         super(DVNeuralNet, self).__init__()
-        input_dim = design_dim + y_dim + 1
+        input_dim = design_dim + 2*y_dim + 1
         self.linear1 = nn.Linear(input_dim, input_dim)
         self.linear2 = nn.Linear(input_dim, input_dim)
         self.linear3 = nn.Linear(input_dim, 1)
         self.softplus = nn.Softplus()
 
     def forward(self, design, y, lp):
-        suff = torch.matmul(y.unsqueeze(-2), design)
         design_suff = design.sum(-2, keepdim=True)
+        suff = torch.matmul(y.unsqueeze(-2), design)
+        squares = torch.matmul((y**2).unsqueeze(-2), design)
+        allsquare = suff**2
         lp_unsqueezed = lp.unsqueeze(-1).unsqueeze(-2)
-        m = torch.cat([suff, design_suff, lp_unsqueezed], -1)
+        m = torch.cat([squares, allsquare, design_suff, lp_unsqueezed], -1)
         h1 = self.softplus(self.linear1(m))
         h2 = self.softplus(self.linear2(h1))
         o = self.linear3(h2).squeeze(-2).squeeze(-1)
@@ -130,7 +132,7 @@ def main(num_steps):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
 
-    ns = range(0, N, 15)
+    ns = range(0, N, 2)
     designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
     X = torch.stack(designs)
 
@@ -147,13 +149,13 @@ def main(num_steps):
     print(true_ape)
     print("True EIG")
     print(H_prior - true_ape)
-
+    
     # rainforth = naive_rainforth(model, X, "y", "w", N=10000, M=100)
     # print("10000-100 Rainforth estimate")
     # print(rainforth)
     
     # Donsker varadhan
-    dv_loss_fn = donsker_varadhan_loss(model, X, "y", "w", 500,
+    dv_loss_fn = donsker_varadhan_loss(model, X, "y", "w", 1000,
                                        DVNeuralNet(p, p))
     params = None
     ewma = None
