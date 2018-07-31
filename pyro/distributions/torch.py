@@ -19,6 +19,13 @@ class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
                 logits = self.logits.expand(batch_shape)
                 return type(self)(logits=logits, validate_args=validate_args)
 
+    def enumerate_support(self, expand=True):
+        values = self._param.new_tensor([0., 1.])
+        values = values.reshape((2,) + (1,) * len(self.batch_shape))
+        if expand:
+            values = values.expand((2,) + self.batch_shape)
+        return values
+
 
 class Beta(torch.distributions.Beta, TorchDistributionMixin):
     def expand(self, batch_shape):
@@ -44,6 +51,16 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
             else:
                 logits = self.logits.expand(batch_shape + self.logits.shape[-1:])
                 return type(self)(logits=logits, validate_args=validate_args)
+
+    def enumerate_support(self, expand=True):
+        num_events = self._num_events
+        values = torch.arange(num_events).long()
+        values = values.view((-1,) + (1,) * len(self._batch_shape))
+        if expand:
+            values = values.expand((-1,) + self._batch_shape)
+        if self._param.is_cuda:
+            values = values.cuda(self._param.get_device())
+        return values
 
 
 class Cauchy(torch.distributions.Cauchy, TorchDistributionMixin):
@@ -143,6 +160,11 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
         reinterpreted_shape = base_shape[len(base_shape) - self.reinterpreted_batch_ndims:]
         base_dist = self.base_dist.expand(batch_shape + reinterpreted_shape)
         return type(self)(base_dist, self.reinterpreted_batch_ndims)
+
+    def enumerate_support(self, expand=expand):
+        if self.reinterpreted_batch_ndims:
+            raise NotImplementedError("Pyro does not enumerate over cartesian products")
+        return self.base_dist.enumerate_support(expand=expand)
 
 
 class Laplace(torch.distributions.Laplace, TorchDistributionMixin):
