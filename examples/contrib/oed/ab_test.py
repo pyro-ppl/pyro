@@ -29,7 +29,7 @@ information from actually performing the experiment.
 For details of the implementation of average posterior entropy estimation, see
 the docs for :func:`pyro.contrib.oed.eig.vi_ape`.
 
-We recommend the technical report from Long Ouyang et al [3] as an introduction
+We recommend the technical report from Long Ouyang et al [2] as an introduction
 to optimal experiment design within probabilistic programs.
 
 [1] ["Bayesian Regression"](http://pyro.ai/examples/bayesian_regression.html)
