@@ -118,6 +118,8 @@ def test_log_prob_eval_iterates_in_correct_order():
     for key in reversed(sorted(trace_prob_evaluator._log_probs.keys(), key=lambda x: (len(x), x))):
         iarange_dims.append(trace_prob_evaluator._iarange_dims[key])
         enum_dims.append(trace_prob_evaluator._enum_dims[key])
+    # The reduction operation returns a singleton with dimensions preserved.
+    assert not any(i != 1 for i in trace_prob_evaluator._aggregate_log_probs(frozenset()).shape)
     assert iarange_dims == [[-4, -3], [-2], [-1], []]
     assert enum_dims, [[-8], [-9, -6], [-7], [-5]]
 
