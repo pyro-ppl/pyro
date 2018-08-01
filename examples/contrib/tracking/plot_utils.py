@@ -21,7 +21,8 @@ def init_visdom(visdom_flag):
         return None
 
 
-def plot_solution(observations, p_exists, positions, true_positions, args, message='', fig=None, viz=None):
+def plot_solution(observations, p_exists, positions, true_positions, args,
+                  emission_noise_scale=None, message='', fig=None, viz=None):
     with torch.no_grad():
         if fig is None:
             fig = pyplot.figure(figsize=(12, 6))
@@ -38,6 +39,11 @@ def plot_solution(observations, p_exists, positions, true_positions, args, messa
         for i in range(p_exists.shape[0]):
             position = positions[:, i].detach().numpy()
             pyplot.plot(position, alpha=p_exists[i].item(), color='C0')
+            if emission_noise_scale is not None and p_exists[i].item() > 1e-3:
+                pyplot.fill_between(torch.arange(args.num_frames).numpy(),
+                                    position - emission_noise_scale,
+                                    position + emission_noise_scale,
+                                    alpha=max(p_exists[i].item() - 0.5, 0.03), color='C0')
         if args.expected_num_objects == 1:
             mean = (p_exists * positions).sum(-1) / p_exists.sum(-1)
             pyplot.plot(mean.detach().numpy(), 'r--', alpha=0.5, label='mean')
