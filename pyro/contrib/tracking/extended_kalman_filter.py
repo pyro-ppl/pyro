@@ -215,7 +215,7 @@ class EKFState:
         dx = K_prefix.mm(torch.gesv(dz, S)[0])  # K*dz
         x = self._dynamic_model.geodesic_difference(x, -dx)
 
-        I = torch.eye(self._dynamic_model.dimension)
+        I = torch.eye(self._dynamic_model.dimension)  # noqa: E741
         ImKH = I - K_prefix.mm(torch.gesv(H, S)[0])
         # *Joseph form* of covariance update for numerical stability.
         P = ImKH.mm(self.cov).mm(ImKH.t()) \
