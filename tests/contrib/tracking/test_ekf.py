@@ -41,8 +41,8 @@ def test_EKFState_with_NcpContinuous():
         mean=torch.rand(d),
         cov=torch.eye(d),
         time=t + dt)
-    l = ekf_state1.likelihood_of_update(measurement)
-    assert (l < 1.).all()
+    likelihood = ekf_state1.likelihood_of_update(measurement)
+    assert (likelihood < 1.).all()
 #     old_mean = ekf_state1.mean.clone()
     dz, S = ekf_state1.update(measurement)
     assert dz.shape == (measurement.dimension,)
@@ -87,8 +87,8 @@ def test_EKFState_with_NcvContinuous():
         mean=torch.rand(d),
         cov=torch.eye(d),
         time=t + dt)
-    l = ekf_state1.likelihood_of_update(measurement)
-    assert (l < 1.).all()
+    likelihood = ekf_state1.likelihood_of_update(measurement)
+    assert (likelihood < 1.).all()
 #     old_mean = ekf_state1.mean.clone()
     dz, S = ekf_state1.update(measurement)
     assert dz.shape == (measurement.dimension,)
