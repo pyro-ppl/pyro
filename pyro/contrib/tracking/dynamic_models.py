@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
 
+import torch
+import pyro.distributions as dist
+
 
 class DynamicModel(ABC):
     '''
@@ -11,30 +14,27 @@ class DynamicModel(ABC):
           This for UKF applications. Can be left as `None` for EKF and most
           other filters.
     '''
-    def __init__(
-            self, dimension: int,
-            dimension_pv: int,
-            num_process_noise_parameters: int = None) -> None:
+    def __init__(self, dimension, dimension_pv, num_process_noise_parameters=None):
         self._dimension = dimension
         self._dimension_pv = dimension_pv
         self._num_process_noise_parameters = num_process_noise_parameters
 
     @property
-    def dimension(self) -> int:
+    def dimension(self):
         '''
         Native state dimension access.
         '''
         return self._dimension
 
     @property
-    def dimension_pv(self) -> int:
+    def dimension_pv(self):
         '''
         PV state dimension access.
         '''
         return self._dimension_pv
 
     @property
-    def num_process_noise_parameters(self) -> Optional[int]:
+    def num_process_noise_parameters(self):
         '''
         Process noise parameters space dimension access.
         '''
@@ -55,8 +55,7 @@ class DynamicModel(ABC):
         '''
         pass
 
-    def geodesic_difference(
-            self, x1: np.ndarray, x0: np.ndarray) -> np.ndarray:
+    def geodesic_difference(self, x1, x0):
         '''
         Compute and return the geodesic difference between 2 native states.
         This is a generalization of the Euclidean operation `x1 - x0`.
@@ -68,7 +67,7 @@ class DynamicModel(ABC):
         return x1 - x0  # Default to Euclidean behavior.
 
     @abstractmethod
-    def mean2pv(self, x: np.ndarray) -> np.ndarray:
+    def mean2pv(self, x):
         '''
         Compute and return PV state from native state. Useful for combining
         state estimates of different types in IMM (Interacting Multiple Model)
@@ -83,23 +82,22 @@ class DynamicModel(ABC):
         pass
 
     @abstractmethod
-    def cov2pv(self, P: np.ndarray) -> np.ndarray:
+    def cov2pv(self, P):
         '''
         Compute and return PV covariance from native covariance. Useful for
         combining state estimates of different types in IMM (Interacting
         Multiple Model) filtering.
 
-        ::CAUTION:: For efficiency, may return a reference to the input.
+        .. warning:: For efficiency, may return a reference to the input.
         Deepcopy as necessary to prevent unexpected changes.
 
         :param P: native state estimate covariance.
-
         :return: PV state estimate covariance.
         '''
         pass
 
     @abstractmethod
-    def process_noise_cov(self, dt: float = 0.0) -> np.ndarray:
+    def process_noise_cov(self, dt=0.):
         '''
         Compute and return process noise covariance (Q).
 
@@ -111,7 +109,7 @@ class DynamicModel(ABC):
         '''
         pass
 
-    def sample_process_noise(self, dt: float = 0.0) -> np.ndarray:
+    def sample_process_noise(self, dt=0.):
         '''
         Sample and return a state displacement from the process noise
         distribution over a time interval.
@@ -120,12 +118,11 @@ class DynamicModel(ABC):
         :return: State displacement.
         '''
         Q = self.process_noise_cov(dt)
-        dx = stm.sample_from_normal_distribution(cov=Q)
-        return dx.flatten()
+        dx = dist.MultivariateNormal(torch.zeros_like(Q), Q).sample()
+        return dx
 
     @abstractmethod
-    def copy(self) -> 'DynamicModel':
-        '''Deepcopy'''
+    def copy(self):
         pass
 
 
@@ -135,7 +132,7 @@ class DifferentiableDynamicModel(DynamicModel):
     calculated, usu. analytically or by automatic differentiation.
     '''
     @abstractmethod
-    def jacobian(self, dt: float) -> np.ndarray:
+    def jacobian(self, dt):
         '''
         Compute and return native state transition Jacobian (F) over time
         interval `dt`.
@@ -157,18 +154,14 @@ class Ncp(DifferentiableDynamicModel):
           deviation is roughly half of the max velocity one would ever expect
           to observe.
     '''
-    def __init__(self, dimension: int, sv2: float) -> None:
-        dimension_pv = 2*dimension
-        super().__init__(
-            dimension, dimension_pv, num_process_noise_parameters=1)
+    def __init__(self, dimension, sv2):
+        dimension_pv = 2 * dimension
+        super().__init__(dimension, dimension_pv, num_process_noise_parameters=1)
         self._sv2 = sv2
-        self._F_cache = np.eye(dimension)  # State transition matrix cache
-        self._F_cache.flags.writeable = False
+        self._F_cache = torch.eye(dimension)  # State transition matrix cache
         self._Q_cache = {}  # Process noise cov cache
 
-    def __call__(
-            self, x: np.ndarray, dt: float,
-            do_normalization: bool = True) -> np.ndarray:
+    def __call__(self, x, dt, do_normalization=True):
         '''
         Integrate native state `x` over time interval `dt`.
 
@@ -180,9 +173,9 @@ class Ncp(DifferentiableDynamicModel):
             mod'ing angles into an interval. Has no effect for this subclass.
         :return: Native state x integrated dt into the future.
         '''
-        return x.copy()
+        return x.clone()
 
-    def mean2pv(self, x: np.ndarray) -> np.ndarray:
+    def mean2pv(self, x):
         '''
         Compute and return PV state from native state. Useful for combining
         state estimates of different types in IMM (Interacting Multiple Model)
@@ -191,11 +184,11 @@ class Ncp(DifferentiableDynamicModel):
         :param x: native state estimate mean.
         :return: PV state estimate mean.
         '''
-        x_pv = np.zeros(2*self._dimension)
+        x_pv = torch.zeros(2*self._dimension)
         x_pv[:self._dimension] = x
         return x_pv
 
-    def cov2pv(self, P: np.ndarray) -> np.ndarray:
+    def cov2pv(self, P):
         '''
         Compute and return PV covariance from native covariance. Useful for
         combining state estimates of different types in IMM (Interacting
@@ -205,11 +198,11 @@ class Ncp(DifferentiableDynamicModel):
         :return: PV state estimate covariance.
         '''
         d = 2*self._dimension
-        P_pv = np.zeros((d, d))
+        P_pv = torch.zeros((d, d))
         P_pv[:self._dimension, :self._dimension] = P
         return P_pv
 
-    def jacobian(self, dt: float) -> np.ndarray:
+    def jacobian(self, dt):
         '''
         Compute and return cached native state transition Jacobian (F) over
         time interval `dt`.
@@ -220,7 +213,7 @@ class Ncp(DifferentiableDynamicModel):
         return self._F_cache
 
     @abstractmethod
-    def process_noise_cov(self, dt: float = 0.0) -> np.ndarray:
+    def process_noise_cov(self, dt=0.):
         '''
         Compute and return cached process noise covariance (Q).
 
@@ -242,17 +235,14 @@ class Ncv(DifferentiableDynamicModel):
           deviation is roughly half of the max acceleration one would ever
           expect to observe.
     '''
-    def __init__(self, dimension: int, sa2: float) -> None:
+    def __init__(self, dimension, sa2):
         dimension_pv = dimension
-        super().__init__(
-            dimension, dimension_pv, num_process_noise_parameters=1)
+        super().__init__(dimension, dimension_pv, num_process_noise_parameters=1)
         self._sa2 = sa2
         self._F_cache = {}  # State transition matrix cache
         self._Q_cache = {}  # Process noise cov cache
 
-    def __call__(
-            self, x: np.ndarray, dt: float,
-            do_normalization: bool = True) -> np.ndarray:
+    def __call__(self, x, dt, do_normalization=True):
         '''
         Integrate native state `x` over time interval `dt`.
 
@@ -266,9 +256,9 @@ class Ncv(DifferentiableDynamicModel):
         :return: Native state x integrated dt into the future.
         '''
         F = self.jacobian(dt)
-        return F.dot(x)
+        return F.mm(x.unsqueeze(1)).squeeze(1)
 
-    def mean2pv(self, x: np.ndarray) -> np.ndarray:
+    def mean2pv(self, x):
         '''
         Compute and return PV state from native state. Useful for combining
         state estimates of different types in IMM (Interacting Multiple Model)
@@ -282,7 +272,7 @@ class Ncv(DifferentiableDynamicModel):
         '''
         return x
 
-    def cov2pv(self, P: np.ndarray) -> np.ndarray:
+    def cov2pv(self, P):
         '''
         Compute and return PV covariance from native covariance. Useful for
         combining state estimates of different types in IMM (Interacting
@@ -296,7 +286,7 @@ class Ncv(DifferentiableDynamicModel):
         '''
         return P
 
-    def jacobian(self, dt: float) -> np.ndarray:
+    def jacobian(self, dt):
         '''
         Compute and return cached native state transition Jacobian (F) over
         time interval `dt`.
@@ -306,15 +296,14 @@ class Ncv(DifferentiableDynamicModel):
         '''
         if dt not in self._F_cache:
             d = self._dimension
-            F = np.eye(d)
-            F[:d//2, d//2:] = dt*np.eye(d//2)
-            F.flags.writeable = False
+            F = torch.eye(d)
+            F[:d//2, d//2:] = dt*torch.eye(d//2)
             self._F_cache[dt] = F
 
         return self._F_cache[dt]
 
     @abstractmethod
-    def process_noise_cov(self, dt: float = 0.0) -> np.ndarray:
+    def process_noise_cov(self, dt=0.):
         '''
         Compute and return cached process noise covariance (Q).
 
@@ -339,7 +328,7 @@ class NcpContinuous(Ncp):
           deviation is roughly half of the max velocity one would ever expect
           to observe.
     '''
-    def process_noise_cov(self, dt: float = 0.0) -> np.ndarray:
+    def process_noise_cov(self, dt=0.):
         '''
         Compute and return cached process noise covariance (Q).
 
@@ -351,15 +340,16 @@ class NcpContinuous(Ncp):
             # q: continuous-time process noise intensity with units
             #   length^2/time (m^2/s). Choose `q` so that changes in position,
             #   over a sampling period `dt`, are roughly `sqrt(q*dt)`.
-            q = self._sv2*dt
-            Q = q*dt*np.eye(self._dimension)
-            Q.flags.writeable = False
+            q = self._sv2 * dt
+            Q = q * dt * torch.eye(self._dimension)
             self._Q_cache[dt] = Q
 
         return self._Q_cache[dt]
 
-    def copy(self) -> 'NcpContinuous':
-        '''Deepcopy, except does not copy cached data.'''
+    def copy(self):
+        '''
+        Deepcopy, except does not copy cached data
+        .'''
         return NcpContinuous(self._dimension, self._sv2)
 
 
@@ -377,7 +367,7 @@ class NcvContinuous(Ncv):
           deviation is roughly half of the max acceleration one would ever
           expect to observe.
     '''
-    def process_noise_cov(self, dt: float = 0.0) -> np.ndarray:
+    def process_noise_cov(self, dt=0.):
         '''
         Compute and return cached process noise covariance (Q).
 
@@ -391,17 +381,16 @@ class NcvContinuous(Ncv):
             #   length^2/time^3 (m^2/s^3). Choose `q` so that changes in
             #   velocity, over a sampling period `dt`, are roughly
             #   `sqrt(q*dt)`.
-            q = self._sa2*dt
+            q = self._sa2 * dt
             d = self._dimension
-            dt2 = dt*dt
-            dt3 = dt2*dt
-            Q = np.zeros((d, d))
-            Q[:d//2, :d//2] = dt3*np.eye(d//2)/3.0
-            Q[:d//2, d//2:] = dt2*np.eye(d//2)/2.0
-            Q[d//2:, :d//2] = dt2*np.eye(d//2)/2.0
-            Q[d//2:, d//2:] = dt*np.eye(d//2)
+            dt2 = dt * dt
+            dt3 = dt2 * dt
+            Q = torch.zeros((d, d))
+            Q[:d//2, :d//2] = dt3 * torch.eye(d//2) / 3.0
+            Q[:d//2, d//2:] = dt2 * torch.eye(d//2) / 2.0
+            Q[d//2:, :d//2] = dt2 * torch.eye(d//2) / 2.0
+            Q[d//2:, d//2:] = dt * torch.eye(d//2)
             Q *= q
-            Q.flags.writeable = False
             self._Q_cache[dt] = Q
 
         return self._Q_cache[dt]

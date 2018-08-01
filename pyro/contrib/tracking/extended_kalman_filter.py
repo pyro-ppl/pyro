@@ -1,5 +1,5 @@
-import dynamic_models as dmm
-import measurements as mm
+import torch
+import pyro.distributions as dist
 
 
 class EKFState:
@@ -9,7 +9,7 @@ class EKFState:
     model. Stores a target dynamic model, state estimate, and state time.
     Incoming `Measurement`s provide sensor information for updates.
 
-    ::warning:: For efficiency, the dynamic model is only shallow-copied. Make
+    .. warning:: For efficiency, the dynamic model is only shallow-copied. Make
     a deep copy outside as necessary to protect against unexpected
     changes.
 
@@ -23,13 +23,11 @@ class EKFState:
         if mean is None:
             self._mean = None
         else:
-            self._mean = mean.copy()
-            self._mean.flags.writeable = False
+            self._mean = mean.clone()
         if cov is None:
             self._cov = None
         else:
-            self._cov = cov.copy()
-            self._cov.flags.writeable = False
+            self._cov = cov.clone()
         self._time = time
 
         self._mean_pv_cache = None
@@ -85,7 +83,6 @@ class EKFState:
         if self._mean_pv_cache is None:
             self._mean_pv_cache = \
                 self._dynamic_model.mean2pv(self._mean)
-            self._mean_pv_cache.flags.writeable = False
 
         return self._mean_pv_cache
 
@@ -97,12 +94,11 @@ class EKFState:
         if self._cov_pv_cache is None:
             self._cov_pv_cache = \
                 self._dynamic_model.cov2pv(self._cov)
-            self._cov_pv_cache.flags.writeable = False
 
         return self._cov_pv_cache
 
     @property
-    def time(self) -> float:
+    def time(self):
         '''
         State time access.
         '''
@@ -116,10 +112,8 @@ class EKFState:
         :param cov: target state covariance.
         :param time: state time. None => keep existing time.
         '''
-        self._mean = mean.copy()
-        self._mean.flags.writeable = False
-        self._cov = cov.copy()
-        self._cov.flags.writeable = False
+        self._mean = mean.clone()
+        self._cov = cov.clone()
         if time is not None:
             self._time = time
 
@@ -137,7 +131,7 @@ class EKFState:
         :param destination_time: time to increment to.
         '''
         if dt is not None and destination_time is not None:
-            assert np.isclose(destination_time, self._time + dt)
+            assert ((destination_time - self._time + dt) < 1e-3).all()
         elif dt is None:
             assert destination_time is not None
             dt = destination_time - self._time
@@ -146,12 +140,10 @@ class EKFState:
             destination_time = self._time + dt
 
         self._mean = self._dynamic_model(self._mean, dt)
-        self._mean.flags.writeable = False
 
         F = self._dynamic_model.jacobian(dt)
         Q = self._dynamic_model.process_noise_cov(dt)
-        self._cov = F.dot(self._cov).dot(F.T) + Q
-        self._cov.flags.writeable = False
+        self._cov = F.mm(self._cov).mm(F.t()) + Q
 
         self._time = destination_time
 
@@ -178,7 +170,7 @@ class EKFState:
         z = measurement.mean
         z_predicted = measurement(x_pv)
         dz = measurement.geodesic_difference(z, z_predicted)
-        S = H.dot(self._cov).dot(H.T) + R  # innovation cov
+        S = H.mm(self._cov).mm(H.t()) + R  # innovation cov
 
         return dz, S
 
@@ -193,7 +185,8 @@ class EKFState:
         :return: Likelihood of hypothetical update.
         '''
         dz, S = self.innovation(measurement)
-        return stm.evaluate_normal_pdf(dz, S)
+        return torch.exp(dist.MultivariateNormal(torch.zeros_like(S), S)
+                         .log_prob(dz))
 
     def update(self, measurement):
         '''
@@ -216,23 +209,21 @@ class EKFState:
         z = measurement.mean
         z_predicted = measurement(x_pv)
         dz = measurement.geodesic_difference(z, z_predicted)
-        S = H.dot(P).dot(H.T) + R  # innovation cov
+        S = H.mm(P).mm(H.t()) + R  # innovation cov
 
-        K_prefix = self._cov.dot(H.T)
-        dx = K_prefix.dot(np.linalg.solve(S, dz))  # K*dz
+        K_prefix = self._cov.mm(H.t())
+        dx = K_prefix.mm(torch.gesv(dz, S)[0])  # K*dz
         x = self._dynamic_model.geodesic_difference(x, -dx)
 
-        I = np.eye(self._dynamic_model.dimension)
-        ImKH = I - K_prefix.dot(np.linalg.solve(S, H))
+        I = torch.eye(self._dynamic_model.dimension)
+        ImKH = I - K_prefix.mm(torch.gesv(H, S)[0])
         # *Joseph form* of covariance update for numerical stability.
-        P = ImKH.dot(self.cov).dot(ImKH.T) \
-            + K_prefix.dot(np.linalg.solve(S, \
-            (K_prefix.dot(np.linalg.solve(S, R))).T))
+        P = ImKH.mm(self.cov).mm(ImKH.t()) \
+            + K_prefix.mm(torch.gesv((K_prefix.mm(torch.gesv(R, S)[0])).t(),
+                          S)[0])
 
         self._mean = x
-        self._mean.flags.writeable = False
         self._cov = P
-        self._cov.flags.writeable = False
 
         self._clear_cached()
 
