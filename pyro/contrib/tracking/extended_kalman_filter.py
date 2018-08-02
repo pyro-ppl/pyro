@@ -7,11 +7,10 @@ class EKFState:
     State-Centric EKF (Extended Kalman Filter) for use with either an NCP
     (Nearly-Constant Position) or NCV (Nearly-Constant Velocity) target dynamic
     model. Stores a target dynamic model, state estimate, and state time.
-    Incoming `Measurement`s provide sensor information for updates.
+    Incoming ``Measurement`` provide sensor information for updates.
 
     .. warning:: For efficiency, the dynamic model is only shallow-copied. Make
-    a deep copy outside as necessary to protect against unexpected
-    changes.
+        a deep copy outside as necessary to protect against unexpected changes.
 
     :param dynamic_model: target dynamic model.
     :param mean: mean of target state estimate.
@@ -125,8 +124,8 @@ class EKFState:
         estimate in-place.
 
         :param dt: time to integrate over. The state time will be automatically
-                   incremented this amount unless you provide `destination_time`.
-                   Using `destination_time` may be preferable for prevention of
+                   incremented this amount unless you provide ``destination_time``.
+                   Using ``destination_time`` may be preferable for prevention of
                    roundoff error accumulation.
         :param destination_time: time to increment to.
         '''
@@ -158,7 +157,7 @@ class EKFState:
 
         :param measurement: measurement
         :return: Innovation mean and covariance of hypothetical update.
-        :rtype: tuple(torch.Tensor, torch.Tensor)
+        :rtype: tuple(``torch.Tensor``, ``torch.Tensor``)
         '''
         assert self._time == measurement.time, \
             'State time and measurement time must be aligned!'
@@ -192,8 +191,8 @@ class EKFState:
         '''
         Use measurement to update state estimate in-place and return
         innovation. The innovation is useful, e.g., for evaluating filter
-        consistency or updating model likelihoods when the `EKFState` is part
-        of an `IMMFState`.
+        consistency or updating model likelihoods when the ``EKFState`` is part
+        of an ``IMMFState``.
 
         :param: measurement.
         :returns: Innovation mean and covariance.

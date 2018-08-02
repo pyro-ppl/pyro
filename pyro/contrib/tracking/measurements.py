@@ -27,14 +27,14 @@ class Measurement(ABC):
     @property
     def mean(self):
         '''
-        Measurement mean (`z` in most Kalman Filtering literature).
+        Measurement mean (``z`` in most Kalman Filtering literature).
         '''
         return self._mean
 
     @property
     def cov(self):
         '''
-        Noise covariance (`R` in most Kalman Filtering literature).
+        Noise covariance (``R`` in most Kalman Filtering literature).
         '''
         return self._cov
 
@@ -48,24 +48,24 @@ class Measurement(ABC):
     @abstractmethod
     def __call__(self, x, do_normalization=True):
         '''
-        Measurement map (h) for predicting a measurement `z` from target
-        state `x`.
+        Measurement map (h) for predicting a measurement ``z`` from target
+        state ``x``.
 
         :param x: PV state.
         :param do_normalization: whether to normalize output, e.g., mod'ing angles
               into an interval.
-        :return Measurement predicted from state `x`.
+        :return Measurement predicted from state ``x``.
         '''
         pass
 
     def geodesic_difference(self, z1, z0):
         '''
         Compute and return the geodesic difference between 2 measurements.
-        This is a generalization of the Euclidean operation `z1 - z0`.
+        This is a generalization of the Euclidean operation ``z1 - z0``.
 
         :param z1: measurement.
         :param z0: measurement.
-        :return: Geodesic difference between `z1` and `z2`.
+        :return: Geodesic difference between ``z1`` and ``z2``.
         '''
         return z1 - z0  # Default to Euclidean behavior.
 
@@ -83,9 +83,9 @@ class DifferentiableMeasurement(Measurement):
     def jacobian(self, x=None):
         '''
         Compute and return Jacobian (H) of measurement map (h) at target PV
-        state `x` .
+        state ``x`` .
 
-        :param x: PV state. Use default argument `None` when the Jacobian is not
+        :param x: PV state. Use default argument ``None`` when the Jacobian is not
               state-dependent.
         :return: Read-only Jacobian (H) of measurement map (h).
         '''
@@ -108,22 +108,22 @@ class PositionMeasurement(DifferentiableMeasurement):
 
     def __call__(self, x, do_normalization=True):
         '''
-        Measurement map (h) for predicting a measurement `z` from target
-        state `x`.
+        Measurement map (h) for predicting a measurement ``z`` from target
+        state ``x``.
 
         :param x: PV state.
         :param do_normalization: whether to normalize output. Has no effect for
               this subclass.
-        :return: Measurement predicted from state `x`.
+        :return: Measurement predicted from state ``x``.
         '''
         return x[:self._dimension].clone()
 
     def jacobian(self, x=None):
         '''
         Compute and return Jacobian (H) of measurement map (h) at target PV
-        state `x` .
+        state ``x`` .
 
-        :param x: PV state. The default argument `None` may be used in this
+        :param x: PV state. The default argument ``None`` may be used in this
               subclass since the Jacobian is not state-dependent.
         :return: Read-only Jacobian (H) of measurement map (h).
         '''

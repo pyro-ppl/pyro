@@ -11,7 +11,7 @@ class DynamicModel(ABC):
     :param dimension: native state dimension.
     :param dimension_pv: PV state dimension.
     :param num_process_noise_parameters: process noise parameter space dimension.
-          This for UKF applications. Can be left as `None` for EKF and most
+          This for UKF applications. Can be left as ``None`` for EKF and most
           other filters.
     '''
     def __init__(self, dimension, dimension_pv, num_process_noise_parameters=None):
@@ -43,10 +43,10 @@ class DynamicModel(ABC):
     @abstractmethod
     def __call__(self, x, dt, do_normalization=True):
         '''
-        Integrate native state `x` over time interval `dt`.
+        Integrate native state ``x`` over time interval ``dt``.
 
         :param x: current native state. If the DynamicModel is non-differentiable,
-              be sure to handle the case of `x` being augmented with process
+              be sure to handle the case of ``x`` being augmented with process
               noise parameters.
         :param dt: time interval to integrate over.
         :param do_normalization: whether to perform normalization on output, e.g.,
@@ -58,11 +58,11 @@ class DynamicModel(ABC):
     def geodesic_difference(self, x1, x0):
         '''
         Compute and return the geodesic difference between 2 native states.
-        This is a generalization of the Euclidean operation `x1 - x0`.
+        This is a generalization of the Euclidean operation ``x1 - x0``.
 
         :param x1: native state.
         :param x0: native state.
-        :return: Geodesic difference between native states `x1` and `x2`.
+        :return: Geodesic difference between native states ``x1`` and ``x2``.
         '''
         return x1 - x0  # Default to Euclidean behavior.
 
@@ -74,7 +74,7 @@ class DynamicModel(ABC):
         filtering.
 
         .. warning:: For efficiency, may return a reference to the input.
-        Deepcopy as necessary to prevent unexpected changes.
+            Deepcopy as necessary to prevent unexpected changes.
 
         :param x: native state estimate mean.
         :return: PV state estimate mean.
@@ -89,7 +89,7 @@ class DynamicModel(ABC):
         Multiple Model) filtering.
 
         .. warning:: For efficiency, may return a reference to the input.
-        Deepcopy as necessary to prevent unexpected changes.
+            Deepcopy as necessary to prevent unexpected changes.
 
         :param P: native state estimate covariance.
         :return: PV state estimate covariance.
@@ -103,7 +103,7 @@ class DynamicModel(ABC):
 
         :param dt: time interval to integrate over.
         :return: Read-only covariance (Q). For a DifferentiableDynamicModel, this is
-            the covariance of the native state `x` resulting from stochastic
+            the covariance of the native state ``x`` resulting from stochastic
             integration (for use with EKF). Otherwise, it is the covariance
             directly of the process noise parameters (for use with UKF).
         '''
@@ -135,7 +135,7 @@ class DifferentiableDynamicModel(DynamicModel):
     def jacobian(self, dt):
         '''
         Compute and return native state transition Jacobian (F) over time
-        interval `dt`.
+        interval ``dt``.
 
         :param  dt: time interval to integrate over.
         :return: Read-only Jacobian (F) of integration map (f).
@@ -163,10 +163,10 @@ class Ncp(DifferentiableDynamicModel):
 
     def __call__(self, x, dt, do_normalization=True):
         '''
-        Integrate native state `x` over time interval `dt`.
+        Integrate native state ``x`` over time interval ``dt``.
 
         :param x: current native state. If the DynamicModel is non-differentiable,
-              be sure to handle the case of `x` being augmented with process
+              be sure to handle the case of ``x`` being augmented with process
               noise parameters.
         :param dt: time interval to integrate over.
             do_normalization: whether to perform normalization on output, e.g.,
@@ -205,7 +205,7 @@ class Ncp(DifferentiableDynamicModel):
     def jacobian(self, dt):
         '''
         Compute and return cached native state transition Jacobian (F) over
-        time interval `dt`.
+        time interval ``dt``.
 
         :param dt: time interval to integrate over.
         :return: Read-only Jacobian (F) of integration map (f).
@@ -218,7 +218,7 @@ class Ncp(DifferentiableDynamicModel):
         Compute and return cached process noise covariance (Q).
 
         :param dt: time interval to integrate over.
-        :return: Read-only covariance (Q) of the native state `x` resulting from
+        :return: Read-only covariance (Q) of the native state ``x`` resulting from
             stochastic integration (for use with EKF).
         '''
         pass
@@ -244,10 +244,10 @@ class Ncv(DifferentiableDynamicModel):
 
     def __call__(self, x, dt, do_normalization=True):
         '''
-        Integrate native state `x` over time interval `dt`.
+        Integrate native state ``x`` over time interval ``dt``.
 
         :param x: current native state. If the DynamicModel is non-differentiable,
-              be sure to handle the case of `x` being augmented with process
+              be sure to handle the case of ``x`` being augmented with process
               noise parameters.
         :param dt: time interval to integrate over.
         :param do_normalization: whether to perform normalization on output, e.g.,
@@ -265,7 +265,7 @@ class Ncv(DifferentiableDynamicModel):
         filtering.
 
         .. warning:: For efficiency, returns a reference to the input. Deepcopy
-        as necessary to prevent unexpected changes.
+            as necessary to prevent unexpected changes.
 
         :param x: native state estimate mean.
         :return: PV state estimate mean.
@@ -279,7 +279,7 @@ class Ncv(DifferentiableDynamicModel):
         Multiple Model) filtering.
 
         .. warning:: For efficiency, returns a reference to the input. Deepcopy
-        as necessary to prevent unexpected changes.
+            as necessary to prevent unexpected changes.
 
         :param P: native state estimate covariance.
         :return: PV state estimate covariance.
@@ -289,7 +289,7 @@ class Ncv(DifferentiableDynamicModel):
     def jacobian(self, dt):
         '''
         Compute and return cached native state transition Jacobian (F) over
-        time interval `dt`.
+        time interval ``dt``.
 
         :param dt: time interval to integrate over.
         :return: Read-only Jacobian (F) of integration map (f).
@@ -308,7 +308,7 @@ class Ncv(DifferentiableDynamicModel):
         Compute and return cached process noise covariance (Q).
 
         :param dt: time interval to integrate over.
-        :return: Read-only covariance (Q) of the native state `x` resulting from
+        :return: Read-only covariance (Q) of the native state ``x`` resulting from
             stochastic integration (for use with EKF).
         '''
         pass
@@ -333,13 +333,13 @@ class NcpContinuous(Ncp):
         Compute and return cached process noise covariance (Q).
 
         :param dt: time interval to integrate over.
-        :return: Read-only covariance (Q) of the native state `x` resulting from
+        :return: Read-only covariance (Q) of the native state ``x`` resulting from
             stochastic integration (for use with EKF).
         '''
         if dt not in self._Q_cache:
             # q: continuous-time process noise intensity with units
-            #   length^2/time (m^2/s). Choose `q` so that changes in position,
-            #   over a sampling period `dt`, are roughly `sqrt(q*dt)`.
+            #   length^2/time (m^2/s). Choose ``q`` so that changes in position,
+            #   over a sampling period ``dt``, are roughly ``sqrt(q*dt)``.
             q = self._sv2 * dt
             Q = q * dt * torch.eye(self._dimension)
             self._Q_cache[dt] = Q
@@ -373,14 +373,14 @@ class NcvContinuous(Ncv):
 
         :param dt: time interval to integrate over.
 
-        :return: Read-only covariance (Q) of the native state `x` resulting from
+        :return: Read-only covariance (Q) of the native state ``x`` resulting from
             stochastic integration (for use with EKF).
         '''
         if dt not in self._Q_cache:
             # q: continuous-time process noise intensity with units
-            #   length^2/time^3 (m^2/s^3). Choose `q` so that changes in
-            #   velocity, over a sampling period `dt`, are roughly
-            #   `sqrt(q*dt)`.
+            #   length^2/time^3 (m^2/s^3). Choose ``q`` so that changes in
+            #   velocity, over a sampling period ``dt``, are roughly
+            #   ``sqrt(q*dt)``.
             q = self._sa2 * dt
             d = self._dimension
             dt2 = dt * dt
