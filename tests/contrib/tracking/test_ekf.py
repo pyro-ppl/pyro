@@ -5,7 +5,7 @@ import torch
 from pyro.contrib.tracking.extended_kalman_filter import EKFState
 from pyro.contrib.tracking.dynamic_models import NcpContinuous, NcvContinuous
 from pyro.contrib.tracking.measurements import PositionMeasurement
-from tests.common import assert_equal
+from tests.common import assert_equal, assert_not_equal
 
 
 def test_EKFState_with_NcpContinuous():
@@ -43,11 +43,11 @@ def test_EKFState_with_NcpContinuous():
         time=t + dt)
     likelihood = ekf_state1.likelihood_of_update(measurement)
     assert (likelihood < 1.).all()
-#     old_mean = ekf_state1.mean.clone()
+    old_mean = ekf_state1.mean.clone()
     dz, S = ekf_state1.update(measurement)
     assert dz.shape == (measurement.dimension,)
     assert S.shape == (measurement.dimension, measurement.dimension)
-#     assert not assert_equal(ekf_state1.mean, old_mean, prec=1e-5)
+    assert_not_equal(ekf_state1.mean, old_mean, prec=1e-5)
 
     ekf_state2 = ekf_state1.copy()
     assert ekf_state2.dynamic_model.__class__ == NcpContinuous
@@ -89,11 +89,11 @@ def test_EKFState_with_NcvContinuous():
         time=t + dt)
     likelihood = ekf_state1.likelihood_of_update(measurement)
     assert (likelihood < 1.).all()
-#     old_mean = ekf_state1.mean.clone()
+    old_mean = ekf_state1.mean.clone()
     dz, S = ekf_state1.update(measurement)
     assert dz.shape == (measurement.dimension,)
     assert S.shape == (measurement.dimension, measurement.dimension)
-#     assert not assert_equal(ekf_state1.mean, old_mean)
+    assert_not_equal(ekf_state1.mean, old_mean)
 
     ekf_state2 = ekf_state1.copy()
     assert ekf_state2.dynamic_model.__class__ == NcvContinuous

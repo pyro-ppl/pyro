@@ -198,5 +198,5 @@ def assert_not_equal(x, y, prec=1e-5, msg=''):
     try:
         assert_equal(x, y, prec)
     except AssertionError:
-        pass
+        return
     raise AssertionError("{} \nValues are equal: x={}, y={}, prec={}".format(msg, x, y, prec))
