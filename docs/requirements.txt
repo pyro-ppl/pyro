@@ -1,4 +1,4 @@
-sphinx
+python3-sphinx
 sphinx_rtd_theme
 numpy>=1.7
 contextlib2
