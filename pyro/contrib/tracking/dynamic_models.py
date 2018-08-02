@@ -118,7 +118,7 @@ class DynamicModel(ABC):
         :return: State displacement.
         '''
         Q = self.process_noise_cov(dt)
-        dx = dist.MultivariateNormal(torch.zeros_like(Q), Q).sample()
+        dx = dist.MultivariateNormal(torch.zeros(Q.shape[-1]), Q).sample()
         return dx
 
     @abstractmethod
