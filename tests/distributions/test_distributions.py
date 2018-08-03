@@ -95,7 +95,6 @@ def test_enumerate_support(discrete_dist):
     assert_equal(actual_support_non_vec.data, torch.tensor(expected_support_non_vec))
 
 
-
 def test_enumerate_support_shape(dist):
     if not dist.pyro_dist.has_enumerate_support:
         pytest.skip()
