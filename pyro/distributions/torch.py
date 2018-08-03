@@ -1,8 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
+from torch.distributions import constraints
 
-from pyro.distributions.torch_distribution import TorchDistributionMixin
+from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistributionMixin
 
 
 class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
@@ -124,12 +125,24 @@ class Gumbel(torch.distributions.Gumbel, TorchDistributionMixin):
 
 
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
+    @constraints.dependent_property
+    def support(self):
+        return IndependentConstraint(self.base_dist.support, self.reinterpreted_batch_ndims)
+
+    @property
+    def _validate_args(self):
+        return self.base_dist._validate_args
+
+    @_validate_args.setter
+    def _validate_args(self, value):
+        self.base_dist._validate_args = value
+
     def expand(self, batch_shape):
         batch_shape = torch.Size(batch_shape)
-        validate_args = self.__dict__.get('_validate_args')
-        extra_shape = self.base_dist.event_shape[:self.reinterpreted_batch_ndims]
-        base_dist = self.base_dist.expand(batch_shape + extra_shape)
-        return Independent(base_dist, self.reinterpreted_batch_ndims, validate_args=validate_args)
+        base_shape = self.base_dist.batch_shape
+        reinterpreted_shape = base_shape[len(base_shape) - self.reinterpreted_batch_ndims:]
+        base_dist = self.base_dist.expand(batch_shape + reinterpreted_shape)
+        return type(self)(base_dist, self.reinterpreted_batch_ndims)
 
 
 class Laplace(torch.distributions.Laplace, TorchDistributionMixin):
@@ -170,6 +183,8 @@ class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
 
 
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
+    support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
+
     def expand(self, batch_shape):
         try:
             return super(MultivariateNormal, self).expand(batch_shape)

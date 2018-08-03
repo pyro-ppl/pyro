@@ -5,6 +5,7 @@ import numbers
 from collections import defaultdict
 
 import torch
+from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.util import is_identically_zero
 from pyro.poutine.util import site_is_subsample
@@ -139,7 +140,7 @@ class Dice(object):
         hashable; the canonical ordinal is a ``frozenset`` of site names.
     """
     def __init__(self, guide_trace, ordering):
-        log_denom = defaultdict(lambda: 0.0)  # avoids double-counting when sequentially enumerating
+        log_denom = defaultdict(float)  # avoids double-counting when sequentially enumerating
         log_probs = defaultdict(list)  # accounts for upstream probabilties
 
         for name, site in guide_trace.nodes.items():
@@ -164,7 +165,7 @@ class Dice(object):
 
     def _get_log_factors(self, target_ordinal):
         """
-        Returns a list of DiCE factors ordinal.
+        Returns a list of DiCE factors at a given ordinal.
         """
         # memoize
         try:
@@ -222,3 +223,22 @@ class Dice(object):
 
         self._prob_cache[shape, ordinal] = dice_prob
         return dice_prob
+
+    def compute_expectation(self, costs):
+        """
+        Returns a differentiable expected cost, summing over costs at given ordinals.
+
+        :param dict costs: A dict mapping ordinals to cost tensors
+        :returns: a scalar expected cost
+        :rtype: torch.Tensor or float
+        """
+        expected_cost = 0.
+        for ordinal, cost in costs.items():
+            prob = self.in_context(cost.shape, ordinal)
+            mask = prob > 0
+            if torch.is_tensor(mask) and not mask.all():
+                cost, prob, mask = broadcast_all(cost, prob, mask)
+                prob = prob[mask]
+                cost = cost[mask]
+            expected_cost = expected_cost + (prob * cost).sum()
+        return expected_cost

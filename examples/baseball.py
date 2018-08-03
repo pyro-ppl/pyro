@@ -11,7 +11,7 @@ import torch
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions import Binomial, HalfCauchy, Normal, Uniform
-from pyro.distributions.util import log_sum_exp
+from pyro.distributions.util import logsumexp
 from pyro.infer import EmpiricalMarginal
 from pyro.infer.abstract_infer import TracePredictive
 from pyro.infer.mcmc import MCMC, NUTS
@@ -208,7 +208,7 @@ def evaluate_log_predictive_density(model, model_trace_posterior, baseball_datas
         trace_log_pdf.append(tr.log_prob_sum())
     # Use LogSumExp trick to evaluate $log(1/num_samples \sum_i p(new_data | \theta^{i})) $,
     # where $\theta^{i}$ are parameter samples from the model's posterior.
-    posterior_pred_density = log_sum_exp(torch.stack(trace_log_pdf), dim=-1) - math.log(len(trace_log_pdf))
+    posterior_pred_density = logsumexp(torch.stack(trace_log_pdf), dim=-1) - math.log(len(trace_log_pdf))
     logging.info("\nLog posterior predictive density")
     logging.info("---------------------------------")
     logging.info("{:.4f}\n".format(posterior_pred_density))

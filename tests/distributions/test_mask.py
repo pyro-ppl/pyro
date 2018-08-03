@@ -11,7 +11,7 @@ from tests.common import assert_equal
 def checker_mask(shape):
     mask = tensor(0.)
     for size in shape:
-        mask = mask.unsqueeze(-1) + torch.arange(size)
+        mask = mask.unsqueeze(-1) + torch.arange(float(size))
     return mask.fmod(2)
 
 

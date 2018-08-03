@@ -82,10 +82,10 @@ class VAE(nn.Module):
     def model(self, x):
         # register PyTorch module `decoder` with Pyro
         pyro.module("decoder", self.decoder)
-        with pyro.iarange("data", x.size(0)):
+        with pyro.iarange("data", x.shape[0]):
             # setup hyperparameters for prior p(z)
-            z_loc = x.new_zeros(torch.Size((x.size(0), self.z_dim)))
-            z_scale = x.new_ones(torch.Size((x.size(0), self.z_dim)))
+            z_loc = x.new_zeros(torch.Size((x.shape[0], self.z_dim)))
+            z_scale = x.new_ones(torch.Size((x.shape[0], self.z_dim)))
             # sample from prior (value will be sampled by guide when computing the ELBO)
             z = pyro.sample("latent", dist.Normal(z_loc, z_scale).independent(1))
             # decode the latent code z
@@ -99,7 +99,7 @@ class VAE(nn.Module):
     def guide(self, x):
         # register PyTorch module `encoder` with Pyro
         pyro.module("encoder", self.encoder)
-        with pyro.iarange("data", x.size(0)):
+        with pyro.iarange("data", x.shape[0]):
             # use the encoder to get the parameters used to define q(z|x)
             z_loc, z_scale = self.encoder.forward(x)
             # sample the latent code z
@@ -117,6 +117,9 @@ class VAE(nn.Module):
 
 
 def main(args):
+    # clear param store
+    pyro.clear_param_store()
+
     # setup MNIST data loaders
     # train_loader, test_loader
     train_loader, test_loader = setup_data_loaders(MNIST, use_cuda=args.cuda, batch_size=256)
@@ -143,7 +146,7 @@ def main(args):
         epoch_loss = 0.
         # do a training epoch over each mini-batch x returned
         # by the data loader
-        for _, (x, _) in enumerate(train_loader):
+        for x, _ in train_loader:
             # if on GPU put mini-batch into CUDA memory
             if args.cuda:
                 x = x.cuda()
@@ -172,7 +175,7 @@ def main(args):
                 if i == 0:
                     if args.visdom_flag:
                         plot_vae_samples(vae, vis)
-                        reco_indices = np.random.randint(0, x.size(0), 3)
+                        reco_indices = np.random.randint(0, x.shape[0], 3)
                         for index in reco_indices:
                             test_img = x[index, :]
                             reco_img = vae.reconstruct_img(test_img)
