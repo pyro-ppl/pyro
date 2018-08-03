@@ -37,43 +37,86 @@ def model(args, observations):
         with pyro.iarange("time", args.num_frames):
             # The remaining continuous part is exact.
             assign = pyro.sample("assign",
-                                 dist.Categorical(torch.ones(max_num_objects + 1)))
+                                 dist.Categorical(torch.ones(args.max_num_objects + 1)))
             observed_positions = observations[..., 0]
             bogus_position = positions.new_zeros(args.num_frames, 1)
             augmented_positions = torch.cat([positions, bogus_position], -1)
+            #predicted_positions = augmented_positions[:, assign]
             # weird tricks because index and input must be same dimension in gather
-            assign = torch.cat((assign, assign[..., :1]), -1)
+            pad_shape = assign.shape[:-1] + (augmented_positions.shape[-1] - assign.shape[-1],)
+            assign = torch.cat(
+                (assign,
+                 torch.zeros(assign[..., :1].shape, dtype=torch.long).expand(pad_shape)
+                ), -1)
+            augmented_positions = augmented_positions.unsqueeze(0).expand_as(assign)
             predicted_positions = torch.gather(augmented_positions, -1, assign)
             predicted_positions = predicted_positions[..., :-1]
-            #pdb.set_trace()
+            if args.debug: pdb.set_trace()
             pyro.sample('observations', dist.Normal(predicted_positions, emission_noise_scale),
                         obs=observed_positions)
+
+
+def compute_exists_logits(states_loc, args):
+    log_likelihood = exists_log_likelihood(states_loc, args)
+    exists_logits = log_likelihood[:, 0] - log_likelihood[:, 1]
+    return exists_logits
+
+
+def exists_log_likelihood(states_loc, args):
+    p_exists = min(0.9999, args.expected_num_objects / states_loc.shape[0])
+    real_part = torch.empty(states_loc.shape[0]).fill_(math.log(p_exists))
+    spurious_part = torch.empty(real_part.shape).fill_(math.log(1 - p_exists))
+    return torch.stack([real_part, spurious_part], -1)
+
+
+def compute_assign_logits(positions, observations, emission_noise_scale, args):
+    log_likelihood = assign_log_likelihood(positions, observations, emission_noise_scale, args)
+    assign_logits = log_likelihood[..., :-1] - log_likelihood[..., -1:]
+    is_observed = (observations[..., -1] > 0)
+    assign_logits[~is_observed] = -float('inf')
+    return assign_logits
+
+
+def assign_log_likelihood(positions, observations, emission_noise_scale, args):
+    real_dist = dist.Normal(positions.unsqueeze(-2), emission_noise_scale)
+    fake_dist = dist.Uniform(-4., 4.)
+    is_observed = (observations[..., -1] > 0)
+    observed_positions = observations[..., :-1]
+    real_part = real_dist.log_prob(observed_positions)
+    fake_part = fake_dist.log_prob(observed_positions)
+    log_likelihood = torch.cat([real_part, fake_part], -1)
+    log_likelihood[~is_observed] = -float('inf')
+    return log_likelihood
 
 
 @poutine.broadcast
 def guide(args, observations):
     states_loc = pyro.param("states_loc")
-    # emission_noise_scale = pyro.param("emission_noise_scale")
-    assign_probs = torch.zeros(args.num_frames, observations.shape[1], states_loc.shape[0] + 1)
-    assign_probs[:, 0, 0] = 0.99
-    assign_probs[:, 0, 1] = 0.01
-    assign_probs[:, 1, 1] = 0.99
-    assign_probs[:, 1, 0] = 0.01
-    assign_dist = dist.Categorical(probs=assign_probs)
+    emission_noise_scale = pyro.param("emission_noise_scale")
     with pyro.iarange("objects", states_loc.shape[0]):
-            #  states_var = states_cov.reshape(states_cov.shape[:-2] + (-1,))[..., ::n+1]
-            #  pyro.sample("states", dist.Normal(states_loc, states_var).independent(1))
         pyro.sample("states", dist.Delta(states_loc, event_dim=1))
-
+    #pdb.set_trace()
+    positions = get_positions(states_loc, args.num_frames)
+    assign_logits = compute_assign_logits(positions, observations,
+                                          emission_noise_scale, args)
+    exists_logits = compute_exists_logits(states_loc, args)
+    assignment = MarginalAssignmentPersistent(exists_logits, assign_logits,
+                                              bp_iters=args.bp_iters, bp_momentum=args.bp_momentum)
+    if args.debug: pdb.set_trace()
+    #assign_dist = dist.Categorical(logits=assign_logits)
+    assign_dist = assignment.assign_dist
     with pyro.iarange("detections", observations.shape[1]):
         with pyro.iarange("time", args.num_frames):
-            pyro.sample("assign", assign_dist, infer={"enumerate": "sequential"})
+            pyro.sample("assign", assign_dist, infer={"enumerate": "parallel"})
 
 
-def init_params():
+def init_params(true_states=None):
     emission_noise_scale = pyro.param("emission_noise_scale", torch.tensor(1.),
                                       constraint=constraints.positive)
-    states_loc = pyro.param("states_loc", dist.Normal(0, 1).sample((args.max_num_objects, 2)))
+    if true_states is not None:
+        states_loc = pyro.param("states_loc", lambda: true_states)
+    else:
+        states_loc = pyro.param("states_loc", dist.Normal(0, 1).sample((args.max_num_objects, 2)))
     return states_loc, emission_noise_scale
 
 
@@ -96,7 +139,7 @@ def main(args):
 
     pyro.set_rng_seed(args.seed + 1)  # Use a different seed from data generation
     pyro.clear_param_store()
-    init_params()
+    init_params(dist.Normal(true_states, .5).sample())
 
     # Run guide once and plot
     with torch.no_grad():
@@ -115,7 +158,7 @@ def main(args):
     ens = []
 
     elbo = TraceEnum_ELBO(max_iarange_nesting=2, strict_enumeration_warning=False)
-    newton = Newton(trust_radii={'states_loc': 1.0})
+    newton = Newton(trust_radii={'states_loc': .5})
     adam = ClippedAdam({'lr': 0.1})
     optim = MixedMultiOptimizer([(['emission_noise_scale'], adam),
                                  (['states_loc'], newton)])
@@ -129,6 +172,7 @@ def main(args):
 
             ens.append(pyro.param("emission_noise_scale").item())
             losses.append(loss.item() if isinstance(loss, torch.Tensor) else loss)
+            if args.debug: print(pyro.param("states_loc"))
             print('epoch {: >3d} loss = {}, emission_noise_scale = {}'.format(
                 svi_step, loss, ens[-1]))
     except KeyboardInterrupt:
@@ -146,7 +190,7 @@ def main(args):
         if viz is not None:
             plot_solution(observations, p_exists,
                           positions, true_positions, args,
-                          pyro.param("emission_noise_scale").item(), 'Before inference', viz=viz)
+                          pyro.param("emission_noise_scale").item(), 'After inference', viz=viz)
             plot_exists_prob(p_exists, viz)
 
 
@@ -164,7 +208,11 @@ def parse_args(*args):
     parser.add_argument('--emission-noise-scale', default=0.1, type=float,
                         help='emission noise scale, if this is too small, SVI will see flat gradients.')
     parser.add_argument('--svi-iters', default=20, type=int, help='number of SVI iterations')
+    parser.add_argument('--bp-iters', default=20, type=int, help='number of BP iterations')
+    parser.add_argument('--bp-momentum', default=0.5, type=float, help='BP momentum')
     parser.add_argument('--no-visdom', action="store_false", dest='visdom', default=True,
+                        help='Whether plotting in visdom is desired')
+    parser.add_argument('--debug', action="store_true", dest='debug', default=False,
                         help='Whether plotting in visdom is desired')
     if len(args):
         return parser.parse_args(split(args[0]))
