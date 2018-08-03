@@ -1,7 +1,9 @@
 import argparse
+import time
 from functools import partial
 import torch
 from torch.distributions import constraints
+import pytest
 
 import pyro
 from pyro import optim
@@ -13,66 +15,66 @@ from models.bayes_linear import (
     analytic_posterior_entropy
 )
 
-# Set up regression model dimensions
-N = 100  # number of participants
-p = 2    # number of features
-prior_sds = torch.tensor([10., 2.5])
+PLOT=True
 
-# Model and guide using known obs_sd
-model = partial(bayesian_linear_model, w_mean=torch.tensor(0.),
-                w_sqrtlambda=1/prior_sds, obs_sd=torch.tensor(1.))
-guide = partial(normal_inv_gamma_guide, obs_sd=torch.tensor(1.))
+########################################################################################
+# Linear model with known observation sd
+########################################################################################
 
-
-def estimated_ape(ns, model, guide, num_vi_steps):
-    designs = [group_assignment_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
-    X = torch.stack(designs)
-    est_ape = vi_ape(
-        model,
-        X,
+X_lm = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])) for n in range(0, 11)])
+def vi_for_lm(design, w_sqrt_lambda, obs_sd, alpha_0, beta_0, num_vi_steps, num_is_samples): 
+    return vi_ape(
+        partial(bayesian_linear_model, 
+                w_mean=torch.tensor(0.),
+                w_sqrtlambda=w_sqrt_lambda,
+                obs_sd=obs_sd,
+                alpha_0=alpha_0,
+                beta_0=beta_0),
+        design,
         observation_labels="y",
         vi_parameters={
-            "guide": guide,
-            "optim": optim.Adam({"lr": 0.0025}),
+            "guide": partial(normal_inv_gamma_guide, 
+                             obs_sd=obs_sd),
+            "optim": optim.Adam({"lr": 0.05}),
             "loss": TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
             "num_steps": num_vi_steps},
-        is_parameters={"num_samples": 1}
-    )
-    return est_ape
+        is_parameters={"num_samples": num_is_samples})
 
-
-def true_ape(ns, model, guide):
-    """Analytic APE"""
-    true_ape = []
-    prior_cov = torch.diag(prior_sds**2)
-    designs = [group_assignment_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
-    for i in range(len(ns)):
-        x = designs[i]
-        true_ape.append(analytic_posterior_entropy(prior_cov, x, torch.tensor(1.)))
+def lm_true_ape(X_lm, sqrtlambda, obs_sd):
+    prior_cov = torch.diag(1./sqrtlambda**2)
+    designs = torch.unbind(X_lm)
+    true_ape = [analytic_posterior_entropy(prior_cov, x, obs_sd) for x in designs]
     return torch.tensor(true_ape)
 
 
-def main(num_vi_steps, num_acquisitions, num_bo_steps):
+@pytest.mark.parametrize("arglist",
+    [[(X_lm, vi_for_lm, torch.tensor([.1, .4]), None, torch.tensor(10.), torch.tensor(10.), 5000, 10)],
+     [(X_lm, lm_true_ape, torch.tensor([.1, .4]), torch.tensor(1.)),
+      (X_lm, vi_for_lm, torch.tensor([.1, .4]), torch.tensor(1.), None, None, 5000, 1)],
+     [(X_lm, lm_true_ape, torch.tensor([.1, 10.]), torch.tensor(1.)),
+      (X_lm, vi_for_lm, torch.tensor([.1, 10.]), torch.tensor(1.), None, None, 10000, 1)],
+])
+def test_eig_and_plot(arglist):
+    ys = []
+    for design_tensor, estimator, *args in arglist:
+        ys.append(time_eig(design_tensor, estimator, *args))
 
-    pyro.set_rng_seed(42)
+    if PLOT:
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(12,8))
+        for y in ys:
+            plt.plot(y.detach().numpy(), linestyle='None', marker='o', markersize=10)
+        plt.show()
+
+
+def time_eig(design_tensor, estimator, *args):
+    #pyro.set_rng_seed(42)
     pyro.clear_param_store()
 
-    est_ape = partial(estimated_ape, num_vi_steps=num_vi_steps)
-    est_ape.__doc__ = "Estimated APE by VI"
+    t = time.time()
+    y = estimator(design_tensor, *args)
+    elapsed = time.time() - t
 
-    # todo timer
-    for f in [true_ape, est_ape]:
-        X = torch.tensor(range(0, N, 5))
-        y = f(X)
-        print(y)
-        print(timer)
-
-
-if __name__ == "__main__":
-    # todo change
-    parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
-    parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
-    parser.add_argument('--num-acquisitions', nargs="?", default=10, type=int)
-    parser.add_argument('--num-bo-steps', nargs="?", default=6, type=int)
-    args = parser.parse_args()
-    main(args.num_vi_steps, args.num_acquisitions, args.num_bo_steps)
+    print(y)
+    print(elapsed)
+    return y

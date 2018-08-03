@@ -58,7 +58,7 @@ def estimated_ape(ns, num_vi_steps):
         observation_labels="y",
         vi_parameters={
             "guide": guide,
-            "optim": optim.Adam({"lr": 0.0025}),
+            "optim": optim.Adam({"lr": 0.05}),
             "loss": TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
             "num_steps": num_vi_steps},
         is_parameters={"num_samples": 1}

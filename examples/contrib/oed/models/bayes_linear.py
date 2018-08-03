@@ -26,10 +26,10 @@ def bayesian_linear_model(design, w_mean, w_sqrtlambda, obs_sd=None,
         # First, sample tau (observation precision)
         tau_shape = design.shape[:-2]
         # Global variable
-        tau_prior = dist.Gamma(alpha=alpha_0.expand(tau_shape),
-                               beta=beta_0.expand(tau_shape))
+        tau_prior = dist.Gamma(alpha_0.expand(tau_shape),
+                               beta_0.expand(tau_shape))
         tau = pyro.sample("tau", tau_prior)
-        obs_sd = 1./torch.sqrt(tau)
+        obs_sd = 1./torch.sqrt(tau).unsqueeze(-1)
 
     elif alpha_0 is not None or beta_0 is not None:
         warnings.warn("Values of `alpha_0` and `beta_0` unused becased"
@@ -42,7 +42,7 @@ def bayesian_linear_model(design, w_mean, w_sqrtlambda, obs_sd=None,
     # loc is batch x 1 x p
     loc = w_mean.expand(loc_shape)
     # Place a normal prior on the regression coefficient
-    w_prior = dist.Normal(loc, obs_sd / w_sqrtlambda).independent(2)
+    w_prior = dist.Normal(loc, obs_sd.unsqueeze(-1) / w_sqrtlambda).independent(2)
     w = pyro.sample('w', w_prior).transpose(-1, -2)
 
     # Run the regressor forward conditioned on inputs
@@ -67,12 +67,12 @@ def normal_inv_gamma_guide(design, obs_sd):
     if obs_sd is None:
         # First, sample tau (observation precision)
         tau_shape = design.shape[:-2]
-        alpha = softplus(pyro.param("invsoftplus_alpha", torch.zeros(tau_shape)))
-        beta = softplus(pyro.param("invsoftplus_beta", torch.zeros(tau_shape)))
+        alpha = softplus(pyro.param("invsoftplus_alpha", 3.*torch.ones(tau_shape)))
+        beta = softplus(pyro.param("invsoftplus_beta", 3.*torch.ones(tau_shape)))
         # Global variable
-        tau_prior = dist.Gamma(alpha=alpha, beta=beta)
+        tau_prior = dist.Gamma(alpha, beta)
         tau = pyro.sample("tau", tau_prior)
-        obs_sd = 1./torch.sqrt(tau)
+        obs_sd = 1./torch.sqrt(tau).unsqueeze(-1)
 
     loc_shape = list(design.shape)
     loc_shape[-2] = 1
@@ -82,7 +82,7 @@ def normal_inv_gamma_guide(design, obs_sd):
     sqrtlambda_param = softplus(pyro.param("guide_sqrtlambda",
                                            3.*torch.ones(loc_shape)))
     # guide distributions for w
-    w_dist = dist.Normal(mw_param, obs_sd / sqrtlambda_param).independent(2)
+    w_dist = dist.Normal(mw_param, obs_sd.unsqueeze(-1) / sqrtlambda_param).independent(2)
     pyro.sample('w', w_dist)
 
 
