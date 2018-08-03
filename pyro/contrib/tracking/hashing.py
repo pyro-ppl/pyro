@@ -30,10 +30,11 @@ class LSH(object):
         >>> lsh.add('a', a)
         >>> lsh.add('b', b)
         >>> lsh.add('c', c)
-        >>> lsh.nearby('a') # even though c is within 2radius of a
+        >>> # even though c is within 2radius of a
+        >>> lsh.nearby('a') # doctest: +SKIP
         {'b'}
-        >>> lsh.nearby('b')
-        {'c', 'a'}
+        >>> lsh.nearby('b') # doctest: +SKIP
+        {'a', 'c'}
         >>> lsh.remove('b')
         >>> lsh.nearby('a')
         set()
