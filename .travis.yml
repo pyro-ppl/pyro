@@ -33,7 +33,7 @@ jobs:
               #- make scrub;
               #  git diff-index --quiet HEAD
         - stage: auxiliary modules
-          python: 2.7
+          python: 3.5
           env: STAGE=docs
           script:
               - pip install -r docs/requirements.txt
