@@ -42,8 +42,8 @@ test-examples: lint FORCE
 	pytest -vx -n auto --stage test_examples
 
 test-tutorials: lint FORCE
-	CI=1 grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
-		| xargs pytest -vx --nbval-lax --current-env
+	grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
+		| CI=1 xargs pytest -vx --nbval-lax --current-env
 
 integration-test: lint FORCE
 	pytest -vx -n auto --stage integration
