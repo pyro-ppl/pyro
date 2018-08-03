@@ -48,7 +48,8 @@ def lm_true_ape(X_lm, sqrtlambda, obs_sd):
 
 
 @pytest.mark.parametrize("arglist",
-    [[(X_lm, vi_for_lm, torch.tensor([.1, .4]), None, torch.tensor(10.), torch.tensor(10.), 5000, 10)],
+    [# Warning: do not do this, not a mean-field guide!
+     #[(X_lm, vi_for_lm, torch.tensor([.1, .4]), None, torch.tensor(10.), torch.tensor(10.), 5000, 10)],
      [(X_lm, lm_true_ape, torch.tensor([.1, .4]), torch.tensor(1.)),
       (X_lm, vi_for_lm, torch.tensor([.1, .4]), torch.tensor(1.), None, None, 5000, 1)],
      [(X_lm, lm_true_ape, torch.tensor([.1, 10.]), torch.tensor(1.)),
