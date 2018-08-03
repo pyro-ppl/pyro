@@ -250,6 +250,15 @@ class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistribution
                 logits = self.logits.expand(batch_shape + self.event_shape)
                 return type(self)(logits=logits, validate_args=validate_args)
 
+    def enumerate_support(self, expand=True):
+        n = self.event_shape[0]
+        values = self._new((n, n))
+        torch.eye(n, out=values)
+        values = values.view((n,) + (1,) * len(self.batch_shape) + (n,))
+        if expand:
+            values.expand((n,) + self.batch_shape + (n,))
+        return values
+
 
 class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
     def expand(self, batch_shape):
