@@ -62,8 +62,14 @@ def test_reshape(sample_dim, extra_event_dims):
     if dist.event_shape:
         with pytest.raises(NotImplementedError):
             dist.enumerate_support()
+        with pytest.raises(NotImplementedError):
+            dist.enumerate_support(expand=True)
+        with pytest.raises(NotImplementedError):
+            dist.enumerate_support(expand=False)
     else:
-        assert dist.enumerate_support().shape == torch.Size((2,)) + shape
+        assert dist.enumerate_support().shape == (2,) + shape
+        assert dist.enumerate_support(expand=True).shape == (2,) + shape
+        assert dist.enumerate_support(expand=False).shape == (2,) + (1,) * len(sample_shape + batch_shape) + event_shape
 
 
 @pytest.mark.parametrize('sample_dim,extra_event_dims',
@@ -92,8 +98,14 @@ def test_reshape_reshape(sample_dim, extra_event_dims):
     if dist.event_shape:
         with pytest.raises(NotImplementedError):
             dist.enumerate_support()
+        with pytest.raises(NotImplementedError):
+            dist.enumerate_support(expand=True)
+        with pytest.raises(NotImplementedError):
+            dist.enumerate_support(expand=False)
     else:
-        assert dist.enumerate_support().shape == torch.Size((2,)) + shape
+        assert dist.enumerate_support().shape == (2,) + shape
+        assert dist.enumerate_support(expand=True).shape == (2,) + shape
+        assert dist.enumerate_support(expand=False).shape == (2,) + (1,) * len(sample_shape + batch_shape) + event_shape
 
 
 @pytest.mark.parametrize('sample_dim', [0, 1, 2])

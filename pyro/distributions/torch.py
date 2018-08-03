@@ -256,7 +256,7 @@ class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistribution
         torch.eye(n, out=values)
         values = values.view((n,) + (1,) * len(self.batch_shape) + (n,))
         if expand:
-            values.expand((n,) + self.batch_shape + (n,))
+            values = values.expand((n,) + self.batch_shape + (n,))
         return values
 
 
