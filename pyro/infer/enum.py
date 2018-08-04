@@ -34,8 +34,9 @@ def get_importance_trace(graph_type, max_iarange_nesting, model, guide, *args, *
     Returns a single trace from the guide, and the model that is run
     against it.
     """
-    guide_trace = poutine.trace(poutine.broadcast(guide),
-                                graph_type=graph_type).get_trace(*args, **kwargs)
+    guide = poutine.broadcast(guide)
+    model = poutine.broadcast(model)
+    guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
     model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                 graph_type=graph_type).get_trace(*args, **kwargs)
     if is_validation_enabled():
