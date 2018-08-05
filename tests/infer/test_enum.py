@@ -69,8 +69,8 @@ def test_iter_discrete_traces_vector(graph_type):
         with pyro.iarange("iarange", 2):
             x = pyro.sample("x", dist.Bernoulli(p))
             y = pyro.sample("y", dist.Categorical(probs))
-        assert x.size() == (2,)
-        assert y.size() == (2,)
+            assert x.shape == (1,)
+            assert y.shape == (1,)
         return dict(x=x, y=y)
 
     traces = list(iter_discrete_traces(graph_type, model))
@@ -165,7 +165,7 @@ def gmm_batch_model(data):
     with pyro.iarange("data", len(data)) as batch:
         n = len(batch)
         z = pyro.sample("z", dist.OneHotCategorical(p).expand_by([n]))
-        assert z.shape[-2:] == (n, 2)
+        assert z.shape[-1] == 2
         loc = (z * mus).sum(-1)
         pyro.sample("x", dist.Normal(loc, scale.expand(n)), obs=data[batch])
 
@@ -176,7 +176,7 @@ def gmm_batch_guide(data):
         probs = pyro.param("probs", torch.tensor(torch.ones(n, 1) * 0.6, requires_grad=True))
         probs = torch.cat([probs, 1 - probs], dim=1)
         z = pyro.sample("z", dist.OneHotCategorical(probs))
-        assert z.shape[-2:] == (n, 2)
+        assert z.shape[-1] == 2
 
 
 @pytest.mark.parametrize("data_size", [1, 2, 3])
