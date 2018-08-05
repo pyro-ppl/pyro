@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
-def sample_mask_indices(input_dim, hidden_dim, simple=False, conditional=False):
+def sample_mask_indices(input_dim, hidden_dim, simple=True):
     """
     Samples the indices assigned to hidden units during the construction of MADE masks
 
@@ -15,23 +15,17 @@ def sample_mask_indices(input_dim, hidden_dim, simple=False, conditional=False):
     :type input_dim: int
     :param hidden_dim: the dimensionality of the hidden layer
     :type hidden_dim: int
-    :param simple: True to sample indices uniformly, false to space indices evenly and round up or down randomly
+    :param simple: True to space fractional indices by rounding to nearest int, false round randomly
     :type simple: bool
-    :param conditional: True if sampling indices for a conditional-MADE, false otherwise
-    :type conditional: bool
     """
-    start_integer = 0 if conditional else 1
-
+    indices = torch.linspace(1, input_dim, steps=hidden_dim)
     if simple:
-        # Simple procedure samples each index i.i.d.
-        return torch.randint(start_integer, input_dim, size=(hidden_dim,))
+        # Simple procedure tries to space fractional indices evenly by rounding to nearest int
+        return torch.round(indices)
     else:
         # "Non-simple" procedure creates fractional indices evenly then rounds at random
-        mk = torch.linspace(start_integer, input_dim - 1, steps=hidden_dim)
-
-        # Randomly decide whether to round up or down indices
-        ints = mk.floor()
-        ints += torch.bernoulli(mk - ints)
+        ints = indices.floor()
+        ints += torch.bernoulli(indices - ints)
         return ints
 
 
@@ -58,22 +52,23 @@ def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, ou
     var_index = permutation.clone().type(torch.get_default_dtype())
     var_index[permutation] = torch.arange(input_dim, dtype=torch.get_default_dtype())
 
-    m_input = torch.cat((torch.zeros(observed_dim), 1 + var_index))
-    m_w = [sample_mask_indices(input_dim, hidden_dim, conditional=observed_dim > 0) for i in range(num_layers)]
-    m_v = var_index.repeat(output_dim_multiplier)
+    # Create the indices that are assigned to the neurons
+    input_indices = torch.cat((torch.zeros(observed_dim), 1 + var_index))
+    hidden_indices = [sample_mask_indices(input_dim, hidden_dim) for i in range(num_layers)]
+    output_indices = (var_index + 1).repeat(output_dim_multiplier)
 
     # Create mask from input to output for the skips connections
-    M_A = (m_v.unsqueeze(-1) >= m_input.unsqueeze(0)).type_as(m_v)
+    mask_skip = (output_indices.unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(output_indices)
 
     # Create mask from input to first hidden layer, and between subsequent hidden layers
-    M_W = [(m_w[0].unsqueeze(-1) >= m_input.unsqueeze(0)).type_as(m_v)]
+    masks = [(hidden_indices[0].unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(output_indices)]
     for i in range(1, num_layers):
-        M_W.append((m_w[i].unsqueeze(-1) >= m_w[i - 1].unsqueeze(0)).type_as(m_v))
+        masks.append((hidden_indices[i].unsqueeze(-1) >= hidden_indices[i - 1].unsqueeze(0)).type_as(output_indices))
 
     # Create mask from last hidden layer to output layer
-    M_V = (m_v.unsqueeze(-1) >= m_w[-1].unsqueeze(0)).type_as(m_v)
+    masks.append((output_indices.unsqueeze(-1) >= hidden_indices[-1].unsqueeze(0)).type_as(output_indices))
 
-    return M_W, M_V, M_A
+    return masks, mask_skip
 
 
 class MaskedLinear(nn.Linear):
@@ -121,11 +116,11 @@ class AutoRegressiveNN(nn.Module):
     :type output_dim_multiplier: int
     :param permutation: an optional permutation that is applied to the inputs and controls the order of the
         autoregressive factorization. in particular for the identity permutation the autoregressive structure
-        is such that the Jacobian is upper triangular. By default this is the identity permutation.
+        is such that the Jacobian is upper triangular. By default this is chosen at random.
     :type permutation: torch.LongTensor
     """
 
-    def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1, permutation=None, skip_connections=False,
+    def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1, permutation=None, skip_connections=True,
                  num_layers=1, nonlinearity=nn.ReLU()):
         super(AutoRegressiveNN, self).__init__()
         if input_dim == 1:
@@ -143,22 +138,21 @@ class AutoRegressiveNN(nn.Module):
             self.permutation = permutation.type(dtype=torch.int64)
 
         # Create masks
-        self.M_W, self.M_V, self.M_A = create_mask(input_dim=input_dim, observed_dim=0, hidden_dim=hidden_dim,
-                                                   num_layers=num_layers, permutation=self.permutation,
-                                                   output_dim_multiplier=output_dim_multiplier)
+        self.masks, self.mask_skip = create_mask(input_dim=input_dim, observed_dim=0, hidden_dim=hidden_dim,
+                                                 num_layers=num_layers, permutation=self.permutation,
+                                                 output_dim_multiplier=output_dim_multiplier)
 
         # Create masked layers
-        layers = [MaskedLinear(input_dim, hidden_dim, self.M_W[0])]
+        layers = [MaskedLinear(input_dim, hidden_dim, self.masks[0])]
         for i in range(1, num_layers):
-            layers.append(MaskedLinear(hidden_dim, hidden_dim, self.M_W[i]))
+            layers.append(MaskedLinear(hidden_dim, hidden_dim, self.masks[i]))
+        layers.append(MaskedLinear(hidden_dim, input_dim * output_dim_multiplier, self.masks[-1]))
         self.layers = nn.ModuleList(layers)
 
         if skip_connections:
-            self.skip_p = MaskedLinear(input_dim, input_dim * output_dim_multiplier, self.M_A, bias=False)
+            self.skip_layer = MaskedLinear(input_dim, input_dim * output_dim_multiplier, self.mask_skip, bias=False)
         else:
-            self.M_A = None
-            self.skip_p = None
-        self.p = MaskedLinear(hidden_dim, input_dim * output_dim_multiplier, self.M_V)
+            self.skip_layer = None
 
         # Save the nonlinearity
         self.f = nonlinearity
@@ -174,12 +168,11 @@ class AutoRegressiveNN(nn.Module):
         The forward method
         """
         h = x
-        for layer in self.layers:
+        for layer in self.layers[:-1]:
             h = self.f(layer(h))
+        h = self.layers[-1](h)
 
-        if self.skip_p is not None:
-            h = self.p(h) + self.skip_p(x)
-        else:
-            h = self.p(h)
+        if self.skip_layer is not None:
+            h = h + self.skip_layer(x)
 
         return h
