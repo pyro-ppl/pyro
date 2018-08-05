@@ -27,7 +27,7 @@ def sample_mask_indices(input_dim, hidden_dim, simple=True):
         ints = indices.floor()
         ints += torch.bernoulli(indices - ints)
         return ints
-
+        
 
 def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, output_dim_multiplier):
     """
@@ -55,7 +55,7 @@ def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, ou
     # Create the indices that are assigned to the neurons
     input_indices = torch.cat((torch.zeros(observed_dim), 1 + var_index))
     hidden_indices = [sample_mask_indices(input_dim, hidden_dim) for i in range(num_layers)]
-    output_indices = (var_index + 1).repeat(output_dim_multiplier)
+    output_indices = (var_index+1).repeat(output_dim_multiplier)
 
     # Create mask from input to output for the skips connections
     mask_skip = (output_indices.unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(output_indices)
@@ -120,7 +120,7 @@ class AutoRegressiveNN(nn.Module):
     :type permutation: torch.LongTensor
     """
 
-    def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1, permutation=None, skip_connections=True,
+    def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1, permutation=None, skip_connections=False,
                  num_layers=1, nonlinearity=nn.ReLU()):
         super(AutoRegressiveNN, self).__init__()
         if input_dim == 1:
@@ -139,8 +139,8 @@ class AutoRegressiveNN(nn.Module):
 
         # Create masks
         self.masks, self.mask_skip = create_mask(input_dim=input_dim, observed_dim=0, hidden_dim=hidden_dim,
-                                                 num_layers=num_layers, permutation=self.permutation,
-                                                 output_dim_multiplier=output_dim_multiplier)
+                                                   num_layers=num_layers, permutation=self.permutation,
+                                                   output_dim_multiplier=output_dim_multiplier)
 
         # Create masked layers
         layers = [MaskedLinear(input_dim, hidden_dim, self.masks[0])]
@@ -174,5 +174,5 @@ class AutoRegressiveNN(nn.Module):
 
         if self.skip_layer is not None:
             h = h + self.skip_layer(x)
-
+      
         return h
