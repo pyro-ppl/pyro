@@ -17,6 +17,7 @@ import time
 from os.path import exists
 
 import numpy as np
+import six
 import six.moves.cPickle as pickle
 import torch
 import torch.nn as nn
@@ -273,7 +274,10 @@ def main(args):
 
     jsb_file_loc = "./data/jsb_processed.pkl"
     # ingest training/validation/test data from disk
-    data = pickle.load(open(jsb_file_loc, "rb"))
+    if six.PY2:
+        data = pickle.load(open(jsb_file_loc, "rb"))
+    else:
+        data = pickle.load(open(jsb_file_loc, "rb"), encoding="latin1")
     training_seq_lengths = data['train']['sequence_lengths']
     training_data_sequences = data['train']['sequences']
     test_seq_lengths = data['test']['sequence_lengths']
