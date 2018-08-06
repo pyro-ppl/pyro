@@ -9,7 +9,8 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
-                                    AutoLowRankMultivariateNormal, AutoMultivariateNormal, AutoIAFNormal)
+                                    AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
+                                    AutoMultivariateNormal)
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.optim import Adam
 from tests.common import assert_equal
@@ -48,6 +49,7 @@ def test_scores(auto_class):
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
+    AutoLaplaceApproximation,
 ])
 def test_shapes(auto_class, Elbo):
 
@@ -70,6 +72,7 @@ def test_shapes(auto_class, Elbo):
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
+    AutoLaplaceApproximation,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
 def test_irange_smoke(auto_class, Elbo):
@@ -119,6 +122,7 @@ def auto_guide_callable(model):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
     auto_guide_list_x,
     auto_guide_callable,
 ])
@@ -135,6 +139,9 @@ def test_median(auto_class, Elbo):
     for _ in range(800):
         infer.step()
 
+    if auto_class is AutoLaplaceApproximation:
+        guide = guide.laplace_approximation()
+
     median = guide.median()
     assert_equal(median["x"], torch.tensor(0.0), prec=0.1)
     if auto_class is AutoDelta:
@@ -148,6 +155,7 @@ def test_median(auto_class, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_quantiles(auto_class, Elbo):
@@ -161,6 +169,9 @@ def test_quantiles(auto_class, Elbo):
     infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo(strict_enumeration_warning=False))
     for _ in range(100):
         infer.step()
+
+    if auto_class is AutoLaplaceApproximation:
+        guide = guide.laplace_approximation()
 
     quantiles = guide.quantiles([0.1, 0.5, 0.9])
     median = guide.median()
@@ -190,6 +201,7 @@ def test_quantiles(auto_class, Elbo):
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
+    AutoLaplaceApproximation,
 ])
 def test_discrete_parallel(continuous_class):
     K = 2
@@ -220,6 +232,7 @@ def test_discrete_parallel(continuous_class):
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
     AutoIAFNormal,
+    AutoLaplaceApproximation,
 ])
 def test_guide_list(auto_class):
 
@@ -238,6 +251,7 @@ def test_guide_list(auto_class):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
 ])
 def test_callable(auto_class):
 
@@ -261,6 +275,7 @@ def test_callable(auto_class):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
 ])
 def test_callable_return_dict(auto_class):
 

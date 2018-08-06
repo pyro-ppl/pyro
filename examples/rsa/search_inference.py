@@ -84,13 +84,13 @@ class HashingMarginal(dist.Distribution):
                 value_hash = hash(value)
             if value_hash in logits:
                 # Value has already been seen.
-                logits[value_hash] = dist.util.log_sum_exp(torch.stack([logits[value_hash], logit]), dim=-1)
+                logits[value_hash] = dist.util.logsumexp(torch.stack([logits[value_hash], logit]), dim=-1)
             else:
                 logits[value_hash] = logit
                 values_map[value_hash] = value
 
         logits = torch.stack(list(logits.values())).contiguous().view(-1)
-        logits = logits - dist.util.log_sum_exp(logits, dim=-1)
+        logits = logits - dist.util.logsumexp(logits, dim=-1)
         d = dist.Categorical(logits=logits)
         return d, values_map
 
