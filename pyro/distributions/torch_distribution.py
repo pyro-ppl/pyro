@@ -107,6 +107,8 @@ class TorchDistributionMixin(Distribution):
         :return: An expanded version of this distribution.
         :rtype: :class:`ReshapedDistribution`
         """
+        if not sample_shape:
+            return self
         return ReshapedDistribution(self, sample_shape=sample_shape)
 
     def reshape(self, sample_shape=None, extra_event_dims=None):
