@@ -18,7 +18,7 @@ def iter_discrete_escape(trace, msg):
 
 
 def iter_discrete_extend(trace, site, **ignored):
-    values = site["fn"].enumerate_support(expand=False)
+    values = site["fn"].enumerate_support()
     for i, value in enumerate(values):
         extended_site = site.copy()
         extended_site["infer"] = site["infer"].copy()
@@ -34,8 +34,6 @@ def get_importance_trace(graph_type, max_iarange_nesting, model, guide, *args, *
     Returns a single trace from the guide, and the model that is run
     against it.
     """
-    guide = poutine.broadcast(guide)
-    model = poutine.broadcast(model)
     guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
     model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                 graph_type=graph_type).get_trace(*args, **kwargs)
