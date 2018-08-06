@@ -95,6 +95,25 @@ def test_enumerate_support(discrete_dist):
     assert_equal(actual_support_non_vec.data, torch.tensor(expected_support_non_vec))
 
 
+def test_enumerate_support_shape(dist):
+    if not dist.pyro_dist.has_enumerate_support:
+        pytest.skip()
+    for idx in range(dist.get_num_test_data()):
+        dist_params = dist.get_dist_params(idx)
+        d = dist.pyro_dist(**dist_params)
+        with xfail_if_not_implemented():
+            support = d.enumerate_support()
+            n = support.shape[0]
+            assert support.shape == (n,) + d.batch_shape + d.event_shape
+
+            support_expanded = d.enumerate_support(expand=True)
+            assert_equal(support, support_expanded)
+
+            support_unexpanded = d.enumerate_support(expand=False)
+            assert support_unexpanded.shape == (n,) + (1,) * len(d.batch_shape) + d.event_shape
+            assert (support_expanded == support_unexpanded).all()
+
+
 @pytest.mark.parametrize("dist_class, args", [
     (dist.Normal, {"loc": torch.tensor(0.0), "scale": torch.tensor(-1.0)}),
     (dist.Gamma, {"concentration": -1.0, "rate": 1.0}),

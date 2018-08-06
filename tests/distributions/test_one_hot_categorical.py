@@ -81,9 +81,16 @@ def modify_params_using_dims(probs, dim):
 
 def test_support_dims(dim, probs):
     probs = modify_params_using_dims(probs, dim)
-    support = dist.OneHotCategorical(probs).enumerate_support()
+    d = dist.OneHotCategorical(probs)
+    support = d.enumerate_support()
     for s in support:
         assert_correct_dimensions(s, probs)
+    n = len(support)
+    assert support.shape == (n,) + d.batch_shape + d.event_shape
+    support_expanded = d.enumerate_support(expand=True)
+    assert support_expanded.shape == (n,) + d.batch_shape + d.event_shape
+    support_unexpanded = d.enumerate_support(expand=False)
+    assert support_unexpanded.shape == (n,) + (1,) * len(d.batch_shape) + d.event_shape
 
 
 def test_sample_dims(dim, probs):
