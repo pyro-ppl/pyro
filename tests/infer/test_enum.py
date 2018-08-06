@@ -58,10 +58,11 @@ def test_iter_discrete_traces_scalar(graph_type):
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
-def test_iter_discrete_traces_vector(graph_type):
+@pytest.mark.parametrize("expand", [False, True])
+def test_iter_discrete_traces_vector(expand, graph_type):
     pyro.clear_param_store()
 
-    @config_enumerate
+    @config_enumerate(expand=expand)
     def model():
         p = pyro.param("p", torch.tensor([0.05, 0.15]))
         probs = pyro.param("probs", torch.tensor([[0.1, 0.2, 0.3, 0.4],
@@ -69,8 +70,12 @@ def test_iter_discrete_traces_vector(graph_type):
         with pyro.iarange("iarange", 2):
             x = pyro.sample("x", dist.Bernoulli(p))
             y = pyro.sample("y", dist.Categorical(probs))
-            assert x.shape == (1,)
-            assert y.shape == (1,)
+            if expand:
+                assert x.size() == (2,)
+                assert y.size() == (2,)
+            else:
+                assert x.shape == (1,)
+                assert y.shape == (1,)
         return dict(x=x, y=y)
 
     traces = list(iter_discrete_traces(graph_type, model))
