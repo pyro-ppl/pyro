@@ -23,7 +23,7 @@ class BroadcastMessenger(Messenger):
         if actual_batch_shape is not None:
             target_batch_shape = [None if size == 1 else size for size in actual_batch_shape]
             for f in msg["cond_indep_stack"]:
-                if f.dim is None:
+                if f.dim is None or f.size == -1:
                     continue
                 assert f.dim < 0
                 target_batch_shape = [None] * (-f.dim - len(target_batch_shape)) + target_batch_shape
