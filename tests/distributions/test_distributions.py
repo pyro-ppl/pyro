@@ -130,19 +130,16 @@ def test_distribution_validate_args(dist_class, args, validate_args):
 
 
 def check_sample_shapes(small, large):
-    if isinstance(small, dist.LogNormal) or (
-            isinstance(small, ReshapedDistribution) and
-            isinstance(small.base_dist, dist.LogNormal)):
+    dist_instance = small.base_dist if isinstance(small, ReshapedDistribution) \
+        else small
+    if isinstance(dist_instance, (dist.LogNormal, dist.LowRankMultivariateNormal, dist.VonMises)):
         # Ignore broadcasting bug in LogNormal:
         # https://github.com/pytorch/pytorch/pull/7269
         return
-    try:
-        x = small.sample()
-        assert_equal(small.log_prob(x).expand(large.batch_shape), large.log_prob(x))
-        x = large.sample()
-        assert_equal(small.log_prob(x), large.log_prob(x))
-    except NotImplementedError:
-        pass
+    x = small.sample()
+    assert_equal(small.log_prob(x).expand(large.batch_shape), large.log_prob(x))
+    x = large.sample()
+    assert_equal(small.log_prob(x), large.log_prob(x))
 
 
 @pytest.mark.parametrize('sample_shape', [(), (2,), (2, 3)])

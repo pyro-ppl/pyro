@@ -64,7 +64,7 @@ jobs:
         - python: 2.7
           env: STAGE=examples
           script:
-              - pytest -vs --cov=pyro --stage test_examples
+              - pytest -vs --stage test_examples
               - grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
                   | CI=1 xargs pytest -vx --nbval-lax --current-env
         - python: 3.5
@@ -72,7 +72,7 @@ jobs:
           script: pytest -vs --cov=pyro --stage unit --durations 20
         - python: 3.5
           env: STAGE=examples
-          script: pytest -vs --cov=pyro --stage test_examples
+          script: pytest -vs --stage test_examples
         - stage: integration test
           python: 2.7
           env: STAGE=integration_batch_1
@@ -86,3 +86,6 @@ jobs:
         - python: 3.5
           env: STAGE=integration_batch_2
           script: pytest -vs --cov=pyro --stage integration_batch_2 --durations 10
+
+after_success:
+          - bash <(curl -s https://codecov.io/bash)
