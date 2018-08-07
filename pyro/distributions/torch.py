@@ -284,8 +284,7 @@ class StudentT(torch.distributions.StudentT, TorchDistributionMixin):
 
 class TransformedDistribution(torch.distributions.TransformedDistribution, TorchDistributionMixin):
     def expand(self, batch_shape):
-        base_dist = self.base_dist.expand(batch_shape)
-        return TransformedDistribution(base_dist, self.transforms)
+        return super(TransformedDistribution, self).expand(batch_shape)
 
 
 class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
