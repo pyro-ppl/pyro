@@ -12,15 +12,13 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.tracking.assignment import MarginalAssignmentPersistent
 from pyro.contrib.tracking.hashing import merge_points
-from pyro.infer import SVI, TraceEnum_ELBO
-from pyro.optim import ClippedAdam, SGD, Adam
+from pyro.infer import TraceEnum_ELBO
+from pyro.optim import ClippedAdam
 from pyro.optim.multi import MixedMultiOptimizer, Newton
-from pyro.util import warn_if_nan
 
 from datagen_utils import generate_observations, get_positions
 from plot_utils import plot_solution, plot_exists_prob, init_visdom
 
-import pytest
 pyro.enable_validation(True)
 smoke_test = ('CI' in os.environ)
 
@@ -57,7 +55,8 @@ def model(args, observations):
                     assign[..., :1].shape, dtype=torch.long).expand(pad_shape)), -1)
             augmented_positions = augmented_positions.unsqueeze(0).expand_as(assign)
             predicted_positions = torch.gather(augmented_positions, -1, assign)
-            if args.debug: pdb.set_trace()
+            if args.debug:
+                pdb.set_trace()
             predicted_positions = predicted_positions[..., :observations.shape[1]]
             assert predicted_positions.shape == (num_objects + 1, args.num_frames, num_detections)
             if args.debug:
@@ -109,8 +108,6 @@ def guide(args, observations):
     emission_noise_scale = pyro.param("emission_noise_scale")
     is_observed = (observations[..., -1] > 0)
     num_detections = is_observed.shape[-1]
-    #with pyro.iarange("objects", states_loc.shape[0]):
-    #    pyro.sample("states", dist.Delta(states_loc, event_dim=1))
     positions = get_positions(states_loc, args.num_frames)
     assign_logits = compute_assign_logits(positions, observations, emission_noise_scale, args)
     exists_logits = compute_exists_logits(states_loc, args)
@@ -123,7 +120,7 @@ def guide(args, observations):
         with pyro.iarange("detections", observations.shape[1]):
             with pyro.iarange("time", args.num_frames):
                 assign = pyro.sample("assign", assign_dist, infer={"enumerate": "parallel"})
-                #assert assign.shape == (num_objects + 1, args.num_frames, num_detections)
+                assert assign.shape == (num_objects + 1, args.num_frames, num_detections)
     return assignment.exists_dist.probs
 
 
@@ -131,13 +128,13 @@ def init_params(true_states=None):
     emission_noise_scale = pyro.param("emission_noise_scale", torch.tensor(0.01), constraint=constraints.positive)
     if true_states is not None:
         states_loc = pyro.param("states_loc",
-            lambda: torch.cat((true_states,
-                               torch.index_select(true_states, 0,
-                                                  torch.randint(0, true_states.shape[0],
-                                                                (args.max_num_objects -
-                                                                 true_states.shape[0],)).long()
-                                                  )
-                               ), 0))
+                                lambda: torch.cat((true_states,
+                                                   torch.index_select(true_states, 0,
+                                                                      torch.randint(0, true_states.shape[0],
+                                                                                    (args.max_num_objects -
+                                                                                     true_states.shape[0],)).long()
+                                                                      )
+                                                   ), 0))
     else:
         states_loc = pyro.param("states_loc", dist.Normal(0, 1).sample((args.max_num_objects, 2)))
     return states_loc, emission_noise_scale

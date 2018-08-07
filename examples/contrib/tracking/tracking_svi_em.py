@@ -3,18 +3,15 @@ import math
 import argparse
 import os
 import torch
-import pdb
 from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.tracking.assignment import MarginalAssignmentPersistent
 from pyro.contrib.tracking.hashing import merge_points
-from pyro.ops.newton import newton_step
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import ClippedAdam
 from pyro.optim.multi import MixedMultiOptimizer, Newton
-from pyro.util import warn_if_nan
 
 from datagen_utils import generate_observations, get_positions
 from plot_utils import plot_solution, plot_exists_prob, init_visdom
@@ -64,7 +61,7 @@ def model(args, observations):
             assign = torch.cat(
                 (assign,
                  torch.zeros(assign[..., :1].shape, dtype=torch.long).expand(pad_shape)
-                ), -1)
+                 ), -1)
             augmented_positions = augmented_positions.unsqueeze(0).expand_as(assign)
             predicted_positions = torch.gather(augmented_positions, -1, assign)
             pyro.sample('observations', dist.MaskedMixture(is_real,
@@ -212,7 +209,7 @@ def main(args):
             for em_step in range(args.em_iters):
                 states_loc = pyro.param('states_loc').detach_().requires_grad_()
                 assert pyro.param('states_loc').grad_fn is None
-                loss = elbo.differentiable_loss(model, guide, args, observations) # + 100 * pyro.param("emission_noise_scale").pow(2)  # E-step
+                loss = elbo.differentiable_loss(model, guide, args, observations)  # E-step
                 updated = newton.get_step(loss, {'states_loc': states_loc})  # M-step
                 updated_states_loc = updated['states_loc']
                 assert pyro.param('states_loc').grad_fn is not None
@@ -225,7 +222,6 @@ def main(args):
                 updated_states_loc = updated_states_loc[p_exists > args.prune_threshold]
             if (args.merge_radius >= 0.0) and updated_states_loc.dim() == 2:
                 updated_states_loc, _ = merge_points(updated_states_loc, args.merge_radius)
-            #assert updated_states_loc.grad_fn is not None
             pyro.get_param_store().replace_param('states_loc', updated_states_loc, pyro.param("states_loc"))
 
         ens.append(pyro.param("emission_noise_scale").item())
