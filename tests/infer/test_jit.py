@@ -7,10 +7,10 @@ from torch.distributions import constraints, kl_divergence
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO,
-                        Trace_ELBO, TraceEnum_ELBO,
+from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
                         TraceGraph_ELBO)
 from pyro.optim import Adam
+from tests.common import assert_equal
 
 
 def test_simple():
