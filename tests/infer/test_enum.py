@@ -904,16 +904,20 @@ def test_elbo_rsvi(enumerate1):
     ]))
 
 
-@pytest.mark.parametrize("enumerate1,num_steps", [
-    ("sequential", 2),
-    ("sequential", 3),
-    ("parallel", 2),
-    ("parallel", 3),
-    ("parallel", 10),
-    ("parallel", 20),
-    pytest.param("parallel", 30, marks=pytest.mark.skip(reason="extremely expensive")),
+@pytest.mark.parametrize("enumerate1,num_steps,expand", [
+    ("sequential", 2, True),
+    ("sequential", 2, False),
+    ("sequential", 3, True),
+    ("sequential", 3, False),
+    ("parallel", 2, True),
+    ("parallel", 2, False),
+    ("parallel", 3, True),
+    ("parallel", 3, False),
+    ("parallel", 10, False),
+    ("parallel", 20, False),
+    pytest.param("parallel", 30, False, marks=pytest.mark.skip(reason="extremely expensive")),
 ])
-def test_elbo_hmm_in_model(enumerate1, num_steps):
+def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
     pyro.clear_param_store()
     data = torch.ones(num_steps)
     init_probs = torch.tensor([0.5, 0.5])
@@ -932,7 +936,7 @@ def test_elbo_hmm_in_model(enumerate1, num_steps):
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
             pyro.sample("y_{}".format(i), dist.Normal(locs[x], scale), obs=y)
 
-    @config_enumerate(default=enumerate1)
+    @config_enumerate(default=enumerate1, expand=expand)
     def guide(data):
         mean_field_probs = pyro.param("mean_field_probs", torch.ones(num_steps, 2) / 2,
                                       constraint=constraints.simplex)
@@ -958,16 +962,20 @@ def test_elbo_hmm_in_model(enumerate1, num_steps):
         ]))
 
 
-@pytest.mark.parametrize("enumerate1,num_steps", [
-    ("sequential", 2),
-    ("sequential", 3),
-    ("parallel", 2),
-    ("parallel", 3),
-    ("parallel", 10),
-    ("parallel", 20),
-    pytest.param("parallel", 30, marks=pytest.mark.skip(reason="extremely expensive")),
+@pytest.mark.parametrize("enumerate1,num_steps,expand", [
+    ("sequential", 2, True),
+    ("sequential", 2, False),
+    ("sequential", 3, True),
+    ("sequential", 3, False),
+    ("parallel", 2, True),
+    ("parallel", 2, False),
+    ("parallel", 3, True),
+    ("parallel", 3, False),
+    ("parallel", 10, False),
+    ("parallel", 20, False),
+    pytest.param("parallel", 30, False, marks=pytest.mark.skip(reason="extremely expensive")),
 ])
-def test_elbo_hmm_in_guide(enumerate1, num_steps):
+def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
     pyro.clear_param_store()
     data = torch.ones(num_steps)
     init_probs = torch.tensor([0.5, 0.5])
@@ -986,7 +994,7 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps):
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
             pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=y)
 
-    @config_enumerate(default=enumerate1)
+    @config_enumerate(default=enumerate1, expand=expand)
     def guide(data):
         transition_probs = pyro.param("transition_probs",
                                       torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
