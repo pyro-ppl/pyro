@@ -11,7 +11,6 @@ from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELB
                         Trace_ELBO, TraceEnum_ELBO,
                         TraceGraph_ELBO)
 from pyro.optim import Adam
-from tests.common import assert_equal, xfail_param
 
 
 def test_simple():
