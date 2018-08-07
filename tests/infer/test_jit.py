@@ -7,10 +7,11 @@ from torch.distributions import constraints, kl_divergence
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
+from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO,
+                        Trace_ELBO, TraceEnum_ELBO,
                         TraceGraph_ELBO)
 from pyro.optim import Adam
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_param
 
 
 def test_simple():
@@ -32,25 +33,6 @@ def test_simple():
         assert_equal(f(torch.ones(5)), y.new_tensor([2, 2, 2, 2, 2]))
 
 
-def test_multi_output():
-    y = torch.ones(2)
-
-    @torch.jit.trace(y)
-    def f(x):
-        print('Inside f')
-        assert x is y
-        return y - 1.0, y + 1.0
-
-    print('Calling f(y)')
-    assert_equal(f(y)[1], y.new_tensor([2., 2.]))
-    print('Calling f(y)')
-    assert_equal(f(y)[1], y.new_tensor([2., 2.]))
-    print('Calling f(torch.zeros(2))')
-    assert_equal(f(torch.zeros(2))[1], y.new_tensor([1., 1.]))
-    print('Calling f(torch.zeros(5))')
-    assert_equal(f(torch.ones(5))[1], y.new_tensor([2., 2., 2., 2., 2.]))
-
-
 def test_backward():
     y = torch.ones(2, requires_grad=True)
 
@@ -70,7 +52,6 @@ def test_backward():
         f(torch.ones(5, requires_grad=True))
 
 
-@pytest.mark.xfail(reason="grad cannot appear in jitted code")
 def test_grad():
 
     @torch.jit.compile(nderivs=0)
@@ -85,7 +66,8 @@ def test_grad():
     f(torch.zeros(2, requires_grad=True), torch.zeros(2, requires_grad=True))
 
 
-@pytest.mark.xfail(reason="grad cannot appear in jitted code")
+@pytest.mark.xfail(reason='RuntimeError: '
+                          'saved_variables() needed but not implemented in ExpandBackward')
 def test_grad_expand():
 
     @torch.jit.compile(nderivs=0)
@@ -98,39 +80,6 @@ def test_grad_expand():
     f(torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True))
     print('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
-
-
-@pytest.mark.parametrize('expand', [False, True])
-@pytest.mark.parametrize('shape', [(), (4,), (5, 4)])
-def test_bernoulli_enumerate(shape, expand):
-    shape = torch.Size(shape)
-    probs = torch.empty(shape).fill_(0.25)
-
-    @torch.jit.trace(probs)
-    def f(probs):
-        d = dist.Bernoulli(probs)
-        support = d.enumerate_support(expand=expand)
-        return d.log_prob(support)
-
-    log_prob = f(probs)
-    assert log_prob.shape == (2,) + shape
-
-
-@pytest.mark.parametrize('expand', [False, True])
-@pytest.mark.parametrize('shape', [(3,), (4, 3), (5, 4, 3)])
-def test_categorical_enumerate(shape, expand):
-    shape = torch.Size(shape)
-    probs = torch.ones(shape)
-
-    @torch.jit.trace(probs)
-    def f(probs):
-        d = dist.Categorical(probs)
-        support = d.enumerate_support(expand=expand)
-        return d.log_prob(support)
-
-    log_prob = f(probs)
-    batch_shape = shape[:-1]
-    assert log_prob.shape == shape[-1:] + batch_shape
 
 
 @pytest.mark.parametrize('num_particles', [1, 10])
@@ -163,7 +112,14 @@ def test_svi(Elbo, num_particles):
 @pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
 @pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
 @pytest.mark.parametrize("irange_dim", [1, 2])
-@pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
+@pytest.mark.parametrize('Elbo', [
+    Trace_ELBO,
+    JitTrace_ELBO,
+    TraceGraph_ELBO,
+    JitTraceGraph_ELBO,
+    TraceEnum_ELBO,
+    JitTraceEnum_ELBO,
+])
 def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
     num_particles = 10
@@ -205,7 +161,11 @@ def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
 
 
 @pytest.mark.parametrize('vectorized', [False, True])
-@pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
+@pytest.mark.parametrize('Elbo', [
+    TraceEnum_ELBO,
+    xfail_param(JitTraceEnum_ELBO,
+                reason="jit RuntimeError: Unsupported op descriptor: stack-2-dim_i"),
+])
 def test_beta_bernoulli(Elbo, vectorized):
     pyro.clear_param_store()
     data = torch.tensor([1.0] * 6 + [0.0] * 4)
@@ -241,7 +201,10 @@ def test_beta_bernoulli(Elbo, vectorized):
 
 
 @pytest.mark.parametrize('vectorized', [False, True])
-@pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
+@pytest.mark.parametrize('Elbo', [
+    TraceEnum_ELBO,
+    xfail_param(JitTraceEnum_ELBO, reason="jit RuntimeError in Dirichlet.rsample"),
+])
 def test_dirichlet_bernoulli(Elbo, vectorized):
     pyro.clear_param_store()
     data = torch.tensor([1.0] * 6 + [0.0] * 4)
