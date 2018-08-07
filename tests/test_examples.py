@@ -7,7 +7,7 @@ from subprocess import check_call
 
 import pytest
 
-from tests.common import EXAMPLES_DIR, requires_cuda
+from tests.common import EXAMPLES_DIR, requires_cuda, xfail_param
 
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
@@ -39,6 +39,8 @@ CPU_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential',
     'vae/vae.py --num-epochs=1',
     'vae/vae_comparison.py --num-epochs=1',
+    xfail_param('dmm/dmm.py --num-epochs=1 --jit', reason='not jittable'),
+    xfail_param('vae/vae.py --num-epochs=1 --jit', reason='not jittable'),
 ]
 
 CUDA_EXAMPLES = [
@@ -52,6 +54,8 @@ CUDA_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --cuda',
+    xfail_param('dmm/dmm.py --num-epochs=1 --cuda --jit', reason='not jittable'),
+    xfail_param('vae/vae.py --num-epochs=1 --cuda --jit', reason='not jittable'),
 ]
 
 

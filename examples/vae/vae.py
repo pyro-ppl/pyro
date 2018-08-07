@@ -7,7 +7,7 @@ import visdom
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
 from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
@@ -132,7 +132,8 @@ def main(args):
     optimizer = Adam(adam_args)
 
     # setup the inference algorithm
-    svi = SVI(vae.model, vae.guide, optimizer, loss=Trace_ELBO())
+    elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
+    svi = SVI(vae.model, vae.guide, optimizer, loss=elbo)
 
     # setup visdom for visualization
     if args.visdom_flag:
@@ -204,6 +205,7 @@ if __name__ == '__main__':
     parser.add_argument('-tf', '--test-frequency', default=5, type=int, help='how often we evaluate the test set')
     parser.add_argument('-lr', '--learning-rate', default=1.0e-3, type=float, help='learning rate')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
+    parser.add_argument('--jit', action='store_true', default=False, help='whether to use PyTorch jit')
     parser.add_argument('-visdom', '--visdom_flag', action="store_true", help='Whether plotting in visdom is desired')
     parser.add_argument('-i-tsne', '--tsne_iter', default=100, type=int, help='epoch when tsne visualization runs')
     args = parser.parse_args()
