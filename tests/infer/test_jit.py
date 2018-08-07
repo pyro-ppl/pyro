@@ -163,14 +163,7 @@ def test_svi(Elbo, num_particles):
 @pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
 @pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
 @pytest.mark.parametrize("irange_dim", [1, 2])
-@pytest.mark.parametrize('Elbo', [
-    Trace_ELBO,
-    JitTrace_ELBO,
-    TraceGraph_ELBO,
-    JitTraceGraph_ELBO,
-    TraceEnum_ELBO,
-    JitTraceEnum_ELBO,
-])
+@pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
 def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
     num_particles = 10
@@ -212,15 +205,7 @@ def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
 
 
 @pytest.mark.parametrize('vectorized', [False, True])
-<<<<<<< HEAD
-@pytest.mark.parametrize('Elbo', [
-    TraceEnum_ELBO,
-    xfail_param(JitTraceEnum_ELBO,
-                reason="jit RuntimeError: Unsupported op descriptor: stack-2-dim_i"),
-])
-=======
 @pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
->>>>>>> Fix Categorical.enumerate_support to make JitTraceEnum_ELBO work
 def test_beta_bernoulli(Elbo, vectorized):
     pyro.clear_param_store()
     data = torch.tensor([1.0] * 6 + [0.0] * 4)
@@ -256,14 +241,7 @@ def test_beta_bernoulli(Elbo, vectorized):
 
 
 @pytest.mark.parametrize('vectorized', [False, True])
-<<<<<<< HEAD
-@pytest.mark.parametrize('Elbo', [
-    TraceEnum_ELBO,
-    xfail_param(JitTraceEnum_ELBO, reason="jit RuntimeError in Dirichlet.rsample"),
-])
-=======
 @pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
->>>>>>> Fix Categorical.enumerate_support to make JitTraceEnum_ELBO work
 def test_dirichlet_bernoulli(Elbo, vectorized):
     pyro.clear_param_store()
     data = torch.tensor([1.0] * 6 + [0.0] * 4)
