@@ -70,8 +70,8 @@ def test_nuts_conjugate_gaussian(fixture,
 
 def test_logistic_regression():
     dim = 3
-    true_coefs = torch.arange(1, dim+1)
     data = torch.randn(2000, dim)
+    true_coefs = torch.arange(1, float(dim+1))
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):
@@ -120,8 +120,8 @@ def test_gamma_normal():
 
 def test_logistic_regression_with_dual_averaging():
     dim = 3
-    true_coefs = torch.arange(1, dim+1)
     data = torch.randn(2000, dim)
+    true_coefs = torch.arange(1, float(dim+1))
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):

@@ -49,7 +49,6 @@ class Decoder(nn.Module):
         self.fc21 = nn.Linear(hidden_dim, 784)
         # setup the non-linearities
         self.softplus = nn.Softplus()
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, z):
         # define the forward computation on the latent z
@@ -57,7 +56,7 @@ class Decoder(nn.Module):
         hidden = self.softplus(self.fc1(z))
         # return the parameter for the output Bernoulli
         # each is of size batch_size x 784
-        loc_img = self.sigmoid(self.fc21(hidden))
+        loc_img = torch.sigmoid(self.fc21(hidden))
         return loc_img
 
 
