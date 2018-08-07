@@ -31,20 +31,25 @@ def model(args, observations):
     states_loc = pyro.param("states_loc")
     num_objects = states_loc.shape[0]
     num_detections = observations.shape[1]
-    with pyro.iarange("objects", args.max_num_objects):
-        states_loc = pyro.sample("states", dist.Normal(0., 1.).expand([2]).independent(1))
-        positions = get_positions(states_loc, args.num_frames)
-
+    with pyro.iarange("objects", num_objects):
+        states_loc = pyro.sample("states",
+                                 dist.Normal(0., 1.).expand([2]).independent(1),
+                                 obs=states_loc)
+    positions = get_positions(states_loc, args.num_frames)
+    assert positions.shape == (args.num_frames, states_loc.shape[0])
     with pyro.iarange("detections", num_detections):
         with pyro.iarange("time", args.num_frames):
             # The remaining continuous part is exact.
-            assign = pyro.sample("assign", dist.Categorical(torch.ones(num_objects + 1)))
+            is_observed = (observations[..., -1] > 0)
+            with poutine.scale(scale=is_observed.float().detach()):
+                assign = pyro.sample("assign", dist.Categorical(torch.ones(num_objects + 1)))
             assert assign.shape == (num_objects + 1, args.num_frames, num_detections)  # because parallel enumeration
             observed_positions = observations[..., 0]
+
             assert observed_positions.shape == (args.num_frames, num_detections)
             bogus_position = positions.new_zeros(args.num_frames, 1)
             augmented_positions = torch.cat([positions, bogus_position], -1)
-
+            predicted_positions = augmented_positions[:, assign]
             # weird tricks because index and input must be same dimension in gather
             if augmented_positions.shape[-1] > assign.shape[-1]:
                 pad_shape = assign.shape[:-1] + (augmented_positions.shape[-1] - assign.shape[-1], )
@@ -52,11 +57,15 @@ def model(args, observations):
                     assign[..., :1].shape, dtype=torch.long).expand(pad_shape)), -1)
             augmented_positions = augmented_positions.unsqueeze(0).expand_as(assign)
             predicted_positions = torch.gather(augmented_positions, -1, assign)
+            if args.debug: pdb.set_trace()
             predicted_positions = predicted_positions[..., :observations.shape[1]]
             assert predicted_positions.shape == (num_objects + 1, args.num_frames, num_detections)
             if args.debug:
                 pdb.set_trace()
-            pyro.sample('observations', dist.Normal(predicted_positions, emission_noise_scale), obs=observed_positions)
+            with poutine.scale(scale=is_observed.float().detach()):
+                pyro.sample('observations',
+                            dist.Normal(predicted_positions, emission_noise_scale),
+                            obs=observed_positions)
 
 
 def compute_exists_logits(states_loc, args):
@@ -96,9 +105,12 @@ def assign_log_likelihood(positions, observations, emission_noise_scale, args):
 @poutine.broadcast
 def guide(args, observations):
     states_loc = pyro.param("states_loc")
+    num_objects = states_loc.shape[0]
     emission_noise_scale = pyro.param("emission_noise_scale")
-    with pyro.iarange("objects", states_loc.shape[0]):
-        pyro.sample("states", dist.Delta(states_loc, event_dim=1))
+    is_observed = (observations[..., -1] > 0)
+    num_detections = is_observed.shape[-1]
+    #with pyro.iarange("objects", states_loc.shape[0]):
+    #    pyro.sample("states", dist.Delta(states_loc, event_dim=1))
     positions = get_positions(states_loc, args.num_frames)
     assign_logits = compute_assign_logits(positions, observations, emission_noise_scale, args)
     exists_logits = compute_exists_logits(states_loc, args)
@@ -107,9 +119,11 @@ def guide(args, observations):
     if args.debug:
         pdb.set_trace()
     assign_dist = assignment.assign_dist
-    with pyro.iarange("detections", observations.shape[1]):
-        with pyro.iarange("time", args.num_frames):
-            pyro.sample("assign", assign_dist, infer={"enumerate": "parallel"})
+    with poutine.scale(scale=is_observed.float().detach()):
+        with pyro.iarange("detections", observations.shape[1]):
+            with pyro.iarange("time", args.num_frames):
+                assign = pyro.sample("assign", assign_dist, infer={"enumerate": "parallel"})
+                #assert assign.shape == (num_objects + 1, args.num_frames, num_detections)
     return assignment.exists_dist.probs
 
 
@@ -120,8 +134,8 @@ def init_params(true_states=None):
             lambda: torch.cat((true_states,
                                torch.index_select(true_states, 0,
                                                   torch.randint(0, true_states.shape[0],
-                                                    (args.max_num_objects - true_states.shape[0],)
-                                                                 ).long()
+                                                                (args.max_num_objects -
+                                                                 true_states.shape[0],)).long()
                                                   )
                                ), 0))
     else:
@@ -181,6 +195,15 @@ def main(args):
 
             ens.append(pyro.param("emission_noise_scale").item())
             losses.append(loss.item() if isinstance(loss, torch.Tensor) else loss)
+            if args.merge:
+                with torch.no_grad():
+                    p_exists = guide(args, observations)
+                    updated_states_loc = pyro.param("states_loc").clone()
+                    if args.prune_threshold > 0.0:
+                        updated_states_loc = updated_states_loc[p_exists > args.prune_threshold]
+                    if (args.merge_radius > 0.0) and (updated_states_loc.dim() == 2):
+                        updated_states_loc, _ = merge_points(updated_states_loc, args.merge_radius)
+                    pyro.get_param_store().replace_param('states_loc', updated_states_loc, pyro.param("states_loc"))
             if args.debug:
                 print(pyro.param("states_loc"))
             print('epoch {: >3d} loss = {}, emission_noise_scale = {}, number of objects = {}'.format(
@@ -192,7 +215,7 @@ def main(args):
     # Pruning & merging
     with torch.no_grad():
         p_exists = guide(args, observations)
-        updated_states_loc = pyro.param("states_loc").clone()
+        updated_states_loc = pyro.param("states_loc")
         if args.prune_threshold > 0.0:
             updated_states_loc = updated_states_loc[p_exists > args.prune_threshold]
         if (args.merge_radius > 0.0) and (updated_states_loc.dim() == 2):
@@ -225,7 +248,7 @@ def parse_args(*args):
     parser.add_argument('--expected-num-objects', default=2.0, type=float, help='expected number of objects')
     parser.add_argument('--expected-num-spurious', default=1e-5, type=float,
                         help='expected number of false positives, if this is too small, BP will be unstable.')
-    parser.add_argument('--emission-prob', default=.9999, type=float,
+    parser.add_argument('--emission-prob', default=.8, type=float,
                         help='emission probability, if this is too large, BP will be unstable.')
     parser.add_argument('--emission-noise-scale', default=0.1, type=float,
                         help='emission noise scale, if this is too small, SVI will see flat gradients.')
@@ -240,6 +263,8 @@ def parse_args(*args):
                         help='Whether plotting in visdom is desired')
     parser.add_argument('--merge-radius', default=-1e-5, type=float, help='merge radius')
     parser.add_argument('--prune-threshold', default=-1, type=float, help='prune threshold')
+    parser.add_argument('--merge-every-step', action="store_true", dest='merge', default=False,
+                        help='Merge every step or just at the end')
     if len(args):
         return parser.parse_args(split(args[0]))
     args = parser.parse_args()

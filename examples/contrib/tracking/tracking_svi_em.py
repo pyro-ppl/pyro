@@ -27,7 +27,6 @@ smoke_test = ('CI' in os.environ)
 @poutine.broadcast
 def model(args, observations):
     emission_noise_scale = pyro.param("emission_noise_scale")
-    #emission_noise_scale = pyro.sample("emission_noise_scale", dist.Exponential(1.))
     states_loc = pyro.param("states_loc")
     max_num_objects = pyro.sample("max_num_objects",
                                   dist.Geometric(1. / args.max_num_objects)).long().item()
@@ -60,7 +59,14 @@ def model(args, observations):
             observed_positions = observations[..., 0]
             bogus_position = positions.new_zeros(args.num_frames, 1)
             augmented_positions = torch.cat([positions, bogus_position], -1)
-            predicted_positions = augmented_positions[:, assign]
+            # weird tricks because index and input must be same dimension in gather
+            pad_shape = assign.shape[:-1] + (augmented_positions.shape[-1] - assign.shape[-1],)
+            assign = torch.cat(
+                (assign,
+                 torch.zeros(assign[..., :1].shape, dtype=torch.long).expand(pad_shape)
+                ), -1)
+            augmented_positions = augmented_positions.unsqueeze(0).expand_as(assign)
+            predicted_positions = torch.gather(augmented_positions, -1, assign)
             pyro.sample('observations', dist.MaskedMixture(is_real,
                                                            dist.Normal(0., 1.),  # fake dist
                                                            dist.Normal(predicted_positions,  # real dist
@@ -72,7 +78,7 @@ def model(args, observations):
 def compute_exists_logits(states_loc, args):
     replicates = max(1, states_loc.shape[0] / args.expected_num_objects)
     log_likelihood = exists_log_likelihood(states_loc, args)
-    exists_logits = log_likelihood[:, 1] - log_likelihood[:, 0] - math.log(replicates)
+    exists_logits = log_likelihood[:, 0] - log_likelihood[:, 1] - math.log(replicates)
     return exists_logits
 
 
@@ -109,15 +115,11 @@ def assign_log_likelihood(positions, observations, emission_noise_scale, args):
 
 @poutine.broadcast
 def guide(args, observations):
-    # emission_noise_scale = pyro.param("emission_noise_scale", torch.tensor(1.1234),
-    #                                   constraint=constraints.positive)
-    # states_loc = pyro.param("states_loc", torch.tensor([[2.5410, -1.2934], [-1.1788, 1.5684]] +
-    #                                                    [[0., 0.]] * (args.max_num_objects - 2)))
     emission_noise_scale = pyro.param("emission_noise_scale")
     states_loc = pyro.param("states_loc")
     is_observed = (observations[..., -1] > 0)
-    #states_loc = states_loc.detach()
-    #states_loc.requires_grad = True
+    # states_loc = states_loc.detach()
+    # states_loc.requires_grad = True
     positions = get_positions(states_loc, args.num_frames)
     with torch.set_grad_enabled(True):
         assign_logits = compute_assign_logits(positions, observations,
@@ -126,15 +128,15 @@ def guide(args, observations):
         assignment = MarginalAssignmentPersistent(exists_logits, assign_logits,
                                                   bp_iters=args.bp_iters, bp_momentum=args.bp_momentum)
 
-    pyro.sample("max_num_objects", dist.Delta(torch.tensor(float(len(states_loc)))))
+    pyro.sample("max_num_objects", dist.Delta(torch.tensor(float(states_loc.shape[0]))))
     with pyro.iarange("objects", states_loc.shape[0]):
         exists = pyro.sample("exists", assignment.exists_dist, infer={"enumerate": "parallel"})
         with poutine.scale(scale=exists):
             #  states_var = states_cov.reshape(states_cov.shape[:-2] + (-1,))[..., ::n+1]
             #  pyro.sample("states", dist.Normal(states_loc, states_var).independent(1))
             pyro.sample("states", dist.Delta(states_loc, event_dim=1))
-    with pyro.iarange("detections", observations.shape[1]):
-        with poutine.scale(scale=is_observed.float()):
+    with poutine.scale(scale=is_observed.float()):
+        with pyro.iarange("detections", observations.shape[1]):
             with pyro.iarange("time", args.num_frames):
                 pyro.sample("assign", assignment.assign_dist, infer={"enumerate": "parallel"})
 
@@ -144,7 +146,7 @@ def guide(args, observations):
 def init_params():
     emission_noise_scale = pyro.param("emission_noise_scale", torch.tensor(.5),
                                       constraint=constraints.positive)
-    states_loc = pyro.param("states_loc", dist.Normal(0, 1).sample((args.max_num_objects, 2)))
+    states_loc = pyro.param("states_loc", dist.Normal(0., 1.).sample((args.max_num_objects, 2)))
     return states_loc, emission_noise_scale
 
 
@@ -180,8 +182,8 @@ def main(args):
             plot_exists_prob(p_exists, viz)
 
     # Optimization
-    #pyro.clear_param_store()
-    #init_params()
+    pyro.clear_param_store()
+    init_params()
     pyro.set_rng_seed(1)  # Use a different seed from data generation
     losses = []
     ens = []
@@ -206,17 +208,6 @@ def main(args):
             params = {name: pyro.param(name).unconstrained()
                       for name in param_capture.trace.nodes.keys()}
             optim.step(loss, params)
-            with torch.no_grad():
-                assignment, _ = guide(args, observations)
-                p_exists = assignment.exists_dist.probs
-                updated_states_loc = pyro.param("states_loc")
-                if args.prune_threshold > 0.0:
-                    updated_states_loc = updated_states_loc[p_exists > args.prune_threshold]
-                if (args.merge_radius >= 0.0) and updated_states_loc.dim() == 2:
-                    updated_states_loc, _ = merge_points(updated_states_loc, args.merge_radius)
-                #assert updated_states_loc.grad_fn is not None
-                pyro.get_param_store().replace_param('states_loc', updated_states_loc, pyro.param("states_loc"))
-
         else:
             for em_step in range(args.em_iters):
                 states_loc = pyro.param('states_loc').detach_().requires_grad_()
@@ -224,17 +215,18 @@ def main(args):
                 loss = elbo.differentiable_loss(model, guide, args, observations) # + 100 * pyro.param("emission_noise_scale").pow(2)  # E-step
                 updated = newton.get_step(loss, {'states_loc': states_loc})  # M-step
                 updated_states_loc = updated['states_loc']
-                with torch.no_grad():
-                    assignment, _ = guide(args, observations)
-                    p_exists = assignment.exists_dist.probs
-                if args.prune_threshold > 0.0:
-                    updated_states_loc = updated_states_loc[p_exists > args.prune_threshold]
-                if (args.merge_radius >= 0.0) and updated_states_loc.dim() == 2:
-                    updated_states_loc, _ = merge_points(updated_states_loc, args.merge_radius)
-                assert updated_states_loc.grad_fn is not None
-                pyro.get_param_store().replace_param('states_loc', updated_states_loc, states_loc)
                 assert pyro.param('states_loc').grad_fn is not None
             loss = svi.step(args, observations)
+        with torch.no_grad():
+            assignment, _ = guide(args, observations)
+            p_exists = assignment.exists_dist.probs
+            updated_states_loc = pyro.param("states_loc")
+            if args.prune_threshold > 0.0:
+                updated_states_loc = updated_states_loc[p_exists > args.prune_threshold]
+            if (args.merge_radius >= 0.0) and updated_states_loc.dim() == 2:
+                updated_states_loc, _ = merge_points(updated_states_loc, args.merge_radius)
+            #assert updated_states_loc.grad_fn is not None
+            pyro.get_param_store().replace_param('states_loc', updated_states_loc, pyro.param("states_loc"))
 
         ens.append(pyro.param("emission_noise_scale").item())
         losses.append(loss.item() if isinstance(loss, torch.Tensor) else loss)
