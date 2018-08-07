@@ -19,6 +19,7 @@ from pyro.optim.multi import MixedMultiOptimizer, Newton
 from datagen_utils import generate_observations, get_positions
 from plot_utils import plot_solution, plot_exists_prob, init_visdom
 
+import pytest
 pyro.enable_validation(True)
 smoke_test = ('CI' in os.environ)
 
@@ -104,10 +105,8 @@ def assign_log_likelihood(positions, observations, emission_noise_scale, args):
 @poutine.broadcast
 def guide(args, observations):
     states_loc = pyro.param("states_loc")
-    num_objects = states_loc.shape[0]
     emission_noise_scale = pyro.param("emission_noise_scale")
     is_observed = (observations[..., -1] > 0)
-    num_detections = is_observed.shape[-1]
     positions = get_positions(states_loc, args.num_frames)
     assign_logits = compute_assign_logits(positions, observations, emission_noise_scale, args)
     exists_logits = compute_exists_logits(states_loc, args)
@@ -119,24 +118,25 @@ def guide(args, observations):
     with poutine.scale(scale=is_observed.float().detach()):
         with pyro.iarange("detections", observations.shape[1]):
             with pyro.iarange("time", args.num_frames):
-                assign = pyro.sample("assign", assign_dist, infer={"enumerate": "parallel"})
-                assert assign.shape == (num_objects + 1, args.num_frames, num_detections)
+                pyro.sample("assign", assign_dist, infer={"enumerate": "parallel"})
+                # assign.shape == (num_objects + 1, args.num_frames, num_detections) during inference
+                # assign.shape == (args.num_frames, num_detections) in single guide call (e.g. when plotting)
     return assignment.exists_dist.probs
 
 
-def init_params(true_states=None):
+def init_params(max_num_objects, true_states=None):
     emission_noise_scale = pyro.param("emission_noise_scale", torch.tensor(0.01), constraint=constraints.positive)
     if true_states is not None:
         states_loc = pyro.param("states_loc",
                                 lambda: torch.cat((true_states,
                                                    torch.index_select(true_states, 0,
                                                                       torch.randint(0, true_states.shape[0],
-                                                                                    (args.max_num_objects -
+                                                                                    (max_num_objects -
                                                                                      true_states.shape[0],)).long()
                                                                       )
                                                    ), 0))
     else:
-        states_loc = pyro.param("states_loc", dist.Normal(0, 1).sample((args.max_num_objects, 2)))
+        states_loc = pyro.param("states_loc", dist.Normal(0, 1).sample((max_num_objects, 2)))
     return states_loc, emission_noise_scale
 
 
@@ -160,9 +160,9 @@ def main(args):
     pyro.set_rng_seed(args.seed + 1)  # Use a different seed from data generation
     pyro.clear_param_store()
     if args.good_init:
-        init_params(dist.Normal(true_states, .2).sample())
+        init_params(args.max_num_objects, dist.Normal(true_states, .2).sample())
     else:
-        init_params()
+        init_params(args.max_num_objects)
     # Run guide once and plot
     with torch.no_grad():
         states_loc = pyro.param("states_loc")
@@ -235,6 +235,11 @@ def main(args):
                       'After inference', viz=viz)
         plot_exists_prob(p_exists, viz)
 
+    states_loc = pyro.param("states_loc")
+    positions = get_positions(states_loc, args.num_frames)
+    emission_noise_scale = pyro.param("emission_noise_scale")
+    return true_states, states_loc, positions, emission_noise_scale
+
 
 def parse_args(*args):
     from shlex import split
@@ -249,7 +254,7 @@ def parse_args(*args):
                         help='emission probability, if this is too large, BP will be unstable.')
     parser.add_argument('--emission-noise-scale', default=0.1, type=float,
                         help='emission noise scale, if this is too small, SVI will see flat gradients.')
-    parser.add_argument('--svi-iters', default=20, type=int, help='number of SVI iterations')
+    parser.add_argument('--svi-iters', default=200, type=int, help='number of SVI iterations')
     parser.add_argument('--bp-iters', default=20, type=int, help='number of BP iterations')
     parser.add_argument('--bp-momentum', default=0.5, type=float, help='BP momentum')
     parser.add_argument('--no-visdom', action="store_false", dest='visdom', default=True,
@@ -263,14 +268,88 @@ def parse_args(*args):
     parser.add_argument('--merge-every-step', action="store_true", dest='merge', default=False,
                         help='Merge every step or just at the end')
     if len(args):
-        return parser.parse_args(split(args[0]))
-    args = parser.parse_args()
+        args = parser.parse_args(split(args[0]))
+    else:
+        args = parser.parse_args()
     if args.bp_iters < 0:
         args.bp_iters = None
+        assert args.max_num_objects >= args.expected_num_objects
     return args
 
 
 if __name__ == '__main__':
     args = parse_args()
-    assert args.max_num_objects >= args.expected_num_objects
     main(args)
+
+
+# @pytest.mark.parametrize("num_frames", [5, 10, 20])
+# @pytest.mark.parametrize("max_num_objects", [2, 10, 80, 400])
+# @pytest.mark.parametrize("expected_num_objects", [2, 5, 10])
+# @pytest.mark.parametrize("expected_num_spurious", [1e-5])
+# @pytest.mark.parametrize("emission_prob", [0.9999, 0.9, 0.8, 0.7])
+# @pytest.mark.parametrize("emission_noise_scale", [0.05, 0.1, 0.3, 0.5, 0.7])
+# @pytest.mark.parametrize("merge_radius", [-1.])
+# @pytest.mark.parametrize("prune_threshold", [-1.])
+# @pytest.mark.parametrize("merge_every_step", [False])
+# @pytest.mark.parametrize("good_init", [True])
+@pytest.mark.parametrize("num_frames", [10])
+@pytest.mark.parametrize("max_num_objects", [40])
+@pytest.mark.parametrize("expected_num_objects", [2])
+@pytest.mark.parametrize("expected_num_spurious", [1e-5])
+@pytest.mark.parametrize("emission_prob", [0.9999])
+@pytest.mark.parametrize("emission_noise_scale", [0.1])
+@pytest.mark.parametrize("merge_radius", [-1.])
+@pytest.mark.parametrize("prune_threshold", [-1.])
+@pytest.mark.parametrize("merge_every_step", [False])
+@pytest.mark.parametrize("good_init", [True])
+def test_newton_regression(num_frames, max_num_objects, expected_num_objects, expected_num_spurious,
+                           emission_prob, emission_noise_scale, merge_radius, prune_threshold,
+                           merge_every_step, good_init):
+    if expected_num_objects > max_num_objects:
+        pass
+    arg_string = " ".join(
+        ["--num-frames={}".format(num_frames),
+         "--max-num-objects={}".format(max_num_objects),
+         "--expected-num-spurious={}".format(expected_num_spurious),
+         "--emission-prob={}".format(emission_prob),
+         "--emission-noise-scale={}".format(emission_noise_scale),
+         "--merge-radius={}".format(merge_radius),
+         "--prune-threshold={}".format(prune_threshold),
+         "--good-init" if good_init else "",
+         "--merge-every-step" if merge_every_step else "",
+         "--no-visdom"
+         ])
+    true_states, inferred_states, _, inferred_ens = main(arg_string)
+    true_states = true_states.unsqueeze(0)
+    inferred_states = inferred_states.unsqueeze(1)
+    dist_matrix = (true_states - inferred_states).pow(2).sum(-1).sqrt()
+    dist_threshold = 0.1
+    match = (dist_matrix <= dist_threshold).float()
+    # becase any doesn't have dim arg in 0.4.0
+    # assert (match.sum(dim=1) > 0).all().item()
+    assert (match.sum(dim=0) > 0).all().item()  # check all true objects have at least 1 matching
+
+    ens_threshold = 0.2
+    assert ((inferred_ens - emission_noise_scale).abs() <= ens_threshold).item()
+
+    # true_positions = get_positions(true_states, args.num_frames)
+    # quantization_factor = 1000
+    # uis = torch.unique((inferred_states * quantization_factor).round(), dim=1) / quantization_factor
+    # inferred_positions = get_positions(uis, args.num_frames)
+    # def iou(true_track, predicted_track):
+    #     true_min = true_track - args.emission_noise_scale
+    #     true_max = true_track + args.emission_noise_scale
+    #     predicted_min = true_track - inferred_ens
+    #     predicted_max = true_track + inferred_ens
+    #     intersection = (torch.min(predicted_max, true_max) - torch.max(predicted_min, true_min)).sum()
+    #     union = (torch.max(predicted_max, true_max) - torch.min(predicted_min, true_min)).sum()
+    #     return intersection / union
+
+    # intersections = torch.zeros(true_position.shape[0], inferred_positions.shape[0])
+    # ious = torch.zeros(true_position.shape[0], inferred_positions.shape[0])
+    # for i in range(true_positions.shape[0]):
+    #     for j in range(inferred_positions.shape[0]):
+    #         ious[i, j] = iou(true_positions[i], predicted_positions[j])
+    # max_ious = torch.max(ious[i, j], dim=1)
+    # num_match = max_ious > 0.5
+    # assert num_match >
