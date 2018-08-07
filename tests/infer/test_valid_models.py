@@ -883,17 +883,17 @@ def test_enum_discrete_iarange_shape_broadcasting_ok(enumerate_, expand):
         assert b.shape == (50, 1, 5)
         if enumerate_ == "parallel":
             if expand:
-                assert c.shape == (2, 50, 6, 1)  # FIXME actual shape == (2, 1, 1, 1)
+                assert c.shape == (2, 50, 6, 1)
                 assert d.shape == (2, 1, 50, 6, 5)
             else:
                 assert c.shape == (2, 1, 1, 1)
                 assert d.shape == (2, 1, 1, 1, 1)
         elif enumerate_ == "sequential":
             if expand:
-                assert c.shape == (50, 6, 1)  # FIXME actual shape == ()
+                assert c.shape == (50, 6, 1)
                 assert d.shape == (50, 6, 5)
             else:
-                assert c.shape == (1, 1, 1)  # FIXME actual shape == ()
+                assert c.shape == (1, 1, 1)
                 assert d.shape == (1, 1, 1)
         else:
             assert c.shape == (50, 6, 1)
