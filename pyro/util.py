@@ -52,7 +52,7 @@ def warn_if_nan(value, msg=""):
     also works with numbers.
     """
     if torch.is_tensor(value) and value.requires_grad:
-        value.register_hook(lambda x: warn_if_nan(x, msg))
+        value.register_hook(lambda x: warn_if_nan(x, "grad " + msg))
     if torch_isnan(value):
         warnings.warn("Encountered NaN{}".format((': ' if msg else '.') + msg), stacklevel=2)
 

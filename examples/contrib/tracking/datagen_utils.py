@@ -34,7 +34,7 @@ def generate_observations(args):
                 j += 1
         n = int(num_spurious[t])
         if n:
-            observations[t, j:j + n, 0] = dist.Normal(0., 1.).sample((n,))
+            observations[t, j:j + n, 0] = dist.Uniform(-3., 3.).sample((n,))
             observations[t, j:j + n, 1] = 1
 
     return states, positions, observations
