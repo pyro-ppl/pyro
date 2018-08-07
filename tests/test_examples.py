@@ -112,7 +112,8 @@ def test_cuda(example):
     check_call([sys.executable, filename] + args)
 
 
-@pytest.mark.xfail(reason="not jittable")
+@pytest.mark.skipif('CI' in os.environ, reason='slow test')
+@pytest.mark.xfail(reason='not jittable')
 @pytest.mark.parametrize('example', JIT_EXAMPLES)
 def test_jit(example):
     logger.info('Running:\npython examples/{}'.format(example))
