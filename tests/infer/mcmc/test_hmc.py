@@ -12,6 +12,7 @@ import pyro.distributions as dist
 from pyro.infer import EmpiricalMarginal
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
+import pyro.poutine as poutine
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -241,12 +242,13 @@ def test_beta_bernoulli_with_dual_averaging():
         alpha = torch.tensor([1.1, 1.1])
         beta = torch.tensor([1.1, 1.1])
         p_latent = pyro.sample('p_latent', dist.Beta(alpha, beta))
-        pyro.sample('obs', dist.Bernoulli(p_latent), obs=data)
+        with pyro.iarange("data", data.shape[0], dim=-2):
+            pyro.sample('obs', dist.Bernoulli(p_latent), obs=data)
         return p_latent
 
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True)
+    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True, max_iarange_nesting=2)
     mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_probs, prec=0.05)
@@ -266,3 +268,48 @@ def test_gamma_normal_with_dual_averaging():
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_std, prec=0.05)
+
+
+def test_gaussian_mixture_model():
+    K, N = 3, 1000
+
+    @poutine.broadcast
+    def gmm(data):
+        with pyro.iarange("num_clusters", K):
+            mix_proportions = pyro.sample("phi", dist.Dirichlet(torch.tensor(1.)))
+            cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(K), 1.))
+        with pyro.iarange("data", data.shape[0]):
+            assignments = pyro.sample("assignments", dist.Categorical(mix_proportions))
+            pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)
+        return cluster_means
+
+    true_cluster_means = torch.tensor([1., 5., 10.])
+    true_mix_proportions = torch.tensor([0.1, 0.3, 0.6])
+    cluster_assignments = dist.Categorical(true_mix_proportions).sample(torch.Size((N,)))
+    data = dist.Normal(true_cluster_means[cluster_assignments], 1.0).sample()
+    hmc_kernel = HMC(gmm, trajectory_length=1, adapt_step_size=True, max_iarange_nesting=1)
+    mcmc_run = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
+    posterior = EmpiricalMarginal(mcmc_run, sites=["phi", "cluster_means"]).mean.sort()[0]
+    assert_equal(posterior[0], true_mix_proportions, prec=0.05)
+    assert_equal(posterior[1], true_cluster_means, prec=0.2)
+
+
+def test_bernoulli_latent_model():
+    @poutine.broadcast
+    def model(data):
+        y_prob = pyro.sample("y_prob", dist.Beta(1.0, 1.0))
+        y = pyro.sample("y", dist.Bernoulli(y_prob))
+        with pyro.iarange("data", data.shape[0]):
+            z = pyro.sample("z", dist.Bernoulli(0.65 * y + 0.1))
+            pyro.sample("obs", dist.Normal(2. * z, 1.), obs=data)
+        pyro.sample("nuisance", dist.Bernoulli(0.3))
+
+    N = 2000
+    y_prob = torch.tensor(0.3)
+    y = dist.Bernoulli(y_prob).sample(torch.Size((N,)))
+    z = dist.Bernoulli(0.65 * y + 0.1).sample()
+    data = dist.Normal(2. * z, 1.0).sample()
+    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True, max_iarange_nesting=1)
+    mcmc_run = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
+    posterior = EmpiricalMarginal(mcmc_run, sites="y_prob").mean
+    assert_equal(posterior, y_prob, prec=0.05)

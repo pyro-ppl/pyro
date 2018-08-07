@@ -107,6 +107,8 @@ class TorchDistributionMixin(Distribution):
         :return: An expanded version of this distribution.
         :rtype: :class:`ReshapedDistribution`
         """
+        if not sample_shape:
+            return self
         return ReshapedDistribution(self, sample_shape=sample_shape)
 
     def reshape(self, sample_shape=None, extra_event_dims=None):
@@ -357,18 +359,14 @@ class ReshapedDistribution(TorchDistribution):
             entropy_term = sum_rightmost(entropy_term, self.reinterpreted_batch_ndims).expand(shape)
         return ScoreParts(log_prob, score_function, entropy_term)
 
-    def enumerate_support(self):
+    def enumerate_support(self, expand=True):
         if self.reinterpreted_batch_ndims:
             raise NotImplementedError("Pyro does not enumerate over cartesian products")
 
-        samples = self.base_dist.enumerate_support()
-        if not self.sample_shape:
-            return samples
-
-        # Shift enumeration dim to correct location.
-        enum_shape, base_shape = samples.shape[:1], samples.shape[1:]
-        samples = samples.reshape(enum_shape + (1,) * len(self.sample_shape) + base_shape)
-        samples = samples.expand(enum_shape + self.sample_shape + base_shape)
+        samples = self.base_dist.enumerate_support(expand=False)
+        samples = samples.reshape(samples.shape[:1] + (1,) * len(self.batch_shape) + self.event_shape)
+        if expand:
+            samples = samples.expand(samples.shape[:1] + self.batch_shape + self.event_shape)
         return samples
 
     @property
@@ -424,8 +422,8 @@ class MaskedDistribution(TorchDistribution):
     def score_parts(self, value):
         return self.base_dist.score_parts(value) * self._mask
 
-    def enumerate_support(self):
-        return self.base_dist.enumerate_support()
+    def enumerate_support(self, expand=True):
+        return self.base_dist.enumerate_support(expand=expand)
 
     @property
     def mean(self):

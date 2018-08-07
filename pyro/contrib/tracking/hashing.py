@@ -31,13 +31,13 @@ class LSH(object):
         >>> lsh.add('b', b)
         >>> lsh.add('c', c)
         >>> # even though c is within 2radius of a
-        >>> lsh.nearby('a')  # doctest: +SKIP
-        set(['b'])
-        >>> lsh.nearby('b')  # doctest: +SKIP
-        set(['a', 'c'])
+        >>> lsh.nearby('a') # doctest: +SKIP
+        {'b'}
+        >>> lsh.nearby('b') # doctest: +SKIP
+        {'a', 'c'}
         >>> lsh.remove('b')
-        >>> lsh.nearby('a')  # doctest: +SKIP
-        set([])
+        >>> lsh.nearby('a')
+        set()
 
 
     :param float radius: Scaling parameter used in hash function. Determines the size of the neighbourhood.

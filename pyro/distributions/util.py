@@ -191,16 +191,19 @@ def torch_sign(value):
 try:
     from torch import logsumexp  # for pytorch 0.4.1 and later
 except ImportError:
-    def logsumexp(tensor, dim=-1):
+    def logsumexp(tensor, dim=-1, keepdim=False):
         """
         Numerically stable implementation for the `LogSumExp` operation. The
         summing is done along the dimension specified by ``dim``.
 
         :param torch.Tensor tensor: Input tensor.
         :param dim: Dimension to be summed out.
+        :param keepdim: Whether to retain the dimension
+            that is summed out.
         """
-        max_val = tensor.max(dim)[0]
-        return max_val + (tensor - max_val.unsqueeze(dim)).exp().sum(dim=dim).log()
+        max_val = tensor.max(dim, keepdim=True)[0]
+        log_sum_exp = max_val + (tensor - max_val).exp().sum(dim=dim, keepdim=True).log()
+        return log_sum_exp if keepdim else log_sum_exp.squeeze(dim)
 
 
 log_sum_exp = logsumexp  # DEPRECATED
