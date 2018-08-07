@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
 import os
 import sys
 from subprocess import check_call
@@ -8,6 +9,7 @@ import pytest
 
 from tests.common import EXAMPLES_DIR, requires_cuda
 
+logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
 
 
@@ -80,6 +82,7 @@ def test_coverage():
 
 @pytest.mark.parametrize('example,args', CPU_EXAMPLES, ids=make_ids(CPU_EXAMPLES))
 def test_cpu(example, args):
+    logger.info('Running:\npython examples/{} {}'.format(example, ' '.join(args)))
     example = os.path.join(EXAMPLES_DIR, example)
     check_call([sys.executable, example] + args)
 
@@ -87,5 +90,6 @@ def test_cpu(example, args):
 @requires_cuda
 @pytest.mark.parametrize('example,args', CUDA_EXAMPLES, ids=make_ids(CUDA_EXAMPLES))
 def test_cuda(example, args):
+    logger.info('Running:\npython examples/{} {}'.format(example, ' '.join(args)))
     example = os.path.join(EXAMPLES_DIR, example)
     check_call([sys.executable, example] + args)
