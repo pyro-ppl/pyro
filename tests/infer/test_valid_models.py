@@ -11,7 +11,6 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, config_enumerate
 from pyro.optim import Adam
-from tests.common import xfail_param
 
 logger = logging.getLogger(__name__)
 
@@ -861,14 +860,14 @@ def test_iarange_shape_broadcasting(times):
 
 @pytest.mark.parametrize('enumerate_,expand', [
     (None, True),
-    xfail_param("sequential", True, reason="wrong shape"),
-    xfail_param("sequential", False, reason="wrong shape"),
-    xfail_param("parallel", True, reason="wrong shape"),
-    xfail_param("parallel", False, reason=("ValueError: Model and guide shapes disagree at site 'c': "
-                                           "torch.Size([50, 6, 1]) vs torch.Size([])")),
+    ("sequential", True),
+    ("sequential", False),
+    ("parallel", True),
+    ("parallel", False),
 ])
 def test_enum_discrete_iarange_shape_broadcasting_ok(enumerate_, expand):
 
+    @poutine.broadcast
     def model():
         x_iarange = pyro.iarange("x_iarange", 10, 5, dim=-1)
         y_iarange = pyro.iarange("y_iarange", 11, 6, dim=-2)
