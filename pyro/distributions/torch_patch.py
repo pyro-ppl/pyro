@@ -62,7 +62,7 @@ if torch.__version__.startswith('0.4.1'):
         return unpatched_fn(input)
 
     # work around https://github.com/pytorch/pytorch/issues/9521
-    @_patch('torch._standard_gamma')
+    @_patch('torch._standard_gamma')  # noqa: F811
     def _torch_standard_gamma(concentration):
         concentration = concentration.contiguous()
         unpatched_fn = _torch_standard_gamma._pyro_unpatched
@@ -71,7 +71,7 @@ if torch.__version__.startswith('0.4.1'):
         return unpatched_fn(concentration)
 
     # work around https://github.com/pytorch/pytorch/issues/9521
-    @_patch('torch.distributions.gamma._standard_gamma')
+    @_patch('torch.distributions.gamma._standard_gamma')  # noqa: F811
     def _standard_gamma(concentration):
         concentration = concentration.contiguous()
         if concentration.is_cuda:
@@ -79,7 +79,7 @@ if torch.__version__.startswith('0.4.1'):
         return concentration._standard_gamma()
 
     # work around https://github.com/pytorch/pytorch/issues/9521
-    @_patch('torch._dirichlet_grad')
+    @_patch('torch._dirichlet_grad')  # noqa: F811
     def _torch_dirichlet_grad(x, concentration, total):
         unpatched_fn = _torch_dirichlet_grad._pyro_unpatched
         x = x.contiguous()
