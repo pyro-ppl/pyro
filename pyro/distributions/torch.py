@@ -39,6 +39,8 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
 
 
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
+
+    # log_prob can be deleted after https://github.com/pytorch/pytorch/pull/10321
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)

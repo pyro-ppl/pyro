@@ -54,21 +54,26 @@ CUDA_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --cuda',
 ]
 
+
+def xfail_jit(*args):
+    return pytest.param(*args, marks=[pytest.mark.xfail(reason="not jittable"),
+                                      pytest.mark.skipif('CI' in os.environ, reason='slow test')])
+
+
 JIT_EXAMPLES = [
-    'air/main.py --num-steps=1 --jit',
     'bayesian_regression.py --num-epochs=1 --jit',
-    'contrib/autoname/mixture.py --num-epochs=1 --jit',
-    'dmm/dmm.py --num-epochs=1 --jit',
-    'dmm/dmm.py --num-epochs=1 --num-iafs=1 --jit',
-    'eight_schools/svi.py --num-epochs=1 --jit',
-    'examples/contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit',
-    'vae/ss_vae_M2.py --num-epochs=1 --aux-loss --jit',
-    'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel --jit',
-    'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --jit',
-    'vae/ss_vae_M2.py --num-epochs=1 --jit',
-    'vae/vae.py --num-epochs=1 --jit',
-    'vae/vae_comparison.py --num-epochs=1 --jit',
-    'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit',
+    xfail_jit('air/main.py --num-steps=1 --jit'),
+    xfail_jit('contrib/autoname/mixture.py --num-epochs=1 --jit'),
+    xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
+    xfail_jit('dmm/dmm.py --num-epochs=1 --jit'),
+    xfail_jit('dmm/dmm.py --num-epochs=1 --num-iafs=1 --jit'),
+    xfail_jit('eight_schools/svi.py --num-epochs=1 --jit'),
+    xfail_jit('vae/ss_vae_M2.py --num-epochs=1 --aux-loss --jit'),
+    xfail_jit('vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel --jit'),
+    xfail_jit('vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --jit'),
+    xfail_jit('vae/ss_vae_M2.py --num-epochs=1 --jit'),
+    xfail_jit('vae/vae.py --num-epochs=1 --jit'),
+    xfail_jit('vae/vae_comparison.py --num-epochs=1 --jit'),
 ]
 
 
@@ -112,8 +117,6 @@ def test_cuda(example):
     check_call([sys.executable, filename] + args)
 
 
-@pytest.mark.skipif('CI' in os.environ, reason='slow test')
-@pytest.mark.xfail(reason='not jittable')
 @pytest.mark.parametrize('example', JIT_EXAMPLES)
 def test_jit(example):
     logger.info('Running:\npython examples/{}'.format(example))
