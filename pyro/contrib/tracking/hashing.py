@@ -36,7 +36,7 @@ class LSH(object):
         >>> lsh.nearby('b') # doctest: +SKIP
         {'a', 'c'}
         >>> lsh.remove('b')
-        >>> lsh.nearby('a')
+        >>> lsh.nearby('a') # doctest: +SKIP
         set()
 
 

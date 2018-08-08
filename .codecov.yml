@@ -1,3 +1,8 @@
 ignore:
   - "pyro/docutil.py"
   - "pyro/logger.py"
+
+coverage:
+  range: 60..95
+  round: nearest
+  precision: 2
