@@ -1,7 +1,7 @@
 [report]
 exclude_lines =
     pragma: no cover
-    def backward  # these are run via Pytorch
+    def backward
     raise AssertionError
     raise NotImplementedError
     raise ValueError
