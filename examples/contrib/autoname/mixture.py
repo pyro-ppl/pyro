@@ -8,7 +8,7 @@ from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.autoname import named
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
 
 # This is a simple gaussian mixture model.
@@ -55,7 +55,8 @@ def main(args):
     pyro.enable_validation()
 
     optim = Adam({"lr": 0.1})
-    inference = SVI(model, guide, optim, loss=Trace_ELBO())
+    elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
+    inference = SVI(model, guide, optim, loss=elbo)
     data = torch.tensor([0.0, 1.0, 2.0, 20.0, 30.0, 40.0])
     k = 2
 
@@ -65,7 +66,7 @@ def main(args):
         if step and step % 10 == 0:
             print('{}\t{:0.5g}'.format(step, loss))
             loss = 0.0
-        loss += inference.step(data, k)
+        loss += inference.step(data, k=k)
 
     print('Parameters:')
     for name in sorted(pyro.get_param_store().get_all_param_names()):
@@ -75,5 +76,6 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=200, type=int)
+    parser.add_argument('--jit', action='store_true')
     args = parser.parse_args()
     main(args)

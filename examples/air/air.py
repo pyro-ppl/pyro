@@ -161,7 +161,7 @@ class AIR(nn.Module):
 
         return ModelState(x=x, z_pres=z_pres, z_where=z_where)
 
-    def model(self, data, _, **kwargs):
+    def model(self, data, batch_size, **kwargs):
         pyro.module("decode", self.decode)
         with pyro.iarange('data', data.size(0), use_cuda=self.use_cuda) as ix:
             batch = data[ix]

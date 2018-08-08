@@ -54,10 +54,28 @@ CUDA_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --cuda',
 ]
 
+JIT_EXAMPLES = [
+    'air/main.py --num-steps=1 --jit',
+    'bayesian_regression.py --num-epochs=1 --jit',
+    'contrib/autoname/mixture.py --num-epochs=1 --jit',
+    'dmm/dmm.py --num-epochs=1 --jit',
+    'dmm/dmm.py --num-epochs=1 --num-iafs=1 --jit',
+    'eight_schools/svi.py --num-epochs=1 --jit',
+    'examples/contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit',
+    'vae/ss_vae_M2.py --num-epochs=1 --aux-loss --jit',
+    'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel --jit',
+    'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --jit',
+    'vae/ss_vae_M2.py --num-epochs=1 --jit',
+    'vae/vae.py --num-epochs=1 --jit',
+    'vae/vae_comparison.py --num-epochs=1 --jit',
+    'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit',
+]
+
 
 def test_coverage():
     cpu_tests = set((e if isinstance(e, str) else e.values[0]).split()[0] for e in CPU_EXAMPLES)
     cuda_tests = set((e if isinstance(e, str) else e.values[0]).split()[0] for e in CUDA_EXAMPLES)
+    jit_tests = set((e if isinstance(e, str) else e.values[0]).split()[0] for e in JIT_EXAMPLES)
     for root, dirs, files in os.walk(EXAMPLES_DIR):
         for basename in files:
             if not basename.endswith('.py'):
@@ -68,9 +86,11 @@ def test_coverage():
             example = os.path.relpath(path, EXAMPLES_DIR)
             if '__main__' in text:
                 if example not in cpu_tests:
-                    pytest.fail('Example: {} not covered in CPU_TESTS.'.format(example))
+                    pytest.fail('Example: {} not covered in CPU_EXAMPLES.'.format(example))
                 if '--cuda' in text and example not in cuda_tests:
-                    pytest.fail('Example: {} not covered by CUDA_TESTS.'.format(example))
+                    pytest.fail('Example: {} not covered by CUDA_EXAMPLES.'.format(example))
+                if '--jit' in text and example not in jit_tests:
+                    pytest.fail('Example: {} not covered by JIT_EXAMPLES.'.format(example))
 
 
 @pytest.mark.parametrize('example', CPU_EXAMPLES)
@@ -85,6 +105,17 @@ def test_cpu(example):
 @requires_cuda
 @pytest.mark.parametrize('example', CUDA_EXAMPLES)
 def test_cuda(example):
+    logger.info('Running:\npython examples/{}'.format(example))
+    example = example.split()
+    filename, args = example[0], example[1:]
+    filename = os.path.join(EXAMPLES_DIR, filename)
+    check_call([sys.executable, filename] + args)
+
+
+@pytest.mark.skipif('CI' in os.environ, reason='slow test')
+@pytest.mark.xfail(reason='not jittable')
+@pytest.mark.parametrize('example', JIT_EXAMPLES)
+def test_jit(example):
     logger.info('Running:\npython examples/{}'.format(example))
     example = example.split()
     filename, args = example[0], example[1:]
