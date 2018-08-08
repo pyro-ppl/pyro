@@ -118,7 +118,7 @@ class DynamicModel(ABC):
         :return: State displacement.
         '''
         Q = self.process_noise_cov(dt)
-        dx = dist.MultivariateNormal(torch.zeros(Q.shape[-1]), Q).sample()
+        dx = dist.MultivariateNormal(Q.new_zeros(Q.shape[-1]), Q).sample()
         return dx
 
     @abstractmethod
@@ -184,7 +184,7 @@ class Ncp(DifferentiableDynamicModel):
         :param x: native state estimate mean.
         :return: PV state estimate mean.
         '''
-        x_pv = torch.zeros(2*self._dimension)
+        x_pv = x.new_zeros(2*self._dimension)
         x_pv[:self._dimension] = x
         return x_pv
 
@@ -198,7 +198,7 @@ class Ncp(DifferentiableDynamicModel):
         :return: PV state estimate covariance.
         '''
         d = 2*self._dimension
-        P_pv = torch.zeros((d, d))
+        P_pv = P.new_zeros((d, d))
         P_pv[:self._dimension, :self._dimension] = P
         return P_pv
 
@@ -297,7 +297,7 @@ class Ncv(DifferentiableDynamicModel):
         if dt not in self._F_cache:
             d = self._dimension
             F = torch.eye(d)
-            F[:d//2, d//2:] = dt*torch.eye(d//2)
+            F[:d//2, d//2:] = dt * torch.eye(d//2)
             self._F_cache[dt] = F
 
         return self._F_cache[dt]

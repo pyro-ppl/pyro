@@ -103,8 +103,8 @@ class PositionMeasurement(DifferentiableMeasurement):
     def __init__(self, mean, cov, time):
         super().__init__(mean, cov, time)
         self._jacobian = torch.cat([
-            torch.eye(self.dimension),
-            torch.zeros((self.dimension, self.dimension))], dim=1)
+            torch.eye(self.dimension, dtype=mean.dtype, device=mean.device),
+            mean.new_zeros((self.dimension, self.dimension))], dim=1)
 
     def __call__(self, x, do_normalization=True):
         '''

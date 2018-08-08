@@ -142,7 +142,7 @@ class EKFState:
 
         F = self._dynamic_model.jacobian(dt)
         Q = self._dynamic_model.process_noise_cov(dt)
-        self._cov = F.mm(self._cov).mm(F.t()) + Q
+        self._cov = F.mm(self._cov).mm(F.transpose(-1, -2)) + Q
 
         self._time = destination_time
 
@@ -169,7 +169,7 @@ class EKFState:
         z = measurement.mean
         z_predicted = measurement(x_pv)
         dz = measurement.geodesic_difference(z, z_predicted)
-        S = H.mm(self._cov).mm(H.t()) + R  # innovation cov
+        S = H.mm(self._cov).mm(H.transpose(-1, -2)) + R  # innovation cov
 
         return dz, S
 
@@ -184,7 +184,7 @@ class EKFState:
         :return: Likelihood of hypothetical update.
         '''
         dz, S = self.innovation(measurement)
-        return torch.exp(dist.MultivariateNormal(torch.zeros_like(S), S)
+        return torch.exp(dist.MultivariateNormal(S.new_zeros(S.shape[-1]), S)
                          .log_prob(dz))
 
     def update(self, measurement):
@@ -208,17 +208,17 @@ class EKFState:
         z = measurement.mean
         z_predicted = measurement(x_pv)
         dz = measurement.geodesic_difference(z, z_predicted)
-        S = H.mm(P).mm(H.t()) + R  # innovation cov
+        S = H.mm(P).mm(H.transpose(-1, -2)) + R  # innovation cov
 
-        K_prefix = self._cov.mm(H.t())
+        K_prefix = self._cov.mm(H.transpose(-1, -2))
         dx = K_prefix.mm(torch.gesv(dz, S)[0]).squeeze(1)  # K*dz
         x = self._dynamic_model.geodesic_difference(x, -dx)
 
         I = torch.eye(self._dynamic_model.dimension)  # noqa: E741
         ImKH = I - K_prefix.mm(torch.gesv(H, S)[0])
         # *Joseph form* of covariance update for numerical stability.
-        P = ImKH.mm(self.cov).mm(ImKH.t()) \
-            + K_prefix.mm(torch.gesv((K_prefix.mm(torch.gesv(R, S)[0])).t(),
+        P = ImKH.mm(self.cov).mm(ImKH.transpose(-1, -2)) \
+            + K_prefix.mm(torch.gesv((K_prefix.mm(torch.gesv(R, S)[0])).transpose(-1, -2),
                           S)[0])
 
         self._mean = x
