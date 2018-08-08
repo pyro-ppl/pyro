@@ -54,6 +54,13 @@ if torch.__version__.startswith('0.4.1'):
         input = input.contiguous()
         return unpatched_fn(input) if out is None else unpatched_fn(input, out)
 
+    # work around https://github.com/pytorch/pytorch/issues/9917
+    @_patch('torch.poisson')
+    def _torch_poisson(input):
+        unpatched_fn = _torch_poisson._pyro_unpatched
+        input = input.contiguous()
+        return unpatched_fn(input)
+
     # work around https://github.com/pytorch/pytorch/issues/9521
     @_patch('torch._standard_gamma')
     def _torch_standard_gamma(concentration):
