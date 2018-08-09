@@ -1,10 +1,12 @@
-from abc import ABC, abstractmethod
+from abc import ABCMeta, abstractmethod
+from six import add_metaclass
 
 import torch
 import pyro.distributions as dist
 
 
-class DynamicModel(ABC):
+@add_metaclass(ABCMeta)
+class DynamicModel(object):
     '''
     Dynamic model interface.
 

@@ -1,9 +1,11 @@
-from abc import ABC, abstractmethod
+from abc import ABCMeta, abstractmethod
+from six import add_metaclass
 
 import torch
 
 
-class Measurement(ABC):
+@add_metaclass(ABCMeta)
+class Measurement(object):
     '''
     Gaussian measurement interface.
 
