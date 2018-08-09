@@ -61,8 +61,8 @@ def xfail_jit(*args):
 
 
 JIT_EXAMPLES = [
-    'bayesian_regression.py --num-epochs=1 --jit',
     xfail_jit('air/main.py --num-steps=1 --jit'),
+    xfail_jit('bayesian_regression.py --num-epochs=1 --jit'),  # this works on PyTorch master
     xfail_jit('contrib/autoname/mixture.py --num-epochs=1 --jit'),
     xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
     xfail_jit('dmm/dmm.py --num-epochs=1 --jit'),
