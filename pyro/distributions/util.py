@@ -208,7 +208,7 @@ def eye_like(value, m, n=None):
     if n is None:
         n = m
     eye = value.new_zeros(m, n)
-    eye.view(-1)[::n + 1] = 1
+    eye.view(-1)[:min(m, n) * n:n + 1] = 1
     return eye
 
 

@@ -139,10 +139,11 @@ def test_scale_tensor(tensor, scale, expected):
         assert actual == expected
 
 
-@pytest.mark.parametrize("m", [1, 2, 3, 4])
-@pytest.mark.parametrize("n", [1, 2, 3, 4, None])
+@pytest.mark.parametrize("m", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("n", [1, 2, 3, 4, 5, None])
 def test_eye_like(m, n):
     x = torch.tensor(0.)
     expected = torch.eye(m) if n is None else torch.eye(m, n)
     actual = eye_like(x, m, n)
-    assert_equal(expected, actual, '{} vs {}'.format(expected.cpu().numpy(), actual.cpu().numpy()))
+    assert_equal(expected, actual,
+                 msg='Expected:\n{}\nActual:\n{}'.format(expected.cpu().numpy(), actual.cpu().numpy()))
