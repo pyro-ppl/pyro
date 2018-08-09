@@ -202,7 +202,8 @@ def test_gamma_beta(jit):
     assert_equal(posterior.mean, torch.stack([true_alpha, true_beta]), prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True,
+                                                 marks=[pytest.mark.skip("FIXME: Slow on JIT.")])])
 def test_gaussian_mixture_model(jit):
     K, N = 3, 1000
 
@@ -227,8 +228,8 @@ def test_gaussian_mixture_model(jit):
     assert_equal(posterior[1], true_cluster_means, prec=0.2)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True,
-                                                 marks=[pytest.mark.skip("FIXME: Slow on JIT.")])])
+@pytest.mark.parametrize("jit", [False, mark_jit(True, marks=[
+    pytest.mark.xfail(reason="FIXME: log not implemented for 'CPULongType'")])])
 def test_bernoulli_latent_model(jit):
     @poutine.broadcast
     def model(data):

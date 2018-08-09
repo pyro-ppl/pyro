@@ -138,7 +138,7 @@ class NUTS(HMC):
         else:
             diverging = (sliced_energy >= self._max_sliced_energy)
             delta_energy = energy_new - energy_current
-            accept_prob = (-delta_energy).exp().clamp(max=1)
+            accept_prob = (-delta_energy).exp().clamp(max=1.0)
         return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads,
                          z_new, tree_size, False, diverging, accept_prob, 1)
 

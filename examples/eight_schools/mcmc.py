@@ -54,7 +54,7 @@ if __name__ == '__main__':
                         help='number of MCMC samples (default: 1000)')
     parser.add_argument('--warmup-steps', type=int, default=1000,
                         help='number of MCMC samples for warmup (default: 1000)')
-    parser.add_argument('--jit', action='store_true', default=True)
+    parser.add_argument('--jit', action='store_true', default=False)
     args = parser.parse_args()
 
     main(args)

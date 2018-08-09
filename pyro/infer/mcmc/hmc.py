@@ -147,8 +147,8 @@ class HMC(TraceKernel):
 
         @torch.jit.trace(*vals, optimize=True)
         def wrapped(*zi):
-            print("called")
             z_constrained = list(zi)
+            # transform to constrained space.
             for i, name in enumerate(names):
                 if name in self.transforms:
                     transform = self.transforms[name]
