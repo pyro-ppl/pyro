@@ -19,14 +19,16 @@ from .test_hmc import TEST_CASES, TEST_IDS, T, rmse
 logger = logging.getLogger(__name__)
 
 
-def mark_jit(*args, markers=[]):
-    jit_markers = markers + [
+def mark_jit(*args, **kwargs):
+    jit_markers = kwargs.pop("marks", [])
+    jit_markers += [
         pytest.mark.skipif(torch.__version__ <= "0.4.1",
                            reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228"),
         pytest.mark.skipif('CI' in os.environ,
                            reason='slow test')
     ]
-    return pytest.param(*args, marks=jit_markers)
+    kwargs["marks"] = jit_markers
+    return pytest.param(*args, **kwargs)
 
 
 T2 = T(*TEST_CASES[2].values)._replace(num_samples=800, warmup_steps=200)
@@ -162,7 +164,7 @@ def test_beta_bernoulli_with_dual_averaging(jit):
 
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    nuts_kernel = NUTS(model, adapt_step_size=True)
+    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites="p_latent")
     assert_equal(posterior.mean, true_probs, prec=0.03)
@@ -226,7 +228,7 @@ def test_gaussian_mixture_model(jit):
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True,
-                                                 markers=[pytest.mark.skip("Extremely slow.")])])
+                                                 marks=[pytest.mark.skip("FIXME: Slow on JIT.")])])
 def test_bernoulli_latent_model(jit):
     @poutine.broadcast
     def model(data):

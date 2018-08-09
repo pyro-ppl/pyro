@@ -18,14 +18,16 @@ from tests.common import assert_equal
 logger = logging.getLogger(__name__)
 
 
-def mark_jit(*args, markers=[]):
-    jit_markers = markers + [
+def mark_jit(*args, **kwargs):
+    jit_markers = kwargs.pop("marks", [])
+    jit_markers += [
         pytest.mark.skipif(torch.__version__ <= "0.4.1",
                            reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228"),
         pytest.mark.skipif('CI' in os.environ,
                            reason='slow test')
     ]
-    return pytest.param(*args, marks=jit_markers)
+    kwargs["marks"] = jit_markers
+    return pytest.param(*args, **kwargs)
 
 
 class GaussianChain(object):
@@ -314,7 +316,7 @@ def test_gaussian_mixture_model(jit):
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True,
-                                                 markers=[pytest.mark.skip("Extremely slow.")])])
+                                                 marks=[pytest.mark.skip("FIXME: Slow on JIT.")])])
 def test_bernoulli_latent_model(jit):
     @poutine.broadcast
     def model(data):

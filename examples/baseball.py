@@ -218,7 +218,7 @@ def main(args):
     baseball_dataset = pd.read_csv(DATA_URL, "\t")
     train, _, player_names = train_test_split(baseball_dataset)
     at_bats, hits = train[:, 0], train[:, 1]
-    nuts_kernel = NUTS(conditioned_model, adapt_step_size=True)
+    nuts_kernel = NUTS(conditioned_model, adapt_step_size=True, jit_compile=args.jit)
     logging.info("Original Dataset:")
     logging.info(baseball_dataset)
 
@@ -270,5 +270,7 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--num-samples", nargs="?", default=1200, type=int)
     parser.add_argument("--warmup-steps", nargs='?', default=300, type=int)
     parser.add_argument("--rng_seed", nargs='?', default=0, type=int)
+    parser.add_argument('--jit', action='store_true', default=True,
+                        help='use PyTorch jit')
     args = parser.parse_args()
     main(args)
