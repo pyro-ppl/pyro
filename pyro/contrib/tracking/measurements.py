@@ -13,8 +13,8 @@ class Measurement(ABC):
     '''
     def __init__(self, mean, cov, time):
         self._dimension = len(mean)
-        self._mean = mean.clone()
-        self._cov = cov.clone()
+        self._mean = mean
+        self._cov = cov
         self._time = time
 
     @property
@@ -116,7 +116,7 @@ class PositionMeasurement(DifferentiableMeasurement):
               this subclass.
         :return: Measurement predicted from state ``x``.
         '''
-        return x[:self._dimension].clone()
+        return x[:self._dimension]
 
     def jacobian(self, x=None):
         '''

@@ -1,4 +1,6 @@
 import torch
+from torch.distributions.utils import lazy_property
+
 import pyro.distributions as dist
 
 
@@ -19,23 +21,28 @@ class EKFState:
     '''
     def __init__(self, dynamic_model, mean, cov, time):
         self._dynamic_model = dynamic_model
-        if mean is None:
-            self._mean = None
-        else:
-            self._mean = mean.clone()
-        if cov is None:
-            self._cov = None
-        else:
-            self._cov = cov.clone()
+        self._mean = mean
+        self._cov = cov
         self._time = time
 
-        self._mean_pv_cache = None
-        self._cov_pv_cache = None
+#         if mean is None:
+#             self._mean = None
+#         else:
+#             self._mean = mean.clone()
+#         if cov is None:
+#             self._cov = None
+#         else:
+#             self._cov = cov.clone()
+#         self._time = time
+#
+#         self._mean_pv_cache = None
+#         self._cov_pv_cache = None
 
     def _clear_cached(self):
         '''
         Call this whenever actions are taken which invalidate cached data.
         '''
+        return
         self._mean_pv_cache = None
         self._cov_pv_cache = None
 
@@ -74,22 +81,24 @@ class EKFState:
         '''
         return self._dynamic_model.dimension_pv
 
-    @property
+    @lazy_property
     def mean_pv(self):
         '''
         Compute and return cached PV state estimate mean.
         '''
+        return self._dynamic_model.mean2pv(self._mean)
         if self._mean_pv_cache is None:
             self._mean_pv_cache = \
                 self._dynamic_model.mean2pv(self._mean)
 
         return self._mean_pv_cache
 
-    @property
+    @lazy_property
     def cov_pv(self):
         '''
         Compute and return cached PV state estimate covariance.
         '''
+        return self._dynamic_model.cov2pv(self._cov)
         if self._cov_pv_cache is None:
             self._cov_pv_cache = \
                 self._dynamic_model.cov2pv(self._cov)
@@ -111,8 +120,10 @@ class EKFState:
         :param cov: target state covariance.
         :param time: state time. None => keep existing time.
         '''
-        self._mean = mean.clone()
-        self._cov = cov.clone()
+        self._mean = mean
+        self._cov = cov
+#         self._mean = mean.clone()
+#         self._cov = cov.clone()
         if time is not None:
             self._time = time
 
@@ -224,7 +235,7 @@ class EKFState:
         self._mean = x
         self._cov = P
 
-        self._clear_cached()
+#         self._clear_cached()
 
         return dz, S
 
