@@ -5,8 +5,11 @@ from contextlib import contextmanager
 
 import torch
 import torch.distributions as torch_dist
+from torch import logsumexp
 
 _VALIDATION_ENABLED = False
+
+log_sum_exp = logsumexp  # DEPRECATED
 
 
 def copy_docs_from(source_class, full_text=False):
@@ -198,27 +201,6 @@ def torch_sign(value):
     if isinstance(value, numbers.Number):
         return (value > 0) - (value < 0)
     return torch.sign(value)
-
-
-try:
-    from torch import logsumexp  # for pytorch 0.4.1 and later
-except ImportError:
-    def logsumexp(tensor, dim=-1, keepdim=False):
-        """
-        Numerically stable implementation for the `LogSumExp` operation. The
-        summing is done along the dimension specified by ``dim``.
-
-        :param torch.Tensor tensor: Input tensor.
-        :param dim: Dimension to be summed out.
-        :param keepdim: Whether to retain the dimension
-            that is summed out.
-        """
-        max_val = tensor.max(dim, keepdim=True)[0]
-        log_sum_exp = max_val + (tensor - max_val).exp().sum(dim=dim, keepdim=True).log()
-        return log_sum_exp if keepdim else log_sum_exp.squeeze(dim)
-
-
-log_sum_exp = logsumexp  # DEPRECATED
 
 
 def enable_validation(is_validate):
