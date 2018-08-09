@@ -2,27 +2,38 @@ import torch
 from matplotlib import pyplot
 import time
 import warnings
+import os
+import errno
 
 
-def init_visdom(visdom_flag):
-    if visdom_flag:
+def init_plot_utils(args):
+    viz = None
+    if args.visdom:
         from visdom import Visdom
         viz = Visdom()
         startup_sec = 1
         while not viz.check_connection() and startup_sec > 0:
             time.sleep(0.1)
             startup_sec -= 0.1
-        if viz.check_connection():
-            return viz
-        else:
+        if not viz.check_connection():
             warnings.warn('No connection could be formed quickly')
-            return None
-    else:
-        return None
+            viz = None
+
+    full_exp_dir = None
+    if args.exp_name is not None:
+        full_exp_dir = os.path.join(args.exp_dir, args.exp_name)
+        try:
+            os.makedirs(full_exp_dir)
+        except OSError as exception:
+            if exception.errno != errno.EEXIST:
+                warnings.warn('Something went wrong creating {}'.format(full_exp_dir))
+                full_exp_dir = None
+
+    return viz, full_exp_dir
 
 
 def plot_solution(observations, p_exists, positions, true_positions, args,
-                  emission_noise_scale=None, message='', fig=None, viz=None):
+                  emission_noise_scale=None, message='', fig=None, viz=None, env='main', fig_dir=None):
     with torch.no_grad():
         if fig is None:
             fig = pyplot.figure(figsize=(12, 6))
@@ -55,20 +66,24 @@ def plot_solution(observations, p_exists, positions, true_positions, args,
         pyplot.xlabel('time step')
         pyplot.ylabel('position')
         pyplot.tight_layout()
+        if fig_dir is not None:
+            fig.savefig(os.path.join(fig_dir, "solution.png"), bbox_inches='tight', dpi=100)
         if viz is not None:
-            viz.matplot(pyplot)
+            viz.matplot(pyplot, env=env)
 
 
-def plot_exists_prob(p_exists, viz=None):
+def plot_exists_prob(p_exists, viz=None, env='main', fig_dir=None):
     p_exists = p_exists.detach().numpy()
     if viz is not None:
         viz.line(Y=sorted(p_exists),
                  X=torch.arange(p_exists.size).numpy(),
                  opts=dict(xlabel='rank', ylabel='p_exists',
                            title='Prob(exists) of {} potential objects, total = {:0.2f}'.format(len(p_exists),
-                                                                                                p_exists.sum())))
-    else:
-        pyplot.figure(figsize=(6, 4)).patch.set_color('white')
+                                                                                                p_exists.sum())),
+                 env=env)
+    if (fig_dir is not None) or (viz is None):
+        fig = pyplot.figure(figsize=(6, 4))
+        fig.patch.set_color('white')
         pyplot.plot(sorted(p_exists))
         pyplot.ylim(0, None)
         pyplot.xlim(0, len(p_exists))
@@ -77,3 +92,21 @@ def plot_exists_prob(p_exists, viz=None):
         pyplot.title('Prob(exists) of {} potential objects, total = {:0.2f}'.format(
             len(p_exists), p_exists.sum()))
         pyplot.tight_layout()
+        if fig_dir is not None:
+            fig.savefig(os.path.join(fig_dir, "exists_prob.png"), bbox_inches='tight', dpi=100)
+
+
+def plot_list(list_values, title, viz=None, env='main', fig_dir=None):
+    if viz is not None:
+        viz.line(Y=list_values, X=torch.arange(len(list_values)).numpy(), opts=dict(title=title), env=env)
+
+    if (fig_dir is not None) or (viz is None):
+        fig = pyplot.figure(figsize=(6, 4))
+        fig.patch.set_color('white')
+        pyplot.plot(list_values)
+        pyplot.ylim(0, None)
+        pyplot.xlim(0, len(list_values))
+        pyplot.title(title)
+        pyplot.tight_layout()
+        if fig_dir is not None:
+            fig.savefig(os.path.join(fig_dir, title.lower().replace(' ', '_') + ".png"), bbox_inches='tight', dpi=100)
