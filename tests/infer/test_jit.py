@@ -100,7 +100,7 @@ def test_grad_expand():
     f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
 
 
-@pytest.mark.skipif(torch.version <= '0.4.1',
+@pytest.mark.skipif(torch.__version__ <= '0.4.1',
                     reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
 @pytest.mark.parametrize('expand', [False, True])
 @pytest.mark.parametrize('shape', [(), (4,), (5, 4)])
@@ -118,7 +118,7 @@ def test_bernoulli_enumerate(shape, expand):
     assert log_prob.shape == (2,) + shape
 
 
-@pytest.mark.skipif(torch.version <= '0.4.1',
+@pytest.mark.skipif(torch.__version__ <= '0.4.1',
                     reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
 @pytest.mark.parametrize('expand', [False, True])
 @pytest.mark.parametrize('shape', [(3,), (4, 3), (5, 4, 3)])
@@ -137,7 +137,7 @@ def test_categorical_enumerate(shape, expand):
     assert log_prob.shape == shape[-1:] + batch_shape
 
 
-@pytest.mark.skipif(torch.version <= '0.4.1',
+@pytest.mark.skipif(torch.__version__ <= '0.4.1',
                     reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
 @pytest.mark.parametrize('num_particles', [1, 10])
 @pytest.mark.parametrize('Elbo', [
@@ -166,7 +166,7 @@ def test_svi(Elbo, num_particles):
         inference.step(data)
 
 
-@pytest.mark.skipif(torch.version <= '0.4.1',
+@pytest.mark.skipif(torch.__version__ <= '0.4.1',
                     reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
 @pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
 @pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
@@ -212,7 +212,7 @@ def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
     ]))
 
 
-@pytest.mark.skipif(torch.version <= '0.4.1',
+@pytest.mark.skipif(torch.__version__ <= '0.4.1',
                     reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
 @pytest.mark.parametrize('vectorized', [False, True])
 @pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
@@ -250,7 +250,7 @@ def test_beta_bernoulli(Elbo, vectorized):
         svi.step(data)
 
 
-@pytest.mark.skipif(torch.version <= '0.4.1',
+@pytest.mark.skipif(torch.__version__ <= '0.4.1',
                     reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
 @pytest.mark.parametrize('vectorized', [False, True])
 @pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
