@@ -47,6 +47,14 @@ def _torch_dirichlet_grad(x, concentration, total):
 
 if torch.__version__ >= '0.4.1':
 
+    # work around https://github.com/pytorch/pytorch/issues/10241
+    # this can be deleted after https://github.com/pytorch/pytorch/pull/10269
+    @_patch('torch.log')
+    def _torch_log(input, out=None):
+        unpatched_fn = _torch_log._pyro_unpatched
+        input = input.contiguous()
+        return unpatched_fn(input) if out is None else unpatched_fn(input, out)
+
     # work around https://github.com/pytorch/pytorch/issues/9917
     @_patch('torch.bernoulli')
     def _torch_bernoulli(input, out=None):
