@@ -200,6 +200,8 @@ def torch_sign(value):
     """
     if isinstance(value, numbers.Number):
         return (value > 0) - (value < 0)
+    if value.dtype == torch.int64:
+        value = value.float()
     return torch.sign(value)
 
 
