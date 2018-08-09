@@ -203,6 +203,15 @@ def torch_sign(value):
     return torch.sign(value)
 
 
+# work around lack of jit support for torch.eye(..., out=value)
+def eye_like(value, m, n=None):
+    if n is None:
+        n = m
+    eye = value.new_zeros(m, n)
+    eye.view(-1)[::n + 1] = 1
+    return eye
+
+
 def enable_validation(is_validate):
     global _VALIDATION_ENABLED
     _VALIDATION_ENABLED = is_validate

@@ -96,7 +96,7 @@ if hasattr(torch, 'broadcast_tensors'):
     # workaround lack of jit support for Categorical.log_prob()
     # this can be deleted after https://github.com/pytorch/pytorch/pull/10321
     @_patch('torch.distributions.categorical.Categorical.log_prob')
-    def log_prob(self, value):
+    def _log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
         value = value.long().unsqueeze(-1)

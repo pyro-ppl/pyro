@@ -7,6 +7,7 @@ from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
 from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistribution
+from pyro.distributions.util import eye_like
 
 
 def _matrix_triangular_solve_compat(b, A, upper=True):
@@ -84,7 +85,7 @@ class LowRankMultivariateNormal(TorchDistribution):
         A = self.covariance_matrix_W_term / Dsqrt
         At_A = A.t().matmul(A)
         N = A.shape[1]
-        Id = torch.eye(N, N, out=A.new_empty(N, N))
+        Id = eye_like(A, N)
         K = Id + At_A
         L = K.potrf(upper=False)
         return Dsqrt.unsqueeze(1) * L
@@ -111,7 +112,7 @@ class LowRankMultivariateNormal(TorchDistribution):
         """
         W_Dinv = W / D
         M = W.shape[0]
-        Id = torch.eye(M, M, out=W.new_empty(M, M))
+        Id = eye_like(W, M)
         K = Id + W_Dinv.matmul(W.t())
         L = K.potrf(upper=False)
         if y.dim() == 1:

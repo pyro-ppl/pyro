@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 import torch
 
-from pyro.distributions.util import broadcast_shape, scale_tensor, sum_leftmost, sum_rightmost
+from pyro.distributions.util import broadcast_shape, eye_like, scale_tensor, sum_leftmost, sum_rightmost
+from tests.common import assert_equal
 
 INF = float('inf')
 
@@ -136,3 +137,12 @@ def test_scale_tensor(tensor, scale, expected):
         assert (actual == expected).all()
     else:
         assert actual == expected
+
+
+@pytest.mark.parametrize("m", [1, 2, 3, 4])
+@pytest.mark.parametrize("n", [1, 2, 3, 4, None])
+def test_eye_like(m, n):
+    x = torch.tensor(0.)
+    expected = torch.eye(m) if n is None else torch.eye(m, n)
+    actual = eye_like(x, m, n)
+    assert_equal(expected, actual, '{} vs {}'.format(expected.cpu().numpy(), actual.cpu().numpy()))
