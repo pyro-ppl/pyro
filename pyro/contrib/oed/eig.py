@@ -84,9 +84,9 @@ def naive_rainforth(model, design, observation_label="y", target_label="theta",
 def donsker_varadhan_loss(model, design, observation_label, target_label,
                           num_particles, U):
 
-    global ewma
-    ewma = None
-    alpha = 2.
+    # global ewma
+    # ewma = None
+    # alpha = 2.
 
     expanded_design = design.expand((num_particles, *design.shape))
 
@@ -94,7 +94,7 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
 
     def loss_fn():
 
-        global ewma
+        # global ewma
 
         trace = poutine.trace(model).get_trace(expanded_design)
         y = trace.nodes[observation_label]["value"]
@@ -110,13 +110,8 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
         T_unshuffled = U(expanded_design, y, unshuffled_lp)
         T_shuffled = U(expanded_design, y, shuffled_lp)
 
-        # Use ewma correction to gradients
-        expect_exp = logsumexp(T_shuffled, dim=0) - np.log(num_particles)
-        if ewma is None:
-            ewma = torch.exp(expect_exp)
-        else:
-            ewma = (1/(1+alpha))*(torch.exp(expect_exp) + alpha*ewma)
-        expect_exp.grad = 1./ewma
+        # TODO Use ewma correction to gradients
+        expect_exp = logsumexp(T_shuffled - np.log(num_particles), dim=0)
 
         # Switch sign, sum over batch dimensions for scalar loss
         loss = T_unshuffled.sum(0)/num_particles - expect_exp
