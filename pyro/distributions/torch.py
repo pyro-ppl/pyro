@@ -54,7 +54,7 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
 
     def enumerate_support(self, expand=True):
         num_events = self._num_events
-        values = torch.arange(num_events).long()
+        values = torch.arange(num_events, dtype=torch.long)
         values = values.view((-1,) + (1,) * len(self._batch_shape))
         if expand:
             values = values.expand((-1,) + self._batch_shape)

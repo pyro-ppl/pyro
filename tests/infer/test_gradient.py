@@ -175,11 +175,11 @@ def test_iarange_elbo_vectorized_particles(Elbo, reparameterized):
     TraceGraph_ELBO,
     TraceEnum_ELBO,
     xfail_param(JitTrace_ELBO,
-                reason="jit RuntimeError: Unsupported op descriptor: index-2"),
+                reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
     xfail_param(JitTraceGraph_ELBO,
-                reason="jit RuntimeError: Unsupported op descriptor: index-2"),
+                reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
     xfail_param(JitTraceEnum_ELBO,
-                reason="jit RuntimeError: Unsupported op descriptor: index-2"),
+                reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
 ])
 def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
     pyro.clear_param_store()

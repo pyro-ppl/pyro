@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import torch.nn.functional as F
+import torch
 
 import pyro
 import pyro.distributions as dist
@@ -23,7 +23,7 @@ class Binary(Likelihood):
     def __init__(self, response_function=None, name="Binary"):
         super(Binary, self).__init__(name)
         self.response_function = (response_function if response_function is not None
-                                  else F.sigmoid)
+                                  else torch.sigmoid)
 
     def forward(self, f_loc, f_var, y=None):
         r"""

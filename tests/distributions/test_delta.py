@@ -16,13 +16,13 @@ class TestDelta(TestCase):
         self.vs = torch.tensor([[0.0], [1.0], [2.0], [3.0]])
         self.vs_expanded = self.vs.expand(4, 3)
         self.test_data = torch.tensor([[3.0], [3.0], [3.0]])
-        self.batch_test_data_1 = torch.arange(0, 4).unsqueeze(1).expand(4, 3)
-        self.batch_test_data_2 = torch.arange(4, 8).unsqueeze(1).expand(4, 3)
-        self.batch_test_data_3 = torch.Tensor([[3], [3], [3], [3]])
-        self.expected_support = [[[0], [1], [2], [3]]]
-        self.expected_support_non_vec = [[3]]
-        self.analytic_mean = 3
-        self.analytic_var = 0
+        self.batch_test_data_1 = torch.arange(0., 4.).unsqueeze(1).expand(4, 3)
+        self.batch_test_data_2 = torch.arange(4., 8.).unsqueeze(1).expand(4, 3)
+        self.batch_test_data_3 = torch.Tensor([[3.], [3.], [3.], [3.]])
+        self.expected_support = [[[0.], [1.], [2.], [3.]]]
+        self.expected_support_non_vec = [[3.]]
+        self.analytic_mean = 3.
+        self.analytic_var = 0.
         self.n_samples = 10
 
     def test_log_prob_sum(self):
