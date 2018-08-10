@@ -99,7 +99,7 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
         :param int num_acquisitions: the number of points to generate
         :param dict opt_params: additional parameters for optimization
             routines
-        :return: a tensor of points to evaluate `self.f` at
+        :return: a tensor of points to evaluate `loss` at
         :rtype: torch.Tensor
         """
 
