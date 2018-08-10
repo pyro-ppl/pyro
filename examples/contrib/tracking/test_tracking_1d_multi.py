@@ -30,8 +30,7 @@ def xfail_param(*args, **kwargs):
 
 @pytest.mark.parametrize("arg_string", [
     "--num-frames=20 --max-num-objects=2 --expected-num-objects=2 --emission-noise-scale=0.1 --seed=2",
-    xfail_param("--num-frames=20 --max-num-objects=2 --expected-num-objects=2 --emission-noise-scale=0.1 --seed=1",
-                reason="objects are too cluttered"),
+    "--num-frames=20 --max-num-objects=2 --expected-num-objects=2 --emission-noise-scale=0.1 --seed=1",
     "--num-frames=20 --max-num-objects=40 --expected-num-objects=2 --emission-noise-scale=0.1 --seed=2",
     "--num-frames=20 --max-num-objects=40 --expected-num-objects=10 --emission-noise-scale=0.1 --seed=2",
     xfail_param("--num-frames=20 --max-num-objects=40 --expected-num-objects=10 --emission-noise-scale=0.1 --seed=1",
@@ -43,11 +42,13 @@ def xfail_param(*args, **kwargs):
     "--seed=2",
     "--num-frames=20 --max-num-objects=40 --expected-num-objects=5 --emission-noise-scale=0.1 "
     "--expected-num-spurious=0.2 --seed=2",
-    xfail_param("--num-frames=20 --max-num-objects=40 --expected-num-objects=5 --emission-noise-scale=0.1 "
-                "--expected-num-spurious=0.2 --seed=1", reason="converges to single object+some residuals"),
-    "--num-frames=20 --max-num-objects=40 --expected-num-objects=2 --emission-noise-scale=0.1 "
-    "--expected-num-spurious=0.2 --seed=1", ])
+    "--num-frames=20 --max-num-objects=40 --expected-num-objects=5 --emission-noise-scale=0.1 "
+    "--expected-num-spurious=0.2 --seed=1",
+    xfail_param("--num-frames=20 --max-num-objects=40 --expected-num-objects=2 --emission-noise-scale=0.1 "
+                "--expected-num-spurious=0.2 --seed=2", reason="converges to single object"),
+                 ])
 @pytest.mark.filterwarnings('ignore::ImportWarning')  # pandas raise warning for some reason...
+@pytest.mark.filterwarnings('ignore::DeprecationWarning')  # pandas raise warning for some reason...
 def test_1d_track_objects(arg_string):
     args = parse_args(arg_string + " --good-init -q --no-visdom")
     # generate data
@@ -76,7 +77,7 @@ def test_1d_track_objects(arg_string):
         metrics = calculate_motmetrics(true_positions, inferred_positions, exp_dir=full_exp_dir)  # metrics is DataFrame
         # mota = metrics['mota']['acc']
         motp = metrics['motp']['acc']
-        assert motp < 1e-3
+        assert motp < 1e-2
 
     ens_threshold = 0.2
     assert ((inferred_ens - args.emission_noise_scale).abs() <= ens_threshold).item()
