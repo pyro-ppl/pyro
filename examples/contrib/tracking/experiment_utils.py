@@ -21,9 +21,11 @@ def json2args(filename):
 
 def tabulate_results(exp_dir='.', filename=None):
     from glob import glob
+    import sys
     experiments = glob(os.path.join(exp_dir, "exp*", ""))
+    total_num_folders = len(experiments)
     all_results = pandas.DataFrame()
-    for e in experiments:
+    for i, e in enumerate(experiments):
         config_fpath = os.path.join(e, 'config.json')
         result_fpath = os.path.join(e, 'results.csv')
         if os.path.exists(config_fpath) and os.path.exists(result_fpath):
@@ -37,6 +39,9 @@ def tabulate_results(exp_dir='.', filename=None):
             results = results.rename(index={'acc': row_name})
             entry = pandas.concat([config, results], axis=1)
             all_results = pandas.concat([all_results, entry], axis=0)
+        sys.stdout.write("\rAnalyzed {} of {} folders{}".format(i+1, total_num_folders,
+                                                                "\n" if i+1 == total_num_folders else ""))
+        sys.stdout.flush()
     if filename is not None:
         all_results.to_csv(filename)
     else:
