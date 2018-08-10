@@ -454,6 +454,53 @@ def test_elbo_categoricals(enumerate1, enumerate2, enumerate3, max_iarange_nesti
         ]))
 
 
+@pytest.mark.parametrize("enumerate1", [None, "parallel"])
+@pytest.mark.parametrize("enumerate2", [None, "parallel"])
+@pytest.mark.parametrize("enumerate3", [None, "parallel"])
+@pytest.mark.parametrize("method", ["differentiable_loss", "loss_and_grads"])
+def test_elbo_normals(method, enumerate1, enumerate2, enumerate3):
+    pyro.clear_param_store()
+    num_particles =  100 * 10 ** sum(1 for e in [enumerate1, enumerate2, enumerate3] if not e)
+    prec = 0.1
+    q = pyro.param("q", torch.tensor(0.0, requires_grad=True))
+
+    def model():
+        pyro.sample("x1", dist.Normal(0.25, 1.))
+        pyro.sample("x2", dist.Normal(0.5, 1.))
+        pyro.sample("x3", dist.Normal(1., 1.))
+
+    def guide():
+        q = pyro.param("q")
+        pyro.sample("x1", dist.Normal(q, 1.), infer={"enumerate": enumerate1, "num_samples": 10})
+        pyro.sample("x2", dist.Normal(q, 1.), infer={"enumerate": enumerate2, "num_samples": 10})
+        pyro.sample("x3", dist.Normal(q, 1.), infer={"enumerate": enumerate3, "num_samples": 10})
+
+    kl = sum(kl_divergence(dist.Normal(q, 1.), dist.Normal(p, 1.)) for p in [0.25, 0.5, 1.])
+    expected_loss = kl.item()
+    expected_grad = grad(kl, [q])[0]
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
+                          num_particles=num_particles,
+                          vectorize_particles=True,
+                          strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
+    if method == "differentiable_loss":
+        loss = elbo.differentiable_loss(model, guide)
+        actual_loss = loss.item()
+        actual_grad = grad(loss, [q])[0]
+    else:
+        actual_loss = elbo.loss_and_grads(model, guide)
+        actual_grad = q.grad
+
+    assert_equal(actual_loss, expected_loss, prec=prec, msg="".join([
+        "\nexpected loss = {}".format(expected_loss),
+        "\n  actual loss = {}".format(actual_loss),
+    ]))
+    assert_equal(actual_grad, expected_grad, prec=prec, msg="".join([
+        "\nexpected grads = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual grads = {}".format(actual_grad.detach().cpu().numpy()),
+    ]))
+
+
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("iarange_dim", [1, 2])
