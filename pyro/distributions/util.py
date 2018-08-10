@@ -52,11 +52,7 @@ def is_identically_zero(x):
     Check if argument is exactly the number zero. True for the number zero;
     false for other numbers; false for :class:`~torch.Tensor`s.
     """
-    if isinstance(x, numbers.Number):
-        return x == 0
-    elif isinstance(x, torch.Tensor) and x.dtype == torch.int64 and not x.shape:
-        return x.item() == 0
-    return False
+    return isinstance(x, numbers.Number) and x == 0
 
 
 def is_identically_one(x):
@@ -64,11 +60,7 @@ def is_identically_one(x):
     Check if argument is exactly the number one. True for the number one;
     false for other numbers; false for :class:`~torch.Tensor`s.
     """
-    if isinstance(x, numbers.Number):
-        return x == 1
-    elif isinstance(x, torch.Tensor) and x.dtype == torch.int64 and not x.shape:
-        return x.item() == 1
-    return False
+    return isinstance(x, numbers.Number) and x == 1
 
 
 def broadcast_shape(*shapes, **kwargs):
@@ -180,12 +172,8 @@ def scale_tensor(tensor, scale):
 
     # avoid NANs
     if not isinstance(scale, numbers.Number):
-        if scale.dtype == torch.int64:
-            scale = scale.float()
         result[(scale == 0).expand_as(result)] = 0
     if not isinstance(tensor, numbers.Number):
-        if tensor.dtype == torch.int64:
-            tensor = tensor.float()
         result[(tensor == 0).expand_as(result)] = 0
 
     return result

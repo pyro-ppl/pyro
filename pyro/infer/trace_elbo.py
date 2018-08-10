@@ -160,7 +160,7 @@ class JitTrace_ELBO(Trace_ELBO):
             # build a closure for loss_and_surrogate_loss
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.trace
+            @pyro.ops.jit.compile(nderivs=1)
             def loss_and_surrogate_loss(*args):
                 self = weakself()
                 loss = 0.0
@@ -200,7 +200,7 @@ class JitTrace_ELBO(Trace_ELBO):
 
         # invoke _loss_and_surrogate_loss
         loss, surrogate_loss = self._loss_and_surrogate_loss(*args)
-        surrogate_loss.backward()
+        surrogate_loss.backward()  # this line triggers jit compilation
         loss = loss.item()
 
         warn_if_nan(loss, "loss")
