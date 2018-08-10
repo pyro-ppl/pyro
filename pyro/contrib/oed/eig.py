@@ -1,4 +1,8 @@
+import torch
+import numpy as np
+
 import pyro
+from pyro import poutine
 from pyro.contrib.oed.search import Search
 from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.contrib.autoguide import mean_field_guide_entropy
@@ -58,3 +62,102 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters):
     loss = loss_dist.mean
 
     return loss
+
+
+def naive_rainforth(model, design, observation_label="y", target_label="theta",
+                    N=100, M=10):
+
+    expanded_design = design.expand((N, *design.shape))
+    trace = poutine.trace(model).get_trace(expanded_design)
+    trace.compute_log_prob()
+    y = trace.nodes[observation_label]["value"]
+    conditional_lp = trace.nodes[observation_label]["log_prob"]
+
+    reexpanded_design = design.expand((M, 1, *design.shape))
+    reexp_trace = poutine.trace(model).get_trace(reexpanded_design)
+    marginal_lp = cond_log_prob(model, y, reexp_trace.nodes[target_label]["value"],
+                                observation_label, target_label, design)[0]
+
+    return (conditional_lp - marginal_lp).sum(0)/N
+
+
+def donsker_varadhan_loss(model, design, observation_label, target_label,
+                          num_particles, U):
+
+    # global ewma
+    # ewma = None
+    # alpha = 2.
+
+    expanded_design = design.expand((num_particles, *design.shape))
+
+    pyro.module("U", U)
+
+    def loss_fn():
+
+        # global ewma
+
+        trace = poutine.trace(model).get_trace(expanded_design)
+        y = trace.nodes[observation_label]["value"]
+        theta = trace.nodes[target_label]["value"]
+
+        # Compute log probabilities
+        trace.compute_log_prob()
+        unshuffled_lp = trace.nodes[observation_label]["log_prob"]
+        # Not actually shuffling, resimulate for safety
+        shuffled_lp, _ = cond_log_prob(model, y, None, observation_label, 
+                                       target_label, expanded_design.unsqueeze(0))
+
+        T_unshuffled = U(expanded_design, y, unshuffled_lp)
+        T_shuffled = U(expanded_design, y, shuffled_lp)
+
+        # TODO Use ewma correction to gradients
+        expect_exp = logsumexp(T_shuffled - np.log(num_particles), dim=0)
+
+        # Switch sign, sum over batch dimensions for scalar loss
+        loss = T_unshuffled.sum(0)/num_particles - expect_exp
+        agg_loss = -loss.sum()
+        return agg_loss, loss
+
+    return loss_fn
+
+
+def cond_log_prob(model, observation, target, observation_label, target_label, *args):
+    if target is not None:
+        M = target.shape[0]
+        conditional_model = pyro.condition(model, data={
+            observation_label: observation.unsqueeze(0),
+            target_label: target
+            })
+    else:
+        M = 1
+        conditional_model = pyro.condition(model, data={
+            observation_label: observation.unsqueeze(0),
+            })
+    trace = poutine.trace(conditional_model).get_trace(*args)
+    trace.compute_log_prob()
+    return (logsumexp(trace.nodes[observation_label]["log_prob"], 0) - np.log(M), 
+            trace.nodes[target_label]["value"])
+
+
+def logsumexp(inputs, dim=None, keepdim=False):
+    """Numerically stable logsumexp.
+
+    Args:
+        inputs: A Variable with any shape.
+        dim: An integer.
+        keepdim: A boolean.
+
+    Returns:
+        Equivalent of log(sum(exp(inputs), dim=dim, keepdim=keepdim)).
+    """
+    # For a 1-D array x (any array along a single dimension),
+    # log sum exp(x) = s + log sum exp(x - s)
+    # with s = max(x) being a common choice.
+    if dim is None:
+        inputs = inputs.view(-1)
+        dim = 0
+    s, _ = torch.max(inputs, dim=dim, keepdim=True)
+    outputs = s + (inputs - s).exp().sum(dim=dim, keepdim=True).log()
+    if not keepdim:
+        outputs = outputs.squeeze(dim)
+    return outputs
