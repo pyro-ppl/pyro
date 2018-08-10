@@ -23,7 +23,7 @@ def pytest_generate_tests(metafunc):
 def generate_list_of_experiments():
     from itertools import product
     num_frames_list = [10, 20, 40]
-    max_num_objects_list = [2, 10, 80, 400]
+    max_num_objects_list = [2, 10, 80, 200]
     expected_num_objects_list = [2, 5, 10, 20]
     expected_num_spurious_list = [0.00001, 0.1, 1, 2, 5, 10]
     emission_prob_list = [.7, .8, .9, .9999]
