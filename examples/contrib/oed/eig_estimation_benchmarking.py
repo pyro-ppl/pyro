@@ -98,11 +98,11 @@ def donsker_varadhan_lm(X_lm, sqrtlambda, obs_sd, alpha_0, beta_0, n_iter, n_sam
      [(X_lm, lm_true_eig, [torch.tensor([.1, .4]), torch.tensor(1.)]),
       (X_lm, vi_for_lm, [torch.tensor([.1, .4]), torch.tensor(1.), None, None, 5000, 1]),
       (X_lm, naive_rainforth_lm, [torch.tensor([.1, .4]), torch.tensor(1.), None, None, 2000, 2000]),
-      (X_lm, donsker_varadhan_lm, [torch.tensor([.1, .4]), torch.tensor(1.), None, None, 4000, 200, 0.05, DVNeuralNet(2, 2)])],
+      (X_lm, donsker_varadhan_lm, [torch.tensor([.1, .4]), torch.tensor(1.), None, None, 4000, 200, 0.02, DVNeuralNet(2, 2)])],
      [(X_lm, lm_true_eig, [torch.tensor([.1, 10.]), torch.tensor(1.)]),
       (X_lm, vi_for_lm, [torch.tensor([.1, 10.]), torch.tensor(1.), None, None, 10000, 1]),
       (X_lm, naive_rainforth_lm, [torch.tensor([.1, 10.]), torch.tensor(1.), None, None, 2000, 2000]),
-      (X_lm, donsker_varadhan_lm, [torch.tensor([.1, 10.]), torch.tensor(1.), None, None, 4000, 200, 0.05, DVNeuralNet(2, 2)])],
+      (X_lm, donsker_varadhan_lm, [torch.tensor([.1, 10.]), torch.tensor(1.), None, None, 4000, 200, 0.02, DVNeuralNet(2, 2)])],
 ])
 def test_eig_and_plot(arglist):
     pyro.set_rng_seed(42)
