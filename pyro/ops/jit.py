@@ -17,12 +17,14 @@ class CompiledFunction(object):
     """
     def __init__(self, fn):
         self.fn = fn
-        self.compiled = None
+        self.compiled = {}  # len(args) -> callable
         self._param_names = None
 
     def __call__(self, *args, **kwargs):
+        argc = len(args)
+
         # if first time
-        if self.compiled is None:
+        if argc not in self.compiled:
             # param capture
             with poutine.block():
                 with poutine.trace(param_only=True) as first_param_capture:
@@ -46,7 +48,7 @@ class CompiledFunction(object):
                     constrained_params[name] = constrained_param
                 return poutine.replay(self.fn, params=constrained_params)(*args, **kwargs)
 
-            self.compiled = compiled
+            self.compiled[argc] = compiled
         else:
             unconstrained_params = [pyro.param(name).unconstrained()
                                     for name in self._param_names]
@@ -54,7 +56,7 @@ class CompiledFunction(object):
 
         with poutine.block(hide=self._param_names):
             with poutine.trace(param_only=True) as param_capture:
-                ret = self.compiled(*params_and_args)
+                ret = self.compiled[argc](*params_and_args)
 
         for name in param_capture.trace.nodes.keys():
             if name not in self._param_names:

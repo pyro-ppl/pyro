@@ -200,6 +200,8 @@ def torch_sign(value):
     """
     if isinstance(value, numbers.Number):
         return (value > 0) - (value < 0)
+    if value.dtype == torch.int64:
+        value = value.float()
     return torch.sign(value)
 
 
@@ -208,7 +210,7 @@ def eye_like(value, m, n=None):
     if n is None:
         n = m
     eye = value.new_zeros(m, n)
-    eye.view(-1)[::n + 1] = 1
+    eye.view(-1)[:min(m, n) * n:n + 1] = 1
     return eye
 
 
