@@ -1,2 +1,4 @@
 -e git://github.com/nwojke/pymotutils#egg=pymotutils
 motmetrics
+pytest-xdist
+lap

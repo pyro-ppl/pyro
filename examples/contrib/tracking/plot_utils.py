@@ -70,7 +70,8 @@ def plot_solution(observations, p_exists, positions, true_positions, args,
             fig.savefig(os.path.join(fig_dir, "solution.png"), bbox_inches='tight', dpi=100)
         if viz is not None:
             viz.matplot(pyplot, env=env)
-
+        else:
+            pyplot.close(fig)
 
 def plot_exists_prob(p_exists, viz=None, env='main', fig_dir=None):
     p_exists = p_exists.detach().numpy()
@@ -94,6 +95,7 @@ def plot_exists_prob(p_exists, viz=None, env='main', fig_dir=None):
         pyplot.tight_layout()
         if fig_dir is not None:
             fig.savefig(os.path.join(fig_dir, "exists_prob.png"), bbox_inches='tight', dpi=100)
+            pyplot.close(fig)
 
 
 def plot_list(list_values, title, viz=None, env='main', fig_dir=None):
@@ -110,3 +112,4 @@ def plot_list(list_values, title, viz=None, env='main', fig_dir=None):
         pyplot.tight_layout()
         if fig_dir is not None:
             fig.savefig(os.path.join(fig_dir, title.lower().replace(' ', '_') + ".png"), bbox_inches='tight', dpi=100)
+            pyplot.close(fig)

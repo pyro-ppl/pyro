@@ -20,7 +20,7 @@ def pytest_generate_tests(metafunc):
 
 def generate_list_of_experiments():
     from itertools import product
-    num_frames_list = [2, 10, 20]
+    num_frames_list = [10, 20, 40]
     max_num_objects_list = [2, 10, 80, 400]
     expected_num_objects_list = [2, 5, 10, 20]
     expected_num_spurious_list = [0.00001, 0.1, 1, 2, 5, 10]
@@ -53,8 +53,10 @@ def generate_list_of_experiments():
     return arg_strings
 
 
+@pytest.mark.filterwarnings('ignore::ImportWarning')  # pandas raise warning for some reason...
+@pytest.mark.filterwarnings('ignore::DeprecationWarning')  # pandas raise warning for some reason...
 def test_experiment(args):
-    args = parse_args(args + " --good-init -q --no-visdom")
+    args = parse_args(args + " --good-init -q --no-visdom --exp-dir=/home/alican/experiments")
     # generate data
     pyro.set_rng_seed(args.seed)
     true_states, true_positions, observations = generate_observations(args)
@@ -107,11 +109,11 @@ def test_experiment(args):
         metrics = calculate_motmetrics(true_positions, inferred_positions, exp_dir=full_exp_dir)  # metrics is DataFrame
         # mota = metrics['mota']['acc']
         motp = metrics['motp']['acc']
-        assert motp < 1e-3
+        assert motp < 0.1
 
     ens_threshold = 0.2
     assert ((inferred_ens - args.emission_noise_scale).abs() <= ens_threshold).item()
 
 
 if __name__ == '__main__':
-    pytest.main(["-n=auto", "run_experiments.py::test_experiment"])
+    pytest.main(["run_experiments.py::test_experiment"])
