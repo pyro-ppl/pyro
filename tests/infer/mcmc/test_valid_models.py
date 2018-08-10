@@ -1,15 +1,13 @@
 import logging
 
-import torch
-
 import pytest
-from torch.nn.functional import sigmoid
+import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import config_enumerate
-from pyro.infer.mcmc import MCMC, HMC, NUTS
 import pyro.poutine as poutine
+from pyro.infer import config_enumerate
+from pyro.infer.mcmc import HMC, MCMC, NUTS
 from pyro.infer.mcmc.util import EnumTraceProbEvaluator
 from pyro.primitives import _Subsample
 from tests.common import assert_equal
@@ -49,7 +47,7 @@ def test_model_error_stray_batch_dims(kernel, kwargs):
     def gmm():
         data = torch.tensor([0., 0., 3., 3., 3., 5., 5.])
         mix_proportions = pyro.sample("phi", dist.Dirichlet(torch.ones(3)))
-        cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(3), 1.))
+        cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(3.), 1.))
         with pyro.iarange("data", data.shape[0]):
             assignments = pyro.sample("assignments", dist.Categorical(mix_proportions))
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)
@@ -74,7 +72,7 @@ def test_model_error_enum_dim_clash(kernel, kwargs):
         data = torch.tensor([0., 0., 3., 3., 3., 5., 5.])
         with pyro.iarange("num_clusters", 3):
             mix_proportions = pyro.sample("phi", dist.Dirichlet(torch.tensor(1.)))
-            cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(3), 1.))
+            cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(3.), 1.))
         with pyro.iarange("data", data.shape[0]):
             assignments = pyro.sample("assignments", dist.Categorical(mix_proportions))
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)
@@ -260,7 +258,7 @@ def test_enum_log_prob_continuous_sampled(data, expected_log_prob):
         mean = 2 * y - 1
         n = pyro.sample("n", dist.Normal(mean, 1.))
         with pyro.iarange("data", len(data)):
-            pyro.sample("obs", dist.Bernoulli(sigmoid(n)), obs=data)
+            pyro.sample("obs", dist.Bernoulli(torch.sigmoid(n)), obs=data)
 
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)

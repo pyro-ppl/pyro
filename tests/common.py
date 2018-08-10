@@ -116,6 +116,7 @@ def assert_tensors_equal(a, b, prec=1e-5, msg=''):
         nan_mask = a != a
         assert torch.equal(nan_mask, b != b), msg
         diff = a - b
+        diff[a == b] = 0  # handle inf
         diff[nan_mask] = 0
         if diff.is_signed():
             diff = diff.abs()

@@ -44,7 +44,6 @@ class Emitter(nn.Module):
         self.lin_hidden_to_input = nn.Linear(emission_dim, input_dim)
         # initialize the two non-linearities used in the neural network
         self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, z_t):
         """
@@ -53,7 +52,7 @@ class Emitter(nn.Module):
         """
         h1 = self.relu(self.lin_z_to_hidden(z_t))
         h2 = self.relu(self.lin_hidden_to_hidden(h1))
-        ps = self.sigmoid(self.lin_hidden_to_input(h2))
+        ps = torch.sigmoid(self.lin_hidden_to_input(h2))
         return ps
 
 
@@ -77,7 +76,6 @@ class GatedTransition(nn.Module):
         self.lin_z_to_loc.bias.data = torch.zeros(z_dim)
         # initialize the three non-linearities used in the neural network
         self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
         self.softplus = nn.Softplus()
 
     def forward(self, z_t_1):
@@ -88,7 +86,7 @@ class GatedTransition(nn.Module):
         """
         # compute the gating function
         _gate = self.relu(self.lin_gate_z_to_hidden(z_t_1))
-        gate = self.sigmoid(self.lin_gate_hidden_to_z(_gate))
+        gate = torch.sigmoid(self.lin_gate_hidden_to_z(_gate))
         # compute the 'proposed mean'
         _proposed_mean = self.relu(self.lin_proposed_mean_z_to_hidden(z_t_1))
         proposed_mean = self.lin_proposed_mean_hidden_to_z(_proposed_mean)

@@ -70,8 +70,8 @@ def test_nuts_conjugate_gaussian(fixture,
 
 def test_logistic_regression():
     dim = 3
-    true_coefs = torch.arange(1, dim+1)
     data = torch.randn(2000, dim)
+    true_coefs = torch.arange(1., dim + 1.)
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):
@@ -120,8 +120,8 @@ def test_gamma_normal():
 
 def test_logistic_regression_with_dual_averaging():
     dim = 3
-    true_coefs = torch.arange(1, dim+1)
     data = torch.randn(2000, dim)
+    true_coefs = torch.arange(1., dim + 1.)
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):
@@ -189,7 +189,7 @@ def test_gaussian_mixture_model():
     def gmm(data):
         with pyro.iarange("num_clusters", K):
             mix_proportions = pyro.sample("phi", dist.Dirichlet(torch.tensor(1.)))
-            cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(K), 1.))
+            cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(float(K)), 1.))
         with pyro.iarange("data", data.shape[0]):
             assignments = pyro.sample("assignments", dist.Categorical(mix_proportions))
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)

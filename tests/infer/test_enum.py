@@ -154,7 +154,7 @@ def gmm_guide(data, verbose=False):
 @pytest.mark.parametrize("model", [gmm_model, gmm_guide])
 def test_gmm_iter_discrete_traces(data_size, graph_type, model):
     pyro.clear_param_store()
-    data = torch.arange(0, data_size)
+    data = torch.arange(0., float(data_size))
     model = config_enumerate(model)
     traces = list(iter_discrete_traces(graph_type, model, data=data, verbose=True))
     # This non-vectorized version is exponential in data_size:
@@ -189,7 +189,7 @@ def gmm_batch_guide(data):
 @pytest.mark.parametrize("model", [gmm_batch_model, gmm_batch_guide])
 def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     pyro.clear_param_store()
-    data = torch.arange(0, data_size)
+    data = torch.arange(0., float(data_size))
     model = config_enumerate(model)
     traces = list(iter_discrete_traces(graph_type, model, data=data))
     # This vectorized version is independent of data_size:
