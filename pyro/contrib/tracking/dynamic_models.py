@@ -158,7 +158,7 @@ class Ncp(DifferentiableDynamicModel):
     '''
     def __init__(self, dimension, sv2):
         dimension_pv = 2 * dimension
-        super().__init__(dimension, dimension_pv, num_process_noise_parameters=1)
+        super(Ncp, self).__init__(dimension, dimension_pv, num_process_noise_parameters=1)
         self._sv2 = sv2
         self._F_cache = torch.eye(dimension)  # State transition matrix cache
         self._Q_cache = {}  # Process noise cov cache
@@ -239,7 +239,7 @@ class Ncv(DifferentiableDynamicModel):
     '''
     def __init__(self, dimension, sa2):
         dimension_pv = dimension
-        super().__init__(dimension, dimension_pv, num_process_noise_parameters=1)
+        super(Ncv, self).__init__(dimension, dimension_pv, num_process_noise_parameters=1)
         self._sa2 = sa2
         self._F_cache = {}  # State transition matrix cache
         self._Q_cache = {}  # Process noise cov cache
