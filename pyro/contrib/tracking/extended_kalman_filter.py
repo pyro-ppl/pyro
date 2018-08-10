@@ -171,7 +171,7 @@ class EKFState(object):
 
         return dz, S
 
-    def likelihood_of_update(self, measurement):
+    def log_likelihood_of_update(self, measurement):
         '''
         Compute and return the likelihood of a potential update, but don't
         actually perform the update. Assumes state and measurement are time-
@@ -182,8 +182,8 @@ class EKFState(object):
         :return: Likelihood of hypothetical update.
         '''
         dz, S = self.innovation(measurement)
-        return torch.exp(dist.MultivariateNormal(S.new_zeros(S.shape[-1]), S)
-                         .log_prob(dz))
+        return dist.MultivariateNormal(S.new_zeros(S.shape[-1]),
+                                       S).log_prob(dz)
 
     def update(self, measurement):
         '''
