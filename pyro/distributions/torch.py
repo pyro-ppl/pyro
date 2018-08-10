@@ -39,16 +39,6 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
 
 
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
-
-    # log_prob can be deleted after https://github.com/pytorch/pytorch/pull/10321
-    def log_prob(self, value):
-        if self._validate_args:
-            self._validate_sample(value)
-        value = value.long().unsqueeze(-1)
-        value, log_pmf = torch.broadcast_tensors(value, self.logits)
-        value = value[..., :1]
-        return log_pmf.gather(-1, value).squeeze(-1)
-
     def expand(self, batch_shape):
         try:
             return super(Categorical, self).expand(batch_shape)
