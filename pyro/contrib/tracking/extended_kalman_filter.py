@@ -4,7 +4,7 @@ from torch.distributions.utils import lazy_property
 import pyro.distributions as dist
 
 
-class EKFState:
+class EKFState(object):
     '''
     State-Centric EKF (Extended Kalman Filter) for use with either an NCP
     (Nearly-Constant Position) or NCV (Nearly-Constant Velocity) target dynamic
@@ -77,11 +77,6 @@ class EKFState:
         Compute and return cached PV state estimate mean.
         '''
         return self._dynamic_model.mean2pv(self._mean)
-        if self._mean_pv_cache is None:
-            self._mean_pv_cache = \
-                self._dynamic_model.mean2pv(self._mean)
-
-        return self._mean_pv_cache
 
     @lazy_property
     def cov_pv(self):
@@ -89,11 +84,6 @@ class EKFState:
         Compute and return cached PV state estimate covariance.
         '''
         return self._dynamic_model.cov2pv(self._cov)
-        if self._cov_pv_cache is None:
-            self._cov_pv_cache = \
-                self._dynamic_model.cov2pv(self._cov)
-
-        return self._cov_pv_cache
 
     @property
     def time(self):
