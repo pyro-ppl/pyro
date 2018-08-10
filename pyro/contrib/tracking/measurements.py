@@ -145,4 +145,4 @@ class PositionMeasurement(DifferentiableMeasurement):
         return self._jacobian
 
     def copy(self):
-        return PositionMeasurement(self._mean, self._cov, self._time. self._frame_num)
+        return PositionMeasurement(self._mean, self._cov, self._time, self._frame_num)
