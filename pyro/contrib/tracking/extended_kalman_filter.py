@@ -25,26 +25,13 @@ class EKFState:
         self._cov = cov
         self._time = time
 
-#         if mean is None:
-#             self._mean = None
-#         else:
-#             self._mean = mean.clone()
-#         if cov is None:
-#             self._cov = None
-#         else:
-#             self._cov = cov.clone()
-#         self._time = time
-#
-#         self._mean_pv_cache = None
-#         self._cov_pv_cache = None
-
     def _clear_cached(self):
         '''
         Call this whenever actions are taken which invalidate cached data.
         '''
-        return
-        self._mean_pv_cache = None
-        self._cov_pv_cache = None
+        # XXX: remove in place mutations and this function
+        self.__dict__.pop('mean_pv', None)
+        self.__dict__.pop('cov_pv', None)
 
     @property
     def dynamic_model(self):
@@ -122,8 +109,6 @@ class EKFState:
         '''
         self._mean = mean
         self._cov = cov
-#         self._mean = mean.clone()
-#         self._cov = cov.clone()
         if time is not None:
             self._time = time
 
@@ -235,7 +220,7 @@ class EKFState:
         self._mean = x
         self._cov = P
 
-#         self._clear_cached()
+        self._clear_cached()
 
         return dz, S
 
