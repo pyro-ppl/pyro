@@ -133,6 +133,9 @@ class Dice(object):
         Eric P. Xing, Shimon Whiteson (2018)
         "DiCE: The Infinitely Differentiable Monte-Carlo Estimator"
         https://arxiv.org/abs/1802.05098
+    [2] Laurence Aitchison (2018)
+        "Tensor Monte Carlo: particle methods for the GPU era"
+        https://arxiv.org/abs/1806.08593
 
     :param pyro.poutine.trace.Trace guide_trace: A guide trace.
     :param ordering: A dictionary mapping model site names to ordinal values.
@@ -146,7 +149,9 @@ class Dice(object):
         for name, site in guide_trace.nodes.items():
             if site["type"] != "sample":
                 continue
-            log_prob = site['score_parts'].score_function  # not scaled by subsampling
+            # FIXME save unscaled log_prob even for reparametrized sites
+            # log_prob = site['score_parts'].score_function  # not scaled by subsampling
+            log_prob = site['log_prob'] / site['scale']  # FIXME suffers from NANs
             if is_identically_zero(log_prob):
                 continue
 
@@ -154,6 +159,8 @@ class Dice(object):
             if site["infer"].get("enumerate"):
                 if site["infer"]["enumerate"] == "sequential":
                     log_denom[ordinal] += math.log(site["infer"]["_enum_total"])
+                elif "num_samples" in site["infer"]:  # site was parallel sampled
+                    log_prob = log_prob - log_prob.detach() - math.log(site["infer"]["num_samples"])
             else:  # site was monte carlo sampled
                 log_prob = log_prob - log_prob.detach()
             log_probs[ordinal].append(log_prob)

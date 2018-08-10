@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
+
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
@@ -81,20 +83,25 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
         yield traced_fn.get_trace(*args, **kwargs)
 
 
-def _config_enumerate(default, expand):
+def _config_enumerate(default, expand, num_samples):
 
     def config_fn(site):
         if site["type"] != "sample" or site["is_observed"]:
             return {}
-        if not getattr(site["fn"], "has_enumerate_support", False):
+        if type(site["fn"]).__name__ == "_Subsample":
             return {}
-        return {"enumerate": site["infer"].get("enumerate", default),
-                "expand": site["infer"].get("expand", expand)}
+        if getattr(site["fn"], "has_enumerate_support", False):
+            return {"enumerate": site["infer"].get("enumerate", default),
+                    "expand": site["infer"].get("expand", expand)}
+        if num_samples is not None:
+            return {"enumerate": site["infer"].get("enumerate", default),
+                    "num_samples": site["infer"].get("num_samples", num_samples)}
+        return {}
 
     return config_fn
 
 
-def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT):
+def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT, num_samples=None):
     """
     Configures each enumerable site a guide to enumerate with given method,
     ``site["infer"]["enumerate"] = default``. This can be used as either a
@@ -128,8 +135,11 @@ def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT):
             repr(default)))
     if expand not in [True, False]:
         raise ValueError("Invalid expand value. Expected True or False, but got {}".format(repr(expand)))
+    if not (num_samples is None or isinstance(num_samples, numbers.Number) and num_samples > 0):
+        raise ValueError("Invalid num_samples, expected None or positive integer, but got {}".format(
+            repr(num_samples)))
     # Support usage as a decorator:
     if guide is None:
-        return lambda guide: config_enumerate(guide, default=default, expand=expand)
+        return lambda guide: config_enumerate(guide, default=default, expand=expand, num_samples=num_samples)
 
-    return poutine.infer_config(guide, config_fn=_config_enumerate(default, expand))
+    return poutine.infer_config(guide, config_fn=_config_enumerate(default, expand, num_samples))

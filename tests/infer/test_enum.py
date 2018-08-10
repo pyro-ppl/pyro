@@ -319,6 +319,49 @@ def test_elbo_bern(method, enumerate1):
         ]))
 
 
+@pytest.mark.parametrize("method", ["loss", "differentiable_loss", "loss_and_grads"])
+@pytest.mark.parametrize("enumerate1", [None, "parallel"])
+def test_elbo_normal(method, enumerate1):
+    pyro.clear_param_store()
+    num_particles = 1 if enumerate1 else 10000
+    prec = 0.01
+    q = pyro.param("q", torch.tensor(1., requires_grad=True))
+    kl = kl_divergence(dist.Normal(q, 1.), dist.Normal(0., 1.))
+
+    def model():
+        with pyro.iarange("particles", num_particles):
+            pyro.sample("z", dist.Normal(0., 1.).expand_by([num_particles]))
+
+    @config_enumerate(default=enumerate1, num_samples=10000)
+    def guide():
+        q = pyro.param("q")
+        with pyro.iarange("particles", num_particles):
+            pyro.sample("z", dist.Normal(q, 1.).expand_by([num_particles]))
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1,
+                          strict_enumeration_warning=any([enumerate1]))
+
+    if method == "loss":
+        actual = elbo.loss(model, guide) / num_particles
+        expected = kl.item()
+        assert_equal(actual, expected, prec=prec, msg="".join([
+            "\nexpected = {}".format(expected),
+            "\n  actual = {}".format(actual),
+        ]))
+    else:
+        if method == "differentiable_loss":
+            loss = elbo.differentiable_loss(model, guide)
+            actual = grad(loss, [q])[0] / num_particles
+        elif method == "loss_and_grads":
+            elbo.loss_and_grads(model, guide)
+            actual = q.grad / num_particles
+        expected = grad(kl, [q])[0]
+        assert_equal(actual, expected, prec=prec, msg="".join([
+            "\nexpected = {}".format(expected.detach().cpu().numpy()),
+            "\n  actual = {}".format(actual.detach().cpu().numpy()),
+        ]))
+
+
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
