@@ -460,7 +460,7 @@ def test_elbo_categoricals(enumerate1, enumerate2, enumerate3, max_iarange_nesti
 @pytest.mark.parametrize("method", ["differentiable_loss", "loss_and_grads"])
 def test_elbo_normals(method, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
-    num_particles =  100 * 10 ** sum(1 for e in [enumerate1, enumerate2, enumerate3] if not e)
+    num_particles = 100 * 10 ** sum(1 for e in [enumerate1, enumerate2, enumerate3] if not e)
     prec = 0.1
     q = pyro.param("q", torch.tensor(0.0, requires_grad=True))
 

@@ -149,19 +149,18 @@ class Dice(object):
         for name, site in guide_trace.nodes.items():
             if site["type"] != "sample":
                 continue
-            # FIXME save unscaled log_prob even for reparametrized sites
-            # log_prob = site['score_parts'].score_function  # not scaled by subsampling
-            log_prob = site['log_prob'] / site['scale']  # FIXME suffers from NANs
-            if is_identically_zero(log_prob):
-                continue
 
             ordinal = ordering[name]
             if site["infer"].get("enumerate"):
-                if site["infer"]["enumerate"] == "sequential":
-                    log_denom[ordinal] += math.log(site["infer"]["_enum_total"])
-                elif "num_samples" in site["infer"]:  # site was parallel sampled
+                log_prob = site['score_parts'].unscaled_log_prob  # not scaled by subsampling
+                if "num_samples" in site["infer"]:  # site was parallel sampled
                     log_prob = log_prob - log_prob.detach() - math.log(site["infer"]["num_samples"])
+                elif site["infer"]["enumerate"] == "sequential":
+                    log_denom[ordinal] += math.log(site["infer"]["_enum_total"])
             else:  # site was monte carlo sampled
+                log_prob = site['score_parts'].score_function  # not scaled by subsampling
+                if is_identically_zero(log_prob):
+                    continue
                 log_prob = log_prob - log_prob.detach()
             log_probs[ordinal].append(log_prob)
 
