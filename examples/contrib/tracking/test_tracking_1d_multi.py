@@ -2,26 +2,27 @@ import pytest
 from tracking_1d_multi import track_1d_objects
 from datagen_utils import generate_observations, get_positions
 from tracking_1d_multi import parse_args
-
 import pyro
 import os
 
 
-def calculate_motmetrics(true_positions, inferred_positions, exp_dir=None):
+def calculate_metrics(true_positions, inferred_positions, true_ens, inferred_ens, exp_dir=None):
     assert true_positions.shape[0] == inferred_positions.shape[0]
     import motmetrics as mm
+    import pandas
+
     acc = mm.MOTAccumulator(auto_id=True)
-    for f in range(true_positions.shape[1]):
+    for f in range(true_positions.shape[0]):
         C = (true_positions[f].unsqueeze(-1) - inferred_positions[f].unsqueeze(0)).pow(2).detach().tolist()
         acc.update(
             list(range(true_positions.shape[1])),  # Ground truth objects in this frame
             list(range(inferred_positions.shape[1])),  # Detector hypotheses in this frame
             C)
-    mh = mm.metrics.create()
-    summary = mh.compute(acc, metrics=mm.metrics.motchallenge_metrics, name='acc')
+    metrics = mm.metrics.create().compute(acc, metrics=mm.metrics.motchallenge_metrics, name='acc')
+    metrics.loc[:, 'ens_error'] = pandas.Series((inferred_ens - true_ens).abs().item(), index=metrics.index)
     if exp_dir is not None:
-        summary.to_csv(os.path.join(exp_dir, "results.csv"), header=True, sep=',', mode='w')
-    return summary
+        metrics.to_csv(os.path.join(exp_dir, "results.csv"), header=True, sep=',', mode='w')
+    return metrics
 
 
 def xfail_param(*args, **kwargs):
@@ -73,8 +74,8 @@ def test_1d_track_objects(arg_string):
         match = (dist_matrix <= dist_threshold).float()
         assert (match.sum(dim=1) > 0).all().item(), dist_matrix  # check all true objects have at least 1 matching
     else:
-        full_exp_dir = os.path.join(args.exp_dir, args.exp_name) if args.exp_name is not None else None
-        metrics = calculate_motmetrics(true_positions, inferred_positions, exp_dir=full_exp_dir)  # metrics is DataFrame
+        metrics = calculate_metrics(true_positions, inferred_positions,
+                                    args.emission_noise_scale, inferred_ens)  # metrics is pandas DataFrame
         # mota = metrics['mota']['acc']
         motp = metrics['motp']['acc']
         assert motp < 1e-2

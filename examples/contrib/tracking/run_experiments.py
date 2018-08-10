@@ -9,7 +9,7 @@ from datagen_utils import generate_observations, get_positions
 from plot_utils import plot_solution, plot_exists_prob, init_plot_utils, plot_list
 from experiment_utils import args2json
 from tracking_1d_multi import track_1d_objects, parse_args, guide
-from test_tracking_1d_multi import calculate_motmetrics
+from test_tracking_1d_multi import calculate_metrics
 
 smoke_test = ('CI' in os.environ)
 
@@ -28,13 +28,14 @@ def generate_list_of_experiments():
     expected_num_spurious_list = [0.00001, 0.1, 1, 2, 5, 10]
     emission_prob_list = [.7, .8, .9, .9999]
     emission_noise_scale_list = [0.05, 0.1, 0.2, 0.3]
+    merge_radius_list = [-1, 1e-8]
     result = product(num_frames_list, max_num_objects_list, expected_num_objects_list,
-                     expected_num_spurious_list, emission_prob_list, emission_noise_scale_list
-                     )
+                     expected_num_spurious_list, emission_prob_list, emission_noise_scale_list,
+                     merge_radius_list)
     arg_strings = []
     for each in result:
-        (num_frames, max_num_objects, expected_num_objects,
-         expected_num_spurious, emission_prob, emission_noise_scale) = each
+        (num_frames, max_num_objects, expected_num_objects, expected_num_spurious,
+         emission_prob, emission_noise_scale, merge_radius) = each
         if max_num_objects < expected_num_objects:
             continue
         arg_string = " ".join(
@@ -45,10 +46,8 @@ def generate_list_of_experiments():
              "--expected-num-spurious={}".format(expected_num_spurious),
              "--emission-prob={}".format(emission_prob),
              "--emission-noise-scale={}".format(emission_noise_scale),
-             "--merge-radius=1e-3",
+             "--merge-radius={}".format(merge_radius),
              "--prune-threshold=-1e-2",
-             "--good-init",
-             "--no-visdom",
              "--seed=2"
              ])
         arg_strings.append(arg_string)
@@ -98,23 +97,16 @@ def test_experiment(args):
     inferred_states = pyro.param("states_loc")
     inferred_positions = get_positions(inferred_states, args.num_frames)
     inferred_ens = pyro.param("emission_noise_scale")
-    old_metric = False
-    if old_metric:
-        true_states = true_states.unsqueeze(1)
-        inferred_states = inferred_states.unsqueeze(0)
-        dist_matrix = (true_states - inferred_states).pow(2).sum(-1).sqrt()
-        dist_threshold = 0.2
-        match = (dist_matrix <= dist_threshold).float()
-        assert (match.sum(dim=1) > 0).all().item(), dist_matrix  # check all true objects have at least 1 matching
-    else:
-        full_exp_dir = os.path.join(args.exp_dir, args.exp_name) if args.exp_name is not None else None
-        metrics = calculate_motmetrics(true_positions, inferred_positions, exp_dir=full_exp_dir)  # metrics is DataFrame
-        # mota = metrics['mota']['acc']
-        motp = metrics['motp']['acc']
-        assert motp < 0.01
+    full_exp_dir = os.path.join(args.exp_dir, args.exp_name) if args.exp_name is not None else None
+    metrics = calculate_metrics(true_positions, inferred_positions,
+                                args.emission_noise_scale, inferred_ens,
+                                exp_dir=full_exp_dir)  # metrics is DataFrame
+    # mota = metrics['mota']['acc']
+    motp = metrics['motp']['acc']
+    ens_error = metrics['ens_error']['acc']
 
-    ens_threshold = 0.2
-    assert ((inferred_ens - args.emission_noise_scale).abs() <= ens_threshold).item()
+    assert motp < 0.05
+    assert ens_error <= 0.2
 
 
 if __name__ == '__main__':
