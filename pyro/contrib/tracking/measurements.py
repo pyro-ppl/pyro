@@ -11,13 +11,19 @@ class Measurement(object):
 
     :param mean: mean of measurement distribution.
     :param cov: covariance of measurement distribution.
-    :param time: time of measurement.
+    :param time: continuous time of measurement. If this is not
+          provided, `frame_num` must be.
+    :param frame_num: discrete time of measurement. If this is not
+          provided, `time` must be.
     '''
-    def __init__(self, mean, cov, time):
+    def __init__(self, mean, cov, time=None, frame_num=None):
         self._dimension = len(mean)
         self._mean = mean
         self._cov = cov
+        if time is None and frame_num is None:
+            raise ValueError('Must provide time or frame_num!')
         self._time = time
+        self._frame_num = frame_num
 
     @property
     def dimension(self):
@@ -43,9 +49,16 @@ class Measurement(object):
     @property
     def time(self):
         '''
-        Time of measurement.
+        Continuous time of measurement.
         '''
         return self._time
+
+    @property
+    def frame_num(self):
+        '''
+        Discrete time of measurement.
+        '''
+        return self._frame_num
 
     @abstractmethod
     def __call__(self, x, do_normalization=True):
@@ -102,8 +115,8 @@ class PositionMeasurement(DifferentiableMeasurement):
     :param cov: covariance of measurement distribution.
     :param time: time of measurement.
     '''
-    def __init__(self, mean, cov, time):
-        super().__init__(mean, cov, time)
+    def __init__(self, mean, cov, time=None, frame_num=None):
+        super().__init__(mean, cov, time=time, frame_num=frame_num)
         self._jacobian = torch.cat([
             torch.eye(self.dimension, dtype=mean.dtype, device=mean.device),
             mean.new_zeros((self.dimension, self.dimension))], dim=1)
@@ -132,4 +145,4 @@ class PositionMeasurement(DifferentiableMeasurement):
         return self._jacobian
 
     def copy(self):
-        return PositionMeasurement(self._mean, self._cov, self._time)
+        return PositionMeasurement(self._mean, self._cov, self._time. self._frame_num)

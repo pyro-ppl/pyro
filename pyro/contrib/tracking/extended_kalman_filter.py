@@ -19,11 +19,14 @@ class EKFState:
     :param cov: covariance of target state estimate.
     :param time: time of state estimate.
     '''
-    def __init__(self, dynamic_model, mean, cov, time):
+    def __init__(self, dynamic_model, mean, cov, time=None, frame_num=None):
         self._dynamic_model = dynamic_model
         self._mean = mean
         self._cov = cov
+        if time is None and frame_num is None:
+            raise ValueError('Must provide time or frame_num!')
         self._time = time
+        self._frame_num = frame_num
 
     def _clear_cached(self):
         '''
@@ -95,26 +98,36 @@ class EKFState:
     @property
     def time(self):
         '''
-        State time access.
+        Continuous State time access.
         '''
         return self._time
 
-    def init(self, mean, cov, time):
+    @property
+    def frame_num(self):
+        '''
+        Discrete State time access.
+        '''
+        return self._frame_num
+
+    def init(self, mean, cov, time=None, frame_num=None):
         '''
         Re-initialize target state.
 
         :param mean: target state mean.
         :param cov: target state covariance.
-        :param time: state time. None => keep existing time.
+        :param time: continuous state time. None => keep existing time.
+        :param time: discrete state time. None => keep existing time.
         '''
         self._mean = mean
         self._cov = cov
         if time is not None:
             self._time = time
+        if frame_num is not None:
+            self._frame_num = frame_num
 
         self._clear_cached()
 
-    def predict(self, dt=None, destination_time=None):
+    def predict(self, dt=None, destination_time=None, destination_frame_num=None):
         '''
         Use dynamic model to predict (aka propagate aka integrate) state
         estimate in-place.
@@ -123,24 +136,23 @@ class EKFState:
                    incremented this amount unless you provide ``destination_time``.
                    Using ``destination_time`` may be preferable for prevention of
                    roundoff error accumulation.
-        :param destination_time: time to increment to.
+        :param destination_time: optional value to set continuous state time to
+            after integration. If this is not provided, then
+            `destination_frame_num` must be.
+        :param destination_frame_num: optional value to set discrete state time to
+            after integration. If this is not provided, then
+            `destination_frame_num` must be.
         '''
-        if dt is not None and destination_time is not None:
-            assert ((destination_time - self._time + dt) < 1e-3).all()
-        elif dt is None:
-            assert destination_time is not None
-            dt = destination_time - self._time
-        elif destination_time is None:
-            assert dt is not None
-            destination_time = self._time + dt
-
         self._mean = self._dynamic_model(self._mean, dt)
 
         F = self._dynamic_model.jacobian(dt)
         Q = self._dynamic_model.process_noise_cov(dt)
         self._cov = F.mm(self._cov).mm(F.transpose(-1, -2)) + Q
 
+        if destination_time is None and destination_frame_num is None:
+            raise ValueError('destination_time or destination_frame_num must be specified!')
         self._time = destination_time
+        self._frame_num = destination_frame_num
 
         self._clear_cached()
 
@@ -193,8 +205,12 @@ class EKFState:
         :param: measurement.
         :returns: Innovation mean and covariance.
         '''
-        assert self._time == measurement.time, \
-            'State time and measurement time must be aligned!'
+        if self._time is not None:
+            assert self._time == measurement.time, \
+                'State time and measurement time must be aligned!'
+        if self._frame_num is not None:
+            assert self._frame_num == measurement.frame_num, \
+                'State time and measurement time must be aligned!'
 
         x = self._mean
         x_pv = self._dynamic_model.mean2pv(x)
@@ -224,10 +240,24 @@ class EKFState:
 
         return dz, S
 
-    def copy(self):
+    def copy(self, time=None, frame_num=None):
         '''
         Deepcopy everything, except dynamic model is only shallow-copied.
+
+        Optionally `time` and/or `frame_num` can be reset. This is useful,
+        e.g., if you want to cache an intial filter state that can be copied
+        into newly initialized tracks at different times.
         '''
+        if time is not None and frame_num is None:
+            return EKFState(
+                dynamic_model=self._dynamic_model,
+                mean=self._mean, cov=self._cov,
+                time=time, frame_num=None)
+        if time is None and frame_num is not None:
+            return EKFState(
+                dynamic_model=self._dynamic_model,
+                mean=self._mean, cov=self._cov,
+                time=None, frame_num=frame_num)
         return EKFState(
             dynamic_model=self._dynamic_model,
             mean=self._mean, cov=self._cov, time=self._time)
