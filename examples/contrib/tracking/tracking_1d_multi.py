@@ -5,6 +5,7 @@ import os
 import pdb
 
 import torch
+import torch.nn.functional as F
 from torch.distributions import constraints
 
 import pyro
@@ -47,14 +48,16 @@ def model(args, observations):
 
             assert observed_positions.shape == (args.num_frames, num_detections)
             bogus_position = positions.new_zeros(args.num_frames, 1)
-            augmented_positions = torch.cat([positions, bogus_position], -1)
-            predicted_positions = augmented_positions[:, assign]
+            augmented_positions = torch.cat([positions, bogus_position], -1).unsqueeze(0)
+
             # weird tricks because index and input must be same dimension in gather
             if augmented_positions.shape[-1] > assign.shape[-1]:
-                pad_shape = assign.shape[:-1] + (augmented_positions.shape[-1] - assign.shape[-1], )
-                assign = torch.cat((assign, (augmented_positions.shape[-1] - 1) * torch.ones(
-                    assign[..., :1].shape, dtype=torch.long).expand(pad_shape)), -1)
-            augmented_positions = augmented_positions.unsqueeze(0).expand_as(assign)
+                assign = F.pad(assign, (0, augmented_positions.shape[-1] - assign.shape[-1]),
+                               'constant', augmented_positions.shape[-1] - 1)
+            elif augmented_positions.shape[-1] < assign.shape[-1]:
+                augmented_positions = F.pad(augmented_positions,
+                                            (0, assign.shape[-1] - augmented_positions.shape[-1]), 'replicate')
+            augmented_positions = augmented_positions.expand_as(assign)
             predicted_positions = torch.gather(augmented_positions, -1, assign)
             if args.debug:
                 pdb.set_trace()
@@ -231,7 +234,7 @@ def demo(args):
         args2json(args, os.path.join(full_exp_dir, 'config.json'))
     env = str(args)
 
-    losses, ens = track_1d_objects(args, observations)
+    losses, ens = track_1d_objects(args, observations, true_states)
 
     # run visualizations
     if (viz is not None) or (full_exp_dir is not None):
@@ -251,7 +254,7 @@ def demo(args):
     states_loc = pyro.param("states_loc")
     positions = get_positions(states_loc, args.num_frames)
     emission_noise_scale = pyro.param("emission_noise_scale")
-    return true_states, states_loc, args.emission_noise_scale, emission_noise_scale, p_exists
+    return true_states, states_loc, args.emission_noise_scale, emission_noise_scale
 
 
 def parse_args(*args):
