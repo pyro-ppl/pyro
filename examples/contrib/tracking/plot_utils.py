@@ -73,6 +73,7 @@ def plot_solution(observations, p_exists, positions, true_positions, args,
         else:
             pyplot.close(fig)
 
+
 def plot_exists_prob(p_exists, viz=None, env='main', fig_dir=None):
     p_exists = p_exists.detach().numpy()
     if viz is not None:

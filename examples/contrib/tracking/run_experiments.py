@@ -11,9 +11,11 @@ from experiment_utils import args2json
 from tracking_1d_multi import track_1d_objects, parse_args, guide
 from test_tracking_1d_multi import calculate_motmetrics
 
+smoke_test = ('CI' in os.environ)
+
 
 def pytest_generate_tests(metafunc):
-    args_list = generate_list_of_experiments()
+    args_list = generate_list_of_experiments() if not smoke_test else []
     if 'args' in metafunc.fixturenames:
         metafunc.parametrize("args", args_list)
 
@@ -109,11 +111,11 @@ def test_experiment(args):
         metrics = calculate_motmetrics(true_positions, inferred_positions, exp_dir=full_exp_dir)  # metrics is DataFrame
         # mota = metrics['mota']['acc']
         motp = metrics['motp']['acc']
-        assert motp < 0.1
+        assert motp < 0.01
 
     ens_threshold = 0.2
     assert ((inferred_ens - args.emission_noise_scale).abs() <= ens_threshold).item()
 
 
 if __name__ == '__main__':
-    pytest.main(["run_experiments.py::test_experiment"])
+    pytest.main(["-n=auto", "run_experiments.py::test_experiment", "-v", "--tb=line"])
