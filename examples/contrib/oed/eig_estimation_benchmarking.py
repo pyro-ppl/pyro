@@ -7,12 +7,15 @@ import numpy as np
 import pyro
 from pyro import optim
 from pyro.infer import TraceEnum_ELBO
-from pyro.contrib.oed.eig import vi_ape, naive_rainforth
+from pyro.contrib.oed.eig import (
+    vi_ape, naive_rainforth, donsker_varadhan_loss
+)
 
 from models.bayes_linear import (
     bayesian_linear_model, normal_inv_gamma_guide, group_assignment_matrix,
     analytic_posterior_entropy
 )
+from nn.donsker_varadhan import DVNeuralNet
 
 PLOT = True
 
@@ -68,15 +71,38 @@ def naive_rainforth_lm(X_lm, sqrtlambda, obs_sd, alpha_0, beta_0, N, M):
         X_lm, "y", "w", N=N, M=M)
 
 
+def donsker_varadhan_lm(X_lm, sqrtlambda, obs_sd, alpha_0, beta_0, n_iter, n_samples, lr, nn):
+    model = partial(bayesian_linear_model,
+                    w_mean=torch.tensor(0.),
+                    w_sqrtlambda=sqrtlambda,
+                    obs_sd=obs_sd,
+                    alpha_0=alpha_0,
+                    beta_0=beta_0)
+    dv_loss_fn = donsker_varadhan_loss(model, X_lm, "y", "w", n_samples, nn)
+    params = None
+    opt = optim.Adam({"lr": lr})
+    for step in range(n_iter):
+        if params is not None:
+            pyro.infer.util.zero_grads(params)
+        agg_loss, dv_loss = dv_loss_fn()
+        agg_loss.backward()
+        params = [pyro.param(name).unconstrained()
+                  for name in pyro.get_param_store().get_all_param_names()]
+        opt(params)
+    return dv_loss
+
+
 @pytest.mark.parametrize("arglist", [
      # Warning: do not do this, not a mean-field guide!
      # [(X_lm, vi_for_lm, torch.tensor([.1, .4]), None, torch.tensor(10.), torch.tensor(10.), 5000, 10)],
      [(X_lm, lm_true_eig, [torch.tensor([.1, .4]), torch.tensor(1.)]),
       (X_lm, vi_for_lm, [torch.tensor([.1, .4]), torch.tensor(1.), None, None, 5000, 1]),
-      (X_lm, naive_rainforth_lm, [torch.tensor([.1, .4]), torch.tensor(1.), None, None, 2000, 2000])],
+      (X_lm, naive_rainforth_lm, [torch.tensor([.1, .4]), torch.tensor(1.), None, None, 2000, 2000]),
+      (X_lm, donsker_varadhan_lm, [torch.tensor([.1, .4]), torch.tensor(1.), None, None, 4000, 200, 0.05, DVNeuralNet(2, 2)])],
      [(X_lm, lm_true_eig, [torch.tensor([.1, 10.]), torch.tensor(1.)]),
       (X_lm, vi_for_lm, [torch.tensor([.1, 10.]), torch.tensor(1.), None, None, 10000, 1]),
-      (X_lm, naive_rainforth_lm, [torch.tensor([.1, 10.]), torch.tensor(1.), None, None, 2000, 2000])],
+      (X_lm, naive_rainforth_lm, [torch.tensor([.1, 10.]), torch.tensor(1.), None, None, 2000, 2000]),
+      (X_lm, donsker_varadhan_lm, [torch.tensor([.1, 10.]), torch.tensor(1.), None, None, 4000, 200, 0.05, DVNeuralNet(2, 2)])],
 ])
 def test_eig_and_plot(arglist):
     pyro.set_rng_seed(42)
