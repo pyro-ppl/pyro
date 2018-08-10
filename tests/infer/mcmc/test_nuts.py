@@ -224,3 +224,25 @@ def test_bernoulli_latent_model():
     mcmc_run = MCMC(nuts_kernel, num_samples=600, warmup_steps=200).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites="y_prob").mean
     assert_equal(posterior, y_prob, prec=0.05)
+
+
+@pytest.mark.parametrize("num_steps", [2, 3, 5])
+def test_gaussian_hmm_enum_shape(num_steps):
+    dim = 4
+
+    def model(data):
+        initialize = pyro.sample("initialize", dist.Dirichlet(torch.ones(dim)))
+        transition = pyro.sample("transition", dist.Dirichlet(torch.ones(dim, dim)))
+        emission_loc = pyro.sample("emission_loc", dist.Normal(torch.zeros(dim), torch.ones(dim)))
+        emission_scale = pyro.sample("emission_scale", dist.LogNormal(torch.zeros(dim), torch.ones(dim)))
+        x = None
+        for t, y in enumerate(data):
+            x = pyro.sample("x_{}".format(t), dist.Categorical(initialize if x is None else transition[x]))
+            pyro.sample("y_{}".format(t), dist.Normal(emission_loc[x], emission_scale[x]), obs=y)
+            # check shape
+            effective_dim = sum(1 for size in x.shape if size > 1)
+            assert effective_dim == 1
+
+    data = torch.ones(num_steps)
+    nuts_kernel = NUTS(model, adapt_step_size=True, max_iarange_nesting=0)
+    MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)
