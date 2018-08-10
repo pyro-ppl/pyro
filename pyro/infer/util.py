@@ -150,15 +150,14 @@ class Dice(object):
             if site["type"] != "sample":
                 continue
 
+            log_prob = site['score_parts'].score_function  # not scaled by subsampling
             ordinal = ordering[name]
             if site["infer"].get("enumerate"):
-                log_prob = site['score_parts'].unscaled_log_prob  # not scaled by subsampling
                 if "num_samples" in site["infer"]:  # site was parallel sampled
-                    log_prob = log_prob - log_prob.detach() - math.log(site["infer"]["num_samples"])
+                    log_prob = -math.log(site["infer"]["num_samples"])
                 elif site["infer"]["enumerate"] == "sequential":
                     log_denom[ordinal] += math.log(site["infer"]["_enum_total"])
             else:  # site was monte carlo sampled
-                log_prob = site['score_parts'].score_function  # not scaled by subsampling
                 if is_identically_zero(log_prob):
                     continue
                 log_prob = log_prob - log_prob.detach()

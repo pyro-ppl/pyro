@@ -20,12 +20,6 @@ class ScoreParts(namedtuple('ScoreParts', ['log_prob', 'score_function', 'entrop
         log_prob = scale_tensor(self.log_prob, scale)
         score_function = scale_tensor(self.score_function, torch_sign(scale))
         entropy_term = scale_tensor(self.entropy_term, scale)
-        scaled = ScoreParts(log_prob, score_function, entropy_term)
-        scaled._unscaled_log_prob = self.unscaled_log_prob
-        return scaled
+        return ScoreParts(log_prob, score_function, entropy_term)
 
     __rmul__ = __mul__
-
-    @property
-    def unscaled_log_prob(self):
-        return getattr(self, '_unscaled_log_prob', self.log_prob)
