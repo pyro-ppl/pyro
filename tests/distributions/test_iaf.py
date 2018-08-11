@@ -100,11 +100,6 @@ class AutoRegressiveNNTests(TestCase):
     def _test_masks(self, input_dim, observed_dim, hidden_dim, num_layers, permutation, output_dim_multiplier):
         masks, mask_skip = create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, output_dim_multiplier)
 
-        #print('input_dim', input_dim, 'observed_dim', observed_dim, 'hidden_dim', hidden_dim, 'num_layers', num_layers, 'perm', permutation, 'output_mul', output_dim_multiplier)
-
-        #[print(m.size()) for m in masks]
-        #print(mask_skip.size())
-
         # First test that hidden layer masks are adequately connected
         # Tracing backwards, works out what inputs each output is connected to
         # It's a dictionary of sets indexed by a tuple (input_dim, param_dim)
@@ -116,14 +111,12 @@ class AutoRegressiveNNTests(TestCase):
           for jdx in range(output_dim_multiplier):
             prev_connections = set()
             # Do final mask
-            #print('Final mask size', masks[-1].size())
             for kdx in range(masks[-1].size(1)):
               if masks[-1][idx + jdx*input_dim, kdx]:
                 prev_connections.add(kdx)
 
             # Do hidden masks
             for m in reversed(masks[:-1]):
-              #print('mask size', m.size())
               this_connections = set()
               for kdx in prev_connections:
                 for ldx in range(m.size(1)):
@@ -132,12 +125,7 @@ class AutoRegressiveNNTests(TestCase):
               prev_connections = this_connections.copy()
 
             # Calculate correct answer
-            correct = torch.cat((torch.arange(observed_dim), torch.tensor(permutation[0:permutation.index(idx)], dtype=torch.long)+observed_dim))
-            correct, _ = torch.sort(correct)
-
-            #print('input_dim', input_dim, 'observed_dim', observed_dim, 'hidden_dim', hidden_dim, 'num_layers', num_layers, 'perm', permutation, 'output_mul', output_dim_multiplier)
-            #print(this_connections, correct)
-
+            correct = torch.cat((torch.arange(observed_dim), torch.tensor(sorted(permutation[0:permutation.index(idx)]), dtype=torch.long)+observed_dim))
             assert (torch.tensor(list(sorted(this_connections)), dtype=torch.long) == correct).all()
 
     def test_jacobians(self):
@@ -149,9 +137,7 @@ class AutoRegressiveNNTests(TestCase):
           for observed_dim in [0, 3]:
             for num_layers in [1, 3]:
               for output_dim_multiplier in [1, 2, 3]:
+                # NOTE: the hidden dimension must be greater than the input_dim for the masks to be well-defined!
                 hidden_dim = input_dim * 5
                 permutation = torch.randperm(input_dim)
                 self._test_masks(input_dim, observed_dim, hidden_dim, num_layers, permutation, output_dim_multiplier)
-
-        #permutation = torch.tensor([2, 0, 1])
-        #self._test_masks(3, 0, 15, 1, permutation, 1)
