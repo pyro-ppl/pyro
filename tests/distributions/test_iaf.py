@@ -97,28 +97,18 @@ class AutoRegressiveNNTests(TestCase):
 
             assert lower_sum == float(0.0)
 
-    def test_jacobians(self):
-        for input_dim in [2, 3, 5, 7, 9, 11]:
-            self._test_jacobian(input_dim, 3 * input_dim + 1, 2)
-
-    def test_masks(self):
-        input_dim = 3
-        observed_dim = 4
-        hidden_dim = 9
-        num_layers = 1
-        #permutation = torch.arange(input_dim)
-        permutation = torch.tensor([1, 2, 0])
-        output_dim_multiplier = 1
-
+    def _test_masks(self, input_dim, observed_dim, hidden_dim, num_layers, permutation, output_dim_multiplier):
         masks, mask_skip = create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, output_dim_multiplier)
-        #print(len(masks))
+
+        #print('input_dim', input_dim, 'observed_dim', observed_dim, 'hidden_dim', hidden_dim, 'num_layers', num_layers, 'perm', permutation, 'output_mul', output_dim_multiplier)
+
+        #[print(m.size()) for m in masks]
+        #print(mask_skip.size())
 
         # First test that hidden layer masks are adequately connected
-
         # Tracing backwards, works out what inputs each output is connected to
         # It's a dictionary of sets indexed by a tuple (input_dim, param_dim)
         permutation = list(permutation.numpy())
-        connections = {}
 
         # Loop over variables
         for idx in range(input_dim):
@@ -126,27 +116,42 @@ class AutoRegressiveNNTests(TestCase):
           for jdx in range(output_dim_multiplier):
             prev_connections = set()
             # Do final mask
+            #print('Final mask size', masks[-1].size())
             for kdx in range(masks[-1].size(1)):
               if masks[-1][idx + jdx*input_dim, kdx]:
                 prev_connections.add(kdx)
 
             # Do hidden masks
-            for m in masks[:-1]:
+            for m in reversed(masks[:-1]):
+              #print('mask size', m.size())
               this_connections = set()
               for kdx in prev_connections:
                 for ldx in range(m.size(1)):
                   if m[kdx, ldx]:
                     this_connections.add(ldx)
-              prev_connections = this_connections
-
-            connections[(idx, jdx)] = torch.tensor(list(this_connections))
+              prev_connections = this_connections.copy()
 
             # Calculate correct answer
             correct = torch.cat((torch.arange(observed_dim), torch.tensor(permutation[0:permutation.index(idx)], dtype=torch.long)+observed_dim))
+            correct, _ = torch.sort(correct)
 
-            assert (torch.tensor(list(this_connections)) == correct).all()
+            #print('input_dim', input_dim, 'observed_dim', observed_dim, 'hidden_dim', hidden_dim, 'num_layers', num_layers, 'perm', permutation, 'output_mul', output_dim_multiplier)
+            #print(this_connections, correct)
 
-            #correct = list(range(observed_dim)) + list(np.array(permutation[0:permutation.index(idx)]+observed_dim))
-            #print('correct answer', correct)
+            assert (torch.tensor(list(sorted(this_connections)), dtype=torch.long) == correct).all()
 
-            #print('output', idx, 'param', jdx, 'connected to', connections[(idx,jdx)])
+    def test_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, 3 * input_dim + 1, 2)
+
+    def test_masks(self):
+        for input_dim in [1, 3, 5]:
+          for observed_dim in [0, 3]:
+            for num_layers in [1, 3]:
+              for output_dim_multiplier in [1, 2, 3]:
+                hidden_dim = input_dim * 5
+                permutation = torch.randperm(input_dim)
+                self._test_masks(input_dim, observed_dim, hidden_dim, num_layers, permutation, output_dim_multiplier)
+
+        #permutation = torch.tensor([2, 0, 1])
+        #self._test_masks(3, 0, 15, 1, permutation, 1)
