@@ -42,14 +42,14 @@ def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, ou
     :param num_layers: the number of hidden layers for which to create masks
     :type num_layers: int
     :param permutation: the order of the input variables
-    :type permutation: torch.Tensor
+    :type permutation: torch.LongTensor
     :param output_dim_multiplier: tiles the output (e.g. for when a separate mean and scale parameter are desired)
     :type output_dim_multiplier: int
     """
     # Create mask indices for input, hidden layers, and final layer
     # We use 0 to refer to the elements of the variable being conditioned on,
     # and range(1:(D_latent+1)) for the input variable
-    var_index = permutation.clone().type(torch.get_default_dtype())
+    var_index = torch.empty(permutation.shape, dtype=torch.get_default_dtype())
     var_index[permutation] = torch.arange(input_dim, dtype=torch.get_default_dtype())
 
     # Create the indices that are assigned to the neurons
@@ -58,15 +58,15 @@ def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, ou
     output_indices = (var_index + 1).repeat(output_dim_multiplier)
 
     # Create mask from input to output for the skips connections
-    mask_skip = (output_indices.unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(output_indices)
+    mask_skip = (output_indices.unsqueeze(-1) > input_indices.unsqueeze(0)).float()
 
     # Create mask from input to first hidden layer, and between subsequent hidden layers
-    masks = [(hidden_indices[0].unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(output_indices)]
+    masks = [(hidden_indices[0].unsqueeze(-1) > input_indices.unsqueeze(0)).float()]
     for i in range(1, num_layers):
-        masks.append((hidden_indices[i].unsqueeze(-1) >= hidden_indices[i - 1].unsqueeze(0)).type_as(output_indices))
+        masks.append((hidden_indices[i].unsqueeze(-1) >= hidden_indices[i - 1].unsqueeze(0)).float())
 
     # Create mask from last hidden layer to output layer
-    masks.append((output_indices.unsqueeze(-1) >= hidden_indices[-1].unsqueeze(0)).type_as(output_indices))
+    masks.append((output_indices.unsqueeze(-1) >= hidden_indices[-1].unsqueeze(0)).float())
 
     return masks, mask_skip
 
