@@ -107,26 +107,35 @@ class AutoRegressiveNNTests(TestCase):
 
         # Loop over variables
         for idx in range(input_dim):
+          # Calculate correct answer
+          correct = torch.cat((torch.arange(observed_dim), torch.tensor(sorted(permutation[0:permutation.index(idx)]), dtype=torch.long)+observed_dim))
+
           # Loop over parameters for each variable
           for jdx in range(output_dim_multiplier):
             prev_connections = set()
-            # Do final mask
+            # Do output-to-penultimate hidden layer mask
             for kdx in range(masks[-1].size(1)):
               if masks[-1][idx + jdx*input_dim, kdx]:
                 prev_connections.add(kdx)
 
-            # Do hidden masks
+            # Do hidden-to-hidden, and hidden-to-input layer masks
             for m in reversed(masks[:-1]):
               this_connections = set()
               for kdx in prev_connections:
                 for ldx in range(m.size(1)):
                   if m[kdx, ldx]:
                     this_connections.add(ldx)
-              prev_connections = this_connections.copy()
+              prev_connections = this_connections
 
-            # Calculate correct answer
-            correct = torch.cat((torch.arange(observed_dim), torch.tensor(sorted(permutation[0:permutation.index(idx)]), dtype=torch.long)+observed_dim))
-            assert (torch.tensor(list(sorted(this_connections)), dtype=torch.long) == correct).all()
+            assert (torch.tensor(list(sorted(prev_connections)), dtype=torch.long) == correct).all()
+
+            # Test the skip-connections mask
+            skip_connections = set()
+            for kdx in range(mask_skip.size(1)):
+              if mask_skip[idx + jdx*input_dim, kdx]:
+                skip_connections.add(kdx)
+            assert (torch.tensor(list(sorted(skip_connections)), dtype=torch.long) == correct).all()
+
 
     def test_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
