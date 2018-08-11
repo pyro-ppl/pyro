@@ -9,6 +9,7 @@ import torch
 import pyro.distributions as dist
 from pyro.distributions.iaf import InverseAutoregressiveFlow
 from pyro.nn import AutoRegressiveNN
+from pyro.nn.auto_reg_nn import create_mask
 
 pytestmark = pytest.mark.init(rng_seed=123)
 
@@ -99,3 +100,53 @@ class AutoRegressiveNNTests(TestCase):
     def test_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, 3 * input_dim + 1, 2)
+
+    def test_masks(self):
+        input_dim = 3
+        observed_dim = 4
+        hidden_dim = 9
+        num_layers = 1
+        #permutation = torch.arange(input_dim)
+        permutation = torch.tensor([1, 2, 0])
+        output_dim_multiplier = 1
+
+        masks, mask_skip = create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, output_dim_multiplier)
+        #print(len(masks))
+
+        # First test that hidden layer masks are adequately connected
+
+        # Tracing backwards, works out what inputs each output is connected to
+        # It's a dictionary of sets indexed by a tuple (input_dim, param_dim)
+        permutation = list(permutation.numpy())
+        connections = {}
+
+        # Loop over variables
+        for idx in range(input_dim):
+          # Loop over parameters for each variable
+          for jdx in range(output_dim_multiplier):
+            prev_connections = set()
+            # Do final mask
+            for kdx in range(masks[-1].size(1)):
+              if masks[-1][idx + jdx*input_dim, kdx]:
+                prev_connections.add(kdx)
+
+            # Do hidden masks
+            for m in masks[:-1]:
+              this_connections = set()
+              for kdx in prev_connections:
+                for ldx in range(m.size(1)):
+                  if m[kdx, ldx]:
+                    this_connections.add(ldx)
+              prev_connections = this_connections
+
+            connections[(idx, jdx)] = torch.tensor(list(this_connections))
+
+            # Calculate correct answer
+            correct = torch.cat((torch.arange(observed_dim), torch.tensor(permutation[0:permutation.index(idx)], dtype=torch.long)+observed_dim))
+
+            assert (torch.tensor(list(this_connections)) == correct).all()
+
+            #correct = list(range(observed_dim)) + list(np.array(permutation[0:permutation.index(idx)]+observed_dim))
+            #print('correct answer', correct)
+
+            #print('output', idx, 'param', jdx, 'connected to', connections[(idx,jdx)])
