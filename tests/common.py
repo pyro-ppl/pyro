@@ -13,7 +13,6 @@ import torch.cuda
 from numpy.testing import assert_allclose
 from pytest import approx
 
-torch.set_default_tensor_type(os.environ.get('PYRO_TENSOR_TYPE', 'torch.DoubleTensor'))
 
 """
 Contains test utilities for assertions, approximate comparison (of tensors and other objects).
@@ -117,6 +116,7 @@ def assert_tensors_equal(a, b, prec=1e-5, msg=''):
         nan_mask = a != a
         assert torch.equal(nan_mask, b != b), msg
         diff = a - b
+        diff[a == b] = 0  # handle inf
         diff[nan_mask] = 0
         if diff.is_signed():
             diff = diff.abs()

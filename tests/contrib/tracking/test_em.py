@@ -54,35 +54,32 @@ def model(detections, args):
         assign_probs[-1] = p_fake
         assign = pyro.sample('assign', dist.Categorical(logits=assign_probs))
         is_fake = (assign == assign.shape[-1] - 1)
-        is_real = ~is_fake
-        with poutine.scale(scale=is_real.type_as(assign_probs)):
-            objects_plus_bogus = torch.zeros(max_num_objects + 1)
-            objects_plus_bogus[:max_num_objects] = objects
-            pyro.sample('real_detections', dist.Normal(objects_plus_bogus[assign], noise_scale),
-                        obs=detections)
-        with poutine.scale(scale=is_fake.type_as(assign_probs)):
-            pyro.sample('fake_detections', dist.Normal(0., 1.),
-                        obs=detections)
+        objects_plus_bogus = torch.zeros(max_num_objects + 1)
+        objects_plus_bogus[:max_num_objects] = objects
+        real_dist = dist.Normal(objects_plus_bogus[assign], noise_scale)
+        fake_dist = dist.Normal(0., 1.)
+        pyro.sample('detections', dist.MaskedMixture(is_fake, real_dist, fake_dist),
+                    obs=detections)
 
 
 # This should match detection_model's existence part.
-def exists_log_likelihood(objects, args):
+def compute_exists_logits(objects, args):
     p_exists = args.expected_num_objects / args.max_num_objects
     real_part = dist.Normal(0., 1.).log_prob(objects)
     real_part = real_part + math.log(p_exists)
     spurious_part = torch.empty(real_part.shape).fill_(math.log(1 - p_exists))
-    return torch.stack([spurious_part, real_part], -1)
+    return real_part - spurious_part
 
 
 # This should match detection_model's assignment part.
-def assign_log_likelihood(objects, detections, noise_scale, args):
+def compute_assign_logits(objects, detections, noise_scale, args):
     num_detections = len(detections)
     p_fake = args.num_fake_detections / num_detections
     real_part = dist.Normal(objects, noise_scale).log_prob(detections)
     real_part = real_part + math.log((1 - p_fake) / args.max_num_objects)
     fake_part = dist.Normal(0., 1.).log_prob(detections)
     fake_part = fake_part + math.log(p_fake)
-    return torch.cat([real_part, fake_part], -1)
+    return real_part - fake_part
 
 
 def guide(detections, args):
@@ -93,14 +90,12 @@ def guide(detections, args):
 
     with torch.set_grad_enabled(args.assignment_grad):
         # Evaluate log likelihoods. TODO make this more pyronic.
-        exists_loglike = exists_log_likelihood(objects, args)
-        assign_loglike = assign_log_likelihood(objects, detections.unsqueeze(-1), noise_scale, args)
-        assert exists_loglike.shape == (max_num_objects, 2)
-        assert assign_loglike.shape == (num_detections, max_num_objects + 1)
+        exists_logits = compute_exists_logits(objects, args)
+        assign_logits = compute_assign_logits(objects, detections.unsqueeze(-1), noise_scale, args)
+        assert exists_logits.shape == (max_num_objects,)
+        assert assign_logits.shape == (num_detections, max_num_objects)
 
         # Compute soft assignments.
-        exists_logits = exists_loglike[:, 1] - exists_loglike[:, 0]
-        assign_logits = assign_loglike[:, :-1] - assign_loglike[:, -1:]
         assignment = MarginalAssignment(exists_logits, assign_logits, bp_iters=10)
 
     with pyro.iarange('objects_iarange', max_num_objects):

@@ -1,12 +1,16 @@
 import argparse
 import torch
+from torch.distributions import constraints
 import numpy as np
 
 import pyro
 import pyro.distributions as dist
 from pyro import optim
-from pyro.infer import Trace_ELBO
+from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import vi_ape
+import pyro.contrib.gp as gp
+
+from gp_bayes_opt import GPBayesOptimizer
 
 """
 Example builds on the Bayesian regression tutorial [1]. It demonstrates how
@@ -35,7 +39,7 @@ to optimal experiment design within probabilistic programs.
 N = 100  # number of participants
 p_treatments = 2  # number of treatment groups
 p = p_treatments  # number of features
-prior_stdevs = torch.tensor([1, .5])
+prior_stdevs = torch.tensor([10., 2.5])
 
 softplus = torch.nn.functional.softplus
 
@@ -93,61 +97,70 @@ def design_to_matrix(design):
         if i > 0:
             X[t:t+i, col] = 1.
         t += i
+    if t < n:
+        X[t:, -1] = 1.
     return X
 
 
 def analytic_posterior_entropy(prior_cov, x):
-    posterior_cov = prior_cov - prior_cov.mm(x.t().mm(torch.inverse(
-        x.mm(prior_cov.mm(x.t())) + torch.eye(N)).mm(x.mm(prior_cov))))
-    return 0.5*torch.logdet(2*np.pi*np.e*posterior_cov)
+    # Use some kernel trick magic
+    SigmaXX = prior_cov.mm(x.t().mm(x))
+    posterior_cov = prior_cov - torch.inverse(
+        SigmaXX + torch.eye(p)).mm(SigmaXX.mm(prior_cov))
+    y = 0.5*torch.logdet(2*np.pi*np.e*posterior_cov)
+    return y
 
 
-def main(num_steps):
+def main(num_vi_steps, num_acquisitions, num_bo_steps):
 
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
 
-    ns = range(0, N, 5)
-    designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
-    X = torch.stack(designs)
+    def estimated_ape(ns):
+        designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
+        X = torch.stack(designs)
+        est_ape = vi_ape(
+            model,
+            X,
+            observation_labels="y",
+            vi_parameters={
+                "guide": guide,
+                "optim": optim.Adam({"lr": 0.0025}),
+                "loss": TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
+                "num_steps": num_vi_steps},
+            is_parameters={"num_samples": 1}
+        )
+        return est_ape
 
-    # Estimated loss (linear transform of EIG)
-    est_ape = vi_ape(
-        model,
-        X,
-        observation_labels="y",
-        vi_parameters={
-            "guide": guide,
-            "optim": optim.Adam({"lr": 0.0025}),
-            "loss": Trace_ELBO(),
-            "num_steps": num_steps},
-        is_parameters={"num_samples": 2}
-    )
+    def true_ape(ns):
+        true_ape = []
+        prior_cov = torch.diag(prior_stdevs**2)
+        designs = [design_to_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
+        for i in range(len(ns)):
+            x = designs[i]
+            true_ape.append(analytic_posterior_entropy(prior_cov, x))
+        return torch.tensor(true_ape)
 
-    # Analytic loss
-    true_ape = []
-    prior_cov = torch.diag(prior_stdevs**2)
-    for i in range(len(ns)):
-        x = X[i, :, :]
-        true_ape.append(analytic_posterior_entropy(prior_cov, x))
+    for f in [true_ape, estimated_ape]:
+        X = torch.tensor([25., 75.])
+        y = f(X)
+        pyro.clear_param_store()
+        gpmodel = gp.models.GPRegression(
+            X, y, gp.kernels.Matern52(input_dim=1, lengthscale=torch.tensor(5.)),
+            noise=torch.tensor(0.1), jitter=1e-6)
+        gpmodel.optimize(loss=TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss)
+        gpbo = GPBayesOptimizer(constraints.interval(0, 100), gpmodel,
+                                num_acquisitions=num_acquisitions)
+        for i in range(num_bo_steps):
+            result = gpbo.get_step(f, None)
 
-    print("Estimated APE values")
-    print(est_ape)
-    print("True APE values")
-    print(true_ape)
-
-    # # Plot to compare
-    # import matplotlib.pyplot as plt
-    # ns = np.array(ns)
-    # est_ape = np.array(est_ape.detach())
-    # true_ape = np.array(true_ape)
-    # plt.scatter(ns, est_ape)
-    # plt.scatter(ns, true_ape, color='r')
-    # plt.show()
+        print(result)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
-    parser.add_argument("-n", "--num-steps", nargs="?", default=3000, type=int)
+    parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
+    parser.add_argument('--num-acquisitions', nargs="?", default=10, type=int)
+    parser.add_argument('--num-bo-steps', nargs="?", default=6, type=int)
     args = parser.parse_args()
-    main(args.num_steps)
+    main(args.num_vi_steps, args.num_acquisitions, args.num_bo_steps)
