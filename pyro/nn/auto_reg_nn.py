@@ -135,7 +135,8 @@ class AutoRegressiveNN(nn.Module):
 
         # Hidden dimension must be not less than the input otherwise it isn't
         # possible to connect to the outputs correctly
-        assert hidden_dim >= input_dim
+        if hidden_dim < input_dim:
+            raise ValueError('Hidden dimension must not be less than input dimension.')
 
         if permutation is None:
             # By default set a random permutation of variables, which is important for performance with multiple steps
