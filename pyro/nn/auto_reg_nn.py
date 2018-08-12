@@ -61,6 +61,9 @@ def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, ou
     mask_skip = (output_indices.unsqueeze(-1) > input_indices.unsqueeze(0)).float()
 
     # Create mask from input to first hidden layer, and between subsequent hidden layers
+    # NOTE: The masks created follow a slightly different pattern than that given in Germain et al. Figure 1
+    # The output first in the order (e.g. x_2 in the figure) is connected to hidden units rather than being unattached
+    # Tracing a path back through the network, however, this variable will still be unconnected to any input variables
     masks = [(hidden_indices[0].unsqueeze(-1) > input_indices.unsqueeze(0)).float()]
     for i in range(1, num_layers):
         masks.append((hidden_indices[i].unsqueeze(-1) >= hidden_indices[i - 1].unsqueeze(0)).float())
@@ -129,6 +132,10 @@ class AutoRegressiveNN(nn.Module):
         self.hidden_dim = hidden_dim
         self.output_dim_multiplier = output_dim_multiplier
         self.num_layers = num_layers
+
+        # Hidden dimension must be not less than the input otherwise it isn't
+        # possible to connect to the outputs correctly
+        assert(hidden_dim >= input_dim)
 
         if permutation is None:
             # By default set a random permutation of variables, which is important for performance with multiple steps
