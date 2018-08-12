@@ -58,18 +58,18 @@ def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, ou
     output_indices = (var_index + 1).repeat(output_dim_multiplier)
 
     # Create mask from input to output for the skips connections
-    mask_skip = (output_indices.unsqueeze(-1) > input_indices.unsqueeze(0)).float()
+    mask_skip = (output_indices.unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(var_index)
 
     # Create mask from input to first hidden layer, and between subsequent hidden layers
     # NOTE: The masks created follow a slightly different pattern than that given in Germain et al. Figure 1
     # The output first in the order (e.g. x_2 in the figure) is connected to hidden units rather than being unattached
     # Tracing a path back through the network, however, this variable will still be unconnected to any input variables
-    masks = [(hidden_indices[0].unsqueeze(-1) > input_indices.unsqueeze(0)).float()]
+    masks = [(hidden_indices[0].unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(var_index)]
     for i in range(1, num_layers):
-        masks.append((hidden_indices[i].unsqueeze(-1) >= hidden_indices[i - 1].unsqueeze(0)).float())
+        masks.append((hidden_indices[i].unsqueeze(-1) >= hidden_indices[i - 1].unsqueeze(0)).type_as(var_index))
 
     # Create mask from last hidden layer to output layer
-    masks.append((output_indices.unsqueeze(-1) >= hidden_indices[-1].unsqueeze(0)).float())
+    masks.append((output_indices.unsqueeze(-1) >= hidden_indices[-1].unsqueeze(0)).type_as(var_index))
 
     return masks, mask_skip
 
