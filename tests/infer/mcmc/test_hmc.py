@@ -30,6 +30,10 @@ def mark_jit(*args, **kwargs):
     return pytest.param(*args, **kwargs)
 
 
+def jit_idfn(param):
+    return "JIT={}".format(param)
+
+
 class GaussianChain(object):
 
     def __init__(self, dim, chain_len, num_obs):
@@ -166,7 +170,7 @@ def test_hmc_conjugate_gaussian(fixture,
         assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_logistic_regression(jit):
     dim = 3
     data = torch.randn(2000, dim)
@@ -185,7 +189,7 @@ def test_logistic_regression(jit):
     assert_equal(rmse(true_coefs, beta_posterior.mean).item(), 0.0, prec=0.1)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_beta_bernoulli(jit):
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
@@ -202,7 +206,7 @@ def test_beta_bernoulli(jit):
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_gamma_normal(jit):
     def model(data):
         rate = torch.tensor([1.0, 1.0])
@@ -219,7 +223,7 @@ def test_gamma_normal(jit):
     assert_equal(posterior.mean, true_std, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_dirichlet_categorical(jit):
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
@@ -235,7 +239,7 @@ def test_dirichlet_categorical(jit):
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_logistic_regression_with_dual_averaging(jit):
     dim = 3
     data = torch.randn(2000, dim)
@@ -254,7 +258,7 @@ def test_logistic_regression_with_dual_averaging(jit):
     assert_equal(rmse(posterior.mean, true_coefs).item(), 0.0, prec=0.1)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_beta_bernoulli_with_dual_averaging(jit):
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
@@ -266,13 +270,14 @@ def test_beta_bernoulli_with_dual_averaging(jit):
 
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True, max_iarange_nesting=2)
+    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True, max_iarange_nesting=2,
+                     jit_compile=jit)
     mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_gamma_normal_with_dual_averaging(jit):
     def model(data):
         rate = torch.tensor([1.0, 1.0])
@@ -290,7 +295,8 @@ def test_gamma_normal_with_dual_averaging(jit):
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True,
-                                                 marks=[pytest.mark.skip("FIXME: Slow on JIT.")])])
+                                                 marks=[pytest.mark.skip("FIXME: Slow on JIT.")])],
+                         ids=jit_idfn)
 def test_gaussian_mixture_model(jit):
     K, N = 3, 1000
 
@@ -316,7 +322,7 @@ def test_gaussian_mixture_model(jit):
     assert_equal(posterior[1], true_cluster_means, prec=0.2)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_bernoulli_latent_model(jit):
     @poutine.broadcast
     def model(data):

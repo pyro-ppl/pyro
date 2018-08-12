@@ -31,6 +31,10 @@ def mark_jit(*args, **kwargs):
     return pytest.param(*args, **kwargs)
 
 
+def jit_idfn(param):
+    return "JIT={}".format(param)
+
+
 T2 = T(*TEST_CASES[2].values)._replace(num_samples=800, warmup_steps=200)
 TEST_CASES[2] = pytest.param(*T2, marks=pytest.mark.skipif(
     'CI' in os.environ and os.environ['CI'] == 'true', reason='Slow test - skip on CI'))
@@ -81,7 +85,7 @@ def test_nuts_conjugate_gaussian(fixture,
         assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_logistic_regression(jit):
     dim = 3
     data = torch.randn(2000, dim)
@@ -100,7 +104,7 @@ def test_logistic_regression(jit):
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_beta_bernoulli(jit):
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
@@ -117,7 +121,7 @@ def test_beta_bernoulli(jit):
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_gamma_normal(jit):
     def model(data):
         rate = torch.tensor([1.0, 1.0])
@@ -134,7 +138,7 @@ def test_gamma_normal(jit):
     assert_equal(posterior.mean, true_std, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_logistic_regression_with_dual_averaging(jit):
     dim = 3
     data = torch.randn(2000, dim)
@@ -153,7 +157,7 @@ def test_logistic_regression_with_dual_averaging(jit):
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_beta_bernoulli_with_dual_averaging(jit):
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
@@ -170,7 +174,7 @@ def test_beta_bernoulli_with_dual_averaging(jit):
     assert_equal(posterior.mean, true_probs, prec=0.03)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_dirichlet_categorical(jit):
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
@@ -186,7 +190,7 @@ def test_dirichlet_categorical(jit):
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)])
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_gamma_beta(jit):
     def model(data):
         alpha_prior = pyro.sample('alpha', dist.Gamma(concentration=1., rate=1.))
@@ -203,7 +207,8 @@ def test_gamma_beta(jit):
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True,
-                                                 marks=[pytest.mark.skip("FIXME: Slow on JIT.")])])
+                                                 marks=[pytest.mark.skip("FIXME: Slow on JIT.")])],
+                         ids=jit_idfn)
 def test_gaussian_mixture_model(jit):
     K, N = 3, 1000
 
@@ -229,7 +234,7 @@ def test_gaussian_mixture_model(jit):
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True, marks=[
-    pytest.mark.xfail(reason="FIXME: log not implemented for 'CPULongType'")])])
+    pytest.mark.xfail(reason="FIXME: log not implemented for 'CPULongType'")])], ids=jit_idfn)
 def test_bernoulli_latent_model(jit):
     @poutine.broadcast
     def model(data):
@@ -250,8 +255,9 @@ def test_bernoulli_latent_model(jit):
     assert_equal(posterior, y_prob, prec=0.05)
 
 
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 @pytest.mark.parametrize("num_steps", [2, 3, 5])
-def test_gaussian_hmm_enum_shape(num_steps):
+def test_gaussian_hmm_enum_shape(jit, num_steps):
     dim = 4
 
     def model(data):
@@ -268,5 +274,5 @@ def test_gaussian_hmm_enum_shape(num_steps):
             assert effective_dim == 1
 
     data = torch.ones(num_steps)
-    nuts_kernel = NUTS(model, adapt_step_size=True, max_iarange_nesting=0)
+    nuts_kernel = NUTS(model, adapt_step_size=True, max_iarange_nesting=0, jit_compile=jit)
     MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)
