@@ -109,7 +109,7 @@ class AutoRegressiveNNTests(TestCase):
         # Loop over variables
         for idx in range(input_dim):
             # Calculate correct answer
-            correct = torch.cat((torch.arange(observed_dim), torch.tensor(
+            correct = torch.cat((torch.arange(observed_dim, dtype=torch.long), torch.tensor(
                 sorted(permutation[0:permutation.index(idx)]), dtype=torch.long) + observed_dim))
 
             # Loop over parameters for each variable
