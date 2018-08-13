@@ -123,6 +123,7 @@ class Dice(object):
     - scaled log-probability due to subsampling
     - independence in different ordinals due to iarange
     - weights due to parallel and sequential enumeration
+    - weights due to local multiple sampling
 
     This assumes restricted dependency structure on the model and guide:
     variables outside of an :class:`~pyro.iarange` can never depend on
@@ -153,8 +154,11 @@ class Dice(object):
             log_prob = site['score_parts'].score_function  # not scaled by subsampling
             ordinal = ordering[name]
             if site["infer"].get("enumerate"):
-                if "num_samples" in site["infer"]:  # site was parallel sampled
-                    log_prob = -math.log(site["infer"]["num_samples"])
+                num_samples = site["infer"].get("num_samples")
+                if num_samples is not None:  # site was multiply sampled
+                    if not is_identically_zero(log_prob):
+                        log_prob = log_prob - log_prob.detach()
+                    log_prob = log_prob - math.log(num_samples)
                 elif site["infer"]["enumerate"] == "sequential":
                     log_denom[ordinal] += math.log(site["infer"]["_enum_total"])
             else:  # site was monte carlo sampled

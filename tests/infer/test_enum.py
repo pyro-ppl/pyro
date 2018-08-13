@@ -362,6 +362,68 @@ def test_elbo_normal(method, enumerate1):
         ]))
 
 
+@pytest.mark.parametrize("enumerate1,num_samples1", [
+    (None, None),
+    ("sequential", None),
+    ("parallel", None),
+    ("parallel", 300),
+])
+@pytest.mark.parametrize("enumerate2,num_samples2", [
+    (None, None),
+    ("sequential", None),
+    ("parallel", None),
+    ("parallel", 300),
+])
+@pytest.mark.parametrize("method", ["differentiable_loss", "loss_and_grads"])
+def test_elbo_bern_bern(method, enumerate1, enumerate2, num_samples1, num_samples2):
+    pyro.clear_param_store()
+    if enumerate1 and enumerate2 and num_samples1 is None and num_samples2 is None:
+        num_particles = 1
+        prec = 0.001
+    else:
+        num_particles = 2 * 300 * 300
+        for n in [num_samples1, num_samples2]:
+            if n is not None:
+                num_particles = num_particles // n
+        prec = 0.1
+
+    q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
+
+    def model():
+        pyro.sample("x1", dist.Bernoulli(0.2))
+        pyro.sample("x2", dist.Bernoulli(0.4))
+
+    def guide():
+        q = pyro.param("q")
+        pyro.sample("x1", dist.Bernoulli(q), infer={"enumerate": enumerate1, "num_samples": num_samples1})
+        pyro.sample("x2", dist.Bernoulli(q), infer={"enumerate": enumerate2, "num_samples": num_samples2})
+
+    kl = sum(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p)) for p in [0.2, 0.4])
+    expected_loss = kl.item()
+    expected_grad = grad(kl, [q])[0]
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
+                          num_particles=num_particles,
+                          vectorize_particles=True,
+                          strict_enumeration_warning=any([enumerate1, enumerate2]))
+    if method == "differentiable_loss":
+        loss = elbo.differentiable_loss(model, guide)
+        actual_loss = loss.item()
+        actual_grad = grad(loss, [q])[0]
+    else:
+        actual_loss = elbo.loss_and_grads(model, guide)
+        actual_grad = q.grad
+
+    assert_equal(actual_loss, expected_loss, prec=prec, msg="".join([
+        "\nexpected loss = {}".format(expected_loss),
+        "\n  actual loss = {}".format(actual_loss),
+    ]))
+    assert_equal(actual_grad, expected_grad, prec=prec, msg="".join([
+        "\nexpected grads = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual grads = {}".format(actual_grad.detach().cpu().numpy()),
+    ]))
+
+
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])

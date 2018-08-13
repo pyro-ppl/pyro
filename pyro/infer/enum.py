@@ -135,9 +135,14 @@ def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT, nu
             repr(default)))
     if expand not in [True, False]:
         raise ValueError("Invalid expand value. Expected True or False, but got {}".format(repr(expand)))
-    if not (num_samples is None or isinstance(num_samples, numbers.Number) and num_samples > 0):
-        raise ValueError("Invalid num_samples, expected None or positive integer, but got {}".format(
-            repr(num_samples)))
+    if num_samples is not None:
+        if not (isinstance(num_samples, numbers.Number) and num_samples > 0):
+            raise ValueError("Invalid num_samples, expected None or positive integer, but got {}".format(
+                repr(num_samples)))
+        if default == "sequential":
+            raise ValueError('Local sampling does not support "sequential" sampling; '
+                             'use "parallel" sampling instead.')
+
     # Support usage as a decorator:
     if guide is None:
         return lambda guide: config_enumerate(guide, default=default, expand=expand, num_samples=num_samples)
