@@ -55,7 +55,7 @@ class DynamicModel(object):
               mod'ing angles into an interval.
         :return: Native state x integrated dt into the future.
         '''
-        pass
+        raise NotImplementedError
 
     def geodesic_difference(self, x1, x0):
         '''
@@ -81,7 +81,7 @@ class DynamicModel(object):
         :param x: native state estimate mean.
         :return: PV state estimate mean.
         '''
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def cov2pv(self, P):
@@ -96,7 +96,7 @@ class DynamicModel(object):
         :param P: native state estimate covariance.
         :return: PV state estimate covariance.
         '''
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def process_noise_cov(self, dt=0.):
@@ -109,7 +109,7 @@ class DynamicModel(object):
             integration (for use with EKF). Otherwise, it is the covariance
             directly of the process noise parameters (for use with UKF).
         '''
-        pass
+        raise NotImplementedError
 
     def sample_process_noise(self, dt=0.):
         '''
@@ -125,7 +125,7 @@ class DynamicModel(object):
 
     @abstractmethod
     def copy(self):
-        pass
+        raise NotImplementedError
 
 
 class DifferentiableDynamicModel(DynamicModel):
@@ -142,7 +142,7 @@ class DifferentiableDynamicModel(DynamicModel):
         :param  dt: time interval to integrate over.
         :return: Read-only Jacobian (F) of integration map (f).
         '''
-        pass
+        raise NotImplementedError
 
 
 class Ncp(DifferentiableDynamicModel):
@@ -223,7 +223,7 @@ class Ncp(DifferentiableDynamicModel):
         :return: Read-only covariance (Q) of the native state ``x`` resulting from
             stochastic integration (for use with EKF).
         '''
-        pass
+        raise NotImplementedError
 
 
 class Ncv(DifferentiableDynamicModel):
@@ -313,7 +313,7 @@ class Ncv(DifferentiableDynamicModel):
         :return: Read-only covariance (Q) of the native state ``x`` resulting from
             stochastic integration (for use with EKF).
         '''
-        pass
+        raise NotImplementedError
 
 
 class NcpContinuous(Ncp):

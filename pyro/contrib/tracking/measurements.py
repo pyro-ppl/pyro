@@ -71,7 +71,7 @@ class Measurement(object):
               into an interval.
         :return Measurement predicted from state ``x``.
         '''
-        pass
+        raise NotImplementedError
 
     def geodesic_difference(self, z1, z0):
         '''
@@ -86,7 +86,7 @@ class Measurement(object):
 
     @abstractmethod
     def copy(self):
-        pass
+        raise NotImplementedError
 
 
 class DifferentiableMeasurement(Measurement):
@@ -104,7 +104,7 @@ class DifferentiableMeasurement(Measurement):
               state-dependent.
         :return: Read-only Jacobian (H) of measurement map (h).
         '''
-        pass
+        raise NotImplementedError
 
 
 class PositionMeasurement(DifferentiableMeasurement):
