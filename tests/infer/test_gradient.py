@@ -23,6 +23,7 @@ def DiffTrace_ELBO(*args, **kwargs):
     return Trace_ELBO(*args, **kwargs).differentiable_loss
 
 
+@pytest.mark.parametrize("scale", [1., 2.], ids=["unscaled", "scaled"])
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
 @pytest.mark.parametrize("Elbo,local_samples", [
@@ -32,11 +33,11 @@ def DiffTrace_ELBO(*args, **kwargs):
     (TraceEnum_ELBO, False),
     (TraceEnum_ELBO, True),
 ])
-def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples):
+def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, scale):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
-    precision = 0.06
+    precision = 0.06 * scale
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
     @poutine.broadcast
@@ -53,6 +54,10 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples):
         with pyro.iarange("data", len(data), subsample_size, subsample) as ind:
             loc_ind = loc[ind]
             pyro.sample("z", Normal(loc_ind, scale))
+
+    if scale != 1.0:
+        model = poutine.scale(model, scale=scale)
+        guide = poutine.scale(guide, scale=scale)
 
     num_particles = 50000
     if local_samples:
@@ -74,7 +79,7 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples):
     normalizer = 2 if subsample else 1
     actual_grads = {name: param.grad.detach().cpu().numpy() / normalizer for name, param in params.items()}
 
-    expected_grads = {'loc': np.array([0.5, -2.0]), 'scale': np.array([2.0])}
+    expected_grads = {'loc': scale * np.array([0.5, -2.0]), 'scale': scale * np.array([2.0])}
     for name in sorted(params):
         logger.info('expected {} = {}'.format(name, expected_grads[name]))
         logger.info('actual   {} = {}'.format(name, actual_grads[name]))
