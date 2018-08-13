@@ -81,20 +81,15 @@ def naive_rainforth(model, design, observation_label="y", target_label="theta",
     return (conditional_lp - marginal_lp).sum(0)/N
 
 
-def donsker_varadhan_loss(model, design, observation_label, target_label,
-                          num_particles, U):
+def donsker_varadhan_loss(model, observation_label, target_label, U):
 
-    # global ewma
-    # ewma = None
-    # alpha = 2.
-
-    expanded_design = design.expand((num_particles, *design.shape))
+    ewma_log = EwmaLog(alpha=0.66)
 
     pyro.module("U", U)
 
-    def loss_fn():
+    def loss_fn(design, num_particles):
 
-        # global ewma
+        expanded_design = design.expand((num_particles, *design.shape))
 
         trace = poutine.trace(model).get_trace(expanded_design)
         y = trace.nodes[observation_label]["value"]
@@ -110,8 +105,10 @@ def donsker_varadhan_loss(model, design, observation_label, target_label,
         T_unshuffled = U(expanded_design, y, unshuffled_lp)
         T_shuffled = U(expanded_design, y, shuffled_lp)
 
-        # TODO Use ewma correction to gradients
-        expect_exp = logsumexp(T_shuffled - np.log(num_particles), dim=0)
+        A = T_shuffled - np.log(num_particles)
+        s, _ = torch.max(A, dim=0)
+        expect_exp = s + ewma_log((A - s).exp().sum(dim=0), s)
+        # expect_exp = logsumexp(A, dim=0)
 
         # Switch sign, sum over batch dimensions for scalar loss
         loss = T_unshuffled.sum(0)/num_particles - expect_exp
@@ -161,3 +158,27 @@ def logsumexp(inputs, dim=None, keepdim=False):
     if not keepdim:
         outputs = outputs.squeeze(dim)
     return outputs
+
+
+class EwmaLog(torch.autograd.Function):
+
+    def __init__(self, alpha):
+        self.alpha = alpha
+        self.ewma = torch.tensor(0.)
+        self.n = 0
+        self.s = 0.
+
+    def forward(self, inputs, s, dim=0, keepdim=False):
+        self.n += 1
+        if torch.isnan(self.ewma).any() or (self.ewma == float('inf')).any():
+            self.ewma = inputs
+            self.s = s
+        else:
+            self.ewma = inputs*(1. - self.alpha)/(1 - self.alpha**self.n) \
+                        + torch.exp(self.s - s)*self.ewma \
+                        * (self.alpha - self.alpha**self.n)/(1 - self.alpha**self.n)
+            self.s = s
+        return inputs.log()
+
+    def backward(self, grad_output):
+        return grad_output/self.ewma, None, None, None
