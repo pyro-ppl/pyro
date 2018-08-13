@@ -90,12 +90,12 @@ def _config_enumerate(default, expand, num_samples):
             return {}
         if type(site["fn"]).__name__ == "_Subsample":
             return {}
-        if getattr(site["fn"], "has_enumerate_support", False):
-            return {"enumerate": site["infer"].get("enumerate", default),
-                    "expand": site["infer"].get("expand", expand)}
         if num_samples is not None:
             return {"enumerate": site["infer"].get("enumerate", default),
                     "num_samples": site["infer"].get("num_samples", num_samples)}
+        if getattr(site["fn"], "has_enumerate_support", False):
+            return {"enumerate": site["infer"].get("enumerate", default),
+                    "expand": site["infer"].get("expand", expand)}
         return {}
 
     return config_fn
