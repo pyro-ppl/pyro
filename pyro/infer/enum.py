@@ -127,6 +127,9 @@ def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT, nu
         "sequential", "parallel", or None.
     :param bool expand: Whether to expand enumerated sample values. See
         :meth:`~pyro.distributions.Distribution.enumerate_support` for details.
+    :param num_samples: if not ``None``, use local Monte Carlo sampling rather than
+        exhaustive enumeration. This also makes sense for continuous distributions.
+    :type num_samples: int or None
     :return: an annotated guide
     :rtype: callable
     """
