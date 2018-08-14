@@ -12,8 +12,7 @@ from pyro.contrib.oed.eig import (
 )
 
 from models.bayes_linear import (
-    bayesian_linear_model, normal_inv_gamma_guide, group_assignment_matrix,
-    analytic_posterior_entropy
+    zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_entropy
 )
 from nn.donsker_varadhan import DVNeuralNet
 
@@ -27,41 +26,37 @@ X_lm = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])) for n in ra
 X_small = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])) for n in [0, 5]])
 
 
-def vi_for_lm(design, sqrtlambda, obs_sd, alpha_0, beta_0, num_vi_steps, num_is_samples):
+def vi_for_lm(design, w_sds, num_vi_steps, num_is_samples):
+    model, guide = zero_mean_unit_obs_sd_lm(w_sds)
     prior_cov = torch.diag(1./sqrtlambda**2)
     H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov)
     return H_prior - vi_ape(
-        partial(bayesian_linear_model,
-                w_mean=torch.tensor(0.),
-                w_sqrtlambda=sqrtlambda,
-                obs_sd=obs_sd,
-                alpha_0=alpha_0,
-                beta_0=beta_0),
+        model,
         design,
         observation_labels="y",
         vi_parameters={
-            "guide": partial(normal_inv_gamma_guide,
-                             obs_sd=obs_sd),
+            "guide": guide,
             "optim": optim.Adam({"lr": 0.05}),
             "loss": TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
             "num_steps": num_vi_steps},
         is_parameters={"num_samples": num_is_samples})
 
 
-def lm_true_ape(X_lm, sqrtlambda, obs_sd):
-    prior_cov = torch.diag(1./sqrtlambda**2)
+def lm_true_ape(X_lm, w_sds, obs_sd=torch.tensor(1.)):
+    prior_cov = torch.diag(w_sds**2)
     designs = torch.unbind(X_lm)
     true_ape = [analytic_posterior_entropy(prior_cov, x, obs_sd) for x in designs]
     return torch.tensor(true_ape)
 
 
-def lm_true_eig(X_lm, sqrtlambda, obs_sd):
-    prior_cov = torch.diag(1./sqrtlambda**2)
+def lm_true_eig(X_lm, w_sds, obs_sd=torch.tensor(1.)):
+    prior_cov = torch.diag(w_sds**2)
     H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov)
-    return H_prior - lm_true_ape(X_lm, sqrtlambda, obs_sd)
+    return H_prior - lm_true_ape(X_lm, w_sds, obs_sd)
 
 
-def naive_rainforth_lm(X_lm, sqrtlambda, obs_sd, alpha_0, beta_0, N, M):
+def naive_rainforth_lm(X_lm, w_sds, N, M):
+    model, _ = zero_mean_unit_obs_sd_lm(w_sds)
     return naive_rainforth(
         partial(bayesian_linear_model,
                 w_mean=torch.tensor(0.),
@@ -72,14 +67,9 @@ def naive_rainforth_lm(X_lm, sqrtlambda, obs_sd, alpha_0, beta_0, N, M):
         X_lm, "y", "w", N=N, M=M)
 
 
-def donsker_varadhan_lm(X_lm, sqrtlambda, obs_sd, alpha_0, beta_0, n_iter, n_samples, lr, nn,
+def donsker_varadhan_lm(X_lm, w_sds, n_iter, n_samples, lr, nn,
                         final_X_lm=None, final_n_samples=None, return_history=False):
-    model = partial(bayesian_linear_model,
-                    w_mean=torch.tensor(0.),
-                    w_sqrtlambda=sqrtlambda,
-                    obs_sd=obs_sd,
-                    alpha_0=alpha_0,
-                    beta_0=beta_0)
+    model, _ = zero_mean_unit_obs_sd_lm(w_sds)
     if final_X_lm is None:
         final_X_lm = X_lm
     if final_n_samples is None:
@@ -106,16 +96,14 @@ def donsker_varadhan_lm(X_lm, sqrtlambda, obs_sd, alpha_0, beta_0, n_iter, n_sam
 
 
 @pytest.mark.parametrize("arglist", [
-     # Warning: do not do this, not a mean-field guide!
-     # [(X_lm, vi_for_lm, torch.tensor([.1, .4]), None, torch.tensor(10.), torch.tensor(10.), 5000, 10)],
-     [(X_lm, lm_true_eig, [torch.tensor([.1, .4]), torch.tensor(1.)]),
-      (X_lm, vi_for_lm, [torch.tensor([.1, .4]), torch.tensor(1.), None, None, 5000, 1]),
-      (X_lm, naive_rainforth_lm, [torch.tensor([.1, .4]), torch.tensor(1.), None, None, 2000, 2000]),
-      (X_lm, donsker_varadhan_lm, [torch.tensor([.1, .4]), torch.tensor(1.), None, None, 4000, 200, 0.005, DVNeuralNet(2, 2)])],
-     [(X_lm, lm_true_eig, [torch.tensor([.1, 10.]), torch.tensor(1.)]),
-      (X_lm, vi_for_lm, [torch.tensor([.1, 10.]), torch.tensor(1.), None, None, 10000, 1]),
-      (X_lm, naive_rainforth_lm, [torch.tensor([.1, 10.]), torch.tensor(1.), None, None, 2000, 2000]),
-      (X_lm, donsker_varadhan_lm, [torch.tensor([.1, 10.]), torch.tensor(1.), None, None, 4000, 200, 0.005, DVNeuralNet(2, 2)])],
+     [(X_lm, lm_true_eig, [torch.tensor([10., 2.5])]),
+      (X_lm, vi_for_lm, [torch.tensor([10., 2.5]), 5000, 1]),
+      (X_lm, naive_rainforth_lm, [torch.tensor([10., 2.5]), 2000, 2000]),
+      (X_lm, donsker_varadhan_lm, [torch.tensor([10., 2.5]), 4000, 200, 0.005, DVNeuralNet(2, 2)])],
+     [(X_lm, lm_true_eig, [torch.tensor([10., .1])]),
+      (X_lm, vi_for_lm, [torch.tensor([10., .1]), 10000, 1]),
+      (X_lm, naive_rainforth_lm, [torch.tensor([10., .1]), 2000, 2000]),
+      (X_lm, donsker_varadhan_lm, [torch.tensor([10., .1]), 4000, 200, 0.005, DVNeuralNet(2, 2)])],
 ])
 def test_eig_and_plot(arglist):
     pyro.set_rng_seed(42)

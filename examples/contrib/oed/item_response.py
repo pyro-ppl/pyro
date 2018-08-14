@@ -8,75 +8,10 @@ from pyro import optim
 from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import vi_ape
 
-# Number of layers of hierarchy (1 layer- classical linear model)
-layers = 2
-# Parameters controlling the prior variance
-A = 20.
-B = 10.
-beta = torch.tensor(1.)
+from models.bayes_linear import two_group_bernoulli
 
 
-def model(design_tensor, participant_id):
-    """Hierarchical logistic regression model.
-
-    :param torch.tensor design_tensor: a `batch_dims x n x p`
-        tensor giving the features of the `n` responses (e.g.
-        the features of the `n` objects to be given at this time)
-    :param list participant_id: a hierarchical list of the groups
-        that the current participant is assigned to. The first element
-        indexes the highest level group. For instance, a geographical
-        hierarchy list could look like
-        `["United States", "California", "Santa Rosa"]`
-    """
-    # batch x n
-    response_shape = list(design_tensor.shape)[:-1]
-    # batch x 1 x p
-    coef_shape = list(design_tensor.shape)
-    coef_shape[-2] = 1
-
-    intercept = torch.zeros(response_shape)
-    coef = torch.zeros(coef_shape)
-
-    for layer in range(layers):
-        layer_name = "_".join([str(layer)] + participant_id[:layer])
-        # Prior sds decay exponentially with layer
-        intercept_sd = torch.ones(response_shape)*A*torch.exp(-beta*layer)
-        intercept_dist = dist.Normal(0., intercept_sd).independent(1)
-        intercept += pyro.sample(layer_name + "_intercept", intercept_dist)
-
-        coef_sd = torch.ones(coef_shape)*B*torch.exp(-beta*layer)
-        coef_dist = dist.Normal(0., coef_sd).independent(2)
-        coef += pyro.sample(layer_name + "_coef", coef_dist)
-
-    logit_p = torch.matmul(design_tensor, coef.t()).squeeze(-1) + intercept
-    # Binary outcomes - responses to `n` items shown to given participant
-    return pyro.sample("y", dist.Bernoulli(logits=logit_p).independent(1))
-
-
-def guide(design_tensor, participant_id):
-    # batch x n
-    response_shape = list(design_tensor.shape)[:-1]
-    # batch x 1 x p
-    coef_shape = list(design_tensor.shape)
-    coef_shape[-2] = 1
-    # define our variational parameters, sample mean-field
-    for layer in range(layers):
-        # Local intercept
-        layer_name = "_".join([str(layer)] + participant_id[:layer])
-        intercept_mean = pyro.param(layer_name + "_intercept_mean",
-                                    torch.zeros(response_shape))
-        intercept_sd = softplus(pyro.param(layer_name + "_intercept_sd",
-                                10.*torch.ones(response_shape)))
-        intercept_dist = dist.Normal(intercept_mean, intercept_sd).independent(1)
-        pyro.sample(layer_name + "_intercept", intercept_dist)
-
-        # Local coefficient
-        coef_mean = pyro.param(layer_name + "_coef_mean",
-                               torch.zeros(coef_shape))
-        coef_sd = softplus(pyro.param(layer_name + "_coef_sd",
-                           10.*torch.ones(coef_shape)))
-        coef_dist = dist.Normal(coef_mean, coef_sd).independent(2)
-        pyro.sample(layer_name + "_coef", coef_dist)
+model, guide = two_group_bernoulli(torch.tensor([1.]), torch.tensor([.5]))
 
 
 def spherical_design_tensor(d):
@@ -88,14 +23,14 @@ def main(num_vi_steps):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
 
-    def estimated_ape(designs, participant, ydist):
+    def estimated_ape(designs, ydist):
         design_tensor = spherical_design_tensor(designs)
         est_ape = vi_ape(
-            lambda d: model(d, participant),
+            model,
             design_tensor,
             observation_labels="y",
             vi_parameters={
-                "guide": lambda d: guide(d, participant),
+                "guide": guide,
                 "optim": optim.Adam({"lr": 0.0025}),
                 "loss": TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
                 "num_steps": num_vi_steps},
@@ -104,9 +39,8 @@ def main(num_vi_steps):
         )
         return est_ape
 
-    participant = ["a"]
     X = torch.tensor([[0., 0.], [0., 1.5]])
-    y = estimated_ape(X, participant, None)
+    y = estimated_ape(X, dist.Bernoulli(torch.tensor([0.5])))
     print(y)
     # pyro.clear_param_store()
     # gpmodel = gp.models.GPRegression(
