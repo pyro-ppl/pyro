@@ -23,4 +23,3 @@ def test_PositionMeasurement():
         torch.rand(dimension), torch.rand(dimension)).shape \
         == (dimension,)
     assert measurement.jacobian().shape == (dimension, 2*dimension)
-    assert measurement.copy() is not measurement

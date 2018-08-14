@@ -84,10 +84,6 @@ class Measurement(object):
         '''
         return z1 - z0  # Default to Euclidean behavior.
 
-    @abstractmethod
-    def copy(self):
-        raise NotImplementedError
-
 
 class DifferentiableMeasurement(Measurement):
     '''
@@ -143,6 +139,3 @@ class PositionMeasurement(DifferentiableMeasurement):
         :return: Read-only Jacobian (H) of measurement map (h).
         '''
         return self._jacobian
-
-    def copy(self):
-        return PositionMeasurement(self._mean, self._cov, self._time, self._frame_num)

@@ -72,11 +72,8 @@ def test_NcpContinuous():
     assert Q1.shape == (d, d)
     assert_cov_validity(Q1)
 
-    dx = ncp.sample_process_noise(dt)
+    dx = ncp.process_noise_dist(dt).sample()
     assert dx.shape == (ncp.dimension,)
-
-    ncp1 = ncp.copy()
-    assert ncp1
 
 
 def test_NcvContinuous():
@@ -110,8 +107,5 @@ def test_NcvContinuous():
     assert Q1.shape == (d, d)
     assert_cov_validity(Q1)
 
-    dx = ncv.sample_process_noise(dt)
+    dx = ncv.process_noise_dist(dt).sample()
     assert dx.shape == (ncv.dimension,)
-
-    ncv1 = ncv.copy()
-    assert ncv1

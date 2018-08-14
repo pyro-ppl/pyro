@@ -111,21 +111,16 @@ class DynamicModel(object):
         '''
         raise NotImplementedError
 
-    def sample_process_noise(self, dt=0.):
+    def process_noise_dist(self, dt=0.):
         '''
-        Sample and return a state displacement from the process noise
+        Return a distribution object of state displacement from the process noise
         distribution over a time interval.
 
         :param dt: time interval that process noise accumulates over.
-        :return: State displacement.
+        :return: :class:`~pyro.distributions.torch.MultivariateNormal`.
         '''
         Q = self.process_noise_cov(dt)
-        dx = dist.MultivariateNormal(Q.new_zeros(Q.shape[-1]), Q).sample()
-        return dx
-
-    @abstractmethod
-    def copy(self):
-        raise NotImplementedError
+        return dist.MultivariateNormal(Q.new_zeros(Q.shape[-1]), Q)
 
 
 class DifferentiableDynamicModel(DynamicModel):
@@ -175,7 +170,7 @@ class Ncp(DifferentiableDynamicModel):
             mod'ing angles into an interval. Has no effect for this subclass.
         :return: Native state x integrated dt into the future.
         '''
-        return x.clone()
+        return x
 
     def mean2pv(self, x):
         '''
@@ -348,12 +343,6 @@ class NcpContinuous(Ncp):
 
         return self._Q_cache[dt]
 
-    def copy(self):
-        '''
-        Deepcopy, except does not copy cached data
-        .'''
-        return NcpContinuous(self._dimension, self._sv2)
-
 
 class NcvContinuous(Ncv):
     '''
@@ -396,9 +385,3 @@ class NcvContinuous(Ncv):
             self._Q_cache[dt] = Q
 
         return self._Q_cache[dt]
-
-    def copy(self):
-        '''
-        Deepcopy, except does not copy cached data.
-        '''
-        return NcvContinuous(self._dimension, self._sa2)
