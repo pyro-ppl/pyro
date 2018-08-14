@@ -2,11 +2,14 @@ from abc import ABCMeta, abstractmethod
 from six import add_metaclass
 
 import torch
+from torch import nn
+from torch.nn import Parameter
 import pyro.distributions as dist
+from pyro.distributions.util import eye_like
 
 
 @add_metaclass(ABCMeta)
-class DynamicModel(object):
+class DynamicModel(nn.Module):
     '''
     Dynamic model interface.
 
@@ -20,6 +23,7 @@ class DynamicModel(object):
         self._dimension = dimension
         self._dimension_pv = dimension_pv
         self._num_process_noise_parameters = num_process_noise_parameters
+        super(DynamicModel, self).__init__()
 
     @property
     def dimension(self):
@@ -43,7 +47,7 @@ class DynamicModel(object):
         return self._num_process_noise_parameters
 
     @abstractmethod
-    def __call__(self, x, dt, do_normalization=True):
+    def forward(self, x, dt, do_normalization=True):
         '''
         Integrate native state ``x`` over time interval ``dt``.
 
@@ -154,11 +158,13 @@ class Ncp(DifferentiableDynamicModel):
     def __init__(self, dimension, sv2):
         dimension_pv = 2 * dimension
         super(Ncp, self).__init__(dimension, dimension_pv, num_process_noise_parameters=1)
-        self._sv2 = sv2
-        self._F_cache = torch.eye(dimension)  # State transition matrix cache
+        if not isinstance(sv2, torch.Tensor):
+            sv2 = torch.tensor(sv2)
+        self.sv2 = Parameter(sv2)
+        self._F_cache = eye_like(sv2, dimension)  # State transition matrix cache
         self._Q_cache = {}  # Process noise cov cache
 
-    def __call__(self, x, dt, do_normalization=True):
+    def forward(self, x, dt, do_normalization=True):
         '''
         Integrate native state ``x`` over time interval ``dt``.
 
@@ -235,11 +241,13 @@ class Ncv(DifferentiableDynamicModel):
     def __init__(self, dimension, sa2):
         dimension_pv = dimension
         super(Ncv, self).__init__(dimension, dimension_pv, num_process_noise_parameters=1)
-        self._sa2 = sa2
+        if not isinstance(sa2, torch.Tensor):
+            sa2 = torch.tensor(sa2)
+        self.sa2 = Parameter(sa2)
         self._F_cache = {}  # State transition matrix cache
         self._Q_cache = {}  # Process noise cov cache
 
-    def __call__(self, x, dt, do_normalization=True):
+    def forward(self, x, dt, do_normalization=True):
         '''
         Integrate native state ``x`` over time interval ``dt``.
 
@@ -293,8 +301,8 @@ class Ncv(DifferentiableDynamicModel):
         '''
         if dt not in self._F_cache:
             d = self._dimension
-            F = torch.eye(d)
-            F[:d//2, d//2:] = dt * torch.eye(d//2)
+            F = eye_like(self.sa2, d)
+            F[:d//2, d//2:] = dt * eye_like(self.sa2, d//2)
             self._F_cache[dt] = F
 
         return self._F_cache[dt]
@@ -337,8 +345,8 @@ class NcpContinuous(Ncp):
             # q: continuous-time process noise intensity with units
             #   length^2/time (m^2/s). Choose ``q`` so that changes in position,
             #   over a sampling period ``dt``, are roughly ``sqrt(q*dt)``.
-            q = self._sv2 * dt
-            Q = q * dt * torch.eye(self._dimension)
+            q = self.sv2 * dt
+            Q = q * dt * eye_like(self.sv2, self._dimension)
             self._Q_cache[dt] = Q
 
         return self._Q_cache[dt]
@@ -372,15 +380,16 @@ class NcvContinuous(Ncv):
             #   length^2/time^3 (m^2/s^3). Choose ``q`` so that changes in
             #   velocity, over a sampling period ``dt``, are roughly
             #   ``sqrt(q*dt)``.
-            q = self._sa2 * dt
+            q = self.sa2 * dt
             d = self._dimension
             dt2 = dt * dt
             dt3 = dt2 * dt
             Q = torch.zeros((d, d))
-            Q[:d//2, :d//2] = dt3 * torch.eye(d//2) / 3.0
-            Q[:d//2, d//2:] = dt2 * torch.eye(d//2) / 2.0
-            Q[d//2:, :d//2] = dt2 * torch.eye(d//2) / 2.0
-            Q[d//2:, d//2:] = dt * torch.eye(d//2)
+            eye = eye_like(self.sa2, d//2)
+            Q[:d//2, :d//2] = dt3 * eye / 3.0
+            Q[:d//2, d//2:] = dt2 * eye / 2.0
+            Q[d//2:, :d//2] = dt2 * eye  / 2.0
+            Q[d//2:, d//2:] = dt * eye
             Q *= q
             self._Q_cache[dt] = Q
 

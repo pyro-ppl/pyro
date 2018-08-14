@@ -2,6 +2,7 @@ from abc import ABCMeta, abstractmethod
 from six import add_metaclass
 
 import torch
+from pyro.distributions.util import eye_like
 
 
 @add_metaclass(ABCMeta)
@@ -114,7 +115,7 @@ class PositionMeasurement(DifferentiableMeasurement):
     def __init__(self, mean, cov, time=None, frame_num=None):
         super(PositionMeasurement, self).__init__(mean, cov, time=time, frame_num=frame_num)
         self._jacobian = torch.cat([
-            torch.eye(self.dimension, dtype=mean.dtype, device=mean.device),
+            eye_like(mean, self.dimension),
             mean.new_zeros((self.dimension, self.dimension))], dim=1)
 
     def __call__(self, x, do_normalization=True):
