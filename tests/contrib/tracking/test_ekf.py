@@ -27,30 +27,20 @@ def test_EKFState_with_NcpContinuous():
     assert_equal(P, ekf_state.cov_pv[:d, :d], prec=1e-5)
     assert_equal(t, ekf_state.time, prec=1e-5)
 
-    ekf_state.init(2*x, 2*P, t + 2.0)
-    assert_equal(2*x, ekf_state.mean, prec=1e-5)
-    assert_equal(2*P, ekf_state.cov, prec=1e-5)
-    assert_equal(t + 2.0, ekf_state.time, prec=1e-5)
-
-    ekf_state.init(2*x, 2*P, t)
-    ekf_state1 = ekf_state.copy()
-    ekf_state1.predict(dt, destination_time=t+dt)
-    assert ekf_state1.dynamic_model.__class__ == NcpContinuous
+    ekf_state1 = EKFState(ncp, 2*x, 2*P, t)
+    ekf_state2 = ekf_state1.predict(dt, destination_time=t+dt)
+    assert ekf_state2.dynamic_model.__class__ == NcpContinuous
 
     measurement = PositionMeasurement(
         mean=torch.rand(d),
         cov=torch.eye(d),
         time=t + dt)
-    likelihood = ekf_state1.likelihood_of_update(measurement)
-    assert (likelihood < 1.).all()
-    old_mean = ekf_state1.mean.clone()
-    dz, S = ekf_state1.update(measurement)
+    log_likelihood = ekf_state2.log_likelihood_of_update(measurement)
+    assert (log_likelihood < 0.).all()
+    ekf_state3, (dz, S) = ekf_state2.update(measurement)
     assert dz.shape == (measurement.dimension,)
     assert S.shape == (measurement.dimension, measurement.dimension)
-    assert_not_equal(ekf_state1.mean, old_mean, prec=1e-5)
-
-    ekf_state2 = ekf_state1.copy()
-    assert ekf_state2.dynamic_model.__class__ == NcpContinuous
+    assert_not_equal(ekf_state3.mean, ekf_state2.mean, prec=1e-5)
 
 
 def test_EKFState_with_NcvContinuous():
@@ -73,27 +63,17 @@ def test_EKFState_with_NcvContinuous():
     assert_equal(P, ekf_state.cov_pv, prec=1e-5)
     assert_equal(t, ekf_state.time, prec=1e-5)
 
-    ekf_state.init(2*x, 2*P, t + 2.0)
-    assert_equal(2*x, ekf_state.mean, prec=1e-5)
-    assert_equal(2*P, ekf_state.cov, prec=1e-5)
-    assert_equal(t + 2.0, ekf_state.time, prec=1e-5)
-
-    ekf_state.init(2*x, 2*P, t)
-    ekf_state1 = ekf_state.copy()
-    ekf_state1.predict(dt, destination_time=t+dt)
-    assert ekf_state1.dynamic_model.__class__ == NcvContinuous
+    ekf_state1 = EKFState(ncv, 2*x, 2*P, t)
+    ekf_state2 = ekf_state1.predict(dt, destination_time=t+dt)
+    assert ekf_state2.dynamic_model.__class__ == NcvContinuous
 
     measurement = PositionMeasurement(
         mean=torch.rand(d),
         cov=torch.eye(d),
         time=t + dt)
-    likelihood = ekf_state1.likelihood_of_update(measurement)
-    assert (likelihood < 1.).all()
-    old_mean = ekf_state1.mean.clone()
-    dz, S = ekf_state1.update(measurement)
+    log_likelihood = ekf_state2.log_likelihood_of_update(measurement)
+    assert (log_likelihood < 0.).all()
+    ekf_state3, (dz, S) = ekf_state2.update(measurement)
     assert dz.shape == (measurement.dimension,)
     assert S.shape == (measurement.dimension, measurement.dimension)
-    assert_not_equal(ekf_state1.mean, old_mean)
-
-    ekf_state2 = ekf_state1.copy()
-    assert ekf_state2.dynamic_model.__class__ == NcvContinuous
+    assert_not_equal(ekf_state3.mean, ekf_state2.mean, prec=1e-5)

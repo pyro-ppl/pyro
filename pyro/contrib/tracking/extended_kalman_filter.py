@@ -28,14 +28,6 @@ class EKFState(object):
         self._time = time
         self._frame_num = frame_num
 
-    def _clear_cached(self):
-        '''
-        Call this whenever actions are taken which invalidate cached data.
-        '''
-        # XXX: remove in place mutations and this function
-        self.__dict__.pop('mean_pv', None)
-        self.__dict__.pop('cov_pv', None)
-
     @property
     def dynamic_model(self):
         '''
@@ -99,24 +91,6 @@ class EKFState(object):
         '''
         return self._frame_num
 
-    def init(self, mean, cov, time=None, frame_num=None):
-        '''
-        Re-initialize target state.
-
-        :param mean: target state mean.
-        :param cov: target state covariance.
-        :param time: continuous state time. None => keep existing time.
-        :param time: discrete state time. None => keep existing time.
-        '''
-        self._mean = mean
-        self._cov = cov
-        if time is not None:
-            self._time = time
-        if frame_num is not None:
-            self._frame_num = frame_num
-
-        self._clear_cached()
-
     def predict(self, dt=None, destination_time=None, destination_frame_num=None):
         '''
         Use dynamic model to predict (aka propagate aka integrate) state
@@ -133,18 +107,17 @@ class EKFState(object):
             after integration. If this is not provided, then
             `destination_frame_num` must be.
         '''
-        self._mean = self._dynamic_model(self._mean, dt)
+        pred_mean = self._dynamic_model(self._mean, dt)
 
         F = self._dynamic_model.jacobian(dt)
         Q = self._dynamic_model.process_noise_cov(dt)
-        self._cov = F.mm(self._cov).mm(F.transpose(-1, -2)) + Q
+        pred_cov = F.mm(self._cov).mm(F.transpose(-1, -2)) + Q
 
         if destination_time is None and destination_frame_num is None:
             raise ValueError('destination_time or destination_frame_num must be specified!')
-        self._time = destination_time
-        self._frame_num = destination_frame_num
 
-        self._clear_cached()
+        return EKFState(self._dynamic_model, pred_mean, pred_cov,
+                        destination_time, destination_frame_num)
 
     def innovation(self, measurement):
         '''
@@ -223,31 +196,8 @@ class EKFState(object):
             + K_prefix.mm(torch.gesv((K_prefix.mm(torch.gesv(R, S)[0])).transpose(-1, -2),
                           S)[0])
 
-        self._mean = x
-        self._cov = P
+        pred_mean = x
+        pred_cov = P
+        state = EKFState(self._dynamic_model, pred_mean, pred_cov, self._time, self._frame_num)
 
-        self._clear_cached()
-
-        return dz, S
-
-    def copy(self, time=None, frame_num=None):
-        '''
-        Deepcopy everything, except dynamic model is only shallow-copied.
-
-        Optionally `time` and/or `frame_num` can be reset. This is useful,
-        e.g., if you want to cache an intial filter state that can be copied
-        into newly initialized tracks at different times.
-        '''
-        if time is not None and frame_num is None:
-            return EKFState(
-                dynamic_model=self._dynamic_model,
-                mean=self._mean, cov=self._cov,
-                time=time, frame_num=None)
-        if time is None and frame_num is not None:
-            return EKFState(
-                dynamic_model=self._dynamic_model,
-                mean=self._mean, cov=self._cov,
-                time=None, frame_num=frame_num)
-        return EKFState(
-            dynamic_model=self._dynamic_model,
-            mean=self._mean, cov=self._cov, time=self._time)
+        return state, (dz, S)
