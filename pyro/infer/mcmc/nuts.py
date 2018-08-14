@@ -56,6 +56,9 @@ class NUTS(HMC):
     :param int max_iarange_nesting: Optional bound on max number of nested
         :func:`pyro.iarange` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
+    :param bool jit_compile: Optional parameter denoting whether to use
+        the PyTorch JIT to trace the log density computation, and use this
+        optimized executable trace in the integrator.
 
     Example:
 
@@ -82,12 +85,14 @@ class NUTS(HMC):
                  step_size=None,
                  adapt_step_size=False,
                  transforms=None,
-                 max_iarange_nesting=float("inf")):
+                 max_iarange_nesting=float("inf"),
+                 jit_compile=False):
         super(NUTS, self).__init__(model,
                                    step_size,
                                    adapt_step_size=adapt_step_size,
                                    transforms=transforms,
-                                   max_iarange_nesting=max_iarange_nesting)
+                                   max_iarange_nesting=max_iarange_nesting,
+                                   jit_compile=jit_compile)
 
         self._max_tree_depth = 10  # from Stan
         # There are three conditions to stop doubling process:
@@ -133,7 +138,7 @@ class NUTS(HMC):
         else:
             diverging = (sliced_energy >= self._max_sliced_energy)
             delta_energy = energy_new - energy_current
-            accept_prob = (-delta_energy).exp().clamp(max=1)
+            accept_prob = (-delta_energy).exp().clamp(max=1.0)
         return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads,
                          z_new, tree_size, False, diverging, accept_prob, 1)
 

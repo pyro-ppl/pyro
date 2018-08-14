@@ -50,6 +50,9 @@ class HMC(TraceKernel):
     :param int max_iarange_nesting: Optional bound on max number of nested
         :func:`pyro.iarange` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
+    :param bool jit_compile: Optional parameter denoting whether to use
+        the PyTorch JIT to trace the log density computation, and use this
+        optimized executable trace in the integrator.
 
     Example:
 
@@ -78,7 +81,8 @@ class HMC(TraceKernel):
                  num_steps=None,
                  adapt_step_size=False,
                  transforms=None,
-                 max_iarange_nesting=float("inf")):
+                 max_iarange_nesting=float("inf"),
+                 jit_compile=False):
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
         self.model = poutine.enum(config_enumerate(model, default="parallel", expand=False),
@@ -94,6 +98,7 @@ class HMC(TraceKernel):
             self.trajectory_length = 2 * math.pi  # from Stan
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
         self.adapt_step_size = adapt_step_size
+        self._jit_compile = jit_compile
         self._target_accept_prob = 0.8  # from Stan
 
         self.transforms = {} if transforms is None else transforms
@@ -123,6 +128,8 @@ class HMC(TraceKernel):
         return 0.5 * sum(x.pow(2).sum() for x in r.values())
 
     def _potential_energy(self, z):
+        if self._jit_compile:
+            return self._potential_energy_jit(z)
         # Since the model is specified in the constrained space, transform the
         # unconstrained R.V.s `z` to the constrained space.
         z_constrained = z.copy()
@@ -135,6 +142,32 @@ class HMC(TraceKernel):
             potential_energy += transform.log_abs_det_jacobian(z_constrained[name], z[name]).sum()
         return potential_energy
 
+    def _potential_energy_jit(self, z):
+        names, vals = zip(*sorted(z.items()))
+        if self._compiled_potential_fn:
+            return self._compiled_potential_fn(*vals)
+
+        @torch.jit.trace(*vals, optimize=True)
+        def wrapped(*zi):
+            z_constrained = list(zi)
+            # transform to constrained space.
+            for i, name in enumerate(names):
+                if name in self.transforms:
+                    transform = self.transforms[name]
+                    z_constrained[i] = transform.inv(z_constrained[i])
+            z_constrained = dict(zip(names, z_constrained))
+            trace = self._get_trace(z_constrained)
+            potential_energy = -self._compute_trace_log_prob(trace)
+            # adjust by the jacobian for this transformation.
+            for i, name in enumerate(names):
+                if name in self.transforms:
+                    transform = self.transforms[name]
+                    potential_energy += transform.log_abs_det_jacobian(z_constrained[name], zi[i]).sum()
+            return potential_energy
+
+        self._compiled_potential_fn = wrapped
+        return self._compiled_potential_fn(*vals)
+
     def _energy(self, z, r):
         return self._kinetic_energy(r) + self._potential_energy(z)
 
@@ -143,6 +176,7 @@ class HMC(TraceKernel):
         self._accept_cnt = 0
         self._r_dist = OrderedDict()
         self._args = None
+        self._compiled_potential_fn = None
         self._kwargs = None
         self._prototype_trace = None
         self._adapt_phase = False

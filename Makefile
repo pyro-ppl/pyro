@@ -60,6 +60,8 @@ test-cuda: lint FORCE
 test-jit: FORCE
 	@echo See jit.log
 	pytest -v -n auto --tb=short --runxfail tests/infer/test_jit.py tests/test_examples.py::test_jit | tee jit.log
+	pytest -v -n auto --tb=short --runxfail tests/infer/mcmc/test_hmc.py tests/infer/mcmc/test_nuts.py \
+		-k JIT=True | tee -a jit.log
 
 clean: FORCE
 	git clean -dfx -e pyro-egg.info
