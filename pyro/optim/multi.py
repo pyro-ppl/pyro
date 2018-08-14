@@ -43,7 +43,8 @@ class MultiOptimizer(object):
         updated_values = self.get_step(loss, params)
         for name, value in params.items():
             with torch.no_grad():
-                value[...] = updated_values[name]
+                # we need to detach because updated_value may depend on value
+                value.copy_(updated_values[name].detach())
 
     def get_step(self, loss, params):
         """
@@ -69,6 +70,8 @@ class PyroMultiOptimizer(MultiOptimizer):
     in a :class:`MultiOptimizer` interface.
     """
     def __init__(self, optim):
+        if not isinstance(optim, PyroOptim):
+            raise TypeError('Expected a PyroOptim object but got a {}'.format(type(optim)))
         self.optim = optim
 
     def step(self, loss, params):
@@ -96,12 +99,23 @@ class MixedMultiOptimizer(MultiOptimizer):
 
     :param list parts: A list of ``(names, optim)`` pairs, where each
         ``names`` is a list of parameter names, and each ``optim`` is a
-        :class:`MultiOptimizer` object to be used for the named parameters.
-        Together the ``names`` should partition up all desired parameters to
-        optimize.
+        :class:`MultiOptimizer` or :class:`~pyro.optim.optim.PyroOptim` object
+        to be used for the named parameters. Together the ``names`` should
+        partition up all desired parameters to optimize.
+    :raises ValueError: if any name is optimized by multiple optimizers.
     """
     def __init__(self, parts):
-        self.parts = list(parts)
+        optim_dict = {}
+        self.parts = []
+        for names_part, optim in parts:
+            if isinstance(optim, PyroOptim):
+                optim = PyroMultiOptimizer(optim)
+            for name in names_part:
+                if name in optim_dict:
+                    raise ValueError("Attempted to optimize parameter '{}' by two different optimizers: "
+                                     "{} vs {}" .format(name, optim_dict[name], optim))
+                optim_dict[name] = optim
+            self.parts.append((names_part, optim))
 
     def step(self, loss, params):
         for names_part, optim in self.parts:
@@ -122,6 +136,9 @@ class Newton(MultiOptimizer):
     per-parameter ``trust_radius``. See :func:`~pyro.ops.newton.newton_step`
     for details.
 
+    The result of :meth:`get_step` will be differentiable, however the
+    updated values from :meth:`step` will be detached.
+
     :param dict trust_radii: a dict mapping parameter name to radius of trust
         region. Missing names will use unregularized Newton update, equivalent
         to infinite trust radius.
@@ -134,5 +151,5 @@ class Newton(MultiOptimizer):
         for name, value in params.items():
             trust_radius = self.trust_radii.get(name)
             updated_value, cov = newton_step(loss, value, trust_radius)
-            updated_values[name] = updated_value.detach()
+            updated_values[name] = updated_value
         return updated_values

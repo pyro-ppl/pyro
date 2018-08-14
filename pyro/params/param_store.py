@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import re
 import weakref
 
 import torch
@@ -84,6 +85,8 @@ class ParamStoreDict(object):
         :type name: str
         :param init_tensor: initial tensor
         :type init_tensor: torch.Tensor
+        :param constraint: torch constraint
+        :type constraint: torch.distributions.constraints.Constraint
         :returns: parameter
         :rtype: torch.Tensor
         """
@@ -119,6 +122,19 @@ class ParamStoreDict(object):
         param.unconstrained = weakref.ref(unconstrained_param)
 
         return param
+
+    def match(self, name):
+        """
+        Get all parameters that match regex. The parameter must exist.
+
+        :param name: regular expression
+        :type name: str
+        :returns: dict with key param name and value torch Tensor
+        """
+        pattern = re.compile(name)
+        params_dict = {key: self.get_param(key) for key in self._params.keys()
+                       if pattern.match(key)}
+        return params_dict
 
     def param_name(self, p):
         """
@@ -165,12 +181,12 @@ class ParamStoreDict(object):
         Save parameters to disk
 
         :param filename: file name to save to
-        :type name: str
+        :type filename: str
         """
         with open(filename, "wb") as output_file:
             torch.save(self.get_state(), output_file)
 
-    def load(self, filename):
+    def load(self, filename, map_location=None):
         """
         Loads parameters from disk
 
@@ -183,10 +199,12 @@ class ParamStoreDict(object):
                pyro.module('module', nn, update_module_params=True)
 
         :param filename: file name to load from
-        :type name: str
+        :type filename: str
+        :param map_location: specifies how to remap storage locations
+        :type map_location: function, torch.device, string or a dict
         """
         with open(filename, "rb") as input_file:
-            state = torch.load(input_file)
+            state = torch.load(input_file, map_location)
         self.set_state(state)
 
 

@@ -129,8 +129,8 @@ class Parameterized(nn.Module):
             p = pyro.sample(param_name, prior)
         else:  # prior != None and mode = "guide"
             MAP_param_name = param_name + "_MAP"
-            # TODO: consider to init parameter from a prior call instead of mean
-            MAP_param = pyro.param(MAP_param_name, prior.mean.detach())
+            # initiate randomly from prior
+            MAP_param = pyro.param(MAP_param_name, prior)
             p = pyro.sample(param_name, dist.Delta(MAP_param))
 
         self._registered_params[param] = p

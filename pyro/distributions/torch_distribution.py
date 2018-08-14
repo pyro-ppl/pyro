@@ -3,8 +3,9 @@ from __future__ import absolute_import, division, print_function
 import numbers
 
 import torch
-from torch.distributions import constraints
+from torch.distributions import biject_to, constraints, transform_to
 
+import pyro.distributions.torch
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import broadcast_shape, sum_rightmost
@@ -106,6 +107,8 @@ class TorchDistributionMixin(Distribution):
         :return: An expanded version of this distribution.
         :rtype: :class:`ReshapedDistribution`
         """
+        if not sample_shape:
+            return self
         return ReshapedDistribution(self, sample_shape=sample_shape)
 
     def reshape(self, sample_shape=None, extra_event_dims=None):
@@ -142,12 +145,11 @@ class TorchDistributionMixin(Distribution):
         :param int reinterpreted_batch_ndims: The number of batch dimensions
             to reinterpret as event dimensions.
         :return: A reshaped version of this distribution.
-        :rtype: :class:`ReshapedDistribution`
+        :rtype: :class:`pyro.distributions.torch.Independent`
         """
         if reinterpreted_batch_ndims is None:
             reinterpreted_batch_ndims = len(self.batch_shape)
-        # TODO return pyro.distributions.torch.Independent(self, reinterpreted_batch_ndims)
-        return ReshapedDistribution(self, reinterpreted_batch_ndims=reinterpreted_batch_ndims)
+        return pyro.distributions.torch.Independent(self, reinterpreted_batch_ndims)
 
     def mask(self, mask):
         """
@@ -225,6 +227,33 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
     pass
 
 
+# TODO move this upstream to torch.distributions
+class IndependentConstraint(constraints.Constraint):
+    """
+    Wraps a constraint by aggregating over ``reinterpreted_batch_ndims``-many
+    dims in :meth:`check`, so that an event is valid only if all its
+    independent entries are valid.
+
+    :param torch.distributions.constraints.Constraint base_constraint: A base
+        constraint whose entries are incidentally indepenent.
+    :param int reinterpreted_batch_ndims: The number of extra event dimensions that will
+        be considered dependent.
+    """
+    def __init__(self, base_constraint, reinterpreted_batch_ndims):
+        self.base_constraint = base_constraint
+        self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
+
+    def check(self, value):
+        result = self.base_constraint.check(value)
+        result = result.reshape(result.shape[:result.dim() - self.reinterpreted_batch_ndims] + (-1,))
+        result = result.min(-1)[0]
+        return result
+
+
+biject_to.register(IndependentConstraint, lambda c: biject_to(c.base_constraint))
+transform_to.register(IndependentConstraint, lambda c: transform_to(c.base_constraint))
+
+
 class ReshapedDistribution(TorchDistribution):
     """
     Reshapes a distribution by adding ``sample_shape`` to its total shape
@@ -300,7 +329,15 @@ class ReshapedDistribution(TorchDistribution):
 
     @constraints.dependent_property
     def support(self):
-        return self.base_dist.support
+        return IndependentConstraint(self.base_dist.support, self.reinterpreted_batch_ndims)
+
+    @property
+    def _validate_args(self):
+        return self.base_dist._validate_args
+
+    @_validate_args.setter
+    def _validate_args(self, value):
+        self.base_dist._validate_args = value
 
     def sample(self, sample_shape=torch.Size()):
         return self.base_dist.sample(sample_shape + self.sample_shape)
@@ -322,18 +359,14 @@ class ReshapedDistribution(TorchDistribution):
             entropy_term = sum_rightmost(entropy_term, self.reinterpreted_batch_ndims).expand(shape)
         return ScoreParts(log_prob, score_function, entropy_term)
 
-    def enumerate_support(self):
+    def enumerate_support(self, expand=True):
         if self.reinterpreted_batch_ndims:
             raise NotImplementedError("Pyro does not enumerate over cartesian products")
 
-        samples = self.base_dist.enumerate_support()
-        if not self.sample_shape:
-            return samples
-
-        # Shift enumeration dim to correct location.
-        enum_shape, base_shape = samples.shape[:1], samples.shape[1:]
-        samples = samples.reshape(enum_shape + (1,) * len(self.sample_shape) + base_shape)
-        samples = samples.expand(enum_shape + self.sample_shape + base_shape)
+        samples = self.base_dist.enumerate_support(expand=False)
+        samples = samples.reshape(samples.shape[:1] + (1,) * len(self.batch_shape) + self.event_shape)
+        if expand:
+            samples = samples.expand(samples.shape[:1] + self.batch_shape + self.event_shape)
         return samples
 
     @property
@@ -389,8 +422,8 @@ class MaskedDistribution(TorchDistribution):
     def score_parts(self, value):
         return self.base_dist.score_parts(value) * self._mask
 
-    def enumerate_support(self):
-        return self.base_dist.enumerate_support()
+    def enumerate_support(self, expand=True):
+        return self.base_dist.enumerate_support(expand=expand)
 
     @property
     def mean(self):
