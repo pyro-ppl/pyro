@@ -71,13 +71,13 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters,
 def naive_rainforth(model, design, observation_label="y", target_label="theta",
                     N=100, M=10):
 
-    expanded_design = design.expand((N, *design.shape))
+    expanded_design = design.expand((N,) + design.shape)
     trace = poutine.trace(model).get_trace(expanded_design)
     trace.compute_log_prob()
     y = trace.nodes[observation_label]["value"]
     conditional_lp = trace.nodes[observation_label]["log_prob"]
 
-    reexpanded_design = design.expand((M, 1, *design.shape))
+    reexpanded_design = design.expand((M, 1) + design.shape)
     reexp_trace = poutine.trace(model).get_trace(reexpanded_design)
     marginal_lp = cond_log_prob(model, y, reexp_trace.nodes[target_label]["value"],
                                 observation_label, target_label, design)[0]
@@ -93,17 +93,16 @@ def donsker_varadhan_loss(model, observation_label, target_label, U):
 
     def loss_fn(design, num_particles):
 
-        expanded_design = design.expand((num_particles, *design.shape))
+        expanded_design = design.expand((num_particles,) + design.shape)
 
         trace = poutine.trace(model).get_trace(expanded_design)
         y = trace.nodes[observation_label]["value"]
-        theta = trace.nodes[target_label]["value"]
 
         # Compute log probabilities
         trace.compute_log_prob()
         unshuffled_lp = trace.nodes[observation_label]["log_prob"]
         # Not actually shuffling, resimulate for safety
-        shuffled_lp, _ = cond_log_prob(model, y, None, observation_label, 
+        shuffled_lp, _ = cond_log_prob(model, y, None, observation_label,
                                        target_label, expanded_design.unsqueeze(0))
 
         T_unshuffled = U(expanded_design, y, unshuffled_lp)
@@ -136,7 +135,7 @@ def cond_log_prob(model, observation, target, observation_label, target_label, *
             })
     trace = poutine.trace(conditional_model).get_trace(*args)
     trace.compute_log_prob()
-    return (logsumexp(trace.nodes[observation_label]["log_prob"], 0) - np.log(M), 
+    return (logsumexp(trace.nodes[observation_label]["log_prob"], 0) - np.log(M),
             trace.nodes[target_label]["value"])
 
 

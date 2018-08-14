@@ -1,5 +1,4 @@
 import time
-from functools import partial
 import torch
 import pytest
 import numpy as np

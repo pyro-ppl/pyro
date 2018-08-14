@@ -1,5 +1,5 @@
 import warnings
-from functools import partial, lru_cache
+from functools import lru_cache
 import torch
 from torch.nn.functional import softplus
 import numpy as np
@@ -105,14 +105,14 @@ def zero_mean_unit_obs_sd_lm(prior_sds, intercept_sd=None):
     def model(design):
         if intercept_sd is not None:
             design = cache_constant(design)
-            return bayesian_linear_model(design, 
+            return bayesian_linear_model(design,
                                          w_means={"w": torch.tensor(0.),
                                                   "b": torch.tensor(0.)},
                                          w_sqrtlambdas={"w": 1./prior_sds,
                                                         "b": 1./intercept_sd.unsqueeze(-1)},
                                          obs_sd=torch.tensor(1.))
         else:
-            return bayesian_linear_model(design, 
+            return bayesian_linear_model(design,
                                          w_means={"w": torch.tensor(0.)},
                                          w_sqrtlambdas={"w": 1./prior_sds},
                                          obs_sd=torch.tensor(1.))
@@ -123,12 +123,12 @@ def zero_mean_unit_obs_sd_lm(prior_sds, intercept_sd=None):
 
     def guide(design):
         if intercept_sd is not None:
-            return normal_inv_gamma_guide(design, 
+            return normal_inv_gamma_guide(design,
                                           w_sizes={"w": prior_sds.shape,
                                                    "b": (1,)},
                                           obs_sd=torch.tensor(1.))
         else:
-            return normal_inv_gamma_guide(design, 
+            return normal_inv_gamma_guide(design,
                                           w_sizes={"w": prior_sds.shape},
                                           obs_sd=torch.tensor(1.))
 
@@ -137,16 +137,16 @@ def zero_mean_unit_obs_sd_lm(prior_sds, intercept_sd=None):
 
 def zero_mean_normal_inv_gamma(alpha, beta, prior_sds):
     def model(design):
-        return bayesian_linear_model(design, 
+        return bayesian_linear_model(design,
                                      w_means={"w": torch.tensor(0.)},
                                      w_sqrtlambdas={"w": 1/prior_sds},
                                      alpha_0=alpha,
                                      beta_0=beta)
 
     def guide(design):
-        return normal_inv_gamma_guide(design, 
+        return normal_inv_gamma_guide(design,
                                       w_sizes={"w": prior_sds.shape})
-    
+
     return model, guide
 
 

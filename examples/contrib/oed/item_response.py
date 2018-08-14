@@ -1,6 +1,5 @@
 import argparse
 import torch
-from torch.nn.functional import softplus
 
 import pyro
 import pyro.distributions as dist
