@@ -2,6 +2,7 @@ import torch
 from torch.distributions.utils import lazy_property
 
 import pyro.distributions as dist
+from pyro.distributions.util import eye_like
 
 
 class EKFState(object):
@@ -189,7 +190,7 @@ class EKFState(object):
         dx = K_prefix.mm(torch.gesv(dz, S)[0]).squeeze(1)  # K*dz
         x = self._dynamic_model.geodesic_difference(x, -dx)
 
-        I = eye_like(self.x, self._dynamic_model.dimension)  # noqa: E741
+        I = eye_like(x, self._dynamic_model.dimension)  # noqa: E741
         ImKH = I - K_prefix.mm(torch.gesv(H, S)[0])
         # *Joseph form* of covariance update for numerical stability.
         P = ImKH.mm(self.cov).mm(ImKH.transpose(-1, -2)) \

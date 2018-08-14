@@ -388,7 +388,7 @@ class NcvContinuous(Ncv):
             eye = eye_like(self.sa2, d//2)
             Q[:d//2, :d//2] = dt3 * eye / 3.0
             Q[:d//2, d//2:] = dt2 * eye / 2.0
-            Q[d//2:, :d//2] = dt2 * eye  / 2.0
+            Q[d//2:, :d//2] = dt2 * eye / 2.0
             Q[d//2:, d//2:] = dt * eye
             Q *= q
             self._Q_cache[dt] = Q
