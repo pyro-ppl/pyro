@@ -28,7 +28,7 @@ X_small = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])) for n in
 
 def vi_for_lm(design, w_sds, num_vi_steps, num_is_samples):
     model, guide = zero_mean_unit_obs_sd_lm(w_sds)
-    prior_cov = torch.diag(1./sqrtlambda**2)
+    prior_cov = torch.diag(w_sds**2)
     H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov)
     return H_prior - vi_ape(
         model,
@@ -57,14 +57,7 @@ def lm_true_eig(X_lm, w_sds, obs_sd=torch.tensor(1.)):
 
 def naive_rainforth_lm(X_lm, w_sds, N, M):
     model, _ = zero_mean_unit_obs_sd_lm(w_sds)
-    return naive_rainforth(
-        partial(bayesian_linear_model,
-                w_mean=torch.tensor(0.),
-                w_sqrtlambda=sqrtlambda,
-                obs_sd=obs_sd,
-                alpha_0=alpha_0,
-                beta_0=beta_0),
-        X_lm, "y", "w", N=N, M=M)
+    return naive_rainforth(model, X_lm, "y", "w", N=N, M=M)
 
 
 def donsker_varadhan_lm(X_lm, w_sds, n_iter, n_samples, lr, nn,
@@ -131,17 +124,17 @@ def time_eig(design_tensor, estimator, *args):
     return y
 
 
-@pytest.mark.parametrize("design,sqrtlambda,obs_sd,dv_params", [
-     (X_small, torch.tensor([.1, .4]), torch.tensor(1.), {"n_iter": 4000, "n_samples": 200, "lr": 0.005, "nn": DVNeuralNet(2, 2),
-                                                          "final_n_samples": 10000}),
-     (X_small, torch.tensor([.1, 10.]), torch.tensor(1.), {"n_iter": 2000, "n_samples": 200, "lr": 0.005, "nn": DVNeuralNet(2, 2),
-                                                           "final_n_samples": 10000})
+@pytest.mark.parametrize("design,w_sds,dv_params", [
+     (X_small, torch.tensor([10., 2.5]), {"n_iter": 4000, "n_samples": 200, "lr": 0.005, "nn": DVNeuralNet(2, 2),
+                                          "final_n_samples": 10000}),
+     (X_small, torch.tensor([10., .1]), {"n_iter": 2000, "n_samples": 200, "lr": 0.005, "nn": DVNeuralNet(2, 2),
+                                         "final_n_samples": 10000})
 ])
-def test_dv_lm_convergence(design, sqrtlambda, obs_sd, dv_params):
+def test_dv_lm_convergence(design, w_sds, dv_params):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
-    truth = lm_true_eig(design, sqrtlambda, obs_sd)
-    dv, final = donsker_varadhan_lm(design, sqrtlambda, obs_sd, None, None, return_history=True, **dv_params)
+    truth = lm_true_eig(design, w_sds)
+    dv, final = donsker_varadhan_lm(design, w_sds, return_history=True, **dv_params)
     x = np.arange(0, dv.shape[0])
     print("Final est", final, "Truth", truth)
 
