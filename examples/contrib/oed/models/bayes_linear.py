@@ -1,5 +1,5 @@
 import warnings
-from functools import partial
+from functools import partial, lru_cache
 import torch
 from torch.nn.functional import softplus
 import numpy as np
@@ -96,7 +96,7 @@ def normal_inv_gamma_guide(design, obs_sd, w_sizes):
         sqrtlambda_param = softplus(pyro.param("{}_guide_sqrtlambda".format(name),
                                                3.*torch.ones(w_shape)))
         # guide distributions for w
-        w_dist = dist.Normal(mw_param, obs_sd.unsqueeze(-1) / sqrtlambda_param).independent(2)
+        w_dist = dist.Normal(mw_param, obs_sd / sqrtlambda_param).independent(1)
         pyro.sample(name, w_dist)
 
 
@@ -104,18 +104,22 @@ def normal_inv_gamma_guide(design, obs_sd, w_sizes):
 def zero_mean_unit_obs_sd_lm(prior_sds, intercept_sd=None):
     def model(design):
         if intercept_sd is not None:
-            design = torch.cat(design, torch.tensor(1.).expand(design.shape[:-1]+(1,)))
+            design = cache_constant(design)
             return bayesian_linear_model(design, 
                                          w_means={"w": torch.tensor(0.),
                                                   "b": torch.tensor(0.)},
-                                         w_sqrtlambdas={"w": 1/prior_sds,
-                                                        "b": 1/intercept_sd.unsqueeze(-1)},
+                                         w_sqrtlambdas={"w": 1./prior_sds,
+                                                        "b": 1./intercept_sd.unsqueeze(-1)},
                                          obs_sd=torch.tensor(1.))
         else:
             return bayesian_linear_model(design, 
                                          w_means={"w": torch.tensor(0.)},
-                                         w_sqrtlambdas={"w": 1/prior_sds},
+                                         w_sqrtlambdas={"w": 1./prior_sds},
                                          obs_sd=torch.tensor(1.))
+
+    @lru_cache(10)
+    def cache_constant(design):
+        return torch.cat(design, torch.tensor(1.).expand(design.shape[:-1]+(1,)))
 
     def guide(design):
         if intercept_sd is not None:

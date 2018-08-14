@@ -113,8 +113,10 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
 
         return X
 
-    def get_step(self, loss, params):
+    def get_step(self, loss, params, verbose=False):
         X = self.acquisition_func(num_acquisitions=self.num_acquisitions)
         y = loss(X)
+        if verbose:
+            print("Acquire at: X", X, "y", y, sep='\n')
         self.update_posterior(X, y)
         return self.opt_differentiable(lambda x: self.gpmodel(x)[0])
