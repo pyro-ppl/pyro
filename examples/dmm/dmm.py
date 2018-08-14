@@ -27,7 +27,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import InverseAutoregressiveFlow, TransformedDistribution
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import ClippedAdam
 from util import get_logger
 
@@ -44,7 +44,6 @@ class Emitter(nn.Module):
         self.lin_hidden_to_input = nn.Linear(emission_dim, input_dim)
         # initialize the two non-linearities used in the neural network
         self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, z_t):
         """
@@ -53,7 +52,7 @@ class Emitter(nn.Module):
         """
         h1 = self.relu(self.lin_z_to_hidden(z_t))
         h2 = self.relu(self.lin_hidden_to_hidden(h1))
-        ps = self.sigmoid(self.lin_hidden_to_input(h2))
+        ps = torch.sigmoid(self.lin_hidden_to_input(h2))
         return ps
 
 
@@ -77,7 +76,6 @@ class GatedTransition(nn.Module):
         self.lin_z_to_loc.bias.data = torch.zeros(z_dim)
         # initialize the three non-linearities used in the neural network
         self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
         self.softplus = nn.Softplus()
 
     def forward(self, z_t_1):
@@ -88,7 +86,7 @@ class GatedTransition(nn.Module):
         """
         # compute the gating function
         _gate = self.relu(self.lin_gate_z_to_hidden(z_t_1))
-        gate = self.sigmoid(self.lin_gate_hidden_to_z(_gate))
+        gate = torch.sigmoid(self.lin_gate_hidden_to_z(_gate))
         # compute the 'proposed mean'
         _proposed_mean = self.relu(self.lin_proposed_mean_z_to_hidden(z_t_1))
         proposed_mean = self.lin_proposed_mean_hidden_to_z(_proposed_mean)
@@ -324,7 +322,8 @@ def main(args):
     adam = ClippedAdam(adam_params)
 
     # setup inference algorithm
-    elbo = SVI(dmm.model, dmm.guide, adam, Trace_ELBO())
+    elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
+    svi = SVI(dmm.model, dmm.guide, adam, loss=elbo)
 
     # now we're going to define some functions we need to form the main training loop
 
@@ -367,8 +366,8 @@ def main(args):
             = poly.get_mini_batch(mini_batch_indices, training_data_sequences,
                                   training_seq_lengths, cuda=args.cuda)
         # do an actual gradient step
-        loss = elbo.step(mini_batch, mini_batch_reversed, mini_batch_mask,
-                         mini_batch_seq_lengths, annealing_factor)
+        loss = svi.step(mini_batch, mini_batch_reversed, mini_batch_mask,
+                        mini_batch_seq_lengths, annealing_factor)
         # keep track of the training loss
         return loss
 
@@ -378,10 +377,10 @@ def main(args):
         dmm.rnn.eval()
 
         # compute the validation and test loss n_samples many times
-        val_nll = elbo.evaluate_loss(val_batch, val_batch_reversed, val_batch_mask,
-                                     val_seq_lengths) / np.sum(val_seq_lengths)
-        test_nll = elbo.evaluate_loss(test_batch, test_batch_reversed, test_batch_mask,
-                                      test_seq_lengths) / np.sum(test_seq_lengths)
+        val_nll = svi.evaluate_loss(val_batch, val_batch_reversed, val_batch_mask,
+                                    val_seq_lengths) / np.sum(val_seq_lengths)
+        test_nll = svi.evaluate_loss(test_batch, test_batch_reversed, test_batch_mask,
+                                     test_seq_lengths) / np.sum(test_seq_lengths)
 
         # put the RNN back into training mode (i.e. turn on drop-out if applicable)
         dmm.rnn.train()
@@ -445,6 +444,7 @@ if __name__ == '__main__':
     parser.add_argument('-sopt', '--save-opt', type=str, default='')
     parser.add_argument('-smod', '--save-model', type=str, default='')
     parser.add_argument('--cuda', action='store_true')
+    parser.add_argument('--jit', action='store_true')
     parser.add_argument('-l', '--log', type=str, default='dmm.log')
     args = parser.parse_args()
 

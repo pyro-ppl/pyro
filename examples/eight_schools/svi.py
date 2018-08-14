@@ -9,7 +9,7 @@ from torch.distributions import constraints, transforms
 import pyro
 import pyro.distributions as dist
 from data import J, sigma, y
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
@@ -59,7 +59,8 @@ def guide(data):
 
 def main(args):
     optim = Adam({'lr': args.lr})
-    svi = SVI(model, guide, optim, loss=Trace_ELBO())
+    elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
+    svi = SVI(model, guide, optim, loss=elbo)
 
     pyro.clear_param_store()
     for j in range(args.num_epochs):
@@ -78,6 +79,7 @@ if __name__ == '__main__':
                         help='learning rate (default: 0.01)')
     parser.add_argument('--num-epochs', type=int, default=1000,
                         help='number of epochs (default: 1000)')
+    parser.add_argument('--jit', action='store_true', default=False)
     args = parser.parse_args()
 
     main(args)

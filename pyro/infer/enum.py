@@ -3,9 +3,9 @@ from __future__ import absolute_import, division, print_function
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
-from pyro.poutine import Trace
-
 from pyro.infer.util import is_validation_enabled
+from pyro.poutine import Trace
+from pyro.poutine.enumerate_messenger import EXPAND_DEFAULT
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape
 
@@ -18,7 +18,7 @@ def iter_discrete_escape(trace, msg):
 
 
 def iter_discrete_extend(trace, site, **ignored):
-    values = site["fn"].enumerate_support()
+    values = site["fn"].enumerate_support(expand=site["infer"].get("expand", EXPAND_DEFAULT))
     for i, value in enumerate(values):
         extended_site = site.copy()
         extended_site["infer"] = site["infer"].copy()
@@ -34,6 +34,8 @@ def get_importance_trace(graph_type, max_iarange_nesting, model, guide, *args, *
     Returns a single trace from the guide, and the model that is run
     against it.
     """
+    guide = poutine.broadcast(guide)
+    model = poutine.broadcast(model)
     guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
     model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                 graph_type=graph_type).get_trace(*args, **kwargs)
@@ -79,21 +81,20 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
         yield traced_fn.get_trace(*args, **kwargs)
 
 
-def _config_enumerate(default):
+def _config_enumerate(default, expand):
 
     def config_fn(site):
         if site["type"] != "sample" or site["is_observed"]:
             return {}
         if not getattr(site["fn"], "has_enumerate_support", False):
             return {}
-        if "enumerate" in site["infer"]:
-            return {}  # do not overwrite existing config
-        return {"enumerate": default}
+        return {"enumerate": site["infer"].get("enumerate", default),
+                "expand": site["infer"].get("expand", expand)}
 
     return config_fn
 
 
-def config_enumerate(guide=None, default="sequential"):
+def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT):
     """
     Configures each enumerable site a guide to enumerate with given method,
     ``site["infer"]["enumerate"] = default``. This can be used as either a
@@ -107,7 +108,7 @@ def config_enumerate(guide=None, default="sequential"):
         def guide1(*args, **kwargs):
             ...
 
-        @config_enumerate(default="parallel")
+        @config_enumerate(default="parallel", expand=False)
         def guide2(*args, **kwargs):
             ...
 
@@ -115,15 +116,20 @@ def config_enumerate(guide=None, default="sequential"):
 
     :param callable guide: a pyro model that will be used as a guide in
         :class:`~pyro.infer.svi.SVI`.
-    :param str default: one of "sequential", "parallel", or None.
+    :param str default: Which enumerate strategy to use, one of
+        "sequential", "parallel", or None.
+    :param bool expand: Whether to expand enumerated sample values. See
+        :meth:`~pyro.distributions.Distribution.enumerate_support` for details.
     :return: an annotated guide
     :rtype: callable
     """
     if default not in ["sequential", "parallel", None]:
         raise ValueError("Invalid default value. Expected 'sequential', 'parallel', or None, but got {}".format(
             repr(default)))
+    if expand not in [True, False]:
+        raise ValueError("Invalid expand value. Expected True or False, but got {}".format(repr(expand)))
     # Support usage as a decorator:
     if guide is None:
-        return lambda guide: config_enumerate(guide, default=default)
+        return lambda guide: config_enumerate(guide, default=default, expand=expand)
 
-    return poutine.infer_config(guide, config_fn=_config_enumerate(default))
+    return poutine.infer_config(guide, config_fn=_config_enumerate(default, expand))

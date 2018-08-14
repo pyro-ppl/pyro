@@ -127,7 +127,7 @@ class _GSMSample(Function):
         q_tot = (pis * q_j).sum(-1, keepdim=True)  # l
 
         Phi_j = torch.exp(-0.5 * r_sqr_j)  # l j
-        exponents = - torch.arange(1, int(dim/2) + 1, 1)
+        exponents = - torch.arange(1., int(dim/2) + 1., 1.)
         if z.dim() > 1:
             r_j_poly = r_sqr_j.unsqueeze(-1).expand(-1, -1, int(dim/2))  # l j d/2
         else:

@@ -8,8 +8,9 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.optim as optim
-from pyro.distributions import Normal
+from pyro.distributions import Normal, Uniform
 from pyro.infer import SVI, TraceGraph_ELBO
+from tests.common import assert_equal
 
 
 class OptimTests(TestCase):
@@ -117,3 +118,48 @@ def test_dynamic_lr(scheduler, num_steps):
 def test_autowrap(factory):
     instance = factory({})
     assert instance.pt_optim_constructor.__name__ == factory.__name__
+
+
+@pytest.mark.parametrize('clip_norm', [1., 3., 5.])
+def test_clippedadam_clip(clip_norm):
+    x1 = torch.tensor(0., requires_grad=True)
+    x2 = torch.tensor(0., requires_grad=True)
+    opt_ca = optim.clipped_adam.ClippedAdam(params=[x1], lr=1., lrd=1., clip_norm=clip_norm)
+    opt_a = torch.optim.Adam(params=[x2], lr=1.)
+    for step in range(3):
+        opt_ca.zero_grad()
+        opt_a.zero_grad()
+        x1.backward(Uniform(clip_norm, clip_norm + 3.).sample())
+        x2.backward(torch.tensor(clip_norm))
+        opt_ca.step()
+        opt_a.step()
+        assert_equal(x1, x2)
+
+
+@pytest.mark.parametrize('clip_norm', [1., 3., 5.])
+def test_clippedadam_pass(clip_norm):
+    x1 = torch.tensor(0., requires_grad=True)
+    x2 = torch.tensor(0., requires_grad=True)
+    opt_ca = optim.clipped_adam.ClippedAdam(params=[x1], lr=1., lrd=1., clip_norm=clip_norm)
+    opt_a = torch.optim.Adam(params=[x2], lr=1.)
+    for step in range(3):
+        g = Uniform(-clip_norm, clip_norm).sample()
+        opt_ca.zero_grad()
+        opt_a.zero_grad()
+        x1.backward(g)
+        x2.backward(g)
+        opt_ca.step()
+        opt_a.step()
+        assert_equal(x1, x2)
+
+
+@pytest.mark.parametrize('lrd', [1., 3., 5.])
+def test_clippedadam_lrd(lrd):
+    x1 = torch.tensor(0., requires_grad=True)
+    orig_lr = 1.0
+    opt_ca = optim.clipped_adam.ClippedAdam(params=[x1], lr=orig_lr, lrd=lrd)
+    for step in range(3):
+        g = Uniform(-5., 5.).sample()
+        x1.backward(g)
+        opt_ca.step()
+        assert opt_ca.param_groups[0]['lr'] == orig_lr * lrd**(step + 1)

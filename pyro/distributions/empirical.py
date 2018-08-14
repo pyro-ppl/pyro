@@ -170,6 +170,7 @@ class Empirical(TorchDistribution):
         self._finalize()
         return self._samples, self._log_weights
 
-    def enumerate_support(self):
+    def enumerate_support(self, expand=True):
+        # Empirical does not support batching, so expanding is a no-op.
         self._finalize()
         return self._samples

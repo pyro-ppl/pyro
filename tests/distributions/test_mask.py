@@ -43,6 +43,8 @@ def test_mask(batch_dim, event_dim, mask_dim):
     assert_equal(dist.score_parts(sample), base_dist.score_parts(sample) * mask, prec=0)
     if not dist.event_shape:
         assert_equal(dist.enumerate_support(), base_dist.enumerate_support())
+        assert_equal(dist.enumerate_support(expand=True), base_dist.enumerate_support(expand=True))
+        assert_equal(dist.enumerate_support(expand=False), base_dist.enumerate_support(expand=False))
 
 
 @pytest.mark.parametrize('batch_shape,mask_shape', [
