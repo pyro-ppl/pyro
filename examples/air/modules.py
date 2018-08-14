@@ -1,5 +1,6 @@
+import torch
 import torch.nn as nn
-from torch.nn.functional import sigmoid, softplus
+from torch.nn.functional import softplus
 
 
 # Takes pixel intensities of the attention window to parameters (mean,
@@ -29,7 +30,7 @@ class Decoder(nn.Module):
         a = self.mlp(z)
         if self.bias is not None:
             a = a + self.bias
-        return sigmoid(a) if self.use_sigmoid else a
+        return torch.sigmoid(a) if self.use_sigmoid else a
 
 
 # A general purpose module to construct networks that look like:
@@ -68,7 +69,7 @@ class Predict(nn.Module):
 
     def forward(self, h):
         out = self.mlp(h)
-        z_pres_p = sigmoid(out[:, 0:self.z_pres_size])
+        z_pres_p = torch.sigmoid(out[:, 0:self.z_pres_size])
         z_where_loc = out[:, self.z_pres_size:self.z_pres_size + self.z_where_size]
         z_where_scale = softplus(out[:, (self.z_pres_size + self.z_where_size):])
         return z_pres_p, z_where_loc, z_where_scale

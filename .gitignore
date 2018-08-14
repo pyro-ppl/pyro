@@ -7,6 +7,7 @@ examples/*/processed
 examples/*/results
 examples/*/raw
 examples/dmm/*.pkl
+examples/*.csv
 pyro/contrib/examples/processed
 pyro/contrib/examples/results
 pyro/contrib/examples/raw

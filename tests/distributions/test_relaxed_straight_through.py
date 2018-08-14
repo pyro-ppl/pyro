@@ -1,14 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
+import pytest
 import torch
 from torch.autograd import grad
-from torch.distributions import OneHotCategorical, RelaxedOneHotCategorical, RelaxedBernoulli, constraints
+from torch.distributions import constraints
 
 import pyro
 import pyro.optim as optim
-import pytest
-from pyro.distributions import RelaxedOneHotCategoricalStraightThrough
-from pyro.distributions import RelaxedBernoulliStraightThrough
+from pyro.distributions import (OneHotCategorical, RelaxedBernoulli, RelaxedBernoulliStraightThrough,
+                                RelaxedOneHotCategorical, RelaxedOneHotCategoricalStraightThrough)
 from pyro.infer import SVI, Trace_ELBO
 from tests.common import assert_equal
 

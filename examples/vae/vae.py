@@ -7,7 +7,7 @@ import visdom
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
 from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
@@ -49,7 +49,6 @@ class Decoder(nn.Module):
         self.fc21 = nn.Linear(hidden_dim, 784)
         # setup the non-linearities
         self.softplus = nn.Softplus()
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, z):
         # define the forward computation on the latent z
@@ -57,7 +56,7 @@ class Decoder(nn.Module):
         hidden = self.softplus(self.fc1(z))
         # return the parameter for the output Bernoulli
         # each is of size batch_size x 784
-        loc_img = self.sigmoid(self.fc21(hidden))
+        loc_img = torch.sigmoid(self.fc21(hidden))
         return loc_img
 
 
@@ -82,10 +81,10 @@ class VAE(nn.Module):
     def model(self, x):
         # register PyTorch module `decoder` with Pyro
         pyro.module("decoder", self.decoder)
-        with pyro.iarange("data", x.size(0)):
+        with pyro.iarange("data", x.shape[0]):
             # setup hyperparameters for prior p(z)
-            z_loc = x.new_zeros(torch.Size((x.size(0), self.z_dim)))
-            z_scale = x.new_ones(torch.Size((x.size(0), self.z_dim)))
+            z_loc = x.new_zeros(torch.Size((x.shape[0], self.z_dim)))
+            z_scale = x.new_ones(torch.Size((x.shape[0], self.z_dim)))
             # sample from prior (value will be sampled by guide when computing the ELBO)
             z = pyro.sample("latent", dist.Normal(z_loc, z_scale).independent(1))
             # decode the latent code z
@@ -99,7 +98,7 @@ class VAE(nn.Module):
     def guide(self, x):
         # register PyTorch module `encoder` with Pyro
         pyro.module("encoder", self.encoder)
-        with pyro.iarange("data", x.size(0)):
+        with pyro.iarange("data", x.shape[0]):
             # use the encoder to get the parameters used to define q(z|x)
             z_loc, z_scale = self.encoder.forward(x)
             # sample the latent code z
@@ -117,6 +116,9 @@ class VAE(nn.Module):
 
 
 def main(args):
+    # clear param store
+    pyro.clear_param_store()
+
     # setup MNIST data loaders
     # train_loader, test_loader
     train_loader, test_loader = setup_data_loaders(MNIST, use_cuda=args.cuda, batch_size=256)
@@ -129,7 +131,8 @@ def main(args):
     optimizer = Adam(adam_args)
 
     # setup the inference algorithm
-    svi = SVI(vae.model, vae.guide, optimizer, loss=Trace_ELBO())
+    elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
+    svi = SVI(vae.model, vae.guide, optimizer, loss=elbo)
 
     # setup visdom for visualization
     if args.visdom_flag:
@@ -143,7 +146,7 @@ def main(args):
         epoch_loss = 0.
         # do a training epoch over each mini-batch x returned
         # by the data loader
-        for _, (x, _) in enumerate(train_loader):
+        for x, _ in train_loader:
             # if on GPU put mini-batch into CUDA memory
             if args.cuda:
                 x = x.cuda()
@@ -172,7 +175,7 @@ def main(args):
                 if i == 0:
                     if args.visdom_flag:
                         plot_vae_samples(vae, vis)
-                        reco_indices = np.random.randint(0, x.size(0), 3)
+                        reco_indices = np.random.randint(0, x.shape[0], 3)
                         for index in reco_indices:
                             test_img = x[index, :]
                             reco_img = vae.reconstruct_img(test_img)
@@ -201,6 +204,7 @@ if __name__ == '__main__':
     parser.add_argument('-tf', '--test-frequency', default=5, type=int, help='how often we evaluate the test set')
     parser.add_argument('-lr', '--learning-rate', default=1.0e-3, type=float, help='learning rate')
     parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
+    parser.add_argument('--jit', action='store_true', default=False, help='whether to use PyTorch jit')
     parser.add_argument('-visdom', '--visdom_flag', action="store_true", help='Whether plotting in visdom is desired')
     parser.add_argument('-i-tsne', '--tsne_iter', default=100, type=int, help='epoch when tsne visualization runs')
     args = parser.parse_args()

@@ -97,7 +97,7 @@ class Distribution(object):
             # See Roeder, Wu, Duvenaud (2017) "Sticking the Landing" https://arxiv.org/abs/1703.09194
             return ScoreParts(log_prob=log_prob, score_function=log_prob, entropy_term=0)
 
-    def enumerate_support(self):
+    def enumerate_support(self, expand=True):
         """
         Returns a representation of the parametrized distribution's support,
         along the first dimension. This is implemented only by discrete
@@ -106,6 +106,10 @@ class Distribution(object):
         Note that this returns support values of all the batched RVs in
         lock-step, rather than the full cartesian product.
 
+        :param bool expand: whether to expand the result to a tensor of shape
+            ``(n,) + batch_shape + event_shape``. If false, the return value
+            has unexpanded shape ``(n,) + (1,)*len(batch_shape) + event_shape``
+            which can be broadcasted to the full shape.
         :return: An iterator over the distribution's discrete support.
         :rtype: iterator
         """

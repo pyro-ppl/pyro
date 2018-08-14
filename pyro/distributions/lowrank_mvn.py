@@ -6,7 +6,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
-from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistribution
 
 
 def _matrix_triangular_solve_compat(b, A, upper=True):
@@ -28,15 +28,15 @@ class LowRankMultivariateNormal(TorchDistribution):
     Implements fast computation for log probability of Multivariate Normal distribution
     when the covariance matrix has the form::
 
-        covariance_matrix = W.T @ W + D.
+        covariance_matrix = W @ W.T + D.
 
-    Here D is a diagonal vector and ``W`` is a matrix of size ``M x N``. The
+    Here D is a diagonal vector and ``W`` is a matrix of size ``N x M``. The
     computation will be beneficial when ``M << N``.
 
     :param torch.Tensor loc: Mean.
         Must be a 1D or 2D tensor with the last dimension of size N.
     :param torch.Tensor W_term: W term of covariance matrix.
-        Must be in 2 dimensional of size M x N.
+        Must be in 2 dimensional of size N x M.
     :param torch.Tensor D_term: D term of covariance matrix.
         Must be in 1 dimensional of size N.
     :param float trace_term: A optional term to be added into Mahalabonis term
@@ -45,15 +45,16 @@ class LowRankMultivariateNormal(TorchDistribution):
     arg_constraints = {"loc": constraints.real,
                        "covariance_matrix_D_term": constraints.positive,
                        "scale_tril": constraints.lower_triangular}
-    support = constraints.real
+    support = IndependentConstraint(constraints.real, 1)
     has_rsample = True
 
     def __init__(self, loc, W_term, D_term, trace_term=None):
+        W_term = W_term.t()
         if loc.shape[-1] != D_term.shape[0]:
             raise ValueError("Expected loc.shape == D_term.shape, but got {} vs {}".format(
                 loc.shape, D_term.shape))
         if D_term.shape[0] != W_term.shape[1]:
-            raise ValueError("The dimension of D_term must match the second dimension of W_term.")
+            raise ValueError("The dimension of D_term must match the first dimension of W_term.")
         if D_term.dim() != 1 or W_term.dim() != 2 or loc.dim() > 2:
             raise ValueError("D_term, W_term must be 1D, 2D tensors respectively and "
                              "loc must be a 1D or 2D tensor.")

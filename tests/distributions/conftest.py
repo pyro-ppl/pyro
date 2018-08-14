@@ -153,7 +153,7 @@ continuous_dists = [
     Fixture(pyro_dist=dist.LowRankMultivariateNormal,
             scipy_dist=sp.multivariate_normal,
             examples=[
-                {'loc': [2.0, 1.0], 'D_term': [0.5, 0.5], 'W_term': [[1.0, 0.5]],
+                {'loc': [2.0, 1.0], 'D_term': [0.5, 0.5], 'W_term': [[1.0], [0.5]],
                  'test_data': [[2.0, 1.0], [9.0, 3.4]]},
             ],
             scipy_arg_fn=lambda loc, D_term=None, W_term=None:
@@ -207,14 +207,14 @@ continuous_dists = [
     Fixture(pyro_dist=dist.HalfCauchy,
             scipy_dist=sp.halfcauchy,
             examples=[
-                {'loc': [0.5], 'scale': [1.2],
+                {'scale': [1.2],
                  'test_data': [1.0]},
-                {'loc': [0.5, -1.5], 'scale': [1.2, 1.2],
+                {'scale': [1.2, 1.2],
                  'test_data': [[1.0, -1.0], [1.0, -1.0]]},
-                {'loc': [[0.5], [0.3]], 'scale': [[1.2], [1.0]],
+                {'scale': [[1.2], [1.0]],
                  'test_data': [[0.54], [0.35]]}
             ],
-            scipy_arg_fn=lambda loc, scale: ((), {"loc": np.array(loc), "scale": np.array(scale)})),
+            scipy_arg_fn=lambda scale: ((), {"scale": np.array(scale)})),
     Fixture(pyro_dist=dist.VonMises,
             scipy_dist=sp.vonmises,
             examples=[

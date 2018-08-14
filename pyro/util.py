@@ -54,7 +54,7 @@ def warn_if_nan(value, msg=""):
     if torch.is_tensor(value) and value.requires_grad:
         value.register_hook(lambda x: warn_if_nan(x, msg))
     if torch_isnan(value):
-        warnings.warn("Encountered NaN{}".format((': ' if msg else '.') + msg))
+        warnings.warn("Encountered NaN{}".format((': ' if msg else '.') + msg), stacklevel=2)
 
 
 def warn_if_inf(value, msg="", allow_posinf=False, allow_neginf=False):
@@ -66,10 +66,10 @@ def warn_if_inf(value, msg="", allow_posinf=False, allow_neginf=False):
             value.register_hook(lambda x: warn_if_inf(x, msg, allow_posinf, allow_neginf))
     if (not allow_posinf) and (value == float('inf') if isinstance(value, numbers.Number)
                                else (value == float('inf')).any()):
-        warnings.warn("Encountered +inf{}".format((': ' if msg else '.') + msg))
+        warnings.warn("Encountered +inf{}".format((': ' if msg else '.') + msg), stacklevel=2)
     if (not allow_neginf) and (value == -float('inf') if isinstance(value, numbers.Number)
                                else (value == -float('inf')).any()):
-        warnings.warn("Encountered -inf{}".format((': ' if msg else '.') + msg))
+        warnings.warn("Encountered -inf{}".format((': ' if msg else '.') + msg), stacklevel=2)
 
 
 def save_visualization(trace, graph_output):
@@ -307,6 +307,16 @@ def check_traceenum_requirements(model_trace, guide_trace):
             irange_counters[name] = irange_counter
             if name in enumerated_sites:
                 enumerated_contexts[context].add(name)
+
+
+def check_if_enumerated(guide_trace):
+    enumerated_sites = [name for name, site in guide_trace.nodes.items()
+                        if site["type"] == "sample" and site["infer"].get("enumerate")]
+    if enumerated_sites:
+        warnings.warn('\n'.join([
+            'Found sample sites configured for enumeration:'
+            ', '.join(enumerated_sites),
+            'If you want to enumerate sites, you need to use TraceEnum_ELBO instead.']))
 
 
 @contextmanager

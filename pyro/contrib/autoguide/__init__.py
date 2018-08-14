@@ -41,9 +41,10 @@ __all__ = [
     'AutoDiscreteParallel',
     'AutoGuide',
     'AutoGuideList',
+    'AutoIAFNormal',
+    'AutoLaplaceApproximation',
     'AutoLowRankMultivariateNormal',
     'AutoMultivariateNormal',
-    'AutoIAFNormal',
 ]
 
 
@@ -106,9 +107,7 @@ class AutoGuide(object):
             self.master()._check_prototype(self.prototype_trace)
 
         self._iaranges = {}
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] != "sample" or site["is_observed"]:
-                continue
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
             for frame in site["cond_indep_stack"]:
                 if frame.vectorized:
                     self._iaranges[frame.name] = frame
@@ -241,18 +240,31 @@ class AutoCallable(AutoGuide):
         return {} if result is None else result
 
 
+def _hessian(y, xs):
+    dys = torch.autograd.grad(y, xs, create_graph=True)
+    flat_dy = torch.cat([dy.reshape(-1) for dy in dys])
+    H = []
+    for dyi in flat_dy:
+        Hi = torch.cat([Hij.reshape(-1) for Hij in torch.autograd.grad(dyi, xs, retain_graph=True)])
+        H.append(Hi)
+    H = torch.stack(H)
+    return H
+
+
 class AutoDelta(AutoGuide):
     """
     This implementation of :class:`AutoGuide` uses Delta distributions to
     construct a MAP guide over the entire latent space. The guide does not
     depend on the model's ``*args, **kwargs``.
 
+    ..note:: This class does MAP inference in constrained space.
+
     Usage::
 
         guide = AutoDelta(model)
         svi = SVI(model, guide, ...)
 
-    By default latent variables are randomly initialized by the model.  To
+    By default latent variables are randomly initialized by the model. To
     change this default behavior the user should call :func:`pyro.param` before
     beginning inference, with ``"auto_"`` prefixed to the targetd sample site
     names e.g. for sample sites named "level" and "concentration", initialize
@@ -275,9 +287,7 @@ class AutoDelta(AutoGuide):
 
         iaranges = self._create_iaranges()
         result = {}
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] != "sample" or site["is_observed"]:
-                continue
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
             with ExitStack() as stack:
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
@@ -296,13 +306,31 @@ class AutoDelta(AutoGuide):
         """
         return self(*args, **kwargs)
 
+    def covariance(self, *args, **kwargs):
+        """
+        Returns covariance of the packed latent variable under Laplace (quadratic) approximation.
+        The packed latent variable is packed from the flat versions of latent variables, which are
+        arranged according to their appearance in the base ``model``.
+        """
+        guide_trace = poutine.trace(self).get_trace(*args, **kwargs)
+        model_trace = poutine.trace(
+            poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
+        loss = -model_trace.log_prob_sum()
+
+        latents = []
+        for _, site in guide_trace.iter_stochastic_nodes():
+            latents.append(site["value"])
+
+        H = _hessian(loss, latents)
+        return torch.inverse(H)
+
 
 class AutoContinuous(AutoGuide):
     """
     Base class for implementations of continuous-valued Automatic
     Differentiation Variational Inference [1].
 
-    Each derived class implements its own :meth:`sample_latent` method.
+    Each derived class implements its own :meth:`get_posterior` method.
 
     Assumes model structure and latent dimension are fixed, and all latent
     variables are continuous.
@@ -319,10 +347,7 @@ class AutoContinuous(AutoGuide):
         super(AutoContinuous, self)._setup_prototype(*args, **kwargs)
         self._unconstrained_shapes = {}
         self._cond_indep_stacks = {}
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] != "sample" or site["is_observed"]:
-                continue
-
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
             # Collect the shapes of unconstrained values.
             # These may differ from the shapes of constrained values.
             self._unconstrained_shapes[name] = biject_to(site["fn"].support).inv(site["value"]).shape
@@ -334,12 +359,19 @@ class AutoContinuous(AutoGuide):
         if self.latent_dim == 0:
             raise RuntimeError('{} found no latent variables; Use an empty guide instead'.format(type(self).__name__))
 
+    def get_posterior(self, *args, **kwargs):
+        """
+        Returns the posterior distribution.
+        """
+        raise NotImplementedError
+
     def sample_latent(self, *args, **kwargs):
         """
         Samples an encoded latent given the same ``*args, **kwargs`` as the
         base ``model``.
         """
-        raise NotImplementedError
+        pos_dist = self.get_posterior(*args, **kwargs)
+        return pyro.sample("_{}_latent".format(self.prefix), pos_dist, infer={"is_auxiliary": True})
 
     def _unpack_latent(self, latent):
         """
@@ -348,13 +380,12 @@ class AutoContinuous(AutoGuide):
             (site, unconstrained_value)
         """
         pos = 0
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] == "sample" and not site["is_observed"]:
-                unconstrained_shape = self._unconstrained_shapes[name]
-                size = _product(unconstrained_shape)
-                unconstrained_value = latent[pos:pos + size].view(unconstrained_shape)
-                yield site, unconstrained_value
-                pos += size
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            unconstrained_shape = self._unconstrained_shapes[name]
+            size = _product(unconstrained_shape)
+            unconstrained_value = latent[pos:pos + size].view(unconstrained_shape)
+            yield site, unconstrained_value
+            pos += size
         assert pos == len(latent)
 
     def __call__(self, *args, **kwargs):
@@ -448,18 +479,16 @@ class AutoMultivariateNormal(AutoContinuous):
         pyro.param("auto_scale_tril", torch.tril(torch.rand(latent_dim)),
                    constraint=constraints.lower_cholesky)
     """
-    def sample_latent(self, *args, **kwargs):
+    def get_posterior(self, *args, **kwargs):
         """
-        Samples the (single) multivariate normal latent used in the auto guide.
+        Returns a MultivariateNormal posterior distribution.
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
         scale_tril = pyro.param("{}_scale_tril".format(self.prefix),
                                 lambda: torch.eye(self.latent_dim),
                                 constraint=constraints.lower_cholesky)
-        return pyro.sample("_{}_latent".format(self.prefix),
-                           dist.MultivariateNormal(loc, scale_tril=scale_tril),
-                           infer={"is_auxiliary": True})
+        return dist.MultivariateNormal(loc, scale_tril=scale_tril)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
@@ -487,18 +516,16 @@ class AutoDiagonalNormal(AutoContinuous):
         pyro.param("auto_scale", torch.ones(latent_dim),
                    constraint=constraints.positive)
     """
-    def sample_latent(self, *args, **kwargs):
+    def get_posterior(self, *args, **kwargs):
         """
-        Samples the (single) diagnoal normal latent used in the auto guide.
+        Returns a diagonal Normal posterior distribution.
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
         scale = pyro.param("{}_scale".format(self.prefix),
                            lambda: torch.ones(self.latent_dim),
                            constraint=constraints.positive)
-        return pyro.sample("_{}_latent".format(self.prefix),
-                           dist.Normal(loc, scale).independent(1),
-                           infer={"is_auxiliary": True})
+        return dist.Normal(loc, scale).independent(1)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
@@ -519,13 +546,13 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the ``D_term`` is initialized to 1/2 and the ``W_term`` is
-    intialized randomly such that ``W_term.t().matmul(W_term)`` is half the
+    intialized randomly such that ``W_term.matmul(W_term.t())`` is half the
     identity matrix. To change this default behavior the user
     should call :func:`pyro.param` before beginning inference, e.g.::
 
         latent_dim = 10
         pyro.param("auto_loc", torch.randn(latent_dim))
-        pyro.param("auto_W_term", torch.randn(latent_dim)))
+        pyro.param("auto_W_term", torch.randn(latent_dim, rank)))
         pyro.param("auto_D_term", torch.randn(latent_dim).exp()),
                    constraint=constraints.positive)
 
@@ -535,30 +562,28 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
     """
     def __init__(self, model, prefix="auto", rank=1):
         if not isinstance(rank, numbers.Number) or not rank > 0:
-            raise ValueError("Expected rank >= 0 but got {}".format(rank))
+            raise ValueError("Expected rank > 0 but got {}".format(rank))
         self.rank = rank
         super(AutoLowRankMultivariateNormal, self).__init__(model, prefix)
 
-    def sample_latent(self, *args, **kwargs):
+    def get_posterior(self, *args, **kwargs):
         """
-        Samples the (single) multivariate normal latent used in the auto guide.
+        Returns a LowRankMultivariateNormal posterior distribution.
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
         W_term = pyro.param("{}_W_term".format(self.prefix),
-                            lambda: torch.randn(self.rank, self.latent_dim) * (0.5 / self.rank) ** 0.5)
+                            lambda: torch.randn(self.latent_dim, self.rank) * (0.5 / self.rank) ** 0.5)
         D_term = pyro.param("{}_D_term".format(self.prefix),
                             lambda: torch.ones(self.latent_dim) * 0.5,
                             constraint=constraints.positive)
-        return pyro.sample("_{}_latent".format(self.prefix),
-                           dist.LowRankMultivariateNormal(loc, W_term, D_term),
-                           infer={"is_auxiliary": True})
+        return dist.LowRankMultivariateNormal(loc, W_term, D_term)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
         W_term = pyro.param("{}_W_term".format(self.prefix))
         D_term = pyro.param("{}_D_term".format(self.prefix))
-        scale = (W_term.pow(2).sum(0) + D_term).sqrt()
+        scale = (W_term.pow(2).sum(-1) + D_term).sqrt()
         return loc, scale
 
 
@@ -584,7 +609,11 @@ class AutoIAFNormal(AutoContinuous):
         self.hidden_dim = hidden_dim
         super(AutoIAFNormal, self).__init__(model, prefix)
 
-    def sample_latent(self, *args, **kwargs):
+    def get_posterior(self, *args, **kwargs):
+        """
+        Returns a diagonal Normal posterior distribution transformed by
+        :class:`~pyro.distributions.iaf.InverseAutoregressiveFlow`.
+        """
         if self.latent_dim == 1:
             raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
         if self.hidden_dim is None:
@@ -592,9 +621,68 @@ class AutoIAFNormal(AutoContinuous):
         iaf = dist.InverseAutoregressiveFlow(self.latent_dim, self.hidden_dim,
                                              sigmoid_bias=self.sigmoid_bias)
         pyro.module("{}_iaf".format(self.prefix), iaf.module)
-        self.iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
-        return pyro.sample("_{}_latent".format(self.prefix), self.iaf_dist.independent(1),
-                           infer={"is_auxiliary": True})
+        iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
+        return iaf_dist.independent(1)
+
+
+class AutoLaplaceApproximation(AutoContinuous):
+    """
+    Laplace approximation (quadratic approximation) approximates the posterior
+    math:`log p(z | x)` by a multivariate normal distribution in the
+    unconstrained space. Under the hood, it uses Delta distributions to
+    construct a MAP guide over the entire (unconstrained) latent space. Its
+    covariance is given by the inverse of the hessian of :math:`-\log p(x, z)`
+    at the MAP point of `z`.
+
+    Usage::
+
+        delta_guide = AutoLaplaceApproximation(model)
+        svi = SVI(model, delta_guide, ...)
+        # ...then train the delta_guide...
+        guide = delta_guide.laplace_approximation()
+
+    By default the mean vector is initialized to zero. To change this default behavior
+    the user should call :func:`pyro.param` before beginning inference, e.g.::
+
+        latent_dim = 10
+        pyro.param("auto_loc", torch.randn(latent_dim))
+    """
+
+    def get_posterior(self, *args, **kwargs):
+        """
+        Returns a Delta posterior distribution for MAP inference.
+        """
+        loc = pyro.param("{}_loc".format(self.prefix),
+                         lambda: torch.zeros(self.latent_dim))
+        return dist.Delta(loc).independent(1)
+
+    def laplace_approximation(self, *args, **kwargs):
+        """
+        Returns a :class:`AutoMultivariateNormal` instance whose posterior's `loc` and
+        `scale_tril` are given by Laplace approximation.
+        """
+        guide_trace = poutine.trace(self).get_trace(*args, **kwargs)
+        model_trace = poutine.trace(
+            poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
+        loss = guide_trace.log_prob_sum() - model_trace.log_prob_sum()
+
+        loc = pyro.param("{}_loc".format(self.prefix))
+        H = _hessian(loss, loc.unconstrained())
+        cov = H.inverse()
+        scale_tril = cov.potrf(upper=False)
+
+        # calculate scale_tril from self.guide()
+        param_store = pyro.get_param_store()
+        scale_tril_name = "{}_scale_tril".format(self.prefix)
+        if scale_tril_name in param_store.get_all_param_names():
+            param_store.replace_param(scale_tril_name, scale_tril, pyro.param(scale_tril_name))
+        else:
+            pyro.param(scale_tril_name, lambda: scale_tril.detach(),
+                       constraint=constraints.lower_cholesky)
+
+        gaussian_guide = AutoMultivariateNormal(self.model, prefix=self.prefix)
+        gaussian_guide._setup_prototype(*args, **kwargs)
+        return gaussian_guide
 
 
 class AutoDiscreteParallel(AutoGuide):
@@ -613,9 +701,7 @@ class AutoDiscreteParallel(AutoGuide):
         self._discrete_sites = []
         self._cond_indep_stacks = {}
         self._iaranges = {}
-        for name, site in self.prototype_trace.nodes.items():
-            if site["type"] != "sample" or site["is_observed"]:
-                continue
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
             if site["infer"].get("enumerate") != "parallel":
                 raise NotImplementedError('Expected sample site "{}" to be discrete and '
                                           'configured for parallel enumeration'.format(name))
@@ -667,3 +753,20 @@ class AutoDiscreteParallel(AutoGuide):
                 result[name] = pyro.sample(name, discrete_dist, infer={"enumerate": "parallel"})
 
         return result
+
+
+def mean_field_guide_entropy(guide, *args):
+    """Computes the entropy of a guide program, assuming
+    that the guide is fully mean-field (i.e. all sample sites
+    in the guide are independent).
+
+    The entropy is simply the sum of the entropies at the
+    individual sites.
+    """
+    trace = poutine.trace(guide).get_trace(*args)
+    entropy = 0.
+    for name, site in trace.nodes.items():
+        if site["type"] == "sample":
+            if not poutine.util.site_is_subsample(site):
+                entropy += site["fn"].entropy()
+    return entropy

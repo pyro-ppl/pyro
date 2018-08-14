@@ -11,6 +11,7 @@ import pyro.distributions as dist
 from pyro.infer import EmpiricalMarginal
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.nuts import NUTS
+import pyro.poutine as poutine
 from tests.common import assert_equal
 
 from .test_hmc import TEST_CASES, TEST_IDS, T, rmse
@@ -20,8 +21,11 @@ logger = logging.getLogger(__name__)
 T2 = T(*TEST_CASES[2].values)._replace(num_samples=800, warmup_steps=200)
 TEST_CASES[2] = pytest.param(*T2, marks=pytest.mark.skipif(
     'CI' in os.environ and os.environ['CI'] == 'true', reason='Slow test - skip on CI'))
-T3 = T(*TEST_CASES[3].values)._replace(num_samples=700, warmup_steps=100)
-TEST_CASES[3] = T3
+T3 = T(*TEST_CASES[3].values)._replace(num_samples=1000, warmup_steps=200)
+TEST_CASES[3] = pytest.param(*T3, marks=[
+    pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
+                       reason='Slow test - skip on CI')]
+)
 
 
 @pytest.mark.parametrize(
@@ -66,8 +70,8 @@ def test_nuts_conjugate_gaussian(fixture,
 
 def test_logistic_regression():
     dim = 3
-    true_coefs = torch.arange(1, dim+1)
     data = torch.randn(2000, dim)
+    true_coefs = torch.arange(1., dim + 1.)
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):
@@ -82,7 +86,7 @@ def test_logistic_regression():
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
 
 
-def test_bernoulli_beta():
+def test_beta_bernoulli():
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
         beta = torch.tensor([1.1, 1.1])
@@ -98,7 +102,7 @@ def test_bernoulli_beta():
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
-def test_normal_gamma():
+def test_gamma_normal():
     def model(data):
         rate = torch.tensor([1.0, 1.0])
         concentration = torch.tensor([1.0, 1.0])
@@ -116,8 +120,8 @@ def test_normal_gamma():
 
 def test_logistic_regression_with_dual_averaging():
     dim = 3
-    true_coefs = torch.arange(1, dim+1)
     data = torch.randn(2000, dim)
+    true_coefs = torch.arange(1., dim + 1.)
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):
@@ -132,8 +136,7 @@ def test_logistic_regression_with_dual_averaging():
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
 
 
-@pytest.mark.filterwarnings("ignore:Encountered NAN")
-def test_bernoulli_beta_with_dual_averaging():
+def test_beta_bernoulli_with_dual_averaging():
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
         beta = torch.tensor([1.1, 1.1])
@@ -149,7 +152,7 @@ def test_bernoulli_beta_with_dual_averaging():
     assert_equal(posterior.mean, true_probs, prec=0.03)
 
 
-def test_categorical_dirichlet():
+def test_dirichlet_categorical():
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
         p_latent = pyro.sample('p_latent', dist.Dirichlet(concentration))
@@ -162,3 +165,84 @@ def test_categorical_dirichlet():
     mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_probs, prec=0.02)
+
+
+def test_gamma_beta():
+    def model(data):
+        alpha_prior = pyro.sample('alpha', dist.Gamma(concentration=1., rate=1.))
+        beta_prior = pyro.sample('beta', dist.Gamma(concentration=1., rate=1.))
+        pyro.sample('x', dist.Beta(concentration1=alpha_prior, concentration0=beta_prior), obs=data)
+
+    true_alpha = torch.tensor(5.)
+    true_beta = torch.tensor(1.)
+    data = dist.Beta(concentration1=true_alpha, concentration0=true_beta).sample(torch.Size((5000,)))
+    nuts_kernel = NUTS(model, adapt_step_size=True)
+    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=200).run(data)
+    posterior = EmpiricalMarginal(mcmc_run, sites=['alpha', 'beta'])
+    assert_equal(posterior.mean, torch.stack([true_alpha, true_beta]), prec=0.05)
+
+
+def test_gaussian_mixture_model():
+    K, N = 3, 1000
+
+    @poutine.broadcast
+    def gmm(data):
+        with pyro.iarange("num_clusters", K):
+            mix_proportions = pyro.sample("phi", dist.Dirichlet(torch.tensor(1.)))
+            cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(float(K)), 1.))
+        with pyro.iarange("data", data.shape[0]):
+            assignments = pyro.sample("assignments", dist.Categorical(mix_proportions))
+            pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)
+        return cluster_means
+
+    true_cluster_means = torch.tensor([1., 5., 10.])
+    true_mix_proportions = torch.tensor([0.1, 0.3, 0.6])
+    cluster_assignments = dist.Categorical(true_mix_proportions).sample(torch.Size((N,)))
+    data = dist.Normal(true_cluster_means[cluster_assignments], 1.0).sample()
+    nuts_kernel = NUTS(gmm, adapt_step_size=True, max_iarange_nesting=1)
+    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=200).run(data)
+    posterior = EmpiricalMarginal(mcmc_run, sites=["phi", "cluster_means"]).mean.sort()[0]
+    assert_equal(posterior[0], true_mix_proportions, prec=0.05)
+    assert_equal(posterior[1], true_cluster_means, prec=0.2)
+
+
+def test_bernoulli_latent_model():
+    @poutine.broadcast
+    def model(data):
+        y_prob = pyro.sample("y_prob", dist.Beta(1., 1.))
+        with pyro.iarange("data", data.shape[0]):
+            y = pyro.sample("y", dist.Bernoulli(y_prob))
+            z = pyro.sample("z", dist.Bernoulli(0.65 * y + 0.1))
+            pyro.sample("obs", dist.Normal(2. * z, 1.), obs=data)
+
+    N = 2000
+    y_prob = torch.tensor(0.3)
+    y = dist.Bernoulli(y_prob).sample(torch.Size((N,)))
+    z = dist.Bernoulli(0.65 * y + 0.1).sample()
+    data = dist.Normal(2. * z, 1.0).sample()
+    nuts_kernel = NUTS(model, adapt_step_size=True, max_iarange_nesting=1)
+    mcmc_run = MCMC(nuts_kernel, num_samples=600, warmup_steps=200).run(data)
+    posterior = EmpiricalMarginal(mcmc_run, sites="y_prob").mean
+    assert_equal(posterior, y_prob, prec=0.05)
+
+
+@pytest.mark.parametrize("num_steps", [2, 3, 5])
+def test_gaussian_hmm_enum_shape(num_steps):
+    dim = 4
+
+    def model(data):
+        initialize = pyro.sample("initialize", dist.Dirichlet(torch.ones(dim)))
+        transition = pyro.sample("transition", dist.Dirichlet(torch.ones(dim, dim)))
+        emission_loc = pyro.sample("emission_loc", dist.Normal(torch.zeros(dim), torch.ones(dim)))
+        emission_scale = pyro.sample("emission_scale", dist.LogNormal(torch.zeros(dim), torch.ones(dim)))
+        x = None
+        for t, y in enumerate(data):
+            x = pyro.sample("x_{}".format(t), dist.Categorical(initialize if x is None else transition[x]))
+            pyro.sample("y_{}".format(t), dist.Normal(emission_loc[x], emission_scale[x]), obs=y)
+            # check shape
+            effective_dim = sum(1 for size in x.shape if size > 1)
+            assert effective_dim == 1
+
+    data = torch.ones(num_steps)
+    nuts_kernel = NUTS(model, adapt_step_size=True, max_iarange_nesting=0)
+    MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)

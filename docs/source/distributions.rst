@@ -78,6 +78,13 @@ EmpiricalDistribution
     :undoc-members:
     :show-inheritance:
 
+GaussianScaleMixture
+------------------------------------
+.. autoclass:: pyro.distributions.GaussianScaleMixture
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 HalfCauchy
 ----------
 .. autoclass:: pyro.distributions.HalfCauchy
@@ -88,6 +95,13 @@ HalfCauchy
 LowRankMultivariateNormal
 -------------------------
 .. autoclass:: pyro.distributions.LowRankMultivariateNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+MaskedMixture
+-------------
+.. autoclass:: pyro.distributions.MaskedMixture
     :members:
     :undoc-members:
     :show-inheritance:

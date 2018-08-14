@@ -11,7 +11,7 @@ from tests.common import assert_equal
 def checker_mask(shape):
     mask = tensor(0.)
     for size in shape:
-        mask = mask.unsqueeze(-1) + torch.arange(size)
+        mask = mask.unsqueeze(-1) + torch.arange(float(size))
     return mask.fmod(2)
 
 
@@ -43,6 +43,8 @@ def test_mask(batch_dim, event_dim, mask_dim):
     assert_equal(dist.score_parts(sample), base_dist.score_parts(sample) * mask, prec=0)
     if not dist.event_shape:
         assert_equal(dist.enumerate_support(), base_dist.enumerate_support())
+        assert_equal(dist.enumerate_support(expand=True), base_dist.enumerate_support(expand=True))
+        assert_equal(dist.enumerate_support(expand=False), base_dist.enumerate_support(expand=False))
 
 
 @pytest.mark.parametrize('batch_shape,mask_shape', [

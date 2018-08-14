@@ -118,13 +118,13 @@ class SparseGPRegression(GPModel):
         Xu = self.get_param("Xu")
         noise = self.get_param("noise")
 
-        # W = inv(Luu) @ Kuf
-        # Qff = Kfu @ inv(Kuu) @ Kuf = W.T @ W
+        # W = (inv(Luu) @ Kuf).T
+        # Qff = Kfu @ inv(Kuu) @ Kuf = W @ W.T
         # Fomulas for each approximation method are
         # DTC:  y_cov = Qff + noise,                   trace_term = 0
         # FITC: y_cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
         # VFE:  y_cov = Qff + noise,                   trace_term = tr(Kff-Qff) / noise
-        # y_cov = W.T @ W + D
+        # y_cov = W @ W.T + D
         # trace_term is added into log_prob
 
         M = Xu.shape[0]
@@ -132,27 +132,31 @@ class SparseGPRegression(GPModel):
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.potrf(upper=False)
         Kuf = self.kernel(Xu, self.X)
-        W = Kuf.trtrs(Luu, upper=False)[0]
+        W = Kuf.trtrs(Luu, upper=False)[0].t()
 
-        D = noise.expand(W.shape[1])
-        trace_term = 0
+        D = noise.expand(W.shape[0])
         if self.approx == "FITC" or self.approx == "VFE":
             Kffdiag = self.kernel(self.X, diag=True)
-            Qffdiag = W.pow(2).sum(dim=0)
+            Qffdiag = W.pow(2).sum(dim=-1)
             if self.approx == "FITC":
                 D = D + Kffdiag - Qffdiag
             else:  # approx = "VFE"
-                trace_term += (Kffdiag - Qffdiag).sum() / noise
+                trace_term = (Kffdiag - Qffdiag).sum() / noise
 
         zero_loc = self.X.new_zeros(self.X.shape[0])
         f_loc = zero_loc + self.mean_function(self.X)
         if self.y is None:
-            f_var = D + W.pow(2).sum(dim=0)
+            f_var = D + W.pow(2).sum(dim=-1)
             return f_loc, f_var
         else:
+            if self.approx == "VFE":
+                trace_term_name = param_with_module_name(self.name, "trace_term")
+                pyro.sample(trace_term_name, dist.Bernoulli(probs=torch.exp(-trace_term / 2.)),
+                            obs=trace_term.new_tensor(1.))
+
             y_name = param_with_module_name(self.name, "y")
             return pyro.sample(y_name,
-                               dist.LowRankMultivariateNormal(f_loc, W, D, trace_term)
+                               dist.LowRankMultivariateNormal(f_loc, W, D)
                                    .expand_by(self.y.shape[:-1])
                                    .independent(self.y.dim() - 1),
                                obs=self.y)

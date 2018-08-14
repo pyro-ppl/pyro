@@ -117,7 +117,8 @@ def main(args):
 
     optimizer = optim.Adam({"lr": args.lr})
 
-    svi = infer.SVI(gpmodel.model, gpmodel.guide, optimizer, infer.Trace_ELBO())
+    elbo = infer.JitTrace_ELBO() if args.jit else infer.Trace_ELBO()
+    svi = infer.SVI(gpmodel.model, gpmodel.guide, optimizer, elbo)
 
     for epoch in range(1, args.epochs + 1):
         start_time = time.time()
@@ -143,6 +144,8 @@ if __name__ == '__main__':
                         help='learning rate (default: 0.01)')
     parser.add_argument('--cuda', action='store_true', default=False,
                         help='enables CUDA training')
+    parser.add_argument('--jit', action='store_true', default=False,
+                        help='enables PyTorch jit')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',

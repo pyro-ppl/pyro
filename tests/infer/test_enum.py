@@ -16,6 +16,7 @@ from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
+from pyro.util import torch_isnan
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -57,10 +58,11 @@ def test_iter_discrete_traces_scalar(graph_type):
 
 
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
-def test_iter_discrete_traces_vector(graph_type):
+@pytest.mark.parametrize("expand", [False, True])
+def test_iter_discrete_traces_vector(expand, graph_type):
     pyro.clear_param_store()
 
-    @config_enumerate
+    @config_enumerate(expand=expand)
     def model():
         p = pyro.param("p", torch.tensor([0.05, 0.15]))
         probs = pyro.param("probs", torch.tensor([[0.1, 0.2, 0.3, 0.4],
@@ -68,8 +70,12 @@ def test_iter_discrete_traces_vector(graph_type):
         with pyro.iarange("iarange", 2):
             x = pyro.sample("x", dist.Bernoulli(p))
             y = pyro.sample("y", dist.Categorical(probs))
-        assert x.size() == (2,)
-        assert y.size() == (2,)
+            if expand:
+                assert x.size() == (2,)
+                assert y.size() == (2,)
+            else:
+                assert x.shape == (1,)
+                assert y.shape == (1,)
         return dict(x=x, y=y)
 
     traces = list(iter_discrete_traces(graph_type, model))
@@ -115,6 +121,8 @@ def test_avoid_nan(enumerate1):
                           strict_enumeration_warning=any([enumerate1]))
     loss = elbo.loss(model, guide)
     assert not math.isnan(loss), loss
+    loss = elbo.differentiable_loss(model, guide)
+    assert not torch_isnan(loss), loss
     loss = elbo.loss_and_grads(model, guide)
     assert not math.isnan(loss), loss
 
@@ -146,7 +154,7 @@ def gmm_guide(data, verbose=False):
 @pytest.mark.parametrize("model", [gmm_model, gmm_guide])
 def test_gmm_iter_discrete_traces(data_size, graph_type, model):
     pyro.clear_param_store()
-    data = torch.arange(0, data_size)
+    data = torch.arange(0., float(data_size))
     model = config_enumerate(model)
     traces = list(iter_discrete_traces(graph_type, model, data=data, verbose=True))
     # This non-vectorized version is exponential in data_size:
@@ -162,7 +170,7 @@ def gmm_batch_model(data):
     with pyro.iarange("data", len(data)) as batch:
         n = len(batch)
         z = pyro.sample("z", dist.OneHotCategorical(p).expand_by([n]))
-        assert z.shape[-2:] == (n, 2)
+        assert z.shape[-1] == 2
         loc = (z * mus).sum(-1)
         pyro.sample("x", dist.Normal(loc, scale.expand(n)), obs=data[batch])
 
@@ -173,7 +181,7 @@ def gmm_batch_guide(data):
         probs = pyro.param("probs", torch.tensor(torch.ones(n, 1) * 0.6, requires_grad=True))
         probs = torch.cat([probs, 1 - probs], dim=1)
         z = pyro.sample("z", dist.OneHotCategorical(probs))
-        assert z.shape[-2:] == (n, 2)
+        assert z.shape[-1] == 2
 
 
 @pytest.mark.parametrize("data_size", [1, 2, 3])
@@ -181,7 +189,7 @@ def gmm_batch_guide(data):
 @pytest.mark.parametrize("model", [gmm_batch_model, gmm_batch_guide])
 def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     pyro.clear_param_store()
-    data = torch.arange(0, data_size)
+    data = torch.arange(0., float(data_size))
     model = config_enumerate(model)
     traces = list(iter_discrete_traces(graph_type, model, data=data))
     # This vectorized version is independent of data_size:
@@ -203,6 +211,35 @@ def test_svi_step_smoke(model, guide, enumerate1):
                           strict_enumeration_warning=any([enumerate1]))
     inference = SVI(model, guide, optimizer, loss=elbo)
     inference.step(data)
+
+
+@pytest.mark.parametrize("model,guide", [
+    (gmm_model, gmm_guide),
+    (gmm_batch_model, gmm_batch_guide),
+], ids=["single", "batch"])
+@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+def test_differentiable_loss(model, guide, enumerate1):
+    pyro.clear_param_store()
+    data = torch.tensor([0.0, 1.0, 9.0])
+
+    guide = config_enumerate(guide, default=enumerate1)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1,
+                          strict_enumeration_warning=any([enumerate1]))
+
+    pyro.set_rng_seed(0)
+    loss = elbo.differentiable_loss(model, guide, data)
+    param_names = sorted(pyro.get_param_store().get_all_param_names())
+    actual_loss = loss.item()
+    actual_grads = grad(loss, [pyro.param(name).unconstrained() for name in param_names])
+
+    pyro.set_rng_seed(0)
+    expected_loss = elbo.loss_and_grads(model, guide, data)
+    expected_grads = [pyro.param(name).unconstrained().grad for name in param_names]
+
+    assert_equal(actual_loss, expected_loss)
+    for name, actual_grad, expected_grad in zip(param_names, actual_grads, expected_grads):
+        assert_equal(actual_grad, expected_grad, msg='bad {} gradient. Expected:\n{}\nActual:\n{}'.format(
+            name, expected_grad, actual_grad))
 
 
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
@@ -239,9 +276,9 @@ def test_svi_step_guide_uses_grad(enumerate1):
     inference.step()
 
 
-@pytest.mark.parametrize("quantity", ["loss", "grad"])
+@pytest.mark.parametrize("method", ["loss", "differentiable_loss", "loss_and_grads"])
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-def test_elbo_bern(quantity, enumerate1):
+def test_elbo_bern(method, enumerate1):
     pyro.clear_param_store()
     num_particles = 1 if enumerate1 else 10000
     prec = 0.001 if enumerate1 else 0.1
@@ -261,7 +298,7 @@ def test_elbo_bern(quantity, enumerate1):
     elbo = TraceEnum_ELBO(max_iarange_nesting=1,
                           strict_enumeration_warning=any([enumerate1]))
 
-    if quantity == "loss":
+    if method == "loss":
         actual = elbo.loss(model, guide) / num_particles
         expected = kl.item()
         assert_equal(actual, expected, prec=prec, msg="".join([
@@ -269,8 +306,12 @@ def test_elbo_bern(quantity, enumerate1):
             "\n  actual = {}".format(actual),
         ]))
     else:
-        elbo.loss_and_grads(model, guide)
-        actual = q.grad / num_particles
+        if method == "differentiable_loss":
+            loss = elbo.differentiable_loss(model, guide)
+            actual = grad(loss, [q])[0] / num_particles
+        elif method == "loss_and_grads":
+            elbo.loss_and_grads(model, guide)
+            actual = q.grad / num_particles
         expected = grad(kl, [q])[0]
         assert_equal(actual, expected, prec=prec, msg="".join([
             "\nexpected = {}".format(expected.detach().cpu().numpy()),
@@ -281,7 +322,8 @@ def test_elbo_bern(quantity, enumerate1):
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
-def test_elbo_berns(enumerate1, enumerate2, enumerate3):
+@pytest.mark.parametrize("method", ["differentiable_loss", "loss_and_grads"])
+def test_elbo_berns(method, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
     num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 10000
     prec = 0.001 if all([enumerate1, enumerate2, enumerate3]) else 0.1
@@ -306,8 +348,13 @@ def test_elbo_berns(enumerate1, enumerate2, enumerate3):
                           num_particles=num_particles,
                           vectorize_particles=True,
                           strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
-    actual_loss = elbo.loss_and_grads(model, guide)
-    actual_grad = q.grad
+    if method == "differentiable_loss":
+        loss = elbo.differentiable_loss(model, guide)
+        actual_loss = loss.item()
+        actual_grad = grad(loss, [q])[0]
+    else:
+        actual_loss = elbo.loss_and_grads(model, guide)
+        actual_grad = q.grad
 
     assert_equal(actual_loss, expected_loss, prec=prec, msg="".join([
         "\nexpected loss = {}".format(expected_loss),
@@ -857,16 +904,20 @@ def test_elbo_rsvi(enumerate1):
     ]))
 
 
-@pytest.mark.parametrize("enumerate1,num_steps", [
-    ("sequential", 2),
-    ("sequential", 3),
-    ("parallel", 2),
-    ("parallel", 3),
-    ("parallel", 10),
-    ("parallel", 20),
-    pytest.param("parallel", 30, marks=pytest.mark.skip(reason="extremely expensive")),
+@pytest.mark.parametrize("enumerate1,num_steps,expand", [
+    ("sequential", 2, True),
+    ("sequential", 2, False),
+    ("sequential", 3, True),
+    ("sequential", 3, False),
+    ("parallel", 2, True),
+    ("parallel", 2, False),
+    ("parallel", 3, True),
+    ("parallel", 3, False),
+    ("parallel", 10, False),
+    ("parallel", 20, False),
+    pytest.param("parallel", 30, False, marks=pytest.mark.skip(reason="extremely expensive")),
 ])
-def test_elbo_hmm_in_model(enumerate1, num_steps):
+def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
     pyro.clear_param_store()
     data = torch.ones(num_steps)
     init_probs = torch.tensor([0.5, 0.5])
@@ -885,7 +936,7 @@ def test_elbo_hmm_in_model(enumerate1, num_steps):
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
             pyro.sample("y_{}".format(i), dist.Normal(locs[x], scale), obs=y)
 
-    @config_enumerate(default=enumerate1)
+    @config_enumerate(default=enumerate1, expand=expand)
     def guide(data):
         mean_field_probs = pyro.param("mean_field_probs", torch.ones(num_steps, 2) / 2,
                                       constraint=constraints.simplex)
@@ -911,16 +962,20 @@ def test_elbo_hmm_in_model(enumerate1, num_steps):
         ]))
 
 
-@pytest.mark.parametrize("enumerate1,num_steps", [
-    ("sequential", 2),
-    ("sequential", 3),
-    ("parallel", 2),
-    ("parallel", 3),
-    ("parallel", 10),
-    ("parallel", 20),
-    pytest.param("parallel", 30, marks=pytest.mark.skip(reason="extremely expensive")),
+@pytest.mark.parametrize("enumerate1,num_steps,expand", [
+    ("sequential", 2, True),
+    ("sequential", 2, False),
+    ("sequential", 3, True),
+    ("sequential", 3, False),
+    ("parallel", 2, True),
+    ("parallel", 2, False),
+    ("parallel", 3, True),
+    ("parallel", 3, False),
+    ("parallel", 10, False),
+    ("parallel", 20, False),
+    pytest.param("parallel", 30, False, marks=pytest.mark.skip(reason="extremely expensive")),
 ])
-def test_elbo_hmm_in_guide(enumerate1, num_steps):
+def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
     pyro.clear_param_store()
     data = torch.ones(num_steps)
     init_probs = torch.tensor([0.5, 0.5])
@@ -939,7 +994,7 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps):
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
             pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=y)
 
-    @config_enumerate(default=enumerate1)
+    @config_enumerate(default=enumerate1, expand=expand)
     def guide(data):
         transition_probs = pyro.param("transition_probs",
                                       torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
