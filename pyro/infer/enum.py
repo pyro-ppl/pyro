@@ -103,9 +103,17 @@ def _config_enumerate(default, expand, num_samples):
 
 def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT, num_samples=None):
     """
-    Configures each enumerable site a guide to enumerate with given method,
-    ``site["infer"]["enumerate"] = default``. This can be used as either a
-    function::
+    Configures enumeration for all relevant sites in a guide. This is mainly
+    used in conjunction with :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO`.
+
+    When configuring for exhaustive enumeration of discrete variables, this
+    configures all sample sites whose distribution satisfies
+    ``.has_enumerate_support == True``.
+    When configuring for local parallel Monte Carlo sampling via
+    ``default="parallel", num_samples=n``, this configures all sample sites.
+    This does not overwrite existing annotations ``infer={"enumerate": ...}``.
+
+    This can be used as either a function::
 
         guide = config_enumerate(guide)
 
@@ -119,16 +127,18 @@ def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT, nu
         def guide2(*args, **kwargs):
             ...
 
-    This does not overwrite existing annotations ``infer={"enumerate": ...}``.
-
     :param callable guide: a pyro model that will be used as a guide in
         :class:`~pyro.infer.svi.SVI`.
     :param str default: Which enumerate strategy to use, one of
         "sequential", "parallel", or None.
     :param bool expand: Whether to expand enumerated sample values. See
         :meth:`~pyro.distributions.Distribution.enumerate_support` for details.
-    :param num_samples: if not ``None``, use local Monte Carlo sampling rather than
-        exhaustive enumeration. This also makes sense for continuous distributions.
+        This only applies to exhaustive enumeration, where ``num_samples=None``.
+        If ``num_samples`` is not ``None``, then this samples will always be
+        expanded.
+    :param num_samples: if not ``None``, use local Monte Carlo sampling rather
+        than exhaustive enumeration. This makes sense for both continuous and
+        discrete distributions.
     :type num_samples: int or None
     :return: an annotated guide
     :rtype: callable

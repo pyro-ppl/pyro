@@ -36,6 +36,8 @@ Handlers
 
 .. autofunction:: pyro.poutine.trace
 
+.. autofunction:: pyro.infer.enum.config_enumerate
+
 Trace
 ------
 
