@@ -394,3 +394,75 @@ class NcvContinuous(Ncv):
             self._Q_cache[dt] = Q
 
         return self._Q_cache[dt]
+
+
+class NcpDiscrete(Ncp):
+    '''
+    NCP (Nearly-Constant Position) dynamic model with DWNV (Discrete White
+    Noise Velocity).
+
+    :param dimension: native state dimension.
+    :param sv2: variance of velocity. Usually chosen so that the standard
+          deviation is roughly half of the max velocity one would ever expect
+          to observe.
+
+    References:
+        "Estimation with Applications to Tracking and Navigation" by Y. Bar-
+        Shalom et al, 2001, p.273.
+    '''
+    def process_noise_cov(self, dt=0.):
+        '''
+        Compute and return cached process noise covariance (Q).
+        Args:
+            dt: time interval to integrate over.
+        Returns:
+            Read-only covariance (Q) of the native state `x` resulting from
+            stochastic integration (for use with EKF).
+        '''
+        if dt not in self._Q_cache:
+            Q = self.sv2 * dt * dt * eye_like(self.sv2, self._dimension)
+            Q.flags.writeable = False
+            self._Q_cache[dt] = Q
+
+        return self._Q_cache[dt]
+
+
+class NcvDiscrete(Ncv):
+    '''
+    NCV (Nearly-Constant Velocity) dynamic model with DWNA (Discrete White
+    Noise Acceleration).
+
+    :param dimension: native state dimension.
+    :param sa2: variance of acceleration. Usually chosen so that the standard
+          deviation is roughly half of the max acceleration one would ever
+          expect to observe.
+
+    References:
+        "Estimation with Applications to Tracking and Navigation" by Y. Bar-
+        Shalom et al, 2001, p.273.
+    '''
+    def process_noise_cov(self, d=0.):
+        '''
+        Compute and return cached process noise covariance (Q).
+
+        :param dt: time interval to integrate over.
+        :return: Read-only covariance (Q) of the native state `x` resulting from
+            stochastic integration (for use with EKF). (Note that this Q, modulo
+            numerical error, has rank `dimension/2`. So, it is only positive
+            semi-definite.)
+        '''
+        if dt not in self._Q_cache:
+            d = self._dimension
+            dt2 = dt*dt
+            dt3 = dt2*dt
+            dt4 = dt2*dt2
+            Q = zeros_like(self.sa2, (d, d))
+            Q[:d//2, :d//2] = 0.25 * dt4 * eye_like(self.sa2, d//2)
+            Q[:d//2, d//2:] = 0.5 * dt3 * eye_like(self.sa2, d//2)
+            Q[d//2:, :d//2] = 0.5 * dt3 * eye_like(sekf.sa2, d//2)
+            Q[d//2:, d//2:] = dt2 * eye_like(self.sa2, d//2)
+            Q *= self.sa2
+            Q.flags.writeable = False
+            self._Q_cache[dt] = Q
+
+        return self._Q_cache[dt]
