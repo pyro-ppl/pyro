@@ -1,5 +1,4 @@
 import warnings
-from functools import lru_cache
 import torch
 from torch.nn.functional import softplus
 import numpy as np
@@ -117,7 +116,7 @@ def zero_mean_unit_obs_sd_lm(prior_sds, intercept_sd=None):
                                          w_sqrtlambdas={"w": 1./prior_sds},
                                          obs_sd=torch.tensor(1.))
 
-    @lru_cache(10)
+    # @lru_cache(10)
     def cache_constant(design):
         return torch.cat(design, torch.tensor(1.).expand(design.shape[:-1]+(1,)))
 
