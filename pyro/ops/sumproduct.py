@@ -7,41 +7,19 @@ import torch
 # import opt_einsum as oe
 
 
-def sumproduct(factors, target_dims, optimize=False):
-    """
-    """
-    assert all(d < 0 for d in target_dims)
-
-    if not optimize:
-        product = factors[0]
-        for factor in factors[1:]:
-            product = product * factor
-
-        for dim, size in enumerate(product.shape):
-            if dim not in target_dims:
-                product = product.sum(dim, True)
-
-        target_ndims = 1-min(target_dims)
-        while len(product.shape) > target_ndims:
-            product = product.squeeze(0)
-        return product
-
-    raise NotImplementedError
-
-
-def sumlogsumexp(log_factors, target_shape, optimize=False):
-    """
-    """
+def sumproduct(factors, target_shape, optimize=False):
     # Handle trivial cases.
-    if not any(isinstance(t, torch.Tensor) for t in log_factors):
-        return math.exp(sum(log_factors))
+    if not any(isinstance(t, torch.Tensor) for t in factors):
+        result = 1.
+        for factor in factors:
+            result *= factor
+        return result
 
     # Naive algorithm.
     if not optimize:
-        log_result = log_factors[0]
-        for log_factor in log_factors[1:]:
-            log_result = log_result + log_factor
-        result = log_result.exp()
+        result = factors[0]
+        for factor in factors[1:]:
+            result = result * factor
 
         while result.dim() > len(target_shape):
             result = result.sum(0)
@@ -53,4 +31,5 @@ def sumlogsumexp(log_factors, target_shape, optimize=False):
 
         return result
 
+    # Use opt-einsum.
     raise NotImplementedError

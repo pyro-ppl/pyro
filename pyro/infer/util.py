@@ -8,7 +8,7 @@ import torch
 from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.util import is_identically_zero
-from pyro.ops.sumproduct import sumlogsumexp
+from pyro.ops.sumproduct import sumproduct
 from pyro.poutine.util import site_is_subsample
 
 _VALIDATION_ENABLED = False
@@ -37,6 +37,17 @@ def torch_backward(x):
     """
     if torch.is_tensor(x):
         x.backward()
+
+
+def torch_exp(x):
+    """
+    Like ``x.exp()`` for a :class:`~torch.Tensor`, but also accepts
+    numbers.
+    """
+    if torch.is_tensor(x):
+        return torch.exp(x)
+    else:
+        return math.exp(x)
 
 
 def detach_iterable(iterable):
@@ -209,7 +220,9 @@ class Dice(object):
             pass
 
         log_factors = self._get_log_factors(ordinal)
-        dice_prob = sumlogsumexp(log_factors, shape)
+        factors = [torch_exp(f) for f in log_factors]
+        dice_prob = sumproduct(factors, shape)
+
         self._prob_cache[shape, ordinal] = dice_prob
         return dice_prob
 
