@@ -150,7 +150,7 @@ class AutoRegressiveNNTests(TestCase):
                         # NOTE: the hidden dimension must be greater than the input_dim for the
                         # masks to be well-defined!
                         hidden_dim = input_dim * 5
-                        permutation = torch.randperm(input_dim)
+                        permutation = torch.randperm(input_dim, device='cpu')
                         self._test_masks(
                             input_dim,
                             observed_dim,
