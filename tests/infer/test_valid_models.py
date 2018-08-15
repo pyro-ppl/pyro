@@ -697,9 +697,15 @@ def test_enum_discrete_parallel_nested_ok(max_iarange_nesting):
               TraceEnum_ELBO(max_iarange_nesting=max_iarange_nesting))
 
 
-@pytest.mark.parametrize("expand", [False, True])
-@pytest.mark.parametrize("enumerate_", ["sequential", "parallel"])
-def test_enumerate_parallel_iarange_ok(enumerate_, expand):
+@pytest.mark.parametrize('enumerate_,expand,num_samples', [
+    (None, False, None),
+    ("sequential", False, None),
+    ("sequential", True, None),
+    ("parallel", False, None),
+    ("parallel", True, None),
+    ("parallel", True, 3),
+])
+def test_enumerate_parallel_iarange_ok(enumerate_, expand, num_samples):
 
     def model():
         p2 = torch.ones(2) / 2
@@ -713,7 +719,24 @@ def test_enumerate_parallel_iarange_ok(enumerate_, expand):
                 x536 = pyro.sample("x536", dist.Categorical(p536))
 
         # check shapes
-        if enumerate_ == "sequential":
+        if enumerate_ == "parallel":
+            if num_samples:
+                n = num_samples
+                # Meaning of dimensions:    [ enum dims | iarange dims ]
+                assert x2.shape == torch.Size([        n, 1, 1])  # noqa: E201
+                assert x34.shape == torch.Size([    n, 1, 1, 3])  # noqa: E201
+                assert x536.shape == torch.Size([n, 1, 1, 5, 3])  # noqa: E201
+            elif expand:
+                # Meaning of dimensions:    [ enum dims | iarange dims ]
+                assert x2.shape == torch.Size([        2, 1, 1])  # noqa: E201
+                assert x34.shape == torch.Size([    4, 1, 1, 3])  # noqa: E201
+                assert x536.shape == torch.Size([6, 1, 1, 5, 3])  # noqa: E201
+            else:
+                # Meaning of dimensions:    [ enum dims | iarange placeholders ]
+                assert x2.shape == torch.Size([        2, 1, 1])  # noqa: E201
+                assert x34.shape == torch.Size([    4, 1, 1, 1])  # noqa: E201
+                assert x536.shape == torch.Size([6, 1, 1, 1, 1])  # noqa: E201
+        elif enumerate_ == "sequential":
             if expand:
                 # All dimensions are iarange dimensions.
                 assert x2.shape == torch.Size([])
@@ -725,19 +748,14 @@ def test_enumerate_parallel_iarange_ok(enumerate_, expand):
                 assert x34.shape == torch.Size([1])
                 assert x536.shape == torch.Size([1, 1])
         else:
-            if expand:
-                # Meaning of dimensions:    [ enum dims | iarange dims ]
-                assert x2.shape == torch.Size([        2, 1, 1])  # noqa: E201
-                assert x34.shape == torch.Size([    4, 1, 1, 3])  # noqa: E201
-                assert x536.shape == torch.Size([6, 1, 1, 5, 3])  # noqa: E201
-            else:
-                # Meaning of dimensions:    [ enum dims | iarange placeholders ]
-                assert x2.shape == torch.Size([        2, 1, 1])  # noqa: E201
-                assert x34.shape == torch.Size([    4, 1, 1, 1])  # noqa: E201
-                assert x536.shape == torch.Size([6, 1, 1, 1, 1])  # noqa: E201
+            # All dimensions are iarange dimensions.
+            assert x2.shape == torch.Size([])
+            assert x34.shape == torch.Size([3])
+            assert x536.shape == torch.Size([5, 3])
 
-    elbo = TraceEnum_ELBO(max_iarange_nesting=2)
-    assert_ok(model, config_enumerate(model, enumerate_, expand), elbo)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=2, strict_enumeration_warning=enumerate_)
+    guide = config_enumerate(model, enumerate_, expand, num_samples)
+    assert_ok(model, guide, elbo)
 
 
 @pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
@@ -858,14 +876,15 @@ def test_iarange_shape_broadcasting(times):
     assert_ok(model, guide, Trace_ELBO())
 
 
-@pytest.mark.parametrize('enumerate_,expand', [
-    (None, True),
-    ("sequential", True),
-    ("sequential", False),
-    ("parallel", True),
-    ("parallel", False),
+@pytest.mark.parametrize('enumerate_,expand,num_samples', [
+    (None, True, None),
+    ("sequential", True, None),
+    ("sequential", False, None),
+    ("parallel", True, None),
+    ("parallel", False, None),
+    ("parallel", True, 3),
 ])
-def test_enum_discrete_iarange_shape_broadcasting_ok(enumerate_, expand):
+def test_enum_discrete_iarange_shape_broadcasting_ok(enumerate_, expand, num_samples):
 
     @poutine.broadcast
     def model():
@@ -880,26 +899,34 @@ def test_enum_discrete_iarange_shape_broadcasting_ok(enumerate_, expand):
                 d = pyro.sample("d", dist.Bernoulli(b))
 
         # check shapes
-        assert b.shape == (50, 1, 5)
         if enumerate_ == "parallel":
-            if expand:
+            if num_samples:
+                assert b.shape == (num_samples, 50, 1, 5)
+                assert c.shape == (num_samples, 1, 50, 6, 1)
+                assert d.shape == (num_samples, 1, num_samples, 50, 6, 5)
+            elif expand:
+                assert b.shape == (50, 1, 5)
                 assert c.shape == (2, 50, 6, 1)
                 assert d.shape == (2, 1, 50, 6, 5)
             else:
+                assert b.shape == (50, 1, 5)
                 assert c.shape == (2, 1, 1, 1)
                 assert d.shape == (2, 1, 1, 1, 1)
         elif enumerate_ == "sequential":
             if expand:
+                assert b.shape == (50, 1, 5)
                 assert c.shape == (50, 6, 1)
                 assert d.shape == (50, 6, 5)
             else:
+                assert b.shape == (50, 1, 5)
                 assert c.shape == (1, 1, 1)
                 assert d.shape == (1, 1, 1)
         else:
+            assert b.shape == (50, 1, 5)
             assert c.shape == (50, 6, 1)
             assert d.shape == (50, 6, 5)
 
-    guide = config_enumerate(model, default=enumerate_, expand=expand)
+    guide = config_enumerate(model, default=enumerate_, expand=expand, num_samples=num_samples)
     elbo = TraceEnum_ELBO(max_iarange_nesting=3,
                           strict_enumeration_warning=(enumerate_ == "parallel"))
     assert_ok(model, guide, elbo)
@@ -1003,23 +1030,23 @@ def test_vectorized_num_particles(Elbo):
                                  strict_enumeration_warning=False))
 
 
-@pytest.mark.parametrize('enumerate_,expand', [
-    (None, False),
-    ("sequential", False),
-    ("sequential", True),
-    ("parallel", False),
-    ("parallel", True),
+@pytest.mark.parametrize('enumerate_,expand,num_samples', [
+    (None, False, None),
+    ("sequential", False, None),
+    ("sequential", True, None),
+    ("parallel", False, None),
+    ("parallel", True, None),
+    ("parallel", True, 3),
 ])
 @pytest.mark.parametrize('num_particles', [1, 50])
-def test_enum_discrete_vectorized_num_particles(enumerate_, expand, num_particles):
+def test_enum_discrete_vectorized_num_particles(enumerate_, expand, num_samples, num_particles):
 
-    @config_enumerate(default=enumerate_, expand=expand)
+    @config_enumerate(default=enumerate_, expand=expand, num_samples=num_samples)
     def model():
         x_iarange = pyro.iarange("x_iarange", 10, 5, dim=-1)
         y_iarange = pyro.iarange("y_iarange", 11, 6, dim=-2)
         with x_iarange:
             b = pyro.sample("b", dist.Beta(torch.tensor(1.1), torch.tensor(1.1)))
-            assert b.shape == torch.Size((num_particles, 1, 5) if num_particles > 1 else (5,))
         with y_iarange:
             c = pyro.sample("c", dist.Bernoulli(0.5))
         with x_iarange, y_iarange:
@@ -1027,37 +1054,59 @@ def test_enum_discrete_vectorized_num_particles(enumerate_, expand, num_particle
 
         # check shapes
         if num_particles > 1:
-            assert b.shape == (num_particles, 1, 5)
             if enumerate_ == "parallel":
-                if expand:
+                if num_samples:
+                    assert b.shape == (num_samples, num_particles, 1, 5)
+                    assert c.shape == (num_samples, 1, num_particles, 6, 1)
+                    assert d.shape == (num_samples, 1, num_samples, num_particles, 6, 5)
+                elif expand:
+                    assert b.shape == (num_particles, 1, 5)
                     assert c.shape == (2, num_particles, 6, 1)
                     assert d.shape == (2, 1, num_particles, 6, 5)
                 else:
+                    assert b.shape == (num_particles, 1, 5)
                     assert c.shape == (2, 1, 1, 1)
                     assert d.shape == (2, 1, 1, 1, 1)
             elif enumerate_ == "sequential":
                 if expand:
+                    assert b.shape == (num_particles, 1, 5)
                     assert c.shape == (num_particles, 6, 1)
                     assert d.shape == (num_particles, 6, 5)
                 else:
+                    assert b.shape == (num_particles, 1, 5)
                     assert c.shape == (1, 1, 1)
                     assert d.shape == (1, 1, 1)
+            else:
+                assert b.shape == (num_particles, 1, 5)
+                assert c.shape == (num_particles, 6, 1)
+                assert d.shape == (num_particles, 6, 5)
         else:
-            assert b.shape == (5,)
             if enumerate_ == "parallel":
-                if expand:
+                if num_samples:
+                    assert b.shape == (num_samples, 1, 5,)
+                    assert c.shape == (num_samples, 1, 6, 1)
+                    assert d.shape == (num_samples, 1, num_samples, 6, 5)
+                elif expand:
+                    assert b.shape == (5,)
                     assert c.shape == (2, 6, 1)
                     assert d.shape == (2, 1, 6, 5)
                 else:
+                    assert b.shape == (5,)
                     assert c.shape == (2, 1, 1)
                     assert d.shape == (2, 1, 1, 1)
             elif enumerate_ == "sequential":
                 if expand:
+                    assert b.shape == (5,)
                     assert c.shape == (6, 1)
                     assert d.shape == (6, 5)
                 else:
+                    assert b.shape == (5,)
                     assert c.shape == (1, 1)
                     assert d.shape == (1, 1)
+            else:
+                assert b.shape == (5,)
+                assert c.shape == (6, 1)
+                assert d.shape == (6, 5)
 
     assert_ok(model, model, TraceEnum_ELBO(max_iarange_nesting=2,
                                            num_particles=num_particles,
