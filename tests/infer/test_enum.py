@@ -912,9 +912,15 @@ def test_non_mean_field_bern_bern_elbo_gradient(enumerate1, pi1, pi2):
 @pytest.mark.parametrize("pi1", [0.33, 0.44])
 @pytest.mark.parametrize("pi2", [0.55, 0.39])
 @pytest.mark.parametrize("pi3", [0.22, 0.29])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-def test_non_mean_field_bern_normal_elbo_gradient(enumerate1, pi1, pi2, pi3, include_z=True):
+@pytest.mark.parametrize("enumerate1,num_samples", [
+    (None, None),
+    ("sequential", None),
+    ("parallel", None),
+    ("parallel", 2),
+])
+def test_non_mean_field_bern_normal_elbo_gradient(enumerate1, pi1, pi2, pi3, num_samples):
     pyro.clear_param_store()
+    include_z = True
     num_particles = 10000
 
     def model():
