@@ -18,7 +18,7 @@ def sample_mask_indices(input_dim, hidden_dim, simple=True):
     :param simple: True to space fractional indices by rounding to nearest int, false round randomly
     :type simple: bool
     """
-    indices = torch.linspace(1, input_dim, steps=hidden_dim)
+    indices = torch.linspace(1, input_dim, steps=hidden_dim, device='cpu').to(torch.Tensor().device)
     if simple:
         # Simple procedure tries to space fractional indices evenly by rounding to nearest int
         return torch.round(indices)
@@ -140,7 +140,7 @@ class AutoRegressiveNN(nn.Module):
 
         if permutation is None:
             # By default set a random permutation of variables, which is important for performance with multiple steps
-            self.permutation = torch.randperm(input_dim)
+            self.permutation = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
         else:
             # The permutation is chosen by the user
             self.permutation = permutation.type(dtype=torch.int64)
