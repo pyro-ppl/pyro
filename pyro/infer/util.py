@@ -8,6 +8,7 @@ import torch
 from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.util import is_identically_zero
+from pyro.ops.sumproduct import sumlogsumexp
 from pyro.poutine.util import site_is_subsample
 
 _VALIDATION_ENABLED = False
@@ -207,20 +208,8 @@ class Dice(object):
         except KeyError:
             pass
 
-        # TODO replace this naive sum-product computation with message passing.
-        log_prob = sum(self._get_log_factors(ordinal))
-        if isinstance(log_prob, numbers.Number):
-            dice_prob = math.exp(log_prob)
-        else:
-            dice_prob = log_prob.exp()
-            while dice_prob.dim() > len(shape):
-                dice_prob = dice_prob.sum(0)
-            while dice_prob.dim() < len(shape):
-                dice_prob = dice_prob.unsqueeze(0)
-            for dim, (dice_size, target_size) in enumerate(zip(dice_prob.shape, shape)):
-                if dice_size > target_size:
-                    dice_prob = dice_prob.sum(dim, True)
-
+        log_factors = self._get_log_factors(ordinal)
+        dice_prob = sumlogsumexp(log_factors, shape)
         self._prob_cache[shape, ordinal] = dice_prob
         return dice_prob
 
