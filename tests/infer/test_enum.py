@@ -250,9 +250,9 @@ def test_svi_step_guide_uses_grad(enumerate1):
     def model():
         scale = pyro.param("scale")
         loc = pyro.sample("loc", dist.Normal(0., 10.))
+        pyro.sample("b", dist.Bernoulli(0.5))
         with pyro.iarange("data", len(data)):
             pyro.sample("obs", dist.Normal(loc, scale), obs=data)
-        pyro.sample("b", dist.Bernoulli(0.5))
 
     @config_enumerate(default=enumerate1)
     def guide():

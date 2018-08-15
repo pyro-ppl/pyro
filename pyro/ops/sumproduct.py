@@ -13,7 +13,11 @@ def _product(factors):
     return result
 
 
-def sumproduct(factors, target_shape, optimize=True):
+def zip_align_right(xs, ys):
+    return reversed(zip(reversed(xs), reversed(ys)))
+
+
+def sumproduct(factors, target_shape=(), optimize=True):
     # Handle numbers and trivial cases.
     numbers = []
     tensors = []
@@ -21,13 +25,26 @@ def sumproduct(factors, target_shape, optimize=True):
         (tensors if isinstance(t, torch.Tensor) else numbers).append(t)
     if not tensors:
         return _product(numbers)
+    shape = broadcast_shape(*(t.shape for t in tensors))
     if numbers:
         number_part = _product(numbers)
         tensor_part = sumproduct(tensors, target_shape, optimize=optimize)
-        shape = broadcast_shape(*(t.shape for t in tensors))
         contracted_shape = shape[:len(shape) - len(target_shape)]
         replication_power = _product(contracted_shape)
         return tensor_part * number_part ** replication_power
+
+    # Work around opt_einsum interface lack of support for pure broadcasting.
+    if len(shape) < len(target_shape) or \
+            any(s < t for s, t in zip_align_right(shape, target_shape)):
+        smaller_shape = list(target_shape)
+        for i in range(len(target_shape)):
+            if i >= len(shape) or shape[-1-i] < target_shape[-1-i]:
+                smaller_shape[-1-i] = 1
+        while smaller_shape and smaller_shape[0] == 1:
+            smaller_shape = smaller_shape[1:]
+        smaller_shape = tuple(smaller_shape)
+        result = sumproduct(factors, smaller_shape, optimize=optimize)
+        return result.expand(target_shape)
 
     if not optimize:
         return naive_sumproduct(tensors, target_shape)
@@ -59,9 +76,8 @@ def opt_sumproduct(factors, target_shape):
     num_symbols = len(target_shape)
     num_symbols = max(num_symbols, max(t.dim() for t in factors))
     symbols = [opt_einsum.get_symbol(i) for i in range(num_symbols)]
-    rev_symbols = list(reversed(symbols))
     target_names = [name
-                    for name, size in zip(rev_symbols, reversed(target_shape))
+                    for name, size in zip_align_right(symbols, target_shape)
                     if size != 1]
 
     # Construct low-dimensional tensors with symbolic names.
@@ -70,7 +86,7 @@ def opt_sumproduct(factors, target_shape):
     for factor in factors:
         packed_names.append([
             name
-            for name, size in zip(rev_symbols, reversed(factor.shape))
+            for name, size in zip_align_right(symbols, factor.shape)
             if size != 1])
         packed_factors.append(factor.squeeze().clone())  # FIXME remove this clone
         assert packed_factors[-1].dim() == len(packed_names[-1])
