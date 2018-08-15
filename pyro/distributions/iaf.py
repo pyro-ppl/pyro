@@ -18,7 +18,8 @@ class InverseAutoregressiveFlow(Transform):
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> iaf = InverseAutoregressiveFlow(10, 40)
+    >>> arn = AutoRegressiveNN(10, [40]])
+    >>> iaf = InverseAutoregressiveFlow(10, arn)
     >>> iaf_module = pyro.module("my_iaf", iaf.module)
     >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf])
     >>> iaf_dist.sample()  # doctest: +SKIP
@@ -56,12 +57,10 @@ class InverseAutoregressiveFlow(Transform):
 
     codomain = constraints.real
 
-    def __init__(self, input_dim, hidden_dim, sigmoid_bias=2.0, permutation=None):
+    def __init__(self, autoregressive_nn, sigmoid_bias=2.0):
         super(InverseAutoregressiveFlow, self).__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
         self.module = nn.Module()
-        self.module.arn = AutoRegressiveNN(input_dim, hidden_dim, output_dim_multiplier=2, permutation=permutation)
+        self.module.arn = autoregressive_nn
         self.module.sigmoid = nn.Sigmoid()
         self.module.sigmoid_bias = torch.tensor(sigmoid_bias)
         self._intermediates_cache = {}
@@ -84,10 +83,9 @@ class InverseAutoregressiveFlow(Transform):
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
-        hidden = self.module.arn(x)
-        scale = self.module.sigmoid(hidden[..., 0:self.input_dim] +
-                                    hidden.new_tensor(self.module.sigmoid_bias))
-        mean = hidden[..., self.input_dim:]
+        mean, scale = self.module.arn(x)
+        scale = self.module.sigmoid(scale + scale.new_tensor(self.module.sigmoid_bias))
+
         y = scale * x + (1 - scale) * mean
         self._add_intermediate_to_cache(x, y, 'x')
         self._add_intermediate_to_cache(scale, y, 'scale')

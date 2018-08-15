@@ -29,7 +29,7 @@ def sample_mask_indices(input_dim, hidden_dim, simple=True):
         return ints
 
 
-def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, output_dim_multiplier):
+def create_mask(input_dim, observed_dim, hidden_dims, permutation, output_dim_multiplier):
     """
     Creates MADE masks for a conditional distribution
 
@@ -37,10 +37,8 @@ def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, ou
     :type input_dim: int
     :param observed_dim: the dimensionality of the variable that is conditioned on (for conditional densities)
     :type observed_dim: int
-    :param hidden_dim: the dimensionality of the hidden layer(s)
-    :type hidden_dim: int
-    :param num_layers: the number of hidden layers for which to create masks
-    :type num_layers: int
+    :param hidden_dims: the dimensionality of the hidden layers(s)
+    :type hidden_dims: list[int]
     :param permutation: the order of the input variables
     :type permutation: torch.LongTensor
     :param output_dim_multiplier: tiles the output (e.g. for when a separate mean and scale parameter are desired)
@@ -54,7 +52,7 @@ def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, ou
 
     # Create the indices that are assigned to the neurons
     input_indices = torch.cat((torch.zeros(observed_dim), 1 + var_index))
-    hidden_indices = [sample_mask_indices(input_dim, hidden_dim) for i in range(num_layers)]
+    hidden_indices = [sample_mask_indices(input_dim, h) for h in hidden_dims]
     output_indices = (var_index + 1).repeat(output_dim_multiplier)
 
     # Create mask from input to output for the skips connections
@@ -65,7 +63,7 @@ def create_mask(input_dim, observed_dim, hidden_dim, num_layers, permutation, ou
     # The output first in the order (e.g. x_2 in the figure) is connected to hidden units rather than being unattached
     # Tracing a path back through the network, however, this variable will still be unconnected to any input variables
     masks = [(hidden_indices[0].unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(var_index)]
-    for i in range(1, num_layers):
+    for i in range(1, len(hidden_dims)):
         masks.append((hidden_indices[i].unsqueeze(-1) >= hidden_indices[i - 1].unsqueeze(0)).type_as(var_index))
 
     # Create mask from last hidden layer to output layer
@@ -110,8 +108,12 @@ class AutoRegressiveNN(nn.Module):
 
     :param input_dim: the dimensionality of the input
     :type input_dim: int
-    :param hidden_dim: the dimensionality of the hidden units
-    :type hidden_dim: int
+    :param hidden_dims: the dimensionality of the hidden units per layer
+    :type hidden_dims: list[int]
+    :param count_params: number of parameters to return from a forward call of the network.
+    :type count_params: int
+    :param param_dim: the dimensionality of each parameter
+    :type param_dim: int
     :param output_dim_multiplier: the dimensionality of the output is given by input_dim x output_dim_multiplier.
         specifically the shape of the output for a single vector input is [output_dim_multiplier, input_dim].
         for any i, j in range(0, output_dim_multiplier) the subset of outputs [i, :] has identical
@@ -121,22 +123,26 @@ class AutoRegressiveNN(nn.Module):
         autoregressive factorization. in particular for the identity permutation the autoregressive structure
         is such that the Jacobian is upper triangular. By default this is chosen at random.
     :type permutation: torch.LongTensor
+    :param skip_connections: Whether to add skip connections from the input to the output.
+    :type skip_connections: bool
+    :param nonlinearity: The nonlinearity to use in the feedforward network.
+    :type nonlinearity: torch.nn.module
     """
 
-    def __init__(self, input_dim, hidden_dim, output_dim_multiplier=1, permutation=None, skip_connections=False,
-                 num_layers=1, nonlinearity=nn.ReLU()):
+    def __init__(self, input_dim, hidden_dims, count_params=2, param_dim=1, permutation=None, skip_connections=False, nonlinearity=nn.ReLU()):
         super(AutoRegressiveNN, self).__init__()
         if input_dim == 1:
             warnings.warn('AutoRegressiveNN input_dim = 1. Consider using an affine transformation instead.')
         self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.output_dim_multiplier = output_dim_multiplier
-        self.num_layers = num_layers
+        self.hidden_dims = hidden_dims
+        self.count_params = count_params
+        self.param_dim = param_dim
 
         # Hidden dimension must be not less than the input otherwise it isn't
         # possible to connect to the outputs correctly
-        if hidden_dim < input_dim:
-            raise ValueError('Hidden dimension must not be less than input dimension.')
+        for h in hidden_dims:
+            if h < input_dim:
+                raise ValueError('Hidden dimension must not be less than input dimension.')
 
         if permutation is None:
             # By default set a random permutation of variables, which is important for performance with multiple steps
@@ -146,15 +152,14 @@ class AutoRegressiveNN(nn.Module):
             self.permutation = permutation.type(dtype=torch.int64)
 
         # Create masks
-        self.masks, self.mask_skip = create_mask(input_dim=input_dim, observed_dim=0, hidden_dim=hidden_dim,
-                                                 num_layers=num_layers, permutation=self.permutation,
-                                                 output_dim_multiplier=output_dim_multiplier)
+        output_dim_multiplier = count_params*param_dim
+        self.masks, self.mask_skip = create_mask(input_dim=input_dim, observed_dim=0, hidden_dims=hidden_dims, permutation=self.permutation, output_dim_multiplier=output_dim_multiplier)
 
         # Create masked layers
-        layers = [MaskedLinear(input_dim, hidden_dim, self.masks[0])]
-        for i in range(1, num_layers):
-            layers.append(MaskedLinear(hidden_dim, hidden_dim, self.masks[i]))
-        layers.append(MaskedLinear(hidden_dim, input_dim * output_dim_multiplier, self.masks[-1]))
+        layers = [MaskedLinear(input_dim, hidden_dims[0], self.masks[0])]
+        for i in range(1, len(hidden_dims)):
+            layers.append(MaskedLinear(hidden_dims[i-1], hidden_dims[i], self.masks[i]))
+        layers.append(MaskedLinear(hidden_dims[-1], input_dim * output_dim_multiplier, self.masks[-1]))
         self.layers = nn.ModuleList(layers)
 
         if skip_connections:
@@ -183,4 +188,12 @@ class AutoRegressiveNN(nn.Module):
         if self.skip_layer is not None:
             h = h + self.skip_layer(x)
 
-        return h
+        # Shape the output into self.count_params of dimension self.param_dim*self.input_dim
+        if self.count_params == 1:
+          return h
+        else:
+          params = [h[:,(i*self.param_dim*self.input_dim):((i+1)*self.param_dim*self.input_dim)] for i in range(self.count_params)]
+          if self.param_dim > 1:
+            params = [p.reshape(-1, self.param_dim, self.input_dim) for p in params]
+
+          return tuple(params)
