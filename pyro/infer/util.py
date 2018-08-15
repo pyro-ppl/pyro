@@ -226,21 +226,29 @@ class Dice(object):
         self._prob_cache[shape, ordinal] = dice_prob
         return dice_prob
 
-    def compute_expectation(self, costs):
+    def compute_expectation(self, costs, use_einsum=False):
         """
         Returns a differentiable expected cost, summing over costs at given ordinals.
 
-        :param dict costs: A dict mapping ordinals to cost tensors
+        :param dict costs: A dict mapping ordinals to lists of cost tensors
         :returns: a scalar expected cost
         :rtype: torch.Tensor or float
         """
         expected_cost = 0.
-        for ordinal, cost in costs.items():
-            prob = self.in_context(cost.shape, ordinal)
-            mask = prob > 0
-            if torch.is_tensor(mask) and not mask.all():
-                cost, prob, mask = broadcast_all(cost, prob, mask)
-                prob = prob[mask]
-                cost = cost[mask]
-            expected_cost = expected_cost + (prob * cost).sum()
+        for ordinal, cost_terms in costs.items():
+            if use_einsum:
+                # FIXME this is qualitatively wrong
+                # TODO handle NANs
+                log_factors = self._get_log_factors(ordinal)
+                factors = [torch_exp(f) for f in log_factors] + cost_terms
+                expected_cost = expected_cost + sumproduct(factors)
+            else:
+                cost = sum(cost_terms)
+                prob = self.in_context(cost.shape, ordinal)
+                mask = prob > 0
+                if torch.is_tensor(mask) and not mask.all():
+                    cost, prob, mask = broadcast_all(cost, prob, mask)
+                    prob = prob[mask]
+                    cost = cost[mask]
+                expected_cost = expected_cost + (prob * cost).sum()
         return expected_cost
