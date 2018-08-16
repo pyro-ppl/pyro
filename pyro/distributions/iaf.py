@@ -17,8 +17,7 @@ class InverseAutoregressiveFlow(Transform):
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> arn = AutoRegressiveNN(10, [40])
-    >>> iaf = InverseAutoregressiveFlow(10, arn)
+    >>> iaf = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
     >>> iaf_module = pyro.module("my_iaf", iaf.module)
     >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf])
     >>> iaf_dist.sample()  # doctest: +SKIP
