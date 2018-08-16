@@ -86,10 +86,6 @@ class AutoRegressiveNNTests(TestCase):
                     x = torch.randn(1, input_dim)
                     epsilon_vector = torch.zeros(1, input_dim)
                     epsilon_vector[0, j] = self.epsilon
-
-                    #print(type(arn(x + 0.5 * epsilon_vector)), len(arn(x + 0.5 * epsilon_vector)))
-                    #raise Exception()
-
                     delta = (arn(x + 0.5 * epsilon_vector) - arn(x - 0.5 * epsilon_vector)) / self.epsilon
                     jacobian[j, k] = float(delta[0, k + output_index * input_dim])
 

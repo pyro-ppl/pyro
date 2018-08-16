@@ -6,7 +6,6 @@ from torch.distributions.transforms import Transform
 from torch.distributions import constraints
 
 from pyro.distributions.util import copy_docs_from
-from pyro.nn import AutoRegressiveNN
 
 
 @copy_docs_from(Transform)

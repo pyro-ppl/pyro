@@ -129,7 +129,15 @@ class AutoRegressiveNN(nn.Module):
     :type nonlinearity: torch.nn.module
     """
 
-    def __init__(self, input_dim, hidden_dims, count_params=2, param_dim=1, permutation=None, skip_connections=False, nonlinearity=nn.ReLU()):
+    def __init__(
+            self,
+            input_dim,
+            hidden_dims,
+            count_params=2,
+            param_dim=1,
+            permutation=None,
+            skip_connections=False,
+            nonlinearity=nn.ReLU()):
         super(AutoRegressiveNN, self).__init__()
         if input_dim == 1:
             warnings.warn('AutoRegressiveNN input_dim = 1. Consider using an affine transformation instead.')
@@ -152,13 +160,15 @@ class AutoRegressiveNN(nn.Module):
             self.permutation = permutation.type(dtype=torch.int64)
 
         # Create masks
-        output_dim_multiplier = count_params*param_dim
-        self.masks, self.mask_skip = create_mask(input_dim=input_dim, observed_dim=0, hidden_dims=hidden_dims, permutation=self.permutation, output_dim_multiplier=output_dim_multiplier)
+        output_dim_multiplier = count_params * param_dim
+        self.masks, self.mask_skip = create_mask(
+            input_dim=input_dim, observed_dim=0, hidden_dims=hidden_dims, permutation=self.permutation,
+            output_dim_multiplier=output_dim_multiplier)
 
         # Create masked layers
         layers = [MaskedLinear(input_dim, hidden_dims[0], self.masks[0])]
         for i in range(1, len(hidden_dims)):
-            layers.append(MaskedLinear(hidden_dims[i-1], hidden_dims[i], self.masks[i]))
+            layers.append(MaskedLinear(hidden_dims[i - 1], hidden_dims[i], self.masks[i]))
         layers.append(MaskedLinear(hidden_dims[-1], input_dim * output_dim_multiplier, self.masks[-1]))
         self.layers = nn.ModuleList(layers)
 
@@ -190,14 +200,15 @@ class AutoRegressiveNN(nn.Module):
 
         # Shape the output into self.count_params of dimension self.param_dim*self.input_dim
         if self.count_params == 1:
-          return h
+            return h
         else:
-          params = [h[...,(i*self.param_dim*self.input_dim):((i+1)*self.param_dim*self.input_dim)] for i in range(self.count_params)]
-          if self.param_dim > 1:
-            # NOTE: Better way to do this?
-            if len(x.size()) > 1:
-              params = [p.reshape(-1, self.param_dim, self.input_dim) for p in params]
-            else:
-              params = [p.reshape(self.param_dim, self.input_dim) for p in params]
+            params = [h[..., (i * self.param_dim * self.input_dim):((i + 1) * self.param_dim * self.input_dim)]
+                      for i in range(self.count_params)]
+            if self.param_dim > 1:
+                # NOTE: Better way to do this?
+                if len(x.size()) > 1:
+                    params = [p.reshape(-1, self.param_dim, self.input_dim) for p in params]
+                else:
+                    params = [p.reshape(self.param_dim, self.input_dim) for p in params]
 
-          return tuple(params)
+            return tuple(params)
