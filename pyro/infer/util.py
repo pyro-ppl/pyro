@@ -123,6 +123,7 @@ class Dice(object):
     - scaled log-probability due to subsampling
     - independence in different ordinals due to iarange
     - weights due to parallel and sequential enumeration
+    - weights due to local multiple sampling
 
     This assumes restricted dependency structure on the model and guide:
     variables outside of an :class:`~pyro.iarange` can never depend on
@@ -133,6 +134,9 @@ class Dice(object):
         Eric P. Xing, Shimon Whiteson (2018)
         "DiCE: The Infinitely Differentiable Monte-Carlo Estimator"
         https://arxiv.org/abs/1802.05098
+    [2] Laurence Aitchison (2018)
+        "Tensor Monte Carlo: particle methods for the GPU era"
+        https://arxiv.org/abs/1806.08593
 
     :param pyro.poutine.trace.Trace guide_trace: A guide trace.
     :param ordering: A dictionary mapping model site names to ordinal values.
@@ -146,15 +150,20 @@ class Dice(object):
         for name, site in guide_trace.nodes.items():
             if site["type"] != "sample":
                 continue
-            log_prob = site['score_parts'].score_function  # not scaled by subsampling
-            if is_identically_zero(log_prob):
-                continue
 
+            log_prob = site['score_parts'].score_function  # not scaled by subsampling
             ordinal = ordering[name]
             if site["infer"].get("enumerate"):
-                if site["infer"]["enumerate"] == "sequential":
+                num_samples = site["infer"].get("num_samples")
+                if num_samples is not None:  # site was multiply sampled
+                    if not is_identically_zero(log_prob):
+                        log_prob = log_prob - log_prob.detach()
+                    log_prob = log_prob - math.log(num_samples)
+                elif site["infer"]["enumerate"] == "sequential":
                     log_denom[ordinal] += math.log(site["infer"]["_enum_total"])
             else:  # site was monte carlo sampled
+                if is_identically_zero(log_prob):
+                    continue
                 log_prob = log_prob - log_prob.detach()
             log_probs[ordinal].append(log_prob)
 

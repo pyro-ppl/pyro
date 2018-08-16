@@ -38,13 +38,14 @@ def _compute_dice_elbo(model_trace, guide_trace):
 
 class TraceEnum_ELBO(ELBO):
     """
-    A trace implementation of ELBO-based SVI that supports enumeration
-    over discrete sample sites.
+    A trace implementation of ELBO-based SVI that supports
+    - exhaustive enumeration over discrete sample sites, and
+    - local parallel sampling over any sample sites.
 
     To enumerate over a sample site, the ``guide``'s sample site must specify
     either ``infer={'enumerate': 'sequential'}`` or
     ``infer={'enumerate': 'parallel'}``. To configure all sites at once, use
-    :func:`~pyro.infer.enum.config_enumerate``.
+    :func:`~pyro.infer.enum.config_enumerate`.
 
     This assumes restricted dependency structure on the model and guide:
     variables outside of an :class:`~pyro.iarange` can never depend on

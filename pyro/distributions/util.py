@@ -188,6 +188,15 @@ def torch_sign(value):
     return torch.sign(value)
 
 
+# work around lack of jit support for torch.eye(..., out=value)
+def eye_like(value, m, n=None):
+    if n is None:
+        n = m
+    eye = value.new_zeros(m, n)
+    eye.view(-1)[:min(m, n) * n:n + 1] = 1
+    return eye
+
+
 try:
     from torch import logsumexp  # for pytorch 0.4.1 and later
 except ImportError:
