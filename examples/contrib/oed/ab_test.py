@@ -31,10 +31,15 @@ the docs for :func:`pyro.contrib.oed.eig.vi_ape`.
 We recommend the technical report from Long Ouyang et al [2] as an introduction
 to optimal experiment design within probabilistic programs.
 
+To optimize the APE (which is required to be minimized) we used Gaussian Process
+based Bayesian Optimization. See the BO tutorial [3] for details of optimizing noisy
+and expensive-to-compute functions in pyro.
+
 [1] ["Bayesian Regression"](http://pyro.ai/examples/bayesian_regression.html)
 [2] Long Ouyang, Michael Henry Tessler, Daniel Ly, Noah Goodman (2016),
     "Practical optimal experiment design with probabilistic programs",
     (https://arxiv.org/abs/1608.05046)
+[3] ["Bayesian Optimization"](http://pyro.ai/examples/bo.html)
 """
 
 # Set up regression model dimensions
@@ -76,7 +81,7 @@ def true_ape(ns):
 
 def main(num_vi_steps, num_acquisitions, num_bo_steps):
 
-    pyro.set_rng_seed(42)
+    pyro.set_rng_seed(0)
     pyro.clear_param_store()
 
     est_ape = partial(estimated_ape, num_vi_steps=num_vi_steps)

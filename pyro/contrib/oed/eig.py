@@ -68,75 +68,96 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters,
     return loss
 
 
-def naive_rainforth(model, design, observation_label="y", target_label="theta",
+def naive_rainforth(model, design, observation_label="y", target_labels="theta",
                     N=100, M=10):
+    """
+    Naive Rainforth (i.e. Nested Monte Carlo) estimate of the expected information
+    gain (EIG). The estimate is 
 
+        :math:`\\frac{1}{N}\\sum_{n=1}^N \\log p(y_n | \\theta_n, d) - \\log (\\frac{1}{M}\\sum_{m=1}^M p(y_n | \\theta_m, d))`
+
+    Caution: the target labels must encompass all other variables in the model: no
+    Monte Carlo estimation is attempted for the :math:`\\log p(y | \\theta, d)` term.
+    """
+
+    if isinstance(target_labels, str):
+        target_labels = [target_labels]
+
+    # Take N samples of the model
     expanded_design = design.expand((N,) + design.shape)
     trace = poutine.trace(model).get_trace(expanded_design)
     trace.compute_log_prob()
     y = trace.nodes[observation_label]["value"]
     conditional_lp = trace.nodes[observation_label]["log_prob"]
 
+    # Take M independent samples of theta
     reexpanded_design = design.expand((M, 1) + design.shape)
     reexp_trace = poutine.trace(model).get_trace(reexpanded_design)
-    marginal_lp = cond_log_prob(model, y, reexp_trace.nodes[target_label]["value"],
-                                observation_label, target_label, design)[0]
+    data = {l: reexp_trace.nodes[l]["value"] for l in target_labels}
+    data.update({observation_label: y.unsqueeze(0)})
+
+    # Condition on response and new thetas
+    conditional_model = pyro.condition(model, data=data)
+    trace = poutine.trace(conditional_model).get_trace(reexpanded_design)
+    trace.compute_log_prob()
+    marginal_lp = logsumexp(trace.nodes[observation_label]["log_prob"], 0) - np.log(M)
 
     return (conditional_lp - marginal_lp).sum(0)/N
 
 
-def donsker_varadhan_loss(model, observation_label, target_label, U):
+def donsker_varadhan_loss(model, observation_label, T):
+    """
+    Donsker-Varadhan estimate of the expected information gain (EIG).
 
-    ewma_log = EwmaLog(alpha=0.66)
+    The Donsker-Varadhan representation of EIG is
 
-    pyro.module("U", U)
+        :math:`\\sup_T E[T(y, \\theta)] - \\log E[\\exp(T(\\bar{y}, \\bar{\\theta}))]`
+
+    where the first expectation is over the joint :math:`p(y | \\theta, d)` and
+    the second is over :math:`p(\\bar{y}|d)p(\\bar{\\theta})``.
+
+    :param function model: A stochastic function.
+    :param str observation_label: String label for observed variable.
+    :param function or torch.nn.Module T: optimisable function `T` for use in the
+        Donsker-Varadhan loss function.
+    """
+
+    ewma_log = EwmaLog(alpha=0.90)
+
+    try:
+        pyro.module("T", T)
+    except AssertionError:
+        pass
 
     def loss_fn(design, num_particles):
 
         expanded_design = design.expand((num_particles,) + design.shape)
 
-        trace = poutine.trace(model).get_trace(expanded_design)
-        y = trace.nodes[observation_label]["value"]
+        # Unshuffled data
+        unshuffled_trace = poutine.trace(model).get_trace(expanded_design)
+        y = unshuffled_trace.nodes[observation_label]["value"]
 
-        # Compute log probabilities
-        trace.compute_log_prob()
-        unshuffled_lp = trace.nodes[observation_label]["log_prob"]
+        # Shuffled data
         # Not actually shuffling, resimulate for safety
-        shuffled_lp, _ = cond_log_prob(model, y, None, observation_label,
-                                       target_label, expanded_design.unsqueeze(0))
+        data = {observation_label: y}
+        conditional_model = pyro.condition(model, data=data)
+        shuffled_trace = poutine.trace(conditional_model).get_trace(expanded_design)
 
-        T_unshuffled = U(expanded_design, y, unshuffled_lp)
-        T_shuffled = U(expanded_design, y, shuffled_lp)
+        T_unshuffled = T(expanded_design, unshuffled_trace, observation_label)
+        T_shuffled = T(expanded_design, shuffled_trace, observation_label)
+
+        unshuffled_expectation = T_unshuffled.sum(0)/num_particles
 
         A = T_shuffled - np.log(num_particles)
         s, _ = torch.max(A, dim=0)
-        expect_exp = s + ewma_log((A - s).exp().sum(dim=0), s)
-        # expect_exp = logsumexp(A, dim=0)
+        shuffled_expectation = s + ewma_log((A - s).exp().sum(dim=0), s)
 
+        loss = unshuffled_expectation - shuffled_expectation
         # Switch sign, sum over batch dimensions for scalar loss
-        loss = T_unshuffled.sum(0)/num_particles - expect_exp
         agg_loss = -loss.sum()
         return agg_loss, loss
 
     return loss_fn
-
-
-def cond_log_prob(model, observation, target, observation_label, target_label, *args):
-    if target is not None:
-        M = target.shape[0]
-        conditional_model = pyro.condition(model, data={
-            observation_label: observation.unsqueeze(0),
-            target_label: target
-            })
-    else:
-        M = 1
-        conditional_model = pyro.condition(model, data={
-            observation_label: observation.unsqueeze(0),
-            })
-    trace = poutine.trace(conditional_model).get_trace(*args)
-    trace.compute_log_prob()
-    return (logsumexp(trace.nodes[observation_label]["log_prob"], 0) - np.log(M),
-            trace.nodes[target_label]["value"])
 
 
 def logsumexp(inputs, dim=None, keepdim=False):

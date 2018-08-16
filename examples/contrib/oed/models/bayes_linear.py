@@ -7,21 +7,48 @@ import pyro
 import pyro.distributions as dist
 
 
-def bayesian_linear_model(design, w_means, w_sqrtlambdas, obs_sd=None,
-                          alpha_0=None, beta_0=None, response="normal",
+def bayesian_linear_model(design, w_means=None, w_sqrtlambdas=None, obs_sd=None,
+                          alpha_0=None, beta_0=None, response="normal", 
                           response_label="y"):
-    """A Bayesian linear model.
+    """
+    A pyro model for Bayesian linear regression.
 
-    If `obs_sd` is passed, the regression coefficient `w` is samples from
-    a Gaussian with mean `w_mean` and sds `obs_sd / w_sqrtlambda`.
-    These tensors may be scalar or `p`-dimensional vectors.
-    `X` is then sampled from a Gaussian with mean `Xw` and sd `obs_sd`.
+    If :param:`response` is `"normal"` this corresponds to a linear regression
+    model
 
-    If `obs_sd=None`, the observation variance is sampled from an inverse
-    Gamma distribution with parameters `alpha_0` and `beta_0`.
-    Then `w` is sampled from a Gaussian with mean `w_mean` and sds given by
-    `obs_sd / w_sqrtlambda` (cf. `lambda` in the NIG family).
-    Finally, `X` is Gaussian with mean `Xw` and sd `sigma`.
+        :math:`Y = Xw + \\epsilon`
+
+    with `\\epsilon`` i.i.d. zero-mean Gaussian. The observation standard deviation
+    (:param:`obs_sd`) may be known or unknown. If unknown, it is assumed to follow an
+    inverse Gamma distribution with parameters :param:`alpha_0` and :param:`beta_0`.
+
+    If the response type is `"bernoulli"` we instead have :math:`Y \\sim Bernoulli(p)`
+    with
+
+        :math:`logit(p) = Xw`
+
+    Given parameter groups in :param:`w_means` and :param:`w_sqrtlambda`, the regression
+    coefficient is taken to be Gaussian with mean `w_mean` and standard deviation
+    given by
+
+        :math:`\\sigma / \\sqrt{\\lambda}`
+
+    corresponding to the normal inverse Gamma family.
+
+    :param torch.Tensor design: a tensor with last two dimensions `n` and `p`
+        corresponding to observations and features respectively.
+    :param dict w_means: map from variable names to tensors of parameter means.
+    :param dict w_sqrtlambdas: map from variable names to tensors of square root
+        :math:`\\lambda` values.
+    :param torch.Tensor obs_sd: the observation standard deviation (if assumed known).
+        This is still relevant in the case of Bernoulli observations when coefficeints
+        are sampled using `w_sqrtlambdas`.
+    :param torch.Tensor alpha_0: Gamma :math:`\\alpha` parameter for unknown observation
+        covariance.
+    :param torch.Tensor beta_0: Gamma :math:`\\beta` parameter for unknown observation
+        covariance.
+    :param str response: Emission distribution. May be `"normal"` or `"bernoulli"`.
+    :param str response_label: Variable label for response.
     """
     # design is size batch x n x p
     # tau is size batch
@@ -42,11 +69,14 @@ def bayesian_linear_model(design, w_means, w_sqrtlambdas, obs_sd=None,
 
     # Allow different names for different coefficient groups
     w = []
-    for name, w_sqrtlambda in w_sqrtlambdas.items():
-        w_mean = w_means[name]
-        # Place a normal prior on the regression coefficient
-        w_prior = dist.Normal(w_mean, obs_sd / w_sqrtlambda).independent(1)
-        w.append(pyro.sample(name, w_prior).unsqueeze(-1))
+    if w_sqrtlambdas is not None:
+        for name, w_sqrtlambda in w_sqrtlambdas.items():
+            w_mean = w_means[name]
+            # Place a normal prior on the regression coefficient
+            w_prior = dist.Normal(w_mean, obs_sd / w_sqrtlambda).independent(1)
+            w.append(pyro.sample(name, w_prior).unsqueeze(-1))
+    if w_alphas is not None:
+        raise NotImplemented()
     w = torch.cat(w, dim=-2)
 
     # Run the regressor forward conditioned on inputs
