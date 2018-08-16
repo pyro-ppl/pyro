@@ -413,10 +413,9 @@ class NcpDiscrete(Ncp):
     def process_noise_cov(self, dt=0.):
         '''
         Compute and return cached process noise covariance (Q).
-        Args:
-            dt: time interval to integrate over.
-        Returns:
-            Read-only covariance (Q) of the native state `x` resulting from
+
+        :param dt: time interval to integrate over.
+        :return: Read-only covariance (Q) of the native state `x` resulting from
             stochastic integration (for use with EKF).
         '''
         if dt not in self._Q_cache:
