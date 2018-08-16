@@ -16,6 +16,7 @@ class InverseAutoregressiveFlow(Transform):
 
     Example usage:
 
+    >>> from pyro.nn import AutoRegressiveNN
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> iaf = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
     >>> iaf_module = pyro.module("my_iaf", iaf.module)
