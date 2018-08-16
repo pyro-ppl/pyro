@@ -88,7 +88,7 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
     est_ape.__doc__ = "Estimated APE by VI"
 
     estimators = [true_ape, est_ape]
-    noises = [0.0001, 0.01]
+    noises = [0.0001, 0.25]
 
     for f, noise in zip(estimators, noises):
         X = torch.tensor([25., 75.])
