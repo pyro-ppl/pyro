@@ -32,10 +32,8 @@ class InverseAutoregressiveFlow(Transform):
     this would be a (potentially) costly computation that scales with the dimension of the input (and in
     any case support for this is not included in this implementation).
 
-    :param input_dim: dimension of input
-    :type input_dim: int
-    :param hidden_dim: hidden dimension (number of hidden units)
-    :type hidden_dim: int
+    :param autoregressive_nn: an autoregressive neural network whose forward call returns a mean and logit-scale as a tuple.
+    :type autoregressive_nn: nn.Module
     :param sigmoid_bias: bias on the hidden units fed into the sigmoid; default=`2.0`
     :type sigmoid_bias: float
     :param permutation: whether the order of the inputs should be permuted (by default the conditional

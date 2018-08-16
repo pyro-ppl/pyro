@@ -102,6 +102,13 @@ class AutoRegressiveNN(nn.Module):
     """
     An implementation of a MADE-like auto-regressive neural network.
 
+    Example usage:
+    >>> arn = AutoRegressiveNN(10, [50], count_params=3)
+    >>> x = torch.randn(100, 10)
+    >>> a, b, c = arn(x)  # 3 parameters of size (100, 10)
+    >>> arn = AutoRegressiveNN(10, [50], count_params=2, param_dim=15)
+    >>> m, s = arn(x) # 2 parameters of size(100, 15, 10)
+
     Reference:
     MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]
     Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle
@@ -114,11 +121,6 @@ class AutoRegressiveNN(nn.Module):
     :type count_params: int
     :param param_dim: the dimensionality of each parameter
     :type param_dim: int
-    :param output_dim_multiplier: the dimensionality of the output is given by input_dim x output_dim_multiplier.
-        specifically the shape of the output for a single vector input is [output_dim_multiplier, input_dim].
-        for any i, j in range(0, output_dim_multiplier) the subset of outputs [i, :] has identical
-        autoregressive structure to [j, :]. defaults to `1`
-    :type output_dim_multiplier: int
     :param permutation: an optional permutation that is applied to the inputs and controls the order of the
         autoregressive factorization. in particular for the identity permutation the autoregressive structure
         is such that the Jacobian is upper triangular. By default this is chosen at random.
