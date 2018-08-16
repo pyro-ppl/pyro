@@ -26,6 +26,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.util import sum_rightmost
 from pyro.infer.enum import config_enumerate
+from pyro.nn import AutoRegressiveNN
 from pyro.poutine.util import prune_subsample_sites
 
 try:
@@ -618,7 +619,7 @@ class AutoIAFNormal(AutoContinuous):
             raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
         if self.hidden_dim is None:
             self.hidden_dim = self.latent_dim
-        iaf = dist.InverseAutoregressiveFlow(pyro.nn.AutoRegressiveNN(self.latent_dim, [self.hidden_dim]),
+        iaf = dist.InverseAutoregressiveFlow(AutoRegressiveNN(self.latent_dim, [self.hidden_dim]),
                                              sigmoid_bias=self.sigmoid_bias)
         pyro.module("{}_iaf".format(self.prefix), iaf.module)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
