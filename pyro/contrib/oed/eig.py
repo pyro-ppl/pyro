@@ -72,9 +72,11 @@ def naive_rainforth(model, design, observation_label="y", target_labels="theta",
                     N=100, M=10):
     """
     Naive Rainforth (i.e. Nested Monte Carlo) estimate of the expected information
-    gain (EIG). The estimate is 
+    gain (EIG). The estimate is
 
-        :math:`\\frac{1}{N}\\sum_{n=1}^N \\log p(y_n | \\theta_n, d) - \\log (\\frac{1}{M}\\sum_{m=1}^M p(y_n | \\theta_m, d))`
+    .. math::
+
+        \\frac{1}{N}\\sum_{n=1}^N \\log p(y_n | \\theta_n, d) - \\log (\\frac{1}{M}\\sum_{m=1}^M p(y_n | \\theta_m, d))
 
     Caution: the target labels must encompass all other variables in the model: no
     Monte Carlo estimation is attempted for the :math:`\\log p(y | \\theta, d)` term.

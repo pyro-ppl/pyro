@@ -8,7 +8,7 @@ import pyro.distributions as dist
 
 
 def bayesian_linear_model(design, w_means=None, w_sqrtlambdas=None, obs_sd=None,
-                          alpha_0=None, beta_0=None, response="normal", 
+                          alpha_0=None, beta_0=None, response="normal",
                           response_label="y"):
     """
     A pyro model for Bayesian linear regression.
@@ -75,17 +75,15 @@ def bayesian_linear_model(design, w_means=None, w_sqrtlambdas=None, obs_sd=None,
             # Place a normal prior on the regression coefficient
             w_prior = dist.Normal(w_mean, obs_sd / w_sqrtlambda).independent(1)
             w.append(pyro.sample(name, w_prior).unsqueeze(-1))
-    if w_alphas is not None:
-        raise NotImplemented()
     w = torch.cat(w, dim=-2)
 
     # Run the regressor forward conditioned on inputs
     prediction_mean = torch.matmul(design, w).squeeze(-1)
     if response == "normal":
         # y is an n-vector: hence use .independent(1)
-        pyro.sample(response_label, dist.Normal(prediction_mean, obs_sd).independent(1))
+        return pyro.sample(response_label, dist.Normal(prediction_mean, obs_sd).independent(1))
     elif response == "bernoulli":
-        pyro.sample(response_label, dist.Bernoulli(logits=prediction_mean).independent(1))
+        return pyro.sample(response_label, dist.Bernoulli(logits=prediction_mean).independent(1))
     else:
         raise ValueError("Unknown response distribution: '{}'".format(response))
 
