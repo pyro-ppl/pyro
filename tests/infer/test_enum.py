@@ -973,7 +973,7 @@ def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
     ("parallel", 3, False),
     ("parallel", 10, False),
     ("parallel", 20, False),
-    ("parallel", 22, False),
+    # ("parallel", 22, False),
     pytest.param("parallel", 30, False, marks=pytest.mark.skip(reason="extremely expensive")),
 ])
 def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):

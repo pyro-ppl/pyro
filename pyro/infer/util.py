@@ -7,7 +7,7 @@ from collections import defaultdict
 import torch
 from torch.distributions.utils import broadcast_all
 
-from pyro.distributions.util import is_identically_zero
+from pyro.distributions.util import broadcast_shape, is_identically_zero
 from pyro.ops.sumproduct import sumproduct
 from pyro.poutine.util import site_is_subsample
 
@@ -226,7 +226,7 @@ class Dice(object):
         self._prob_cache[shape, ordinal] = dice_prob
         return dice_prob
 
-    def compute_expectation(self, costs, use_einsum=False):
+    def compute_expectation(self, costs, use_einsum=True):
         """
         Returns a differentiable expected cost, summing over costs at given ordinals.
 
@@ -240,8 +240,20 @@ class Dice(object):
                 # FIXME this is qualitatively wrong
                 # TODO handle NANs
                 log_factors = self._get_log_factors(ordinal)
-                factors = [torch_exp(f) for f in log_factors] + cost_terms
-                expected_cost = expected_cost + sumproduct(factors)
+                factors = [torch_exp(f) for f in log_factors]
+
+                # Version 0. (correct but exponential cost)
+                # expected_cost = expected_cost + sumproduct(factors + [sum(cost_terms)])
+
+                # Version 1. (wrong but cheap)
+                # factors.append(sum(cost_terms))
+                # expected_cost = expected_cost + sumproduct(factors)
+
+                # Version 2. (correct but quadratic cost)
+                target_shape = broadcast_shape(*(c.shape for c in cost_terms))
+                for cost in cost_terms:
+                    cost = cost.expand(target_shape)
+                    expected_cost = expected_cost + sumproduct(factors + [cost])
             else:
                 cost = sum(cost_terms)
                 prob = self.in_context(cost.shape, ordinal)
