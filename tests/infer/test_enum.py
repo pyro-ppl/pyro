@@ -319,6 +319,111 @@ def test_elbo_bern(method, enumerate1):
         ]))
 
 
+@pytest.mark.parametrize("method", ["loss", "differentiable_loss", "loss_and_grads"])
+@pytest.mark.parametrize("enumerate1", [None, "parallel"])
+def test_elbo_normal(method, enumerate1):
+    pyro.clear_param_store()
+    num_particles = 1 if enumerate1 else 10000
+    prec = 0.01
+    q = pyro.param("q", torch.tensor(1., requires_grad=True))
+    kl = kl_divergence(dist.Normal(q, 1.), dist.Normal(0., 1.))
+
+    def model():
+        with pyro.iarange("particles", num_particles):
+            pyro.sample("z", dist.Normal(0., 1.).expand_by([num_particles]))
+
+    @config_enumerate(default=enumerate1, num_samples=10000)
+    def guide():
+        q = pyro.param("q")
+        with pyro.iarange("particles", num_particles):
+            pyro.sample("z", dist.Normal(q, 1.).expand_by([num_particles]))
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1,
+                          strict_enumeration_warning=any([enumerate1]))
+
+    if method == "loss":
+        actual = elbo.loss(model, guide) / num_particles
+        expected = kl.item()
+        assert_equal(actual, expected, prec=prec, msg="".join([
+            "\nexpected = {}".format(expected),
+            "\n  actual = {}".format(actual),
+        ]))
+    else:
+        if method == "differentiable_loss":
+            loss = elbo.differentiable_loss(model, guide)
+            actual = grad(loss, [q])[0] / num_particles
+        elif method == "loss_and_grads":
+            elbo.loss_and_grads(model, guide)
+            actual = q.grad / num_particles
+        expected = grad(kl, [q])[0]
+        assert_equal(actual, expected, prec=prec, msg="".join([
+            "\nexpected = {}".format(expected.detach().cpu().numpy()),
+            "\n  actual = {}".format(actual.detach().cpu().numpy()),
+        ]))
+
+
+@pytest.mark.parametrize("enumerate1,num_samples1", [
+    (None, None),
+    ("sequential", None),
+    ("parallel", None),
+    ("parallel", 300),
+])
+@pytest.mark.parametrize("enumerate2,num_samples2", [
+    (None, None),
+    ("sequential", None),
+    ("parallel", None),
+    ("parallel", 300),
+])
+@pytest.mark.parametrize("method", ["differentiable_loss", "loss_and_grads"])
+def test_elbo_bern_bern(method, enumerate1, enumerate2, num_samples1, num_samples2):
+    pyro.clear_param_store()
+    if enumerate1 and enumerate2 and num_samples1 is None and num_samples2 is None:
+        num_particles = 1
+        prec = 0.001
+    else:
+        num_particles = 2 * 300 * 300
+        for n in [num_samples1, num_samples2]:
+            if n is not None:
+                num_particles = num_particles // n
+        prec = 0.1
+
+    q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
+
+    def model():
+        pyro.sample("x1", dist.Bernoulli(0.2))
+        pyro.sample("x2", dist.Bernoulli(0.4))
+
+    def guide():
+        q = pyro.param("q")
+        pyro.sample("x1", dist.Bernoulli(q), infer={"enumerate": enumerate1, "num_samples": num_samples1})
+        pyro.sample("x2", dist.Bernoulli(q), infer={"enumerate": enumerate2, "num_samples": num_samples2})
+
+    kl = sum(kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p)) for p in [0.2, 0.4])
+    expected_loss = kl.item()
+    expected_grad = grad(kl, [q])[0]
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
+                          num_particles=num_particles,
+                          vectorize_particles=True,
+                          strict_enumeration_warning=any([enumerate1, enumerate2]))
+    if method == "differentiable_loss":
+        loss = elbo.differentiable_loss(model, guide)
+        actual_loss = loss.item()
+        actual_grad = grad(loss, [q])[0]
+    else:
+        actual_loss = elbo.loss_and_grads(model, guide)
+        actual_grad = q.grad
+
+    assert_equal(actual_loss, expected_loss, prec=prec, msg="".join([
+        "\nexpected loss = {}".format(expected_loss),
+        "\n  actual loss = {}".format(actual_loss),
+    ]))
+    assert_equal(actual_grad, expected_grad, prec=prec, msg="".join([
+        "\nexpected grads = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual grads = {}".format(actual_grad.detach().cpu().numpy()),
+    ]))
+
+
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
@@ -409,6 +514,53 @@ def test_elbo_categoricals(enumerate1, enumerate2, enumerate3, max_iarange_nesti
             "\nexpected grad = {}".format(expected_grad.detach().cpu().numpy()),
             "\n  actual grad = {}".format(actual_grad.detach().cpu().numpy()),
         ]))
+
+
+@pytest.mark.parametrize("enumerate1", [None, "parallel"])
+@pytest.mark.parametrize("enumerate2", [None, "parallel"])
+@pytest.mark.parametrize("enumerate3", [None, "parallel"])
+@pytest.mark.parametrize("method", ["differentiable_loss", "loss_and_grads"])
+def test_elbo_normals(method, enumerate1, enumerate2, enumerate3):
+    pyro.clear_param_store()
+    num_particles = 100 * 10 ** sum(1 for e in [enumerate1, enumerate2, enumerate3] if not e)
+    prec = 0.1
+    q = pyro.param("q", torch.tensor(0.0, requires_grad=True))
+
+    def model():
+        pyro.sample("x1", dist.Normal(0.25, 1.))
+        pyro.sample("x2", dist.Normal(0.5, 1.))
+        pyro.sample("x3", dist.Normal(1., 1.))
+
+    def guide():
+        q = pyro.param("q")
+        pyro.sample("x1", dist.Normal(q, 1.), infer={"enumerate": enumerate1, "num_samples": 10})
+        pyro.sample("x2", dist.Normal(q, 1.), infer={"enumerate": enumerate2, "num_samples": 10})
+        pyro.sample("x3", dist.Normal(q, 1.), infer={"enumerate": enumerate3, "num_samples": 10})
+
+    kl = sum(kl_divergence(dist.Normal(q, 1.), dist.Normal(p, 1.)) for p in [0.25, 0.5, 1.])
+    expected_loss = kl.item()
+    expected_grad = grad(kl, [q])[0]
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
+                          num_particles=num_particles,
+                          vectorize_particles=True,
+                          strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
+    if method == "differentiable_loss":
+        loss = elbo.differentiable_loss(model, guide)
+        actual_loss = loss.item()
+        actual_grad = grad(loss, [q])[0]
+    else:
+        actual_loss = elbo.loss_and_grads(model, guide)
+        actual_grad = q.grad
+
+    assert_equal(actual_loss, expected_loss, prec=prec, msg="".join([
+        "\nexpected loss = {}".format(expected_loss),
+        "\n  actual loss = {}".format(actual_loss),
+    ]))
+    assert_equal(actual_grad, expected_grad, prec=prec, msg="".join([
+        "\nexpected grads = {}".format(expected_grad.detach().cpu().numpy()),
+        "\n  actual grads = {}".format(actual_grad.detach().cpu().numpy()),
+    ]))
 
 
 @pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
@@ -760,9 +912,15 @@ def test_non_mean_field_bern_bern_elbo_gradient(enumerate1, pi1, pi2):
 @pytest.mark.parametrize("pi1", [0.33, 0.44])
 @pytest.mark.parametrize("pi2", [0.55, 0.39])
 @pytest.mark.parametrize("pi3", [0.22, 0.29])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-def test_non_mean_field_bern_normal_elbo_gradient(enumerate1, pi1, pi2, pi3, include_z=True):
+@pytest.mark.parametrize("enumerate1,num_samples", [
+    (None, None),
+    ("sequential", None),
+    ("parallel", None),
+    ("parallel", 2),
+])
+def test_non_mean_field_bern_normal_elbo_gradient(enumerate1, pi1, pi2, pi3, num_samples):
     pyro.clear_param_store()
+    include_z = True
     num_particles = 10000
 
     def model():

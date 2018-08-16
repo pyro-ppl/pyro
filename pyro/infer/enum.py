@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
+
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
@@ -81,24 +83,37 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
         yield traced_fn.get_trace(*args, **kwargs)
 
 
-def _config_enumerate(default, expand):
+def _config_enumerate(default, expand, num_samples):
 
     def config_fn(site):
         if site["type"] != "sample" or site["is_observed"]:
             return {}
-        if not getattr(site["fn"], "has_enumerate_support", False):
+        if type(site["fn"]).__name__ == "_Subsample":
             return {}
-        return {"enumerate": site["infer"].get("enumerate", default),
-                "expand": site["infer"].get("expand", expand)}
+        if num_samples is not None:
+            return {"enumerate": site["infer"].get("enumerate", default),
+                    "num_samples": site["infer"].get("num_samples", num_samples)}
+        if getattr(site["fn"], "has_enumerate_support", False):
+            return {"enumerate": site["infer"].get("enumerate", default),
+                    "expand": site["infer"].get("expand", expand)}
+        return {}
 
     return config_fn
 
 
-def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT):
+def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT, num_samples=None):
     """
-    Configures each enumerable site a guide to enumerate with given method,
-    ``site["infer"]["enumerate"] = default``. This can be used as either a
-    function::
+    Configures enumeration for all relevant sites in a guide. This is mainly
+    used in conjunction with :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO`.
+
+    When configuring for exhaustive enumeration of discrete variables, this
+    configures all sample sites whose distribution satisfies
+    ``.has_enumerate_support == True``.
+    When configuring for local parallel Monte Carlo sampling via
+    ``default="parallel", num_samples=n``, this configures all sample sites.
+    This does not overwrite existing annotations ``infer={"enumerate": ...}``.
+
+    This can be used as either a function::
 
         guide = config_enumerate(guide)
 
@@ -112,14 +127,19 @@ def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT):
         def guide2(*args, **kwargs):
             ...
 
-    This does not overwrite existing annotations ``infer={"enumerate": ...}``.
-
     :param callable guide: a pyro model that will be used as a guide in
         :class:`~pyro.infer.svi.SVI`.
     :param str default: Which enumerate strategy to use, one of
         "sequential", "parallel", or None.
     :param bool expand: Whether to expand enumerated sample values. See
         :meth:`~pyro.distributions.Distribution.enumerate_support` for details.
+        This only applies to exhaustive enumeration, where ``num_samples=None``.
+        If ``num_samples`` is not ``None``, then this samples will always be
+        expanded.
+    :param num_samples: if not ``None``, use local Monte Carlo sampling rather
+        than exhaustive enumeration. This makes sense for both continuous and
+        discrete distributions.
+    :type num_samples: int or None
     :return: an annotated guide
     :rtype: callable
     """
@@ -128,8 +148,16 @@ def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT):
             repr(default)))
     if expand not in [True, False]:
         raise ValueError("Invalid expand value. Expected True or False, but got {}".format(repr(expand)))
+    if num_samples is not None:
+        if not (isinstance(num_samples, numbers.Number) and num_samples > 0):
+            raise ValueError("Invalid num_samples, expected None or positive integer, but got {}".format(
+                repr(num_samples)))
+        if default == "sequential":
+            raise ValueError('Local sampling does not support "sequential" sampling; '
+                             'use "parallel" sampling instead.')
+
     # Support usage as a decorator:
     if guide is None:
-        return lambda guide: config_enumerate(guide, default=default, expand=expand)
+        return lambda guide: config_enumerate(guide, default=default, expand=expand, num_samples=num_samples)
 
-    return poutine.infer_config(guide, config_fn=_config_enumerate(default, expand))
+    return poutine.infer_config(guide, config_fn=_config_enumerate(default, expand, num_samples))
