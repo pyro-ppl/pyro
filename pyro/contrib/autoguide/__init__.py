@@ -618,7 +618,7 @@ class AutoIAFNormal(AutoContinuous):
             raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
         if self.hidden_dim is None:
             self.hidden_dim = self.latent_dim
-        iaf = dist.InverseAutoregressiveFlow(self.latent_dim, self.hidden_dim,
+        iaf = dist.InverseAutoregressiveFlow(pyro.nn.AutoRegressiveNN(self.latent_dim, [self.hidden_dim]),
                                              sigmoid_bias=self.sigmoid_bias)
         pyro.module("{}_iaf".format(self.prefix), iaf.module)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])

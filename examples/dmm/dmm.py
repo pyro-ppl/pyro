@@ -150,7 +150,7 @@ class DMM(nn.Module):
                           dropout=rnn_dropout_rate)
 
         # if we're using normalizing flows, instantiate those too
-        self.iafs = [InverseAutoregressiveFlow(z_dim, iaf_dim) for _ in range(num_iafs)]
+        self.iafs = [InverseAutoregressiveFlow(pyro.nn.AutoRegressiveNN(z_dim, [iaf_dim])) for _ in range(num_iafs)]
         self.iafs_modules = nn.ModuleList([iaf.module for iaf in self.iafs])
 
         # define a (trainable) parameters z_0 and z_q_0 that help define the probability

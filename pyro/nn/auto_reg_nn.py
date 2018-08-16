@@ -192,8 +192,12 @@ class AutoRegressiveNN(nn.Module):
         if self.count_params == 1:
           return h
         else:
-          params = [h[:,(i*self.param_dim*self.input_dim):((i+1)*self.param_dim*self.input_dim)] for i in range(self.count_params)]
+          params = [h[...,(i*self.param_dim*self.input_dim):((i+1)*self.param_dim*self.input_dim)] for i in range(self.count_params)]
           if self.param_dim > 1:
-            params = [p.reshape(-1, self.param_dim, self.input_dim) for p in params]
+            # NOTE: Better way to do this?
+            if len(x.size()) > 1:
+              params = [p.reshape(-1, self.param_dim, self.input_dim) for p in params]
+            else:
+              params = [p.reshape(self.param_dim, self.input_dim) for p in params]
 
           return tuple(params)
