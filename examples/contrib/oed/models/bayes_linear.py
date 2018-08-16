@@ -54,7 +54,8 @@ def logistic_regression_model(coef_mean, coef_sd, coef_label="w", observation_la
 
 
 def lmer_model(fixed_effects_sd, n_groups, random_effects_alpha, random_effects_beta,
-               fixed_effects_label="w", random_effects_label="u", observation_label="y"):
+               fixed_effects_label="w", random_effects_label="u", observation_label="y",
+               response="normal"):
     return partial(bayesian_linear_model,
                    w_means={fixed_effects_label: torch.tensor(0.)},
                    w_sqrtlambdas={fixed_effects_label: 1./fixed_effects_sd},
@@ -62,7 +63,7 @@ def lmer_model(fixed_effects_sd, n_groups, random_effects_alpha, random_effects_
                    re_group_sizes={random_effects_label: n_groups},
                    re_alphas={random_effects_label: random_effects_alpha},
                    re_betas={random_effects_label: random_effects_beta},
-                   response="normal",
+                   response=response,
                    response_label=observation_label)
 
 
@@ -154,9 +155,9 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         group_p = alpha.shape[-1]
         G_prior = dist.Gamma(alpha.expand(tau_shape + (group_p,)),
                              beta.expand(tau_shape + (group_p,)))
-        G = pyro.sample("G_" + name, G_prior)
+        G = 1./torch.sqrt(pyro.sample("G_" + name, G_prior))
         # Repeat `G` for each group
-        repeat_shape = (1 for _ in tau_shape) + (group_size,)
+        repeat_shape = tuple(1 for _ in tau_shape) + (group_size,)
         u_prior = dist.Normal(torch.tensor(0.), G.repeat(repeat_shape)).independent(1)
         w.append(pyro.sample(name, u_prior).unsqueeze(-1))
     # Regression coefficient `w` is batch x p x 1
