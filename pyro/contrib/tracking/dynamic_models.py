@@ -421,7 +421,6 @@ class NcpDiscrete(Ncp):
         '''
         if dt not in self._Q_cache:
             Q = self.sv2 * dt * dt * eye_like(self.sv2, self._dimension)
-            Q.flags.writeable = False
             self._Q_cache[dt] = Q
 
         return self._Q_cache[dt]
@@ -441,7 +440,7 @@ class NcvDiscrete(Ncv):
         "Estimation with Applications to Tracking and Navigation" by Y. Bar-
         Shalom et al, 2001, p.273.
     '''
-    def process_noise_cov(self, d=0.):
+    def process_noise_cov(self, dt=0.):
         '''
         Compute and return cached process noise covariance (Q).
 
@@ -456,13 +455,12 @@ class NcvDiscrete(Ncv):
             dt2 = dt*dt
             dt3 = dt2*dt
             dt4 = dt2*dt2
-            Q = zeros_like(self.sa2, (d, d))
+            Q = self.sa2.new_zeros(d, d)
             Q[:d//2, :d//2] = 0.25 * dt4 * eye_like(self.sa2, d//2)
             Q[:d//2, d//2:] = 0.5 * dt3 * eye_like(self.sa2, d//2)
-            Q[d//2:, :d//2] = 0.5 * dt3 * eye_like(sekf.sa2, d//2)
+            Q[d//2:, :d//2] = 0.5 * dt3 * eye_like(self.sa2, d//2)
             Q[d//2:, d//2:] = dt2 * eye_like(self.sa2, d//2)
             Q *= self.sa2
-            Q.flags.writeable = False
             self._Q_cache[dt] = Q
 
         return self._Q_cache[dt]

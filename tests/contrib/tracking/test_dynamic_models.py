@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-from pyro.contrib.tracking.dynamic_models import NcpContinuous, NcvContinuous
+from pyro.contrib.tracking.dynamic_models import (NcpContinuous, NcvContinuous,
+                                                  NcvDiscrete, NcpDiscrete)
 from tests.common import assert_equal, assert_not_equal
 
 
@@ -143,7 +144,7 @@ def test_NcpDiscrete():
     Q1 = ncp.process_noise_cov(dt)  # Test caching.
     assert_equal(Q, Q1)
     assert Q1.shape == (d, d)
-    stm.assert_cov_validity(Q1)
+    assert_cov_validity(Q1)
 
     dx = ncp.process_noise_dist(dt).sample()
     assert dx.shape == (ncp.dimension,)
@@ -179,6 +180,4 @@ def test_NcvDiscrete():
     Q1 = ncv.process_noise_cov(dt)  # Test caching.
     assert_equal(Q, Q1)
     assert Q1.shape == (d, d)
-
-    dx = ncv.process_noise_dist(dt).sample()
-    assert dx.shape == (ncv.dimension,)
+    # Q has rank `dimension/2`, so it is not a valid cov matrix
