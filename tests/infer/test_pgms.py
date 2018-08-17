@@ -1,7 +1,9 @@
 import torch
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
+from pyro.contrib.autoguide import AutoDelta, AutoDiscreteParallel
 from pyro.infer import TraceEnum_ELBO, SVI, config_enumerate
 import pyro.optim as optim
 import pyro.poutine as poutine
@@ -20,21 +22,34 @@ def test_discrete_dag():
 
     @poutine.broadcast
     @config_enumerate(default="parallel", expand=False)
-    def model(data_c=None, data_f=None):
-        cpd_b = pyro.param("cpd_b", torch.ones(2) / 2.)
-        cpd_c = pyro.param("cpd_c", torch.ones(2, 2) / 2.)
-        cpd_d = pyro.param("cpd_d", torch.ones(2, 2) / 2.)
-        cpd_e = pyro.param("cpd_e", torch.ones(2) / 2.)
-        cpd_f = pyro.param("cpd_f", torch.ones(2, 2) / 2.)
-        a = pyro.sample("a", dist.Bernoulli(0.5))
-        b = pyro.sample("b", dist.Bernoulli(cpd_b[a.long()]))
-        size_data = len(data_c) if data_c is not None else 1
-        with pyro.iarange("data_c", size_data):
-            c = pyro.sample("c", dist.Bernoulli(cpd_c[a.long()][b.long()]), obs=data_c)
-        d = pyro.sample("d", dist.Bernoulli(cpd_d[b.long()][c.long()]))
-        e = pyro.sample("e", dist.Bernoulli(cpd_e[d.long()]))
-        with pyro.iarange("data_f", size_data):
-            pyro.sample("f", dist.Bernoulli(cpd_f[d.long()][e.long()]), obs=data_f)
+    def model(data):
+        cpd_a = pyro.param("cpd_a", torch.ones(2), constraint=constraints.simplex)
+        cpd_b = pyro.param("cpd_b", torch.ones(2, 2) / 2., constraint=constraints.simplex)
+        cpd_c = pyro.param("cpd_c", torch.ones(2, 2, 2) / 2., constraint=constraints.simplex)
+        cpd_d = pyro.param("cpd_d", torch.ones(2, 2, 2) / 2., constraint=constraints.simplex)
+        cpd_e = pyro.param("cpd_e", torch.ones(2, 2) / 2., constraint=constraints.simplex)
+        cpd_f = pyro.param("cpd_f", torch.ones(2, 2, 2) / 2., constraint=constraints.simplex)
+        a = pyro.sample("a", dist.Categorical(cpd_a))
+        b = pyro.sample("b", dist.Categorical(cpd_b[a]))
+        with pyro.iarange("data_c", len(data), dim=-1):
+            c = pyro.sample("c", dist.Categorical(cpd_c[a, b]), obs=data[:, 0])
+            d = pyro.sample("d", dist.Categorical(cpd_d[b, c.long()]))
+            e = pyro.sample("e", dist.Categorical(cpd_e[d]))
+        with pyro.iarange("data_f", len(data), dim=-2):
+            pyro.sample("f", dist.Categorical(cpd_f[d, e]), obs=data[:, 1])
+
+    @poutine.broadcast
+    @config_enumerate(default="parallel", expand=False)
+    def guide(data):
+        cpd_a = pyro.param("cpd_a", torch.ones(2), constraint=constraints.simplex)
+        cpd_b = pyro.param("cpd_b", torch.ones(2, 2) / 2., constraint=constraints.simplex)
+        cpd_d = pyro.param("cpd_d", torch.ones(2, 2, 2) / 2., constraint=constraints.simplex)
+        cpd_e = pyro.param("cpd_e", torch.ones(2, 2) / 2., constraint=constraints.simplex)
+        a = pyro.sample("a", dist.Categorical(cpd_a))
+        b = pyro.sample("b", dist.Categorical(cpd_b[a]))
+        with pyro.iarange("data_c", len(data), dim=-1):
+            d = pyro.sample("d", dist.Categorical(cpd_d[b, data[:, 0].long()]))
+            e = pyro.sample("e", dist.Categorical(cpd_e[d]))
 
     def conditioned_model(data):
         return poutine.condition(model, data=data)()
@@ -53,10 +68,16 @@ def test_discrete_dag():
         return torch.stack(c), torch.stack(f)
 
     pyro.clear_param_store()
-    adam = optim.Adam({"lr": .0005, "betas": (0.95, 0.999)})
-    svi = SVI(model, model, adam, loss=TraceEnum_ELBO(max_iarange_nesting=0))
-    data = dict(zip(("c", "f"), generate_data()))
+    adam = optim.Adam({"lr": .01, "betas": (0.95, 0.999)})
+    svi = SVI(model, guide, adam, loss=TraceEnum_ELBO(max_iarange_nesting=2))
+    data = torch.ones(1000, 2)
 
-    for _ in range(1000):
-        print(svi.step(data))
+    for i in range(3000):
+        if i % 100:
+            print(svi.step(data))
+    print(pyro.param("cpd_a"))
     print(pyro.param("cpd_b"))
+    print(pyro.param("cpd_c"))
+    print(pyro.param("cpd_d"))
+    print(pyro.param("cpd_e"))
+    print(pyro.param("cpd_f"))
