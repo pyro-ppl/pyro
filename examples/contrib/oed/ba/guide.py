@@ -21,16 +21,10 @@ class Ba_lm_guide(nn.Module):
         design_suff = design.sum(-2, keepdim=True)
         suff = torch.matmul(y.unsqueeze(-2), design)
         mu = (suff/(design_suff + self.regu)).squeeze(-2)
-        mu2 = (suff/(design_suff + 1./prior_var)).squeeze(-2)
-        print('analytic mu', mu2)
-        print('trained mu', mu)
-        print('analytic regu', 1./prior_var)
-        print('trained regu', self.regu)
+        # mu2 = (suff/(design_suff + 1./prior_var)).squeeze(-2)
 
-        posterior_var = prior_var - (1./(prior_var*design_suff + self.obs_sd**2))*(prior_var**2*design_suff)
-        posterior_var = posterior_var.squeeze(-2)
-        print('analytic sds', posterior_var.sqrt())
-        print('trained sds', self.sds)
+        # posterior_var = prior_var - (1./(prior_var*design_suff + self.obs_sd**2))*(prior_var**2*design_suff)
+        # posterior_var = posterior_var.squeeze(-2)
         return mu, self.sds
 
     def guide(self, y_dict, design):
