@@ -19,6 +19,8 @@ logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 class DiscreteDag(TestCase):
     """
+    . represents direction of the dependency.
+
     a --. b
     |  /  |
     ..    .
