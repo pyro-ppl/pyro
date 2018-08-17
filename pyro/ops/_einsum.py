@@ -2,10 +2,13 @@ from __future__ import absolute_import, division, print_function
 
 import contextlib
 import numbers
+from collections import OrderedDict
 
 import opt_einsum
 
-CACHE = {}
+from pyro.distributions.torch_patch import _patch
+
+CACHE = OrderedDict()
 
 
 class Deferred(object):
@@ -27,6 +30,28 @@ class DeferredTensor(Deferred):
     def __init__(self, tensor):
         super(DeferredTensor, self).__init__(tensor.shape)
         self._value = tensor
+
+    def __hash__(self):
+        return id(self._value)
+
+    def squeeze(self):
+        key = 'squeeze', self
+        if key in CACHE:
+            return CACHE[key]
+
+        result = DeferredTensor(self._value.squeeze())
+        CACHE[key] = result
+        return result
+
+
+def deferred_tensor(tensor):
+    key = 'deferred_tensor', id(tensor)
+    if key in CACHE:
+        return CACHE[key]
+
+    result = DeferredTensor(tensor)
+    CACHE[key] = result
+    return result
 
 
 class Transpose(Deferred):
@@ -72,6 +97,11 @@ class Tensordot(Deferred):
     def _eval(self):
         x = self.x.eval()
         y = self.y.eval()
+
+        # This workaround can be deleted after this issue is fixed in release:
+        # https://github.com/pytorch/pytorch/issues/7763
+        x, y = x.clone(), y.clone()
+
         self._value = opt_einsum.backends.torch.tensordot(x, y, self.axes)
 
     def __hash__(self):
@@ -110,6 +140,11 @@ class Einsum(Deferred):
 
     def _eval(self):
         operands = [d.eval() for d in self.operands]
+
+        # This workaround can be deleted after this issue is fixed in release:
+        # https://github.com/pytorch/pytorch/issues/7763
+        operands = [d.clone() for d in operands]
+
         self._value = opt_einsum.backends.torch.einsum(self.equation, *operands)
 
     def __hash__(self):
@@ -129,7 +164,34 @@ def einsum(equation, *operands):
 
 
 @contextlib.contextmanager
-def shared_intermediates():
+def shared_intermediates(debug=False):
     CACHE.clear()
     yield
+
+    if debug:
+        names = {value: 'x{}'.format(i) for i, value in enumerate(CACHE.values())}
+        for value in CACHE.values():
+            if isinstance(value, DeferredTensor):
+                args = '...'
+            elif isinstance(value, Transpose):
+                args = '{}, {}'.format(names[value.a], value.axes)
+            elif isinstance(value, Tensordot):
+                args = '{}, {}, {}'.format(names[value.x], names[value.y], value.axes)
+            elif isinstance(value, Einsum):
+                args = '{}, {}'.format(value.equation, ', '.join(names[o] for o in value.operands))
+            print('{} = {}({})'.format(names[value], type(value).__name__, args))
+
     CACHE.clear()
+
+
+# Work around torch.einsum's limitation to 26 letters
+@_patch('torch.einsum')
+def _einsum(equation, operands):
+
+    # attempt to alpha convert to a-z
+    target = 'abcdefghijklmnopqrstuvwxyz'
+    source = sorted(set(name for name in equation if name not in ',->'))
+    rename = dict(zip(source, target))
+    equation = ''.join(rename.get(x, x) for x in equation)
+
+    return _einsum._pyro_unpatched(equation, operands)

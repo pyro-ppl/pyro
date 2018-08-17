@@ -973,8 +973,7 @@ def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
     ("parallel", 3, False),
     ("parallel", 10, False),
     ("parallel", 20, False),
-    # ("parallel", 22, False),
-    pytest.param("parallel", 30, False, marks=pytest.mark.skip(reason="extremely expensive")),
+    ("parallel", 30, False),
 ])
 def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
     pyro.clear_param_store()
@@ -1029,6 +1028,10 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
         22: {
             "transition_probs": [[4.11979618, -4.11979618], [4.11979618, -4.11979618]],
             "emission_probs": [[8.25, -8.25], [2.75, -2.75]],
+        },
+        30: {
+            "transition_probs": [[5.76771452, -5.76771452], [5.76771452, -5.76771452]],
+            "emission_probs": [[11.25, -11.25], [3.75, -3.75]],
         },
     }
 

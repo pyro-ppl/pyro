@@ -7,7 +7,8 @@ from collections import defaultdict
 import torch
 from torch.distributions.utils import broadcast_all
 
-from pyro.distributions.util import broadcast_shape, is_identically_zero
+from pyro.distributions.util import is_identically_zero
+from pyro.ops._einsum import shared_intermediates
 from pyro.ops.sumproduct import sumproduct
 from pyro.poutine.util import site_is_subsample
 
@@ -234,27 +235,53 @@ class Dice(object):
         :returns: a scalar expected cost
         :rtype: torch.Tensor or float
         """
+        if use_einsum:
+            exp_table = {}
+            factors_table = defaultdict(list)
+            for ordinal in costs:
+                for log_factor in self._get_log_factors(ordinal):
+                    if id(log_factor) not in exp_table:
+                        factor = torch_exp(log_factor)
+                        exp_table[id(log_factor)] = factor
+                        factors_table[ordinal].append(factor)
+
         expected_cost = 0.
-        for ordinal, cost_terms in costs.items():
-            if use_einsum:
-                # FIXME this is qualitatively wrong
-                # TODO handle NANs
-                log_factors = self._get_log_factors(ordinal)
-                factors = [torch_exp(f) for f in log_factors]
+        if use_einsum:
+            with shared_intermediates():
+                for ordinal, cost_terms in costs.items():
+                    factors = factors_table[ordinal]
 
-                # Version 0. (correct but exponential cost)
-                # expected_cost = expected_cost + sumproduct(factors + [sum(cost_terms)])
+                    # Version 0. (correct but exponential cost)
+                    # expected_cost = expected_cost + sumproduct(factors + [sum(cost_terms)])
 
-                # Version 1. (wrong but cheap)
-                # factors.append(sum(cost_terms))
-                # expected_cost = expected_cost + sumproduct(factors)
+                    # Version 1. (wrong but cheap)
+                    # factors.append(sum(cost_terms))
+                    # expected_cost = expected_cost + sumproduct(factors)
 
-                # Version 2. (correct but quadratic cost)
-                target_shape = broadcast_shape(*(c.shape for c in cost_terms))
-                for cost in cost_terms:
-                    cost = cost.expand(target_shape)
-                    expected_cost = expected_cost + sumproduct(factors + [cost])
-            else:
+                    # Version 2. (correct but quadratic cost)
+                    # target_shape = broadcast_shape(*(c.shape for c in cost_terms))
+                    # for cost in cost_terms:
+                    #     cost = cost.expand(target_shape)
+                    #     expected_cost = expected_cost + sumproduct(factors + [cost])
+
+                    # Version 3. (best case linear cost, but does not share in practice)
+                    # for cost in cost_terms:
+                    #     part = sumproduct(factors + [cost], optimize=True,
+                    #                       backend='pyro.ops._einsum')
+                    #     expected_cost = expected_cost + part
+
+                    # Version 4.
+                    for cost in cost_terms:
+                        prob = sumproduct(factors, cost.shape, optimize=True,
+                                          backend='pyro.ops._einsum')
+                        mask = prob > 0
+                        if torch.is_tensor(mask) and not mask.all():
+                            cost, prob, mask = broadcast_all(cost, prob, mask)
+                            prob = prob[mask]
+                            cost = cost[mask]
+                        expected_cost = expected_cost + (prob * cost).sum()
+        else:
+            for ordinal, cost_terms in costs.items():
                 cost = sum(cost_terms)
                 prob = self.in_context(cost.shape, ordinal)
                 mask = prob > 0
