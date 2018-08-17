@@ -13,7 +13,8 @@ from pyro.contrib.oed.eig import (
 
 from models.bayes_linear import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_entropy,
-    bayesian_linear_model, normal_inv_gamma_family_guide
+    bayesian_linear_model, normal_inv_gamma_family_guide, normal_inverse_gamma_linear_model,
+    normal_inverse_gamma_guide
 )
 from dv.neural import T_neural
 
@@ -81,8 +82,13 @@ def vi_for_group_lm(design, w1_sd, w2_sd, num_vi_steps, num_is_samples):
         is_parameters={"num_samples": num_is_samples})
 
 
-def vi_for_lm(design, w_sds, num_vi_steps, num_is_samples):
-    model, guide = zero_mean_unit_obs_sd_lm(w_sds)
+def vi_for_lm(design, w_sds, num_vi_steps, num_is_samples, lr=0.05, known_cov=True):
+    if known_cov:
+        model, guide = zero_mean_unit_obs_sd_lm(w_sds)
+    else:
+        model = normal_inverse_gamma_linear_model(torch.tensor(0.), w_sds, 
+                                                  torch.tensor(5.), torch.tensor(4.))
+        guide = normal_inverse_gamma_guide(w_sds.shape)
     prior_cov = torch.diag(w_sds**2)
     H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov)
     return H_prior - vi_ape(
@@ -91,7 +97,7 @@ def vi_for_lm(design, w_sds, num_vi_steps, num_is_samples):
         observation_labels="y",
         vi_parameters={
             "guide": guide,
-            "optim": optim.Adam({"lr": 0.05}),
+            "optim": optim.Adam({"lr": lr}),
             "loss": TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
             "num_steps": num_vi_steps},
         is_parameters={"num_samples": num_is_samples})
@@ -110,9 +116,21 @@ def lm_true_eig(X_lm, w_sds, obs_sd=torch.tensor(1.)):
     return H_prior - lm_true_ape(X_lm, w_sds, obs_sd)
 
 
-def naive_rainforth_lm(X_lm, w_sds, N, M):
-    model, _ = zero_mean_unit_obs_sd_lm(w_sds)
-    return naive_rainforth(model, X_lm, "y", "w", N=N, M=M)
+def naive_rainforth_lm(X, w_sds, N, M, known_cov=True):
+    if known_cov:
+        model, _ = zero_mean_unit_obs_sd_lm(w_sds)
+    else:
+        model = normal_inverse_gamma_linear_model(torch.tensor(0.), w_sds, 
+                                                  torch.tensor(5.), torch.tensor(4.))
+    return naive_rainforth(model, X, "y", "w", N=N, M=M)
+
+
+def naive_rainforth_group_lm(X, w1_sd, w2_sd, N, M):
+    model = partial(bayesian_linear_model, 
+                    w_means={"w1": torch.tensor(0.), "w2": torch.tensor(0.)},
+                    w_sqrtlambdas={"w1": 1./w1_sd, "w2": 1./w2_sd},
+                    obs_sd=torch.tensor(1.))
+    return naive_rainforth(model, X, "y", "w1", N=N, M=M, M_prime=M)
 
 
 def donsker_varadhan_lm(X, w_sds, n_iter, n_samples, lr, T,
@@ -143,7 +161,18 @@ def donsker_varadhan_lm(X, w_sds, n_iter, n_samples, lr, T,
         return dv_loss
 
 
-@pytest.mark.parametrize("title,arglist", [ 
+@pytest.mark.parametrize("title,arglist", [
+    ("Linear model targeting one parameter",
+     [(X_circle[..., :1], lm_true_eig, [torch.tensor([10.])]),
+      (X_circle, vi_for_group_lm, [torch.tensor([10.]), torch.tensor([2.5]), 5000, 1]),
+      (X_circle, naive_rainforth_group_lm, [torch.tensor([10.]), torch.tensor([2.5]), 200, 200])
+      ]),
+    ("Linear model with designs on S^1",
+     [(X_circle, lm_true_eig, [torch.tensor([10., 2.5])]),
+      (X_circle, vi_for_lm, [torch.tensor([10., 2.5]), 5000, 1, 0.01]),
+      (X_circle, naive_rainforth_lm, [torch.tensor([10., 2.5]), 2000, 2000]),
+      # (X_circle, donsker_varadhan_lm, [torch.tensor([10., 2.5]), 4000, 200, 0.005, T_neural(2, 2)])
+      ]),
     ("A/B test linear model known covariance",
      [(X_lm, lm_true_eig, [torch.tensor([10., 2.5])]),
       (X_lm, vi_for_lm, [torch.tensor([10., 2.5]), 5000, 1]),
@@ -155,16 +184,6 @@ def donsker_varadhan_lm(X, w_sds, n_iter, n_samples, lr, T,
       (X_lm, vi_for_lm, [torch.tensor([10., .1]), 10000, 1]),
       (X_lm, naive_rainforth_lm, [torch.tensor([10., .1]), 2000, 2000]),
       # (X_lm, donsker_varadhan_lm, [torch.tensor([10., .1]), 4000, 200, 0.005, T_neural(2, 2)])
-      ]),
-    ("Linear model with designs on S^1",
-     [(X_circle, lm_true_eig, [torch.tensor([10., 2.5])]),
-      (X_circle, vi_for_lm, [torch.tensor([10., 2.5]), 10000, 1]),
-      (X_circle, naive_rainforth_lm, [torch.tensor([10., 2.5]), 2000, 2000]),
-      # (X_circle, donsker_varadhan_lm, [torch.tensor([10., 2.5]), 4000, 200, 0.005, T_neural(2, 2)])
-      ]),
-    ("Linear model targeting one parameter",
-     [(X_circle[..., :1], lm_true_eig, [torch.tensor([10.])]),
-      (X_circle, vi_for_group_lm, [torch.tensor([10.]), torch.tensor([2.5]), 5000, 1])
       ])
 ])
 def test_eig_and_plot(title, arglist):
@@ -173,7 +192,7 @@ def test_eig_and_plot(title, arglist):
     of axes. Typically, each test within one `arglist` should estimate the same quantity.
     This is repeated for each `arglist`.
     """
-    pyro.set_rng_seed(42)
+    # pyro.set_rng_seed(42)
     ys = []
     names = []
     for design_tensor, estimator, args in arglist:
