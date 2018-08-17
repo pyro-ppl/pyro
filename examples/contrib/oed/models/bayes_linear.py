@@ -1,4 +1,6 @@
 import warnings
+from collections import OrderedDict
+from functools import partial
 import torch
 from torch.nn.functional import softplus
 import numpy as np
@@ -7,7 +9,66 @@ import pyro
 import pyro.distributions as dist
 
 
-def bayesian_linear_model(design, w_means=None, w_sqrtlambdas=None, obs_sd=None,
+def known_covariance_linear_model(coef_mean, coef_sd, observation_sd,
+                                  coef_label="w", observation_label="y"):
+    return partial(bayesian_linear_model, 
+                   w_means={coef_label: coef_mean},
+                   w_sqrtlambdas={coef_label: 1./(observation_sd*coef_sd)},
+                   obs_sd=observation_sd,
+                   response_label=observation_label)
+
+
+def normal_guide(observation_sd, coef_shape, coef_label="w"):
+    return partial(normal_inv_gamma_family_guide, 
+                   obs_sd=observation_sd,
+                   w_sizes={coef_label: coef_shape})
+
+
+def zero_mean_unit_obs_sd_lm(coef_sd):
+    model = known_covariance_linear_model(torch.tensor(0.), coef_sd, torch.tensor(1.))
+    guide = normal_guide(torch.tensor(1.), coef_sd.shape)
+    return model, guide
+
+
+def normal_inverse_gamma_linear_model(coef_mean, coef_sqrtlambda, alpha,
+                                      beta, coef_label="w",
+                                      observation_label="y"):
+    return partial(bayesian_linear_model, 
+                   w_means={coef_label: coef_mean},
+                   w_sqrtlambdas={coef_label: coef_sqrtlambda},
+                   alpha_0=alpha, beta_0=beta,
+                   response_label=observation_label)
+
+
+def normal_inverse_gamma_guide(coef_shape, coef_label="w"):
+    return partial(normal_inv_gamma_family_guide, obs_sd=None, w_sizes={coef_label: coef_shape})
+
+
+def logistic_regression_model(coef_mean, coef_sd, coef_label="w", observation_label="y"):
+    return partial(bayesian_linear_model,
+                   w_means={coef_label: coef_mean},
+                   w_sqrtlambdas={coef_label: 1./coef_sd},
+                   obs_sd=torch.tensor(1.),
+                   response="bernoulli",
+                   response_label=observation_label)
+
+
+def lmer_model(fixed_effects_sd, n_groups, random_effects_alpha, random_effects_beta,
+               fixed_effects_label="w", random_effects_label="u", observation_label="y",
+               response="normal"):
+    return partial(bayesian_linear_model,
+                   w_means={fixed_effects_label: torch.tensor(0.)},
+                   w_sqrtlambdas={fixed_effects_label: 1./fixed_effects_sd},
+                   obs_sd=torch.tensor(1.),
+                   re_group_sizes={random_effects_label: n_groups},
+                   re_alphas={random_effects_label: random_effects_alpha},
+                   re_betas={random_effects_label: random_effects_beta},
+                   response=response,
+                   response_label=observation_label)
+
+
+def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={},
+                          re_alphas={}, re_betas={}, obs_sd=None,
                           alpha_0=None, beta_0=None, response="normal",
                           response_label="y"):
     """
@@ -27,19 +88,30 @@ def bayesian_linear_model(design, w_means=None, w_sqrtlambdas=None, obs_sd=None,
 
         :math:`logit(p) = Xw`
 
-    Given parameter groups in :param:`w_means` and :param:`w_sqrtlambda`, the regression
-    coefficient is taken to be Gaussian with mean `w_mean` and standard deviation
+    Given parameter groups in :param:`w_means` and :param:`w_sqrtlambda`, the fixed effects
+    regression coefficient is taken to be Gaussian with mean `w_mean` and standard deviation
     given by
 
         :math:`\\sigma / \\sqrt{\\lambda}`
 
     corresponding to the normal inverse Gamma family.
 
+    The random effects coefficient is constructed as follows. For each random effect
+    group, standard deviations for that group are sampled from a normal inverse Gamma
+    distribution. For each group, a random effect coefficient is then sampled from a zero 
+    mean Gaussian with those standard deviations.
+
     :param torch.Tensor design: a tensor with last two dimensions `n` and `p`
-        corresponding to observations and features respectively.
-    :param dict w_means: map from variable names to tensors of parameter means.
-    :param dict w_sqrtlambdas: map from variable names to tensors of square root
-        :math:`\\lambda` values.
+            corresponding to observations and features respectively.
+    :param OrderedDict w_means: map from variable names to tensors of fixed effect means.
+    :param OrderedDict w_sqrtlambdas: map from variable names to tensors of square root
+        :math:`\\lambda` values for fixed effects.
+    :param OrderedDict re_group_sizes: map from variable names to int representing the
+        group size
+    :param OrderedDict re_alphas: map from variable names to `torch.Tensor`, the tensor
+        consists of Gamma dist :math:`\\alpha` values
+    :param OrderedDict re_betas: map from variable names to `torch.Tensor`, the tensor
+        consists of Gamma dist :math:`\\beta` values
     :param torch.Tensor obs_sd: the observation standard deviation (if assumed known).
         This is still relevant in the case of Bernoulli observations when coefficeints
         are sampled using `w_sqrtlambdas`.
@@ -67,14 +139,28 @@ def bayesian_linear_model(design, w_means=None, w_sqrtlambdas=None, obs_sd=None,
     # response will be shape batch x n
     obs_sd = obs_sd.expand(tau_shape).unsqueeze(-1)
 
-    # Allow different names for different coefficient groups
+    # Build the regression coefficient
     w = []
-    if w_sqrtlambdas is not None:
-        for name, w_sqrtlambda in w_sqrtlambdas.items():
-            w_mean = w_means[name]
-            # Place a normal prior on the regression coefficient
-            w_prior = dist.Normal(w_mean, obs_sd / w_sqrtlambda).independent(1)
-            w.append(pyro.sample(name, w_prior).unsqueeze(-1))
+    # Allow different names for different coefficient groups
+    # Process fixed effects
+    for name, w_sqrtlambda in w_sqrtlambdas.items():
+        w_mean = w_means[name]
+        # Place a normal prior on the regression coefficient
+        w_prior = dist.Normal(w_mean, obs_sd / w_sqrtlambda).independent(1)
+        w.append(pyro.sample(name, w_prior).unsqueeze(-1))
+    # Process random effects
+    for name, group_size in re_group_sizes.items():
+        # Sample `G` once for this group
+        alpha, beta = re_alphas[name], re_betas[name]
+        group_p = alpha.shape[-1]
+        G_prior = dist.Gamma(alpha.expand(tau_shape + (group_p,)),
+                             beta.expand(tau_shape + (group_p,)))
+        G = 1./torch.sqrt(pyro.sample("G_" + name, G_prior))
+        # Repeat `G` for each group
+        repeat_shape = tuple(1 for _ in tau_shape) + (group_size,)
+        u_prior = dist.Normal(torch.tensor(0.), G.repeat(repeat_shape)).independent(1)
+        w.append(pyro.sample(name, u_prior).unsqueeze(-1))
+    # Regression coefficient `w` is batch x p x 1
     w = torch.cat(w, dim=-2)
 
     # Run the regressor forward conditioned on inputs
@@ -87,8 +173,10 @@ def bayesian_linear_model(design, w_means=None, w_sqrtlambdas=None, obs_sd=None,
     else:
         raise ValueError("Unknown response distribution: '{}'".format(response))
 
+    return model
 
-def normal_inv_gamma_guide(design, obs_sd, w_sizes):
+
+def normal_inv_gamma_family_guide(design, obs_sd, w_sizes):
     """Normal inverse Gamma family guide.
 
     If `obs_sd` is known, this is a two-parameter family with separate parameters
@@ -100,6 +188,12 @@ def normal_inv_gamma_guide(design, obs_sd, w_sizes):
     `tau` is sampled from a Gamma distribution with parameters `alpha`, `beta`
     (separate for each batch). We let `obs_sd = 1./torch.sqrt(tau)` and then
     proceed as above.
+
+    :param torch.Tensor design: a tensor with last two dimensions `n` and `p`
+        corresponding to observations and features respectively.
+    :param torch.Tensor obs_sd: observation standard deviation, or `None` to use
+        inverse Gamma
+    :param OrderedDict w_sizes: map from variable names to torch.Size
     """
     # design is size batch x n x p
     # tau is size batch
@@ -125,74 +219,6 @@ def normal_inv_gamma_guide(design, obs_sd, w_sizes):
         # guide distributions for w
         w_dist = dist.Normal(mw_param, obs_sd / sqrtlambda_param).independent(1)
         pyro.sample(name, w_dist)
-
-
-# Some wrapper functions for common models
-def zero_mean_unit_obs_sd_lm(prior_sds, intercept_sd=None):
-    def model(design):
-        if intercept_sd is not None:
-            design = cache_constant(design)
-            return bayesian_linear_model(design,
-                                         w_means={"w": torch.tensor(0.),
-                                                  "b": torch.tensor(0.)},
-                                         w_sqrtlambdas={"w": 1./prior_sds,
-                                                        "b": 1./intercept_sd.unsqueeze(-1)},
-                                         obs_sd=torch.tensor(1.))
-        else:
-            return bayesian_linear_model(design,
-                                         w_means={"w": torch.tensor(0.)},
-                                         w_sqrtlambdas={"w": 1./prior_sds},
-                                         obs_sd=torch.tensor(1.))
-
-    # @lru_cache(10)
-    def cache_constant(design):
-        return torch.cat(design, torch.tensor(1.).expand(design.shape[:-1]+(1,)))
-
-    def guide(design):
-        if intercept_sd is not None:
-            return normal_inv_gamma_guide(design,
-                                          w_sizes={"w": prior_sds.shape,
-                                                   "b": (1,)},
-                                          obs_sd=torch.tensor(1.))
-        else:
-            return normal_inv_gamma_guide(design,
-                                          w_sizes={"w": prior_sds.shape},
-                                          obs_sd=torch.tensor(1.))
-
-    return model, guide
-
-
-def zero_mean_normal_inv_gamma(alpha, beta, prior_sds):
-    def model(design):
-        return bayesian_linear_model(design,
-                                     w_means={"w": torch.tensor(0.)},
-                                     w_sqrtlambdas={"w": 1/prior_sds},
-                                     alpha_0=alpha,
-                                     beta_0=beta)
-
-    def guide(design):
-        return normal_inv_gamma_guide(design,
-                                      w_sizes={"w": prior_sds.shape})
-
-    return model, guide
-
-
-def two_group_bernoulli(global_sds, local_sds):
-    def model(design):
-        return bayesian_linear_model(design,
-                                     w_means={"w_global": torch.tensor(0.),
-                                              "w_local": torch.tensor(0.)},
-                                     w_sqrtlambdas={"w_global": 1/global_sds,
-                                                    "w_local": 1/local_sds},
-                                     obs_sd=torch.tensor(1.),
-                                     response="bernoulli")
-
-    def guide(design):
-        return normal_inv_gamma_guide(design, None,
-                                      w_sizes={"w_global": global_sds.shape,
-                                               "w_local": local_sds.shape})
-
-    return model, guide
 
 
 def group_assignment_matrix(design):

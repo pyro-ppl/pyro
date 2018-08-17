@@ -9,7 +9,7 @@ from pyro.contrib.autoguide import mean_field_guide_entropy
 
 
 def vi_ape(model, design, observation_labels, vi_parameters, is_parameters,
-           y_dist=None):
+           y_dist=None, target_labels=None):
     """Estimates the average posterior entropy (APE) loss function using
     variational inference (VI).
 
@@ -40,6 +40,9 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters,
         of samples to draw from the marginal.
     :param pyro.distributions.Distribution y_dist: (optional) the distribution
         assumed for the response variable :math:`Y`
+    :param list target_labels: A subset of the sample sites over which the posterior
+        entropy is to be measured. If `None` is passed, the posterior over all
+        non-observation sites is included in the APE.
     :return: Loss function estimate
     :rtype: `torch.Tensor`
 
@@ -47,6 +50,8 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters,
 
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
+    if target_labels is not None and isinstance(target_labels, str):
+        target_labels = [target_labels]
 
     def posterior_entropy(y_dist, design):
         # Important that y_dist is sampled *within* the function
@@ -55,7 +60,7 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters,
         conditioned_model = pyro.condition(model, data=y_dict)
         SVI(conditioned_model, **vi_parameters).run(design)
         # Recover the entropy
-        return mean_field_guide_entropy(vi_parameters["guide"], design)  # TODO specify inference labels pattern here
+        return mean_field_guide_entropy(vi_parameters["guide"], design, whitelist=target_labels)
 
     if y_dist is None:
         y_dist = EmpiricalMarginal(Importance(model, **is_parameters).run(design),
@@ -68,8 +73,8 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters,
     return loss
 
 
-def naive_rainforth(model, design, observation_label="y", target_labels="theta",
-                    N=100, M=10):
+def naive_rainforth(model, design, observation_labels="y", target_labels=None,
+                    N=100, M=10, M_prime=10):
     """
     Naive Rainforth (i.e. Nested Monte Carlo) estimate of the expected information
     gain (EIG). The estimate is
@@ -80,29 +85,55 @@ def naive_rainforth(model, design, observation_label="y", target_labels="theta",
 
     Caution: the target labels must encompass all other variables in the model: no
     Monte Carlo estimation is attempted for the :math:`\\log p(y | \\theta, d)` term.
+
+    :param function model:
+    :param torch.Tensor design:
+    :param list observation_labels:
+    :param list target_labels:
+    :param int N:
+    :param int M:
+    :param int M_prime:
+    :return: EIG estimate
+    :rtype: `torch.Tensor`
     """
 
-    if isinstance(target_labels, str):
+    if isinstance(observation_labels, str):
+        observation_labels = [observation_labels]
+    if target_labels is not None and isinstance(target_labels, str):
         target_labels = [target_labels]
 
     # Take N samples of the model
     expanded_design = design.expand((N,) + design.shape)
     trace = poutine.trace(model).get_trace(expanded_design)
     trace.compute_log_prob()
-    y = trace.nodes[observation_label]["value"]
-    conditional_lp = trace.nodes[observation_label]["log_prob"]
+    y_dict = {l: trace.nodes[l]["value"].unsqueeze(0) for l in observation_labels}
+    
+    if target_labels is not None:
+        theta_dict = {l: trace.nodes[l]["value"].expand((M_prime,) + trace.nodes[l]["value"].shape)
+                         for l in target_labels}
+        theta_dict.update(y_dict)
+        # Resample M values of u and compute conditional probabilities
+        conditional_model = pyro.condition(model, data=theta_dict)
+        # Not acceptable to use (M_prime, 1) here - other variables may occur after
+        # theta, so need to be sampled conditional upon it
+        reexpanded_design = design.expand((M_prime, N) + design.shape)
+        trace = poutine.trace(conditional_model).get_trace(reexpanded_design)
+        trace.compute_log_prob()
+        conditional_lp = logsumexp(sum(trace.nodes[l]["log_prob"] for l in observation_labels), 0) \
+                         - np.log(M_prime)
+    else:
+        # This assumes that y are independent conditional on theta
+        # Furthermore assume that there are no other variables besides theta
+        conditional_lp = sum(trace.nodes[l]["log_prob"] for l in observation_labels)
 
-    # Take M independent samples of theta
+    # Resample M values of theta and compute conditional probabilities
+    conditional_model = pyro.condition(model, data=y_dict)
+    # Using (M, 1) instead of (M, N) - acceptable to re-use thetas between ys because
+    # theta comes before y in graphical model
     reexpanded_design = design.expand((M, 1) + design.shape)
-    reexp_trace = poutine.trace(model).get_trace(reexpanded_design)
-    data = {l: reexp_trace.nodes[l]["value"] for l in target_labels}
-    data.update({observation_label: y.unsqueeze(0)})
-
-    # Condition on response and new thetas
-    conditional_model = pyro.condition(model, data=data)
     trace = poutine.trace(conditional_model).get_trace(reexpanded_design)
     trace.compute_log_prob()
-    marginal_lp = logsumexp(trace.nodes[observation_label]["log_prob"], 0) - np.log(M)
+    marginal_lp = logsumexp(sum(trace.nodes[l]["log_prob"] for l in observation_labels), 0) - np.log(M)
 
     return (conditional_lp - marginal_lp).sum(0)/N
 

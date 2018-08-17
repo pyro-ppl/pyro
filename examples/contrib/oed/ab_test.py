@@ -81,14 +81,14 @@ def true_ape(ns):
 
 def main(num_vi_steps, num_acquisitions, num_bo_steps):
 
-    pyro.set_rng_seed(0)
+    pyro.set_rng_seed(42)
     pyro.clear_param_store()
 
     est_ape = partial(estimated_ape, num_vi_steps=num_vi_steps)
     est_ape.__doc__ = "Estimated APE by VI"
 
     estimators = [true_ape, est_ape]
-    noises = [0.0001, 0.1]
+    noises = [0.0001, 0.25]
 
     for f, noise in zip(estimators, noises):
         X = torch.tensor([25., 75.])
