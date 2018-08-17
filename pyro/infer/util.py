@@ -250,27 +250,6 @@ class Dice(object):
             with shared_intermediates():
                 for ordinal, cost_terms in costs.items():
                     factors = factors_table[ordinal]
-
-                    # Version 0. (correct but exponential cost)
-                    # expected_cost = expected_cost + sumproduct(factors + [sum(cost_terms)])
-
-                    # Version 1. (wrong but cheap)
-                    # factors.append(sum(cost_terms))
-                    # expected_cost = expected_cost + sumproduct(factors)
-
-                    # Version 2. (correct but quadratic cost)
-                    # target_shape = broadcast_shape(*(c.shape for c in cost_terms))
-                    # for cost in cost_terms:
-                    #     cost = cost.expand(target_shape)
-                    #     expected_cost = expected_cost + sumproduct(factors + [cost])
-
-                    # Version 3. (best case linear cost, but does not share in practice)
-                    # for cost in cost_terms:
-                    #     part = sumproduct(factors + [cost], optimize=True,
-                    #                       backend='pyro.ops._einsum')
-                    #     expected_cost = expected_cost + part
-
-                    # Version 4.
                     for cost in cost_terms:
                         prob = sumproduct(factors, cost.shape, optimize=True,
                                           backend='pyro.ops._einsum')
