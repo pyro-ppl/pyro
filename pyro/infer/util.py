@@ -5,6 +5,7 @@ import numbers
 from collections import defaultdict
 
 import torch
+from six.moves import reduce
 from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.util import is_identically_zero

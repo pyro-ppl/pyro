@@ -17,7 +17,7 @@ def _product(factors):
 
 
 def zip_align_right(xs, ys):
-    return reversed(zip(reversed(xs), reversed(ys)))
+    return reversed(list(zip(reversed(xs), reversed(ys))))
 
 
 def sumproduct(factors, target_shape=(), optimize=True, backend='torch'):
