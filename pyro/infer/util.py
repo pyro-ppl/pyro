@@ -8,7 +8,7 @@ import torch
 from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.util import is_identically_zero
-from pyro.ops._einsum import shared_intermediates
+from pyro.ops.einsum.deferred import shared_intermediates
 from pyro.ops.sumproduct import sumproduct
 from pyro.poutine.util import site_is_subsample
 
@@ -299,7 +299,7 @@ class Dice(object):
             for ordinal, cost_terms in costs.items():
                 factors = factors_table.get(ordinal, [])
                 for cost in cost_terms:
-                    prob = sumproduct(factors, cost.shape, backend='pyro.ops._einsum')
+                    prob = sumproduct(factors, cost.shape, backend='pyro.ops.einsum.deferred')
                     mask = prob > 0
                     if torch.is_tensor(mask) and not mask.all():
                         cost, prob, mask = broadcast_all(cost, prob, mask)

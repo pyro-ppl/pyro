@@ -6,7 +6,7 @@ import opt_einsum
 import torch
 
 from pyro.distributions.util import broadcast_shape
-from pyro.ops._einsum import deferred_tensor
+from pyro.ops.einsum.deferred import deferred_tensor
 
 
 def _product(factors):
@@ -75,8 +75,8 @@ def naive_sumproduct(factors, target_shape):
 
 def opt_sumproduct(factors, target_shape, backend='torch'):
     assert all(isinstance(t, torch.Tensor) for t in factors)
-    assert backend in ['torch', 'pyro.ops._einsum'], backend
-    if backend == 'pyro.ops._einsum':
+    assert backend in ['torch', 'pyro.ops.einsum.deferred'], backend
+    if backend == 'pyro.ops.einsum.deferred':
         factors = [deferred_tensor(t) for t in factors]
 
     num_symbols = len(target_shape)
@@ -101,7 +101,7 @@ def opt_sumproduct(factors, target_shape, backend='torch'):
     expr = '{}->{}'.format(','.join(''.join(names) for names in packed_names),
                            ''.join(target_names))
     packed_result = opt_einsum.contract(expr, *packed_factors, backend=backend)
-    if backend == 'pyro.ops._einsum':
+    if backend == 'pyro.ops.einsum.deferred':
         packed_result = packed_result.eval()
 
     # Unpack result.

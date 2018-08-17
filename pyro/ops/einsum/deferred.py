@@ -44,7 +44,7 @@ def contract(equation, *operands, **kwargs):
     Like :func:`opt_einsum.contract` but adds debugging metadata.
     """
     # add debugging metadata
-    if kwargs.get('backend', 'torch') == 'pyro.ops._einsum':
+    if kwargs.get('backend', 'torch') == 'pyro.ops.einsum.deferred':
         inputs, output = equation.split('->')
         inputs = inputs.split(',')
         for dims, d in zip(inputs, operands):
