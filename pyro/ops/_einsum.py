@@ -80,9 +80,9 @@ class Deferred(object):
     def __eq__(self, other):
         return self is other
 
-    def eval(self):
+    def eval(self, backend='torch'):
         if self._value is None:
-            self._eval()
+            self._eval(backend)
             assert self._value.shape == self.shape
         return self._value
 
@@ -128,9 +128,10 @@ class Transpose(Deferred):
         if a._dims is not None:
             self._dims = ''.join(a._dims[i] for i in axes)
 
-    def _eval(self):
+    def _eval(self, backend):
         a = self._a.eval()
-        self._value = opt_einsum.backends.torch.transpose(a, self._axes)
+        transpose = opt_einsum.backends.dispatch.get_func('transpose', backend)
+        self._value = transpose(a, self._axes)
 
     def __hash__(self):
         return hash((self._a, self._axes))
@@ -164,15 +165,16 @@ class Tensordot(Deferred):
             self._dims = ''.join([s for i, s in enumerate(x._dims) if i not in axes[0]] +
                                  [s for i, s in enumerate(y._dims) if i not in axes[1]])
 
-    def _eval(self):
-        x = self._x.eval()
-        y = self._y.eval()
+    def _eval(self, backend):
+        x = self._x.eval(backend)
+        y = self._y.eval(backend)
 
         # This workaround can be deleted after this issue is fixed in release:
         # https://github.com/pytorch/pytorch/issues/7763
         x, y = x.clone(), y.clone()
 
-        self._value = opt_einsum.backends.torch.tensordot(x, y, self._axes)
+        tensordot = opt_einsum.backends.dispatch.get_func('tensordot', backend)
+        self._value = tensordot(x, y, self._axes)
 
     def __hash__(self):
         return hash((self._x, self._y, self._axes))
@@ -211,14 +213,15 @@ class Einsum(Deferred):
         if all(d._dims is not None for d in operands):
             self._dims = output
 
-    def _eval(self):
-        operands = [d.eval() for d in self._operands]
+    def _eval(self, backend):
+        operands = [d.eval(backend) for d in self._operands]
 
         # This workaround can be deleted after this issue is fixed in release:
         # https://github.com/pytorch/pytorch/issues/7763
         operands = [d.clone() for d in operands]
 
-        self._value = opt_einsum.backends.torch.einsum(self._equation, *operands)
+        einsum = opt_einsum.backends.dispatch.get_func('einsum', backend)
+        self._value = einsum(self._equation, *operands)
 
     def __hash__(self):
         return hash((self._equation, self._operands))
