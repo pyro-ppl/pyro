@@ -99,7 +99,7 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
         :param int num_acquisitions: the number of points to generate
         :param dict opt_params: additional parameters for optimization
             routines
-        :return: a tensor of points to evaluate `self.f` at
+        :return: a tensor of points to evaluate `loss` at
         :rtype: torch.Tensor
         """
 
@@ -113,8 +113,13 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
 
         return X
 
-    def get_step(self, loss, params):
+    def get_step(self, loss, params, verbose=False):
         X = self.acquisition_func(num_acquisitions=self.num_acquisitions)
         y = loss(X)
+        if verbose:
+            print("Acquire at: X")
+            print(X)
+            print("y")
+            print(y)
         self.update_posterior(X, y)
         return self.opt_differentiable(lambda x: self.gpmodel(x)[0])
