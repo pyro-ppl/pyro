@@ -13,7 +13,7 @@ from pyro.contrib.oed.eig import (
 from models.bayes_linear import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_entropy
 )
-from dv.neural import T_neural
+from dv.neural import T_neural, T_specialized
 from ba.guide import Ba_lm_guide
 
 PLOT = True
@@ -110,8 +110,6 @@ def barber_agakov_lm(X, w_sds, n_iter, n_samples, lr, guide,
         params = [pyro.param(name).unconstrained()
                   for name in pyro.get_param_store().get_all_param_names()]
         opt(params)
-        print(ba_loss)
-    print(params)
     _, ba_loss = ba_loss_fn(final_X, final_n_samples)
     if return_history:
         return torch.stack(history), ba_loss
@@ -160,51 +158,36 @@ def time_eig(design_tensor, estimator, *args):
     return y
 
 
-@pytest.mark.parametrize("design,w_sds,dv_params", [
-     (X_small, torch.tensor([10., 2.5]), {"n_iter": 2000, "n_samples": 2000, "lr": 0.0005, "T": T_neural(2, 2),
-                                          "final_n_samples": 10000}),
+@pytest.mark.parametrize("design,estimator,true,w_sds,dv_params", [
+     (X_small, donsker_varadhan_lm, lm_true_eig, 
+      torch.tensor([10., 2.5]), 
+      {"n_iter": 400, "n_samples": 40, "lr": 0.05,
+       "T": T_specialized(), "final_n_samples": 10000}),
+     (X_small, barber_agakov_lm, lm_true_ape,
+      torch.tensor([10., 2.5]), 
+      {"n_iter": 400, "n_samples": 10, "lr": 0.05,
+       "guide": Ba_lm_guide(torch.tensor([10., 2.5])).guide,
+       "final_n_samples": 1000})
 ])
-def test_dv_lm_convergence(design, w_sds, dv_params):
+def test_convergence(design, estimator, true, w_sds, dv_params):
     """
-    Produces a convergence plot for a Donsker-Varadhan EIG estimation.
+    Produces a convergence plot for a Barber-Agakov or Donsker-Varadhan
+    EIG estimation.
     """
+    t = time.time()
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
-    truth = lm_true_eig(design, w_sds)
-    dv, final = donsker_varadhan_lm(design, w_sds, return_history=True, **dv_params)
+    truth = true(design, w_sds)
+    dv, final = estimator(design, w_sds, return_history=True, **dv_params)
     x = np.arange(0, dv.shape[0])
-    print("Final est", final, "Truth", truth)
+    print(estimator.__name__)
+    print("Final est", final, "Truth", truth, "Error", (final - truth).abs().sum())
+    print("Time", time.time() - t)
 
     if PLOT:
         import matplotlib.pyplot as plt
         plt.figure(figsize=(12, 8))
         plt.plot(x, torch.nn.ReLU()(dv.detach()).numpy())
-
-        for true, col in zip(torch.unbind(truth, 0), plt.rcParams['axes.prop_cycle'].by_key()['color']):
-            plt.axhline(true.numpy(), color=col)
-        plt.show()
-
-
-@pytest.mark.parametrize("design,w_sds,ba_params", [
-     (X_small, torch.tensor([10., 2.5]), {"n_iter": 400, "n_samples": 10, "lr": 0.05, 
-                                          "guide": Ba_lm_guide(torch.tensor([10., 2.5])).guide,
-                                          "final_n_samples": 1000}),
-])
-def test_ba_lm_convergence(design, w_sds, ba_params):
-    """
-    Produces a convergence plot for a Barber-Agakov APE estimation.
-    """
-    pyro.set_rng_seed(42)
-    pyro.clear_param_store()
-    truth = lm_true_ape(design, w_sds)
-    ba, final = barber_agakov_lm(design, w_sds, return_history=True, **ba_params)
-    x = np.arange(0, ba.shape[0])
-    print("Final est", final, "Truth", truth)
-
-    if PLOT:
-        import matplotlib.pyplot as plt
-        plt.figure(figsize=(12, 8))
-        plt.plot(x, torch.nn.ReLU()(ba.detach()).numpy())
 
         for true, col in zip(torch.unbind(truth, 0), plt.rcParams['axes.prop_cycle'].by_key()['color']):
             plt.axhline(true.numpy(), color=col)
