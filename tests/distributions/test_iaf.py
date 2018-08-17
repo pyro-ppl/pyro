@@ -71,21 +71,21 @@ class AutoRegressiveNNTests(TestCase):
     def setUp(self):
         self.epsilon = 1.0e-3
 
-    def _test_jacobian(self, input_dim, hidden_dim, multiplier):
+    def _test_jacobian(self, input_dim, hidden_dim, param_dim):
         jacobian = torch.zeros(input_dim, input_dim)
-        arn = AutoRegressiveNN(input_dim, [hidden_dim], param_dims=[1])
+        arn = AutoRegressiveNN(input_dim, [hidden_dim], param_dims=[param_dim])
 
         def nonzero(x):
             return torch.sign(torch.abs(x))
 
-        for output_index in range(multiplier):
+        for output_index in range(param_dim):
             for j in range(input_dim):
                 for k in range(input_dim):
                     x = torch.randn(1, input_dim)
                     epsilon_vector = torch.zeros(1, input_dim)
                     epsilon_vector[0, j] = self.epsilon
                     delta = (arn(x + 0.5 * epsilon_vector) - arn(x - 0.5 * epsilon_vector)) / self.epsilon
-                    jacobian[j, k] = float(delta[0, k + output_index * input_dim])
+                    jacobian[j, k] = float(delta[0, output_index, k])
 
             permutation = arn.get_permutation()
             permuted_jacobian = jacobian.clone()

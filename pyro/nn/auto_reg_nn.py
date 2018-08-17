@@ -148,7 +148,8 @@ class AutoRegressiveNN(nn.Module):
         self.input_dim = input_dim
         self.hidden_dims = hidden_dims
         self.param_dims = param_dims
-        self.count_params = sum(param_dims)
+        self.count_params = len(param_dims)
+        self.output_multiplier = sum(param_dims)
         self.all_ones = (torch.tensor(param_dims) == 1).all().item()
 
         # Calculate the indices on the output corresponding to each parameter
@@ -170,20 +171,19 @@ class AutoRegressiveNN(nn.Module):
             self.permutation = permutation.type(dtype=torch.int64)
 
         # Create masks
-        output_dim_multiplier = self.count_params
         self.masks, self.mask_skip = create_mask(
             input_dim=input_dim, observed_dim=0, hidden_dims=hidden_dims, permutation=self.permutation,
-            output_dim_multiplier=output_dim_multiplier)
+            output_dim_multiplier=self.output_multiplier)
 
         # Create masked layers
         layers = [MaskedLinear(input_dim, hidden_dims[0], self.masks[0])]
         for i in range(1, len(hidden_dims)):
             layers.append(MaskedLinear(hidden_dims[i - 1], hidden_dims[i], self.masks[i]))
-        layers.append(MaskedLinear(hidden_dims[-1], input_dim * output_dim_multiplier, self.masks[-1]))
+        layers.append(MaskedLinear(hidden_dims[-1], input_dim * self.output_multiplier, self.masks[-1]))
         self.layers = nn.ModuleList(layers)
 
         if skip_connections:
-            self.skip_layer = MaskedLinear(input_dim, input_dim * output_dim_multiplier, self.mask_skip, bias=False)
+            self.skip_layer = MaskedLinear(input_dim, input_dim * self.output_multiplier, self.mask_skip, bias=False)
         else:
             self.skip_layer = None
 
@@ -209,13 +209,16 @@ class AutoRegressiveNN(nn.Module):
             h = h + self.skip_layer(x)
 
         # Shape the output, squeezing the parameter dimension if all ones
-        if self.count_params == 1:
+        if self.output_multiplier == 1:
             return h
         else:
-            h = h.reshape(list(x.size()[:-1]) + [self.count_params, self.input_dim])
+            h = h.reshape(list(x.size()[:-1]) + [self.output_multiplier, self.input_dim])
 
             # Squeeze dimension if all parameters are one dimensional
-            if self.all_ones:
+            if self.count_params == 1:
+                return h
+
+            elif self.all_ones:
                 return h.unbind(dim=-2)
 
             # If not all ones, then probably don't want to squeeze a single dimension parameter
