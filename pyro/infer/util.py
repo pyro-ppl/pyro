@@ -128,6 +128,13 @@ class MultiFrameTensor(dict):
             '({}, ...)'.format(frames) for frames in self]))
 
 
+def deduplicate_by_shape(tensors, combine=lambda a, b: a + b):
+    grouped = defaultdict(list)
+    for tensor in tensors:
+        grouped[getattr(tensor, 'shape', None)].append(tensor)
+    return [reduce(combine, parts) for parts in grouped.values()]
+
+
 class Dice(object):
     """
     An implementation of the DiCE operator compatible with Pyro features.
@@ -236,37 +243,49 @@ class Dice(object):
         :rtype: torch.Tensor or float
         """
         if use_einsum:
-            exp_table = {}
-            factors_table = defaultdict(list)
-            for ordinal in costs:
-                for log_factor in self._get_log_factors(ordinal):
-                    if id(log_factor) not in exp_table:
-                        factor = torch_exp(log_factor)
-                        exp_table[id(log_factor)] = factor
-                        factors_table[ordinal].append(factor)
+            return self._opt_compute_expectation(costs)
+        else:
+            return self._naive_compute_expectation(costs)
+
+    def _naive_compute_expectation(self, costs):
+        expected_cost = 0.
+        for ordinal, cost_terms in costs.items():
+            cost = sum(cost_terms)
+            prob = self.in_context(cost.shape, ordinal)
+            mask = prob > 0
+            if torch.is_tensor(mask) and not mask.all():
+                cost, prob, mask = broadcast_all(cost, prob, mask)
+                prob = prob[mask]
+                cost = cost[mask]
+            expected_cost = expected_cost + (prob * cost).sum()
+        return expected_cost
+
+    def _opt_compute_expectation(self, costs):
+        exp_table = {}
+        factors_table = defaultdict(list)
+        for ordinal in costs:
+            for log_factor in self._get_log_factors(ordinal):
+                if id(log_factor) not in exp_table:
+                    factor = torch_exp(log_factor)
+                    exp_table[id(log_factor)] = factor
+                    factors_table[ordinal].append(factor)
+
+        costs = {ordinal: deduplicate_by_shape(group)
+                 for ordinals, group in costs.items()}
+        factors_table = {ordinal: deduplicate_by_shape(group, combine=lambda a, b: a * b)
+                         for ordinals, group in factors_table.items()}
 
         expected_cost = 0.
-        if use_einsum:
-            with shared_intermediates():
-                for ordinal, cost_terms in costs.items():
-                    factors = factors_table[ordinal]
-                    for cost in cost_terms:
-                        prob = sumproduct(factors, cost.shape, optimize=True,
-                                          backend='pyro.ops._einsum')
-                        mask = prob > 0
-                        if torch.is_tensor(mask) and not mask.all():
-                            cost, prob, mask = broadcast_all(cost, prob, mask)
-                            prob = prob[mask]
-                            cost = cost[mask]
-                        expected_cost = expected_cost + (prob * cost).sum()
-        else:
+        with shared_intermediates():
             for ordinal, cost_terms in costs.items():
-                cost = sum(cost_terms)
-                prob = self.in_context(cost.shape, ordinal)
-                mask = prob > 0
-                if torch.is_tensor(mask) and not mask.all():
-                    cost, prob, mask = broadcast_all(cost, prob, mask)
-                    prob = prob[mask]
-                    cost = cost[mask]
-                expected_cost = expected_cost + (prob * cost).sum()
+                factors = factors_table.get(ordinal, [])
+                for cost in cost_terms:
+                    prob = sumproduct(factors, cost.shape, optimize=True,
+                                      backend='pyro.ops._einsum')
+                    mask = prob > 0
+                    if torch.is_tensor(mask) and not mask.all():
+                        cost, prob, mask = broadcast_all(cost, prob, mask)
+                        prob = prob[mask]
+                        cost = cost[mask]
+                    expected_cost = expected_cost + (prob * cost).sum()
         return expected_cost
