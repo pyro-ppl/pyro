@@ -8,7 +8,7 @@ import pyro
 from pyro import optim
 from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import (
-    vi_ape, naive_rainforth, donsker_varadhan_loss
+    vi_ape, naive_rainforth, donsker_varadhan_loss, barber_agakov_loss
 )
 
 from models.bayes_linear import (
@@ -17,6 +17,7 @@ from models.bayes_linear import (
     normal_inverse_gamma_guide
 )
 from dv.neural import T_neural
+from ba.guide import Ba_lm_guide
 
 PLOT = True
 
@@ -258,6 +259,32 @@ def test_dv_lm_convergence(design, w_sds, dv_params):
         import matplotlib.pyplot as plt
         plt.figure(figsize=(12, 8))
         plt.plot(x, torch.nn.ReLU()(dv.detach()).numpy())
+
+        for true, col in zip(torch.unbind(truth, 0), plt.rcParams['axes.prop_cycle'].by_key()['color']):
+            plt.axhline(true.numpy(), color=col)
+        plt.show()
+
+
+@pytest.mark.parametrize("design,w_sds,ba_params", [
+     (X_small, torch.tensor([10., 2.5]), {"n_iter": 400, "n_samples": 10, "lr": 0.05, 
+                                          "guide": Ba_lm_guide(torch.tensor([10., 2.5])).guide,
+                                          "final_n_samples": 1000}),
+])
+def test_ba_lm_convergence(design, w_sds, ba_params):
+    """
+    Produces a convergence plot for a Barber-Agakov APE estimation.
+    """
+    pyro.set_rng_seed(42)
+    pyro.clear_param_store()
+    truth = lm_true_ape(design, w_sds)
+    ba, final = barber_agakov_lm(design, w_sds, return_history=True, **ba_params)
+    x = np.arange(0, ba.shape[0])
+    print("Final est", final, "Truth", truth)
+
+    if PLOT:
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(12, 8))
+        plt.plot(x, torch.nn.ReLU()(ba.detach()).numpy())
 
         for true, col in zip(torch.unbind(truth, 0), plt.rcParams['axes.prop_cycle'].by_key()['color']):
             plt.axhline(true.numpy(), color=col)

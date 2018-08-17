@@ -193,6 +193,34 @@ def donsker_varadhan_loss(model, observation_label, T):
     return loss_fn
 
 
+def barber_agakov_loss(model, guide, observation_labels="y", target_labels="w"):
+
+    if isinstance(observation_labels, str):
+        observation_labels = [observation_labels]
+    if isinstance(target_labels, str):
+        target_labels = [target_labels]
+
+    def loss_fn(design, num_particles):
+
+        expanded_design = design.expand((num_particles,) + design.shape)
+
+        # Sample from p(y, theta | d)
+        trace = poutine.trace(model).get_trace(expanded_design)
+        y_dict = {l: trace.nodes[l]["value"] for l in observation_labels}
+        theta_dict = {l: trace.nodes[l]["value"] for l in target_labels}
+
+        # Run through q(theta | y, d)
+        conditional_guide = pyro.condition(guide, data=theta_dict)
+        cond_trace = poutine.trace(conditional_guide).get_trace(y_dict, expanded_design)
+        cond_trace.compute_log_prob()
+
+        loss = -sum(cond_trace.nodes[l]["log_prob"] for l in target_labels).sum(0)/num_particles
+        agg_loss = loss.sum()
+        return agg_loss, loss
+
+    return loss_fn
+
+
 def logsumexp(inputs, dim=None, keepdim=False):
     """Numerically stable logsumexp.
 
