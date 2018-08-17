@@ -103,24 +103,21 @@ class AutoRegressiveNN(nn.Module):
     An implementation of a MADE-like auto-regressive neural network.
 
     Example usage:
-    >>> arn = AutoRegressiveNN(10, [50], count_params=3)
     >>> x = torch.randn(100, 10)
-    >>> a, b, c = arn(x)  # 3 parameters of size (100, 10)
-    >>> arn = AutoRegressiveNN(10, [50], count_params=2, param_dim=15)
-    >>> m, s = arn(x) # 2 parameters of size(100, 15, 10)
-
-    Reference:
-    MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]
-    Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle
+    >>> arn = AutoRegressiveNN(10, [50], param_dims=[1])
+    >>> p = arn(x)  # 1 parameters of size (100, 10)
+    >>> arn = AutoRegressiveNN(10, [50], param_dims=[1, 1])
+    >>> m, s = arn(x) # 2 parameters of size (100, 10)
+    >>> arn = AutoRegressiveNN(10, [50], param_dims=[1, 5, 3])
+    >>> a, b, c = arn(x) # 3 parameters of sizes, (100, 1, 10), (100, 5, 10), (100, 3, 10)
 
     :param input_dim: the dimensionality of the input
     :type input_dim: int
     :param hidden_dims: the dimensionality of the hidden units per layer
     :type hidden_dims: list[int]
-    :param count_params: number of parameters to return from a forward call of the network.
-    :type count_params: int
-    :param param_dim: the dimensionality of each parameter
-    :type param_dim: int
+    :param param_dims: shape the output into parameters of dimension (p_n, input_dim) for p_n in param_dims
+        when p_n > 1 and dimension (input_dim) when p_n == 1
+    :type param_dims: list[int]
     :param permutation: an optional permutation that is applied to the inputs and controls the order of the
         autoregressive factorization. in particular for the identity permutation the autoregressive structure
         is such that the Jacobian is upper triangular. By default this is chosen at random.
@@ -129,14 +126,19 @@ class AutoRegressiveNN(nn.Module):
     :type skip_connections: bool
     :param nonlinearity: The nonlinearity to use in the feedforward network.
     :type nonlinearity: torch.nn.module
+
+    Reference:
+
+    MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]
+    Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle
+
     """
 
     def __init__(
             self,
             input_dim,
             hidden_dims,
-            count_params=2,
-            param_dim=1,
+            param_dims=[1, 1],
             permutation=None,
             skip_connections=False,
             nonlinearity=nn.ReLU()):
@@ -145,8 +147,14 @@ class AutoRegressiveNN(nn.Module):
             warnings.warn('AutoRegressiveNN input_dim = 1. Consider using an affine transformation instead.')
         self.input_dim = input_dim
         self.hidden_dims = hidden_dims
-        self.count_params = count_params
-        self.param_dim = param_dim
+        self.param_dims = param_dims
+        self.count_params = sum(param_dims)
+        self.all_ones = (torch.tensor(param_dims) == 1).all().item()
+
+        # Calculate the indices on the output corresponding to each parameter
+        ends = torch.cumsum(torch.tensor(param_dims), dim=0)
+        starts = torch.cat((torch.zeros(1).type_as(ends), ends[:-1]))
+        self.param_slices = [slice(s.item(), e.item()) for s, e in zip(starts, ends)]
 
         # Hidden dimension must be not less than the input otherwise it isn't
         # possible to connect to the outputs correctly
@@ -162,7 +170,7 @@ class AutoRegressiveNN(nn.Module):
             self.permutation = permutation.type(dtype=torch.int64)
 
         # Create masks
-        output_dim_multiplier = count_params * param_dim
+        output_dim_multiplier = self.count_params
         self.masks, self.mask_skip = create_mask(
             input_dim=input_dim, observed_dim=0, hidden_dims=hidden_dims, permutation=self.permutation,
             output_dim_multiplier=output_dim_multiplier)
@@ -200,17 +208,16 @@ class AutoRegressiveNN(nn.Module):
         if self.skip_layer is not None:
             h = h + self.skip_layer(x)
 
-        # Shape the output into self.count_params of dimension self.param_dim*self.input_dim
+        # Shape the output, squeezing the parameter dimension if all ones
         if self.count_params == 1:
             return h
         else:
-            params = [h[..., (i * self.param_dim * self.input_dim):((i + 1) * self.param_dim * self.input_dim)]
-                      for i in range(self.count_params)]
-            if self.param_dim > 1:
-                # NOTE: Better way to do this?
-                if len(x.size()) > 1:
-                    params = [p.reshape(-1, self.param_dim, self.input_dim) for p in params]
-                else:
-                    params = [p.reshape(self.param_dim, self.input_dim) for p in params]
+            h = h.reshape(list(x.size()[:-1]) + [self.count_params, self.input_dim])
 
-            return tuple(params)
+            # Squeeze dimension if all parameters are one dimensional
+            if self.all_ones:
+                return h.unbind(dim=-2)
+
+            # If not all ones, then probably don't want to squeeze a single dimension parameter
+            else:
+                return tuple([h[..., s, :] for s in self.param_slices])
