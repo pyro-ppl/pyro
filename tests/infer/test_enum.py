@@ -1037,12 +1037,11 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
         },
     }
 
+    if num_steps not in expected_grads:
+        return
     for name, value in pyro.get_param_store().named_parameters():
         actual = value.grad
-        try:
-            expected = torch.tensor(expected_grads[num_steps][name])
-        except KeyError:
-            continue
+        expected = torch.tensor(expected_grads[num_steps][name])
         assert_equal(actual, expected, msg=''.join([
             '\nexpected {}.grad = {}'.format(name, expected.cpu().numpy()),
             '\n  actual {}.grad = {}'.format(name, actual.detach().cpu().numpy()),

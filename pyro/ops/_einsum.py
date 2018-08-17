@@ -187,7 +187,7 @@ def einsum(equation, *operands):
 @contextlib.contextmanager
 def shared_intermediates(debug=False):
     CACHE.clear()
-    yield
+    yield CACHE
 
     if debug:
         names = {value: 'x{}'.format(i) for i, value in enumerate(CACHE.values())}

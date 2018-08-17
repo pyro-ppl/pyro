@@ -261,6 +261,7 @@ class Dice(object):
         return expected_cost
 
     def _opt_compute_expectation(self, costs):
+        # precompute exponentials to be shared across calls to sumproduct
         exp_table = {}
         factors_table = defaultdict(list)
         for ordinal in costs:
@@ -281,8 +282,7 @@ class Dice(object):
             for ordinal, cost_terms in costs.items():
                 factors = factors_table.get(ordinal, [])
                 for cost in cost_terms:
-                    prob = sumproduct(factors, cost.shape, optimize=True,
-                                      backend='pyro.ops._einsum')
+                    prob = sumproduct(factors, cost.shape, backend='pyro.ops._einsum')
                     mask = prob > 0
                     if torch.is_tensor(mask) and not mask.all():
                         cost, prob, mask = broadcast_all(cost, prob, mask)

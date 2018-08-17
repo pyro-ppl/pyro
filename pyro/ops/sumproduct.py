@@ -94,22 +94,15 @@ def opt_sumproduct(factors, target_shape, backend='torch'):
             name
             for name, size in zip_align_right(symbols, factor.shape)
             if size != 1])
-        # packed_factors.append(factor.squeeze().clone())  # FIXME remove this clone
         packed_factors.append(factor.squeeze())
         assert len(packed_factors[-1].shape) == len(packed_names[-1])
 
     # Contract packed tensors.
     expr = '{}->{}'.format(','.join(''.join(names) for names in packed_names),
                            ''.join(target_names))
-
     packed_result = opt_einsum.contract(expr, *packed_factors, backend=backend)
     if backend == 'pyro.ops._einsum':
         packed_result = packed_result.eval()
 
     # Unpack result.
-    result = packed_result
-    for dim in range(-1, -1 - len(target_shape), -1):
-        if target_shape[dim] == 1:
-            result = result.unsqueeze(dim)
-    assert result.shape == target_shape
-    return result
+    return packed_result.reshape(target_shape)
