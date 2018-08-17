@@ -85,12 +85,19 @@ def vi_for_group_lm(design, w1_sd, w2_sd, num_vi_steps, num_is_samples):
 def vi_for_lm(design, w_sds, num_vi_steps, num_is_samples, lr=0.05, known_cov=True):
     if known_cov:
         model, guide = zero_mean_unit_obs_sd_lm(w_sds)
+        prior_cov = torch.diag(w_sds**2)
+        H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov)
     else:
+        alpha = torch.tensor(5.)
+        beta = torch.tensor(4.)
         model = normal_inverse_gamma_linear_model(torch.tensor(0.), w_sds, 
-                                                  torch.tensor(5.), torch.tensor(4.))
+                                                  alpha, beta)
         guide = normal_inverse_gamma_guide(w_sds.shape)
-    prior_cov = torch.diag(w_sds**2)
-    H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov)
+        prior_cov = torch.diag(w_sds**2)
+        H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov) + torch.digamma(alpha) \
+                  - 2*torch.log(beta) + alpha + torch.lgamma(alpha) \
+                  + (1. - alpha)*torch.digamma(alpha)
+    
     return H_prior - vi_ape(
         model,
         design,
@@ -122,7 +129,7 @@ def naive_rainforth_lm(X, w_sds, N, M, known_cov=True):
     else:
         model = normal_inverse_gamma_linear_model(torch.tensor(0.), w_sds, 
                                                   torch.tensor(5.), torch.tensor(4.))
-    return naive_rainforth(model, X, "y", "w", N=N, M=M)
+    return naive_rainforth(model, X, "y", None, N=N, M=M)
 
 
 def naive_rainforth_group_lm(X, w1_sd, w2_sd, N, M):
@@ -162,6 +169,11 @@ def donsker_varadhan_lm(X, w_sds, n_iter, n_samples, lr, T,
 
 
 @pytest.mark.parametrize("title,arglist", [
+    ("A/B testing with unknown covariance",
+      # Warning! Guide is not mean-field
+     [(X_lm, vi_for_lm, [torch.tensor([10, 2.5]), 5000, 10, 0.05, False]),
+      (X_lm, naive_rainforth_lm, [torch.tensor([10., 2.5]), 2000, 2000, False])
+      ]),
     ("Linear model targeting one parameter",
      [(X_circle[..., :1], lm_true_eig, [torch.tensor([10.])]),
       (X_circle, vi_for_group_lm, [torch.tensor([10.]), torch.tensor([2.5]), 5000, 1]),
