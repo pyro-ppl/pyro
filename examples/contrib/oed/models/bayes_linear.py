@@ -205,7 +205,7 @@ def group_assignment_matrix(design):
     :rtype: torch.tensor
 
     """
-    n, p = int(torch.sum(design)), int(design.size()[0])
+    n, p = int(torch.sum(design)), int(design.shape[0])
     X = torch.zeros(n, p)
     t = 0
     for col, i in enumerate(design):
