@@ -9,6 +9,21 @@ import opt_einsum
 from pyro.distributions.torch_patch import _patch
 
 CACHE = OrderedDict()
+ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
+
+
+def alpha_canonicalize(equation):
+    """
+    Attempt to alpha convert to an equation to the letters a-z,
+    in an order-independent canonical way.
+    """
+    rename = OrderedDict()
+    for name in equation:
+        if name in ',->':
+            continue
+        if name not in rename:
+            rename[name] = ALPHABET[len(rename)]
+    return ''.join(rename.get(x, x) for x in equation)
 
 
 class Deferred(object):
@@ -126,7 +141,7 @@ class Einsum(Deferred):
     def __init__(self, equation, operands):
         assert all(isinstance(d, Deferred) for d in operands)
         self.equation = equation
-        self.operands = operands
+        self.operands = tuple(operands)
         inputs, output = equation.split('->')
         inputs = inputs.split(',')
         assert len(inputs) == len(operands)
@@ -152,9 +167,15 @@ class Einsum(Deferred):
 
 
 def einsum(equation, *operands):
-    operands = tuple(operands)
+    # compute a canonical hash, modulo commutativity
+    inputs, output = equation.split('->')
+    inputs = inputs.split(',')
+    canonical = sorted(zip(inputs, operands), key=lambda x: id(x[1]))
+    canonical_inputs = ','.join(input_ for input_, _ in canonical)
+    canonical_equation = alpha_canonicalize('{}->{}'.format(canonical_inputs, output))
+    canonical_operands = tuple(d for _, d in canonical)
 
-    key = 'einsum', equation, operands
+    key = 'einsum', canonical_equation, canonical_operands
     if key in CACHE:
         return CACHE[key]
 
@@ -187,11 +208,5 @@ def shared_intermediates(debug=False):
 # Work around torch.einsum's limitation to 26 letters
 @_patch('torch.einsum')
 def _einsum(equation, operands):
-
-    # attempt to alpha convert to a-z
-    target = 'abcdefghijklmnopqrstuvwxyz'
-    source = sorted(set(name for name in equation if name not in ',->'))
-    rename = dict(zip(source, target))
-    equation = ''.join(rename.get(x, x) for x in equation)
-
+    equation = alpha_canonicalize(equation)
     return _einsum._pyro_unpatched(equation, operands)

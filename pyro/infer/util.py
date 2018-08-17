@@ -270,6 +270,7 @@ class Dice(object):
                     exp_table[id(log_factor)] = factor
                     factors_table[ordinal].append(factor)
 
+        # deduplicate by shape to increase sharing
         costs = {ordinal: deduplicate_by_shape(group)
                  for ordinals, group in costs.items()}
         factors_table = {ordinal: deduplicate_by_shape(group, combine=lambda a, b: a * b)

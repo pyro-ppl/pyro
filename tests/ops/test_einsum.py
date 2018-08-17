@@ -29,7 +29,37 @@ def test_deferred_backend():
     assert_equal(actual, expected)
 
 
-def test_sharing():
+def test_complete_sharing():
+    x = torch.randn(5, 4)
+    y = torch.randn(4, 3)
+    z = torch.randn(3, 2)
+
+    print('-' * 40)
+    print('Without sharing:')
+    with shared_intermediates():
+        x_ = deferred_tensor(x)
+        y_ = deferred_tensor(y)
+        z_ = deferred_tensor(z)
+        opt_einsum.contract('ab,bc,cd->', x_, y_, z_, backend='pyro.ops._einsum')
+        expected = len(pyro.ops._einsum.CACHE)
+
+    print('-' * 40)
+    print('With sharing:')
+    with shared_intermediates():
+        x_ = deferred_tensor(x)
+        y_ = deferred_tensor(y)
+        z_ = deferred_tensor(z)
+        opt_einsum.contract('ab,bc,cd->', x_, y_, z_, backend='pyro.ops._einsum')
+        opt_einsum.contract('ab,bc,cd->', x_, y_, z_, backend='pyro.ops._einsum')
+        actual = len(pyro.ops._einsum.CACHE)
+
+    print('-' * 40)
+    print('Without sharing: {} expressions'.format(expected))
+    print('With sharing: {} expressions'.format(actual))
+    assert actual == expected
+
+
+def test_partial_sharing():
     x = torch.randn(5, 4)
     y = torch.randn(4, 3)
     z1 = torch.randn(3, 2)

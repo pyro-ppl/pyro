@@ -974,6 +974,8 @@ def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
     ("parallel", 10, False),
     ("parallel", 20, False),
     ("parallel", 30, False),
+    ("parallel", 40, False),
+    ("parallel", 50, False),
 ])
 def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
     pyro.clear_param_store()
@@ -1037,7 +1039,10 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
 
     for name, value in pyro.get_param_store().named_parameters():
         actual = value.grad
-        expected = torch.tensor(expected_grads[num_steps][name])
+        try:
+            expected = torch.tensor(expected_grads[num_steps][name])
+        except KeyError:
+            continue
         assert_equal(actual, expected, msg=''.join([
             '\nexpected {}.grad = {}'.format(name, expected.cpu().numpy()),
             '\n  actual {}.grad = {}'.format(name, actual.detach().cpu().numpy()),
