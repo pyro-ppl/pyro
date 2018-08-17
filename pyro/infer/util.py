@@ -178,6 +178,7 @@ class Dice(object):
                 log_prob = log_prob - log_prob.detach()
             log_probs[ordinal].append(log_prob)
 
+        self.has_iaranges = any(ordinal for ordinal in ordering.values())
         self.log_denom = log_denom
         self.log_probs = log_probs
         self._log_factors_cache = {}
@@ -227,9 +228,23 @@ class Dice(object):
         except KeyError:
             pass
 
-        log_factors = self._get_log_factors(ordinal)
-        factors = [torch_exp(f) for f in log_factors]
-        dice_prob = sumproduct(factors, shape)
+        # TODO replace this naive sum-product computation with message passing.
+        log_prob = sum(self._get_log_factors(ordinal))
+        if isinstance(log_prob, numbers.Number):
+            dice_prob = math.exp(log_prob)
+        else:
+            dice_prob = log_prob.exp()
+            while dice_prob.dim() > len(shape):
+                dice_prob = dice_prob.sum(0)
+            while dice_prob.dim() < len(shape):
+                dice_prob = dice_prob.unsqueeze(0)
+            for dim, (dice_size, target_size) in enumerate(zip(dice_prob.shape, shape)):
+                if dice_size > target_size:
+                    dice_prob = dice_prob.sum(dim, True)
+        # Note that the following cheaper version appears to be broken:
+        # log_factors = self._get_log_factors(ordinal)
+        # factors = [torch_exp(f) for f in log_factors]
+        # dice_prob = sumproduct(factors, shape)
 
         self._prob_cache[shape, ordinal] = dice_prob
         return dice_prob
@@ -242,7 +257,8 @@ class Dice(object):
         :returns: a scalar expected cost
         :rtype: torch.Tensor or float
         """
-        if use_einsum:
+        # einsum is currently incompatible with iarange
+        if use_einsum and not self.has_iaranges:
             return self._opt_compute_expectation(costs)
         else:
             return self._naive_compute_expectation(costs)
@@ -277,8 +293,9 @@ class Dice(object):
         factors_table = {ordinal: deduplicate_by_shape(group, combine=lambda a, b: a * b)
                          for ordinals, group in factors_table.items()}
 
-        expected_cost = 0.
+        # share computation across all cost terms
         with shared_intermediates():
+            expected_cost = 0.
             for ordinal, cost_terms in costs.items():
                 factors = factors_table.get(ordinal, [])
                 for cost in cost_terms:
