@@ -169,6 +169,11 @@ def donsker_varadhan_lm(X, w_sds, n_iter, n_samples, lr, T,
 
 
 @pytest.mark.parametrize("title,arglist", [
+    # ("A/B testing with unknown covariance targeting regression coefficient only",
+    #   # Warning! Guide is not mean-field
+    #  [(X_lm, vi_for_lm, [torch.tensor([10, 2.5]), 5000, 10, 0.05, False]),
+    #   (X_lm, naive_rainforth_lm, [torch.tensor([10., 2.5]), 2000, 2000, False])
+    #   ]),
     ("A/B testing with unknown covariance",
       # Warning! Guide is not mean-field
      [(X_lm, vi_for_lm, [torch.tensor([10, 2.5]), 5000, 10, 0.05, False]),
