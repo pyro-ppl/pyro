@@ -136,11 +136,10 @@ class EnumTraceProbEvaluator(object):
         """
         Aggregate the `log_prob` terms using depth first search.
         """
-        with shared_intermediates():
-            if not self._children[ordinal]:
-                return self._reduce(ordinal)
-            agg_log_prob = sum(map(self._aggregate_log_probs, self._children[ordinal]))
-            return self._reduce(ordinal, agg_log_prob)
+        if not self._children[ordinal]:
+            return self._reduce(ordinal)
+        agg_log_prob = sum(map(self._aggregate_log_probs, self._children[ordinal]))
+        return self._reduce(ordinal, agg_log_prob)
 
     def log_prob(self, model_trace):
         """
@@ -149,7 +148,8 @@ class EnumTraceProbEvaluator(object):
 
         :return: log pdf of the trace.
         """
-        if not self.has_enumerable_sites:
-            return model_trace.log_prob_sum()
-        self._compute_log_prob_terms(model_trace)
-        return self._aggregate_log_probs(ordinal=frozenset()).sum()
+        with shared_intermediates():
+            if not self.has_enumerable_sites:
+                return model_trace.log_prob_sum()
+            self._compute_log_prob_terms(model_trace)
+            return self._aggregate_log_probs(ordinal=frozenset()).sum()
