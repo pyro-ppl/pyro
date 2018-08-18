@@ -49,7 +49,7 @@ def contract(equation, *operands, **kwargs):
         return result_._value
 
     if backend == 'pyro.ops.einsum.shared' and not _CURRENT_BACKEND:
-        raise ValueError('sharing backend is available only via shared_intermediates')
+        raise ValueError('shared backend is available only via shared_intermediates')
 
     return opt_einsum.contract(equation, *operands, backend=backend, **kwargs)
 
@@ -81,18 +81,6 @@ class _Shared(object):
     def __eq__(self, other):
         return self is other
 
-    def squeeze(self):
-        key = 'squeeze', self
-
-        cache = _SHARING_STACK[-1]
-        if key in cache:
-            return cache[key]
-
-        result = _Shared(self._value.squeeze())
-
-        cache[key] = result
-        return result
-
 
 def _shared(tensor):
     key = '_shared', id(tensor)
@@ -115,9 +103,8 @@ def transpose(a, axes):
     if key in cache:
         return cache[key]
 
-    a = a._value
     transpose = opt_einsum.backends.dispatch.get_func('transpose', _CURRENT_BACKEND[0])
-    result = _Shared(transpose(a, axes))
+    result = _Shared(transpose(a._value, axes))
 
     cache[key] = result
     return result
@@ -133,15 +120,8 @@ def tensordot(x, y, axes=2):
     if key in cache:
         return cache[key]
 
-    x = x._value
-    y = y._value
-
-    # This workaround can be deleted after this issue is fixed in release:
-    # https://github.com/pytorch/pytorch/issues/7763
-    x, y = x.clone(), y.clone()
-
     tensordot = opt_einsum.backends.dispatch.get_func('tensordot', _CURRENT_BACKEND[0])
-    result = _Shared(tensordot(x, y, axes))
+    result = _Shared(tensordot(x._value, y._value, axes))
 
     cache[key] = result
     return result
@@ -161,21 +141,20 @@ def einsum(equation, *operands):
     if key in cache:
         return cache[key]
 
-    operands = [t._value for t in operands]
-
-    # This workaround can be deleted after this issue is fixed in release:
-    # https://github.com/pytorch/pytorch/issues/7763
-    operands = [t.clone() for t in operands]
-
     einsum = opt_einsum.backends.dispatch.get_func('einsum', _CURRENT_BACKEND[0])
-    result = _Shared(einsum(equation, *operands))
+    result = _Shared(einsum(equation, *(t._value for t in operands)))
 
     cache[key] = result
     return result
 
 
-# Work around torch.einsum's limitation to 26 letters
 @_patch('torch.einsum')
 def _einsum(equation, operands):
+    # Work around torch.einsum's limitation to 26 letters.
     equation = _alpha_canonicalize(equation)
+
+    # This workaround can be deleted after this issue is fixed in release:
+    # https://github.com/pytorch/pytorch/issues/7763
+    operands = [t.clone() for t in operands]
+
     return _einsum._pyro_unpatched(equation, operands)
