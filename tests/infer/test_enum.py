@@ -11,7 +11,7 @@ from torch.distributions import constraints, kl_divergence
 
 import pyro
 import pyro.distributions as dist
-import pyro.ops.einsum.deferred
+import pyro.ops.einsum.shared
 import pyro.optim
 import pyro.poutine as poutine
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
@@ -1243,7 +1243,7 @@ def test_elbo_hmm_in_guide_growth():
         start_time = timeit.default_timer()
         elbo.loss_and_grads(model, guide, data)
         times.append(timeit.default_timer() - start_time)
-        costs.append(pyro.ops.einsum.deferred.LAST_CACHE_SIZE[0])
+        costs.append(pyro.ops.einsum.shared.LAST_CACHE_SIZE[0])
     print('Growth:')
     print('sizes = {}'.format(repr(sizes)))
     print('costs = {}'.format(repr(costs)))

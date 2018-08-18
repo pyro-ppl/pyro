@@ -4,11 +4,11 @@ import opt_einsum
 import pytest
 import torch
 
-from pyro.ops.einsum.deferred import Deferred, contract, deferred_tensor, shared_intermediates
+from pyro.ops.einsum import contract, shared_intermediates
 from tests.common import assert_equal
 
 
-def test_deferred_backend():
+def test_shared_backend():
     w = torch.randn(2, 3, 4)
     x = torch.randn(3, 4, 5)
     y = torch.randn(4, 5, 6)
@@ -16,16 +16,9 @@ def test_deferred_backend():
     expr = 'abc,bcd,cde,def->af'
 
     expected = contract(expr, w, x, y, z, backend='torch')
-
     with shared_intermediates():
-        w_ = deferred_tensor(w)
-        x_ = deferred_tensor(x)
-        y_ = deferred_tensor(y)
-        z_ = deferred_tensor(z)
-        actual_ = contract(expr, w_, x_, y_, z_, backend='pyro.ops.einsum.deferred')
+        actual = contract(expr, w, x, y, z, backend='torch')
 
-    assert isinstance(actual_, Deferred)
-    actual = actual_.eval()
     assert_equal(actual, expected)
 
 
@@ -37,20 +30,14 @@ def test_complete_sharing():
     print('-' * 40)
     print('Without sharing:')
     with shared_intermediates() as cache:
-        x_ = deferred_tensor(x)
-        y_ = deferred_tensor(y)
-        z_ = deferred_tensor(z)
-        contract('ab,bc,cd->', x_, y_, z_, backend='pyro.ops.einsum.deferred')
+        contract('ab,bc,cd->', x, y, z, backend='torch')
         expected = len(cache)
 
     print('-' * 40)
     print('With sharing:')
     with shared_intermediates() as cache:
-        x_ = deferred_tensor(x)
-        y_ = deferred_tensor(y)
-        z_ = deferred_tensor(z)
-        contract('ab,bc,cd->', x_, y_, z_, backend='pyro.ops.einsum.deferred')
-        contract('ab,bc,cd->', x_, y_, z_, backend='pyro.ops.einsum.deferred')
+        contract('ab,bc,cd->', x, y, z, backend='torch')
+        contract('ab,bc,cd->', x, y, z, backend='torch')
         actual = len(cache)
 
     print('-' * 40)
@@ -69,28 +56,18 @@ def test_partial_sharing():
     print('Without sharing:')
     num_exprs_nosharing = 0
     with shared_intermediates() as cache:
-        x_ = deferred_tensor(x)
-        y_ = deferred_tensor(y)
-        z1_ = deferred_tensor(z1)
-        contract('ab,bc,cd->', x_, y_, z1_, backend='pyro.ops.einsum.deferred')
-        num_exprs_nosharing += len(cache) - 3  # ignore deferred_tensor
+        contract('ab,bc,cd->', x, y, z1, backend='torch')
+        num_exprs_nosharing += len(cache) - 3  # ignore shared_tensor
     with shared_intermediates() as cache:
-        x_ = deferred_tensor(x)
-        y_ = deferred_tensor(y)
-        z2_ = deferred_tensor(z1)
-        contract('ab,bc,cd->', x_, y_, z2_, backend='pyro.ops.einsum.deferred')
-        num_exprs_nosharing += len(cache) - 3  # ignore deferred_tensor
+        contract('ab,bc,cd->', x, y, z2, backend='torch')
+        num_exprs_nosharing += len(cache) - 3  # ignore shared_tensor
 
     print('-' * 40)
     print('With sharing:')
     with shared_intermediates() as cache:
-        x_ = deferred_tensor(x)
-        y_ = deferred_tensor(y)
-        z1_ = deferred_tensor(z1)
-        z2_ = deferred_tensor(z2)
-        contract('ab,bc,cd->', x_, y_, z1_, backend='pyro.ops.einsum.deferred')
-        contract('ab,bc,cd->', x_, y_, z2_, backend='pyro.ops.einsum.deferred')
-        num_exprs_sharing = len(cache) - 4  # ignore deferred_tensor
+        contract('ab,bc,cd->', x, y, z1, backend='torch')
+        contract('ab,bc,cd->', x, y, z2, backend='torch')
+        num_exprs_sharing = len(cache) - 4  # ignore shared_tensor
 
     print('-' * 40)
     print('Without sharing: {} expressions'.format(num_exprs_nosharing))
@@ -99,8 +76,7 @@ def test_partial_sharing():
 
 
 def compute_cost(cache):
-    return sum(1 for v in cache.values()
-               if type(v).__name__ in ('Einsum', 'Tensordot'))
+    return sum(1 for key in cache.keys() if key[0] in ('einsum', 'tensordot'))
 
 
 @pytest.mark.parametrize('size', [3, 4, 5])
@@ -110,15 +86,14 @@ def test_chain(size):
     names = [alphabet[i:i+2] for i in range(size)]
     inputs = ','.join(names)
 
-    with shared_intermediates(debug=True):
+    with shared_intermediates():
         print(inputs)
         for i in range(size + 1):
             target = alphabet[i]
             equation = '{}->{}'.format(inputs, target)
-            xs_ = [deferred_tensor(x) for x in xs]
-            path_info = opt_einsum.contract_path(equation, *xs_)
+            path_info = opt_einsum.contract_path(equation, *xs)
             print(path_info[1])
-            contract(equation, *xs_, backend='pyro.ops.einsum.deferred')
+            contract(equation, *xs, backend='torch')
         print('-' * 40)
 
 
@@ -129,15 +104,14 @@ def test_chain_2(size):
     names = [alphabet[i:i+2] for i in range(size)]
     inputs = ','.join(names)
 
-    with shared_intermediates(debug=True):
+    with shared_intermediates():
         print(inputs)
         for i in range(size):
             target = alphabet[i:i+2]
             equation = '{}->{}'.format(inputs, target)
-            xs_ = [deferred_tensor(x) for x in xs]
-            path_info = opt_einsum.contract_path(equation, *xs_)
+            path_info = opt_einsum.contract_path(equation, *xs)
             print(path_info[1])
-            contract(equation, *xs_, backend='pyro.ops.einsum.deferred')
+            contract(equation, *xs, backend='torch')
         print('-' * 40)
 
 
@@ -154,8 +128,7 @@ def test_chain_2_growth():
             for i in range(size):
                 target = alphabet[i:i+2]
                 equation = '{}->{}'.format(inputs, target)
-                xs_ = [deferred_tensor(x) for x in xs]
-                contract(equation, *xs_, backend='pyro.ops.einsum.deferred')
+                contract(equation, *xs, backend='torch')
             costs.append(compute_cost(cache))
 
     print('sizes = {}'.format(repr(sizes)))
@@ -176,8 +149,7 @@ def test_chain_sharing(size):
         with shared_intermediates() as cache:
             target = alphabet[i]
             equation = '{}->{}'.format(inputs, target)
-            xs_ = [deferred_tensor(x) for x in xs]
-            contract(equation, *xs_, backend='pyro.ops.einsum.deferred')
+            contract(equation, *xs, backend='torch')
             num_exprs_nosharing += compute_cost(cache)
 
     with shared_intermediates() as cache:
@@ -185,10 +157,9 @@ def test_chain_sharing(size):
         for i in range(size + 1):
             target = alphabet[i]
             equation = '{}->{}'.format(inputs, target)
-            xs_ = [deferred_tensor(x) for x in xs]
-            path_info = opt_einsum.contract_path(equation, *xs_)
+            path_info = opt_einsum.contract_path(equation, *xs)
             print(path_info[1])
-            contract(equation, *xs_, backend='pyro.ops.einsum.deferred')
+            contract(equation, *xs, backend='torch')
         num_exprs_sharing = compute_cost(cache)
 
     print('-' * 40)
