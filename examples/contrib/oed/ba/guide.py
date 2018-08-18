@@ -7,24 +7,23 @@ import pyro.distributions as dist
 
 class Ba_lm_guide(nn.Module):
 
-    def __init__(self, w_sds, obs_sd=torch.tensor(1.)):
+    def __init__(self, coef_shape):
         super(Ba_lm_guide, self).__init__()
-        self.obs_sd = obs_sd
-        self.w_sizes = w_sds.shape
-        self.w_sds = w_sds
-        self.regu = nn.Parameter(torch.tensor([10., 10.]))
-        self.sds = nn.Parameter(torch.tensor([[10., 10.], [10., 10.]]))
+        self.regu = nn.Parameter(10.*torch.ones(coef_shape[-1]))
+        self.sds = nn.Parameter(10.*torch.ones(coef_shape))
 
     def forward(self, y, design):
-        prior_var = self.w_sds**2
-
-        design_suff = design.sum(-2, keepdim=True)
-        suff = torch.matmul(y.unsqueeze(-2), design)
-        mu = (suff/(design_suff + self.regu)).squeeze(-2)
+        # design_suff = design.sum(-2, keepdim=True)
+        # suff = torch.matmul(y.unsqueeze(-2), design)
+        xtxi = tensorized_2_by_2_matrix_inverse(torch.matmul(design.transpose(-1, -2), design) + torch.diag(self.regu))
+        mu = torch.matmul(xtxi, torch.matmul(design.transpose(-1, -2), y.unsqueeze(-1))).squeeze(-1)
+        # mu = (suff/(design_suff + self.regu)).squeeze(-2)
 
         return mu, self.sds
 
-    def guide(self, y_dict, design):
+    def guide(self, y_dict, design, observation_labels, target_labels):
+
+        target_label = target_labels[0]
 
         pyro.module("ba_guide", self)
 
@@ -34,15 +33,21 @@ class Ba_lm_guide(nn.Module):
         tau_shape = design.shape[:-2]
 
         # response will be shape batch x n
-        obs_sd = self.obs_sd.expand(tau_shape).unsqueeze(-1)
 
-        w_shape = tau_shape + self.w_sizes
         # Set up mu and lambda
         mu, sigma = self.forward(y, design)
-        # print('y', y)
-        # print('mu', mu)
-        # print('sigma', sigma)
         
         # guide distributions for w
         w_dist = dist.Normal(mu, sigma).independent(1)
-        w = pyro.sample("w", w_dist)
+        w = pyro.sample(target_label, w_dist)
+
+
+def tensorized_2_by_2_matrix_inverse(M):
+    det = M[..., 0, 0]*M[..., 1, 1] - M[..., 1, 0]*M[..., 0, 1]
+    inv = torch.zeros(M.shape)
+    inv[..., 0, 0] = M[..., 1, 1]
+    inv[..., 1, 1] = M[..., 0, 0]
+    inv[..., 0, 1] = -M[..., 0, 1]
+    inv[..., 1, 0] = -M[..., 1, 0]
+    inv = inv/det.unsqueeze(-1).unsqueeze(-1)
+    return inv

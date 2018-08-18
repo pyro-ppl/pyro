@@ -30,12 +30,12 @@ class T_neural(nn.Module):
 
 
 class T_specialized(nn.Module):
-    def __init__(self):
+    def __init__(self, coef_shape):
         super(T_specialized, self).__init__()
         self.obs_sd = torch.tensor(1.)
         self.w_sizes = (2,)
-        self.regu = nn.Parameter(torch.tensor([10., 10.]))
-        self.sds = nn.Parameter(torch.tensor([[10., 10.], [10., 10.]]))
+        self.regu = nn.Parameter(10.*torch.ones(coef_shape[-1]))
+        self.sds = nn.Parameter(10.*torch.ones(coef_shape))
 
     def forward(self, design, trace, observation_labels, target_labels):
         # TODO fix this
@@ -53,14 +53,14 @@ class T_specialized(nn.Module):
         sigma = self.sds
 
         conditional_guide = pyro.condition(self.guide, data=theta_dict)
-        cond_trace = poutine.trace(conditional_guide).get_trace(design, mu, sigma)
+        cond_trace = poutine.trace(conditional_guide).get_trace(design, mu, sigma, target_label)
         cond_trace.compute_log_prob()
 
         posterior_lp = cond_trace.nodes[target_label]["log_prob"]
 
         return posterior_lp - prior_lp
 
-    def guide(self, design, mu, sigma):
+    def guide(self, design, mu, sigma, target_label):
 
         # pyro.module("ba_guide", self)
 
@@ -75,4 +75,4 @@ class T_specialized(nn.Module):
         
         # guide distributions for w
         w_dist = dist.Normal(mu, sigma).independent(1)
-        w = pyro.sample("w", w_dist)
+        w = pyro.sample(target_label, w_dist)
