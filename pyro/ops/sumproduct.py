@@ -4,6 +4,7 @@ import operator
 from numbers import Number
 
 import torch
+from six.moves import reduce
 
 import opt_einsum
 from pyro.distributions.util import broadcast_shape
