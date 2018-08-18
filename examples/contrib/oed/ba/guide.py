@@ -41,6 +41,56 @@ class Ba_lm_guide(nn.Module):
         w = pyro.sample(target_label, w_dist)
 
 
+class Ba_nig_guide(nn.Module):
+
+    def __init__(self, regu_shape, scale_tril_shape, tau_shape, w_sizes, mf=False):
+        super(Ba_nig_guide, self).__init__()
+        self.regu = nn.Parameter(-2.*torch.ones(regu_shape))
+        self.scale_tril = nn.Parameter(10.*torch.ones(scale_tril_shape))
+        self.alpha = nn.Parameter(100.*torch.ones(tau_shape))
+        self.b0 = nn.Parameter(100.*torch.ones(tau_shape))
+        self.w_sizes = w_sizes
+        self.mf = mf
+        self.softplus = nn.Softplus()
+
+    def forward(self, y, design, target_label):
+
+        # TODO fix this
+        design = design[..., :self.w_sizes[target_label]]
+
+        anneal = torch.diag(self.softplus(self.regu))
+        xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
+        xtxi = tensorized_matrix_inverse(xtx)
+        mu = torch.matmul(xtxi, torch.matmul(design.transpose(-1, -2), y.unsqueeze(-1))).squeeze(-1)
+
+        scale_tril = tensorized_tril(self.scale_tril)
+
+        yty = torch.matmul(y.unsqueeze(-2), y.unsqueeze(-1)).squeeze(-1).squeeze(-1)
+        xtymu = torch.matmul(y.unsqueeze(-2), design).matmul(mu.unsqueeze(-1)).squeeze(-1).squeeze(-1)
+        beta = self.b0 + .5*(yty - xtymu)
+
+        return mu, scale_tril, self.alpha, beta
+
+    def guide(self, y_dict, design, observation_labels, target_labels):
+
+        target_label = target_labels[0]
+        pyro.module("ba_guide", self)
+
+        y = y_dict["y"]
+        mu, scale_tril, alpha, beta = self.forward(y, design, target_label)
+
+        tau_dist = dist.Gamma(alpha, beta)
+        tau = pyro.sample("tau", tau_dist)
+        obs_sd = 1./tau.sqrt().unsqueeze(-1).unsqueeze(-1)
+
+        # guide distributions for w
+        if self.mf:
+            w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril)
+        else:
+            w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril*obs_sd)
+        w = pyro.sample(target_label, w_dist)
+
+
 def tensorized_matrix_inverse(M):
     if M.shape[-1] == 1:
         return 1./M
