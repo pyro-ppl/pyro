@@ -8,8 +8,8 @@ from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.contrib.autoguide import mean_field_guide_entropy
 
 
-def vi_ape(model, design, observation_labels, vi_parameters, is_parameters,
-           y_dist=None, target_labels=None):
+def vi_ape(model, design, observation_labels, target_labels,
+           vi_parameters, is_parameters, y_dist=None, ):
     """Estimates the average posterior entropy (APE) loss function using
     variational inference (VI).
 
@@ -31,6 +31,9 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters,
         present in `model`. These sites are regarded as future observations
         and other sites are regarded as latent variables over which a
         posterior is to be inferred.
+    :param list target_labels: A subset of the sample sites over which the posterior
+        entropy is to be measured. If `None` is passed, the posterior over all
+        non-observation sites is included in the APE.
     :param dict vi_parameters: Variational inference parameters which should include:
         `optim`: an instance of :class:`pyro.Optim`, `guide`: a guide function
         compatible with `model`, `num_steps`: the number of VI steps to make,
@@ -40,9 +43,6 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters,
         of samples to draw from the marginal.
     :param pyro.distributions.Distribution y_dist: (optional) the distribution
         assumed for the response variable :math:`Y`
-    :param list target_labels: A subset of the sample sites over which the posterior
-        entropy is to be measured. If `None` is passed, the posterior over all
-        non-observation sites is included in the APE.
     :return: Loss function estimate
     :rtype: `torch.Tensor`
 
@@ -73,8 +73,8 @@ def vi_ape(model, design, observation_labels, vi_parameters, is_parameters,
     return loss
 
 
-def naive_rainforth(model, design, observation_labels="y", target_labels=None,
-                    N=100, M=10, M_prime=10):
+def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
+                        N=100, M=10, M_prime=10):
     """
     Naive Rainforth (i.e. Nested Monte Carlo) estimate of the expected information
     gain (EIG). The estimate is
@@ -86,13 +86,18 @@ def naive_rainforth(model, design, observation_labels="y", target_labels=None,
     Caution: the target labels must encompass all other variables in the model: no
     Monte Carlo estimation is attempted for the :math:`\\log p(y | \\theta, d)` term.
 
-    :param function model:
-    :param torch.Tensor design:
-    :param list observation_labels:
-    :param list target_labels:
-    :param int N:
-    :param int M:
-    :param int M_prime:
+    :param function model: A pyro model accepting `design` as only argument.
+    :param torch.Tensor design: Tensor representation of design
+    :param list observation_labels: A subset of the sample sites
+        present in `model`. These sites are regarded as future observations
+        and other sites are regarded as latent variables over which a
+        posterior is to be inferred.
+    :param list target_labels: A subset of the sample sites over which the posterior
+        entropy is to be measured. If `None` is passed, the posterior over all
+        non-observation sites is included in the EIG.
+    :param int N: Number of outer expectation samples.
+    :param int M: Number of inner expectation samples for `p(y|d)`.
+    :param int M_prime: Number of samples for `p(y | theta, d)` if required.
     :return: EIG estimate
     :rtype: `torch.Tensor`
     """
@@ -138,7 +143,9 @@ def naive_rainforth(model, design, observation_labels="y", target_labels=None,
     return (conditional_lp - marginal_lp).sum(0)/N
 
 
-def donsker_varadhan_loss(model, observation_label, T):
+def donsker_varadhan_eig(model, design, observation_labels, target_labels,
+                         num_samples, num_steps, T, optim, return_history=False,
+                         final_design=None, final_num_samples=None):
     """
     Donsker-Varadhan estimate of the expected information gain (EIG).
 
@@ -149,11 +156,75 @@ def donsker_varadhan_loss(model, observation_label, T):
     where the first expectation is over the joint :math:`p(y | \\theta, d)` and
     the second is over :math:`p(\\bar{y}|d)p(\\bar{\\theta})``.
 
-    :param function model: A stochastic function.
-    :param str observation_label: String label for observed variable.
+    :param function model: A pyro model accepting `design` as only argument.
+    :param torch.Tensor design: Tensor representation of design
+    :param list observation_labels: A subset of the sample sites
+        present in `model`. These sites are regarded as future observations
+        and other sites are regarded as latent variables over which a
+        posterior is to be inferred.
+    :param list target_labels: A subset of the sample sites over which the posterior
+        entropy is to be measured. If `None` is passed, the posterior over all
+        non-observation sites is included in the EIG.
+    :param int num_samples: Number of samples per iteration.
+    :param int num_steps: Number of optimisation steps.
     :param function or torch.nn.Module T: optimisable function `T` for use in the
         Donsker-Varadhan loss function.
+    :param pyro.optim.Optim optim: Optimiser to use.
+    :return: EIG estimate
+    :rtype: `torch.Tensor`
     """
+    if isinstance(observation_labels, str):
+        observation_labels = [observation_labels]
+    if target_labels is not None and isinstance(target_labels, str):
+        target_labels = [target_labels]
+    loss = donsker_varadhan_loss(model, T, observation_labels, target_labels)
+    return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
+                            final_design, final_num_samples)
+
+
+def barber_agakov_ape(model, design, observation_labels, target_labels,
+                      num_samples, num_steps, guide, optim, return_history=False,
+                      final_design=None, final_num_samples=None):
+    """
+    Barber-Agakov estimate of APE.
+    """
+    if isinstance(observation_labels, str):
+        observation_labels = [observation_labels]
+    if target_labels is not None and isinstance(target_labels, str):
+        target_labels = [target_labels]
+    loss = barber_agakov_loss(model, guide, observation_labels, target_labels)
+    return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
+                            final_design, final_num_samples)
+
+
+def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_history=False,
+                     final_design=None, final_num_samples=None):
+
+    if final_design is None:
+        final_design = design
+    if final_num_samples is None:
+        final_num_samples = num_samples
+
+    params = None
+    history = []
+    for step in range(num_steps):
+        if params is not None:
+            pyro.infer.util.zero_grads(params)
+        agg_loss, loss = loss_fn(design, num_samples)
+        agg_loss.backward()
+        if return_history:
+            history.append(loss)
+        params = [pyro.param(name).unconstrained()
+                  for name in pyro.get_param_store().get_all_param_names()]
+        optim(params)
+    _, loss = loss_fn(final_design, final_num_samples)
+    if return_history:
+        return torch.stack(history), loss
+    else:
+        return dv_loss
+
+
+def donsker_varadhan_loss(model, T, observation_labels, target_labels):
 
     ewma_log = EwmaLog(alpha=0.90)
 
@@ -168,16 +239,17 @@ def donsker_varadhan_loss(model, observation_label, T):
 
         # Unshuffled data
         unshuffled_trace = poutine.trace(model).get_trace(expanded_design)
-        y = unshuffled_trace.nodes[observation_label]["value"]
+        y_dict = {l: unshuffled_trace.nodes[l]["value"] for l in observation_labels}
 
         # Shuffled data
         # Not actually shuffling, resimulate for safety
-        data = {observation_label: y}
-        conditional_model = pyro.condition(model, data=data)
+        conditional_model = pyro.condition(model, data=y_dict)
         shuffled_trace = poutine.trace(conditional_model).get_trace(expanded_design)
 
-        T_unshuffled = T(expanded_design, unshuffled_trace, observation_label)
-        T_shuffled = T(expanded_design, shuffled_trace, observation_label)
+        T_unshuffled = T(expanded_design, unshuffled_trace, observation_labels,
+                         target_labels)
+        T_shuffled = T(expanded_design, shuffled_trace, observation_labels,
+                       target_labels)
 
         unshuffled_expectation = T_unshuffled.sum(0)/num_particles
 
@@ -193,12 +265,7 @@ def donsker_varadhan_loss(model, observation_label, T):
     return loss_fn
 
 
-def barber_agakov_loss(model, guide, observation_labels="y", target_labels="w"):
-
-    if isinstance(observation_labels, str):
-        observation_labels = [observation_labels]
-    if isinstance(target_labels, str):
-        target_labels = [target_labels]
+def barber_agakov_loss(model, guide, observation_labels, target_labels):
 
     def loss_fn(design, num_particles):
 
