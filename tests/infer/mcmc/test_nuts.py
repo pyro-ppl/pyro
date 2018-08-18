@@ -226,7 +226,7 @@ def test_bernoulli_latent_model():
     assert_equal(posterior, y_prob, prec=0.05)
 
 
-@pytest.mark.parametrize("num_steps", [12])
+@pytest.mark.parametrize("num_steps", [20])
 def test_gaussian_hmm_enum_shape(num_steps):
     dim = 4
 

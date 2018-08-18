@@ -23,7 +23,7 @@ class EnumTraceProbEvaluator(object):
                  model_trace,
                  has_enumerable_sites=False,
                  max_iarange_nesting=float("inf"),
-                 use_einsum=False):
+                 use_einsum=True):
         self.has_enumerable_sites = has_enumerable_sites
         self.max_iarange_nesting = max_iarange_nesting
         self.use_einsum = use_einsum

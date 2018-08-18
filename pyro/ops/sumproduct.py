@@ -104,6 +104,7 @@ def opt_sumproduct(factors, target_shape, backend='torch'):
     # Contract packed tensors.
     expr = '{}->{}'.format(','.join(''.join(names) for names in packed_names),
                            ''.join(target_names))
+    print(expr)
     packed_result = contract(expr, *packed_factors, backend=backend)
 
     # Unpack result.
