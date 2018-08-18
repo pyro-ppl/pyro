@@ -18,7 +18,7 @@ from models.bayes_linear import (
     normal_inverse_gamma_guide, group_linear_model, group_normal_guide
 )
 from dv.neural import T_neural, T_specialized
-from ba.guide import Ba_lm_guide
+from ba.guide import Ba_lm_guide, Ba_nig_guide
 
 PLOT = True
 
@@ -80,9 +80,14 @@ group_2p_linear_model_sds_10_2pt5 = group_linear_model(torch.tensor(0.), torch.t
                                                        torch.tensor([2.5]), torch.tensor(1.))
 group_2p_guide = group_normal_guide(torch.tensor(1.), (1,), (1,))
 group_2p_ba_guide = lambda d: Ba_lm_guide((1,), (d, 1), {"w1": 1, "w2": 1}).guide
-nig_2p_linear_model_5_4 = normal_inverse_gamma_linear_model(torch.tensor(0.), torch.tensor([10., 2.5]),
-                                                            torch.tensor([5.]), torch.tensor([4.]))
+nig_2p_linear_model_3_2 = normal_inverse_gamma_linear_model(torch.tensor(0.), torch.tensor([.1, .4]),
+                                                            torch.tensor([2.1]), torch.tensor([1.1]))
+nig_2p_linear_model_15_14 = normal_inverse_gamma_linear_model(torch.tensor(0.), torch.tensor([.1, .4]),
+                                                              torch.tensor([15.]), torch.tensor([14.]))
+
 nig_2p_guide = normal_inverse_gamma_guide((2,))
+nig_2p_ba_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}).guide
+nig_2p_ba_mf_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}, mf=True).guide
 
 ########################################################################################
 # Aux
@@ -132,6 +137,42 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
 
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,arglist", [
+    ("A/B testing with unknown covariance (Gamma(15, 14))",
+     nig_2p_linear_model_15_14, AB_test_11d_10n_2p, "y", ["w", "tau"],
+     [(naive_rainforth_eig, [2000, 2000]),
+      # Warning! Guide is not mean-field
+      (vi_ape,
+       [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+         "num_steps": 1000}, {"num_samples": 4}]),
+      (barber_agakov_ape, [20, 800, nig_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+        False, None, 1000]),
+      (barber_agakov_ape, [20, 800, nig_2p_ba_mf_guide(11), optim.Adam({"lr": 0.05}),
+        False, None, 1000])
+      ]),
+    ("A/B testing with unknown covariance (Gamma(3, 2))",
+     nig_2p_linear_model_3_2, AB_test_11d_10n_2p, "y", ["w", "tau"],
+     [(naive_rainforth_eig, [2000, 2000]),
+      # Warning! Guide is not mean-field
+      (vi_ape,
+       [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+         "num_steps": 1000}, {"num_samples": 4}]),
+      (barber_agakov_ape, [20, 800, nig_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+        False, None, 1000]),
+      (barber_agakov_ape, [20, 800, nig_2p_ba_mf_guide(11), optim.Adam({"lr": 0.05}),
+        False, None, 1000])
+      ]),
+    ("A/B test linear model known covariance",
+     basic_2p_linear_model_sds_10_2pt5, AB_test_11d_10n_2p, "y", "w",
+     [(linear_model_ground_truth, []),
+      (naive_rainforth_eig, [2000, 2000]),
+      (vi_eig,
+       [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+         "num_steps": 1000}, {"num_samples": 1}]),
+      (donsker_varadhan_eig, [400, 400, T_specialized((11, 3)), optim.Adam({"lr": 0.05}),
+        False, None, 1000]),
+      (ba_eig, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+        False, None, 1000])
+      ]),
     ("Linear model targeting one parameter", 
      group_2p_linear_model_sds_10_2pt5, X_circle_10d_1n_2p, "y", "w1",
      [(linear_model_ground_truth, []),
@@ -156,18 +197,6 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
       (ba_eig, [20, 400, basic_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
         False, None, 1000])
       ]),
-    ("A/B test linear model known covariance",
-     basic_2p_linear_model_sds_10_2pt5, AB_test_11d_10n_2p, "y", "w",
-     [(linear_model_ground_truth, []),
-      (naive_rainforth_eig, [2000, 2000]),
-      (vi_eig,
-       [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
-         "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig, [400, 400, T_specialized((11, 3)), optim.Adam({"lr": 0.05}),
-        False, None, 1000]),
-      (ba_eig, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 1000])
-      ]),
     ("A/B test linear model known covariance (different sds)",
      basic_2p_linear_model_sds_10_0pt1, AB_test_11d_10n_2p, "y", "w",
      [(linear_model_ground_truth, []),
@@ -179,14 +208,6 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
         False, None, 1000]),
       (ba_eig, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 1000])
-      ]),
-    ("A/B testing with unknown covariance",
-     nig_2p_linear_model_5_4, AB_test_11d_10n_2p, "y", "w",
-     [(naive_rainforth_eig, [2000, 2000]),
-      # Warning! Guide is not mean-field
-      (vi_ape,
-       [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
-         "num_steps": 5000}, {"num_samples": 10}]),
       ])
 ])
 def test_eig_and_plot(title, model, design, observation_label, target_label, arglist):
@@ -226,6 +247,16 @@ def time_eig(estimator, model, design, observation_label, target_label, args):
 
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,est1,est2,kwargs1,kwargs2", [
+    ("Barber-Agakov on A/B test with unknown covariance",
+     nig_2p_linear_model_3_2, AB_test_2d_10n_2p, "y", "w",
+     barber_agakov_ape, None,
+     {"num_steps": 800, "num_samples": 20, "optim": optim.Adam({"lr": 0.05}),
+      "guide": nig_2p_ba_guide(2), "final_num_samples": 1000}, {}),
+    ("Barber-Agakov on A/B test with unknown covariance (mean-field guide)",
+     nig_2p_linear_model_3_2, AB_test_2d_10n_2p, "y", "w",
+     barber_agakov_ape, None,
+     {"num_steps": 800, "num_samples": 20, "optim": optim.Adam({"lr": 0.05}),
+      "guide": nig_2p_ba_mf_guide(2), "final_num_samples": 1000}, {}),
     ("Barber-Agakov on circle",
      basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
      barber_agakov_ape, linear_model_ground_truth,
@@ -257,19 +288,27 @@ def test_convergence(title, model, design, observation_label, target_label, est1
     t = time.time()
     # pyro.set_rng_seed(42)
     pyro.clear_param_store()
-    truth = est2(model, design, observation_label, target_label, **kwargs2)
+    if est2 is not None:
+        truth = est2(model, design, observation_label, target_label, **kwargs2)
+    else:
+        truth = None
     dv, final = est1(model, design, observation_label, target_label, return_history=True, **kwargs1)
     x = np.arange(0, dv.shape[0])
     print(est1.__name__)
-    print("Final est", final, "Truth", truth, "Error", (final - truth).abs().sum())
+    if truth is not None:
+        print("Final est", final, "Truth", truth, "Error", (final - truth).abs().sum())
+    else:
+        print("Final est", final)
     print("Time", time.time() - t)
 
     if PLOT:
         import matplotlib.pyplot as plt
         plt.figure(figsize=(12, 8))
-        plt.plot(x, torch.nn.ReLU()(dv.detach()).numpy())
+        plt.plot(x, dv.detach().numpy())
 
-        for true, col in zip(torch.unbind(truth, 0), plt.rcParams['axes.prop_cycle'].by_key()['color']):
-            plt.axhline(true.numpy(), color=col)
+        if truth is not None:
+            for true, col in zip(torch.unbind(truth, 0), plt.rcParams['axes.prop_cycle'].by_key()['color']):
+                plt.axhline(true.numpy(), color=col)
+        
         plt.title(title)
         plt.show()
