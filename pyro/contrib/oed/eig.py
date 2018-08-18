@@ -32,8 +32,7 @@ def vi_ape(model, design, observation_labels, target_labels,
         and other sites are regarded as latent variables over which a
         posterior is to be inferred.
     :param list target_labels: A subset of the sample sites over which the posterior
-        entropy is to be measured. If `None` is passed, the posterior over all
-        non-observation sites is included in the APE.
+        entropy is to be measured.
     :param dict vi_parameters: Variational inference parameters which should include:
         `optim`: an instance of :class:`pyro.Optim`, `guide`: a guide function
         compatible with `model`, `num_steps`: the number of VI steps to make,
@@ -74,7 +73,7 @@ def vi_ape(model, design, observation_labels, target_labels,
 
 
 def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
-                        N=100, M=10, M_prime=10):
+                        N=100, M=10, M_prime=None):
     """
     Naive Rainforth (i.e. Nested Monte Carlo) estimate of the expected information
     gain (EIG). The estimate is
@@ -93,8 +92,7 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
         and other sites are regarded as latent variables over which a
         posterior is to be inferred.
     :param list target_labels: A subset of the sample sites over which the posterior
-        entropy is to be measured. If `None` is passed, the posterior over all
-        non-observation sites is included in the EIG.
+        entropy is to be measured.
     :param int N: Number of outer expectation samples.
     :param int M: Number of inner expectation samples for `p(y|d)`.
     :param int M_prime: Number of samples for `p(y | theta, d)` if required.
@@ -104,7 +102,7 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
 
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
-    if target_labels is not None and isinstance(target_labels, str):
+    if isinstance(target_labels, str):
         target_labels = [target_labels]
 
     # Take N samples of the model
@@ -113,7 +111,7 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
     trace.compute_log_prob()
     y_dict = {l: trace.nodes[l]["value"].unsqueeze(0) for l in observation_labels}
     
-    if target_labels is not None:
+    if M_prime is not None:
         theta_dict = {l: trace.nodes[l]["value"].expand((M_prime,) + trace.nodes[l]["value"].shape)
                          for l in target_labels}
         theta_dict.update(y_dict)
@@ -163,8 +161,7 @@ def donsker_varadhan_eig(model, design, observation_labels, target_labels,
         and other sites are regarded as latent variables over which a
         posterior is to be inferred.
     :param list target_labels: A subset of the sample sites over which the posterior
-        entropy is to be measured. If `None` is passed, the posterior over all
-        non-observation sites is included in the EIG.
+        entropy is to be measured.
     :param int num_samples: Number of samples per iteration.
     :param int num_steps: Number of optimisation steps.
     :param function or torch.nn.Module T: optimisable function `T` for use in the
@@ -175,7 +172,7 @@ def donsker_varadhan_eig(model, design, observation_labels, target_labels,
     """
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
-    if target_labels is not None and isinstance(target_labels, str):
+    if isinstance(target_labels, str):
         target_labels = [target_labels]
     loss = donsker_varadhan_loss(model, T, observation_labels, target_labels)
     return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
@@ -190,7 +187,7 @@ def barber_agakov_ape(model, design, observation_labels, target_labels,
     """
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
-    if target_labels is not None and isinstance(target_labels, str):
+    if isinstance(target_labels, str):
         target_labels = [target_labels]
     loss = barber_agakov_loss(model, guide, observation_labels, target_labels)
     return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
@@ -217,11 +214,12 @@ def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_hist
         params = [pyro.param(name).unconstrained()
                   for name in pyro.get_param_store().get_all_param_names()]
         optim(params)
+        print(params)
     _, loss = loss_fn(final_design, final_num_samples)
     if return_history:
         return torch.stack(history), loss
     else:
-        return dv_loss
+        return loss
 
 
 def donsker_varadhan_loss(model, T, observation_labels, target_labels):
@@ -278,7 +276,8 @@ def barber_agakov_loss(model, guide, observation_labels, target_labels):
 
         # Run through q(theta | y, d)
         conditional_guide = pyro.condition(guide, data=theta_dict)
-        cond_trace = poutine.trace(conditional_guide).get_trace(y_dict, expanded_design)
+        cond_trace = poutine.trace(conditional_guide).get_trace(y_dict, expanded_design,
+            observation_labels, target_labels)
         cond_trace.compute_log_prob()
 
         loss = -sum(cond_trace.nodes[l]["log_prob"] for l in target_labels).sum(0)/num_particles
