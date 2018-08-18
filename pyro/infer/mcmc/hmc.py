@@ -51,6 +51,9 @@ class HMC(TraceKernel):
     :param int max_iarange_nesting: Optional bound on max number of nested
         :func:`pyro.iarange` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
+    :param bool use_einsum: Whether to use an einsum operation to evaluate
+        log pdf for the model trace. No-op unless the trace has discrete
+        sample sites.
 
     Example:
 
@@ -79,7 +82,8 @@ class HMC(TraceKernel):
                  num_steps=None,
                  adapt_step_size=False,
                  transforms=None,
-                 max_iarange_nesting=float("inf")):
+                 max_iarange_nesting=float("inf"),
+                 use_einsum=False):
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
         self.model = poutine.enum(config_enumerate(model, default="parallel", expand=False),
@@ -95,6 +99,7 @@ class HMC(TraceKernel):
             self.trajectory_length = 2 * math.pi  # from Stan
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
         self.adapt_step_size = adapt_step_size
+        self.use_einsum = use_einsum
         self._target_accept_prob = 0.8  # from Stan
 
         self.transforms = {} if transforms is None else transforms
@@ -200,7 +205,8 @@ class HMC(TraceKernel):
     def _validate_trace(self, trace):
         self._trace_prob_evaluator = EnumTraceProbEvaluator(trace,
                                                             self._has_enumerable_sites,
-                                                            self.max_iarange_nesting)
+                                                            self.max_iarange_nesting,
+                                                            use_einsum=self.use_einsum)
         trace_log_prob_sum = self._compute_trace_log_prob(trace)
         if torch_isnan(trace_log_prob_sum) or torch_isinf(trace_log_prob_sum):
             raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")

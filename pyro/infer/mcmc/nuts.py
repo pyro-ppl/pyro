@@ -56,6 +56,9 @@ class NUTS(HMC):
     :param int max_iarange_nesting: Optional bound on max number of nested
         :func:`pyro.iarange` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
+    :param bool use_einsum: Whether to use an einsum operation to evaluate
+        log pdf for the model trace. No-op unless the trace has discrete
+        sample sites.
 
     Example:
 
@@ -82,12 +85,14 @@ class NUTS(HMC):
                  step_size=None,
                  adapt_step_size=False,
                  transforms=None,
-                 max_iarange_nesting=float("inf")):
+                 max_iarange_nesting=float("inf"),
+                 use_einsum=False):
         super(NUTS, self).__init__(model,
                                    step_size,
                                    adapt_step_size=adapt_step_size,
                                    transforms=transforms,
-                                   max_iarange_nesting=max_iarange_nesting)
+                                   max_iarange_nesting=max_iarange_nesting,
+                                   use_einsum=use_einsum)
 
         self._max_tree_depth = 10  # from Stan
         # There are three conditions to stop doubling process:
