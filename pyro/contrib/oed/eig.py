@@ -214,7 +214,6 @@ def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_hist
         params = [pyro.param(name).unconstrained()
                   for name in pyro.get_param_store().get_all_param_names()]
         optim(params)
-        print(params)
     _, loss = loss_fn(final_design, final_num_samples)
     if return_history:
         return torch.stack(history), loss
