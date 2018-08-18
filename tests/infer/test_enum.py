@@ -1207,7 +1207,7 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
         ]))
 
 
-def test_elbo_hmm_in_guide_growth():
+def test_elbo_hmm_growth():
     pyro.clear_param_store()
     init_probs = torch.tensor([0.5, 0.5])
     elbo = TraceEnum_ELBO(max_iarange_nesting=0)
@@ -1257,6 +1257,65 @@ def test_elbo_hmm_in_guide_growth():
     print('costs = {}'.format(repr(costs)))
     print('times1 = {}'.format(repr(times1)))
     print('times2 = {}'.format(repr(times2)))
+
+    # This assertion may fail nondeterministically:
+    # assert costs[-3] + costs[-1] == 2 * costs[-2], 'cost is not asymptotically linear'
+
+
+def test_elbo_dbn_growth():
+    pyro.clear_param_store()
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+
+    def model(data):
+        uniform = torch.tensor([0.5, 0.5])
+        probs_z = pyro.param("probs_z",
+                             torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                             constraint=constraints.simplex)
+        for i, z in enumerate(data):
+            pyro.sample("x_{}".format(i), dist.Categorical(uniform))
+            y = pyro.sample("y_{}".format(i), dist.Categorical(uniform))
+            pyro.sample("z_{}".format(i), dist.Categorical(probs_z[y]), obs=z)
+
+    @config_enumerate(default="parallel", expand=False)
+    def guide(data):
+        probs_x = pyro.param("probs_x",
+                             torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                             constraint=constraints.simplex)
+        probs_y = pyro.param("probs_y",
+                             torch.tensor([[[0.75, 0.25], [0.45, 0.55]],
+                                           [[0.55, 0.45], [0.25, 0.75]]]),
+                             constraint=constraints.simplex)
+        x = 0
+        y = 0
+        for i in range(len(data)):
+            x = pyro.sample("x_{}".format(i), dist.Categorical(probs_x[x]))
+            y = pyro.sample("y_{}".format(i), dist.Categorical(probs_y[x, y]))
+
+    sizes = range(1, 11)
+    costs = []
+    times1 = []
+    times2 = []
+    for size in sizes:
+        data = torch.ones(size)
+
+        time0 = timeit.default_timer()
+        elbo.loss_and_grads(model, guide, data)  # compiles paths
+        time1 = timeit.default_timer()
+        elbo.loss_and_grads(model, guide, data)  # reuses compiled path
+        time2 = timeit.default_timer()
+
+        times1.append(time1 - time0)
+        times2.append(time2 - time1)
+        costs.append(pyro.ops.einsum.shared.LAST_CACHE_SIZE[0])
+
+    print('Growth:')
+    print('sizes = {}'.format(repr(sizes)))
+    print('costs = {}'.format(repr(costs)))
+    print('times1 = {}'.format(repr(times1)))
+    print('times2 = {}'.format(repr(times2)))
+
+    # This assertion may fail nondeterministically:
+    # assert costs[-3] + costs[-1] == 2 * costs[-2], 'cost is not asymptotically linear'
 
 
 @pytest.mark.parametrize("pi_a", [0.33])
