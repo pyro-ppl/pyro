@@ -5,7 +5,6 @@ import numbers
 from collections import OrderedDict
 
 import opt_einsum
-from pyro.distributions.torch_patch import _patch
 
 _SHARING_STACK = []
 _CURRENT_BACKEND = []
@@ -15,7 +14,7 @@ LAST_CACHE_SIZE = [0]  # for profiling
 @contextlib.contextmanager
 def shared_intermediates(cache=None):
     """
-    Context in which :func:`contract` intermediate results are shared.
+    Context in which :func:`~pyro.ops.einsum.contract` intermediate results are shared.
     Note that intermediate computations will not be garbage collected until
     1. this context exits, and
     2. the yielded cache is garbage collected (if it was captured).
@@ -146,15 +145,3 @@ def einsum(equation, *operands):
 
     cache[key] = result
     return result
-
-
-@_patch('torch.einsum')
-def _einsum(equation, operands):
-    # Work around torch.einsum's limitation to 26 letters.
-    equation = _alpha_canonicalize(equation)
-
-    # This workaround can be deleted after this issue is fixed in release:
-    # https://github.com/pytorch/pytorch/issues/7763
-    operands = [t.clone() for t in operands]
-
-    return _einsum._pyro_unpatched(equation, operands)

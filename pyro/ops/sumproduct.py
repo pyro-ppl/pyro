@@ -3,11 +3,12 @@ from __future__ import absolute_import, division, print_function
 import operator
 from numbers import Number
 
+import opt_einsum
 import torch
 from six.moves import reduce
 
-import opt_einsum
 from pyro.distributions.util import broadcast_shape
+from pyro.ops.einsum import contract
 
 
 def zip_align_right(xs, ys):
@@ -98,7 +99,7 @@ def opt_sumproduct(factors, target_shape, backend='torch'):
     # Contract packed tensors.
     expr = '{}->{}'.format(','.join(''.join(names) for names in packed_names),
                            ''.join(target_names))
-    packed_result = opt_einsum.contract(expr, *packed_factors, backend=backend)
+    packed_result = contract(expr, *packed_factors, backend=backend)
 
     # Unpack result.
     return packed_result.reshape(target_shape)

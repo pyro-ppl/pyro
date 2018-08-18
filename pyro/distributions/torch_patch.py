@@ -45,4 +45,18 @@ def _torch_dirichlet_grad(x, concentration, total):
     return unpatched_fn(x, concentration, total)
 
 
+@_patch('torch.einsum')
+def _einsum(equation, operands):
+    # work around torch.einsum's limitation to 26 letters
+    symbols = sorted(set(equation) - set(',->'))
+    rename = dict(zip(symbols, 'abcdefghijklmnopqrstuvwxyz'))
+    equation = ''.join(rename.get(s, s) for s in equation)
+
+    # this workaround can be deleted after this issue is fixed in release:
+    # https://github.com/pytorch/pytorch/issues/7763
+    operands = [t.clone() for t in operands]
+
+    return _einsum._pyro_unpatched(equation, operands)
+
+
 __all__ = []

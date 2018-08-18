@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import pytest
 import torch
 
-import opt_einsum
+from pyro.ops.einsum import contract
 from tests.common import assert_equal
 
 
@@ -26,6 +26,6 @@ def test_einsum(equation):
     operands = [torch.randn(*(sizes[dim] for dim in dims))
                 for dims in inputs]
 
-    expected = opt_einsum.contract(equation, *(d.exp() for d in operands), backend='torch').log()
-    actual = opt_einsum.contract(equation, *operands, backend='pyro.ops.einsum.torch_log')
+    expected = contract(equation, *(d.exp() for d in operands), backend='torch').log()
+    actual = contract(equation, *operands, backend='pyro.ops.einsum.torch_log')
     assert_equal(actual, expected)
