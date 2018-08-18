@@ -1,7 +1,10 @@
+import torch
 from collections import defaultdict
 
-from pyro.distributions.util import logsumexp
+from pyro.distributions.util import logsumexp, broadcast_shape
 from pyro.infer.util import is_validation_enabled
+from pyro.ops.einsum import shared_intermediates
+from pyro.ops.sumproduct import sumproduct
 from pyro.util import check_site_shape
 
 
@@ -19,11 +22,14 @@ class EnumTraceProbEvaluator(object):
     def __init__(self,
                  model_trace,
                  has_enumerable_sites=False,
-                 max_iarange_nesting=float("inf")):
+                 max_iarange_nesting=float("inf"),
+                 use_einsum=False):
         self.has_enumerable_sites = has_enumerable_sites
         self.max_iarange_nesting = max_iarange_nesting
+        self.use_einsum = use_einsum
         # To be populated using the model trace once.
-        self._log_probs = {}
+        self._log_probs = defaultdict(list)
+        self._log_prob_shapes = defaultdict(tuple)
         self._children = defaultdict(list)
         self._enum_dims = {}
         self._iarange_dims = {}
@@ -53,10 +59,10 @@ class EnumTraceProbEvaluator(object):
         For each ordinal, populate the `iarange` and `enum` dims to be
         evaluated or enumerated out.
         """
-        log_prob = self._log_probs[ordinal]
+        log_prob_shape = self._log_prob_shapes[ordinal]
         iarange_dims = sorted([frame.dim for frame in ordinal - parent_ordinal])
-        enum_dims = set((i for i in range(-log_prob.dim(), -self.max_iarange_nesting)
-                         if log_prob.shape[i] > 1))
+        enum_dims = set((i for i in range(-len(log_prob_shape), -self.max_iarange_nesting)
+                         if log_prob_shape[i] > 1))
         self._iarange_dims[ordinal] = iarange_dims
         self._enum_dims[ordinal] = sorted(enum_dims - parent_enum_dims)
         for c in self._children[ordinal]:
@@ -68,21 +74,21 @@ class EnumTraceProbEvaluator(object):
         in the model trace, and stores the result in `self._log_probs`.
         """
         model_trace.compute_log_prob()
+        self._log_probs = defaultdict(list)
         ordering = {name: frozenset(site["cond_indep_stack"])
                     for name, site in model_trace.nodes.items()
                     if site["type"] == "sample"}
         # Collect log prob terms per independence context.
-        log_probs = defaultdict(list)
         for name, site in model_trace.nodes.items():
             if site["type"] == "sample":
                 if is_validation_enabled():
                     check_site_shape(site, self.max_iarange_nesting)
-                log_probs[ordering[name]].append(site["log_prob"])
+                self._log_probs[ordering[name]].append(site["log_prob"])
+        if not self._log_prob_shapes:
+            for ordinal, log_prob in self._log_probs.items():
+                self._log_prob_shapes[ordinal] = broadcast_shape(*(t.shape for t in self._log_probs[ordinal]))
 
-        for ordinal, log_prob in log_probs.items():
-            self._log_probs[ordinal] = sum(log_prob)
-
-    def _reduce(self, ordinal, agg_log_prob=0.):
+    def _reduce(self, ordinal, agg_log_prob=torch.tensor(0.)):
         """
         Reduce the log prob terms for the given ordinal:
           - taking log_sum_exp of factors in enum dims (i.e.
@@ -96,21 +102,45 @@ class EnumTraceProbEvaluator(object):
         :return: `log_prob` with marginalized `iarange` and `enum`
             dims.
         """
-        log_prob = self._log_probs[ordinal] + agg_log_prob
+        if self.use_einsum:
+            return self._reduce_einsum(ordinal, agg_log_prob)
+        log_prob = sum(self._log_probs[ordinal]) + agg_log_prob
         for enum_dim in self._enum_dims[ordinal]:
             log_prob = logsumexp(log_prob, dim=enum_dim, keepdim=True)
         for marginal_dim in self._iarange_dims[ordinal]:
             log_prob = log_prob.sum(dim=marginal_dim, keepdim=True)
         return log_prob
 
+    def _reduce_einsum(self, ordinal, agg_log_prob=0.):
+        """
+        Same operation as `_reduce` except that the tensors are passed to
+        the einsum backend.
+
+        :param ordinal: node (ordinal)
+        :param torch.Tensor agg_log_prob: aggregated `log_prob`
+            terms from the downstream nodes.
+        :return: `log_prob` with marginalized `iarange` and `enum`
+            dims.
+        """
+        shape = broadcast_shape(self._log_prob_shapes[ordinal], agg_log_prob.shape)
+        enum_shape = [shape[i] if -len(shape) + i not in self._enum_dims[ordinal] else 1
+                      for i in range(len(shape))]
+        iarange_shape = [enum_shape[i] if -len(enum_shape) + i not in self._iarange_dims[ordinal] else 1
+                         for i in range(len(enum_shape))]
+        log_prob = sumproduct(self._log_probs[ordinal] + [agg_log_prob], target_shape=enum_shape,
+                              backend='pyro.ops.einsum.torch_log')
+        log_prob = sumproduct([log_prob], target_shape=iarange_shape)
+        return log_prob
+
     def _aggregate_log_probs(self, ordinal):
         """
         Aggregate the `log_prob` terms using depth first search.
         """
-        if not self._children[ordinal]:
-            return self._reduce(ordinal)
-        agg_log_prob = sum(map(self._aggregate_log_probs, self._children[ordinal]))
-        return self._reduce(ordinal, agg_log_prob)
+        with shared_intermediates():
+            if not self._children[ordinal]:
+                return self._reduce(ordinal)
+            agg_log_prob = sum(map(self._aggregate_log_probs, self._children[ordinal]))
+            return self._reduce(ordinal, agg_log_prob)
 
     def log_prob(self, model_trace):
         """
