@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 import math
+import timeit
 
 import pytest
 import torch
@@ -10,6 +11,7 @@ from torch.distributions import constraints, kl_divergence
 
 import pyro
 import pyro.distributions as dist
+import pyro.ops.einsum.deferred
 import pyro.optim
 import pyro.poutine as poutine
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
@@ -250,9 +252,9 @@ def test_svi_step_guide_uses_grad(enumerate1):
     def model():
         scale = pyro.param("scale")
         loc = pyro.sample("loc", dist.Normal(0., 10.))
+        pyro.sample("b", dist.Bernoulli(0.5))
         with pyro.iarange("data", len(data)):
             pyro.sample("obs", dist.Normal(loc, scale), obs=data)
-        pyro.sample("b", dist.Bernoulli(0.5))
 
     @config_enumerate(default=enumerate1)
     def guide():
@@ -1131,7 +1133,9 @@ def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
     ("parallel", 3, False),
     ("parallel", 10, False),
     ("parallel", 20, False),
-    pytest.param("parallel", 30, False, marks=pytest.mark.skip(reason="extremely expensive")),
+    ("parallel", 30, False),
+    ("parallel", 40, False),
+    ("parallel", 50, False),
 ])
 def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
     pyro.clear_param_store()
@@ -1145,7 +1149,6 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
         emission_probs = pyro.param("emission_probs",
                                     torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
                                     constraint=constraints.simplex)
-
         x = None
         for i, y in enumerate(data):
             probs = init_probs if x is None else transition_probs[x]
@@ -1183,8 +1186,18 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
             "transition_probs": [[3.70781687, -3.70781687], [3.70781687, -3.70781687]],
             "emission_probs": [[7.5, -7.5], [2.5, -2.5]],
         },
+        22: {
+            "transition_probs": [[4.11979618, -4.11979618], [4.11979618, -4.11979618]],
+            "emission_probs": [[8.25, -8.25], [2.75, -2.75]],
+        },
+        30: {
+            "transition_probs": [[5.76771452, -5.76771452], [5.76771452, -5.76771452]],
+            "emission_probs": [[11.25, -11.25], [3.75, -3.75]],
+        },
     }
 
+    if num_steps not in expected_grads:
+        return
     for name, value in pyro.get_param_store().named_parameters():
         actual = value.grad
         expected = torch.tensor(expected_grads[num_steps][name])
@@ -1192,3 +1205,46 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
             '\nexpected {}.grad = {}'.format(name, expected.cpu().numpy()),
             '\n  actual {}.grad = {}'.format(name, actual.detach().cpu().numpy()),
         ]))
+
+
+def test_elbo_hmm_in_guide_growth():
+    pyro.clear_param_store()
+    init_probs = torch.tensor([0.5, 0.5])
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+
+    def model(data):
+        transition_probs = pyro.param("transition_probs",
+                                      torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                      constraint=constraints.simplex)
+        emission_probs = pyro.param("emission_probs",
+                                    torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                    constraint=constraints.simplex)
+        x = None
+        for i, y in enumerate(data):
+            probs = init_probs if x is None else transition_probs[x]
+            x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
+            pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=y)
+
+    @config_enumerate(default="parallel", expand=False)
+    def guide(data):
+        transition_probs = pyro.param("transition_probs",
+                                      torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                      constraint=constraints.simplex)
+        x = None
+        for i, y in enumerate(data):
+            probs = init_probs if x is None else transition_probs[x]
+            x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
+
+    sizes = range(1, 11)
+    costs = []
+    times = []
+    for size in sizes:
+        data = torch.ones(size)
+        start_time = timeit.default_timer()
+        elbo.loss_and_grads(model, guide, data)
+        times.append(timeit.default_timer() - start_time)
+        costs.append(pyro.ops.einsum.deferred.LAST_CACHE_SIZE[0])
+    print('Growth:')
+    print('sizes = {}'.format(repr(sizes)))
+    print('costs = {}'.format(repr(costs)))
+    print('times = {}'.format(repr(times)))

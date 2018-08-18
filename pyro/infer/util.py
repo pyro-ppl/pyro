@@ -5,9 +5,12 @@ import numbers
 from collections import defaultdict
 
 import torch
+from six.moves import reduce
 from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.util import is_identically_zero
+from pyro.ops.einsum.deferred import shared_intermediates
+from pyro.ops.sumproduct import sumproduct
 from pyro.poutine.util import site_is_subsample
 
 _VALIDATION_ENABLED = False
@@ -36,6 +39,17 @@ def torch_backward(x):
     """
     if torch.is_tensor(x):
         x.backward()
+
+
+def torch_exp(x):
+    """
+    Like ``x.exp()`` for a :class:`~torch.Tensor`, but also accepts
+    numbers.
+    """
+    if torch.is_tensor(x):
+        return torch.exp(x)
+    else:
+        return math.exp(x)
 
 
 def detach_iterable(iterable):
@@ -115,6 +129,13 @@ class MultiFrameTensor(dict):
             '({}, ...)'.format(frames) for frames in self]))
 
 
+def deduplicate_by_shape(tensors, combine=lambda a, b: a + b):
+    grouped = defaultdict(list)
+    for tensor in tensors:
+        grouped[getattr(tensor, 'shape', None)].append(tensor)
+    return [reduce(combine, parts) for parts in grouped.values()]
+
+
 class Dice(object):
     """
     An implementation of the DiCE operator compatible with Pyro features.
@@ -167,6 +188,7 @@ class Dice(object):
                 log_prob = log_prob - log_prob.detach()
             log_probs[ordinal].append(log_prob)
 
+        self.has_iaranges = any(ordinal for ordinal in ordering.values())
         self.log_denom = log_denom
         self.log_probs = log_probs
         self._log_factors_cache = {}
@@ -229,20 +251,32 @@ class Dice(object):
             for dim, (dice_size, target_size) in enumerate(zip(dice_prob.shape, shape)):
                 if dice_size > target_size:
                     dice_prob = dice_prob.sum(dim, True)
+        # Note that the following cheaper version appears to be broken:
+        # log_factors = self._get_log_factors(ordinal)
+        # factors = [torch_exp(f) for f in log_factors]
+        # dice_prob = sumproduct(factors, shape)
 
         self._prob_cache[shape, ordinal] = dice_prob
         return dice_prob
 
-    def compute_expectation(self, costs):
+    def compute_expectation(self, costs, use_einsum=True):
         """
         Returns a differentiable expected cost, summing over costs at given ordinals.
 
-        :param dict costs: A dict mapping ordinals to cost tensors
+        :param dict costs: A dict mapping ordinals to lists of cost tensors
         :returns: a scalar expected cost
         :rtype: torch.Tensor or float
         """
+        # einsum is currently incompatible with iarange
+        if use_einsum and not self.has_iaranges:
+            return self._opt_compute_expectation(costs)
+        else:
+            return self._naive_compute_expectation(costs)
+
+    def _naive_compute_expectation(self, costs):
         expected_cost = 0.
-        for ordinal, cost in costs.items():
+        for ordinal, cost_terms in costs.items():
+            cost = sum(cost_terms)
             prob = self.in_context(cost.shape, ordinal)
             mask = prob > 0
             if torch.is_tensor(mask) and not mask.all():
@@ -250,4 +284,36 @@ class Dice(object):
                 prob = prob[mask]
                 cost = cost[mask]
             expected_cost = expected_cost + (prob * cost).sum()
+        return expected_cost
+
+    def _opt_compute_expectation(self, costs):
+        # precompute exponentials to be shared across calls to sumproduct
+        exp_table = {}
+        factors_table = defaultdict(list)
+        for ordinal in costs:
+            for log_factor in self._get_log_factors(ordinal):
+                if id(log_factor) not in exp_table:
+                    factor = torch_exp(log_factor)
+                    exp_table[id(log_factor)] = factor
+                    factors_table[ordinal].append(factor)
+
+        # deduplicate by shape to increase sharing
+        costs = {ordinal: deduplicate_by_shape(group)
+                 for ordinals, group in costs.items()}
+        factors_table = {ordinal: deduplicate_by_shape(group, combine=lambda a, b: a * b)
+                         for ordinals, group in factors_table.items()}
+
+        # share computation across all cost terms
+        with shared_intermediates():
+            expected_cost = 0.
+            for ordinal, cost_terms in costs.items():
+                factors = factors_table.get(ordinal, [])
+                for cost in cost_terms:
+                    prob = sumproduct(factors, cost.shape, backend='pyro.ops.einsum.deferred')
+                    mask = prob > 0
+                    if torch.is_tensor(mask) and not mask.all():
+                        cost, prob, mask = broadcast_all(cost, prob, mask)
+                        prob = prob[mask]
+                        cost = cost[mask]
+                    expected_cost = expected_cost + (prob * cost).sum()
         return expected_cost

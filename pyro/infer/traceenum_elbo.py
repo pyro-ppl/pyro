@@ -25,13 +25,13 @@ def _compute_dice_elbo(model_trace, guide_trace):
                 for name, site in trace.nodes.items()
                 if site["type"] == "sample"}
 
-    costs = defaultdict(float)
+    costs = defaultdict(list)
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
-            costs[ordering[name]] = costs[ordering[name]] + site["log_prob"]
+            costs[ordering[name]].append(site["log_prob"])
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample":
-            costs[ordering[name]] = costs[ordering[name]] - site["log_prob"]
+            costs[ordering[name]].append(-site["log_prob"])
 
     return Dice(guide_trace, ordering).compute_expectation(costs)
 
