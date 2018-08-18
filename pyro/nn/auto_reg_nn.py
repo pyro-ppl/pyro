@@ -116,7 +116,8 @@ class AutoRegressiveNN(nn.Module):
     :param hidden_dims: the dimensionality of the hidden units per layer
     :type hidden_dims: list[int]
     :param param_dims: shape the output into parameters of dimension (p_n, input_dim) for p_n in param_dims
-        when p_n > 1 and dimension (input_dim) when p_n == 1
+        when p_n > 1 and dimension (input_dim) when p_n == 1. The default is [1, 1], i.e. output two parameters
+        of dimension (input_dim), which is useful for inverse autoregressive flow.
     :type param_dims: list[int]
     :param permutation: an optional permutation that is applied to the inputs and controls the order of the
         autoregressive factorization. in particular for the identity permutation the autoregressive structure
@@ -124,7 +125,8 @@ class AutoRegressiveNN(nn.Module):
     :type permutation: torch.LongTensor
     :param skip_connections: Whether to add skip connections from the input to the output.
     :type skip_connections: bool
-    :param nonlinearity: The nonlinearity to use in the feedforward network such as torch.nn.ReLU()
+    :param nonlinearity: The nonlinearity to use in the feedforward network such as torch.nn.ReLU(). Note that no
+        nonlinearity is applied to the final network output, so the output is an unbounded real number.
     :type nonlinearity: torch.nn.module
 
     Reference:
