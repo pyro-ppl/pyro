@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import operator
+
 import pytest
 import torch
 from six.moves import reduce
@@ -28,7 +30,7 @@ def test_sumproduct(factor_shapes, shape, optimize):
                for s in factor_shapes]
     actual = sumproduct(factors, shape, optimize=optimize)
 
-    expected = reduce(lambda x, y: x * y, factors)
+    expected = reduce(operator.mul, factors)
     while expected.dim() > len(shape):
         expected = expected.sum(0)
     while expected.dim() < len(shape):
