@@ -1248,3 +1248,66 @@ def test_elbo_hmm_in_guide_growth():
     print('sizes = {}'.format(repr(sizes)))
     print('costs = {}'.format(repr(costs)))
     print('times = {}'.format(repr(times)))
+
+
+@pytest.mark.parametrize("pi_a", [0.33])
+@pytest.mark.parametrize("pi_b", [0.51])
+@pytest.mark.parametrize("pi_c", [0.37])
+@pytest.mark.parametrize("N_b", [3, 4])
+@pytest.mark.parametrize("N_c", [5])
+@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
+def test_bernoulli_pyramid_elbo_gradient(enumerate1, N_b, N_c, pi_a, pi_b, pi_c):
+    pyro.clear_param_store()
+
+    def model():
+        a = pyro.sample("a", dist.Bernoulli(0.33))
+        with pyro.iarange("b_iarange", N_b):
+            b = pyro.sample("b", dist.Bernoulli(0.25 * a + 0.50))
+            with pyro.iarange("c_iarange", N_c):
+                pyro.sample("c", dist.Bernoulli(0.15 * a + 0.20 * b + 0.32))
+
+    def guide():
+        qa = pyro.param("qa", torch.tensor(pi_a, requires_grad=True))
+        qb = pyro.param("qb", torch.tensor(pi_b, requires_grad=True))
+        qc = pyro.param("qc", torch.tensor(pi_c, requires_grad=True))
+        pyro.sample("a", dist.Bernoulli(qa))
+        with pyro.iarange("b_iarange", N_b):
+            pyro.sample("b", dist.Bernoulli(qb).expand_by([N_b]))
+            with pyro.iarange("c_iarange", N_c):
+                pyro.sample("c", dist.Bernoulli(qc).expand_by([N_c, N_b]))
+
+    logger.info("Computing gradients using surrogate loss")
+    elbo = TraceEnum_ELBO(max_iarange_nesting=2,
+                          strict_enumeration_warning=True)
+    elbo.loss_and_grads(model, config_enumerate(guide, default=enumerate1))
+    actual_grad_qa = pyro.param('qa').grad
+    actual_grad_qb = pyro.param('qb').grad
+    actual_grad_qc = pyro.param('qc').grad
+
+    logger.info("Computing analytic gradients")
+    qa = torch.tensor(pi_a, requires_grad=True)
+    qb = torch.tensor(pi_b, requires_grad=True)
+    qc = torch.tensor(pi_c, requires_grad=True)
+    elbo = kl_divergence(dist.Bernoulli(qa), dist.Bernoulli(0.33))
+    elbo = elbo + N_b * qa * kl_divergence(dist.Bernoulli(qb), dist.Bernoulli(0.75))
+    elbo = elbo + N_b * (1.0 - qa) * kl_divergence(dist.Bernoulli(qb), dist.Bernoulli(0.50))
+    elbo = elbo + N_c * N_b * qa * qb * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.67))
+    elbo = elbo + N_c * N_b * (1.0 - qa) * qb * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.52))
+    elbo = elbo + N_c * N_b * qa * (1.0 - qb) * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.47))
+    elbo = elbo + N_c * N_b * (1.0 - qa) * (1.0 - qb) * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.32))
+    expected_grad_qa, expected_grad_qb, expected_grad_qc = grad(elbo, [qa, qb, qc])
+
+    prec = 0.001
+
+    assert_equal(actual_grad_qa, expected_grad_qa, prec=prec, msg="".join([
+        "\nqa expected = {}".format(expected_grad_qa.data.cpu().numpy()),
+        "\nqa  actual = {}".format(actual_grad_qa.data.cpu().numpy()),
+    ]))
+    assert_equal(actual_grad_qb, expected_grad_qb, prec=prec, msg="".join([
+        "\nqb expected = {}".format(expected_grad_qb.data.cpu().numpy()),
+        "\nqb   actual = {}".format(actual_grad_qb.data.cpu().numpy()),
+    ]))
+    assert_equal(actual_grad_qc, expected_grad_qc, prec=prec, msg="".join([
+        "\nqc expected = {}".format(expected_grad_qc.data.cpu().numpy()),
+        "\nqc   actual = {}".format(actual_grad_qc.data.cpu().numpy()),
+    ]))
