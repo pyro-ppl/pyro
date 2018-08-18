@@ -244,15 +244,15 @@ class Dice(object):
                 factors_table[ordinal].append(factor)
 
         # deduplicate by shape to increase sharing
-        costs = {ordinal: deduplicate_by_shape(group)
-                 for ordinal, group in costs.items()}
+        costs = [(ordinal, deduplicate_by_shape(group))
+                 for ordinal, group in costs.items()]
         factors_table = {ordinal: deduplicate_by_shape(group, combine=operator.mul)
                          for ordinal, group in factors_table.items()}
 
         # share computation across all cost terms
         with shared_intermediates():
             expected_cost = 0.
-            for ordinal, cost_terms in costs.items():
+            for ordinal, cost_terms in costs:
                 factors = factors_table.get(ordinal, [])
                 for cost in cost_terms:
                     prob = sumproduct(factors, cost.shape)

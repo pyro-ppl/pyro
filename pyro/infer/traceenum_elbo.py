@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 import weakref
-from collections import defaultdict
+from collections import OrderedDict
 
 import torch
 from six.moves import queue
@@ -25,13 +25,13 @@ def _compute_dice_elbo(model_trace, guide_trace):
                 for name, site in trace.nodes.items()
                 if site["type"] == "sample"}
 
-    costs = defaultdict(list)
+    costs = OrderedDict()
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
-            costs[ordering[name]].append(site["log_prob"])
+            costs.setdefault(ordering[name], []).append(site["log_prob"])
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample":
-            costs[ordering[name]].append(-site["log_prob"])
+            costs.setdefault(ordering[name], []).append(-site["log_prob"])
 
     return Dice(guide_trace, ordering).compute_expectation(costs)
 
