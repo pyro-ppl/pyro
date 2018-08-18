@@ -11,17 +11,39 @@ import pyro.distributions as dist
 
 def known_covariance_linear_model(coef_mean, coef_sd, observation_sd,
                                   coef_label="w", observation_label="y"):
-    return partial(bayesian_linear_model, 
-                   w_means={coef_label: coef_mean},
-                   w_sqrtlambdas={coef_label: 1./(observation_sd*coef_sd)},
-                   obs_sd=observation_sd,
-                   response_label=observation_label)
+    model = partial(bayesian_linear_model, 
+                    w_means={coef_label: coef_mean},
+                    w_sqrtlambdas={coef_label: 1./(observation_sd*coef_sd)},
+                    obs_sd=observation_sd,
+                    response_label=observation_label)
+    # For testing, add these
+    model.obs_sd = observation_sd
+    model.w_sds = {coef_label: coef_sd}
+    return model
 
 
 def normal_guide(observation_sd, coef_shape, coef_label="w"):
     return partial(normal_inv_gamma_family_guide, 
                    obs_sd=observation_sd,
                    w_sizes={coef_label: coef_shape})
+
+
+def group_linear_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
+                       coef1_label="w1", coef2_label="w2", observation_label="y"):
+    model = partial(
+        bayesian_linear_model, w_means={coef1_label: coef1_mean, coef2_label: coef2_mean},
+        w_sqrtlambdas={coef1_label: 1./(observation_sd*coef1_sd), coef2_label: 1./(observation_sd*coef2_sd)},
+        obs_sd=observation_sd)
+    model.obs_sd = observation_sd
+    model.w_sds = {coef1_label: coef1_sd, coef2_label: coef2_sd}
+    return model
+
+
+def group_normal_guide(observation_sd, coef1_shape, coef2_shape,
+                       coef1_label="w1", coef2_label="w2"):
+    return partial(
+        normal_inv_gamma_family_guide, w_sizes={coef1_label: coef1_shape, coef2_label: coef2_shape},
+        obs_sd=observation_sd)
 
 
 def zero_mean_unit_obs_sd_lm(coef_sd):
