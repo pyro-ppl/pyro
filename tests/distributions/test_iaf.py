@@ -20,7 +20,7 @@ class InverseAutoregressiveFlowTests(TestCase):
 
     def _test_jacobian(self, input_dim, hidden_dim):
         jacobian = torch.zeros(input_dim, input_dim)
-        iaf = InverseAutoregressiveFlow(input_dim, hidden_dim, sigmoid_bias=0.5)
+        iaf = InverseAutoregressiveFlow(AutoRegressiveNN(input_dim, [40]), sigmoid_bias=0.5)
 
         def nonzero(x):
             return torch.sign(torch.abs(x))
@@ -54,7 +54,7 @@ class InverseAutoregressiveFlowTests(TestCase):
     def _test_shape(self, base_shape):
         base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
         last_dim = base_shape[-1] if isinstance(base_shape, tuple) else base_shape
-        iaf = InverseAutoregressiveFlow(last_dim, 40)
+        iaf = InverseAutoregressiveFlow(AutoRegressiveNN(last_dim, [40]))
         sample = dist.TransformedDistribution(base_dist, [iaf]).sample()
         assert sample.shape == base_shape
 
@@ -71,21 +71,21 @@ class AutoRegressiveNNTests(TestCase):
     def setUp(self):
         self.epsilon = 1.0e-3
 
-    def _test_jacobian(self, input_dim, hidden_dim, multiplier):
+    def _test_jacobian(self, input_dim, hidden_dim, param_dim):
         jacobian = torch.zeros(input_dim, input_dim)
-        arn = AutoRegressiveNN(input_dim, hidden_dim, multiplier)
+        arn = AutoRegressiveNN(input_dim, [hidden_dim], param_dims=[param_dim])
 
         def nonzero(x):
             return torch.sign(torch.abs(x))
 
-        for output_index in range(multiplier):
+        for output_index in range(param_dim):
             for j in range(input_dim):
                 for k in range(input_dim):
                     x = torch.randn(1, input_dim)
                     epsilon_vector = torch.zeros(1, input_dim)
                     epsilon_vector[0, j] = self.epsilon
                     delta = (arn(x + 0.5 * epsilon_vector) - arn(x - 0.5 * epsilon_vector)) / self.epsilon
-                    jacobian[j, k] = float(delta[0, k + output_index * input_dim])
+                    jacobian[j, k] = float(delta[0, output_index, k])
 
             permutation = arn.get_permutation()
             permuted_jacobian = jacobian.clone()
@@ -97,9 +97,8 @@ class AutoRegressiveNNTests(TestCase):
 
             assert lower_sum == float(0.0)
 
-    def _test_masks(self, input_dim, observed_dim, hidden_dim, num_layers, permutation, output_dim_multiplier):
-        masks, mask_skip = create_mask(input_dim, observed_dim, hidden_dim,
-                                       num_layers, permutation, output_dim_multiplier)
+    def _test_masks(self, input_dim, observed_dim, hidden_dims, permutation, output_dim_multiplier):
+        masks, mask_skip = create_mask(input_dim, observed_dim, hidden_dims, permutation, output_dim_multiplier)
 
         # First test that hidden layer masks are adequately connected
         # Tracing backwards, works out what inputs each output is connected to
@@ -154,7 +153,6 @@ class AutoRegressiveNNTests(TestCase):
                         self._test_masks(
                             input_dim,
                             observed_dim,
-                            hidden_dim,
-                            num_layers,
+                            [hidden_dim]*num_layers,
                             permutation,
                             output_dim_multiplier)
