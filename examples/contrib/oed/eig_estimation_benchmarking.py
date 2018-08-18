@@ -8,13 +8,13 @@ import pyro
 from pyro import optim
 from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import (
-    vi_ape, naive_rainforth, donsker_varadhan_loss, barber_agakov_loss
+    vi_ape, naive_rainforth_eig, donsker_varadhan_eig, barber_agakov_ape
 )
 
 from models.bayes_linear import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_entropy,
     bayesian_linear_model, normal_inv_gamma_family_guide, normal_inverse_gamma_linear_model,
-    normal_inverse_gamma_guide
+    normal_inverse_gamma_guide, group_linear_model, group_normal_guide
 )
 from dv.neural import T_neural, T_specialized
 from ba.guide import Ba_lm_guide
@@ -50,189 +50,124 @@ Estimation techniques:
 TODO:
 
 - VI with amortization
-- Barber-Agakov (with amortization)
+- Barber-Agakov with amortization
+- Better guides/ test cases for DV and BA
 """
 
-# design tensors have shape: batch x n x p
-X_lm = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])) for n in range(0, 11)])
-X_small = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])) for n in [0, 5]])
-item_thetas = torch.linspace(0., 2*np.pi, 10).unsqueeze(-1)
-X_circle = torch.stack([item_thetas.cos(), -item_thetas.sin()], dim=-1)
+#########################################################################################
+# Designs
+#########################################################################################
+# All design tensors have shape: batch x n x p
+# AB test
+AB_test_10d_10n_2p = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])) for n in range(0, 11)])
+AB_test_2d_10n_2p = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])) for n in [0, 5]])
+
+# Design on S^1
+item_thetas = torch.linspace(0., np.pi, 10).unsqueeze(-1)
+X_circle_10d_1n_2p = torch.stack([item_thetas.cos(), -item_thetas.sin()], dim=-1)
+
+#########################################################################################
+# Models
+#########################################################################################
+# Linear models
+basic_2p_linear_model_sds_10_2pt5, basic_2p_guide = zero_mean_unit_obs_sd_lm(torch.tensor([10., 2.5]))
+basic_2p_linear_model_sds_10_0pt1, _ = zero_mean_unit_obs_sd_lm(torch.tensor([10., .1]))
+group_2p_linear_model_sds_10_2pt5 = group_linear_model(torch.tensor(0.), torch.tensor([10.]), torch.tensor(0.), 
+                                                       torch.tensor([2.5]), torch.tensor(1.))
+group_2p_guide = group_normal_guide(torch.tensor(1.), (1,), (1,))
+nig_2p_linear_model_5_4 = normal_inverse_gamma_linear_model(torch.tensor(0.), torch.tensor([10., 2.5]),
+                                                            torch.tensor([5.]), torch.tensor([4.]))
+nig_2p_guide = normal_inverse_gamma_guide((2,))
+
+########################################################################################
+# Aux
+########################################################################################
+
+elbo = TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss
 
 
-def vi_for_group_lm(design, w1_sd, w2_sd, num_vi_steps, num_is_samples):
-    model = partial(bayesian_linear_model, 
-                    w_means={"w1": torch.tensor(0.), "w2": torch.tensor(0.)},
-                    w_sqrtlambdas={"w1": 1./w1_sd, "w2": 1./w2_sd},
-                    obs_sd=torch.tensor(1.))
-    guide = partial(normal_inv_gamma_family_guide,
-                    w_sizes={"w1": w1_sd.shape, "w2": w2_sd.shape},
-                    obs_sd=torch.tensor(1.))
-    prior_cov = torch.diag(w1_sd**2)
-    H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov)
-    return H_prior - vi_ape(
-        model,
-        design,
-        observation_labels="y",
-        target_labels="w1",
-        vi_parameters={
-            "guide": guide,
-            "optim": optim.Adam({"lr": 0.05}),
-            "loss": TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
-            "num_steps": num_vi_steps},
-        is_parameters={"num_samples": num_is_samples})
+def linear_model_ground_truth(model, design, observation_labels, target_labels, eig=True):
+    out = torch.tensor(0.)
+    start = 0
+    for label, w_sd in model.w_sds.items():
+        if target_labels is None or label in target_labels:
+            prior_cov = torch.diag(w_sd**2)
+            designs = torch.unbind(design[..., start:(start+w_sd.shape[-1])])
+            true_ape = [analytic_posterior_entropy(prior_cov, x, model.obs_sd) for x in designs]
+            if eig:
+                H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov)
+                out = out + H_prior - torch.tensor(true_ape)
+            else:
+                # else, APE
+                out = out + torch.tensor(true_ape)
+        start += w_sd.shape[-1]
+    return out
 
 
-def vi_for_lm(design, w_sds, num_vi_steps, num_is_samples, lr=0.05, known_cov=True):
-    if known_cov:
-        model, guide = zero_mean_unit_obs_sd_lm(w_sds)
-        prior_cov = torch.diag(w_sds**2)
-        H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov)
-    else:
-        alpha = torch.tensor(5.)
-        beta = torch.tensor(4.)
-        model = normal_inverse_gamma_linear_model(torch.tensor(0.), w_sds, 
-                                                  alpha, beta)
-        guide = normal_inverse_gamma_guide(w_sds.shape)
-        prior_cov = torch.diag(w_sds**2)
-        H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov) + torch.digamma(alpha) \
-                  - 2*torch.log(beta) + alpha + torch.lgamma(alpha) \
-                  + (1. - alpha)*torch.digamma(alpha)
-    
-    return H_prior - vi_ape(
-        model,
-        design,
-        observation_labels="y",
-        vi_parameters={
-            "guide": guide,
-            "optim": optim.Adam({"lr": lr}),
-            "loss": TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
-            "num_steps": num_vi_steps},
-        is_parameters={"num_samples": num_is_samples})
+def H_prior(model, design, observation_labels, target_labels):
+    out = torch.tensor(0.)
+    start = 0
+    for label, w_sd in model.w_sds.items():
+        if target_labels is None or label in target_labels:
+            prior_cov = torch.diag(w_sd**2)
+            H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov)
+            out = out + H_prior
+        start += w_sd.shape[-1]
+    return out
 
 
-def lm_true_ape(X_lm, w_sds, obs_sd=torch.tensor(1.)):
-    prior_cov = torch.diag(w_sds**2)
-    designs = torch.unbind(X_lm)
-    true_ape = [analytic_posterior_entropy(prior_cov, x, obs_sd) for x in designs]
-    return torch.tensor(true_ape)
+def vi_eig(model, design, observation_labels, target_labels, *args, **kwargs):
+    ape = vi_ape(model, design, observation_labels, target_labels, *args, **kwargs)
+    prior_entropy = H_prior(model, design, observation_labels, target_labels)
+    return prior_entropy - ape
 
 
-def lm_true_eig(X_lm, w_sds, obs_sd=torch.tensor(1.)):
-    prior_cov = torch.diag(w_sds**2)
-    H_prior = 0.5*torch.logdet(2*np.pi*np.e*prior_cov)
-    return H_prior - lm_true_ape(X_lm, w_sds, obs_sd)
-
-
-def naive_rainforth_lm(X, w_sds, N, M, known_cov=True):
-    if known_cov:
-        model, _ = zero_mean_unit_obs_sd_lm(w_sds)
-    else:
-        model = normal_inverse_gamma_linear_model(torch.tensor(0.), w_sds, 
-                                                  torch.tensor(5.), torch.tensor(4.))
-    return naive_rainforth(model, X, "y", None, N=N, M=M)
-
-
-def naive_rainforth_group_lm(X, w1_sd, w2_sd, N, M):
-    model = partial(bayesian_linear_model, 
-                    w_means={"w1": torch.tensor(0.), "w2": torch.tensor(0.)},
-                    w_sqrtlambdas={"w1": 1./w1_sd, "w2": 1./w2_sd},
-                    obs_sd=torch.tensor(1.))
-    return naive_rainforth(model, X, "y", "w1", N=N, M=M, M_prime=M)
-
-
-def donsker_varadhan_lm(X, w_sds, n_iter, n_samples, lr, T,
-                        final_X=None, final_n_samples=None, return_history=False):
-    model, _ = zero_mean_unit_obs_sd_lm(w_sds)
-    if final_X is None:
-        final_X = X
-    if final_n_samples is None:
-        final_n_samples = n_samples
-    dv_loss_fn = donsker_varadhan_loss(model, "y", T)
-    params = None
-    opt = optim.ClippedAdam({"lr": lr, "betas": (0.92, 0.999)})
-    history = []
-    for step in range(n_iter):
-        if params is not None:
-            pyro.infer.util.zero_grads(params)
-        agg_loss, dv_loss = dv_loss_fn(X, n_samples)
-        agg_loss.backward()
-        if return_history:
-            history.append(dv_loss)
-        params = [pyro.param(name).unconstrained()
-                  for name in pyro.get_param_store().get_all_param_names()]
-        opt(params)
-    _, dv_loss = dv_loss_fn(final_X, final_n_samples)
-    if return_history:
-        return torch.stack(history), dv_loss
-    else:
-        return dv_loss
-
-
-def barber_agakov_lm(X, w_sds, n_iter, n_samples, lr, guide,
-                     final_X=None, final_n_samples=None, return_history=False):
-    model, _ = zero_mean_unit_obs_sd_lm(w_sds)
-    if final_X is None:
-        final_X = X
-    if final_n_samples is None:
-        final_n_samples = n_samples
-    ba_loss_fn = barber_agakov_loss(model, guide)
-    params = None
-    opt = optim.ClippedAdam({"lr": lr, "betas": (0.92, 0.999)})
-    history = []
-    for step in range(n_iter):
-        if params is not None:
-            pyro.infer.util.zero_grads(params)
-        agg_loss, ba_loss = ba_loss_fn(X, n_samples)
-        agg_loss.backward()
-        if return_history:
-            history.append(ba_loss)
-        params = [pyro.param(name).unconstrained()
-                  for name in pyro.get_param_store().get_all_param_names()]
-        opt(params)
-    _, ba_loss = ba_loss_fn(final_X, final_n_samples)
-    if return_history:
-        return torch.stack(history), ba_loss
-    else:
-        return ba_loss
-
-
-@pytest.mark.parametrize("title,arglist", [
-    # ("A/B testing with unknown covariance targeting regression coefficient only",
-    #   # Warning! Guide is not mean-field
-    #  [(X_lm, vi_for_lm, [torch.tensor([10, 2.5]), 5000, 10, 0.05, False]),
-    #   (X_lm, naive_rainforth_lm, [torch.tensor([10., 2.5]), 2000, 2000, False])
-    #   ]),
-    ("A/B testing with unknown covariance",
-      # Warning! Guide is not mean-field
-     [(X_lm, vi_for_lm, [torch.tensor([10, 2.5]), 5000, 10, 0.05, False]),
-      (X_lm, naive_rainforth_lm, [torch.tensor([10., 2.5]), 2000, 2000, False])
-      ]),
-    ("Linear model targeting one parameter",
-     [(X_circle[..., :1], lm_true_eig, [torch.tensor([10.])]),
-      (X_circle, vi_for_group_lm, [torch.tensor([10.]), torch.tensor([2.5]), 5000, 1]),
-      (X_circle, naive_rainforth_group_lm, [torch.tensor([10.]), torch.tensor([2.5]), 200, 200])
+@pytest.mark.parametrize("title,model,design,observation_label,target_label,arglist", [
+    ("Linear model targeting one parameter - EIG", 
+     group_2p_linear_model_sds_10_2pt5, X_circle_10d_1n_2p, "y", "w1",
+     [(linear_model_ground_truth, []),
+      (naive_rainforth_eig, [200, 200, 200]),
+      (vi_eig,
+       [{"guide": group_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+         "num_steps": 5000}, {"num_samples": 1}])
       ]),
     ("Linear model with designs on S^1",
-     [(X_circle, lm_true_eig, [torch.tensor([10., 2.5])]),
-      (X_circle, vi_for_lm, [torch.tensor([10., 2.5]), 5000, 1, 0.01]),
-      (X_circle, naive_rainforth_lm, [torch.tensor([10., 2.5]), 2000, 2000]),
+     basic_2p_linear_model_sds_10_2pt5, X_circle_10d_1n_2p, "y", None,
+     [(linear_model_ground_truth, []),
+      (vi_eig,
+       [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+         "num_steps": 5000}, {"num_samples": 1}]),
+      (naive_rainforth_eig, [2000, 2000]),
       # (X_circle, donsker_varadhan_lm, [torch.tensor([10., 2.5]), 4000, 200, 0.005, T_neural(2, 2)])
       ]),
     ("A/B test linear model known covariance",
-     [(X_lm, lm_true_eig, [torch.tensor([10., 2.5])]),
-      (X_lm, vi_for_lm, [torch.tensor([10., 2.5]), 5000, 1]),
-      (X_lm, naive_rainforth_lm, [torch.tensor([10., 2.5]), 2000, 2000]),
+     basic_2p_linear_model_sds_10_2pt5, AB_test_10d_10n_2p, "y", None,
+     [(linear_model_ground_truth, []),
+      (vi_eig,
+       [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+         "num_steps": 5000}, {"num_samples": 1}]),
+      (naive_rainforth_eig, [2000, 2000]),
       # (X_lm, donsker_varadhan_lm, [torch.tensor([10., 2.5]), 4000, 200, 0.005, T_neural(2, 2)])
       ]),
     ("A/B test linear model known covariance (different sds)",
-     [(X_lm, lm_true_eig, [torch.tensor([10., .1])]),
-      (X_lm, vi_for_lm, [torch.tensor([10., .1]), 10000, 1]),
-      (X_lm, naive_rainforth_lm, [torch.tensor([10., .1]), 2000, 2000]),
+     basic_2p_linear_model_sds_10_0pt1, AB_test_10d_10n_2p, "y", None,
+     [(linear_model_ground_truth, []),
+      (vi_eig,
+       [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+         "num_steps": 5000}, {"num_samples": 1}]),
+      (naive_rainforth_eig, [2000, 2000]),
       # (X_lm, donsker_varadhan_lm, [torch.tensor([10., .1]), 4000, 200, 0.005, T_neural(2, 2)])
+      ]),
+    ("A/B testing with unknown covariance",
+     nig_2p_linear_model_5_4, AB_test_10d_10n_2p, "y", None,
+      # Warning! Guide is not mean-field
+     [(vi_ape,
+       [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+         "num_steps": 5000}, {"num_samples": 10}]),
+      (naive_rainforth_eig, [2000, 2000])
       ])
 ])
-def test_eig_and_plot(title, arglist):
+def test_eig_and_plot(title, model, design, observation_label, target_label, arglist):
     """
     Runs a group of EIG estimation tests and plots the estimates on a single set
     of axes. Typically, each test within one `arglist` should estimate the same quantity.
@@ -241,8 +176,8 @@ def test_eig_and_plot(title, arglist):
     # pyro.set_rng_seed(42)
     ys = []
     names = []
-    for design_tensor, estimator, args in arglist:
-        ys.append(time_eig(design_tensor, estimator, *args))
+    for estimator, args in arglist:
+        ys.append(time_eig(estimator, model, design, observation_label, target_label, args))
         names.append(estimator.__name__)
 
     if PLOT:
@@ -255,11 +190,11 @@ def test_eig_and_plot(title, arglist):
         plt.show()
 
 
-def time_eig(design_tensor, estimator, *args):
+def time_eig(estimator, model, design, observation_label, target_label, args):
     pyro.clear_param_store()
 
     t = time.time()
-    y = estimator(design_tensor, *args)
+    y = estimator(model, design, observation_label, target_label, *args)
     elapsed = time.time() - t
 
     print(estimator.__name__)
@@ -268,29 +203,31 @@ def time_eig(design_tensor, estimator, *args):
     return y
 
 
-@pytest.mark.parametrize("design,estimator,true,w_sds,dv_params", [
-     (X_small, donsker_varadhan_lm, lm_true_eig, 
-      torch.tensor([10., 2.5]), 
-      {"n_iter": 400, "n_samples": 400, "lr": 0.05,
-       "T": T_specialized(), "final_n_samples": 10000}),
-     (X_small, barber_agakov_lm, lm_true_ape,
-      torch.tensor([10., 2.5]), 
-      {"n_iter": 400, "n_samples": 10, "lr": 0.05,
-       "guide": Ba_lm_guide(torch.tensor([10., 2.5])).guide,
-       "final_n_samples": 1000})
+@pytest.mark.parametrize("title,model,design,observation_label,target_label,est1,est2,kwargs1,kwargs2", [
+    ("Donsker-Varadhan on small AB test",
+     basic_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w", 
+     donsker_varadhan_eig, linear_model_ground_truth,
+     {"num_steps": 400, "num_samples": 400, "optim": optim.Adam({"lr": 0.05}),
+      "T": T_specialized(), "final_num_samples": 10000}, {}),
+    ("Barber-Agakov on small AB test",
+     basic_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w",
+     barber_agakov_ape, linear_model_ground_truth,
+     {"num_steps": 400, "num_samples": 10, "optim": optim.Adam({"lr": 0.05}),
+      "guide": Ba_lm_guide(torch.tensor([10., 2.5])).guide,
+      "final_num_samples": 1000}, {"eig": False})
 ])
-def test_convergence(design, estimator, true, w_sds, dv_params):
+def test_convergence(title, model, design, observation_label, target_label, est1, est2, kwargs1, kwargs2):
     """
     Produces a convergence plot for a Barber-Agakov or Donsker-Varadhan
     EIG estimation.
     """
     t = time.time()
-    pyro.set_rng_seed(42)
+    # pyro.set_rng_seed(42)
     pyro.clear_param_store()
-    truth = true(design, w_sds)
-    dv, final = estimator(design, w_sds, return_history=True, **dv_params)
+    truth = est2(model, design, observation_label, target_label, **kwargs2)
+    dv, final = est1(model, design, observation_label, target_label, return_history=True, **kwargs1)
     x = np.arange(0, dv.shape[0])
-    print(estimator.__name__)
+    print(est1.__name__)
     print("Final est", final, "Truth", truth, "Error", (final - truth).abs().sum())
     print("Time", time.time() - t)
 
@@ -301,4 +238,5 @@ def test_convergence(design, estimator, true, w_sds, dv_params):
 
         for true, col in zip(torch.unbind(truth, 0), plt.rcParams['axes.prop_cycle'].by_key()['color']):
             plt.axhline(true.numpy(), color=col)
+        plt.title(title)
         plt.show()

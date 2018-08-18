@@ -37,7 +37,11 @@ class T_specialized(nn.Module):
         self.regu = nn.Parameter(torch.tensor([10., 10.]))
         self.sds = nn.Parameter(torch.tensor([[10., 10.], [10., 10.]]))
 
-    def forward(self, design, trace, observation_label, target_label="w"):
+    def forward(self, design, trace, observation_labels, target_labels):
+        # TODO fix this
+        observation_label = observation_labels[0]
+        target_label = target_labels[0]
+
         trace.compute_log_prob()
         prior_lp = trace.nodes[target_label]["log_prob"]
         y = trace.nodes[observation_label]["value"]
