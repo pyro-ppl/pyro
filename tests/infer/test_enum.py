@@ -1207,7 +1207,7 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
         ]))
 
 
-def test_elbo_hmm_in_guide_growth():
+def test_elbo_hmm_growth():
     pyro.clear_param_store()
     init_probs = torch.tensor([0.5, 0.5])
     elbo = TraceEnum_ELBO(max_iarange_nesting=0)
@@ -1258,6 +1258,9 @@ def test_elbo_hmm_in_guide_growth():
     print('times1 = {}'.format(repr(times1)))
     print('times2 = {}'.format(repr(times2)))
 
+    # This assertion may fail nondeterministically:
+    # assert costs[-3] + costs[-1] == 2 * costs[-2], 'cost is not asymptotically linear'
+
 
 def test_elbo_dbn_growth():
     pyro.clear_param_store()
@@ -1288,7 +1291,7 @@ def test_elbo_dbn_growth():
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs_x[x]))
             y = pyro.sample("y_{}".format(i), dist.Categorical(probs_y[x, y]))
 
-    sizes = range(1, 31)
+    sizes = range(1, 11)
     costs = []
     times1 = []
     times2 = []
@@ -1310,6 +1313,9 @@ def test_elbo_dbn_growth():
     print('costs = {}'.format(repr(costs)))
     print('times1 = {}'.format(repr(times1)))
     print('times2 = {}'.format(repr(times2)))
+
+    # This assertion may fail nondeterministically:
+    # assert costs[-3] + costs[-1] == 2 * costs[-2], 'cost is not asymptotically linear'
 
 
 @pytest.mark.parametrize("pi_a", [0.33])
