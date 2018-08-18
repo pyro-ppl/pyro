@@ -7,39 +7,34 @@ import pyro.distributions as dist
 
 class Ba_lm_guide(nn.Module):
 
-    def __init__(self, coef_shape):
+    def __init__(self, shape):
         super(Ba_lm_guide, self).__init__()
-        self.regu = nn.Parameter(10.*torch.ones(coef_shape[-1]))
-        self.sds = nn.Parameter(10.*torch.ones(coef_shape))
+        self.regu = nn.Parameter(-2.*torch.ones(shape[-1] - 1))
+        self.scale_tril = nn.Parameter(10.*torch.ones(shape))
+        self.softplus = nn.Softplus()
 
     def forward(self, y, design):
-        # design_suff = design.sum(-2, keepdim=True)
-        # suff = torch.matmul(y.unsqueeze(-2), design)
-        xtxi = tensorized_2_by_2_matrix_inverse(torch.matmul(design.transpose(-1, -2), design) + torch.diag(self.regu))
-        mu = torch.matmul(xtxi, torch.matmul(design.transpose(-1, -2), y.unsqueeze(-1))).squeeze(-1)
-        # mu = (suff/(design_suff + self.regu)).squeeze(-2)
 
-        return mu, self.sds
+        anneal = torch.diag(self.softplus(self.regu))
+        xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
+        xtxi = tensorized_2_by_2_matrix_inverse(xtx)
+        mu = torch.matmul(xtxi, torch.matmul(design.transpose(-1, -2), y.unsqueeze(-1))).squeeze(-1)
+
+        scale_tril = tensorized_2_by_2_tril(self.scale_tril)
+
+        return mu, scale_tril
 
     def guide(self, y_dict, design, observation_labels, target_labels):
 
         target_label = target_labels[0]
-
         pyro.module("ba_guide", self)
 
         y = y_dict["y"]
-        # design is size batch x n x p
-        # tau is size batch
-        tau_shape = design.shape[:-2]
-
-        # response will be shape batch x n
-
-        # Set up mu and lambda
-        mu, sigma = self.forward(y, design)
+        mu, scale_tril = self.forward(y, design)
         
         # guide distributions for w
-        w_dist = dist.Normal(mu, sigma).independent(1)
-        w = pyro.sample(target_label, w_dist)
+        w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril)
+        pyro.sample(target_label, w_dist)
 
 
 def tensorized_2_by_2_matrix_inverse(M):
@@ -51,3 +46,11 @@ def tensorized_2_by_2_matrix_inverse(M):
     inv[..., 1, 0] = -M[..., 1, 0]
     inv = inv/det.unsqueeze(-1).unsqueeze(-1)
     return inv
+
+
+def tensorized_2_by_2_tril(M):
+    tril = torch.zeros(M.shape[:-1] + (2, 2))
+    tril[..., 0, 0] = M[..., 0]
+    tril[..., 1, 0] = M[..., 1]
+    tril[..., 1, 1] = M[..., 2]
+    return tril
