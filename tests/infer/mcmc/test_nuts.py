@@ -230,8 +230,7 @@ def test_bernoulli_latent_model():
     (2, False),
     (3, False),
     # This will crash without the einsum backend
-    pytest.param(30, True, marks=pytest.mark.skipif("CI" in os.environ,
-                                                    reason="slow test")),
+    pytest.param(30, True, marks=pytest.mark.skip(reason="slow test")),
 ])
 def test_gaussian_hmm_enum_shape(num_steps, use_einsum):
     dim = 4
