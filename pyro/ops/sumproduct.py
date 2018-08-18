@@ -25,18 +25,23 @@ def memoized_squeeze(tensor):
 
 def sumproduct(factors, target_shape=(), backend='torch', optimize=True):
     # Handle numbers and trivial cases.
-    # FIXME this does not handle nonstandard backends like torch_log
+    if backend.endswith('_log'):
+        multiply = operator.add
+        unit = 0.
+    else:
+        multiply = operator.mul
+        unit = 1.
     numbers = []
     tensors = []
     for t in factors:
         (numbers if isinstance(t, Number) else tensors).append(t)
     if not tensors:
-        return reduce(operator.mul, numbers, 1.)
+        return reduce(multiply, numbers, unit)
     shape = broadcast_shape(*(t.shape for t in tensors))
     if numbers:
-        number_part = reduce(operator.mul, numbers, 1.)
+        number_part = reduce(multiply, numbers, unit)
         tensor_part = sumproduct(tensors, target_shape, backend=backend, optimize=optimize)
-        return tensor_part * number_part
+        return multiply(tensor_part, number_part)
 
     # Work around opt_einsum interface lack of support for pure broadcasting.
     if len(shape) < len(target_shape) or \
