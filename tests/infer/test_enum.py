@@ -1312,3 +1312,83 @@ def test_bernoulli_pyramid_elbo_gradient(enumerate1, N_b, N_c, pi_a, pi_b, pi_c,
         "\nqc expected = {}".format(expected_grad_qc.data.cpu().numpy()),
         "\nqc   actual = {}".format(actual_grad_qc.data.cpu().numpy()),
     ]))
+
+
+@pytest.mark.parametrize("pi_a", [0.33])
+@pytest.mark.parametrize("pi_b", [0.51])
+@pytest.mark.parametrize("pi_c", [0.37])
+@pytest.mark.parametrize("pi_d", [0.29])
+@pytest.mark.parametrize("b_factor", [0.03, 0.04])
+@pytest.mark.parametrize("c_factor", [0.04, 0.06])
+@pytest.mark.parametrize("d_offset", [0.32])
+@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
+@pytest.mark.parametrize("expand", [True, False])
+def test_bernoulli_non_tree_elbo_gradient(enumerate1, b_factor, c_factor, pi_a, pi_b, pi_c, pi_d,
+                                          expand, d_offset, N_b=2, N_c=2):
+    pyro.clear_param_store()
+
+    def model():
+        a = pyro.sample("a", dist.Bernoulli(0.33))
+        b = pyro.sample("b", dist.Bernoulli(0.25 * a + 0.50))
+        c = pyro.sample("c", dist.Bernoulli(0.25 * a + 0.10 * b + 0.50))
+        pyro.sample("d", dist.Bernoulli(b_factor * b + c_factor * c + d_offset))
+
+    def guide():
+        qa = pyro.param("qa", torch.tensor(pi_a, requires_grad=True))
+        qb = pyro.param("qb", torch.tensor(pi_b, requires_grad=True))
+        qc = pyro.param("qc", torch.tensor(pi_c, requires_grad=True))
+        qd = pyro.param("qd", torch.tensor(pi_d, requires_grad=True))
+        pyro.sample("a", dist.Bernoulli(qa))
+        pyro.sample("b", dist.Bernoulli(qb))
+        pyro.sample("c", dist.Bernoulli(qc))
+        pyro.sample("d", dist.Bernoulli(qd))
+
+    logger.info("Computing gradients using surrogate loss")
+    elbo = TraceEnum_ELBO(max_iarange_nesting=2,
+                          strict_enumeration_warning=True)
+    elbo.loss_and_grads(model, config_enumerate(guide, default=enumerate1, expand=expand))
+    actual_grad_qa = pyro.param('qa').grad
+    actual_grad_qb = pyro.param('qb').grad
+    actual_grad_qc = pyro.param('qc').grad
+    actual_grad_qd = pyro.param('qd').grad
+
+    logger.info("Computing analytic gradients")
+    qa = torch.tensor(pi_a, requires_grad=True)
+    qb = torch.tensor(pi_b, requires_grad=True)
+    qc = torch.tensor(pi_c, requires_grad=True)
+    qd = torch.tensor(pi_d, requires_grad=True)
+
+    elbo = kl_divergence(dist.Bernoulli(qa), dist.Bernoulli(0.33))
+    elbo = elbo + qa * kl_divergence(dist.Bernoulli(qb), dist.Bernoulli(0.75))
+    elbo = elbo + (1.0 - qa) * kl_divergence(dist.Bernoulli(qb), dist.Bernoulli(0.50))
+
+    elbo = elbo + qa * qb * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.85))
+    elbo = elbo + (1.0 - qa) * qb * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.60))
+    elbo = elbo + qa * (1.0 - qb) * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.75))
+    elbo = elbo + (1.0 - qa) * (1.0 - qb) * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.50))
+
+    elbo = elbo + qb * qc * kl_divergence(dist.Bernoulli(qd), dist.Bernoulli(b_factor + c_factor + d_offset))
+    elbo = elbo + (1.0 - qb) * qc * kl_divergence(dist.Bernoulli(qd), dist.Bernoulli(c_factor + d_offset))
+    elbo = elbo + qb * (1.0 - qc) * kl_divergence(dist.Bernoulli(qd), dist.Bernoulli(b_factor + d_offset))
+    elbo = elbo + (1.0 - qb) * (1.0 - qc) * kl_divergence(dist.Bernoulli(qd), dist.Bernoulli(d_offset))
+
+    expected_grad_qa, expected_grad_qb, expected_grad_qc, expected_grad_qd = grad(elbo, [qa, qb, qc, qd])
+
+    prec = 0.0001
+
+    assert_equal(actual_grad_qa, expected_grad_qa, prec=prec, msg="".join([
+        "\nqa expected = {}".format(expected_grad_qa.data.cpu().numpy()),
+        "\nqa  actual = {}".format(actual_grad_qa.data.cpu().numpy()),
+    ]))
+    assert_equal(actual_grad_qb, expected_grad_qb, prec=prec, msg="".join([
+        "\nqb expected = {}".format(expected_grad_qb.data.cpu().numpy()),
+        "\nqb   actual = {}".format(actual_grad_qb.data.cpu().numpy()),
+    ]))
+    assert_equal(actual_grad_qc, expected_grad_qc, prec=prec, msg="".join([
+        "\nqc expected = {}".format(expected_grad_qc.data.cpu().numpy()),
+        "\nqc   actual = {}".format(actual_grad_qc.data.cpu().numpy()),
+    ]))
+    assert_equal(actual_grad_qd, expected_grad_qd, prec=prec, msg="".join([
+        "\nqd expected = {}".format(expected_grad_qd.data.cpu().numpy()),
+        "\nqd   actual = {}".format(actual_grad_qd.data.cpu().numpy()),
+    ]))
