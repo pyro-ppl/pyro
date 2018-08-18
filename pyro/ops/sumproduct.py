@@ -1,19 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
+import operator
 from numbers import Number
 
-import opt_einsum
 import torch
 
+import opt_einsum
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.einsum.deferred import deferred_tensor
-
-
-def _product(factors):
-    result = 1.
-    for factor in factors:
-        result = result * factor
-    return result
 
 
 def zip_align_right(xs, ys):
@@ -27,14 +21,13 @@ def sumproduct(factors, target_shape=(), optimize=True, backend='torch'):
     for t in factors:
         (numbers if isinstance(t, Number) else tensors).append(t)
     if not tensors:
-        return _product(numbers)
+        return reduce(operator.mul, numbers, 1.)
     shape = broadcast_shape(*(t.shape for t in tensors))
     if numbers:
-        number_part = _product(numbers)
+        number_part = reduce(operator.mul, numbers, 1.)
         tensor_part = sumproduct(tensors, target_shape, optimize=optimize, backend=backend)
         contracted_shape = shape[:len(shape) - len(target_shape)]
-        replication_power = _product(contracted_shape)
-        return tensor_part * number_part ** replication_power
+        return tensor_part * number_part
 
     # Work around opt_einsum interface lack of support for pure broadcasting.
     if len(shape) < len(target_shape) or \
