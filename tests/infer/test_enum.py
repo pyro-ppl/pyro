@@ -1237,14 +1237,23 @@ def test_elbo_hmm_in_guide_growth():
 
     sizes = range(1, 11)
     costs = []
-    times = []
+    times1 = []
+    times2 = []
     for size in sizes:
         data = torch.ones(size)
-        start_time = timeit.default_timer()
-        elbo.loss_and_grads(model, guide, data)
-        times.append(timeit.default_timer() - start_time)
+
+        time0 = timeit.default_timer()
+        elbo.loss_and_grads(model, guide, data)  # compiles paths
+        time1 = timeit.default_timer()
+        elbo.loss_and_grads(model, guide, data)  # reuses compiled path
+        time2 = timeit.default_timer()
+
+        times1.append(time1 - time0)
+        times2.append(time2 - time1)
         costs.append(pyro.ops.einsum.shared.LAST_CACHE_SIZE[0])
+
     print('Growth:')
     print('sizes = {}'.format(repr(sizes)))
     print('costs = {}'.format(repr(costs)))
-    print('times = {}'.format(repr(times)))
+    print('times1 = {}'.format(repr(times1)))
+    print('times2 = {}'.format(repr(times2)))
