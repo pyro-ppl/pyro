@@ -136,6 +136,15 @@ def deduplicate_by_shape(tensors, combine=lambda a, b: a + b):
     return [reduce(combine, parts) for parts in grouped.values()]
 
 
+def expand_to_ordinal(ordinal, tensor):
+    shape = [1] * max(-frame.dim for frame in ordinal)
+    for frame in ordinal:
+        if frame.size is not None:
+            shape[frame.dim] = frame.size
+    tensor, _ = broadcast_all(tensor, torch.empty(torch.Size(shape)))
+    return tensor
+
+
 class Dice(object):
     """
     An implementation of the DiCE operator compatible with Pyro features.
@@ -180,6 +189,11 @@ class Dice(object):
                     if not is_identically_zero(log_prob):
                         log_prob = log_prob - log_prob.detach()
                     log_prob = log_prob - math.log(num_samples)
+                    if not isinstance(log_prob, torch.Tensor):
+                        value = site["value"]
+                        ones_shape = len(value.shape[1:]) - len(site["fn"].event_shape)
+                        shape = value.shape[:1] + (1,) * ones_shape
+                        log_prob = value.new_tensor(log_prob).expand(shape)
                 elif site["infer"]["enumerate"] == "sequential":
                     log_denom[ordinal] += math.log(site["infer"]["_enum_total"])
             else:  # site was monte carlo sampled
@@ -277,8 +291,34 @@ class Dice(object):
     def _naive_compute_expectation(self, costs):
         expected_cost = 0.
         for ordinal, cost_terms in costs.items():
+            # Version 1. correct
+            # cost = sum(cost_terms)
+            # prob = self.in_context(cost.shape, ordinal)
+            # mask = prob > 0
+            # if torch.is_tensor(mask) and not mask.all():
+            #     cost, prob, mask = broadcast_all(cost, prob, mask)
+            #     prob = prob[mask]
+            #     cost = cost[mask]
+            # expected_cost = expected_cost + (prob * cost).sum()
+
+            # Version 2. fails test_elbo_normals
+            # for cost in cost_terms:
+            #     cost = expand_to_ordinal(ordinal, cost)
+            #     prob = self.in_context(cost.shape, ordinal)
+            #     mask = prob > 0
+            #     if torch.is_tensor(mask) and not mask.all():
+            #         cost, prob, mask = broadcast_all(cost, prob, mask)
+            #         prob = prob[mask]
+            #         cost = cost[mask]
+            #     expected_cost = expected_cost + (prob * cost).sum()
+
+            # Version 3. fails test_elbo_normals
+            shape = broadcast_shape(*(c.shape for c in cost_terms))
             for cost in cost_terms:
                 prob = self.in_context(cost.shape, ordinal)
+                # cost = cost.expand(shape)  # <-- this is the crux
+                # if cost.shape != shape:
+                #     import pdb; pdb.set_trace()
                 mask = prob > 0
                 if torch.is_tensor(mask) and not mask.all():
                     cost, prob, mask = broadcast_all(cost, prob, mask)

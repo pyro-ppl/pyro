@@ -26,7 +26,6 @@ def sumproduct(factors, target_shape=(), optimize=True, backend='torch'):
     if numbers:
         number_part = reduce(operator.mul, numbers, 1.)
         tensor_part = sumproduct(tensors, target_shape, optimize=optimize, backend=backend)
-        contracted_shape = shape[:len(shape) - len(target_shape)]
         return tensor_part * number_part
 
     # Work around opt_einsum interface lack of support for pure broadcasting.
