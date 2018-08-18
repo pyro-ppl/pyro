@@ -1251,12 +1251,13 @@ def test_elbo_hmm_in_guide_growth():
 
 
 @pytest.mark.parametrize("pi_a", [0.33])
-@pytest.mark.parametrize("pi_b", [0.51])
+@pytest.mark.parametrize("pi_b", [0.51, 0.77])
 @pytest.mark.parametrize("pi_c", [0.37])
 @pytest.mark.parametrize("N_b", [3, 4])
-@pytest.mark.parametrize("N_c", [5])
+@pytest.mark.parametrize("N_c", [5, 6])
 @pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
-def test_bernoulli_pyramid_elbo_gradient(enumerate1, N_b, N_c, pi_a, pi_b, pi_c):
+@pytest.mark.parametrize("expand", [True, False])
+def test_bernoulli_pyramid_elbo_gradient(enumerate1, N_b, N_c, pi_a, pi_b, pi_c, expand):
     pyro.clear_param_store()
 
     def model():
@@ -1279,7 +1280,7 @@ def test_bernoulli_pyramid_elbo_gradient(enumerate1, N_b, N_c, pi_a, pi_b, pi_c)
     logger.info("Computing gradients using surrogate loss")
     elbo = TraceEnum_ELBO(max_iarange_nesting=2,
                           strict_enumeration_warning=True)
-    elbo.loss_and_grads(model, config_enumerate(guide, default=enumerate1))
+    elbo.loss_and_grads(model, config_enumerate(guide, default=enumerate1, expand=expand))
     actual_grad_qa = pyro.param('qa').grad
     actual_grad_qb = pyro.param('qb').grad
     actual_grad_qc = pyro.param('qc').grad
