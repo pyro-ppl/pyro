@@ -60,7 +60,7 @@ TODO:
 #########################################################################################
 # All design tensors have shape: batch x n x p
 # AB test
-AB_test_10d_10n_2p = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])) for n in range(0, 11)])
+AB_test_11d_10n_2p = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])) for n in range(0, 11)])
 AB_test_2d_10n_2p = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])) for n in [0, 5]])
 
 # Design on S^1
@@ -138,7 +138,7 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
       (naive_rainforth_eig, [200, 200, 200]),
       (vi_eig,
        [{"guide": group_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
-         "num_steps": 5000}, {"num_samples": 1}]),
+         "num_steps": 1000}, {"num_samples": 1}]),
       (donsker_varadhan_eig, [400, 400, T_specialized((10, 3)), optim.Adam({"lr": 0.05}),
         False, None, 1000]),
       (ba_eig, [20, 400, group_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
@@ -147,46 +147,46 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
     ("Linear model with designs on S^1",
      basic_2p_linear_model_sds_10_2pt5, X_circle_10d_1n_2p, "y", "w",
      [(linear_model_ground_truth, []),
+      (naive_rainforth_eig, [2000, 2000]),
       (vi_eig,
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
-         "num_steps": 5000}, {"num_samples": 1}]),
-      (naive_rainforth_eig, [2000, 2000]),
+         "num_steps": 1000}, {"num_samples": 1}]),
       (donsker_varadhan_eig, [400, 400, T_specialized((10, 3)), optim.Adam({"lr": 0.05}),
         False, None, 1000]),
       (ba_eig, [20, 400, basic_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
         False, None, 1000])
       ]),
     ("A/B test linear model known covariance",
-     basic_2p_linear_model_sds_10_2pt5, AB_test_10d_10n_2p, "y", "w",
+     basic_2p_linear_model_sds_10_2pt5, AB_test_11d_10n_2p, "y", "w",
      [(linear_model_ground_truth, []),
+      (naive_rainforth_eig, [2000, 2000]),
       (vi_eig,
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
-         "num_steps": 5000}, {"num_samples": 1}]),
-      (naive_rainforth_eig, [2000, 2000]),
-      (donsker_varadhan_eig, [400, 400, T_specialized((10, 3)), optim.Adam({"lr": 0.05}),
+         "num_steps": 1000}, {"num_samples": 1}]),
+      (donsker_varadhan_eig, [400, 400, T_specialized((11, 3)), optim.Adam({"lr": 0.05}),
         False, None, 1000]),
-      (ba_eig, [20, 400, group_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
+      (ba_eig, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 1000])
       ]),
     ("A/B test linear model known covariance (different sds)",
-     basic_2p_linear_model_sds_10_0pt1, AB_test_10d_10n_2p, "y", "w",
+     basic_2p_linear_model_sds_10_0pt1, AB_test_11d_10n_2p, "y", "w",
      [(linear_model_ground_truth, []),
+      (naive_rainforth_eig, [2000, 2000]),
       (vi_eig,
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
-         "num_steps": 5000}, {"num_samples": 1}]),
-      (naive_rainforth_eig, [2000, 2000]),
-      (donsker_varadhan_eig, [400, 400, T_specialized((10, 3)), optim.Adam({"lr": 0.05}),
+         "num_steps": 1000}, {"num_samples": 1}]),
+      (donsker_varadhan_eig, [400, 400, T_specialized((11, 3)), optim.Adam({"lr": 0.05}),
         False, None, 1000]),
-      (ba_eig, [20, 400, group_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
+      (ba_eig, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 1000])
       ]),
     ("A/B testing with unknown covariance",
-     nig_2p_linear_model_5_4, AB_test_10d_10n_2p, "y", "w",
+     nig_2p_linear_model_5_4, AB_test_11d_10n_2p, "y", "w",
+     [(naive_rainforth_eig, [2000, 2000]),
       # Warning! Guide is not mean-field
-     [(vi_ape,
+      (vi_ape,
        [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 5000}, {"num_samples": 10}]),
-      (naive_rainforth_eig, [2000, 2000])
       ])
 ])
 def test_eig_and_plot(title, model, design, observation_label, target_label, arglist):
