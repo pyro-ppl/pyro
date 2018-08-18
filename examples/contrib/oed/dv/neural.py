@@ -30,12 +30,11 @@ class T_neural(nn.Module):
 
 
 class T_specialized(nn.Module):
-    def __init__(self, coef_shape):
+    def __init__(self, shape):
         super(T_specialized, self).__init__()
-        self.obs_sd = torch.tensor(1.)
-        self.w_sizes = (2,)
-        self.regu = nn.Parameter(10.*torch.ones(coef_shape[-1]))
-        self.sds = nn.Parameter(10.*torch.ones(coef_shape))
+        self.regu = nn.Parameter(-2.*torch.ones(shape[-1] - 1))
+        self.scale_tril = nn.Parameter(3.*torch.ones(shape))
+        self.softplus = nn.Softplus()
 
     def forward(self, design, trace, observation_labels, target_labels):
         # TODO fix this
@@ -47,32 +46,42 @@ class T_specialized(nn.Module):
         y = trace.nodes[observation_label]["value"]
         theta_dict = {target_label: trace.nodes[target_label]["value"]}
 
-        design_suff = design.sum(-2, keepdim=True)
-        suff = torch.matmul(y.unsqueeze(-2), design)
-        mu = (suff/(design_suff + self.regu)).squeeze(-2)
-        sigma = self.sds
+        anneal = torch.diag(self.softplus(self.regu))
+        xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
+        xtxi = tensorized_2_by_2_matrix_inverse(xtx)
+        mu = torch.matmul(xtxi, torch.matmul(design.transpose(-1, -2), y.unsqueeze(-1))).squeeze(-1)
+
+        scale_tril = tensorized_2_by_2_tril(self.scale_tril)
 
         conditional_guide = pyro.condition(self.guide, data=theta_dict)
-        cond_trace = poutine.trace(conditional_guide).get_trace(design, mu, sigma, target_label)
+        cond_trace = poutine.trace(conditional_guide).get_trace(design, mu, scale_tril, target_label)
         cond_trace.compute_log_prob()
 
         posterior_lp = cond_trace.nodes[target_label]["log_prob"]
 
         return posterior_lp - prior_lp
 
-    def guide(self, design, mu, sigma, target_label):
-
-        # pyro.module("ba_guide", self)
-
-        # design is size batch x n x p
-        # tau is size batch
-        tau_shape = design.shape[:-2]
-
-        # response will be shape batch x n
-        obs_sd = self.obs_sd.expand(tau_shape).unsqueeze(-1)
-
-        w_shape = tau_shape + self.w_sizes
+    def guide(self, design, mu, scale_tril, target_label):
         
         # guide distributions for w
-        w_dist = dist.Normal(mu, sigma).independent(1)
-        w = pyro.sample(target_label, w_dist)
+        w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril)
+        pyro.sample(target_label, w_dist)
+
+
+def tensorized_2_by_2_matrix_inverse(M):
+    det = M[..., 0, 0]*M[..., 1, 1] - M[..., 1, 0]*M[..., 0, 1]
+    inv = torch.zeros(M.shape)
+    inv[..., 0, 0] = M[..., 1, 1]
+    inv[..., 1, 1] = M[..., 0, 0]
+    inv[..., 0, 1] = -M[..., 0, 1]
+    inv[..., 1, 0] = -M[..., 1, 0]
+    inv = inv/det.unsqueeze(-1).unsqueeze(-1)
+    return inv
+
+
+def tensorized_2_by_2_tril(M):
+    tril = torch.zeros(M.shape[:-1] + (2, 2))
+    tril[..., 0, 0] = M[..., 0]
+    tril[..., 1, 0] = M[..., 1]
+    tril[..., 1, 1] = M[..., 2]
+    return tril

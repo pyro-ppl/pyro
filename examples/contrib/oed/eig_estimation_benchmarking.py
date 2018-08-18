@@ -65,8 +65,8 @@ AB_test_2d_10n_2p = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])
 # Design on S^1
 item_thetas = torch.linspace(0., np.pi, 10).unsqueeze(-1)
 X_circle_10d_1n_2p = torch.stack([item_thetas.cos(), -item_thetas.sin()], dim=-1)
-item_thetas_small = torch.linspace(0., 4*np.pi/5, 4).unsqueeze(-1)
-X_circle_4d_1n_2p = torch.stack([item_thetas_small.cos(), -item_thetas_small.sin()], dim=-1)
+item_thetas_small = torch.linspace(0., np.pi/2, 5).unsqueeze(-1)
+X_circle_5d_1n_2p = torch.stack([item_thetas_small.cos(), -item_thetas_small.sin()], dim=-1)
 
 #########################################################################################
 # Models
@@ -220,28 +220,28 @@ def time_eig(estimator, model, design, observation_label, target_label, args):
 
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,est1,est2,kwargs1,kwargs2", [
-    ("Donsker-Varadhan on small AB test",
-     basic_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w", 
-     donsker_varadhan_eig, linear_model_ground_truth,
-     {"num_steps": 400, "num_samples": 400, "optim": optim.Adam({"lr": 0.05}),
-      "T": T_specialized((2, 2)), "final_num_samples": 10000}, {}),
+    ("Barber-Agakov on circle",
+     basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
+     barber_agakov_ape, linear_model_ground_truth,
+     {"num_steps": 400, "num_samples": 10, "optim": optim.Adam({"lr": 0.05}),
+      "guide": Ba_lm_guide((5, 3)).guide,
+      "final_num_samples": 1000}, {"eig": False}),
     ("Barber-Agakov on small AB test",
      basic_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w",
      barber_agakov_ape, linear_model_ground_truth,
      {"num_steps": 400, "num_samples": 10, "optim": optim.Adam({"lr": 0.05}),
-      "guide": Ba_lm_guide((2, 2)).guide,
+      "guide": Ba_lm_guide((2, 3)).guide,
       "final_num_samples": 1000}, {"eig": False}),
+    ("Donsker-Varadhan on small AB test",
+     basic_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w", 
+     donsker_varadhan_eig, linear_model_ground_truth,
+     {"num_steps": 400, "num_samples": 100, "optim": optim.Adam({"lr": 0.05}),
+      "T": T_specialized((2, 3)), "final_num_samples": 10000}, {}),
     ("Donsker-Varadhan on circle",
-     basic_2p_linear_model_sds_10_2pt5, X_circle_4d_1n_2p, "y", "w", 
+     basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w", 
      donsker_varadhan_eig, linear_model_ground_truth,
      {"num_steps": 400, "num_samples": 400, "optim": optim.Adam({"lr": 0.05}),
-      "T": T_specialized((4, 2)), "final_num_samples": 10000}, {}),
-    ("Barber-Agakov on circle",
-     basic_2p_linear_model_sds_10_2pt5, X_circle_4d_1n_2p, "y", "w",
-     barber_agakov_ape, linear_model_ground_truth,
-     {"num_steps": 1000, "num_samples": 20, "optim": optim.Adam({"lr": 0.025}),
-      "guide": Ba_lm_guide((4, 2)).guide,
-      "final_num_samples": 1000}, {"eig": False})
+      "T": T_specialized((5, 3)), "final_num_samples": 10000}, {})
 ])
 def test_convergence(title, model, design, observation_label, target_label, est1, est2, kwargs1, kwargs2):
     """
