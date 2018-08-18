@@ -79,9 +79,6 @@ class DynamicModel(nn.Module):
         state estimates of different types in IMM (Interacting Multiple Model)
         filtering.
 
-        .. warning:: For efficiency, may return a reference to the input.
-            Deepcopy as necessary to prevent unexpected changes.
-
         :param x: native state estimate mean.
         :return: PV state estimate mean.
         '''
@@ -93,9 +90,6 @@ class DynamicModel(nn.Module):
         Compute and return PV covariance from native covariance. Useful for
         combining state estimates of different types in IMM (Interacting
         Multiple Model) filtering.
-
-        .. warning:: For efficiency, may return a reference to the input.
-            Deepcopy as necessary to prevent unexpected changes.
 
         :param P: native state estimate covariance.
         :return: PV state estimate covariance.
@@ -269,9 +263,6 @@ class Ncv(DifferentiableDynamicModel):
         state estimates of different types in IMM (Interacting Multiple Model)
         filtering.
 
-        .. warning:: For efficiency, returns a reference to the input. Deepcopy
-            as necessary to prevent unexpected changes.
-
         :param x: native state estimate mean.
         :return: PV state estimate mean.
         '''
@@ -282,9 +273,6 @@ class Ncv(DifferentiableDynamicModel):
         Compute and return PV covariance from native covariance. Useful for
         combining state estimates of different types in IMM (Interacting
         Multiple Model) filtering.
-
-        .. warning:: For efficiency, returns a reference to the input. Deepcopy
-            as necessary to prevent unexpected changes.
 
         :param P: native state estimate covariance.
         :return: PV state estimate covariance.
