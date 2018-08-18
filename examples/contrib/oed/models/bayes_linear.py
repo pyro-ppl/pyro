@@ -266,10 +266,10 @@ def group_assignment_matrix(design):
     return X
 
 
-def analytic_posterior_entropy(prior_cov, x, obs_sd):
+def analytic_posterior_cov(prior_cov, x, obs_sd):
     """
     Given a prior covariance matrix and a design matrix `x`,
-    returns the entropy of the posterior under a Bayesian
+    returns the covariance of the posterior under a Bayesian
     linear regression model with design `x` and observation
     noise `obs_sd`.
     """
@@ -278,4 +278,4 @@ def analytic_posterior_entropy(prior_cov, x, obs_sd):
     SigmaXX = prior_cov.mm(x.t().mm(x))
     posterior_cov = prior_cov - torch.inverse(
         SigmaXX + (obs_sd**2)*torch.eye(p)).mm(SigmaXX.mm(prior_cov))
-    return 0.5*torch.logdet(2*np.pi*np.e*posterior_cov)
+    return posterior_cov
