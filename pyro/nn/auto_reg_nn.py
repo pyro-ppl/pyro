@@ -124,7 +124,7 @@ class AutoRegressiveNN(nn.Module):
     :type permutation: torch.LongTensor
     :param skip_connections: Whether to add skip connections from the input to the output.
     :type skip_connections: bool
-    :param nonlinearity: The nonlinearity to use in the feedforward network.
+    :param nonlinearity: The nonlinearity to use in the feedforward network such as torch.nn.ReLU()
     :type nonlinearity: torch.nn.module
 
     Reference:
