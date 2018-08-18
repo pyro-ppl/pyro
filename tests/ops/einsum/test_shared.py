@@ -4,7 +4,7 @@ import opt_einsum
 import pytest
 import torch
 
-from pyro.ops.einsum.shared import contract, shared_intermediates
+from pyro.ops.einsum import contract, shared_intermediates
 from tests.common import assert_equal
 
 

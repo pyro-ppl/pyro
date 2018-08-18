@@ -5,6 +5,7 @@ import numbers
 from collections import OrderedDict
 
 import opt_einsum
+from opt_einsum.backends.dispatch import get_func
 
 _SHARING_STACK = []
 _CURRENT_BACKEND = []
@@ -95,14 +96,15 @@ def _shared(tensor):
 
 
 def transpose(a, axes):
+    backend = _CURRENT_BACKEND[0]
     axes = tuple(axes)
-    key = 'transpose', a, axes
+    key = 'transpose', backend, a, axes
 
     cache = _SHARING_STACK[-1]
     if key in cache:
         return cache[key]
 
-    transpose = opt_einsum.backends.dispatch.get_func('transpose', _CURRENT_BACKEND[0])
+    transpose = get_func('transpose', backend)
     result = _Shared(transpose(a._value, axes))
 
     cache[key] = result
@@ -110,16 +112,17 @@ def transpose(a, axes):
 
 
 def tensordot(x, y, axes=2):
+    backend = _CURRENT_BACKEND[0]
     if isinstance(axes, numbers.Number):
         axes = list(range(len(x.shape)))[len(x.shape) - axes:], list(range(len(y.shape)))[:axes]
     axes = tuple(axes[0]), tuple(axes[1])
-    key = 'tensordot', x, y, axes
+    key = 'tensordot', backend, x, y, axes
 
     cache = _SHARING_STACK[-1]
     if key in cache:
         return cache[key]
 
-    tensordot = opt_einsum.backends.dispatch.get_func('tensordot', _CURRENT_BACKEND[0])
+    tensordot = get_func('tensordot', backend)
     result = _Shared(tensordot(x._value, y._value, axes))
 
     cache[key] = result
@@ -127,6 +130,7 @@ def tensordot(x, y, axes=2):
 
 
 def einsum(equation, *operands):
+    backend = _CURRENT_BACKEND[0]
     # compute a canonical hash, modulo commutativity
     inputs, output = equation.split('->')
     inputs = inputs.split(',')
@@ -134,13 +138,13 @@ def einsum(equation, *operands):
     canonical_inputs = ','.join(input_ for input_, _ in canonical)
     canonical_equation = _alpha_canonicalize('{}->{}'.format(canonical_inputs, output))
     canonical_operands = tuple(d for _, d in canonical)
-    key = 'einsum', canonical_equation, canonical_operands
+    key = 'einsum', backend, canonical_equation, canonical_operands
 
     cache = _SHARING_STACK[-1]
     if key in cache:
         return cache[key]
 
-    einsum = opt_einsum.backends.dispatch.get_func('einsum', _CURRENT_BACKEND[0])
+    einsum = get_func('einsum', backend)
     result = _Shared(einsum(equation, *(t._value for t in operands)))
 
     cache[key] = result
