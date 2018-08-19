@@ -1291,7 +1291,7 @@ def test_elbo_dbn_growth():
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs_x[x]))
             y = pyro.sample("y_{}".format(i), dist.Categorical(probs_y[x, y]))
 
-    sizes = range(1, 11)
+    sizes = range(1, 31)
     costs = []
     times1 = []
     times2 = []
