@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import contextlib
 import numbers
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 
 import opt_einsum
 from opt_einsum.backends.dispatch import get_func
@@ -10,7 +10,7 @@ from opt_einsum.backends.dispatch import get_func
 _SHARING_STACK = []
 _CURRENT_BACKEND = []
 _PATH_CACHE = {}
-LAST_CACHE_SIZE = [0]  # for profiling
+LAST_CACHE_SIZE = [Counter()]  # for profiling
 
 
 @contextlib.contextmanager
@@ -28,7 +28,7 @@ def shared_intermediates(cache=None):
         cache = {}
     _SHARING_STACK.append(cache)
     yield cache
-    LAST_CACHE_SIZE[0] = len(cache)
+    LAST_CACHE_SIZE[0] = Counter(key[0] for key in cache.keys())
     _SHARING_STACK.pop()
 
 
