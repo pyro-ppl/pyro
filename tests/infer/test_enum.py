@@ -19,6 +19,7 @@ from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
+from pyro.infer.util import LAST_CACHE_SIZE
 from pyro.util import torch_isnan
 from tests.common import assert_equal
 
@@ -1251,7 +1252,7 @@ def test_elbo_hmm_growth():
 
         times1.append(time1 - time0)
         times2.append(time2 - time1)
-        costs.append(pyro.ops.einsum.shared.LAST_CACHE_SIZE[0])
+        costs.append(LAST_CACHE_SIZE[0])
 
     collated_costs = defaultdict(list)
     for counts in costs:
@@ -1296,7 +1297,7 @@ def test_elbo_dbn_growth():
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs_x[x]))
             y = pyro.sample("y_{}".format(i), dist.Categorical(probs_y[x, y]))
 
-    sizes = range(2, 31)
+    sizes = range(2, 11)
     costs = []
     times1 = []
     times2 = []
@@ -1311,7 +1312,7 @@ def test_elbo_dbn_growth():
 
         times1.append(time1 - time0)
         times2.append(time2 - time1)
-        costs.append(pyro.ops.einsum.shared.LAST_CACHE_SIZE[0])
+        costs.append(LAST_CACHE_SIZE[0])
 
     collated_costs = defaultdict(list)
     for counts in costs:
