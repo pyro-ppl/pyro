@@ -7,10 +7,10 @@ import pytest
 import torch
 from six.moves import reduce
 
+import pyro.distributions.torch_patch  # noqa: F401
 from pyro.ops.einsum import contract, shared_intermediates
 from pyro.ops.sumproduct import sumproduct, zip_align_right
 from tests.common import assert_equal
-import pyro.distributions.torch_patch
 
 
 @pytest.mark.parametrize('xs,ys,expected', [
