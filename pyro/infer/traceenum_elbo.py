@@ -26,12 +26,16 @@ def _compute_dice_elbo(model_trace, guide_trace):
                 if site["type"] == "sample"}
 
     costs = OrderedDict()
-    for name, site in model_trace.nodes.items():
-        if site["type"] == "sample":
-            costs.setdefault(ordering[name], []).append(site["log_prob"])
+    exactly_cancelled = set()
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample":
-            costs.setdefault(ordering[name], []).append(-site["log_prob"])
+            if site["infer"].get("exact"):
+                exactly_cancelled.add(name)
+            else:
+                costs.setdefault(ordering[name], []).append(-site["log_prob"])
+    for name, site in model_trace.nodes.items():
+        if site["type"] == "sample" and name not in exactly_cancelled:
+            costs.setdefault(ordering[name], []).append(site["log_prob"])
 
     return Dice(guide_trace, ordering).compute_expectation(costs)
 

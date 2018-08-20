@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import itertools
 import logging
 import math
 import timeit
@@ -1205,6 +1206,54 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
             '\nexpected {}.grad = {}'.format(name, expected.cpu().numpy()),
             '\n  actual {}.grad = {}'.format(name, actual.detach().cpu().numpy()),
         ]))
+
+
+@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, 30])
+def test_elbo_hmm_exact(num_steps):
+    data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+
+    def hidden_stream():
+        transition_probs = pyro.param("transition_probs",
+                                      torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                      constraint=constraints.simplex)
+        x = 0
+        for t in itertools.count():
+            x = pyro.sample("x_{}".format(t), dist.Categorical(transition_probs[x]))
+            yield x
+
+    def model(data):
+        emission_probs = pyro.param("emission_probs",
+                                    torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                    constraint=constraints.simplex)
+        xs = list(itertools.islice(hidden_stream(), len(data)))
+        for t in pyro.irange("data", len(data)):
+            pyro.sample("y_{}".format(t), dist.Categorical(emission_probs[xs[t]]), obs=data[t])
+
+    @config_enumerate(default="parallel", expand=False)
+    def naive_guide(data):
+        return list(itertools.islice(hidden_stream(), len(data)))
+
+    optim_guide = poutine.infer_config(naive_guide, lambda msg: {'exact': True})
+
+    expected = elbo.differentiable_loss(model, naive_guide, data)
+    naive_cost = pyro.ops.einsum.shared.LAST_CACHE_SIZE[0]
+    actual = elbo.differentiable_loss(model, optim_guide, data)
+    optim_cost = pyro.ops.einsum.shared.LAST_CACHE_SIZE[0]
+    print('naive_cost = {}, optim_cost = {}'.format(naive_cost, optim_cost))
+
+    assert_equal(expected, actual)
+    assert_equal(expected, actual,
+                 msg='Expected:\n{}\nActual:\n{}'.format(expected, actual))
+
+    for name in ["transition_probs", "emission_probs"]:
+        param = pyro.param(name).unconstrained()
+        expected_grad = grad(expected, [param], retain_graph=True)[0]
+        actual_grad = grad(actual, [param], retain_graph=True)[0]
+        assert_equal(expected_grad, actual_grad,
+                     msg='Expected {}:\n{}\nActual {}:\n{}'.format(name, expected, name, actual))
+
+    assert optim_cost < naive_cost
 
 
 def test_elbo_hmm_growth():
