@@ -150,12 +150,10 @@ def init_params(args, true_states=None, true_ens=None):
 def track_1d_objects(args, observations, true_states=None):
     pyro.set_rng_seed(args.seed + 1)  # Use a different seed from data generation
     pyro.clear_param_store()
-    if args.good_init:
-        init_params(args, dist.Normal(true_states, 0.1).sample(),
-                    args.emission_noise_scale + dist.Normal(0, 0.01).sample().abs()
-                    )
-    else:
-        init_params(args)
+    init_states = dist.Normal(true_states, 0.1).sample() if args.good_init in ['states', 'both'] else None
+    init_ens = dist.Normal(args.emission_noise_scale, 0.1 * args.emission_noise_scale
+                           ).sample().abs() if args.good_init in ['ens', 'both'] else None
+    init_params(args, init_states, init_ens)
 
     # Optimization
     pyro.set_rng_seed(args.seed + 1)  # Use a different seed from data generation
@@ -277,8 +275,9 @@ def parse_args(*args):
     parser.add_argument('--bp-momentum', default=0.5, type=float, help='BP momentum')
     parser.add_argument('--no-visdom', action="store_false", dest='visdom', default=True,
                         help='Whether plotting in visdom is desired')
-    parser.add_argument('--good-init', action="store_true", dest='good_init', default=False,
+    parser.add_argument('--good-init', choices=['none', 'states', 'ens', 'both'], default='none',
                         help='Init states_loc & emission_noise_scale with correct values')
+
     parser.add_argument('--debug', action="store_true", dest='debug', default=False,
                         help='Whether plotting in visdom is desired')
     parser.add_argument('--merge-radius', default=-1, type=float, help='merge radius')

@@ -51,7 +51,7 @@ def xfail_param(*args, **kwargs):
 @pytest.mark.filterwarnings('ignore::ImportWarning')  # pandas raise warning for some reason...
 @pytest.mark.filterwarnings('ignore::DeprecationWarning')  # pandas raise warning for some reason...
 def test_1d_track_objects(arg_string):
-    args = parse_args(arg_string + " --good-init -q --no-visdom")
+    args = parse_args(arg_string + " --good-init=both -q --no-visdom")
     # generate data
     pyro.set_rng_seed(args.seed)
     true_states, true_positions, observations = generate_observations(args)

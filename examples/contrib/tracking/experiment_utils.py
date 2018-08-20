@@ -22,6 +22,8 @@ def json2args(filename):
 def tabulate_results(exp_dir='.', filename=None):
     from glob import glob
     import sys
+    if filename is not None and not os.path.exists(os.path.dirname(filename)):
+        raise(ValueError("{} is not found".format(os.path.dirname(filename))))
     experiments = glob(os.path.join(exp_dir, "exp*", ""))
     total_num_folders = len(experiments)
     all_results = pandas.DataFrame()
@@ -43,6 +45,9 @@ def tabulate_results(exp_dir='.', filename=None):
                                                                 "\n" if i+1 == total_num_folders else ""))
         sys.stdout.flush()
     if filename is not None:
-        all_results.to_csv(filename)
+        if all_results.shape[0] > 0:
+            all_results.to_csv(filename)
+        else:
+            print("No valid experiment folders found in '{}'".format(exp_dir))
     else:
         return all_results

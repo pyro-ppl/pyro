@@ -28,14 +28,15 @@ def generate_list_of_experiments():
     expected_num_spurious_list = [0.00001, 0.1, 1, 2, 5, 10]
     emission_prob_list = [.7, .8, .9, .9999]
     emission_noise_scale_list = [0.05, 0.1, 0.2, 0.3]
-    merge_radius_list = [-1, 1e-8]
+    merge_radius_list = [-1]
+    good_init_list = ['both', 'states']
     result = product(num_frames_list, max_num_objects_list, expected_num_objects_list,
                      expected_num_spurious_list, emission_prob_list, emission_noise_scale_list,
-                     merge_radius_list)
+                     merge_radius_list, good_init_list)
     arg_strings = []
     for each in result:
         (num_frames, max_num_objects, expected_num_objects, expected_num_spurious,
-         emission_prob, emission_noise_scale, merge_radius) = each
+         emission_prob, emission_noise_scale, merge_radius, good_init) = each
         if max_num_objects < expected_num_objects:
             continue
         arg_string = " ".join(
@@ -47,6 +48,7 @@ def generate_list_of_experiments():
              "--emission-prob={}".format(emission_prob),
              "--emission-noise-scale={}".format(emission_noise_scale),
              "--merge-radius={}".format(merge_radius),
+             "--good-init={}".format(good_init),
              "--prune-threshold=-1e-2",
              "--seed=2"
              ])
@@ -57,7 +59,7 @@ def generate_list_of_experiments():
 @pytest.mark.filterwarnings('ignore::ImportWarning')  # pandas raise warning for some reason...
 @pytest.mark.filterwarnings('ignore::DeprecationWarning')  # pandas raise warning for some reason...
 def test_experiment(args):
-    args = parse_args(args + " --good-init -q --no-visdom --exp-dir=/home/alican/experiments")
+    args = parse_args(args + " -q --no-visdom --exp-dir=/home/alican/experiments")
     # generate data
     pyro.set_rng_seed(args.seed)
     true_states, true_positions, observations = generate_observations(args)
@@ -105,8 +107,8 @@ def test_experiment(args):
     motp = metrics['motp']['acc']
     ens_error = metrics['ens_error']['acc']
 
-    assert motp < 0.05
-    assert ens_error <= 0.2
+    assert motp < 0.05, "{} > 0.05: {}".format(motp, args.exp_name)
+    assert ens_error <= 0.2, "{} > 0.2: {}".format(motp, args.exp_name)
 
 
 if __name__ == '__main__':
