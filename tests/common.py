@@ -116,6 +116,7 @@ def assert_tensors_equal(a, b, prec=1e-5, msg=''):
         nan_mask = a != a
         assert torch.equal(nan_mask, b != b), msg
         diff = a - b
+        diff[a == b] = 0  # handle inf
         diff[nan_mask] = 0
         if diff.is_signed():
             diff = diff.abs()
@@ -197,5 +198,5 @@ def assert_not_equal(x, y, prec=1e-5, msg=''):
     try:
         assert_equal(x, y, prec)
     except AssertionError:
-        pass
+        return
     raise AssertionError("{} \nValues are equal: x={}, y={}, prec={}".format(msg, x, y, prec))

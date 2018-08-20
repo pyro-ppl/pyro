@@ -6,7 +6,6 @@ from torch.distributions.transforms import Transform
 from torch.distributions import constraints
 
 from pyro.distributions.util import copy_docs_from
-from pyro.nn import AutoRegressiveNN
 
 
 @copy_docs_from(Transform)
@@ -17,8 +16,9 @@ class InverseAutoregressiveFlow(Transform):
 
     Example usage:
 
+    >>> from pyro.nn import AutoRegressiveNN
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> iaf = InverseAutoregressiveFlow(10, 40)
+    >>> iaf = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
     >>> iaf_module = pyro.module("my_iaf", iaf.module)
     >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf])
     >>> iaf_dist.sample()  # doctest: +SKIP
@@ -32,15 +32,11 @@ class InverseAutoregressiveFlow(Transform):
     this would be a (potentially) costly computation that scales with the dimension of the input (and in
     any case support for this is not included in this implementation).
 
-    :param input_dim: dimension of input
-    :type input_dim: int
-    :param hidden_dim: hidden dimension (number of hidden units)
-    :type hidden_dim: int
+    :param autoregressive_nn: an autoregressive neural network whose forward call returns a real-valued
+        mean and logit-scale as a tuple
+    :type autoregressive_nn: nn.Module
     :param sigmoid_bias: bias on the hidden units fed into the sigmoid; default=`2.0`
     :type sigmoid_bias: float
-    :param permutation: whether the order of the inputs should be permuted (by default the conditional
-        dependence structure of the autoregression follows the sequential order)
-    :type permutation: bool
 
     References:
 
@@ -56,12 +52,10 @@ class InverseAutoregressiveFlow(Transform):
 
     codomain = constraints.real
 
-    def __init__(self, input_dim, hidden_dim, sigmoid_bias=2.0, permutation=None):
+    def __init__(self, autoregressive_nn, sigmoid_bias=2.0):
         super(InverseAutoregressiveFlow, self).__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
         self.module = nn.Module()
-        self.module.arn = AutoRegressiveNN(input_dim, hidden_dim, output_dim_multiplier=2, permutation=permutation)
+        self.module.arn = autoregressive_nn
         self.module.sigmoid = nn.Sigmoid()
         self.module.sigmoid_bias = torch.tensor(sigmoid_bias)
         self._intermediates_cache = {}
@@ -84,10 +78,9 @@ class InverseAutoregressiveFlow(Transform):
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
-        hidden = self.module.arn(x)
-        scale = self.module.sigmoid(hidden[..., 0:self.input_dim] +
-                                    hidden.new_tensor(self.module.sigmoid_bias))
-        mean = hidden[..., self.input_dim:]
+        mean, scale = self.module.arn(x)
+        scale = self.module.sigmoid(scale + scale.new_tensor(self.module.sigmoid_bias))
+
         y = scale * x + (1 - scale) * mean
         self._add_intermediate_to_cache(x, y, 'x')
         self._add_intermediate_to_cache(scale, y, 'scale')

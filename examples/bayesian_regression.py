@@ -7,7 +7,7 @@ from torch.nn.functional import normalize  # noqa: F401
 
 import pyro
 from pyro.distributions import Bernoulli, Normal  # noqa: F401
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
 
 
@@ -94,11 +94,6 @@ def guide(data):
     return lifted_module()
 
 
-# instantiate optim and inference objects
-optim = Adam({"lr": 0.05})
-svi = SVI(model, guide, optim, loss=Trace_ELBO())
-
-
 # get array of batch indices
 def get_batch_indices(N, batch_size):
     all_batches = np.arange(0, N, batch_size)
@@ -115,6 +110,11 @@ def main(args):
         data = data.cuda()
         softplus.cuda()
         regression_model.cuda()
+
+    # perform inference
+    optim = Adam({"lr": 0.05})
+    elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
+    svi = SVI(model, guide, optim, loss=elbo)
     for j in range(args.num_epochs):
         if args.batch_size == N:
             # use the entire data set
@@ -140,5 +140,6 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--num-epochs', default=1000, type=int)
     parser.add_argument('-b', '--batch-size', default=N, type=int)
     parser.add_argument('--cuda', action='store_true')
+    parser.add_argument('--jit', action='store_true')
     args = parser.parse_args()
     main(args)

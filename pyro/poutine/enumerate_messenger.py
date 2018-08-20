@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 from .messenger import Messenger
 
+EXPAND_DEFAULT = True  # TODO(fritzo,eb8680) Flip this to False in Pyro 0.3.
+
 
 class EnumerateMessenger(Messenger):
     """
@@ -30,9 +32,14 @@ class EnumerateMessenger(Messenger):
             return
 
         if msg["infer"].get("enumerate") == "parallel":
-            # Enumerate over the support of the distribution.
             dist = msg["fn"]
-            value = dist.enumerate_support()
+            num_samples = msg["infer"].get("num_samples")
+            if num_samples is None:
+                # Enumerate over the support of the distribution.
+                value = dist.enumerate_support(expand=msg["infer"].get("expand", EXPAND_DEFAULT))
+            else:
+                # Monte Carlo sample the distribution.
+                value = dist(sample_shape=(num_samples,))
             assert len(value.shape) == 1 + len(dist.batch_shape) + len(dist.event_shape)
 
             # Ensure enumeration happens at an available tensor dimension.

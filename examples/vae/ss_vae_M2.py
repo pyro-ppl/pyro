@@ -7,7 +7,7 @@ from visdom import Visdom
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.examples.util import print_and_log, set_seed
-from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, config_enumerate
+from pyro.infer import SVI, JitTrace_ELBO, JitTraceEnum_ELBO, Trace_ELBO, TraceEnum_ELBO, config_enumerate
 from pyro.optim import Adam
 from utils.custom_mlp import MLP, Exp
 from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
@@ -300,14 +300,16 @@ def main(args):
     # set up the loss(es) for inference. wrapping the guide in config_enumerate builds the loss as a sum
     # by enumerating each class label for the sampled discrete categorical distribution in the model
     guide = config_enumerate(ss_vae.guide, args.enum_discrete)
-    loss_basic = SVI(ss_vae.model, guide, optimizer, loss=TraceEnum_ELBO(max_iarange_nesting=1))
+    elbo = (JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO)(max_iarange_nesting=1)
+    loss_basic = SVI(ss_vae.model, guide, optimizer, loss=elbo)
 
     # build a list of all losses considered
     losses = [loss_basic]
 
     # aux_loss: whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)
     if args.aux_loss:
-        loss_aux = SVI(ss_vae.model_classify, ss_vae.guide_classify, optimizer, loss=Trace_ELBO())
+        elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
+        loss_aux = SVI(ss_vae.model_classify, ss_vae.guide_classify, optimizer, loss=elbo)
         losses.append(loss_aux)
 
     try:
@@ -383,6 +385,8 @@ if __name__ == "__main__":
 
     parser.add_argument('--cuda', action='store_true',
                         help="use GPU(s) to speed up training")
+    parser.add_argument('--jit', action='store_true',
+                        help="use PyTorch jit to speed up training")
     parser.add_argument('-n', '--num-epochs', default=50, type=int,
                         help="number of epochs to run")
     parser.add_argument('--aux-loss', action="store_true",
