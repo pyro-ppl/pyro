@@ -8,7 +8,7 @@ _PATH_CACHE = {}
 def contract(equation, *operands, **kwargs):
     """
     Like :func:`opt_einsum.contract` but works with
-    :func:`~pyro.ops.einsum.shared_intermediates` contexts.
+    :func:`~opt_einsum.shared_intermediates` contexts.
 
     :param bool cache_path: whether to cache the contraction path.
         Defaults to True.
@@ -31,4 +31,4 @@ def contract(equation, *operands, **kwargs):
     return expr(*operands, backend=backend, out=out)
 
 
-__all__ = ['contract', 'shared_intermediates']
+__all__ = ['contract']

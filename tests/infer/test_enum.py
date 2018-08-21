@@ -12,7 +12,6 @@ from torch.distributions import constraints, kl_divergence
 
 import pyro
 import pyro.distributions as dist
-import pyro.ops.einsum.shared
 import pyro.optim
 import pyro.poutine as poutine
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
@@ -1237,7 +1236,7 @@ def test_elbo_hmm_growth():
             probs = init_probs if x is None else transition_probs[x]
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
 
-    sizes = range(2, 11)
+    sizes = range(2, 16)
     costs = []
     times1 = []
     times2 = []
@@ -1264,8 +1263,9 @@ def test_elbo_hmm_growth():
     print('times1 = {}'.format(repr(times1)))
     print('times2 = {}'.format(repr(times2)))
 
-    # This assertion may fail nondeterministically:
-    # assert costs[-3] + costs[-1] == 2 * costs[-2], 'cost is not asymptotically linear'
+    for key, cost in collated_costs.items():
+        dt = 3
+        assert cost[-1 - dt - dt] -2 * cost[-1 - dt] + cost[-1] == 0, '{} cost is not linear'.format(key)
 
 
 def test_elbo_dbn_growth():
@@ -1297,7 +1297,7 @@ def test_elbo_dbn_growth():
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs_x[x]))
             y = pyro.sample("y_{}".format(i), dist.Categorical(probs_y[x, y]))
 
-    sizes = range(2, 11)
+    sizes = range(2, 16)
     costs = []
     times1 = []
     times2 = []
@@ -1324,8 +1324,9 @@ def test_elbo_dbn_growth():
     print('times1 = {}'.format(repr(times1)))
     print('times2 = {}'.format(repr(times2)))
 
-    # This assertion may fail nondeterministically:
-    # assert costs[-3] + costs[-1] == 2 * costs[-2], 'cost is not asymptotically linear'
+    for key, cost in collated_costs.items():
+        dt = 3
+        assert cost[-1 - dt - dt] -2 * cost[-1 - dt] + cost[-1] < dt, '{} cost is not linear'.format(key)
 
 
 @pytest.mark.parametrize("pi_a", [0.33])
