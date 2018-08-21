@@ -51,7 +51,7 @@ prior_sds = torch.tensor([10., 0.15])
 
 # Model and guide using known obs_sd
 model, _ = zero_mean_unit_obs_sd_lm(prior_sds)
-guides = {1: Ba_lm_guide((2,), (1, 3), {"w": 2}).guide,
+guides = {10: Ba_lm_guide((2,), (10, 3), {"w": 2}).guide,
           2: Ba_lm_guide((2,), (2, 3), {"w": 2}).guide}
 
 
@@ -62,7 +62,7 @@ def estimated_ape(ns):
     X = torch.stack(designs)
     guide = guides[d]
     est_ape = barber_agakov_ape(
-        model, X, "y", "w",10, 800, guide, 
+        model, X, "y", "w", 10, 800, guide, 
         optim.Adam({"lr": 0.05}), final_num_samples=1000)
     return est_ape
 
@@ -88,7 +88,7 @@ def main(num_vi_steps, num_bo_steps):
     noises = [0.0001, 0.25]
     num_acqs = [2, 10]
 
-    for f, noise, num_acquisitions in zip(estimators, noises, n_acqs):
+    for f, noise, num_acquisitions in zip(estimators, noises, num_acqs):
         X = torch.tensor([25., 75.])
         y = f(X)
         gpmodel = gp.models.GPRegression(
