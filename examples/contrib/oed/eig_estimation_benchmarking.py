@@ -61,6 +61,7 @@ TODO:
 # All design tensors have shape: batch x n x p
 # AB test
 AB_test_11d_10n_2p = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])) for n in range(0, 11)])
+AB_test_2d_100n_2p = torch.stack([group_assignment_matrix(torch.tensor([n, 100-n])) for n in [0, 55]])
 AB_test_2d_10n_2p = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])) for n in [0, 5]])
 
 # Design on S^1
@@ -247,6 +248,12 @@ def time_eig(estimator, model, design, observation_label, target_label, args):
 
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,est1,est2,kwargs1,kwargs2", [
+    ("Barber-Agakov on small AB test",
+     basic_2p_linear_model_sds_10_2pt5, AB_test_2d_100n_2p, "y", "w",
+     barber_agakov_ape, linear_model_ground_truth,
+     {"num_steps": 800, "num_samples": 10, "optim": optim.Adam({"lr": 0.05}),
+      "guide": basic_2p_ba_guide(2),
+      "final_num_samples": 1000}, {"eig": False}),
     ("Barber-Agakov on A/B test with unknown covariance",
      nig_2p_linear_model_3_2, AB_test_2d_10n_2p, "y", "w",
      barber_agakov_ape, None,

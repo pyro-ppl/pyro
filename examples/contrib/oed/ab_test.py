@@ -7,13 +7,14 @@ import numpy as np
 import pyro
 from pyro import optim
 from pyro.infer import TraceEnum_ELBO
-from pyro.contrib.oed.eig import vi_ape
+from pyro.contrib.oed.eig import barber_agakov_ape
 import pyro.contrib.gp as gp
 
 from gp_bayes_opt import GPBayesOptimizer
 from models.bayes_linear import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov
 )
+from ba.guide import Ba_lm_guide
 
 """
 Example builds on the Bayesian regression tutorial [1]. It demonstrates how
@@ -46,27 +47,23 @@ and expensive-to-compute functions in pyro.
 # Set up regression model dimensions
 N = 100  # number of participants
 p = 2    # number of features
-prior_sds = torch.tensor([10., 2.5])
+prior_sds = torch.tensor([10., 0.15])
 
 # Model and guide using known obs_sd
-model, guide = zero_mean_unit_obs_sd_lm(prior_sds)
+model, _ = zero_mean_unit_obs_sd_lm(prior_sds)
+guides = {1: Ba_lm_guide((2,), (1, 3), {"w": 2}).guide,
+          2: Ba_lm_guide((2,), (2, 3), {"w": 2}).guide}
 
 
-def estimated_ape(ns, num_vi_steps):
+def estimated_ape(ns):
+    """Estimated APE by BA"""
+    d = len(ns)
     designs = [group_assignment_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
     X = torch.stack(designs)
-    est_ape = vi_ape(
-        model,
-        X,
-        observation_labels="y",
-        target_labels="w",
-        vi_parameters={
-            "guide": guide,
-            "optim": optim.Adam({"lr": 0.05}),
-            "loss": TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
-            "num_steps": num_vi_steps},
-        is_parameters={"num_samples": 1}
-    )
+    guide = guides[d]
+    est_ape = barber_agakov_ape(
+        model, X, "y", "w",10, 800, guide, 
+        optim.Adam({"lr": 0.05}), final_num_samples=1000)
     return est_ape
 
 
@@ -87,10 +84,7 @@ def main(num_vi_steps, num_bo_steps):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
 
-    est_ape = partial(estimated_ape, num_vi_steps=num_vi_steps)
-    est_ape.__doc__ = "Estimated APE by VI"
-
-    estimators = [true_ape, est_ape]
+    estimators = [true_ape, estimated_ape]
     noises = [0.0001, 0.25]
     num_acqs = [2, 10]
 
