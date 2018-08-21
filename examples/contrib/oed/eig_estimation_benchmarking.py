@@ -85,7 +85,7 @@ nig_2p_linear_model_3_2 = normal_inverse_gamma_linear_model(torch.tensor(0.), to
 nig_2p_linear_model_15_14 = normal_inverse_gamma_linear_model(torch.tensor(0.), torch.tensor([.1, .4]),
                                                               torch.tensor([15.]), torch.tensor([14.]))
 
-nig_2p_guide = normal_inverse_gamma_guide((2,))
+nig_2p_guide = normal_inverse_gamma_guide((2,), mf=True)
 nig_2p_ba_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}).guide
 nig_2p_ba_mf_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}, mf=True).guide
 
@@ -142,7 +142,6 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
     ("A/B testing with unknown covariance (Gamma(15, 14))",
      nig_2p_linear_model_15_14, AB_test_11d_10n_2p, "y", ["w", "tau"],
      [(naive_rainforth_eig, [2000, 2000]),
-      # Warning! Guide is not mean-field
       (vi_ape,
        [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 4}]),
@@ -154,7 +153,6 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
     ("A/B testing with unknown covariance (Gamma(3, 2))",
      nig_2p_linear_model_3_2, AB_test_11d_10n_2p, "y", ["w", "tau"],
      [(naive_rainforth_eig, [2000, 2000]),
-      # Warning! Guide is not mean-field
       (vi_ape,
        [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 4}]),
