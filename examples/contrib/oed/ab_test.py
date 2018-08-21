@@ -82,7 +82,7 @@ def true_ape(ns):
     return torch.tensor(true_ape)
 
 
-def main(num_vi_steps, num_acquisitions, num_bo_steps):
+def main(num_vi_steps, num_bo_steps):
 
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
@@ -92,8 +92,9 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
 
     estimators = [true_ape, est_ape]
     noises = [0.0001, 0.25]
+    num_acqs = [2, 10]
 
-    for f, noise in zip(estimators, noises):
+    for f, noise, num_acquisitions in zip(estimators, noises, n_acqs):
         X = torch.tensor([25., 75.])
         y = f(X)
         gpmodel = gp.models.GPRegression(
@@ -102,8 +103,8 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
         gpmodel.optimize(loss=TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss)
         gpbo = GPBayesOptimizer(constraints.interval(0, 100), gpmodel,
                                 num_acquisitions=num_acquisitions)
+        pyro.clear_param_store()
         for i in range(num_bo_steps):
-            pyro.clear_param_store()
             result = gpbo.get_step(f, None, verbose=True)
 
         print(f.__doc__)
@@ -113,7 +114,6 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
     parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
-    parser.add_argument('--num-acquisitions', nargs="?", default=10, type=int)
     parser.add_argument('--num-bo-steps', nargs="?", default=5, type=int)
     args = parser.parse_args()
-    main(args.num_vi_steps, args.num_acquisitions, args.num_bo_steps)
+    main(args.num_vi_steps, args.num_bo_steps)
