@@ -25,8 +25,9 @@ def _compute_dice_elbo(model_trace, guide_trace):
                 for name, site in trace.nodes.items()
                 if site["type"] == "sample"}
 
+    # Collect log(p(z,x)) and -log(q(z)) terms.
     costs = OrderedDict()
-    exactly_cancelled = set()
+    exactly_cancelled = set()  # terms satisfying p(z,x) == q(z)
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample":
             if site["infer"].get("exact"):
@@ -37,7 +38,11 @@ def _compute_dice_elbo(model_trace, guide_trace):
         if site["type"] == "sample" and name not in exactly_cancelled:
             costs.setdefault(ordering[name], []).append(site["log_prob"])
 
-    return Dice(guide_trace, ordering).compute_expectation(costs)
+    # Compute q(z) factors.
+    dice = Dice(guide_trace, ordering)
+
+    # Compute the expectation E z~q [ log(p(z,x)) - log(q(z)) ]
+    return dice.compute_expectation(costs)
 
 
 class TraceEnum_ELBO(ELBO):
