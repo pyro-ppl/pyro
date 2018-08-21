@@ -1209,6 +1209,30 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
         ]))
 
 
+@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, 30])
+def test_elbo_hmm_enumerate_model(num_steps):
+    data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+
+    @config_enumerate(default="parallel", expand=False)
+    def model(data):
+        transition_probs = pyro.param("transition_probs",
+                                      torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                      constraint=constraints.simplex)
+        emission_probs = pyro.param("emission_probs",
+                                    torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                    constraint=constraints.simplex)
+        x = 0
+        for t, y in enumerate(data):
+            x = pyro.sample("x_{}".format(t), dist.Categorical(transition_probs[x]))
+            pyro.sample("y_{}".format(t), dist.Categorical(emission_probs[x]), obs=y)
+
+    def guide(data):
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+    elbo.differentiable_loss(model, guide, data)
+
+
 def test_elbo_hmm_growth():
     pyro.clear_param_store()
     init_probs = torch.tensor([0.5, 0.5])

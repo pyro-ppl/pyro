@@ -10,9 +10,11 @@ class EnumerateMessenger(Messenger):
     Enumerates in parallel over discrete sample sites marked
     ``infer={"enumerate": "parallel"}``.
 
-    :param int first_available_dim: The first tensor dimension (counting
+    :param first_available_dim: The first tensor dimension (counting
         from the right) that is available for parallel enumeration. This
         dimension and all dimensions left may be used internally by Pyro.
+        This can be an integer or a callable returning an integer.
+    :type first_available_dim: int or callable
     """
     def __init__(self, first_available_dim):
         super(EnumerateMessenger, self).__init__()
@@ -20,7 +22,8 @@ class EnumerateMessenger(Messenger):
         self.next_available_dim = None
 
     def __enter__(self):
-        self.next_available_dim = self.first_available_dim
+        first = self.first_available_dim
+        self.next_available_dim = first() if callable(first) else first
         return super(EnumerateMessenger, self).__enter__()
 
     def _pyro_sample(self, msg):

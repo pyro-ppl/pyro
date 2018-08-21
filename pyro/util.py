@@ -160,9 +160,15 @@ def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float(
         and guide agree on sample shape.
     """
     # Check ordinary sample sites.
-    model_vars = set(name for name, site in model_trace.nodes.items()
-                     if site["type"] == "sample" and not site["is_observed"]
-                     if type(site["fn"]).__name__ != "_Subsample")
+    replay_vars = set(name for name, site in model_trace.nodes.items()
+                      if site["type"] == "sample" and not site["is_observed"]
+                      if type(site["fn"]).__name__ != "_Subsample"
+                      if not site["infer"].get("enumerate"))
+    enum_vars = set(name for name, site in model_trace.nodes.items()
+                    if site["type"] == "sample" and not site["is_observed"]
+                    if type(site["fn"]).__name__ != "_Subsample"
+                    if site["infer"].get("enumerate"))
+    model_vars = replay_vars | enum_vars
     guide_vars = set(name for name, site in guide_trace.nodes.items()
                      if site["type"] == "sample"
                      if type(site["fn"]).__name__ != "_Subsample")
@@ -171,15 +177,15 @@ def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float(
                    if site["infer"].get("is_auxiliary"))
     if aux_vars & model_vars:
         warnings.warn("Found auxiliary vars in the model: {}".format(aux_vars & model_vars))
-    if not (guide_vars <= model_vars | aux_vars):
+    if not (guide_vars <= replay_vars | aux_vars):
         warnings.warn("Found non-auxiliary vars in guide but not model, "
                       "consider marking these infer={{'is_auxiliary': True}}:\n{}".format(
                           guide_vars - aux_vars - model_vars))
-    if not (model_vars <= guide_vars):
-        warnings.warn("Found vars in model but not guide: {}".format(model_vars - guide_vars))
+    if not (replay_vars <= guide_vars):
+        warnings.warn("Found vars in model but not guide: {}".format(replay_vars - guide_vars))
 
     # Check shapes agree.
-    for name in model_vars & guide_vars:
+    for name in replay_vars & guide_vars:
         model_site = model_trace.nodes[name]
         guide_site = guide_trace.nodes[name]
 
