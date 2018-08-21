@@ -4,6 +4,7 @@ import itertools
 import logging
 import math
 import timeit
+from collections import defaultdict
 
 import pytest
 import torch
@@ -19,6 +20,7 @@ from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
+from pyro.infer.util import LAST_CACHE_SIZE
 from pyro.util import torch_isnan
 from tests.common import assert_equal
 
@@ -1284,7 +1286,7 @@ def test_elbo_hmm_growth():
             probs = init_probs if x is None else transition_probs[x]
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
 
-    sizes = range(1, 11)
+    sizes = range(2, 11)
     costs = []
     times1 = []
     times2 = []
@@ -1299,11 +1301,15 @@ def test_elbo_hmm_growth():
 
         times1.append(time1 - time0)
         times2.append(time2 - time1)
-        costs.append(pyro.ops.einsum.shared.LAST_CACHE_SIZE[0])
+        costs.append(LAST_CACHE_SIZE[0])
 
+    collated_costs = defaultdict(list)
+    for counts in costs:
+        for key, cost in counts.items():
+            collated_costs[key].append(cost)
     print('Growth:')
     print('sizes = {}'.format(repr(sizes)))
-    print('costs = {}'.format(repr(costs)))
+    print('costs = {}'.format(repr(dict(collated_costs))))
     print('times1 = {}'.format(repr(times1)))
     print('times2 = {}'.format(repr(times2)))
 
@@ -1340,7 +1346,7 @@ def test_elbo_dbn_growth():
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs_x[x]))
             y = pyro.sample("y_{}".format(i), dist.Categorical(probs_y[x, y]))
 
-    sizes = range(1, 11)
+    sizes = range(2, 11)
     costs = []
     times1 = []
     times2 = []
@@ -1355,11 +1361,15 @@ def test_elbo_dbn_growth():
 
         times1.append(time1 - time0)
         times2.append(time2 - time1)
-        costs.append(pyro.ops.einsum.shared.LAST_CACHE_SIZE[0])
+        costs.append(LAST_CACHE_SIZE[0])
 
+    collated_costs = defaultdict(list)
+    for counts in costs:
+        for key, cost in counts.items():
+            collated_costs[key].append(cost)
     print('Growth:')
     print('sizes = {}'.format(repr(sizes)))
-    print('costs = {}'.format(repr(costs)))
+    print('costs = {}'.format(repr(dict(collated_costs))))
     print('times1 = {}'.format(repr(times1)))
     print('times2 = {}'.format(repr(times2)))
 

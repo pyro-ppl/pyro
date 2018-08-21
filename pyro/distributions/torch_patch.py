@@ -47,6 +47,15 @@ def _torch_dirichlet_grad(x, concentration, total):
 
 @_patch('torch.einsum')
 def _einsum(equation, operands):
+    # work around torch.einsum performance issues
+    # see https://github.com/pytorch/pytorch/issues/10661
+    if equation == 'ac,abc->cb':
+        x, y = operands
+        return (x.unsqueeze(1) * y).sum(0).transpose(0, 1)
+    elif equation == 'abc,ac->cb':
+        y, x = operands
+        return (x.unsqueeze(1) * y).sum(0).transpose(0, 1)
+
     # work around torch.einsum's limitation to 26 letters
     symbols = sorted(set(equation) - set(',->'))
     rename = dict(zip(symbols, 'abcdefghijklmnopqrstuvwxyz'))
