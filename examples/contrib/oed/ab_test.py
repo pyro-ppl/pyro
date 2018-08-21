@@ -2,6 +2,7 @@ import argparse
 from functools import partial
 import torch
 from torch.distributions import constraints
+import numpy as np
 
 import pyro
 from pyro import optim
@@ -11,7 +12,7 @@ import pyro.contrib.gp as gp
 
 from gp_bayes_opt import GPBayesOptimizer
 from models.bayes_linear import (
-    zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_entropy
+    zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov
 )
 
 """
@@ -58,6 +59,7 @@ def estimated_ape(ns, num_vi_steps):
         model,
         X,
         observation_labels="y",
+        target_labels="w",
         vi_parameters={
             "guide": guide,
             "optim": optim.Adam({"lr": 0.05}),
@@ -75,7 +77,8 @@ def true_ape(ns):
     designs = [group_assignment_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
     for i in range(len(ns)):
         x = designs[i]
-        true_ape.append(analytic_posterior_entropy(prior_cov, x, torch.tensor(1.)))
+        posterior_cov = analytic_posterior_cov(prior_cov, x, torch.tensor(1.))
+        true_ape.append(0.5*torch.logdet(2*np.pi*np.e*posterior_cov))
     return torch.tensor(true_ape)
 
 

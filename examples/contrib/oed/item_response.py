@@ -2,7 +2,7 @@ import argparse
 import torch
 
 import pyro
-from pyro.contrib.oed.eig import naive_rainforth
+from pyro.contrib.oed.eig import naive_rainforth_eig
 
 from models.bayes_linear import lmer_model
 
@@ -62,7 +62,8 @@ def main(N, M):
     item_thetas = torch.tensor([[0., 0.], [0., .5], [0., 1.]])
     design_tensor = build_design_tensor(item_thetas, individual_assignment)
     print("Design tensor", design_tensor)
-    y = naive_rainforth(model, design_tensor, target_labels=["w", "u", "G_u"], N=N, M=M)
+    y = naive_rainforth_eig(model, design_tensor, observation_labels="y", 
+                            target_labels=["w", "u", "G_u"], N=N, M=M)
     print("EIG", y)
 
 
