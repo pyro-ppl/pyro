@@ -33,13 +33,14 @@ Models for benchmarking:
 - A/B test with unknown observation covariance:
   - aim to learn regression coefficients *and* obs_sd
   - aim to learn regression coefficients, information on obs_sd ignored
-- logistic regression
-- LMER with normal response and known obs_sd:
-  - aim to learn all unknowns: w, u and G_u
-  - aim to learn w and G_u
-  - aim to learn w
-  - aim to learn u
-- logistic-LMER
+- logistic regression*
+- LMER with normal response and known obs_sd:*
+  - aim to learn all unknowns: w, u and G_u*
+  - aim to learn w*
+  - aim to learn u*
+- logistic-LMER*
+
+* to do
 
 Estimation techniques:
 
@@ -47,12 +48,11 @@ Estimation techniques:
 - iterated variational inference
 - naive Rainforth (nested Monte Carlo)
 - Donsker-Varadhan
+- Barber-Agakov
 
 TODO:
 
-- VI with amortization
-- Barber-Agakov with amortization
-- Better guides/ test cases for DV and BA
+- better guides- use autoguide, allow different levels of amortization
 """
 
 #########################################################################################
@@ -81,7 +81,7 @@ group_2p_linear_model_sds_10_2pt5 = group_linear_model(torch.tensor(0.), torch.t
 group_2p_guide = group_normal_guide(torch.tensor(1.), (1,), (1,))
 group_2p_ba_guide = lambda d: Ba_lm_guide((1,), (d, 1), {"w1": 1, "w2": 1}).guide
 nig_2p_linear_model_3_2 = normal_inverse_gamma_linear_model(torch.tensor(0.), torch.tensor([.1, .4]),
-                                                            torch.tensor([2.1]), torch.tensor([1.1]))
+                                                            torch.tensor([3.]), torch.tensor([2.]))
 nig_2p_linear_model_15_14 = normal_inverse_gamma_linear_model(torch.tensor(0.), torch.tensor([.1, .4]),
                                                               torch.tensor([15.]), torch.tensor([14.]))
 
@@ -125,12 +125,14 @@ def H_prior(model, design, observation_labels, target_labels):
 
 
 def vi_eig(model, design, observation_labels, target_labels, *args, **kwargs):
+    # **Only** applies to linear models - analytic prior entropy
     ape = vi_ape(model, design, observation_labels, target_labels, *args, **kwargs)
     prior_entropy = H_prior(model, design, observation_labels, target_labels)
     return prior_entropy - ape
 
 
 def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
+    # **Only** applies to linear models - analytic prior entropy
     ape = barber_agakov_ape(model, design, observation_labels, target_labels, *args, **kwargs)
     prior_entropy = H_prior(model, design, observation_labels, target_labels)
     return prior_entropy - ape
