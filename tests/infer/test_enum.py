@@ -1239,9 +1239,9 @@ def test_elbo_hmm_exact(num_steps):
     optim_guide = poutine.infer_config(naive_guide, lambda msg: {'exact': True})
 
     expected = elbo.differentiable_loss(model, naive_guide, data)
-    naive_cost = pyro.ops.einsum.shared.LAST_CACHE_SIZE[0]
+    naive_cost = LAST_CACHE_SIZE[0]
     actual = elbo.differentiable_loss(model, optim_guide, data)
-    optim_cost = pyro.ops.einsum.shared.LAST_CACHE_SIZE[0]
+    optim_cost = LAST_CACHE_SIZE[0]
     print('naive_cost = {}, optim_cost = {}'.format(naive_cost, optim_cost))
 
     assert_equal(expected, actual)
@@ -1255,7 +1255,10 @@ def test_elbo_hmm_exact(num_steps):
         assert_equal(expected_grad, actual_grad,
                      msg='Expected {}:\n{}\nActual {}:\n{}'.format(name, expected, name, actual))
 
-    assert optim_cost < naive_cost
+    assert optim_cost['tensor'] <= naive_cost['tensor']
+    assert optim_cost['transpose'] <= naive_cost['transpose']
+    assert optim_cost['einsum'] < naive_cost['einsum']
+    assert optim_cost['tensordot'] <= naive_cost['tensordot']
 
 
 def test_elbo_hmm_growth():
