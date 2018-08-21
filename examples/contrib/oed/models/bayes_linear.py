@@ -201,9 +201,9 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
 def normal_inv_gamma_family_guide(design, obs_sd, w_sizes):
     """Normal inverse Gamma family guide.
 
-    If `obs_sd` is known, this is a two-parameter family with separate parameters
-    for each batch. `w` is sampled from a Gaussian with mean `mw_param` and
-    sd `obs_sd / lambda_param` and the two parameters `mw_param` and `lambda_param`
+    If `obs_sd` is known, this is a multivariate Normal family with separate
+    parameters for each batch. `w` is sampled from a Gaussian with mean `mw_param` and
+    covariance matrix derived from  `obs_sd * lambda_param` and the two parameters `mw_param` and `lambda_param`
     are learned.
 
     If `obs_sd=None`, this is a four-parameter family. The observation precision
