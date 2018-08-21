@@ -10,7 +10,7 @@ from six.moves import reduce
 from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.util import is_identically_zero
-from pyro.ops.einsum import shared_intermediates
+from opt_einsum import shared_intermediates
 from pyro.ops.sumproduct import sumproduct
 from pyro.poutine.util import site_is_subsample
 
