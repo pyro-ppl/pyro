@@ -3,6 +3,7 @@ from collections import OrderedDict
 from functools import partial
 import torch
 from torch.nn.functional import softplus
+from torch.distributions import constraints
 import numpy as np
 
 import pyro
@@ -62,8 +63,8 @@ def normal_inverse_gamma_linear_model(coef_mean, coef_sqrtlambda, alpha,
                    response_label=observation_label)
 
 
-def normal_inverse_gamma_guide(coef_shape, coef_label="w"):
-    return partial(normal_inv_gamma_family_guide, obs_sd=None, w_sizes={coef_label: coef_shape})
+def normal_inverse_gamma_guide(coef_shape, coef_label="w", **kwargs):
+    return partial(normal_inv_gamma_family_guide, obs_sd=None, w_sizes={coef_label: coef_shape}, **kwargs)
 
 
 def logistic_regression_model(coef_mean, coef_sd, coef_label="w", observation_label="y"):
@@ -198,7 +199,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
     return model
 
 
-def normal_inv_gamma_family_guide(design, obs_sd, w_sizes):
+def normal_inv_gamma_family_guide(design, obs_sd, w_sizes, mf=False):
     """Normal inverse Gamma family guide.
 
     If `obs_sd` is known, this is a multivariate Normal family with separate
@@ -222,8 +223,8 @@ def normal_inv_gamma_family_guide(design, obs_sd, w_sizes):
     tau_shape = design.shape[:-2]
     if obs_sd is None:
         # First, sample tau (observation precision)
-        alpha = softplus(pyro.param("invsoftplus_alpha", 3.*torch.ones(tau_shape)))
-        beta = softplus(pyro.param("invsoftplus_beta", 3.*torch.ones(tau_shape)))
+        alpha = softplus(pyro.param("invsoftplus_alpha", 20.*torch.ones(tau_shape)))
+        beta = softplus(pyro.param("invsoftplus_beta", 20.*torch.ones(tau_shape)))
         # Global variable
         tau_prior = dist.Gamma(alpha, beta)
         tau = pyro.sample("tau", tau_prior)
@@ -235,11 +236,17 @@ def normal_inv_gamma_family_guide(design, obs_sd, w_sizes):
     for name, size in w_sizes.items():
         w_shape = tau_shape + size
         # Set up mu and lambda
-        mw_param = pyro.param("{}_guide_mean".format(name), torch.zeros(w_shape))
-        sqrtlambda_param = softplus(pyro.param("{}_guide_sqrtlambda".format(name),
-                                               3.*torch.ones(w_shape)))
+        mw_param = pyro.param("{}_guide_mean".format(name),
+                              torch.zeros(w_shape))
+        scale_tril = pyro.param(
+            "{}_guide_scale_tril".format(name),
+            torch.eye(*size).expand(tau_shape + size + size),
+            constraint=constraints.lower_cholesky)
         # guide distributions for w
-        w_dist = dist.Normal(mw_param, obs_sd / sqrtlambda_param).independent(1)
+        if mf:
+            w_dist = dist.MultivariateNormal(mw_param, scale_tril=scale_tril)
+        else:
+            w_dist = dist.MultivariateNormal(mw_param, scale_tril=obs_sd.unsqueeze(-1) * scale_tril)
         pyro.sample(name, w_dist)
 
 
