@@ -28,7 +28,6 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
     enum_dims = []
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
-            site["log_prob"]._pyro_name = name  # DEBUG
             if name in guide_trace or not site["infer"].get("_enumerate_dim") is not None:
                 costs.setdefault(ordering[name], []).append(site["log_prob"])
             else:
@@ -52,9 +51,6 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
             for cost_t in costs_t:
                 target_shape = broadcast_shape(cost_t.shape, ordinal_shape)
                 target_shape = target_shape[enum_boundary:] if enum_boundary else ()
-                print('{}: target_shape={}, factor shapes = {}'.format(
-                    cost_t._pyro_name, tuple(target_shape),
-                    ' '.join(str(tuple(x.shape)) for x in logprobs_t + [cost_t])))
                 marginal_costs[t].append(sumproduct(logprobs_t + [cost_t], target_shape,
                                                     backend='pyro.ops.einsum.torch_log'))
     return marginal_costs
