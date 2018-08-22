@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 import math
+import timeit
+from collections import defaultdict
 
 import pytest
 import torch
@@ -10,12 +12,14 @@ from torch.distributions import constraints, kl_divergence
 
 import pyro
 import pyro.distributions as dist
+import pyro.ops.einsum.shared
 import pyro.optim
 import pyro.poutine as poutine
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
+from pyro.infer.util import LAST_CACHE_SIZE
 from pyro.util import torch_isnan
 from tests.common import assert_equal
 
@@ -250,9 +254,9 @@ def test_svi_step_guide_uses_grad(enumerate1):
     def model():
         scale = pyro.param("scale")
         loc = pyro.sample("loc", dist.Normal(0., 10.))
+        pyro.sample("b", dist.Bernoulli(0.5))
         with pyro.iarange("data", len(data)):
             pyro.sample("obs", dist.Normal(loc, scale), obs=data)
-        pyro.sample("b", dist.Bernoulli(0.5))
 
     @config_enumerate(default=enumerate1)
     def guide():
@@ -1131,7 +1135,9 @@ def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
     ("parallel", 3, False),
     ("parallel", 10, False),
     ("parallel", 20, False),
-    pytest.param("parallel", 30, False, marks=pytest.mark.skip(reason="extremely expensive")),
+    ("parallel", 30, False),
+    ("parallel", 40, False),
+    ("parallel", 50, False),
 ])
 def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
     pyro.clear_param_store()
@@ -1145,7 +1151,6 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
         emission_probs = pyro.param("emission_probs",
                                     torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
                                     constraint=constraints.simplex)
-
         x = None
         for i, y in enumerate(data):
             probs = init_probs if x is None else transition_probs[x]
@@ -1183,8 +1188,18 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
             "transition_probs": [[3.70781687, -3.70781687], [3.70781687, -3.70781687]],
             "emission_probs": [[7.5, -7.5], [2.5, -2.5]],
         },
+        22: {
+            "transition_probs": [[4.11979618, -4.11979618], [4.11979618, -4.11979618]],
+            "emission_probs": [[8.25, -8.25], [2.75, -2.75]],
+        },
+        30: {
+            "transition_probs": [[5.76771452, -5.76771452], [5.76771452, -5.76771452]],
+            "emission_probs": [[11.25, -11.25], [3.75, -3.75]],
+        },
     }
 
+    if num_steps not in expected_grads:
+        return
     for name, value in pyro.get_param_store().named_parameters():
         actual = value.grad
         expected = torch.tensor(expected_grads[num_steps][name])
@@ -1192,3 +1207,266 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
             '\nexpected {}.grad = {}'.format(name, expected.cpu().numpy()),
             '\n  actual {}.grad = {}'.format(name, actual.detach().cpu().numpy()),
         ]))
+
+
+def test_elbo_hmm_growth():
+    pyro.clear_param_store()
+    init_probs = torch.tensor([0.5, 0.5])
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+
+    def model(data):
+        transition_probs = pyro.param("transition_probs",
+                                      torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                      constraint=constraints.simplex)
+        emission_probs = pyro.param("emission_probs",
+                                    torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                    constraint=constraints.simplex)
+        x = None
+        for i, y in enumerate(data):
+            probs = init_probs if x is None else transition_probs[x]
+            x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
+            pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=y)
+
+    @config_enumerate(default="parallel", expand=False)
+    def guide(data):
+        transition_probs = pyro.param("transition_probs",
+                                      torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                      constraint=constraints.simplex)
+        x = None
+        for i, y in enumerate(data):
+            probs = init_probs if x is None else transition_probs[x]
+            x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
+
+    sizes = range(2, 11)
+    costs = []
+    times1 = []
+    times2 = []
+    for size in sizes:
+        data = torch.ones(size)
+
+        time0 = timeit.default_timer()
+        elbo.loss_and_grads(model, guide, data)  # compiles paths
+        time1 = timeit.default_timer()
+        elbo.loss_and_grads(model, guide, data)  # reuses compiled path
+        time2 = timeit.default_timer()
+
+        times1.append(time1 - time0)
+        times2.append(time2 - time1)
+        costs.append(LAST_CACHE_SIZE[0])
+
+    collated_costs = defaultdict(list)
+    for counts in costs:
+        for key, cost in counts.items():
+            collated_costs[key].append(cost)
+    print('Growth:')
+    print('sizes = {}'.format(repr(sizes)))
+    print('costs = {}'.format(repr(dict(collated_costs))))
+    print('times1 = {}'.format(repr(times1)))
+    print('times2 = {}'.format(repr(times2)))
+
+    # This assertion may fail nondeterministically:
+    # assert costs[-3] + costs[-1] == 2 * costs[-2], 'cost is not asymptotically linear'
+
+
+def test_elbo_dbn_growth():
+    pyro.clear_param_store()
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+
+    def model(data):
+        uniform = torch.tensor([0.5, 0.5])
+        probs_z = pyro.param("probs_z",
+                             torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                             constraint=constraints.simplex)
+        for i, z in enumerate(data):
+            pyro.sample("x_{}".format(i), dist.Categorical(uniform))
+            y = pyro.sample("y_{}".format(i), dist.Categorical(uniform))
+            pyro.sample("z_{}".format(i), dist.Categorical(probs_z[y]), obs=z)
+
+    @config_enumerate(default="parallel", expand=False)
+    def guide(data):
+        probs_x = pyro.param("probs_x",
+                             torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                             constraint=constraints.simplex)
+        probs_y = pyro.param("probs_y",
+                             torch.tensor([[[0.75, 0.25], [0.45, 0.55]],
+                                           [[0.55, 0.45], [0.25, 0.75]]]),
+                             constraint=constraints.simplex)
+        x = 0
+        y = 0
+        for i in range(len(data)):
+            x = pyro.sample("x_{}".format(i), dist.Categorical(probs_x[x]))
+            y = pyro.sample("y_{}".format(i), dist.Categorical(probs_y[x, y]))
+
+    sizes = range(2, 11)
+    costs = []
+    times1 = []
+    times2 = []
+    for size in sizes:
+        data = torch.ones(size)
+
+        time0 = timeit.default_timer()
+        elbo.loss_and_grads(model, guide, data)  # compiles paths
+        time1 = timeit.default_timer()
+        elbo.loss_and_grads(model, guide, data)  # reuses compiled path
+        time2 = timeit.default_timer()
+
+        times1.append(time1 - time0)
+        times2.append(time2 - time1)
+        costs.append(LAST_CACHE_SIZE[0])
+
+    collated_costs = defaultdict(list)
+    for counts in costs:
+        for key, cost in counts.items():
+            collated_costs[key].append(cost)
+    print('Growth:')
+    print('sizes = {}'.format(repr(sizes)))
+    print('costs = {}'.format(repr(dict(collated_costs))))
+    print('times1 = {}'.format(repr(times1)))
+    print('times2 = {}'.format(repr(times2)))
+
+    # This assertion may fail nondeterministically:
+    # assert costs[-3] + costs[-1] == 2 * costs[-2], 'cost is not asymptotically linear'
+
+
+@pytest.mark.parametrize("pi_a", [0.33])
+@pytest.mark.parametrize("pi_b", [0.51, 0.77])
+@pytest.mark.parametrize("pi_c", [0.37])
+@pytest.mark.parametrize("N_b", [3, 4])
+@pytest.mark.parametrize("N_c", [5, 6])
+@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
+@pytest.mark.parametrize("expand", [True, False])
+def test_bernoulli_pyramid_elbo_gradient(enumerate1, N_b, N_c, pi_a, pi_b, pi_c, expand):
+    pyro.clear_param_store()
+
+    def model():
+        a = pyro.sample("a", dist.Bernoulli(0.33))
+        with pyro.iarange("b_iarange", N_b):
+            b = pyro.sample("b", dist.Bernoulli(0.25 * a + 0.50))
+            with pyro.iarange("c_iarange", N_c):
+                pyro.sample("c", dist.Bernoulli(0.15 * a + 0.20 * b + 0.32))
+
+    def guide():
+        qa = pyro.param("qa", torch.tensor(pi_a, requires_grad=True))
+        qb = pyro.param("qb", torch.tensor(pi_b, requires_grad=True))
+        qc = pyro.param("qc", torch.tensor(pi_c, requires_grad=True))
+        pyro.sample("a", dist.Bernoulli(qa))
+        with pyro.iarange("b_iarange", N_b):
+            pyro.sample("b", dist.Bernoulli(qb).expand_by([N_b]))
+            with pyro.iarange("c_iarange", N_c):
+                pyro.sample("c", dist.Bernoulli(qc).expand_by([N_c, N_b]))
+
+    logger.info("Computing gradients using surrogate loss")
+    elbo = TraceEnum_ELBO(max_iarange_nesting=2,
+                          strict_enumeration_warning=True)
+    elbo.loss_and_grads(model, config_enumerate(guide, default=enumerate1, expand=expand))
+    actual_grad_qa = pyro.param('qa').grad
+    actual_grad_qb = pyro.param('qb').grad
+    actual_grad_qc = pyro.param('qc').grad
+
+    logger.info("Computing analytic gradients")
+    qa = torch.tensor(pi_a, requires_grad=True)
+    qb = torch.tensor(pi_b, requires_grad=True)
+    qc = torch.tensor(pi_c, requires_grad=True)
+    elbo = kl_divergence(dist.Bernoulli(qa), dist.Bernoulli(0.33))
+    elbo = elbo + N_b * qa * kl_divergence(dist.Bernoulli(qb), dist.Bernoulli(0.75))
+    elbo = elbo + N_b * (1.0 - qa) * kl_divergence(dist.Bernoulli(qb), dist.Bernoulli(0.50))
+    elbo = elbo + N_c * N_b * qa * qb * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.67))
+    elbo = elbo + N_c * N_b * (1.0 - qa) * qb * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.52))
+    elbo = elbo + N_c * N_b * qa * (1.0 - qb) * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.47))
+    elbo = elbo + N_c * N_b * (1.0 - qa) * (1.0 - qb) * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.32))
+    expected_grad_qa, expected_grad_qb, expected_grad_qc = grad(elbo, [qa, qb, qc])
+
+    prec = 0.001
+
+    assert_equal(actual_grad_qa, expected_grad_qa, prec=prec, msg="".join([
+        "\nqa expected = {}".format(expected_grad_qa.data.cpu().numpy()),
+        "\nqa  actual = {}".format(actual_grad_qa.data.cpu().numpy()),
+    ]))
+    assert_equal(actual_grad_qb, expected_grad_qb, prec=prec, msg="".join([
+        "\nqb expected = {}".format(expected_grad_qb.data.cpu().numpy()),
+        "\nqb   actual = {}".format(actual_grad_qb.data.cpu().numpy()),
+    ]))
+    assert_equal(actual_grad_qc, expected_grad_qc, prec=prec, msg="".join([
+        "\nqc expected = {}".format(expected_grad_qc.data.cpu().numpy()),
+        "\nqc   actual = {}".format(actual_grad_qc.data.cpu().numpy()),
+    ]))
+
+
+@pytest.mark.parametrize("pi_a", [0.33])
+@pytest.mark.parametrize("pi_b", [0.51])
+@pytest.mark.parametrize("pi_c", [0.37])
+@pytest.mark.parametrize("pi_d", [0.29])
+@pytest.mark.parametrize("b_factor", [0.03, 0.04])
+@pytest.mark.parametrize("c_factor", [0.04, 0.06])
+@pytest.mark.parametrize("d_offset", [0.32])
+@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
+@pytest.mark.parametrize("expand", [True, False])
+def test_bernoulli_non_tree_elbo_gradient(enumerate1, b_factor, c_factor, pi_a, pi_b, pi_c, pi_d,
+                                          expand, d_offset, N_b=2, N_c=2):
+    pyro.clear_param_store()
+
+    def model():
+        a = pyro.sample("a", dist.Bernoulli(0.33))
+        b = pyro.sample("b", dist.Bernoulli(0.25 * a + 0.50))
+        c = pyro.sample("c", dist.Bernoulli(0.25 * a + 0.10 * b + 0.50))
+        pyro.sample("d", dist.Bernoulli(b_factor * b + c_factor * c + d_offset))
+
+    def guide():
+        qa = pyro.param("qa", torch.tensor(pi_a, requires_grad=True))
+        qb = pyro.param("qb", torch.tensor(pi_b, requires_grad=True))
+        qc = pyro.param("qc", torch.tensor(pi_c, requires_grad=True))
+        qd = pyro.param("qd", torch.tensor(pi_d, requires_grad=True))
+        pyro.sample("a", dist.Bernoulli(qa))
+        pyro.sample("b", dist.Bernoulli(qb))
+        pyro.sample("c", dist.Bernoulli(qc))
+        pyro.sample("d", dist.Bernoulli(qd))
+
+    logger.info("Computing gradients using surrogate loss")
+    elbo = TraceEnum_ELBO(max_iarange_nesting=2,
+                          strict_enumeration_warning=True)
+    elbo.loss_and_grads(model, config_enumerate(guide, default=enumerate1, expand=expand))
+    actual_grad_qa = pyro.param('qa').grad
+    actual_grad_qb = pyro.param('qb').grad
+    actual_grad_qc = pyro.param('qc').grad
+    actual_grad_qd = pyro.param('qd').grad
+
+    logger.info("Computing analytic gradients")
+    qa = torch.tensor(pi_a, requires_grad=True)
+    qb = torch.tensor(pi_b, requires_grad=True)
+    qc = torch.tensor(pi_c, requires_grad=True)
+    qd = torch.tensor(pi_d, requires_grad=True)
+
+    elbo = kl_divergence(dist.Bernoulli(qa), dist.Bernoulli(0.33))
+    elbo = elbo + qa * kl_divergence(dist.Bernoulli(qb), dist.Bernoulli(0.75))
+    elbo = elbo + (1.0 - qa) * kl_divergence(dist.Bernoulli(qb), dist.Bernoulli(0.50))
+
+    elbo = elbo + qa * qb * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.85))
+    elbo = elbo + (1.0 - qa) * qb * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.60))
+    elbo = elbo + qa * (1.0 - qb) * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.75))
+    elbo = elbo + (1.0 - qa) * (1.0 - qb) * kl_divergence(dist.Bernoulli(qc), dist.Bernoulli(0.50))
+
+    elbo = elbo + qb * qc * kl_divergence(dist.Bernoulli(qd), dist.Bernoulli(b_factor + c_factor + d_offset))
+    elbo = elbo + (1.0 - qb) * qc * kl_divergence(dist.Bernoulli(qd), dist.Bernoulli(c_factor + d_offset))
+    elbo = elbo + qb * (1.0 - qc) * kl_divergence(dist.Bernoulli(qd), dist.Bernoulli(b_factor + d_offset))
+    elbo = elbo + (1.0 - qb) * (1.0 - qc) * kl_divergence(dist.Bernoulli(qd), dist.Bernoulli(d_offset))
+
+    expected_grad_qa, expected_grad_qb, expected_grad_qc, expected_grad_qd = grad(elbo, [qa, qb, qc, qd])
+
+    prec = 0.0001
+
+    assert_equal(actual_grad_qa, expected_grad_qa, prec=prec, msg="".join([
+        "\nqa expected = {}".format(expected_grad_qa.data.cpu().numpy()),
+        "\nqa  actual = {}".format(actual_grad_qa.data.cpu().numpy()),
+    ]))
+    assert_equal(actual_grad_qb, expected_grad_qb, prec=prec, msg="".join([
+        "\nqb expected = {}".format(expected_grad_qb.data.cpu().numpy()),
+        "\nqb   actual = {}".format(actual_grad_qb.data.cpu().numpy()),
+    ]))
+    assert_equal(actual_grad_qc, expected_grad_qc, prec=prec, msg="".join([
+        "\nqc expected = {}".format(expected_grad_qc.data.cpu().numpy()),
+        "\nqc   actual = {}".format(actual_grad_qc.data.cpu().numpy()),
+    ]))
+    assert_equal(actual_grad_qd, expected_grad_qd, prec=prec, msg="".join([
+        "\nqd expected = {}".format(expected_grad_qd.data.cpu().numpy()),
+        "\nqd   actual = {}".format(actual_grad_qd.data.cpu().numpy()),
+    ]))

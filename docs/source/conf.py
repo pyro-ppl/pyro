@@ -180,6 +180,7 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
     'torch': ('http://pytorch.org/docs/master/', None),
     'networkx': ('https://networkx.github.io/documentation/stable/', None),
+    'opt_einsum': ('https://optimized-einsum.readthedocs.io/en/stable/', None)
 }
 
 # document class constructors (__init__ methods):

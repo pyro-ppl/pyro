@@ -21,3 +21,9 @@ that are mostly independent of the rest of Pyro.
     :undoc-members:
     :show-inheritance:
     :member-order: bysource
+
+.. automodule:: pyro.ops.einsum
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
