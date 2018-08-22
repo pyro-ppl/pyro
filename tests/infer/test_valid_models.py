@@ -1005,6 +1005,84 @@ def test_dim_allocation_error(Elbo, expand):
     assert_error(model, guide, Elbo())
 
 
+def test_enum_in_model_ok():
+    infer = {'enumerate': 'parallel', 'expand': False}
+
+    def model():
+        p = pyro.param('p', torch.tensor(0.25))
+        a = pyro.sample('a', dist.Bernoulli(p))
+        b = pyro.sample('b', dist.Bernoulli(p + a / 2))
+        c = pyro.sample('c', dist.Bernoulli(p + b / 2), infer=infer)
+        d = pyro.sample('d', dist.Bernoulli(p + c / 2))
+        e = pyro.sample('e', dist.Bernoulli(p + d / 2))
+        f = pyro.sample('f', dist.Bernoulli(p + e / 2), infer=infer)
+        g = pyro.sample('g', dist.Bernoulli(p + f / 2), obs=torch.tensor(0.))
+
+        # check shapes
+        assert a.shape == ()
+        assert b.shape == (2,)
+        assert c.shape == (2, 1, 1)
+        assert d.shape == (2,)
+        assert e.shape == (2, 1)
+        assert f.shape == (2, 1, 1, 1)
+        assert g.shape == ()
+
+    def guide():
+        p = pyro.param('p', torch.tensor(0.25))
+        a = pyro.sample('a', dist.Bernoulli(p))
+        b = pyro.sample('b', dist.Bernoulli(p + a / 2), infer=infer)
+        d = pyro.sample('d', dist.Bernoulli(p + b / 2))
+        e = pyro.sample('e', dist.Bernoulli(p + d / 2), infer=infer)
+
+        # check shapes
+        assert a.shape == ()
+        assert b.shape == (2,)
+        assert d.shape == (2,)
+        assert e.shape == (2, 1)
+
+    assert_ok(model, guide, TraceEnum_ELBO(max_iarange_nesting=0))
+
+
+def test_enum_iarange_in_model_ok():
+    infer = {'enumerate': 'parallel', 'expand': False}
+
+    def model():
+        p = pyro.param('p', torch.tensor(0.25))
+        a = pyro.sample('a', dist.Bernoulli(p))
+        b = pyro.sample('b', dist.Bernoulli(p + a / 2))
+        c = pyro.sample('c', dist.Bernoulli(p + b / 2), infer=infer)
+        with pyro.iarange('data', 3):
+            d = pyro.sample('d', dist.Bernoulli(p + c / 2))
+            e = pyro.sample('e', dist.Bernoulli(p + d / 2))
+            f = pyro.sample('f', dist.Bernoulli(p + e / 2), infer=infer)
+            g = pyro.sample('g', dist.Bernoulli(p + f / 2), obs=torch.zeros(3))
+
+        # check shapes
+        assert a.shape == ()
+        assert b.shape == (2, 1)
+        assert c.shape == (2, 1, 1, 1)
+        assert d.shape == (2, 3)
+        assert e.shape == (2, 1, 1)
+        assert f.shape == (2, 1, 1, 1, 1)
+        assert g.shape == (3,)
+
+    def guide():
+        p = pyro.param('p', torch.tensor(0.25))
+        a = pyro.sample('a', dist.Bernoulli(p))
+        b = pyro.sample('b', dist.Bernoulli(p + a / 2), infer=infer)
+        with pyro.iarange('data', 3):
+            d = pyro.sample('d', dist.Bernoulli(p + b / 2))
+            e = pyro.sample('e', dist.Bernoulli(p + d / 2), infer=infer)
+
+        # check shapes
+        assert a.shape == ()
+        assert b.shape == (2, 1)
+        assert d.shape == (2, 3)
+        assert e.shape == (2, 1, 1)
+
+    assert_ok(model, guide, TraceEnum_ELBO(max_iarange_nesting=1))
+
+
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_vectorized_num_particles(Elbo):
     data = torch.ones(1000, 2)

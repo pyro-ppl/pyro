@@ -40,11 +40,9 @@ class EnumerateMessenger(Messenger):
             if num_samples is None:
                 # Enumerate over the support of the distribution.
                 value = dist.enumerate_support(expand=msg["infer"].get("expand", EXPAND_DEFAULT))
-                msg["infer"]["_enumerated"] = "parallel"
             else:
                 # Monte Carlo sample the distribution.
                 value = dist(sample_shape=(num_samples,))
-                msg["infer"]["_enumerated"] = "monte_carlo"
             assert len(value.shape) == 1 + len(dist.batch_shape) + len(dist.event_shape)
 
             # Ensure enumeration happens at an available tensor dimension.
@@ -62,5 +60,6 @@ class EnumerateMessenger(Messenger):
                 diff = target_dim - actual_dim
                 value = value.reshape(value.shape[:1] + (1,) * diff + value.shape[1:])
 
+            msg["infer"]["_enumerate_dim"] = target_dim
             msg["value"] = value
             msg["done"] = True

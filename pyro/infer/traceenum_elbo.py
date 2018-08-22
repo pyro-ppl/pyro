@@ -20,6 +20,7 @@ from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
 
+# TODO move this logic into a poutine
 def _compute_model_costs(model_trace, guide_trace, ordering):
     # Collect model log_probs, possibly marginalizing out enumerated model variables.
     costs = OrderedDict()
@@ -28,7 +29,7 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
             site["log_prob"]._pyro_name = name  # DEBUG
-            if name in guide_trace or not site["infer"].get("_enumerated"):
+            if name in guide_trace or not site["infer"].get("_enumerate_dim") is not None:
                 costs.setdefault(ordering[name], []).append(site["log_prob"])
             else:
                 enum_logprobs.setdefault(ordering[name], []).append(site["log_prob"])
