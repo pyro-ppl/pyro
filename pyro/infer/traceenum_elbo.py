@@ -21,18 +21,18 @@ from pyro.util import check_traceenum_requirements, warn_if_nan
 
 
 def _compute_model_costs(model_trace, guide_trace, ordering):
-    # Collect model log_probs, possibly marginalizing out discrete model variables.
+    # Collect model log_probs, possibly marginalizing out enumerated model variables.
     costs = OrderedDict()
     enum_logprobs = OrderedDict()
     enum_dims = []
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
-            if site["infer"].get("_enumerated") and name not in guide_trace.nodes:
+            site["log_prob"]._pyro_name = name  # DEBUG
+            if name in guide_trace or not site["infer"].get("_enumerated"):
+                costs.setdefault(ordering[name], []).append(site["log_prob"])
+            else:
                 enum_logprobs.setdefault(ordering[name], []).append(site["log_prob"])
                 enum_dims.append(len(site["fn"].event_shape) - len(site["value"].shape))
-            else:
-                site["log_prob"]._pyro_name = name  # DEBUG
-                costs.setdefault(ordering[name], []).append(site["log_prob"])
     if not enum_logprobs:
         return costs
 
@@ -54,9 +54,8 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
                 print('{}: target_shape={}, factor shapes = {}'.format(
                     cost_t._pyro_name, tuple(target_shape),
                     ' '.join(str(tuple(x.shape)) for x in logprobs_t + [cost_t])))
-                marginal_costs[t].append(
-                    sumproduct(logprobs_t + [cost_t], target_shape,
-                               backend='pyro.ops.einsum.torch_log'))
+                marginal_costs[t].append(sumproduct(logprobs_t + [cost_t], target_shape,
+                                                    backend='pyro.ops.einsum.torch_log'))
     return marginal_costs
 
 
@@ -124,6 +123,9 @@ class TraceEnum_ELBO(ELBO):
         if self.vectorize_particles:
             guide = self._vectorized_num_particles(guide)
             model = self._vectorized_num_particles(model)
+        else:
+            guide = poutine.broadcast(guide)
+            model = poutine.broadcast(model)
 
         # Enable parallel enumeration over the vectorized guide and model.
         # The model allocates enumeration dimensions after (to the left of) the guide.
