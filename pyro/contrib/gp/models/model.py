@@ -89,8 +89,8 @@ class GPModel(Parameterized):
     """
     def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6, name=None):
         super(GPModel, self).__init__(name)
-        self.set_data(X, y)
         self.kernel = kernel
+        self.set_data(X, y)
         self.mean_function = (mean_function if mean_function is not None else
                               _zero_mean_function)
         self.jitter = jitter

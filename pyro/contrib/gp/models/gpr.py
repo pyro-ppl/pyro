@@ -144,6 +144,24 @@ class GPRegression(GPModel):
 
         return loc + self.mean_function(Xnew), cov
 
+    def set_data(self, X, y, safe=True):
+        if not safe:
+            super(GPRegression, self).set_data(X, y)
+        else:
+            Kff = self.kernel(X).contiguous()
+            try:
+                Lff = Kff.potrf(upper=False)
+                assert not torch.isnan(Lff).any()
+                super(GPRegression, self).set_data(X, y)
+            except AssertionError:
+                # Catch nan in new kernel matrix
+                # Stop admitting new data
+                pass
+            except RuntimeError:
+                # Catch potrf failure
+                # Would like to catch Lapack error directly
+                pass
+
     def iter_sample(self, noiseless=True):
         r"""
         Iteratively constructs a sample from the Gaussian Process posterior.

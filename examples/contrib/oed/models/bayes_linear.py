@@ -23,10 +23,11 @@ def known_covariance_linear_model(coef_mean, coef_sd, observation_sd,
     return model
 
 
-def normal_guide(observation_sd, coef_shape, coef_label="w"):
+def normal_guide(observation_sd, coef_shape, coef_label="w", base_shape=None):
     return partial(normal_inv_gamma_family_guide, 
                    obs_sd=observation_sd,
-                   w_sizes={coef_label: coef_shape})
+                   w_sizes={coef_label: coef_shape},
+                   base_shape=base_shape)
 
 
 def group_linear_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
@@ -47,9 +48,9 @@ def group_normal_guide(observation_sd, coef1_shape, coef2_shape,
         obs_sd=observation_sd)
 
 
-def zero_mean_unit_obs_sd_lm(coef_sd):
+def zero_mean_unit_obs_sd_lm(coef_sd, guide_base_shape=None):
     model = known_covariance_linear_model(torch.tensor(0.), coef_sd, torch.tensor(1.))
-    guide = normal_guide(torch.tensor(1.), coef_sd.shape)
+    guide = normal_guide(torch.tensor(1.), coef_sd.shape, base_shape=guide_base_shape)
     return model, guide
 
 
@@ -199,7 +200,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
     return model
 
 
-def normal_inv_gamma_family_guide(design, obs_sd, w_sizes, mf=False):
+def normal_inv_gamma_family_guide(design, obs_sd, w_sizes, mf=False, base_shape=None):
     """Normal inverse Gamma family guide.
 
     If `obs_sd` is known, this is a multivariate Normal family with separate
@@ -220,7 +221,10 @@ def normal_inv_gamma_family_guide(design, obs_sd, w_sizes, mf=False):
     """
     # design is size batch x n x p
     # tau is size batch
-    tau_shape = design.shape[:-2]
+    if base_shape is None:
+        tau_shape = design.shape[:-2]
+    else:
+        tau_shape = base_shape
     if obs_sd is None:
         # First, sample tau (observation precision)
         alpha = softplus(pyro.param("invsoftplus_alpha", 20.*torch.ones(tau_shape)))
