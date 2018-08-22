@@ -37,29 +37,15 @@ def sumproduct(factors, target_shape=(), backend='torch', optimize=True):
         (numbers if isinstance(t, Number) else tensors).append(t)
     if not tensors:
         return reduce(multiply, numbers, unit)
-    shape = broadcast_shape(*(t.shape for t in tensors))
     if numbers:
         number_part = reduce(multiply, numbers, unit)
         tensor_part = sumproduct(tensors, target_shape, backend=backend, optimize=optimize)
         return multiply(tensor_part, number_part)
 
-    # Work around opt_einsum interface lack of support for pure broadcasting.
-    if len(shape) < len(target_shape) or \
-            any(s < t for s, t in zip_align_right(shape, target_shape)):
-        smaller_shape = list(target_shape)
-        for i in range(len(target_shape)):
-            if i >= len(shape) or shape[-1-i] < target_shape[-1-i]:
-                smaller_shape[-1-i] = 1
-        while smaller_shape and smaller_shape[0] == 1:
-            smaller_shape = smaller_shape[1:]
-        smaller_shape = tuple(smaller_shape)
-        result = sumproduct(factors, smaller_shape, backend=backend, optimize=optimize)
-        return result.expand(target_shape)
-
-    if not optimize:
-        return naive_sumproduct(tensors, target_shape)
-    else:
+    if optimize:
         return opt_sumproduct(tensors, target_shape, backend=backend)
+    else:
+        return naive_sumproduct(tensors, target_shape)
 
 
 def naive_sumproduct(factors, target_shape):
@@ -77,19 +63,32 @@ def naive_sumproduct(factors, target_shape):
         if result_size > target_size:
             result = result.sum(dim, True)
 
-    return result
+    return result.expand(target_shape)
 
 
 def opt_sumproduct(factors, target_shape, backend='torch'):
     assert all(isinstance(t, torch.Tensor) for t in factors)
-    num_symbols = len(target_shape)
-    num_symbols = max(num_symbols, max(len(t.shape) for t in factors))
+
+    # Work around opt_einsum interface lack of support for pure broadcasting.
+    shape = broadcast_shape(*(t.shape for t in factors))
+    if len(shape) < len(target_shape) or \
+            any(s < t for s, t in zip_align_right(shape, target_shape)):
+        smaller_shape = list(target_shape)
+        for i in range(len(target_shape)):
+            if i >= len(shape) or shape[-1-i] < target_shape[-1-i]:
+                smaller_shape[-1-i] = 1
+        while smaller_shape and smaller_shape[0] == 1:
+            smaller_shape = smaller_shape[1:]
+        smaller_shape = tuple(smaller_shape)
+        result = opt_sumproduct(factors, smaller_shape, backend=backend)
+        return result.expand(target_shape)
+
+    # Construct low-dimensional tensors with symbolic names.
+    num_symbols = max(len(target_shape), max(len(t.shape) for t in factors))
     symbols = [opt_einsum.get_symbol(i) for i in range(num_symbols)]
     target_names = [name
                     for name, size in zip_align_right(symbols, target_shape)
                     if size != 1]
-
-    # Construct low-dimensional tensors with symbolic names.
     packed_names = []
     packed_factors = []
     for factor in factors:
