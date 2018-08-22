@@ -10,32 +10,59 @@ from six.moves import queue
 import pyro
 import pyro.ops.jit
 import pyro.poutine as poutine
-from pyro.distributions.util import is_identically_zero
+from pyro.distributions.util import broadcast_shape, is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
 from pyro.infer.util import Dice, is_validation_enabled
+from pyro.ops.einsum import shared_intermediates
+from pyro.ops.sumproduct import sumproduct
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
 
 def _compute_model_costs(model_trace, guide_trace, ordering):
-    enum_dims = []
+    # Collect model log_probs, possibly marginalizing out discrete model variables.
     costs = OrderedDict()
+    enum_logprobs = OrderedDict()
+    enum_dims = []
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
-            costs.setdefault(ordering[name], []).append(site["log_prob"])
-            if site["infer"].get("enumerate") and name not in guide_trace.nodes:
+            if site["infer"].get("_enumerated") and name not in guide_trace.nodes:
+                enum_logprobs.setdefault(ordering[name], []).append(site["log_prob"])
                 enum_dims.append(len(site["fn"].event_shape) - len(site["value"].shape))
-    if not enum_dims:
+            else:
+                site["log_prob"]._pyro_name = name  # DEBUG
+                costs.setdefault(ordering[name], []).append(site["log_prob"])
+    if not enum_logprobs:
         return costs
 
-    # sum out enumeration dimensions
-    raise NotImplementedError('TODO(fritzo,eb8680)')
+    # Marginalize out all enumerated variables.
+    enum_boundary = max(enum_dims) + 1
+    marginal_costs = OrderedDict((t, []) for t in costs)
+    with shared_intermediates():
+        for t, costs_t in costs.items():
+            # TODO refine this coarse dependency ordering using time and tensor shapes.
+            logprobs_t = sum((logprobs_u for u, logprobs_u in enum_logprobs.items() if u <= t), [])
+            if not logprobs_t:
+                marginal_costs[t] = costs_t
+                continue
+
+            ordinal_shape = broadcast_shape(*(x.shape for x in logprobs_t))
+            for cost_t in costs_t:
+                target_shape = broadcast_shape(cost_t.shape, ordinal_shape)
+                target_shape = target_shape[enum_boundary:] if enum_boundary else ()
+                print('{}: target_shape={}, factor shapes = {}'.format(
+                    cost_t._pyro_name, tuple(target_shape),
+                    ' '.join(str(tuple(x.shape)) for x in logprobs_t + [cost_t])))
+                marginal_costs[t].append(
+                    sumproduct(logprobs_t + [cost_t], target_shape,
+                               backend='pyro.ops.einsum.torch_log'))
+    return marginal_costs
 
 
 def _compute_dice_elbo(model_trace, guide_trace):
     # y depends on x iff ordering[x] <= ordering[y]
-    # TODO refine this coarse dependency ordering.
+    # TODO refine this coarse dependency ordering using time.
     ordering = {name: frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
                 for trace in (model_trace, guide_trace)
                 for name, site in trace.nodes.items()

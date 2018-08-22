@@ -177,10 +177,10 @@ def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float(
                    if site["infer"].get("is_auxiliary"))
     if aux_vars & model_vars:
         warnings.warn("Found auxiliary vars in the model: {}".format(aux_vars & model_vars))
-    if not (guide_vars <= replay_vars | aux_vars):
-        warnings.warn("Found non-auxiliary vars in guide but not model, "
-                      "consider marking these infer={{'is_auxiliary': True}}:\n{}".format(
-                          guide_vars - aux_vars - model_vars))
+    # if not (guide_vars <= replay_vars | aux_vars):
+    #     warnings.warn("Found non-auxiliary vars in guide but not model, "
+    #                   "consider marking these infer={{'is_auxiliary': True}}:\n{}".format(
+    #                       guide_vars - aux_vars - replay_vars))
     if not (replay_vars <= guide_vars):
         warnings.warn("Found vars in model but not guide: {}".format(replay_vars - guide_vars))
 
