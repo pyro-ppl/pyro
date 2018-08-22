@@ -23,29 +23,62 @@ def memoized_squeeze(tensor):
     return result
 
 
-def sumproduct(factors, target_shape=(), backend='torch', optimize=True):
+def sumproduct(factors, target_shape=(), optimize=True):
+    """
+    Compute product of factors; then sum down extra dims and broadcast up
+    missing dims so that result has shape ``target_shape``.
+
+    :param iterable factors: An iterable of :class:`torch.Tensor` or Numbers.
+    :param torch.Size target_shape: An optional shape of the result.
+        If missing, all dimensions will be summed out.
+    :param bool optimize: Whether to use the :mod:`opt_einsum` backend.
+    :return: A tensor of shape ``target_shape``.
+    """
     # Handle numbers and trivial cases.
-    if backend.endswith('_log'):
-        multiply = operator.add
-        unit = 0.
-    else:
-        multiply = operator.mul
-        unit = 1.
     numbers = []
     tensors = []
     for t in factors:
         (numbers if isinstance(t, Number) else tensors).append(t)
     if not tensors:
-        return reduce(multiply, numbers, unit)
+        return torch.tensor(float(reduce(operator.mul, numbers, 1.))).expand(target_shape)
     if numbers:
-        number_part = reduce(multiply, numbers, unit)
-        tensor_part = sumproduct(tensors, target_shape, backend=backend, optimize=optimize)
-        return multiply(tensor_part, number_part)
-
+        number_part = reduce(operator.mul, numbers, 1.)
+        tensor_part = sumproduct(tensors, target_shape, optimize=optimize)
+        return tensor_part * number_part
     if optimize:
-        return opt_sumproduct(tensors, target_shape, backend=backend)
+        return opt_sumproduct(tensors, target_shape, backend='torch')
     else:
         return naive_sumproduct(tensors, target_shape)
+
+
+def logsumproductexp(log_factors, target_shape=(), optimize=True):
+    """
+    Compute sum of log factors; then log_sum_exp down extra dims and broadcast
+    up missing dims so that result has shape ``target_shape``.
+
+    :param iterable log_factors: An iterable of :class:`torch.Tensor` or
+        Numbers.
+    :param torch.Size target_shape: An optional shape of the result.
+        If missing, all dimensions will be summed out.
+    :param bool optimize: Whether to use the :mod:`opt_einsum` backend.
+    :return: A tensor of shape ``target_shape``.
+    """
+    # Handle numbers and trivial cases.
+    numbers = []
+    tensors = []
+    for t in log_factors:
+        (numbers if isinstance(t, Number) else tensors).append(t)
+    if not tensors:
+        return torch.tensor(float(sum(numbers))).expand(target_shape)
+    if numbers:
+        number_part = sum(numbers)
+        tensor_part = logsumproductexp(tensors, target_shape)
+        return tensor_part + number_part
+    if optimize:
+        return opt_sumproduct(tensors, target_shape,
+                              backend='pyro.ops.einsum.torch_log')
+    else:
+        return naive_sumproduct([t.exp() for t in tensors], target_shape).log()
 
 
 def naive_sumproduct(factors, target_shape):
