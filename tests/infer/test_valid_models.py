@@ -1083,6 +1083,18 @@ def test_enum_iarange_in_model_ok():
     assert_ok(model, guide, TraceEnum_ELBO(max_iarange_nesting=1))
 
 
+def test_enum_sequential_in_model_error():
+
+    def model():
+        p = pyro.param('p', torch.tensor(0.25))
+        pyro.sample('a', dist.Bernoulli(p), infer={'enumerate': 'sequential'})
+
+    def guide():
+        pass
+
+    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=0))
+
+
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_vectorized_num_particles(Elbo):
     data = torch.ones(1000, 2)
