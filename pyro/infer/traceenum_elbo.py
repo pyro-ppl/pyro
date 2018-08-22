@@ -15,7 +15,7 @@ from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
 from pyro.infer.util import Dice, is_validation_enabled
 from pyro.ops.einsum import shared_intermediates
-from pyro.ops.sumproduct import sumproduct
+from pyro.ops.sumproduct import logsumproductexp
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
@@ -51,8 +51,7 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
             for cost_t in costs_t:
                 target_shape = broadcast_shape(cost_t.shape, ordinal_shape)
                 target_shape = target_shape[enum_boundary:] if enum_boundary else ()
-                marginal_costs[t].append(sumproduct(logprobs_t + [cost_t], target_shape,
-                                                    backend='pyro.ops.einsum.torch_log'))
+                marginal_costs[t].append(logsumproductexp(logprobs_t + [cost_t], target_shape))
     return marginal_costs
 
 
