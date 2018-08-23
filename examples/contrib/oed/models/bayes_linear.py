@@ -4,10 +4,13 @@ from functools import partial
 import torch
 from torch.nn.functional import softplus
 from torch.distributions import constraints
+from torch.distributions.transformed_distribution import TransformedDistribution
+from torch.distributions.transforms import AffineTransform, SigmoidTransform
 import numpy as np
 
 import pyro
 import pyro.distributions as dist
+from pyro.contrib.oed.util import rmv, lexpand
 
 
 def known_covariance_linear_model(coef_mean, coef_sd, observation_sd,
@@ -34,7 +37,7 @@ def group_linear_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_s
     model = partial(
         bayesian_linear_model, w_means={coef1_label: coef1_mean, coef2_label: coef2_mean},
         w_sqrtlambdas={coef1_label: 1./(observation_sd*coef1_sd), coef2_label: 1./(observation_sd*coef2_sd)},
-        obs_sd=observation_sd)
+        obs_sd=observation_sd, response_label=observation_label)
     model.obs_sd = observation_sd
     model.w_sds = {coef1_label: coef1_sd, coef2_label: coef2_sd}
     return model
@@ -90,10 +93,55 @@ def lmer_model(fixed_effects_sd, n_groups, random_effects_alpha, random_effects_
                    response_label=observation_label)
 
 
+def sigmoid_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
+                  sigmoid_alpha, sigmoid_beta, sigmoid_design,
+                  coef1_label="w1", coef2_label="w2", observation_label="y",
+                  sigmoid_label="k"):
+
+    def model(design):
+        batch_shape = design.shape[:-2]
+        k = pyro.sample(sigmoid_label, 
+                dist.Gamma(lexpand(sigmoid_alpha, *batch_shape),
+                           lexpand(sigmoid_beta, *batch_shape)).independent(1))
+        k_assigned = rmv(sigmoid_design, k)
+        
+        return bayesian_linear_model(
+            design,
+            w_means={coef1_label: coef1_mean, coef2_label: coef2_mean},
+            w_sqrtlambdas={coef1_label: 1./(observation_sd*coef1_sd), coef2_label: 1./(observation_sd*coef2_sd)},
+            obs_sd=observation_sd,
+            response="sigmoid",
+            response_label=observation_label,
+            k=k_assigned
+            )
+
+    return model
+
+
+def sigmoid_model2(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
+                   sigmoid_k, sigmoid_design,
+                   coef1_label="w1", coef2_label="w2", observation_label="y"):
+
+    def model(design):
+        k_assigned = rmv(sigmoid_design, sigmoid_k)
+        
+        return bayesian_linear_model(
+            design,
+            w_means={coef1_label: coef1_mean, coef2_label: coef2_mean},
+            w_sqrtlambdas={coef1_label: 1./(observation_sd*coef1_sd), coef2_label: 1./(observation_sd*coef2_sd)},
+            obs_sd=observation_sd,
+            response="sigmoid",
+            response_label=observation_label,
+            k=k_assigned
+            )
+
+    return model
+
+
 def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={},
                           re_alphas={}, re_betas={}, obs_sd=None,
                           alpha_0=None, beta_0=None, response="normal",
-                          response_label="y"):
+                          response_label="y", k=None):
     """
     A pyro model for Bayesian linear regression.
 
@@ -193,10 +241,15 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         return pyro.sample(response_label, dist.Normal(prediction_mean, obs_sd).independent(1))
     elif response == "bernoulli":
         return pyro.sample(response_label, dist.Bernoulli(logits=prediction_mean).independent(1))
+    elif response == "sigmoid":
+        base_dist = dist.Normal(prediction_mean, obs_sd).independent(1)
+        # You can add loc via the linear model itself
+        k = k.expand(prediction_mean.shape)
+        transforms = [AffineTransform(loc=0., scale=k), SigmoidTransform()]
+        response_dist = dist.TransformedDistribution(base_dist, transforms)
+        return pyro.sample(response_label, response_dist)
     else:
         raise ValueError("Unknown response distribution: '{}'".format(response))
-
-    return model
 
 
 def normal_inv_gamma_family_guide(design, obs_sd, w_sizes, mf=False):
@@ -271,6 +324,22 @@ def group_assignment_matrix(design):
     if t < n:
         X[t:, -1] = 1.
     return X
+
+
+def rf_group_assignments(n, random_intercept=True):
+    assert n % 2 == 0
+    n_designs = n//2
+    participant_matrix = torch.eye(n).expand(n_designs, n, n)
+    l = []
+    for i in range(n_designs):
+        X1 = group_assignment_matrix(torch.tensor([i, n_designs - i]))
+        X2 = group_assignment_matrix(torch.tensor([n_designs - i, i]))
+        X = torch.cat([X1, X2], dim=-2)
+        l.append(X)
+    X = torch.stack(l, dim=0)    
+    if random_intercept:
+        X = torch.cat([X, participant_matrix], dim=-1)
+    return X, participant_matrix
 
 
 def analytic_posterior_cov(prior_cov, x, obs_sd):
