@@ -94,7 +94,7 @@ def main(num_vi_steps, num_bo_steps):
     noises = [0.0001, 0.25]
     num_acqs = [2, 10]
 
-    for f, noise, num_acquisitions in zip(estimators, noises, n_acqs):
+    for f, noise, num_acquisitions in zip(estimators, noises, num_acqs):
         X = torch.tensor([25., 75.])
         y = f(X)
         gpmodel = gp.models.GPRegression(
