@@ -65,7 +65,8 @@ class Ba_sigmoid_guide(nn.Module):
         # partial_logit = 1./y - 1.
         # logit = (partial_logit.clamp(1e-25, 1e25)).log()
         # y_trans = self.inverse_sigmoid_offset + logit/self.inverse_sigmoid_scale
-        logited = y.log() - (-y).log1p()
+        y, y1m = y.clamp(1e-35, 1), (1.-y).clamp(1e-35, 1)
+        logited = y.log() - y1m.log()
         y_trans = logited/.1
 
         # TODO fix this
@@ -75,11 +76,8 @@ class Ba_sigmoid_guide(nn.Module):
         xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
         xtxi = tensorized_matrix_inverse(xtx)
         mu = rmv(xtxi, rmv(design.transpose(-1, -2), y_trans))
-        print(mu)
-        print(y_trans)
 
         scale_tril = tensorized_tril(self.scale_tril)
-        print(scale_tril.shape)
 
         return mu, scale_tril
 
