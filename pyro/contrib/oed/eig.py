@@ -110,7 +110,7 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
     expanded_design = lexpand(design, N)
     trace = poutine.trace(model).get_trace(expanded_design)
     trace.compute_log_prob()
-    
+
     if M_prime is not None:
         y_dict = {l: lexpand(trace.nodes[l]["value"], M_prime) for l in observation_labels}
         theta_dict = {l: lexpand(trace.nodes[l]["value"], M_prime) for l in target_labels}
@@ -123,7 +123,7 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
         retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
         retrace.compute_log_prob()
         conditional_lp = logsumexp(sum(retrace.nodes[l]["log_prob"] for l in observation_labels), 0) \
-                         - np.log(M_prime)
+                        - np.log(M_prime)
     else:
         # This assumes that y are independent conditional on theta
         # Furthermore assume that there are no other variables besides theta
@@ -138,7 +138,7 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
     retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
     retrace.compute_log_prob()
     marginal_lp = logsumexp(sum(retrace.nodes[l]["log_prob"] for l in observation_labels), 0) \
-                  - np.log(M)
+                 - np.log(M)
 
     return (conditional_lp - marginal_lp).sum(0)/N
 

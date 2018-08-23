@@ -4,18 +4,16 @@ from functools import partial
 import torch
 from torch.nn.functional import softplus
 from torch.distributions import constraints
-from torch.distributions.transformed_distribution import TransformedDistribution
 from torch.distributions.transforms import AffineTransform, SigmoidTransform
-import numpy as np
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.oed.util import rmv, lexpand
+from pyro.contrib.oed.util import rmv
 
 
 def known_covariance_linear_model(coef_mean, coef_sd, observation_sd,
                                   coef_label="w", observation_label="y"):
-    model = partial(bayesian_linear_model, 
+    model = partial(bayesian_linear_model,
                     w_means={coef_label: coef_mean},
                     w_sqrtlambdas={coef_label: 1./(observation_sd*coef_sd)},
                     obs_sd=observation_sd,
@@ -27,7 +25,7 @@ def known_covariance_linear_model(coef_mean, coef_sd, observation_sd,
 
 
 def normal_guide(observation_sd, coef_shape, coef_label="w"):
-    return partial(normal_inv_gamma_family_guide, 
+    return partial(normal_inv_gamma_family_guide,
                    obs_sd=observation_sd,
                    w_sizes={coef_label: coef_shape})
 
@@ -59,7 +57,7 @@ def zero_mean_unit_obs_sd_lm(coef_sd):
 def normal_inverse_gamma_linear_model(coef_mean, coef_sqrtlambda, alpha,
                                       beta, coef_label="w",
                                       observation_label="y"):
-    return partial(bayesian_linear_model, 
+    return partial(bayesian_linear_model,
                    w_means={coef_label: coef_mean},
                    w_sqrtlambdas={coef_label: coef_sqrtlambda},
                    alpha_0=alpha, beta_0=beta,
@@ -101,11 +99,11 @@ def sigmoid_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
     def model(design):
         batch_shape = design.shape[:-2]
         k_shape = batch_shape + (sigmoid_design.shape[-1],)
-        k = pyro.sample(sigmoid_label, 
+        k = pyro.sample(sigmoid_label,
                         dist.Gamma(sigmoid_alpha.expand(k_shape),
                                    sigmoid_beta.expand(k_shape)).independent(1))
         k_assigned = rmv(sigmoid_design, k)
-        
+
         return bayesian_linear_model(
             design,
             w_means={coef1_label: coef1_mean, coef2_label: coef2_mean},
@@ -150,7 +148,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
 
     The random effects coefficient is constructed as follows. For each random effect
     group, standard deviations for that group are sampled from a normal inverse Gamma
-    distribution. For each group, a random effect coefficient is then sampled from a zero 
+    distribution. For each group, a random effect coefficient is then sampled from a zero
     mean Gaussian with those standard deviations.
 
     :param torch.Tensor design: a tensor with last two dimensions `n` and `p`
@@ -173,7 +171,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         covariance.
     :param str response: Emission distribution. May be `"normal"` or `"bernoulli"`.
     :param str response_label: Variable label for response.
-    :param torch.Tensor k: Only used for a sigmoid response. The slope of the sigmoid 
+    :param torch.Tensor k: Only used for a sigmoid response. The slope of the sigmoid
         transformation.
     """
     # design is size batch x n x p
@@ -313,13 +311,13 @@ def rf_group_assignments(n, random_intercept=True):
     assert n % 2 == 0
     n_designs = n//2
     participant_matrix = torch.eye(n).expand(n_designs, n, n)
-    l = []
+    Xs = []
     for i in range(n_designs):
         X1 = group_assignment_matrix(torch.tensor([i, n_designs - i]))
         X2 = group_assignment_matrix(torch.tensor([n_designs - i, i]))
         X = torch.cat([X1, X2], dim=-2)
-        l.append(X)
-    X = torch.stack(l, dim=0)    
+        Xs.append(X)
+    X = torch.stack(Xs, dim=0)    
     if random_intercept:
         X = torch.cat([X, participant_matrix], dim=-1)
     return X, participant_matrix

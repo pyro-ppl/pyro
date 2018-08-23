@@ -2,7 +2,6 @@ import time
 import torch
 import pytest
 import numpy as np
-from functools import partial
 
 import pyro
 from pyro import optim
@@ -14,11 +13,10 @@ from pyro.contrib.oed.util import get_indices
 
 from models.bayes_linear import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov,
-    bayesian_linear_model, normal_inv_gamma_family_guide, normal_inverse_gamma_linear_model,
-    normal_inverse_gamma_guide, group_linear_model, group_normal_guide,
-    sigmoid_model, rf_group_assignments
+    normal_inverse_gamma_linear_model, normal_inverse_gamma_guide, group_linear_model,
+    group_normal_guide, sigmoid_model, rf_group_assignments
 )
-from dv.neural import T_neural, T_specialized
+from dv.neural import T_specialized
 from ba.guide import Ba_lm_guide, Ba_nig_guide, Ba_sigmoid_guide
 
 PLOT = True
@@ -94,11 +92,9 @@ nig_2p_guide = normal_inverse_gamma_guide((2,), mf=True)
 nig_2p_ba_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}).guide
 nig_2p_ba_mf_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}, mf=True).guide
 
-alpha = torch.ones(10)
-beta = 10.*torch.ones(10)
-sigmoid_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.), 
+sigmoid_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.),
                                   torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
-                                  alpha, beta, AB_sigmoid_design_5d)
+                                  torch.ones(10), 10.*torch.ones(10), AB_sigmoid_design_5d)
 sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(torch.tensor([10., 2.5]), 5, 10, {"w1": 2}).guide
 
 ########################################################################################
@@ -114,7 +110,6 @@ def linear_model_ground_truth(model, design, observation_labels, target_labels, 
 
     w_sd = torch.cat(list(model.w_sds.values()), dim=-1)
     prior_cov = torch.diag(w_sd**2)
-    designs = torch.unbind(design)
     posterior_covs = [analytic_posterior_cov(prior_cov, x, model.obs_sd) for x in torch.unbind(design)]
     target_indices = get_indices(target_labels, tensors=model.w_sds)
     target_posterior_covs = [S[target_indices, :][:, target_indices] for S in posterior_covs]
@@ -332,6 +327,6 @@ def test_convergence(title, model, design, observation_label, target_label, est1
         if truth is not None:
             for true, col in zip(torch.unbind(truth, 0), plt.rcParams['axes.prop_cycle'].by_key()['color']):
                 plt.axhline(true.numpy(), color=col)
-        
+
         plt.title(title)
         plt.show()
