@@ -197,6 +197,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
     # tau is size batch
     tau_shape = design.shape[:-2]
     if obs_sd is None:
+        print("OOOOOps, obs_sd unknown")
         # First, sample tau (observation precision)
         tau_prior = dist.Gamma(alpha_0.expand(tau_shape),
                                beta_0.expand(tau_shape))
@@ -233,6 +234,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         w.append(pyro.sample(name, u_prior).unsqueeze(-1))
     # Regression coefficient `w` is batch x p x 1
     w = torch.cat(w, dim=-2)
+    print("w", w)
 
     # Run the regressor forward conditioned on inputs
     prediction_mean = torch.matmul(design, w).squeeze(-1)
@@ -245,9 +247,10 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         base_dist = dist.Normal(prediction_mean, obs_sd).independent(1)
         # You can add loc via the linear model itself
         k = k.expand(prediction_mean.shape)
-        transforms = [AffineTransform(loc=0., scale=k), SigmoidTransform()]
+        transforms = [AffineTransform(loc=0., scale=.1), SigmoidTransform()]
         response_dist = dist.TransformedDistribution(base_dist, transforms)
-        return pyro.sample(response_label, response_dist)
+        y = pyro.sample(response_label, response_dist)
+        return y
     else:
         raise ValueError("Unknown response distribution: '{}'".format(response))
 

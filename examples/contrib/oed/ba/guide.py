@@ -62,9 +62,11 @@ class Ba_sigmoid_guide(nn.Module):
     def forward(self, y, design, target_label):
 
         # Actual hard part, try to invert transformation on y
-        partial_logit = 1./y - 1.
-        logit = (partial_logit.clamp(1e-25, 1e25)).log()
-        y_trans = self.inverse_sigmoid_offset + logit/self.inverse_sigmoid_scale
+        # partial_logit = 1./y - 1.
+        # logit = (partial_logit.clamp(1e-25, 1e25)).log()
+        # y_trans = self.inverse_sigmoid_offset + logit/self.inverse_sigmoid_scale
+        logited = y.log() - (-y).log1p()
+        y_trans = logited/.1
 
         # TODO fix this
         design = design[..., :self.w_sizes[target_label]]
