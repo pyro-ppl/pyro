@@ -6,6 +6,7 @@ from pyro import poutine
 from pyro.contrib.oed.search import Search
 from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.contrib.autoguide import mean_field_guide_entropy
+from pyro.contrib.oed.util import lexpand
 
 
 def vi_ape(model, design, observation_labels, target_labels,
@@ -106,37 +107,38 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
         target_labels = [target_labels]
 
     # Take N samples of the model
-    expanded_design = design.expand((N,) + design.shape)
+    expanded_design = lexpand(design, N)
     trace = poutine.trace(model).get_trace(expanded_design)
     trace.compute_log_prob()
-    y_dict = {l: trace.nodes[l]["value"].unsqueeze(0) for l in observation_labels}
     
     if M_prime is not None:
-        theta_dict = {l: trace.nodes[l]["value"].expand((M_prime,) + trace.nodes[l]["value"].shape)
-                         for l in target_labels}
+        y_dict = {l: lexpand(trace.nodes[l]["value"], M_prime) for l in observation_labels}
+        theta_dict = {l: lexpand(trace.nodes[l]["value"], M_prime) for l in target_labels}
         theta_dict.update(y_dict)
         # Resample M values of u and compute conditional probabilities
         conditional_model = pyro.condition(model, data=theta_dict)
         # Not acceptable to use (M_prime, 1) here - other variables may occur after
         # theta, so need to be sampled conditional upon it
-        reexpanded_design = design.expand((M_prime, N) + design.shape)
-        trace = poutine.trace(conditional_model).get_trace(reexpanded_design)
-        trace.compute_log_prob()
-        conditional_lp = logsumexp(sum(trace.nodes[l]["log_prob"] for l in observation_labels), 0) \
+        reexpanded_design = lexpand(design, M_prime, N)
+        retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
+        retrace.compute_log_prob()
+        conditional_lp = logsumexp(sum(retrace.nodes[l]["log_prob"] for l in observation_labels), 0) \
                          - np.log(M_prime)
     else:
         # This assumes that y are independent conditional on theta
         # Furthermore assume that there are no other variables besides theta
         conditional_lp = sum(trace.nodes[l]["log_prob"] for l in observation_labels)
 
+    y_dict = {l: lexpand(trace.nodes[l]["value"], M) for l in observation_labels}
     # Resample M values of theta and compute conditional probabilities
     conditional_model = pyro.condition(model, data=y_dict)
     # Using (M, 1) instead of (M, N) - acceptable to re-use thetas between ys because
     # theta comes before y in graphical model
-    reexpanded_design = design.expand((M, 1) + design.shape)
-    trace = poutine.trace(conditional_model).get_trace(reexpanded_design)
-    trace.compute_log_prob()
-    marginal_lp = logsumexp(sum(trace.nodes[l]["log_prob"] for l in observation_labels), 0) - np.log(M)
+    reexpanded_design = lexpand(design, M, 1)
+    retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
+    retrace.compute_log_prob()
+    marginal_lp = logsumexp(sum(retrace.nodes[l]["log_prob"] for l in observation_labels), 0) \
+                  - np.log(M)
 
     return (conditional_lp - marginal_lp).sum(0)/N
 
@@ -232,7 +234,7 @@ def donsker_varadhan_loss(model, T, observation_labels, target_labels):
 
     def loss_fn(design, num_particles):
 
-        expanded_design = design.expand((num_particles,) + design.shape)
+        expanded_design = lexpand(design, num_particles)
 
         # Unshuffled data
         unshuffled_trace = poutine.trace(model).get_trace(expanded_design)
@@ -266,7 +268,7 @@ def barber_agakov_loss(model, guide, observation_labels, target_labels):
 
     def loss_fn(design, num_particles):
 
-        expanded_design = design.expand((num_particles,) + design.shape)
+        expanded_design = lexpand(design, num_particles)
 
         # Sample from p(y, theta | d)
         trace = poutine.trace(model).get_trace(expanded_design)
