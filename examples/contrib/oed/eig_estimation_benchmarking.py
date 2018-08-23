@@ -73,7 +73,6 @@ X_circle_5d_1n_2p = torch.stack([item_thetas_small.cos(), -item_thetas_small.sin
 
 # Random effects designs
 AB_test_reff_5d_10n_12p, AB_sigmoid_design_5d = rf_group_assignments(10)
-sub_design = AB_test_reff_5d_10n_12p[..., :, 0:2]
 
 #########################################################################################
 # Models
@@ -97,9 +96,9 @@ nig_2p_ba_mf_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}, mf=Tru
 
 alpha = torch.ones(10)
 beta = 10.*torch.ones(10)
-k = torch.ones(10)
-sigmoid_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.), torch.tensor([1.]*5 + [10.]*5),
-                                  torch.tensor(1.), alpha, beta, AB_sigmoid_design_5d)
+sigmoid_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.), 
+                                  torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
+                                  alpha, beta, AB_sigmoid_design_5d)
 sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(torch.tensor([10., 2.5]), 5, 10, {"w1": 2}).guide
 
 ########################################################################################
