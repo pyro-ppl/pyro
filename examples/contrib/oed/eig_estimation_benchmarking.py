@@ -70,7 +70,7 @@ item_thetas_small = torch.linspace(0., np.pi/2, 5).unsqueeze(-1)
 X_circle_5d_1n_2p = torch.stack([item_thetas_small.cos(), -item_thetas_small.sin()], dim=-1)
 
 # Random effects designs
-AB_test_reff_5d_10n_12p, AB_sigmoid_design_5d = rf_group_assignments(10)
+AB_test_reff_6d_10n_12p, AB_sigmoid_design_6d = rf_group_assignments(10)
 
 #########################################################################################
 # Models
@@ -94,8 +94,8 @@ nig_2p_ba_mf_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}, mf=Tru
 
 sigmoid_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.),
                                   torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
-                                  torch.ones(10), 10.*torch.ones(10), AB_sigmoid_design_5d)
-sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(torch.tensor([10., 2.5]), 5, 10, {"w1": 2}).guide
+                                  torch.ones(10), 10.*torch.ones(10), AB_sigmoid_design_6d)
+sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(torch.tensor([10., 2.5]), d, 10, {"w1": 2}).guide
 
 ########################################################################################
 # Aux
@@ -147,9 +147,9 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,arglist", [
     ("Sigmoid model: 2 classes of participants (5/5), A/B test (5/5)",
-     sigmoid_12p_model, AB_test_reff_5d_10n_12p, "y", "w1",
+     sigmoid_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
      [(naive_rainforth_eig, [500, 500, 500]),
-      (barber_agakov_ape, [20, 500, sigmoid_ba_guide(5), optim.Adam({"lr": 0.05}),
+      (barber_agakov_ape, [20, 500, sigmoid_ba_guide(6), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
     ("A/B testing with unknown covariance (Gamma(15, 14))",
@@ -261,10 +261,10 @@ def time_eig(estimator, model, design, observation_label, target_label, args):
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,est1,est2,kwargs1,kwargs2", [
     ("Barber-Agakov on sigmoid",
-     sigmoid_12p_model, AB_test_reff_5d_10n_12p, "y", "w1",
+     sigmoid_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
      barber_agakov_ape, None,
      {"num_steps": 500, "num_samples": 20, "optim": optim.Adam({"lr": 0.05}),
-      "guide": sigmoid_ba_guide(5), "final_num_samples": 500}, {}),
+      "guide": sigmoid_ba_guide(6), "final_num_samples": 500}, {}),
     ("Barber-Agakov on A/B test with unknown covariance",
      nig_2p_linear_model_3_2, AB_test_2d_10n_2p, "y", "w",
      barber_agakov_ape, None,

@@ -309,12 +309,12 @@ def group_assignment_matrix(design):
 
 def rf_group_assignments(n, random_intercept=True):
     assert n % 2 == 0
-    n_designs = n//2
+    n_designs = n//2 + 1
     participant_matrix = torch.eye(n).expand(n_designs, n, n)
     Xs = []
     for i in range(n_designs):
-        X1 = group_assignment_matrix(torch.tensor([i, n_designs - i]))
-        X2 = group_assignment_matrix(torch.tensor([n_designs - i, i]))
+        X1 = group_assignment_matrix(torch.tensor([i, n//2 - i]))
+        X2 = group_assignment_matrix(torch.tensor([n//2 - i, i]))
         X = torch.cat([X1, X2], dim=-2)
         Xs.append(X)
     X = torch.stack(Xs, dim=0)    
