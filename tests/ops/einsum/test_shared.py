@@ -8,6 +8,10 @@ from pyro.ops.einsum import contract, shared_intermediates
 from tests.common import assert_equal
 
 
+def compute_cost(cache):
+    return sum(1 for key in cache.keys() if key[0] in ('einsum', 'tensordot'))
+
+
 def test_shared_backend():
     w = torch.randn(2, 3, 4)
     x = torch.randn(3, 4, 5)
@@ -57,26 +61,22 @@ def test_partial_sharing():
     num_exprs_nosharing = 0
     with shared_intermediates() as cache:
         contract('ab,bc,cd->', x, y, z1, backend='torch')
-        num_exprs_nosharing += len(cache) - 3  # ignore shared_tensor
+        num_exprs_nosharing += len(cache)
     with shared_intermediates() as cache:
         contract('ab,bc,cd->', x, y, z2, backend='torch')
-        num_exprs_nosharing += len(cache) - 3  # ignore shared_tensor
+        num_exprs_nosharing += len(cache)
 
     print('-' * 40)
     print('With sharing:')
     with shared_intermediates() as cache:
         contract('ab,bc,cd->', x, y, z1, backend='torch')
         contract('ab,bc,cd->', x, y, z2, backend='torch')
-        num_exprs_sharing = len(cache) - 4  # ignore shared_tensor
+        num_exprs_sharing = len(cache)
 
     print('-' * 40)
     print('Without sharing: {} expressions'.format(num_exprs_nosharing))
     print('With sharing: {} expressions'.format(num_exprs_sharing))
     assert num_exprs_nosharing > num_exprs_sharing
-
-
-def compute_cost(cache):
-    return sum(1 for key in cache.keys() if key[0] in ('einsum', 'tensordot'))
 
 
 @pytest.mark.parametrize('size', [3, 4, 5])

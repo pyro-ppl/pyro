@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import math
 import numbers
 import operator
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 import torch
 from six.moves import reduce
@@ -15,6 +15,7 @@ from pyro.ops.sumproduct import sumproduct
 from pyro.poutine.util import site_is_subsample
 
 _VALIDATION_ENABLED = False
+LAST_CACHE_SIZE = [Counter()]  # for profiling
 
 
 def enable_validation(is_validate):
@@ -244,15 +245,15 @@ class Dice(object):
                 factors_table[ordinal].append(factor)
 
         # deduplicate by shape to increase sharing
-        costs = {ordinal: deduplicate_by_shape(group)
-                 for ordinal, group in costs.items()}
+        costs = [(ordinal, deduplicate_by_shape(group))
+                 for ordinal, group in costs.items()]
         factors_table = {ordinal: deduplicate_by_shape(group, combine=operator.mul)
                          for ordinal, group in factors_table.items()}
 
         # share computation across all cost terms
-        with shared_intermediates():
+        with shared_intermediates() as cache:
             expected_cost = 0.
-            for ordinal, cost_terms in costs.items():
+            for ordinal, cost_terms in costs:
                 factors = factors_table.get(ordinal, [])
                 for cost in cost_terms:
                     prob = sumproduct(factors, cost.shape)
@@ -262,4 +263,5 @@ class Dice(object):
                         prob = prob[mask]
                         cost = cost[mask]
                     expected_cost = expected_cost + (prob * cost).sum()
+        LAST_CACHE_SIZE[0] = Counter(key[0] for key in cache.keys())
         return expected_cost
