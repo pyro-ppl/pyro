@@ -40,7 +40,7 @@ class Ba_lm_guide(nn.Module):
 
         # guide distributions for w
         w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril)
-        w = pyro.sample(target_label, w_dist)
+        pyro.sample(target_label, w_dist)
 
 
 class Ba_sigmoid_guide(nn.Module):
@@ -84,7 +84,7 @@ class Ba_sigmoid_guide(nn.Module):
 
         # guide distributions for w
         w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril)
-        w = pyro.sample(target_label, w_dist)
+        pyro.sample(target_label, w_dist)
 
 
 class Ba_nig_guide(nn.Module):
@@ -134,7 +134,7 @@ class Ba_nig_guide(nn.Module):
             w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril)
         else:
             w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril*obs_sd)
-        w = pyro.sample(target_label, w_dist)
+        pyro.sample(target_label, w_dist)
 
 
 def tensorized_matrix_inverse(M):
