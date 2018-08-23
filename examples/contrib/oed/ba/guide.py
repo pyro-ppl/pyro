@@ -4,6 +4,8 @@ from torch import nn
 import pyro
 import pyro.distributions as dist
 
+from pyro.contrib.oed.util import rmv
+
 
 class Ba_lm_guide(nn.Module):
 
@@ -25,6 +27,57 @@ class Ba_lm_guide(nn.Module):
         mu = torch.matmul(xtxi, torch.matmul(design.transpose(-1, -2), y.unsqueeze(-1))).squeeze(-1)
 
         scale_tril = tensorized_tril(self.scale_tril)
+        print(scale_tril)
+
+        return mu, scale_tril
+
+    def guide(self, y_dict, design, observation_labels, target_labels):
+
+        target_label = target_labels[0]
+        pyro.module("ba_guide", self)
+
+        y = y_dict["y"]
+        mu, scale_tril = self.forward(y, design, target_label)
+
+        # guide distributions for w
+        w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril)
+        w = pyro.sample(target_label, w_dist)
+
+
+class Ba_sigmoid_guide(nn.Module):
+
+    def __init__(self, prior_sds, d, n, w_sizes):
+        super(Ba_sigmoid_guide, self).__init__()
+        self.anneal = torch.diag(prior_sds**2)
+        p = prior_sds.shape[-1]
+        # self.inverse_sigmoid_scale = nn.Parameter(0.5*torch.ones(n))
+        # self.inverse_sigmoid_offset = nn.Parameter(torch.zeros(n))
+        self.inverse_sigmoid_scale = torch.ones(n)
+        self.inverse_sigmoid_offset = torch.zeros(n)
+        self.scale_tril = nn.Parameter(10.*torch.ones(d, tri_n(p)))
+        self.w_sizes = w_sizes
+        self.softplus = nn.Softplus()
+        self.regu = nn.Parameter(-2.*torch.ones(p))
+
+    def forward(self, y, design, target_label):
+
+        # Actual hard part, try to invert transformation on y
+        partial_logit = 1./y - 1.
+        logit = (partial_logit.clamp(1e-25, 1e25)).log()
+        y_trans = self.inverse_sigmoid_offset + logit/self.inverse_sigmoid_scale
+
+        # TODO fix this
+        design = design[..., :self.w_sizes[target_label]]
+
+        anneal = torch.diag(self.softplus(self.regu))
+        xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
+        xtxi = tensorized_matrix_inverse(xtx)
+        mu = rmv(xtxi, rmv(design.transpose(-1, -2), y_trans))
+        print(mu)
+        print(y_trans)
+
+        scale_tril = tensorized_tril(self.scale_tril)
+        print(scale_tril.shape)
 
         return mu, scale_tril
 
@@ -118,3 +171,6 @@ def tensorized_tril(M):
         return tril
     else:
         raise NotImplemented()
+
+def tri_n(n):
+    return n*(n+1)/2

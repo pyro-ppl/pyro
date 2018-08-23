@@ -15,10 +15,11 @@ from pyro.contrib.oed.util import get_indices
 from models.bayes_linear import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov,
     bayesian_linear_model, normal_inv_gamma_family_guide, normal_inverse_gamma_linear_model,
-    normal_inverse_gamma_guide, group_linear_model, group_normal_guide
+    normal_inverse_gamma_guide, group_linear_model, group_normal_guide,
+    sigmoid_model2, rf_group_assignments
 )
 from dv.neural import T_neural, T_specialized
-from ba.guide import Ba_lm_guide, Ba_nig_guide
+from ba.guide import Ba_lm_guide, Ba_nig_guide, Ba_sigmoid_guide
 
 PLOT = True
 
@@ -33,6 +34,7 @@ Models for benchmarking:
 - A/B test with unknown observation covariance:
   - aim to learn regression coefficients *and* obs_sd
   - aim to learn regression coefficients, information on obs_sd ignored
+- sigmoid model
 - logistic regression*
 - LMER with normal response and known obs_sd:*
   - aim to learn all unknowns: w, u and G_u*
@@ -69,6 +71,9 @@ X_circle_10d_1n_2p = torch.stack([item_thetas.cos(), -item_thetas.sin()], dim=-1
 item_thetas_small = torch.linspace(0., np.pi/2, 5).unsqueeze(-1)
 X_circle_5d_1n_2p = torch.stack([item_thetas_small.cos(), -item_thetas_small.sin()], dim=-1)
 
+# Random effects designs
+AB_test_reff_5d_10n_12p, AB_sigmoid_design_5d = rf_group_assignments(10)
+
 #########################################################################################
 # Models
 #########################################################################################
@@ -88,6 +93,13 @@ nig_2p_linear_model_15_14 = normal_inverse_gamma_linear_model(torch.tensor(0.), 
 nig_2p_guide = normal_inverse_gamma_guide((2,), mf=True)
 nig_2p_ba_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}).guide
 nig_2p_ba_mf_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}, mf=True).guide
+
+# alpha = torch.tensor([2.]*10)
+# beta = torch.tensor([2.]*5 + [20.]*5)
+k = torch.ones(10)
+sigmoid_12p_model = sigmoid_model2(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.), torch.tensor([.01]*5 + [.01]*5),
+                                   torch.tensor(1.), k, AB_sigmoid_design_5d)
+sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(torch.tensor([10.]), 5, 10, {"w1": 1}).guide
 
 ########################################################################################
 # Aux
@@ -139,6 +151,18 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
 
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,arglist", [
+    ("A/B test linear model targetting one coefficients",
+     group_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w1",
+     [(linear_model_ground_truth, [False]),
+      (barber_agakov_ape, [20, 400, group_2p_ba_guide(2), optim.Adam({"lr": 0.05}),
+        False, None, 500])
+      ]),
+    ("Sigmoid model: 2 classes of participants (5/5), A/B test (5/5)",
+     sigmoid_12p_model, AB_test_reff_5d_10n_12p, "y", "w1",
+     [(naive_rainforth_eig, [2000, 2000, 2000]),
+      (barber_agakov_ape, [20, 800, sigmoid_ba_guide(5), optim.Adam({"lr": 0.05}),
+        False, None, 500])
+      ]),
     ("A/B testing with unknown covariance (Gamma(15, 14))",
      nig_2p_linear_model_15_14, AB_test_11d_10n_2p, "y", ["w", "tau"],
      [(naive_rainforth_eig, [2000, 2000]),
@@ -146,9 +170,9 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
        [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 4}]),
       (barber_agakov_ape, [20, 800, nig_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 1000]),
+        False, None, 500]),
       (barber_agakov_ape, [20, 800, nig_2p_ba_mf_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 1000])
+        False, None, 500])
       ]),
     ("A/B testing with unknown covariance (Gamma(3, 2))",
      nig_2p_linear_model_3_2, AB_test_11d_10n_2p, "y", ["w", "tau"],
@@ -157,9 +181,9 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
        [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 4}]),
       (barber_agakov_ape, [20, 800, nig_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 1000]),
+        False, None, 500]),
       (barber_agakov_ape, [20, 800, nig_2p_ba_mf_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 1000])
+        False, None, 500])
       ]),
     ("A/B test linear model known covariance",
      basic_2p_linear_model_sds_10_2pt5, AB_test_11d_10n_2p, "y", "w",
@@ -169,9 +193,9 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
       (donsker_varadhan_eig, [400, 400, T_specialized((11, 3)), optim.Adam({"lr": 0.05}),
-        False, None, 1000]),
+        False, None, 500]),
       (ba_eig, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 1000])
+        False, None, 500])
       ]),
     ("Linear model targeting one parameter", 
      group_2p_linear_model_sds_10_2pt5, X_circle_10d_1n_2p, "y", "w1",
@@ -181,9 +205,9 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
        [{"guide": group_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
       (donsker_varadhan_eig, [400, 400, T_specialized((10, 3)), optim.Adam({"lr": 0.05}),
-        False, None, 1000]),
+        False, None, 500]),
       (ba_eig, [20, 400, group_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
-        False, None, 1000])
+        False, None, 500])
       ]),
     ("Linear model with designs on S^1",
      basic_2p_linear_model_sds_10_2pt5, X_circle_10d_1n_2p, "y", "w",
@@ -193,9 +217,9 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
       (donsker_varadhan_eig, [400, 400, T_specialized((10, 3)), optim.Adam({"lr": 0.05}),
-        False, None, 1000]),
+        False, None, 500]),
       (ba_eig, [20, 400, basic_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
-        False, None, 1000])
+        False, None, 500])
       ]),
     ("A/B test linear model known covariance (different sds)",
      basic_2p_linear_model_sds_10_0pt1, AB_test_11d_10n_2p, "y", "w",
@@ -205,9 +229,9 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
       (donsker_varadhan_eig, [400, 400, T_specialized((11, 3)), optim.Adam({"lr": 0.05}),
-        False, None, 1000]),
+        False, None, 500]),
       (ba_eig, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 1000])
+        False, None, 500])
       ])
 ])
 def test_eig_and_plot(title, model, design, observation_label, target_label, arglist):
@@ -247,6 +271,11 @@ def time_eig(estimator, model, design, observation_label, target_label, args):
 
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,est1,est2,kwargs1,kwargs2", [
+    ("Barber-Agakov on sigmoid",
+     sigmoid_12p_model, AB_test_reff_5d_10n_12p, "y", "w1",
+     barber_agakov_ape, None,
+     {"num_steps": 500, "num_samples": 1000, "optim": optim.Adam({"lr": 0.05}),
+      "guide": sigmoid_ba_guide(5), "final_num_samples": 500}, {}),
     ("Barber-Agakov on A/B test with unknown covariance",
      nig_2p_linear_model_3_2, AB_test_2d_10n_2p, "y", "w",
      barber_agakov_ape, None,
