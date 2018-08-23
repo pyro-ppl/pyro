@@ -27,7 +27,6 @@ class Ba_lm_guide(nn.Module):
         mu = torch.matmul(xtxi, torch.matmul(design.transpose(-1, -2), y.unsqueeze(-1))).squeeze(-1)
 
         scale_tril = tensorized_tril(self.scale_tril)
-        print(scale_tril)
 
         return mu, scale_tril
 
@@ -48,21 +47,16 @@ class Ba_sigmoid_guide(nn.Module):
 
     def __init__(self, prior_sds, d, n, w_sizes):
         super(Ba_sigmoid_guide, self).__init__()
-        self.anneal = torch.diag(prior_sds**2)
         p = prior_sds.shape[-1]
         self.inverse_sigmoid_scale = nn.Parameter(torch.ones(n))
-        # self.inverse_sigmoid_offset = nn.Parameter(torch.zeros(n))
         self.scale_tril = nn.Parameter(10.*torch.ones(d, tri_n(p)))
+        self.regu = nn.Parameter(-2.*torch.ones(d, p))
         self.w_sizes = w_sizes
         self.softplus = nn.Softplus()
-        self.regu = nn.Parameter(-2.*torch.ones(d, p))
 
     def forward(self, y, design, target_label):
 
-        # Actual hard part, try to invert transformation on y
-        # partial_logit = 1./y - 1.
-        # logit = (partial_logit.clamp(1e-25, 1e25)).log()
-        # y_trans = self.inverse_sigmoid_offset + logit/self.inverse_sigmoid_scale
+        # Approx invert transformation on y in expectation
         y, y1m = y.clamp(1e-35, 1), (1.-y).clamp(1e-35, 1)
         logited = y.log() - y1m.log()
         y_trans = logited/.1
