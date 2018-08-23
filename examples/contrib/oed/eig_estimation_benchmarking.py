@@ -73,6 +73,7 @@ X_circle_5d_1n_2p = torch.stack([item_thetas_small.cos(), -item_thetas_small.sin
 
 # Random effects designs
 AB_test_reff_5d_10n_12p, AB_sigmoid_design_5d = rf_group_assignments(10)
+sub_design = AB_test_reff_5d_10n_12p[..., :, 0:2]
 
 #########################################################################################
 # Models
@@ -97,9 +98,10 @@ nig_2p_ba_mf_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}, mf=Tru
 # alpha = torch.tensor([2.]*10)
 # beta = torch.tensor([2.]*5 + [20.]*5)
 k = torch.ones(10)
-sigmoid_12p_model = sigmoid_model2(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.), torch.tensor([.01]*5 + [.01]*5),
+sigmoid_12p_model = sigmoid_model2(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.), torch.tensor([.0001]*5 + [.0001]*5),
                                    torch.tensor(1.), k, AB_sigmoid_design_5d)
-sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(torch.tensor([10.]), 5, 10, {"w1": 1}).guide
+sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(torch.tensor([10., 2.5]), 5, 10, {"w1": 2}).guide
+# sigmoid_ba_guide = lambda d: Ba_lm_guide((2,), (d, 3), {"w1": 2, "w2": 10}).guide
 
 ########################################################################################
 # Aux
@@ -151,12 +153,12 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
 
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,arglist", [
-    ("A/B test linear model targetting one coefficients",
-     group_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w1",
-     [(linear_model_ground_truth, [False]),
-      (barber_agakov_ape, [20, 400, group_2p_ba_guide(2), optim.Adam({"lr": 0.05}),
-        False, None, 500])
-      ]),
+    # ("A/B test linear model targetting one coefficient",
+    #  group_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w1",
+    #  [(linear_model_ground_truth, [False]),
+    #   (barber_agakov_ape, [20, 400, group_2p_ba_guide(2), optim.Adam({"lr": 0.05}),
+    #     False, None, 500])
+    #   ]),
     ("Sigmoid model: 2 classes of participants (5/5), A/B test (5/5)",
      sigmoid_12p_model, AB_test_reff_5d_10n_12p, "y", "w1",
      [(naive_rainforth_eig, [2000, 2000, 2000]),
