@@ -119,26 +119,6 @@ def sigmoid_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
     return model
 
 
-# def sigmoid_model2(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
-#                    sigmoid_k, sigmoid_design,
-#                    coef1_label="w1", coef2_label="w2", observation_label="y"):
-
-#     def model(design):
-#         k_assigned = rmv(sigmoid_design, sigmoid_k)
-        
-#         return bayesian_linear_model(
-#             design,
-#             w_means={coef1_label: coef1_mean, coef2_label: coef2_mean},
-#             w_sqrtlambdas={coef1_label: 1./(observation_sd*coef1_sd), coef2_label: 1./(observation_sd*coef2_sd)},
-#             obs_sd=observation_sd,
-#             response="sigmoid",
-#             response_label=observation_label,
-#             k=k_assigned
-#             )
-
-#     return model
-
-
 def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={},
                           re_alphas={}, re_betas={}, obs_sd=None,
                           alpha_0=None, beta_0=None, response="normal",
@@ -193,6 +173,8 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         covariance.
     :param str response: Emission distribution. May be `"normal"` or `"bernoulli"`.
     :param str response_label: Variable label for response.
+    :param torch.Tensor k: Only used for a sigmoid response. The slope of the sigmoid 
+        transformation.
     """
     # design is size batch x n x p
     # tau is size batch

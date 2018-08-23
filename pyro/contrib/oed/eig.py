@@ -282,7 +282,6 @@ def barber_agakov_loss(model, guide, observation_labels, target_labels):
         cond_trace.compute_log_prob()
 
         loss = -sum(cond_trace.nodes[l]["log_prob"] for l in target_labels).sum(0)/num_particles
-        print(loss)
         agg_loss = loss.sum()
         return agg_loss, loss
 
