@@ -152,16 +152,10 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
 
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,arglist", [
-    # ("A/B test linear model targetting one coefficient",
-    #  group_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w1",
-    #  [(linear_model_ground_truth, [False]),
-    #   (barber_agakov_ape, [20, 400, group_2p_ba_guide(2), optim.Adam({"lr": 0.05}),
-    #     False, None, 500])
-    #   ]),
     ("Sigmoid model: 2 classes of participants (5/5), A/B test (5/5)",
      sigmoid_12p_model, AB_test_reff_5d_10n_12p, "y", "w1",
-     [(naive_rainforth_eig, [2000, 2000, 2000]),
-      (barber_agakov_ape, [20, 800, sigmoid_ba_guide(5), optim.Adam({"lr": 0.05}),
+     [(naive_rainforth_eig, [500, 500, 500]),
+      (barber_agakov_ape, [20, 500, sigmoid_ba_guide(5), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
     ("A/B testing with unknown covariance (Gamma(15, 14))",
@@ -275,7 +269,7 @@ def time_eig(estimator, model, design, observation_label, target_label, args):
     ("Barber-Agakov on sigmoid",
      sigmoid_12p_model, AB_test_reff_5d_10n_12p, "y", "w1",
      barber_agakov_ape, None,
-     {"num_steps": 500, "num_samples": 1000, "optim": optim.Adam({"lr": 0.05}),
+     {"num_steps": 500, "num_samples": 20, "optim": optim.Adam({"lr": 0.05}),
       "guide": sigmoid_ba_guide(5), "final_num_samples": 500}, {}),
     ("Barber-Agakov on A/B test with unknown covariance",
      nig_2p_linear_model_3_2, AB_test_2d_10n_2p, "y", "w",
