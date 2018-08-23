@@ -50,14 +50,12 @@ class Ba_sigmoid_guide(nn.Module):
         super(Ba_sigmoid_guide, self).__init__()
         self.anneal = torch.diag(prior_sds**2)
         p = prior_sds.shape[-1]
-        # self.inverse_sigmoid_scale = nn.Parameter(0.5*torch.ones(n))
+        self.inverse_sigmoid_scale = nn.Parameter(torch.ones(n))
         # self.inverse_sigmoid_offset = nn.Parameter(torch.zeros(n))
-        self.inverse_sigmoid_scale = torch.ones(n)
-        self.inverse_sigmoid_offset = torch.zeros(n)
         self.scale_tril = nn.Parameter(10.*torch.ones(d, tri_n(p)))
         self.w_sizes = w_sizes
         self.softplus = nn.Softplus()
-        self.regu = nn.Parameter(-2.*torch.ones(p))
+        self.regu = nn.Parameter(-2.*torch.ones(d, p))
 
     def forward(self, y, design, target_label):
 
@@ -68,11 +66,12 @@ class Ba_sigmoid_guide(nn.Module):
         y, y1m = y.clamp(1e-35, 1), (1.-y).clamp(1e-35, 1)
         logited = y.log() - y1m.log()
         y_trans = logited/.1
+        y_trans = y_trans * self.inverse_sigmoid_scale
 
         # TODO fix this
         design = design[..., :self.w_sizes[target_label]]
 
-        anneal = torch.diag(self.softplus(self.regu))
+        anneal = tensorized_diag(self.softplus(self.regu))
         xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
         xtxi = tensorized_matrix_inverse(xtx)
         mu = rmv(xtxi, rmv(design.transpose(-1, -2), y_trans))
@@ -171,6 +170,19 @@ def tensorized_tril(M):
         return tril
     else:
         raise NotImplemented()
+
+
+def tensorized_diag(M):
+    if M.shape[-1] == 1:
+        return M.unsqueeze(-1)
+    if M.shape[-1] == 2:
+        diag = torch.zeros(M.shape[:-1] + (2, 2))
+        diag[..., 0, 0] = M[..., 0]
+        diag[..., 1, 1] = M[..., 1]
+        return diag
+    else:
+        raise NotImplemented()
+
 
 def tri_n(n):
     return n*(n+1)/2

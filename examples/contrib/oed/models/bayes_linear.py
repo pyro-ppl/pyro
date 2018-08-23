@@ -100,9 +100,10 @@ def sigmoid_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
 
     def model(design):
         batch_shape = design.shape[:-2]
+        k_shape = batch_shape + (sigmoid_design.shape[-1],)
         k = pyro.sample(sigmoid_label, 
-                dist.Gamma(lexpand(sigmoid_alpha, *batch_shape),
-                           lexpand(sigmoid_beta, *batch_shape)).independent(1))
+                        dist.Gamma(sigmoid_alpha.expand(k_shape),
+                                   sigmoid_beta.expand(k_shape)).independent(1))
         k_assigned = rmv(sigmoid_design, k)
         
         return bayesian_linear_model(
@@ -118,24 +119,24 @@ def sigmoid_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
     return model
 
 
-def sigmoid_model2(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
-                   sigmoid_k, sigmoid_design,
-                   coef1_label="w1", coef2_label="w2", observation_label="y"):
+# def sigmoid_model2(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
+#                    sigmoid_k, sigmoid_design,
+#                    coef1_label="w1", coef2_label="w2", observation_label="y"):
 
-    def model(design):
-        k_assigned = rmv(sigmoid_design, sigmoid_k)
+#     def model(design):
+#         k_assigned = rmv(sigmoid_design, sigmoid_k)
         
-        return bayesian_linear_model(
-            design,
-            w_means={coef1_label: coef1_mean, coef2_label: coef2_mean},
-            w_sqrtlambdas={coef1_label: 1./(observation_sd*coef1_sd), coef2_label: 1./(observation_sd*coef2_sd)},
-            obs_sd=observation_sd,
-            response="sigmoid",
-            response_label=observation_label,
-            k=k_assigned
-            )
+#         return bayesian_linear_model(
+#             design,
+#             w_means={coef1_label: coef1_mean, coef2_label: coef2_mean},
+#             w_sqrtlambdas={coef1_label: 1./(observation_sd*coef1_sd), coef2_label: 1./(observation_sd*coef2_sd)},
+#             obs_sd=observation_sd,
+#             response="sigmoid",
+#             response_label=observation_label,
+#             k=k_assigned
+#             )
 
-    return model
+#     return model
 
 
 def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={},
