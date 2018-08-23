@@ -4,7 +4,7 @@ from collections import defaultdict
 from pyro.distributions.util import logsumexp, broadcast_shape
 from pyro.infer.util import is_validation_enabled
 from pyro.ops.einsum import shared_intermediates
-from pyro.ops.sumproduct import sumproduct
+from pyro.ops.sumproduct import sumproduct, logsumproductexp
 from pyro.util import check_site_shape
 
 
@@ -127,8 +127,7 @@ class EnumTraceProbEvaluator(object):
                       for i in range(len(shape))]
         iarange_shape = [enum_shape[i] if -len(enum_shape) + i not in self._iarange_dims[ordinal] else 1
                          for i in range(len(enum_shape))]
-        log_prob = sumproduct(self._log_probs[ordinal] + [agg_log_prob], target_shape=enum_shape,
-                              backend='pyro.ops.einsum.torch_log')
+        log_prob = logsumproductexp(self._log_probs[ordinal] + [agg_log_prob], target_shape=enum_shape)
         log_prob = sumproduct([log_prob], target_shape=iarange_shape)
         return log_prob
 
