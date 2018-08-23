@@ -10,25 +10,60 @@ from six.moves import queue
 import pyro
 import pyro.ops.jit
 import pyro.poutine as poutine
-from pyro.distributions.util import is_identically_zero
+from pyro.distributions.util import broadcast_shape, is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
 from pyro.infer.util import Dice, is_validation_enabled
+from pyro.ops.einsum import shared_intermediates
+from pyro.ops.sumproduct import logsumproductexp
+from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
+
+
+# TODO move this logic into a poutine
+def _compute_model_costs(model_trace, guide_trace, ordering):
+    # Collect model log_probs, possibly marginalizing out enumerated model variables.
+    costs = OrderedDict()
+    enum_logprobs = OrderedDict()
+    enum_dims = []
+    for name, site in model_trace.nodes.items():
+        if site["type"] == "sample":
+            if name in guide_trace or not site["infer"].get("_enumerate_dim") is not None:
+                costs.setdefault(ordering[name], []).append(site["log_prob"])
+            else:
+                enum_logprobs.setdefault(ordering[name], []).append(site["log_prob"])
+                enum_dims.append(len(site["fn"].event_shape) - len(site["value"].shape))
+    if not enum_logprobs:
+        return costs
+
+    # Marginalize out all enumerated variables.
+    enum_boundary = max(enum_dims) + 1
+    marginal_costs = OrderedDict((t, []) for t in costs)
+    with shared_intermediates():
+        for t, costs_t in costs.items():
+            # TODO refine this coarse dependency ordering using time and tensor shapes.
+            logprobs_t = sum((logprobs_u for u, logprobs_u in enum_logprobs.items() if u <= t), [])
+            if not logprobs_t:
+                marginal_costs[t] = costs_t
+                continue
+
+            ordinal_shape = broadcast_shape(*(x.shape for x in logprobs_t))
+            for cost_t in costs_t:
+                target_shape = broadcast_shape(cost_t.shape, ordinal_shape)
+                target_shape = target_shape[enum_boundary:] if enum_boundary else ()
+                marginal_costs[t].append(logsumproductexp(logprobs_t + [cost_t], target_shape))
+    return marginal_costs
 
 
 def _compute_dice_elbo(model_trace, guide_trace):
     # y depends on x iff ordering[x] <= ordering[y]
-    # TODO refine this coarse dependency ordering.
+    # TODO refine this coarse dependency ordering using time.
     ordering = {name: frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
                 for trace in (model_trace, guide_trace)
                 for name, site in trace.nodes.items()
                 if site["type"] == "sample"}
 
-    costs = OrderedDict()
-    for name, site in model_trace.nodes.items():
-        if site["type"] == "sample":
-            costs.setdefault(ordering[name], []).append(site["log_prob"])
+    costs = _compute_model_costs(model_trace, guide_trace, ordering)
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample":
             costs.setdefault(ordering[name], []).append(-site["log_prob"])
@@ -63,11 +98,12 @@ class TraceEnum_ELBO(ELBO):
         if is_validation_enabled():
             check_traceenum_requirements(model_trace, guide_trace)
 
-            enumerated_sites = [name for name, site in guide_trace.nodes.items()
-                                if site["type"] == "sample"
-                                and site["infer"].get("enumerate", None)]
+            has_enumerated_sites = any(site["infer"].get("enumerate")
+                                       for trace in (guide_trace, model_trace)
+                                       for name, site in trace.nodes.items()
+                                       if site["type"] == "sample")
 
-            if self.strict_enumeration_warning and len(enumerated_sites) == 0:
+            if self.strict_enumeration_warning and not has_enumerated_sites:
                 warnings.warn('TraceEnum_ELBO found no sample sites configured for enumeration. '
                               'If you want to enumerate sites, you need to @config_enumerate or set '
                               'infer={"enumerate": "sequential"} or infer={"enumerate": "parallel"}? '
@@ -83,9 +119,16 @@ class TraceEnum_ELBO(ELBO):
         if self.vectorize_particles:
             guide = self._vectorized_num_particles(guide)
             model = self._vectorized_num_particles(model)
+        else:
+            guide = poutine.broadcast(guide)
+            model = poutine.broadcast(model)
 
-        # enable parallel enumeration over the vectorized guide.
-        guide = poutine.enum(guide, first_available_dim=self.max_iarange_nesting)
+        # Enable parallel enumeration over the vectorized guide and model.
+        # The model allocates enumeration dimensions after (to the left of) the guide.
+        guide_enum = EnumerateMessenger(first_available_dim=self.max_iarange_nesting)
+        model_enum = EnumerateMessenger(first_available_dim=lambda: guide_enum.next_available_dim)
+        guide = guide_enum(guide)
+        model = model_enum(model)
         q = queue.LifoQueue()
         guide = poutine.queue(guide, q,
                               escape_fn=iter_discrete_escape,

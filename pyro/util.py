@@ -160,23 +160,28 @@ def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float(
         and guide agree on sample shape.
     """
     # Check ordinary sample sites.
-    model_vars = set(name for name, site in model_trace.nodes.items()
-                     if site["type"] == "sample" and not site["is_observed"]
-                     if type(site["fn"]).__name__ != "_Subsample")
     guide_vars = set(name for name, site in guide_trace.nodes.items()
                      if site["type"] == "sample"
                      if type(site["fn"]).__name__ != "_Subsample")
     aux_vars = set(name for name, site in guide_trace.nodes.items()
                    if site["type"] == "sample"
                    if site["infer"].get("is_auxiliary"))
+    model_vars = set(name for name, site in model_trace.nodes.items()
+                     if site["type"] == "sample" and not site["is_observed"]
+                     if type(site["fn"]).__name__ != "_Subsample")
+    enum_vars = set(name for name, site in model_trace.nodes.items()
+                    if site["type"] == "sample" and not site["is_observed"]
+                    if type(site["fn"]).__name__ != "_Subsample"
+                    if site["infer"].get("_enumerate_dim") is not None
+                    if name not in guide_vars)
     if aux_vars & model_vars:
         warnings.warn("Found auxiliary vars in the model: {}".format(aux_vars & model_vars))
     if not (guide_vars <= model_vars | aux_vars):
         warnings.warn("Found non-auxiliary vars in guide but not model, "
                       "consider marking these infer={{'is_auxiliary': True}}:\n{}".format(
                           guide_vars - aux_vars - model_vars))
-    if not (model_vars <= guide_vars):
-        warnings.warn("Found vars in model but not guide: {}".format(model_vars - guide_vars))
+    if not (model_vars <= guide_vars | enum_vars):
+        warnings.warn("Found vars in model but not guide: {}".format(model_vars - guide_vars - enum_vars))
 
     # Check shapes agree.
     for name in model_vars & guide_vars:

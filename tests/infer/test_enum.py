@@ -1208,6 +1208,344 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
         ]))
 
 
+@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, 30])
+def test_hmm_enumerate_model(num_steps):
+    data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+
+    @config_enumerate(default="parallel", expand=False)
+    def model(data):
+        transition_probs = pyro.param("transition_probs",
+                                      torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                      constraint=constraints.simplex)
+        emission_probs = pyro.param("emission_probs",
+                                    torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                    constraint=constraints.simplex)
+        x = 0
+        for t, y in enumerate(data):
+            x = pyro.sample("x_{}".format(t), dist.Categorical(transition_probs[x]))
+            pyro.sample("y_{}".format(t), dist.Categorical(emission_probs[x]), obs=y)
+            print('{}\t{}'.format(t, tuple(x.shape)))
+
+    def guide(data):
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+    elbo.differentiable_loss(model, guide, data)
+
+
+@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, 30])
+def test_hmm_enumerate_model_and_guide(num_steps):
+    data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+
+    def model(data):
+        transition_probs = pyro.param("transition_probs",
+                                      torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                      constraint=constraints.simplex)
+        emission_probs = pyro.param("emission_probs",
+                                    torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+                                    constraint=constraints.simplex)
+        x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+        print('-1\t{}'.format(tuple(x.shape)))
+        for t, y in enumerate(data):
+            x = pyro.sample("x_{}".format(t), dist.Categorical(transition_probs[x]),
+                            infer={"enumerate": "parallel", "expand": False})
+            pyro.sample("y_{}".format(t), dist.Categorical(emission_probs[x]), obs=y)
+            print('{}\t{}'.format(t, tuple(x.shape)))
+
+    def guide(data):
+        init_probs = pyro.param("init_probs",
+                                torch.tensor([0.75, 0.25]),
+                                constraint=constraints.simplex)
+        pyro.sample("x", dist.Categorical(init_probs),
+                    infer={"enumerate": "parallel", "expand": False})
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+    elbo.differentiable_loss(model, guide, data)
+
+
+def test_elbo_enumerate_1():
+    pyro.param("guide_probs_x",
+               torch.tensor([0.1, 0.9]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_x",
+               torch.tensor([0.4, 0.6]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_y",
+               torch.tensor([[0.75, 0.25], [0.55, 0.45]]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_z",
+               torch.tensor([0.3, 0.7]),
+               constraint=constraints.simplex)
+
+    def auto_model():
+        probs_x = pyro.param("model_probs_x")
+        probs_y = pyro.param("model_probs_y")
+        probs_z = pyro.param("model_probs_z")
+        x = pyro.sample("x", dist.Categorical(probs_x))
+        pyro.sample("y", dist.Categorical(probs_y[x]),
+                    infer={"enumerate": "parallel", "expand": False})
+        pyro.sample("z", dist.Categorical(probs_z), obs=torch.tensor(0))
+
+    def hand_model():
+        probs_x = pyro.param("model_probs_x")
+        probs_z = pyro.param("model_probs_z")
+        pyro.sample("x", dist.Categorical(probs_x))
+        pyro.sample("z", dist.Categorical(probs_z), obs=torch.tensor(0))
+
+    @config_enumerate(default="parallel", expand=False)
+    def guide():
+        probs_x = pyro.param("guide_probs_x")
+        pyro.sample("x", dist.Categorical(probs_x))
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0, strict_enumeration_warning=False)
+    auto_loss = elbo.differentiable_loss(auto_model, guide)
+    hand_loss = elbo.differentiable_loss(hand_model, guide)
+    assert_equal(auto_loss, hand_loss,
+                 msg='Expected:\n{}\nActual:\n{}'.format(hand_loss.detach().cpu().numpy(),
+                                                         auto_loss.detach().cpu().numpy()))
+
+    names = ["guide_probs_x", "model_probs_x", "model_probs_y"]
+    params = [pyro.param(name).unconstrained() for name in names]
+    auto_grads = grad(auto_loss, params, allow_unused=True)
+    hand_grads = grad(hand_loss, params, allow_unused=True)
+    for name, auto_grad, hand_grad in zip(names, auto_grads, hand_grads):
+        if auto_grad is None or hand_grad is None:
+            continue
+        assert_equal(auto_grad, hand_grad,
+                     msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
+                                                                 hand_grad.detach().cpu().numpy(),
+                                                                 auto_grad.detach().cpu().numpy()))
+
+
+def test_elbo_enumerate_2():
+    pyro.param("guide_probs_x",
+               torch.tensor([0.1, 0.9]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_x",
+               torch.tensor([0.4, 0.6]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_y",
+               torch.tensor([[0.75, 0.25], [0.55, 0.45]]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_z",
+               torch.tensor([[0.3, 0.7], [0.2, 0.8]]),
+               constraint=constraints.simplex)
+
+    def auto_model():
+        probs_x = pyro.param("model_probs_x")
+        probs_y = pyro.param("model_probs_y")
+        probs_z = pyro.param("model_probs_z")
+        x = pyro.sample("x", dist.Categorical(probs_x))
+        y = pyro.sample("y", dist.Categorical(probs_y[x]),
+                        infer={"enumerate": "parallel", "expand": False})
+        pyro.sample("z", dist.Categorical(probs_z[y]), obs=torch.tensor(0))
+
+    def hand_model():
+        probs_x = pyro.param("model_probs_x")
+        probs_y = pyro.param("model_probs_y")
+        probs_z = pyro.param("model_probs_z")
+        probs_yz = probs_y.mm(probs_z)
+        x = pyro.sample("x", dist.Categorical(probs_x))
+        pyro.sample("z", dist.Categorical(probs_yz[x]), obs=torch.tensor(0))
+
+    @config_enumerate(default="parallel", expand=False)
+    def guide():
+        probs_x = pyro.param("guide_probs_x")
+        pyro.sample("x", dist.Categorical(probs_x))
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0, strict_enumeration_warning=False)
+    auto_loss = elbo.differentiable_loss(auto_model, guide)
+    hand_loss = elbo.differentiable_loss(hand_model, guide)
+    assert_equal(auto_loss, hand_loss,
+                 msg='Expected:\n{}\nActual:\n{}'.format(hand_loss.detach().cpu().numpy(),
+                                                         auto_loss.detach().cpu().numpy()))
+
+    names = ["guide_probs_x", "model_probs_x", "model_probs_y", "model_probs_z"]
+    params = [pyro.param(name).unconstrained() for name in names]
+    auto_grads = grad(auto_loss, params, allow_unused=True)
+    hand_grads = grad(hand_loss, params, allow_unused=True)
+    for name, auto_grad, hand_grad in zip(names, auto_grads, hand_grads):
+        assert_equal(auto_grad, hand_grad,
+                     msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
+                                                                 hand_grad.detach().cpu().numpy(),
+                                                                 auto_grad.detach().cpu().numpy()))
+
+
+@pytest.mark.parametrize('num_samples', [1, 3])
+def test_elbo_enumerate_iarange_1(num_samples):
+    pyro.param("guide_probs_x",
+               torch.tensor([0.1, 0.9]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_x",
+               torch.tensor([0.4, 0.6]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_y",
+               torch.tensor([[0.75, 0.25], [0.55, 0.45]]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_z",
+               torch.tensor([[0.3, 0.7], [0.2, 0.8]]),
+               constraint=constraints.simplex)
+
+    def auto_model(data):
+        probs_x = pyro.param("model_probs_x")
+        probs_y = pyro.param("model_probs_y")
+        probs_z = pyro.param("model_probs_z")
+        x = pyro.sample("x", dist.Categorical(probs_x))
+        y = pyro.sample("y", dist.Categorical(probs_y[x]),
+                        infer={"enumerate": "parallel", "expand": False})
+        with pyro.iarange("data", len(data)):
+            pyro.sample("z", dist.Categorical(probs_z[y]), obs=data)
+
+    def hand_model(data):
+        probs_x = pyro.param("model_probs_x")
+        probs_y = pyro.param("model_probs_y")
+        probs_z = pyro.param("model_probs_z")
+        probs_yz = probs_y.mm(probs_z)
+        x = pyro.sample("x", dist.Categorical(probs_x))
+        with pyro.iarange("data", len(data)):
+            pyro.sample("z", dist.Categorical(probs_yz[x]), obs=data)
+
+    @config_enumerate(default="parallel", expand=False)
+    def guide(data):
+        probs_x = pyro.param("guide_probs_x")
+        pyro.sample("x", dist.Categorical(probs_x))
+
+    data = dist.Categorical(torch.tensor([0.3, 0.7])).sample((num_samples,))
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1, strict_enumeration_warning=False)
+    auto_loss = elbo.differentiable_loss(auto_model, guide, data)
+    hand_loss = elbo.differentiable_loss(hand_model, guide, data)
+    assert_equal(auto_loss, hand_loss,
+                 msg='Expected:\n{}\nActual:\n{}'.format(hand_loss.detach().cpu().numpy(),
+                                                         auto_loss.detach().cpu().numpy()))
+
+    names = ["guide_probs_x", "model_probs_x", "model_probs_y", "model_probs_z"]
+    params = [pyro.param(name).unconstrained() for name in names]
+    auto_grads = grad(auto_loss, params, allow_unused=True)
+    hand_grads = grad(hand_loss, params, allow_unused=True)
+    for name, auto_grad, hand_grad in zip(names, auto_grads, hand_grads):
+        assert_equal(auto_grad, hand_grad,
+                     msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
+                                                                 hand_grad.detach().cpu().numpy(),
+                                                                 auto_grad.detach().cpu().numpy()))
+
+
+@pytest.mark.parametrize('num_samples', [1,  3])
+def test_elbo_enumerate_iarange_2(num_samples):
+    pyro.param("guide_probs_x",
+               torch.tensor([0.1, 0.9]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_x",
+               torch.tensor([0.4, 0.6]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_y",
+               torch.tensor([[0.75, 0.25], [0.55, 0.45]]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_z",
+               torch.tensor([[0.3, 0.7], [0.2, 0.8]]),
+               constraint=constraints.simplex)
+
+    def auto_model(data):
+        probs_x = pyro.param("model_probs_x")
+        probs_y = pyro.param("model_probs_y")
+        probs_z = pyro.param("model_probs_z")
+        x = pyro.sample("x", dist.Categorical(probs_x))
+        with pyro.iarange("data", len(data)):
+            y = pyro.sample("y", dist.Categorical(probs_y[x]),
+                            infer={"enumerate": "parallel", "expand": False})
+            pyro.sample("z", dist.Categorical(probs_z[y]), obs=data)
+
+    def hand_model(data):
+        probs_x = pyro.param("model_probs_x")
+        probs_y = pyro.param("model_probs_y")
+        probs_z = pyro.param("model_probs_z")
+        probs_yz = probs_y.mm(probs_z)
+        x = pyro.sample("x", dist.Categorical(probs_x))
+        with pyro.iarange("data", len(data)):
+            pyro.sample("z", dist.Categorical(probs_yz[x]), obs=data)
+
+    @config_enumerate(default="parallel", expand=False)
+    def guide(data):
+        probs_x = pyro.param("guide_probs_x")
+        pyro.sample("x", dist.Categorical(probs_x))
+
+    data = dist.Categorical(torch.tensor([0.3, 0.7])).sample((num_samples,))
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1, strict_enumeration_warning=False)
+    auto_loss = elbo.differentiable_loss(auto_model, guide, data)
+    hand_loss = elbo.differentiable_loss(hand_model, guide, data)
+    assert_equal(auto_loss, hand_loss,
+                 msg='Expected:\n{}\nActual:\n{}'.format(hand_loss.detach().cpu().numpy(),
+                                                         auto_loss.detach().cpu().numpy()))
+
+    names = ["guide_probs_x", "model_probs_x", "model_probs_y", "model_probs_z"]
+    params = [pyro.param(name).unconstrained() for name in names]
+    auto_grads = grad(auto_loss, params, allow_unused=True)
+    hand_grads = grad(hand_loss, params, allow_unused=True)
+    for name, auto_grad, hand_grad in zip(names, auto_grads, hand_grads):
+        assert_equal(auto_grad, hand_grad,
+                     msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
+                                                                 hand_grad.detach().cpu().numpy(),
+                                                                 auto_grad.detach().cpu().numpy()))
+
+
+@pytest.mark.parametrize('num_samples', [1,  3])
+def test_elbo_enumerate_iarange_3(num_samples):
+    pyro.param("guide_probs_x",
+               torch.tensor([0.1, 0.9]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_x",
+               torch.tensor([0.4, 0.6]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_y",
+               torch.tensor([[0.75, 0.25], [0.55, 0.45]]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_z",
+               torch.tensor([[0.3, 0.7], [0.2, 0.8]]),
+               constraint=constraints.simplex)
+
+    def auto_model(data):
+        probs_x = pyro.param("model_probs_x")
+        probs_y = pyro.param("model_probs_y")
+        probs_z = pyro.param("model_probs_z")
+        with pyro.iarange("data", len(data)):
+            x = pyro.sample("x", dist.Categorical(probs_x))
+            y = pyro.sample("y", dist.Categorical(probs_y[x]),
+                            infer={"enumerate": "parallel", "expand": False})
+            pyro.sample("z", dist.Categorical(probs_z[y]), obs=data)
+
+    def hand_model(data):
+        probs_x = pyro.param("model_probs_x")
+        probs_y = pyro.param("model_probs_y")
+        probs_z = pyro.param("model_probs_z")
+        probs_yz = probs_y.mm(probs_z)
+        with pyro.iarange("data", len(data)):
+            x = pyro.sample("x", dist.Categorical(probs_x))
+            pyro.sample("z", dist.Categorical(probs_yz[x]), obs=data)
+
+    @config_enumerate(default="parallel", expand=False)
+    def guide(data):
+        probs_x = pyro.param("guide_probs_x")
+        with pyro.iarange("data", len(data)):
+            pyro.sample("x", dist.Categorical(probs_x))
+
+    data = dist.Categorical(torch.tensor([0.3, 0.7])).sample((num_samples,))
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1, strict_enumeration_warning=False)
+    auto_loss = elbo.differentiable_loss(auto_model, guide, data)
+    hand_loss = elbo.differentiable_loss(hand_model, guide, data)
+    assert_equal(auto_loss, hand_loss,
+                 msg='Expected:\n{}\nActual:\n{}'.format(hand_loss.detach().cpu().numpy(),
+                                                         auto_loss.detach().cpu().numpy()))
+
+    names = ["guide_probs_x", "model_probs_x", "model_probs_y", "model_probs_z"]
+    params = [pyro.param(name).unconstrained() for name in names]
+    auto_grads = grad(auto_loss, params, allow_unused=True)
+    hand_grads = grad(hand_loss, params, allow_unused=True)
+    for name, auto_grad, hand_grad in zip(names, auto_grads, hand_grads):
+        assert_equal(auto_grad, hand_grad,
+                     msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
+                                                                 hand_grad.detach().cpu().numpy(),
+                                                                 auto_grad.detach().cpu().numpy()))
+
+
 def test_elbo_hmm_growth():
     pyro.clear_param_store()
     init_probs = torch.tensor([0.5, 0.5])
