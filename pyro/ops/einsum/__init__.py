@@ -6,33 +6,37 @@ import os
 import opt_einsum
 from six.moves import cPickle as pickle
 
+from pyro.ops.einsum.shared import handle_sharing, shared_intermediates
+
 _PATH_CACHE = {}
 
 
 def contract(equation, *operands, **kwargs):
     """
     Like :func:`opt_einsum.contract` but works with
-    :func:`~opt_einsum.shared_intermediates` contexts.
+    :func:`~pyro.ops.einsum.shared_intermediates` contexts.
 
     :param bool cache_path: whether to cache the contraction path.
         Defaults to True.
     """
     backend = kwargs.pop('backend', 'numpy')
-    cache_path = kwargs.pop('cache_path', True)
-    if not cache_path:
-        return opt_einsum.contract(equation, *operands, **kwargs)
+    with handle_sharing(backend) as backend:
 
-    # memoize the contraction path
-    out = kwargs.pop('out', None)
-    kwargs_key = tuple(kwargs.items())
-    shapes = tuple(tuple(t.shape) for t in operands)
-    key = equation, shapes, kwargs_key
-    if key in _PATH_CACHE:
-        expr = _PATH_CACHE[key]
-    else:
-        expr = opt_einsum.contract_expression(equation, *shapes, **kwargs)
-        _PATH_CACHE[key] = expr
-    return expr(*operands, backend=backend, out=out)
+        cache_path = kwargs.pop('cache_path', True)
+        if not cache_path:
+            return opt_einsum.contract(equation, *operands, backend=backend, **kwargs)
+
+        # memoize the contraction path
+        out = kwargs.pop('out', None)
+        kwargs_key = tuple(kwargs.items())
+        shapes = tuple(tuple(t.shape) for t in operands)
+        key = equation, shapes, kwargs_key
+        if key in _PATH_CACHE:
+            expr = _PATH_CACHE[key]
+        else:
+            expr = opt_einsum.contract_expression(equation, *shapes, **kwargs)
+            _PATH_CACHE[key] = expr
+        return expr(*operands, backend=backend, out=out)
 
 
 @contextlib.contextmanager
@@ -54,4 +58,4 @@ def cached_paths(filename):
             pickle.dump(_PATH_CACHE, f, pickle.HIGHEST_PROTOCOL)
 
 
-__all__ = ['contract', 'cached_paths']
+__all__ = ['contract', 'cached_paths', 'shared_intermediates']
