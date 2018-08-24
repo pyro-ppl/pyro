@@ -94,7 +94,10 @@ nig_2p_ba_mf_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}, mf=Tru
 
 sigmoid_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.),
                                   torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
-                                  torch.ones(10), 10.*torch.ones(10), AB_sigmoid_design_6d)
+                                  100.*torch.ones(10), 1000.*torch.ones(10), AB_sigmoid_design_6d)
+sigmoid_difficult_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.),
+                                            torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
+                                            10.*torch.ones(10), 100.*torch.ones(10), AB_sigmoid_design_6d)
 sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(torch.tensor([10., 2.5]), d, 10, {"w1": 2}).guide
 
 ########################################################################################
@@ -260,10 +263,10 @@ def time_eig(estimator, model, design, observation_label, target_label, args):
 
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,est1,est2,kwargs1,kwargs2", [
-    ("Barber-Agakov on sigmoid",
-     sigmoid_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
+    ("Barber-Agakov on difficult sigmoid",
+     sigmoid_difficult_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
      barber_agakov_ape, None,
-     {"num_steps": 500, "num_samples": 20, "optim": optim.Adam({"lr": 0.05}),
+     {"num_steps": 5000, "num_samples": 200, "optim": optim.Adam({"lr": 0.05}),
       "guide": sigmoid_ba_guide(6), "final_num_samples": 500}, {}),
     ("Barber-Agakov on A/B test with unknown covariance",
      nig_2p_linear_model_3_2, AB_test_2d_10n_2p, "y", "w",
