@@ -199,7 +199,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         w_mean = w_means[name]
         # Place a normal prior on the regression coefficient
         w_prior = dist.Normal(w_mean, obs_sd / w_sqrtlambda).independent(1)
-        w.append(pyro.sample(name, w_prior).unsqueeze(-1))
+        w.append(pyro.sample(name, w_prior))
     # Process random effects
     for name, group_size in re_group_sizes.items():
         # Sample `G` once for this group
@@ -211,12 +211,12 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         # Repeat `G` for each group
         repeat_shape = tuple(1 for _ in tau_shape) + (group_size,)
         u_prior = dist.Normal(torch.tensor(0.), G.repeat(repeat_shape)).independent(1)
-        w.append(pyro.sample(name, u_prior).unsqueeze(-1))
-    # Regression coefficient `w` is batch x p x 1
-    w = torch.cat(w, dim=-2)
+        w.append(pyro.sample(name, u_prior))
+    # Regression coefficient `w` is batch x p
+    w = torch.cat(w, dim=-1)
 
     # Run the regressor forward conditioned on inputs
-    prediction_mean = torch.matmul(design, w).squeeze(-1)
+    prediction_mean = rmv(design, w)
     if response == "normal":
         # y is an n-vector: hence use .independent(1)
         return pyro.sample(response_label, dist.Normal(prediction_mean, obs_sd).independent(1))
@@ -226,7 +226,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         base_dist = dist.Normal(prediction_mean, obs_sd).independent(1)
         # You can add loc via the linear model itself
         k = k.expand(prediction_mean.shape)
-        transforms = [AffineTransform(loc=0., scale=.1), SigmoidTransform()]
+        transforms = [AffineTransform(loc=0., scale=k), SigmoidTransform()]
         response_dist = dist.TransformedDistribution(base_dist, transforms)
         return pyro.sample(response_label, response_dist)
     else:
@@ -310,7 +310,7 @@ def group_assignment_matrix(design):
 def rf_group_assignments(n, random_intercept=True):
     assert n % 2 == 0
     n_designs = n//2 + 1
-    participant_matrix = torch.eye(n).expand(n_designs, n, n)
+    participant_matrix = torch.eye(n)
     Xs = []
     for i in range(n_designs):
         X1 = group_assignment_matrix(torch.tensor([i, n//2 - i]))
@@ -319,7 +319,7 @@ def rf_group_assignments(n, random_intercept=True):
         Xs.append(X)
     X = torch.stack(Xs, dim=0)    
     if random_intercept:
-        X = torch.cat([X, participant_matrix], dim=-1)
+        X = torch.cat([X, participant_matrix.expand(n_designs, n, n)], dim=-1)
     return X, participant_matrix
 
 

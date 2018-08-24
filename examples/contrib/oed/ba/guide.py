@@ -49,6 +49,8 @@ class Ba_sigmoid_guide(nn.Module):
         super(Ba_sigmoid_guide, self).__init__()
         p = prior_sds.shape[-1]
         self.inverse_sigmoid_scale = nn.Parameter(torch.ones(n))
+        self.h1_weight = nn.Parameter(torch.ones(n))
+        self.h1_bias = nn.Parameter(torch.zeros(n))
         self.scale_tril = nn.Parameter(10.*torch.ones(d, tri_n(p)))
         self.regu = nn.Parameter(-2.*torch.ones(d, p))
         self.w_sizes = w_sizes
@@ -61,6 +63,8 @@ class Ba_sigmoid_guide(nn.Module):
         logited = y.log() - y1m.log()
         y_trans = logited/.1
         y_trans = y_trans * self.inverse_sigmoid_scale
+        hidden = self.softplus(y_trans)
+        y_trans = y_trans + hidden * self.h1_weight + self.h1_bias
 
         # TODO fix this
         design = design[..., :self.w_sizes[target_label]]
