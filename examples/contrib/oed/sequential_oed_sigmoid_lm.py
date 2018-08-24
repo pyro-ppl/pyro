@@ -1,23 +1,17 @@
 import argparse
-from functools import partial
 import torch
-from torch.distributions import constraints
 from torch.nn.functional import softplus
 from torch.distributions.transforms import AffineTransform, SigmoidTransform
-import numpy as np
 
 import pyro
 from pyro import optim
 import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO
-import pyro.poutine as poutine
 from pyro.contrib.oed.eig import barber_agakov_ape
 from pyro.contrib.oed.util import rmv
-import pyro.contrib.gp as gp
 
-from models.bayes_linear import (
-    sigmoid_model, rf_group_assignments
-)
+from models.bayes_linear import sigmoid_model, rf_group_assignments
+
 from ba.guide import Ba_sigmoid_guide
 
 # Random effects designs
@@ -47,7 +41,7 @@ def svi_guide(design):
     n, p = design.shape[-2:]
     k_alpha = 100.*torch.ones(batch_shape + (n,))
     k_beta = 1000.*torch.ones(batch_shape + (n,))
-    k = pyro.sample("k", dist.Gamma(k_alpha, k_beta).independent(1))
+    pyro.sample("k", dist.Gamma(k_alpha, k_beta).independent(1))
 
     w1_mean = pyro.param("w1_mean", torch.zeros(batch_shape + (2,)))
     w1_sds = softplus(pyro.param("w1_sds", -3.*torch.ones(batch_shape + (2,))))
@@ -108,7 +102,5 @@ def main():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sigmoid iterated experiment design")
-    # parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
-    # parser.add_argument('--num-bo-steps', nargs="?", default=5, type=int)
     args = parser.parse_args()
     main()
