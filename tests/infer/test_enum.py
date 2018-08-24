@@ -1603,7 +1603,7 @@ def test_elbo_hmm_growth():
 
     for key, cost in collated_costs.items():
         dt = 3
-        assert cost[-1 - dt - dt] -2 * cost[-1 - dt] + cost[-1] == 0, '{} cost is not linear'.format(key)
+        assert cost[-1 - dt - dt] - 2 * cost[-1 - dt] + cost[-1] == 0, '{} cost is not linear'.format(key)
 
 
 def test_elbo_dbn_growth():
@@ -1663,8 +1663,9 @@ def test_elbo_dbn_growth():
     print('times2 = {}'.format(repr(times2)))
 
     for key, cost in collated_costs.items():
-        dt = 3
-        assert cost[-1 - dt - dt] -2 * cost[-1 - dt] + cost[-1] < dt, '{} cost is not linear'.format(key)
+        dt = 4
+        assert cost[-1 - dt - dt] - 2 * cost[-1 - dt] + cost[-1] <= 2, \
+            '{} cost is not approximately linear'.format(key)
 
 
 @pytest.mark.parametrize("pi_a", [0.33])
