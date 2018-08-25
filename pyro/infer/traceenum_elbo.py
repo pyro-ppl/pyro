@@ -47,7 +47,7 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
             log_factors = []
             scales = set()
             for site in sites_t:
-                if len(site["log_prob"].shape) <= -enum_boundary:
+                if site["log_prob"].dim() <= -enum_boundary:
                     # For site do not depend on an enumerated variable, procede as usual.
                     marginal_costs[t].append(site["log_prob"])
                 else:
@@ -66,6 +66,9 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
                         log_factors.append(logprob)
                         scales.add(site["scale"])
             # This is only correct if all enumerated things share a common subsampling scale.
+            # Note that we use a cheap weak comparison by id rather than tensor value, because
+            # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
+            # only in value but at all derivatives.
             if len(scales) != 1:
                 raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
                                  "but found {} different scales.".format(len(scales)))
@@ -148,11 +151,15 @@ class TraceEnum_ELBO(ELBO):
             model = poutine.broadcast(model)
 
         # Enable parallel enumeration over the vectorized guide and model.
-        # The model allocates enumeration dimensions after (to the left of) the guide.
+        # The model allocates enumeration dimensions after (to the left of) the guide,
+        # accomplished by letting the model_enum lazily query the guide_enum for its
+        # final .next_available_dim. The laziness is accomplished via a lambda.
+        # Note this relies on the guide being run before the model.
         guide_enum = EnumerateMessenger(first_available_dim=self.max_iarange_nesting)
         model_enum = EnumerateMessenger(first_available_dim=lambda: guide_enum.next_available_dim)
         guide = guide_enum(guide)
         model = model_enum(model)
+
         q = queue.LifoQueue()
         guide = poutine.queue(guide, q,
                               escape_fn=iter_discrete_escape,
