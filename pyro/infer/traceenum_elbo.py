@@ -22,36 +22,43 @@ from pyro.util import check_traceenum_requirements, warn_if_nan
 
 # TODO move this logic into a poutine
 def _compute_model_costs(model_trace, guide_trace, ordering):
-    # Collect model log_probs, possibly marginalizing out enumerated model variables.
+    # Collect model logprobs and costs that may have been enumerated in the model.
     costs = OrderedDict()
     enum_logprobs = OrderedDict()
     enum_dims = []
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
-            if name in guide_trace or not site["infer"].get("_enumerate_dim") is not None:
+            if name in guide_trace or site["infer"].get("_enumerate_dim") is None:
                 costs.setdefault(ordering[name], []).append(site["log_prob"])
             else:
-                enum_logprobs.setdefault(ordering[name], []).append(site["log_prob"])
+                log_prob = site["score_parts"].score_function  # not scaled by subsampling
+                enum_logprobs.setdefault(ordering[name], []).append(log_prob)
                 enum_dims.append(len(site["fn"].event_shape) - len(site["value"].shape))
     if not enum_logprobs:
         return costs
 
-    # Marginalize out all enumerated variables.
+    # Marginalize out all variables that have been enumerated in the model.
     enum_boundary = max(enum_dims) + 1
+    assert enum_boundary <= 0
     marginal_costs = OrderedDict((t, []) for t in costs)
     with shared_intermediates():
         for t, costs_t in costs.items():
-            # TODO refine this coarse dependency ordering using time and tensor shapes.
-            logprobs_t = sum((logprobs_u for u, logprobs_u in enum_logprobs.items() if u <= t), [])
-            if not logprobs_t:
-                marginal_costs[t] = costs_t
-                continue
-
-            ordinal_shape = broadcast_shape(*(x.shape for x in logprobs_t))
-            for cost_t in costs_t:
-                target_shape = broadcast_shape(cost_t.shape, ordinal_shape)
-                target_shape = target_shape[enum_boundary:] if enum_boundary else ()
-                marginal_costs[t].append(logsumproductexp(logprobs_t + [cost_t], target_shape))
+            log_factors = []
+            for cost in costs_t:
+                if len(cost.shape) <= -enum_boundary:
+                    marginal_costs[t].append(cost)
+                else:
+                    log_factors.append(cost)
+            if log_factors:
+                for u, logprobs_u in enum_logprobs.items():
+                    # TODO refine this coarse dependency ordering using time and tensor shapes.
+                    if u <= t:
+                        log_factors.extend(logprobs_u)
+                # TODO split marginal_cost into connected components wrt shared tensor dims.
+                target_shape = (broadcast_shape(*set(x.shape[enum_boundary:] for x in log_factors))
+                                if enum_boundary else ())
+                marginal_cost = logsumproductexp(log_factors, target_shape)
+                marginal_costs[t].append(marginal_cost)
     return marginal_costs
 
 
@@ -75,12 +82,14 @@ class TraceEnum_ELBO(ELBO):
     """
     A trace implementation of ELBO-based SVI that supports
     - exhaustive enumeration over discrete sample sites, and
-    - local parallel sampling over any sample sites.
+    - local parallel sampling over any sample site.
 
-    To enumerate over a sample site, the ``guide``'s sample site must specify
-    either ``infer={'enumerate': 'sequential'}`` or
-    ``infer={'enumerate': 'parallel'}``. To configure all sites at once, use
-    :func:`~pyro.infer.enum.config_enumerate`.
+    To enumerate over a sample site in the ``guide``, mark the site with either
+    ``infer={'enumerate': 'sequential'}`` or
+    ``infer={'enumerate': 'parallel'}``. To configure all guide sites at once,
+    use :func:`~pyro.infer.enum.config_enumerate`. To enumerate over a sample
+    site in the ``model``, mark the site ``infer={'enumerate': 'parallel'}``
+    and ensure the site does not appear in the ``guide``.
 
     This assumes restricted dependency structure on the model and guide:
     variables outside of an :class:`~pyro.iarange` can never depend on
