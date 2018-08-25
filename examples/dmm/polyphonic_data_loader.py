@@ -16,6 +16,7 @@ und Kognitive Systeme at Universitaet Karlsruhe.
 import os
 
 import numpy as np
+import six
 import six.moves.cPickle as pickle
 import torch
 import torch.nn as nn
