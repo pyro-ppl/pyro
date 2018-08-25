@@ -113,7 +113,7 @@ def analytic_posterior_entropy(prior_cov, x):
 
 def main(num_vi_steps, num_acquisitions, num_bo_steps):
 
-    pyro.set_rng_seed(42)
+    # pyro.set_rng_seed(42)
     pyro.clear_param_store()
 
     def estimated_ape(ns):
@@ -125,7 +125,7 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
             observation_labels="y",
             vi_parameters={
                 "guide": guide,
-                "optim": optim.Adam({"lr": 0.0025}),
+                "optim": optim.Adam({"lr": 0.025}),
                 "loss": Trace_ELBO(),
                 "num_steps": num_vi_steps},
             is_parameters={"num_samples": 1}
@@ -141,13 +141,13 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
             true_ape.append(analytic_posterior_entropy(prior_cov, x))
         return torch.tensor(true_ape)
 
-    for f in [true_ape, estimated_ape]:
+    for f in [estimated_ape, true_ape]:
         X = torch.tensor([25., 75.])
         y = f(X)
         pyro.clear_param_store()
         gpmodel = gp.models.GPRegression(
             X, y, gp.kernels.Matern52(input_dim=1, lengthscale=torch.tensor(5.)),
-            noise=torch.tensor(0.1), jitter=1e-6)
+            noise=torch.tensor(0.25), jitter=1e-6)
         gpmodel.optimize()
         gpbo = GPBayesOptimizer(f, constraints.interval(0, 100), gpmodel)
         print(gpbo.run(num_steps=num_bo_steps, num_acquisitions=num_acquisitions))
@@ -155,7 +155,7 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
-    parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
+    parser.add_argument("-n", "--num-vi-steps", nargs="?", default=7500, type=int)
     parser.add_argument('--num-acquisitions', nargs="?", default=10, type=int)
     parser.add_argument('--num-bo-steps', nargs="?", default=6, type=int)
     args = parser.parse_args()
