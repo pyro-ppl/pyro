@@ -59,7 +59,7 @@ def main(args):
 
     logging.info('Training on {} sequences'.format(len(sequences)))
     guide = AutoDelta(poutine.block(model, expose=["trans", "emit"]))
-    optim = Adam({'lr': 0.1})
+    optim = Adam({'lr': args.learning_rate})
     Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
     elbo = Elbo(max_iarange_nesting=2)
     svi = SVI(model, guide, optim, elbo)
@@ -77,6 +77,7 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--num-epochs", default=100, type=int)
     parser.add_argument("-b", "--batch-size", default=8, type=int)
     parser.add_argument("-d", "--hidden-dim", default=16, type=int)
+    parser.add_argument("-lr", "--learning-rate", default=0.1, type=float)
     parser.add_argument('--jit', action='store_true')
     args = parser.parse_args()
     main(args)
