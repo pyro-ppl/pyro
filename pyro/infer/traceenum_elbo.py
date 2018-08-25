@@ -10,7 +10,7 @@ from six.moves import queue
 import pyro
 import pyro.ops.jit
 import pyro.poutine as poutine
-from pyro.distributions.util import broadcast_shape, is_identically_zero
+from pyro.distributions.util import broadcast_shape, is_identically_zero, scale_and_mask
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
 from pyro.infer.util import Dice, is_validation_enabled
@@ -22,43 +22,55 @@ from pyro.util import check_traceenum_requirements, warn_if_nan
 
 # TODO move this logic into a poutine
 def _compute_model_costs(model_trace, guide_trace, ordering):
-    # Collect model logprobs and costs that may have been enumerated in the model.
-    costs = OrderedDict()
-    enum_logprobs = OrderedDict()
+    # Collect model sites that may have been enumerated in the model.
+    cost_sites = OrderedDict()
+    enum_sites = OrderedDict()
     enum_dims = []
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
             if name in guide_trace or site["infer"].get("_enumerate_dim") is None:
-                costs.setdefault(ordering[name], []).append(site["log_prob"])
+                cost_sites.setdefault(ordering[name], []).append(site)
             else:
-                log_prob = site["score_parts"].score_function  # not scaled by subsampling
-                enum_logprobs.setdefault(ordering[name], []).append(log_prob)
-                enum_dims.append(len(site["fn"].event_shape) - len(site["value"].shape))
-    if not enum_logprobs:
-        return costs
+                enum_sites.setdefault(ordering[name], []).append(site)
+                enum_dims.append(site["fn"].event_dim - site["value"].dim())
+    if not enum_sites:
+        return OrderedDict((t, [site["log_prob"] for site in sites_t])
+                           for t, sites_t in cost_sites.items())
 
     # Marginalize out all variables that have been enumerated in the model.
     enum_boundary = max(enum_dims) + 1
     assert enum_boundary <= 0
-    marginal_costs = OrderedDict((t, []) for t in costs)
+    marginal_costs = OrderedDict((t, []) for t in cost_sites)
     with shared_intermediates():
-        for t, costs_t in costs.items():
+        for t, sites_t in cost_sites.items():
             log_factors = []
-            for cost in costs_t:
-                if len(cost.shape) <= -enum_boundary:
-                    marginal_costs[t].append(cost)
+            scales = set()
+            for site in sites_t:
+                if len(site["log_prob"].shape) <= -enum_boundary:
+                    # site does not depend on an enumerated variable
+                    marginal_costs[t].append(site["log_prob"])
                 else:
+                    cost = scale_and_mask(site["unscaled_log_prob"], mask=site["mask"])
                     log_factors.append(cost)
-            if log_factors:
-                for u, logprobs_u in enum_logprobs.items():
-                    # TODO refine this coarse dependency ordering using time and tensor shapes.
-                    if u <= t:
-                        log_factors.extend(logprobs_u)
-                # TODO split marginal_cost into connected components wrt shared tensor dims.
-                target_shape = (broadcast_shape(*set(x.shape[enum_boundary:] for x in log_factors))
-                                if enum_boundary else ())
-                marginal_cost = logsumproductexp(log_factors, target_shape)
-                marginal_costs[t].append(marginal_cost)
+                    scales.add(site["scale"])
+            if not log_factors:
+                continue
+            for u, sites_u in enum_sites.items():
+                # TODO refine this coarse dependency ordering using time and tensor shapes.
+                if u <= t:
+                    for site in sites_u:
+                        logprob = site["unscaled_log_prob"]
+                        log_factors.append(logprob)
+                        scales.add(site["scale"])
+            if len(scales) != 1:
+                raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
+                                 "but found {} different scales.".format(len(scales)))
+            # TODO split marginal_cost into connected components wrt shared tensor dims.
+            target_shape = (broadcast_shape(*set(x.shape[enum_boundary:] for x in log_factors))
+                            if enum_boundary else ())
+            marginal_cost = logsumproductexp(log_factors, target_shape)
+            marginal_cost = scale_and_mask(marginal_cost, scale=scales.pop())
+            marginal_costs[t].append(marginal_cost)
     return marginal_costs
 
 

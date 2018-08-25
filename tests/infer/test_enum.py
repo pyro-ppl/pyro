@@ -1340,32 +1340,27 @@ def test_elbo_enumerate_2(scale):
                torch.tensor([[0.3, 0.7], [0.2, 0.8]]),
                constraint=constraints.simplex)
 
+    @poutine.scale(scale=scale)
     def auto_model():
         probs_x = pyro.param("model_probs_x")
         probs_y = pyro.param("model_probs_y")
         probs_z = pyro.param("model_probs_z")
-        pyro.sample("w", dist.Bernoulli(0.5),
-                    infer={"enumerate": "parallel", "expand": False})
         x = pyro.sample("x", dist.Categorical(probs_x))
         y = pyro.sample("y", dist.Categorical(probs_y[x]),
                         infer={"enumerate": "parallel", "expand": False})
-        with poutine.scale(scale=scale):
-            pyro.sample("z", dist.Categorical(probs_z[y]), obs=torch.tensor(0))
-            print('DEBUG probs_z[y].shape = {}'.format(probs_z[y].shape))
+        pyro.sample("z", dist.Categorical(probs_z[y]), obs=torch.tensor(0))
 
+    @poutine.scale(scale=scale)
     def hand_model():
         probs_x = pyro.param("model_probs_x")
         probs_y = pyro.param("model_probs_y")
         probs_z = pyro.param("model_probs_z")
         probs_yz = probs_y.mm(probs_z)
-        pyro.sample("w", dist.Bernoulli(0.5),
-                    infer={"enumerate": "parallel", "expand": False})
         x = pyro.sample("x", dist.Categorical(probs_x))
-        with poutine.scale(scale=scale):
-            pyro.sample("z", dist.Categorical(probs_yz[x]), obs=torch.tensor(0))
-            print('DEBUG probs_yz[x].shape = {}'.format(probs_yz[x].shape))
+        pyro.sample("z", dist.Categorical(probs_yz[x]), obs=torch.tensor(0))
 
     @config_enumerate(default="parallel", expand=False)
+    @poutine.scale(scale=scale)
     def guide():
         probs_x = pyro.param("guide_probs_x")
         pyro.sample("x", dist.Categorical(probs_x))
@@ -1407,28 +1402,20 @@ def test_elbo_enumerate_3(scale):
         probs_x = pyro.param("model_probs_x")
         probs_y = pyro.param("model_probs_y")
         probs_z = pyro.param("model_probs_z")
-        pyro.sample("w", dist.Bernoulli(0.5),
-                    infer={"enumerate": "parallel", "expand": False})
         x = pyro.sample("x", dist.Categorical(probs_x))
-        y = pyro.sample("y", dist.Categorical(probs_y[x]),
-                        infer={"enumerate": "parallel", "expand": False})
         with poutine.scale(scale=scale):
-            pyro.sample("z1", dist.Categorical(probs_z[y]), obs=torch.tensor(0))
-            pyro.sample("z2", dist.Categorical(probs_z[y]), obs=torch.tensor(0))
-            print('DEBUG probs_z[y].shape = {}'.format(probs_z[y].shape))
+            y = pyro.sample("y", dist.Categorical(probs_y[x]),
+                            infer={"enumerate": "parallel", "expand": False})
+            pyro.sample("z", dist.Categorical(probs_z[y]), obs=torch.tensor(0))
 
     def hand_model():
         probs_x = pyro.param("model_probs_x")
         probs_y = pyro.param("model_probs_y")
         probs_z = pyro.param("model_probs_z")
         probs_yz = probs_y.mm(probs_z)
-        pyro.sample("w", dist.Bernoulli(0.5),
-                    infer={"enumerate": "parallel", "expand": False})
         x = pyro.sample("x", dist.Categorical(probs_x))
         with poutine.scale(scale=scale):
-            pyro.sample("z1", dist.Categorical(probs_yz[x]), obs=torch.tensor(0))
-            pyro.sample("z2", dist.Categorical(probs_yz[x]), obs=torch.tensor(0))
-            print('DEBUG probs_yz[x].shape = {}'.format(probs_yz[x].shape))
+            pyro.sample("z", dist.Categorical(probs_yz[x]), obs=torch.tensor(0))
 
     @config_enumerate(default="parallel", expand=False)
     def guide():
@@ -1469,28 +1456,27 @@ def test_elbo_enumerate_iarange_1(num_samples, scale):
                torch.tensor([[0.3, 0.7], [0.2, 0.8]]),
                constraint=constraints.simplex)
 
-    @poutine.scale(scale=scale)
     def auto_model(data):
         probs_x = pyro.param("model_probs_x")
         probs_y = pyro.param("model_probs_y")
         probs_z = pyro.param("model_probs_z")
         x = pyro.sample("x", dist.Categorical(probs_x))
-        y = pyro.sample("y", dist.Categorical(probs_y[x]),
-                        infer={"enumerate": "parallel", "expand": False})
-        with pyro.iarange("data", len(data)):
-            pyro.sample("z", dist.Categorical(probs_z[y]), obs=data)
+        with poutine.scale(scale=scale):
+            y = pyro.sample("y", dist.Categorical(probs_y[x]),
+                            infer={"enumerate": "parallel", "expand": False})
+            with pyro.iarange("data", len(data)):
+                pyro.sample("z", dist.Categorical(probs_z[y]), obs=data)
 
-    @poutine.scale(scale=scale)
     def hand_model(data):
         probs_x = pyro.param("model_probs_x")
         probs_y = pyro.param("model_probs_y")
         probs_z = pyro.param("model_probs_z")
         probs_yz = probs_y.mm(probs_z)
         x = pyro.sample("x", dist.Categorical(probs_x))
-        with pyro.iarange("data", len(data)):
-            pyro.sample("z", dist.Categorical(probs_yz[x]), obs=data)
+        with poutine.scale(scale=scale):
+            with pyro.iarange("data", len(data)):
+                pyro.sample("z", dist.Categorical(probs_yz[x]), obs=data)
 
-    @poutine.scale(scale=scale)
     @config_enumerate(default="parallel", expand=False)
     def guide(data):
         probs_x = pyro.param("guide_probs_x")
@@ -1537,11 +1523,10 @@ def test_elbo_enumerate_iarange_2(num_samples, scale):
         probs_z = pyro.param("model_probs_z")
         x = pyro.sample("x", dist.Categorical(probs_x))
         with pyro.iarange("data", len(data)):
-            y = pyro.sample("y", dist.Categorical(probs_y[x]),
-                            infer={"enumerate": "parallel", "expand": False})
             with poutine.scale(scale=scale):
+                y = pyro.sample("y", dist.Categorical(probs_y[x]),
+                                infer={"enumerate": "parallel", "expand": False})
                 pyro.sample("z", dist.Categorical(probs_z[y]), obs=data)
-                print('DEBUG probs_z[y].shape = {}'.format(probs_z[y].shape))
 
     def hand_model(data):
         probs_x = pyro.param("model_probs_x")
@@ -1552,7 +1537,6 @@ def test_elbo_enumerate_iarange_2(num_samples, scale):
         with pyro.iarange("data", len(data)):
             with poutine.scale(scale=scale):
                 pyro.sample("z", dist.Categorical(probs_yz[x]), obs=data)
-                print('DEBUG probs_yz[x].shape = {}'.format(probs_yz[x].shape))
 
     @config_enumerate(default="parallel", expand=False)
     def guide(data):
