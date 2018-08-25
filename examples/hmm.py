@@ -26,7 +26,7 @@ def model(sequences, sequence_lengths, trans_prior, emit_prior, args):
         lengths = sequence_lengths[batch]
         x = 0
         for t in range(lengths.max()):
-            with poutine.scale(scale=(lengths > t).float().unsqueeze(-1)):
+            with poutine.mask(mask=(lengths > t).unsqueeze(-1)):
                 x = pyro.sample("x_{}".format(t), dist.Categorical(trans[x]),
                                 infer={"enumerate": "parallel", "expand": False})
                 with tones_iarange:
