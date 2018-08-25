@@ -1267,6 +1267,24 @@ def test_hmm_enumerate_model_and_guide(num_steps):
     elbo.differentiable_loss(model, guide, data)
 
 
+def _check_loss_and_grads(expected_loss, actual_loss):
+    assert_equal(actual_loss, expected_loss,
+                 msg='Expected:\n{}\nActual:\n{}'.format(expected_loss.detach().cpu().numpy(),
+                                                         actual_loss.detach().cpu().numpy()))
+
+    names = pyro.get_param_store().get_all_param_names()
+    params = [pyro.param(name).unconstrained() for name in names]
+    actual_grads = grad(actual_loss, params, allow_unused=True)
+    expected_grads = grad(expected_loss, params, allow_unused=True)
+    for name, actual_grad, expected_grad in zip(names, actual_grads, expected_grads):
+        if actual_grad is None or expected_grad is None:
+            continue
+        assert_equal(actual_grad, expected_grad,
+                     msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
+                                                                 expected_grad.detach().cpu().numpy(),
+                                                                 actual_grad.detach().cpu().numpy()))
+
+
 @pytest.mark.parametrize('scale', [1, 10])
 def test_elbo_enumerate_1(scale):
     pyro.param("guide_probs_x",
@@ -1308,21 +1326,7 @@ def test_elbo_enumerate_1(scale):
     elbo = TraceEnum_ELBO(max_iarange_nesting=0, strict_enumeration_warning=False)
     auto_loss = elbo.differentiable_loss(auto_model, guide)
     hand_loss = elbo.differentiable_loss(hand_model, guide)
-    assert_equal(auto_loss, hand_loss,
-                 msg='Expected:\n{}\nActual:\n{}'.format(hand_loss.detach().cpu().numpy(),
-                                                         auto_loss.detach().cpu().numpy()))
-
-    names = ["guide_probs_x", "model_probs_x", "model_probs_y"]
-    params = [pyro.param(name).unconstrained() for name in names]
-    auto_grads = grad(auto_loss, params, allow_unused=True)
-    hand_grads = grad(hand_loss, params, allow_unused=True)
-    for name, auto_grad, hand_grad in zip(names, auto_grads, hand_grads):
-        if auto_grad is None or hand_grad is None:
-            continue
-        assert_equal(auto_grad, hand_grad,
-                     msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
-                                                                 hand_grad.detach().cpu().numpy(),
-                                                                 auto_grad.detach().cpu().numpy()))
+    _check_loss_and_grads(hand_loss, auto_loss)
 
 
 @pytest.mark.parametrize('scale', [1, 10])
@@ -1368,19 +1372,7 @@ def test_elbo_enumerate_2(scale):
     elbo = TraceEnum_ELBO(max_iarange_nesting=0, strict_enumeration_warning=False)
     auto_loss = elbo.differentiable_loss(auto_model, guide)
     hand_loss = elbo.differentiable_loss(hand_model, guide)
-    assert_equal(auto_loss, hand_loss,
-                 msg='Expected:\n{}\nActual:\n{}'.format(hand_loss.detach().cpu().numpy(),
-                                                         auto_loss.detach().cpu().numpy()))
-
-    names = ["guide_probs_x", "model_probs_x", "model_probs_y", "model_probs_z"]
-    params = [pyro.param(name).unconstrained() for name in names]
-    auto_grads = grad(auto_loss, params, allow_unused=True)
-    hand_grads = grad(hand_loss, params, allow_unused=True)
-    for name, auto_grad, hand_grad in zip(names, auto_grads, hand_grads):
-        assert_equal(auto_grad, hand_grad,
-                     msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
-                                                                 hand_grad.detach().cpu().numpy(),
-                                                                 auto_grad.detach().cpu().numpy()))
+    _check_loss_and_grads(hand_loss, auto_loss)
 
 
 @pytest.mark.parametrize('scale', [1, 10])
@@ -1425,19 +1417,7 @@ def test_elbo_enumerate_3(scale):
     elbo = TraceEnum_ELBO(max_iarange_nesting=0, strict_enumeration_warning=False)
     auto_loss = elbo.differentiable_loss(auto_model, guide)
     hand_loss = elbo.differentiable_loss(hand_model, guide)
-    assert_equal(auto_loss, hand_loss,
-                 msg='Expected:\n{}\nActual:\n{}'.format(hand_loss.detach().cpu().numpy(),
-                                                         auto_loss.detach().cpu().numpy()))
-
-    names = ["guide_probs_x", "model_probs_x", "model_probs_y", "model_probs_z"]
-    params = [pyro.param(name).unconstrained() for name in names]
-    auto_grads = grad(auto_loss, params, allow_unused=True)
-    hand_grads = grad(hand_loss, params, allow_unused=True)
-    for name, auto_grad, hand_grad in zip(names, auto_grads, hand_grads):
-        assert_equal(auto_grad, hand_grad,
-                     msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
-                                                                 hand_grad.detach().cpu().numpy(),
-                                                                 auto_grad.detach().cpu().numpy()))
+    _check_loss_and_grads(hand_loss, auto_loss)
 
 
 @pytest.mark.parametrize('scale', [1, 10])
@@ -1486,19 +1466,7 @@ def test_elbo_enumerate_iarange_1(num_samples, scale):
     elbo = TraceEnum_ELBO(max_iarange_nesting=1, strict_enumeration_warning=False)
     auto_loss = elbo.differentiable_loss(auto_model, guide, data)
     hand_loss = elbo.differentiable_loss(hand_model, guide, data)
-    assert_equal(auto_loss, hand_loss,
-                 msg='Expected:\n{}\nActual:\n{}'.format(hand_loss.detach().cpu().numpy(),
-                                                         auto_loss.detach().cpu().numpy()))
-
-    names = ["guide_probs_x", "model_probs_x", "model_probs_y", "model_probs_z"]
-    params = [pyro.param(name).unconstrained() for name in names]
-    auto_grads = grad(auto_loss, params, allow_unused=True)
-    hand_grads = grad(hand_loss, params, allow_unused=True)
-    for name, auto_grad, hand_grad in zip(names, auto_grads, hand_grads):
-        assert_equal(auto_grad, hand_grad,
-                     msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
-                                                                 hand_grad.detach().cpu().numpy(),
-                                                                 auto_grad.detach().cpu().numpy()))
+    _check_loss_and_grads(hand_loss, auto_loss)
 
 
 @pytest.mark.parametrize('scale', [1, 10])
@@ -1547,19 +1515,7 @@ def test_elbo_enumerate_iarange_2(num_samples, scale):
     elbo = TraceEnum_ELBO(max_iarange_nesting=1, strict_enumeration_warning=False)
     auto_loss = elbo.differentiable_loss(auto_model, guide, data)
     hand_loss = elbo.differentiable_loss(hand_model, guide, data)
-    assert_equal(auto_loss, hand_loss,
-                 msg='Expected:\n{}\nActual:\n{}'.format(hand_loss.detach().cpu().numpy(),
-                                                         auto_loss.detach().cpu().numpy()))
-
-    names = ["guide_probs_x", "model_probs_x", "model_probs_y", "model_probs_z"]
-    params = [pyro.param(name).unconstrained() for name in names]
-    auto_grads = grad(auto_loss, params, allow_unused=True)
-    hand_grads = grad(hand_loss, params, allow_unused=True)
-    for name, auto_grad, hand_grad in zip(names, auto_grads, hand_grads):
-        assert_equal(auto_grad, hand_grad,
-                     msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
-                                                                 hand_grad.detach().cpu().numpy(),
-                                                                 auto_grad.detach().cpu().numpy()))
+    _check_loss_and_grads(hand_loss, auto_loss)
 
 
 @pytest.mark.parametrize('num_samples', [1,  3])
@@ -1606,19 +1562,7 @@ def test_elbo_enumerate_iarange_3(num_samples):
     elbo = TraceEnum_ELBO(max_iarange_nesting=1, strict_enumeration_warning=False)
     auto_loss = elbo.differentiable_loss(auto_model, guide, data)
     hand_loss = elbo.differentiable_loss(hand_model, guide, data)
-    assert_equal(auto_loss, hand_loss,
-                 msg='Expected:\n{}\nActual:\n{}'.format(hand_loss.detach().cpu().numpy(),
-                                                         auto_loss.detach().cpu().numpy()))
-
-    names = ["guide_probs_x", "model_probs_x", "model_probs_y", "model_probs_z"]
-    params = [pyro.param(name).unconstrained() for name in names]
-    auto_grads = grad(auto_loss, params, allow_unused=True)
-    hand_grads = grad(hand_loss, params, allow_unused=True)
-    for name, auto_grad, hand_grad in zip(names, auto_grads, hand_grads):
-        assert_equal(auto_grad, hand_grad,
-                     msg='{}\nExpected:\n{}\nActual:\n{}'.format(name,
-                                                                 hand_grad.detach().cpu().numpy(),
-                                                                 auto_grad.detach().cpu().numpy()))
+    _check_loss_and_grads(hand_loss, auto_loss)
 
 
 def test_elbo_hmm_growth():
