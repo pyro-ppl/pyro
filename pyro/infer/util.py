@@ -174,7 +174,7 @@ class Dice(object):
             if site["type"] != "sample":
                 continue
 
-            log_prob = site["unscaled_log_prob"]
+            log_prob = site['score_parts'].score_function  # not scaled by subsampling
             ordinal = ordering[name]
             if site["infer"].get("enumerate"):
                 num_samples = site["infer"].get("num_samples")

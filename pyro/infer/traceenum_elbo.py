@@ -43,13 +43,16 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
     marginal_costs = OrderedDict((t, []) for t in cost_sites)
     with shared_intermediates():
         for t, sites_t in cost_sites.items():
+            # TODO split log_factors into connected components wrt shared tensor dims.
             log_factors = []
             scales = set()
             for site in sites_t:
                 if len(site["log_prob"].shape) <= -enum_boundary:
-                    # site does not depend on an enumerated variable
+                    # For site do not depend on an enumerated variable, procede as usual.
                     marginal_costs[t].append(site["log_prob"])
                 else:
+                    # For sites that depend on an enumerated variable, we need to apply
+                    # the mask inside- and the scale outside- of the log expectation.
                     cost = scale_and_mask(site["unscaled_log_prob"], mask=site["mask"])
                     log_factors.append(cost)
                     scales.add(site["scale"])
@@ -62,10 +65,10 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
                         logprob = site["unscaled_log_prob"]
                         log_factors.append(logprob)
                         scales.add(site["scale"])
+            # This is only correct if all enumerated things share a common subsampling scale.
             if len(scales) != 1:
                 raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
                                  "but found {} different scales.".format(len(scales)))
-            # TODO split marginal_cost into connected components wrt shared tensor dims.
             target_shape = (broadcast_shape(*set(x.shape[enum_boundary:] for x in log_factors))
                             if enum_boundary else ())
             marginal_cost = logsumproductexp(log_factors, target_shape)
