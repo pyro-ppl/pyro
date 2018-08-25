@@ -331,6 +331,7 @@ def param(name, *args, **kwargs):
             "kwargs": kwargs,
             "infer": {},
             "scale": 1.0,
+            "mask": None,
             "cond_indep_stack": (),
             "value": None,
             "done": False,
