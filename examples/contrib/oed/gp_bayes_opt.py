@@ -163,3 +163,4 @@ class GPBayesOptimizer:
         ax1.set_title("Find design {}".format(xlabel))
         if with_title:
             ax1.set_ylabel("EIG estimate")
+            ax1.set_xlabel("Design")
