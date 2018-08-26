@@ -44,17 +44,17 @@ def svi_guide(design):
     pyro.sample("k", dist.Gamma(k_alpha, k_beta).independent(1))
 
     w1_mean = pyro.param("w1_mean", torch.zeros(batch_shape + (2,)))
-    w1_sds = softplus(pyro.param("w1_sds", -3.*torch.ones(batch_shape + (2,))))
+    w1_sds = softplus(pyro.param("w1_sds", -5.*torch.ones(batch_shape + (2,))))
     pyro.sample("w1", dist.Normal(w1_mean, w1_sds).independent(1))
     w2_mean = pyro.param("w2_mean", torch.zeros(batch_shape + (10,)))
-    w2_sds = softplus(pyro.param("w2_sds", -3.*torch.ones(batch_shape + (10,))))
+    w2_sds = softplus(pyro.param("w2_sds", -5.*torch.ones(batch_shape + (10,))))
     pyro.sample("w2", dist.Normal(w2_mean, w2_sds).independent(1))
 
 
 def learn_posterior(y, d, model, svi_guide):
     vi_parameters = {
         "guide": svi_guide, 
-        "optim": optim.Adam({"lr": 0.05}),
+        "optim": optim.Adam({"lr": 0.005}),
         "loss": Trace_ELBO(),
         "num_steps": 10000}
     conditioned_model = pyro.condition(model, data={"y": y})
@@ -85,13 +85,16 @@ def main():
                  "optim": optim.Adam({"lr": 0.05}), "final_num_samples": 500}
 
     for experiment_number in range(1, 6):
+        pyro.clear_param_store()
         print("Experiment number", experiment_number)
 
         estimation_surface = barber_agakov_ape(model, AB_test_reff_6d_10n_12p, "y", "w1", **ba_kwargs)
         print(estimation_surface)
 
         # Run experiment
-        d_star_index = torch.argmin(estimation_surface)
+        # d_star_index = torch.argmin(estimation_surface)
+        d_star_index = torch.randint(6, tuple())
+        d_star_index = int(d_star_index)
         design = AB_test_reff_6d_10n_12p[d_star_index, ...]
         y = true_model(design)
         print("Chosen design", d_star_index)
