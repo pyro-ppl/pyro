@@ -1593,6 +1593,45 @@ def test_elbo_enumerate_iarange_3(num_samples, num_masked, scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
+def test_elbo_scale():
+    # Consider a mixture model with two components, toggled by `which`.
+    def component_model(data, which, suffix=""):
+        loc = pyro.param("locs", torch.tensor([-1., 1.]))[which]
+        with pyro.iarange("data" + suffix, len(data)):
+            pyro.sample("obs" + suffix, dist.Normal(loc, 1.), obs=data)
+
+    pyro.param("mixture_probs", torch.tensor([0.25, 0.75]), constraint=constraints.simplex)
+
+    # We can implement this in two ways.
+    # First consider automatic enumeration in the guide.
+    def auto_model(data):
+        mixture_probs = pyro.param("mixture_probs")
+        which = pyro.sample("which", dist.Categorical(mixture_probs))
+        component_model(data, which)
+
+    def auto_guide(data):
+        mixture_probs = pyro.param("mixture_probs")
+        pyro.sample("which", dist.Categorical(mixture_probs),
+                    infer={"enumerate": "parallel", "expand": False})
+
+    # Second consider explicit enumeration in the model, where we
+    # marginalize out the `which` variable by hand.
+    def hand_model(data):
+        mixture_probs = pyro.param("mixture_probs")
+        for which in pyro.irange("which", len(mixture_probs)):
+            with pyro.poutine.scale(scale=mixture_probs[which]):
+                component_model(data, which, suffix="_{}".format(which))
+
+    def hand_guide(data):
+        pass
+
+    data = dist.Normal(0., 2.).sample((3,))
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1, strict_enumeration_warning=False)
+    auto_loss = elbo.differentiable_loss(auto_model, auto_guide, data)
+    hand_loss = elbo.differentiable_loss(hand_model, hand_guide, data)
+    _check_loss_and_grads(hand_loss, auto_loss)
+
+
 def test_elbo_hmm_growth():
     pyro.clear_param_store()
     init_probs = torch.tensor([0.5, 0.5])

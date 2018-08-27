@@ -48,7 +48,7 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
             scales = set()
             for site in sites_t:
                 if site["log_prob"].dim() <= -enum_boundary:
-                    # For site do not depend on an enumerated variable, procede as usual.
+                    # For site do not depend on an enumerated variable, proceed as usual.
                     marginal_costs[t].append(site["log_prob"])
                 else:
                     # For sites that depend on an enumerated variable, we need to apply
