@@ -219,6 +219,9 @@ models = {name[len('model_'):]: model
 
 
 def main(args):
+    if args.cuda:
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
     logging.info('Loading data')
     data = poly.load_data()
 
@@ -290,6 +293,7 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--hidden-dim", default=16, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
     parser.add_argument("-t", "--truncate", type=int)
+    parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
     args = parser.parse_args()
     main(args)
