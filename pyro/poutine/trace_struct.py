@@ -243,6 +243,7 @@ class Trace(object):
                     site["log_prob"]
                 except KeyError:
                     log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
+                    site["unscaled_log_prob"] = log_p
                     log_p = scale_and_mask(log_p, site["scale"], site["mask"])
                     site["log_prob"] = log_p
                     site["log_prob_sum"] = log_p.sum()
@@ -262,6 +263,7 @@ class Trace(object):
                 # Note that ScoreParts overloads the multiplication operator
                 # to correctly scale each of its three parts.
                 value = site["fn"].score_parts(site["value"], *site["args"], **site["kwargs"])
+                site["unscaled_log_prob"] = value.log_prob
                 value = value.scale_and_mask(site["scale"], site["mask"])
                 site["score_parts"] = value
                 site["log_prob"] = value.log_prob
