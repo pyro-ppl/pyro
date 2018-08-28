@@ -16,7 +16,7 @@ from models.bayes_linear import (
     normal_inverse_gamma_linear_model, normal_inverse_gamma_guide, group_linear_model,
     group_normal_guide, sigmoid_model, rf_group_assignments
 )
-from dv.neural import T_specialized
+from dv.neural import T_specialized, T_sigmoid
 from ba.guide import Ba_lm_guide, Ba_nig_guide, Ba_sigmoid_guide
 
 PLOT = True
@@ -77,6 +77,7 @@ AB_test_reff_6d_10n_12p, AB_sigmoid_design_6d = rf_group_assignments(10)
 #########################################################################################
 # Linear models
 basic_2p_linear_model_sds_10_2pt5, basic_2p_guide = zero_mean_unit_obs_sd_lm(torch.tensor([10., 2.5]))
+_, basic_2p_guide_w1 = zero_mean_unit_obs_sd_lm(torch.tensor([10., 2.5]), coef_label="w1")
 basic_2p_linear_model_sds_10_0pt1, _ = zero_mean_unit_obs_sd_lm(torch.tensor([10., .1]))
 basic_2p_ba_guide = lambda d: Ba_lm_guide((2,), (d, 3), {"w": 2}).guide
 group_2p_linear_model_sds_10_2pt5 = group_linear_model(torch.tensor(0.), torch.tensor([10.]), torch.tensor(0.), 
@@ -99,6 +100,7 @@ sigmoid_difficult_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10.,
                                             torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
                                             10.*torch.ones(10), 100.*torch.ones(10), AB_sigmoid_design_6d)
 sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(torch.tensor([10., 2.5]), d, 10, {"w1": 2}).guide
+sigmoid_dvnn = T_sigmoid(torch.tensor([10., 2.5]), 6, 10, {"w1": 2})
 
 ########################################################################################
 # Aux
@@ -123,7 +125,7 @@ def linear_model_ground_truth(model, design, observation_labels, target_labels, 
         return torch.tensor([0.5*torch.logdet(2*np.pi*np.e*C) for C in target_posterior_covs])
 
 
-def H_prior(model, design, observation_labels, target_labels):
+def lm_H_prior(model, design, observation_labels, target_labels):
     if isinstance(target_labels, str):
         target_labels = [target_labels]
 
@@ -134,25 +136,66 @@ def H_prior(model, design, observation_labels, target_labels):
     return 0.5*torch.logdet(2*np.pi*np.e*target_prior_covs)
 
 
-def vi_eig(model, design, observation_labels, target_labels, *args, **kwargs):
+def mc_H_prior(model, design, label="w1", num_samples=1000):
+    expanded_design= design.expand((num_samples, ) + design.shape)
+    trace = pyro.poutine.trace(model).get_trace(expanded_design)
+    trace.compute_log_prob()
+    lp = trace.nodes[label]["log_prob"]
+    return -lp.sum(0)/num_samples
+
+
+def vi_eig_lm(model, design, observation_labels, target_labels, *args, **kwargs):
     # **Only** applies to linear models - analytic prior entropy
     ape = vi_ape(model, design, observation_labels, target_labels, *args, **kwargs)
     prior_entropy = H_prior(model, design, observation_labels, target_labels)
     return prior_entropy - ape
 
 
-def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
+def ba_eig_lm(model, design, observation_labels, target_labels, *args, **kwargs):
     # **Only** applies to linear models - analytic prior entropy
     ape = barber_agakov_ape(model, design, observation_labels, target_labels, *args, **kwargs)
     prior_entropy = H_prior(model, design, observation_labels, target_labels)
     return prior_entropy - ape
 
 
+def ba_eig_mc(model, design, observation_labels, target_labels, *args, **kwargs):
+    if "num_hprior_samples" in kwargs:
+        hprior = mc_H_prior(model, design, kwargs["num_hprior_samples"])
+    else:
+        hprior = mc_H_prior(model, design)
+    return hprior - barber_agakov_ape(model, design, observation_labels, target_labels, *args, **kwargs)
+
+
+# Makes the plots look pretty
+vi_eig_lm.name = "Variational inference"
+vi_ape.name = "Variational inference"
+ba_eig_lm.name = "Barber-Agakov"
+ba_eig_mc.name = "Barber-Agakov"
+barber_agakov_ape.name = "Barber-Agakov"
+donsker_varadhan_eig.name = "Donsker-Varadhan"
+linear_model_ground_truth.name = "Ground truth"
+naive_rainforth_eig.name = "Naive Rainforth"
+
+
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,arglist", [
-    ("Sigmoid model: 2 classes of participants (5/5), A/B test (5/5)",
+    ("Sigmoid link function",
      sigmoid_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
-     [(naive_rainforth_eig, [500, 500, 500]),
-      (barber_agakov_ape, [20, 500, sigmoid_ba_guide(6), optim.Adam({"lr": 0.05}),
+     [#(naive_rainforth_eig, [20000, 500, 500]),
+      (donsker_varadhan_eig, [200, 20000, sigmoid_dvnn, optim.Adam({"lr": 0.05}),
+        False, None, 500]),
+      (ba_eig_mc, [20, 1000, sigmoid_ba_guide(6), optim.Adam({"lr": 0.05}),
+        False, None, 500])
+      ]),
+    ("A/B test linear model with known observation variance",
+     basic_2p_linear_model_sds_10_2pt5, AB_test_11d_10n_2p, "y", "w",
+     [(linear_model_ground_truth, []),
+      (naive_rainforth_eig, [2000, 2000]),
+      (vi_eig_lm,
+       [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+         "num_steps": 1000}, {"num_samples": 1}]),
+      (donsker_varadhan_eig, [400, 800, T_specialized((11, 3)), optim.Adam({"lr": 0.025}),
+        False, None, 500]),
+      (ba_eig_lm, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
     ("A/B testing with unknown covariance (Gamma(15, 14))",
@@ -177,52 +220,40 @@ def ba_eig(model, design, observation_labels, target_labels, *args, **kwargs):
       (barber_agakov_ape, [20, 800, nig_2p_ba_mf_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
-    ("A/B test linear model known covariance",
-     basic_2p_linear_model_sds_10_2pt5, AB_test_11d_10n_2p, "y", "w",
-     [(linear_model_ground_truth, []),
-      (naive_rainforth_eig, [2000, 2000]),
-      (vi_eig,
-       [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
-         "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig, [400, 400, T_specialized((11, 3)), optim.Adam({"lr": 0.05}),
-        False, None, 500]),
-      (ba_eig, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 500])
-      ]),
     ("Linear model targeting one parameter", 
      group_2p_linear_model_sds_10_2pt5, X_circle_10d_1n_2p, "y", "w1",
      [(linear_model_ground_truth, []),
       (naive_rainforth_eig, [200, 200, 200]),
-      (vi_eig,
+      (vi_eig_lm,
        [{"guide": group_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
       (donsker_varadhan_eig, [400, 400, T_specialized((10, 3)), optim.Adam({"lr": 0.05}),
         False, None, 500]),
-      (ba_eig, [20, 400, group_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
+      (ba_eig_lm, [20, 400, group_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
     ("Linear model with designs on S^1",
      basic_2p_linear_model_sds_10_2pt5, X_circle_10d_1n_2p, "y", "w",
      [(linear_model_ground_truth, []),
       (naive_rainforth_eig, [2000, 2000]),
-      (vi_eig,
+      (vi_eig_lm,
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
       (donsker_varadhan_eig, [400, 400, T_specialized((10, 3)), optim.Adam({"lr": 0.05}),
         False, None, 500]),
-      (ba_eig, [20, 400, basic_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
+      (ba_eig_lm, [20, 400, basic_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
     ("A/B test linear model known covariance (different sds)",
      basic_2p_linear_model_sds_10_0pt1, AB_test_11d_10n_2p, "y", "w",
      [(linear_model_ground_truth, []),
       (naive_rainforth_eig, [2000, 2000]),
-      (vi_eig,
+      (vi_eig_lm,
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
       (donsker_varadhan_eig, [400, 400, T_specialized((11, 3)), optim.Adam({"lr": 0.05}),
         False, None, 500]),
-      (ba_eig, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+      (ba_eig_lm, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ])
 ])
@@ -232,20 +263,24 @@ def test_eig_and_plot(title, model, design, observation_label, target_label, arg
     of axes. Typically, each test within one `arglist` should estimate the same quantity.
     This is repeated for each `arglist`.
     """
-    # pyro.set_rng_seed(42)
     ys = []
     names = []
+    elapseds = []
     for estimator, args in arglist:
-        ys.append(time_eig(estimator, model, design, observation_label, target_label, args))
-        names.append(estimator.__name__)
+        y, elapsed = time_eig(estimator, model, design, observation_label, target_label, args)
+        ys.append(y)
+        elapseds.append(elapsed)
+        names.append(estimator.name)
 
     if PLOT:
         import matplotlib.pyplot as plt
-        plt.figure(figsize=(12, 8))
+        plt.figure(figsize=(10, 5))
         for y in ys:
             plt.plot(y.detach().numpy(), linestyle='None', marker='o', markersize=10)
         plt.title(title)
         plt.legend(names)
+        plt.xlabel("Design")
+        plt.ylabel("EIG estimate")
         plt.show()
 
 
@@ -259,7 +294,7 @@ def time_eig(estimator, model, design, observation_label, target_label, args):
     print(estimator.__name__)
     print('estimate', y)
     print('elapsed', elapsed)
-    return y
+    return y, elapsed
 
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,est1,est2,kwargs1,kwargs2", [
@@ -307,7 +342,6 @@ def test_convergence(title, model, design, observation_label, target_label, est1
     EIG estimation.
     """
     t = time.time()
-    # pyro.set_rng_seed(42)
     pyro.clear_param_store()
     if est2 is not None:
         truth = est2(model, design, observation_label, target_label, **kwargs2)

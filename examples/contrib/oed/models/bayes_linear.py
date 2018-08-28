@@ -48,9 +48,9 @@ def group_normal_guide(observation_sd, coef1_shape, coef2_shape,
         obs_sd=observation_sd)
 
 
-def zero_mean_unit_obs_sd_lm(coef_sd):
-    model = known_covariance_linear_model(torch.tensor(0.), coef_sd, torch.tensor(1.))
-    guide = normal_guide(torch.tensor(1.), coef_sd.shape)
+def zero_mean_unit_obs_sd_lm(coef_sd, coef_label="w"):
+    model = known_covariance_linear_model(torch.tensor(0.), coef_sd, torch.tensor(1.), coef_label=coef_label)
+    guide = normal_guide(torch.tensor(1.), coef_sd.shape, coef_label=coef_label)
     return model, guide
 
 
@@ -226,7 +226,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         base_dist = dist.Normal(prediction_mean, obs_sd).independent(1)
         # You can add loc via the linear model itself
         k = k.expand(prediction_mean.shape)
-        transforms = [AffineTransform(loc=0., scale=k), SigmoidTransform()]
+        transforms = [AffineTransform(loc=torch.tensor(0.), scale=k), SigmoidTransform()]
         response_dist = dist.TransformedDistribution(base_dist, transforms)
         return pyro.sample(response_label, response_dist)
     else:
