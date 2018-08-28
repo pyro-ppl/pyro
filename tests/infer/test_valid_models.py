@@ -1006,7 +1006,7 @@ def test_dim_allocation_error(Elbo, expand):
 
 
 def test_enum_in_model_ok():
-    infer = {'enumerate': 'parallel', 'expand': False}
+    infer = {'enumerate': 'parallel'}
 
     def model():
         p = pyro.param('p', torch.tensor(0.25))
@@ -1044,7 +1044,7 @@ def test_enum_in_model_ok():
 
 
 def test_enum_iarange_in_model_ok():
-    infer = {'enumerate': 'parallel', 'expand': False}
+    infer = {'enumerate': 'parallel'}
 
     def model():
         p = pyro.param('p', torch.tensor(0.25))
