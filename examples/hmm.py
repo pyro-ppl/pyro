@@ -2,8 +2,8 @@
 This example shows how to marginalize out discrete model variables in Pyro.
 
 This combines Stochastic Variational Inference (SVI) with an
-Expectation-Maximization (EM) algorithm, where we compute exact expectation of
-the ELBO wrt a subset of model variables.
+Expectation-Maximization (EM) algorithm, where we use enumeration to exactly
+marginalize out some variables from the ELBO computation.
 
 To marginalize out discrete variables ``x`` in Pyro's SVI:
 1. Verify that the variable dependency structure in your model
@@ -56,9 +56,15 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
     assert lengths.shape == (num_sequences,)
     assert lengths.max() <= max_length
     with poutine.mask(mask=torch.tensor(include_prior)):
+        # Our prior on transition probabilities will be:
+        # stay in the same state with 90% probability; uniformly jump to another
+        # state with 10% probability.
         probs_x = pyro.sample("probs_x",
                               dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
                                   .independent(1))
+        # We put a weak prior on the conditional probability of a tone sounding.
+        # We know that on average about 4 of 88 tones are active, so we'll set a
+        # rough weak prior of 10% of the notes being active at any one time.
         probs_y = pyro.sample("probs_y",
                               dist.Beta(0.1, 0.9)
                                   .expand([args.hidden_dim, data_dim])
@@ -69,6 +75,9 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
         x = 0
         for t in range(lengths.max()):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+                # On the next line, we'll overwrite the value of x with an updated
+                # value. If we wanted to record all x values, we could instead
+                # write x[t] = pyro.sample(...x[t-1]...).
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
                                 infer={"enumerate": "parallel", "expand": False})
                 with tones_iarange:
@@ -279,7 +288,7 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--num-steps", default=50, type=int)
     parser.add_argument("-b", "--batch-size", default=8, type=int)
     parser.add_argument("-d", "--hidden-dim", default=16, type=int)
-    parser.add_argument("-lr", "--learning-rate", default=0.1, type=float)
+    parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
     parser.add_argument("-t", "--truncate", type=int)
     parser.add_argument('--jit', action='store_true')
     args = parser.parse_args()
