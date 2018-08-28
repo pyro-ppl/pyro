@@ -28,13 +28,17 @@ Handlers
 
 .. autofunction:: pyro.poutine.lift
 
-.. autofunction:: pyro.poutine.replay
+.. autofunction:: pyro.poutine.mask
 
 .. autofunction:: pyro.poutine.queue
+
+.. autofunction:: pyro.poutine.replay
 
 .. autofunction:: pyro.poutine.scale
 
 .. autofunction:: pyro.poutine.trace
+
+.. autofunction:: pyro.infer.enum.config_enumerate
 
 Trace
 ------

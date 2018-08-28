@@ -43,7 +43,7 @@ def model(detections, args):
     p_exists = args.expected_num_objects / max_num_objects
     with pyro.iarange('objects_iarange', max_num_objects):
         exists = pyro.sample('exists', dist.Bernoulli(p_exists))
-        with poutine.scale(scale=exists):
+        with poutine.mask(mask=exists.byte()):
             pyro.sample('objects', dist.Normal(0., 1.), obs=objects)
 
     # Assignment part.

@@ -85,7 +85,7 @@ class HMC(TraceKernel):
                  jit_compile=False):
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
-        self.model = poutine.enum(config_enumerate(model, default="parallel", expand=False),
+        self.model = poutine.enum(config_enumerate(model, default="parallel"),
                                   first_available_dim=max_iarange_nesting)
         # broadcast sample sites inside iarange.
         self.model = poutine.broadcast(self.model)

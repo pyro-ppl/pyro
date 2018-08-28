@@ -4,8 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from pyro.distributions.util import broadcast_shape, eye_like, scale_tensor, sum_leftmost, sum_rightmost
-from tests.common import assert_equal
+from pyro.distributions.util import broadcast_shape, sum_leftmost, sum_rightmost
 
 INF = float('inf')
 
@@ -96,54 +95,3 @@ def test_sum_leftmost():
     assert sum_leftmost(x, -1).shape == (4,)
     assert sum_leftmost(x, -2).shape == (3, 4)
     assert sum_leftmost(x, INF).shape == ()
-
-
-@pytest.mark.parametrize('tensor,scale,expected', [
-    (0., 0., 0.),
-    (0., 1., 0.),
-    (0., 2., 0.),
-    (0., INF, 0.),
-    (1., 0., 0.),
-    (1., 1., 1.),
-    (1., 2., 2.),
-    (1., INF, INF),
-    (2., 0., 0.),
-    (2., 1., 2.),
-    (2., 2., 4.),
-    (2., INF, INF),
-    (INF, 0., 0.),
-    (INF, 1., INF),
-    (INF, 2., INF),
-    (INF, INF, INF),
-    (0., torch.tensor([0., 1., 2., INF]), torch.tensor([0., 0., 0., 0.])),
-    (1., torch.tensor([0., 1., 2., INF]), torch.tensor([0., 1., 2., INF])),
-    (2., torch.tensor([0., 1., 2., INF]), torch.tensor([0., 2., 4., INF])),
-    (INF, torch.tensor([0., 1., 2., INF]), torch.tensor([0., INF, INF, INF])),
-    (0., torch.tensor([0., 1., 2., INF]), torch.tensor([0., 0., 0., 0.])),
-    (1., torch.tensor([0., 1., 2., INF]), torch.tensor([0., 1., 2., INF])),
-    (2., torch.tensor([0., 1., 2., INF]), torch.tensor([0., 2., 4., INF])),
-    (INF, torch.tensor([0., 1., 2., INF]), torch.tensor([0., INF, INF, INF])),
-    (torch.tensor([0., 1., 2., INF]),
-     torch.tensor([[0.], [1.], [2.], [INF]]),
-     torch.tensor([[0., 0., 0., 0.],
-                   [0., 1., 2., INF],
-                   [0., 2., 4., INF],
-                   [0., INF, INF, INF]])),
-])
-def test_scale_tensor(tensor, scale, expected):
-    actual = scale_tensor(tensor, scale)
-    assert type(actual) == type(expected)
-    if torch.is_tensor(actual):
-        assert (actual == expected).all()
-    else:
-        assert actual == expected
-
-
-@pytest.mark.parametrize("m", [1, 2, 3, 4, 5])
-@pytest.mark.parametrize("n", [1, 2, 3, 4, 5, None])
-def test_eye_like(m, n):
-    x = torch.tensor(0.)
-    expected = torch.eye(m) if n is None else torch.eye(m, n)
-    actual = eye_like(x, m, n)
-    assert_equal(expected, actual,
-                 msg='Expected:\n{}\nActual:\n{}'.format(expected.cpu().numpy(), actual.cpu().numpy()))

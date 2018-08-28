@@ -208,4 +208,26 @@ if hasattr(torch, 'broadcast_tensors'):
             batch_shape, event_shape, validate_args=validate_args)
 
 
+def _einsum(equation, operands):
+    # work around torch.einsum performance issues
+    # see https://github.com/pytorch/pytorch/issues/10661
+    if equation == 'ac,abc->cb':
+        x, y = operands
+        return (x.unsqueeze(1) * y).sum(0).transpose(0, 1)
+    elif equation == 'abc,ac->cb':
+        y, x = operands
+        return (x.unsqueeze(1) * y).sum(0).transpose(0, 1)
+
+    # work around torch.einsum's limitation to 26 letters
+    symbols = sorted(set(equation) - set(',->'))
+    rename = dict(zip(symbols, 'abcdefghijklmnopqrstuvwxyz'))
+    equation = ''.join(rename.get(s, s) for s in equation)
+
+    # this workaround can be deleted after this issue is fixed in release:
+    # https://github.com/pytorch/pytorch/issues/7763
+    operands = [t.clone() for t in operands]
+
+    return _einsum._pyro_unpatched(equation, operands)
+
+
 __all__ = []
