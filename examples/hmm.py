@@ -10,7 +10,7 @@ To marginalize out discrete variables ``x`` in Pyro's SVI:
     admits tractable inference, i.e. the dependency graph among
     enumerated variables should have narrow treewidth.
 2. Annotate each target each such sample site in the model
-    with ``infer={"enumerate": "parallel", "expand": False}``
+    with ``infer={"enumerate": "parallel"}``
 3. Ensure your model can handle broadcasting of the sample values
     of those variables
 4. Use the ``TraceEnum_ELBO`` loss inside Pyro's ``SVI``.
@@ -79,7 +79,7 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
                 # value. If we wanted to record all x values, we could instead
                 # write x[t] = pyro.sample(...x[t-1]...).
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
-                                infer={"enumerate": "parallel", "expand": False})
+                                infer={"enumerate": "parallel"})
                 with tones_iarange:
                     pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x]),
                                 obs=sequences[batch, t])
@@ -111,7 +111,7 @@ def model_2(sequences, lengths, args, batch_size=None, include_prior=True):
         for t in range(lengths.max()):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
-                                infer={"enumerate": "parallel", "expand": False})
+                                infer={"enumerate": "parallel"})
                 # Note the broadcasting tricks here: to index probs_y on tensors x and y,
                 # we also need a final tensor for the tones dimension. This is conveniently
                 # provided by the iarange associated with that dimension.
@@ -156,9 +156,9 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
         for t in range(lengths.max()):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
-                                infer={"enumerate": "parallel", "expand": False})
+                                infer={"enumerate": "parallel"})
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
-                                infer={"enumerate": "parallel", "expand": False})
+                                infer={"enumerate": "parallel"})
                 with tones_iarange as tones:
                     pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[w, x, tones]),
                                 obs=sequences[batch, t])
@@ -204,10 +204,10 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
         for t in range(lengths.max()):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
-                                infer={"enumerate": "parallel", "expand": False})
+                                infer={"enumerate": "parallel"})
                 x = pyro.sample("x_{}".format(t),
                                 dist.Categorical(probs_x[w.unsqueeze(-1), x.unsqueeze(-1), hidden]),
-                                infer={"enumerate": "parallel", "expand": False})
+                                infer={"enumerate": "parallel"})
                 with tones_iarange as tones:
                     pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[w, x, tones]),
                                 obs=sequences[batch, t])
