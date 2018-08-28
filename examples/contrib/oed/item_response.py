@@ -27,7 +27,7 @@ learn the actual random effect coefficients.
 # Second parameter grouping represent individual effects
 # In this example, there are two individuals
 # Choose inverse gamma distribution to have mean ~20, variance ~1
-model = lmer_model(torch.tensor([10., 10.]), 2, torch.tensor([400., 400.]), 
+model = lmer_model(torch.tensor([10., 10.]), 2, torch.tensor([400., 400.]),
                    torch.tensor([8000., 8000.]), response="bernoulli")
 
 
@@ -62,7 +62,7 @@ def main(N, M):
     item_thetas = torch.tensor([[0., 0.], [0., .5], [0., 1.]])
     design_tensor = build_design_tensor(item_thetas, individual_assignment)
     print("Design tensor", design_tensor)
-    y = naive_rainforth_eig(model, design_tensor, observation_labels="y", 
+    y = naive_rainforth_eig(model, design_tensor, observation_labels="y",
                             target_labels=["w", "u", "G_u"], N=N, M=M)
     print("EIG", y)
 
