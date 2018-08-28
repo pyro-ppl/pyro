@@ -2,6 +2,7 @@ import argparse
 import torch
 from torch.nn.functional import softplus
 from torch.distributions.transforms import AffineTransform, SigmoidTransform
+import numpy as np
 
 import pyro
 from pyro import optim
@@ -18,6 +19,7 @@ from ba.guide import Ba_sigmoid_guide
 AB_test_reff_6d_10n_12p, AB_sigmoid_design_6d = rf_group_assignments(10)
 
 sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(torch.tensor([10., 2.5]), d, 10, {"w1": 2}).guide
+# svi_ba_guide = lambda: Ba_sigmoid_guide(torch.ones(12), 1, 10, {"w": 12}).guide
 
 
 def true_model(design):
@@ -46,24 +48,23 @@ def svi_guide(design):
     w1_mean = pyro.param("w1_mean", torch.zeros(batch_shape + (2,)))
     w1_sds = softplus(pyro.param("w1_sds", -5.*torch.ones(batch_shape + (2,))))
     pyro.sample("w1", dist.Normal(w1_mean, w1_sds).independent(1))
-    w2_mean = pyro.param("w2_mean", torch.zeros(batch_shape + (10,)))
-    w2_sds = softplus(pyro.param("w2_sds", -5.*torch.ones(batch_shape + (10,))))
+    w2_mean = torch.tensor(0.)
+    w2_sds = torch.tensor([1.]*5 + [10.]*5)
     pyro.sample("w2", dist.Normal(w2_mean, w2_sds).independent(1))
 
 
 def learn_posterior(y, d, model, svi_guide):
+    guide = lambda d: svi_guide({"y": y}, d, None, ["w"])
     vi_parameters = {
-        "guide": svi_guide, 
+        "guide": guide, 
         "optim": optim.Adam({"lr": 0.005}),
         "loss": Trace_ELBO(),
         "num_steps": 10000}
     conditioned_model = pyro.condition(model, data={"y": y})
     SVI(conditioned_model, **vi_parameters).run(d)
 
-    print("w1_mean", pyro.param("w1_mean"))
-    print("w1_sds", softplus(pyro.param("w1_sds")))
-    print("w2_mean", pyro.param("w2_mean"))
-    print("w2_sds", softplus(pyro.param("w2_sds")))
+    print(pyro.param("w1_mean"))
+    # print(pyro.param("w2_mean"))
     
     new_model = sigmoid_model(pyro.param("w1_mean"),
                               pyro.param("w1_sds"),
@@ -78,29 +79,54 @@ def learn_posterior(y, d, model, svi_guide):
 
 def main():
 
-    model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.),
-                          torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
-                          100.*torch.ones(10), 1000.*torch.ones(10), AB_sigmoid_design_6d)
-    ba_kwargs = {"num_samples": 100, "num_steps": 500, "guide": sigmoid_ba_guide(6), 
-                 "optim": optim.Adam({"lr": 0.05}), "final_num_samples": 500}
+    results = {'oed': [], 'rand': []}
 
-    for experiment_number in range(1, 6):
-        pyro.clear_param_store()
-        print("Experiment number", experiment_number)
+    for typ in ['oed', 'rand']:
+        print("Type", typ)
 
-        estimation_surface = barber_agakov_ape(model, AB_test_reff_6d_10n_12p, "y", "w1", **ba_kwargs)
-        print(estimation_surface)
+        for k in range(5):
+            print("Run", k)
 
-        # Run experiment
-        # d_star_index = torch.argmin(estimation_surface)
-        d_star_index = torch.randint(6, tuple())
-        d_star_index = int(d_star_index)
-        design = AB_test_reff_6d_10n_12p[d_star_index, ...]
-        y = true_model(design)
-        print("Chosen design", d_star_index)
-        print("y", y)
+            model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.),
+                                  torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
+                                  100.*torch.ones(10), 1000.*torch.ones(10), AB_sigmoid_design_6d)
+            my_guide = sigmoid_ba_guide(6)
+            ba_kwargs = {"num_samples": 100, "num_steps": 500, "guide": my_guide, 
+                         "optim": optim.Adam({"lr": 0.05}), "final_num_samples": 500}
 
-        model = learn_posterior(y, design, model, svi_guide)
+            for experiment_number in range(1, 6):
+                pyro.clear_param_store()
+                print("Experiment number", experiment_number)
+
+                estimation_surface = barber_agakov_ape(model, AB_test_reff_6d_10n_12p, "y", "w1", **ba_kwargs)
+                # print(estimation_surface)
+
+                # Run experiment
+                if typ == 'oed':
+                    d_star_index = torch.argmin(estimation_surface)
+                elif typ == 'rand':
+                    d_star_index = torch.randint(6, tuple())
+                d_star_index = int(d_star_index)
+                design = AB_test_reff_6d_10n_12p[d_star_index, ...]
+                y = true_model(design)
+                mu, scale_tril = my_guide({"y": y}, AB_test_reff_6d_10n_12p, None, ["w1"])
+                
+                model = sigmoid_model(mu[d_star_index, ...].detach(), torch.diag(scale_tril[d_star_index, ...].detach()), torch.tensor(0.),
+                                      torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
+                                      100.*torch.ones(10), 1000.*torch.ones(10), AB_sigmoid_design_6d)
+
+            results[typ].append((mu[d_star_index, ...].detach().numpy(), scale_tril[d_star_index, ...].detach().numpy()))
+
+    print(results)
+    import matplotlib.pyplot as plt
+    plt.figure()
+    x = np.arange(1, 5)
+    plt.plot(x, np.array([results['oed'][i] for i in range(5)]), color='o')
+    plt.plot(x, np.array([results['oed'][i] for i in range(5)]), color='b')
+    plt.axhline(1)
+    plt.axhline(-1)
+    plt.show()
+
 
 
 if __name__ == "__main__":

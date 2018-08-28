@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import math
 
 import pyro
 import pyro.distributions as dist
@@ -90,6 +91,8 @@ class Ba_sigmoid_guide(nn.Module):
         w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril)
         pyro.sample(target_label, w_dist)
 
+        return mu, scale_tril
+
 
 class Ba_nig_guide(nn.Module):
 
@@ -154,7 +157,8 @@ def tensorized_matrix_inverse(M):
         inv = inv/det.unsqueeze(-1).unsqueeze(-1)
         return inv
     else:
-        raise NotImplemented()
+        b = [t.inverse() for t in torch.functional.unbind(M)]
+        return torch.stack(b)
 
 
 def tensorized_tril(M):
@@ -167,7 +171,15 @@ def tensorized_tril(M):
         tril[..., 1, 1] = M[..., 2]
         return tril
     else:
-        raise NotImplemented()
+        x = M.shape[-1]
+        inv_trin = int(.5*(math.sqrt(8*x + 1) - 1))
+        tril = torch.zeros(M.shape[:-1] + (inv_trin, inv_trin))
+        k = 0
+        for i in range(inv_trin):
+            for j in range(i+1):
+                tril[..., i, j] = M[..., k]
+                k += 1
+        return tril
 
 
 def tensorized_diag(M):
@@ -179,7 +191,11 @@ def tensorized_diag(M):
         diag[..., 1, 1] = M[..., 1]
         return diag
     else:
-        raise NotImplemented()
+        x = M.shape[-1]
+        diag = torch.zeros(M.shape[:-1] + (x, x))
+        for i in range(x):
+            diag[..., i, i] = M[..., i]
+        return diag
 
 
 def tri_n(n):
