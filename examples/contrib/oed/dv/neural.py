@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.distributions.multivariate_normal import _batch_inverse as batch_inverse
 
 import pyro
 import pyro.poutine as poutine
@@ -48,7 +49,7 @@ class T_specialized(nn.Module):
 
         anneal = torch.diag(self.softplus(self.regu))
         xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
-        xtxi = tensorized_2_by_2_matrix_inverse(xtx)
+        xtxi = batch_inverse(xtx)
         mu = torch.matmul(xtxi, torch.matmul(design.transpose(-1, -2), y.unsqueeze(-1))).squeeze(-1)
 
         scale_tril = tensorized_2_by_2_tril(self.scale_tril)
@@ -66,17 +67,6 @@ class T_specialized(nn.Module):
         # guide distributions for w
         w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril)
         pyro.sample(target_label, w_dist)
-
-
-def tensorized_2_by_2_matrix_inverse(M):
-    det = M[..., 0, 0]*M[..., 1, 1] - M[..., 1, 0]*M[..., 0, 1]
-    inv = torch.zeros(M.shape)
-    inv[..., 0, 0] = M[..., 1, 1]
-    inv[..., 1, 1] = M[..., 0, 0]
-    inv[..., 0, 1] = -M[..., 0, 1]
-    inv[..., 1, 0] = -M[..., 1, 0]
-    inv = inv/det.unsqueeze(-1).unsqueeze(-1)
-    return inv
 
 
 def tensorized_2_by_2_tril(M):
