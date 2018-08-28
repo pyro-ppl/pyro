@@ -238,10 +238,10 @@ def main(args):
     pyro.clear_param_store()
     pyro.enable_validation(True)
 
-    # We'll train using Bayesian Baum-Welch, i.e. MAP estimation while
-    # marginalizing out the hidden state x. This is accomplished via an
-    # automatic guide that learns point estimates of all of our conditional
-    # probability tables, named probs_*.
+    # We'll train using MAP Baum-Welch, i.e. MAP estimation while marginalizing
+    # out the hidden state x. This is accomplished via an automatic guide that
+    # learns point estimates of all of our conditional probability tables,
+    # named probs_*.
     guide = AutoDelta(poutine.block(model, expose_fn=lambda msg: msg["name"].startswith("probs_")))
 
     # Enumeration requires a TraceEnum elbo and declaring the max_iarange_nesting.
@@ -285,7 +285,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Bayesian Baum-Welch learning Bach Chorales")
+    parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
     parser.add_argument("-n", "--num-steps", default=50, type=int)
