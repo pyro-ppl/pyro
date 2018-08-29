@@ -1594,8 +1594,56 @@ def test_elbo_enumerate_iarange_3(num_samples, num_masked, scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-@pytest.mark.parametrize('enumerate_w', [None, "parallel"])
-def test_elbo_enumerate_ordinals_1(enumerate_w, scale):
+def test_elbo_enumerate_ordinals_1(scale):
+    pyro.param("probs_a", torch.tensor([0.4, 0.6]),
+               constraint=constraints.simplex)
+    pyro.param("probs_b", torch.tensor([0.6, 0.4]),
+               constraint=constraints.simplex)
+    pyro.param("locs", torch.tensor([-1., 1.]))
+    pyro.param("scales", torch.tensor([1., 2.]),
+               constraint=constraints.positive)
+
+    @poutine.scale(scale=scale)
+    def auto_model(data):
+        probs_a = pyro.param("probs_a")
+        probs_b = pyro.param("probs_b")
+        locs = pyro.param("locs")
+        scales = pyro.param("scales")
+        a = pyro.sample("a", dist.Categorical(probs_a),
+                        infer={"enumerate": "parallel"})
+        with pyro.iarange("data", 2):
+            b = pyro.sample("b", dist.Categorical(probs_b),
+                            infer={"enumerate": "parallel"})
+            pyro.sample("obs", dist.Normal(locs[b], scales[a]),
+                        obs=data)
+
+    @poutine.scale(scale=scale)
+    def hand_model(data):
+        probs_a = pyro.param("probs_a")
+        probs_b = pyro.param("probs_b")
+        locs = pyro.param("locs")
+        scales = pyro.param("scales")
+        a = pyro.sample("a", dist.Categorical(probs_a),
+                        infer={"enumerate": "parallel"})
+        for i in pyro.irange("data", 2):
+            b = pyro.sample("b_{}".format(i), dist.Categorical(probs_b),
+                            infer={"enumerate": "parallel"})
+            pyro.sample("obs_{}".format(i), dist.Normal(locs[b], scales[a]),
+                        obs=data[i])
+
+    def guide(data):
+        pass
+
+    data = torch.tensor([0.5, 1.5])
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    auto_loss = elbo.differentiable_loss(auto_model, guide, data)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+    hand_loss = elbo.differentiable_loss(hand_model, guide, data)
+    _check_loss_and_grads(hand_loss, auto_loss)
+
+
+@pytest.mark.parametrize('scale', [1, 10])
+def test_elbo_enumerate_ordinals_2(scale):
     #  Guide    Model
     #    a -----> b
     #    |        |
