@@ -5,15 +5,15 @@ import math
 import pyro
 import pyro.distributions as dist
 
-from pyro.contrib.oed.util import rmv, rinverse
+from pyro.contrib.oed.util import rmv, rvv, rinverse, rdiag, rtril
 
 
 class Ba_lm_guide(nn.Module):
 
-    def __init__(self, regu_shape, scale_tril_shape, w_sizes):
+    def __init__(self, p, d, w_sizes):
         super(Ba_lm_guide, self).__init__()
-        self.regu = nn.Parameter(-2.*torch.ones(regu_shape))
-        self.scale_tril = nn.Parameter(10.*torch.ones(scale_tril_shape))
+        self.regu = nn.Parameter(-2.*torch.ones(p))
+        self.scale_tril = nn.Parameter(10.*torch.ones(d, p, p))
         self.w_sizes = w_sizes
         self.softplus = nn.Softplus()
 
@@ -25,9 +25,9 @@ class Ba_lm_guide(nn.Module):
         anneal = torch.diag(self.softplus(self.regu))
         xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
         xtxi = rinverse(xtx)
-        mu = torch.matmul(xtxi, torch.matmul(design.transpose(-1, -2), y.unsqueeze(-1))).squeeze(-1)
+        mu = rmv(xtxi, rmv(design.transpose(-1, -2), y))
 
-        scale_tril = tensorized_tril(self.scale_tril)
+        scale_tril = rtril(self.scale_tril)
 
         return mu, scale_tril
 
@@ -46,13 +46,12 @@ class Ba_lm_guide(nn.Module):
 
 class Ba_sigmoid_guide(nn.Module):
 
-    def __init__(self, prior_sds, d, n, w_sizes):
+    def __init__(self, p, d, n, w_sizes):
         super(Ba_sigmoid_guide, self).__init__()
-        p = prior_sds.shape[-1]
         self.inverse_sigmoid_scale = nn.Parameter(torch.ones(n))
         self.h1_weight = nn.Parameter(torch.ones(n))
         self.h1_bias = nn.Parameter(torch.zeros(n))
-        self.scale_tril = nn.Parameter(10.*torch.ones(d, tri_n(p)))
+        self.scale_tril = nn.Parameter(10.*torch.ones(d, p, p))
         self.regu = nn.Parameter(-2.*torch.ones(d, p))
         self.w_sizes = w_sizes
         self.softplus = nn.Softplus()
@@ -70,12 +69,12 @@ class Ba_sigmoid_guide(nn.Module):
         # TODO fix this
         design = design[..., :self.w_sizes[target_label]]
 
-        anneal = tensorized_diag(self.softplus(self.regu))
+        anneal = rdiag(self.softplus(self.regu))
         xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
         xtxi = rinverse(xtx)
         mu = rmv(xtxi, rmv(design.transpose(-1, -2), y_trans))
 
-        scale_tril = tensorized_tril(self.scale_tril)
+        scale_tril = rtril(self.scale_tril)
 
         return mu, scale_tril
 
@@ -96,12 +95,12 @@ class Ba_sigmoid_guide(nn.Module):
 
 class Ba_nig_guide(nn.Module):
 
-    def __init__(self, regu_shape, scale_tril_shape, tau_shape, w_sizes, mf=False):
+    def __init__(self, p, d, w_sizes, mf=False):
         super(Ba_nig_guide, self).__init__()
-        self.regu = nn.Parameter(-2.*torch.ones(regu_shape))
-        self.scale_tril = nn.Parameter(10.*torch.ones(scale_tril_shape))
-        self.alpha = nn.Parameter(100.*torch.ones(tau_shape))
-        self.b0 = nn.Parameter(100.*torch.ones(tau_shape))
+        self.regu = nn.Parameter(-2.*torch.ones(p))
+        self.scale_tril = nn.Parameter(10.*torch.ones(d, p, p))
+        self.alpha = nn.Parameter(100.*torch.ones(d))
+        self.b0 = nn.Parameter(100.*torch.ones(d))
         self.w_sizes = w_sizes
         self.mf = mf
         self.softplus = nn.Softplus()
@@ -114,11 +113,11 @@ class Ba_nig_guide(nn.Module):
         anneal = torch.diag(self.softplus(self.regu))
         xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
         xtxi = rinverse(xtx)
-        mu = torch.matmul(xtxi, torch.matmul(design.transpose(-1, -2), y.unsqueeze(-1))).squeeze(-1)
+        mu = rmv(xtxi, rmv(design.transpose(-1, -2), y))
 
-        scale_tril = tensorized_tril(self.scale_tril)
+        scale_tril = rtril(self.scale_tril)
 
-        yty = torch.matmul(y.unsqueeze(-2), y.unsqueeze(-1)).squeeze(-1).squeeze(-1)
+        yty = rvv(y, y)
         xtymu = torch.matmul(y.unsqueeze(-2), design).matmul(mu.unsqueeze(-1)).squeeze(-1).squeeze(-1)
         beta = self.b0 + .5*(yty - xtymu)
 
@@ -142,44 +141,3 @@ class Ba_nig_guide(nn.Module):
         else:
             w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril*obs_sd)
         pyro.sample(target_label, w_dist)
-
-
-def tensorized_tril(M):
-    if M.shape[-1] == 1:
-        return M.unsqueeze(-1)
-    if M.shape[-1] == 3:
-        tril = torch.zeros(M.shape[:-1] + (2, 2))
-        tril[..., 0, 0] = M[..., 0]
-        tril[..., 1, 0] = M[..., 1]
-        tril[..., 1, 1] = M[..., 2]
-        return tril
-    else:
-        x = M.shape[-1]
-        inv_trin = int(.5*(math.sqrt(8*x + 1) - 1))
-        tril = torch.zeros(M.shape[:-1] + (inv_trin, inv_trin))
-        k = 0
-        for i in range(inv_trin):
-            for j in range(i+1):
-                tril[..., i, j] = M[..., k]
-                k += 1
-        return tril
-
-
-def tensorized_diag(M):
-    if M.shape[-1] == 1:
-        return M.unsqueeze(-1)
-    if M.shape[-1] == 2:
-        diag = torch.zeros(M.shape[:-1] + (2, 2))
-        diag[..., 0, 0] = M[..., 0]
-        diag[..., 1, 1] = M[..., 1]
-        return diag
-    else:
-        x = M.shape[-1]
-        diag = torch.zeros(M.shape[:-1] + (x, x))
-        for i in range(x):
-            diag[..., i, i] = M[..., i]
-        return diag
-
-
-def tri_n(n):
-    return n*(n+1)/2
