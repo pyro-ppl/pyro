@@ -1,11 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
+import operator
 import warnings
 import weakref
 from collections import OrderedDict
 
 import torch
-from six.moves import queue
+from six.moves import queue, reduce
 
 import pyro
 import pyro.ops.jit
@@ -76,7 +77,13 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
             # Contract enumeration dimensions via sum-product algorithm (in log space).
             shapes = set(x.shape[enum_boundary:] for xs in log_factors.values() for x in xs)
             target_shape = broadcast_shape(*shapes) if enum_boundary else ()
-            marginal_cost = logsumproductexp(sum(log_factors.values(), []), target_shape)
+            scaled_log_factors = []
+            for t, log_factors_t in log_factors.items():
+                # Avoid double-counting due to the .sum() in the second contraction below.
+                denom = reduce(operator.mul, (f.size for f in upper - t), 1)
+                for log_factor in log_factors_t:
+                    scaled_log_factors.append(log_factor if denom == 1 else log_factor / denom)
+            marginal_cost = logsumproductexp(scaled_log_factors, target_shape)
 
             # Contract iarange dimensions via product (in log space).
             lower = frozenset.intersection(*log_factors.keys())
