@@ -264,6 +264,7 @@ def test_eig_and_plot(title, model, design, observation_label, target_label, arg
     ys = []
     names = []
     elapseds = []
+    print(title)
     for estimator, args in arglist:
         y, elapsed = time_eig(estimator, model, design, observation_label, target_label, args)
         ys.append(y)

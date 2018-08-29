@@ -37,7 +37,7 @@ def lexpand(A, *dimensions):
 
 def rexpand(A, *dimensions):
     """Expand tensor, adding new dimensions on right."""
-    return A.expand(A.shape + tuple(dimensions))
+    return A.view(A.shape + (1,)*len(dimensions)).expand(A.shape + tuple(dimensions))
 
 
 def rinverse(M):
