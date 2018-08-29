@@ -1,12 +1,11 @@
 import torch
 from torch import nn
-from torch.distributions.multivariate_normal import _batch_inverse as batch_inverse
 import math
 
 import pyro
 import pyro.distributions as dist
 
-from pyro.contrib.oed.util import rmv
+from pyro.contrib.oed.util import rmv, rinverse
 
 
 class Ba_lm_guide(nn.Module):
@@ -25,7 +24,7 @@ class Ba_lm_guide(nn.Module):
 
         anneal = torch.diag(self.softplus(self.regu))
         xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
-        xtxi = batch_inverse(xtx)
+        xtxi = rinverse(xtx)
         mu = torch.matmul(xtxi, torch.matmul(design.transpose(-1, -2), y.unsqueeze(-1))).squeeze(-1)
 
         scale_tril = tensorized_tril(self.scale_tril)
@@ -73,7 +72,7 @@ class Ba_sigmoid_guide(nn.Module):
 
         anneal = tensorized_diag(self.softplus(self.regu))
         xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
-        xtxi = batch_inverse(xtx)
+        xtxi = rinverse(xtx)
         mu = rmv(xtxi, rmv(design.transpose(-1, -2), y_trans))
 
         scale_tril = tensorized_tril(self.scale_tril)
@@ -114,7 +113,7 @@ class Ba_nig_guide(nn.Module):
 
         anneal = torch.diag(self.softplus(self.regu))
         xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
-        xtxi = batch_inverse(xtx)
+        xtxi = rinverse(xtx)
         mu = torch.matmul(xtxi, torch.matmul(design.transpose(-1, -2), y.unsqueeze(-1))).squeeze(-1)
 
         scale_tril = tensorized_tril(self.scale_tril)

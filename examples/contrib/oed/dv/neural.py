@@ -1,11 +1,10 @@
 import torch
 from torch import nn
-from torch.distributions.multivariate_normal import _batch_inverse as batch_inverse
 
 import pyro
 import pyro.poutine as poutine
 import pyro.distributions as dist
-from pyro.contrib.oed.util import rmv
+from pyro.contrib.oed.util import rmv, rinverse
 
 
 class T_neural(nn.Module):
@@ -51,10 +50,10 @@ class T_specialized(nn.Module):
 
         anneal = torch.diag(self.softplus(self.regu))
         xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
-        xtxi = batch_inverse(xtx)
+        xtxi = rinverse(xtx)
         mu = torch.matmul(xtxi, torch.matmul(design.transpose(-1, -2), y.unsqueeze(-1))).squeeze(-1)
 
-        scale_tril = tensorized_2_by_2_tril(self.scale_tril)
+        scale_tril = tensorized_tril(self.scale_tril)
 
         conditional_guide = pyro.condition(self.guide, data=theta_dict)
         cond_trace = poutine.trace(conditional_guide).get_trace(design, mu, scale_tril, target_label)
@@ -106,7 +105,7 @@ class T_sigmoid(nn.Module):
 
         anneal = tensorized_diag(self.softplus(self.regu))
         xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
-        xtxi = tensorized_matrix_inverse(xtx)
+        xtxi = rinverse(xtx)
         mu = rmv(xtxi, rmv(design.transpose(-1, -2), y_trans))
 
         scale_tril = tensorized_tril(self.scale_tril)

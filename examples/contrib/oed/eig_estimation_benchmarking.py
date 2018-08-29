@@ -119,7 +119,7 @@ def linear_model_ground_truth(model, design, observation_labels, target_labels, 
     target_indices = get_indices(target_labels, tensors=model.w_sds)
     target_posterior_covs = [S[target_indices, :][:, target_indices] for S in posterior_covs]
     if eig:
-        prior_entropy = H_prior(model, design, observation_labels, target_labels)
+        prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
         return prior_entropy - torch.tensor([0.5*torch.logdet(2*np.pi*np.e*C) for C in target_posterior_covs])
     else:
         return torch.tensor([0.5*torch.logdet(2*np.pi*np.e*C) for C in target_posterior_covs])
@@ -147,14 +147,14 @@ def mc_H_prior(model, design, label="w1", num_samples=1000):
 def vi_eig_lm(model, design, observation_labels, target_labels, *args, **kwargs):
     # **Only** applies to linear models - analytic prior entropy
     ape = vi_ape(model, design, observation_labels, target_labels, *args, **kwargs)
-    prior_entropy = H_prior(model, design, observation_labels, target_labels)
+    prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
     return prior_entropy - ape
 
 
 def ba_eig_lm(model, design, observation_labels, target_labels, *args, **kwargs):
     # **Only** applies to linear models - analytic prior entropy
     ape = barber_agakov_ape(model, design, observation_labels, target_labels, *args, **kwargs)
-    prior_entropy = H_prior(model, design, observation_labels, target_labels)
+    prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
     return prior_entropy - ape
 
 
@@ -178,14 +178,6 @@ naive_rainforth_eig.name = "Naive Rainforth"
 
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,arglist", [
-    ("Sigmoid link function",
-     sigmoid_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
-     [#(naive_rainforth_eig, [20000, 500, 500]),
-      (donsker_varadhan_eig, [200, 20000, sigmoid_dvnn, optim.Adam({"lr": 0.05}),
-        False, None, 500]),
-      (ba_eig_mc, [20, 1000, sigmoid_ba_guide(6), optim.Adam({"lr": 0.05}),
-        False, None, 500])
-      ]),
     ("A/B test linear model with known observation variance",
      basic_2p_linear_model_sds_10_2pt5, AB_test_11d_10n_2p, "y", "w",
      [(linear_model_ground_truth, []),
@@ -254,6 +246,14 @@ naive_rainforth_eig.name = "Naive Rainforth"
       (donsker_varadhan_eig, [400, 400, T_specialized((11, 3)), optim.Adam({"lr": 0.05}),
         False, None, 500]),
       (ba_eig_lm, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+        False, None, 500])
+      ]),
+    ("Sigmoid link function",
+     sigmoid_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
+     [#(naive_rainforth_eig, [20000, 500, 500]),
+      (donsker_varadhan_eig, [200, 4000, sigmoid_dvnn, optim.Adam({"lr": 0.05}),
+        False, None, 500]),
+      (ba_eig_mc, [20, 1000, sigmoid_ba_guide(6), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ])
 ])
