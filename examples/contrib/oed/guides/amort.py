@@ -4,6 +4,7 @@ import math
 
 import pyro
 import pyro.distributions as dist
+from pyro import poutine
 
 from pyro.contrib.oed.util import rmv, rvv, rinverse, rdiag, rtril
 
@@ -13,7 +14,7 @@ class Ba_lm_guide(nn.Module):
     def __init__(self, p, d, w_sizes):
         super(Ba_lm_guide, self).__init__()
         self.regu = nn.Parameter(-2.*torch.ones(p))
-        self.scale_tril = nn.Parameter(10.*torch.ones(d, p, p))
+        self.scale_tril = nn.Parameter(3.*torch.ones(d, p, p))
         self.w_sizes = w_sizes
         self.softplus = nn.Softplus()
 
@@ -141,3 +142,28 @@ class Ba_nig_guide(nn.Module):
         else:
             w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril*obs_sd)
         pyro.sample(target_label, w_dist)
+
+
+class GuideDV(nn.Module):
+    def __init__(self, guide):
+        super(GuideDV, self).__init__()
+        self.guide = guide
+
+    def forward(self, design, trace, observation_labels, target_labels):
+        # TODO fix this
+        observation_label = observation_labels[0]
+        target_label = target_labels[0]
+
+        trace.compute_log_prob()
+        prior_lp = trace.nodes[target_label]["log_prob"] 
+        y_dict = {observation_label: trace.nodes[observation_label]["value"]}
+        theta_dict = {target_label: trace.nodes[target_label]["value"]}
+
+        conditional_guide = pyro.condition(self.guide, data=theta_dict)
+        cond_trace = poutine.trace(conditional_guide).get_trace(
+                y_dict, design, observation_labels, target_labels)
+        cond_trace.compute_log_prob()
+
+        posterior_lp = cond_trace.nodes[target_label]["log_prob"]
+
+        return posterior_lp - prior_lp
