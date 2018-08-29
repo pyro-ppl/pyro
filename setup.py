@@ -84,6 +84,7 @@ setup(
         'opt_einsum>=2.1.3',
         'six>=1.10.0',
         'torch==0.4.0',
+        'tqdm>=4.25',
     ],
     extras_require={
         'extras': EXTRAS_REQUIRE,
