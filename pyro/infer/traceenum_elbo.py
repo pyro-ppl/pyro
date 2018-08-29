@@ -15,7 +15,6 @@ from pyro.distributions.util import broadcast_shape, is_identically_zero, scale_
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
 from pyro.infer.util import Dice, is_validation_enabled
-from pyro.ops.einsum import shared_intermediates
 from pyro.ops.sumproduct import logsumproductexp
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
@@ -42,57 +41,65 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
     enum_boundary = max(enum_dims) + 1
     assert enum_boundary <= 0
     marginal_costs = OrderedDict()
-    with shared_intermediates():
-        log_factors = OrderedDict()
-        scales = set()
-        for t, sites_t in cost_sites.items():
+    log_factors = OrderedDict()
+    scales = set()
+    for t, sites_t in cost_sites.items():
+        for site in sites_t:
+            if site["log_prob"].dim() <= -enum_boundary:
+                # For site do not depend on an enumerated variable, proceed as usual.
+                marginal_costs.setdefault(t, []).append(site["log_prob"])
+            else:
+                # For sites that depend on an enumerated variable, we need to apply
+                # the mask inside- and the scale outside- of the log expectation.
+                cost = scale_and_mask(site["unscaled_log_prob"], mask=site["mask"])
+                log_factors.setdefault(t, []).append(cost)
+                scales.add(site["scale"])
+    if not log_factors:
+        return marginal_costs
+
+    # TODO split log_factors into connected components wrt shared tensor dims.
+    upper = frozenset.union(*log_factors.keys())
+    iarange_dims = {}
+    for frame in upper:
+        other = iarange_dims.setdefault(frame.dim, frame.name)
+        if other != frame.name:
+            raise ValueError("Model enumeration does not support iarange dim recycling. "
+                             "Try setting distinct iarange dims for: '{}', '{}'."
+                             .format(frame.name, other))
+    for t, sites_t in enum_sites.items():
+        # TODO refine this coarse dependency ordering using time and tensor shapes.
+        if t <= upper:
             for site in sites_t:
-                if site["log_prob"].dim() <= -enum_boundary:
-                    # For site do not depend on an enumerated variable, proceed as usual.
-                    marginal_costs.setdefault(t, []).append(site["log_prob"])
-                else:
-                    # For sites that depend on an enumerated variable, we need to apply
-                    # the mask inside- and the scale outside- of the log expectation.
-                    cost = scale_and_mask(site["unscaled_log_prob"], mask=site["mask"])
-                    log_factors.setdefault(t, []).append(cost)
-                    scales.add(site["scale"])
-        if log_factors:
-            # TODO split log_factors into connected components wrt shared tensor dims.
-            upper = frozenset.union(*log_factors.keys())
-            for t, sites_t in enum_sites.items():
-                # TODO refine this coarse dependency ordering using time and tensor shapes.
-                if t <= upper:
-                    for site in sites_t:
-                        logprob = site["unscaled_log_prob"]
-                        log_factors.setdefault(t, []).append(logprob)
-                        scales.add(site["scale"])
-            # This is only correct if all enumerated sites share a common subsampling scale.
-            # Note that we use a cheap weak comparison by id rather than tensor value, because
-            # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
-            # only in value but at all derivatives.
-            if len(scales) != 1:
-                raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
-                                 "but found {} different scales.".format(len(scales)))
+                logprob = site["unscaled_log_prob"]
+                log_factors.setdefault(t, []).append(logprob)
+                scales.add(site["scale"])
+    # This is only correct if all enumerated sites share a common subsampling scale.
+    # Note that we use a cheap weak comparison by id rather than tensor value, because
+    # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
+    # only in value but at all derivatives.
+    if len(scales) != 1:
+        raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
+                         "but found {} different scales.".format(len(scales)))
 
-            # Contract enumeration dimensions via sum-product algorithm (in log space).
-            shapes = set(x.shape[enum_boundary:] for xs in log_factors.values() for x in xs)
-            target_shape = broadcast_shape(*shapes) if enum_boundary else ()
-            scaled_log_factors = []
-            for t, log_factors_t in log_factors.items():
-                # Avoid double-counting due to the .sum() in the second contraction below.
-                denom = reduce(operator.mul, (f.size for f in upper - t), 1)
-                for log_factor in log_factors_t:
-                    scaled_log_factors.append(log_factor if denom == 1 else log_factor / denom)
-            marginal_cost = logsumproductexp(scaled_log_factors, target_shape)
+    # Contract enumeration dimensions via sum-product algorithm (in log space).
+    shapes = set(x.shape[enum_boundary:] for xs in log_factors.values() for x in xs)
+    target_shape = broadcast_shape(*shapes) if enum_boundary else ()
+    scaled_log_factors = []
+    for t, log_factors_t in log_factors.items():
+        # Avoid double-counting due to the .sum() in the second contraction below.
+        denom = reduce(operator.mul, (f.size for f in upper - t), 1)
+        for log_factor in log_factors_t:
+            scaled_log_factors.append(log_factor if denom == 1 else log_factor / denom)
+    marginal_cost = logsumproductexp(scaled_log_factors, target_shape)
 
-            # Contract iarange dimensions via product (in log space).
-            lower = frozenset.intersection(*log_factors.keys())
-            for frame in upper - lower:
-                marginal_cost = marginal_cost.sum(frame.dim, keepdim=True)
-            while marginal_cost.dim() and marginal_cost.shape[0] == 1:
-                marginal_cost.squeeze_(0)
-            marginal_cost = scale_and_mask(marginal_cost, scale=scales.pop())
-            marginal_costs.setdefault(lower, []).append(marginal_cost)
+    # Contract iarange dimensions via product (in log space).
+    lower = frozenset.intersection(*log_factors.keys())
+    for frame in upper - lower:
+        marginal_cost = marginal_cost.sum(frame.dim, keepdim=True)
+    while marginal_cost.dim() and marginal_cost.shape[0] == 1:
+        marginal_cost = marginal_cost.squeeze(0)
+    marginal_cost = scale_and_mask(marginal_cost, scale=scales.pop())
+    marginal_costs.setdefault(lower, []).append(marginal_cost)
     return marginal_costs
 
 
