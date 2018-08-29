@@ -54,8 +54,7 @@ def rinverse(M):
         inv[..., 1, 1] = M[..., 0, 0]
         inv[..., 0, 1] = -M[..., 0, 1]
         inv[..., 1, 0] = -M[..., 1, 0]
-        inv = inv/det.unsqueeze(-1).unsqueeze(-1)
-        return inv
+        return inv/det.unsqueeze(-1).unsqueeze(-1)
     else:
         return _batch_inverse(M)
 

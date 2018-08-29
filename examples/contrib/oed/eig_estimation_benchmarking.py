@@ -16,10 +16,9 @@ from models.bayes_linear import (
     normal_inverse_gamma_linear_model, normal_inverse_gamma_guide, group_linear_model,
     group_normal_guide, sigmoid_model, rf_group_assignments
 )
-from dv.neural import T_specialized, T_sigmoid
-from ba.guide import Ba_lm_guide, Ba_nig_guide, Ba_sigmoid_guide
+from guides.amort import Ba_lm_guide, Ba_nig_guide, Ba_sigmoid_guide, GuideDV
 
-PLOT = True
+PLOT = False
 
 """
 Expected information gain estimation benchmarking
@@ -100,7 +99,6 @@ sigmoid_difficult_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10.,
                                             torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
                                             10.*torch.ones(10), 100.*torch.ones(10), AB_sigmoid_design_6d)
 sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(2, d, 10, {"w1": 2}).guide
-sigmoid_dvnn = T_sigmoid(torch.tensor([10., 2.5]), 6, 10, {"w1": 2})
 
 ########################################################################################
 # Aux
@@ -185,8 +183,8 @@ naive_rainforth_eig.name = "Naive Rainforth"
       (vi_eig_lm,
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig, [400, 800, T_specialized((11, 3)), optim.Adam({"lr": 0.025}),
-        False, None, 500]),
+      (donsker_varadhan_eig, [400, 800, GuideDV(basic_2p_ba_guide(11)),
+        optim.Adam({"lr": 0.025}), False, None, 500]),
       (ba_eig_lm, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
@@ -219,8 +217,8 @@ naive_rainforth_eig.name = "Naive Rainforth"
       (vi_eig_lm,
        [{"guide": group_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig, [400, 400, T_specialized((10, 3)), optim.Adam({"lr": 0.05}),
-        False, None, 500]),
+      (donsker_varadhan_eig, [400, 400, GuideDV(group_2p_ba_guide(10)),
+        optim.Adam({"lr": 0.05}), False, None, 500]),
       (ba_eig_lm, [20, 400, group_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
@@ -231,8 +229,8 @@ naive_rainforth_eig.name = "Naive Rainforth"
       (vi_eig_lm,
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig, [400, 400, T_specialized((10, 3)), optim.Adam({"lr": 0.05}),
-        False, None, 500]),
+      (donsker_varadhan_eig, [400, 400, GuideDV(basic_2p_ba_guide(10)),
+        optim.Adam({"lr": 0.05}), False, None, 500]),
       (ba_eig_lm, [20, 400, basic_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
@@ -243,16 +241,16 @@ naive_rainforth_eig.name = "Naive Rainforth"
       (vi_eig_lm,
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig, [400, 400, T_specialized((11, 3)), optim.Adam({"lr": 0.05}),
-        False, None, 500]),
+      (donsker_varadhan_eig, [400, 400, GuideDV(basic_2p_ba_guide(11)),
+        optim.Adam({"lr": 0.05}), False, None, 500]),
       (ba_eig_lm, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
     ("Sigmoid link function",
      sigmoid_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
      [#(naive_rainforth_eig, [20000, 500, 500]),
-      (donsker_varadhan_eig, [200, 4000, sigmoid_dvnn, optim.Adam({"lr": 0.05}),
-        False, None, 500]),
+      (donsker_varadhan_eig, [200, 4000, GuideDV(sigmoid_ba_guide(6)),
+        optim.Adam({"lr": 0.05}), False, None, 500]),
       (ba_eig_mc, [20, 1000, sigmoid_ba_guide(6), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ])
@@ -329,12 +327,12 @@ def time_eig(estimator, model, design, observation_label, target_label, args):
      basic_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w", 
      donsker_varadhan_eig, linear_model_ground_truth,
      {"num_steps": 400, "num_samples": 100, "optim": optim.Adam({"lr": 0.05}),
-      "T": T_specialized((2, 3)), "final_num_samples": 10000}, {}),
+      "T": GuideDV(basic_2p_ba_guide(2)), "final_num_samples": 10000}, {}),
     ("Donsker-Varadhan on circle",
      basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w", 
      donsker_varadhan_eig, linear_model_ground_truth,
      {"num_steps": 400, "num_samples": 400, "optim": optim.Adam({"lr": 0.05}),
-      "T": T_specialized((5, 3)), "final_num_samples": 10000}, {})
+      "T": GuideDV(basic_2p_ba_guide(5)), "final_num_samples": 10000}, {})
 ])
 def test_convergence(title, model, design, observation_label, target_label, est1, est2, kwargs1, kwargs2):
     """
