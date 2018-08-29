@@ -79,19 +79,19 @@ AB_test_reff_6d_10n_12p, AB_sigmoid_design_6d = rf_group_assignments(10)
 basic_2p_linear_model_sds_10_2pt5, basic_2p_guide = zero_mean_unit_obs_sd_lm(torch.tensor([10., 2.5]))
 _, basic_2p_guide_w1 = zero_mean_unit_obs_sd_lm(torch.tensor([10., 2.5]), coef_label="w1")
 basic_2p_linear_model_sds_10_0pt1, _ = zero_mean_unit_obs_sd_lm(torch.tensor([10., .1]))
-basic_2p_ba_guide = lambda d: Ba_lm_guide((2,), (d, 3), {"w": 2}).guide
+basic_2p_ba_guide = lambda d: Ba_lm_guide(2, d, {"w": 2}).guide
 group_2p_linear_model_sds_10_2pt5 = group_linear_model(torch.tensor(0.), torch.tensor([10.]), torch.tensor(0.), 
                                                        torch.tensor([2.5]), torch.tensor(1.))
 group_2p_guide = group_normal_guide(torch.tensor(1.), (1,), (1,))
-group_2p_ba_guide = lambda d: Ba_lm_guide((1,), (d, 1), {"w1": 1, "w2": 1}).guide
+group_2p_ba_guide = lambda d: Ba_lm_guide(1, d, {"w1": 1, "w2": 1}).guide
 nig_2p_linear_model_3_2 = normal_inverse_gamma_linear_model(torch.tensor(0.), torch.tensor([.1, .4]),
                                                             torch.tensor([3.]), torch.tensor([2.]))
 nig_2p_linear_model_15_14 = normal_inverse_gamma_linear_model(torch.tensor(0.), torch.tensor([.1, .4]),
                                                               torch.tensor([15.]), torch.tensor([14.]))
 
 nig_2p_guide = normal_inverse_gamma_guide((2,), mf=True)
-nig_2p_ba_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}).guide
-nig_2p_ba_mf_guide = lambda d: Ba_nig_guide((2,), (d, 3), (d,), {"w": 2}, mf=True).guide
+nig_2p_ba_guide = lambda d: Ba_nig_guide(2, d, {"w": 2}).guide
+nig_2p_ba_mf_guide = lambda d: Ba_nig_guide(2, d, {"w": 2}, mf=True).guide
 
 sigmoid_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.),
                                   torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
@@ -99,7 +99,7 @@ sigmoid_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), to
 sigmoid_difficult_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.),
                                             torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
                                             10.*torch.ones(10), 100.*torch.ones(10), AB_sigmoid_design_6d)
-sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(torch.tensor([10., 2.5]), d, 10, {"w1": 2}).guide
+sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(2, d, 10, {"w1": 2}).guide
 sigmoid_dvnn = T_sigmoid(torch.tensor([10., 2.5]), 6, 10, {"w1": 2})
 
 ########################################################################################

@@ -4,7 +4,7 @@ from torch import nn
 import pyro
 import pyro.poutine as poutine
 import pyro.distributions as dist
-from pyro.contrib.oed.util import rmv, rinverse
+from pyro.contrib.oed.util import rmv, rinverse, rdiag
 
 
 class T_neural(nn.Module):
@@ -103,7 +103,7 @@ class T_sigmoid(nn.Module):
         # TODO fix this
         design = design[..., :self.w_sizes[target_label]]
 
-        anneal = tensorized_diag(self.softplus(self.regu))
+        anneal = rdiag(self.softplus(self.regu))
         xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
         xtxi = rinverse(xtx)
         mu = rmv(xtxi, rmv(design.transpose(-1, -2), y_trans))
@@ -137,18 +137,6 @@ def tensorized_tril(M):
         tril[..., 1, 0] = M[..., 1]
         tril[..., 1, 1] = M[..., 2]
         return tril
-    else:
-        raise NotImplemented()
-
-
-def tensorized_diag(M):
-    if M.shape[-1] == 1:
-        return M.unsqueeze(-1)
-    if M.shape[-1] == 2:
-        diag = torch.zeros(M.shape[:-1] + (2, 2))
-        diag[..., 0, 0] = M[..., 0]
-        diag[..., 1, 1] = M[..., 1]
-        return diag
     else:
         raise NotImplemented()
 

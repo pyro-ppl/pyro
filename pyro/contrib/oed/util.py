@@ -58,3 +58,13 @@ def rinverse(M):
         return inv
     else:
         return _batch_inverse(M)
+
+
+def rdiag(v):
+    """Converts the rightmost dimension to a diagonal matrix."""
+    return rexpand(v, v.shape[-1])*torch.eye(v.shape[-1])
+
+
+def rtril(M, diagonal=0):
+    """Takes the lower-triangular of the rightmost 2 dimensions."""
+    return M*torch.tril(torch.ones(M.shape[-2], M.shape[-1]), diagonal=diagonal)
