@@ -12,12 +12,12 @@ from pyro.contrib.oed.util import rmv
 
 from models.bayes_linear import sigmoid_model, rf_group_assignments
 
-from ba.guide import Ba_sigmoid_guide
+from guides.amort import Ba_sigmoid_guide
 
 # Random effects designs
 AB_test_reff_6d_10n_12p, AB_sigmoid_design_6d = rf_group_assignments(10)
 
-sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(torch.tensor([10., 2.5]), d, 10, {"w1": 2}).guide
+sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(2, d, 10, {"w1": 2}).guide
 
 
 def true_model(design):
