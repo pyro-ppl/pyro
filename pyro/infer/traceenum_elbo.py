@@ -42,9 +42,8 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
     assert enum_boundary <= 0
     marginal_costs = OrderedDict()
     with shared_intermediates():
-        log_factors = []
+        log_factors = OrderedDict()
         scales = set()
-        ordinals = set()
         for t, sites_t in cost_sites.items():
             for site in sites_t:
                 if site["log_prob"].dim() <= -enum_boundary:
@@ -54,21 +53,18 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
                     # For sites that depend on an enumerated variable, we need to apply
                     # the mask inside- and the scale outside- of the log expectation.
                     cost = scale_and_mask(site["unscaled_log_prob"], mask=site["mask"])
-                    log_factors.append(cost)
+                    log_factors.setdefault(t, []).append(cost)
                     scales.add(site["scale"])
-                    ordinals.add(t)
         if log_factors:
             # TODO split log_factors into connected components wrt shared tensor dims.
-            lower = frozenset.intersection(*ordinals)
-            upper = frozenset.union(*ordinals)
+            upper = frozenset.union(*log_factors.keys())
             for t, sites_t in enum_sites.items():
                 # TODO refine this coarse dependency ordering using time and tensor shapes.
                 if t <= upper:
                     for site in sites_t:
                         logprob = site["unscaled_log_prob"]
-                        log_factors.append(logprob)
+                        log_factors.setdefault(t, []).append(logprob)
                         scales.add(site["scale"])
-                        ordinals.add(t)
             # This is only correct if all enumerated sites share a common subsampling scale.
             # Note that we use a cheap weak comparison by id rather than tensor value, because
             # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
@@ -78,11 +74,12 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
                                  "but found {} different scales.".format(len(scales)))
 
             # Contract enumeration dimensions via sum-product algorithm (in log space).
-            target_shape = (broadcast_shape(*set(x.shape[enum_boundary:] for x in log_factors))
-                            if enum_boundary else ())
-            marginal_cost = logsumproductexp(log_factors, target_shape)
+            shapes = set(x.shape[enum_boundary:] for xs in log_factors.values() for x in xs)
+            target_shape = broadcast_shape(*shapes) if enum_boundary else ()
+            marginal_cost = logsumproductexp(sum(log_factors.values(), []), target_shape)
 
             # Contract iarange dimensions via product (in log space).
+            lower = frozenset.intersection(*log_factors.keys())
             for frame in upper - lower:
                 marginal_cost = marginal_cost.sum(frame.dim, keepdim=True)
             while marginal_cost.dim() and marginal_cost.shape[0] == 1:
