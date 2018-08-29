@@ -1594,51 +1594,63 @@ def test_elbo_enumerate_iarange_3(num_samples, num_masked, scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-def test_elbo_enumerate_ordinals_1(scale):
-    pyro.param("probs_a", torch.tensor([0.4, 0.6]),
-               constraint=constraints.simplex)
-    pyro.param("probs_b", torch.tensor([0.6, 0.4]),
-               constraint=constraints.simplex)
+@pytest.mark.parametrize('inner_obs', [False, True])
+@pytest.mark.parametrize('outer_obs', [False, True])
+def test_elbo_enumerate_ordinals_1(outer_obs, inner_obs, scale):
+    #   a ---> outer_obs
+    #     \
+    # +-----\------------------+
+    # |       \                |
+    # | b ---> inner_obs   N=2 |
+    # +------------------------+
+    pyro.param("probs_a", torch.tensor([0.4, 0.6]), constraint=constraints.simplex)
+    pyro.param("probs_b", torch.tensor([0.6, 0.4]), constraint=constraints.simplex)
     pyro.param("locs", torch.tensor([-1., 1.]))
-    pyro.param("scales", torch.tensor([1., 2.]),
-               constraint=constraints.positive)
+    pyro.param("scales", torch.tensor([1., 2.]), constraint=constraints.positive)
+    outer_data = torch.tensor(2.0)
+    inner_data = torch.tensor([0.5, 1.5])
 
     @poutine.scale(scale=scale)
-    def auto_model(data):
+    def auto_model():
         probs_a = pyro.param("probs_a")
         probs_b = pyro.param("probs_b")
         locs = pyro.param("locs")
         scales = pyro.param("scales")
         a = pyro.sample("a", dist.Categorical(probs_a),
                         infer={"enumerate": "parallel"})
-        with pyro.iarange("data", 2):
+        if outer_obs:
+            pyro.sample("outer_obs", dist.Normal(0., scales[a]),
+                        obs=outer_data)
+        with pyro.iarange("inner", 2):
             b = pyro.sample("b", dist.Categorical(probs_b),
                             infer={"enumerate": "parallel"})
-            pyro.sample("obs", dist.Normal(locs[b], scales[a]),
-                        obs=data)
+            if inner_obs:
+                pyro.sample("inner_obs", dist.Normal(locs[b], scales[a]),
+                            obs=inner_data)
 
     @poutine.scale(scale=scale)
-    def hand_model(data):
+    def hand_model():
         probs_a = pyro.param("probs_a")
         probs_b = pyro.param("probs_b")
         locs = pyro.param("locs")
         scales = pyro.param("scales")
-        a = pyro.sample("a", dist.Categorical(probs_a),
-                        infer={"enumerate": "parallel"})
-        for i in pyro.irange("data", 2):
+        a = pyro.sample("a", dist.Categorical(probs_a), infer={"enumerate": "parallel"})
+        if outer_obs:
+            pyro.sample("outer_obs", dist.Normal(0., scales[a]), obs=outer_data)
+        for i in pyro.irange("inner", 2):
             b = pyro.sample("b_{}".format(i), dist.Categorical(probs_b),
                             infer={"enumerate": "parallel"})
-            pyro.sample("obs_{}".format(i), dist.Normal(locs[b], scales[a]),
-                        obs=data[i])
+            if inner_obs:
+                pyro.sample("inner_obs_{}".format(i), dist.Normal(locs[b], scales[a]),
+                            obs=inner_data[i])
 
-    def guide(data):
+    def guide():
         pass
 
-    data = torch.tensor([0.5, 1.5])
     elbo = TraceEnum_ELBO(max_iarange_nesting=1)
-    auto_loss = elbo.differentiable_loss(auto_model, guide, data)
+    auto_loss = elbo.differentiable_loss(auto_model, guide)
     elbo = TraceEnum_ELBO(max_iarange_nesting=0)
-    hand_loss = elbo.differentiable_loss(hand_model, guide, data)
+    hand_loss = elbo.differentiable_loss(hand_model, guide)
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
