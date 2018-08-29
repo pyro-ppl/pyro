@@ -6,58 +6,72 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 
-from pyro.contrib.oed.util import rmv, rvv, rinverse, rdiag, rtril
+from pyro.contrib.oed.util import (
+    get_indices, tensor_to_dict, rmv, rvv, rinverse, rdiag, rtril
+)
 
 
-class Ba_lm_guide(nn.Module):
+class LinearModelGuide(nn.Module):
 
-    def __init__(self, p, d, w_sizes):
-        super(Ba_lm_guide, self).__init__()
-        self.regu = nn.Parameter(-2.*torch.ones(p))
-        self.scale_tril = nn.Parameter(3.*torch.ones(d, p, p))
+    def __init__(self, d, w_sizes):
+        """
+        Guide for linear models. No amortisation happens over designs.
+        Amortisation over data is taken care of by analytic formulae for
+        linear models (heavy use of truth).
+
+        :param int d: the number of designs 
+        :param dict w_sizes: map from variable string names to int.
+        """
+        super(LinearModelGuide, self).__init__()
+        # Represent each parameter group as independent Gaussian
+        # Making a weak mean-field assumption
+        # To avoid this- combine labels
+        self.tikhonov_diag = nn.Parameter(-2.*torch.ones(sum(w_sizes.values())))
+        self.scale_tril = {l: nn.Parameter(3.*torch.ones(d, p, p)) for l, p in w_sizes.items()}
         self.w_sizes = w_sizes
         self.softplus = nn.Softplus()
 
-    def forward(self, y, design, target_label):
+    def forward(self, y_dict, design, target_labels):
 
-        # TODO fix this
-        design = design[..., :self.w_sizes[target_label]]
+        y = torch.cat(list(y_dict.values()), dim=-1)
+        return self.linear_model_formula(y, design, target_labels)
 
-        anneal = torch.diag(self.softplus(self.regu))
-        xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
+    def linear_model_formula(self, y, design, target_labels):
+
+        tikhonov_diag = torch.diag(self.softplus(self.tikhonov_diag))
+        xtx = torch.matmul(design.transpose(-1, -2), design) + tikhonov_diag
         xtxi = rinverse(xtx)
         mu = rmv(xtxi, rmv(design.transpose(-1, -2), y))
 
-        scale_tril = rtril(self.scale_tril)
+        # Extract sub-indices
+        mu = tensor_to_dict(self.w_sizes, mu, subset=target_labels)
+        scale_tril = {l: rtril(self.scale_tril[l]) if l in target_labels}
 
         return mu, scale_tril
 
     def guide(self, y_dict, design, observation_labels, target_labels):
 
-        target_label = target_labels[0]
         pyro.module("ba_guide", self)
 
-        y = y_dict["y"]
-        mu, scale_tril = self.forward(y, design, target_label)
+        # Returns two dicts from labels -> tensors
+        mu, scale_tril = self.forward(y_dict, design, target_labels)
 
-        # guide distributions for w
-        w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril)
-        pyro.sample(target_label, w_dist)
+        for l in target_labels:
+            w_dist = dist.MultivariateNormal(mu[l], scale_tril=scale_tril[l])
+            pyro.sample(l, w_dist)
 
 
-class Ba_sigmoid_guide(nn.Module):
+class SigmoidGuide(LinearModelGuide):
 
-    def __init__(self, p, d, n, w_sizes):
-        super(Ba_sigmoid_guide, self).__init__()
+    def __init__(self, d, n, w_sizes):
+        super(SigmoidGuide, self).__init__(d, w_sizes)
         self.inverse_sigmoid_scale = nn.Parameter(torch.ones(n))
         self.h1_weight = nn.Parameter(torch.ones(n))
         self.h1_bias = nn.Parameter(torch.zeros(n))
-        self.scale_tril = nn.Parameter(10.*torch.ones(d, p, p))
-        self.regu = nn.Parameter(-2.*torch.ones(d, p))
-        self.w_sizes = w_sizes
-        self.softplus = nn.Softplus()
 
-    def forward(self, y, design, target_label):
+    def forward(self, y_dict, design, target_labels):
+
+        y = torch.cat(list(y_dict.values()), dim=-1)
 
         # Approx invert transformation on y in expectation
         y, y1m = y.clamp(1e-35, 1), (1.-y).clamp(1e-35, 1)
@@ -67,81 +81,46 @@ class Ba_sigmoid_guide(nn.Module):
         hidden = self.softplus(y_trans)
         y_trans = y_trans + hidden * self.h1_weight + self.h1_bias
 
-        # TODO fix this
-        design = design[..., :self.w_sizes[target_label]]
-
-        anneal = rdiag(self.softplus(self.regu))
-        xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
-        xtxi = rinverse(xtx)
-        mu = rmv(xtxi, rmv(design.transpose(-1, -2), y_trans))
-
-        scale_tril = rtril(self.scale_tril)
-
-        return mu, scale_tril
-
-    def guide(self, y_dict, design, observation_labels, target_labels):
-
-        target_label = target_labels[0]
-        pyro.module("ba_guide", self)
-
-        y = y_dict["y"]
-        mu, scale_tril = self.forward(y, design, target_label)
-
-        # guide distributions for w
-        w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril)
-        pyro.sample(target_label, w_dist)
-
-        return mu, scale_tril
+        return self.linear_model_formula(y_trans, design, target_labels)
 
 
-class Ba_nig_guide(nn.Module):
+class NormalInverseGammaGuide(LinearModelGuide):
 
-    def __init__(self, p, d, w_sizes, mf=False):
-        super(Ba_nig_guide, self).__init__()
-        self.regu = nn.Parameter(-2.*torch.ones(p))
-        self.scale_tril = nn.Parameter(10.*torch.ones(d, p, p))
+    def __init__(self, d, w_sizes, mf=False, tau_label="tau"):
+        super(NormalInverseGammaGuide, self).__init__(d, w_sizes)
         self.alpha = nn.Parameter(100.*torch.ones(d))
         self.b0 = nn.Parameter(100.*torch.ones(d))
-        self.w_sizes = w_sizes
         self.mf = mf
-        self.softplus = nn.Softplus()
+        self.tau_label = tau_label
 
-    def forward(self, y, design, target_label):
+    def forward(self, y_dict, design, target_labels):
 
-        # TODO fix this
-        design = design[..., :self.w_sizes[target_label]]
+        y = torch.cat(list(y_dict.values()), dim=-1)
 
-        anneal = torch.diag(self.softplus(self.regu))
-        xtx = torch.matmul(design.transpose(-1, -2), design) + anneal
-        xtxi = rinverse(xtx)
-        mu = rmv(xtxi, rmv(design.transpose(-1, -2), y))
-
-        scale_tril = rtril(self.scale_tril)
+        mu, scale_tril = self.linear_model_formula(y, design, target_labels)
 
         yty = rvv(y, y)
-        xtymu = torch.matmul(y.unsqueeze(-2), design).matmul(mu.unsqueeze(-1)).squeeze(-1).squeeze(-1)
-        beta = self.b0 + .5*(yty - xtymu)
+        ytxmu = rvv(y, rmv(design, mu))
+        beta = self.b0 + .5*(yty - ytxmu)
 
         return mu, scale_tril, self.alpha, beta
 
     def guide(self, y_dict, design, observation_labels, target_labels):
 
-        target_label = target_labels[0]
         pyro.module("ba_guide", self)
 
-        y = y_dict["y"]
-        mu, scale_tril, alpha, beta = self.forward(y, design, target_label)
+        mu, scale_tril, alpha, beta = self.forward(y_dict, design, target_labels)
 
         tau_dist = dist.Gamma(alpha, beta)
-        tau = pyro.sample("tau", tau_dist)
+        tau = pyro.sample(self.tau_label, tau_dist)
         obs_sd = 1./tau.sqrt().unsqueeze(-1).unsqueeze(-1)
 
-        # guide distributions for w
-        if self.mf:
-            w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril)
-        else:
-            w_dist = dist.MultivariateNormal(mu, scale_tril=scale_tril*obs_sd)
-        pyro.sample(target_label, w_dist)
+        for l in target_labels:
+            if self.mf:
+                w_dist = dist.MultivariateNormal(mu[l], scale_tril=scale_tril[l])
+            else:
+                w_dist = dist.MultivariateNormal(mu[l], scale_tril=scale_tril[l]*obs_sd)
+            pyro.sample(l, w_dist)
 
 
 class GuideDV(nn.Module):
@@ -150,20 +129,17 @@ class GuideDV(nn.Module):
         self.guide = guide
 
     def forward(self, design, trace, observation_labels, target_labels):
-        # TODO fix this
-        observation_label = observation_labels[0]
-        target_label = target_labels[0]
 
         trace.compute_log_prob()
-        prior_lp = trace.nodes[target_label]["log_prob"] 
-        y_dict = {observation_label: trace.nodes[observation_label]["value"]}
-        theta_dict = {target_label: trace.nodes[target_label]["value"]}
+        prior_lp = sum(trace.nodes[l]["log_prob"] for l in target_labels)
+        y_dict = {l: trace.nodes[l]["value"] for l in observation_labels}
+        theta_dict = {l: trace.nodes[l]["value"] for l in target_labels}
 
         conditional_guide = pyro.condition(self.guide, data=theta_dict)
         cond_trace = poutine.trace(conditional_guide).get_trace(
                 y_dict, design, observation_labels, target_labels)
         cond_trace.compute_log_prob()
 
-        posterior_lp = cond_trace.nodes[target_label]["log_prob"]
+        posterior_lp = sum(cond_trace.nodes[l]["log_prob"] for l in target_labels)
 
         return posterior_lp - prior_lp

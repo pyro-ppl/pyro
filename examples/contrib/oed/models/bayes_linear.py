@@ -233,6 +233,8 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         raise ValueError("Unknown response distribution: '{}'".format(response))
 
 
+# TODO replace this guide with one allowing correlation between
+# regression coefficients (necessary!)
 def normal_inv_gamma_family_guide(design, obs_sd, w_sizes, mf=False):
     """Normal inverse Gamma family guide.
 
