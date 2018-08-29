@@ -134,8 +134,9 @@ def opt_sumproduct(factors, target_shape, backend='torch'):
         assert len(packed_factors[-1].shape) == len(packed_names[-1])
 
     # Contract packed tensors.
-    expr = '{}->{}'.format(','.join(''.join(names) for names in packed_names),
-                           ''.join(target_names))
+    inputs = ','.join(''.join(names) for names in packed_names)
+    output = ''.join(target_names)
+    expr = inputs + '->' + output
     packed_result = contract(expr, *packed_factors, backend=backend)
 
     # Unpack result.
