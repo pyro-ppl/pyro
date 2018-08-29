@@ -11,7 +11,6 @@ from pyro.contrib.oed.eig import barber_agakov_ape
 from pyro.contrib.oed.util import rmv
 
 from models.bayes_linear import sigmoid_model, rf_group_assignments
-
 from guides.amort import Ba_sigmoid_guide
 
 # Random effects designs

@@ -7,12 +7,25 @@ def get_indices(labels, sizes=None, tensors=None):
     start = 0
     for label in labels:
         if sizes is not None:
-            end = start+sizes[label][0]
+            end = start+sizes[label]
         else:
             end = start+tensors[label].shape[0]
         indices.extend(range(start, end))
         start = end
     return torch.tensor(indices)
+
+
+def tensor_to_dict(sizes, tensor, subset=None):
+    if subset is None:
+        subset = sizes.keys()
+    start = 0
+    out = {}
+    for label, size in sizes.items():
+        end = start + size
+        if label in subset:
+            out[label] = tensor[..., start:end]
+        start = end
+    return out
 
 
 def rmm(A, B):

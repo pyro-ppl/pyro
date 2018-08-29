@@ -134,11 +134,14 @@ def lm_H_prior(model, design, observation_labels, target_labels):
     return 0.5*torch.logdet(2*np.pi*np.e*target_prior_covs)
 
 
-def mc_H_prior(model, design, label="w1", num_samples=1000):
+def mc_H_prior(model, design, observation_labels, target_labels, num_samples=1000):
+    if isinstance(target_labels, str):
+        target_labels = [target_labels]
+
     expanded_design= design.expand((num_samples, ) + design.shape)
     trace = pyro.poutine.trace(model).get_trace(expanded_design)
     trace.compute_log_prob()
-    lp = trace.nodes[label]["log_prob"]
+    lp = sum(trace.nodes[l]["log_prob"] for l in target_labels)
     return -lp.sum(0)/num_samples
 
 
@@ -157,10 +160,11 @@ def ba_eig_lm(model, design, observation_labels, target_labels, *args, **kwargs)
 
 
 def ba_eig_mc(model, design, observation_labels, target_labels, *args, **kwargs):
+    # Compute the prior entropy my Monte Carlo, the uses barber_agakov_ape
     if "num_hprior_samples" in kwargs:
-        hprior = mc_H_prior(model, design, kwargs["num_hprior_samples"])
+        hprior = mc_H_prior(model, design, observation_labels, target_labels, kwargs["num_hprior_samples"])
     else:
-        hprior = mc_H_prior(model, design)
+        hprior = mc_H_prior(model, design, observation_labels, target_labels)
     return hprior - barber_agakov_ape(model, design, observation_labels, target_labels, *args, **kwargs)
 
 
