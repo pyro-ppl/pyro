@@ -76,8 +76,8 @@ def initialize_progbar(warmup_steps, num_samples, min_width=100, max_width=120, 
     """
     Initialize progress bar using :class:`~tqdm.tqdm`.
 
-    :param int warmup_steps: Number of warmup steps
-    :param int num_samples: Number of MCMC samples
+    :param int warmup_steps: Number of warmup steps.
+    :param int num_samples: Number of MCMC samples.
     :param int min_width: Minimum column width of the bar.
     :param int max_width: Maximum column width of the bar.
     :param int pos: Position of the bar (e.g. in the case of
@@ -86,7 +86,7 @@ def initialize_progbar(warmup_steps, num_samples, min_width=100, max_width=120, 
     description = "Warmup" if pos is None else "Warmup [{}]".format(pos)
     progress_bar = tqdm(total=warmup_steps + num_samples, desc=description,
                         position=pos, file=sys.stderr)
-    if progress_bar.ncols:
+    if progress_bar.ncols is not None:
         progress_bar.ncols = min(min_width, progress_bar.ncols)
         progress_bar.ncols = max(max_width, progress_bar.ncols)
     return progress_bar
