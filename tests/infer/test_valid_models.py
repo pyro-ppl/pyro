@@ -1095,22 +1095,7 @@ def test_enum_sequential_in_model_error():
     assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=0))
 
 
-def test_enum_in_model_multi_scale_error():
-
-    @config_enumerate(default="parallel")
-    def model():
-        p = pyro.param("p", torch.tensor([0.2, 0.8]))
-        x = pyro.sample("x", dist.Bernoulli(0.3)).long()
-        with poutine.scale(scale=2.):
-            pyro.sample("y", dist.Bernoulli(p[x]), obs=torch.tensor(0.))
-
-    def guide():
-        pass
-
-    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=0))
-
-
-def test_enum_in_model_iarange_reuse_error():
+def test_enum_in_model_iarange_reuse_ok():
 
     @config_enumerate(default="parallel")
     def model():
@@ -1125,7 +1110,22 @@ def test_enum_in_model_iarange_reuse_error():
     def guide():
         pass
 
-    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=1))
+    assert_ok(model, guide, TraceEnum_ELBO(max_iarange_nesting=1))
+
+
+def test_enum_in_model_multi_scale_error():
+
+    @config_enumerate(default="parallel")
+    def model():
+        p = pyro.param("p", torch.tensor([0.2, 0.8]))
+        x = pyro.sample("x", dist.Bernoulli(0.3)).long()
+        with poutine.scale(scale=2.):
+            pyro.sample("y", dist.Bernoulli(p[x]), obs=torch.tensor(0.))
+
+    def guide():
+        pass
+
+    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=0))
 
 
 def test_enum_in_model_diamond_error():

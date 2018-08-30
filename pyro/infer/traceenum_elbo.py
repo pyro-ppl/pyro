@@ -19,15 +19,22 @@ from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
 
-def _check_model_enumeration_requirements(upper, scales):
-    # Check that enumerated iaranges do not have conflicting dims.
-    iarange_dims = {}
-    for frame in upper:
-        other = iarange_dims.setdefault(frame.dim, frame.name)
-        if other != frame.name:
-            raise ValueError("Model enumeration does not support iarange dim recycling. "
-                             "Try setting distinct iarange dims for: '{}', '{}'."
-                             .format(frame.name, other))
+def _check_model_enumeration_requirements(log_factors, scales):
+    # Check for absence of diamonds, i.e. collider iaranges.
+    for t in log_factors:
+        for u in log_factors:
+            if not (u < t):
+                continue
+            for v in log_factors:
+                if not (v < t):
+                    continue
+                if u <= v or v <= u:
+                    continue
+                left = ', '.join(sorted(f.name for f in u - v))
+                right = ', '.join(sorted(f.name for f in v - u))
+                raise ValueError("Expected tree-structured iarange nesting, but found "
+                                 "dependencies on independent iarange sets [{}] and [{}]"
+                                 .format(left, right))
 
     # Check that all enumerated sites share a common subsampling scale.
     # Note that we use a cheap weak comparison by id rather than tensor value, because
@@ -39,34 +46,40 @@ def _check_model_enumeration_requirements(upper, scales):
 
 
 def _contract(log_factors, enum_boundary):
-    # Iteratively eliminate iarange dimensions by performing
-    # logsumproductexp() then .sum() contractions.
-    # The logsumproductexp() contractions eliminate enumeration dims;
-    # the .sum() contractions eliminate iarange dims.
-    lower = frozenset.intersection(*log_factors.keys())
-    ordinal = frozenset.union(*log_factors.keys())
-    for frame in sorted(ordinal - lower, key=lambda frame: frame.dim):
-        terms = [x for t in list(log_factors.keys())
-                 if frame in t for x in log_factors.pop(t)]
+    # First close the set of ordinals under intersection (greatest lower bound),
+    # ensuring that the ordinals are arranged in a tree structure.
+    pending = list(log_factors)
+    while pending:
+        t = pending.pop()
+        for u in list(log_factors):
+            tu = t & u
+            if tu not in log_factors:
+                log_factors[tu] = []
+                pending.append(tu)
+
+    # Recursively combine terms in different iarange contexts.
+    while True:
+        leaf = max(reversed(log_factors), key=len)
+        terms = log_factors.pop(leaf)
+
+        # Eliminate enumeration dims via a logsumproductexp() contraction.
         remaining_boundary = (min(-x.dim() for xs in log_factors.values() for x in xs)
                               if log_factors else enum_boundary)
         assert remaining_boundary <= enum_boundary
         shape = (broadcast_shape(*set(x.shape[remaining_boundary:] for x in terms))
                  if remaining_boundary else ())
         term = logsumproductexp(terms, shape)
-        term = term.sum(frame.dim, keepdim=True)
-        ordinal = ordinal - frozenset([frame])
-        log_factors.setdefault(ordinal, []).append(term)
+        if not log_factors:
+            break
 
-    # Perform a final logsumproductexp() contraction to eliminate remaining
-    # enumeration dimensions.
-    assert ordinal == lower
-    terms = log_factors.pop(ordinal)
-    assert terms and not log_factors
-    shape = (broadcast_shape(*set(x.shape[enum_boundary:] for x in terms))
-             if enum_boundary else ())
-    term = logsumproductexp(terms, shape)
-    return ordinal, term
+        # Eliminate iarange dims via .sum().
+        frames = frozenset.intersection(*(leaf - t for t in log_factors if t < leaf))
+        assert frames
+        for frame in frames:
+            term = term.sum(frame.dim, keepdim=True)
+        log_factors[leaf - frozenset([frame])].append(term)
+
+    return leaf, term
 
 
 # TODO move this logic into a poutine
@@ -104,16 +117,14 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
                 log_factors.setdefault(t, []).append(cost)
                 scales.add(site["scale"])
     if log_factors:
-        # TODO split log_factors into connected components wrt shared tensor dims.
-        upper = frozenset.union(*log_factors.keys())
         for t, sites_t in enum_sites.items():
             # TODO refine this coarse dependency ordering using time and tensor shapes.
-            if t <= upper:
+            if any(t <= u for u in log_factors):
                 for site in sites_t:
                     logprob = site["unscaled_log_prob"]
                     log_factors.setdefault(t, []).append(logprob)
                     scales.add(site["scale"])
-        _check_model_enumeration_requirements(upper, scales)
+        _check_model_enumeration_requirements(log_factors, scales)
         t, log_factor = _contract(log_factors, enum_boundary)
         log_factor = scale_and_mask(log_factor, scale=scales.pop())
         marginal_costs.setdefault(t, []).append(log_factor)
