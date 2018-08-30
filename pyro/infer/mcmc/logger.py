@@ -18,7 +18,7 @@ class TqdmHandler(logging.StreamHandler):
         try:
             msg = self.format(record)
             self.flush()
-            tqdm.write(msg, file=sys.stdout)
+            tqdm.write(msg, file=sys.stderr)
         except (KeyboardInterrupt, SystemExit):
             raise
         except Exception:
@@ -85,7 +85,7 @@ def initialize_progbar(warmup_steps, num_samples, min_width=100, max_width=120, 
     """
     description = "Warmup" if pos is None else "Warmup [{}]".format(pos)
     progress_bar = tqdm(total=warmup_steps + num_samples, desc=description,
-                        position=pos, file=sys.stdout)
+                        position=pos, file=sys.stderr)
     if progress_bar.ncols:
         progress_bar.ncols = min(min_width, progress_bar.ncols)
         progress_bar.ncols = max(max_width, progress_bar.ncols)
