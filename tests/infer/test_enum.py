@@ -1691,6 +1691,7 @@ def test_elbo_hmm_growth():
         assert cost[-1 - dt - dt] - 2 * cost[-1 - dt] + cost[-1] == 0, '{} cost is not linear'.format(key)
 
 
+@pytest.mark.xfail(reason="flakey on travis due to nondeterministic computations")
 def test_elbo_dbn_growth():
     pyro.clear_param_store()
     elbo = TraceEnum_ELBO(max_iarange_nesting=0)
