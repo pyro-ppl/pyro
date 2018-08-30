@@ -20,6 +20,25 @@ from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
 
+def _check_model_enumeration_requirements(upper, scales):
+    # Check that enumerated iaranges do not have conflicting dims.
+    iarange_dims = {}
+    for frame in upper:
+        other = iarange_dims.setdefault(frame.dim, frame.name)
+        if other != frame.name:
+            raise ValueError("Model enumeration does not support iarange dim recycling. "
+                             "Try setting distinct iarange dims for: '{}', '{}'."
+                             .format(frame.name, other))
+
+    # Check that all enumerated sites share a common subsampling scale.
+    # Note that we use a cheap weak comparison by id rather than tensor value, because
+    # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
+    # only in value but at all derivatives.
+    if len(scales) != 1:
+        raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
+                         "but found {} different scales.".format(len(scales)))
+
+
 # TODO move this logic into a poutine
 def _compute_model_costs(model_trace, guide_trace, ordering):
     # Collect model sites that may have been enumerated in the model.
@@ -55,17 +74,10 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
                 log_factors.setdefault(t, []).append(cost)
                 scales.add(site["scale"])
     if not log_factors:
-        return marginal_costs
+        return marginal_costs  # No cost terms depend on an enumerated variable.
 
     # TODO split log_factors into connected components wrt shared tensor dims.
     upper = frozenset.union(*log_factors.keys())
-    iarange_dims = {}
-    for frame in upper:
-        other = iarange_dims.setdefault(frame.dim, frame.name)
-        if other != frame.name:
-            raise ValueError("Model enumeration does not support iarange dim recycling. "
-                             "Try setting distinct iarange dims for: '{}', '{}'."
-                             .format(frame.name, other))
     for t, sites_t in enum_sites.items():
         # TODO refine this coarse dependency ordering using time and tensor shapes.
         if t <= upper:
@@ -73,21 +85,15 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
                 logprob = site["unscaled_log_prob"]
                 log_factors.setdefault(t, []).append(logprob)
                 scales.add(site["scale"])
-    # This is only correct if all enumerated sites share a common subsampling scale.
-    # Note that we use a cheap weak comparison by id rather than tensor value, because
-    # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
-    # only in value but at all derivatives.
-    if len(scales) != 1:
-        raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
-                         "but found {} different scales.".format(len(scales)))
+    _check_model_enumeration_requirements(upper, scales)
 
     # Contract enumeration dimensions via sum-product algorithm (in log space).
     shapes = set(x.shape[enum_boundary:] for xs in log_factors.values() for x in xs)
     target_shape = broadcast_shape(*shapes) if enum_boundary else ()
     scaled_log_factors = []
     for t, log_factors_t in log_factors.items():
-        # Avoid double-counting due to the .sum() in the second contraction below.
-        denom = reduce(operator.mul, (f.size for f in upper - t), 1)
+        # Avoid double-counting due to the .sum() in the iarange contraction below.
+        denom = reduce(operator.mul, (target_shape[frame.dim] for frame in upper - t), 1)
         for log_factor in log_factors_t:
             scaled_log_factors.append(log_factor if denom == 1 else log_factor / denom)
     marginal_cost = logsumproductexp(scaled_log_factors, target_shape)
