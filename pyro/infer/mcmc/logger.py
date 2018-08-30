@@ -86,13 +86,13 @@ def initialize_progbar(warmup_steps, num_samples, min_width=100, max_width=120, 
     """
     description = "Warmup" if pos is None else "Warmup [{}]".format(pos)
     total_steps = warmup_steps + num_samples
-    progress_bar = tqdm(total=total_steps, desc=description,
-                        position=pos, file=sys.stderr)
-    # Reduce number of updates for CI logs
+    # Disable progress bar in "CI"
     # (see https://github.com/travis-ci/travis-ci/issues/1337).
-    if "CI" in os.environ:
-        progress_bar.miniters = total_steps // 5
-    if progress_bar.ncols is not None:
+    disable = "CI" in os.environ
+    progress_bar = tqdm(total=total_steps, desc=description,
+                        position=pos, file=sys.stderr, disable=disable)
+
+    if getattr(progress_bar, "ncols", None) is not None:
         progress_bar.ncols = min(min_width, progress_bar.ncols)
         progress_bar.ncols = max(max_width, progress_bar.ncols)
     return progress_bar
