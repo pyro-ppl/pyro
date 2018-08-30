@@ -90,7 +90,7 @@ def initialize_progbar(warmup_steps, num_samples, min_width=100, max_width=120, 
                         position=pos, file=sys.stderr)
     # Reduce number of updates for CI logs
     # (see https://github.com/travis-ci/travis-ci/issues/1337).
-    if "CONTINUOUS_INTEGRATION" in os.environ:
+    if "CI" in os.environ:
         progress_bar.miniters = total_steps // 5
     if progress_bar.ncols is not None:
         progress_bar.ncols = min(min_width, progress_bar.ncols)
