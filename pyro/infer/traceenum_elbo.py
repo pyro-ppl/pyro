@@ -1,12 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-import operator
 import warnings
 import weakref
 from collections import OrderedDict
 
 import torch
-from six.moves import queue, reduce
+from six.moves import queue
 
 import pyro
 import pyro.ops.jit
@@ -37,6 +36,33 @@ def _check_model_enumeration_requirements(upper, scales):
     if len(scales) != 1:
         raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
                          "but found {} different scales.".format(len(scales)))
+
+
+def _contract(log_factors, enum_boundary):
+    # Recursively perform logsumproductexp() then .sum() contractions
+    # down to the smallest set of cond indep stack frames.
+    # The logsumproductexp() contractions eliminate enumeration dims;
+    # the .sum() contractions eliminate iarange dims.
+    lower = frozenset.intersection(*log_factors.keys())
+    ordinal = frozenset.union(*log_factors.keys())
+    for frame in sorted(ordinal - lower, key=lambda frame: frame.dim):
+        terms = [x for t in list(log_factors.keys())
+                 if frame in t for x in log_factors.pop(t)]
+        remaining_boundary = -1 - max(x.dim() for xs in log_factors.values() for x in xs)
+        shape = broadcast_shape(*set(x.shape[remaining_boundary:] for x in terms))
+        term = logsumproductexp(terms, shape)
+        term = term.sum(frame.dim, keepdim=True)
+        ordinal = ordinal - frozenset([frame])
+        log_factors.setdefault(ordinal, []).append(term)
+    assert ordinal == lower
+
+    # Perform a final logsumproductexp() contraction to eliminate remaining
+    # enumeration dimesions.
+    terms = log_factors.pop(ordinal)
+    assert terms and not log_factors
+    shape = broadcast_shape(*set(x.shape[enum_boundary:] for x in terms))
+    term = logsumproductexp(terms, shape)
+    return ordinal, term
 
 
 # TODO move this logic into a poutine
@@ -86,26 +112,8 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
                 log_factors.setdefault(t, []).append(logprob)
                 scales.add(site["scale"])
     _check_model_enumeration_requirements(upper, scales)
-
-    # Contract enumeration dimensions via sum-product algorithm (in log space).
-    shapes = set(x.shape[enum_boundary:] for xs in log_factors.values() for x in xs)
-    target_shape = broadcast_shape(*shapes) if enum_boundary else ()
-    scaled_log_factors = []
-    for t, log_factors_t in log_factors.items():
-        # Avoid double-counting due to the .sum() in the iarange contraction below.
-        denom = reduce(operator.mul, (target_shape[frame.dim] for frame in upper - t), 1)
-        for log_factor in log_factors_t:
-            scaled_log_factors.append(log_factor if denom == 1 else log_factor / denom)
-    marginal_cost = logsumproductexp(scaled_log_factors, target_shape)
-
-    # Contract iarange dimensions via product (in log space).
-    lower = frozenset.intersection(*log_factors.keys())
-    for frame in upper - lower:
-        marginal_cost = marginal_cost.sum(frame.dim, keepdim=True)
-    while marginal_cost.dim() and marginal_cost.shape[0] == 1:
-        marginal_cost = marginal_cost.squeeze(0)
-    marginal_cost = scale_and_mask(marginal_cost, scale=scales.pop())
-    marginal_costs.setdefault(lower, []).append(marginal_cost)
+    t, log_factor = _contract(log_factors, enum_boundary)
+    marginal_costs.setdefault(t, []).append(log_factor)
     return marginal_costs
 
 
