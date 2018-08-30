@@ -5,6 +5,7 @@ import weakref
 from collections import OrderedDict
 
 import torch
+from opt_einsum import shared_intermediates
 from six.moves import queue
 
 import pyro

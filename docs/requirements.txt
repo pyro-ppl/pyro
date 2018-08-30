@@ -6,4 +6,4 @@ cloudpickle>=0.3.1
 graphviz>=0.8
 networkx>=2.0.0
 observations>=0.1.4
-opt_einsum>=2.1.3
+opt_einsum>=2.2.0
