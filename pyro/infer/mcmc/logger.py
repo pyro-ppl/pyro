@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import sys
 from collections import OrderedDict
 
@@ -84,8 +85,13 @@ def initialize_progbar(warmup_steps, num_samples, min_width=100, max_width=120, 
         multiple parallel samplers).
     """
     description = "Warmup" if pos is None else "Warmup [{}]".format(pos)
-    progress_bar = tqdm(total=warmup_steps + num_samples, desc=description,
+    total_steps = warmup_steps + num_samples
+    progress_bar = tqdm(total=total_steps, desc=description,
                         position=pos, file=sys.stderr)
+    # Reduce number of updates for CI logs
+    # (see https://github.com/travis-ci/travis-ci/issues/1337).
+    if "CONTINUOUS_INTEGRATION" in os.environ:
+        progress_bar.miniters = total_steps // 5
     if progress_bar.ncols is not None:
         progress_bar.ncols = min(min_width, progress_bar.ncols)
         progress_bar.ncols = max(max_width, progress_bar.ncols)
