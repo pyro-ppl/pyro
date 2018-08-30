@@ -1095,6 +1095,39 @@ def test_enum_sequential_in_model_error():
     assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=0))
 
 
+def test_enum_in_model_multi_scale_error():
+
+    @config_enumerate(default="parallel")
+    def model():
+        p = pyro.param("p", torch.tensor([0.2, 0.8]))
+        x = pyro.sample("x", dist.Bernoulli(0.3)).long()
+        with poutine.scale(scale=2.):
+            pyro.sample("y", dist.Bernoulli(p[x]), obs=torch.tensor(0.))
+
+    def guide():
+        pass
+
+    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=0))
+
+
+def test_enum_in_model_iarange_reuse_error():
+
+    @config_enumerate(default="parallel")
+    def model():
+        p = pyro.param("p", torch.tensor([0.2, 0.8]))
+        a = pyro.sample("a", dist.Bernoulli(0.3)).long()
+        with pyro.iarange("b_axis", 2):
+            pyro.sample("b", dist.Bernoulli(p[a]), obs=torch.tensor([0., 1.]))
+        c = pyro.sample("c", dist.Bernoulli(0.3)).long()
+        with pyro.iarange("c_axis", 2):
+            pyro.sample("d", dist.Bernoulli(p[c]), obs=torch.tensor([0., 0.]))
+
+    def guide():
+        pass
+
+    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=1))
+
+
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_vectorized_num_particles(Elbo):
     data = torch.ones(1000, 2)

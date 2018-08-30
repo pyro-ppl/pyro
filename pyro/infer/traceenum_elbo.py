@@ -58,7 +58,7 @@ def _contract(log_factors, enum_boundary):
         log_factors.setdefault(ordinal, []).append(term)
 
     # Perform a final logsumproductexp() contraction to eliminate remaining
-    # enumeration dimesions.
+    # enumeration dimensions.
     assert ordinal == lower
     terms = log_factors.pop(ordinal)
     assert terms and not log_factors

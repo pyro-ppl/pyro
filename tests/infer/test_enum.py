@@ -1425,10 +1425,10 @@ def test_elbo_enumerate_3(scale):
                          [(1, 1), (2, 2), (3, 2)],
                          ids=["single", "batch", "masked"])
 def test_elbo_enumerate_iarange_1(num_samples, num_masked, scale):
-    #             +---------+
-    # x ----> y ----> z     |
-    #             |       N |
-    #             +---------+
+    #              +---------+
+    #  x ----> y ----> z     |
+    #              |       N |
+    #              +---------+
     pyro.param("guide_probs_x",
                torch.tensor([0.1, 0.9]),
                constraint=constraints.simplex)
@@ -1487,10 +1487,10 @@ def test_elbo_enumerate_iarange_1(num_samples, num_masked, scale):
                          [(1, 1), (2, 2), (3, 2)],
                          ids=["single", "batch", "masked"])
 def test_elbo_enumerate_iarange_2(num_samples, num_masked, scale):
-    #     +-----------------+
-    # x ----> y ----> z     |
-    #     |               N |
-    #     +-----------------+
+    #      +-----------------+
+    #  x ----> y ----> z     |
+    #      |               N |
+    #      +-----------------+
     pyro.param("guide_probs_x",
                torch.tensor([0.1, 0.9]),
                constraint=constraints.simplex)
@@ -1549,10 +1549,10 @@ def test_elbo_enumerate_iarange_2(num_samples, num_masked, scale):
                          [(1, 1), (2, 2), (3, 2)],
                          ids=["single", "batch", "masked"])
 def test_elbo_enumerate_iarange_3(num_samples, num_masked, scale):
-    # +-----------------------+
-    # | x ----> y ----> z     |
-    # |                     N |
-    # +-----------------------+
+    #  +-----------------------+
+    #  | x ----> y ----> z     |
+    #  |                     N |
+    #  +-----------------------+
     pyro.param("guide_probs_x",
                torch.tensor([0.1, 0.9]),
                constraint=constraints.simplex)
@@ -1624,12 +1624,12 @@ def test_elbo_enumerate_iarange_3(num_samples, num_masked, scale):
 @pytest.mark.parametrize('inner_obs', [False, True])
 @pytest.mark.parametrize('outer_obs', [False, True])
 def test_elbo_enumerate_iarange_4(outer_obs, inner_obs, scale):
-    #   a ---> outer_obs
-    #     \
-    # +-----\------------------+
-    # |       \                |
-    # | b ---> inner_obs   N=2 |
-    # +------------------------+
+    #    a ---> outer_obs
+    #      \
+    #  +-----\------------------+
+    #  |       \                |
+    #  | b ---> inner_obs   N=2 |
+    #  +------------------------+
     pyro.param("probs_a", torch.tensor([0.4, 0.6]), constraint=constraints.simplex)
     pyro.param("probs_b", torch.tensor([0.6, 0.4]), constraint=constraints.simplex)
     pyro.param("locs", torch.tensor([-1., 1.]))
@@ -1773,7 +1773,7 @@ def test_elbo_enumerate_iarange_5(scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-def test_elbo_enumerate_iarange_6(scale):
+def test_elbo_enumerate_iaranges_1(scale):
     #         +----------+
     #         |      M=2 |
     #     a ----> b      |
@@ -1837,7 +1837,7 @@ def test_elbo_enumerate_iarange_6(scale):
     def guide(data):
         pass
 
-    data = torch.tensor([[0, 0], [0, 1]])
+    data = torch.tensor([[0, 1], [0, 0]])
     elbo = TraceEnum_ELBO(max_iarange_nesting=2)
     auto_loss = elbo.differentiable_loss(auto_model, guide, data)
     elbo = TraceEnum_ELBO(max_iarange_nesting=0)
@@ -1846,7 +1846,7 @@ def test_elbo_enumerate_iarange_6(scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-def test_elbo_enumerate_iarange_7(scale):
+def test_elbo_enumerate_iaranges_2(scale):
     #  +-----------------+
     #  | a ----> b   M=2 |
     #  +-----------------+
