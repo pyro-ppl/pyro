@@ -20,8 +20,8 @@ class TqdmHandler(logging.StreamHandler):
             msg = self.format(record)
             self.flush()
             tqdm.write(msg, file=sys.stderr)
-        except (KeyboardInterrupt, SystemExit):
-            raise
+        except (KeyboardInterrupt, SystemExit) as e:
+            raise e
         except Exception:
             self.handleError(record)
 
@@ -51,8 +51,8 @@ class MCMCLoggingHandler(logging.Handler):
                 self.progress_bar.update()
             else:
                 self.log_handler.handle(record)
-        except (KeyboardInterrupt, SystemExit):
-            raise
+        except (KeyboardInterrupt, SystemExit) as e:
+            raise e
         except Exception:
             self.handleError(record)
 
