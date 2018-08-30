@@ -5,6 +5,7 @@ import weakref
 from collections import OrderedDict
 
 import torch
+from opt_einsum import shared_intermediates
 from six.moves import queue
 
 import pyro
@@ -14,7 +15,6 @@ from pyro.distributions.util import broadcast_shape, is_identically_zero, scale_
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
 from pyro.infer.util import Dice, is_validation_enabled
-from pyro.ops.einsum import shared_intermediates
 from pyro.ops.sumproduct import logsumproductexp
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
