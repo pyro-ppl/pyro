@@ -7,8 +7,9 @@ import pyro.distributions as dist
 from pyro import poutine
 
 from pyro.contrib.oed.util import (
-    get_indices, tensor_to_dict, rmv, rvv, rinverse, rdiag, rtril
+    get_indices, tensor_to_dict, rmv, rvv, rdiag, rtril
 )
+from pyro.ops.matrix_utils import rinverse
 
 
 class LinearModelGuide(nn.Module):
@@ -28,6 +29,9 @@ class LinearModelGuide(nn.Module):
         # To avoid this- combine labels
         self.tikhonov_diag = nn.Parameter(-2.*torch.ones(sum(w_sizes.values())))
         self.scale_tril = {l: nn.Parameter(3.*torch.ones(d, p, p)) for l, p in w_sizes.items()}
+        # This registers the dict values in pytorch
+        # Await new version to use nn.ParamterDict
+        self._registered = nn.ParameterList(self.scale_tril.values())
         self.w_sizes = w_sizes
         self.softplus = nn.Softplus()
 
@@ -40,12 +44,12 @@ class LinearModelGuide(nn.Module):
 
         tikhonov_diag = torch.diag(self.softplus(self.tikhonov_diag))
         xtx = torch.matmul(design.transpose(-1, -2), design) + tikhonov_diag
-        xtxi = rinverse(xtx)
+        xtxi = rinverse(xtx, sym=True)
         mu = rmv(xtxi, rmv(design.transpose(-1, -2), y))
 
         # Extract sub-indices
         mu = tensor_to_dict(self.w_sizes, mu, subset=target_labels)
-        scale_tril = {l: rtril(self.scale_tril[l]) if l in target_labels}
+        scale_tril = {l: rtril(self.scale_tril[l]) for l in target_labels}
 
         return mu, scale_tril
 
@@ -97,10 +101,12 @@ class NormalInverseGammaGuide(LinearModelGuide):
 
         y = torch.cat(list(y_dict.values()), dim=-1)
 
-        mu, scale_tril = self.linear_model_formula(y, design, target_labels)
+        coefficient_labels = [l for l in target_labels if l != self.tau_label]
+        mu, scale_tril = self.linear_model_formula(y, design, coefficient_labels)
+        mu_vec = torch.cat(list(mu.values()), dim=-1)
 
         yty = rvv(y, y)
-        ytxmu = rvv(y, rmv(design, mu))
+        ytxmu = rvv(y, rmv(design, mu_vec))
         beta = self.b0 + .5*(yty - ytxmu)
 
         return mu, scale_tril, self.alpha, beta
@@ -111,16 +117,18 @@ class NormalInverseGammaGuide(LinearModelGuide):
 
         mu, scale_tril, alpha, beta = self.forward(y_dict, design, target_labels)
 
-        tau_dist = dist.Gamma(alpha, beta)
-        tau = pyro.sample(self.tau_label, tau_dist)
-        obs_sd = 1./tau.sqrt().unsqueeze(-1).unsqueeze(-1)
+        if self.tau_label in target_labels:
+            tau_dist = dist.Gamma(alpha, beta)
+            tau = pyro.sample(self.tau_label, tau_dist)
+            obs_sd = 1./tau.sqrt().unsqueeze(-1).unsqueeze(-1)
 
         for l in target_labels:
-            if self.mf:
-                w_dist = dist.MultivariateNormal(mu[l], scale_tril=scale_tril[l])
-            else:
-                w_dist = dist.MultivariateNormal(mu[l], scale_tril=scale_tril[l]*obs_sd)
-            pyro.sample(l, w_dist)
+            if l != self.tau_label:
+                if self.mf:
+                    w_dist = dist.MultivariateNormal(mu[l], scale_tril=scale_tril[l])
+                else:
+                    w_dist = dist.MultivariateNormal(mu[l], scale_tril=scale_tril[l]*obs_sd)
+                pyro.sample(l, w_dist)
 
 
 class GuideDV(nn.Module):

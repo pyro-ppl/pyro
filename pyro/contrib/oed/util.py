@@ -1,5 +1,4 @@
 import torch
-from torch.distributions.multivariate_normal import _batch_inverse
 
 
 def get_indices(labels, sizes=None, tensors=None):
@@ -60,7 +59,13 @@ def rinverse(M):
     assert M.shape[-1] == M.shape[-2]
     if M.shape[-1] == 1:
         return 1./M
+    # diagonal matrix
+    elif (torch.abs(M*(1. - torch.eye(M.shape[-1]))) < 1e-25).all():
+        print("using good inverse")
+        print(M)
+        return 1./M
     elif M.shape[-1] == 2:
+        print("call to 2x2 inverse")
         det = M[..., 0, 0]*M[..., 1, 1] - M[..., 1, 0]*M[..., 0, 1]
         inv = torch.zeros(M.shape)
         inv[..., 0, 0] = M[..., 1, 1]
@@ -69,7 +74,17 @@ def rinverse(M):
         inv[..., 1, 0] = -M[..., 1, 0]
         return inv/det.unsqueeze(-1).unsqueeze(-1)
     else:
-        return _batch_inverse(M)
+        # Use blockwise inversion
+        d = M.shape[-1]//2
+        A, B, C, D = M[..., :d, :d], M[..., :d, d:], M[..., d:, :d], M[..., d:, d:]
+        Ainv = rinverse(A)
+        schur = rinverse(D - C.matmul(Ainv).matmul(B))
+        inv = torch.zeros(M.shape)
+        inv[..., :d, :d] = Ainv + Ainv.matmul(B).matmul(schur).matmul(C).matmul(Ainv)
+        inv[..., :d, d:] = -Ainv.matmul(B).matmul(schur)
+        inv[..., d:, :d] = -schur.matmul(C).matmul(Ainv)
+        inv[..., d:, d:] = schur
+        return inv
 
 
 def rdiag(v):
