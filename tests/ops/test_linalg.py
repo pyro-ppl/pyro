@@ -4,9 +4,8 @@ import itertools
 
 import pytest
 import torch
-from torch.autograd import grad
 
-from pyro.ops.matrix_utils import rinverse
+from pyro.ops.linalg import rinverse
 from tests.common import assert_equal
 
 
