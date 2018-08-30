@@ -6,11 +6,12 @@ import timeit
 
 import pytest
 import torch
+from opt_einsum import shared_intermediates
 from six.moves import reduce
 
 import pyro.distributions.torch_patch  # noqa: F401
 from pyro.infer.util import torch_exp
-from pyro.ops.einsum import contract, shared_intermediates
+from pyro.ops.einsum import contract
 from pyro.ops.sumproduct import logsumproductexp, sumproduct, zip_align_right
 from tests.common import assert_equal
 

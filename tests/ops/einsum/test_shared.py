@@ -3,8 +3,9 @@ from __future__ import absolute_import, division, print_function
 import opt_einsum
 import pytest
 import torch
+from opt_einsum import shared_intermediates
 
-from pyro.ops.einsum import contract, shared_intermediates
+from pyro.ops.einsum import contract
 from tests.common import assert_equal
 
 
