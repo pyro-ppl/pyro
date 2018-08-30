@@ -5,7 +5,6 @@ import weakref
 from collections import OrderedDict
 
 import torch
-from opt_einsum import shared_intermediates
 from six.moves import queue
 
 import pyro
@@ -40,8 +39,8 @@ def _check_model_enumeration_requirements(upper, scales):
 
 
 def _contract(log_factors, enum_boundary):
-    # Recursively perform logsumproductexp() then .sum() contractions
-    # down to the smallest set of cond indep stack frames.
+    # Iteratively eliminate iarange dimensions by performing
+    # logsumproductexp() then .sum() contractions.
     # The logsumproductexp() contractions eliminate enumeration dims;
     # the .sum() contractions eliminate iarange dims.
     lower = frozenset.intersection(*log_factors.keys())
@@ -49,10 +48,11 @@ def _contract(log_factors, enum_boundary):
     for frame in sorted(ordinal - lower, key=lambda frame: frame.dim):
         terms = [x for t in list(log_factors.keys())
                  if frame in t for x in log_factors.pop(t)]
-        remaining_boundary = min((-x.dim() for xs in log_factors.values() for x in xs),
-                                 enum_boundary)
+        remaining_boundary = (min(-x.dim() for xs in log_factors.values() for x in xs)
+                              if log_factors else enum_boundary)
         assert remaining_boundary <= enum_boundary
-        shape = broadcast_shape(*set(x.shape[remaining_boundary:] for x in terms))
+        shape = (broadcast_shape(*set(x.shape[remaining_boundary:] for x in terms))
+                 if remaining_boundary else ())
         term = logsumproductexp(terms, shape)
         term = term.sum(frame.dim, keepdim=True)
         ordinal = ordinal - frozenset([frame])
@@ -63,7 +63,8 @@ def _contract(log_factors, enum_boundary):
     assert ordinal == lower
     terms = log_factors.pop(ordinal)
     assert terms and not log_factors
-    shape = broadcast_shape(*set(x.shape[enum_boundary:] for x in terms))
+    shape = (broadcast_shape(*set(x.shape[enum_boundary:] for x in terms))
+             if enum_boundary else ())
     term = logsumproductexp(terms, shape)
     return ordinal, term
 
@@ -114,6 +115,7 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
                     scales.add(site["scale"])
         _check_model_enumeration_requirements(upper, scales)
         t, log_factor = _contract(log_factors, enum_boundary)
+        log_factor = scale_and_mask(log_factor, scale=scales.pop())
         marginal_costs.setdefault(t, []).append(log_factor)
     return marginal_costs
 

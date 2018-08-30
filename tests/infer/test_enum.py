@@ -1620,8 +1620,8 @@ def test_elbo_enumerate_iarange_3(num_samples, num_masked, scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-@pytest.mark.parametrize('inner_obs', [False, True])
-@pytest.mark.parametrize('outer_obs', [False, True])
+@pytest.mark.parametrize('outer_obs,inner_obs',
+                         [(False, True), (True, False), (True, True)])
 def test_elbo_enumerate_iarange_4(outer_obs, inner_obs, scale):
     #    a ---> outer_obs
     #      \
@@ -1712,6 +1712,7 @@ def test_elbo_enumerate_iarange_5(scale):
     pyro.param("guide_probs_c",
                torch.tensor([[0., 1.], [1., 0.]]),  # deterministic
                constraint=constraints.simplex)
+    d_ind = torch.arange(2, dtype=torch.long)
 
     @poutine.scale(scale=scale)
     def auto_model(data):
@@ -1723,9 +1724,10 @@ def test_elbo_enumerate_iarange_5(scale):
         a = pyro.sample("a", dist.Categorical(probs_a))
         b = pyro.sample("b", dist.Categorical(probs_b[a]),
                         infer={"enumerate": "parallel"})
-        with pyro.iarange("data", 2) as ind:
+        with pyro.iarange("data", 2):
             c = pyro.sample("c", dist.Categorical(probs_c[a]))
-            d = pyro.sample("d", dist.Categorical(probs_d[b, c, ind]),
+            d = pyro.sample("d",
+                            dist.Categorical(probs_d[b.unsqueeze(-1), c.unsqueeze(-1), d_ind]),
                             infer={"enumerate": "parallel"})
             pyro.sample("obs", dist.Categorical(probs_e[d]), obs=data)
 
@@ -1750,7 +1752,8 @@ def test_elbo_enumerate_iarange_5(scale):
                         infer={"enumerate": "parallel"})
         for i in pyro.irange("data", 2):
             c = pyro.sample("c_{}".format(i), dist.Categorical(probs_c[a]))
-            d = pyro.sample("d_{}".format(i), dist.Categorical(probs_d[b, c]),
+            d = pyro.sample("d_{}".format(i),
+                            dist.Categorical(probs_d[b.unsqueeze(-1), c.unsqueeze(-1), d_ind]),
                             infer={"enumerate": "parallel"})
             pyro.sample("obs_{}".format(i), dist.Categorical(probs_e[d]), obs=data[i])
 
@@ -1795,6 +1798,7 @@ def test_elbo_enumerate_iaranges_1(scale):
     pyro.param("probs_d",
                torch.tensor([[[0.4, 0.6], [0.3, 0.7]], [[0.3, 0.7], [0.2, 0.8]]]),
                constraint=constraints.simplex)
+    d_ind = torch.arange(2, dtype=torch.long)
 
     @config_enumerate(default="parallel")
     @poutine.scale(scale=scale)
@@ -1805,14 +1809,15 @@ def test_elbo_enumerate_iaranges_1(scale):
         probs_d = pyro.param("probs_d")
         b_axis = pyro.iarange("b_axis", 2, dim=-1)
         c_axis = pyro.iarange("c_axis", 2, dim=-2)
-        d_ind = torch.arange(2, dtype=torch.long)
         a = pyro.sample("a", dist.Categorical(probs_a))
         with b_axis:
             b = pyro.sample("b", dist.Categorical(probs_b[a]))
         with c_axis:
             c = pyro.sample("c", dist.Categorical(probs_c[a]))
         with b_axis, c_axis:
-            pyro.sample("d", dist.Categorical(probs_d[b, c, d_ind]), obs=data)
+            pyro.sample("d",
+                        dist.Categorical(probs_d[b.unsqueeze(-1), c.unsqueeze(-1), d_ind]),
+                        obs=data)
 
     @config_enumerate(default="parallel")
     @poutine.scale(scale=scale)
@@ -1823,14 +1828,13 @@ def test_elbo_enumerate_iaranges_1(scale):
         probs_d = pyro.param("probs_d")
         b_axis = pyro.irange("b_axis", 2)
         c_axis = pyro.irange("c_axis", 2)
-        d_ind = torch.arange(2, dtype=torch.long)
         a = pyro.sample("a", dist.Categorical(probs_a))
         b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
         c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
         for i in b_axis:
             for j in c_axis:
                 pyro.sample("d_{}_{}".format(i, j),
-                            dist.Categorical(probs_d[b[i], c[j], d_ind]),
+                            dist.Categorical(probs_d[b[i].unsqueeze(-1), c[j].unsqueeze(-1), d_ind]),
                             obs=data[i, j])
 
     def guide(data):
