@@ -48,16 +48,18 @@ def _contract(log_factors, enum_boundary):
     for frame in sorted(ordinal - lower, key=lambda frame: frame.dim):
         terms = [x for t in list(log_factors.keys())
                  if frame in t for x in log_factors.pop(t)]
-        remaining_boundary = -1 - max(x.dim() for xs in log_factors.values() for x in xs)
+        remaining_boundary = min((-x.dim() for xs in log_factors.values() for x in xs),
+                                 enum_boundary)
+        assert remaining_boundary <= enum_boundary
         shape = broadcast_shape(*set(x.shape[remaining_boundary:] for x in terms))
         term = logsumproductexp(terms, shape)
         term = term.sum(frame.dim, keepdim=True)
         ordinal = ordinal - frozenset([frame])
         log_factors.setdefault(ordinal, []).append(term)
-    assert ordinal == lower
 
     # Perform a final logsumproductexp() contraction to eliminate remaining
     # enumeration dimesions.
+    assert ordinal == lower
     terms = log_factors.pop(ordinal)
     assert terms and not log_factors
     shape = broadcast_shape(*set(x.shape[enum_boundary:] for x in terms))
@@ -99,21 +101,19 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
                 cost = scale_and_mask(site["unscaled_log_prob"], mask=site["mask"])
                 log_factors.setdefault(t, []).append(cost)
                 scales.add(site["scale"])
-    if not log_factors:
-        return marginal_costs  # No cost terms depend on an enumerated variable.
-
-    # TODO split log_factors into connected components wrt shared tensor dims.
-    upper = frozenset.union(*log_factors.keys())
-    for t, sites_t in enum_sites.items():
-        # TODO refine this coarse dependency ordering using time and tensor shapes.
-        if t <= upper:
-            for site in sites_t:
-                logprob = site["unscaled_log_prob"]
-                log_factors.setdefault(t, []).append(logprob)
-                scales.add(site["scale"])
-    _check_model_enumeration_requirements(upper, scales)
-    t, log_factor = _contract(log_factors, enum_boundary)
-    marginal_costs.setdefault(t, []).append(log_factor)
+    if log_factors:
+        # TODO split log_factors into connected components wrt shared tensor dims.
+        upper = frozenset.union(*log_factors.keys())
+        for t, sites_t in enum_sites.items():
+            # TODO refine this coarse dependency ordering using time and tensor shapes.
+            if t <= upper:
+                for site in sites_t:
+                    logprob = site["unscaled_log_prob"]
+                    log_factors.setdefault(t, []).append(logprob)
+                    scales.add(site["scale"])
+        _check_model_enumeration_requirements(upper, scales)
+        t, log_factor = _contract(log_factors, enum_boundary)
+        marginal_costs.setdefault(t, []).append(log_factor)
     return marginal_costs
 
 
