@@ -9,7 +9,7 @@ from pyro import poutine
 from pyro.contrib.oed.util import (
     get_indices, tensor_to_dict, rmv, rvv, rdiag, rtril
 )
-from pyro.ops.matrix_utils import rinverse
+from pyro.ops.linalg import rinverse
 
 
 class LinearModelGuide(nn.Module):
