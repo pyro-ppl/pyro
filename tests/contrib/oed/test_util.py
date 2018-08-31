@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import OrderedDict
 import pytest
 import torch
 
@@ -10,16 +11,16 @@ from tests.common import assert_equal
 
 
 def test_get_indices_sizes():
-    sizes = {"a": 2, "b": 2, "c": 2}
+    sizes = OrderedDict([("a", 2), ("b", 2), ("c", 2)])
     assert_equal(get_indices(["b"], sizes=sizes), torch.tensor([2, 3]))
     assert_equal(get_indices(["b", "c"], sizes=sizes), torch.tensor([2, 3, 4, 5]))
-    tensors = {"a": torch.ones(2), "b": torch.ones(2), "c": torch.ones(2)}
+    tensors = OrderedDict([("a", torch.ones(2)), ("b", torch.ones(2)), ("c", torch.ones(2))])
     assert_equal(get_indices(["b"], tensors=tensors), torch.tensor([2, 3]))
     assert_equal(get_indices(["b", "c"], tensors=tensors), torch.tensor([2, 3, 4, 5]))
 
 
 def test_tensor_to_dict():
-    sizes = {"a": 2, "b": 2, "c": 2}
+    sizes = OrderedDict([("a", 2), ("b", 2), ("c", 2)])
     vector = torch.tensor([1., 2, 3, 4, 5, 6])
     assert_equal(tensor_to_dict(sizes, vector), {"a": torch.tensor([1., 2.]),
                                                  "b": torch.tensor([3., 4.]),

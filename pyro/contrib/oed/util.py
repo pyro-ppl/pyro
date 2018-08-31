@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import torch
 
 
@@ -5,7 +6,7 @@ def get_indices(labels, sizes=None, tensors=None):
     indices = []
     start = 0
     if sizes is None:
-        sizes = {l: t.shape[0] for l, t in tensors.items()}
+        sizes = OrderedDict([(l, t.shape[0]) for l, t in tensors.items()])
     for label in sizes:
         end = start+sizes[label]
         if label in labels:
