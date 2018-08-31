@@ -6,11 +6,12 @@ import operator
 from collections import Counter, defaultdict
 
 import torch
+from opt_einsum import shared_intermediates
+from opt_einsum.sharing import count_cached_ops
 from six.moves import reduce
 from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.util import is_identically_zero
-from pyro.ops.einsum import shared_intermediates
 from pyro.ops.sumproduct import sumproduct
 from pyro.poutine.util import site_is_subsample
 
@@ -263,5 +264,5 @@ class Dice(object):
                         prob = prob[mask]
                         cost = cost[mask]
                     expected_cost = expected_cost + (prob * cost).sum()
-        LAST_CACHE_SIZE[0] = Counter(key[0] for key in cache.keys())
+        LAST_CACHE_SIZE[0] = count_cached_ops(cache)
         return expected_cost

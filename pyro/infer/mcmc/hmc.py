@@ -85,7 +85,7 @@ class HMC(TraceKernel):
                  use_einsum=False):
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
-        self.model = poutine.enum(config_enumerate(model, default="parallel", expand=False),
+        self.model = poutine.enum(config_enumerate(model, default="parallel"),
                                   first_available_dim=max_iarange_nesting)
         # broadcast sample sites inside iarange.
         self.model = poutine.broadcast(self.model)
@@ -299,5 +299,7 @@ class HMC(TraceKernel):
         return self._get_trace(z)
 
     def diagnostics(self):
-        return "Step size: {:.6f} \t Acceptance rate: {:.6f}".format(
-            self.step_size, self._accept_cnt / self._t)
+        return OrderedDict([
+            ("Step size", self.step_size),
+            ("Acceptance rate", self._accept_cnt / self._t)
+        ])

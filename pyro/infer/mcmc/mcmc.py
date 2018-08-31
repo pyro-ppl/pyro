@@ -1,9 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
-import math
+import json
+import logging
 
-import pyro
 from pyro.infer import TracePosterior
+from pyro.infer.mcmc.logger import initialize_logger, initialize_progbar, TQDM_MSG
 
 
 class MCMC(TracePosterior):
@@ -25,24 +26,29 @@ class MCMC(TracePosterior):
         self.kernel = kernel
         self.warmup_steps = warmup_steps
         self.num_samples = num_samples
+        self.logger = logging.getLogger("pyro.infer.mcmc")
         super(MCMC, self).__init__()
 
+    def _gen_samples(self, num_samples, init_trace):
+        trace = init_trace
+        for _ in range(num_samples):
+            trace = self.kernel.sample(trace)
+            diagnostics = json.dumps(self.kernel.diagnostics())
+            self.logger.info(diagnostics, extra={"msg_type": TQDM_MSG})
+            yield trace
+
     def _traces(self, *args, **kwargs):
+        chain_id = kwargs.pop("chain_id", 0)
+        progress_bar = initialize_progbar(self.warmup_steps, self.num_samples)
+        self.logger = initialize_logger(self.logger, chain_id, progress_bar)
         self.kernel.setup(*args, **kwargs)
         trace = self.kernel.initial_trace()
-        pyro.log.info("Starting MCMC using kernel - {} ...".format(self.kernel.__class__.__name__))
-        logging_interval = math.ceil((self.warmup_steps + self.num_samples) / 20)
-        for t in range(1, self.warmup_steps + self.num_samples + 1):
-            trace = self.kernel.sample(trace)
-            if t % logging_interval == 0:
-                stage = "WARMUP" if t <= self.warmup_steps else "SAMPLE"
-                pyro.log.info("Iteration: {} [{}]".format(t, stage))
-                diagnostic_info = self.kernel.diagnostics()
-                if diagnostic_info is not None:
-                    pyro.log.info(diagnostic_info)
-            if t <= self.warmup_steps:
-                if t == self.warmup_steps:
-                    self.kernel.end_warmup()
+        with progress_bar:
+            for trace in self._gen_samples(self.warmup_steps, trace):
                 continue
-            yield (trace, 1.0)
+            self.kernel.end_warmup()
+            if progress_bar:
+                progress_bar.set_description("Sample")
+            for trace in self._gen_samples(self.num_samples, trace):
+                yield (trace, 1.0)
         self.kernel.cleanup()
