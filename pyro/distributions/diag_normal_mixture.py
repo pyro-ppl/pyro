@@ -48,13 +48,15 @@ class MixtureOfDiagNormals(TorchDistribution):
         assert(self.batch_mode or locs.dim() == 2), \
             "The locs parameter in MixtureOfDiagNormals should be K x D dimensional (or B x K x D if doing batches)"
         if not self.batch_mode:
-            assert(coord_scale.dim() == 2), "The coord_scale parameter in MixtureOfDiagNormals should be K x D dimensional"
+            assert(coord_scale.dim() == 2), \
+                "The coord_scale parameter in MixtureOfDiagNormals should be K x D dimensional"
             assert(component_logits.dim() == 1), \
                 "The component_logits parameter in MixtureOfDiagNormals should be K dimensional"
             assert(component_logits.size(-1) == locs.size(-2))
             batch_shape = ()
         else:
-            assert(coord_scale.dim() > 2), "The coord_scale parameter in MixtureOfDiagNormals should be B x K x D dimensional"
+            assert(coord_scale.dim() > 2), \
+                "The coord_scale parameter in MixtureOfDiagNormals should be B x K x D dimensional"
             assert(component_logits.dim() > 1), \
                 "The component_logits parameter in MixtureOfDiagNormals should be B x K dimensional"
             assert(component_logits.size(-1) == locs.size(-2))
@@ -81,7 +83,8 @@ class MixtureOfDiagNormals(TorchDistribution):
 
     def rsample(self, sample_shape=torch.Size()):
         which = self.categorical.sample(sample_shape)
-        return _MixDiagNormalSample.apply(self.locs, self.coord_scale, self.component_logits, self.categorical.probs, which,
+        return _MixDiagNormalSample.apply(self.locs, self.coord_scale,
+                                          self.component_logits, self.categorical.probs, which,
                                           sample_shape + self.locs.shape[:-2] + (self.dim,))
 
 
