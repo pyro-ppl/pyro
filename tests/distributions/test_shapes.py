@@ -45,7 +45,7 @@ def test_dirichlet_shape():
 def test_zip_shape():
     gate = torch.ones(3, 2) / 2
     rate = torch.ones(3, 2) / 2
-    d = dist.ZIP(gate, rate)
+    d = dist.ZeroInflatedPoisson(gate, rate)
     assert d.batch_shape == (3, 2)
     assert d.event_shape == ()
     assert d.shape() == (3, 2)
