@@ -50,9 +50,10 @@ class HMC(TraceKernel):
     :param int max_iarange_nesting: Optional bound on max number of nested
         :func:`pyro.iarange` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
-    :param bool use_einsum: Whether to use an einsum operation to evaluate
-        log pdf for the model trace. No-op unless the trace has discrete
-        sample sites.
+    :param bool experimental_use_einsum: Whether to use an einsum operation
+        to evaluat log pdf for the model trace. No-op unless the trace has
+        discrete sample sites. This flag is experimental and will most likely
+        be removed in a future release.
 
     Example:
 
@@ -82,7 +83,7 @@ class HMC(TraceKernel):
                  adapt_step_size=False,
                  transforms=None,
                  max_iarange_nesting=float("inf"),
-                 use_einsum=False):
+                 experimental_use_einsum=False):
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
         self.model = poutine.enum(config_enumerate(model, default="parallel"),
@@ -98,7 +99,7 @@ class HMC(TraceKernel):
             self.trajectory_length = 2 * math.pi  # from Stan
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
         self.adapt_step_size = adapt_step_size
-        self.use_einsum = use_einsum
+        self.use_einsum = experimental_use_einsum
         self._target_accept_prob = 0.8  # from Stan
 
         self.transforms = {} if transforms is None else transforms

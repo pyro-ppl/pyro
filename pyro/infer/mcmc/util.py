@@ -1,9 +1,10 @@
-import torch
 from collections import defaultdict
+
+import torch
+from opt_einsum import shared_intermediates
 
 from pyro.distributions.util import logsumexp, broadcast_shape
 from pyro.infer.util import is_validation_enabled
-from pyro.ops.einsum import shared_intermediates
 from pyro.ops.sumproduct import sumproduct, logsumproductexp
 from pyro.util import check_site_shape
 
