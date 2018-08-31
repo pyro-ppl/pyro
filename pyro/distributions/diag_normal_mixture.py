@@ -21,7 +21,7 @@ class MixtureOfDiagNormals(TorchDistribution):
     D-dimensional mean parameter and a D-dimensional diagonal covariance
     matrix. The K different component means are gathered into the K x D
     dimensional parameter `locs` and the K different scale parameters are
-    gathered into the K x D dimensional parameter `scales`. The mixture
+    gathered into the K x D dimensional parameter `coord_scale`. The mixture
     weights are controlled by a K-dimensional vector of softmax logits,
     `component_logits`. This distribution implements pathwise derivatives
     for samples from the distribution.
@@ -35,33 +35,33 @@ class MixtureOfDiagNormals(TorchDistribution):
     Theofanis Karaletsos. arXiv:1806.01856
 
     :param torch.Tensor locs: K x D mean matrix
-    :param torch.Tensor scales: K x D scale matrix
+    :param torch.Tensor coord_scale: K x D scale matrix
     :param torch.Tensor component_logits: K-dimensional vector of softmax logits
     """
     has_rsample = True
-    arg_constraints = {"locs": constraints.real, "scales": constraints.positive,
+    arg_constraints = {"locs": constraints.real, "coord_scale": constraints.positive,
                        "component_logits": constraints.real}
 
-    def __init__(self, locs, scales, component_logits):
+    def __init__(self, locs, coord_scale, component_logits):
         self.batch_mode = (locs.dim() > 2)
-        assert(scales.shape == locs.shape)
+        assert(coord_scale.shape == locs.shape)
         assert(self.batch_mode or locs.dim() == 2), \
             "The locs parameter in MixtureOfDiagNormals should be K x D dimensional (or B x K x D if doing batches)"
         if not self.batch_mode:
-            assert(scales.dim() == 2), "The scales parameter in MixtureOfDiagNormals should be K x D dimensional"
+            assert(coord_scale.dim() == 2), "The coord_scale parameter in MixtureOfDiagNormals should be K x D dimensional"
             assert(component_logits.dim() == 1), \
                 "The component_logits parameter in MixtureOfDiagNormals should be K dimensional"
             assert(component_logits.size(-1) == locs.size(-2))
             batch_shape = ()
         else:
-            assert(scales.dim() > 2), "The scales parameter in MixtureOfDiagNormals should be B x K x D dimensional"
+            assert(coord_scale.dim() > 2), "The coord_scale parameter in MixtureOfDiagNormals should be B x K x D dimensional"
             assert(component_logits.dim() > 1), \
                 "The component_logits parameter in MixtureOfDiagNormals should be B x K dimensional"
             assert(component_logits.size(-1) == locs.size(-2))
             batch_shape = tuple(locs.shape[:-2])
 
         self.locs = locs
-        self.scales = scales
+        self.coord_scale = coord_scale
         self.component_logits = component_logits
         self.dim = locs.size(-1)
         self.categorical = Categorical(logits=component_logits)
@@ -69,11 +69,11 @@ class MixtureOfDiagNormals(TorchDistribution):
         super(MixtureOfDiagNormals, self).__init__(batch_shape=batch_shape, event_shape=(self.dim,))
 
     def log_prob(self, value):
-        epsilon = (value.unsqueeze(-2) - self.locs) / self.scales  # L B K D
+        epsilon = (value.unsqueeze(-2) - self.locs) / self.coord_scale  # L B K D
         eps_sqr = 0.5 * torch.pow(epsilon, 2.0).sum(-1)  # L B K
         eps_sqr_min = torch.min(eps_sqr, -1)[0]  # L B K
-        scales_prod = self.scales.log().sum(-1).exp()  # B K
-        result = self.probs * torch.exp(-eps_sqr + eps_sqr_min.unsqueeze(-1)) / scales_prod  # L B K
+        coord_scale_prod = self.coord_scale.log().sum(-1).exp()  # B K
+        result = self.probs * torch.exp(-eps_sqr + eps_sqr_min.unsqueeze(-1)) / coord_scale_prod  # L B K
         result = torch.log(result.sum(-1))  # L B
         result = result - 0.5 * math.log(2.0 * math.pi) * float(self.dim)
         result = result - eps_sqr_min
@@ -81,7 +81,7 @@ class MixtureOfDiagNormals(TorchDistribution):
 
     def rsample(self, sample_shape=torch.Size()):
         which = self.categorical.sample(sample_shape)
-        return _MixDiagNormalSample.apply(self.locs, self.scales, self.component_logits, self.categorical.probs, which,
+        return _MixDiagNormalSample.apply(self.locs, self.coord_scale, self.component_logits, self.categorical.probs, which,
                                           sample_shape + self.locs.shape[:-2] + (self.dim,))
 
 

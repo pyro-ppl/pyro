@@ -5,6 +5,7 @@ from pyro.distributions.avf_mvn import AVFMultivariateNormal
 from pyro.distributions.binomial import Binomial
 from pyro.distributions.delta import Delta
 from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNormalsSharedCovariance
+from pyro.distributions.diag_normal_mixture import MixtureOfDiagNormals
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
@@ -38,6 +39,7 @@ __all__ = [
     "LowRankMultivariateNormal",
     "MaskedMixture",
     "MixtureOfDiagNormalsSharedCovariance",
+    "MixtureOfDiagNormals",
     "OMTMultivariateNormal",
     "Rejector",
     "RelaxedBernoulliStraightThrough",
