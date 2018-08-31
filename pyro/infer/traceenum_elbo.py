@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 import weakref
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 
 import torch
 from six.moves import queue
@@ -34,7 +34,9 @@ def _check_model_enumeration_requirements(log_factors, scales):
                 left = ', '.join(sorted(f.name for f in u - v))
                 right = ', '.join(sorted(f.name for f in v - u))
                 raise ValueError("Expected tree-structured iarange nesting, but found "
-                                 "dependencies on independent iarange sets [{}] and [{}]"
+                                 "dependencies on independent iarange sets [{}] and [{}]. "
+                                 "Try converting one of the iaranges to an irange (but beware "
+                                 "exponential cost in the size of that irange)"
                                  .format(left, right))
 
     # Check that all enumerated sites share a common subsampling scale.
@@ -59,15 +61,10 @@ def _contract(log_factors, enum_boundary):
                 pending.append(tu)
 
     # Collect all enumeration dimensions.
-    enum_dims = defaultdict(set)
-    for t, terms in log_factors.items():
-        for term in terms:
-            for dim, size in enumerate(term.shape):
-                dim -= term.dim()
-                if dim >= enum_boundary:
-                    break
-                if size > 1:
-                    enum_dims[t].add(dim)
+    enum_dims = {t: set(i for term in terms
+                        for i in range(-term.dim(), enum_boundary)
+                        if term.shape[i] > 1)
+                 for t, terms in log_factors.items()}
 
     # Recursively combine terms in different iarange contexts.
     while True:
@@ -94,7 +91,7 @@ def _contract(log_factors, enum_boundary):
         assert frames
         for frame in frames:
             term = term.sum(frame.dim, keepdim=True)
-        parent = leaf - frozenset([frame])
+        parent = leaf - frames
         log_factors[parent].append(term)
         enum_dims[parent] |= dims & remaining_dims
 
