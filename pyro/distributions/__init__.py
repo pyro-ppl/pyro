@@ -22,7 +22,7 @@ from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
 from pyro.distributions.von_mises import VonMises
 from pyro.distributions.von_mises_3d import VonMises3D
-from pyro.distributions.zip import ZIP
+from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
 
 __all__ = [
     "enable_validation",
@@ -46,7 +46,7 @@ __all__ = [
     "TorchDistribution",
     "VonMises",
     "VonMises3D",
-    "ZIP"
+    "ZeroInflatedPoisson"
 ]
 
 # Import all torch distributions from `pyro.distributions.torch_distribution`

@@ -7,7 +7,7 @@ from torch.distributions.utils import broadcast_all, lazy_property
 from pyro.distributions import TorchDistribution
 
 
-class ZIP(TorchDistribution):
+class ZeroInflatedPoisson(TorchDistribution):
     """
     A Zero Inflated Poisson distribution.
 
@@ -21,14 +21,15 @@ class ZIP(TorchDistribution):
         self.gate, self.rate = broadcast_all(gate, rate)
         batch_shape = self.gate.shape
         event_shape = torch.Size()
-        super(ZIP, self).__init__(batch_shape, event_shape, validate_args)
+        super(ZeroInflatedPoisson, self).__init__(batch_shape, event_shape, validate_args)
 
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
         gate, rate, value = broadcast_all(self.gate, self.rate, value)
         log_prob = (-gate).log1p() + (rate.log() * value) - rate - (value + 1).lgamma()
-        log_prob[value == 0] = (gate[value == 0] + (1 - gate[value == 0]) * torch.exp(-rate[value == 0])).log()
+        zeros = value == 0
+        log_prob[zeros] = (gate[zeros] + log_prob[zeros].exp()).log()
         return log_prob
 
     def sample(self, sample_shape=torch.Size()):
@@ -49,7 +50,7 @@ class ZIP(TorchDistribution):
 
     def expand(self, batch_shape):
         try:
-            return super(ZIP, self).expand(batch_shape)
+            return super(ZeroInflatedPoisson, self).expand(batch_shape)
         except NotImplementedError:
             validate_args = self.__dict__.get('_validate_args')
             gate = self.gate.expand(batch_shape)
