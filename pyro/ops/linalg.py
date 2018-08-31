@@ -3,14 +3,11 @@ from __future__ import absolute_import, division, print_function
 import math
 
 import torch
-from torch.autograd import grad
-
-from pyro.util import warn_if_nan
 
 
 def rinverse(M, sym=False):
     """Matrix inversion of rightmost dimensions (batched).
-    
+
     For 1, 2, and 3 dimensions this uses the formulae.
     For larger matrices, it uses blockwise inversion to reduce to
     smaller matrices.
