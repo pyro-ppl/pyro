@@ -250,5 +250,6 @@ def test_gaussian_hmm_enum_shape(num_steps, use_einsum):
             assert effective_dim == 1
 
     data = torch.ones(num_steps)
-    nuts_kernel = NUTS(model, adapt_step_size=True, max_iarange_nesting=0, use_einsum=use_einsum)
+    nuts_kernel = NUTS(model, adapt_step_size=True, max_iarange_nesting=0,
+                       experimental_use_einsum=use_einsum)
     MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)
