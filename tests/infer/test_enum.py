@@ -1273,8 +1273,8 @@ def _check_loss_and_grads(expected_loss, actual_loss):
 
     names = pyro.get_param_store().get_all_param_names()
     params = [pyro.param(name).unconstrained() for name in names]
-    actual_grads = grad(actual_loss, params, allow_unused=True)
-    expected_grads = grad(expected_loss, params, allow_unused=True)
+    actual_grads = grad(actual_loss, params, allow_unused=True, retain_graph=True)
+    expected_grads = grad(expected_loss, params, allow_unused=True, retain_graph=True)
     for name, actual_grad, expected_grad in zip(names, actual_grads, expected_grads):
         if actual_grad is None or expected_grad is None:
             continue
@@ -1893,6 +1893,55 @@ def test_elbo_enumerate_iaranges_2(scale):
 
 @pytest.mark.parametrize('scale', [1, 10])
 def test_elbo_enumerate_iaranges_3(scale):
+    #      +------------------+
+    #      |     +----------+ |
+    #  a ----------> b      | |
+    #      |     |      N=2 | |
+    #      | M=2 +----------+ |
+    #      +-------------------+
+    pyro.param("probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("probs_b",
+               torch.tensor([[0.6, 0.4], [0.4, 0.6]]),
+               constraint=constraints.simplex)
+    data = torch.tensor([[0, 1], [0, 0]])
+
+    @config_enumerate(default="parallel")
+    @poutine.scale(scale=scale)
+    def auto_model():
+        probs_a = pyro.param("probs_a")
+        probs_b = pyro.param("probs_b")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with pyro.iarange("outer", 2):
+            with pyro.iarange("inner", 2):
+                pyro.sample("b", dist.Categorical(probs_b[a]),
+                            obs=data)
+
+    @config_enumerate(default="parallel")
+    @poutine.scale(scale=scale)
+    def hand_model():
+        probs_a = pyro.param("probs_a")
+        probs_b = pyro.param("probs_b")
+        inner = pyro.irange("inner", 2)
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        for i in pyro.irange("outer", 2):
+            for j in inner:
+                pyro.sample("b_{}_{}".format(i, j), dist.Categorical(probs_b[a]),
+                            obs=data[i, j])
+
+    def guide():
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=2)
+    auto_loss = elbo.differentiable_loss(auto_model, guide)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+    hand_loss = elbo.differentiable_loss(hand_model, guide)
+    _check_loss_and_grads(hand_loss, auto_loss)
+
+
+@pytest.mark.parametrize('scale', [1, 10])
+def test_elbo_enumerate_iaranges_4(scale):
     #      +--------------------+
     #      |       +----------+ |
     #  a ----> b ----> c      | |
@@ -1947,7 +1996,7 @@ def test_elbo_enumerate_iaranges_3(scale):
 
 
 @pytest.mark.parametrize('scale', [1, 10])
-def test_elbo_enumerate_iaranges_4(scale):
+def test_elbo_enumerate_iaranges_5(scale):
     #     a
     #     | \
     #  +--|---\------------+
@@ -2006,6 +2055,126 @@ def test_elbo_enumerate_iaranges_4(scale):
     elbo = TraceEnum_ELBO(max_iarange_nesting=0)
     hand_loss = elbo.differentiable_loss(hand_model, guide)
     _check_loss_and_grads(hand_loss, auto_loss)
+
+
+@pytest.mark.parametrize('scale', [1, 10])
+def test_elbo_enumerate_iaranges_6(scale):
+    #         +----------+
+    #         |      M=2 |
+    #     a ----> b      |
+    #     |   |   |      |
+    #  +--|-------|--+   |
+    #  |  V   |   V  |   |
+    #  |  c ----> d  |   |
+    #  |      |      |   |
+    #  | N=2  +------|---+
+    #  +-------------+
+    pyro.param("probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("probs_b",
+               torch.tensor([[0.6, 0.4], [0.4, 0.6]]),
+               constraint=constraints.simplex)
+    pyro.param("probs_c",
+               torch.tensor([[0.75, 0.25], [0.55, 0.45]]),
+               constraint=constraints.simplex)
+    pyro.param("probs_d",
+               torch.tensor([[[0.4, 0.6], [0.3, 0.7]], [[0.3, 0.7], [0.2, 0.8]]]),
+               constraint=constraints.simplex)
+    d_ind = torch.arange(2, dtype=torch.long)
+
+    @config_enumerate(default="parallel")
+    @poutine.scale(scale=scale)
+    def model_irange_irange(data):
+        probs_a = pyro.param("probs_a")
+        probs_b = pyro.param("probs_b")
+        probs_c = pyro.param("probs_c")
+        probs_d = pyro.param("probs_d")
+        b_axis = pyro.irange("b_axis", 2)
+        c_axis = pyro.irange("c_axis", 2)
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
+        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
+        for i in b_axis:
+            for j in c_axis:
+                pyro.sample("d_{}_{}".format(i, j),
+                            dist.Categorical(probs_d[b[i].unsqueeze(-1), c[j].unsqueeze(-1), d_ind]),
+                            obs=data[i, j])
+
+    @config_enumerate(default="parallel")
+    @poutine.scale(scale=scale)
+    def model_irange_iarange(data):
+        probs_a = pyro.param("probs_a")
+        probs_b = pyro.param("probs_b")
+        probs_c = pyro.param("probs_c")
+        probs_d = pyro.param("probs_d")
+        b_axis = pyro.irange("b_axis", 2)
+        c_axis = pyro.iarange("c_axis", 2)
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
+        with c_axis:
+            c = pyro.sample("c", dist.Categorical(probs_c[a]))
+        for i in b_axis:
+            with c_axis:
+                pyro.sample("d_{}".format(i),
+                            dist.Categorical(probs_d[b[i].unsqueeze(-1), c.unsqueeze(-1), d_ind]),
+                            obs=data[i])
+
+    @config_enumerate(default="parallel")
+    @poutine.scale(scale=scale)
+    def model_iarange_irange(data):
+        probs_a = pyro.param("probs_a")
+        probs_b = pyro.param("probs_b")
+        probs_c = pyro.param("probs_c")
+        probs_d = pyro.param("probs_d")
+        b_axis = pyro.iarange("b_axis", 2)
+        c_axis = pyro.irange("c_axis", 2)
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with b_axis:
+            b = pyro.sample("b", dist.Categorical(probs_b[a]))
+        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
+        with b_axis:
+            for j in c_axis:
+                pyro.sample("d_{}".format(j),
+                            dist.Categorical(probs_d[b.unsqueeze(-1), c[j].unsqueeze(-1), d_ind]),
+                            obs=data[:, j])
+
+    @config_enumerate(default="parallel")
+    @poutine.scale(scale=scale)
+    def model_iarange_iarange(data):
+        probs_a = pyro.param("probs_a")
+        probs_b = pyro.param("probs_b")
+        probs_c = pyro.param("probs_c")
+        probs_d = pyro.param("probs_d")
+        b_axis = pyro.iarange("b_axis", 2, dim=-1)
+        c_axis = pyro.iarange("c_axis", 2, dim=-2)
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with b_axis:
+            b = pyro.sample("b", dist.Categorical(probs_b[a]))
+        with c_axis:
+            c = pyro.sample("c", dist.Categorical(probs_c[a]))
+        with b_axis, c_axis:
+            pyro.sample("d",
+                        dist.Categorical(probs_d[b.unsqueeze(-1), c.unsqueeze(-1), d_ind]),
+                        obs=data)
+
+    def guide(data):
+        pass
+
+    # Check that either one of the iranges can be promoted to an iarange.
+    data = torch.tensor([[0, 1], [0, 0]])
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+    loss_irange_irange = elbo.differentiable_loss(model_irange_irange, guide, data)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    loss_iarange_irange = elbo.differentiable_loss(model_iarange_irange, guide, data)
+    loss_irange_iarange = elbo.differentiable_loss(model_irange_iarange, guide, data)
+    _check_loss_and_grads(loss_irange_irange, loss_iarange_irange)
+    _check_loss_and_grads(loss_irange_irange, loss_irange_iarange)
+
+    # But promoting both to iaranges should result in an error.
+    elbo = TraceEnum_ELBO(max_iarange_nesting=2)
+    with pytest.raises(ValueError, match="Expected tree-structured iarange nesting.*"):
+        elbo.differentiable_loss(model_iarange_iarange, guide, data)
 
 
 def test_elbo_scale():
