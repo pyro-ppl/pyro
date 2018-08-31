@@ -1839,7 +1839,7 @@ def test_elbo_enumerate_iaranges_1(scale):
 def test_elbo_enumerate_iaranges_2(scale):
     #  +---------+       +---------+
     #  |     b <---- a ----> c     |
-    #  | M=2     |       |     N=2 |
+    #  | M=2     |       |     N=3 |
     #  +---------+       +---------+
     pyro.param("probs_a",
                torch.tensor([0.45, 0.55]),
@@ -1851,7 +1851,7 @@ def test_elbo_enumerate_iaranges_2(scale):
                torch.tensor([[0.75, 0.25], [0.55, 0.45]]),
                constraint=constraints.simplex)
     b_data = torch.tensor([0, 1])
-    c_data = torch.tensor([0, 0])
+    c_data = torch.tensor([0, 0, 1])
 
     @config_enumerate(default="parallel")
     @poutine.scale(scale=scale)
@@ -1860,10 +1860,10 @@ def test_elbo_enumerate_iaranges_2(scale):
         probs_b = pyro.param("probs_b")
         probs_c = pyro.param("probs_c")
         a = pyro.sample("a", dist.Categorical(probs_a))
-        with pyro.iarange("b_axis", 2, dim=-1):
+        with pyro.iarange("b_axis", 2):
             pyro.sample("b", dist.Categorical(probs_b[a]),
                         obs=b_data)
-        with pyro.iarange("c_axis", 2, dim=-2):
+        with pyro.iarange("c_axis", 3):
             pyro.sample("c", dist.Categorical(probs_c[a]),
                         obs=c_data)
 
@@ -1877,14 +1877,14 @@ def test_elbo_enumerate_iaranges_2(scale):
         for i in pyro.irange("b_axis", 2):
             pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a]),
                         obs=b_data[i])
-        for j in pyro.irange("c_axis", 2):
+        for j in pyro.irange("c_axis", 3):
             pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a]),
                         obs=c_data[j])
 
     def guide():
         pass
 
-    elbo = TraceEnum_ELBO(max_iarange_nesting=2)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
     auto_loss = elbo.differentiable_loss(auto_model, guide)
     elbo = TraceEnum_ELBO(max_iarange_nesting=0)
     hand_loss = elbo.differentiable_loss(hand_model, guide)

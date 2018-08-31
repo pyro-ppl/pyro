@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 import weakref
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import torch
 from six.moves import queue
@@ -21,6 +21,7 @@ from pyro.util import check_traceenum_requirements, warn_if_nan
 
 def _check_model_enumeration_requirements(log_factors, scales):
     # Check for absence of diamonds, i.e. collider iaranges.
+    # This is required to avoid loops in message passing.
     for t in log_factors:
         for u in log_factors:
             if not (u < t):
@@ -57,27 +58,45 @@ def _contract(log_factors, enum_boundary):
                 log_factors[tu] = []
                 pending.append(tu)
 
+    # Collect all enumeration dimensions.
+    enum_dims = defaultdict(set)
+    for t, terms in log_factors.items():
+        for term in terms:
+            for dim, size in enumerate(term.shape):
+                dim -= term.dim()
+                if dim >= enum_boundary:
+                    break
+                if size > 1:
+                    enum_dims[t].add(dim)
+
     # Recursively combine terms in different iarange contexts.
     while True:
-        leaf = max(reversed(log_factors), key=len)
+        leaf = max(log_factors, key=len)
         terms = log_factors.pop(leaf)
+        dims = enum_dims.pop(leaf)
 
         # Eliminate enumeration dims via a logsumproductexp() contraction.
-        remaining_boundary = (min(-x.dim() for xs in log_factors.values() for x in xs)
-                              if log_factors else enum_boundary)
-        assert remaining_boundary <= enum_boundary
-        shape = (broadcast_shape(*set(x.shape[remaining_boundary:] for x in terms))
-                 if remaining_boundary else ())
+        shape = list(broadcast_shape(*set(x.shape for x in terms)))
+        remaining_dims = set.union(set(), *enum_dims.values())
+        for dim in dims - remaining_dims:
+            shape[dim] = 1
+        shape.reverse()
+        while shape and shape[-1] == 1:
+            shape.pop()
+        shape.reverse()
+        shape = tuple(shape)
         term = logsumproductexp(terms, shape)
         if not log_factors:
             break
 
-        # Eliminate iarange dims via .sum().
+        # Eliminate iarange dims via .sum() contractions.
         frames = frozenset.intersection(*(leaf - t for t in log_factors if t < leaf))
         assert frames
         for frame in frames:
             term = term.sum(frame.dim, keepdim=True)
-        log_factors[leaf - frozenset([frame])].append(term)
+        parent = leaf - frozenset([frame])
+        log_factors[parent].append(term)
+        enum_dims[parent] |= dims & remaining_dims
 
     return leaf, term
 
@@ -108,7 +127,7 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
     for t, sites_t in cost_sites.items():
         for site in sites_t:
             if site["log_prob"].dim() <= -enum_boundary:
-                # For site do not depend on an enumerated variable, proceed as usual.
+                # For sites that do not depend on an enumerated variable, proceed as usual.
                 marginal_costs.setdefault(t, []).append(site["log_prob"])
             else:
                 # For sites that depend on an enumerated variable, we need to apply
