@@ -11,12 +11,12 @@ from pyro.contrib.oed.eig import barber_agakov_ape
 from pyro.contrib.oed.util import rmv
 
 from models.bayes_linear import sigmoid_model, rf_group_assignments
-from guides.amort import Ba_sigmoid_guide
+from guides.amort import SigmoidGuide
 
 # Random effects designs
 AB_test_reff_6d_10n_12p, AB_sigmoid_design_6d = rf_group_assignments(10)
 
-sigmoid_ba_guide = lambda d: Ba_sigmoid_guide(2, d, 10, {"w1": 2}).guide
+sigmoid_ba_guide = lambda d: SigmoidGuide(d, 10, {"w1": 2, "w2": 10})
 
 
 def true_model(design):
@@ -56,7 +56,7 @@ def main(num_experiments, num_runs):
                                   1000.*torch.ones(10),
                                   AB_sigmoid_design_6d)
             my_guide = sigmoid_ba_guide(6)
-            ba_kwargs = {"num_samples": 100, "num_steps": 500, "guide": my_guide,
+            ba_kwargs = {"num_samples": 100, "num_steps": 500, "guide": my_guide.guide,
                          "optim": optim.Adam({"lr": 0.05}), "final_num_samples": 500}
 
             for experiment_number in range(1, num_experiments+1):
@@ -72,7 +72,8 @@ def main(num_experiments, num_runs):
                 d_star_index = int(d_star_index)
                 design = AB_test_reff_6d_10n_12p[d_star_index, ...]
                 y = true_model(design)
-                mu, scale_tril = my_guide({"y": y}, AB_test_reff_6d_10n_12p, None, ["w1"])
+                mu_dict, scale_tril_dict = my_guide({"y": y}, AB_test_reff_6d_10n_12p, ["w1"])
+                mu, scale_tril = mu_dict["w1"], scale_tril_dict["w1"]
 
                 model = sigmoid_model(mu[d_star_index, ...].detach(),
                                       torch.diag(scale_tril[d_star_index, ...].detach()),
