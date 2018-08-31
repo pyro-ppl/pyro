@@ -327,5 +327,7 @@ class HMC(TraceKernel):
         return self._get_trace(z)
 
     def diagnostics(self):
-        return "Step size: {:.6f} \t Acceptance rate: {:.6f}".format(
-            self.step_size, self._accept_cnt / self._t)
+        return OrderedDict([
+            ("Step size", self.step_size),
+            ("Acceptance rate", self._accept_cnt / self._t)
+        ])
