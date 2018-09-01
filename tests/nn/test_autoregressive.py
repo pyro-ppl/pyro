@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 from unittest import TestCase
 
-import numpy as np
 import pytest
 import torch
 

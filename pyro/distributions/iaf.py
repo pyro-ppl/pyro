@@ -7,6 +7,9 @@ from torch.distributions import constraints
 
 from pyro.distributions.util import copy_docs_from
 
+# This helper function clamps gradients but still passes through the gradient in clamped regions
+# NOTE: Not sure how necessary this is, but I was copying the design of the TensorFlow implementation
+
 
 def clamp_preserve_gradients(x, min, max):
     return x + (x.clamp(min, max) - x).detach()
@@ -15,8 +18,8 @@ def clamp_preserve_gradients(x, min, max):
 @copy_docs_from(Transform)
 class InverseAutoregressiveFlow(Transform):
     """
-    An implementation of an Inverse Autoregressive Flow. Together with the `TransformedDistribution` this
-    provides a way to create richer variational approximations.
+    An implementation of an Inverse Autoregressive Flow, using Eq (10) from Kingma Et Al., 2016.
+    Together with the `TransformedDistribution` this provides a way to create richer variational approximations.
 
     Example usage:
 
@@ -29,18 +32,21 @@ class InverseAutoregressiveFlow(Transform):
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
 
-    Note that this implementation is only meant to be used in settings where the inverse of the Bijector
-    is never explicitly computed (rather the result is cached from the forward call). In the context of
-    variational inference, this means that the InverseAutoregressiveFlow should only be used in the guide,
-    i.e. in the variational distribution. In other contexts the inverse could in principle be computed but
-    this would be a (potentially) costly computation that scales with the dimension of the input (and in
-    any case support for this is not included in this implementation).
+    The inverse of the Bijector is required when, e.g., scoring the log density of a sample with
+    `TransformedDistribution`. This implementation caches the inverse of the Bijector when its forward
+    operation is called, e.g., when sampling from `TransformedDistribution`. However, if the cached value
+    isn't available, either because it was already popped from the cache, or an arbitary value is being
+    scored, it will calculate it manually. Note that this is an operation that scales as O(D) where D is
+    the input dimension, and so should be avoided for large dimensional uses. So in general, it is cheap
+    to sample from IAF, score a value that was sampled by IAF, but expensive to score an arbitrary value.
 
     :param autoregressive_nn: an autoregressive neural network whose forward call returns a real-valued
         mean and logit-scale as a tuple
     :type autoregressive_nn: nn.Module
-    :param sigmoid_bias: bias on the hidden units fed into the sigmoid; default=`2.0`
-    :type sigmoid_bias: float
+    :param log_scale_min_clip: The minimum value for clipping the log(scale) from the autoregressive NN
+    :type log_scale_min_clip: float
+    :param log_scale_max_clip: The maximum value for clipping the log(scale) from the autoregressive NN
+    :type log_scale_max_clip: float
 
     References:
 
@@ -99,11 +105,9 @@ class InverseAutoregressiveFlow(Transform):
         Inverts y => x. Uses a previously cached inverse if available, otherwise performs the inversion afresh.
         """
         if (y, 'x') in self._intermediates_cache:
-            #print('returning cached inverse')
             x = self._intermediates_cache.pop((y, 'x'))
             return x
         else:
-            #print('returning calculated inverse')
             x_size = y.size()[:-1]
             perm = self.module.arn.permutation
             input_dim = y.size(-1)
@@ -112,15 +116,12 @@ class InverseAutoregressiveFlow(Transform):
             # NOTE: Inversion is an expensive operation that scales in the dimension of the input
             for idx in perm:
                 mean, log_scale = self.module.arn(torch.stack(x, dim=-1))
-                inverse_scale = torch.exp(-clamp_preserve_gradients(log_scale[..., idx], min=-5., max=3))
+                inverse_scale = torch.exp(-clamp_preserve_gradients(
+                    log_scale[..., idx], min=self.log_scale_min_clip, max=self.log_scale_max_clip))
                 mean = mean[..., idx]
                 x[idx] = (y[..., idx] - mean) * inverse_scale
 
             x = torch.stack(x, dim=-1)
-
-            #_, log_scale = self.module.arn(x)
-            #scale = torch.exp(clamp_preserve_gradients(log_scale, min=-5., max=3))
-            #self._add_intermediate_to_cache(scale, y, 'scale')
             return x
 
     def _add_intermediate_to_cache(self, intermediate, y, name):
@@ -139,15 +140,16 @@ class InverseAutoregressiveFlow(Transform):
             log_scale = self._intermediates_cache.pop((y, 'log_scale'))
         else:
             _, log_scale = self.module.arn(x)
-            log_scale = clamp_preserve_gradients(log_scale, min=-5., max=3)
+            log_scale = clamp_preserve_gradients(log_scale, min=self.log_scale_min_clip, max=self.log_scale_max_clip)
         return log_scale
 
 
 @copy_docs_from(Transform)
 class InverseAutoregressiveFlowStable(Transform):
     """
-    An implementation of an Inverse Autoregressive Flow. Together with the `TransformedDistribution` this
-    provides a way to create richer variational approximations.
+    An implementation of an Inverse Autoregressive Flow, using Eqs (13)/(14) from Kingma Et Al., 2016.
+    This variant of IAF is claimed by the authors to be more numerically stable than one using Eq (10),
+    although in practice it leads to a restriction on the distributions that can be represented.
 
     Example usage:
 
@@ -160,12 +162,7 @@ class InverseAutoregressiveFlowStable(Transform):
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
 
-    Note that this implementation is only meant to be used in settings where the inverse of the Bijector
-    is never explicitly computed (rather the result is cached from the forward call). In the context of
-    variational inference, this means that the InverseAutoregressiveFlow should only be used in the guide,
-    i.e. in the variational distribution. In other contexts the inverse could in principle be computed but
-    this would be a (potentially) costly computation that scales with the dimension of the input (and in
-    any case support for this is not included in this implementation).
+    See `InverseAutoregressiveFlow` docs for a discussion of the running cost.
 
     :param autoregressive_nn: an autoregressive neural network whose forward call returns a real-valued
         mean and logit-scale as a tuple
@@ -247,10 +244,6 @@ class InverseAutoregressiveFlowStable(Transform):
                 x[idx] = inverse_scale * y[..., idx] + (1 - inverse_scale) * mean[..., idx]
 
             x = torch.stack(x, dim=-1)
-
-            #_, log_scale = self.module.arn(x)
-            #scale = torch.exp(clamp_preserve_gradients(log_scale, min=-5., max=3))
-            #self._add_intermediate_to_cache(scale, y, 'scale')
             return x
 
     def _add_intermediate_to_cache(self, intermediate, y, name):

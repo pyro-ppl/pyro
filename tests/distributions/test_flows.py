@@ -9,10 +9,8 @@ import torch
 import pyro.distributions as dist
 from pyro.distributions.iaf import InverseAutoregressiveFlow, InverseAutoregressiveFlowStable
 from pyro.nn import AutoRegressiveNN
-from pyro.nn.auto_reg_nn import create_mask
 
 pytestmark = pytest.mark.init(rng_seed=123)
-
 
 
 class AutoregressiveFlowTests(TestCase):
@@ -58,12 +56,12 @@ class AutoregressiveFlowTests(TestCase):
         assert diag_sum == float(input_dim)
         assert lower_sum == float(0.0)
 
-    def _test_inverses(self, input_dim, make_flow):
+    def _test_inverse(self, input_dim, make_flow):
         base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
         iaf = make_flow(input_dim)
         iaf_dist = dist.TransformedDistribution(base_dist, [iaf])
 
-        # The fist time _inverse is called it returns the cached value, the second time the numerical inverse
+        # The first time _inverse is called it returns the cached value, the second time the numerical inverse
         y = iaf_dist.sample(torch.Size([100]))
         x_true = iaf._inverse(y)
         x_calculated = iaf._inverse(y)
