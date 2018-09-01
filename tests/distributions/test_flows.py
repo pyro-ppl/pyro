@@ -61,9 +61,15 @@ class AutoregressiveFlowTests(TestCase):
         iaf = make_flow(input_dim)
 
         # The first time _inverse is called it returns the cached value, the second time the numerical inverse
-        x_true = base_dist.sample(torch.Size([100]))
+        x_true = base_dist.sample(torch.Size([10]))
         y = iaf._call(x_true)
         x_calculated = iaf._inverse(y)
+
+        if torch.norm(x_true - x_calculated, dim=-1).max().item() >= self.delta:
+          print('perm', iaf.permutation)
+          print('x_true', x_true)
+          print('x_calculated', x_calculated)
+          raise Exception()
 
         assert torch.norm(x_true - x_calculated, dim=-1).max().item() < self.delta
 

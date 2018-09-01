@@ -21,15 +21,17 @@ class FlipFlow(Transform):
     Example usage:
 
     >>> from pyro.nn import AutoRegressiveNN
+    >>> from pyro.distributions import InverseAutoregressiveFlow, FlipFlow
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> iaf = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
-    >>> iaf_module = pyro.module("my_iaf", iaf.module)
-    >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf])
+    >>> iaf1 = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
+    >>> ff = FlipFlow(torch.randperm(10))
+    >>> iaf2 = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
+    >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf1, ff, iaf2])
     >>> iaf_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
     
-    :param permutation: a optional permutation ordering that is applied to the inputs.
+    :param permutation: a permutation ordering that is applied to the inputs.
     :type permutation: torch.LongTensor
 
     """
@@ -42,6 +44,8 @@ class FlipFlow(Transform):
         self.permutation = permutation
 
         # Calculate the inverse permutation order
+        self.inv_permutation = torch.empty(permutation.shape, dtype=torch.long)
+        self.inv_permutation[permutation] = torch.arange(permutation.size(0))
 
     def _call(self, x):
         """
@@ -62,8 +66,7 @@ class FlipFlow(Transform):
         Inverts y => x. Uses a previously cached inverse if available, otherwise performs the inversion afresh.
         """
 
-        # To invert y, we simply apply the same permutation again
-        return y[...,self.permutation]
+        return y[...,self.inv_permutation]
 
     def log_abs_det_jacobian(self, x, y):
         """
