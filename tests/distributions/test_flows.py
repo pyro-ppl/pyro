@@ -7,7 +7,6 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-#from pyro.distributions.iaf import InverseAutoregressiveFlow, InverseAutoregressiveFlowStable
 from pyro.nn import AutoRegressiveNN
 
 pytestmark = pytest.mark.init(rng_seed=123)
@@ -66,10 +65,10 @@ class AutoregressiveFlowTests(TestCase):
         x_calculated = iaf._inverse(y)
 
         if torch.norm(x_true - x_calculated, dim=-1).max().item() >= self.delta:
-          print('perm', iaf.permutation)
-          print('x_true', x_true)
-          print('x_calculated', x_calculated)
-          raise Exception()
+            print('perm', iaf.permutation)
+            print('x_true', x_true)
+            print('x_calculated', x_calculated)
+            raise Exception()
 
         assert torch.norm(x_true - x_calculated, dim=-1).max().item() < self.delta
 
@@ -93,11 +92,11 @@ class AutoregressiveFlowTests(TestCase):
         assert sample.shape == base_shape
 
     def _make_iaf(self, input_dim):
-        arn = AutoRegressiveNN(input_dim, [3*input_dim + 1])
+        arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
         return dist.InverseAutoregressiveFlow(arn)
 
     def _make_iaf_stable(self, input_dim):
-        arn = AutoRegressiveNN(input_dim, [3*input_dim + 1])
+        arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
         return dist.InverseAutoregressiveFlowStable(arn, sigmoid_bias=0.5)
 
     def _make_flipflow(self, input_dim):

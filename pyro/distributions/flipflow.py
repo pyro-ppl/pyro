@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-import torch.nn as nn
 from torch.distributions.transforms import Transform
 from torch.distributions import constraints
 
@@ -14,7 +13,7 @@ class FlipFlow(Transform):
     A normalizing flow that reorders the input dimensions, that is, multiplies the input by a permutation matrix.
     This is useful in between IAF transforms to increase the flexibility of the resulting distribution and
     stabilize learning. Whilst not being an autoregressive flow, the log absolute determinate of the Jacobian is
-    easily calculable as 0. Note that reordering the input dimension between two layers of IAF is not equivalent 
+    easily calculable as 0. Note that reordering the input dimension between two layers of IAF is not equivalent
     to reordering the dimension inside the MADE networks that those IAFs use; using a FlipFlow results in a
     distribution with more flexibility.
 
@@ -30,7 +29,7 @@ class FlipFlow(Transform):
     >>> iaf_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
-    
+
     :param permutation: a permutation ordering that is applied to the inputs.
     :type permutation: torch.LongTensor
 
@@ -56,7 +55,7 @@ class FlipFlow(Transform):
         sample from the base distribution (or the output of a previous flow)
         """
 
-        return x[...,self.permutation]
+        return x[..., self.permutation]
 
     def _inverse(self, y):
         """
@@ -66,13 +65,13 @@ class FlipFlow(Transform):
         Inverts y => x. Uses a previously cached inverse if available, otherwise performs the inversion afresh.
         """
 
-        return y[...,self.inv_permutation]
+        return y[..., self.inv_permutation]
 
     def log_abs_det_jacobian(self, x, y):
         """
         Calculates the elementwise determinant of the log Jacobian, i.e. log(abs([dy_0/dx_0, ..., dy_{N-1}/dx_{N-1}])).
         Note that this type of flow is not autoregressive, so the log Jacobian is not the sum of the previous
-        expression. However, it turns out it's always 0 (since the determinant is -1 or +1), and so returning a 
+        expression. However, it turns out it's always 0 (since the determinant is -1 or +1), and so returning a
         vector of zeros works.
         """
 
