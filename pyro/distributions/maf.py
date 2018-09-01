@@ -29,7 +29,7 @@ class MaskedAutoregressiveFlow(Transform):
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
 
-    IAF and MAF can be seen as the inverse of each other. I.e. MAF simple swaps the forward and inverse
+    IAF and MAF can be seen as the inverse of each other. I.e. MAF simply swaps the forward and inverse
     operations of IAF. This means that scoring an arbitrary sample is fast and sampling scales as O(D),
     where D is the input dimension, and so should be avoided for large dimensional uses.
 
