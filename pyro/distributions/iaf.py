@@ -99,9 +99,11 @@ class InverseAutoregressiveFlow(Transform):
         Inverts y => x. Uses a previously cached inverse if available, otherwise performs the inversion afresh.
         """
         if (y, 'x') in self._intermediates_cache:
+            #print('returning cached inverse')
             x = self._intermediates_cache.pop((y, 'x'))
             return x
         else:
+            #print('returning calculated inverse')
             x_size = y.size()[:-1]
             perm = self.module.arn.permutation
             input_dim = y.size(-1)
