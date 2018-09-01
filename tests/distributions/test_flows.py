@@ -7,7 +7,7 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-from pyro.distributions.iaf import InverseAutoregressiveFlow, InverseAutoregressiveFlowStable
+#from pyro.distributions.iaf import InverseAutoregressiveFlow, InverseAutoregressiveFlowStable
 from pyro.nn import AutoRegressiveNN
 
 pytestmark = pytest.mark.init(rng_seed=123)
@@ -77,11 +77,15 @@ class AutoregressiveFlowTests(TestCase):
 
     def _make_iaf(self, input_dim):
         arn = AutoRegressiveNN(input_dim, [3*input_dim + 1])
-        return InverseAutoregressiveFlow(arn)
+        return dist.InverseAutoregressiveFlow(arn)
 
     def _make_iaf_stable(self, input_dim):
         arn = AutoRegressiveNN(input_dim, [3*input_dim + 1])
-        return InverseAutoregressiveFlowStable(arn, sigmoid_bias=0.5)
+        return dist.InverseAutoregressiveFlowStable(arn, sigmoid_bias=0.5)
+
+    def _make_flipflow(self, input_dim):
+        permutation = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
+        return dist.FlipFlow(permutation)
 
     def test_iaf_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -99,6 +103,10 @@ class AutoregressiveFlowTests(TestCase):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_inverse(input_dim, self._make_iaf_stable)
 
+    def test_flipflow_inverses(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_inverse(input_dim, self._make_flipflow)
+
     def test_iaf_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_iaf)
@@ -106,3 +114,7 @@ class AutoregressiveFlowTests(TestCase):
     def test_iaf_stable_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_iaf_stable)
+
+    def test_flipflow_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_flipflow)
