@@ -56,14 +56,12 @@ def _partition_terms(terms, dims):
     """
     # Construct a bipartite graph between terms and the dims in which they
     # are enumerated. This conflates terms and dims (tensors and ints).
-    neighbors = OrderedDict()
+    neighbors = OrderedDict([(t, []) for t in terms] + [(d, []) for d in dims])
     for term in terms:
         for dim in range(-term.dim(), 0):
             if dim in dims and term.shape[dim] > 1:
-                neighbors.setdefault(term, []).append(dim)
-                neighbors.setdefault(dim, []).append(term)
-        if term not in neighbors:
-            yield [term], set()
+                neighbors[term].append(dim)
+                neighbors[dim].append(term)
 
     # Partition the bipartite graph into connected components for contraction.
     while neighbors:

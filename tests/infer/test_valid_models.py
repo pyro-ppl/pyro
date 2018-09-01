@@ -26,13 +26,14 @@ def assert_ok(model, guide, elbo):
     inference.step()
 
 
-def assert_error(model, guide, elbo):
+def assert_error(model, guide, elbo, match=None):
     """
     Assert that inference fails with an error.
     """
     pyro.clear_param_store()
     inference = SVI(model,  guide, Adam({"lr": 1e-6}), elbo)
-    with pytest.raises((NotImplementedError, UserWarning, KeyError, ValueError, RuntimeError)):
+    with pytest.raises((NotImplementedError, UserWarning, KeyError, ValueError, RuntimeError),
+                       match=match):
         inference.step()
 
 
@@ -1125,7 +1126,8 @@ def test_enum_in_model_multi_scale_error():
     def guide():
         pass
 
-    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=0))
+    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=0),
+                 match='Expected all enumerated sample sites to share a common poutine.scale')
 
 
 def test_enum_in_model_diamond_error():
@@ -1158,7 +1160,8 @@ def test_enum_in_model_diamond_error():
     def guide():
         pass
 
-    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=2))
+    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=2),
+                 match='Expected tree-structured iarange nesting')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
