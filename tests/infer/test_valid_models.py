@@ -26,7 +26,7 @@ def assert_ok(model, guide, elbo):
     inference.step()
 
 
-def assert_error(model, guide, elbo, match):
+def assert_error(model, guide, elbo, match=None):
     """
     Assert that inference fails with an error.
     """
