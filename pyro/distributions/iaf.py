@@ -136,7 +136,7 @@ class InverseAutoregressiveFlow(Transform):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        if (y, 'scale') in self._intermediates_cache:
+        if (y, 'log_scale') in self._intermediates_cache:
             log_scale = self._intermediates_cache.pop((y, 'log_scale'))
         else:
             _, log_scale = self.module.arn(x)
@@ -258,7 +258,7 @@ class InverseAutoregressiveFlowStable(Transform):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        if (y, 'scale') in self._intermediates_cache:
+        if (y, 'log_scale') in self._intermediates_cache:
             log_scale = self._intermediates_cache.pop((y, 'log_scale'))
         else:
             _, logit_scale = self.module.arn(x)
