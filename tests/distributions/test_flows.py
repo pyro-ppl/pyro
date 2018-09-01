@@ -26,23 +26,23 @@ class AutoregressiveFlowTests(TestCase):
 
     def _test_jacobian(self, input_dim, make_flow):
         jacobian = torch.zeros(input_dim, input_dim)
-        iaf = make_flow(input_dim)
+        flow = make_flow(input_dim)
 
         def nonzero(x):
             return torch.sign(torch.abs(x))
 
         x = torch.randn(1, input_dim)
-        iaf_x = iaf(x)
-        analytic_ldt = iaf.log_abs_det_jacobian(x, iaf_x).data.sum()
+        flow_x = flow(x)
+        analytic_ldt = flow.log_abs_det_jacobian(x, flow_x).data.sum()
 
         for j in range(input_dim):
             for k in range(input_dim):
                 epsilon_vector = torch.zeros(1, input_dim)
                 epsilon_vector[0, j] = self.epsilon
-                delta = (iaf(x + 0.5 * epsilon_vector) - iaf(x - 0.5 * epsilon_vector)) / self.epsilon
+                delta = (flow(x + 0.5 * epsilon_vector) - flow(x - 0.5 * epsilon_vector)) / self.epsilon
                 jacobian[j, k] = float(delta[0, k].data.sum())
 
-        permutation = iaf.arn.get_permutation()
+        permutation = flow.arn.get_permutation()
         permuted_jacobian = jacobian.clone()
         for j in range(input_dim):
             for k in range(input_dim):
@@ -85,8 +85,8 @@ class AutoregressiveFlowTests(TestCase):
         return InverseAutoregressiveFlowStable(arn, sigmoid_bias=0.5)
 
     def _make_maf(self, input_dim):
-        arn = MaskedRegressiveNN(input_dim, [3*input_dim + 1])
-        return InverseAutoregressiveFlow(arn)
+        arn = AutoRegressiveNN(input_dim, [3*input_dim + 1])
+        return MaskedAutoregressiveFlow(arn)
 
     def test_iaf_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -95,10 +95,6 @@ class AutoregressiveFlowTests(TestCase):
     def test_iaf_stable_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_iaf_stable)
-
-    def test_maf_jacobians(self):
-        for input_dim in [2, 3, 5, 7, 9, 11]:
-            self._test_jacobian(input_dim, self._make_maf)
 
     def test_iaf_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:

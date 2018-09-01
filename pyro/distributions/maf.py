@@ -107,10 +107,10 @@ class MaskedAutoregressiveFlow(Transform):
 
     def _add_intermediate_to_cache(self, intermediate, y, name):
         """
-        Internal function used to cache intermediate results computed during the forward call
+        Internal function used to cache intermediate results computed during the inverse call
         """
-        assert((y, name) not in self._intermediates_cache),\
-            "key collision in _add_intermediate_to_cache"
+        #assert((y, name) not in self._intermediates_cache),\
+        #    "key collision in _add_intermediate_to_cache"
         self._intermediates_cache[(y, name)] = intermediate
 
     def log_abs_det_jacobian(self, x, y):
