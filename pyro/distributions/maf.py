@@ -7,8 +7,10 @@ from torch.distributions import constraints
 
 from pyro.distributions.util import copy_docs_from
 
+
 def clamp_preserve_gradients(x, min, max):
     return x + (x.clamp(min, max) - x).detach()
+
 
 @copy_docs_from(Transform)
 class MaskedAutoregressiveFlow(Transform):
@@ -96,12 +98,12 @@ class MaskedAutoregressiveFlow(Transform):
         :type y: torch.Tensor
 
         Inverts y => x. Uses a previously cached inverse if available, otherwise performs the inversion afresh.
-        """ 
+        """
         mean, log_scale = self.module.arn(y)
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         scale = torch.exp(log_scale)
 
-        x = scale*y + mean
+        x = scale * y + mean
         self._add_intermediate_to_cache(log_scale, y, 'log_scale')
         return x
 
@@ -109,7 +111,7 @@ class MaskedAutoregressiveFlow(Transform):
         """
         Internal function used to cache intermediate results computed during the inverse call
         """
-        #assert((y, name) not in self._intermediates_cache),\
+        # assert((y, name) not in self._intermediates_cache),\
         #    "key collision in _add_intermediate_to_cache"
         self._intermediates_cache[(y, name)] = intermediate
 

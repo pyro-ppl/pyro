@@ -39,6 +39,7 @@ __all__ = [
     "InverseAutoregressiveFlow",
     "InverseAutoregressiveFlowStable",
     "LowRankMultivariateNormal",
+    "MaskedAutoregressiveFlow",
     "MaskedMixture",
     "MixtureOfDiagNormalsSharedCovariance",
     "OMTMultivariateNormal",
