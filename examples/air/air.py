@@ -233,7 +233,7 @@ class AIR(nn.Module):
         # Sample presence.
         z_pres = pyro.sample('z_pres_{}'.format(t),
                              dist.Bernoulli(z_pres_p * prev.z_pres).independent(1),
-                             infer=dict(baseline=dict(baseline_value=bl_value.squeeze(-1))))
+                             infer=bl_value)
 
         sample_mask = z_pres if self.use_masking else torch.tensor(1.0)
 
@@ -259,7 +259,7 @@ class AIR(nn.Module):
 
     def baseline_step(self, prev, inputs):
         if not self.use_baselines:
-            return None, None, None
+            return dict(), None, None
 
         # Prevent gradients flowing back from baseline loss to
         # inference net by detaching from graph here.
@@ -282,7 +282,8 @@ class AIR(nn.Module):
         if self.baseline_scalar is not None:
             bl_value = bl_value * self.baseline_scalar
 
-        return bl_value, bl_h, bl_c
+        infer_dict = dict(baseline_value=bl_value.squeeze(-1))
+        return infer_dict, bl_h, bl_c
 
 
 # Spatial transformer helpers.
