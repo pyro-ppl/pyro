@@ -228,12 +228,12 @@ class AIR(nn.Module):
         z_pres_p, z_where_loc, z_where_scale = self.predict(h)
 
         # Compute baseline estimates for discrete choice z_pres.
-        bl_value, bl_h, bl_c = self.baseline_step(prev, inputs)
+        infer_dict, bl_h, bl_c = self.baseline_step(prev, inputs)
 
         # Sample presence.
         z_pres = pyro.sample('z_pres_{}'.format(t),
                              dist.Bernoulli(z_pres_p * prev.z_pres).independent(1),
-                             infer=bl_value)
+                             infer=infer_dict)
 
         sample_mask = z_pres if self.use_masking else torch.tensor(1.0)
 
