@@ -7,8 +7,10 @@ from torch.distributions import constraints
 
 from pyro.distributions.util import copy_docs_from
 
+
 def clamp_preserve_gradients(x, min, max):
-  return x + (x.clamp(min, max) - x).detach()
+    return x + (x.clamp(min, max) - x).detach()
+
 
 @copy_docs_from(Transform)
 class InverseAutoregressiveFlow(Transform):
@@ -103,7 +105,7 @@ class InverseAutoregressiveFlow(Transform):
             x_size = y.size()[:-1]
             perm = self.module.arn.permutation
             input_dim = y.size(-1)
-            x = [torch.zeros(x_size, device=y.device)]*input_dim
+            x = [torch.zeros(x_size, device=y.device)] * input_dim
 
             # NOTE: Inversion is an expensive operation that scales in the dimension of the input
             for idx in perm:
@@ -137,6 +139,7 @@ class InverseAutoregressiveFlow(Transform):
             _, log_scale = self.module.arn(x)
             log_scale = clamp_preserve_gradients(log_scale, min=-5., max=3)
         return log_scale
+
 
 @copy_docs_from(Transform)
 class InverseAutoregressiveFlowStable(Transform):
@@ -233,13 +236,13 @@ class InverseAutoregressiveFlowStable(Transform):
             x_size = y.size()[:-1]
             perm = self.module.arn.permutation
             input_dim = y.size(-1)
-            x = [torch.zeros(x_size, device=y.device)]*input_dim
+            x = [torch.zeros(x_size, device=y.device)] * input_dim
 
             # NOTE: Inversion is an expensive operation that scales in the dimension of the input
             for idx in perm:
                 mean, logit_scale = self.module.arn(torch.stack(x, dim=-1))
                 inverse_scale = 1 + torch.exp(-logit_scale[..., idx] - self.sigmoid_bias)
-                x[idx] = inverse_scale * y[..., idx]  + (1 - inverse_scale) * mean[..., idx]
+                x[idx] = inverse_scale * y[..., idx] + (1 - inverse_scale) * mean[..., idx]
 
             x = torch.stack(x, dim=-1)
 
