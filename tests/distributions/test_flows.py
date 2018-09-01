@@ -59,6 +59,17 @@ class AutoregressiveFlowTests(TestCase):
     def _test_inverse(self, input_dim, make_flow):
         base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
         iaf = make_flow(input_dim)
+
+        # The first time _inverse is called it returns the cached value, the second time the numerical inverse
+        x_true = base_dist.sample(torch.Size([100]))
+        y = iaf._call(x_true)
+        x_calculated = iaf._inverse(y)
+
+        assert torch.norm(x_true - x_calculated, dim=-1).max().item() < self.delta
+
+    def _test_inverse_cached(self, input_dim, make_flow):
+        base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+        iaf = make_flow(input_dim)
         iaf_dist = dist.TransformedDistribution(base_dist, [iaf])
 
         # The first time _inverse is called it returns the cached value, the second time the numerical inverse
@@ -97,11 +108,11 @@ class AutoregressiveFlowTests(TestCase):
 
     def test_iaf_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
-            self._test_inverse(input_dim, self._make_iaf)
+            self._test_inverse_cached(input_dim, self._make_iaf)
 
     def test_iaf_stable_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
-            self._test_inverse(input_dim, self._make_iaf_stable)
+            self._test_inverse_cached(input_dim, self._make_iaf_stable)
 
     def test_flipflow_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
