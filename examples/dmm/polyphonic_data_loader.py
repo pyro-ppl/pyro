@@ -13,7 +13,7 @@ however, the original source of the data seems to be the Institut fuer Algorithm
 und Kognitive Systeme at Universitaet Karlsruhe.
 """
 
-from os.path import exists, join
+import os
 
 import numpy as np
 import six.moves.cPickle as pickle
@@ -24,9 +24,15 @@ from observations import jsb_chorales
 
 # this function processes the raw data; in particular it unsparsifies it
 def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
-    output = join(base_path, filename)
-    if exists(output):
-        return
+    output = os.path.join(base_path, filename)
+    if os.path.exists(output):
+        try:
+            with open(output, "rb") as f:
+                return pickle.load(f)
+        except (ValueError, UnicodeDecodeError):
+            # Assume python env has changed.
+            # Recreate pickle file in this env's format.
+            os.remove(output)
 
     print("processing raw polyphonic music data...")
     data = jsb_chorales(base_path)
@@ -44,13 +50,20 @@ def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
                 slice_length = len(note_slice)
                 if slice_length > 0:
                     processed_dataset[split]['sequences'][seq, t, note_slice] = np.ones((slice_length))
-    pickle.dump(processed_dataset, open(output, "wb"))
+    pickle.dump(processed_dataset, open(output, "wb"), pickle.HIGHEST_PROTOCOL)
     print("dumped processed data to %s" % output)
 
 
 # this logic will be initiated upon import
 base_path = './data'
 process_data(base_path, "jsb_processed.pkl")
+jsb_file_loc = "./data/jsb_processed.pkl"
+
+
+# ingest training/validation/test data from disk
+def load_data():
+    with open(jsb_file_loc, "rb") as f:
+        return pickle.load(f)
 
 
 # this function takes a numpy mini-batch and reverses each sequence

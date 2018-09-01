@@ -3,6 +3,8 @@ from __future__ import absolute_import, division, print_function
 import contextlib
 import numbers
 import os
+import shutil
+import tempfile
 import warnings
 from itertools import product
 
@@ -12,7 +14,6 @@ import torch
 import torch.cuda
 from numpy.testing import assert_allclose
 from pytest import approx
-
 
 """
 Contains test utilities for assertions, approximate comparison (of tensors and other objects).
@@ -37,6 +38,17 @@ def suppress_warnings(fn):
             fn(*args, **kwargs)
 
     return wrapper
+
+
+# backport of Python 3's context manager
+@contextlib.contextmanager
+def TemporaryDirectory():
+    try:
+        path = tempfile.mkdtemp()
+        yield path
+    finally:
+        if os.path.exists(path):
+            shutil.rmtree(path)
 
 
 requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(),

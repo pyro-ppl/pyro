@@ -48,7 +48,7 @@ def sample(name, fn, *args, **kwargs):
     :returns: sample
     """
     obs = kwargs.pop("obs", None)
-    infer = kwargs.pop("infer", {})
+    infer = kwargs.pop("infer", {}).copy()
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if not am_i_wrapped():
@@ -70,6 +70,7 @@ def sample(name, fn, *args, **kwargs):
             "value": None,
             "infer": infer,
             "scale": 1.0,
+            "mask": None,
             "cond_indep_stack": (),
             "done": False,
             "stop": False,
@@ -330,6 +331,7 @@ def param(name, *args, **kwargs):
             "kwargs": kwargs,
             "infer": {},
             "scale": 1.0,
+            "mask": None,
             "cond_indep_stack": (),
             "value": None,
             "done": False,

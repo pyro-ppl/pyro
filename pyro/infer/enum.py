@@ -7,7 +7,6 @@ from six.moves.queue import LifoQueue
 from pyro import poutine
 from pyro.infer.util import is_validation_enabled
 from pyro.poutine import Trace
-from pyro.poutine.enumerate_messenger import EXPAND_DEFAULT
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, check_site_shape
 
@@ -20,7 +19,7 @@ def iter_discrete_escape(trace, msg):
 
 
 def iter_discrete_extend(trace, site, **ignored):
-    values = site["fn"].enumerate_support(expand=site["infer"].get("expand", EXPAND_DEFAULT))
+    values = site["fn"].enumerate_support(expand=site["infer"].get("expand", False))
     for i, value in enumerate(values):
         extended_site = site.copy()
         extended_site["infer"] = site["infer"].copy()
@@ -101,7 +100,7 @@ def _config_enumerate(default, expand, num_samples):
     return config_fn
 
 
-def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT, num_samples=None):
+def config_enumerate(guide=None, default="sequential", expand=False, num_samples=None):
     """
     Configures enumeration for all relevant sites in a guide. This is mainly
     used in conjunction with :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO`.
@@ -123,7 +122,7 @@ def config_enumerate(guide=None, default="sequential", expand=EXPAND_DEFAULT, nu
         def guide1(*args, **kwargs):
             ...
 
-        @config_enumerate(default="parallel", expand=False)
+        @config_enumerate(default="parallel", expand=True)
         def guide2(*args, **kwargs):
             ...
 

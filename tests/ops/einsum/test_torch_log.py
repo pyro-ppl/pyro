@@ -5,7 +5,7 @@ import torch
 
 from pyro.infer.util import torch_exp
 from pyro.ops.einsum import contract
-from pyro.ops.sumproduct import sumproduct
+from pyro.ops.sumproduct import logsumproductexp, sumproduct
 from tests.common import assert_equal
 
 
@@ -59,9 +59,9 @@ def test_einsum(equation):
     (None, (1,), (1, 2)),
     (None, (2,)),
 ])
-def test_sumproduct(shapes):
+def test_logsumproductexp(shapes):
     factors = [float(torch.randn(torch.Size())) if shape is None else torch.randn(shape)
                for shape in shapes]
     expected = sumproduct([torch_exp(x) for x in factors]).log()
-    actual = sumproduct(factors, backend='pyro.ops.einsum.torch_log')
+    actual = logsumproductexp(factors)
     assert_equal(actual, expected)

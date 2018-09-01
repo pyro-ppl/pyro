@@ -4,7 +4,7 @@ import collections
 
 import networkx
 
-from pyro.distributions.util import scale_tensor
+from pyro.distributions.util import scale_and_mask
 from pyro.poutine.util import is_validation_enabled
 from pyro.util import warn_if_nan, warn_if_inf
 
@@ -215,21 +215,20 @@ class Trace(object):
         :returns: total log probability.
         :rtype: torch.Tensor
         """
-        log_p = 0.0
+        result = 0.0
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
                 try:
-                    site_log_p = site["log_prob_sum"]
+                    log_p = site["log_prob_sum"]
                 except KeyError:
-                    args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
-                    site_log_p = scale_tensor(site_log_p, site["scale"]).sum()
-                    site["log_prob_sum"] = site_log_p
+                    log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
+                    log_p = scale_and_mask(log_p, site["scale"], site["mask"]).sum()
+                    site["log_prob_sum"] = log_p
                     if is_validation_enabled():
-                        warn_if_nan(site_log_p, "log_prob_sum at site '{}'".format(name))
-                        warn_if_inf(site_log_p, "log_prob_sum at site '{}'".format(name), allow_neginf=True)
-                log_p += site_log_p
-        return log_p
+                        warn_if_nan(log_p, "log_prob_sum at site '{}'".format(name))
+                        warn_if_inf(log_p, "log_prob_sum at site '{}'".format(name), allow_neginf=True)
+                result += log_p
+        return result
 
     def compute_log_prob(self, site_filter=lambda name, site: True):
         """
@@ -243,11 +242,11 @@ class Trace(object):
                 try:
                     site["log_prob"]
                 except KeyError:
-                    args, kwargs = site["args"], site["kwargs"]
-                    site_log_p = site["fn"].log_prob(site["value"], *args, **kwargs)
-                    site_log_p = scale_tensor(site_log_p, site["scale"])
-                    site["log_prob"] = site_log_p
-                    site["log_prob_sum"] = site_log_p.sum()
+                    log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
+                    site["unscaled_log_prob"] = log_p
+                    log_p = scale_and_mask(log_p, site["scale"], site["mask"])
+                    site["log_prob"] = log_p
+                    site["log_prob_sum"] = log_p.sum()
                     if is_validation_enabled():
                         warn_if_nan(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name))
                         warn_if_inf(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name), allow_neginf=True)
@@ -263,10 +262,12 @@ class Trace(object):
             if site["type"] == "sample" and "score_parts" not in site:
                 # Note that ScoreParts overloads the multiplication operator
                 # to correctly scale each of its three parts.
-                value = site["fn"].score_parts(site["value"], *site["args"], **site["kwargs"]) * site["scale"]
+                value = site["fn"].score_parts(site["value"], *site["args"], **site["kwargs"])
+                site["unscaled_log_prob"] = value.log_prob
+                value = value.scale_and_mask(site["scale"], site["mask"])
                 site["score_parts"] = value
-                site["log_prob"] = value[0]
-                site["log_prob_sum"] = value[0].sum()
+                site["log_prob"] = value.log_prob
+                site["log_prob_sum"] = value.log_prob.sum()
                 if is_validation_enabled():
                     warn_if_nan(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name))
                     warn_if_inf(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name), allow_neginf=True)
