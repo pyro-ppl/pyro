@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 import weakref
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import torch
 from six.moves import queue
@@ -48,7 +48,52 @@ def _check_model_enumeration_requirements(log_factors, scales):
                          "but found {} different scales.".format(len(scales)))
 
 
+def _partition_terms(terms, dims):
+    """
+    Given a list of terms and a set of contraction dims, partitions the terms
+    up into sets that must be contracted together. By separating these
+    components we avoid broadcasting. This function should be deterministic.
+    """
+    # Construct a bipartite graph between terms and the dims in which they
+    # are enumerated. This conflates terms and dims (tensors and ints).
+    neighbors = OrderedDict()
+    for term in terms:
+        for dim in range(-term.dim(), 0):
+            if dim in dims and term.shape[dim] > 1:
+                neighbors.setdefault(term, []).append(dim)
+                neighbors.setdefault(dim, []).append(term)
+        if term not in neighbors:
+            yield [term], set()
+
+    # Partition the bipartite graph into connected components for contraction.
+    while neighbors:
+        v, pending = neighbors.popitem()
+        component = OrderedDict([(v, None)])  # used as an OrderedSet
+        for v in pending:
+            component[v] = None
+        while pending:
+            v = pending.pop()
+            for v in neighbors.pop(v):
+                if v not in component:
+                    component[v] = None
+                    pending.append(v)
+
+        # Split this connected component into tensors and dims.
+        component_terms = [v for v in component if isinstance(v, torch.Tensor)]
+        component_dims = set(v for v in component if not isinstance(v, torch.Tensor))
+        yield component_terms, component_dims
+
+
 def _contract(log_factors, enum_boundary):
+    """
+    Contract out all enumeration dims in a tree of log_factors in-place, via
+    message passing. This function should be deterministic.
+
+    :param OrderedDict log_factors: a dictionary mapping ordinals to lists of
+        tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
+    :param int enum_boundary: a dimension (counting from the right) such that
+        all dimensions left of this dimension are enumeration dimensions.
+    """
     # First close the set of ordinals under intersection (greatest lower bound),
     # ensuring that the ordinals are arranged in a tree structure.
     pending = list(log_factors)
@@ -61,41 +106,43 @@ def _contract(log_factors, enum_boundary):
                 pending.append(tu)
 
     # Collect all enumeration dimensions.
-    enum_dims = {t: set(i for term in terms
-                        for i in range(-term.dim(), enum_boundary)
-                        if term.shape[i] > 1)
-                 for t, terms in log_factors.items()}
+    enum_dims = defaultdict(set)
+    for t, terms in log_factors.items():
+        enum_dims[t] |= set(i for term in terms
+                            for i in range(-term.dim(), enum_boundary)
+                            if term.shape[i] > 1)
 
     # Recursively combine terms in different iarange contexts.
-    while True:
+    while len(log_factors) > 1 or any(enum_dims.values()):
         leaf = max(log_factors, key=len)
-        terms = log_factors.pop(leaf)
-        dims = enum_dims.pop(leaf)
-
-        # Eliminate enumeration dims via a logsumproductexp() contraction.
-        shape = list(broadcast_shape(*set(x.shape for x in terms)))
+        leaf_terms = log_factors.pop(leaf)
+        leaf_dims = enum_dims.pop(leaf)
         remaining_dims = set.union(set(), *enum_dims.values())
-        for dim in dims - remaining_dims:
-            shape[dim] = 1
-        shape.reverse()
-        while shape and shape[-1] == 1:
-            shape.pop()
-        shape.reverse()
-        shape = tuple(shape)
-        term = logsumproductexp(terms, shape)
-        if not log_factors:
-            break
+        contract_dims = leaf_dims - remaining_dims
+        contract_frames = (frozenset.intersection(*(leaf - t for t in log_factors if t < leaf))
+                           if log_factors else frozenset())
+        parent = leaf - contract_frames
+        enum_dims[parent] |= leaf_dims & remaining_dims
+        log_factors.setdefault(parent, [])
+        for terms, dims in _partition_terms(leaf_terms, contract_dims):
 
-        # Eliminate iarange dims via .sum() contractions.
-        frames = frozenset.intersection(*(leaf - t for t in log_factors if t < leaf))
-        assert frames
-        for frame in frames:
-            term = term.sum(frame.dim, keepdim=True)
-        parent = leaf - frames
-        log_factors[parent].append(term)
-        enum_dims[parent] |= dims & remaining_dims
+            # Eliminate any enumeration dims via a logsumproductexp() contraction.
+            if dims:
+                shape = list(broadcast_shape(*set(x.shape for x in terms)))
+                for dim in dims:
+                    shape[dim] = 1
+                shape.reverse()
+                while shape and shape[-1] == 1:
+                    shape.pop()
+                shape.reverse()
+                shape = tuple(shape)
+                terms = [logsumproductexp(terms, shape)]
 
-    return leaf, term
+            # Eliminate remaining iarange dims via .sum() contractions.
+            for term in terms:
+                for frame in contract_frames:
+                    term = term.sum(frame.dim, keepdim=True)
+                log_factors[parent].append(term)
 
 
 # TODO move this logic into a poutine
@@ -141,9 +188,13 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
                     log_factors.setdefault(t, []).append(logprob)
                     scales.add(site["scale"])
         _check_model_enumeration_requirements(log_factors, scales)
-        t, log_factor = _contract(log_factors, enum_boundary)
-        log_factor = scale_and_mask(log_factor, scale=scales.pop())
-        marginal_costs.setdefault(t, []).append(log_factor)
+        scale = scales.pop()
+        _contract(log_factors, enum_boundary)
+        for t, log_factors_t in log_factors.items():
+            marginal_costs_t = marginal_costs.setdefault(t, [])
+            for term in log_factors_t:
+                term = scale_and_mask(term, scale=scale)
+                marginal_costs_t.append(term)
     return marginal_costs
 
 

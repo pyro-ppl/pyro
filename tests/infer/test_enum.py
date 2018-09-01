@@ -1893,12 +1893,12 @@ def test_elbo_enumerate_iaranges_2(scale):
 
 @pytest.mark.parametrize('scale', [1, 10])
 def test_elbo_enumerate_iaranges_3(scale):
-    #      +------------------+
-    #      |     +----------+ |
-    #  a ----------> b      | |
-    #      |     |      N=2 | |
-    #      | M=2 +----------+ |
-    #      +-------------------+
+    #      +--------------------+
+    #      |  +----------+      |
+    #  a -------> b      |      |
+    #      |  |      N=2 |      |
+    #      |  +----------+  M=2 |
+    #      +--------------------+
     pyro.param("probs_a",
                torch.tensor([0.45, 0.55]),
                constraint=constraints.simplex)
