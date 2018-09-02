@@ -99,7 +99,7 @@ def test_variable_clash_in_model_error(Elbo):
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p))
 
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='Multiple sample sites named')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -107,15 +107,15 @@ def test_model_guide_dim_mismatch_error(Elbo):
 
     def model():
         loc = torch.zeros(2)
-        scale = torch.zeros(2)
+        scale = torch.ones(2)
         pyro.sample("x", dist.Normal(loc, scale))
 
     def guide():
         loc = pyro.param("loc", torch.zeros(2, 1, requires_grad=True))
-        scale = pyro.param("scale", torch.zeros(2, 1, requires_grad=True))
+        scale = pyro.param("scale", torch.ones(2, 1, requires_grad=True))
         pyro.sample("x", dist.Normal(loc, scale))
 
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='Model and guide shapes disagree')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -123,15 +123,15 @@ def test_model_guide_shape_mismatch_error(Elbo):
 
     def model():
         loc = torch.zeros(1, 2)
-        scale = torch.zeros(1, 2)
+        scale = torch.ones(1, 2)
         pyro.sample("x", dist.Normal(loc, scale))
 
     def guide():
         loc = pyro.param("loc", torch.zeros(2, 1, requires_grad=True))
-        scale = pyro.param("scale", torch.zeros(2, 1, requires_grad=True))
+        scale = pyro.param("scale", torch.ones(2, 1, requires_grad=True))
         pyro.sample("x", dist.Normal(loc, scale))
 
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='Model and guide shapes disagree')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -146,7 +146,7 @@ def test_variable_clash_in_guide_error(Elbo):
         pyro.sample("x", dist.Bernoulli(p))
         pyro.sample("x", dist.Bernoulli(p))  # Should error here.
 
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='Multiple sample sites named')
 
 
 @pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
@@ -187,7 +187,7 @@ def test_irange_variable_clash_error(Elbo):
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide)
 
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='Multiple sample sites named')
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
@@ -318,7 +318,8 @@ def test_irange_in_guide_not_model_error(subsample_size, Elbo, is_validate):
 
     with pyro.validation_enabled(is_validate):
         if is_validate:
-            assert_error(model, guide, Elbo())
+            assert_error(model, guide, Elbo(),
+                         match='Found iarange statements in guide but not model')
         else:
             assert_ok(model, guide, Elbo())
 
@@ -331,7 +332,7 @@ def test_iarange_broadcast_error(Elbo):
         with pyro.iarange("iarange", 10, 5):
             pyro.sample("x", dist.Bernoulli(p).expand_by([2]))
 
-    assert_error(model, model, Elbo())
+    assert_error(model, model, Elbo(), match='Shape mismatch inside iarange')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -422,7 +423,7 @@ def test_nested_iarange_iarange_dim_error_1(Elbo):
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_inner)]))
 
     guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='invalid log_prob shape')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -437,7 +438,7 @@ def test_nested_iarange_iarange_dim_error_2(Elbo):
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_inner)]))
 
     guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='Shape mismatch inside iarange')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -452,7 +453,7 @@ def test_nested_iarange_iarange_dim_error_3(Elbo):
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_inner), 1]))  # error here
 
     guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='invalid log_prob shape')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -467,7 +468,7 @@ def test_nested_iarange_iarange_dim_error_4(Elbo):
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_outer)]))  # error here
 
     guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='hape mismatch inside iarange')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -531,7 +532,7 @@ def test_iarange_wrong_size_error():
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.Bernoulli(p).expand_by([1 + len(ind)]))
 
-    assert_error(model, guide, TraceGraph_ELBO())
+    assert_error(model, guide, TraceGraph_ELBO(), match='Shape mismatch inside iarange')
 
 
 @pytest.mark.parametrize("enumerate_", [None, "sequential", "parallel"])
@@ -661,7 +662,8 @@ def test_no_iarange_enum_discrete_batch_error():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p).expand_by([5]))
 
-    assert_error(model, config_enumerate(guide), TraceEnum_ELBO())
+    assert_error(model, config_enumerate(guide), TraceEnum_ELBO(),
+                 match='invalid log_prob shape')
 
 
 @pytest.mark.parametrize('max_iarange_nesting', [0, 1, 2])
@@ -1003,7 +1005,7 @@ def test_dim_allocation_error(Elbo, expand):
             assert y.shape == (5, 6)
 
     guide = config_enumerate(model, expand=expand) if Elbo is TraceEnum_ELBO else model
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='collide at dim=')
 
 
 def test_enum_in_model_ok():
@@ -1093,7 +1095,8 @@ def test_enum_sequential_in_model_error():
     def guide():
         pass
 
-    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=0))
+    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=0),
+                 match='Found vars in model but not guide')
 
 
 def test_enum_in_model_iarange_reuse_ok():

@@ -2481,3 +2481,37 @@ def test_bernoulli_non_tree_elbo_gradient(enumerate1, b_factor, c_factor, pi_a, 
         "\nqd expected = {}".format(expected_grad_qd.data.cpu().numpy()),
         "\nqd   actual = {}".format(actual_grad_qd.data.cpu().numpy()),
     ]))
+
+
+@pytest.mark.parametrize("gate", [0.1, 0.25, 0.5, 0.75, 0.9])
+@pytest.mark.parametrize("rate", [0.1, 1., 3.])
+def test_elbo_zip(gate, rate):
+    # test for ZIP distribution
+    @poutine.broadcast
+    def zip_model(data):
+        gate = pyro.param("gate")
+        rate = pyro.param("rate")
+        with pyro.iarange("data", len(data)):
+            pyro.sample("obs", dist.ZeroInflatedPoisson(gate, rate), obs=data)
+
+    @poutine.broadcast
+    def composite_model(data):
+        gate = pyro.param("gate")
+        rate = pyro.param("rate")
+        dist1 = dist.Delta(torch.tensor(0.))
+        dist0 = dist.Poisson(rate)
+        with pyro.iarange("data", len(data)):
+            mask = pyro.sample("mask", dist.Bernoulli(gate), infer={"enumerate": "parallel"}).byte()
+            pyro.sample("obs", dist.MaskedMixture(mask, dist0, dist1), obs=data)
+
+    def guide(data):
+        pass
+
+    gate = pyro.param("gate", torch.tensor(gate), constraint=constraints.unit_interval)
+    rate = pyro.param("rate", torch.tensor(rate), constraint=constraints.positive)
+
+    data = torch.tensor([0., 1., 2.])
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1, strict_enumeration_warning=False)
+    zip_loss = elbo.differentiable_loss(zip_model, guide, data)
+    composite_loss = elbo.differentiable_loss(composite_model, guide, data)
+    _check_loss_and_grads(zip_loss, composite_loss)
