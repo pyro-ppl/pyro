@@ -1552,6 +1552,7 @@ def test_elbo_enumerate_iarange_3(num_samples, num_masked, scale):
     #  | x ----> y ----> z     |
     #  |                     N |
     #  +-----------------------+
+    # This iarange should remain unreduced since all enumeration is in a single iarange.
     pyro.param("guide_probs_x",
                torch.tensor([0.1, 0.9]),
                constraint=constraints.simplex)
@@ -1629,6 +1630,7 @@ def test_elbo_enumerate_iarange_4(outer_obs, inner_obs, scale):
     #  |       \                |
     #  | b ---> inner_obs   N=2 |
     #  +------------------------+
+    # This tests two different observations, one outside and one inside an iarange.
     pyro.param("probs_a", torch.tensor([0.4, 0.6]), constraint=constraints.simplex)
     pyro.param("probs_b", torch.tensor([0.6, 0.4]), constraint=constraints.simplex)
     pyro.param("locs", torch.tensor([-1., 1.]))
@@ -1691,6 +1693,7 @@ def test_elbo_enumerate_iarange_5(scale):
     #  | V        V                |
     #  | c -----> d -----> e   N=2 |
     #  +---------------------------+
+    # This tests a mixture of model and guide enumeration.
     pyro.param("model_probs_a",
                torch.tensor([0.45, 0.55]),
                constraint=constraints.simplex)
@@ -1782,6 +1785,8 @@ def test_elbo_enumerate_iaranges_1(scale):
     #  +-----------------+
     #  | c ----> d   N=3 |
     #  +-----------------+
+    # This tests two unrelated iaranges.
+    # Each should remain uncontracted.
     pyro.param("probs_a",
                torch.tensor([0.45, 0.55]),
                constraint=constraints.simplex)
@@ -1841,6 +1846,7 @@ def test_elbo_enumerate_iaranges_2(scale):
     #  |     b <---- a ----> c     |
     #  | M=2     |       |     N=3 |
     #  +---------+       +---------+
+    # This tests two different iaranges with recycled dimension.
     pyro.param("probs_a",
                torch.tensor([0.45, 0.55]),
                constraint=constraints.simplex)
@@ -1899,6 +1905,8 @@ def test_elbo_enumerate_iaranges_3(scale):
     #      |  |      N=2 |      |
     #      |  +----------+  M=2 |
     #      +--------------------+
+    # This is tests the case of multiple iarange contractions in
+    # a single step.
     pyro.param("probs_a",
                torch.tensor([0.45, 0.55]),
                constraint=constraints.simplex)
@@ -2069,6 +2077,8 @@ def test_elbo_enumerate_iaranges_6(scale):
     #  |      |      |   |
     #  | N=2  +------|---+
     #  +-------------+
+    # This tests different ways of mixing two independence contexts,
+    # where each can be either irange or iarange.
     pyro.param("probs_a",
                torch.tensor([0.45, 0.55]),
                constraint=constraints.simplex)
