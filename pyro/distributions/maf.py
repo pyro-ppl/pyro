@@ -41,9 +41,9 @@ class MaskedAutoregressiveFlow(Transform):
     :param log_scale_max_clip: The maximum value for clipping the log(scale) from the autoregressive NN
     :type log_scale_max_clip: float
 
-    References:
+    Reference:
 
-    1. Masked Autoregressive Flow for Density Estimation  arXiv:1705.07057v4 [stat.ML]
+    Masked Autoregressive Flow for Density Estimation  [arXiv:1705.07057v4]
     George Papamakarios, Theo Pavlakou, Iain Murray
 
     """
@@ -111,8 +111,6 @@ class MaskedAutoregressiveFlow(Transform):
         """
         Internal function used to cache intermediate results computed during the inverse call
         """
-        # assert((y, name) not in self._intermediates_cache),\
-        #    "key collision in _add_intermediate_to_cache"
         self._intermediates_cache[(y, name)] = intermediate
 
     def log_abs_det_jacobian(self, x, y):

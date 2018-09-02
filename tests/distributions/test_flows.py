@@ -9,6 +9,7 @@ import torch
 import pyro.distributions as dist
 from pyro.distributions.iaf import InverseAutoregressiveFlow, InverseAutoregressiveFlowStable
 from pyro.distributions.maf import MaskedAutoregressiveFlow
+from pyro.distributions.naf import NeuralAutoregressiveSampling, NeuralAutoregressiveScoring
 from pyro.nn import AutoRegressiveNN
 
 pytestmark = pytest.mark.init(rng_seed=123)
@@ -88,6 +89,14 @@ class AutoregressiveFlowTests(TestCase):
         arn = AutoRegressiveNN(input_dim, [3*input_dim + 1])
         return MaskedAutoregressiveFlow(arn)
 
+    def _make_naf_sampling(self, input_dim):
+        arn = AutoRegressiveNN(input_dim, [3*input_dim + 1], param_dims=[16]*3)
+        return NeuralAutoregressiveSampling(arn, hidden_units=16)
+
+    def _make_naf_scoring(self, input_dim):
+        arn = AutoRegressiveNN(input_dim, [3*input_dim + 1], param_dims=[16]*3)
+        return NeuralAutoregressiveScoring(arn, hidden_units=16)
+
     def test_iaf_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_iaf)
@@ -119,3 +128,7 @@ class AutoregressiveFlowTests(TestCase):
     def test_iaf_stable_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_iaf_stable)
+
+    def test_naf_sampling_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_naf_sampling)

@@ -13,6 +13,7 @@ from pyro.distributions.iaf import InverseAutoregressiveFlow, InverseAutoregress
 from pyro.distributions.lowrank_mvn import LowRankMultivariateNormal
 from pyro.distributions.maf import MaskedAutoregressiveFlow
 from pyro.distributions.mixture import MaskedMixture
+from pyro.distributions.naf import NeuralAutoregressiveSampling, NeuralAutoregressiveScoring
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.relaxed_straight_through import (RelaxedBernoulliStraightThrough,
@@ -42,6 +43,8 @@ __all__ = [
     "MaskedAutoregressiveFlow",
     "MaskedMixture",
     "MixtureOfDiagNormalsSharedCovariance",
+    "NeuralAutoregressiveSampling",
+    "NeuralAutoregressiveScoring",
     "OMTMultivariateNormal",
     "Rejector",
     "RelaxedBernoulliStraightThrough",
