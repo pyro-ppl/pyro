@@ -51,7 +51,7 @@ class HMC(TraceKernel):
         :func:`pyro.iarange` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
     :param bool experimental_use_einsum: Whether to use an einsum operation
-        to evaluat log pdf for the model trace. No-op unless the trace has
+        to evaluate log pdf for the model trace. No-op unless the trace has
         discrete sample sites. This flag is experimental and will most likely
         be removed in a future release.
 
