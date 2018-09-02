@@ -22,6 +22,11 @@ from pyro.infer.util import LAST_CACHE_SIZE
 from pyro.util import torch_isnan
 from tests.common import assert_equal
 
+try:
+    from contextlib import ExitStack  # python 3
+except ImportError:
+    from contextlib2 import ExitStack  # python 2
+
 logger = logging.getLogger(__name__)
 
 
@@ -1684,8 +1689,76 @@ def test_elbo_enumerate_iarange_4(outer_obs, inner_obs, scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
+def test_elbo_enumerate_iarange_5():
+    #        Guide   Model
+    #                  a
+    #  +---------------|--+
+    #  | M=2           V  |
+    #  |       b ----> c  |
+    #  +------------------+
+    pyro.param("model_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_b",
+               torch.tensor([0.6, 0.4]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_c",
+               torch.tensor([[[0.4, 0.5, 0.1], [0.3, 0.5, 0.2]],
+                             [[0.3, 0.4, 0.3], [0.4, 0.4, 0.2]]]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_b",
+               torch.tensor([0.8, 0.2]),
+               constraint=constraints.simplex)
+    data = torch.tensor([1, 2])
+    c_ind = torch.arange(3, dtype=torch.long)
+
+    @config_enumerate(default="parallel")
+    def model_iarange():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with pyro.iarange("b_axis", 2):
+            b = pyro.sample("b", dist.Categorical(probs_b))
+            pyro.sample("c",
+                        dist.Categorical(probs_c[a.unsqueeze(-1), b.unsqueeze(-1), c_ind]),
+                        obs=data)
+
+    @config_enumerate(default="parallel")
+    def guide_iarange():
+        probs_b = pyro.param("guide_probs_b")
+        with pyro.iarange("b_axis", 2):
+            pyro.sample("b", dist.Categorical(probs_b))
+
+    @config_enumerate(default="parallel")
+    def model_irange():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        for i in pyro.irange("b_axis", 2):
+            b = pyro.sample("b_{}".format(i), dist.Categorical(probs_b))
+            pyro.sample("c_{}".format(i),
+                        dist.Categorical(probs_c[a.unsqueeze(-1), b.unsqueeze(-1), c_ind]),
+                        obs=data[i])
+
+    @config_enumerate(default="parallel")
+    def guide_irange():
+        probs_b = pyro.param("guide_probs_b")
+        for i in pyro.irange("b_axis", 2):
+            pyro.sample("b_{}".format(i), dist.Categorical(probs_b))
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+    expected_loss = elbo.differentiable_loss(model_irange, guide_irange)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    with pytest.raises(ValueError, match="Expected model enumeration to be no more global than guide"):
+        actual_loss = elbo.differentiable_loss(model_iarange, guide_iarange)
+        # This never gets run because we don't support this yet.
+        _check_loss_and_grads(expected_loss, actual_loss)
+
+
 @pytest.mark.parametrize('scale', [1, 10])
-def test_elbo_enumerate_iarange_5(scale):
+def test_elbo_enumerate_iarange_6(scale):
     #  Guide    Model
     #    a -----> b
     #    |        |
@@ -2185,6 +2258,128 @@ def test_elbo_enumerate_iaranges_6(scale):
     elbo = TraceEnum_ELBO(max_iarange_nesting=2)
     with pytest.raises(ValueError, match="Expected tree-structured iarange nesting.*"):
         elbo.differentiable_loss(model_iarange_iarange, guide, data)
+
+
+@pytest.mark.parametrize('guide_scale', [1])
+@pytest.mark.parametrize('model_scale', [1])
+@pytest.mark.parametrize('outer_vectorized,inner_vectorized,xfail',
+                         [(False, True, False), (True, False, True), (True, True, True)],
+                         ids=['irange-iarange', 'iarange-irange', 'iarange-iarange'])
+def test_elbo_enumerate_iaranges_7(model_scale, guide_scale, inner_vectorized, outer_vectorized, xfail):
+    #        Guide   Model
+    #                  a
+    #      +-----------|--------+
+    #      | M=2   +---|------+ |
+    #      |       |   V  N=2 | |
+    #      |   b ----> c      | |
+    #      |       +----------+ |
+    #      +--------------------+
+    pyro.param("model_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_b",
+               torch.tensor([0.6, 0.4]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_c",
+               torch.tensor([[[0.4, 0.5, 0.1], [0.3, 0.5, 0.2]],
+                             [[0.3, 0.4, 0.3], [0.4, 0.4, 0.2]]]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_b",
+               torch.tensor([0.8, 0.2]),
+               constraint=constraints.simplex)
+    data = torch.tensor([[0, 1], [0, 2]])
+    c_ind = torch.arange(3, dtype=torch.long)
+
+    @config_enumerate(default="parallel")
+    @poutine.scale(scale=model_scale)
+    def model_iarange_iarange():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with pyro.iarange("outer", 2):
+            b = pyro.sample("b", dist.Categorical(probs_b))
+            with pyro.iarange("inner", 2):
+                pyro.sample("c",
+                            dist.Categorical(probs_c[a.unsqueeze(-1), b.unsqueeze(-1), c_ind]),
+                            obs=data)
+
+    @config_enumerate(default="parallel")
+    @poutine.scale(scale=model_scale)
+    def model_irange_iarange():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        inner = pyro.iarange("inner", 2)
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        for i in pyro.irange("outer", 2):
+            b = pyro.sample("b_{}".format(i), dist.Categorical(probs_b))
+            with inner:
+                pyro.sample("c_{}".format(i),
+                            dist.Categorical(probs_c[a.unsqueeze(-1), b.unsqueeze(-1), c_ind]),
+                            obs=data[:, i])
+
+    @config_enumerate(default="parallel")
+    @poutine.scale(scale=model_scale)
+    def model_iarange_irange():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with pyro.iarange("outer", 2):
+            b = pyro.sample("b", dist.Categorical(probs_b))
+            for j in pyro.irange("inner", 2):
+                pyro.sample("c_{}".format(j),
+                            dist.Categorical(probs_c[a.unsqueeze(-1), b.unsqueeze(-1), c_ind]),
+                            obs=data[j])
+
+    @config_enumerate(default="parallel")
+    @poutine.scale(scale=model_scale)
+    def model_irange_irange():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        inner = pyro.irange("inner", 2)
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        for i in pyro.irange("outer", 2):
+            b = pyro.sample("b_{}".format(i), dist.Categorical(probs_b))
+            for j in inner:
+                pyro.sample("c_{}_{}".format(i, j),
+                            dist.Categorical(probs_c[a.unsqueeze(-1), b.unsqueeze(-1), c_ind]),
+                            obs=data[j, i])
+
+    @config_enumerate(default="parallel")
+    @poutine.scale(scale=guide_scale)
+    def guide_iarange():
+        probs_b = pyro.param("guide_probs_b")
+        with pyro.iarange("outer", 2):
+            pyro.sample("b", dist.Categorical(probs_b))
+
+    @config_enumerate(default="parallel")
+    @poutine.scale(scale=guide_scale)
+    def guide_irange():
+        probs_b = pyro.param("guide_probs_b")
+        for i in pyro.irange("outer", 2):
+            pyro.sample("b_{}".format(i), dist.Categorical(probs_b))
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+    expected_loss = elbo.differentiable_loss(model_irange_irange, guide_irange)
+    with ExitStack() as stack:
+        if xfail:
+            stack.enter_context(pytest.raises(
+                ValueError,
+                match="Expected model enumeration to be no more global than guide"))
+        if inner_vectorized:
+            if outer_vectorized:
+                elbo = TraceEnum_ELBO(max_iarange_nesting=2)
+                actual_loss = elbo.differentiable_loss(model_iarange_iarange, guide_iarange)
+            else:
+                elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+                actual_loss = elbo.differentiable_loss(model_irange_iarange, guide_irange)
+        else:
+            elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+            actual_loss = elbo.differentiable_loss(model_iarange_irange, guide_iarange)
+        _check_loss_and_grads(expected_loss, actual_loss)
 
 
 def test_elbo_scale():

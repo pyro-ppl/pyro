@@ -29,6 +29,18 @@ def _check_shared_scale(scales):
                          "but found {} different scales.".format(len(scales)))
 
 
+def _check_model_guide_enumeration_constraint(model_enum_sites, guide_trace):
+    min_ordinal = frozenset.intersection(*model_enum_sites.keys())
+    for name, site in guide_trace.nodes.items():
+        if site["type"] == "sample" and site["infer"].get("_enumerate_dim") is not None:
+            for f in site["cond_indep_stack"]:
+                if f.vectorized and f not in min_ordinal:
+                    raise ValueError("Expected model enumeration to be no more global than guide enumeration, "
+                                     "but found model enumeration sites upstream of guide site '{}' in iarange('{}'). "
+                                     "Try converting some model enumeration sites to guide enumeration sites."
+                                     .format(name, f.name))
+
+
 # TODO move this logic into a poutine
 def _compute_model_costs(model_trace, guide_trace, ordering):
     # Collect model sites that may have been enumerated in the model.
@@ -45,6 +57,7 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
     if not enum_sites:
         return OrderedDict((t, [site["log_prob"] for site in sites_t])
                            for t, sites_t in cost_sites.items())
+    _check_model_guide_enumeration_constraint(enum_sites, guide_trace)
 
     # Marginalize out all variables that have been enumerated in the model.
     enum_boundary = max(enum_dims) + 1
