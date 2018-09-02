@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 import weakref
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 
 import torch
 from six.moves import queue
@@ -10,157 +10,13 @@ from six.moves import queue
 import pyro
 import pyro.ops.jit
 import pyro.poutine as poutine
-from pyro.distributions.util import broadcast_shape, is_identically_zero, scale_and_mask
+from pyro.distributions.util import is_identically_zero, scale_and_mask
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
+from pyro.infer.contract import contract_tensor_tree
 from pyro.infer.util import Dice, is_validation_enabled
-from pyro.ops.sumproduct import logsumproductexp
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
-
-
-def _check_tree_structure(log_factors):
-    # Check for absence of diamonds, i.e. collider iaranges.
-    # This is required to avoid loops in message passing.
-    for t in log_factors:
-        for u in log_factors:
-            if not (u < t):
-                continue
-            for v in log_factors:
-                if not (v < t):
-                    continue
-                if u <= v or v <= u:
-                    continue
-                left = ', '.join(sorted(f.name for f in u - v))
-                right = ', '.join(sorted(f.name for f in v - u))
-                raise ValueError("Expected tree-structured iarange nesting, but found "
-                                 "dependencies on independent iarange sets [{}] and [{}]. "
-                                 "Try converting one of the iaranges to an irange (but beware "
-                                 "exponential cost in the size of that irange)"
-                                 .format(left, right))
-
-
-def _partition_terms(terms, dims):
-    """
-    Given a list of terms and a set of contraction dims, partitions the terms
-    up into sets that must be contracted together. By separating these
-    components we avoid broadcasting. This function should be deterministic.
-    """
-    # Construct a bipartite graph between terms and the dims in which they
-    # are enumerated. This conflates terms and dims (tensors and ints).
-    neighbors = OrderedDict([(t, []) for t in terms] + [(d, []) for d in dims])
-    for term in terms:
-        for dim in range(-term.dim(), 0):
-            if dim in dims and term.shape[dim] > 1:
-                neighbors[term].append(dim)
-                neighbors[dim].append(term)
-
-    # Partition the bipartite graph into connected components for contraction.
-    while neighbors:
-        v, pending = neighbors.popitem()
-        component = OrderedDict([(v, None)])  # used as an OrderedSet
-        for v in pending:
-            component[v] = None
-        while pending:
-            v = pending.pop()
-            for v in neighbors.pop(v):
-                if v not in component:
-                    component[v] = None
-                    pending.append(v)
-
-        # Split this connected component into tensors and dims.
-        component_terms = [v for v in component if isinstance(v, torch.Tensor)]
-        component_dims = set(v for v in component if not isinstance(v, torch.Tensor))
-        yield component_terms, component_dims
-
-
-def _contract_component(tensor_tree, sum_dims):
-    """
-    Contract out ``sum_dims`` in a tree of tensors in-place, via
-    message passing. This function should be deterministic.
-
-    :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
-        tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
-    :param dict sum_dims: a dictionary mapping tensors to sets of dimensions
-        (indexed from the right) that should be summed out.
-    """
-    # First close the set of ordinals under intersection (greatest lower bound),
-    # ensuring that the ordinals are arranged in a tree structure.
-    pending = list(tensor_tree)
-    while pending:
-        t = pending.pop()
-        for u in list(tensor_tree):
-            tu = t & u
-            if tu not in tensor_tree:
-                tensor_tree[tu] = []
-                pending.append(tu)
-    _check_tree_structure(tensor_tree)
-
-    # Collect contraction dimension by ordinal.
-    dims_tree = defaultdict(set)
-    for t, terms in tensor_tree.items():
-        dims_tree[t] = set.union(*(sum_dims[term] for term in terms))
-
-    # Recursively combine terms in different iarange contexts.
-    while any(dims_tree.values()):
-        leaf = max(tensor_tree, key=len)
-        leaf_terms = tensor_tree.pop(leaf)
-        leaf_dims = dims_tree.pop(leaf)
-        remaining_dims = set.union(set(), *dims_tree.values())
-        contract_dims = leaf_dims - remaining_dims
-        contract_frames = (frozenset.intersection(*(leaf - t for t in tensor_tree if t < leaf))
-                           if tensor_tree else frozenset())
-        parent = leaf - contract_frames
-        dims_tree[parent] |= leaf_dims & remaining_dims
-        tensor_tree.setdefault(parent, [])
-        for terms, dims in _partition_terms(leaf_terms, contract_dims):
-
-            # Eliminate any enumeration dims via a logsumproductexp() contraction.
-            if dims:
-                shape = list(broadcast_shape(*set(x.shape for x in terms)))
-                for dim in dims:
-                    shape[dim] = 1
-                shape.reverse()
-                while shape and shape[-1] == 1:
-                    shape.pop()
-                shape.reverse()
-                shape = tuple(shape)
-                terms = [logsumproductexp(terms, shape)]
-
-            # Eliminate remaining iarange dims via .sum() contractions.
-            for term in terms:
-                for frame in contract_frames:
-                    term = term.sum(frame.dim, keepdim=True)
-                tensor_tree[parent].append(term)
-
-
-def _contract(tensor_tree, sum_dims):
-    """
-    Contract out ``sum_dims`` in a tree of tensors in-place, via
-    message passing. This function should be deterministic.
-
-    :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
-        tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
-    :param dict sum_dims: a dictionary mapping tensors to sets of dimensions
-        (indexed from the right) that should be summed out.
-    """
-    ordinals = {term: t for t, terms in tensor_tree.items() for term in terms}
-    all_terms = [term for terms in tensor_tree.values() for term in terms]
-    all_dims = set.union(*sum_dims.values())
-    tensor_tree.clear()
-
-    # Split this tensor tree into connected components.
-    for terms, dims in _partition_terms(all_terms, all_dims):
-        component = OrderedDict()
-        for term in terms:
-            component.setdefault(ordinals[term], []).append(term)
-
-        # Contract this connected component down to a single tensor.
-        _contract_component(component, sum_dims)
-        assert len(component) == 1
-        assert len(next(iter(component.values()))) == 1
-        for t, terms in component.items():
-            tensor_tree.setdefault(t, []).extend(terms)
 
 
 def _check_shared_scale(scales):
@@ -219,7 +75,7 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
         scale = scales.pop()
         sum_dims = {x: set(i for i in range(-x.dim(), enum_boundary) if x.shape[i] > 1)
                     for xs in log_factors.values() for x in xs}
-        _contract(log_factors, sum_dims)
+        contract_tensor_tree(log_factors, sum_dims)
         for t, log_factors_t in log_factors.items():
             marginal_costs_t = marginal_costs.setdefault(t, [])
             for term in log_factors_t:
