@@ -56,9 +56,6 @@ class NUTS(HMC):
     :param int max_iarange_nesting: Optional bound on max number of nested
         :func:`pyro.iarange` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
-    :param bool use_einsum: Whether to use an einsum operation to evaluate
-        log pdf for the model trace. No-op unless the trace has discrete
-        sample sites.
     :param bool experimental_use_einsum: Whether to use an einsum operation
         to evaluat log pdf for the model trace. No-op unless the trace has
         discrete sample sites. This flag is experimental and will most likely
