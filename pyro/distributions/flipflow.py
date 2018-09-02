@@ -44,7 +44,7 @@ class FlipFlow(Transform):
 
         # Calculate the inverse permutation order
         self.inv_permutation = torch.empty(permutation.shape, dtype=torch.long)
-        self.inv_permutation[permutation] = torch.arange(permutation.size(0))
+        self.inv_permutation[permutation] = torch.arange(permutation.size(0), dtype=torch.long)
 
     def _call(self, x):
         """
