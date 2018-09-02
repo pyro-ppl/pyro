@@ -19,7 +19,7 @@ from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
 
-def _check_model_enumeration_requirements(log_factors, scales):
+def _check_tree_structure(log_factors):
     # Check for absence of diamonds, i.e. collider iaranges.
     # This is required to avoid loops in message passing.
     for t in log_factors:
@@ -38,14 +38,6 @@ def _check_model_enumeration_requirements(log_factors, scales):
                                  "Try converting one of the iaranges to an irange (but beware "
                                  "exponential cost in the size of that irange)"
                                  .format(left, right))
-
-    # Check that all enumerated sites share a common subsampling scale.
-    # Note that we use a cheap weak comparison by id rather than tensor value, because
-    # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
-    # only in value but at all derivatives.
-    if len(scales) != 1:
-        raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
-                         "but found {} different scales.".format(len(scales)))
 
 
 def _partition_terms(terms, dims):
@@ -82,46 +74,45 @@ def _partition_terms(terms, dims):
         yield component_terms, component_dims
 
 
-def _contract(log_factors, enum_boundary):
+def _contract_component(tensor_tree, sum_dims):
     """
-    Contract out all enumeration dims in a tree of log_factors in-place, via
+    Contract out ``sum_dims`` in a tree of tensors in-place, via
     message passing. This function should be deterministic.
 
-    :param OrderedDict log_factors: a dictionary mapping ordinals to lists of
+    :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
         tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
-    :param int enum_boundary: a dimension (counting from the right) such that
-        all dimensions left of this dimension are enumeration dimensions.
+    :param dict sum_dims: a dictionary mapping tensors to sets of dimensions
+        (indexed from the right) that should be summed out.
     """
     # First close the set of ordinals under intersection (greatest lower bound),
     # ensuring that the ordinals are arranged in a tree structure.
-    pending = list(log_factors)
+    pending = list(tensor_tree)
     while pending:
         t = pending.pop()
-        for u in list(log_factors):
+        for u in list(tensor_tree):
             tu = t & u
-            if tu not in log_factors:
-                log_factors[tu] = []
+            if tu not in tensor_tree:
+                tensor_tree[tu] = []
                 pending.append(tu)
+    _check_tree_structure(tensor_tree)
 
-    # Collect all enumeration dimensions.
-    enum_dims = defaultdict(set)
-    for t, terms in log_factors.items():
-        enum_dims[t] |= set(i for term in terms
-                            for i in range(-term.dim(), enum_boundary)
-                            if term.shape[i] > 1)
+    # Collect contraction dimension by ordinal.
+    dims_tree = defaultdict(set)
+    for t, terms in tensor_tree.items():
+        dims_tree[t] = set.union(*(sum_dims[term] for term in terms))
 
     # Recursively combine terms in different iarange contexts.
-    while len(log_factors) > 1 or any(enum_dims.values()):
-        leaf = max(log_factors, key=len)
-        leaf_terms = log_factors.pop(leaf)
-        leaf_dims = enum_dims.pop(leaf)
-        remaining_dims = set.union(set(), *enum_dims.values())
+    while any(dims_tree.values()):
+        leaf = max(tensor_tree, key=len)
+        leaf_terms = tensor_tree.pop(leaf)
+        leaf_dims = dims_tree.pop(leaf)
+        remaining_dims = set.union(set(), *dims_tree.values())
         contract_dims = leaf_dims - remaining_dims
-        contract_frames = (frozenset.intersection(*(leaf - t for t in log_factors if t < leaf))
-                           if log_factors else frozenset())
+        contract_frames = (frozenset.intersection(*(leaf - t for t in tensor_tree if t < leaf))
+                           if tensor_tree else frozenset())
         parent = leaf - contract_frames
-        enum_dims[parent] |= leaf_dims & remaining_dims
-        log_factors.setdefault(parent, [])
+        dims_tree[parent] |= leaf_dims & remaining_dims
+        tensor_tree.setdefault(parent, [])
         for terms, dims in _partition_terms(leaf_terms, contract_dims):
 
             # Eliminate any enumeration dims via a logsumproductexp() contraction.
@@ -140,7 +131,46 @@ def _contract(log_factors, enum_boundary):
             for term in terms:
                 for frame in contract_frames:
                     term = term.sum(frame.dim, keepdim=True)
-                log_factors[parent].append(term)
+                tensor_tree[parent].append(term)
+
+
+def _contract(tensor_tree, sum_dims):
+    """
+    Contract out ``sum_dims`` in a tree of tensors in-place, via
+    message passing. This function should be deterministic.
+
+    :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
+        tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
+    :param dict sum_dims: a dictionary mapping tensors to sets of dimensions
+        (indexed from the right) that should be summed out.
+    """
+    ordinals = {term: t for t, terms in tensor_tree.items() for term in terms}
+    all_terms = [term for terms in tensor_tree.values() for term in terms]
+    all_dims = set.union(*sum_dims.values())
+    tensor_tree.clear()
+
+    # Split this tensor tree into connected components.
+    for terms, dims in _partition_terms(all_terms, all_dims):
+        component = OrderedDict()
+        for term in terms:
+            component.setdefault(ordinals[term], []).append(term)
+
+        # Contract this connected component down to a single tensor.
+        _contract_component(component, sum_dims)
+        assert len(component) == 1
+        assert len(next(iter(component.values()))) == 1
+        for t, terms in component.items():
+            tensor_tree.setdefault(t, []).extend(terms)
+
+
+def _check_shared_scale(scales):
+    # Check that all enumerated sites share a common subsampling scale.
+    # Note that we use a cheap weak comparison by id rather than tensor value, because
+    # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
+    # only in value but at all derivatives.
+    if len(scales) != 1:
+        raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
+                         "but found {} different scales.".format(len(scales)))
 
 
 # TODO move this logic into a poutine
@@ -185,9 +215,11 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
                     logprob = site["unscaled_log_prob"]
                     log_factors.setdefault(t, []).append(logprob)
                     scales.add(site["scale"])
-        _check_model_enumeration_requirements(log_factors, scales)
+        _check_shared_scale(scales)
         scale = scales.pop()
-        _contract(log_factors, enum_boundary)
+        sum_dims = {x: set(i for i in range(-x.dim(), enum_boundary) if x.shape[i] > 1)
+                    for xs in log_factors.values() for x in xs}
+        _contract(log_factors, sum_dims)
         for t, log_factors_t in log_factors.items():
             marginal_costs_t = marginal_costs.setdefault(t, [])
             for term in log_factors_t:
