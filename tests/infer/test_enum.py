@@ -1757,8 +1757,69 @@ def test_elbo_enumerate_iarange_5():
         _check_loss_and_grads(expected_loss, actual_loss)
 
 
+@pytest.mark.parametrize('enumerate1', ['parallel', 'sequential'])
+def test_elbo_enumerate_iarange_6(enumerate1):
+    #     Guide           Model
+    #           +-------+
+    #       b ----> c <---- a
+    #           |  M=2  |
+    #           +-------+
+    # This tests that sequential enumeration over b works, even though
+    # model-side enumeration moves c into b's iarange via contraction.
+    pyro.param("model_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_b",
+               torch.tensor([0.6, 0.4]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_c",
+               torch.tensor([[[0.4, 0.5, 0.1], [0.3, 0.5, 0.2]],
+                             [[0.3, 0.4, 0.3], [0.4, 0.4, 0.2]]]),
+               constraint=constraints.simplex)
+    pyro.param("guide_probs_b",
+               torch.tensor([0.8, 0.2]),
+               constraint=constraints.simplex)
+    data = torch.tensor([1, 2])
+    c_ind = torch.arange(3, dtype=torch.long)
+
+    @config_enumerate(default="parallel")
+    def model_iarange():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        b = pyro.sample("b", dist.Categorical(probs_b))
+        with pyro.iarange("b_axis", 2):
+            pyro.sample("c",
+                        dist.Categorical(probs_c[a.unsqueeze(-1), b.unsqueeze(-1), c_ind]),
+                        obs=data)
+
+    @config_enumerate(default="parallel")
+    def model_irange():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        b = pyro.sample("b", dist.Categorical(probs_b))
+        for i in pyro.irange("b_axis", 2):
+            pyro.sample("c_{}".format(i),
+                        dist.Categorical(probs_c[a.unsqueeze(-1), b.unsqueeze(-1), c_ind]),
+                        obs=data[i])
+
+    @config_enumerate(default=enumerate1)
+    def guide():
+        probs_b = pyro.param("guide_probs_b")
+        pyro.sample("b", dist.Categorical(probs_b))
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+    expected_loss = elbo.differentiable_loss(model_irange, guide)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    actual_loss = elbo.differentiable_loss(model_iarange, guide)
+    _check_loss_and_grads(expected_loss, actual_loss)
+
+
 @pytest.mark.parametrize('scale', [1, 10])
-def test_elbo_enumerate_iarange_6(scale):
+def test_elbo_enumerate_iarange_7(scale):
     #  Guide    Model
     #    a -----> b
     #    |        |
