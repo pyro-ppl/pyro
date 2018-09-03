@@ -20,13 +20,28 @@ def test_provenance():
         return x * y
 
     @nonstandard.ProvenanceMessenger()
-    def blah():
-        return add(mul(2, 3), 4)
+    def blah(x):
+        return add(mul(2, 3), x)
 
-    b = blah()
+    b = blah(4)
     assert isinstance(b, nonstandard.ProvenanceBox)
     assert isinstance(b.value, numbers.Number)
     assert b.value == 10
+
+
+def test_provenance_operator():
+
+    box = nonstandard.ProvenanceMessenger.value_wrapper
+
+    @nonstandard.ProvenanceMessenger()
+    def blah(x):
+        return box(2) * box(3) + x
+
+    b = blah(4)
+    assert isinstance(b, nonstandard.ProvenanceBox)
+    assert isinstance(b.value, numbers.Number)
+    assert b.value == 10
+    assert b._parents[0]
 
 
 def test_nested_provenance():
@@ -41,10 +56,10 @@ def test_nested_provenance():
 
     @nonstandard.ProvenanceMessenger()
     @nonstandard.ProvenanceMessenger()
-    def blah():
-        return add(mul(2, 3), 4)
+    def blah(x):
+        return add(mul(2, 3), x)
 
-    b = blah()
+    b = blah(4)
     assert isinstance(b, nonstandard.ProvenanceBox)
     assert isinstance(b.value, nonstandard.ProvenanceBox)
     assert isinstance(b.value.value, numbers.Number)
@@ -68,6 +83,21 @@ def test_lazy():
     b = blah()
     assert isinstance(b, nonstandard.LazyBox)
     assert b._value is None
+    assert b.value == 10
+
+
+def test_lazy_operator():
+
+    box = nonstandard.LazyMessenger.value_wrapper
+
+    @nonstandard.LazyMessenger()
+    def blah():
+        return box(2) * box(3) + box(4)
+
+    b = blah()
+    assert isinstance(b, nonstandard.LazyBox)
+    assert b._value is None
+    assert isinstance(b.value, numbers.Number)
     assert b.value == 10
 
 

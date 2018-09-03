@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import operator
+
 from .messenger import Messenger
 from .runtime import apply_stack
 
@@ -34,6 +36,7 @@ class Box(object):
     """
     Boxed value.
     Each new NonstandardMessenger subclass should define its own Box subclass.
+    Needs operator overloads.
     """
     def __init__(self, value):
         self._value = value
@@ -45,18 +48,16 @@ class Box(object):
     def update(self, new_value):
         self._value = new_value
 
-
-class BoxedCallable(Box):
-    """
-    Boxed function (which is also a boxed value)
-    Each new NonstandardMessenger subclass should define
-    its own BoxedCallable subclass.
-
-    Should composition run in the other direction?
-    ie should we just box Callables?
-    """
     def __call__(self, *args, **kwargs):
+        assert callable(self.value)
         return self.value(*args, **kwargs)
+
+
+for op in operator.__all__:
+    if hasattr(operator, "__{}__".format(op)) and \
+       callable(getattr(operator, op)):
+        setattr(Box, "__{}__".format(op),
+                make_nonstandard(getattr(operator, op)))
 
 
 class NonstandardMessenger(Messenger):
@@ -80,7 +81,17 @@ class NonstandardMessenger(Messenger):
 
     # these will usually need to be redefined for each subclass
     value_wrapper = Box
-    function_wrapper = BoxedCallable
+    function_wrapper = Box
+
+    def __call__(self, fn):
+        def _wraps(*args, **kwargs):
+            with self:
+                return fn(
+                    *tuple(self.value_wrapper(a) for a in args),
+                    **{k: self.value_wrapper(v) for k, v in kwargs.items()}
+                )
+        _wraps.msngr = self
+        return _wraps
 
     def _process_message(self, msg):
         """
@@ -160,9 +171,6 @@ class LazyBox(Box):
                 **self._expr[2])
         return self._value
 
-
-class LazyBoxedCallable(BoxedCallable):
-
     def __call__(self, *args, **kwargs):
         return LazyBox(expr=(self.value, args, kwargs))
 
@@ -179,7 +187,7 @@ class LazyMessenger(NonstandardMessenger):
 
     # value wrappers for lazy evaluation
     value_wrapper = LazyBox
-    function_wrapper = LazyBoxedCallable
+    function_wrapper = LazyBox
 
     def _process_message(self, msg):
         msg["done"] = True
@@ -191,12 +199,9 @@ class ProvenanceBox(Box):
     def set_parents(self, *args, **kwargs):
         self._parents = tuple(args) + tuple(kwargs.items())
 
-
-class ProvenanceBoxedCallable(BoxedCallable):
-
     def __call__(self, *args, **kwargs):
         value = ProvenanceBox(None)
-        value.set_parents(tuple(args) + tuple(kwargs.items()))
+        value.set_parents(*args, **kwargs)
         return value
 
 
@@ -206,4 +211,4 @@ class ProvenanceMessenger(NonstandardMessenger):
     """
     # value wrappers
     value_wrapper = ProvenanceBox
-    function_wrapper = ProvenanceBoxedCallable
+    function_wrapper = ProvenanceBox
