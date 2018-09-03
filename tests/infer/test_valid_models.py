@@ -1053,8 +1053,8 @@ def test_enum_in_model_iarange_ok():
         p = pyro.param('p', torch.tensor(0.25))
         a = pyro.sample('a', dist.Bernoulli(p))
         b = pyro.sample('b', dist.Bernoulli(p + a / 2))
-        c = pyro.sample('c', dist.Bernoulli(p + b / 2), infer=infer)
         with pyro.iarange('data', 3):
+            c = pyro.sample('c', dist.Bernoulli(p + b / 2), infer=infer)
             d = pyro.sample('d', dist.Bernoulli(p + c / 2))
             e = pyro.sample('e', dist.Bernoulli(p + d / 2))
             f = pyro.sample('f', dist.Bernoulli(p + e / 2), infer=infer)
