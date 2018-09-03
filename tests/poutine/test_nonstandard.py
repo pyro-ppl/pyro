@@ -70,10 +70,12 @@ def test_lazy():
 
     @nonstandard.make_nonstandard
     def add(x, y):
+        print("add")
         return x + y
 
     @nonstandard.make_nonstandard
     def mul(x, y):
+        print("mul")
         return x * y
 
     @nonstandard.LazyMessenger()
@@ -81,8 +83,9 @@ def test_lazy():
         return add(mul(2, 3), 4)
 
     b = blah()
+    print("here")
     assert isinstance(b, nonstandard.LazyBox)
-    assert b._value is None
+    assert b._ptr is None
     assert b.value == 10
 
 
@@ -96,7 +99,7 @@ def test_lazy_operator():
 
     b = blah()
     assert isinstance(b, nonstandard.LazyBox)
-    assert b._value is None
+    assert b._ptr is None
     assert isinstance(b.value, numbers.Number)
     assert b.value == 10
 
@@ -120,5 +123,5 @@ def test_lazy_provenance():
 
     assert isinstance(b, nonstandard.ProvenanceBox)
     assert isinstance(b.value, nonstandard.LazyBox)
-    assert b.value._value is None
+    assert b.value._ptr is None
     assert b.value.value == 10

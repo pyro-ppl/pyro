@@ -36,17 +36,20 @@ class Box(object):
     """
     Boxed value.
     Each new NonstandardMessenger subclass should define its own Box subclass.
-    Needs operator overloads.
     """
     def __init__(self, value):
-        self._value = value
+        """
+        _ptr is the internal pointer to the wrapped data
+        """
+        self._ptr = value
 
     @property
     def value(self):
-        return self._value
+        """computes the value inside the box"""
+        return self._ptr
 
     def update(self, new_value):
-        self._value = new_value
+        self._ptr = new_value
 
     def __call__(self, *args, **kwargs):
         assert callable(self.value)
@@ -116,7 +119,6 @@ class NonstandardMessenger(Messenger):
         assert isinstance(msg["value"], self.value_wrapper) or not msg["value"]
 
         # store boxed values for postprocessing
-        # XXX what about msg["value"]?
         self._wrapper_cell["fn"] = msg["fn"]
         self._wrapper_cell["args"] = msg["args"]
         self._wrapper_cell["kwargs"] = msg["kwargs"]
@@ -124,12 +126,12 @@ class NonstandardMessenger(Messenger):
             self._wrapper_cell["value"] = msg["value"]
 
         # unbox values for function application
-        msg["fn"] = msg["fn"].value
-        msg["args"] = tuple(arg.value for arg in msg["args"])
-        msg["kwargs"] = {name: kwarg.value
+        msg["fn"] = msg["fn"]._ptr
+        msg["args"] = tuple(arg._ptr for arg in msg["args"])
+        msg["kwargs"] = {name: kwarg._ptr
                          for name, kwarg in msg["kwargs"].items()}
         if msg["value"] is not None:
-            msg["value"] = msg["value"].value
+            msg["value"] = msg["value"]._ptr
 
     def _postprocess_message(self, msg):
         """
@@ -159,18 +161,17 @@ class NonstandardMessenger(Messenger):
 class LazyBox(Box):
 
     def __init__(self, value=None, expr=()):
-        assert not value or not expr
-        self._value = value
+        self._ptr = value
         self._expr = expr
 
     @property
     def value(self):
-        if self._value is None:
-            self._value = self._expr[0].value(
+        if self._expr:
+            self._ptr = self._expr[0].value(
                 *(a.value for a in self._expr[1]),
                 **{k: v.value for k, v in self._expr[2].items()})
             self._expr = ()
-        return self._value
+        return self._ptr
 
     def __call__(self, *args, **kwargs):
         return LazyBox(expr=(self, args, kwargs))
