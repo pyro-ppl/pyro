@@ -9,7 +9,8 @@ from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
 from pyro.distributions.half_cauchy import HalfCauchy
-from pyro.distributions.iaf import InverseAutoregressiveFlow
+from pyro.distributions.iaf import InverseAutoregressiveFlow, InverseAutoregressiveFlowStable
+from pyro.distributions.flipflow import FlipFlow
 from pyro.distributions.lowrank_mvn import LowRankMultivariateNormal
 from pyro.distributions.mixture import MaskedMixture
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
@@ -33,9 +34,11 @@ __all__ = [
     "Delta",
     "Distribution",
     "Empirical",
+    "FlipFlow",
     "GaussianScaleMixture",
     "HalfCauchy",
     "InverseAutoregressiveFlow",
+    "InverseAutoregressiveFlowStable",
     "LowRankMultivariateNormal",
     "MaskedMixture",
     "MixtureOfDiagNormalsSharedCovariance",
