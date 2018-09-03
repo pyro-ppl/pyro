@@ -166,13 +166,14 @@ class LazyBox(Box):
     @property
     def value(self):
         if self._value is None:
-            self._value = self._expr[0](
+            self._value = self._expr[0].value(
                 *(a.value for a in self._expr[1]),
-                **self._expr[2])
+                **{k: v.value for k, v in self._expr[2].items()})
+            self._expr = ()
         return self._value
 
     def __call__(self, *args, **kwargs):
-        return LazyBox(expr=(self.value, args, kwargs))
+        return LazyBox(expr=(self, args, kwargs))
 
 
 class LazyMessenger(NonstandardMessenger):
@@ -190,7 +191,7 @@ class LazyMessenger(NonstandardMessenger):
     function_wrapper = LazyBox
 
     def _process_message(self, msg):
-        msg["done"] = True
+        msg["done"] = True  # block default processing
         super(LazyMessenger, self)._process_message(msg)
 
 
