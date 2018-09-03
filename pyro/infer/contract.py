@@ -90,19 +90,26 @@ def _partition_terms(terms, dims):
         yield component_terms, component_dims
 
 
-def _contract_component(tensor_tree, sum_dims):
+def _contract_component(tensor_tree, sum_dims, target_ordinal=None):
     """
     Contract out ``sum_dims`` in a tree of tensors in-place, via message
-    passing. This reduces all tensors down to the minimum shared iarange
-    context. This function should be deterministic.
+    passing. This reduces all tensors down to a single iarange context
+    ``target_ordinal``, by default the minimum shared iarange context. This
+    function should be deterministic.
 
     :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
         tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
     :param dict sum_dims: a dictionary mapping tensors to sets of dimensions
         (indexed from the right) that should be summed out.
+    :param frozenset target_ordinal: An optional ordinal to which results will
+        be contracted or broadcasted.
     """
+    if target_ordinal is None:
+        target_ordinal = frozenset.intersection(*tensor_tree)
+
     # First close the set of ordinals under intersection (greatest lower bound),
     # ensuring that the ordinals are arranged in a tree structure.
+    tensor_tree.setdefault(target_ordinal, [])
     pending = list(tensor_tree)
     while pending:
         t = pending.pop()
@@ -116,20 +123,27 @@ def _contract_component(tensor_tree, sum_dims):
     # Collect contraction dimension by ordinal.
     dims_tree = defaultdict(set)
     for t, terms in tensor_tree.items():
-        dims_tree[t] = set.union(*(sum_dims[term] for term in terms))
+        dims_tree[t] = set.union(set(), *(sum_dims[term] for term in terms))
 
     # Recursively combine terms in different iarange contexts.
-    while any(dims_tree.values()):
-        leaf = max(tensor_tree, key=len)
+    while len(tensor_tree) > 1 or any(dims_tree.values()):
+        leaf = max(tensor_tree, key=lambda t: len(t ^ target_ordinal))
         leaf_terms = tensor_tree.pop(leaf)
         leaf_dims = dims_tree.pop(leaf)
         remaining_dims = set.union(set(), *dims_tree.values())
         contract_dims = leaf_dims - remaining_dims
-        contract_frames = (frozenset.intersection(*(leaf - t for t in tensor_tree if t < leaf))
-                           if tensor_tree else frozenset())
-        parent = leaf - contract_frames
+        contract_frames = frozenset()
+        broadcast_frames = frozenset()
+        if leaf - target_ordinal:
+            # Contract out unneeded iaranges.
+            contract_frames = frozenset.intersection(*(leaf - t for t in tensor_tree if t < leaf))
+        elif target_ordinal - leaf:
+            # Broadcast up needed iaranges.
+            broadcast_frames = frozenset.intersection(*(t - leaf for t in tensor_tree if t > leaf))
+        parent = leaf - contract_frames | broadcast_frames
         dims_tree[parent] |= leaf_dims & remaining_dims
         tensor_tree.setdefault(parent, [])
+
         for terms, dims in _partition_terms(leaf_terms, contract_dims):
 
             # Eliminate any enumeration dims via a logsumproductexp() contraction.
@@ -144,10 +158,18 @@ def _contract_component(tensor_tree, sum_dims):
                 shape = tuple(shape)
                 terms = [logsumproductexp(terms, shape)]
 
-            # Eliminate remaining iarange dims via .sum() contractions.
             for term in terms:
+                # Eliminate extra iarange dims via .sum() contractions.
                 for frame in contract_frames:
                     term = term.sum(frame.dim, keepdim=True)
+
+                # Broadcast to any missing iaranges via .expand().
+                for frame in broadcast_frames:
+                    shape = list(term.shape)
+                    shape = [1] * (-frame.dim - len(shape)) + shape
+                    shape[frame.dim] = frame.size
+                    term = term.expand(shape)
+
                 tensor_tree[parent].append(term)
 
 
@@ -161,6 +183,9 @@ def contract_tensor_tree(tensor_tree, sum_dims):
     :param dict sum_dims: a dictionary mapping tensors to sets of dimensions
         (indexed from the right) that should be summed out.
     """
+    assert isinstance(tensor_tree, OrderedDict)
+    assert isinstance(sum_dims, dict)
+
     ordinals = {term: t for t, terms in tensor_tree.items() for term in terms}
     all_terms = [term for terms in tensor_tree.values() for term in terms]
     all_dims = set.union(*sum_dims.values())
@@ -178,3 +203,28 @@ def contract_tensor_tree(tensor_tree, sum_dims):
         assert len(next(iter(component.values()))) == 1
         for t, terms in component.items():
             tensor_tree.setdefault(t, []).extend(terms)
+
+
+def contract_to_tensor(tensor_tree, sum_dims, target_ordinal):
+    """
+    Contract out ``sum_dims`` in a tree of tensors in-place, via message
+    passing. This reduces all terms down to a single tensor in the iarange context specified by
+    ``target_ordinal``. This function should be deterministic.
+
+    :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
+        tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
+    :param dict sum_dims: a dictionary mapping tensors to sets of dimensions
+        (indexed from the right) that should be summed out.
+    :param frozendset target_ordinal: An optional ordinal to which results will
+        be contracted or broadcasted.
+    :returns: a single tensor
+    :rtype: torch.Tensor
+    """
+    assert isinstance(tensor_tree, OrderedDict)
+    assert isinstance(sum_dims, dict)
+    assert isinstance(target_ordinal, frozenset)
+
+    _contract_component(tensor_tree, sum_dims, target_ordinal)
+    t, terms = tensor_tree.popitem()
+    assert t == target_ordinal
+    return sum(terms)
