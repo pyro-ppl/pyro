@@ -89,7 +89,7 @@ def validate_message(msg):
     Asserts that the message has a valid format.
     :returns: None
     """
-    assert msg["type"] in ("sample", "param"), \
+    assert msg["type"] in ("sample", "param", "apply"), \
         "{} is an invalid site type, how did that get there?".format(msg["type"])
 
 
@@ -100,7 +100,7 @@ def default_process_message(msg):
     :returns: None
     """
     validate_message(msg)
-    if msg["type"] == "sample":
+    if msg["type"] == "sample" or msg["type"] == "apply":
         fn, args, kwargs = \
             msg["fn"], msg["args"], msg["kwargs"]
 
@@ -112,7 +112,7 @@ def default_process_message(msg):
         if msg["done"]:
             return msg
 
-        if msg["is_observed"]:
+        if msg["type"] == "sample" and msg["is_observed"]:
             assert msg["value"] is not None
             val = msg["value"]
         else:

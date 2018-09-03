@@ -122,5 +122,8 @@ class Messenger(object):
     def _pyro_sample(self, msg):
         return None
 
+    def _pyro_apply(self, msg):
+        return None
+
     def _pyro_param(self, msg):
         return None

@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import pyro  # XXX circular dependency, replace sample with apply_stack
 from .messenger import Messenger
 from .runtime import apply_stack
 
@@ -10,7 +9,24 @@ def make_nonstandard(fn):
     Wrapper for calling apply_stack to apply any active effects.
     """
     def _fn(*args, **kwargs):
-        return pyro.sample("aa", fn, *args, **kwargs)  # XXX not really a sample
+        msg = {
+            "type": "apply",
+            "name": kwargs.get("name", None),
+            "fn": fn,
+            "is_observed": False,
+            "args": args,
+            "kwargs": kwargs,
+            "value": None,
+            "scale": 1.0,
+            "mask": None,
+            "cond_indep_stack": (),
+            "done": False,
+            "stop": False,
+            "continuation": None
+        }
+        # apply the stack and return its return value
+        apply_stack(msg)
+        return msg["value"]
     return _fn
 
 
@@ -25,6 +41,9 @@ class Box(object):
     @property
     def value(self):
         return self._value
+
+    def update(self, new_value):
+        self._value = new_value
 
 
 class BoxedCallable(Box):
@@ -49,33 +68,40 @@ class NonstandardMessenger(Messenger):
     1. Box all unboxed inputs <-- _process_message / __call__
     2. Unbox all boxed inputs <-- _process_message
     3. Unbox boxed function <-- _process_message
-    4. Call unboxed function on unboxed inputs <-- apply_stack (?)
+    4. Call unboxed function on unboxed inputs <-- what happens here??
     5. Box unboxed output <-- _postprocess_message
     6. Return boxed output
+
+    How should function registration work?
     """
     def __init__(self):
         super(NonstandardMessenger, self).__init__()
         self._wrapper_cell = {}
 
-    # these usually need to be defined for each subclass
-    value_wrapper = Box  # XXX should be a @property?
-    function_wrapper = BoxedCallable  # XXX should be a @property?
+    # these will usually need to be redefined for each subclass
+    value_wrapper = Box
+    function_wrapper = BoxedCallable
 
     def _process_message(self, msg):
         """
         Unbox all boxed inputs
         """
-        # boxing
-        msg["fn"] = self.function_wrapper(msg["fn"])
+        # boxing of any unboxed function and inputs
+        if not isinstance(msg["fn"], self.function_wrapper):
+            msg["fn"] = self.function_wrapper(msg["fn"])
         msg["args"] = tuple(a if isinstance(a, self.value_wrapper)
                             else self.value_wrapper(a)
                             for a in msg["args"])
+        if msg["value"] is not None:
+            msg["value"] = self.value_wrapper(msg["value"])
 
-        # validation
+        # validation of boxed arguments
         assert isinstance(msg["fn"], self.function_wrapper)
         assert all(isinstance(x, self.value_wrapper) for x in msg["args"])
         assert all(isinstance(x, self.value_wrapper)
                    for x in msg["kwargs"].values())
+
+        # validate type of value
         assert isinstance(msg["value"], self.value_wrapper) or not msg["value"]
 
         # store boxed values for postprocessing
@@ -87,7 +113,6 @@ class NonstandardMessenger(Messenger):
             self._wrapper_cell["value"] = msg["value"]
 
         # unbox values for function application
-        # XXX what about msg["value"]?
         msg["fn"] = msg["fn"].value
         msg["args"] = tuple(arg.value for arg in msg["args"])
         msg["kwargs"] = {name: kwarg.value
@@ -99,12 +124,21 @@ class NonstandardMessenger(Messenger):
         """
         Re-boxing.
         """
-        # validation
+        # validation of wrapped values
         assert all(self._wrapper_cell.get(field, None) is not None
                    for field in ["fn", "args", "kwargs"])
 
+        # capture unboxed value
+        new_val = msg["value"]
+
         # restore boxed values
         msg.update(self._wrapper_cell)
+        self._wrapper_cell.clear()
+
+        # application of boxed function
+        # (this is where the actual effect is applied)
+        msg["value"] = msg["fn"](*msg["args"], **msg["kwargs"])
+        msg["value"].update(new_val)  # update value pointer
 
     def _reset(self):
         self._wrapper_cell.clear()
@@ -113,15 +147,24 @@ class NonstandardMessenger(Messenger):
 
 class LazyBox(Box):
 
+    def __init__(self, value=None, expr=()):
+        assert not value or not expr
+        self._value = value
+        self._expr = expr
+
     @property
     def value(self):
-        pass
+        if self._value is None:
+            self._value = self._expr[0](
+                *(a.value for a in self._expr[1]),
+                **self._expr[2])
+        return self._value
 
 
 class LazyBoxedCallable(BoxedCallable):
 
     def __call__(self, *args, **kwargs):
-        pass
+        return LazyBox(expr=(self.value, args, kwargs))
 
 
 class LazyMessenger(NonstandardMessenger):
@@ -138,6 +181,10 @@ class LazyMessenger(NonstandardMessenger):
     value_wrapper = LazyBox
     function_wrapper = LazyBoxedCallable
 
+    def _process_message(self, msg):
+        msg["done"] = True
+        super(LazyMessenger, self)._process_message(msg)
+
 
 class ProvenanceBox(Box):
 
@@ -148,7 +195,7 @@ class ProvenanceBox(Box):
 class ProvenanceBoxedCallable(BoxedCallable):
 
     def __call__(self, *args, **kwargs):
-        value = ProvenanceBox(self.fn(*args, **kwargs))
+        value = ProvenanceBox(None)
         value.set_parents(tuple(args) + tuple(kwargs.items()))
         return value
 
