@@ -24,7 +24,7 @@ def rinverse(M, sym=False):
         inv[..., 1, 0] = -M[..., 1, 0]
         return inv / det.unsqueeze(-1).unsqueeze(-1)
     elif M.shape[-1] == 3:
-        return _inv_3d(M, sym=sym)
+        return inv3d(M, sym=sym)
     else:
         # Use blockwise inversion
         d = M.shape[-1]//2
@@ -42,7 +42,7 @@ def rinverse(M, sym=False):
         return inv
 
 
-def _determinant_3d(H):
+def determinant_3d(H):
     """
     Returns the determinants of a batched 3-D matrix
     """
@@ -52,7 +52,7 @@ def _determinant_3d(H):
     return detH
 
 
-def _eig_3d(H):
+def eig_3d(H):
     """
     Returns the eigenvalues of a symmetric batched 3-D matrix
     """
@@ -61,7 +61,7 @@ def _eig_3d(H):
     p2 = (H[..., 0, 0] - q).pow(2) + (H[..., 1, 1] - q).pow(2) + (H[..., 2, 2] - q).pow(2) + 2 * p1
     p = torch.sqrt(p2 / 6)
     B = (1 / p).unsqueeze(-1).unsqueeze(-1) * (H - q.unsqueeze(-1).unsqueeze(-1) * torch.eye(3))
-    r = _determinant_3d(B) / 2
+    r = determinant_3d(B) / 2
     phi = (r.acos() / 3).unsqueeze(-1).unsqueeze(-1).expand(r.shape + (3, 3))
     phi[r < -1 + 1e-6] = math.pi / 3
     phi[r > 1 - 1e-6] = 0.
@@ -73,11 +73,11 @@ def _eig_3d(H):
     return eig2, eig3, eig1
 
 
-def _inv_3d(H, sym=False):
+def inv3d(H, sym=False):
     """
     Calculates the inverse of a batched 3-D matrix
     """
-    detH = _determinant_3d(H)
+    detH = determinant_3d(H)
     Hinv = H.new_empty(H.shape)
     Hinv[..., 0, 0] = H[..., 1, 1] * H[..., 2, 2] - H[..., 1, 2] * H[..., 2, 1]
     Hinv[..., 1, 1] = H[..., 0, 0] * H[..., 2, 2] - H[..., 0, 2] * H[..., 2, 0]

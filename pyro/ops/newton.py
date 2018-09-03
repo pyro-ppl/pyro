@@ -4,7 +4,7 @@ import torch
 from torch.autograd import grad
 
 from pyro.util import warn_if_nan
-from pyro.ops.linalg import rinverse, _eig_3d
+from pyro.ops.linalg import rinverse, eig_3d
 
 
 def newton_step(loss, x, trust_radius=None):
@@ -198,7 +198,7 @@ def newton_step_3d(loss, x, trust_radius=None):
     if trust_radius is not None:
         # regularize to keep update within ball of given trust_radius
         # calculate eigenvalues of symmetric matrix
-        min_eig, _, _ = _eig_3d(H)
+        min_eig, _, _ = eig_3d(H)
         regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
         warn_if_nan(regularizer, 'regularizer')
         H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new_tensor(torch.eye(3))
