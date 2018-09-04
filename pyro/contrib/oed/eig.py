@@ -123,7 +123,7 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
         retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
         retrace.compute_log_prob()
         conditional_lp = logsumexp(sum(retrace.nodes[l]["log_prob"] for l in observation_labels), 0) \
-                        - np.log(M_prime)
+            - np.log(M_prime)
     else:
         # This assumes that y are independent conditional on theta
         # Furthermore assume that there are no other variables besides theta
@@ -138,7 +138,7 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
     retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
     retrace.compute_log_prob()
     marginal_lp = logsumexp(sum(retrace.nodes[l]["log_prob"] for l in observation_labels), 0) \
-                 - np.log(M)
+        - np.log(M)
 
     return (conditional_lp - marginal_lp).sum(0)/N
 
@@ -277,8 +277,8 @@ def barber_agakov_loss(model, guide, observation_labels, target_labels):
 
         # Run through q(theta | y, d)
         conditional_guide = pyro.condition(guide, data=theta_dict)
-        cond_trace = poutine.trace(conditional_guide).get_trace(y_dict, expanded_design,
-            observation_labels, target_labels)
+        cond_trace = poutine.trace(conditional_guide).get_trace(
+            y_dict, expanded_design, observation_labels, target_labels)
         cond_trace.compute_log_prob()
 
         loss = -sum(cond_trace.nodes[l]["log_prob"] for l in target_labels).sum(0)/num_particles
