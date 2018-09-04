@@ -50,6 +50,6 @@ def test_ape_svi(model, arg, design, guide, expected_ape, n_steps):
         "num_steps": n_steps
     }
     is_parameters = {"num_samples": 1}
-    ape = vi_ape(lambda d: model(arg, d), design, "y", vi_parameters,
+    ape = vi_ape(lambda d: model(arg, d), design, "y", ["w", "u"], vi_parameters,
                  is_parameters)
     assert_equal(ape, expected_ape, prec=1e-4)
