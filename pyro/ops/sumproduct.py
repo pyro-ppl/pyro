@@ -16,10 +16,31 @@ def zip_align_right(xs, ys):
 
 
 def memoized_squeeze(tensor):
-    if hasattr(tensor, '_memoized_squeeze'):
-        return tensor._memoized_squeeze
+    """
+    Computes ``tensor.squeeze()`` memoizing the result for the lifetime of
+    ``tensor``. This enables sharing when used inside
+    :func:`~opt_einsum.shared_intermediates`.
+    """
+    if hasattr(tensor, '_pyro_memoized_squeeze'):
+        return tensor._pyro_memoized_squeeze
     result = tensor.squeeze()
-    tensor._memoized_squeeze = result
+    tensor._pyro_memoized_squeeze = result
+    return result
+
+
+def memoized_sum_keepdim(tensor, dim):
+    """
+    Computes ``tensor.sum(dim, keepdim=True)`` memoizing the result for the
+    lifetime of ``tensor``. This enables sharing when used inside
+    :func:`~opt_einsum.shared_intermediates`.
+    """
+    if dim < 0:
+        dim += tensor.dim()
+    name = '_pyro_memoized_sum_keepdim_{}'.format(dim)
+    if hasattr(tensor, name):
+        return getattr(tensor, name)
+    result = tensor.sum(dim, keepdim=True)
+    setattr(tensor, name, result)
     return result
 
 

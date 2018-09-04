@@ -5,7 +5,7 @@ from collections import OrderedDict, defaultdict
 import torch
 
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.sumproduct import logsumproductexp
+from pyro.ops.sumproduct import logsumproductexp, memoized_sum_keepdim
 
 
 def _check_tree_structure(tensor_tree):
@@ -160,15 +160,8 @@ def _contract_component(tensor_tree, sum_dims, target_ordinal=None):
 
             for term in terms:
                 # Eliminate extra iarange dims via .sum() contractions.
-                for frame in contract_frames:
-                    term = term.sum(frame.dim, keepdim=True)
-
-                # Broadcast to any missing iaranges via .expand().
-                for frame in broadcast_frames:
-                    shape = list(term.shape)
-                    shape = [1] * (-frame.dim - len(shape)) + shape
-                    shape[frame.dim] = frame.size
-                    term = term.expand(shape)
+                for frame in sorted(contract_frames, key=lambda f: -f.dim):
+                    term = memoized_sum_keepdim(term, frame.dim)
 
                 tensor_tree[parent].append(term)
 
@@ -227,4 +220,15 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal):
     _contract_component(tensor_tree, sum_dims, target_ordinal)
     t, terms = tensor_tree.popitem()
     assert t == target_ordinal
-    return sum(terms)
+    term = sum(terms)
+
+    # Broadcast to any missing iaranges via .expand().
+    shape = list(term.shape)
+    for frame in target_ordinal:
+        shape = [1] * (-frame.dim - len(shape)) + shape
+        shape[frame.dim] = frame.size
+    shape = torch.Size(shape)
+    if term.shape != shape:
+        term = term.expand(shape)
+
+    return term
