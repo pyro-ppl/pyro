@@ -754,7 +754,7 @@ class AutoDiscreteParallel(AutoGuide):
         return result
 
 
-def mean_field_guide_entropy(guide, *args, whitelist=None):
+def mean_field_guide_entropy(guide, args, whitelist=None):
     """Computes the entropy of a guide program, assuming
     that the guide is fully mean-field (i.e. all sample sites
     in the guide are independent).

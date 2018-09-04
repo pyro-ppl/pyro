@@ -9,7 +9,7 @@ from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import (
     vi_ape, naive_rainforth_eig, donsker_varadhan_eig, barber_agakov_ape
 )
-from pyro.contrib.oed.util import get_indices
+from pyro.contrib.oed.util import get_indices, lexpand
 
 from models.bayes_linear import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov,
@@ -80,7 +80,7 @@ basic_2p_linear_model_sds_10_2pt5, basic_2p_guide = zero_mean_unit_obs_sd_lm(tor
 _, basic_2p_guide_w1 = zero_mean_unit_obs_sd_lm(torch.tensor([10., 2.5]), coef_label="w1")
 basic_2p_linear_model_sds_10_0pt1, _ = zero_mean_unit_obs_sd_lm(torch.tensor([10., .1]))
 basic_2p_ba_guide = lambda d: LinearModelGuide(d, {"w": 2}).guide
-group_2p_linear_model_sds_10_2pt5 = group_linear_model(torch.tensor(0.), torch.tensor([10.]), torch.tensor(0.), 
+group_2p_linear_model_sds_10_2pt5 = group_linear_model(torch.tensor(0.), torch.tensor([10.]), torch.tensor(0.),
                                                        torch.tensor([2.5]), torch.tensor(1.))
 group_2p_guide = group_normal_guide(torch.tensor(1.), (1,), (1,))
 group_2p_ba_guide = lambda d: LinearModelGuide(d, {"w1": 1, "w2": 1}).guide
@@ -139,7 +139,7 @@ def mc_H_prior(model, design, observation_labels, target_labels, num_samples=100
     if isinstance(target_labels, str):
         target_labels = [target_labels]
 
-    expanded_design= design.expand((num_samples, ) + design.shape)
+    expanded_design = lexpand(design, num_samples)
     trace = pyro.poutine.trace(model).get_trace(expanded_design)
     trace.compute_log_prob()
     lp = sum(trace.nodes[l]["log_prob"] for l in target_labels)
@@ -183,8 +183,7 @@ naive_rainforth_eig.name = "Naive Rainforth"
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,arglist", [
     ("Sigmoid link function",
      sigmoid_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
-     [#(naive_rainforth_eig, [20000, 500, 500]),
-      (donsker_varadhan_eig, [400, 400, GuideDV(sigmoid_ba_guide(6)),
+     [(donsker_varadhan_eig, [400, 400, GuideDV(sigmoid_ba_guide(6)),
         optim.Adam({"lr": 0.05}), False, None, 500]),
       (ba_eig_mc, [20, 800, sigmoid_ba_guide(6), optim.Adam({"lr": 0.05}),
         False, None, 500])
@@ -226,7 +225,7 @@ naive_rainforth_eig.name = "Naive Rainforth"
         False, None, 500])
       ]),
     # TODO: make VI work here (non-mean-field guide)
-    ("Linear model targeting one parameter", 
+    ("Linear model targeting one parameter",
      group_2p_linear_model_sds_10_2pt5, X_circle_10d_1n_2p, "y", "w1",
      [(linear_model_ground_truth, []),
       (naive_rainforth_eig, [200, 200, 200]),
@@ -333,12 +332,12 @@ def time_eig(estimator, model, design, observation_label, target_label, args):
       "guide": basic_2p_ba_guide(2),
       "final_num_samples": 1000}, {"eig": False}),
     ("Donsker-Varadhan on small AB test",
-     basic_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w", 
+     basic_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w",
      donsker_varadhan_eig, linear_model_ground_truth,
      {"num_steps": 400, "num_samples": 100, "optim": optim.Adam({"lr": 0.05}),
       "T": GuideDV(basic_2p_ba_guide(2)), "final_num_samples": 10000}, {}),
     ("Donsker-Varadhan on circle",
-     basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w", 
+     basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
      donsker_varadhan_eig, linear_model_ground_truth,
      {"num_steps": 400, "num_samples": 400, "optim": optim.Adam({"lr": 0.05}),
       "T": GuideDV(basic_2p_ba_guide(5)), "final_num_samples": 10000}, {})
