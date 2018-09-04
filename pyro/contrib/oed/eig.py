@@ -81,10 +81,12 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
 
     .. math::
 
-        \\frac{1}{N}\\sum_{n=1}^N \\log p(y_n | \\theta_n, d) - \\log (\\frac{1}{M}\\sum_{m=1}^M p(y_n | \\theta_m, d))
+        \\frac{1}{N}\\sum_{n=1}^N \\log p(y_n | \\theta_n, d) -
+        \\log \\left(\\frac{1}{M}\\sum_{m=1}^M p(y_n | \\theta_m, d)\\right)
 
-    Caution: the target labels must encompass all other variables in the model: no
-    Monte Carlo estimation is attempted for the :math:`\\log p(y | \\theta, d)` term.
+    Monte Carlo estimation is attempted for the :math:`\\log p(y | \\theta, d)` term if
+    the parameter `M_prime` is passed. Otherwise, it is assumed that that :math:`\\log p(y | \\theta, d)`
+    can safely be read from the model itself.
 
     :param function model: A pyro model accepting `design` as only argument.
     :param torch.Tensor design: Tensor representation of design
@@ -151,10 +153,14 @@ def donsker_varadhan_eig(model, design, observation_labels, target_labels,
 
     The Donsker-Varadhan representation of EIG is
 
-        :math:`\\sup_T E[T(y, \\theta)] - \\log E[\\exp(T(\\bar{y}, \\bar{\\theta}))]`
+    .. math::
 
-    where the first expectation is over the joint :math:`p(y | \\theta, d)` and
-    the second is over :math:`p(\\bar{y}|d)p(\\bar{\\theta})``.
+        \\sup_T E_{p(y, \\theta | d)}[T(y, \\theta)] - \\log E_{p(y|d)p(\\theta)}[\\exp(T(\\bar{y}, \\bar{\\theta}))]
+
+    where :math:`T` is any (measurable) function.
+
+    This methods optimises the loss function over a pre-specified class of
+    functions `T`.
 
     :param function model: A pyro model accepting `design` as only argument.
     :param torch.Tensor design: Tensor representation of design
@@ -169,8 +175,14 @@ def donsker_varadhan_eig(model, design, observation_labels, target_labels,
     :param function or torch.nn.Module T: optimisable function `T` for use in the
         Donsker-Varadhan loss function.
     :param pyro.optim.Optim optim: Optimiser to use.
-    :return: EIG estimate
-    :rtype: `torch.Tensor`
+    :param bool return_history: If `True`, also returns a tensor giving the loss function
+        at each step of the optimisation.
+    :param torch.Tensor final_design: The final design tensor to evaluate at. If `None`, uses
+        `design`.
+    :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
+        uses `num_samples`.
+    :return: EIG estimate, optionally includes full optimisatio history
+    :rtype: `torch.Tensor` or `tuple`
     """
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
@@ -185,7 +197,39 @@ def barber_agakov_ape(model, design, observation_labels, target_labels,
                       num_samples, num_steps, guide, optim, return_history=False,
                       final_design=None, final_num_samples=None):
     """
-    Barber-Agakov estimate of APE.
+    Barber-Agakov estimate of average posterior entropy (APE).
+
+    The Barber-Agakov representation of APE is
+
+        :math:`sup_{q}E_{p(y, \\theta | d)}[\\log q(\\theta | y, d)]`
+
+    where :math:`q` is any distribution on :math:`\\theta`.
+
+    This method optimises the loss over a given guide family `guide`
+    representing :math:`q`.
+
+    :param function model: A pyro model accepting `design` as only argument.
+    :param torch.Tensor design: Tensor representation of design
+    :param list observation_labels: A subset of the sample sites
+        present in `model`. These sites are regarded as future observations
+        and other sites are regarded as latent variables over which a
+        posterior is to be inferred.
+    :param list target_labels: A subset of the sample sites over which the posterior
+        entropy is to be measured.
+    :param int num_samples: Number of samples per iteration.
+    :param int num_steps: Number of optimisation steps.
+    :param function guide: guide family for use in the (implicit) posterior estimation.
+        The parameters of `guide` are optimised to maximise the Barber-Agakov
+        objective.
+    :param pyro.optim.Optim optim: Optimiser to use.
+    :param bool return_history: If `True`, also returns a tensor giving the loss function
+        at each step of the optimisation.
+    :param torch.Tensor final_design: The final design tensor to evaluate at. If `None`, uses
+        `design`.
+    :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
+        uses `num_samples`.
+    :return: EIG estimate, optionally includes full optimisatio history
+    :rtype: `torch.Tensor` or `tuple`
     """
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
@@ -297,7 +341,7 @@ def logsumexp(inputs, dim=None, keepdim=False):
         keepdim: A boolean.
 
     Returns:
-        Equivalent of log(sum(exp(inputs), dim=dim, keepdim=keepdim)).
+        Equivalent of `log(sum(exp(inputs), dim=dim, keepdim=keepdim))`.
     """
     # For a 1-D array x (any array along a single dimension),
     # log sum exp(x) = s + log sum exp(x - s)
@@ -313,6 +357,20 @@ def logsumexp(inputs, dim=None, keepdim=False):
 
 
 class EwmaLog(torch.autograd.Function):
+    """Logarithm function with exponentially weighted moving average
+    for gradients.
+
+    For input `inputs` this function return :code:`inputs.log()`. However, it
+    computes the gradient as
+
+        :math:`\\frac{\\sum_{t=1}^T \\alpha^t}{\\sum_{t=1}^T \\alpha^t x_{T-t}}`
+
+    where :math:`x_t` are historical input values passed to this function,
+    :math:`x_T` being the most recently seen value.
+
+    This gradient may help with numerical stability when the sequence of
+    inputs to the function form a convergent sequence.
+    """
 
     def __init__(self, alpha):
         self.alpha = alpha
@@ -321,6 +379,9 @@ class EwmaLog(torch.autograd.Function):
         self.s = 0.
 
     def forward(self, inputs, s, dim=0, keepdim=False):
+        """Updates the moving average, and returns :code:`inputs.log()`
+
+        """
         self.n += 1
         if torch.isnan(self.ewma).any() or (self.ewma == float('inf')).any():
             self.ewma = inputs
@@ -333,4 +394,7 @@ class EwmaLog(torch.autograd.Function):
         return inputs.log()
 
     def backward(self, grad_output):
+        """Returns the gradient from exponentially weighted moving
+        average of historical input values.
+        """
         return grad_output/self.ewma, None, None, None
