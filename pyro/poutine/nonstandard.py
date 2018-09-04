@@ -53,7 +53,10 @@ class Box(object):
 
     def __call__(self, *args, **kwargs):
         assert callable(self.value)
-        return self.value(*args, **kwargs)
+        # unbox and rebox
+        return type(self)(value=self.value(
+            *(getattr(a, "value", a) for a in args),
+            **{k: getattr(v, "value", v) for k, v in kwargs.items()}))
 
 
 for op in operator.__all__:
@@ -68,13 +71,18 @@ class NonstandardMessenger(Messenger):
     Compositional nonstandard interpretation messenger.
     Useful for lazy evaluation, dependency tracking, conjugacy, etc.
 
-    Wrapping a function:
+    Wrapping a function (ordering option #1):
     1. Box all unboxed inputs <-- _process_message / __call__
     2. Unbox all boxed inputs <-- _process_message
     3. Unbox boxed function <-- _process_message
     4. Call unboxed function on unboxed inputs <-- what happens here??
     5. Box unboxed output <-- _postprocess_message
     6. Return boxed output
+
+    Wrapping a function (ordering option #2):
+    1. Keep boxing things up in _process_message
+    2. In default_process, apply the maximally boxed function
+    3. Unbox things on the way down in _postprocess_message
 
     How should function registration work?
     """
@@ -86,15 +94,15 @@ class NonstandardMessenger(Messenger):
     value_wrapper = Box
     function_wrapper = Box
 
-    def __call__(self, fn):
-        def _wraps(*args, **kwargs):
-            with self:
-                return fn(
-                    *tuple(self.value_wrapper(a) for a in args),
-                    **{k: self.value_wrapper(v) for k, v in kwargs.items()}
-                )
-        _wraps.msngr = self
-        return _wraps
+    # def __call__(self, fn):
+    #     def _wraps(*args, **kwargs):
+    #         with self:
+    #             return fn(
+    #                 *tuple(self.value_wrapper(a) for a in args),
+    #                 **{k: self.value_wrapper(v) for k, v in kwargs.items()}
+    #             )
+    #     _wraps.msngr = self
+    #     return _wraps
 
     def _process_message(self, msg):
         """
@@ -162,16 +170,19 @@ class LazyBox(Box):
 
     def __init__(self, value=None, expr=()):
         self._ptr = value
+        self._value = None
         self._expr = expr
 
     @property
     def value(self):
-        if self._expr:
-            self._ptr = self._expr[0].value(
-                *(a.value for a in self._expr[1]),
-                **{k: v.value for k, v in self._expr[2].items()})
-            self._expr = ()
-        return self._ptr
+        if self._value is None:
+            if self._expr:
+                self._value = self._expr[0].value(
+                    *(a.value for a in self._expr[1]),
+                    **{k: v.value for k, v in self._expr[2].items()})
+            else:
+                self._value = self._ptr
+        return self._value
 
     def __call__(self, *args, **kwargs):
         return LazyBox(expr=(self, args, kwargs))
@@ -198,12 +209,15 @@ class LazyMessenger(NonstandardMessenger):
 
 class ProvenanceBox(Box):
 
-    def set_parents(self, *args, **kwargs):
-        self._parents = tuple(args) + tuple(kwargs.items())
+    @property
+    def parents(self):
+        return self._parents
 
     def __call__(self, *args, **kwargs):
+        # XXX why is this failing with infinite recursion?
+        # value = super(ProvenanceBox, self).__call__(*args, **kwargs)
         value = ProvenanceBox(None)
-        value.set_parents(*args, **kwargs)
+        value._parents = tuple(args) + tuple(kwargs.items())
         return value
 
 
