@@ -1,5 +1,5 @@
 import warnings
-from collections import OrderedDict
+from collections import OrderedDict  # noqa F401  # for docstrings
 from functools import partial
 import torch
 from torch.nn.functional import softplus
@@ -319,7 +319,7 @@ def rf_group_assignments(n, random_intercept=True):
         X2 = group_assignment_matrix(torch.tensor([n//2 - i, i]))
         X = torch.cat([X1, X2], dim=-2)
         Xs.append(X)
-    X = torch.stack(Xs, dim=0)    
+    X = torch.stack(Xs, dim=0)
     if random_intercept:
         X = torch.cat([X, participant_matrix.expand(n_designs, n, n)], dim=-1)
     return X, participant_matrix

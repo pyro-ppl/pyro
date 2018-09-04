@@ -1,14 +1,11 @@
 import torch
 from torch import nn
-import math
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
 
-from pyro.contrib.oed.util import (
-    get_indices, tensor_to_dict, rmv, rvv, rdiag, rtril
-)
+from pyro.contrib.oed.util import tensor_to_dict, rmv, rvv, rtril
 from pyro.ops.linalg import rinverse
 
 
@@ -20,7 +17,7 @@ class LinearModelGuide(nn.Module):
         Amortisation over data is taken care of by analytic formulae for
         linear models (heavy use of truth).
 
-        :param int d: the number of designs 
+        :param int d: the number of designs
         :param dict w_sizes: map from variable string names to int.
         """
         super(LinearModelGuide, self).__init__()
@@ -101,7 +98,7 @@ class NormalInverseGammaGuide(LinearModelGuide):
 
         y = torch.cat(list(y_dict.values()), dim=-1)
 
-        coefficient_labels = [l for l in target_labels if l != self.tau_label]
+        coefficient_labels = [label for label in target_labels if label != self.tau_label]
         mu, scale_tril = self.linear_model_formula(y, design, coefficient_labels)
         mu_vec = torch.cat(list(mu.values()), dim=-1)
 
@@ -122,13 +119,15 @@ class NormalInverseGammaGuide(LinearModelGuide):
             tau = pyro.sample(self.tau_label, tau_dist)
             obs_sd = 1./tau.sqrt().unsqueeze(-1).unsqueeze(-1)
 
-        for l in target_labels:
-            if l != self.tau_label:
+        for label in target_labels:
+            if label != self.tau_label:
                 if self.mf:
-                    w_dist = dist.MultivariateNormal(mu[l], scale_tril=scale_tril[l])
+                    w_dist = dist.MultivariateNormal(mu[label],
+                                                     scale_tril=scale_tril[label])
                 else:
-                    w_dist = dist.MultivariateNormal(mu[l], scale_tril=scale_tril[l]*obs_sd)
-                pyro.sample(l, w_dist)
+                    w_dist = dist.MultivariateNormal(mu[label],
+                                                     scale_tril=scale_tril[label]*obs_sd)
+                pyro.sample(label, w_dist)
 
 
 class GuideDV(nn.Module):

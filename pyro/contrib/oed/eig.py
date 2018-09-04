@@ -60,7 +60,7 @@ def vi_ape(model, design, observation_labels, target_labels,
         conditioned_model = pyro.condition(model, data=y_dict)
         SVI(conditioned_model, **vi_parameters).run(design)
         # Recover the entropy
-        return mean_field_guide_entropy(vi_parameters["guide"], design, whitelist=target_labels)
+        return mean_field_guide_entropy(vi_parameters["guide"], [design], whitelist=target_labels)
 
     if y_dist is None:
         y_dist = EmpiricalMarginal(Importance(model, **is_parameters).run(design),
