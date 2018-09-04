@@ -363,7 +363,7 @@ class EwmaLog(torch.autograd.Function):
     For input `inputs` this function return :code:`inputs.log()`. However, it
     computes the gradient as
 
-        :math:`\\frac{\\sum_{t=1}^T \\alpha^t}{\\sum_{t=1}^T \\alpha^t x_{T-t}}`
+        :math:`\\frac{\\sum_{t=0}^{T-1} \\alpha^t}{\\sum_{t=0}^{T-1} \\alpha^t x_{T-t}}`
 
     where :math:`x_t` are historical input values passed to this function,
     :math:`x_T` being the most recently seen value.
