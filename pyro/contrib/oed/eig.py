@@ -10,7 +10,7 @@ from pyro.contrib.oed.util import lexpand
 
 
 def vi_ape(model, design, observation_labels, target_labels,
-           vi_parameters, is_parameters, y_dist=None, ):
+           vi_parameters, is_parameters, y_dist=None):
     """Estimates the average posterior entropy (APE) loss function using
     variational inference (VI).
 
@@ -379,8 +379,7 @@ class EwmaLog(torch.autograd.Function):
         self.s = 0.
 
     def forward(self, inputs, s, dim=0, keepdim=False):
-        """Updates the moving average, and returns :code:`inputs.log()`
-
+        """Updates the moving average, and returns :code:`inputs.log()`.
         """
         self.n += 1
         if torch.isnan(self.ewma).any() or (self.ewma == float('inf')).any():
