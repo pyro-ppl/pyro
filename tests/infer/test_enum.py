@@ -2783,11 +2783,12 @@ def test_elbo_zip(gate, rate):
     _check_loss_and_grads(zip_loss, composite_loss)
 
 
-def test_mixture_of_diag_normals():
+@pytest.mark.parametrize("mixture,scale", [(dist.MixtureOfDiagNormals, [[2., 1.], [1., 2], [4., 4.]]),
+                                           (dist.MixtureOfDiagNormalsSharedCovariance, [2., 1.])])
+def test_mixture_of_diag_normals(mixture, scale):
     # K = 3, D = 2
     pyro.param("locs", torch.tensor([[0., 0.], [0., 1.], [0., 10.]]))
-    pyro.param("coord_scale", torch.tensor([[2., 1.], [1., 2], [4., 4.]]),
-               constraint=constraints.positive)
+    pyro.param("coord_scale", torch.tensor(scale), constraint=constraints.positive)
     pyro.param("component_logits", torch.tensor([0., -1., 2.]))
     data = torch.tensor([[0., 0.], [1., 1.], [2., 3.], [1., 11.]])
 
@@ -2796,8 +2797,7 @@ def test_mixture_of_diag_normals():
         coord_scale = pyro.param("coord_scale")
         component_logits = pyro.param("component_logits")
         with pyro.iarange("data", len(data)):
-            pyro.sample("obs", dist.MixtureOfDiagNormals(locs, coord_scale, component_logits),
-                        obs=data)
+            pyro.sample("obs", mixture(locs, coord_scale, component_logits), obs=data)
 
     def hand_model():
         locs = pyro.param("locs")

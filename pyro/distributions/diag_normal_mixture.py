@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 import math
-import numpy as np
 
 import torch
 from torch.autograd import Function
@@ -122,7 +121,8 @@ class _MixDiagNormalSample(Function):
         mu_cd = locs.unsqueeze(-2) - locs.unsqueeze(-3)  # b c d i
         mu_cd_norm = torch.pow(mu_cd, 2.0).sum(-1).sqrt()  # b c d
         mu_cd /= mu_cd_norm.unsqueeze(-1)  # b c d i
-        diagonals = torch.LongTensor(range(K))
+        diagonals = z.new_empty((K,), dtype=torch.long)
+        torch.arange(K, out=diagonals)
         mu_cd[..., diagonals, diagonals, :] = 0.0
 
         mu_ll_cd = (locs.unsqueeze(-2) * mu_cd).sum(-1)  # b c d
@@ -130,8 +130,11 @@ class _MixDiagNormalSample(Function):
         z_perp_cd = z.unsqueeze(-2).unsqueeze(-2) - z_ll_cd.unsqueeze(-1) * mu_cd  # l b c d i
         z_perp_cd_sqr = torch.pow(z_perp_cd, 2.0).sum(-1)  # l b c d
 
-        shift_indices = torch.LongTensor(range(dim)) - 1
+        shift_indices = z.new_empty((dim,), dtype=torch.long)
+        torch.arange(dim, out=shift_indices)
+        shift_indices = shift_indices - 1
         shift_indices[0] = 0
+
         z_shift_cumsum = torch.pow(z_shift, 2.0)
         z_shift_cumsum = z_shift_cumsum.sum(-1, keepdim=True) - torch.cumsum(z_shift_cumsum, dim=-1)  # l b j i
         z_tilde_cumsum = torch.cumsum(torch.pow(z_tilde, 2.0), dim=-1)  # l b j i
@@ -141,7 +144,7 @@ class _MixDiagNormalSample(Function):
 
         log_scales = torch.log(scales)  # b j i
         epsilons_sqr = torch.pow(z_tilde, 2.0)  # l b j i
-        log_qs = -0.5 * epsilons_sqr - 0.5 * np.log(2.0 * np.pi) - log_scales  # l b j i
+        log_qs = -0.5 * epsilons_sqr - 0.5 * math.log(2.0 * math.pi) - log_scales  # l b j i
         log_q_j = log_qs.sum(-1, keepdim=True)  # l b j 1
         q_j = torch.exp(log_q_j)  # l b j 1
         q_tot = (pis * q_j.squeeze(-1)).sum(-1)  # l b
@@ -162,7 +165,7 @@ class _MixDiagNormalSample(Function):
         logits_grad *= torch.exp(-0.5 * r_sqr_ji)  # l b j i
         logits_grad = (logits_grad * g / sigma_products).sum(-1)  # l b j
         logits_grad = sum_leftmost(logits_grad / q_tot, -1 - batch_dims)  # b j
-        logits_grad *= 0.5 * np.power(2.0 * math.pi, -0.5 * (dim - 1))
+        logits_grad *= 0.5 * math.pow(2.0 * math.pi, -0.5 * (dim - 1))
         logits_grad = -pis * logits_grad
         logits_grad = logits_grad - logits_grad.sum(-1, keepdim=True) * pis
 
@@ -170,7 +173,7 @@ class _MixDiagNormalSample(Function):
         v_cd = torch.erf((z_ll_cd - mu_ll_cd) / root_two) - torch.erf((z_ll_cd + mu_ll_dc) / root_two)
         v_cd *= torch.exp(-0.5 * z_perp_cd_sqr)  # l b c d
         mu_cd_g = (g.unsqueeze(-2) * mu_cd).sum(-1)  # l b c d
-        v_cd *= -mu_cd_g * pis.unsqueeze(-2) * 0.5 * np.power(2.0 * math.pi, -0.5 * (dim - 1))  # l b c d
+        v_cd *= -mu_cd_g * pis.unsqueeze(-2) * 0.5 * math.pow(2.0 * math.pi, -0.5 * (dim - 1))  # l b c d
         v_cd = pis * sum_leftmost(v_cd.sum(-1) / q_tot, -1 - batch_dims)
         logits_grad += v_cd
 
