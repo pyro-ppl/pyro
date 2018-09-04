@@ -1,5 +1,5 @@
 import warnings
-from collections import OrderedDict  # noqa F401  # for docstrings
+from collections import OrderedDict  # noqa: F401  # for docstrings
 from functools import partial
 import torch
 from torch.nn.functional import softplus

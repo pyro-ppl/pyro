@@ -79,19 +79,19 @@ AB_test_reff_6d_10n_12p, AB_sigmoid_design_6d = rf_group_assignments(10)
 basic_2p_linear_model_sds_10_2pt5, basic_2p_guide = zero_mean_unit_obs_sd_lm(torch.tensor([10., 2.5]))
 _, basic_2p_guide_w1 = zero_mean_unit_obs_sd_lm(torch.tensor([10., 2.5]), coef_label="w1")
 basic_2p_linear_model_sds_10_0pt1, _ = zero_mean_unit_obs_sd_lm(torch.tensor([10., .1]))
-basic_2p_ba_guide = lambda d: LinearModelGuide(d, {"w": 2}).guide
+basic_2p_ba_guide = lambda d: LinearModelGuide(d, {"w": 2}).guide  # noqa: E731
 group_2p_linear_model_sds_10_2pt5 = group_linear_model(torch.tensor(0.), torch.tensor([10.]), torch.tensor(0.),
                                                        torch.tensor([2.5]), torch.tensor(1.))
 group_2p_guide = group_normal_guide(torch.tensor(1.), (1,), (1,))
-group_2p_ba_guide = lambda d: LinearModelGuide(d, {"w1": 1, "w2": 1}).guide
+group_2p_ba_guide = lambda d: LinearModelGuide(d, {"w1": 1, "w2": 1}).guide  # noqa: E731
 nig_2p_linear_model_3_2 = normal_inverse_gamma_linear_model(torch.tensor(0.), torch.tensor([.1, .4]),
                                                             torch.tensor([3.]), torch.tensor([2.]))
 nig_2p_linear_model_15_14 = normal_inverse_gamma_linear_model(torch.tensor(0.), torch.tensor([.1, .4]),
                                                               torch.tensor([15.]), torch.tensor([14.]))
 
 nig_2p_guide = normal_inverse_gamma_guide((2,), mf=True)
-nig_2p_ba_guide = lambda d: NormalInverseGammaGuide(d, {"w": 2}).guide
-nig_2p_ba_mf_guide = lambda d: NormalInverseGammaGuide(d, {"w": 2}, mf=True).guide
+nig_2p_ba_guide = lambda d: NormalInverseGammaGuide(d, {"w": 2}).guide  # noqa: E731
+nig_2p_ba_mf_guide = lambda d: NormalInverseGammaGuide(d, {"w": 2}, mf=True).guide  # noqa: E731
 
 sigmoid_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.),
                                   torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
@@ -99,7 +99,7 @@ sigmoid_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), to
 sigmoid_difficult_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.),
                                             torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
                                             10.*torch.ones(10), 100.*torch.ones(10), AB_sigmoid_design_6d)
-sigmoid_ba_guide = lambda d: SigmoidGuide(d, 10, {"w1": 2, "w2": 10}).guide
+sigmoid_ba_guide = lambda d: SigmoidGuide(d, 10, {"w1": 2, "w2": 10}).guide  # noqa: E731
 
 ########################################################################################
 # Aux
@@ -183,9 +183,11 @@ naive_rainforth_eig.name = "Naive Rainforth"
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,arglist", [
     ("Sigmoid link function",
      sigmoid_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
-     [(donsker_varadhan_eig, [400, 400, GuideDV(sigmoid_ba_guide(6)),
+     [(donsker_varadhan_eig,
+       [400, 400, GuideDV(sigmoid_ba_guide(6)),
         optim.Adam({"lr": 0.05}), False, None, 500]),
-      (ba_eig_mc, [20, 800, sigmoid_ba_guide(6), optim.Adam({"lr": 0.05}),
+      (ba_eig_mc,
+       [20, 800, sigmoid_ba_guide(6), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
     ("A/B test linear model with known observation variance",
@@ -195,9 +197,11 @@ naive_rainforth_eig.name = "Naive Rainforth"
       (vi_eig_lm,
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig, [400, 800, GuideDV(basic_2p_ba_guide(11)),
+      (donsker_varadhan_eig,
+       [400, 800, GuideDV(basic_2p_ba_guide(11)),
         optim.Adam({"lr": 0.025}), False, None, 500]),
-      (ba_eig_lm, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+      (ba_eig_lm,
+       [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
     # TODO: make this example work better
@@ -207,9 +211,11 @@ naive_rainforth_eig.name = "Naive Rainforth"
       (vi_ape,
        [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 4}]),
-      (barber_agakov_ape, [20, 800, nig_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+      (barber_agakov_ape,
+       [20, 800, nig_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 500]),
-      (barber_agakov_ape, [20, 800, nig_2p_ba_mf_guide(11), optim.Adam({"lr": 0.05}),
+      (barber_agakov_ape,
+       [20, 800, nig_2p_ba_mf_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
     # TODO: make this example work better
@@ -219,9 +225,11 @@ naive_rainforth_eig.name = "Naive Rainforth"
       (vi_ape,
        [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 4}]),
-      (barber_agakov_ape, [20, 800, nig_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+      (barber_agakov_ape,
+       [20, 800, nig_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 500]),
-      (barber_agakov_ape, [20, 800, nig_2p_ba_mf_guide(11), optim.Adam({"lr": 0.05}),
+      (barber_agakov_ape,
+       [20, 800, nig_2p_ba_mf_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
     # TODO: make VI work here (non-mean-field guide)
@@ -232,9 +240,11 @@ naive_rainforth_eig.name = "Naive Rainforth"
       (vi_eig_lm,
        [{"guide": group_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig, [400, 400, GuideDV(group_2p_ba_guide(10)),
+      (donsker_varadhan_eig,
+       [400, 400, GuideDV(group_2p_ba_guide(10)),
         optim.Adam({"lr": 0.05}), False, None, 500]),
-      (ba_eig_lm, [20, 400, group_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
+      (ba_eig_lm,
+       [20, 400, group_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
     ("Linear model with designs on S^1",
@@ -244,9 +254,11 @@ naive_rainforth_eig.name = "Naive Rainforth"
       (vi_eig_lm,
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig, [400, 400, GuideDV(basic_2p_ba_guide(10)),
+      (donsker_varadhan_eig,
+       [400, 400, GuideDV(basic_2p_ba_guide(10)),
         optim.Adam({"lr": 0.05}), False, None, 500]),
-      (ba_eig_lm, [20, 400, basic_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
+      (ba_eig_lm,
+       [20, 400, basic_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
     ("A/B test linear model known covariance (different sds)",
@@ -256,9 +268,11 @@ naive_rainforth_eig.name = "Naive Rainforth"
       (vi_eig_lm,
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig, [400, 400, GuideDV(basic_2p_ba_guide(11)),
+      (donsker_varadhan_eig,
+       [400, 400, GuideDV(basic_2p_ba_guide(11)),
         optim.Adam({"lr": 0.05}), False, None, 500]),
-      (ba_eig_lm, [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+      (ba_eig_lm,
+       [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
 ])
