@@ -10,7 +10,7 @@ import pyro.distributions as dist
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
                         TraceGraph_ELBO)
 from pyro.optim import Adam
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_param
 
 
 def test_simple():
@@ -248,6 +248,37 @@ def test_beta_bernoulli(Elbo, vectorized):
     svi = SVI(model, guide, optim, elbo)
     for step in range(40):
         svi.step(data)
+
+
+@pytest.mark.skipif(torch.__version__ <= '0.4.1',
+                    reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
+@pytest.mark.parametrize('Elbo', [
+    Trace_ELBO,
+    xfail_param(JitTrace_ELBO, reason="https://github.com/uber/pyro/issues/1358"),
+    TraceGraph_ELBO,
+    xfail_param(JitTraceGraph_ELBO, reason="https://github.com/uber/pyro/issues/1358"),
+    TraceEnum_ELBO,
+    xfail_param(JitTraceEnum_ELBO, reason="https://github.com/uber/pyro/issues/1358"),
+])
+def test_svi_irregular_batch_size(Elbo):
+    pyro.clear_param_store()
+
+    def model(data):
+        loc = pyro.param("loc", torch.tensor(0.0))
+        scale = pyro.param("scale", torch.tensor(1.0), constraint=constraints.positive)
+        with pyro.iarange("data", data.shape[0]):
+            pyro.sample("x",
+                        dist.Normal(loc, scale).expand([data.shape[0]]),
+                        obs=data)
+
+    def guide(data):
+        pass
+
+    pyro.clear_param_store()
+    elbo = Elbo(strict_enumeration_warning=False, max_iarange_nesting=1)
+    inference = SVI(model, guide, Adam({"lr": 1e-6}), elbo)
+    inference.step(torch.ones(10))
+    inference.step(torch.ones(3))
 
 
 @pytest.mark.skipif(torch.__version__ <= '0.4.1',
