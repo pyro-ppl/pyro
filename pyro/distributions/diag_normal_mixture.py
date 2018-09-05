@@ -155,7 +155,7 @@ class _MixDiagNormalSample(Function):
         shift_log_scales[..., 0] = 0.0
         sigma_products = torch.cumsum(shift_log_scales, dim=-1).exp()  # b j i
 
-        reverse_indices = torch.LongTensor(range(dim - 1, -1, -1))
+        reverse_indices = z.new_tensor(range(dim - 1, -1, -1), dtype=torch.long)
         reverse_log_sigma_0 = sigma_0.log()[..., reverse_indices]  # b 1 i
         sigma_0_products = torch.cumsum(reverse_log_sigma_0, dim=-1).exp()[..., reverse_indices - 1]  # b 1 i
         sigma_0_products[..., -1] = 1.0
