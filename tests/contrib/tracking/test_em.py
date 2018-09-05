@@ -10,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.tracking.assignment import MarginalAssignment
-from pyro.infer import SVI, TraceEnum_ELBO
+from pyro.infer import TraceEnum_ELBO
 from pyro.optim import Adam
 from pyro.optim.multi import MixedMultiOptimizer, Newton
 
@@ -138,37 +138,6 @@ def test_em(assignment_grad):
         loss = elbo.differentiable_loss(model, guide, detections, args)  # E-step
         newton.step(loss, {'objects_loc': objects_loc})  # M-step
         print('step {}, loss = {}'.format(step, loss.item()))
-
-
-@pytest.mark.parametrize('assignment_grad', [False, True])
-def test_em_nested_in_svi(assignment_grad):
-    args = make_args()
-    args.assignment_grad = assignment_grad
-    detections = generate_data(args)
-
-    pyro.clear_param_store()
-    pyro.param('noise_scale', torch.tensor(args.init_noise_scale),
-               constraint=constraints.positive)
-    pyro.param('objects_loc', torch.randn(args.max_num_objects, 1))
-
-    # Learn object_loc via EM and noise_scale via SVI.
-    optim = Adam({'lr': 0.1})
-    elbo = TraceEnum_ELBO(max_iarange_nesting=2)
-    newton = Newton(trust_radii={'objects_loc': 1.0})
-    svi = SVI(poutine.block(model, hide=['objects_loc']),
-              poutine.block(guide, hide=['objects_loc']), optim, elbo)
-    for svi_step in range(50):
-        for em_step in range(2):
-            objects_loc = pyro.param('objects_loc').detach_().requires_grad_()
-            assert pyro.param('objects_loc').grad_fn is None
-            loss = elbo.differentiable_loss(model, guide, detections, args)  # E-step
-            updated = newton.get_step(loss, {'objects_loc': objects_loc})  # M-step
-            assert updated['objects_loc'].grad_fn is not None
-            pyro.get_param_store().replace_param('objects_loc', updated['objects_loc'], objects_loc)
-            assert pyro.param('objects_loc').grad_fn is not None
-        loss = svi.step(detections, args)
-        print('step {: >2d}, loss = {:0.6f}, noise_scale = {:0.6f}'.format(
-            svi_step, loss, pyro.param('noise_scale').item()))
 
 
 def test_svi_multi():
