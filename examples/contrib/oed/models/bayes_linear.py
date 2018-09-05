@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 from collections import OrderedDict  # noqa: F401  # for docstrings
-from contextlib import ExitStack
+from contextlib2 import ExitStack
 from functools import partial
 import torch
 from torch.nn.functional import softplus
