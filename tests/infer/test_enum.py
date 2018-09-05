@@ -2783,8 +2783,10 @@ def test_elbo_zip(gate, rate):
     _check_loss_and_grads(zip_loss, composite_loss)
 
 
-@pytest.mark.parametrize("mixture,scale", [(dist.MixtureOfDiagNormals, [[2., 1.], [1., 2], [4., 4.]]),
-                                           (dist.MixtureOfDiagNormalsSharedCovariance, [2., 1.])])
+@pytest.mark.parametrize("mixture,scale", [
+    (dist.MixtureOfDiagNormals, [[2., 1.], [1., 2], [4., 4.]]),
+    (dist.MixtureOfDiagNormalsSharedCovariance, [2., 1.]),
+])
 def test_mixture_of_diag_normals(mixture, scale):
     # K = 3, D = 2
     pyro.param("locs", torch.tensor([[0., 0.], [0., 1.], [0., 10.]]))
