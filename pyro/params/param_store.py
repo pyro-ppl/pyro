@@ -112,7 +112,7 @@ class ParamStoreDict(object):
 
         # store the unconstrained value and constraint
         with torch.no_grad():
-            unconstrained_value = transform_to(constraint).inv(new_constrained_value)
+            unconstrained_value = transform_to(constraint).inv(new_constrained_value.detach())
         unconstrained_value.requires_grad_(True)
         self._params[name] = unconstrained_value
 
