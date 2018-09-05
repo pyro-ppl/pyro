@@ -80,6 +80,15 @@ class ParamStoreDict(object):
     def __len__(self):
         return len(self._params)
 
+    def __delitem__(self, name):
+        """
+        Remove a parameter from the param store.
+        """
+        constrained_value = self._params.pop(name)
+        unconstrained_value = constrained_value.unconstrained()
+        self._params_to_name.pop(unconstrained_value)
+        self._constraints.pop(name)
+
     def __getitem__(self, name):
         """
         Get the constrained value of a named parameter.
@@ -93,14 +102,6 @@ class ParamStoreDict(object):
 
         return constrained_value
 
-    def __delitem__(self, name):
-        """
-        Remove a parameter from the param store.
-        """
-        constrained_value = self._params.pop(name)
-        self._params_to_name.pop(constrained_value)
-        self._constraints.pop(name)
-
     def __setitem__(self, name, new_constrained_value):
         """
         Set the constrained value of an existing parameter, or the value of a
@@ -110,13 +111,15 @@ class ParamStoreDict(object):
         # store constraint, defaulting to unconstrained
         constraint = self._constraints.setdefault(name, constraints.real)
 
-        # store the unconstrained value and constraint
+        # compute the unconstrained value
         with torch.no_grad():
-            unconstrained_value = transform_to(constraint).inv(new_constrained_value.detach())
+            new_constrained_value = new_constrained_value.detach()
+            unconstrained_value = transform_to(constraint).inv(new_constrained_value)
+            unconstrained_value = unconstrained_value.contiguous()
         unconstrained_value.requires_grad_(True)
-        self._params[name] = unconstrained_value
 
-        # keep track of each tensor and it's name
+        # store a bidirectional mapping between name and unconstrained tensor
+        self._params[name] = unconstrained_value
         self._param_to_name[unconstrained_value] = name
 
     def setdefault(self, name, init_constrained_value, constraint=constraints.real):
