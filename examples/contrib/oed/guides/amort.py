@@ -131,6 +131,9 @@ class NormalInverseGammaGuide(LinearModelGuide):
 
 
 class GuideDV(nn.Module):
+    """A Donsker-Varadhan `T` family based on a guide family via
+    the relation `T = log p(theta) - log q(theta | y, d)`
+    """
     def __init__(self, guide):
         super(GuideDV, self).__init__()
         self.guide = guide
