@@ -85,55 +85,43 @@ def lm_H_prior(model, design, observation_labels, target_labels):
     return 0.5*torch.logdet(2*np.pi*np.e*target_prior_covs)
 
 
-def mean_field_guide(batch_tensor, design):
-    # A batched variable
-    w_p = pyro.param("w_p", 0.2*torch.ones(batch_tensor.shape))
-    u_p = pyro.param("u_p", 0.5*torch.ones(batch_tensor.shape))
-    pyro.sample("w", dist.Bernoulli(w_p))
-    pyro.sample("u", dist.Bernoulli(u_p))
+def bernoulli_guide(design):
+    w_p = pyro.param("w_p", torch.tensor(0.2))
+    u_p = pyro.param("u_p", torch.tensor(0.5))
+    pyro.sample("w", dist.Bernoulli(w_p.expand(design.shape[:-1])))
+    pyro.sample("u", dist.Bernoulli(u_p.expand(design.shape[:-1])))
 
 
-def basic_model(batch_tensor, design):
-    pyro.sample("w", dist.Bernoulli(design[0]*torch.ones(batch_tensor.shape)))
-    pyro.sample("u", dist.Bernoulli(design[1]*torch.ones(batch_tensor.shape)))
+def bernoulli_ba_guide(y_dict, design, observation_labels, target_labels):
+    return bernoulli_guide(design)
+
+
+def bernoulli_model(design):
+    pyro.sample("w", dist.Bernoulli(design[..., 0]))
+    pyro.sample("u", dist.Bernoulli(design[..., 1]))
     pyro.sample("y", dist.Delta(torch.tensor([1.])))
+
+
+def bernoulli_ground_truth(model, design, observation_labels, target_labels, eig=True):
+    if eig:
+        return torch.tensor(0.)
+    else:
+        return torch.tensor(h(design[0]) + h(design[1]))
 
 
 def h(p):
     return -(sc.xlogy(p, p) + sc.xlog1py(1 - p, -p))
 
-@pytest.mark.skip
-@pytest.mark.parametrize("model,arg,design,guide,expected_ape,n_steps", [
-    # Test without running any steps- should get entropy at initialization value
-    (basic_model, torch.Tensor([0.0]), torch.Tensor([0.3, 0.4]),
-     mean_field_guide, torch.Tensor([h(0.2)+h(0.5)]), 0),
-    # These two learn the design (50 steps sufficient for SVI)
-    (basic_model, torch.Tensor([0.0]), torch.Tensor([0.3, 0.4]),
-     mean_field_guide, torch.Tensor([h(0.3)+h(0.4)]), 50),
-    (basic_model, torch.Tensor([0.0]), torch.Tensor([0.3, 0.5]),
-     mean_field_guide, torch.Tensor([h(0.3)+h(0.5)]), 50)
-])
-def test_ape_svi(model, arg, design, guide, expected_ape, n_steps):
-    # Reset seed: deals with noise in SVI etc
-    pyro.set_rng_seed(42)
-    pyro.clear_param_store()
-    vi_parameters = {
-        "guide": lambda d: guide(arg, d),
-        "optim": optim.Adam({"lr": 0.01}),
-        "loss": Trace_ELBO(),
-        "num_steps": n_steps
-    }
-    is_parameters = {"num_samples": 1}
-    ape = vi_ape(lambda d: model(arg, d), design, "y", ["w", "u"], vi_parameters,
-                 is_parameters)
-    assert_equal(ape, expected_ape, prec=1e-4)
-
-# turn into-
-#def test_eig_independent(model, design, observation_labels, target_labels, estimator, args, expected):
-
-
 
 @pytest.mark.parametrize("model,design,observation_labels,target_labels,estimator,args,eig,allow_error", [
+    (bernoulli_model, torch.tensor([0.3, 0.4]), "y", ["w", "u"], vi_ape, 
+        [{"guide": bernoulli_guide, "optim": optim.Adam({"lr": 0.01}),
+          "loss": elbo, "num_steps": 100}, {"num_samples": 1}], False, 1e-2),
+    (bernoulli_model, torch.tensor([0.3, 0.4]), "y", ["w", "u"], naive_rainforth_eig,
+        [100, 100], True, 1e-2),
+    (bernoulli_model, torch.tensor([0.3, 0.4]), "y", ["w", "u"], barber_agakov_ape, 
+        [20, 800, bernoulli_ba_guide, optim.Adam({"lr": 0.01}),
+         False, None, 1000], False, 1e-2),
     (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w", 
         naive_rainforth_eig, [500, 500], True, 0.2),
     (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
@@ -164,14 +152,13 @@ def test_eig_lm(model, design, observation_labels, target_labels, estimator, arg
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
     y = estimator(model, design, observation_labels, target_labels, *args)
-    y_true = linear_model_ground_truth(model, design, observation_labels, target_labels, eig=eig)
+    if model is bernoulli_model:
+        y_true = bernoulli_ground_truth(model, design, observation_labels, target_labels, eig=eig)
+    else:
+        y_true = linear_model_ground_truth(model, design, observation_labels, target_labels, eig=eig)
     print()
     print(estimator.__name__)
     print(y)
     print(y_true)
     error = torch.max(torch.abs(y - y_true))
     assert error < allow_error
-
-
-
-
