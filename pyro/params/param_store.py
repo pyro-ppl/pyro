@@ -133,11 +133,11 @@ class ParamStoreDict(object):
                             constraint=constraints.positive)
 
         :param str name: parameter name
-        :param init_constrained_value: initial tensor
+        :param init_constrained_value: initial constrained value
         :type init_constrained_value: torch.Tensor or callable returning a torch.Tensor
         :param constraint: torch constraint object
         :type constraint: torch.distributions.constraints.Constraint
-        :returns: parameter
+        :returns: constrained parameter value
         :rtype: torch.Tensor
         """
         if name not in self._params:
