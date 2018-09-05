@@ -226,8 +226,14 @@ def test_bernoulli_latent_model():
     assert_equal(posterior, y_prob, prec=0.05)
 
 
-@pytest.mark.parametrize("num_steps", [2, 3, 5])
-def test_gaussian_hmm_enum_shape(num_steps):
+@pytest.mark.parametrize("num_steps,use_einsum", [
+    (2, False),
+    (3, False),
+    # This will crash without the einsum backend
+    pytest.param(30, True,
+                 marks=pytest.mark.skip(reason="https://github.com/pytorch/pytorch/issues/10661")),
+])
+def test_gaussian_hmm_enum_shape(num_steps, use_einsum):
     dim = 4
 
     def model(data):
@@ -244,5 +250,6 @@ def test_gaussian_hmm_enum_shape(num_steps):
             assert effective_dim == 1
 
     data = torch.ones(num_steps)
-    nuts_kernel = NUTS(model, adapt_step_size=True, max_iarange_nesting=0)
+    nuts_kernel = NUTS(model, adapt_step_size=True, max_iarange_nesting=0,
+                       experimental_use_einsum=use_einsum)
     MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)

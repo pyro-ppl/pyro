@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
-from opt_einsum.parser import einsum_symbols_base
+
+EINSUM_SYMBOLS_BASE = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 
 def transpose(a, axes):
@@ -61,7 +62,7 @@ def tensordot(x, y, axes=2):
     out_ix = []
 
     # fill in repeated indices
-    available_ix = iter(einsum_symbols_base)
+    available_ix = iter(EINSUM_SYMBOLS_BASE)
     for ax1, ax2 in zip(*axes):
         repeat = next(available_ix)
         x_ix[ax1] = repeat

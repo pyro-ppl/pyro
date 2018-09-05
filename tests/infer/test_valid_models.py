@@ -26,13 +26,14 @@ def assert_ok(model, guide, elbo):
     inference.step()
 
 
-def assert_error(model, guide, elbo):
+def assert_error(model, guide, elbo, match=None):
     """
     Assert that inference fails with an error.
     """
     pyro.clear_param_store()
     inference = SVI(model,  guide, Adam({"lr": 1e-6}), elbo)
-    with pytest.raises((NotImplementedError, UserWarning, KeyError, ValueError, RuntimeError)):
+    with pytest.raises((NotImplementedError, UserWarning, KeyError, ValueError, RuntimeError),
+                       match=match):
         inference.step()
 
 
@@ -98,7 +99,7 @@ def test_variable_clash_in_model_error(Elbo):
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p))
 
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='Multiple sample sites named')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -106,15 +107,15 @@ def test_model_guide_dim_mismatch_error(Elbo):
 
     def model():
         loc = torch.zeros(2)
-        scale = torch.zeros(2)
+        scale = torch.ones(2)
         pyro.sample("x", dist.Normal(loc, scale))
 
     def guide():
         loc = pyro.param("loc", torch.zeros(2, 1, requires_grad=True))
-        scale = pyro.param("scale", torch.zeros(2, 1, requires_grad=True))
+        scale = pyro.param("scale", torch.ones(2, 1, requires_grad=True))
         pyro.sample("x", dist.Normal(loc, scale))
 
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='Model and guide shapes disagree')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -122,15 +123,15 @@ def test_model_guide_shape_mismatch_error(Elbo):
 
     def model():
         loc = torch.zeros(1, 2)
-        scale = torch.zeros(1, 2)
+        scale = torch.ones(1, 2)
         pyro.sample("x", dist.Normal(loc, scale))
 
     def guide():
         loc = pyro.param("loc", torch.zeros(2, 1, requires_grad=True))
-        scale = pyro.param("scale", torch.zeros(2, 1, requires_grad=True))
+        scale = pyro.param("scale", torch.ones(2, 1, requires_grad=True))
         pyro.sample("x", dist.Normal(loc, scale))
 
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='Model and guide shapes disagree')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -145,7 +146,7 @@ def test_variable_clash_in_guide_error(Elbo):
         pyro.sample("x", dist.Bernoulli(p))
         pyro.sample("x", dist.Bernoulli(p))  # Should error here.
 
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='Multiple sample sites named')
 
 
 @pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
@@ -186,7 +187,7 @@ def test_irange_variable_clash_error(Elbo):
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide)
 
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='Multiple sample sites named')
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
@@ -317,7 +318,8 @@ def test_irange_in_guide_not_model_error(subsample_size, Elbo, is_validate):
 
     with pyro.validation_enabled(is_validate):
         if is_validate:
-            assert_error(model, guide, Elbo())
+            assert_error(model, guide, Elbo(),
+                         match='Found iarange statements in guide but not model')
         else:
             assert_ok(model, guide, Elbo())
 
@@ -330,7 +332,7 @@ def test_iarange_broadcast_error(Elbo):
         with pyro.iarange("iarange", 10, 5):
             pyro.sample("x", dist.Bernoulli(p).expand_by([2]))
 
-    assert_error(model, model, Elbo())
+    assert_error(model, model, Elbo(), match='Shape mismatch inside iarange')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -421,7 +423,7 @@ def test_nested_iarange_iarange_dim_error_1(Elbo):
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_inner)]))
 
     guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='invalid log_prob shape')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -436,7 +438,7 @@ def test_nested_iarange_iarange_dim_error_2(Elbo):
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_inner)]))
 
     guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='Shape mismatch inside iarange')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -451,7 +453,7 @@ def test_nested_iarange_iarange_dim_error_3(Elbo):
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_inner), 1]))  # error here
 
     guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='invalid log_prob shape')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -466,7 +468,7 @@ def test_nested_iarange_iarange_dim_error_4(Elbo):
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_outer)]))  # error here
 
     guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='hape mismatch inside iarange')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -530,7 +532,7 @@ def test_iarange_wrong_size_error():
         with pyro.iarange("iarange", 10, 5) as ind:
             pyro.sample("x", dist.Bernoulli(p).expand_by([1 + len(ind)]))
 
-    assert_error(model, guide, TraceGraph_ELBO())
+    assert_error(model, guide, TraceGraph_ELBO(), match='Shape mismatch inside iarange')
 
 
 @pytest.mark.parametrize("enumerate_", [None, "sequential", "parallel"])
@@ -660,7 +662,8 @@ def test_no_iarange_enum_discrete_batch_error():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p).expand_by([5]))
 
-    assert_error(model, config_enumerate(guide), TraceEnum_ELBO())
+    assert_error(model, config_enumerate(guide), TraceEnum_ELBO(),
+                 match='invalid log_prob shape')
 
 
 @pytest.mark.parametrize('max_iarange_nesting', [0, 1, 2])
@@ -1002,7 +1005,7 @@ def test_dim_allocation_error(Elbo, expand):
             assert y.shape == (5, 6)
 
     guide = config_enumerate(model, expand=expand) if Elbo is TraceEnum_ELBO else model
-    assert_error(model, guide, Elbo())
+    assert_error(model, guide, Elbo(), match='collide at dim=')
 
 
 def test_enum_in_model_ok():
@@ -1043,15 +1046,15 @@ def test_enum_in_model_ok():
     assert_ok(model, guide, TraceEnum_ELBO(max_iarange_nesting=0))
 
 
-def test_enum_iarange_in_model_ok():
+def test_enum_in_model_iarange_ok():
     infer = {'enumerate': 'parallel'}
 
     def model():
         p = pyro.param('p', torch.tensor(0.25))
         a = pyro.sample('a', dist.Bernoulli(p))
         b = pyro.sample('b', dist.Bernoulli(p + a / 2))
-        c = pyro.sample('c', dist.Bernoulli(p + b / 2), infer=infer)
         with pyro.iarange('data', 3):
+            c = pyro.sample('c', dist.Bernoulli(p + b / 2), infer=infer)
             d = pyro.sample('d', dist.Bernoulli(p + c / 2))
             e = pyro.sample('e', dist.Bernoulli(p + d / 2))
             f = pyro.sample('f', dist.Bernoulli(p + e / 2), infer=infer)
@@ -1092,7 +1095,76 @@ def test_enum_sequential_in_model_error():
     def guide():
         pass
 
-    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=0))
+    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=0),
+                 match='Found vars in model but not guide')
+
+
+def test_enum_in_model_iarange_reuse_ok():
+
+    @config_enumerate(default="parallel")
+    def model():
+        p = pyro.param("p", torch.tensor([0.2, 0.8]))
+        a = pyro.sample("a", dist.Bernoulli(0.3)).long()
+        with pyro.iarange("b_axis", 2):
+            pyro.sample("b", dist.Bernoulli(p[a]), obs=torch.tensor([0., 1.]))
+        c = pyro.sample("c", dist.Bernoulli(0.3)).long()
+        with pyro.iarange("c_axis", 2):
+            pyro.sample("d", dist.Bernoulli(p[c]), obs=torch.tensor([0., 0.]))
+
+    def guide():
+        pass
+
+    assert_ok(model, guide, TraceEnum_ELBO(max_iarange_nesting=1))
+
+
+def test_enum_in_model_multi_scale_error():
+
+    @config_enumerate(default="parallel")
+    def model():
+        p = pyro.param("p", torch.tensor([0.2, 0.8]))
+        x = pyro.sample("x", dist.Bernoulli(0.3)).long()
+        with poutine.scale(scale=2.):
+            pyro.sample("y", dist.Bernoulli(p[x]), obs=torch.tensor(0.))
+
+    def guide():
+        pass
+
+    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=0),
+                 match='Expected all enumerated sample sites to share a common poutine.scale')
+
+
+def test_enum_in_model_diamond_error():
+    data = torch.tensor([[0, 1], [0, 0]])
+
+    @config_enumerate(default="parallel")
+    def model():
+        pyro.param("probs_a", torch.tensor([0.45, 0.55]))
+        pyro.param("probs_b", torch.tensor([[0.6, 0.4], [0.4, 0.6]]))
+        pyro.param("probs_c", torch.tensor([[0.75, 0.25], [0.55, 0.45]]))
+        pyro.param("probs_d", torch.tensor([[[0.4, 0.6], [0.3, 0.7]],
+                                            [[0.3, 0.7], [0.2, 0.8]]]))
+        probs_a = pyro.param("probs_a")
+        probs_b = pyro.param("probs_b")
+        probs_c = pyro.param("probs_c")
+        probs_d = pyro.param("probs_d")
+        b_axis = pyro.iarange("b_axis", 2, dim=-1)
+        c_axis = pyro.iarange("c_axis", 2, dim=-2)
+        d_ind = torch.arange(2, dtype=torch.long)
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with b_axis:
+            b = pyro.sample("b", dist.Categorical(probs_b[a]))
+        with c_axis:
+            c = pyro.sample("c", dist.Categorical(probs_c[a]))
+        with b_axis, c_axis:
+            pyro.sample("d",
+                        dist.Categorical(probs_d[b.unsqueeze(-1), c.unsqueeze(-1), d_ind]),
+                        obs=data)
+
+    def guide():
+        pass
+
+    assert_error(model, guide, TraceEnum_ELBO(max_iarange_nesting=2),
+                 match='Expected tree-structured iarange nesting')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])

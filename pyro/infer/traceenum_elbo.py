@@ -10,14 +10,35 @@ from six.moves import queue
 import pyro
 import pyro.ops.jit
 import pyro.poutine as poutine
-from pyro.distributions.util import broadcast_shape, is_identically_zero, scale_and_mask
+from pyro.distributions.util import is_identically_zero, scale_and_mask
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
+from pyro.infer.contract import contract_tensor_tree
 from pyro.infer.util import Dice, is_validation_enabled
-from pyro.ops.einsum import shared_intermediates
-from pyro.ops.sumproduct import logsumproductexp
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
+
+
+def _check_shared_scale(scales):
+    # Check that all enumerated sites share a common subsampling scale.
+    # Note that we use a cheap weak comparison by id rather than tensor value, because
+    # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
+    # only in value but at all derivatives.
+    if len(scales) != 1:
+        raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
+                         "but found {} different scales.".format(len(scales)))
+
+
+def _check_model_guide_enumeration_constraint(model_enum_sites, guide_trace):
+    min_ordinal = frozenset.intersection(*model_enum_sites.keys())
+    for name, site in guide_trace.nodes.items():
+        if site["type"] == "sample" and site["infer"].get("_enumerate_dim") is not None:
+            for f in site["cond_indep_stack"]:
+                if f.vectorized and f not in min_ordinal:
+                    raise ValueError("Expected model enumeration to be no more global than guide enumeration, "
+                                     "but found model enumeration sites upstream of guide site '{}' in iarange('{}'). "
+                                     "Try converting some model enumeration sites to guide enumeration sites."
+                                     .format(name, f.name))
 
 
 # TODO move this logic into a poutine
@@ -36,47 +57,43 @@ def _compute_model_costs(model_trace, guide_trace, ordering):
     if not enum_sites:
         return OrderedDict((t, [site["log_prob"] for site in sites_t])
                            for t, sites_t in cost_sites.items())
+    _check_model_guide_enumeration_constraint(enum_sites, guide_trace)
 
     # Marginalize out all variables that have been enumerated in the model.
     enum_boundary = max(enum_dims) + 1
     assert enum_boundary <= 0
-    marginal_costs = OrderedDict((t, []) for t in cost_sites)
-    with shared_intermediates():
-        for t, sites_t in cost_sites.items():
-            # TODO split log_factors into connected components wrt shared tensor dims.
-            log_factors = []
-            scales = set()
-            for site in sites_t:
-                if site["log_prob"].dim() <= -enum_boundary:
-                    # For site do not depend on an enumerated variable, proceed as usual.
-                    marginal_costs[t].append(site["log_prob"])
-                else:
-                    # For sites that depend on an enumerated variable, we need to apply
-                    # the mask inside- and the scale outside- of the log expectation.
-                    cost = scale_and_mask(site["unscaled_log_prob"], mask=site["mask"])
-                    log_factors.append(cost)
+    marginal_costs = OrderedDict()
+    log_factors = OrderedDict()
+    scales = set()
+    for t, sites_t in cost_sites.items():
+        for site in sites_t:
+            if site["log_prob"].dim() <= -enum_boundary:
+                # For sites that do not depend on an enumerated variable, proceed as usual.
+                marginal_costs.setdefault(t, []).append(site["log_prob"])
+            else:
+                # For sites that depend on an enumerated variable, we need to apply
+                # the mask inside- and the scale outside- of the log expectation.
+                cost = scale_and_mask(site["unscaled_log_prob"], mask=site["mask"])
+                log_factors.setdefault(t, []).append(cost)
+                scales.add(site["scale"])
+    if log_factors:
+        for t, sites_t in enum_sites.items():
+            # TODO refine this coarse dependency ordering using time and tensor shapes.
+            if any(t <= u for u in log_factors):
+                for site in sites_t:
+                    logprob = site["unscaled_log_prob"]
+                    log_factors.setdefault(t, []).append(logprob)
                     scales.add(site["scale"])
-            if not log_factors:
-                continue
-            for u, sites_u in enum_sites.items():
-                # TODO refine this coarse dependency ordering using time and tensor shapes.
-                if u <= t:
-                    for site in sites_u:
-                        logprob = site["unscaled_log_prob"]
-                        log_factors.append(logprob)
-                        scales.add(site["scale"])
-            # This is only correct if all enumerated things share a common subsampling scale.
-            # Note that we use a cheap weak comparison by id rather than tensor value, because
-            # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
-            # only in value but at all derivatives.
-            if len(scales) != 1:
-                raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
-                                 "but found {} different scales.".format(len(scales)))
-            target_shape = (broadcast_shape(*set(x.shape[enum_boundary:] for x in log_factors))
-                            if enum_boundary else ())
-            marginal_cost = logsumproductexp(log_factors, target_shape)
-            marginal_cost = scale_and_mask(marginal_cost, scale=scales.pop())
-            marginal_costs[t].append(marginal_cost)
+        _check_shared_scale(scales)
+        scale = scales.pop()
+        sum_dims = {x: set(i for i in range(-x.dim(), enum_boundary) if x.shape[i] > 1)
+                    for xs in log_factors.values() for x in xs}
+        contract_tensor_tree(log_factors, sum_dims)
+        for t, log_factors_t in log_factors.items():
+            marginal_costs_t = marginal_costs.setdefault(t, [])
+            for term in log_factors_t:
+                term = scale_and_mask(term, scale=scale)
+                marginal_costs_t.append(term)
     return marginal_costs
 
 
