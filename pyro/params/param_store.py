@@ -53,10 +53,8 @@ class ParamStoreDict(object):
         """
         Iterate over ``(name, constrained_param)`` pairs.
         """
-        for name, unconstrained_value in self.params:
-            constraint = self._constraints[name]
-            constrained_value = transform_to(constraint).inv(unconstrained_value)
-            yield name, constrained_value
+        for name in self._params:
+            yield name, self[name]
 
     def keys(self):
         """
@@ -71,14 +69,20 @@ class ParamStoreDict(object):
         for name, constrained_param in self.items():
             yield constrained_param
 
+    def __bool__(self):
+        return bool(self._params)
+
+    def __len__(self):
+        return len(self._params)
+
+    def __contains__(self, name):
+        return name in self._params
+
     def __iter__(self):
         """
         Iterate over param names.
         """
         return iter(self.keys())
-
-    def __len__(self):
-        return len(self._params)
 
     def __delitem__(self, name):
         """
@@ -86,7 +90,7 @@ class ParamStoreDict(object):
         """
         constrained_value = self._params.pop(name)
         unconstrained_value = constrained_value.unconstrained()
-        self._params_to_name.pop(unconstrained_value)
+        self._param_to_name.pop(unconstrained_value)
         self._constraints.pop(name)
 
     def __getitem__(self, name):
