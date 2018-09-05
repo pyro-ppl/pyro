@@ -186,7 +186,7 @@ naive_rainforth_eig.name = "Naive Rainforth"
     ("A/B test linear model with known observation variance",
      basic_2p_linear_model_sds_10_2pt5, AB_test_11d_10n_2p, "y", "w",
      [(linear_model_ground_truth, []),
-      #(naive_rainforth_eig, [2000, 2000]),
+      (naive_rainforth_eig, [2000, 2000]),
       (vi_eig_lm,
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),

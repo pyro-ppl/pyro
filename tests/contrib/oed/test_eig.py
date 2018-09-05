@@ -8,17 +8,15 @@ import numpy as np
 import pyro
 import pyro.distributions as dist
 from pyro import optim
-from pyro.infer import Trace_ELBO, TraceEnum_ELBO
+from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import (
     vi_ape, naive_rainforth_eig, donsker_varadhan_eig, barber_agakov_ape
 )
-from pyro.contrib.oed.util import get_indices, lexpand
-from tests.common import assert_equal
+from pyro.contrib.oed.util import get_indices
 # TODO move the following code out of examples, e.g. to contrib.lmer
 from examples.contrib.oed.models.bayes_linear import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov,
-    normal_inverse_gamma_linear_model, normal_inverse_gamma_guide, group_linear_model,
-    group_normal_guide, sigmoid_model, rf_group_assignments
+    group_linear_model, group_normal_guide
 )
 from examples.contrib.oed.guides.amort import (
     LinearModelGuide, GuideDV
@@ -35,9 +33,6 @@ AB_test_2d_10n_2p = torch.stack([group_assignment_matrix(torch.tensor([n, 10-n])
 # Design on S^1
 item_thetas_small = torch.linspace(0., np.pi/2, 5).unsqueeze(-1)
 X_circle_5d_1n_2p = torch.stack([item_thetas_small.cos(), -item_thetas_small.sin()], dim=-1)
-
-# Random effects designs
-AB_test_reff_6d_10n_12p, AB_sigmoid_design_6d = rf_group_assignments(10)
 
 #########################################################################################
 # Models
@@ -114,39 +109,48 @@ def h(p):
 
 
 @pytest.mark.parametrize("model,design,observation_labels,target_labels,estimator,args,eig,allow_error", [
-    (bernoulli_model, torch.tensor([0.3, 0.4]), "y", ["w", "u"], vi_ape, 
+    (bernoulli_model, torch.tensor([0.3, 0.4]), "y", ["w", "u"], vi_ape,
         [{"guide": bernoulli_guide, "optim": optim.Adam({"lr": 0.01}),
           "loss": elbo, "num_steps": 100}, {"num_samples": 1}], False, 1e-2),
     (bernoulli_model, torch.tensor([0.3, 0.4]), "y", ["w", "u"], naive_rainforth_eig,
         [100, 100], True, 1e-2),
-    (bernoulli_model, torch.tensor([0.3, 0.4]), "y", ["w", "u"], barber_agakov_ape, 
+    (bernoulli_model, torch.tensor([0.3, 0.4]), "y", ["w", "u"], barber_agakov_ape,
         [20, 800, bernoulli_ba_guide, optim.Adam({"lr": 0.01}),
          False, None, 1000], False, 1e-2),
-    (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w", 
+    (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
         naive_rainforth_eig, [500, 500], True, 0.2),
     (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
-        vi_ape, [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}),
-        "loss": elbo, "num_steps": 1000}, {"num_samples": 1}], False, 0.3),
+        vi_ape,
+        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}),
+          "loss": elbo, "num_steps": 1000}, {"num_samples": 1}], False, 0.3),
     (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
-        donsker_varadhan_eig, [200, 800, GuideDV(basic_2p_ba_guide(5)),
-        optim.Adam({"lr": 0.025}), False, None, 500], True, 0.3),
+        donsker_varadhan_eig,
+        [200, 800, GuideDV(basic_2p_ba_guide(5)),
+         optim.Adam({"lr": 0.025}), False, None, 500], True, 0.3),
     (basic_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w",
-        barber_agakov_ape, [20, 400, basic_2p_ba_guide(2), optim.Adam({"lr": 0.05}),
-        False, None, 500], False, 0.2),
+        barber_agakov_ape,
+        [20, 400, basic_2p_ba_guide(2), optim.Adam({"lr": 0.05}),
+         False, None, 500], False, 0.2),
     (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
-        barber_agakov_ape, [20, 400, basic_2p_ba_guide(5), optim.Adam({"lr": 0.05}),
-        False, None, 500], False, 0.2),
-    (group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1", 
+        barber_agakov_ape,
+        [20, 400, basic_2p_ba_guide(5), optim.Adam({"lr": 0.05}),
+         False, None, 500], False, 0.2),
+    (group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1",
         naive_rainforth_eig, [400, 400, 400], True, 0.2),
-    pytest.param(group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1",
-        vi_ape, [{"guide": group_2p_guide, "optim": optim.Adam({"lr": 0.05}),
-        "loss": elbo, "num_steps": 1000}, {"num_samples": 1}], False, 0.3, marks=pytest.mark.xfail),
+    # This fails because guide is wrong
+    pytest.param(
+        group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1", vi_ape,
+        [{"guide": group_2p_guide, "optim": optim.Adam({"lr": 0.05}),
+          "loss": elbo, "num_steps": 1000}, {"num_samples": 1}], False, 0.3,
+        marks=pytest.mark.xfail),
     (group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1",
-        donsker_varadhan_eig, [200, 400, GuideDV(group_2p_ba_guide(5)),
-        optim.Adam({"lr": 0.025}), False, None, 500], True, 0.3),
+        donsker_varadhan_eig,
+        [200, 400, GuideDV(group_2p_ba_guide(5)),
+         optim.Adam({"lr": 0.025}), False, None, 500], True, 0.3),
     (group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1",
-        barber_agakov_ape, [20, 400, group_2p_ba_guide(5), optim.Adam({"lr": 0.05}),
-        False, None, 500], False, 0.2)
+        barber_agakov_ape,
+        [20, 400, group_2p_ba_guide(5), optim.Adam({"lr": 0.05}),
+         False, None, 500], False, 0.2)
 ])
 def test_eig_lm(model, design, observation_labels, target_labels, estimator, args, eig, allow_error):
     pyro.set_rng_seed(42)
