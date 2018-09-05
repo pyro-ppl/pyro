@@ -183,19 +183,10 @@ naive_rainforth_eig.name = "Naive Rainforth"
 
 
 @pytest.mark.parametrize("title,model,design,observation_label,target_label,arglist", [
-    ("Sigmoid link function",
-     sigmoid_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
-     [(donsker_varadhan_eig,
-       [400, 400, GuideDV(sigmoid_ba_guide(6)),
-        optim.Adam({"lr": 0.05}), False, None, 500]),
-      (ba_eig_mc,
-       [20, 800, sigmoid_ba_guide(6), optim.Adam({"lr": 0.05}),
-        False, None, 500])
-      ]),
     ("A/B test linear model with known observation variance",
      basic_2p_linear_model_sds_10_2pt5, AB_test_11d_10n_2p, "y", "w",
      [(linear_model_ground_truth, []),
-      (naive_rainforth_eig, [2000, 2000]),
+      #(naive_rainforth_eig, [2000, 2000]),
       (vi_eig_lm,
        [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
          "num_steps": 1000}, {"num_samples": 1}]),
@@ -204,6 +195,15 @@ naive_rainforth_eig.name = "Naive Rainforth"
         optim.Adam({"lr": 0.025}), False, None, 500]),
       (ba_eig_lm,
        [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+        False, None, 500])
+      ]),
+    ("Sigmoid link function",
+     sigmoid_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
+     [(donsker_varadhan_eig,
+       [400, 400, GuideDV(sigmoid_ba_guide(6)),
+        optim.Adam({"lr": 0.05}), False, None, 500]),
+      (ba_eig_mc,
+       [20, 800, sigmoid_ba_guide(6), optim.Adam({"lr": 0.05}),
         False, None, 500])
       ]),
     # TODO: make this example work better
