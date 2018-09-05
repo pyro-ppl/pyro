@@ -113,7 +113,7 @@ class ParamStoreDict(object):
 
         # compute the unconstrained value
         with torch.no_grad():
-            new_constrained_value = new_constrained_value.detach()
+            # FIXME should we .detach() the new_constrained_value?
             unconstrained_value = transform_to(constraint).inv(new_constrained_value)
             unconstrained_value = unconstrained_value.contiguous()
         unconstrained_value.requires_grad_(True)

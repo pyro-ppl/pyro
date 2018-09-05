@@ -300,8 +300,12 @@ class ExponentialGammaTests(TestCase):
             return lambda_latent
 
         def guide():
-            alpha_q_log = pyro.param("alpha_q_log", self.log_alpha_n + 0.17)
-            beta_q_log = pyro.param("beta_q_log", self.log_beta_n - 0.143)
+            alpha_q_log = pyro.param(
+                "alpha_q_log",
+                torch.tensor(self.log_alpha_n + 0.17, requires_grad=True))
+            beta_q_log = pyro.param(
+                "beta_q_log",
+                torch.tensor(self.log_beta_n - 0.143, requires_grad=True))
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", Gamma(alpha_q, beta_q),
                         infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
@@ -362,8 +366,9 @@ class RaoBlackwellizationTests(TestCase):
                                 obs=self.data[i][j])
 
         def guide():
-            loc_q = pyro.param("loc_q", self.analytic_loc_n.expand(2) + 0.234)
-            log_sig_q = pyro.param("log_sig_q", self.analytic_log_sig_n.expand(2) - 0.27)
+            loc_q = pyro.param("loc_q", torch.tensor(self.analytic_loc_n.expand(2) + 0.234, requires_grad=True))
+            log_sig_q = pyro.param("log_sig_q",
+                                   torch.tensor(self.analytic_log_sig_n.expand(2) - 0.27, requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             pyro.sample("loc_latent", fakes.NonreparameterizedNormal(loc_q, sig_q).independent(1),
                         infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
@@ -397,7 +402,7 @@ class RaoBlackwellizationTests(TestCase):
     # inside of an irange with superfluous random torch.tensors to complexify the
     # graph structure and introduce additional baselines
     def test_iarange_in_elbo_with_superfluous_rvs(self):
-        self._test_iarange_in_elbo(n_superfluous_top=1, n_superfluous_bottom=1, n_steps=6000)
+        self._test_iarange_in_elbo(n_superfluous_top=1, n_superfluous_bottom=1, n_steps=5000)
 
     def _test_iarange_in_elbo(self, n_superfluous_top, n_superfluous_bottom, n_steps):
         pyro.clear_param_store()
@@ -435,8 +440,9 @@ class RaoBlackwellizationTests(TestCase):
                                              torch.nn.Linear(2, 2)])
 
         def guide():
-            loc_q = pyro.param("loc_q", self.analytic_loc_n.expand(2) + 0.094)
-            log_sig_q = pyro.param("log_sig_q", self.analytic_log_sig_n.expand(2) - 0.07)
+            loc_q = pyro.param("loc_q", torch.tensor(self.analytic_loc_n.expand(2) + 0.094, requires_grad=True))
+            log_sig_q = pyro.param("log_sig_q",
+                                   torch.tensor(self.analytic_log_sig_n.expand(2) - 0.07, requires_grad=True))
             sig_q = torch.exp(log_sig_q)
             trivial_baseline = pyro.module("loc_baseline", pt_loc_baseline)
             baseline_value = trivial_baseline(torch.ones(1)).squeeze()
@@ -450,7 +456,8 @@ class RaoBlackwellizationTests(TestCase):
                         z_baseline = pyro.module("z_baseline_%d_%d" % (i, k),
                                                  pt_superfluous_baselines[3 * k + i])
                         baseline_value = z_baseline(loc_latent.detach())
-                        mean_i = pyro.param("mean_%d_%d" % (i, k), 0.5 * torch.ones(4 - i))
+                        mean_i = pyro.param("mean_%d_%d" % (i, k),
+                                            torch.tensor(0.5 * torch.ones(4 - i), requires_grad=True))
                         z_i_k = pyro.sample("z_%d_%d" % (i, k),
                                             fakes.NonreparameterizedNormal(mean_i, 1),
                                             infer=dict(baseline=dict(baseline_value=baseline_value)))
@@ -458,9 +465,9 @@ class RaoBlackwellizationTests(TestCase):
 
         def per_param_callable(module_name, param_name):
             if 'baseline' in param_name or 'baseline' in module_name:
-                return {"lr": 0.01, "betas": (0.95, 0.99)}
+                return {"lr": 0.010, "betas": (0.95, 0.999)}
             else:
-                return {"lr": 0.001, "betas": (0.95, 0.99)}
+                return {"lr": 0.0012, "betas": (0.95, 0.999)}
 
         adam = optim.Adam(per_param_callable)
         svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
