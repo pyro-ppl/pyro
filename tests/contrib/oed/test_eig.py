@@ -133,33 +133,45 @@ def test_ape_svi(model, arg, design, guide, expected_ape, n_steps):
 
 
 
-@pytest.mark.parametrize("model,design,observation_labels,target_labels,estimator,args,eig", [
+@pytest.mark.parametrize("model,design,observation_labels,target_labels,estimator,args,eig,allow_error", [
     (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w", 
-        naive_rainforth_eig, [2000, 2000], True),
+        naive_rainforth_eig, [500, 500], True, 0.2),
     (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
         vi_ape, [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}),
-        "loss": elbo, "num_steps": 1500}, {"num_samples": 1}], False),
+        "loss": elbo, "num_steps": 1000}, {"num_samples": 1}], False, 0.3),
     (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
-        donsker_varadhan_eig, [400, 3200, GuideDV(basic_2p_ba_guide(5)),
-        optim.Adam({"lr": 0.025}), False, None, 500], True),
+        donsker_varadhan_eig, [200, 800, GuideDV(basic_2p_ba_guide(5)),
+        optim.Adam({"lr": 0.025}), False, None, 500], True, 0.3),
     (basic_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w",
         barber_agakov_ape, [20, 400, basic_2p_ba_guide(2), optim.Adam({"lr": 0.05}),
-        False, None, 500], False),
+        False, None, 500], False, 0.2),
     (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
         barber_agakov_ape, [20, 400, basic_2p_ba_guide(5), optim.Adam({"lr": 0.05}),
-        False, None, 500], False)
+        False, None, 500], False, 0.2),
+    (group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1", 
+        naive_rainforth_eig, [400, 400, 400], True, 0.2),
+    pytest.param(group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1",
+        vi_ape, [{"guide": group_2p_guide, "optim": optim.Adam({"lr": 0.05}),
+        "loss": elbo, "num_steps": 1000}, {"num_samples": 1}], False, 0.3, marks=pytest.mark.xfail),
+    (group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1",
+        donsker_varadhan_eig, [200, 400, GuideDV(group_2p_ba_guide(5)),
+        optim.Adam({"lr": 0.025}), False, None, 500], True, 0.3),
+    (group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1",
+        barber_agakov_ape, [20, 400, group_2p_ba_guide(5), optim.Adam({"lr": 0.05}),
+        False, None, 500], False, 0.2)
 ])
-def test_eig_lm(model, design, observation_labels, target_labels, estimator, args, eig):
+def test_eig_lm(model, design, observation_labels, target_labels, estimator, args, eig, allow_error):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
     y = estimator(model, design, observation_labels, target_labels, *args)
     y_true = linear_model_ground_truth(model, design, observation_labels, target_labels, eig=eig)
+    print()
+    print(estimator.__name__)
     print(y)
     print(y_true)
-    print(estimator.__name__)
-    percent_error = torch.max(torch.abs(y - y_true) / torch.abs(y_true))
-    assert percent_error < 0.1
+    error = torch.max(torch.abs(y - y_true))
+    assert error < allow_error
 
 
-# Also group test with xfail for vi_ape
+
 
