@@ -24,7 +24,7 @@ CPU_EXAMPLES = [
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4',
     'contrib/oed/ab_test.py --num-vi-steps=1000',
     'contrib/oed/item_response.py -N=1000 -M=1000',
-    'contrib/oed/sequential_oed_sigmoid_lm.py ---num-experiments=2 --num-runs=2',
+    'contrib/oed/sequential_oed_sigmoid_lm.py --num-experiments=2 --num-runs=2',
     'dmm/dmm.py --num-epochs=1',
     'dmm/dmm.py --num-epochs=1 --num-iafs=1',
     'eight_schools/mcmc.py --num-samples=500 --warmup-steps=100',
