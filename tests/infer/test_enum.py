@@ -2820,3 +2820,44 @@ def test_mixture_of_diag_normals(mixture, scale):
     auto_loss = elbo.differentiable_loss(auto_model, guide)
     hand_loss = elbo.differentiable_loss(hand_model, guide)
     _check_loss_and_grads(hand_loss, auto_loss)
+
+
+@pytest.mark.parametrize("Dist, prior", [
+    (dist.Categorical, [0.2, 0.8]),
+    (dist.Categorical, [0.2, 0.3, 0.5]),
+    (dist.Categorical, [0.2, 0.3, 0.3, 0.2]),
+    (dist.Bernoulli, 0.2),
+])
+def test_compute_marginals_1(Dist, prior):
+    prior = torch.tensor(prior)
+    data = torch.tensor([0., 0.1, 0.2, 0.9, 1.0, 1.1])
+
+    @config_enumerate(default="parallel")
+    def model():
+        locs = torch.tensor([-1., 0., 1., 2.])
+        x = pyro.sample("x", Dist(prior)).long()
+        with pyro.iarange("data", len(data)):
+            pyro.sample("obs", dist.Normal(locs[x], 1.), obs=data)
+
+    # First compute marginals using an empty guide.
+    def empty_guide():
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    marginal_dists = elbo.compute_marginals(model, empty_guide)
+    assert len(marginal_dists) == 1
+    assert type(marginal_dists["x"]) is Dist
+    probs = marginal_dists["x"].probs
+    assert probs.shape == prior.shape
+
+    # Next insert the computed marginals in an enumerating guide
+    # and ensure that they are exact, or at least locally optimal.
+    pyro.param("probs", probs)
+
+    @config_enumerate(default="parallel")
+    def exact_guide():
+        probs = pyro.param("probs")
+        pyro.sample("x", Dist(probs))
+
+    loss = elbo.differentiable_loss(model, exact_guide)
+    assert_equal(grad(loss, [pyro.param("probs")])[0], torch.zeros_like(probs))

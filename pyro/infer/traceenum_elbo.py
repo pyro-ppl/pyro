@@ -124,27 +124,29 @@ def _compute_dice_elbo(model_trace, guide_trace):
 
 
 def _compute_marginals(model_trace, guide_trace):
-    marginal_costs, log_factors, ordering, sum_dims, scale = _compute_model_factors(
-            model_trace, guide_trace)
-    enum_sites = [site for name, site in model_trace.nodes.items()
-                  if site["type"] == "sample"
-                  if name not in guide_trace.nodes
-                  if site["infer"].get("_enumerate_dim") is not None]
-    result = OrderedDict()
+    args = _compute_model_factors(model_trace, guide_trace)
+    marginal_costs, log_factors, ordering, sum_dims, scale = args
+
+    marginal_dists = OrderedDict()
     with shared_intermediates():
-        for site in enum_sites:
+        for name, site in model_trace.nodes.items():
+            if (site["type"] != "sample" or
+                    name in guide_trace.nodes or
+                    site["infer"].get("_enumerate_dim") is None):
+                continue
+
             enum_dim = site["fn"].event_dim - site["value"].dim()
-            enum_dims = set([enum_dim])
-            site_sum_dims = {term: dims - enum_dims for term, dims in sum_dims.items()}
+            site_sum_dims = {term: dims - {enum_dim} for term, dims in sum_dims.items()}
             ordinal = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
             logits = contract_to_tensor(log_factors, site_sum_dims, ordinal)
-            if enum_dim != -1:
-                logits = logits.transpose(-1, enum_dim)
+            logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
+            while logits.shape[0] == 1:
+                logits.squeeze_(0)
             # Reshape for e.g. Bernoulli vs Categorical.
             if type(site["fn"]).__name__ == "Bernoulli":
                 logits = logits[..., 1] - logits[..., 0]
-            result[site["name"]] = type(site["fn"])(logits=logits)
-    return result
+            marginal_dists[name] = type(site["fn"])(logits=logits)
+    return marginal_dists
 
 
 class TraceEnum_ELBO(ELBO):
@@ -302,13 +304,15 @@ class TraceEnum_ELBO(ELBO):
         :returns: a dict mapping site name to marginal ``Distribution`` object
         :rtype: OrderedDict
         """
-        result = None
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            if result is not None:
-                raise NotImplementedError("TraceEnum_ELBO.compute_marginals() is not compatible with "
-                                          "sequential enumeration or multiple particles.")
-            result = _compute_marginals(model_trace, guide_trace)
-        return result
+        if self.num_particles != 1:
+            raise NotImplementedError("TraceEnum_ELBO.compute_marginals() is not "
+                                      "compatible with multiple particles.")
+        model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
+        for site in guide_trace.nodes.values():
+            if site["type"] == "sample" and site["infer"].get("_enumerated_dim") is not None:
+                raise NotImplementedError("TraceEnum_ELBO.compute_marginals() is not "
+                                          "compatible with guide enumeration.")
+        return _compute_marginals(model_trace, guide_trace)
 
 
 class JitTraceEnum_ELBO(TraceEnum_ELBO):
