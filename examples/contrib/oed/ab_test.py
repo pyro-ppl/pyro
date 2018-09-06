@@ -11,11 +11,11 @@ from pyro import optim
 from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import vi_ape
 import pyro.contrib.gp as gp
-
-from gp_bayes_opt import GPBayesOptimizer
-from models.bayes_linear import (
+from pyro.contrib.glmm import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov
 )
+
+from gp_bayes_opt import GPBayesOptimizer
 
 """
 Example builds on the Bayesian regression tutorial [1]. It demonstrates how
