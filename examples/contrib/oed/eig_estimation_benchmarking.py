@@ -12,12 +12,12 @@ from pyro.contrib.oed.eig import (
     vi_ape, naive_rainforth_eig, donsker_varadhan_eig, barber_agakov_ape
 )
 from pyro.contrib.oed.util import get_indices, lexpand
-
-from models.bayes_linear import (
+from pyro.contrib.glmm import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov,
     normal_inverse_gamma_linear_model, normal_inverse_gamma_guide, group_linear_model,
     group_normal_guide, sigmoid_model, rf_group_assignments
 )
+
 from guides.amort import LinearModelGuide, NormalInverseGammaGuide, SigmoidGuide, GuideDV
 
 PLOT = True
