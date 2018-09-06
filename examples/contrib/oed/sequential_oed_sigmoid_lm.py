@@ -4,7 +4,6 @@ import argparse
 import torch
 from torch.distributions.transforms import AffineTransform, SigmoidTransform
 import numpy as np
-import matplotlib.pyplot as plt
 
 import pyro
 from pyro import optim
@@ -39,7 +38,7 @@ def iqr(array):
     return np.percentile(array, 75) - np.percentile(array, 25)
 
 
-def main(num_experiments, num_runs):
+def main(num_experiments, num_runs, plot=True):
 
     results = {'oed': [], 'rand': []}
 
@@ -94,18 +93,29 @@ def main(num_experiments, num_runs):
     entropies = {k: np.array([0.5*np.linalg.slogdet(2*np.pi*np.e*cov)[1] for cov in v]) for k, v in covs.items()}
     means = np.array([entropies['oed'].mean(), entropies['rand'].mean()])
     iqrs = np.array([iqr(entropies['oed']), iqr(entropies['rand'])])
-    plt.figure()
-    x = np.array([0., 1.])
-    plt.bar(x, height=means, yerr=iqrs, tick_label=['OED', 'Random design'],
-            color=plt.rcParams['axes.prop_cycle'].by_key()['color'][0:2],
-            capsize=10)
-    plt.ylabel("Final posterior entropy")
-    plt.show()
+
+    if plot:
+        import matplotlib.pyplot as plt
+        plt.figure()
+        x = np.array([0., 1.])
+        plt.bar(x, height=means, yerr=iqrs, tick_label=['OED', 'Random design'],
+                color=plt.rcParams['axes.prop_cycle'].by_key()['color'][0:2],
+                capsize=10)
+        plt.ylabel("Final posterior entropy")
+        plt.show()
+
+    else:
+        print("Mean posterior entropy", means)
+        print("IQR posterior entropy", iqrs)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sigmoid iterated experiment design")
     parser.add_argument("--num-experiments", nargs="?", default=5, type=int)
     parser.add_argument("--num-runs", nargs="?", default=5, type=int)
+    feature_parser = parser.add_mutually_exclusive_group(required=False)
+    feature_parser.add_argument('--plot', dest='plot', action='store_true')
+    feature_parser.add_argument('--no-plot', dest='plot', action='store_false')
+    parser.set_defaults(feature=True)
     args = parser.parse_args()
-    main(args.num_experiments, args.num_runs)
+    main(args.num_experiments, args.num_runs, args.plot)
