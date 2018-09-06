@@ -107,7 +107,7 @@ def _compute_dice_elbo(model_trace, guide_trace):
     marginal_costs, log_factors, ordering, sum_dims, scale = _compute_model_factors(
             model_trace, guide_trace)
     if log_factors:
-        contract_tensor_tree(log_factors, sum_dims)
+        log_factors = contract_tensor_tree(log_factors, sum_dims)
         for t, log_factors_t in log_factors.items():
             marginal_costs_t = marginal_costs.setdefault(t, [])
             for term in log_factors_t:
