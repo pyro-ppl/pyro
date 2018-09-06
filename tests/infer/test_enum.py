@@ -2781,3 +2781,43 @@ def test_elbo_zip(gate, rate):
     zip_loss = elbo.differentiable_loss(zip_model, guide, data)
     composite_loss = elbo.differentiable_loss(composite_model, guide, data)
     _check_loss_and_grads(zip_loss, composite_loss)
+
+
+@pytest.mark.parametrize("data", [
+    [None, None],
+    [torch.tensor(0.), None],
+    [None, torch.tensor(0.)],
+    [torch.tensor(0.), torch.tensor(0)],
+])
+def test_backwardsample_posterior(data):
+
+    @config_enumerate(default="parallel")
+    def model(data):
+        xs = list(data)
+        zs = []
+        for i in range(2):
+            K = i + 2  # number of mixture components
+            zs.append(pyro.sample("z_{}".format(i),
+                                  dist.Categorical(torch.ones(K))))
+            if i == 0:
+                loc = pyro.param("loc", torch.randn(K))[zs[i]]
+                xs[i] = pyro.sample("x_{}".format(i),
+                                    dist.Normal(loc, 1.), obs=data[i])
+            elif i == 1:
+                logits = pyro.param("logits", torch.randn(K, 2))[zs[i]]
+                xs[i] = pyro.sample("x_{}".format(i),
+                                    dist.Categorical(logits=logits),
+                                    obs=data[i])
+
+        z12 = zs[0] + 2 * zs[1]
+        pyro.sample("z_12", dist.Categorical(torch.arange(6.)), obs=z12)
+        return xs, zs
+
+    def guide(data):
+        if data[0] is None:
+            pyro.sample("x_0", dist.Normal(0., 1.))
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    xs, zs = elbo.sample_posterior(model, guide, data)
+    for x, datum in zip(xs, data):
+        assert datum is None or datum is x

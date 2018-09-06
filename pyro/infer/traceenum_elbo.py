@@ -5,10 +5,12 @@ import weakref
 from collections import OrderedDict
 
 import torch
+from torch.distributions.utils import broadcast_all
 from opt_einsum import shared_intermediates
 from six.moves import queue
 
 import pyro
+import pyro.distributions as dist
 import pyro.ops.jit
 import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero, scale_and_mask
@@ -40,6 +42,12 @@ def _check_model_guide_enumeration_constraint(model_enum_sites, guide_trace):
                                      "but found model enumeration sites upstream of guide site '{}' in iarange('{}'). "
                                      "Try converting some model enumeration sites to guide enumeration sites."
                                      .format(name, f.name))
+
+
+def _check_sample_posterior(model_trace, guide_trace):
+    for name, site in guide_trace.nodes.items():
+        if site["type"] == "sample":
+            assert site["infer"].get("enumerate") is None
 
 
 # TODO move this logic into a poutine
@@ -147,6 +155,51 @@ def _compute_marginals(model_trace, guide_trace):
     return result
 
 
+class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
+    """
+    Implements forward filtering / backward sampling for sampling
+    from the joint posterior distribution
+    """
+    def __init__(self, enum_trace, guide_trace):
+        self.enum_trace = enum_trace
+        args = _compute_model_factors(enum_trace, guide_trace)
+        self.log_factors = args[1]
+        self.sum_dims = args[3]
+        self.cache = None
+
+    def __enter__(self):
+        self.cache = {}
+        return super(BackwardSampleMessenger, self).__enter__()
+
+    def _pyro_sample(self, msg):
+        enum_dim = self.enum_trace.nodes[msg["name"]]["infer"].get("_enumerate_dim")
+        if enum_dim is not None:
+            assert enum_dim < 0, "{} {}".format(msg["name"], enum_dim)
+            if type(msg["fn"]) is not dist.Categorical:
+                raise NotImplementedError
+            for value in self.sum_dims.values():
+                value.discard(enum_dim)
+            with shared_intermediates(self.cache):
+                target_ordinal = frozenset(f for f in msg["cond_indep_stack"]
+                                           if f.vectorized)
+                marginal = contract_to_tensor(self.log_factors.copy(),
+                                              self.sum_dims,
+                                              target_ordinal)
+            msg["fn"] = dist.Categorical(logits=marginal)
+
+    def _postprocess_message(self, msg):
+        if msg["type"] == "sample":
+            enum_dim = msg["infer"].get("_enumerate_dim")
+            if enum_dim is not None:
+                for t, terms in self.log_factors.items():
+                    for i, term in enumerate(terms):
+                        if term.dim() > -enum_dim and term.shape[enum_dim] > 1:
+                            a, b = broadcast_all(term, msg["value"])
+                            sampled_term = a.gather(enum_dim, b)
+                            terms[i] = sampled_term
+                            self.sum_dims[sampled_term] = self.sum_dims[term] - {enum_dim}
+
+
 class TraceEnum_ELBO(ELBO):
     """
     A trace implementation of ELBO-based SVI that supports
@@ -189,7 +242,7 @@ class TraceEnum_ELBO(ELBO):
 
         return model_trace, guide_trace
 
-    def _get_traces(self, model, guide, *args, **kwargs):
+    def _wrap_model_guide(self, model, guide):
         """
         Runs the guide and runs the model against the guide with
         the result packaged as a trace generator.
@@ -210,7 +263,13 @@ class TraceEnum_ELBO(ELBO):
         model_enum = EnumerateMessenger(first_available_dim=lambda: guide_enum.next_available_dim)
         guide = guide_enum(guide)
         model = model_enum(model)
+        return model, guide
 
+    def _get_traces(self, model, guide, *args, **kwargs):
+        """
+        Runs the guide and runs the model against the guide with
+        the result packaged as a trace generator.
+        """
         q = queue.LifoQueue()
         guide = poutine.queue(guide, q,
                               escape_fn=iter_discrete_escape,
@@ -228,6 +287,7 @@ class TraceEnum_ELBO(ELBO):
         Estimates the ELBO using ``num_particles`` many samples (particles).
         """
         elbo = 0.0
+        model, guide = self._wrap_model_guide(model, guide)
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
             if is_identically_zero(elbo_particle):
@@ -251,6 +311,7 @@ class TraceEnum_ELBO(ELBO):
         as underlying derivatives have been implemented).
         """
         elbo = 0.0
+        model, guide = self._wrap_model_guide(model, guide)
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
             if is_identically_zero(elbo_particle):
@@ -275,6 +336,7 @@ class TraceEnum_ELBO(ELBO):
         Performs backward on the ELBO of each particle.
         """
         elbo = 0.0
+        model, guide = self._wrap_model_guide(model, guide)
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
             if is_identically_zero(elbo_particle):
@@ -303,12 +365,29 @@ class TraceEnum_ELBO(ELBO):
         :rtype: OrderedDict
         """
         result = None
+        model, guide = self._wrap_model_guide(model, guide)
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             if result is not None:
                 raise NotImplementedError("TraceEnum_ELBO.compute_marginals() is not compatible with "
                                           "sequential enumeration or multiple particles.")
             result = _compute_marginals(model_trace, guide_trace)
         return result
+
+    def sample_posterior(self, model, guide, *args, **kwargs):
+        """
+        Sample from the joint posterior distribution of all model-enumerated sites given all observations
+        """
+        model, guide = self._wrap_model_guide(model, guide)  # XXX gross
+        with poutine.block():
+            model_trace, guide_trace = next(self._get_traces(
+                model, guide, *args, **kwargs))  # XXX grosser
+
+        _check_sample_posterior(model_trace, guide_trace)
+        assert self.num_particles == 1
+
+        with BackwardSampleMessenger(model_trace, guide_trace):
+            return poutine.replay(poutine.broadcast(model),
+                                  trace=guide_trace)(*args, **kwargs)
 
 
 class JitTraceEnum_ELBO(TraceEnum_ELBO):
