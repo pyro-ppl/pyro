@@ -2851,10 +2851,10 @@ def test_compute_marginals_single(Dist, prior):
         pass
 
     elbo = TraceEnum_ELBO(max_iarange_nesting=1)
-    marginal_dists = elbo.compute_marginals(model, empty_guide)
-    assert len(marginal_dists) == 1
-    assert type(marginal_dists["x"]) is Dist
-    probs = marginal_dists["x"].probs
+    marginals = elbo.compute_marginals(model, empty_guide)
+    assert len(marginals) == 1
+    assert type(marginals["x"]) is Dist
+    probs = marginals["x"].probs
     assert probs.shape == prior.shape
 
     # Next insert the computed marginals in an enumerating guide
@@ -2900,8 +2900,43 @@ def test_compute_marginals_restrictions(ok, enumerate_guide, num_particles, vect
     assert not torch_isnan(loss)
 
     if ok:
-        marginal_dists = elbo.compute_marginals(model, guide)
-        assert set(marginal_dists.keys()) == {"x", "z"}
+        marginals = elbo.compute_marginals(model, guide)
+        assert set(marginals.keys()) == {"x", "z"}
     else:
         with pytest.raises(NotImplementedError, match="compute_marginals"):
             elbo.compute_marginals(model, guide)
+
+
+@pytest.mark.parametrize('size', [1, 2, 3, 4, 10, 20, 30])
+def test_compute_marginals_hmm(size):
+
+    @config_enumerate(default="parallel")
+    def model(data):
+        transition_probs = torch.tensor([[0.75, 0.25], [0.25, 0.75]])
+        emission_probs = torch.tensor([[0.75, 0.25], [0.25, 0.75]])
+        x = torch.tensor(0)
+        for i, y in enumerate(data):
+            x = pyro.sample("x_{}".format(i), dist.Categorical(transition_probs[x]))
+            pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=y)
+
+        pyro.sample("x_{}".format(len(data)), dist.Categorical(transition_probs[x]),
+                    obs=torch.tensor(1))
+
+    def guide(data):
+        pass
+
+    data = torch.zeros(size, dtype=torch.long)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+    marginals = elbo.compute_marginals(model, guide, data)
+    assert set(marginals.keys()) == {"x_{}".format(i) for i in range(size)}
+    for i in range(size):
+        d = marginals["x_{}".format(i)]
+        assert d.batch_shape == ()
+
+    # The x's should be monotonically increasing, since we've observed x[-1]==0
+    # and x[size]==1, and since the y's are constant.
+    for i in range(size - 1):
+        d1 = marginals["x_{}".format(i)]
+        d2 = marginals["x_{}".format(i + 1)]
+        assert d1.probs[0] > d2.probs[0]
+        assert d1.probs[1] < d2.probs[1]
