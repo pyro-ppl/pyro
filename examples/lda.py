@@ -1,3 +1,13 @@
+"""
+This example demonstrates how to marginalize out discrete assignment variables
+in a Pyro model.
+
+Our example model is Latent Dirichlet Allocation. While the model in this
+example does work, it is not the recommended way of coding up LDA in Pyro.
+Whereas the model in this example treats documents as vectors of categorical
+variables (vectors of word ids), it is usually more efficient to treat
+documents as bags of words (histograms of word counts).
+"""
 from __future__ import absolute_import, division, print_function
 
 import argparse
