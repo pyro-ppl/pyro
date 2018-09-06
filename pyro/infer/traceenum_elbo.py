@@ -309,9 +309,10 @@ class TraceEnum_ELBO(ELBO):
                                       "compatible with multiple particles.")
         model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
         for site in guide_trace.nodes.values():
-            if site["type"] == "sample" and site["infer"].get("_enumerated_dim") is not None:
-                raise NotImplementedError("TraceEnum_ELBO.compute_marginals() is not "
-                                          "compatible with guide enumeration.")
+            if site["type"] == "sample":
+                if "_enumerate_dim" in site["infer"] or "_enum_total" in site["infer"]:
+                    raise NotImplementedError("TraceEnum_ELBO.compute_marginals() is not "
+                                              "compatible with guide enumeration.")
         return _compute_marginals(model_trace, guide_trace)
 
 

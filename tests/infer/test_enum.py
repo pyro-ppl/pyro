@@ -2823,19 +2823,26 @@ def test_mixture_of_diag_normals(mixture, scale):
 
 
 @pytest.mark.parametrize("Dist, prior", [
+    (dist.Bernoulli, 0.2),
     (dist.Categorical, [0.2, 0.8]),
     (dist.Categorical, [0.2, 0.3, 0.5]),
     (dist.Categorical, [0.2, 0.3, 0.3, 0.2]),
-    (dist.Bernoulli, 0.2),
+    (dist.OneHotCategorical, [0.2, 0.8]),
+    (dist.OneHotCategorical, [0.2, 0.3, 0.5]),
+    (dist.OneHotCategorical, [0.2, 0.3, 0.3, 0.2]),
 ])
-def test_compute_marginals_1(Dist, prior):
+def test_compute_marginals_single(Dist, prior):
     prior = torch.tensor(prior)
     data = torch.tensor([0., 0.1, 0.2, 0.9, 1.0, 1.1])
 
     @config_enumerate(default="parallel")
     def model():
         locs = torch.tensor([-1., 0., 1., 2.])
-        x = pyro.sample("x", Dist(prior)).long()
+        x = pyro.sample("x", Dist(prior))
+        if Dist is dist.Bernoulli:
+            x = x.long()
+        elif Dist is dist.OneHotCategorical:
+            x = x.max(-1)[1]
         with pyro.iarange("data", len(data)):
             pyro.sample("obs", dist.Normal(locs[x], 1.), obs=data)
 
@@ -2861,3 +2868,40 @@ def test_compute_marginals_1(Dist, prior):
 
     loss = elbo.differentiable_loss(model, exact_guide)
     assert_equal(grad(loss, [pyro.param("probs")])[0], torch.zeros_like(probs))
+
+
+@pytest.mark.parametrize('ok,enumerate_guide,num_particles,vectorize_particles', [
+    (True, None, 1, False),
+    (False, "sequential", 1, False),
+    (False, "parallel", 1, False),
+    (False, None, 2, False),
+    (False, None, 2, True),
+])
+def test_compute_marginals_restrictions(ok, enumerate_guide, num_particles, vectorize_particles):
+
+    @config_enumerate(default="parallel")
+    def model():
+        w = pyro.sample("w", dist.Bernoulli(0.1))
+        x = pyro.sample("x", dist.Bernoulli(0.2))
+        y = pyro.sample("y", dist.Bernoulli(0.3))
+        z = pyro.sample("z", dist.Bernoulli(0.4))
+        pyro.sample("obs", dist.Normal(0., 1.), obs=w + x + y + z)
+
+    @config_enumerate(default=enumerate_guide)
+    def guide():
+        pyro.sample("w", dist.Bernoulli(0.4))
+        pyro.sample("y", dist.Bernoulli(0.7))
+
+    # Check that the ELBO works fine.
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
+                          num_particles=num_particles,
+                          vectorize_particles=vectorize_particles)
+    loss = elbo.loss(model, guide)
+    assert not torch_isnan(loss)
+
+    if ok:
+        marginal_dists = elbo.compute_marginals(model, guide)
+        assert set(marginal_dists.keys()) == {"x", "z"}
+    else:
+        with pytest.raises(NotImplementedError, match="compute_marginals"):
+            elbo.compute_marginals(model, guide)
