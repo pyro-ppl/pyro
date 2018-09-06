@@ -6,10 +6,11 @@ import torch
 
 import pytest
 from pyro.distributions import MixtureOfDiagNormalsSharedCovariance, GaussianScaleMixture
+from pyro.distributions import MixtureOfDiagNormals
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize('mix_dist', [MixtureOfDiagNormalsSharedCovariance, GaussianScaleMixture])
+@pytest.mark.parametrize('mix_dist', [MixtureOfDiagNormals, MixtureOfDiagNormalsSharedCovariance, GaussianScaleMixture])
 @pytest.mark.parametrize('K', [3])
 @pytest.mark.parametrize('D', [2, 4])
 @pytest.mark.parametrize('batch_mode', [True, False])
@@ -30,8 +31,12 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
         component_scale = torch.tensor(component_scale, requires_grad=True)
     else:
         component_scale = torch.ones(K, requires_grad=True)
-    coord_scale = torch.ones(D) + 0.5 * torch.rand(D)
-    coord_scale = torch.tensor(coord_scale, requires_grad=True)
+    if mix_dist == MixtureOfDiagNormals:
+        coord_scale = torch.ones(K, D) + 0.5 * torch.rand(K, D)
+        coord_scale = torch.tensor(coord_scale, requires_grad=True)
+    else:
+        coord_scale = torch.ones(D) + 0.5 * torch.rand(D)
+        coord_scale = torch.tensor(coord_scale, requires_grad=True)
     if not flat_logits:
         component_logits = torch.tensor(1.5 * torch.rand(K), requires_grad=True)
     else:
@@ -72,6 +77,15 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
         if batch_mode:
             locs = locs.unsqueeze(0).expand(n_samples, K, D)
             coord_scale = coord_scale.unsqueeze(0).expand(n_samples, D)
+            component_logits = component_logits.unsqueeze(0).expand(n_samples, K)
+            dist_params = {'locs': locs, 'coord_scale': coord_scale, 'component_logits': component_logits}
+        else:
+            dist_params = params
+    elif mix_dist == MixtureOfDiagNormals:
+        params = {'locs': locs, 'coord_scale': coord_scale, 'component_logits': component_logits}
+        if batch_mode:
+            locs = locs.unsqueeze(0).expand(n_samples, K, D)
+            coord_scale = coord_scale.unsqueeze(0).expand(n_samples, K, D)
             component_logits = component_logits.unsqueeze(0).expand(n_samples, K)
             dist_params = {'locs': locs, 'coord_scale': coord_scale, 'component_logits': component_logits}
         else:
@@ -138,3 +152,26 @@ def test_gsm_log_prob():
     correct_log_prob /= (2.0 * math.pi) * 4.0
     correct_log_prob = math.log(correct_log_prob)
     assert_equal(log_prob, correct_log_prob, msg='bad log prob for GaussianScaleMixture')
+
+
+@pytest.mark.parametrize('batch_size', [1, 3])
+def test_mix_of_diag_normals_log_prob(batch_size):
+    sigmas = torch.tensor([[2.0, 1.5], [1.5, 2.0]])
+    locs = torch.tensor([[0.0, 1.0], [-1.0, 0.0]])
+    logits = torch.tensor([math.log(0.25), math.log(0.75)])
+    value = torch.tensor([0.5, 0.25])
+    if batch_size > 1:
+        locs = locs.unsqueeze(0).expand(batch_size, 2, 2)
+        sigmas = sigmas.unsqueeze(0).expand(batch_size, 2, 2)
+        logits = logits.unsqueeze(0).expand(batch_size, 2)
+        value = value.unsqueeze(0).expand(batch_size, 2)
+    dist = MixtureOfDiagNormals(locs, sigmas, logits)
+    log_prob = dist.log_prob(value)
+    correct_log_prob = 0.25 * math.exp(-0.5 * (0.25 / 4.0 + 0.5625 / 2.25)) / 3.0
+    correct_log_prob += 0.75 * math.exp(-0.5 * (2.25 / 2.25 + 0.0625 / 4.0)) / 3.0
+    correct_log_prob /= (2.0 * math.pi)
+    correct_log_prob = math.log(correct_log_prob)
+    if batch_size > 1:
+        correct_log_prob = [correct_log_prob] * batch_size
+    correct_log_prob = torch.tensor(correct_log_prob)
+    assert_equal(log_prob, correct_log_prob, msg='bad log prob for MixtureOfDiagNormals')

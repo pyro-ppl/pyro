@@ -673,13 +673,11 @@ class AutoLaplaceApproximation(AutoContinuous):
         scale_tril = cov.potrf(upper=False)
 
         # calculate scale_tril from self.guide()
-        param_store = pyro.get_param_store()
         scale_tril_name = "{}_scale_tril".format(self.prefix)
-        if scale_tril_name in param_store.get_all_param_names():
-            param_store.replace_param(scale_tril_name, scale_tril, pyro.param(scale_tril_name))
-        else:
-            pyro.param(scale_tril_name, lambda: scale_tril.detach(),
-                       constraint=constraints.lower_cholesky)
+        pyro.param(scale_tril_name, scale_tril,
+                   constraint=constraints.lower_cholesky)
+        # force an update to scale_tril even if it already exists
+        pyro.get_param_store()[scale_tril_name] = scale_tril
 
         gaussian_guide = AutoMultivariateNormal(self.model, prefix=self.prefix)
         gaussian_guide._setup_prototype(*args, **kwargs)

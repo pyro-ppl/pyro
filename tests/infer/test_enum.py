@@ -2781,3 +2781,42 @@ def test_elbo_zip(gate, rate):
     zip_loss = elbo.differentiable_loss(zip_model, guide, data)
     composite_loss = elbo.differentiable_loss(composite_model, guide, data)
     _check_loss_and_grads(zip_loss, composite_loss)
+
+
+@pytest.mark.parametrize("mixture,scale", [
+    (dist.MixtureOfDiagNormals, [[2., 1.], [1., 2], [4., 4.]]),
+    (dist.MixtureOfDiagNormalsSharedCovariance, [2., 1.]),
+])
+def test_mixture_of_diag_normals(mixture, scale):
+    # K = 3, D = 2
+    pyro.param("locs", torch.tensor([[0., 0.], [0., 1.], [0., 10.]]))
+    pyro.param("coord_scale", torch.tensor(scale), constraint=constraints.positive)
+    pyro.param("component_logits", torch.tensor([0., -1., 2.]))
+    data = torch.tensor([[0., 0.], [1., 1.], [2., 3.], [1., 11.]])
+
+    def auto_model():
+        locs = pyro.param("locs")
+        coord_scale = pyro.param("coord_scale")
+        component_logits = pyro.param("component_logits")
+        with pyro.iarange("data", len(data)):
+            pyro.sample("obs", mixture(locs, coord_scale, component_logits), obs=data)
+
+    def hand_model():
+        locs = pyro.param("locs")
+        coord_scale = pyro.param("coord_scale")
+        component_logits = pyro.param("component_logits")
+        with pyro.iarange("data", len(data), dim=-2):
+            which = pyro.sample("mask", dist.Categorical(logits=component_logits),
+                                infer={"enumerate": "parallel"})
+            with pyro.iarange("components", len(component_logits), dim=-1) as component_ind:
+                with poutine.mask(mask=(which == component_ind)):
+                    pyro.sample("obs", dist.Normal(locs, coord_scale).independent(1),
+                                obs=data.unsqueeze(-2))
+
+    def guide():
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=2, strict_enumeration_warning=False)
+    auto_loss = elbo.differentiable_loss(auto_model, guide)
+    hand_loss = elbo.differentiable_loss(hand_model, guide)
+    _check_loss_and_grads(hand_loss, auto_loss)
