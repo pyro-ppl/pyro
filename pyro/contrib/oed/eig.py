@@ -291,14 +291,14 @@ def donsker_varadhan_loss(model, T, observation_labels, target_labels):
         conditional_model = pyro.condition(model, data=y_dict)
         shuffled_trace = poutine.trace(conditional_model).get_trace(expanded_design)
 
-        T_unshuffled = T(expanded_design, unshuffled_trace, observation_labels,
-                         target_labels)
-        T_shuffled = T(expanded_design, shuffled_trace, observation_labels,
-                       target_labels)
+        T_joint = T(expanded_design, unshuffled_trace, observation_labels,
+                    target_labels)
+        T_independent = T(expanded_design, shuffled_trace, observation_labels,
+                          target_labels)
 
-        unshuffled_expectation = T_unshuffled.sum(0)/num_particles
+        unshuffled_expectation = T_joint.sum(0)/num_particles
 
-        A = T_shuffled - np.log(num_particles)
+        A = T_independent - np.log(num_particles)
         s, _ = torch.max(A, dim=0)
         shuffled_expectation = s + ewma_log((A - s).exp().sum(dim=0), s)
 
