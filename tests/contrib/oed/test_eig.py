@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import namedtuple
 import torch
 import scipy.special as sc
 import pytest
@@ -79,50 +80,151 @@ def h(p):
     return -(sc.xlogy(p, p) + sc.xlog1py(1 - p, -p))
 
 
-@pytest.mark.parametrize("model,design,observation_labels,target_labels,estimator,args,eig,allow_error", [
-    (bernoulli_model, torch.tensor([0.3, 0.4]), "y", ["w", "u"], vi_ape,
+T = namedtuple("EIGTestCase", [
+    "model",
+    "design",
+    "observation_labels",
+    "target_labels",
+    "estimator",
+    "args",
+    "eig",
+    "allow_error"
+])
+
+TEST_CASES = [
+    T(
+        bernoulli_model,
+        torch.tensor([0.3, 0.4]),
+        "y", ["w", "u"],
+        vi_ape,
         [{"guide": bernoulli_guide, "optim": optim.Adam({"lr": 0.01}),
-          "loss": elbo, "num_steps": 100}, {"num_samples": 1}], False, 1e-2),
-    (bernoulli_model, torch.tensor([0.3, 0.4]), "y", ["w", "u"], naive_rainforth_eig,
-        [100, 100], True, 1e-2),
-    (bernoulli_model, torch.tensor([0.3, 0.4]), "y", ["w", "u"], barber_agakov_ape,
+          "loss": elbo, "num_steps": 100}, {"num_samples": 1}],
+        False,
+        1e-2
+    ),
+    T(  
+        bernoulli_model,
+        torch.tensor([0.3, 0.4]),
+        "y",
+        ["w", "u"],
+        naive_rainforth_eig,
+        [100, 100],
+        True,
+        1e-2
+    ),
+    T(  
+        bernoulli_model,
+        torch.tensor([0.3, 0.4]),
+        "y",
+        ["w", "u"],
+        barber_agakov_ape,
         [20, 800, bernoulli_ba_guide, optim.Adam({"lr": 0.01}),
-         False, None, 1000], False, 1e-2),
-    (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
-        naive_rainforth_eig, [500, 500], True, 0.2),
-    (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
+         False, None, 1000],
+        False,
+        1e-2
+    ),
+    T(
+        basic_2p_linear_model_sds_10_2pt5,
+        X_circle_5d_1n_2p,
+        "y",
+        "w",
+        naive_rainforth_eig,
+        [500, 500],
+        True,
+        0.2
+    ),
+    T(
+        basic_2p_linear_model_sds_10_2pt5,
+        X_circle_5d_1n_2p,
+        "y",
+        "w",
         vi_ape,
         [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}),
-          "loss": elbo, "num_steps": 1000}, {"num_samples": 1}], False, 0.3),
-    (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
+          "loss": elbo, "num_steps": 1000}, {"num_samples": 1}],
+        False,
+        0.3
+    ),
+    T(
+        basic_2p_linear_model_sds_10_2pt5,
+        X_circle_5d_1n_2p,
+        "y",
+        "w",
         donsker_varadhan_eig,
         [200, 800, GuideDV(basic_2p_ba_guide(5)),
-         optim.Adam({"lr": 0.025}), False, None, 500], True, 0.3),
-    (basic_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w",
+         optim.Adam({"lr": 0.025}), False, None, 500],
+        True,
+        0.3
+    ),
+    T(
+        basic_2p_linear_model_sds_10_2pt5,
+        AB_test_2d_10n_2p,
+        "y",
+        "w",
         barber_agakov_ape,
         [20, 400, basic_2p_ba_guide(2), optim.Adam({"lr": 0.05}),
-         False, None, 500], False, 0.2),
-    (basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
+         False, None, 500],
+        False,
+        0.2
+    ),
+    T(
+        basic_2p_linear_model_sds_10_2pt5,
+        X_circle_5d_1n_2p,
+        "y",
+        "w",
         barber_agakov_ape,
         [20, 400, basic_2p_ba_guide(5), optim.Adam({"lr": 0.05}),
-         False, None, 500], False, 0.2),
-    (group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1",
-        naive_rainforth_eig, [400, 400, 400], True, 0.2),
+         False, None, 500],
+        False,
+        0.2
+    ),
+    T(
+        group_2p_linear_model_sds_10_2pt5,
+        X_circle_5d_1n_2p,
+        "y",
+        "w1",
+        naive_rainforth_eig,
+        [400, 400, 400],
+        True,
+        0.2
+    ),
     # This fails because guide is wrong
     pytest.param(
-        group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1", vi_ape,
+        group_2p_linear_model_sds_10_2pt5,
+        X_circle_5d_1n_2p,
+        "y",
+        "w1",
+        vi_ape,
         [{"guide": group_2p_guide, "optim": optim.Adam({"lr": 0.05}),
-          "loss": elbo, "num_steps": 1000}, {"num_samples": 1}], False, 0.3,
-        marks=pytest.mark.xfail),
-    (group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1",
+          "loss": elbo, "num_steps": 1000}, {"num_samples": 1}],
+        False,
+        0.3,
+        marks=pytest.mark.xfail
+    ),
+    T(
+        group_2p_linear_model_sds_10_2pt5,
+        X_circle_5d_1n_2p,
+        "y",
+        "w1",
         donsker_varadhan_eig,
         [200, 400, GuideDV(group_2p_ba_guide(5)),
-         optim.Adam({"lr": 0.025}), False, None, 500], True, 0.3),
-    (group_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w1",
+         optim.Adam({"lr": 0.025}), False, None, 500],
+        True,
+        0.3
+    ),
+    T(
+        group_2p_linear_model_sds_10_2pt5,
+        X_circle_5d_1n_2p,
+        "y",
+        "w1",
         barber_agakov_ape,
         [20, 400, group_2p_ba_guide(5), optim.Adam({"lr": 0.05}),
-         False, None, 500], False, 0.2)
-])
+         False, None, 500],
+        False,
+        0.2
+    )
+]
+
+@pytest.mark.parametrize("model,design,observation_labels,target_labels,estimator,args,eig,allow_error", TEST_CASES)
 def test_eig_lm(model, design, observation_labels, target_labels, estimator, args, eig, allow_error):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
