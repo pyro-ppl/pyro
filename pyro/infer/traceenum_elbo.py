@@ -5,14 +5,15 @@ import weakref
 from collections import OrderedDict
 
 import torch
-from torch.distributions.utils import broadcast_all
 from opt_einsum import shared_intermediates
 from six.moves import queue
+from torch.distributions.utils import broadcast_all
 
 import pyro
 import pyro.distributions as dist
 import pyro.ops.jit
 import pyro.poutine as poutine
+from pyro.distributions.torch_distribution import ReshapedDistribution
 from pyro.distributions.util import is_identically_zero, scale_and_mask
 from pyro.infer.contract import contract_tensor_tree, contract_to_tensor
 from pyro.infer.elbo import ELBO
@@ -125,11 +126,13 @@ def _compute_dice_elbo(model_trace, guide_trace):
     return Dice(guide_trace, ordering).compute_expectation(costs)
 
 
-def _make_dist(Dist, logits):
+def _make_dist(dist_, logits):
     # Reshape for Bernoulli vs Categorical, OneHotCategorical, etc..
-    if Dist is dist.Bernoulli:
+    if isinstance(dist_, dist.Bernoulli):
         logits = logits[..., 1] - logits[..., 0]
-    return Dist(logits=logits)
+    elif isinstance(dist_, ReshapedDistribution):
+        return _make_dist(dist_.base_dist, logits=logits)
+    return type(dist_)(logits=logits)
 
 
 def _compute_marginals(model_trace, guide_trace):
@@ -151,7 +154,7 @@ def _compute_marginals(model_trace, guide_trace):
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
             while logits.shape[0] == 1:
                 logits.squeeze_(0)
-            marginal_dists[name] = _make_dist(type(site["fn"]), logits)
+            marginal_dists[name] = _make_dist(site["fn"], logits)
     return marginal_dists
 
 
@@ -172,6 +175,8 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
         return super(BackwardSampleMessenger, self).__enter__()
 
     def _pyro_sample(self, msg):
+        if msg["name"] not in self.enum_trace.nodes:
+            return
         enum_dim = self.enum_trace.nodes[msg["name"]]["infer"].get("_enumerate_dim")
         if enum_dim is not None:
             assert enum_dim < 0, "{} {}".format(msg["name"], enum_dim)
@@ -183,7 +188,7 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
                 logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
                 while logits.shape[0] == 1:
                     logits.squeeze_(0)
-            msg["fn"] = _make_dist(type(msg["fn"]), logits)
+            msg["fn"] = _make_dist(msg["fn"], logits)
 
     def _postprocess_message(self, msg):
         if msg["type"] == "sample":
@@ -383,8 +388,9 @@ class TraceEnum_ELBO(ELBO):
                                       "compatible with multiple particles.")
         model, guide = self._wrap_model_guide(model, guide)  # XXX gross
         with poutine.block():
-            model_trace, guide_trace = next(self._get_traces(
-                model, guide, *args, **kwargs))  # XXX grosser
+            with pyro.validation_enabled(False):  # XXX grossest
+                model_trace, guide_trace = next(self._get_traces(
+                    model, guide, *args, **kwargs))  # XXX grosser
         for name, site in guide_trace.nodes.items():
             if site["type"] == "sample":
                 if "_enumerate_dim" in site["infer"] or "_enum_total" in site["infer"]:
