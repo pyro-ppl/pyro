@@ -33,6 +33,7 @@ Pyro Documentation
    contrib.autoname
    contrib.gp
    contrib.tracking
+   contrib.treecat
    contrib.oed
 
 
