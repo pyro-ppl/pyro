@@ -31,9 +31,9 @@ class Feature(object):
         # Feature objects adapt the component id to a given feature type.
         f = MyFeature("foo")
         shared = f.sample_shared()
-        with pyro.iarange("components", num_components), poutine.broadcast():
-            group = f.sample_group()  # broadcasts to each component
-        with pyro.iarange("data", len(data)), poutine.broadcast():
+        with pyro.iarange("components", num_components), broadcast():
+            group = f.sample_group(shared)  # broadcasts to each component
+        with pyro.iarange("data", len(data)), broadcast():
             component = pyro.sample("component", membership_dist)
             pyro.sample("obs", f.value_dist(group, component), obs=data)
 
