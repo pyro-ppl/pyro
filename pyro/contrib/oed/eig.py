@@ -296,13 +296,13 @@ def donsker_varadhan_loss(model, T, observation_labels, target_labels):
         T_independent = T(expanded_design, shuffled_trace, observation_labels,
                           target_labels)
 
-        unshuffled_expectation = T_joint.sum(0)/num_particles
+        joint_expectation = T_joint.sum(0)/num_particles
 
         A = T_independent - np.log(num_particles)
         s, _ = torch.max(A, dim=0)
-        shuffled_expectation = s + ewma_log((A - s).exp().sum(dim=0), s)
+        independent_expectation = s + ewma_log((A - s).exp().sum(dim=0), s)
 
-        loss = unshuffled_expectation - shuffled_expectation
+        loss = joint_expectation - independent_expectation
         # Switch sign, sum over batch dimensions for scalar loss
         agg_loss = -loss.sum()
         return agg_loss, loss
