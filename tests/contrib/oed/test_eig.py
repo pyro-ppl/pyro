@@ -13,6 +13,7 @@ from pyro.contrib.oed.eig import (
     vi_ape, naive_rainforth_eig, donsker_varadhan_eig, barber_agakov_ape
 )
 from pyro.contrib.util import get_indices
+from pyro.contrib.oed.util import linear_model_ground_truth
 from pyro.contrib.glmm import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov,
     group_linear_model, group_normal_guide
@@ -48,33 +49,6 @@ group_2p_ba_guide = lambda d: LinearModelGuide(d, {"w1": 1, "w2": 1})  # noqa: E
 ########################################################################################
 
 elbo = TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss
-
-
-def linear_model_ground_truth(model, design, observation_labels, target_labels, eig=True):
-    if isinstance(target_labels, str):
-        target_labels = [target_labels]
-
-    w_sd = torch.cat(list(model.w_sds.values()), dim=-1)
-    prior_cov = torch.diag(w_sd**2)
-    posterior_covs = [analytic_posterior_cov(prior_cov, x, model.obs_sd) for x in torch.unbind(design)]
-    target_indices = get_indices(target_labels, tensors=model.w_sds)
-    target_posterior_covs = [S[target_indices, :][:, target_indices] for S in posterior_covs]
-    if eig:
-        prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
-        return prior_entropy - torch.tensor([0.5*torch.logdet(2*np.pi*np.e*C) for C in target_posterior_covs])
-    else:
-        return torch.tensor([0.5*torch.logdet(2*np.pi*np.e*C) for C in target_posterior_covs])
-
-
-def lm_H_prior(model, design, observation_labels, target_labels):
-    if isinstance(target_labels, str):
-        target_labels = [target_labels]
-
-    w_sd = torch.cat(list(model.w_sds.values()), dim=-1)
-    prior_cov = torch.diag(w_sd**2)
-    target_indices = get_indices(target_labels, tensors=model.w_sds)
-    target_prior_covs = prior_cov[target_indices, :][:, target_indices]
-    return 0.5*torch.logdet(2*np.pi*np.e*target_prior_covs)
 
 
 def bernoulli_guide(design):

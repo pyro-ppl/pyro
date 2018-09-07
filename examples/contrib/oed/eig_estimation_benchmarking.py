@@ -13,6 +13,9 @@ from pyro.contrib.oed.eig import (
     vi_ape, naive_rainforth_eig, donsker_varadhan_eig, barber_agakov_ape
 )
 from pyro.contrib.util import get_indices, lexpand
+from pyro.contrib.oed.util import (
+    linear_model_ground_truth, vi_eig_lm, ba_eig_lm, ba_eig_mc
+)
 from pyro.contrib.glmm import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov,
     normal_inverse_gamma_linear_model, normal_inverse_gamma_guide, group_linear_model,
@@ -108,68 +111,6 @@ sigmoid_ba_guide = lambda d: SigmoidGuide(d, 10, {"w1": 2, "w2": 10})  # noqa: E
 ########################################################################################
 
 elbo = TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss
-
-
-def linear_model_ground_truth(model, design, observation_labels, target_labels, eig=True):
-    if isinstance(target_labels, str):
-        target_labels = [target_labels]
-
-    w_sd = torch.cat(list(model.w_sds.values()), dim=-1)
-    prior_cov = torch.diag(w_sd**2)
-    posterior_covs = [analytic_posterior_cov(prior_cov, x, model.obs_sd) for x in torch.unbind(design)]
-    target_indices = get_indices(target_labels, tensors=model.w_sds)
-    target_posterior_covs = [S[target_indices, :][:, target_indices] for S in posterior_covs]
-    if eig:
-        prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
-        return prior_entropy - torch.tensor([0.5*torch.logdet(2*np.pi*np.e*C) for C in target_posterior_covs])
-    else:
-        return torch.tensor([0.5*torch.logdet(2*np.pi*np.e*C) for C in target_posterior_covs])
-
-
-def lm_H_prior(model, design, observation_labels, target_labels):
-    if isinstance(target_labels, str):
-        target_labels = [target_labels]
-
-    w_sd = torch.cat(list(model.w_sds.values()), dim=-1)
-    prior_cov = torch.diag(w_sd**2)
-    target_indices = get_indices(target_labels, tensors=model.w_sds)
-    target_prior_covs = prior_cov[target_indices, :][:, target_indices]
-    return 0.5*torch.logdet(2*np.pi*np.e*target_prior_covs)
-
-
-def mc_H_prior(model, design, observation_labels, target_labels, num_samples=1000):
-    if isinstance(target_labels, str):
-        target_labels = [target_labels]
-
-    expanded_design = lexpand(design, num_samples)
-    trace = pyro.poutine.trace(model).get_trace(expanded_design)
-    trace.compute_log_prob()
-    lp = sum(trace.nodes[l]["log_prob"] for l in target_labels)
-    return -lp.sum(0)/num_samples
-
-
-def vi_eig_lm(model, design, observation_labels, target_labels, *args, **kwargs):
-    # **Only** applies to linear models - analytic prior entropy
-    ape = vi_ape(model, design, observation_labels, target_labels, *args, **kwargs)
-    prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
-    return prior_entropy - ape
-
-
-def ba_eig_lm(model, design, observation_labels, target_labels, *args, **kwargs):
-    # **Only** applies to linear models - analytic prior entropy
-    ape = barber_agakov_ape(model, design, observation_labels, target_labels, *args, **kwargs)
-    prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
-    return prior_entropy - ape
-
-
-def ba_eig_mc(model, design, observation_labels, target_labels, *args, **kwargs):
-    # Compute the prior entropy my Monte Carlo, the uses barber_agakov_ape
-    if "num_hprior_samples" in kwargs:
-        hprior = mc_H_prior(model, design, observation_labels, target_labels, kwargs["num_hprior_samples"])
-    else:
-        hprior = mc_H_prior(model, design, observation_labels, target_labels)
-    return hprior - barber_agakov_ape(model, design, observation_labels, target_labels, *args, **kwargs)
-
 
 # Makes the plots look pretty
 vi_eig_lm.name = "Variational inference"
