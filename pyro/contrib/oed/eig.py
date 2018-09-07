@@ -334,6 +334,36 @@ def barber_agakov_loss(model, guide, observation_labels, target_labels):
     return loss_fn
 
 
+def amortised_vi_loss(model, guide, observation_labels, target_labels):
+
+    def loss_fn(design, num_particles):
+
+        expanded_design = lexpand(design, num_particles)
+
+        # Sample from p(y | d)
+        trace = poutine.trace(model).get_trace(expanded_design)
+        y_dict = {l: trace.nodes[l]["value"] for l in observation_labels}
+
+        # Sample from q(theta | y, d) and take the log-prob
+        guide_trace = poutine.trace(guide).get_trace(
+            y_dict, expanded_design, observation_labels, target_labels)
+        theta_dict = {l: guide_trace[l]["value"] for l in target_labels}
+        qlp = sum(guide_trace.nodes[l]["log_prob"] for l in target_labels)
+
+        # Run through p(y, theta | d)
+        all_dict = y_dict
+        all_dict.update(theta_dict)
+        conditioned_model = poutine.condition(model, data=all_dict)
+        cond_trace = poutine.trace(conditioned_model).get_trace(expanded_design)
+        plp = sum(cond_trace.nodes[l]["log_prob"] for l in target_labels + observation_labels)
+
+        loss = (plp - qlp).sum(0) / num_particles
+        agg_loss = loss.sum()
+        return agg_loss, loss
+
+    return loss_fn
+
+
 def logsumexp(inputs, dim=None, keepdim=False):
     """Numerically stable logsumexp.
 
