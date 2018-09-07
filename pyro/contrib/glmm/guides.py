@@ -6,7 +6,7 @@ from torch import nn
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.contrib.oed.util import tensor_to_dict, rmv, rvv, rtril
+from pyro.contrib.util import tensor_to_dict, rmv, rvv, rtril
 from pyro.ops.linalg import rinverse
 
 

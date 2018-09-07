@@ -11,7 +11,7 @@ from torch.distributions.transforms import AffineTransform, SigmoidTransform
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.oed.util import rmv
+from pyro.contrib.util import rmv
 
 
 def known_covariance_linear_model(coef_mean, coef_sd, observation_sd,
