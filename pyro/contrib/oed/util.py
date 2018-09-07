@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 import numpy as np
 
+import pyro
 from pyro.contrib.util import get_indices, lexpand
 from pyro.contrib.glmm import analytic_posterior_cov
 from pyro.contrib.oed.eig import barber_agakov_ape, vi_ape

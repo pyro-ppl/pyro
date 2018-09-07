@@ -12,12 +12,11 @@ from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import (
     vi_ape, naive_rainforth_eig, donsker_varadhan_eig, barber_agakov_ape
 )
-from pyro.contrib.util import get_indices, lexpand
 from pyro.contrib.oed.util import (
     linear_model_ground_truth, vi_eig_lm, ba_eig_lm, ba_eig_mc
 )
 from pyro.contrib.glmm import (
-    zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov,
+    zero_mean_unit_obs_sd_lm, group_assignment_matrix,
     normal_inverse_gamma_linear_model, normal_inverse_gamma_guide, group_linear_model,
     group_normal_guide, sigmoid_model, rf_group_assignments
 )

@@ -13,10 +13,9 @@ from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import (
     vi_ape, naive_rainforth_eig, donsker_varadhan_eig, barber_agakov_ape
 )
-from pyro.contrib.util import get_indices
 from pyro.contrib.oed.util import linear_model_ground_truth
 from pyro.contrib.glmm import (
-    zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov,
+    zero_mean_unit_obs_sd_lm, group_assignment_matrix,
     group_linear_model, group_normal_guide
 )
 from pyro.contrib.glmm.guides import LinearModelGuide, GuideDV
@@ -102,7 +101,7 @@ TEST_CASES = [
         False,
         1e-2
     ),
-    T(  
+    T(
         bernoulli_model,
         torch.tensor([0.3, 0.4]),
         "y",
@@ -112,7 +111,7 @@ TEST_CASES = [
         True,
         1e-2
     ),
-    T(  
+    T(
         bernoulli_model,
         torch.tensor([0.3, 0.4]),
         "y",
@@ -223,6 +222,7 @@ TEST_CASES = [
         0.2
     )
 ]
+
 
 @pytest.mark.parametrize("model,design,observation_labels,target_labels,estimator,args,eig,allow_error", TEST_CASES)
 def test_eig_lm(model, design, observation_labels, target_labels, estimator, args, eig, allow_error):
