@@ -262,7 +262,7 @@ def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_hist
         params = [pyro.param(name).unconstrained()
                   for name in pyro.get_param_store().get_all_param_names()]
         optim(params)
-    _, loss = loss_fn(final_design, final_num_samples)
+    _, loss = loss_fn(final_design, final_num_samples, evaluate=True)
     if return_history:
         return torch.stack(history), loss
     else:
@@ -278,7 +278,7 @@ def donsker_varadhan_loss(model, T, observation_labels, target_labels):
     except AssertionError:
         pass
 
-    def loss_fn(design, num_particles):
+    def loss_fn(design, num_particles, **kwargs):
 
         expanded_design = lexpand(design, num_particles)
 
@@ -312,7 +312,7 @@ def donsker_varadhan_loss(model, T, observation_labels, target_labels):
 
 def barber_agakov_loss(model, guide, observation_labels, target_labels):
 
-    def loss_fn(design, num_particles):
+    def loss_fn(design, num_particles, **kwargs):
 
         expanded_design = lexpand(design, num_particles)
 
@@ -336,7 +336,7 @@ def barber_agakov_loss(model, guide, observation_labels, target_labels):
 
 def amortised_vi_loss(model, guide, observation_labels, target_labels):
 
-    def loss_fn(design, num_particles):
+    def loss_fn(design, num_particles, evaluate=False, **kwargs):
 
         expanded_design = lexpand(design, num_particles)
 
@@ -350,14 +350,19 @@ def amortised_vi_loss(model, guide, observation_labels, target_labels):
         theta_dict = {l: guide_trace[l]["value"] for l in target_labels}
         qlp = sum(guide_trace.nodes[l]["log_prob"] for l in target_labels)
 
-        # Run through p(y, theta | d)
-        all_dict = y_dict
-        all_dict.update(theta_dict)
-        conditioned_model = poutine.condition(model, data=all_dict)
-        cond_trace = poutine.trace(conditioned_model).get_trace(expanded_design)
-        plp = sum(cond_trace.nodes[l]["log_prob"] for l in target_labels + observation_labels)
+        if not evaluate:
+            # Run through p(y, theta | d)
+            all_dict = y_dict
+            all_dict.update(theta_dict)
+            conditioned_model = poutine.condition(model, data=all_dict)
+            cond_trace = poutine.trace(conditioned_model).get_trace(expanded_design)
+            plp = sum(cond_trace.nodes[l]["log_prob"] for l in target_labels + observation_labels)
 
-        loss = (plp - qlp).sum(0) / num_particles
+            loss = (plp - qlp).sum(0)/num_particles
+
+        else:
+            loss = -qlp.sum(0)/num_particles
+
         agg_loss = loss.sum()
         return agg_loss, loss
 
