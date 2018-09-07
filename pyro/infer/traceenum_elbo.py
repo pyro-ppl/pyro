@@ -125,6 +125,13 @@ def _compute_dice_elbo(model_trace, guide_trace):
     return Dice(guide_trace, ordering).compute_expectation(costs)
 
 
+def _make_dist(Dist, logits):
+    # Reshape for Bernoulli vs Categorical, OneHotCategorical, etc..
+    if Dist is dist.Bernoulli:
+        logits = logits[..., 1] - logits[..., 0]
+    return Dist(logits=logits)
+
+
 def _compute_marginals(model_trace, guide_trace):
     args = _compute_model_factors(model_trace, guide_trace)
     marginal_costs, log_factors, ordering, sum_dims, scale = args
@@ -144,10 +151,7 @@ def _compute_marginals(model_trace, guide_trace):
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
             while logits.shape[0] == 1:
                 logits.squeeze_(0)
-            # Reshape for e.g. Bernoulli vs Categorical.
-            if type(site["fn"]).__name__ == "Bernoulli":
-                logits = logits[..., 1] - logits[..., 0]
-            marginal_dists[name] = type(site["fn"])(logits=logits)
+            marginal_dists[name] = _make_dist(type(site["fn"]), logits)
     return marginal_dists
 
 
@@ -171,17 +175,15 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
         enum_dim = self.enum_trace.nodes[msg["name"]]["infer"].get("_enumerate_dim")
         if enum_dim is not None:
             assert enum_dim < 0, "{} {}".format(msg["name"], enum_dim)
-            if type(msg["fn"]) is not dist.Categorical:
-                raise NotImplementedError
             for value in self.sum_dims.values():
                 value.discard(enum_dim)
             with shared_intermediates(self.cache):
-                target_ordinal = frozenset(f for f in msg["cond_indep_stack"]
-                                           if f.vectorized)
-                marginal = contract_to_tensor(self.log_factors.copy(),
-                                              self.sum_dims,
-                                              target_ordinal)
-            msg["fn"] = dist.Categorical(logits=marginal)
+                ordinal = frozenset(f for f in msg["cond_indep_stack"] if f.vectorized)
+                logits = contract_to_tensor(self.log_factors, self.sum_dims, ordinal)
+                logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
+                while logits.shape[0] == 1:
+                    logits.squeeze_(0)
+            msg["fn"] = _make_dist(type(msg["fn"]), logits)
 
     def _postprocess_message(self, msg):
         if msg["type"] == "sample":
@@ -190,8 +192,8 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
                 for t, terms in self.log_factors.items():
                     for i, term in enumerate(terms):
                         if term.dim() > -enum_dim and term.shape[enum_dim] > 1:
-                            a, b = broadcast_all(term, msg["value"])
-                            sampled_term = a.gather(enum_dim, b)
+                            term_, value_ = broadcast_all(term, msg["value"])
+                            sampled_term = term_.gather(enum_dim, value_.long())
                             terms[i] = sampled_term
                             self.sum_dims[sampled_term] = self.sum_dims[term] - {enum_dim}
 

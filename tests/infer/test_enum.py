@@ -20,7 +20,7 @@ from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from pyro.infer.util import LAST_CACHE_SIZE
 from pyro.util import torch_isnan
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_param
 
 try:
     from contextlib import ExitStack  # python 3
@@ -2948,7 +2948,7 @@ def test_compute_marginals_hmm(size):
     [None, torch.tensor(0.)],
     [torch.tensor(0.), torch.tensor(0)],
 ])
-def test_backwardsample_posterior(data):
+def test_backwardsample_posterior_smoke(data):
 
     @config_enumerate(default="parallel")
     def model(data):
@@ -2980,3 +2980,44 @@ def test_backwardsample_posterior(data):
     xs, zs = elbo.sample_posterior(model, guide, data)
     for x, datum in zip(xs, data):
         assert datum is None or datum is x
+
+
+@pytest.mark.parametrize('ok,enumerate_guide,num_particles,vectorize_particles', [
+    xfail_param(True, None, 1, False, reason='shape error'),
+    (False, "sequential", 1, False),
+    (False, "parallel", 1, False),
+    (False, None, 2, False),
+    (False, None, 2, True),
+])
+def test_backwardsample_posterior_restrictions(ok, enumerate_guide, num_particles, vectorize_particles):
+
+    @config_enumerate(default="parallel")
+    def model():
+        w = pyro.sample("w", dist.Bernoulli(0.1))
+        x = pyro.sample("x", dist.Bernoulli(0.2))
+        y = pyro.sample("y", dist.Bernoulli(0.3))
+        z = pyro.sample("z", dist.Bernoulli(0.4))
+        pyro.sample("obs", dist.Normal(0., 1.), obs=w + x + y + z)
+        return w, x, y, z
+
+    @config_enumerate(default=enumerate_guide)
+    def guide():
+        pyro.sample("w", dist.Bernoulli(0.4))
+        pyro.sample("y", dist.Bernoulli(0.7))
+
+    # Check that the ELBO works fine.
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
+                          num_particles=num_particles,
+                          vectorize_particles=vectorize_particles)
+    loss = elbo.loss(model, guide)
+    assert not torch_isnan(loss)
+
+    if ok:
+        w, x, y, z = elbo.sample_posterior(model, guide)
+        assert w.shape == ()
+        assert x.shape == ()
+        assert y.shape == ()
+        assert z.shape == ()
+    else:
+        with pytest.raises(NotImplementedError, match="sample_posterior"):
+            elbo.sample_posterior(model, guide)
