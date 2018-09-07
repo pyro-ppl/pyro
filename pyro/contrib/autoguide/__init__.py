@@ -760,8 +760,10 @@ def mean_field_guide_entropy(guide, args, whitelist=None):
     in the guide are independent).
 
     The entropy is simply the sum of the entropies at the
-    individual sites. Use `whitelist` to only include
-    certain sites.
+    individual sites. If `whitelist` is not `None`, only sites
+    listed in `whitelist` will have their entropies included
+    in the sum. If `whitelist` is `None`, all non-subsample
+    sites are included.
     """
     trace = poutine.trace(guide).get_trace(*args)
     entropy = 0.
