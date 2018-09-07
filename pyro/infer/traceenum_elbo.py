@@ -44,12 +44,6 @@ def _check_model_guide_enumeration_constraint(model_enum_sites, guide_trace):
                                      .format(name, f.name))
 
 
-def _check_sample_posterior(model_trace, guide_trace):
-    for name, site in guide_trace.nodes.items():
-        if site["type"] == "sample":
-            assert site["infer"].get("enumerate") is None
-
-
 # TODO move this logic into a poutine
 def _compute_model_factors(model_trace, guide_trace):
     # y depends on x iff ordering[x] <= ordering[y]
@@ -115,7 +109,7 @@ def _compute_dice_elbo(model_trace, guide_trace):
     marginal_costs, log_factors, ordering, sum_dims, scale = _compute_model_factors(
             model_trace, guide_trace)
     if log_factors:
-        contract_tensor_tree(log_factors, sum_dims)
+        log_factors = contract_tensor_tree(log_factors, sum_dims)
         for t, log_factors_t in log_factors.items():
             marginal_costs_t = marginal_costs.setdefault(t, [])
             for term in log_factors_t:
@@ -132,27 +126,29 @@ def _compute_dice_elbo(model_trace, guide_trace):
 
 
 def _compute_marginals(model_trace, guide_trace):
-    marginal_costs, log_factors, ordering, sum_dims, scale = _compute_model_factors(
-            model_trace, guide_trace)
-    enum_sites = [site for name, site in model_trace.nodes.items()
-                  if site["type"] == "sample"
-                  if name not in guide_trace.nodes
-                  if site["infer"].get("_enumerate_dim") is not None]
-    result = OrderedDict()
+    args = _compute_model_factors(model_trace, guide_trace)
+    marginal_costs, log_factors, ordering, sum_dims, scale = args
+
+    marginal_dists = OrderedDict()
     with shared_intermediates():
-        for site in enum_sites:
+        for name, site in model_trace.nodes.items():
+            if (site["type"] != "sample" or
+                    name in guide_trace.nodes or
+                    site["infer"].get("_enumerate_dim") is None):
+                continue
+
             enum_dim = site["fn"].event_dim - site["value"].dim()
-            enum_dims = set([enum_dim])
-            site_sum_dims = {term: dims - enum_dims for term, dims in sum_dims.items()}
+            site_sum_dims = {term: dims - {enum_dim} for term, dims in sum_dims.items()}
             ordinal = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
             logits = contract_to_tensor(log_factors, site_sum_dims, ordinal)
-            if enum_dim != -1:
-                logits = logits.transpose(-1, enum_dim)
+            logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
+            while logits.shape[0] == 1:
+                logits.squeeze_(0)
             # Reshape for e.g. Bernoulli vs Categorical.
             if type(site["fn"]).__name__ == "Bernoulli":
                 logits = logits[..., 1] - logits[..., 0]
-            result[site["name"]] = type(site["fn"])(logits=logits)
-    return result
+            marginal_dists[name] = type(site["fn"])(logits=logits)
+    return marginal_dists
 
 
 class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
@@ -364,26 +360,34 @@ class TraceEnum_ELBO(ELBO):
         :returns: a dict mapping site name to marginal ``Distribution`` object
         :rtype: OrderedDict
         """
-        result = None
+        if self.num_particles != 1:
+            raise NotImplementedError("TraceEnum_ELBO.compute_marginals() is not "
+                                      "compatible with multiple particles.")
         model, guide = self._wrap_model_guide(model, guide)
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            if result is not None:
-                raise NotImplementedError("TraceEnum_ELBO.compute_marginals() is not compatible with "
-                                          "sequential enumeration or multiple particles.")
-            result = _compute_marginals(model_trace, guide_trace)
-        return result
+        model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
+        for site in guide_trace.nodes.values():
+            if site["type"] == "sample":
+                if "_enumerate_dim" in site["infer"] or "_enum_total" in site["infer"]:
+                    raise NotImplementedError("TraceEnum_ELBO.compute_marginals() is not "
+                                              "compatible with guide enumeration.")
+        return _compute_marginals(model_trace, guide_trace)
 
     def sample_posterior(self, model, guide, *args, **kwargs):
         """
         Sample from the joint posterior distribution of all model-enumerated sites given all observations
         """
+        if self.num_particles != 1:
+            raise NotImplementedError("TraceEnum_ELBO.sample_posterior() is not "
+                                      "compatible with multiple particles.")
         model, guide = self._wrap_model_guide(model, guide)  # XXX gross
         with poutine.block():
             model_trace, guide_trace = next(self._get_traces(
                 model, guide, *args, **kwargs))  # XXX grosser
-
-        _check_sample_posterior(model_trace, guide_trace)
-        assert self.num_particles == 1
+        for name, site in guide_trace.nodes.items():
+            if site["type"] == "sample":
+                if "_enumerate_dim" in site["infer"] or "_enum_total" in site["infer"]:
+                    raise NotImplementedError("TraceEnum_ELBO.sample_posterior() is not "
+                                              "compatible with guide enumeration.")
 
         with BackwardSampleMessenger(model_trace, guide_trace):
             return poutine.replay(poutine.broadcast(model),

@@ -115,7 +115,8 @@ class _MixDiagNormalSharedCovarianceSample(Function):
         mu_ab = locs_tilde.unsqueeze(-2) - locs_tilde.unsqueeze(-3)  # b k j i
         mu_ab_norm = torch.pow(mu_ab, 2.0).sum(-1).sqrt()  # b k j
         mu_ab /= mu_ab_norm.unsqueeze(-1)  # b k j i
-        diagonals = torch.LongTensor(range(K))
+        diagonals = z.new_empty((K,), dtype=torch.long)
+        torch.arange(K, out=diagonals)
         mu_ab[..., diagonals, diagonals, :] = 0.0
 
         mu_ll_ab = (locs_tilde.unsqueeze(-2) * mu_ab).sum(-1)  # b k j
