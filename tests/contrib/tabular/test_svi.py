@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import pytest
 import torch
 
-from pyro.contrib.treecat import Boolean, Real, TreeCat
+from pyro.contrib.tabular import Boolean, Real, TreeCat
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
 
