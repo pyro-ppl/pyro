@@ -22,7 +22,7 @@ CPU_EXAMPLES = [
     'contrib/autoname/mixture.py --num-epochs=1',
     'contrib/autoname/tree_data.py --num-epochs=1',
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4',
-    'contrib/oed/ab_test.py --num-vi-steps=1000 --num-acquisitions=2',
+    'contrib/oed/ab_test.py --num-vi-steps=1000',
     'contrib/oed/item_response.py -N=1000 -M=1000',
     'dmm/dmm.py --num-epochs=1',
     'dmm/dmm.py --num-epochs=1 --num-iafs=1',

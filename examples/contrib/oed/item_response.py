@@ -1,10 +1,11 @@
+from __future__ import absolute_import, division, print_function
+
 import argparse
 import torch
 
 import pyro
-from pyro.contrib.oed.eig import naive_rainforth
-
-from models.bayes_linear import two_group_bernoulli
+from pyro.contrib.oed.eig import naive_rainforth_eig
+from pyro.contrib.glmm import lmer_model
 
 """
 Item response example.
@@ -26,8 +27,9 @@ learn the actual random effect coefficients.
 # First parameter grouping represents global effects
 # Second parameter grouping represent individual effects
 # In this example, there are two individuals
-# Individual-level effects have lower sd (more tightly clustered to 0)
-model, guide = two_group_bernoulli(torch.tensor([10., 10.]), torch.tensor([5., 5., 5., 5.]))
+# Choose inverse gamma distribution to have mean ~20, variance ~1
+model = lmer_model(torch.tensor([10., 10.]), 2, torch.tensor([400., 400.]),
+                   torch.tensor([8000., 8000.]), response="bernoulli")
 
 
 def build_design_tensor(item_thetas, individual_assignment):
@@ -61,7 +63,8 @@ def main(N, M):
     item_thetas = torch.tensor([[0., 0.], [0., .5], [0., 1.]])
     design_tensor = build_design_tensor(item_thetas, individual_assignment)
     print("Design tensor", design_tensor)
-    y = naive_rainforth(model, design_tensor, target_labels=["w_global", "w_local"], N=N, M=M)
+    y = naive_rainforth_eig(model, design_tensor, observation_labels="y",
+                            target_labels=["w", "u", "G_u"], N=N, M=M)
     print("EIG", y)
 
 
