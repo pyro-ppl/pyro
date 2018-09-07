@@ -73,7 +73,7 @@ def main(num_experiments, num_runs, plot=True):
                 d_star_index = int(d_star_index)
                 design = AB_test_reff_6d_10n_12p[d_star_index, ...]
                 y = true_model(design)
-                mu_dict, scale_tril_dict = my_guide({"y": y}, AB_test_reff_6d_10n_12p, ["w1"])
+                mu_dict, scale_tril_dict = my_guide.get_params({"y": y}, AB_test_reff_6d_10n_12p, ["w1"])
                 mu, scale_tril = mu_dict["w1"], scale_tril_dict["w1"]
 
                 model = sigmoid_model(mu[d_star_index, ...].detach(),
