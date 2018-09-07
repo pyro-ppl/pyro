@@ -7,7 +7,7 @@ from torch.distributions.transforms import AffineTransform, SigmoidTransform
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.glmm import(
+from pyro.contrib.glmm import (
     known_covariance_linear_model, group_linear_model, zero_mean_unit_obs_sd_lm,
     normal_inverse_gamma_linear_model, logistic_regression_model, sigmoid_model
 )
@@ -15,8 +15,8 @@ from tests.common import assert_equal
 
 
 def lm_2p_10_10_1(design):
-    w = pyro.sample("w", dist.Normal(torch.tensor(0.), 
-                                     torch.tensor([10.,10.])).independent(1))
+    w = pyro.sample("w", dist.Normal(torch.tensor(0.),
+                                     torch.tensor([10., 10.])).independent(1))
     mean = torch.matmul(design, w.unsqueeze(-1)).squeeze(-1)
     y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.)).independent(1))
     return y
@@ -34,8 +34,8 @@ def lm_2p_10_10_1_w12(design):
 
 
 def nz_lm_2p_10_10_1(design):
-    w = pyro.sample("w", dist.Normal(torch.tensor([1., -1.]), 
-                                     torch.tensor([10.,10.])).independent(1))
+    w = pyro.sample("w", dist.Normal(torch.tensor([1., -1.]),
+                                     torch.tensor([10., 10.])).independent(1))
     mean = torch.matmul(design, w.unsqueeze(-1)).squeeze(-1)
     y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.)).independent(1))
     return y
@@ -44,16 +44,16 @@ def nz_lm_2p_10_10_1(design):
 def normal_inv_gamma_2_2_10_10(design):
     tau = pyro.sample("tau", dist.Gamma(torch.tensor(2.), torch.tensor(2.)))
     obs_sd = 1./torch.sqrt(tau)
-    w = pyro.sample("w", dist.Normal(torch.tensor([1., -1.]), 
-                                     obs_sd*torch.tensor([10.,10.])).independent(1))
+    w = pyro.sample("w", dist.Normal(torch.tensor([1., -1.]),
+                                     obs_sd*torch.tensor([10., 10.])).independent(1))
     mean = torch.matmul(design, w.unsqueeze(-1)).squeeze(-1)
     y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.)).independent(1))
     return y
 
 
 def lr_10_10(design):
-    w = pyro.sample("w", dist.Normal(torch.tensor([1., -1.]), 
-                                     torch.tensor([10.,10.])).independent(1))
+    w = pyro.sample("w", dist.Normal(torch.tensor([1., -1.]),
+                                     torch.tensor([10., 10.])).independent(1))
     mean = torch.matmul(design, w.unsqueeze(-1)).squeeze(-1)
     y = pyro.sample("y", dist.Bernoulli(logits=mean).independent(1))
     return y
@@ -63,8 +63,8 @@ def sigmoid_example(design):
     n = design.shape[-2]
     random_effect_k = pyro.sample("k", dist.Gamma(2.*torch.ones(n), torch.tensor(2.)))
     random_effect_offset = pyro.sample("w2", dist.Normal(torch.tensor(0.), torch.ones(n)))
-    w1 =  pyro.sample("w1", dist.Normal(torch.tensor([1., -1.]), 
-                                        torch.tensor([10.,10.])).independent(1))
+    w1 = pyro.sample("w1", dist.Normal(torch.tensor([1., -1.]),
+                                       torch.tensor([10., 10.])).independent(1))
     mean = torch.matmul(design[..., :-2], w1.unsqueeze(-1)).squeeze(-1)
     offset_mean = mean + random_effect_offset
 
@@ -90,7 +90,8 @@ def sigmoid_example(design):
         torch.tensor([[100., -100.]])
     ),
     (
-        group_linear_model(torch.tensor(0.), torch.tensor([10.]), torch.tensor(0.), torch.tensor([10.]), torch.tensor(1.)),
+        group_linear_model(torch.tensor(0.), torch.tensor([10.]), torch.tensor(0.), 
+                           torch.tensor([10.]), torch.tensor(1.)),
         lm_2p_10_10_1_w12,
         torch.tensor([[-1.5, 0.5], [1.5, 0.]])
     ),
@@ -100,7 +101,8 @@ def sigmoid_example(design):
         torch.tensor([[-1., 0.5], [2.5, -2.]])
     ),
     (
-        normal_inverse_gamma_linear_model(torch.tensor([1., -1.]), torch.tensor(.1), torch.tensor(2.), torch.tensor(2.)),
+        normal_inverse_gamma_linear_model(torch.tensor([1., -1.]), torch.tensor(.1),
+                                          torch.tensor(2.), torch.tensor(2.)),
         normal_inv_gamma_2_2_10_10,
         torch.tensor([[1., -0.5], [1.5, 2.]])
     ),
