@@ -2820,3 +2820,123 @@ def test_mixture_of_diag_normals(mixture, scale):
     auto_loss = elbo.differentiable_loss(auto_model, guide)
     hand_loss = elbo.differentiable_loss(hand_model, guide)
     _check_loss_and_grads(hand_loss, auto_loss)
+
+
+@pytest.mark.parametrize("Dist, prior", [
+    (dist.Bernoulli, 0.2),
+    (dist.Categorical, [0.2, 0.8]),
+    (dist.Categorical, [0.2, 0.3, 0.5]),
+    (dist.Categorical, [0.2, 0.3, 0.3, 0.2]),
+    (dist.OneHotCategorical, [0.2, 0.8]),
+    (dist.OneHotCategorical, [0.2, 0.3, 0.5]),
+    (dist.OneHotCategorical, [0.2, 0.3, 0.3, 0.2]),
+])
+def test_compute_marginals_single(Dist, prior):
+    prior = torch.tensor(prior)
+    data = torch.tensor([0., 0.1, 0.2, 0.9, 1.0, 1.1])
+
+    @config_enumerate(default="parallel")
+    def model():
+        locs = torch.tensor([-1., 0., 1., 2.])
+        x = pyro.sample("x", Dist(prior))
+        if Dist is dist.Bernoulli:
+            x = x.long()
+        elif Dist is dist.OneHotCategorical:
+            x = x.max(-1)[1]
+        with pyro.iarange("data", len(data)):
+            pyro.sample("obs", dist.Normal(locs[x], 1.), obs=data)
+
+    # First compute marginals using an empty guide.
+    def empty_guide():
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    marginals = elbo.compute_marginals(model, empty_guide)
+    assert len(marginals) == 1
+    assert type(marginals["x"]) is Dist
+    probs = marginals["x"].probs
+    assert probs.shape == prior.shape
+
+    # Next insert the computed marginals in an enumerating guide
+    # and ensure that they are exact, or at least locally optimal.
+    pyro.param("probs", probs)
+
+    @config_enumerate(default="parallel")
+    def exact_guide():
+        probs = pyro.param("probs")
+        pyro.sample("x", Dist(probs))
+
+    loss = elbo.differentiable_loss(model, exact_guide)
+    assert_equal(grad(loss, [pyro.param("probs")])[0], torch.zeros_like(probs))
+
+
+@pytest.mark.parametrize('ok,enumerate_guide,num_particles,vectorize_particles', [
+    (True, None, 1, False),
+    (False, "sequential", 1, False),
+    (False, "parallel", 1, False),
+    (False, None, 2, False),
+    (False, None, 2, True),
+])
+def test_compute_marginals_restrictions(ok, enumerate_guide, num_particles, vectorize_particles):
+
+    @config_enumerate(default="parallel")
+    def model():
+        w = pyro.sample("w", dist.Bernoulli(0.1))
+        x = pyro.sample("x", dist.Bernoulli(0.2))
+        y = pyro.sample("y", dist.Bernoulli(0.3))
+        z = pyro.sample("z", dist.Bernoulli(0.4))
+        pyro.sample("obs", dist.Normal(0., 1.), obs=w + x + y + z)
+
+    @config_enumerate(default=enumerate_guide)
+    def guide():
+        pyro.sample("w", dist.Bernoulli(0.4))
+        pyro.sample("y", dist.Bernoulli(0.7))
+
+    # Check that the ELBO works fine.
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
+                          num_particles=num_particles,
+                          vectorize_particles=vectorize_particles)
+    loss = elbo.loss(model, guide)
+    assert not torch_isnan(loss)
+
+    if ok:
+        marginals = elbo.compute_marginals(model, guide)
+        assert set(marginals.keys()) == {"x", "z"}
+    else:
+        with pytest.raises(NotImplementedError, match="compute_marginals"):
+            elbo.compute_marginals(model, guide)
+
+
+@pytest.mark.parametrize('size', [1, 2, 3, 4, 10, 20, 30])
+def test_compute_marginals_hmm(size):
+
+    @config_enumerate(default="parallel")
+    def model(data):
+        transition_probs = torch.tensor([[0.75, 0.25], [0.25, 0.75]])
+        emission_probs = torch.tensor([[0.75, 0.25], [0.25, 0.75]])
+        x = torch.tensor(0)
+        for i, y in enumerate(data):
+            x = pyro.sample("x_{}".format(i), dist.Categorical(transition_probs[x]))
+            pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=y)
+
+        pyro.sample("x_{}".format(len(data)), dist.Categorical(transition_probs[x]),
+                    obs=torch.tensor(1))
+
+    def guide(data):
+        pass
+
+    data = torch.zeros(size, dtype=torch.long)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+    marginals = elbo.compute_marginals(model, guide, data)
+    assert set(marginals.keys()) == {"x_{}".format(i) for i in range(size)}
+    for i in range(size):
+        d = marginals["x_{}".format(i)]
+        assert d.batch_shape == ()
+
+    # The x's should be monotonically increasing, since we've observed x[-1]==0
+    # and x[size]==1, and since the y's are constant.
+    for i in range(size - 1):
+        d1 = marginals["x_{}".format(i)]
+        d2 = marginals["x_{}".format(i + 1)]
+        assert d1.probs[0] > d2.probs[0]
+        assert d1.probs[1] < d2.probs[1]

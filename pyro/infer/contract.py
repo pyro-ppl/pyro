@@ -5,7 +5,7 @@ from collections import OrderedDict, defaultdict
 import torch
 
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.sumproduct import logsumproductexp
+from pyro.ops.sumproduct import logsumproductexp, memoized_sum_keepdim
 
 
 def _check_tree_structure(tensor_tree):
@@ -94,8 +94,9 @@ def _contract_component(tensor_tree, sum_dims, target_ordinal=None):
     """
     Contract out ``sum_dims`` in a tree of tensors in-place, via message
     passing. This reduces all tensors down to a single iarange context
-    ``target_ordinal``, by default the minimum shared iarange context. This
-    function should be deterministic.
+    ``target_ordinal``, by default the minimum shared iarange context.
+
+    This function should be deterministic.
 
     :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
         tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
@@ -160,15 +161,8 @@ def _contract_component(tensor_tree, sum_dims, target_ordinal=None):
 
             for term in terms:
                 # Eliminate extra iarange dims via .sum() contractions.
-                for frame in contract_frames:
-                    term = term.sum(frame.dim, keepdim=True)
-
-                # Broadcast to any missing iaranges via .expand().
-                for frame in broadcast_frames:
-                    shape = list(term.shape)
-                    shape = [1] * (-frame.dim - len(shape)) + shape
-                    shape[frame.dim] = frame.size
-                    term = term.expand(shape)
+                for frame in sorted(contract_frames, key=lambda f: -f.dim):
+                    term = memoized_sum_keepdim(term, frame.dim)
 
                 tensor_tree[parent].append(term)
 
@@ -176,12 +170,16 @@ def _contract_component(tensor_tree, sum_dims, target_ordinal=None):
 def contract_tensor_tree(tensor_tree, sum_dims):
     """
     Contract out ``sum_dims`` in a tree of tensors in-place, via
-    message passing. This function should be deterministic.
+    message passing.
+
+    This function should be deterministic and free of side effects.
 
     :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
         tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
     :param dict sum_dims: a dictionary mapping tensors to sets of dimensions
         (indexed from the right) that should be summed out.
+    :returns: A contracted version of ``tensor_tree`
+    :rtype: OrderedDict
     """
     assert isinstance(tensor_tree, OrderedDict)
     assert isinstance(sum_dims, dict)
@@ -189,7 +187,7 @@ def contract_tensor_tree(tensor_tree, sum_dims):
     ordinals = {term: t for t, terms in tensor_tree.items() for term in terms}
     all_terms = [term for terms in tensor_tree.values() for term in terms]
     all_dims = set.union(*sum_dims.values())
-    tensor_tree.clear()
+    contracted_tree = OrderedDict()
 
     # Split this tensor tree into connected components.
     for terms, dims in _partition_terms(all_terms, all_dims):
@@ -202,14 +200,18 @@ def contract_tensor_tree(tensor_tree, sum_dims):
         assert len(component) == 1
         assert len(next(iter(component.values()))) == 1
         for t, terms in component.items():
-            tensor_tree.setdefault(t, []).extend(terms)
+            contracted_tree.setdefault(t, []).extend(terms)
+
+    return contracted_tree
 
 
 def contract_to_tensor(tensor_tree, sum_dims, target_ordinal):
     """
-    Contract out ``sum_dims`` in a tree of tensors in-place, via message
-    passing. This reduces all terms down to a single tensor in the iarange context specified by
-    ``target_ordinal``. This function should be deterministic.
+    Contract out ``sum_dims`` in a tree of tensors, via message
+    passing. This reduces all terms down to a single tensor in the iarange
+    context specified by ``target_ordinal``.
+
+    This function should be deterministic and free of side effects.
 
     :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
         tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
@@ -224,7 +226,19 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal):
     assert isinstance(sum_dims, dict)
     assert isinstance(target_ordinal, frozenset)
 
-    _contract_component(tensor_tree, sum_dims, target_ordinal)
-    t, terms = tensor_tree.popitem()
+    contracted_tree = OrderedDict((t, terms[:]) for t, terms in tensor_tree.items())
+    _contract_component(contracted_tree, sum_dims, target_ordinal)
+    t, terms = contracted_tree.popitem()
     assert t == target_ordinal
-    return sum(terms)
+    term = sum(terms)
+
+    # Broadcast to any missing iaranges via .expand().
+    shape = list(term.shape)
+    for frame in target_ordinal:
+        shape = [1] * (-frame.dim - len(shape)) + shape
+        shape[frame.dim] = frame.size
+    shape = torch.Size(shape)
+    if term.shape != shape:
+        term = term.expand(shape)
+
+    return term
