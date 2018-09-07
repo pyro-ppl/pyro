@@ -55,7 +55,7 @@ class LinearModelGuide(nn.Module):
 
         return mu, scale_tril
 
-    def guide(self, y_dict, design, observation_labels, target_labels):
+    def forward(self, y_dict, design, observation_labels, target_labels):
 
         pyro.module("ba_guide", self)
 
@@ -114,7 +114,7 @@ class NormalInverseGammaGuide(LinearModelGuide):
 
         return mu, scale_tril, self.alpha, beta
 
-    def guide(self, y_dict, design, observation_labels, target_labels):
+    def forward(self, y_dict, design, observation_labels, target_labels):
 
         pyro.module("ba_guide", self)
 

@@ -37,11 +37,11 @@ X_circle_5d_1n_2p = torch.stack([item_thetas_small.cos(), -item_thetas_small.sin
 # Linear models
 basic_2p_linear_model_sds_10_2pt5, basic_2p_guide = zero_mean_unit_obs_sd_lm(torch.tensor([10., 2.5]))
 _, basic_2p_guide_w1 = zero_mean_unit_obs_sd_lm(torch.tensor([10., 2.5]), coef_label="w1")
-basic_2p_ba_guide = lambda d: LinearModelGuide(d, {"w": 2}).guide  # noqa: E731
+basic_2p_ba_guide = lambda d: LinearModelGuide(d, {"w": 2})  # noqa: E731
 group_2p_linear_model_sds_10_2pt5 = group_linear_model(torch.tensor(0.), torch.tensor([10.]), torch.tensor(0.),
                                                        torch.tensor([2.5]), torch.tensor(1.))
 group_2p_guide = group_normal_guide(torch.tensor(1.), (1,), (1,))
-group_2p_ba_guide = lambda d: LinearModelGuide(d, {"w1": 1, "w2": 1}).guide  # noqa: E731
+group_2p_ba_guide = lambda d: LinearModelGuide(d, {"w1": 1, "w2": 1})  # noqa: E731
 
 ########################################################################################
 # Aux

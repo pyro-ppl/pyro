@@ -81,19 +81,19 @@ AB_test_reff_6d_10n_12p, AB_sigmoid_design_6d = rf_group_assignments(10)
 basic_2p_linear_model_sds_10_2pt5, basic_2p_guide = zero_mean_unit_obs_sd_lm(torch.tensor([10., 2.5]))
 _, basic_2p_guide_w1 = zero_mean_unit_obs_sd_lm(torch.tensor([10., 2.5]), coef_label="w1")
 basic_2p_linear_model_sds_10_0pt1, _ = zero_mean_unit_obs_sd_lm(torch.tensor([10., .1]))
-basic_2p_ba_guide = lambda d: LinearModelGuide(d, {"w": 2}).guide  # noqa: E731
+basic_2p_ba_guide = lambda d: LinearModelGuide(d, {"w": 2})  # noqa: E731
 group_2p_linear_model_sds_10_2pt5 = group_linear_model(torch.tensor(0.), torch.tensor([10.]), torch.tensor(0.),
                                                        torch.tensor([2.5]), torch.tensor(1.))
 group_2p_guide = group_normal_guide(torch.tensor(1.), (1,), (1,))
-group_2p_ba_guide = lambda d: LinearModelGuide(d, {"w1": 1, "w2": 1}).guide  # noqa: E731
+group_2p_ba_guide = lambda d: LinearModelGuide(d, {"w1": 1, "w2": 1})  # noqa: E731
 nig_2p_linear_model_3_2 = normal_inverse_gamma_linear_model(torch.tensor(0.), torch.tensor([.1, .4]),
                                                             torch.tensor([3.]), torch.tensor([2.]))
 nig_2p_linear_model_15_14 = normal_inverse_gamma_linear_model(torch.tensor(0.), torch.tensor([.1, .4]),
                                                               torch.tensor([15.]), torch.tensor([14.]))
 
 nig_2p_guide = normal_inverse_gamma_guide((2,), mf=True)
-nig_2p_ba_guide = lambda d: NormalInverseGammaGuide(d, {"w": 2}).guide  # noqa: E731
-nig_2p_ba_mf_guide = lambda d: NormalInverseGammaGuide(d, {"w": 2}, mf=True).guide  # noqa: E731
+nig_2p_ba_guide = lambda d: NormalInverseGammaGuide(d, {"w": 2})  # noqa: E731
+nig_2p_ba_mf_guide = lambda d: NormalInverseGammaGuide(d, {"w": 2}, mf=True)  # noqa: E731
 
 sigmoid_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.),
                                   torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
@@ -101,7 +101,7 @@ sigmoid_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), to
 sigmoid_difficult_12p_model = sigmoid_model(torch.tensor(0.), torch.tensor([10., 2.5]), torch.tensor(0.),
                                             torch.tensor([1.]*5 + [10.]*5), torch.tensor(1.),
                                             10.*torch.ones(10), 100.*torch.ones(10), AB_sigmoid_design_6d)
-sigmoid_ba_guide = lambda d: SigmoidGuide(d, 10, {"w1": 2, "w2": 10}).guide  # noqa: E731
+sigmoid_ba_guide = lambda d: SigmoidGuide(d, 10, {"w1": 2, "w2": 10})  # noqa: E731
 
 ########################################################################################
 # Aux
