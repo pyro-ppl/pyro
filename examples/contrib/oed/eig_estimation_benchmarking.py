@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import namedtuple
 import time
 import torch
 import pytest
@@ -17,8 +18,7 @@ from pyro.contrib.glmm import (
     normal_inverse_gamma_linear_model, normal_inverse_gamma_guide, group_linear_model,
     group_normal_guide, sigmoid_model, rf_group_assignments
 )
-
-from guides.amort import LinearModelGuide, NormalInverseGammaGuide, SigmoidGuide, GuideDV
+from pyro.contrib.glmm.guides import LinearModelGuide, NormalInverseGammaGuide, SigmoidGuide, GuideDV
 
 PLOT = True
 
@@ -181,103 +181,156 @@ donsker_varadhan_eig.name = "Donsker-Varadhan"
 linear_model_ground_truth.name = "Ground truth"
 naive_rainforth_eig.name = "Naive Rainforth"
 
-
-@pytest.mark.parametrize("title,model,design,observation_label,target_label,arglist", [
-    ("A/B test linear model with known observation variance",
-     basic_2p_linear_model_sds_10_2pt5, AB_test_11d_10n_2p, "y", "w",
-     [(linear_model_ground_truth, []),
-      (naive_rainforth_eig, [2000, 2000]),
-      (vi_eig_lm,
-       [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
-         "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig,
-       [400, 800, GuideDV(basic_2p_ba_guide(11)),
-        optim.Adam({"lr": 0.025}), False, None, 500]),
-      (ba_eig_lm,
-       [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 500])
-      ]),
-    ("Sigmoid link function",
-     sigmoid_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
-     [(donsker_varadhan_eig,
-       [400, 400, GuideDV(sigmoid_ba_guide(6)),
-        optim.Adam({"lr": 0.05}), False, None, 500]),
-      (ba_eig_mc,
-       [20, 800, sigmoid_ba_guide(6), optim.Adam({"lr": 0.05}),
-        False, None, 500])
-      ]),
-    # TODO: make this example work better
-    ("A/B testing with unknown covariance (Gamma(15, 14))",
-     nig_2p_linear_model_15_14, AB_test_11d_10n_2p, "y", ["w", "tau"],
-     [(naive_rainforth_eig, [2000, 2000]),
-      (vi_ape,
-       [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
-         "num_steps": 1000}, {"num_samples": 4}]),
-      (barber_agakov_ape,
-       [20, 800, nig_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 500]),
-      (barber_agakov_ape,
-       [20, 800, nig_2p_ba_mf_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 500])
-      ]),
-    # TODO: make this example work better
-    ("A/B testing with unknown covariance (Gamma(3, 2))",
-     nig_2p_linear_model_3_2, AB_test_11d_10n_2p, "y", ["w", "tau"],
-     [(naive_rainforth_eig, [2000, 2000]),
-      (vi_ape,
-       [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
-         "num_steps": 1000}, {"num_samples": 4}]),
-      (barber_agakov_ape,
-       [20, 800, nig_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 500]),
-      (barber_agakov_ape,
-       [20, 800, nig_2p_ba_mf_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 500])
-      ]),
-    # TODO: make VI work here (non-mean-field guide)
-    ("Linear model targeting one parameter",
-     group_2p_linear_model_sds_10_2pt5, X_circle_10d_1n_2p, "y", "w1",
-     [(linear_model_ground_truth, []),
-      (naive_rainforth_eig, [200, 200, 200]),
-      (vi_eig_lm,
-       [{"guide": group_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
-         "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig,
-       [400, 400, GuideDV(group_2p_ba_guide(10)),
-        optim.Adam({"lr": 0.05}), False, None, 500]),
-      (ba_eig_lm,
-       [20, 400, group_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
-        False, None, 500])
-      ]),
-    ("Linear model with designs on S^1",
-     basic_2p_linear_model_sds_10_2pt5, X_circle_10d_1n_2p, "y", "w",
-     [(linear_model_ground_truth, []),
-      (naive_rainforth_eig, [2000, 2000]),
-      (vi_eig_lm,
-       [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
-         "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig,
-       [400, 400, GuideDV(basic_2p_ba_guide(10)),
-        optim.Adam({"lr": 0.05}), False, None, 500]),
-      (ba_eig_lm,
-       [20, 400, basic_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
-        False, None, 500])
-      ]),
-    ("A/B test linear model known covariance (different sds)",
-     basic_2p_linear_model_sds_10_0pt1, AB_test_11d_10n_2p, "y", "w",
-     [(linear_model_ground_truth, []),
-      (naive_rainforth_eig, [2000, 2000]),
-      (vi_eig_lm,
-       [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
-         "num_steps": 1000}, {"num_samples": 1}]),
-      (donsker_varadhan_eig,
-       [400, 400, GuideDV(basic_2p_ba_guide(11)),
-        optim.Adam({"lr": 0.05}), False, None, 500]),
-      (ba_eig_lm,
-       [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
-        False, None, 500])
-      ]),
+T = namedtuple("CompareEstimatorsExample", [
+    "title",
+    "model",
+    "design",
+    "observation_label",
+    "target_label",
+    "arglist"
 ])
+
+CMP_TEST_CASES = [
+    T(
+        "A/B test linear model with known observation variance",
+        basic_2p_linear_model_sds_10_2pt5,
+        AB_test_11d_10n_2p,
+        "y",
+        "w",
+        [
+            (linear_model_ground_truth, []),
+            (naive_rainforth_eig, [2000, 2000]),
+            (vi_eig_lm,
+             [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+               "num_steps": 1000}, {"num_samples": 1}]),
+            (donsker_varadhan_eig,
+             [400, 800, GuideDV(basic_2p_ba_guide(11)),
+              optim.Adam({"lr": 0.025}), False, None, 500]),
+            (ba_eig_lm,
+             [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+              False, None, 500])
+        ]
+    ),
+    T(
+        "Sigmoid link function",
+        sigmoid_12p_model,
+        AB_test_reff_6d_10n_12p,
+        "y",
+        "w1",
+        [
+            (donsker_varadhan_eig,
+             [400, 400, GuideDV(sigmoid_ba_guide(6)),
+              optim.Adam({"lr": 0.05}), False, None, 500]),
+            (ba_eig_mc,
+             [20, 800, sigmoid_ba_guide(6), optim.Adam({"lr": 0.05}),
+              False, None, 500])
+        ]
+    ),
+    # TODO: make this example work better
+    T(
+        "A/B testing with unknown covariance (Gamma(15, 14))",
+        nig_2p_linear_model_15_14,
+        AB_test_11d_10n_2p,
+        "y",
+        ["w", "tau"],
+        [
+            (naive_rainforth_eig, [2000, 2000]),
+            (vi_ape,
+             [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+               "num_steps": 1000}, {"num_samples": 4}]),
+            (barber_agakov_ape,
+             [20, 800, nig_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+              False, None, 500]),
+            (barber_agakov_ape,
+             [20, 800, nig_2p_ba_mf_guide(11), optim.Adam({"lr": 0.05}),
+              False, None, 500])
+        ]
+    ),
+    # TODO: make this example work better
+    T(
+        "A/B testing with unknown covariance (Gamma(3, 2))",
+        nig_2p_linear_model_3_2,
+        AB_test_11d_10n_2p,
+        "y",
+        ["w", "tau"],
+        [
+            (naive_rainforth_eig, [2000, 2000]),
+            (vi_ape,
+             [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+               "num_steps": 1000}, {"num_samples": 4}]),
+            (barber_agakov_ape,
+             [20, 800, nig_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+              False, None, 500]),
+            (barber_agakov_ape,
+             [20, 800, nig_2p_ba_mf_guide(11), optim.Adam({"lr": 0.05}),
+              False, None, 500])
+        ]
+    ),
+    # TODO: make VI work here (non-mean-field guide)
+    T(
+        "Linear model targeting one parameter",
+        group_2p_linear_model_sds_10_2pt5,
+        X_circle_10d_1n_2p,
+        "y",
+        "w1",
+        [
+            (linear_model_ground_truth, []),
+            (naive_rainforth_eig, [200, 200, 200]),
+            (vi_eig_lm,
+             [{"guide": group_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+               "num_steps": 1000}, {"num_samples": 1}]),
+            (donsker_varadhan_eig,
+             [400, 400, GuideDV(group_2p_ba_guide(10)),
+              optim.Adam({"lr": 0.05}), False, None, 500]),
+            (ba_eig_lm,
+             [20, 400, group_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
+              False, None, 500])
+        ]
+    ),
+    T(
+        "Linear model with designs on S^1",
+        basic_2p_linear_model_sds_10_2pt5,
+        X_circle_10d_1n_2p,
+        "y",
+        "w",
+        [
+            (linear_model_ground_truth, []),
+            (naive_rainforth_eig, [2000, 2000]),
+            (vi_eig_lm,
+             [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+               "num_steps": 1000}, {"num_samples": 1}]),
+            (donsker_varadhan_eig,
+             [400, 400, GuideDV(basic_2p_ba_guide(10)),
+              optim.Adam({"lr": 0.05}), False, None, 500]),
+            (ba_eig_lm,
+             [20, 400, basic_2p_ba_guide(10), optim.Adam({"lr": 0.05}),
+              False, None, 500])
+        ]
+    ),
+    T(
+        "A/B test linear model known covariance (different sds)",
+        basic_2p_linear_model_sds_10_0pt1,
+        AB_test_11d_10n_2p,
+        "y",
+        "w",
+        [
+            (linear_model_ground_truth, []),
+            (naive_rainforth_eig, [2000, 2000]),
+            (vi_eig_lm,
+             [{"guide": basic_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
+               "num_steps": 1000}, {"num_samples": 1}]),
+            (donsker_varadhan_eig,
+             [400, 400, GuideDV(basic_2p_ba_guide(11)),
+              optim.Adam({"lr": 0.05}), False, None, 500]),
+            (ba_eig_lm,
+             [20, 400, basic_2p_ba_guide(11), optim.Adam({"lr": 0.05}),
+              False, None, 500])
+        ]
+    ),
+]
+
+
+@pytest.mark.parametrize("title,model,design,observation_label,target_label,arglist", CMP_TEST_CASES)
 def test_eig_and_plot(title, model, design, observation_label, target_label, arglist):
     """
     Runs a group of EIG estimation tests and plots the estimates on a single set
@@ -319,45 +372,107 @@ def time_eig(estimator, model, design, observation_label, target_label, args):
     return y, elapsed
 
 
-@pytest.mark.parametrize("title,model,design,observation_label,target_label,est1,est2,kwargs1,kwargs2", [
-    ("Barber-Agakov on difficult sigmoid",
-     sigmoid_difficult_12p_model, AB_test_reff_6d_10n_12p, "y", "w1",
-     barber_agakov_ape, None,
-     {"num_steps": 5000, "num_samples": 200, "optim": optim.Adam({"lr": 0.05}),
-      "guide": sigmoid_ba_guide(6), "final_num_samples": 500}, {}),
-    ("Barber-Agakov on A/B test with unknown covariance",
-     nig_2p_linear_model_3_2, AB_test_2d_10n_2p, "y", ["w", "tau"],
-     barber_agakov_ape, None,
-     {"num_steps": 800, "num_samples": 20, "optim": optim.Adam({"lr": 0.05}),
-      "guide": nig_2p_ba_guide(2), "final_num_samples": 1000}, {}),
-    ("Barber-Agakov on A/B test with unknown covariance (mean-field guide)",
-     nig_2p_linear_model_3_2, AB_test_2d_10n_2p, "y", ["w", "tau"],
-     barber_agakov_ape, None,
-     {"num_steps": 800, "num_samples": 20, "optim": optim.Adam({"lr": 0.05}),
-      "guide": nig_2p_ba_mf_guide(2), "final_num_samples": 1000}, {}),
-    ("Barber-Agakov on circle",
-     basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
-     barber_agakov_ape, linear_model_ground_truth,
-     {"num_steps": 400, "num_samples": 10, "optim": optim.Adam({"lr": 0.05}),
-      "guide": basic_2p_ba_guide(5),
-      "final_num_samples": 1000}, {"eig": False}),
-    ("Barber-Agakov on small AB test",
-     basic_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w",
-     barber_agakov_ape, linear_model_ground_truth,
-     {"num_steps": 400, "num_samples": 10, "optim": optim.Adam({"lr": 0.05}),
-      "guide": basic_2p_ba_guide(2),
-      "final_num_samples": 1000}, {"eig": False}),
-    ("Donsker-Varadhan on small AB test",
-     basic_2p_linear_model_sds_10_2pt5, AB_test_2d_10n_2p, "y", "w",
-     donsker_varadhan_eig, linear_model_ground_truth,
-     {"num_steps": 400, "num_samples": 100, "optim": optim.Adam({"lr": 0.05}),
-      "T": GuideDV(basic_2p_ba_guide(2)), "final_num_samples": 10000}, {}),
-    ("Donsker-Varadhan on circle",
-     basic_2p_linear_model_sds_10_2pt5, X_circle_5d_1n_2p, "y", "w",
-     donsker_varadhan_eig, linear_model_ground_truth,
-     {"num_steps": 400, "num_samples": 400, "optim": optim.Adam({"lr": 0.05}),
-      "T": GuideDV(basic_2p_ba_guide(5)), "final_num_samples": 10000}, {})
+U = namedtuple("CheckConvergenceExample", [
+    "title",
+    "model",
+    "design",
+    "observation_label",
+    "target_label",
+    "est1",
+    "est2",
+    "kwargs1",
+    "kwargs2"
 ])
+
+CONV_TEST_CASES = [
+    U(
+        "Barber-Agakov on difficult sigmoid",
+        sigmoid_difficult_12p_model,
+        AB_test_reff_6d_10n_12p,
+        "y",
+        "w1",
+        barber_agakov_ape,
+        None,
+        {"num_steps": 5000, "num_samples": 200, "optim": optim.Adam({"lr": 0.05}),
+         "guide": sigmoid_ba_guide(6), "final_num_samples": 500},
+        {}
+    ),
+    U(
+        "Barber-Agakov on A/B test with unknown covariance",
+        nig_2p_linear_model_3_2,
+        AB_test_2d_10n_2p,
+        "y",
+        ["w", "tau"],
+        barber_agakov_ape,
+        None,
+        {"num_steps": 800, "num_samples": 20, "optim": optim.Adam({"lr": 0.05}),
+         "guide": nig_2p_ba_guide(2), "final_num_samples": 1000},
+        {}
+    ),
+    U(
+        "Barber-Agakov on A/B test with unknown covariance (mean-field guide)",
+        nig_2p_linear_model_3_2,
+        AB_test_2d_10n_2p,
+        "y",
+        ["w", "tau"],
+        barber_agakov_ape,
+        None,
+        {"num_steps": 800, "num_samples": 20, "optim": optim.Adam({"lr": 0.05}),
+         "guide": nig_2p_ba_mf_guide(2), "final_num_samples": 1000},
+        {}
+    ),
+    U(
+        "Barber-Agakov on circle",
+        basic_2p_linear_model_sds_10_2pt5,
+        X_circle_5d_1n_2p,
+        "y",
+        "w",
+        barber_agakov_ape,
+        linear_model_ground_truth,
+        {"num_steps": 400, "num_samples": 10, "optim": optim.Adam({"lr": 0.05}),
+         "guide": basic_2p_ba_guide(5), "final_num_samples": 1000},
+        {"eig": False}
+    ),
+    U(
+        "Barber-Agakov on small AB test",
+        basic_2p_linear_model_sds_10_2pt5,
+        AB_test_2d_10n_2p,
+        "y",
+        "w",
+        barber_agakov_ape,
+        linear_model_ground_truth,
+        {"num_steps": 400, "num_samples": 10, "optim": optim.Adam({"lr": 0.05}),
+         "guide": basic_2p_ba_guide(2), "final_num_samples": 1000},
+        {"eig": False}
+    ),
+    U(
+        "Donsker-Varadhan on small AB test",
+        basic_2p_linear_model_sds_10_2pt5,
+        AB_test_2d_10n_2p,
+        "y",
+        "w",
+        donsker_varadhan_eig,
+        linear_model_ground_truth,
+        {"num_steps": 400, "num_samples": 100, "optim": optim.Adam({"lr": 0.05}),
+         "T": GuideDV(basic_2p_ba_guide(2)), "final_num_samples": 10000},
+        {}
+    ),
+    U(
+        "Donsker-Varadhan on circle",
+        basic_2p_linear_model_sds_10_2pt5,
+        X_circle_5d_1n_2p,
+        "y",
+        "w",
+        donsker_varadhan_eig,
+        linear_model_ground_truth,
+        {"num_steps": 400, "num_samples": 400, "optim": optim.Adam({"lr": 0.05}),
+         "T": GuideDV(basic_2p_ba_guide(5)), "final_num_samples": 10000},
+        {}
+    ),
+]
+
+
+@pytest.mark.parametrize("title,model,design,observation_label,target_label,est1,est2,kwargs1,kwargs2", CONV_TEST_CASES)
 def test_convergence(title, model, design, observation_label, target_label, est1, est2, kwargs1, kwargs2):
     """
     Produces a convergence plot for a Barber-Agakov or Donsker-Varadhan
