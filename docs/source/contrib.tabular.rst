@@ -5,19 +5,17 @@ Tabular Data Models
 
 TreeCat
 -------
-.. autoclass:: pyro.contrib.tabular.model.TreeCat
+.. autoclass:: pyro.contrib.tabular.models.TreeCat
     :members:
     :undoc-members:
-    :show-inheritance:
 
 .. automodule:: pyro.contrib.tabular.features
 
-Feature
--------
+Abstract Feature
+----------------
 .. autoclass:: pyro.contrib.tabular.features.Feature
     :members:
     :undoc-members:
-    :show-inheritance:
 
 Boolean
 -------

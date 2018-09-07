@@ -13,20 +13,47 @@ class Feature(object):
     """
     A hierchical mixture model for a single observed feature type.
 
-    Note that feature models can be shared across multiple columns.
+    Feature models are intended as an adapter between latent categorical
+    variables and observed variables of various other datatypes.  Feature
+    models are agnostic to component weight models, which may e.g. be driven
+    by a neural network. Thus users must sample component membership from a
+    user-provided distribution.
 
-    :param str name: The name of this feature, used as a prefix for pyro sample
-        statements for shared and per-group parameters.
+    Example usage::
+
+        # User must provide a membership distribution.
+        num_components = 10
+        weights = pyro.param("component_weights",
+                             torch.ones(num_components) / num_components,
+                             constraint=constraints.simplex)
+        membership_dist = dist.Categorical(weights)
+
+        # Feature objects adapt the component id to a given feature type.
+        f = MyFeature("foo")
+        shared = f.sample_shared()
+        with pyro.iarange("components", num_components), poutine.broadcast():
+            group = f.sample_group()  # broadcasts to each component
+        with pyro.iarange("data", len(data)), poutine.broadcast():
+            component = pyro.sample("component", membership_dist)
+            pyro.sample("obs", f.value_dist(group, component), obs=data)
+
+    :param str name: The name of this feature, used as a prefix for
+        :func:`pyro.sample` statements inside :meth:`sample_shared` and
+        :meth:`sample_group`.
     """
     def __init__(self, name):
         self.name = name
+
+    def __str__(self):
+        return '{}("{}")'.format(type(self).__name__, self.name)
 
     @abstractmethod
     def sample_shared(self):
         """
         Samples parameters of this feature model that are shared by all mixture
-        components. Returns an opaque result to be passed to
-        :meth:`sample_group`.
+        components.
+
+        :returns: an opaque result to be passed to :meth:`sample_group`.
         """
         raise NotImplementedError
 
@@ -35,8 +62,10 @@ class Feature(object):
         """
         Samples per-component parameters of this feature model. This should be
         called inside a broadcasting :class:`~pyro.iarange` over the desired
-        number of components. Returns an opaque result to be passed to
-        :meth:`value_dist`.
+        number of components. This is intended to be executed inside an
+        :class:`~pyro.iarange` over the number of components.
+
+        :returns: an opaque result to be passed to :meth:`value_dist`.
         """
         raise NotImplementedError
 

@@ -16,8 +16,12 @@ class TreeCat(object):
     :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO` for message-passing
     inference, and requires ``max_iarange_nesting >= 1``.
 
-    :param list features: a list of ``Feature`` objects, one per column.
-    :param int capacity: cardinality of each latent categorical variable
+    :param list features: a ``V``-lenth list of
+        :class:`~pyro.contrib.tabular.features.Feature` objects defining a
+        feature model for each column. Feature models can be repeated,
+        indicating that two columns share a common feature model (with shared
+        learned parameters).
+    :param int capacity: cardinality of latent categorical variables
     :param tuple edges: an ``(V-1) x 2`` nested tuple representing the tree
         structure. Each of the ``E = (V-1)`` edges is a tuple ``v1,v2`` of
         vertices.
@@ -40,7 +44,7 @@ class TreeCat(object):
         :param bool impute: Whether to impute missing features. This should be
             set to False during training and True when making predictions.
         :returns: a copy of the input data, optionally with missing columns
-            stochastically imputed according the the joint distribution.
+            stochastically imputed according the the joint posterior.
         :rtype: list
         """
         assert len(data) == len(self.features)
