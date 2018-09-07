@@ -90,7 +90,7 @@ def sigmoid_example(design):
         torch.tensor([[100., -100.]])
     ),
     (
-        group_linear_model(torch.tensor(0.), torch.tensor([10.]), torch.tensor(0.), 
+        group_linear_model(torch.tensor(0.), torch.tensor([10.]), torch.tensor(0.),
                            torch.tensor([10.]), torch.tensor(1.)),
         lm_2p_10_10_1_w12,
         torch.tensor([[-1.5, 0.5], [1.5, 0.]])
