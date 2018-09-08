@@ -251,7 +251,7 @@ class TraceEnum_ELBO(ELBO):
 
         return model_trace, guide_trace
 
-    def _wrap_model_guide(self, model, guide):
+    def _get_traces(self, model, guide, *args, **kwargs):
         """
         Runs the guide and runs the model against the guide with
         the result packaged as a trace generator.
@@ -272,13 +272,7 @@ class TraceEnum_ELBO(ELBO):
         model_enum = EnumerateMessenger(first_available_dim=lambda: guide_enum.next_available_dim)
         guide = guide_enum(guide)
         model = model_enum(model)
-        return model, guide
 
-    def _get_traces(self, model, guide, *args, **kwargs):
-        """
-        Runs the guide and runs the model against the guide with
-        the result packaged as a trace generator.
-        """
         q = queue.LifoQueue()
         guide = poutine.queue(guide, q,
                               escape_fn=iter_discrete_escape,
@@ -296,7 +290,6 @@ class TraceEnum_ELBO(ELBO):
         Estimates the ELBO using ``num_particles`` many samples (particles).
         """
         elbo = 0.0
-        model, guide = self._wrap_model_guide(model, guide)
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
             if is_identically_zero(elbo_particle):
@@ -320,7 +313,6 @@ class TraceEnum_ELBO(ELBO):
         as underlying derivatives have been implemented).
         """
         elbo = 0.0
-        model, guide = self._wrap_model_guide(model, guide)
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
             if is_identically_zero(elbo_particle):
@@ -345,7 +337,6 @@ class TraceEnum_ELBO(ELBO):
         Performs backward on the ELBO of each particle.
         """
         elbo = 0.0
-        model, guide = self._wrap_model_guide(model, guide)
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = _compute_dice_elbo(model_trace, guide_trace)
             if is_identically_zero(elbo_particle):
@@ -376,7 +367,6 @@ class TraceEnum_ELBO(ELBO):
         if self.num_particles != 1:
             raise NotImplementedError("TraceEnum_ELBO.compute_marginals() is not "
                                       "compatible with multiple particles.")
-        model, guide = self._wrap_model_guide(model, guide)
         model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
         for site in guide_trace.nodes.values():
             if site["type"] == "sample":
@@ -392,11 +382,10 @@ class TraceEnum_ELBO(ELBO):
         if self.num_particles != 1:
             raise NotImplementedError("TraceEnum_ELBO.sample_posterior() is not "
                                       "compatible with multiple particles.")
-        w_model, w_guide = self._wrap_model_guide(model, guide)  # XXX gross
         with poutine.block():
             with pyro.validation_enabled(False):  # XXX grossest
                 model_trace, guide_trace = next(self._get_traces(
-                    w_model, w_guide, *args, **kwargs))  # XXX grosser
+                    model, guide, *args, **kwargs))  # XXX grosser
         for name, site in guide_trace.nodes.items():
             if site["type"] == "sample":
                 if "_enumerate_dim" in site["infer"] or "_enum_total" in site["infer"]:
