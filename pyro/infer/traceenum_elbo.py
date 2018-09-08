@@ -7,10 +7,13 @@ from collections import OrderedDict
 import torch
 from opt_einsum import shared_intermediates
 from six.moves import queue
+from torch.distributions.utils import broadcast_all
 
 import pyro
+import pyro.distributions as dist
 import pyro.ops.jit
 import pyro.poutine as poutine
+from pyro.distributions.torch_distribution import ReshapedDistribution
 from pyro.distributions.util import is_identically_zero, scale_and_mask
 from pyro.infer.contract import contract_tensor_tree, contract_to_tensor
 from pyro.infer.elbo import ELBO
@@ -123,6 +126,15 @@ def _compute_dice_elbo(model_trace, guide_trace):
     return Dice(guide_trace, ordering).compute_expectation(costs)
 
 
+def _make_dist(dist_, logits):
+    # Reshape for Bernoulli vs Categorical, OneHotCategorical, etc..
+    if isinstance(dist_, dist.Bernoulli):
+        logits = logits[..., 1] - logits[..., 0]
+    elif isinstance(dist_, ReshapedDistribution):
+        return _make_dist(dist_.base_dist, logits=logits)
+    return type(dist_)(logits=logits)
+
+
 def _compute_marginals(model_trace, guide_trace):
     args = _compute_model_factors(model_trace, guide_trace)
     marginal_costs, log_factors, ordering, sum_dims, scale = args
@@ -142,11 +154,59 @@ def _compute_marginals(model_trace, guide_trace):
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
             while logits.shape[0] == 1:
                 logits.squeeze_(0)
-            # Reshape for e.g. Bernoulli vs Categorical.
-            if type(site["fn"]).__name__ == "Bernoulli":
-                logits = logits[..., 1] - logits[..., 0]
-            marginal_dists[name] = type(site["fn"])(logits=logits)
+            marginal_dists[name] = _make_dist(site["fn"], logits)
     return marginal_dists
+
+
+class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
+    """
+    Implements forward filtering / backward sampling for sampling
+    from the joint posterior distribution
+    """
+    def __init__(self, enum_trace, guide_trace):
+        self.enum_trace = enum_trace
+        args = _compute_model_factors(enum_trace, guide_trace)
+        self.log_factors = args[1]
+        self.sum_dims = args[3]
+        self.cache = None
+
+    def __enter__(self):
+        self.cache = {}
+        return super(BackwardSampleMessenger, self).__enter__()
+
+    def __exit__(self, *args, **kwargs):
+        assert not any(self.sum_dims.values())
+        return super(BackwardSampleMessenger, self).__exit__(*args, **kwargs)
+
+    def _pyro_sample(self, msg):
+        if msg["name"] not in self.enum_trace.nodes:
+            return
+        enum_dim = self.enum_trace.nodes[msg["name"]]["infer"].get("_enumerate_dim")
+        if enum_dim is not None:
+            msg["infer"]["_enumerate_dim"] = enum_dim
+            assert enum_dim < 0, "{} {}".format(msg["name"], enum_dim)
+            for value in self.sum_dims.values():
+                value.discard(enum_dim)
+            with shared_intermediates(self.cache):
+                ordinal = frozenset(f for f in msg["cond_indep_stack"] if f.vectorized)
+                logits = contract_to_tensor(self.log_factors, self.sum_dims, ordinal)
+                logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
+                while logits.shape[0] == 1:
+                    logits.squeeze_(0)
+            msg["fn"] = _make_dist(msg["fn"], logits)
+
+    def _postprocess_message(self, msg):
+        if msg["type"] == "sample":
+            enum_dim = msg["infer"].get("_enumerate_dim")
+            if enum_dim is not None:
+                for t, terms in self.log_factors.items():
+                    for i, term in enumerate(terms):
+                        if term.dim() >= -enum_dim and term.shape[enum_dim] > 1:
+                            term_, value_ = broadcast_all(term, msg["value"])
+                            value_ = value_.index_select(enum_dim, value_.new_tensor([0], dtype=torch.long))
+                            sampled_term = term_.gather(enum_dim, value_.long())
+                            terms[i] = sampled_term
+                            self.sum_dims[sampled_term] = self.sum_dims.pop(term) - {enum_dim}
 
 
 class TraceEnum_ELBO(ELBO):
@@ -314,6 +374,27 @@ class TraceEnum_ELBO(ELBO):
                     raise NotImplementedError("TraceEnum_ELBO.compute_marginals() is not "
                                               "compatible with guide enumeration.")
         return _compute_marginals(model_trace, guide_trace)
+
+    def sample_posterior(self, model, guide, *args, **kwargs):
+        """
+        Sample from the joint posterior distribution of all model-enumerated sites given all observations
+        """
+        if self.num_particles != 1:
+            raise NotImplementedError("TraceEnum_ELBO.sample_posterior() is not "
+                                      "compatible with multiple particles.")
+        with poutine.block(), warnings.catch_warnings():
+            warnings.filterwarnings("ignore", "Found vars in model but not guide")
+            model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
+
+        for name, site in guide_trace.nodes.items():
+            if site["type"] == "sample":
+                if "_enumerate_dim" in site["infer"] or "_enum_total" in site["infer"]:
+                    raise NotImplementedError("TraceEnum_ELBO.sample_posterior() is not "
+                                              "compatible with guide enumeration.")
+
+        with BackwardSampleMessenger(model_trace, guide_trace):
+            return poutine.replay(poutine.broadcast(model),
+                                  trace=guide_trace)(*args, **kwargs)
 
 
 class JitTraceEnum_ELBO(TraceEnum_ELBO):

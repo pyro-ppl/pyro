@@ -58,6 +58,6 @@ class EnumerateMessenger(Messenger):
                 diff = target_dim - actual_dim
                 value = value.reshape(value.shape[:1] + (1,) * diff + value.shape[1:])
 
-            msg["infer"]["_enumerate_dim"] = target_dim
+            msg["infer"]["_enumerate_dim"] = -1 - target_dim
             msg["value"] = value
             msg["done"] = True
