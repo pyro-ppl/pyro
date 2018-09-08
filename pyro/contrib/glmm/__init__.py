@@ -19,7 +19,7 @@ To create a classical Bayesian linear model, use::
 
     model(design)
 
-use a non-linear link function, such as::
+A non-linear link function may be introduced, for instance::
 
     from pyro.contrib.glmm import logistic_regression_model
 
@@ -28,7 +28,7 @@ use a non-linear link function, such as::
                                       coef_sd=torch.tensor([10.]))
 
 Random effects may be incorporated as regular Bayesian regression coefficients.
-For random effects with a shared covariance matrix, see `pyro.contrib.glmm.lmer_model`.
+For random effects with a shared covariance matrix, see :meth:`pyro.contrib.glmm.lmer_model`.
 """
 
 from pyro.contrib.glmm.glmm import *  # noqa: F403, F401
