@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import warnings
-from collections import OrderedDict  # noqa: F401  # for docstrings
+from collections import OrderedDict
 from contextlib2 import ExitStack
 from functools import partial
 import torch
@@ -36,9 +36,12 @@ def normal_guide(observation_sd, coef_shape, coef_label="w"):
 def group_linear_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
                        coef1_label="w1", coef2_label="w2", observation_label="y"):
     model = partial(
-        bayesian_linear_model, w_means={coef1_label: coef1_mean, coef2_label: coef2_mean},
-        w_sqrtlambdas={coef1_label: 1./(observation_sd*coef1_sd), coef2_label: 1./(observation_sd*coef2_sd)},
-        obs_sd=observation_sd, response_label=observation_label)
+        bayesian_linear_model,
+        w_means=OrderedDict([(coef1_label, coef1_mean), (coef2_label, coef2_mean)]),
+        w_sqrtlambdas=OrderedDict([(coef1_label, 1./(observation_sd*coef1_sd)),
+                                   (coef2_label, 1./(observation_sd*coef2_sd))]),
+        obs_sd=observation_sd,
+        response_label=observation_label)
     model.obs_sd = observation_sd
     model.w_sds = {coef1_label: coef1_sd, coef2_label: coef2_sd}
     return model
@@ -47,7 +50,7 @@ def group_linear_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_s
 def group_normal_guide(observation_sd, coef1_shape, coef2_shape,
                        coef1_label="w1", coef2_label="w2"):
     return partial(
-        normal_inv_gamma_family_guide, w_sizes={coef1_label: coef1_shape, coef2_label: coef2_shape},
+        normal_inv_gamma_family_guide, w_sizes=OrderedDict([(coef1_label, coef1_shape), (coef2_label, coef2_shape)]),
         obs_sd=observation_sd)
 
 
@@ -109,7 +112,7 @@ def sigmoid_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
 
         return bayesian_linear_model(
             design,
-            w_means={coef1_label: coef1_mean, coef2_label: coef2_mean},
+            w_means=OrderedDict([(coef1_label, coef1_mean), (coef2_label, coef2_mean)]),
             w_sqrtlambdas={coef1_label: 1./(observation_sd*coef1_sd), coef2_label: 1./(observation_sd*coef2_sd)},
             obs_sd=observation_sd,
             response="sigmoid",
