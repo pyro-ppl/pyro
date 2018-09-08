@@ -20,7 +20,7 @@ from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from pyro.infer.util import LAST_CACHE_SIZE
 from pyro.util import torch_isnan
-from tests.common import assert_equal, xfail_param
+from tests.common import assert_equal
 
 try:
     from contextlib import ExitStack  # python 3
@@ -2973,17 +2973,67 @@ def test_backwardsample_posterior_smoke(data):
         return xs, zs
 
     def guide(data):
-        if data[0] is None:
-            pyro.sample("x_0", dist.Normal(0., 1.))
+        pass
 
     elbo = TraceEnum_ELBO(max_iarange_nesting=1)
     xs, zs = elbo.sample_posterior(model, guide, data)
     for x, datum in zip(xs, data):
         assert datum is None or datum is x
+    for z in zs:
+        assert z.shape == ()
+
+
+def test_backwardsample_posterior_2():
+    num_particles = 10000
+
+    @config_enumerate(default="parallel")
+    def model(data):
+        with pyro.iarange("particles", num_particles):
+            p_z = torch.tensor([0.1, 0.9])
+            x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+            z = pyro.sample("z", dist.Bernoulli(p_z[x]), obs=data)
+        return x, z
+
+    def guide(data):
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    x, z = elbo.sample_posterior(model, guide, data=torch.zeros(num_particles))
+    expected = 0.9
+    actual = (x.type_as(z) == z).float().mean().item()
+    assert abs(expected - actual) < 0.05
+
+
+def test_backwardsample_posterior_3():
+    num_particles = 10000
+
+    @config_enumerate(default="parallel")
+    def model(data):
+        with pyro.iarange("particles", num_particles):
+            p_z = torch.tensor([[0.9, 0.1], [0.1, 0.9]])
+            x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+            y = pyro.sample("y", dist.Categorical(torch.tensor([0.5, 0.5])))
+            z = pyro.sample("z", dist.Bernoulli(p_z[x, y]), obs=data)
+        return x, y, z
+
+    def guide(data):
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+
+    x, y, z = elbo.sample_posterior(model, guide, data=torch.ones(num_particles))
+    expected = 0.9
+    actual = (x == y).float().mean().item()
+    assert abs(expected - actual) < 0.05
+
+    x, y, z = elbo.sample_posterior(model, guide, data=torch.zeros(num_particles))
+    expected = 0.1
+    actual = (x == y).float().mean().item()
+    assert abs(expected - actual) < 0.05
 
 
 @pytest.mark.parametrize('ok,enumerate_guide,num_particles,vectorize_particles', [
-    xfail_param(True, None, 1, False, reason='shape error'),
+    (True, None, 1, False),
     (False, "sequential", 1, False),
     (False, "parallel", 1, False),
     (False, None, 2, False),
