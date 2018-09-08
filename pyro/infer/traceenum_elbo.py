@@ -382,10 +382,10 @@ class TraceEnum_ELBO(ELBO):
         if self.num_particles != 1:
             raise NotImplementedError("TraceEnum_ELBO.sample_posterior() is not "
                                       "compatible with multiple particles.")
-        with poutine.block():
-            with pyro.validation_enabled(False):  # XXX grossest
-                model_trace, guide_trace = next(self._get_traces(
-                    model, guide, *args, **kwargs))  # XXX grosser
+        with poutine.block(), warnings.catch_warnings():
+            warnings.filterwarnings("ignore", "Found vars in model but not guide")
+            model_trace, guide_trace = next(self._get_traces(model, guide, *args, **kwargs))
+
         for name, site in guide_trace.nodes.items():
             if site["type"] == "sample":
                 if "_enumerate_dim" in site["infer"] or "_enum_total" in site["infer"]:
