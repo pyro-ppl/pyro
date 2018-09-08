@@ -174,11 +174,16 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
         self.cache = {}
         return super(BackwardSampleMessenger, self).__enter__()
 
+    def __exit__(self, *args, **kwargs):
+        assert not any(self.sum_dims.values())
+        return super(BackwardSampleMessenger, self).__exit__(*args, **kwargs)
+
     def _pyro_sample(self, msg):
         if msg["name"] not in self.enum_trace.nodes:
             return
         enum_dim = self.enum_trace.nodes[msg["name"]]["infer"].get("_enumerate_dim")
         if enum_dim is not None:
+            msg["infer"]["_enumerate_dim"] = enum_dim
             assert enum_dim < 0, "{} {}".format(msg["name"], enum_dim)
             for value in self.sum_dims.values():
                 value.discard(enum_dim)
@@ -196,11 +201,12 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
             if enum_dim is not None:
                 for t, terms in self.log_factors.items():
                     for i, term in enumerate(terms):
-                        if term.dim() > -enum_dim and term.shape[enum_dim] > 1:
+                        if term.dim() >= -enum_dim and term.shape[enum_dim] > 1:
                             term_, value_ = broadcast_all(term, msg["value"])
+                            value_ = value_.index_select(enum_dim, value_.new_tensor([0], dtype=torch.long))
                             sampled_term = term_.gather(enum_dim, value_.long())
                             terms[i] = sampled_term
-                            self.sum_dims[sampled_term] = self.sum_dims[term] - {enum_dim}
+                            self.sum_dims[sampled_term] = self.sum_dims.pop(term) - {enum_dim}
 
 
 class TraceEnum_ELBO(ELBO):
@@ -386,11 +392,11 @@ class TraceEnum_ELBO(ELBO):
         if self.num_particles != 1:
             raise NotImplementedError("TraceEnum_ELBO.sample_posterior() is not "
                                       "compatible with multiple particles.")
-        model, guide = self._wrap_model_guide(model, guide)  # XXX gross
+        w_model, w_guide = self._wrap_model_guide(model, guide)  # XXX gross
         with poutine.block():
             with pyro.validation_enabled(False):  # XXX grossest
                 model_trace, guide_trace = next(self._get_traces(
-                    model, guide, *args, **kwargs))  # XXX grosser
+                    w_model, w_guide, *args, **kwargs))  # XXX grosser
         for name, site in guide_trace.nodes.items():
             if site["type"] == "sample":
                 if "_enumerate_dim" in site["infer"] or "_enum_total" in site["infer"]:

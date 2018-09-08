@@ -20,7 +20,7 @@ from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from pyro.infer.util import LAST_CACHE_SIZE
 from pyro.util import torch_isnan
-from tests.common import assert_equal, xfail_param
+from tests.common import assert_equal
 
 try:
     from contextlib import ExitStack  # python 3
@@ -2973,17 +2973,18 @@ def test_backwardsample_posterior_smoke(data):
         return xs, zs
 
     def guide(data):
-        if data[0] is None:
-            pyro.sample("x_0", dist.Normal(0., 1.))
+        pass
 
     elbo = TraceEnum_ELBO(max_iarange_nesting=1)
     xs, zs = elbo.sample_posterior(model, guide, data)
     for x, datum in zip(xs, data):
         assert datum is None or datum is x
+    for z in zs:
+        assert z.shape == ()
 
 
 @pytest.mark.parametrize('ok,enumerate_guide,num_particles,vectorize_particles', [
-    xfail_param(True, None, 1, False, reason='shape error'),
+    (True, None, 1, False),
     (False, "sequential", 1, False),
     (False, "parallel", 1, False),
     (False, None, 2, False),
