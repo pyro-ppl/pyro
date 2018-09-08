@@ -2983,6 +2983,55 @@ def test_backwardsample_posterior_smoke(data):
         assert z.shape == ()
 
 
+def test_backwardsample_posterior_2():
+    num_particles = 10000
+
+    @config_enumerate(default="parallel")
+    def model(data):
+        with pyro.iarange("particles", num_particles):
+            p_z = torch.tensor([0.1, 0.9])
+            x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+            z = pyro.sample("z", dist.Bernoulli(p_z[x]), obs=data)
+        return x, z
+
+    def guide(data):
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    x, z = elbo.sample_posterior(model, guide, data=torch.zeros(num_particles))
+    expected = 0.9
+    actual = (x.type_as(z) == z).float().mean().item()
+    assert abs(expected - actual) < 0.05
+
+
+def test_backwardsample_posterior_3():
+    num_particles = 10000
+
+    @config_enumerate(default="parallel")
+    def model(data):
+        with pyro.iarange("particles", num_particles):
+            p_z = torch.tensor([[0.9, 0.1], [0.1, 0.9]])
+            x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+            y = pyro.sample("y", dist.Categorical(torch.tensor([0.5, 0.5])))
+            z = pyro.sample("z", dist.Bernoulli(p_z[x, y]), obs=data)
+        return x, y, z
+
+    def guide(data):
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+
+    x, y, z = elbo.sample_posterior(model, guide, data=torch.ones(num_particles))
+    expected = 0.9
+    actual = (x == y).float().mean().item()
+    assert abs(expected - actual) < 0.05
+
+    x, y, z = elbo.sample_posterior(model, guide, data=torch.zeros(num_particles))
+    expected = 0.1
+    actual = (x == y).float().mean().item()
+    assert abs(expected - actual) < 0.05
+
+
 @pytest.mark.parametrize('ok,enumerate_guide,num_particles,vectorize_particles', [
     (True, None, 1, False),
     (False, "sequential", 1, False),
