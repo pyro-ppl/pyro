@@ -43,7 +43,7 @@ def group_linear_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_s
         obs_sd=observation_sd,
         response_label=observation_label)
     model.obs_sd = observation_sd
-    model.w_sds = {coef1_label: coef1_sd, coef2_label: coef2_sd}
+    model.w_sds = OrderedDict([(coef1_label, coef1_sd), (coef2_label, coef2_sd)])
     return model
 
 

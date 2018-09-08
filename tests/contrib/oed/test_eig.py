@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 import torch
 import scipy.special as sc
 import pytest
@@ -42,7 +42,7 @@ basic_2p_ba_guide = lambda d: LinearModelGuide(d, {"w": 2})  # noqa: E731
 group_2p_linear_model_sds_10_2pt5 = group_linear_model(torch.tensor(0.), torch.tensor([10.]), torch.tensor(0.),
                                                        torch.tensor([2.5]), torch.tensor(1.))
 group_2p_guide = group_normal_guide(torch.tensor(1.), (1,), (1,))
-group_2p_ba_guide = lambda d: LinearModelGuide(d, {"w1": 1, "w2": 1})  # noqa: E731
+group_2p_ba_guide = lambda d: LinearModelGuide(d, OrderedDict([("w1", 1), ("w2", 1)]))  # noqa: E731
 
 ########################################################################################
 # Aux
