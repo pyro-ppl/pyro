@@ -57,7 +57,7 @@ def main(num_experiments, num_runs, plot=True):
                                   1000.*torch.ones(10),
                                   AB_sigmoid_design_6d)
             my_guide = sigmoid_ba_guide(6)
-            ba_kwargs = {"num_samples": 100, "num_steps": 500, "guide": my_guide.guide,
+            ba_kwargs = {"num_samples": 100, "num_steps": 500, "guide": my_guide,
                          "optim": optim.Adam({"lr": 0.05}), "final_num_samples": 500}
 
             for experiment_number in range(1, num_experiments+1):
