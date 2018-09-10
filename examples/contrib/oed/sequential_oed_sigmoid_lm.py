@@ -9,7 +9,7 @@ import pyro
 from pyro import optim
 import pyro.distributions as dist
 from pyro.contrib.oed.eig import barber_agakov_ape
-from pyro.contrib.oed.util import rmv
+from pyro.contrib.util import rmv
 
 from pyro.contrib.glmm import sigmoid_model, rf_group_assignments
 from pyro.contrib.glmm.guides import SigmoidGuide
