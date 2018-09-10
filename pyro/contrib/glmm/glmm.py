@@ -1,7 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 import warnings
-from collections import OrderedDict  # noqa: F401  # for docstrings
+from collections import OrderedDict
+from contextlib2 import ExitStack
 from functools import partial
 import torch
 from torch.nn.functional import softplus
@@ -10,7 +11,7 @@ from torch.distributions.transforms import AffineTransform, SigmoidTransform
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.oed.util import rmv
+from pyro.contrib.util import rmv
 
 
 def known_covariance_linear_model(coef_mean, coef_sd, observation_sd,
@@ -35,18 +36,21 @@ def normal_guide(observation_sd, coef_shape, coef_label="w"):
 def group_linear_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
                        coef1_label="w1", coef2_label="w2", observation_label="y"):
     model = partial(
-        bayesian_linear_model, w_means={coef1_label: coef1_mean, coef2_label: coef2_mean},
-        w_sqrtlambdas={coef1_label: 1./(observation_sd*coef1_sd), coef2_label: 1./(observation_sd*coef2_sd)},
-        obs_sd=observation_sd, response_label=observation_label)
+        bayesian_linear_model,
+        w_means=OrderedDict([(coef1_label, coef1_mean), (coef2_label, coef2_mean)]),
+        w_sqrtlambdas=OrderedDict([(coef1_label, 1./(observation_sd*coef1_sd)),
+                                   (coef2_label, 1./(observation_sd*coef2_sd))]),
+        obs_sd=observation_sd,
+        response_label=observation_label)
     model.obs_sd = observation_sd
-    model.w_sds = {coef1_label: coef1_sd, coef2_label: coef2_sd}
+    model.w_sds = OrderedDict([(coef1_label, coef1_sd), (coef2_label, coef2_sd)])
     return model
 
 
 def group_normal_guide(observation_sd, coef1_shape, coef2_shape,
                        coef1_label="w1", coef2_label="w2"):
     return partial(
-        normal_inv_gamma_family_guide, w_sizes={coef1_label: coef1_shape, coef2_label: coef2_shape},
+        normal_inv_gamma_family_guide, w_sizes=OrderedDict([(coef1_label, coef1_shape), (coef2_label, coef2_shape)]),
         obs_sd=observation_sd)
 
 
@@ -108,7 +112,7 @@ def sigmoid_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
 
         return bayesian_linear_model(
             design,
-            w_means={coef1_label: coef1_mean, coef2_label: coef2_mean},
+            w_means=OrderedDict([(coef1_label, coef1_mean), (coef2_label, coef2_mean)]),
             w_sqrtlambdas={coef1_label: 1./(observation_sd*coef1_sd), coef2_label: 1./(observation_sd*coef2_sd)},
             obs_sd=observation_sd,
             response="sigmoid",
@@ -179,60 +183,64 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
     # design is size batch x n x p
     # tau is size batch
     tau_shape = design.shape[:-2]
-    if obs_sd is None:
-        # First, sample tau (observation precision)
-        tau_prior = dist.Gamma(alpha_0.expand(tau_shape),
-                               beta_0.expand(tau_shape))
-        tau = pyro.sample("tau", tau_prior)
-        obs_sd = 1./torch.sqrt(tau)
+    with ExitStack() as stack:
+        for iarange in iter_iaranges_to_shape(tau_shape):
+            stack.enter_context(iarange)
 
-    elif alpha_0 is not None or beta_0 is not None:
-        warnings.warn("Values of `alpha_0` and `beta_0` unused becased"
-                      "`obs_sd` was specified already.")
+        if obs_sd is None:
+            # First, sample tau (observation precision)
+            tau_prior = dist.Gamma(alpha_0.expand(tau_shape),
+                                   beta_0.expand(tau_shape))
+            tau = pyro.sample("tau", tau_prior)
+            obs_sd = 1./torch.sqrt(tau)
 
-    # response will be shape batch x n
-    obs_sd = obs_sd.expand(tau_shape).unsqueeze(-1)
+        elif alpha_0 is not None or beta_0 is not None:
+            warnings.warn("Values of `alpha_0` and `beta_0` unused becased"
+                          "`obs_sd` was specified already.")
 
-    # Build the regression coefficient
-    w = []
-    # Allow different names for different coefficient groups
-    # Process fixed effects
-    for name, w_sqrtlambda in w_sqrtlambdas.items():
-        w_mean = w_means[name]
-        # Place a normal prior on the regression coefficient
-        w_prior = dist.Normal(w_mean, obs_sd / w_sqrtlambda).independent(1)
-        w.append(pyro.sample(name, w_prior))
-    # Process random effects
-    for name, group_size in re_group_sizes.items():
-        # Sample `G` once for this group
-        alpha, beta = re_alphas[name], re_betas[name]
-        group_p = alpha.shape[-1]
-        G_prior = dist.Gamma(alpha.expand(tau_shape + (group_p,)),
-                             beta.expand(tau_shape + (group_p,)))
-        G = 1./torch.sqrt(pyro.sample("G_" + name, G_prior))
-        # Repeat `G` for each group
-        repeat_shape = tuple(1 for _ in tau_shape) + (group_size,)
-        u_prior = dist.Normal(torch.tensor(0.), G.repeat(repeat_shape)).independent(1)
-        w.append(pyro.sample(name, u_prior))
-    # Regression coefficient `w` is batch x p
-    w = torch.cat(w, dim=-1)
+        # response will be shape batch x n
+        obs_sd = obs_sd.expand(tau_shape).unsqueeze(-1)
 
-    # Run the regressor forward conditioned on inputs
-    prediction_mean = rmv(design, w)
-    if response == "normal":
-        # y is an n-vector: hence use .independent(1)
-        return pyro.sample(response_label, dist.Normal(prediction_mean, obs_sd).independent(1))
-    elif response == "bernoulli":
-        return pyro.sample(response_label, dist.Bernoulli(logits=prediction_mean).independent(1))
-    elif response == "sigmoid":
-        base_dist = dist.Normal(prediction_mean, obs_sd).independent(1)
-        # You can add loc via the linear model itself
-        k = k.expand(prediction_mean.shape)
-        transforms = [AffineTransform(loc=torch.tensor(0.), scale=k), SigmoidTransform()]
-        response_dist = dist.TransformedDistribution(base_dist, transforms)
-        return pyro.sample(response_label, response_dist)
-    else:
-        raise ValueError("Unknown response distribution: '{}'".format(response))
+        # Build the regression coefficient
+        w = []
+        # Allow different names for different coefficient groups
+        # Process fixed effects
+        for name, w_sqrtlambda in w_sqrtlambdas.items():
+            w_mean = w_means[name]
+            # Place a normal prior on the regression coefficient
+            w_prior = dist.Normal(w_mean, obs_sd / w_sqrtlambda).independent(1)
+            w.append(pyro.sample(name, w_prior))
+        # Process random effects
+        for name, group_size in re_group_sizes.items():
+            # Sample `G` once for this group
+            alpha, beta = re_alphas[name], re_betas[name]
+            group_p = alpha.shape[-1]
+            G_prior = dist.Gamma(alpha.expand(tau_shape + (group_p,)),
+                                 beta.expand(tau_shape + (group_p,)))
+            G = 1./torch.sqrt(pyro.sample("G_" + name, G_prior))
+            # Repeat `G` for each group
+            repeat_shape = tuple(1 for _ in tau_shape) + (group_size,)
+            u_prior = dist.Normal(torch.tensor(0.), G.repeat(repeat_shape)).independent(1)
+            w.append(pyro.sample(name, u_prior))
+        # Regression coefficient `w` is batch x p
+        w = torch.cat(w, dim=-1)
+
+        # Run the regressor forward conditioned on inputs
+        prediction_mean = rmv(design, w)
+        if response == "normal":
+            # y is an n-vector: hence use .independent(1)
+            return pyro.sample(response_label, dist.Normal(prediction_mean, obs_sd).independent(1))
+        elif response == "bernoulli":
+            return pyro.sample(response_label, dist.Bernoulli(logits=prediction_mean).independent(1))
+        elif response == "sigmoid":
+            base_dist = dist.Normal(prediction_mean, obs_sd).independent(1)
+            # You can add loc via the linear model itself
+            k = k.expand(prediction_mean.shape)
+            transforms = [AffineTransform(loc=torch.tensor(0.), scale=k), SigmoidTransform()]
+            response_dist = dist.TransformedDistribution(base_dist, transforms)
+            return pyro.sample(response_label, response_dist)
+        else:
+            raise ValueError("Unknown response distribution: '{}'".format(response))
 
 
 # TODO replace this guide with one allowing correlation between
@@ -259,33 +267,37 @@ def normal_inv_gamma_family_guide(design, obs_sd, w_sizes, mf=False):
     # design is size batch x n x p
     # tau is size batch
     tau_shape = design.shape[:-2]
-    if obs_sd is None:
-        # First, sample tau (observation precision)
-        alpha = softplus(pyro.param("invsoftplus_alpha", 20.*torch.ones(tau_shape)))
-        beta = softplus(pyro.param("invsoftplus_beta", 20.*torch.ones(tau_shape)))
-        # Global variable
-        tau_prior = dist.Gamma(alpha, beta)
-        tau = pyro.sample("tau", tau_prior)
-        obs_sd = 1./torch.sqrt(tau)
+    with ExitStack() as stack:
+        for iarange in iter_iaranges_to_shape(tau_shape):
+            stack.enter_context(iarange)
 
-    # response will be shape batch x n
-    obs_sd = obs_sd.expand(tau_shape).unsqueeze(-1)
+        if obs_sd is None:
+            # First, sample tau (observation precision)
+            alpha = softplus(pyro.param("invsoftplus_alpha", 20.*torch.ones(tau_shape)))
+            beta = softplus(pyro.param("invsoftplus_beta", 20.*torch.ones(tau_shape)))
+            # Global variable
+            tau_prior = dist.Gamma(alpha, beta)
+            tau = pyro.sample("tau", tau_prior)
+            obs_sd = 1./torch.sqrt(tau)
 
-    for name, size in w_sizes.items():
-        w_shape = tau_shape + size
-        # Set up mu and lambda
-        mw_param = pyro.param("{}_guide_mean".format(name),
-                              torch.zeros(w_shape))
-        scale_tril = pyro.param(
-            "{}_guide_scale_tril".format(name),
-            torch.eye(*size).expand(tau_shape + size + size),
-            constraint=constraints.lower_cholesky)
-        # guide distributions for w
-        if mf:
-            w_dist = dist.MultivariateNormal(mw_param, scale_tril=scale_tril)
-        else:
-            w_dist = dist.MultivariateNormal(mw_param, scale_tril=obs_sd.unsqueeze(-1) * scale_tril)
-        pyro.sample(name, w_dist)
+        # response will be shape batch x n
+        obs_sd = obs_sd.expand(tau_shape).unsqueeze(-1)
+
+        for name, size in w_sizes.items():
+            w_shape = tau_shape + size
+            # Set up mu and lambda
+            mw_param = pyro.param("{}_guide_mean".format(name),
+                                  torch.zeros(w_shape))
+            scale_tril = pyro.param(
+                "{}_guide_scale_tril".format(name),
+                torch.eye(*size).expand(tau_shape + size + size),
+                constraint=constraints.lower_cholesky)
+            # guide distributions for w
+            if mf:
+                w_dist = dist.MultivariateNormal(mw_param, scale_tril=scale_tril)
+            else:
+                w_dist = dist.MultivariateNormal(mw_param, scale_tril=obs_sd.unsqueeze(-1) * scale_tril)
+            pyro.sample(name, w_dist)
 
 
 def group_assignment_matrix(design):
@@ -340,3 +352,9 @@ def analytic_posterior_cov(prior_cov, x, obs_sd):
     posterior_cov = prior_cov - torch.inverse(
         SigmaXX + (obs_sd**2)*torch.eye(p)).mm(SigmaXX.mm(prior_cov))
     return posterior_cov
+
+
+def iter_iaranges_to_shape(shape):
+    # Go backwards (right to left)
+    for i, s in enumerate(shape[::-1]):
+        yield pyro.iarange("iarange_" + str(i), s)

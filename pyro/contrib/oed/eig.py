@@ -8,7 +8,7 @@ from pyro import poutine
 from pyro.contrib.oed.search import Search
 from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.contrib.autoguide import mean_field_guide_entropy
-from pyro.contrib.oed.util import lexpand
+from pyro.contrib.util import lexpand
 
 
 def vi_ape(model, design, observation_labels, target_labels,

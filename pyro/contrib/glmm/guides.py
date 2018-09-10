@@ -6,7 +6,7 @@ from torch import nn
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.contrib.oed.util import tensor_to_dict, rmv, rvv, rtril
+from pyro.contrib.util import tensor_to_dict, rmv, rvv, rtril
 from pyro.ops.linalg import rinverse
 
 
@@ -55,7 +55,7 @@ class LinearModelGuide(nn.Module):
 
         return mu, scale_tril
 
-    def guide(self, y_dict, design, observation_labels, target_labels):
+    def forward(self, y_dict, design, observation_labels, target_labels):
 
         pyro.module("ba_guide", self)
 
@@ -114,7 +114,7 @@ class NormalInverseGammaGuide(LinearModelGuide):
 
         return mu, scale_tril, self.alpha, beta
 
-    def guide(self, y_dict, design, observation_labels, target_labels):
+    def forward(self, y_dict, design, observation_labels, target_labels):
 
         pyro.module("ba_guide", self)
 
