@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import math
+import warnings
 from collections import OrderedDict
 
 import torch
@@ -153,8 +154,7 @@ class HMC(TraceKernel):
         if self._compiled_potential_fn:
             return self._compiled_potential_fn(*vals)
 
-        @torch.jit.trace(*vals, optimize=True)
-        def wrapped(*zi):
+        def compiled(*zi):
             z_constrained = list(zi)
             # transform to constrained space.
             for i, name in enumerate(names):
@@ -171,7 +171,14 @@ class HMC(TraceKernel):
                     potential_energy += transform.log_abs_det_jacobian(z_constrained[name], zi[i]).sum()
             return potential_energy
 
-        self._compiled_potential_fn = wrapped
+        with pyro.validation_enabled(False), warnings.catch_warnings():
+            # Ignore jit warnings about promoting Python numbers to tensors,
+            # assuming all numbers are constant literals.
+            warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
+                                    message="torch.tensor might cause the trace to be incorrect")
+            warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
+                                    message="Converting a tensor to a Python")
+            self._compiled_potential_fn = torch.jit.trace(compiled, vals)
         return self._compiled_potential_fn(*vals)
 
     def _energy(self, z, r):
