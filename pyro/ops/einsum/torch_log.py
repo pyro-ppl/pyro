@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from opt_einsum.parser import convert_to_valid_einsum_chars
 
 EINSUM_SYMBOLS_BASE = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -16,7 +15,9 @@ def einsum(equation, *operands):
     """
     # rename symbols to support PyTorch 0.4.1 and earlier,
     # which allow only symbols a-z.
-    equation = convert_to_valid_einsum_chars(equation)
+    symbols = sorted(set(equation) - set(',->'))
+    rename = dict(zip(symbols, 'abcdefghijklmnopqrstuvwxyz'))
+    equation = ''.join(rename.get(s, s) for s in equation)
 
     inputs, output = equation.split('->')
     inputs = inputs.split(',')
@@ -52,7 +53,7 @@ def tensordot(x, y, axes=2):
 
     # convert int argument to (list[int], list[int])
     if isinstance(axes, int):
-        axes = range(xnd - axes, xnd), range(axes)
+        axes = list(range(xnd - axes, xnd)), list(range(axes))
 
     # convert (int, int) to (list[int], list[int])
     if isinstance(axes[0], int):
@@ -60,30 +61,22 @@ def tensordot(x, y, axes=2):
     if isinstance(axes[1], int):
         axes = axes[0], (axes[1],)
 
-    # initialize empty indices
-    x_ix = [None] * xnd
-    y_ix = [None] * ynd
-    out_ix = []
+    # compute shifts
+    assert all(dim >= 0 for axis in axes for dim in axes)
+    x_shift = x
+    y_shift = y
+    for dim in axes[0]:
+        x_shift = x_shift.max(dim, keepdim=True)[0]
+    for dim in axes[1]:
+        y_shift = y_shift.max(dim, keepdim=True)[0]
 
-    # fill in repeated indices
-    available_ix = iter(EINSUM_SYMBOLS_BASE)
-    for ax1, ax2 in zip(*axes):
-        repeat = next(available_ix)
-        x_ix[ax1] = repeat
-        y_ix[ax2] = repeat
+    result = torch.tensordot((x - x_shift).exp(), (y - y_shift).exp(), axes).log()
 
-    # fill in the rest, and maintain output order
-    for i in range(xnd):
-        if x_ix[i] is None:
-            leave = next(available_ix)
-            x_ix[i] = leave
-            out_ix.append(leave)
-    for i in range(ynd):
-        if y_ix[i] is None:
-            leave = next(available_ix)
-            y_ix[i] = leave
-            out_ix.append(leave)
+    # apply shifts to result
+    x_part = x.dim() - len(axes[0])
+    y_part = y.dim() - len(axes[1])
+    assert result.dim() == x_part + y_part
+    result += x_shift.reshape(result.shape[:x_part] + (1,) * y_part)
+    result += y_shift.reshape(result.shape[x_part:])
 
-    # form full string and contract!
-    einsum_str = "{},{}->{}".format(*map("".join, (x_ix, y_ix, out_ix)))
-    return einsum(einsum_str, x, y)
+    return result
