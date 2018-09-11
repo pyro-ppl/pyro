@@ -153,6 +153,23 @@ def test_categorical_enumerate(shape, expand):
     assert log_prob.shape == shape[-1:] + batch_shape
 
 
+@pytest.mark.parametrize('expand', [False, True])
+@pytest.mark.parametrize('shape', [(3,), (4, 3), (5, 4, 3)])
+def test_one_hot_categorical_enumerate(shape, expand):
+    shape = torch.Size(shape)
+    probs = torch.ones(shape)
+
+    @pyro.ops.jit.trace
+    def f(probs):
+        d = dist.OneHotCategorical(probs)
+        support = d.enumerate_support(expand=expand)
+        return d.log_prob(support)
+
+    log_prob = f(probs)
+    batch_shape = shape[:-1]
+    assert log_prob.shape == shape[-1:] + batch_shape
+
+
 @pytest.mark.parametrize('num_particles', [1, 10])
 @pytest.mark.parametrize('Elbo', [
     Trace_ELBO,
