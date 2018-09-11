@@ -30,13 +30,6 @@ def _torch_standard_gamma(concentration):
     return unpatched_fn(concentration)
 
 
-@_patch('torch.distributions.gamma._standard_gamma')
-def _standard_gamma(concentration):
-    if concentration.is_cuda:
-        return concentration.cpu()._standard_gamma().cuda(concentration.get_device())
-    return concentration._standard_gamma()
-
-
 @_patch('torch._dirichlet_grad')
 def _torch_dirichlet_grad(x, concentration, total):
     unpatched_fn = _torch_dirichlet_grad._pyro_unpatched
