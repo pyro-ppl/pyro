@@ -33,7 +33,7 @@ def test_simple():
         return y + 1.0
 
     print('Compiling f')
-    f = torch.jit.trace(f, (y,))
+    f = torch.jit.trace(f, (y,), check_trace=False)
     print('Calling f(y)')
     assert_equal(f(y), y.new_tensor([2., 2.]))
     print('Calling f(y)')
@@ -49,11 +49,13 @@ def test_multi_output():
 
     def f(x):
         print('Inside f')
-        assert x is y
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+            assert x is y
         return y - 1.0, y + 1.0
 
     print('Compiling f')
-    f = torch.jit.trace(f, (y,))
+    f = torch.jit.trace(f, (y,), check_trace=False)
     print('Calling f(y)')
     assert_equal(f(y)[1], y.new_tensor([2., 2.]))
     print('Calling f(y)')
@@ -69,7 +71,9 @@ def test_backward():
 
     def f(x):
         print('Inside f')
-        assert x is y
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+            assert x is y
         return (y + 1.0).sum()
 
     print('Compiling f')

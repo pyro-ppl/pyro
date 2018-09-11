@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import numbers
 import warnings
 
-import torch
 from six.moves.queue import LifoQueue
 
 from pyro import poutine

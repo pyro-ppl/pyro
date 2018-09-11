@@ -1,4 +1,8 @@
+from __future__ import absolute_import, division, print_function
+
+import warnings
 import weakref
+
 import torch
 
 import pyro
@@ -47,8 +51,15 @@ class CompiledFunction(object):
                     constrained_params[name] = constrained_param
                 return poutine.replay(self.fn, params=constrained_params)(*args, **kwargs)
 
-            with pyro.validation_enabled(False):
-                self.compiled[argc] = torch.jit.trace(compiled, params_and_args)
+            with pyro.validation_enabled(False), warnings.catch_warnings():
+                # Ignore jit warnings about promoting Python numbers to tensors,
+                # assuming all numbers are constant literals.
+                warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
+                                        message="torch.tensor might cause the trace to be incorrect")
+                warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
+                                        message="Converting a tensor to a Python")
+
+                self.compiled[argc] = torch.jit.trace(compiled, params_and_args, check_trace=False)
         else:
             unconstrained_params = [pyro.param(name).unconstrained()
                                     for name in self._param_names]

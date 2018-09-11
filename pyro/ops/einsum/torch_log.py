@@ -48,12 +48,9 @@ def einsum(equation, *operands):
 # This function is copied and adapted from:
 # https://github.com/dgasmith/opt_einsum/blob/a6dd686/opt_einsum/backends/torch.py
 def tensordot(x, y, axes=2):
-    xnd = x.ndimension()
-    ynd = y.ndimension()
-
     # convert int argument to (list[int], list[int])
     if isinstance(axes, int):
-        axes = list(range(xnd - axes, xnd)), list(range(axes))
+        axes = list(range(x.dim() - axes, x.dim())), list(range(axes))
 
     # convert (int, int) to (list[int], list[int])
     if isinstance(axes[0], int):
