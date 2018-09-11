@@ -1,5 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import os
+
+import pytest
 import torch
 
 from pyro.contrib.tracking.extended_kalman_filter import EKFState
@@ -8,6 +11,8 @@ from pyro.contrib.tracking.measurements import PositionMeasurement
 from tests.common import assert_equal, assert_not_equal
 
 
+@pytest.mark.skipif("CUDA_TEST" in os.environ,
+                    reason="https://github.com/uber/pyro/issues/1381")
 def test_EKFState_with_NcpContinuous():
     d = 3
     ncp = NcpContinuous(dimension=d, sv2=2.0)
@@ -43,6 +48,8 @@ def test_EKFState_with_NcpContinuous():
     assert_not_equal(ekf_state3.mean, ekf_state2.mean, prec=1e-5)
 
 
+@pytest.mark.skipif("CUDA_TEST" in os.environ,
+                    reason="https://github.com/uber/pyro/issues/1381")
 def test_EKFState_with_NcvContinuous():
     d = 6
     ncv = NcvContinuous(dimension=d, sa2=2.0)
