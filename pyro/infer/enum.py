@@ -1,7 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
+import warnings
 
+import torch
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
@@ -20,10 +22,14 @@ def iter_discrete_escape(trace, msg):
 
 def iter_discrete_extend(trace, site, **ignored):
     values = site["fn"].enumerate_support(expand=site["infer"].get("expand", False))
+    enum_total = values.shape[0]
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning, message="Iterating over a tensor")
+        values = iter(values)
     for i, value in enumerate(values):
         extended_site = site.copy()
         extended_site["infer"] = site["infer"].copy()
-        extended_site["infer"]["_enum_total"] = len(values)
+        extended_site["infer"]["_enum_total"] = enum_total
         extended_site["value"] = value
         extended_trace = trace.copy()
         extended_trace.add_node(site["name"], **extended_site)

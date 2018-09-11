@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
+
 import torch
 
 
@@ -38,6 +40,17 @@ def _torch_dirichlet_grad(x, concentration, total):
     return unpatched_fn(x, concentration, total)
 
 
+@_patch('torch.distributions.utils._default_promotion')
+def _default_promotion(v):
+    # Ignore jit warnings about promoting Python numbers to tensors,
+    # assuming all numbers are constant literals.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
+                                message="torch.tensor might cause the trace to be incorrect")
+        return _default_promotion._pyro_unpatched(v)
+
+
+@_patch('torch.einsum')
 def _einsum(equation, operands):
     # work around torch.einsum performance issues
     # see https://github.com/pytorch/pytorch/issues/10661

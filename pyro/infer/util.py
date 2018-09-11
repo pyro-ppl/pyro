@@ -259,10 +259,11 @@ class Dice(object):
                 for cost in cost_terms:
                     prob = sumproduct(factors, cost.shape)
                     mask = prob > 0
-                    if torch.is_tensor(mask) and not mask.all():
-                        cost, prob, mask = broadcast_all(cost, prob, mask)
-                        prob = prob[mask]
-                        cost = cost[mask]
+                    if torch.is_tensor(mask):
+                        if torch._C._get_tracing_state() or not mask.all():
+                            cost, prob, mask = broadcast_all(cost, prob, mask)
+                            prob = prob[mask]
+                            cost = cost[mask]
                     expected_cost = expected_cost + (prob * cost).sum()
         LAST_CACHE_SIZE[0] = count_cached_ops(cache)
         return expected_cost

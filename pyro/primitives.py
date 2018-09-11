@@ -302,13 +302,16 @@ class irange(object):
         self.size, self.subsample_size, self.subsample = _subsample(name, size, subsample_size, subsample, use_cuda)
 
     def __iter__(self):
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning, message="Iterating over a tensor")
+            subsample = iter(self.subsample)
         if not am_i_wrapped():
-            for i in self.subsample:
+            for i in subsample:
                 yield i if isinstance(i, numbers.Number) else i.item()
         else:
             indep_context = poutine.indep(name=self.name, size=self.subsample_size)
             with poutine.scale(scale=self.size / self.subsample_size):
-                for i in self.subsample:
+                for i in subsample:
                     indep_context.next_context()
                     with indep_context:
                         # convert to python numeric type as functions like torch.ones(*args)
