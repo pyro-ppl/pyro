@@ -45,6 +45,19 @@ def _torch_dirichlet_grad(x, concentration, total):
     return unpatched_fn(x, concentration, total)
 
 
+@_patch('torch.linspace')
+def _torch_linspace(*args, **kwargs):
+    unpatched_fn = _torch_linspace._pyro_unpatched
+    template = torch.Tensor()
+    if template.is_cuda:
+        kwargs["device"] = "cpu"
+        ret = torch.linspace(*args, **kwargs).to(device=template.device())
+        kwargs.pop("device", None)
+    else:
+        ret = unpatched_fn(*args, **kwargs)
+    return ret
+
+
 @_patch('torch.einsum')
 def _einsum(equation, operands):
     # work around torch.einsum performance issues
