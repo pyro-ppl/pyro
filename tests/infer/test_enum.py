@@ -396,7 +396,7 @@ def test_elbo_bern_bern(method, enumerate1, enumerate2, num_samples1, num_sample
         for n in [num_samples1, num_samples2]:
             if n is not None:
                 num_particles = num_particles // n
-        prec = 0.1
+        prec = 0.2
 
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
 
