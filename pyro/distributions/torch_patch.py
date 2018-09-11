@@ -56,11 +56,6 @@ def _einsum(equation, operands):
         y, x = operands
         return (x.unsqueeze(1) * y).sum(0).transpose(0, 1)
 
-    # work around torch.einsum's limitation to 26 letters
-    symbols = sorted(set(equation) - set(',->'))
-    rename = dict(zip(symbols, 'abcdefghijklmnopqrstuvwxyz'))
-    equation = ''.join(rename.get(s, s) for s in equation)
-
     # this workaround can be deleted after this issue is fixed in release:
     # https://github.com/pytorch/pytorch/issues/7763
     operands = [t.clone() for t in operands]
