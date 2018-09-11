@@ -323,7 +323,8 @@ def test_gaussian_mixture_model(jit):
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-def test_bernoulli_latent_model(jit):
+@pytest.mark.parametrize("use_einsum", [False, True])
+def test_bernoulli_latent_model(jit, use_einsum):
     @poutine.broadcast
     def model(data):
         y_prob = pyro.sample("y_prob", dist.Beta(1.0, 1.0))
@@ -338,8 +339,8 @@ def test_bernoulli_latent_model(jit):
     y = dist.Bernoulli(y_prob).sample(torch.Size((N,)))
     z = dist.Bernoulli(0.65 * y + 0.1).sample()
     data = dist.Normal(2. * z, 1.0).sample()
-    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True,
-                     max_iarange_nesting=1, jit_compile=jit)
+    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True, max_iarange_nesting=1,
+                     jit_compile=jit, experimental_use_einsum=use_einsum)
     mcmc_run = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites="y_prob").mean
     assert_equal(posterior, y_prob, prec=0.05)

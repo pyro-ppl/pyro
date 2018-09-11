@@ -59,6 +59,10 @@ class NUTS(HMC):
     :param bool jit_compile: Optional parameter denoting whether to use
         the PyTorch JIT to trace the log density computation, and use this
         optimized executable trace in the integrator.
+    :param bool experimental_use_einsum: Whether to use an einsum operation
+        to evaluat log pdf for the model trace. No-op unless the trace has
+        discrete sample sites. This flag is experimental and will most likely
+        be removed in a future release.
 
     Example:
 
@@ -86,13 +90,15 @@ class NUTS(HMC):
                  adapt_step_size=False,
                  transforms=None,
                  max_iarange_nesting=float("inf"),
-                 jit_compile=False):
+                 jit_compile=False,
+                 experimental_use_einsum=False):
         super(NUTS, self).__init__(model,
                                    step_size,
                                    adapt_step_size=adapt_step_size,
                                    transforms=transforms,
                                    max_iarange_nesting=max_iarange_nesting,
-                                   jit_compile=jit_compile)
+                                   jit_compile=jit_compile,
+                                   experimental_use_einsum=experimental_use_einsum)
 
         self._max_tree_depth = 10  # from Stan
         # There are three conditions to stop doubling process:

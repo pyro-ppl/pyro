@@ -53,6 +53,10 @@ class HMC(TraceKernel):
     :param bool jit_compile: Optional parameter denoting whether to use
         the PyTorch JIT to trace the log density computation, and use this
         optimized executable trace in the integrator.
+    :param bool experimental_use_einsum: Whether to use an einsum operation
+        to evaluate log pdf for the model trace. No-op unless the trace has
+        discrete sample sites. This flag is experimental and will most likely
+        be removed in a future release.
 
     Example:
 
@@ -82,7 +86,8 @@ class HMC(TraceKernel):
                  adapt_step_size=False,
                  transforms=None,
                  max_iarange_nesting=float("inf"),
-                 jit_compile=False):
+                 jit_compile=False,
+                 experimental_use_einsum=False):
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
         self.model = poutine.enum(config_enumerate(model, default="parallel"),
@@ -99,6 +104,7 @@ class HMC(TraceKernel):
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
         self.adapt_step_size = adapt_step_size
         self._jit_compile = jit_compile
+        self.use_einsum = experimental_use_einsum
         self._target_accept_prob = 0.8  # from Stan
 
         self.transforms = {} if transforms is None else transforms
@@ -233,7 +239,8 @@ class HMC(TraceKernel):
     def _validate_trace(self, trace):
         self._trace_prob_evaluator = EnumTraceProbEvaluator(trace,
                                                             self._has_enumerable_sites,
-                                                            self.max_iarange_nesting)
+                                                            self.max_iarange_nesting,
+                                                            use_einsum=self.use_einsum)
         trace_log_prob_sum = self._compute_trace_log_prob(trace)
         if torch_isnan(trace_log_prob_sum) or torch_isinf(trace_log_prob_sum):
             raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")

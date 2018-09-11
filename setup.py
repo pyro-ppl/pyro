@@ -90,7 +90,7 @@ setup(
         'extras': EXTRAS_REQUIRE,
         'test': EXTRAS_REQUIRE + [
             'nbval',
-            'pytest>=3.5',
+            'pytest==3.7',
             'pytest-cov',
             'scipy>=0.19.0',
         ],
@@ -103,7 +103,7 @@ setup(
             'nbstripout',
             'nbval',
             'pypandoc',
-            'pytest',
+            'pytest==3.7',
             'pytest-xdist',
             'scipy>=0.19.0',
             'sphinx',
@@ -111,7 +111,7 @@ setup(
             'yapf',
         ],
     },
-    tests_require=['flake8', 'pytest'],
+    tests_require=['flake8', 'pytest==3.7'],
     keywords='machine learning statistics probabilistic programming bayesian modeling pytorch',
     license='MIT License',
     classifiers=[

@@ -138,8 +138,7 @@ def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
                                                      guide_site['value'].new_zeros(dc_shape))
                 avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
                     baseline_beta * avg_downstream_cost_old
-            pyro.get_param_store().replace_param(param_name, avg_downstream_cost_new,
-                                                 avg_downstream_cost_old)
+            pyro.get_param_store()[param_name] = avg_downstream_cost_new
             baseline += avg_downstream_cost_old
         if use_nn_baseline:
             # block nn_baseline_input gradients except in baseline loss
