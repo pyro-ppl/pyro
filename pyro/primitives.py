@@ -100,7 +100,12 @@ class _Subsample(Distribution):
         """
         self.size = size
         self.subsample_size = subsample_size
-        self.use_cuda = torch.Tensor().is_cuda if use_cuda is None else use_cuda
+        if use_cuda is None:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+                self.use_cuda = torch.Tensor().is_cuda
+        else:
+            self.use_cuda = use_cuda
 
     def sample(self, sample_shape=torch.Size()):
         """
@@ -139,7 +144,7 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
         subsample = sample(name, _Subsample(size, subsample_size, use_cuda))
 
     if subsample_size is None:
-        subsample_size = len(subsample)
+        subsample_size = subsample.shape[0]
     elif subsample is not None and subsample_size != len(subsample):
         raise ValueError("subsample_size does not match len(subsample), {} vs {}.".format(
             subsample_size, len(subsample)) +

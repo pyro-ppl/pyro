@@ -31,12 +31,11 @@ class CompiledFunction(object):
                     self.fn(*args, **kwargs)
 
             self._param_names = list(set(first_param_capture.trace.nodes.keys()))
-            unconstrained_params = [pyro.param(name).unconstrained()
-                                    for name in self._param_names]
-            params_and_args = unconstrained_params + list(args)
+            unconstrained_params = tuple(pyro.param(name).unconstrained()
+                                         for name in self._param_names)
+            params_and_args = unconstrained_params + args
             weakself = weakref.ref(self)
 
-            @torch.jit.trace(*params_and_args)
             def compiled(*params_and_args):
                 self = weakself()
                 unconstrained_params = params_and_args[:len(self._param_names)]
@@ -48,7 +47,8 @@ class CompiledFunction(object):
                     constrained_params[name] = constrained_param
                 return poutine.replay(self.fn, params=constrained_params)(*args, **kwargs)
 
-            self.compiled[argc] = compiled
+            with pyro.validation_enabled(False):
+                self.compiled[argc] = torch.jit.trace(compiled, params_and_args)
         else:
             unconstrained_params = [pyro.param(name).unconstrained()
                                     for name in self._param_names]

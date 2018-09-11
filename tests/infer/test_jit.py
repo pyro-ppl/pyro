@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
+
 import pytest
 import torch
 from torch.autograd import grad
@@ -7,21 +9,31 @@ from torch.distributions import constraints, kl_divergence
 
 import pyro
 import pyro.distributions as dist
+import pyro.ops.jit
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
                         TraceGraph_ELBO)
 from pyro.optim import Adam
 from tests.common import assert_equal, xfail_param
 
 
+def constant(*args, **kwargs):
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+        return torch.tensor(*args, **kwargs)
+
+
 def test_simple():
     y = torch.ones(2)
 
-    @torch.jit.trace(y)
     def f(x):
         print('Inside f')
-        assert x is y
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+            assert x is y
         return y + 1.0
 
+    print('Compiling f')
+    f = torch.jit.trace(f, (y,))
     print('Calling f(y)')
     assert_equal(f(y), y.new_tensor([2., 2.]))
     print('Calling f(y)')
@@ -35,12 +47,13 @@ def test_simple():
 def test_multi_output():
     y = torch.ones(2)
 
-    @torch.jit.trace(y)
     def f(x):
         print('Inside f')
         assert x is y
         return y - 1.0, y + 1.0
 
+    print('Compiling f')
+    f = torch.jit.trace(f, (y,))
     print('Calling f(y)')
     assert_equal(f(y)[1], y.new_tensor([2., 2.]))
     print('Calling f(y)')
@@ -54,12 +67,13 @@ def test_multi_output():
 def test_backward():
     y = torch.ones(2, requires_grad=True)
 
-    @torch.jit.trace(y)
     def f(x):
         print('Inside f')
         assert x is y
         return (y + 1.0).sum()
 
+    print('Compiling f')
+    f = torch.jit.trace(f, (y,))
     print('Calling f(y)')
     f(y).backward()
     print('Calling f(y)')
@@ -73,12 +87,13 @@ def test_backward():
 @pytest.mark.xfail(reason="grad cannot appear in jitted code")
 def test_grad():
 
-    @torch.jit.trace(torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True))
     def f(x, y):
         print('Inside f')
         loss = (x - y).pow(2).sum()
         return torch.autograd.grad(loss, [x, y], allow_unused=True)
 
+    print('Compiling f')
+    f = torch.jit.trace(f, (torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True)))
     print('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True))
     print('Invoking f')
@@ -88,27 +103,26 @@ def test_grad():
 @pytest.mark.xfail(reason="grad cannot appear in jitted code")
 def test_grad_expand():
 
-    @torch.jit.trace(torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True))
     def f(x, y):
         print('Inside f')
         loss = (x - y).pow(2).sum()
         return torch.autograd.grad(loss, [x, y], allow_unused=True)
 
+    print('Compiling f')
+    f = torch.jit.trace(f, (torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True)))
     print('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True))
     print('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
 
 
-@pytest.mark.skipif(torch.__version__ <= '0.4.1',
-                    reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
 @pytest.mark.parametrize('expand', [False, True])
 @pytest.mark.parametrize('shape', [(), (4,), (5, 4)])
 def test_bernoulli_enumerate(shape, expand):
     shape = torch.Size(shape)
     probs = torch.empty(shape).fill_(0.25)
 
-    @torch.jit.trace(probs)
+    @pyro.ops.jit.trace
     def f(probs):
         d = dist.Bernoulli(probs)
         support = d.enumerate_support(expand=expand)
@@ -118,15 +132,13 @@ def test_bernoulli_enumerate(shape, expand):
     assert log_prob.shape == (2,) + shape
 
 
-@pytest.mark.skipif(torch.__version__ <= '0.4.1',
-                    reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
 @pytest.mark.parametrize('expand', [False, True])
 @pytest.mark.parametrize('shape', [(3,), (4, 3), (5, 4, 3)])
 def test_categorical_enumerate(shape, expand):
     shape = torch.Size(shape)
     probs = torch.ones(shape)
 
-    @torch.jit.trace(probs)
+    @pyro.ops.jit.trace
     def f(probs):
         d = dist.Categorical(probs)
         support = d.enumerate_support(expand=expand)
@@ -137,8 +149,6 @@ def test_categorical_enumerate(shape, expand):
     assert log_prob.shape == shape[-1:] + batch_shape
 
 
-@pytest.mark.skipif(torch.__version__ <= '0.4.1',
-                    reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
 @pytest.mark.parametrize('num_particles', [1, 10])
 @pytest.mark.parametrize('Elbo', [
     Trace_ELBO,
@@ -153,8 +163,8 @@ def test_svi(Elbo, num_particles):
     data = torch.arange(10.)
 
     def model(data):
-        loc = pyro.param("loc", torch.tensor(0.0))
-        scale = pyro.param("scale", torch.tensor(1.0), constraint=constraints.positive)
+        loc = pyro.param("loc", constant(0.0))
+        scale = pyro.param("scale", constant(1.0), constraint=constraints.positive)
         pyro.sample("x", dist.Normal(loc, scale).expand_by(data.shape).independent(1), obs=data)
 
     def guide(data):
@@ -166,8 +176,6 @@ def test_svi(Elbo, num_particles):
         inference.step(data)
 
 
-@pytest.mark.skipif(torch.__version__ <= '0.4.1',
-                    reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
 @pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
 @pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
 @pytest.mark.parametrize("irange_dim", [1, 2])
@@ -175,7 +183,7 @@ def test_svi(Elbo, num_particles):
 def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
     num_particles = 10
-    q = pyro.param("q", torch.tensor(0.75), constraint=constraints.unit_interval)
+    q = pyro.param("q", constant(0.75), constraint=constraints.unit_interval)
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
     def model():
@@ -212,8 +220,6 @@ def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
     ]))
 
 
-@pytest.mark.skipif(torch.__version__ <= '0.4.1',
-                    reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
 @pytest.mark.parametrize('vectorized', [False, True])
 @pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
 def test_beta_bernoulli(Elbo, vectorized):
@@ -221,15 +227,15 @@ def test_beta_bernoulli(Elbo, vectorized):
     data = torch.tensor([1.0] * 6 + [0.0] * 4)
 
     def model1(data):
-        alpha0 = torch.tensor(10.0)
-        beta0 = torch.tensor(10.0)
+        alpha0 = constant(10.0)
+        beta0 = constant(10.0)
         f = pyro.sample("latent_fairness", dist.Beta(alpha0, beta0))
         for i in pyro.irange("irange", len(data)):
             pyro.sample("obs_{}".format(i), dist.Bernoulli(f), obs=data[i])
 
     def model2(data):
-        alpha0 = torch.tensor(10.0)
-        beta0 = torch.tensor(10.0)
+        alpha0 = constant(10.0)
+        beta0 = constant(10.0)
         f = pyro.sample("latent_fairness", dist.Beta(alpha0, beta0))
         pyro.sample("obs", dist.Bernoulli(f).expand_by(data.shape).independent(1),
                     obs=data)
@@ -237,9 +243,9 @@ def test_beta_bernoulli(Elbo, vectorized):
     model = model2 if vectorized else model1
 
     def guide(data):
-        alpha_q = pyro.param("alpha_q", torch.tensor(15.0),
+        alpha_q = pyro.param("alpha_q", constant(15.0),
                              constraint=constraints.positive)
-        beta_q = pyro.param("beta_q", torch.tensor(15.0),
+        beta_q = pyro.param("beta_q", constant(15.0),
                             constraint=constraints.positive)
         pyro.sample("latent_fairness", dist.Beta(alpha_q, beta_q))
 
@@ -250,8 +256,6 @@ def test_beta_bernoulli(Elbo, vectorized):
         svi.step(data)
 
 
-@pytest.mark.skipif(torch.__version__ <= '0.4.1',
-                    reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
 @pytest.mark.parametrize('Elbo', [
     Trace_ELBO,
     xfail_param(JitTrace_ELBO, reason="https://github.com/uber/pyro/issues/1358"),
@@ -264,8 +268,8 @@ def test_svi_irregular_batch_size(Elbo):
     pyro.clear_param_store()
 
     def model(data):
-        loc = pyro.param("loc", torch.tensor(0.0))
-        scale = pyro.param("scale", torch.tensor(1.0), constraint=constraints.positive)
+        loc = pyro.param("loc", constant(0.0))
+        scale = pyro.param("scale", constant(1.0), constraint=constraints.positive)
         with pyro.iarange("data", data.shape[0]):
             pyro.sample("x",
                         dist.Normal(loc, scale).expand([data.shape[0]]),
@@ -281,8 +285,6 @@ def test_svi_irregular_batch_size(Elbo):
     inference.step(torch.ones(3))
 
 
-@pytest.mark.skipif(torch.__version__ <= '0.4.1',
-                    reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228")
 @pytest.mark.parametrize('vectorized', [False, True])
 @pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
 def test_dirichlet_bernoulli(Elbo, vectorized):
@@ -290,13 +292,13 @@ def test_dirichlet_bernoulli(Elbo, vectorized):
     data = torch.tensor([1.0] * 6 + [0.0] * 4)
 
     def model1(data):
-        concentration0 = torch.tensor([10.0, 10.0])
+        concentration0 = constant([10.0, 10.0])
         f = pyro.sample("latent_fairness", dist.Dirichlet(concentration0))[1]
         for i in pyro.irange("irange", len(data)):
             pyro.sample("obs_{}".format(i), dist.Bernoulli(f), obs=data[i])
 
     def model2(data):
-        concentration0 = torch.tensor([10.0, 10.0])
+        concentration0 = constant([10.0, 10.0])
         f = pyro.sample("latent_fairness", dist.Dirichlet(concentration0))[1]
         pyro.sample("obs", dist.Bernoulli(f).expand_by(data.shape).independent(1),
                     obs=data)
@@ -304,7 +306,7 @@ def test_dirichlet_bernoulli(Elbo, vectorized):
     model = model2 if vectorized else model1
 
     def guide(data):
-        concentration_q = pyro.param("concentration_q", torch.tensor([15.0, 15.0]),
+        concentration_q = pyro.param("concentration_q", constant([15.0, 15.0]),
                                      constraint=constraints.positive)
         pyro.sample("latent_fairness", dist.Dirichlet(concentration_q))
 
