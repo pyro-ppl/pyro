@@ -120,6 +120,30 @@ def test_grad_expand():
     f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
 
 
+def test_masked_fill():
+
+    def f(y, mask):
+        return y.clone().masked_fill_(mask, 0.)
+
+    x = torch.tensor([-float('inf'), -1., 0., 1., float('inf')])
+    y = x / x.unsqueeze(-1)
+    mask = ~(y == y)
+    f = torch.jit.trace(f, (y, mask))
+
+
+def test_masked_fill_workaround():
+
+    def f(y, mask):
+        y = y.clone()
+        y[mask] = 0.
+        return y
+
+    x = torch.tensor([-float('inf'), -1., 0., 1., float('inf')])
+    y = x / x.unsqueeze(-1)
+    mask = ~(y == y)
+    f = torch.jit.trace(f, (y, mask))
+
+
 @pytest.mark.parametrize('expand', [False, True])
 @pytest.mark.parametrize('shape', [(), (4,), (5, 4)])
 def test_bernoulli_enumerate(shape, expand):

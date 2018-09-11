@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
+import warnings
 from contextlib import contextmanager
 
 import torch
@@ -177,7 +178,12 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
         return tensor * scale
     tensor, mask = broadcast_all(tensor, mask)
     tensor = tensor * scale  # triggers a copy, avoiding in-place op errors
-    tensor.masked_fill_(~mask, 0.)
+    if torch._C._get_tracing_state():
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+            tensor[~mask] = 0.
+    else:
+        tensor.masked_fill_(~mask, 0.)
     return tensor
 
 
