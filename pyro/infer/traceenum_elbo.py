@@ -13,7 +13,6 @@ import pyro
 import pyro.distributions as dist
 import pyro.ops.jit
 import pyro.poutine as poutine
-from pyro.distributions.torch_distribution import ReshapedDistribution
 from pyro.distributions.util import is_identically_zero, scale_and_mask
 from pyro.infer.contract import contract_tensor_tree, contract_to_tensor
 from pyro.infer.elbo import ELBO
@@ -130,8 +129,6 @@ def _make_dist(dist_, logits):
     # Reshape for Bernoulli vs Categorical, OneHotCategorical, etc..
     if isinstance(dist_, dist.Bernoulli):
         logits = logits[..., 1] - logits[..., 0]
-    elif isinstance(dist_, ReshapedDistribution):
-        return _make_dist(dist_.base_dist, logits=logits)
     return type(dist_)(logits=logits)
 
 
