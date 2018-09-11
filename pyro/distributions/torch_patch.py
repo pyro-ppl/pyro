@@ -51,7 +51,7 @@ def _torch_linspace(*args, **kwargs):
     template = torch.Tensor()
     if template.is_cuda:
         kwargs["device"] = "cpu"
-        ret = torch.linspace(*args, **kwargs).to(device=template.device())
+        ret = unpatched_fn(*args, **kwargs).to(device=template.device())
         kwargs.pop("device", None)
     else:
         ret = unpatched_fn(*args, **kwargs)
