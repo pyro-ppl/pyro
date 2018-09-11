@@ -59,7 +59,7 @@ def tensordot(x, y, axes=2):
         axes = axes[0], (axes[1],)
 
     # compute shifts
-    assert all(dim >= 0 for axis in axes for dim in axes)
+    assert all(dim >= 0 for axis in axes for dim in axis)
     x_shift = x
     y_shift = y
     for dim in axes[0]:
