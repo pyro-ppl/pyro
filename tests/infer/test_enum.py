@@ -2550,6 +2550,7 @@ def test_elbo_hmm_growth():
 
 
 @pytest.mark.xfail(reason="flakey on travis due to nondeterministic computations")
+@pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/uber/pyro/issues/1379")
 def test_elbo_dbn_growth():
     pyro.clear_param_store()
     elbo = TraceEnum_ELBO(max_iarange_nesting=0)
