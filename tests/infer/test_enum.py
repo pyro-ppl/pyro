@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 def _skip_cuda(*args):
     return skipif_param(*args,
                         condition="CUDA_TEST" in os.environ,
-                        reason="https://github.com/uber/pyro/issues/1379")
+                        reason="https://github.com/uber/pyro/issues/1380")
 
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
@@ -2550,7 +2550,7 @@ def test_elbo_hmm_growth():
 
 
 @pytest.mark.xfail(reason="flakey on travis due to nondeterministic computations")
-@pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/uber/pyro/issues/1379")
+@pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/uber/pyro/issues/1380")
 def test_elbo_dbn_growth():
     pyro.clear_param_store()
     elbo = TraceEnum_ELBO(max_iarange_nesting=0)
