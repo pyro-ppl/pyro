@@ -6,7 +6,7 @@ from torch.autograd.function import once_differentiable
 from torch.distributions import constraints
 
 from pyro.distributions.torch import MultivariateNormal
-from pyro.distributions.util import sum_leftmost
+from pyro.distributions.util import eye_like, sum_leftmost
 
 
 class OMTMultivariateNormal(MultivariateNormal):
@@ -51,7 +51,7 @@ class _OMTMVNSample(Function):
         g = grad_output
         loc_grad = sum_leftmost(grad_output, -1)
 
-        identity = torch.eye(dim, out=torch.tensor(g.new_empty(dim, dim)))
+        identity = eye_like(g, dim)
         R_inv = torch.trtrs(identity, L.t(), transpose=False, upper=True)[0]
 
         z_ja = z.unsqueeze(-1)

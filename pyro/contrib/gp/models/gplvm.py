@@ -1,14 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
-import torch
 from torch.distributions import constraints
 from torch.nn import Parameter
 
 import pyro
-from pyro.contrib.gp.util import Parameterized
 import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.optim as optim
+from pyro.contrib.gp.util import Parameterized
+from pyro.distributions.util import eye_like
 from pyro.params import param_with_module_name
 
 
@@ -74,7 +74,7 @@ class GPLVM(Parameterized):
 
         C = self.X_loc.shape[1]
         X_scale_tril_shape = self.X_loc.shape + (C,)
-        Id = torch.eye(C, out=self.X_loc.new_empty(C, C))
+        Id = eye_like(self.X_loc, C)
         X_scale_tril = Id.expand(X_scale_tril_shape)
         self.X_scale_tril = Parameter(X_scale_tril)
         self.set_constraint("X_scale_tril", constraints.lower_cholesky)
@@ -87,7 +87,7 @@ class GPLVM(Parameterized):
         # sample X from unit multivariate normal distribution
         zero_loc = self.X_loc.new_zeros(self.X_loc.shape)
         C = self.X_loc.shape[1]
-        Id = torch.eye(C, out=self.X_loc.new_empty(C, C))
+        Id = eye_like(self.X_loc, C)
         X_name = param_with_module_name(self.name, "X")
         X = pyro.sample(X_name, dist.MultivariateNormal(zero_loc, scale_tril=Id)
                                     .independent(zero_loc.dim()-1))

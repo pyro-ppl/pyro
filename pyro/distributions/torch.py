@@ -4,6 +4,7 @@ import torch
 from torch.distributions import constraints
 
 from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistributionMixin
+from pyro.distributions.util import eye_like
 
 
 class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
@@ -39,6 +40,7 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
 
 
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
+
     def expand(self, batch_shape):
         try:
             return super(Categorical, self).expand(batch_shape)
@@ -252,8 +254,7 @@ class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistribution
 
     def enumerate_support(self, expand=True):
         n = self.event_shape[0]
-        values = self._new((n, n))
-        torch.eye(n, out=values)
+        values = eye_like(self._categorical._param, n)
         values = values.view((n,) + (1,) * len(self.batch_shape) + (n,))
         if expand:
             values = values.expand((n,) + self.batch_shape + (n,))

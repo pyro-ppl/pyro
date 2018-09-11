@@ -3,10 +3,14 @@ from __future__ import absolute_import, division, print_function
 import numbers
 from contextlib import contextmanager
 
+import torch
 import torch.distributions as torch_dist
+from torch import logsumexp
 from torch.distributions.utils import broadcast_all
 
 _VALIDATION_ENABLED = False
+
+log_sum_exp = logsumexp  # DEPRECATED
 
 
 def copy_docs_from(source_class, full_text=False):
@@ -52,7 +56,11 @@ def is_identically_zero(x):
     Check if argument is exactly the number zero. True for the number zero;
     false for other numbers; false for :class:`~torch.Tensor`s.
     """
-    return isinstance(x, numbers.Number) and x == 0
+    if isinstance(x, numbers.Number):
+        return x == 0
+    elif isinstance(x, torch.Tensor) and x.dtype == torch.int64 and not x.shape:
+        return x.item() == 0
+    return False
 
 
 def is_identically_one(x):
@@ -60,7 +68,11 @@ def is_identically_one(x):
     Check if argument is exactly the number one. True for the number one;
     false for other numbers; false for :class:`~torch.Tensor`s.
     """
-    return isinstance(x, numbers.Number) and x == 1
+    if isinstance(x, numbers.Number):
+        return x == 1
+    elif isinstance(x, torch.Tensor) and x.dtype == torch.int64 and not x.shape:
+        return x.item() == 1
+    return False
 
 
 def broadcast_shape(*shapes, **kwargs):
@@ -176,27 +188,6 @@ def eye_like(value, m, n=None):
     eye = value.new_zeros(m, n)
     eye.view(-1)[:min(m, n) * n:n + 1] = 1
     return eye
-
-
-try:
-    from torch import logsumexp  # for pytorch 0.4.1 and later
-except ImportError:
-    def logsumexp(tensor, dim=-1, keepdim=False):
-        """
-        Numerically stable implementation for the `LogSumExp` operation. The
-        summing is done along the dimension specified by ``dim``.
-
-        :param torch.Tensor tensor: Input tensor.
-        :param dim: Dimension to be summed out.
-        :param keepdim: Whether to retain the dimension
-            that is summed out.
-        """
-        max_val = tensor.max(dim, keepdim=True)[0]
-        log_sum_exp = max_val + (tensor - max_val).exp().sum(dim=dim, keepdim=True).log()
-        return log_sum_exp if keepdim else log_sum_exp.squeeze(dim)
-
-
-log_sum_exp = logsumexp  # DEPRECATED
 
 
 def enable_validation(is_validate):

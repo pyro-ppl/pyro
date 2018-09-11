@@ -9,6 +9,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
+from pyro.distributions.util import eye_like
 from pyro.params import param_with_module_name
 
 
@@ -98,7 +99,7 @@ class VariationalSparseGP(GPModel):
         self.u_loc = Parameter(u_loc)
 
         u_scale_tril_shape = self.latent_shape + (M, M)
-        Id = torch.eye(M, out=self.Xu.new_empty(M, M))
+        Id = eye_like(self.Xu, M)
         u_scale_tril = Id.expand(u_scale_tril_shape)
         self.u_scale_tril = Parameter(u_scale_tril)
         self.set_constraint("u_scale_tril", constraints.lower_cholesky)
@@ -120,7 +121,7 @@ class VariationalSparseGP(GPModel):
         zero_loc = Xu.new_zeros(u_loc.shape)
         u_name = param_with_module_name(self.name, "u")
         if self.whiten:
-            Id = torch.eye(M, out=Xu.new_empty(M, M))
+            Id = eye_like(Xu, M)
             pyro.sample(u_name,
                         dist.MultivariateNormal(zero_loc, scale_tril=Id)
                             .independent(zero_loc.dim() - 1))
