@@ -77,7 +77,7 @@ def test_backward():
         return (y + 1.0).sum()
 
     print('Compiling f')
-    f = torch.jit.trace(f, (y,))
+    f = torch.jit.trace(f, (y,), check_trace=False)
     print('Calling f(y)')
     f(y).backward()
     print('Calling f(y)')
