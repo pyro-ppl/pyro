@@ -290,7 +290,7 @@ def test_svi_step_guide_uses_grad(enumerate1):
 def test_elbo_bern(method, enumerate1, scale):
     pyro.clear_param_store()
     num_particles = 1 if enumerate1 else 10000
-    prec = 0.001 if enumerate1 else 0.1
+    prec = 0.001 if enumerate1 else 0.2
     q = pyro.param("q", torch.tensor(0.5, requires_grad=True))
     kl = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
 
