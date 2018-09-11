@@ -48,6 +48,8 @@ def test_EKFState_with_NcpContinuous():
     assert_not_equal(ekf_state3.mean, ekf_state2.mean, prec=1e-5)
 
 
+@pytest.mark.skipif("CUDA_TEST" in os.environ,
+                    reason="https://github.com/uber/pyro/issues/1381")
 def test_EKFState_with_NcvContinuous():
     d = 6
     ncv = NcvContinuous(dimension=d, sa2=2.0)
