@@ -99,7 +99,7 @@ TEST_CASES = [
         [{"guide": bernoulli_guide, "optim": optim.Adam({"lr": 0.01}),
           "loss": elbo, "num_steps": 100}, {"num_samples": 1}],
         False,
-        1e-2
+        2.5 * 1e-2
     ),
     T(
         bernoulli_model,
@@ -130,7 +130,7 @@ TEST_CASES = [
         naive_rainforth_eig,
         [500, 500],
         True,
-        0.2
+        0.22
     ),
     T(
         basic_2p_linear_model_sds_10_2pt5,
@@ -184,7 +184,7 @@ TEST_CASES = [
         naive_rainforth_eig,
         [400, 400, 400],
         True,
-        0.2
+        0.22
     ),
     # This fails because guide is wrong
     pytest.param(
@@ -228,11 +228,11 @@ TEST_CASES = [
 def test_eig_lm(model, design, observation_labels, target_labels, estimator, args, eig, allow_error):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
-    y = estimator(model, design, observation_labels, target_labels, *args)
+    y = estimator(model, design, observation_labels, target_labels, *args).cpu()
     if model is bernoulli_model:
-        y_true = bernoulli_ground_truth(model, design, observation_labels, target_labels, eig=eig)
+        y_true = bernoulli_ground_truth(model, design, observation_labels, target_labels, eig=eig).cpu()
     else:
-        y_true = linear_model_ground_truth(model, design, observation_labels, target_labels, eig=eig)
+        y_true = linear_model_ground_truth(model, design, observation_labels, target_labels, eig=eig).cpu()
     print()
     print(estimator.__name__)
     print(y)
