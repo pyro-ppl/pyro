@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-
+from opt_einsum.parser import convert_to_valid_einsum_chars
 
 EINSUM_SYMBOLS_BASE = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -14,6 +14,10 @@ def einsum(equation, *operands):
     """
     Log-sum-exp implementation of einsum.
     """
+    # rename symbols to support PyTorch 0.4.1 and earlier,
+    # which allow only symbols a-z.
+    equation = convert_to_valid_einsum_chars(equation)
+
     inputs, output = equation.split('->')
     inputs = inputs.split(',')
 
