@@ -22,22 +22,6 @@ def _patch(target):
     return decorator
 
 
-@_patch('torch._standard_gamma')
-def _torch_standard_gamma(concentration):
-    unpatched_fn = _torch_standard_gamma._pyro_unpatched
-    if concentration.is_cuda:
-        return unpatched_fn(concentration.cpu()).cuda(concentration.get_device())
-    return unpatched_fn(concentration)
-
-
-@_patch('torch._dirichlet_grad')
-def _torch_dirichlet_grad(x, concentration, total):
-    unpatched_fn = _torch_dirichlet_grad._pyro_unpatched
-    if x.is_cuda:
-        return unpatched_fn(x.cpu(), concentration.cpu(), total.cpu()).cuda(x.get_device())
-    return unpatched_fn(x, concentration, total)
-
-
 def _einsum(equation, operands):
     # work around torch.einsum performance issues
     # see https://github.com/pytorch/pytorch/issues/10661
