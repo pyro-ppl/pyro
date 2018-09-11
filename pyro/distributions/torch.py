@@ -4,7 +4,6 @@ import torch
 from torch.distributions import constraints
 
 from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistributionMixin
-from pyro.distributions.util import eye_like
 
 
 class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
