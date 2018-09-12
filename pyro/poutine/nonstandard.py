@@ -66,6 +66,25 @@ for op in operator.__all__:
                 make_nonstandard(getattr(operator, op)))
 
 
+class ReversedBox(object):
+    def __init__(self, value):
+        self.push(value)
+
+    def pop(self):
+        if isinstance(self._ptr, ReversedBox):
+            val = self._ptr.pop()
+            self.push(val._ptr)
+            return val
+        else:
+            return self
+
+    def push(self, value):
+        if isinstance(self._ptr, ReversedBox):
+            self._ptr.push(value)
+        else:
+            self._ptr = value
+
+
 class NonstandardMessenger(Messenger):
     """
     Compositional nonstandard interpretation messenger.
@@ -80,9 +99,20 @@ class NonstandardMessenger(Messenger):
     6. Return boxed output
 
     Wrapping a function (ordering option #2):
-    1. Keep boxing things up in _process_message
+    1. Given a box, keep installing things on its stack on the way up
     2. In default_process, apply the maximally boxed function
     3. Unbox things on the way down in _postprocess_message
+
+    Wrapping a function (ordering option #3):
+    1. Given a box with a value stack, pop the bottom value from the stack on up
+    2. In default_process, apply the function to the unboxed values
+    3. Push values onto the bottom of the stack on the way down
+    This seems like the desired behavior, but how to represent value wrappers?
+    Represent stack with _ptr:
+      pop() walks down and removes last value and sets raw pointer
+      push() walks down and adds pointer at end of stack to new value
+
+    Options #1 and #3 can simulate each other
 
     How should function registration work?
     """
