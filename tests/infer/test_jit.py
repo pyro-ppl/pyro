@@ -120,6 +120,7 @@ def test_grad_expand():
     f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
 
 
+@pytest.mark.xfail(reason="https://github.com/pytorch/pytorch/issues/11555")
 def test_masked_fill():
 
     def f(y, mask):
@@ -134,14 +135,19 @@ def test_masked_fill():
 def test_masked_fill_workaround():
 
     def f(y, mask):
+        return y.clone().masked_fill_(mask, 0.)
+
+    def g(y, mask):
         y = y.clone()
-        y[mask] = 0.
+        y[mask] = 0.  # this is much slower than .masked_fill_()
         return y
 
     x = torch.tensor([-float('inf'), -1., 0., 1., float('inf')])
     y = x / x.unsqueeze(-1)
     mask = ~(y == y)
-    f = torch.jit.trace(f, (y, mask))
+    assert_equal(f(y, mask), g(y, mask))
+    g = torch.jit.trace(g, (y, mask))
+    assert_equal(f(y, mask), g(y, mask))
 
 
 @pytest.mark.parametrize('expand', [False, True])
