@@ -44,7 +44,7 @@ def memoized_sum_keepdim(tensor, dim):
     return result
 
 
-def sumproduct(factors, target_shape=(), optimize=True):
+def sumproduct(factors, target_shape=(), optimize=True, device="cpu"):
     """
     Compute product of factors; then sum down extra dims and broadcast up
     missing dims so that result has shape ``target_shape``.
@@ -53,6 +53,8 @@ def sumproduct(factors, target_shape=(), optimize=True):
     :param torch.Size target_shape: An optional shape of the result.
         If missing, all dimensions will be summed out.
     :param bool optimize: Whether to use the :mod:`opt_einsum` backend.
+    :param str device: optional argument to set device on which to create
+        any new tensors.
     :return: A tensor of shape ``target_shape``.
     """
     # Handle numbers and trivial cases.
@@ -62,7 +64,7 @@ def sumproduct(factors, target_shape=(), optimize=True):
         (numbers if isinstance(t, Number) else tensors).append(t)
     if not tensors:
         return torch.tensor(float(reduce(operator.mul, numbers, 1.)),
-                            device=torch.Tensor().device).expand(target_shape)
+                            device=device).expand(target_shape)
     if numbers:
         number_part = reduce(operator.mul, numbers, 1.)
         tensor_part = sumproduct(tensors, target_shape, optimize=optimize)
