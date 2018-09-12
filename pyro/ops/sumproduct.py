@@ -61,7 +61,8 @@ def sumproduct(factors, target_shape=(), optimize=True):
     for t in factors:
         (numbers if isinstance(t, Number) else tensors).append(t)
     if not tensors:
-        return torch.tensor(float(reduce(operator.mul, numbers, 1.))).expand(target_shape)
+        return torch.tensor(float(reduce(operator.mul, numbers, 1.)),
+                            device=torch.Tensor().device).expand(target_shape)
     if numbers:
         number_part = reduce(operator.mul, numbers, 1.)
         tensor_part = sumproduct(tensors, target_shape, optimize=optimize)
