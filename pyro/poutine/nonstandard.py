@@ -66,7 +66,25 @@ for op in operator.__all__:
                 make_nonstandard(getattr(operator, op)))
 
 
-class ReversedBox(object):
+class ForwardBox(object):
+    def __init__(self, value):
+        self.push(value)
+
+    def pop(self):
+        return self._ptr
+
+    def push(self, value):
+        value._ptr = self
+        return value
+
+
+for op in operator.__all__:
+    if hasattr(operator, "__{}__".format(op)) and \
+       callable(getattr(operator, op)):
+        setattr(ForwardBox, "__{}__".format(op),
+                make_nonstandard(getattr(operator, op)))
+
+class ReverseBox(object):
     def __init__(self, value):
         self.push(value)
 
@@ -82,7 +100,17 @@ class ReversedBox(object):
         if isinstance(self._ptr, ReversedBox):
             self._ptr.push(value)
         else:
+            if isinstance(value, ReversedBox):
+                value.push(self._ptr)
             self._ptr = value
+        return self
+
+
+for op in operator.__all__:
+    if hasattr(operator, "__{}__".format(op)) and \
+       callable(getattr(operator, op)):
+        setattr(ReverseBox, "__{}__".format(op),
+                make_nonstandard(getattr(operator, op)))
 
 
 class NonstandardMessenger(Messenger):
@@ -194,6 +222,98 @@ class NonstandardMessenger(Messenger):
     def _reset(self):
         self._wrapper_cell.clear()
         return super(NonstandardMessenger, self)._reset()
+
+
+class ForwardNonstandardMessenger(Messenger):
+    """
+    Compositional nonstandard interpretation messenger.
+    Useful for lazy evaluation, dependency tracking, conjugacy, etc.
+
+    Wrapping a function (ordering option #1):
+    1. Box all unboxed inputs <-- _process_message / __call__
+    2. Unbox all boxed inputs <-- _process_message
+    3. Unbox boxed function <-- _process_message
+    4. Call unboxed function on unboxed inputs <-- what happens here??
+    5. Box unboxed output <-- _postprocess_message
+    6. Return boxed output
+    """
+    def __init__(self):
+        super(ForwardNonstandardMessenger, self).__init__()
+        self._wrapper_cell = {}
+
+    # these will usually need to be redefined for each subclass
+    value_wrapper = ForwardBox
+    function_wrapper = ForwardBox
+
+    def _process_message(self, msg):
+        """
+        Unbox all boxed inputs
+        """
+        # boxing of any unboxed function and inputs
+        if not isinstance(msg["fn"], self.function_wrapper):
+            msg["fn"] = self.function_wrapper(msg["fn"])
+        msg["args"] = tuple(a if isinstance(a, self.value_wrapper)
+                            else self.value_wrapper(a)
+                            for a in msg["args"])
+        if msg["value"] is not None:
+            msg["value"] = self.value_wrapper(msg["value"])
+
+        # store boxed values for postprocessing
+        self._wrapper_cell["fn"] = msg["fn"]
+        self._wrapper_cell["args"] = msg["args"]
+        self._wrapper_cell["kwargs"] = msg["kwargs"]
+        if msg["value"] is not None:
+            self._wrapper_cell["value"] = msg["value"]
+
+        # unbox values for function application
+        msg["fn"] = msg["fn"].pop()
+        msg["args"] = tuple(arg.pop() for arg in msg["args"])
+        msg["kwargs"] = {name: kwarg.pop()
+                         for name, kwarg in msg["kwargs"].items()}
+        if msg["value"] is not None:
+            msg["value"] = msg["value"].pop()
+
+    def _postprocess_message(self, msg):
+        """
+        Re-boxing.
+        """
+        # validation of wrapped values
+        assert all(self._wrapper_cell.get(field, None) is not None
+                   for field in ["fn", "args", "kwargs"])
+
+        # capture unboxed value
+        new_val = msg["value"]
+
+        # restore boxed values
+        msg.update(self._wrapper_cell)
+        self._wrapper_cell.clear()
+
+        # application of boxed function
+        # (this is where the actual effect is applied)
+        msg["value"] = msg["fn"](*msg["args"], **msg["kwargs"])
+        msg["value"] = msg["value"].push(new_val)  # update value pointer
+
+    def _reset(self):
+        self._wrapper_cell.clear()
+        return super(ForwardNonstandardMessenger, self)._reset()
+
+
+class ReverseNonstandardMessenger(ForwardNonstandardMessenger):
+    """
+    Alternate ordering
+
+    Wrapping a function (ordering option #3):
+    1. Given a box with a value stack, pop the bottom value from the stack on up
+    2. In default_process, apply the function to the unboxed values
+    3. Push values onto the bottom of the stack on the way down
+    This seems like the desired behavior, but how to represent value wrappers?
+    Represent stack with _ptr:
+      pop() walks down and removes last value and sets raw pointer
+      push() walks down and adds pointer at end of stack to new value
+    """
+
+    value_wrapper = ReverseBox
+    function_wrapper = ReverseBox
 
 
 class LazyBox(Box):
