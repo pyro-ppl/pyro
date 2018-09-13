@@ -257,7 +257,7 @@ class Dice(object):
             for ordinal, cost_terms in costs:
                 factors = factors_table.get(ordinal, [])
                 for cost in cost_terms:
-                    prob = sumproduct(factors, cost.shape)
+                    prob = sumproduct(factors, cost.shape, device=cost.device)
                     mask = prob > 0
                     if torch.is_tensor(mask) and not mask.all():
                         cost, prob, mask = broadcast_all(cost, prob, mask)
