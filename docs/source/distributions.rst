@@ -56,14 +56,6 @@ AVFMultivariateNormal
     :undoc-members:
     :show-inheritance:
 
-Binomial
---------
-
-.. autoclass:: pyro.distributions.Binomial
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 Delta
 -----
 .. autoclass:: pyro.distributions.Delta
@@ -81,13 +73,6 @@ EmpiricalDistribution
 GaussianScaleMixture
 ------------------------------------
 .. autoclass:: pyro.distributions.GaussianScaleMixture
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-HalfCauchy
-----------
-.. autoclass:: pyro.distributions.HalfCauchy
     :members:
     :undoc-members:
     :show-inheritance:
