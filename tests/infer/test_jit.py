@@ -155,11 +155,28 @@ def test_masked_fill_workaround():
 def test_scatter():
 
     def make_one_hot(x, i):
-        return x.new_zeros(x.shape).scatter(-1, i, 1.0)
+        return x.new_zeros(x.shape).scatter(-1, i.unsqueeze(-1), 1.0)
 
     x = torch.randn(5, 4, 3)
-    i = torch.randint(0, 3, torch.Size((5, 4, 1)))
+    i = torch.randint(0, 3, torch.Size((5, 4)))
     torch.jit.trace(make_one_hot, (x, i))
+
+
+def test_scatter_workaround():
+
+    def make_one_hot_expected(x, i):
+        return x.new_zeros(x.shape).scatter(-1, i.unsqueeze(-1), 1.0)
+
+    def make_one_hot_actual(x, i):
+        eye = torch.eye(x.shape[-1], dtype=x.dtype, device=x.device)
+        return eye[i].clone()
+
+    x = torch.randn(5, 4, 3)
+    i = torch.randint(0, 3, torch.Size((5, 4)))
+    torch.jit.trace(make_one_hot_actual, (x, i))
+    expected = make_one_hot_expected(x, i)
+    actual = make_one_hot_actual(x, i)
+    assert_equal(actual, expected)
 
 
 @pytest.mark.parametrize('expand', [False, True])
