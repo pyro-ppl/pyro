@@ -26,7 +26,7 @@ with a slider. To adapt a linear model to this case, we add a sigmoid transforma
 using the function
 
     :math:`\frac{1}{1 + e^{-x}}`
-    
+
 to the output from a regular linear model. To make the model more realistic, we allow
 each participant a random offset and slope to account for personal differences in using the slider.
 
