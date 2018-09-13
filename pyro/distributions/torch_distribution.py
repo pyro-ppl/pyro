@@ -237,6 +237,15 @@ class MaskedDistribution(TorchDistribution):
         self._mask = mask.byte()
         super(MaskedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
 
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(MaskedDistribution, _instance)
+        batch_shape = torch.Size(batch_shape)
+        new.base_dist = self.base_dist.expand(batch_shape)
+        new._mask = self._mask.expand(batch_shape)
+        super(MaskedDistribution, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
+
     @property
     def has_rsample(self):
         return self.base_dist.has_rsample
