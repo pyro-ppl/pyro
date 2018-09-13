@@ -14,6 +14,40 @@ from pyro.contrib.util import rmv
 from pyro.contrib.glmm import sigmoid_model, rf_group_assignments
 from pyro.contrib.glmm.guides import SigmoidGuide
 
+"""
+Sequential optimal experiment design using a sigmoid-transformed linear model.
+
+In this example, we demonstrate the effectiveness of using optimal experiment design (OED)
+over a sequence of experiments.
+
+In many settings, the response in a study is restricted to fall in a bounded interval,
+say :math:`[0,1]`. For instance, in a psychology study which asks participants to respond
+with a slider. To adapt a linear model to this case, we add a sigmoid transformation
+using the function
+
+    :math:`\frac{1}{1 + e^{-x}}`
+    
+to the output from a regular linear model. To make the model more realistic, we allow
+each participant a random offset and slope to account for personal differences in using the slider.
+
+The experiment we are designing is an AB test. We choose the allocation of participants
+to the groups A and B using OED, in this case by maximizing the Barber-Agakov bound on
+expected information gain (EIG).
+
+Having found the optimal experiment, we produce data from a fixed simulator that represents
+the actual responses of the respondents. We update our beliefs about the effects of A and B
+using Bayesian inference (which can actually be derived from the posterior approximation found
+when maximizing the Barber-Agakov bound).
+
+We then design and perform the next experiment, assuming that we have a fresh pool of
+participants.
+
+To assess the benefit of using OED, rather than assigning participants at random to the groups,
+we examine the posterior entropy of the final posterior. This tells us how certain (or not)
+we have become about the effects of A and B. We typically find lower entropy (lower uncertainty)
+when using OED.
+"""
+
 # Random effects designs
 AB_test_reff_6d_10n_12p, AB_sigmoid_design_6d = rf_group_assignments(10)
 
