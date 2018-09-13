@@ -151,6 +151,17 @@ def test_masked_fill_workaround():
     assert_equal(f(y, mask), g(y, mask))
 
 
+@pytest.mark.xfail(reason="https://github.com/pytorch/pytorch/issues/11614")
+def test_scatter():
+
+    def make_one_hot(x, i):
+        return x.new_zeros(x.shape).scatter(-1, i, 1.0)
+
+    x = torch.randn(5, 4, 3)
+    i = torch.randint(0, 3, torch.Size((5, 4, 1)))
+    torch.jit.trace(make_one_hot, (x, i))
+
+
 @pytest.mark.parametrize('expand', [False, True])
 @pytest.mark.parametrize('shape', [(), (4,), (5, 4)])
 def test_bernoulli_enumerate(shape, expand):

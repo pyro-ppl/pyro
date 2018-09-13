@@ -58,6 +58,8 @@ class CompiledFunction(object):
                                         message="torch.tensor might cause the trace to be incorrect")
                 warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
                                         message="Converting a tensor to a Python")
+                warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
+                                        message="torch.tensor results are registered as constants in the trace")
 
                 self.compiled[argc] = torch.jit.trace(compiled, params_and_args, check_trace=False)
         else:

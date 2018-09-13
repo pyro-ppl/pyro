@@ -178,6 +178,8 @@ class HMC(TraceKernel):
                                     message="torch.tensor might cause the trace to be incorrect")
             warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
                                     message="Converting a tensor to a Python")
+            warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
+                                    message="torch.tensor results are registered as constants in the trace")
             self._compiled_potential_fn = torch.jit.trace(compiled, vals)
         return self._compiled_potential_fn(*vals)
 
