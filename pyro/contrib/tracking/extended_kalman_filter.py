@@ -187,7 +187,7 @@ class EKFState(object):
         S = H.mm(P).mm(H.transpose(-1, -2)) + R  # innovation cov
 
         K_prefix = self._cov.mm(H.transpose(-1, -2))
-        dx = K_prefix.mm(torch.gesv(dz, S)[0]).squeeze(1)  # K*dz
+        dx = K_prefix.mm(torch.gesv(dz.unsqueeze(1), S)[0]).squeeze(1)  # K*dz
         x = self._dynamic_model.geodesic_difference(x, -dx)
 
         I = eye_like(x, self._dynamic_model.dimension)  # noqa: E741
