@@ -81,8 +81,9 @@ class NonstandardMessenger(Messenger):
 
 class LazyValue(object):
     def __init__(self, fn, *args, **kwargs):
+        if getattr(fn, "__wrapped", False):
+            raise NotImplementedError
         self._expr = (fn, args, kwargs)
-        assert not getattr(fn, "__wrapped", False)
         self._value = None
 
     @rewrap_ret(Box)
