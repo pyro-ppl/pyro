@@ -14,7 +14,10 @@ def unwrap_args(fn):
     return _fn
 
 
-def rewrap_ret(cls, fn):
+def rewrap_ret(cls, fn=None):
+    if fn is None:
+        return lambda x: rewrap_ret(cls, x)
+
     def _fn(*args, **kwargs):
         return cls(fn(*args, **kwargs))
     return _fn
