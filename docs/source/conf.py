@@ -46,6 +46,10 @@ extensions = [
     'sphinx.ext.doctest',
 ]
 
+# Disable documentation inheritance so as to avoid inheriting
+# docstrings in a different format, e.g. when the parent class
+# is a PyTorch class.
+
 autodoc_inherit_docstrings = False
 
 # Add any paths that contain templates here, relative to this directory.
