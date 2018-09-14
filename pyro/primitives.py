@@ -14,7 +14,7 @@ import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import param_with_module_name
-from pyro.poutine.runtime import _DIM_ALLOCATOR, _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack
+from pyro.poutine.runtime import _DIM_ALLOCATOR, _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack, effectful
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 
 
@@ -30,6 +30,22 @@ def clear_param_store():
     Clears the ParamStore. This is especially useful if you're working in a REPL.
     """
     return _PYRO_PARAM_STORE.clear()
+
+
+# @effectful(type="sample")
+# def sample(name, fn, *args, **kwargs):
+#     obs = kwargs.pop("obs", None)
+#     infer = kwargs.pop("infer", {}).copy()
+#     # check if stack is empty
+#     # if stack empty, default behavior (defined here)
+#     if obs is not None:
+#         return obs
+#     return fn(*args, **kwargs)
+# 
+# 
+@effectful(type="param")
+def param(name, *args, **kwargs):
+    return _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
 
 
 def sample(name, fn, *args, **kwargs):
@@ -312,7 +328,7 @@ class irange(object):
 
 
 # XXX this should have the same call signature as torch.Tensor constructors
-def param(name, *args, **kwargs):
+def _param(name, *args, **kwargs):
     """
     Saves the variable as a parameter in the param store.
     To interact with the param store or write to disk,

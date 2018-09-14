@@ -114,16 +114,38 @@ class Messenger(object):
         Process the message by calling appropriate method of itself based
         on message type. The message is updated in place.
         """
-        return getattr(self, "_pyro_{}".format(msg["type"]))(msg)
+        if hasattr(self, "_pyro_{}".format(msg["type"])):
+            return getattr(self, "_pyro_{}".format(msg["type"]))(msg)
+        return None
 
     def _postprocess_message(self, msg):
+        if hasattr(self, "_pyro_post_{}".format(msg["type"])):
+            return getattr(self, "_pyro_post_{}".format(msg["type"]))(msg)
         return None
 
-    def _pyro_sample(self, msg):
-        return None
+    @classmethod
+    def register(cls, fn, type=None, post=None):
+        """
+        @SomeMessengerClass.register
+        def some_function(...)
+        """
+        if type is None:
+            type = fn.__code__.co_name  # XXX is this right?
+        # TODO add staticmethod override
+        setattr(cls, "_pyro_" + type, staticmethod(fn))
+        return fn
 
-    def _pyro_apply(self, msg):
-        return None
+    @classmethod
+    def unregister(cls, fn=None, type=None, post=None):
+        """
+        SomeMessengerClass.unregister(fn) or SomeMessengerClass.unregister("name")
+        """
+        # TODO use this to remove stuff, useful for dealing with inheritance
+        raise NotImplementedError  # remove a name
 
-    def _pyro_param(self, msg):
-        return None
+    @classmethod
+    def unregister_all(cls):
+        """
+        call unregister on all methods
+        """
+        raise NotImplementedError

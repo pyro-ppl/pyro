@@ -99,49 +99,15 @@ def default_process_message(msg):
     :param msg: a message to be processed
     :returns: None
     """
-    validate_message(msg)
-    if msg["type"] == "sample" or msg["type"] == "apply":
-        fn, args, kwargs = \
-            msg["fn"], msg["args"], msg["kwargs"]
-
-        # msg["done"] enforces the guarantee in the poutine execution model
-        # that a site's non-effectful primary computation should only be executed once:
-        # if the site already has a stored return value,
-        # don't reexecute the function at the site,
-        # and do any side effects using the stored return value.
-        if msg["done"]:
-            return msg
-
-        if msg["type"] == "sample" and msg["is_observed"]:
-            assert msg["value"] is not None
-            val = msg["value"]
-        else:
-            val = fn(*args, **kwargs)
-
-        # after fn has been called, update msg to prevent it from being called again.
+    # validate_message(msg)
+    if msg["done"] or msg["is_observed"]:
         msg["done"] = True
-        msg["value"] = val
-    elif msg["type"] == "param":
-        name, args, kwargs = \
-            msg["name"], msg["args"], msg["kwargs"]
+        return msg
 
-        # msg["done"] enforces the guarantee in the poutine execution model
-        # that a site's non-effectful primary computation should only be executed once:
-        # if the site already has a stored return value,
-        # don't reexecute the function at the site,
-        # and do any side effects using the stored return value.
-        if msg["done"]:
-            return msg
+    msg["value"] = msg["fn"](*msg["args"], **msg["kwargs"])
 
-        ret = _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
-
-        # after the param store has been queried, update msg["done"]
-        # to prevent it from being queried again.
-        msg["done"] = True
-        msg["value"] = ret
-    else:
-        assert False
-    return None
+    # after fn has been called, update msg to prevent it from being called again.
+    msg["done"] = True
 
 
 def apply_stack(initial_msg):
@@ -196,3 +162,61 @@ def am_i_wrapped():
     :returns: bool
     """
     return len(_PYRO_STACK) > 0
+
+
+def effectful(fn=None, type=None):
+    """
+    Wrapper for calling apply_stack to apply any active effects.
+    """
+    if fn is None:
+        return lambda x: effectful(x, type=type)
+
+    if getattr(fn, "__wrapped", None):
+        return fn
+    else:
+        if type is None:
+            type = fn.__code__.co_name  # XXX is this right?
+
+        assert type != "message", "cannot use 'message' as keyword"
+
+        def _fn(*args, **kwargs):
+
+            # XXX temporary logic to handle legacy name argument
+            if type in ("sample", "param"):
+                if isinstance(args[0], str) and "name" not in kwargs:
+                    name = args[0]
+                else:
+                    name = kwargs.get("name", None)
+
+                infer = kwargs.get("infer", {})
+
+            # XXX handle legacy obs kwarg
+            if type == "sample":
+                is_observed = kwargs.get("obs", None) is not None
+            else:
+                is_observed = False
+
+            if not am_i_wrapped():
+                return fn(*args, **kwargs)
+            else:
+                msg = {
+                    "type": type,
+                    "name": name,
+                    "fn": fn,  # XXX this isn't quite right?
+                    "is_observed": is_observed,
+                    "args": args,
+                    "kwargs": kwargs,
+                    "value": None,
+                    "scale": 1.0,
+                    "mask": None,
+                    "cond_indep_stack": (),
+                    "done": False,
+                    "stop": False,
+                    "continuation": None,
+                    "infer": infer,
+                }
+                # apply the stack and return its return value
+                apply_stack(msg)
+                return msg["value"]
+        _fn.__wrapped = True
+        return _fn
