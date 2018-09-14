@@ -136,7 +136,7 @@ class Messenger(object):
             type = fn.__code__.co_name  # XXX is this right?
 
         # TODO add staticmethod override
-        setattr(cls, "_pyro_" + "post_" if post else "" + type, staticmethod(fn))
+        setattr(cls, "_pyro_" + ("post_" if post else "") + type, staticmethod(fn))
         return fn
 
     @classmethod

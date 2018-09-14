@@ -172,12 +172,13 @@ def effectful(fn=None, type=None):
 
             # XXX temporary logic to handle legacy name argument
             if type in ("sample", "param"):
+
                 if isinstance(args[0], str) and "name" not in kwargs:
                     name = args[0]
-                else:
-                    name = kwargs.get("name", None)
+            else:
+                name = kwargs.get("name", None)
 
-                infer = kwargs.get("infer", {})
+            infer = kwargs.get("infer", {})
 
             # XXX handle legacy obs kwarg
             if type == "sample":
