@@ -148,5 +148,5 @@ class Messenger(object):
         if type is None:
             type = fn.__code__.co_name  # XXX is this right?
 
-        delattr(cls, "_pyro_" + "post_" if post else "" + type)
+        delattr(cls, "_pyro_" + ("post_" if post else "") + type)
         return fn

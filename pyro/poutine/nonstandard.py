@@ -14,9 +14,9 @@ def unwrap_args(fn):
     return _fn
 
 
-def rewrap_ret(fn):
+def rewrap_ret(cls, fn):
     def _fn(*args, **kwargs):
-        return Box(fn(*args, **kwargs))
+        return cls(fn(*args, **kwargs))
     return _fn
 
 
@@ -30,10 +30,8 @@ def _define_operators(c):
            not hasattr(c, "__{}__".format(op)):
             typename = "__{}__".format(op)
             setattr(c, "__{}__".format(op),
-                    # XXX why doesn't this work identically?
-                    # c(getattr(operator, op), typename=typename))
-                    rewrap_ret(effectful(unwrap_args(getattr(operator, op)),
-                                         type=typename)))
+                    rewrap_ret(c, effectful(unwrap_args(getattr(operator, op)),
+                                            type=typename)))
     return c
 
 
@@ -62,12 +60,11 @@ class Box(object):
         self.typename = typename
 
     def __call__(self, *args, **kwargs):
-        raise NotImplementedError
-        # assert callable(self.value)
-        # # unbox and rebox
-        # return type(self)(
-        #     effectful(unwrap_args(self.value), type=self.typename)(
-        #         *args, **kwargs))
+        assert callable(self.value)
+        # unbox and rebox
+        return rewrap_ret(
+            type(self), effectful(unwrap_args(self.value), type=self.typename)
+        )(*args, **kwargs)
 
 
 @_register_operators(lambda msg: msg)
@@ -82,6 +79,7 @@ class NonstandardMessenger(Messenger):
 class LazyValue(object):
     def __init__(self, fn, *args, **kwargs):
         self._expr = (fn, args, kwargs)
+        assert not getattr(fn, "__wrapped", False)
         self._value = None
 
     def eval(self):
