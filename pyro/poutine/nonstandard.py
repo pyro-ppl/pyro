@@ -14,6 +14,12 @@ def unwrap_args(fn):
     return _fn
 
 
+def rewrap_ret(fn):
+    def _fn(*args, **kwargs):
+        return Box(fn(*args, **kwargs))
+    return _fn
+
+
 def _define_operators(c):
     """
     Decorator for generating operator methods
@@ -23,9 +29,11 @@ def _define_operators(c):
            callable(getattr(operator, op)) and \
            not hasattr(c, "__{}__".format(op)):
             typename = "__{}__".format(op)
-            # TODO pass a sensible name to effectful
             setattr(c, "__{}__".format(op),
-                    effectful(unwrap_args(getattr(operator, op)), type=typename))
+                    # XXX why doesn't this work identically?
+                    # c(getattr(operator, op), typename=typename))
+                    rewrap_ret(effectful(unwrap_args(getattr(operator, op)),
+                                         type=typename)))
     return c
 
 
@@ -38,7 +46,6 @@ def _register_operators(default, post=False):
                callable(getattr(operator, op)) and \
                hasattr(c, typename) and \
                not hasattr(msngr, "_pyro_" + ("_post_" if post else "") + typename):
-                # TODO pass a sensible name to effectful
                 msngr.register(fn=default, type=typename)
         return msngr
     return _decorator
@@ -49,14 +56,18 @@ class Box(object):
     """
     Wrapper for defining nonstandard interpretations with poutine
     """
-    def __init__(self, value):
+    def __init__(self, value, typename=None):
         assert not isinstance(value, Box), "dont need to wrap twice"
         self.value = value
+        self.typename = typename
 
     def __call__(self, *args, **kwargs):
-        assert callable(self.value)
-        # unbox and rebox
-        return type(self)(unwrap_args(effectful(self.value))(*args, **kwargs))
+        raise NotImplementedError
+        # assert callable(self.value)
+        # # unbox and rebox
+        # return type(self)(
+        #     effectful(unwrap_args(self.value), type=self.typename)(
+        #         *args, **kwargs))
 
 
 @_register_operators(lambda msg: msg)
@@ -66,3 +77,36 @@ class NonstandardMessenger(Messenger):
     Does not do any weird nesting of value wrappers.
     """
     value_wrapper = Box
+
+
+class LazyValue(object):
+    def __init__(self, fn, *args, **kwargs):
+        self._expr = (fn, args, kwargs)
+        self._value = None
+
+    def eval(self):
+        if self._value is None:
+            fn = self._expr[0]
+            args = tuple(a.value.eval() if isinstance(a.value, LazyValue) else a
+                         for a in self._expr[1])
+            kwargs = {k: v.value.eval() if isinstance(v.value, LazyValue) else v
+                      for k, v in self._expr[2].items()}
+            self._value = fn(*args, **kwargs)
+            self._expr = None
+        return self._value
+
+
+def lazy_wrap(msg):
+    msg["value"] = LazyValue(msg["fn"], *msg["args"], **msg["kwargs"])
+    msg["done"] = True
+    return msg
+
+
+@_register_operators(lazy_wrap)
+class LazyMessenger(NonstandardMessenger):
+
+    def _process_message(self, msg):
+        super(LazyMessenger, self)._process_message(msg)
+        if not msg["done"] and msg["fn"] is not None:
+            return lazy_wrap(msg)
+        return msg
