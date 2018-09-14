@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import operator
 
 from .messenger import Messenger
-from .runtime import apply_stack, effectful
+from .runtime import effectful
 
 
 def _define_operators(c):

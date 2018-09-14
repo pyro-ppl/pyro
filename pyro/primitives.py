@@ -14,7 +14,7 @@ import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import param_with_module_name
-from pyro.poutine.runtime import _DIM_ALLOCATOR, _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack, effectful
+from pyro.poutine.runtime import _DIM_ALLOCATOR, _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack, effectful  # noqa: E501
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 
 
@@ -31,7 +31,7 @@ def clear_param_store():
     """
     return _PYRO_PARAM_STORE.clear()
 
- 
+
 @effectful(type="param")
 def param(name, *args, **kwargs):
     """
