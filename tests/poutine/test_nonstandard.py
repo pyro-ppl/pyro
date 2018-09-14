@@ -72,7 +72,8 @@ def test_lazy_simple():
     x = model()
     assert isinstance(x, Box)
     assert isinstance(x.value, LazyValue)
-    assert x.value.eval().value == 7
+    assert x.eval().value == 7
+    assert x.value.eval() == 7
 
 
 def test_mixed_strict_lazy():
@@ -81,7 +82,7 @@ def test_mixed_strict_lazy():
     def model():
         a = Box(1) + Box(2) * Box(3)
         assert isinstance(a.value, LazyValue)
-        b = a.value.eval() + Box(1)
+        b = a.eval() + Box(1)
         assert isinstance(b.value, LazyValue)
         assert b.value._expr
         c = b + a
@@ -91,4 +92,5 @@ def test_mixed_strict_lazy():
 
     x = model()
     assert isinstance(x.value, LazyValue)
-    assert x.value.eval().value == 15
+    assert x.eval().value == 15
+    assert x.value.eval() == 15

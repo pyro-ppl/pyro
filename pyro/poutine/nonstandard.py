@@ -43,8 +43,7 @@ def _register_operators(default, post=False, overwrite=True):
         for op in operator.__all__:
             typename = "__{}__".format(op)
             if hasattr(operator, typename) and \
-               callable(getattr(operator, op)) and \
-               hasattr(Box, typename):
+               callable(getattr(operator, op)):
                 if overwrite or not \
                    hasattr(msngr, "_pyro_" + ("_post_" if post else "") + typename):
                     msngr.register(fn=default, type=typename)
@@ -61,6 +60,20 @@ class Box(object):
         assert not isinstance(value, Box), "dont need to wrap twice"
         self.value = value
         self.typename = typename
+
+    def __getattribute__(self, key):
+        # cases
+        if key == "value" or \
+           (key in operator.__all__ and callable(getattr(operator, key))):
+            return super(Box, self).__getattribute__(key)
+        elif hasattr(self.value, key):
+            val = getattr(self.value, key)
+            if callable(val):
+                return rewrap_ret(
+                    type(self),
+                    effectful(unwrap_args(val), type=key))
+            return type(self)(val)
+        return super(Box, self).__getattribute__(key)
 
     def __call__(self, *args, **kwargs):
         assert callable(self.value)
@@ -86,7 +99,6 @@ class LazyValue(object):
         self._expr = (fn, args, kwargs)
         self._value = None
 
-    @rewrap_ret(Box)
     def eval(self):
         if self._value is None:
             fn = self._expr[0]
