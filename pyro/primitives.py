@@ -31,20 +31,17 @@ def clear_param_store():
     """
     return _PYRO_PARAM_STORE.clear()
 
-
-# @effectful(type="sample")
-# def sample(name, fn, *args, **kwargs):
-#     obs = kwargs.pop("obs", None)
-#     infer = kwargs.pop("infer", {}).copy()
-#     # check if stack is empty
-#     # if stack empty, default behavior (defined here)
-#     if obs is not None:
-#         return obs
-#     return fn(*args, **kwargs)
-# 
-# 
+ 
 @effectful(type="param")
 def param(name, *args, **kwargs):
+    """
+    Saves the variable as a parameter in the param store.
+    To interact with the param store or write to disk,
+    see `Parameters <parameters.html>`_.
+
+    :param name: name of parameter
+    :returns: parameter
+    """
     return _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
 
 
@@ -325,38 +322,6 @@ class irange(object):
                         # convert to python numeric type as functions like torch.ones(*args)
                         # do not work with dim 0 torch.Tensor instances.
                         yield i if isinstance(i, numbers.Number) else i.item()
-
-
-# XXX this should have the same call signature as torch.Tensor constructors
-def _param(name, *args, **kwargs):
-    """
-    Saves the variable as a parameter in the param store.
-    To interact with the param store or write to disk,
-    see `Parameters <parameters.html>`_.
-
-    :param name: name of parameter
-    :returns: parameter
-    """
-    if not am_i_wrapped():
-        return _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
-    else:
-        msg = {
-            "type": "param",
-            "name": name,
-            "args": args,
-            "kwargs": kwargs,
-            "infer": {},
-            "scale": 1.0,
-            "mask": None,
-            "cond_indep_stack": (),
-            "value": None,
-            "done": False,
-            "stop": False,
-            "continuation": None
-        }
-        # apply the stack and return its return value
-        apply_stack(msg)
-        return msg["value"]
 
 
 def module(name, nn_module, update_module_params=False):

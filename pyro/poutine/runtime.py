@@ -125,7 +125,6 @@ def apply_stack(initial_msg):
     counter = 0
     # go until time to stop?
     for frame in stack:
-        validate_message(msg)
 
         counter = counter + 1
 
