@@ -38,15 +38,16 @@ def _define_operators(c):
     return c
 
 
-def _register_operators(default, post=False):
+def _register_operators(default, post=False, overwrite=True):
     def _decorator(msngr):
         for op in operator.__all__:
             typename = "__{}__".format(op)
             if hasattr(operator, typename) and \
                callable(getattr(operator, op)) and \
-               hasattr(Box, typename) and \
-               not hasattr(msngr, "_pyro_" + ("_post_" if post else "") + typename):
-                msngr.register(fn=default, type=typename)
+               hasattr(Box, typename):
+                if overwrite or not \
+                   hasattr(msngr, "_pyro_" + ("_post_" if post else "") + typename):
+                    msngr.register(fn=default, type=typename)
         return msngr
     return _decorator
 
