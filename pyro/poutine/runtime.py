@@ -170,21 +170,11 @@ def effectful(fn=None, type=None):
 
         def _fn(*args, **kwargs):
 
-            # XXX temporary logic to handle legacy name argument
-            if type in ("sample", "param"):
+            name = kwargs.pop("name", None)
+            infer = kwargs.pop("infer", {})
 
-                if isinstance(args[0], str) and "name" not in kwargs:
-                    name = args[0]
-            else:
-                name = kwargs.get("name", None)
-
-            infer = kwargs.get("infer", {})
-
-            # XXX handle legacy obs kwarg
-            if type == "sample":
-                is_observed = kwargs.get("obs", None) is not None
-            else:
-                is_observed = False
+            value = kwargs.pop("obs", None)
+            is_observed = value is not None
 
             if not am_i_wrapped():
                 return fn(*args, **kwargs)
@@ -196,7 +186,7 @@ def effectful(fn=None, type=None):
                     "is_observed": is_observed,
                     "args": args,
                     "kwargs": kwargs,
-                    "value": None,
+                    "value": value,
                     "scale": 1.0,
                     "mask": None,
                     "cond_indep_stack": (),

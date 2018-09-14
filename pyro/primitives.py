@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import copy
 import numbers
-import warnings
 from collections import OrderedDict
 from contextlib import contextmanager
 from inspect import isclass
@@ -14,7 +13,7 @@ import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import param_with_module_name
-from pyro.poutine.runtime import _DIM_ALLOCATOR, _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack, effectful  # noqa: E501
+from pyro.poutine.runtime import _DIM_ALLOCATOR, _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, effectful
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 
 
@@ -32,7 +31,6 @@ def clear_param_store():
     return _PYRO_PARAM_STORE.clear()
 
 
-@effectful(type="param")
 def param(name, *args, **kwargs):
     """
     Saves the variable as a parameter in the param store.
@@ -42,7 +40,9 @@ def param(name, *args, **kwargs):
     :param name: name of parameter
     :returns: parameter
     """
-    return _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
+    kwargs["name"] = name
+    return effectful(_PYRO_PARAM_STORE.get_param, type="param")(
+        name, *args, **kwargs)
 
 
 def sample(name, fn, *args, **kwargs):
@@ -60,42 +60,13 @@ def sample(name, fn, *args, **kwargs):
         in kwargs. See inference documentation for details.
     :returns: sample
     """
-    obs = kwargs.pop("obs", None)
-    infer = kwargs.pop("infer", {}).copy()
-    # check if stack is empty
-    # if stack empty, default behavior (defined here)
-    if not am_i_wrapped():
-        if obs is not None:
-            warnings.warn("trying to observe a value outside of inference at " + name,
-                          RuntimeWarning)
-            return obs
-        return fn(*args, **kwargs)
-    # if stack not empty, apply everything in the stack?
-    else:
-        # initialize data structure to pass up/down the stack
-        msg = {
-            "type": "sample",
-            "name": name,
-            "fn": fn,
-            "is_observed": False,
-            "args": args,
-            "kwargs": kwargs,
-            "value": None,
-            "infer": infer,
-            "scale": 1.0,
-            "mask": None,
-            "cond_indep_stack": (),
-            "done": False,
-            "stop": False,
-            "continuation": None
-        }
-        # handle observation
-        if obs is not None:
-            msg["value"] = obs
-            msg["is_observed"] = True
-        # apply the stack and return its return value
-        apply_stack(msg)
-        return msg["value"]
+    # missing name, infer, is_observed
+    kwargs["name"] = name
+    if "infer" not in kwargs:
+        kwargs["infer"] = {}
+    if "obs" not in kwargs:
+        kwargs["obs"] = None
+    return effectful(fn, type="sample")(*args, **kwargs)
 
 
 class _Subsample(Distribution):
