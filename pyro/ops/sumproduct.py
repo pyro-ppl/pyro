@@ -16,14 +16,35 @@ def zip_align_right(xs, ys):
 
 
 def memoized_squeeze(tensor):
-    if hasattr(tensor, '_memoized_squeeze'):
-        return tensor._memoized_squeeze
+    """
+    Computes ``tensor.squeeze()`` memoizing the result for the lifetime of
+    ``tensor``. This enables sharing when used inside
+    :func:`~opt_einsum.shared_intermediates`.
+    """
+    if hasattr(tensor, '_pyro_memoized_squeeze'):
+        return tensor._pyro_memoized_squeeze
     result = tensor.squeeze()
-    tensor._memoized_squeeze = result
+    tensor._pyro_memoized_squeeze = result
     return result
 
 
-def sumproduct(factors, target_shape=(), optimize=True):
+def memoized_sum_keepdim(tensor, dim):
+    """
+    Computes ``tensor.sum(dim, keepdim=True)`` memoizing the result for the
+    lifetime of ``tensor``. This enables sharing when used inside
+    :func:`~opt_einsum.shared_intermediates`.
+    """
+    if dim < 0:
+        dim += tensor.dim()
+    name = '_pyro_memoized_sum_keepdim_{}'.format(dim)
+    if hasattr(tensor, name):
+        return getattr(tensor, name)
+    result = tensor.sum(dim, keepdim=True)
+    setattr(tensor, name, result)
+    return result
+
+
+def sumproduct(factors, target_shape=(), optimize=True, device=None):
     """
     Compute product of factors; then sum down extra dims and broadcast up
     missing dims so that result has shape ``target_shape``.
@@ -32,6 +53,8 @@ def sumproduct(factors, target_shape=(), optimize=True):
     :param torch.Size target_shape: An optional shape of the result.
         If missing, all dimensions will be summed out.
     :param bool optimize: Whether to use the :mod:`opt_einsum` backend.
+    :param str device: optional argument to set device on which to create
+        any new tensors.
     :return: A tensor of shape ``target_shape``.
     """
     # Handle numbers and trivial cases.
@@ -40,7 +63,8 @@ def sumproduct(factors, target_shape=(), optimize=True):
     for t in factors:
         (numbers if isinstance(t, Number) else tensors).append(t)
     if not tensors:
-        return torch.tensor(float(reduce(operator.mul, numbers, 1.))).expand(target_shape)
+        return torch.tensor(float(reduce(operator.mul, numbers, 1.)),
+                            device=device).expand(target_shape)
     if numbers:
         number_part = reduce(operator.mul, numbers, 1.)
         tensor_part = sumproduct(tensors, target_shape, optimize=optimize)
@@ -51,7 +75,7 @@ def sumproduct(factors, target_shape=(), optimize=True):
         return naive_sumproduct(tensors, target_shape)
 
 
-def logsumproductexp(log_factors, target_shape=(), optimize=True):
+def logsumproductexp(log_factors, target_shape=(), optimize=True, device=None):
     """
     Compute sum of log factors; then log_sum_exp down extra dims and broadcast
     up missing dims so that result has shape ``target_shape``.
@@ -61,6 +85,8 @@ def logsumproductexp(log_factors, target_shape=(), optimize=True):
     :param torch.Size target_shape: An optional shape of the result.
         If missing, all dimensions will be summed out.
     :param bool optimize: Whether to use the :mod:`opt_einsum` backend.
+    :param str device: optional argument to set device on which to create
+        any new tensors.
     :return: A tensor of shape ``target_shape``.
     """
     # Handle numbers and trivial cases.
@@ -69,10 +95,11 @@ def logsumproductexp(log_factors, target_shape=(), optimize=True):
     for t in log_factors:
         (numbers if isinstance(t, Number) else tensors).append(t)
     if not tensors:
-        return torch.tensor(float(sum(numbers))).expand(target_shape)
+        return torch.tensor(float(sum(numbers)),
+                            device=device).expand(target_shape)
     if numbers:
         number_part = sum(numbers)
-        tensor_part = logsumproductexp(tensors, target_shape)
+        tensor_part = logsumproductexp(tensors, target_shape, device=device)
         return tensor_part + number_part
     if optimize:
         return opt_sumproduct(tensors, target_shape,

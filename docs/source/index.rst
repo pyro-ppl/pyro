@@ -34,6 +34,7 @@ Pyro Documentation
    contrib.gp
    contrib.tracking
    contrib.oed
+   contrib.glmm
 
 
 Indices and tables

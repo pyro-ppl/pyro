@@ -31,6 +31,10 @@ def xfail_param(*args, **kwargs):
     return pytest.param(*args, marks=[pytest.mark.xfail(**kwargs)])
 
 
+def skipif_param(*args, **kwargs):
+    return pytest.param(*args, marks=[pytest.mark.skipif(**kwargs)])
+
+
 def suppress_warnings(fn):
     def wrapper(*args, **kwargs):
         with warnings.catch_warnings():
