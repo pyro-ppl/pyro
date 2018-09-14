@@ -40,12 +40,11 @@ def _define_operators(c):
 
 def _register_operators(default, post=False):
     def _decorator(msngr):
-        c = msngr.value_wrapper
         for op in operator.__all__:
             typename = "__{}__".format(op)
             if hasattr(operator, typename) and \
                callable(getattr(operator, op)) and \
-               hasattr(c, typename) and \
+               hasattr(Box, typename) and \
                not hasattr(msngr, "_pyro_" + ("_post_" if post else "") + typename):
                 msngr.register(fn=default, type=typename)
         return msngr
@@ -76,7 +75,7 @@ class NonstandardMessenger(Messenger):
     Much-simplified version of NonstandardMessenger
     Does not do any weird nesting of value wrappers.
     """
-    value_wrapper = Box
+    pass
 
 
 class LazyValue(object):
@@ -107,7 +106,9 @@ def lazy_wrap(msg):
 
 @_register_operators(lazy_wrap)
 class LazyMessenger(NonstandardMessenger):
-
+    """
+    Messenger for lazy evaluation
+    """
     def _process_message(self, msg):
         super(LazyMessenger, self)._process_message(msg)
         if not msg["done"] and msg["fn"] is not None:
