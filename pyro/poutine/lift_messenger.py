@@ -37,7 +37,6 @@ class LiftMessenger(Messenger):
         on the param names. If the param name does not match the
         name the keys in the prior, that param name is unchanged.
         """
-        # import pdb; pdb.set_trace()
         name = msg["name"]
         param_name = params.user_param_name(name)
         if isinstance(self.prior, dict):

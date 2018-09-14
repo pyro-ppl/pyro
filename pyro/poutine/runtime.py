@@ -84,22 +84,12 @@ class NonlocalExit(Exception):
                 break
 
 
-def validate_message(msg):
-    """
-    Asserts that the message has a valid format.
-    :returns: None
-    """
-    assert msg["type"] in ("sample", "param", "apply"), \
-        "{} is an invalid site type, how did that get there?".format(msg["type"])
-
-
 def default_process_message(msg):
     """
     Default method for processing messages in inference.
     :param msg: a message to be processed
     :returns: None
     """
-    # validate_message(msg)
     if msg["done"] or msg["is_observed"]:
         msg["done"] = True
         return msg
