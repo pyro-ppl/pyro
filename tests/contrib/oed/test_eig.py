@@ -76,6 +76,7 @@ def bernoulli_ground_truth(model, design, observation_labels, target_labels, eig
 
 
 def h(p):
+    p = p.cpu().numpy()
     return -(sc.xlogy(p, p) + sc.xlog1py(1 - p, -p))
 
 
@@ -228,11 +229,11 @@ TEST_CASES = [
 def test_eig_lm(model, design, observation_labels, target_labels, estimator, args, eig, allow_error):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
-    y = estimator(model, design, observation_labels, target_labels, *args).cpu()
+    y = estimator(model, design, observation_labels, target_labels, *args)
     if model is bernoulli_model:
-        y_true = bernoulli_ground_truth(model, design, observation_labels, target_labels, eig=eig).cpu()
+        y_true = bernoulli_ground_truth(model, design, observation_labels, target_labels, eig=eig)
     else:
-        y_true = linear_model_ground_truth(model, design, observation_labels, target_labels, eig=eig).cpu()
+        y_true = linear_model_ground_truth(model, design, observation_labels, target_labels, eig=eig)
     print()
     print(estimator.__name__)
     print(y)
