@@ -85,6 +85,7 @@ class LazyValue(object):
         assert not getattr(fn, "__wrapped", False)
         self._value = None
 
+    @rewrap_ret(Box)
     def eval(self):
         if self._value is None:
             fn = self._expr[0]
