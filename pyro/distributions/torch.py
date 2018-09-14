@@ -10,6 +10,20 @@ class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributi
     support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
 
 
+class Independent(torch.distributions.Independent, TorchDistributionMixin):
+    @constraints.dependent_property
+    def support(self):
+        return IndependentConstraint(self.base_dist.support, self.reinterpreted_batch_ndims)
+
+    @property
+    def _validate_args(self):
+        return self.base_dist._validate_args
+
+    @_validate_args.setter
+    def _validate_args(self, value):
+        self.base_dist._validate_args = value
+
+
 # Programmatically load all distributions from PyTorch.
 __all__ = []
 for _name, _Dist in torch.distributions.__dict__.items():
