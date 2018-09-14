@@ -164,7 +164,7 @@ def effectful(fn=None, type=None):
         return fn
     else:
         if type is None:
-            type = fn.__code__.co_name  # XXX is this right?
+            type = fn.__code__.co_name
 
         assert type != "message", "cannot use 'message' as keyword"
 
@@ -182,7 +182,7 @@ def effectful(fn=None, type=None):
                 msg = {
                     "type": type,
                     "name": name,
-                    "fn": fn,  # XXX this isn't quite right?
+                    "fn": fn,
                     "is_observed": is_observed,
                     "args": args,
                     "kwargs": kwargs,
