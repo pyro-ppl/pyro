@@ -133,9 +133,8 @@ class Messenger(object):
             return lambda x: cls.register(x, type=type, post=post)
 
         if type is None:
-            type = fn.__code__.co_name  # XXX is this right?
+            type = fn.__code__.co_name
 
-        # TODO add staticmethod override
         setattr(cls, "_pyro_" + ("post_" if post else "") + type, staticmethod(fn))
         return fn
 
@@ -144,9 +143,8 @@ class Messenger(object):
         """
         SomeMessengerClass.unregister(fn) or SomeMessengerClass.unregister("name")
         """
-        # TODO use this to remove stuff, useful for dealing with inheritance
         if type is None:
-            type = fn.__code__.co_name  # XXX is this right?
+            type = fn.__code__.co_name
 
         delattr(cls, "_pyro_" + ("post_" if post else "") + type)
         return fn
