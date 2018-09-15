@@ -282,7 +282,7 @@ class AIR(nn.Module):
         if self.baseline_scalar is not None:
             bl_value = bl_value * self.baseline_scalar
 
-        infer_dict = dict(baseline_value=bl_value.squeeze(-1))
+        infer_dict = dict(baseline=dict(baseline_value=bl_value.squeeze(-1)))
         return infer_dict, bl_h, bl_c
 
 

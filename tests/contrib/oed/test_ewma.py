@@ -17,7 +17,7 @@ def test_ewma(alpha, NS=10000, D=1):
         s, _ = torch.max(exponent, dim=0)
         log_eT = s + ewma_log((exponent - s).exp().mean(dim=0), s)
         log_eT.backward()
-        sigma_grad = sigma.grad.clone().data.numpy()
+        sigma_grad = sigma.grad.clone().cpu().numpy()
         sigma.grad.zero_()
         if k % 100 == 0:
             error = math.fabs(sigma_grad - 1.0)

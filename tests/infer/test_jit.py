@@ -11,6 +11,7 @@ from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELB
                         Trace_ELBO, TraceEnum_ELBO,
                         TraceGraph_ELBO)
 from pyro.optim import Adam
+from pyro.poutine.indep_messenger import CondIndepStackFrame
 from tests.common import assert_equal, xfail_param
 
 
@@ -233,3 +234,13 @@ def test_dirichlet_bernoulli(Elbo, vectorized):
     svi = SVI(model, guide, optim, elbo)
     for step in range(40):
         svi.step(data)
+
+
+@pytest.mark.parametrize("x,y", [
+    (CondIndepStackFrame("a", -1, torch.tensor(2000), 2), CondIndepStackFrame("a", -1, 2000, 2)),
+    (CondIndepStackFrame("a", -1, 1, 2), CondIndepStackFrame("a", -1, torch.tensor(1), 2)),
+])
+def test_cond_indep_equality(x, y):
+    assert x == y
+    assert not x != y
+    assert hash(x) == hash(y)

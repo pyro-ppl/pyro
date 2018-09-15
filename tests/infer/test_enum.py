@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 import math
+import os
 import timeit
 from collections import defaultdict
 
@@ -20,7 +21,7 @@ from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from pyro.infer.util import LAST_CACHE_SIZE
 from pyro.util import torch_isnan
-from tests.common import assert_equal
+from tests.common import assert_equal, skipif_param
 
 try:
     from contextlib import ExitStack  # python 3
@@ -28,6 +29,12 @@ except ImportError:
     from contextlib2 import ExitStack  # python 2
 
 logger = logging.getLogger(__name__)
+
+
+def _skip_cuda(*args):
+    return skipif_param(*args,
+                        condition="CUDA_TEST" in os.environ,
+                        reason="https://github.com/uber/pyro/issues/1380")
 
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
@@ -290,7 +297,7 @@ def test_svi_step_guide_uses_grad(enumerate1):
 def test_elbo_bern(method, enumerate1, scale):
     pyro.clear_param_store()
     num_particles = 1 if enumerate1 else 10000
-    prec = 0.001 if enumerate1 else 0.1
+    prec = 0.001 if enumerate1 else 0.2
     q = pyro.param("q", torch.tensor(0.5, requires_grad=True))
     kl = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
 
@@ -396,7 +403,7 @@ def test_elbo_bern_bern(method, enumerate1, enumerate2, num_samples1, num_sample
         for n in [num_samples1, num_samples2]:
             if n is not None:
                 num_particles = num_particles // n
-        prec = 0.1
+        prec = 0.2
 
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
 
@@ -1084,7 +1091,7 @@ def test_elbo_rsvi(enumerate1):
     ("parallel", 3, False),
     ("parallel", 10, False),
     ("parallel", 20, False),
-    ("parallel", 30, False),
+    _skip_cuda("parallel", 30, False),
 ])
 def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
     pyro.clear_param_store()
@@ -1142,9 +1149,9 @@ def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
     ("parallel", 3, False),
     ("parallel", 10, False),
     ("parallel", 20, False),
-    ("parallel", 30, False),
-    ("parallel", 40, False),
-    ("parallel", 50, False),
+    _skip_cuda("parallel", 30, False),
+    _skip_cuda("parallel", 40, False),
+    _skip_cuda("parallel", 50, False),
 ])
 def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
     pyro.clear_param_store()
@@ -1216,7 +1223,7 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
         ]))
 
 
-@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, 30])
+@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, _skip_cuda(30)])
 def test_hmm_enumerate_model(num_steps):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
 
@@ -1241,7 +1248,7 @@ def test_hmm_enumerate_model(num_steps):
     elbo.differentiable_loss(model, guide, data)
 
 
-@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, 30])
+@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, _skip_cuda(30)])
 def test_hmm_enumerate_model_and_guide(num_steps):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
 
@@ -2543,6 +2550,7 @@ def test_elbo_hmm_growth():
 
 
 @pytest.mark.xfail(reason="flakey on travis due to nondeterministic computations")
+@pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/uber/pyro/issues/1380")
 def test_elbo_dbn_growth():
     pyro.clear_param_store()
     elbo = TraceEnum_ELBO(max_iarange_nesting=0)
@@ -2907,7 +2915,7 @@ def test_compute_marginals_restrictions(ok, enumerate_guide, num_particles, vect
             elbo.compute_marginals(model, guide)
 
 
-@pytest.mark.parametrize('size', [1, 2, 3, 4, 10, 20, 30])
+@pytest.mark.parametrize('size', [1, 2, 3, 4, 10, 20, _skip_cuda(30)])
 def test_compute_marginals_hmm(size):
 
     @config_enumerate(default="parallel")
