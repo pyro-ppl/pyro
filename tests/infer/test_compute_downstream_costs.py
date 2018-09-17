@@ -28,7 +28,7 @@ def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
                                                    guide_trace.nodes[node]['log_prob']))
         downstream_guide_cost_nodes[node] = set([node])
 
-        descendants = networkx.descendants(guide_trace._graph, node)
+        descendants = networkx.descendants(guide_trace, node)
 
         for desc in descendants:
             desc_mft = MultiFrameTensor((stacks[desc],
