@@ -338,8 +338,8 @@ def ignore_jit_warnings(filter=None):
             warnings.filterwarnings("ignore",
                                     category=torch.jit.TracerWarning)
         else:
-            category = torch.jit.TracerWarning
             for msg in filter:
+                category = torch.jit.TracerWarning
                 if isinstance(msg, tuple):
                     msg, category = msg
                 warnings.filterwarnings("ignore",
@@ -366,3 +366,7 @@ def deep_getattr(obj, name):
     Throws an AttributeError if bad attribute
     """
     return functools.reduce(getattr, name.split("."), obj)
+
+
+def torch_float(x):
+    return x.float() if isinstance(x, torch.Tensor) else float(x)

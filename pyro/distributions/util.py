@@ -171,23 +171,18 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
     :param mask: an optional masking tensor
     :type mask: torch.ByteTensor or None
     """
-    # TODO: refactor is_identically_one / zero to return a
-    # ByteTensor instead of a Python bool
-    with ignore_jit_warnings(["Converting a tensor to a Python boolean",
-                              "Converting a tensor to a Python number"]):
-        if is_identically_zero(tensor):
+    if not torch._C._get_tracing_state():
+        if is_identically_zero(tensor) or (mask is None and is_identically_one(scale)):
             return tensor
-        if mask is None:
-            if is_identically_one(scale):
-                return tensor
-            return tensor * scale
-        tensor, mask = broadcast_all(tensor, mask)
-        tensor = tensor * scale  # triggers a copy, avoiding in-place op errors
-        if torch._C._get_tracing_state():
-            tensor[~mask] = 0.
-        else:
-            tensor.masked_fill_(~mask, 0.)
-        return tensor
+    if mask is None:
+        return tensor * scale
+    tensor, mask = broadcast_all(tensor, mask)
+    tensor = tensor * scale  # triggers a copy, avoiding in-place op errors
+    if torch._C._get_tracing_state():
+        tensor[~mask] = 0.
+    else:
+        tensor.masked_fill_(~mask, 0.)
+    return tensor
 
 
 # work around lack of jit support for torch.eye(..., out=value)

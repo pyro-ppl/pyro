@@ -289,9 +289,8 @@ def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
     outer_particles = num_particles // inner_particles
     elbo = Elbo(max_iarange_nesting=0,
                 strict_enumeration_warning=any([enumerate1, enumerate2]),
-                num_particles=inner_particles)
-    if Elbo is JitTraceEnum_ELBO:
-        elbo.ignore_warnings = True
+                num_particles=inner_particles,
+                ignore_jit_warnings=True)
     actual_loss = sum(elbo.loss_and_grads(model, guide)
                       for i in range(outer_particles)) / outer_particles
     actual_grad = q.unconstrained().grad / outer_particles
@@ -335,9 +334,7 @@ def test_beta_bernoulli(Elbo, vectorized):
                             constraint=constraints.positive)
         pyro.sample("latent_fairness", dist.Beta(alpha_q, beta_q))
 
-    elbo = Elbo(num_particles=7, strict_enumeration_warning=False)
-    if Elbo is JitTraceEnum_ELBO:
-        elbo.ignore_warnings = True
+    elbo = Elbo(num_particles=7, strict_enumeration_warning=False, ignore_jit_warnings=True)
     optim = Adam({"lr": 0.0005, "betas": (0.90, 0.999)})
     svi = SVI(model, guide, optim, elbo)
     for step in range(40):
@@ -399,9 +396,7 @@ def test_dirichlet_bernoulli(Elbo, vectorized):
                                      constraint=constraints.positive)
         pyro.sample("latent_fairness", dist.Dirichlet(concentration_q))
 
-    elbo = Elbo(num_particles=7, strict_enumeration_warning=False)
-    if Elbo is JitTraceEnum_ELBO:
-        elbo.ignore_warnings = True
+    elbo = Elbo(num_particles=7, strict_enumeration_warning=False, ignore_jit_warnings=True)
     optim = Adam({"lr": 0.0005, "betas": (0.90, 0.999)})
     svi = SVI(model, guide, optim, elbo)
     for step in range(40):
@@ -416,3 +411,13 @@ def test_cond_indep_equality(x, y):
     assert x == y
     assert not x != y
     assert hash(x) == hash(y)
+
+
+
+def test_shape_inference():
+    def fn(x):
+        y = torch.ones(x.shape[0], dtype=torch.long, device=x.device)
+        return torch.cumsum(y, 0) - 1
+
+    compiled = torch.jit.trace(fn, torch.ones(3))
+    assert_equal(compiled(torch.ones(10)), torch.arange(10))

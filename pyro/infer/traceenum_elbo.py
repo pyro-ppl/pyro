@@ -399,9 +399,6 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
     Like :class:`TraceEnum_ELBO` but uses :func:`pyro.ops.jit.compile` to
     compile :meth:`loss_and_grads`.
 
-    :param bool ignore_warnings: Flag to ignore warnings from the JIT
-        tracer. All :class:`torch.jit.TracerWarning` will be ignored.
-
     This works only for a limited set of models:
 
     -   Models must have static structure.
@@ -413,16 +410,13 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
 
     .. warning:: Experimental. Interface subject to change.
     """
-    def __init__(self, *args, **kwargs):
-        self.ignore_warnings = kwargs.pop("ignore_warnings", False)
-        super(JitTraceEnum_ELBO, self).__init__(*args, **kwargs)
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
         if getattr(self, '_differentiable_loss', None) is None:
 
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.trace(ignore_warnings=self.ignore_warnings)
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings)
             def differentiable_loss(*args):
                 self = weakself()
                 elbo = 0.0

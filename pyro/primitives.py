@@ -14,7 +14,7 @@ import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import param_with_module_name
 from pyro.poutine.runtime import _DIM_ALLOCATOR, _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack
-from pyro.util import deep_getattr, ignore_jit_warnings  # noqa: F401
+from pyro.util import deep_getattr, ignore_jit_warnings, torch_float  # noqa: F401
 
 
 def get_param_store():
@@ -115,7 +115,7 @@ class _Subsample(Distribution):
             raise NotImplementedError
         subsample_size = self.subsample_size
         if subsample_size is None or subsample_size >= self.size:
-            result = torch.arange(self.size)
+            result = torch.cumsum(torch.ones(self.size), dim=0, dtype=torch.long) - 1
         else:
             # torch.randperm does not have a CUDA implementation
             result = torch.randperm(self.size, device=torch.device('cpu'))[:self.subsample_size]
@@ -139,9 +139,6 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
         subsample_size = -1
     elif subsample is None:
         subsample = sample(name, _Subsample(size, subsample_size, use_cuda))
-        # This is to enable the JIT to infer batch shape from the data
-        # e.g. when using iarange(size=data.shape[0], ..)
-        subsample_size = size if subsample_size is None else subsample_size
 
     with ignore_jit_warnings():
         if subsample_size is None:
@@ -249,7 +246,7 @@ class iarange(object):
         self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
         if self._wrapped:
             try:
-                self._scale_messenger = poutine.scale(scale=self.size / self.subsample_size)
+                self._scale_messenger = poutine.scale(scale=torch_float(self.size) / self.subsample_size)
                 self._indep_messenger = poutine.indep(name=self.name, size=self.subsample_size, dim=self.dim)
                 self._scale_messenger.__enter__()
                 self._indep_messenger.__enter__()
@@ -311,12 +308,10 @@ class irange(object):
                 yield i
         else:
             indep_context = poutine.indep(name=self.name, size=self.subsample_size)
-            with poutine.scale(scale=float(self.size / self.subsample_size)):
+            with poutine.scale(scale=torch_float(self.size) / self.subsample_size):
                 for i in subsample:
                     indep_context.next_context()
                     with indep_context:
-                        # convert to python numeric type as functions like torch.ones(*args)
-                        # do not work with dim 0 torch.Tensor instances.
                         yield i
 
 
