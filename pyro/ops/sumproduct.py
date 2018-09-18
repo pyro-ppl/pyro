@@ -9,6 +9,7 @@ from six.moves import reduce
 
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.einsum import contract
+from pyro.util import ignore_jit_warnings
 
 
 def zip_align_right(xs, ys):
@@ -63,8 +64,9 @@ def sumproduct(factors, target_shape=(), optimize=True, device=None):
     for t in factors:
         (numbers if isinstance(t, Number) else tensors).append(t)
     if not tensors:
-        return torch.tensor(float(reduce(operator.mul, numbers, 1.)),
-                            device=device).expand(target_shape)
+        with ignore_jit_warnings(["torch.tensor results are registered as constants"]):
+            return torch.tensor(float(reduce(operator.mul, numbers, 1.)),
+                                device=device).expand(target_shape)
     if numbers:
         number_part = reduce(operator.mul, numbers, 1.)
         tensor_part = sumproduct(tensors, target_shape, optimize=optimize)

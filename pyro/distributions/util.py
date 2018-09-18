@@ -1,13 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
-import warnings
 from contextlib import contextmanager
 
 import torch
 import torch.distributions as torch_dist
 from torch import logsumexp
 from torch.distributions.utils import broadcast_all
+
+from pyro.util import ignore_jit_warnings
 
 _VALIDATION_ENABLED = False
 
@@ -170,21 +171,23 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
     :param mask: an optional masking tensor
     :type mask: torch.ByteTensor or None
     """
-    if is_identically_zero(tensor):
-        return tensor
-    if mask is None:
-        if is_identically_one(scale):
+    # TODO: refactor is_identically_one / zero to return a
+    # ByteTensor instead of a Python bool
+    with ignore_jit_warnings(["Converting a tensor to a Python boolean",
+                              "Converting a tensor to a Python number"]):
+        if is_identically_zero(tensor):
             return tensor
-        return tensor * scale
-    tensor, mask = broadcast_all(tensor, mask)
-    tensor = tensor * scale  # triggers a copy, avoiding in-place op errors
-    if torch._C._get_tracing_state():
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+        if mask is None:
+            if is_identically_one(scale):
+                return tensor
+            return tensor * scale
+        tensor, mask = broadcast_all(tensor, mask)
+        tensor = tensor * scale  # triggers a copy, avoiding in-place op errors
+        if torch._C._get_tracing_state():
             tensor[~mask] = 0.
-    else:
-        tensor.masked_fill_(~mask, 0.)
-    return tensor
+        else:
+            tensor.masked_fill_(~mask, 0.)
+        return tensor
 
 
 # work around lack of jit support for torch.eye(..., out=value)

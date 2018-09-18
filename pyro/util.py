@@ -325,6 +325,27 @@ def check_if_enumerated(guide_trace):
 
 
 @contextmanager
+def ignore_jit_warnings(filter=None):
+    """
+    Ignore JIT tracer warnings with messages that match `filter`. If
+    `filter` is not specified all tracer warnings are ignored.
+    """
+    with warnings.catch_warnings():
+        if filter is None:
+            warnings.filterwarnings("ignore",
+                                    category=torch.jit.TracerWarning)
+        else:
+            category = torch.jit.TracerWarning
+            for msg in filter:
+                if isinstance(msg, tuple):
+                    msg, category = msg
+                warnings.filterwarnings("ignore",
+                                        category=category,
+                                        message=msg)
+        yield
+
+
+@contextmanager
 def optional(context_manager, condition):
     """
     Optionally wrap inside `context_manager` if condition is `True`.

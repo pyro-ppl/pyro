@@ -10,11 +10,12 @@ from torch.distributions import constraints, kl_divergence
 import pyro
 import pyro.distributions as dist
 import pyro.ops.jit
+import pyro.poutine as poutine
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
                         TraceGraph_ELBO)
 from pyro.optim import Adam
 from pyro.poutine.indep_messenger import CondIndepStackFrame
-from tests.common import assert_equal, xfail_param
+from tests.common import assert_equal
 
 
 def constant(*args, **kwargs):
@@ -162,6 +163,7 @@ def test_scatter():
     torch.jit.trace(make_one_hot, (x, i))
 
 
+@pytest.mark.filterwarnings('ignore:Converting a tensor to a Python integer')
 def test_scatter_workaround():
 
     def make_one_hot_expected(x, i):
@@ -181,6 +183,7 @@ def test_scatter_workaround():
 
 @pytest.mark.parametrize('expand', [False, True])
 @pytest.mark.parametrize('shape', [(), (4,), (5, 4)])
+@pytest.mark.filterwarnings('ignore:Converting a tensor to a Python boolean')
 def test_bernoulli_enumerate(shape, expand):
     shape = torch.Size(shape)
     probs = torch.empty(shape).fill_(0.25)
@@ -214,6 +217,7 @@ def test_categorical_enumerate(shape, expand):
 
 @pytest.mark.parametrize('expand', [False, True])
 @pytest.mark.parametrize('shape', [(3,), (4, 3), (5, 4, 3)])
+@pytest.mark.filterwarnings('ignore:Converting a tensor to a Python integer')
 def test_one_hot_categorical_enumerate(shape, expand):
     shape = torch.Size(shape)
     probs = torch.ones(shape)
@@ -286,6 +290,8 @@ def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
     elbo = Elbo(max_iarange_nesting=0,
                 strict_enumeration_warning=any([enumerate1, enumerate2]),
                 num_particles=inner_particles)
+    if Elbo is JitTraceEnum_ELBO:
+        elbo.ignore_warnings = True
     actual_loss = sum(elbo.loss_and_grads(model, guide)
                       for i in range(outer_particles)) / outer_particles
     actual_grad = q.unconstrained().grad / outer_particles
@@ -330,6 +336,8 @@ def test_beta_bernoulli(Elbo, vectorized):
         pyro.sample("latent_fairness", dist.Beta(alpha_q, beta_q))
 
     elbo = Elbo(num_particles=7, strict_enumeration_warning=False)
+    if Elbo is JitTraceEnum_ELBO:
+        elbo.ignore_warnings = True
     optim = Adam({"lr": 0.0005, "betas": (0.90, 0.999)})
     svi = SVI(model, guide, optim, elbo)
     for step in range(40):
@@ -338,15 +346,16 @@ def test_beta_bernoulli(Elbo, vectorized):
 
 @pytest.mark.parametrize('Elbo', [
     Trace_ELBO,
-    xfail_param(JitTrace_ELBO, reason="https://github.com/uber/pyro/issues/1358"),
+    JitTrace_ELBO,
     TraceGraph_ELBO,
-    xfail_param(JitTraceGraph_ELBO, reason="https://github.com/uber/pyro/issues/1358"),
+    JitTraceGraph_ELBO,
     TraceEnum_ELBO,
-    xfail_param(JitTraceEnum_ELBO, reason="https://github.com/uber/pyro/issues/1358"),
+    JitTraceEnum_ELBO,
 ])
 def test_svi_irregular_batch_size(Elbo):
     pyro.clear_param_store()
 
+    @poutine.broadcast
     def model(data):
         loc = pyro.param("loc", constant(0.0))
         scale = pyro.param("scale", constant(1.0), constraint=constraints.positive)
@@ -391,6 +400,8 @@ def test_dirichlet_bernoulli(Elbo, vectorized):
         pyro.sample("latent_fairness", dist.Dirichlet(concentration_q))
 
     elbo = Elbo(num_particles=7, strict_enumeration_warning=False)
+    if Elbo is JitTraceEnum_ELBO:
+        elbo.ignore_warnings = True
     optim = Adam({"lr": 0.0005, "betas": (0.90, 0.999)})
     svi = SVI(model, guide, optim, elbo)
     for step in range(40):

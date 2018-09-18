@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
-import warnings
 
 from six.moves.queue import LifoQueue
 
@@ -9,7 +8,7 @@ from pyro import poutine
 from pyro.infer.util import is_validation_enabled
 from pyro.poutine import Trace
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape
+from pyro.util import check_model_guide_match, check_site_shape, ignore_jit_warnings
 
 
 def iter_discrete_escape(trace, msg):
@@ -22,8 +21,8 @@ def iter_discrete_escape(trace, msg):
 def iter_discrete_extend(trace, site, **ignored):
     values = site["fn"].enumerate_support(expand=site["infer"].get("expand", False))
     enum_total = values.shape[0]
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=RuntimeWarning, message="Iterating over a tensor")
+    with ignore_jit_warnings(["Converting a tensor to a Python index",
+                              ("Iterating over a tensor", RuntimeWarning)]):
         values = iter(values)
     for i, value in enumerate(values):
         extended_site = site.copy()

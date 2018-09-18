@@ -181,7 +181,7 @@ def test_logistic_regression(jit):
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
-    hmc_kernel = HMC(model, step_size=0.0855, num_steps=4, jit_compile=jit)
+    hmc_kernel = HMC(model, step_size=0.0855, num_steps=4, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
     beta_posterior = EmpiricalMarginal(mcmc_run, sites='beta')
     assert_equal(rmse(true_coefs, beta_posterior.mean).item(), 0.0, prec=0.1)
@@ -198,7 +198,7 @@ def test_beta_bernoulli(jit):
 
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    hmc_kernel = HMC(model, step_size=0.02, num_steps=3, jit_compile=jit)
+    hmc_kernel = HMC(model, step_size=0.02, num_steps=3, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_probs, prec=0.05)
@@ -215,7 +215,7 @@ def test_gamma_normal(jit):
 
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
-    hmc_kernel = HMC(model, step_size=0.01, num_steps=3, jit_compile=jit)
+    hmc_kernel = HMC(model, step_size=0.01, num_steps=3, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_std, prec=0.05)
@@ -231,7 +231,7 @@ def test_dirichlet_categorical(jit):
 
     true_probs = torch.tensor([0.1, 0.6, 0.3])
     data = dist.Categorical(true_probs).sample(sample_shape=(torch.Size((2000,))))
-    hmc_kernel = HMC(model, step_size=0.01, num_steps=3, jit_compile=jit)
+    hmc_kernel = HMC(model, step_size=0.01, num_steps=3, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_probs, prec=0.02)
@@ -250,7 +250,8 @@ def test_logistic_regression_with_dual_averaging(jit):
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
-    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True, jit_compile=jit)
+    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True,
+                     jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='beta')
     assert_equal(rmse(posterior.mean, true_coefs).item(), 0.0, prec=0.1)
@@ -269,7 +270,7 @@ def test_beta_bernoulli_with_dual_averaging(jit):
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True, max_iarange_nesting=2,
-                     jit_compile=jit)
+                     jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_probs, prec=0.05)
@@ -338,7 +339,8 @@ def test_bernoulli_latent_model(jit, use_einsum):
     z = dist.Bernoulli(0.65 * y + 0.1).sample()
     data = dist.Normal(2. * z, 1.0).sample()
     hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True, max_iarange_nesting=1,
-                     jit_compile=jit, experimental_use_einsum=use_einsum)
+                     jit_compile=jit, ignore_jit_warnings=True,
+                     experimental_use_einsum=use_einsum)
     mcmc_run = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites="y_prob").mean
     assert_equal(posterior, y_prob, prec=0.05)

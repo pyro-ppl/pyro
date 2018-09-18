@@ -410,12 +410,16 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
 
     .. warning:: Experimental. Interface subject to change.
     """
+    def __init__(self, *args, **kwargs):
+        self.ignore_warnings = kwargs.pop("ignore_warnings", False)
+        super(JitTraceEnum_ELBO, self).__init__(*args, **kwargs)
+
     def loss_and_grads(self, model, guide, *args, **kwargs):
         if getattr(self, '_differentiable_loss', None) is None:
 
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.trace
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_warnings)
             def differentiable_loss(*args):
                 self = weakself()
                 elbo = 0.0

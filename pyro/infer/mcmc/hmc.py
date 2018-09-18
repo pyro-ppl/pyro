@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import math
-import warnings
 from collections import OrderedDict
 
 import torch
@@ -16,7 +15,7 @@ from pyro.infer.mcmc.util import EnumTraceProbEvaluator
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
 from pyro.primitives import _Subsample
-from pyro.util import torch_isinf, torch_isnan, optional
+from pyro.util import torch_isinf, torch_isnan, optional, ignore_jit_warnings
 
 
 class HMC(TraceKernel):
@@ -54,6 +53,8 @@ class HMC(TraceKernel):
     :param bool jit_compile: Optional parameter denoting whether to use
         the PyTorch JIT to trace the log density computation, and use this
         optimized executable trace in the integrator.
+    :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
+        tracer when ``jit_compile=True``. Default is False.
     :param bool experimental_use_einsum: Whether to use an einsum operation
         to evaluate log pdf for the model trace. No-op unless the trace has
         discrete sample sites. This flag is experimental and will most likely
@@ -88,6 +89,7 @@ class HMC(TraceKernel):
                  transforms=None,
                  max_iarange_nesting=float("inf"),
                  jit_compile=False,
+                 ignore_jit_warnings=False,
                  experimental_use_einsum=False):
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
@@ -105,6 +107,7 @@ class HMC(TraceKernel):
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
         self.adapt_step_size = adapt_step_size
         self._jit_compile = jit_compile
+        self._ignore_jit_warnings = ignore_jit_warnings
         self.use_einsum = experimental_use_einsum
         self._target_accept_prob = 0.8  # from Stan
 
@@ -171,16 +174,8 @@ class HMC(TraceKernel):
                     potential_energy += transform.log_abs_det_jacobian(z_constrained[name], zi[i]).sum()
             return potential_energy
 
-        with pyro.validation_enabled(False), warnings.catch_warnings():
-            # Ignore jit warnings about promoting Python numbers to tensors,
-            # assuming all numbers are constant literals.
-            warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
-                                    message="torch.tensor might cause the trace to be incorrect")
-            warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
-                                    message="Converting a tensor to a Python")
-            warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
-                                    message="torch.tensor results are registered as constants in the trace")
-            self._compiled_potential_fn = torch.jit.trace(compiled, vals)
+        with pyro.validation_enabled(False), optional(ignore_jit_warnings(), self._ignore_jit_warnings):
+            self._compiled_potential_fn = torch.jit.trace(compiled, vals, check_trace=False)
         return self._compiled_potential_fn(*vals)
 
     def _energy(self, z, r):
