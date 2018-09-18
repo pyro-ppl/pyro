@@ -413,8 +413,7 @@ def test_cond_indep_equality(x, y):
     assert hash(x) == hash(y)
 
 
-
-def test_shape_inference():
+def test_jit_arange_workaround():
     def fn(x):
         y = torch.ones(x.shape[0], dtype=torch.long, device=x.device)
         return torch.cumsum(y, 0) - 1

@@ -8,7 +8,6 @@ import torch.distributions as torch_dist
 from torch import logsumexp
 from torch.distributions.utils import broadcast_all
 
-from pyro.util import ignore_jit_warnings
 
 _VALIDATION_ENABLED = False
 
