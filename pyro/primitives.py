@@ -139,6 +139,8 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
         subsample_size = -1
     elif subsample is None:
         subsample = sample(name, _Subsample(size, subsample_size, use_cuda))
+        # This is to enable the JIT to infer batch shape from the data
+        # e.g. when using iarange(size=data.shape[0], ..)
         subsample_size = size if subsample_size is None else subsample_size
 
     with ignore_jit_warnings():
