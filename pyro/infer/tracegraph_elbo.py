@@ -258,6 +258,9 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
     Like :class:`TraceGraph_ELBO` but uses :func:`torch.jit.trace` to
     compile :meth:`loss_and_grads`.
 
+    :param bool ignore_warnings: Flag to ignore warnings from the JIT
+        tracer. All :class:`torch.jit.TracerWarning` will be ignored.
+
     This works only for a limited set of models:
 
     -   Models must have static structure.

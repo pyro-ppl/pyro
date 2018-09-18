@@ -91,6 +91,7 @@ class NUTS(HMC):
                  transforms=None,
                  max_iarange_nesting=float("inf"),
                  jit_compile=False,
+                 ignore_jit_warnings=False,
                  experimental_use_einsum=False):
         super(NUTS, self).__init__(model,
                                    step_size,
@@ -98,6 +99,7 @@ class NUTS(HMC):
                                    transforms=transforms,
                                    max_iarange_nesting=max_iarange_nesting,
                                    jit_compile=jit_compile,
+                                   ignore_jit_warnings=ignore_jit_warnings,
                                    experimental_use_einsum=experimental_use_einsum)
 
         self._max_tree_depth = 10  # from Stan
