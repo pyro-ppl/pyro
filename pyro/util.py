@@ -368,5 +368,11 @@ def deep_getattr(obj, name):
     return functools.reduce(getattr, name.split("."), obj)
 
 
+# work around https://github.com/pytorch/pytorch/issues/11829
+def jit_compatible_arange(end, dtype=None, device=None):
+    dtype = torch.long if dtype is None else dtype
+    return torch.cumsum(torch.ones(end, dtype=dtype, device=device), dim=0) - 1
+
+
 def torch_float(x):
     return x.float() if isinstance(x, torch.Tensor) else float(x)
