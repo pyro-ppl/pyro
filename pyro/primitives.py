@@ -96,7 +96,8 @@ class _Subsample(Distribution):
         """
         :param int size: the size of the range to subsample from
         :param int subsample_size: the size of the returned subsample
-        :param bool use_cuda: whether to use cuda tensors
+        :param bool use_cuda: DEPRECATED, use the `device` arg instead.
+            Whether to use cuda tensors.
         :param str device: device to place the `sample` and `log_prob`
             results on.
         """
@@ -201,9 +202,9 @@ class iarange(object):
         If specified, ``dim`` should be negative, i.e. should index from the
         right. If not specified, ``dim`` is set to the rightmost dim that is
         left of all enclosing ``iarange`` contexts.
-    :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for `subsample` and `log_prob`. Defaults to ``torch.Tensor.is_cuda``.
-        **Note:** Deprecated in 0.2.2. Use the `device` arg instead.
+    :param bool use_cuda: DEPRECATED, use the `device` arg instead.
+        Optional bool specifying whether to use cuda tensors for `subsample`
+        and `log_prob`. Defaults to ``torch.Tensor.is_cuda``.
     :param str device: Optional keyword specifying which device to place
         the results of `subsample` and `log_prob` on. By default, results
         are placed on the same device as the default tensor.
@@ -284,9 +285,9 @@ class irange(object):
         schemes. If specified, then ``subsample_size`` will be set to
         ``len(subsample)``.
     :type subsample: Anything supporting ``len()``.
-    :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for `subsample` and `log_prob`. Defaults to ``torch.Tensor.is_cuda``.
-        **Note:** Deprecated in 0.2.2. Use the `device` arg instead.
+    :param bool use_cuda: DEPRECATED, use the `device` arg instead.
+        Optional bool specifying whether to use cuda tensors for `subsample`
+        and `log_prob`. Defaults to ``torch.Tensor.is_cuda``.
     :param str device: Optional keyword specifying which device to place
         the results of `subsample` and `log_prob` on. By default, results
         are placed on the same device as the default tensor.
