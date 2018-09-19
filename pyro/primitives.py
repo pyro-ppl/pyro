@@ -119,9 +119,10 @@ class _Subsample(Distribution):
         if subsample_size is None or subsample_size > self.size:
             subsample_size = self.size
         if subsample_size >= self.size:
-            result = torch.arange(int(self.size)).to(self.device)
+            result = torch.arange(self.size, dtype=torch.long).to(self.device)
         else:
-            result = torch.multinomial(torch.ones(self.size), self.subsample_size, replacement=False).to(self.device)
+            result = torch.multinomial(torch.ones(self.size), self.subsample_size,
+                                       replacement=False).to(self.device)
         return result.cuda() if self.use_cuda else result
 
     def log_prob(self, x):
