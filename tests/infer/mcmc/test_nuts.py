@@ -12,6 +12,7 @@ from pyro.infer import EmpiricalMarginal
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.nuts import NUTS
 import pyro.poutine as poutine
+from pyro.util import ignore_jit_warnings
 from tests.common import assert_equal
 
 from .test_hmc import TEST_CASES, TEST_IDS, T, rmse
@@ -272,14 +273,16 @@ def test_gaussian_hmm_enum_shape(jit, num_steps, use_einsum):
         emission_loc = pyro.sample("emission_loc", dist.Normal(torch.zeros(dim), torch.ones(dim)))
         emission_scale = pyro.sample("emission_scale", dist.LogNormal(torch.zeros(dim), torch.ones(dim)))
         x = None
-        for t, y in enumerate(data):
-            x = pyro.sample("x_{}".format(t), dist.Categorical(initialize if x is None else transition[x]))
-            pyro.sample("y_{}".format(t), dist.Normal(emission_loc[x], emission_scale[x]), obs=y)
-            # check shape
-            effective_dim = sum(1 for size in x.shape if size > 1)
-            assert effective_dim == 1
+        with ignore_jit_warnings([("Iterating over a tensor", RuntimeWarning)]):
+            for t, y in enumerate(data):
+                x = pyro.sample("x_{}".format(t), dist.Categorical(initialize if x is None else transition[x]))
+                pyro.sample("y_{}".format(t), dist.Normal(emission_loc[x], emission_scale[x]), obs=y)
+                # check shape
+                effective_dim = sum(1 for size in x.shape if size > 1)
+                assert effective_dim == 1
 
     data = torch.ones(num_steps)
-    nuts_kernel = NUTS(model, adapt_step_size=True, max_iarange_nesting=0, jit_compile=jit,
+    nuts_kernel = NUTS(model, adapt_step_size=True, max_iarange_nesting=0,
+                       jit_compile=jit, ignore_jit_warnings=True,
                        experimental_use_einsum=use_einsum)
     MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)

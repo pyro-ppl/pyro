@@ -1,12 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
 import weakref
 
 import torch
 
 import pyro
 import pyro.poutine as poutine
+from pyro.util import ignore_jit_warnings, optional
 
 
 class CompiledFunction(object):
@@ -19,9 +19,10 @@ class CompiledFunction(object):
     The actual PyTorch compilation artifact is stored in :attr:`compiled`.
     Call diagnostic methods on this attribute.
     """
-    def __init__(self, fn):
+    def __init__(self, fn, ignore_warnings=False):
         self.fn = fn
         self.compiled = {}  # len(args) -> callable
+        self.ignore_warnings = ignore_warnings
         self._param_names = None
 
     def __call__(self, *args, **kwargs):
@@ -51,16 +52,7 @@ class CompiledFunction(object):
                     constrained_params[name] = constrained_param
                 return poutine.replay(self.fn, params=constrained_params)(*args, **kwargs)
 
-            with pyro.validation_enabled(False), warnings.catch_warnings():
-                # Ignore jit warnings about promoting Python numbers to tensors,
-                # assuming all numbers are constant literals.
-                warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
-                                        message="torch.tensor might cause the trace to be incorrect")
-                warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
-                                        message="Converting a tensor to a Python")
-                warnings.filterwarnings("ignore", category=torch.jit.TracerWarning,
-                                        message="torch.tensor results are registered as constants in the trace")
-
+            with pyro.validation_enabled(False), optional(ignore_jit_warnings(), self.ignore_warnings):
                 self.compiled[argc] = torch.jit.trace(compiled, params_and_args, check_trace=False)
         else:
             unconstrained_params = [pyro.param(name).unconstrained()
@@ -79,7 +71,7 @@ class CompiledFunction(object):
         return ret
 
 
-def trace(fn=None):
+def trace(fn=None, ignore_warnings=False):
     """
     Lazy replacement for :func:`torch.jit.trace` that works with
     Pyro functions that call :func:`pyro.param`.
@@ -100,5 +92,5 @@ def trace(fn=None):
             return tr.log_prob_sum()
     """
     if fn is None:
-        return lambda fn: trace(fn)
-    return CompiledFunction(fn)
+        return lambda fn: trace(fn, ignore_warnings=ignore_warnings)
+    return CompiledFunction(fn, ignore_warnings=ignore_warnings)

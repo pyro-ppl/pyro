@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import copy
-import numbers
 import warnings
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -15,7 +14,7 @@ import pyro.poutine as poutine
 from pyro.distributions.distribution import Distribution
 from pyro.params import param_with_module_name
 from pyro.poutine.runtime import _DIM_ALLOCATOR, _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack
-from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
+from pyro.util import deep_getattr, ignore_jit_warnings, torch_float, jit_compatible_arange  # noqa: F401
 
 
 def get_param_store():
@@ -115,19 +114,16 @@ class _Subsample(Distribution):
         if sample_shape:
             raise NotImplementedError
         subsample_size = self.subsample_size
-        if subsample_size is None or subsample_size > self.size:
-            subsample_size = self.size
-        if subsample_size == self.size:
-            result = torch.LongTensor(list(range(self.size)))
+        if subsample_size is None or subsample_size >= self.size:
+            result = jit_compatible_arange(self.size)
         else:
-            # torch.randperm does not have a CUDA implementation
-            result = torch.randperm(self.size, device=torch.device('cpu'))[:self.subsample_size]
+            result = torch.multinomial(torch.ones(self.size), self.subsample_size, replacement=False)
         return result.cuda() if self.use_cuda else result
 
     def log_prob(self, x):
         # This is zero so that iarange can provide an unbiased estimate of
         # the non-subsampled log_prob.
-        result = torch.zeros(1)
+        result = torch.tensor(0.)
         return result.cuda() if self.use_cuda else result
 
 
@@ -143,12 +139,13 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
     elif subsample is None:
         subsample = sample(name, _Subsample(size, subsample_size, use_cuda))
 
-    if subsample_size is None:
-        subsample_size = subsample.shape[0]
-    elif subsample is not None and subsample_size != len(subsample):
-        raise ValueError("subsample_size does not match len(subsample), {} vs {}.".format(
-            subsample_size, len(subsample)) +
-            " Did you accidentally use different subsample_size in the model and guide?")
+    with ignore_jit_warnings():
+        if subsample_size is None:
+            subsample_size = subsample.shape[0] if torch._C._get_tracing_state() else len(subsample)
+        elif subsample is not None and subsample_size != len(subsample):
+            raise ValueError("subsample_size does not match len(subsample), {} vs {}.".format(
+                subsample_size, len(subsample)) +
+                " Did you accidentally use different subsample_size in the model and guide?")
 
     return size, subsample_size, subsample
 
@@ -248,7 +245,7 @@ class iarange(object):
         self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
         if self._wrapped:
             try:
-                self._scale_messenger = poutine.scale(scale=float(self.size / self.subsample_size))
+                self._scale_messenger = poutine.scale(scale=torch_float(self.size) / self.subsample_size)
                 self._indep_messenger = poutine.indep(name=self.name, size=self.subsample_size, dim=self.dim)
                 self._scale_messenger.__enter__()
                 self._indep_messenger.__enter__()
@@ -302,21 +299,19 @@ class irange(object):
         self.size, self.subsample_size, self.subsample = _subsample(name, size, subsample_size, subsample, use_cuda)
 
     def __iter__(self):
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=RuntimeWarning, message="Iterating over a tensor")
+        with ignore_jit_warnings(["Converting a tensor to a Python index",
+                                  ("Iterating over a tensor", RuntimeWarning)]):
             subsample = iter(self.subsample)
         if not am_i_wrapped():
             for i in subsample:
-                yield i if isinstance(i, numbers.Number) else i.item()
+                yield i
         else:
             indep_context = poutine.indep(name=self.name, size=self.subsample_size)
-            with poutine.scale(scale=float(self.size / self.subsample_size)):
+            with poutine.scale(scale=torch_float(self.size) / self.subsample_size):
                 for i in subsample:
                     indep_context.next_context()
                     with indep_context:
-                        # convert to python numeric type as functions like torch.ones(*args)
-                        # do not work with dim 0 torch.Tensor instances.
-                        yield i if isinstance(i, numbers.Number) else i.item()
+                        yield i
 
 
 # XXX this should have the same call signature as torch.Tensor constructors

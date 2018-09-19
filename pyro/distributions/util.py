@@ -1,13 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
-import warnings
 from contextlib import contextmanager
 
 import torch
 import torch.distributions as torch_dist
 from torch import logsumexp
 from torch.distributions.utils import broadcast_all
+
 
 _VALIDATION_ENABLED = False
 
@@ -170,18 +170,15 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
     :param mask: an optional masking tensor
     :type mask: torch.ByteTensor or None
     """
-    if is_identically_zero(tensor):
-        return tensor
-    if mask is None:
-        if is_identically_one(scale):
+    if not torch._C._get_tracing_state():
+        if is_identically_zero(tensor) or (mask is None and is_identically_one(scale)):
             return tensor
+    if mask is None:
         return tensor * scale
     tensor, mask = broadcast_all(tensor, mask)
     tensor = tensor * scale  # triggers a copy, avoiding in-place op errors
     if torch._C._get_tracing_state():
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
-            tensor[~mask] = 0.
+        tensor[~mask] = 0.
     else:
         tensor.masked_fill_(~mask, 0.)
     return tensor

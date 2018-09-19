@@ -36,6 +36,8 @@ class ELBO(object):
         misuse of enumeration, i.e. that
         :class:`pyro.infer.traceenum_elbo.TraceEnum_ELBO` is used iff there
         are enumerated sample sites.
+    :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
+        tracer, when . All :class:`torch.jit.TracerWarning` will be ignored.
 
     References
 
@@ -50,7 +52,8 @@ class ELBO(object):
                  num_particles=1,
                  max_iarange_nesting=float('inf'),
                  vectorize_particles=False,
-                 strict_enumeration_warning=True):
+                 strict_enumeration_warning=True,
+                 ignore_jit_warnings=False):
         self.num_particles = num_particles
         self.max_iarange_nesting = max_iarange_nesting
         self.vectorize_particles = vectorize_particles
@@ -61,6 +64,7 @@ class ELBO(object):
                                      "a finite value for `max_iarange_nesting` arg.")
                 self.max_iarange_nesting += 1
         self.strict_enumeration_warning = strict_enumeration_warning
+        self.ignore_jit_warnings = ignore_jit_warnings
 
     def _vectorized_num_particles(self, fn):
         """
