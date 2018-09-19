@@ -92,15 +92,23 @@ class _Subsample(Distribution):
     Internal use only. This should only be used by `iarange`.
     """
 
-    def __init__(self, size, subsample_size, use_cuda=None):
+    def __init__(self, size, subsample_size, use_cuda=None, device=None):
         """
         :param int size: the size of the range to subsample from
         :param int subsample_size: the size of the returned subsample
-        :param bool use_cuda: whether to use cuda tensors
+        :param bool use_cuda: DEPRECATED, use the `device` arg instead.
+            Whether to use cuda tensors.
+        :param str device: device to place the `sample` and `log_prob`
+            results on.
         """
         self.size = size
         self.subsample_size = subsample_size
-        self.use_cuda = torch.Tensor().is_cuda if use_cuda is None else use_cuda
+        self.use_cuda = use_cuda
+        if self.use_cuda is not None:
+            if self.use_cuda ^ (device != "cpu"):
+                raise ValueError("Incompatible arg values use_cuda={}, device={}."
+                                 .format(use_cuda, device))
+        self.device = torch.Tensor().device if not device else device
 
     def sample(self, sample_shape=torch.Size()):
         """
@@ -112,21 +120,21 @@ class _Subsample(Distribution):
         subsample_size = self.subsample_size
         if subsample_size is None or subsample_size > self.size:
             subsample_size = self.size
-        if subsample_size == self.size:
-            result = torch.LongTensor(list(range(self.size)))
+        if subsample_size >= self.size:
+            result = torch.arange(self.size, dtype=torch.long).to(self.device)
         else:
-            # torch.randperm does not have a CUDA implementation
-            result = torch.randperm(self.size, device=torch.device('cpu'))[:self.subsample_size]
+            result = torch.multinomial(torch.ones(self.size), self.subsample_size,
+                                       replacement=False).to(self.device)
         return result.cuda() if self.use_cuda else result
 
     def log_prob(self, x):
         # This is zero so that iarange can provide an unbiased estimate of
         # the non-subsampled log_prob.
-        result = torch.zeros(1)
+        result = torch.tensor(0., device=self.device)
         return result.cuda() if self.use_cuda else result
 
 
-def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=None):
+def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=None, device=None):
     """
     Helper function for iarange and irange. See their docstrings for details.
     """
@@ -136,7 +144,7 @@ def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=No
         size = -1  # This is PyTorch convention for "arbitrary size"
         subsample_size = -1
     elif subsample is None:
-        subsample = sample(name, _Subsample(size, subsample_size, use_cuda))
+        subsample = sample(name, _Subsample(size, subsample_size, use_cuda=use_cuda, device=device))
 
     if subsample_size is None:
         subsample_size = len(subsample)
@@ -194,8 +202,12 @@ class iarange(object):
         If specified, ``dim`` should be negative, i.e. should index from the
         right. If not specified, ``dim`` is set to the rightmost dim that is
         left of all enclosing ``iarange`` contexts.
-    :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for `subsample` and `log_prob`. Defaults to `torch.Tensor.is_cuda`.
+    :param bool use_cuda: DEPRECATED, use the `device` arg instead.
+        Optional bool specifying whether to use cuda tensors for `subsample`
+        and `log_prob`. Defaults to ``torch.Tensor.is_cuda``.
+    :param str device: Optional keyword specifying which device to place
+        the results of `subsample` and `log_prob` on. By default, results
+        are placed on the same device as the default tensor.
     :return: A reusabe context manager yielding a single 1-dimensional
         :class:`torch.Tensor` of indices.
 
@@ -233,10 +245,11 @@ class iarange(object):
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
     extended discussion.
     """
-    def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None, use_cuda=None):
+    def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None, use_cuda=None, device=None):
         self.name = name
         self.dim = dim
-        self.size, self.subsample_size, self.subsample = _subsample(name, size, subsample_size, subsample, use_cuda)
+        self.size, self.subsample_size, self.subsample = _subsample(name, size, subsample_size, subsample,
+                                                                    use_cuda=use_cuda, device=device)
 
     def __enter__(self):
         self._wrapped = am_i_wrapped()
@@ -272,9 +285,12 @@ class irange(object):
         schemes. If specified, then ``subsample_size`` will be set to
         ``len(subsample)``.
     :type subsample: Anything supporting ``len()``.
-    :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for internal ``log_prob`` computations. Defaults to
-        ``torch.Tensor.is_cuda``.
+    :param bool use_cuda: DEPRECATED, use the `device` arg instead.
+        Optional bool specifying whether to use cuda tensors for `subsample`
+        and `log_prob`. Defaults to ``torch.Tensor.is_cuda``.
+    :param str device: Optional keyword specifying which device to place
+        the results of `subsample` and `log_prob` on. By default, results
+        are placed on the same device as the default tensor.
     :return: A reusable iterator yielding a sequence of integers.
 
     Examples:
@@ -292,9 +308,10 @@ class irange(object):
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
-    def __init__(self, name, size, subsample_size=None, subsample=None, use_cuda=None):
+    def __init__(self, name, size, subsample_size=None, subsample=None, use_cuda=None, device=None):
         self.name = name
-        self.size, self.subsample_size, self.subsample = _subsample(name, size, subsample_size, subsample, use_cuda)
+        self.size, self.subsample_size, self.subsample = _subsample(name, size, subsample_size, subsample,
+                                                                    use_cuda=use_cuda, device=device)
 
     def __iter__(self):
         if not am_i_wrapped():
