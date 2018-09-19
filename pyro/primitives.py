@@ -103,9 +103,10 @@ class _Subsample(Distribution):
         self.size = size
         self.subsample_size = subsample_size
         self.use_cuda = use_cuda
-        if self.use_cuda and device == "cpu":
-            raise ValueError("Incompatible arg values use_cuda={}, device={}."
-                             .format(use_cuda, device))
+        if self.use_cuda is not None:
+            if self.use_cuda ^ (device != "cpu"):
+                raise ValueError("Incompatible arg values use_cuda={}, device={}."
+                                 .format(use_cuda, device))
         self.device = torch.Tensor().device if not device else device
 
     def sample(self, sample_shape=torch.Size()):
