@@ -200,9 +200,8 @@ class iarange(object):
         right. If not specified, ``dim`` is set to the rightmost dim that is
         left of all enclosing ``iarange`` contexts.
     :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for `subsample` and `log_prob`. Defaults to `torch.Tensor.is_cuda`.
-        .. note:: This will be deprecated in `version=0.3`. Please use the
-        ``device`` arg instead.
+        for `subsample` and `log_prob`. Defaults to ``torch.Tensor.is_cuda``.
+        **Note:** Deprecated in 0.2.2. Use the `device` arg instead.
     :param str device: Optional keyword specifying which device to place
         the results of `subsample` and `log_prob` on. By default, results
         are placed on the same device as the default tensor.
@@ -284,9 +283,8 @@ class irange(object):
         ``len(subsample)``.
     :type subsample: Anything supporting ``len()``.
     :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for `subsample` and `log_prob`. Defaults to `torch.Tensor.is_cuda`.
-        .. note:: This will be deprecated in `version=0.3`. Please use the
-        ``device`` arg instead.
+        for `subsample` and `log_prob`. Defaults to ``torch.Tensor.is_cuda``.
+        **Note:** Deprecated in 0.2.2. Use the `device` arg instead.
     :param str device: Optional keyword specifying which device to place
         the results of `subsample` and `log_prob` on. By default, results
         are placed on the same device as the default tensor.
