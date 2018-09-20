@@ -9,7 +9,7 @@ from tests.common import assert_equal
 
 def test_mvn():
     tmp = torch.randn(3, 10)
-    cov = torch.tensor(torch.matmul(tmp, tmp.t()))
+    cov = torch.matmul(tmp, tmp.t())
     mvn = dist.MultivariateNormal(cov.new_zeros(3), cov)
 
     x = torch.randn(3, requires_grad=True)
