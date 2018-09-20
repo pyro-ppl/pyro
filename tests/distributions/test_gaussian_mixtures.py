@@ -25,23 +25,22 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
     if mix_dist == GaussianScaleMixture:
         locs = torch.zeros(K, D, requires_grad=True)
     else:
-        locs = torch.tensor(torch.rand(K, D), requires_grad=True)
+        locs = torch.rand(K, D).requires_grad_(True)
     if mix_dist == GaussianScaleMixture:
-        component_scale = 1.5 * torch.ones(K) + 0.5 * torch.rand(K)
-        component_scale = torch.tensor(component_scale, requires_grad=True)
+        component_scale = 1.5 * torch.ones(K) + 0.5 * torch.rand(K).requires_grad_(True)
     else:
         component_scale = torch.ones(K, requires_grad=True)
     if mix_dist == MixtureOfDiagNormals:
         coord_scale = torch.ones(K, D) + 0.5 * torch.rand(K, D)
-        coord_scale = torch.tensor(coord_scale, requires_grad=True)
+        coord_scale.requires_grad_(True)
     else:
         coord_scale = torch.ones(D) + 0.5 * torch.rand(D)
-        coord_scale = torch.tensor(coord_scale, requires_grad=True)
+        coord_scale.requires_grad_(True)
     if not flat_logits:
-        component_logits = torch.tensor(1.5 * torch.rand(K), requires_grad=True)
+        component_logits = (1.5 * torch.rand(K)).requires_grad_(True)
     else:
-        component_logits = torch.tensor(0.1 * torch.rand(K), requires_grad=True)
-    omega = torch.tensor(0.2 * torch.ones(D) + 0.1 * torch.rand(D), requires_grad=False)
+        component_logits = (0.1 * torch.rand(K)).requires_grad_(True)
+    omega = (0.2 * torch.ones(D) + 0.1 * torch.rand(D)).requires_grad_(False)
 
     _pis = torch.exp(component_logits)
     pis = _pis / _pis.sum()
