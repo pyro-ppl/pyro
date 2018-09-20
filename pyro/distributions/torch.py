@@ -20,7 +20,7 @@ class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
                 return type(self)(logits=logits, validate_args=validate_args)
 
     def enumerate_support(self, expand=True):
-        values = self._param.new([0., 1.])
+        values = self._param.new_tensor([0., 1.])
         values = values.reshape((2,) + (1,) * len(self.batch_shape))
         if expand:
             values = values.expand((2,) + self.batch_shape)
