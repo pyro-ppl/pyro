@@ -152,7 +152,7 @@ class SparseGPRegression(GPModel):
             if self.approx == "VFE":
                 trace_term_name = param_with_module_name(self.name, "trace_term")
                 pyro.sample(trace_term_name, dist.Bernoulli(probs=torch.exp(-trace_term / 2.)),
-                            obs=trace_term.new_tensor(1.))
+                            obs=torch.tensor(1., dtype=trace_term.dtype, device=trace_term.device))
 
             y_name = param_with_module_name(self.name, "y")
             return pyro.sample(y_name,

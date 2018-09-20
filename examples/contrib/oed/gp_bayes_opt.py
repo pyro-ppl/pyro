@@ -46,8 +46,7 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
         """
         # transform x to an unconstrained domain
         unconstrained_x_init = transform_to(self.constraints).inv(x_init)
-        unconstrained_x = unconstrained_x_init.new_tensor(
-            unconstrained_x_init, requires_grad=True)
+        unconstrained_x = unconstrained_x_init.detach().clone().requires_grad_(True)
         # TODO: Use LBFGS with line search by pytorch #8824 merged
         minimizer = optim.LBFGS([unconstrained_x], max_eval=20)
 

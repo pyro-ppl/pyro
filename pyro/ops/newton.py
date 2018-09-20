@@ -150,7 +150,7 @@ def newton_step_2d(loss, x, trust_radius=None):
         min_eig = mean_eig - (mean_eig ** 2 - detH).clamp(min=0).sqrt()
         regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
         warn_if_nan(regularizer, 'regularizer')
-        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new_tensor(torch.eye(2))
+        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * torch.eye(2, dtype=H.dtype, device=H.device)
 
     # compute newton update
     Hinv = rinverse(H, sym=True)
@@ -201,7 +201,7 @@ def newton_step_3d(loss, x, trust_radius=None):
         min_eig, _, _ = eig_3d(H)
         regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
         warn_if_nan(regularizer, 'regularizer')
-        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new_tensor(torch.eye(3))
+        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * torch.eye(3, dtype=H.dtype, device=H.device)
 
     # compute newton update
     Hinv = rinverse(H, sym=True)
