@@ -72,8 +72,8 @@ class NormalNormalTests(TestCase):
             return loc_latent
 
         def guide():
-            loc_q = pyro.param("loc_q", self.analytic_loc_n.detach().clone() + 0.134)
-            log_sig_q = pyro.param("log_sig_q", self.analytic_log_sig_n.data.detach().clone() - 0.14)
+            loc_q = pyro.param("loc_q", self.analytic_loc_n.detach() + 0.134)
+            log_sig_q = pyro.param("log_sig_q", self.analytic_log_sig_n.data.detach() - 0.14)
             sig_q = torch.exp(log_sig_q)
             Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
             pyro.sample("loc_latent", Normal(loc_q, sig_q).independent(1))
