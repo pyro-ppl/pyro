@@ -27,7 +27,8 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
     else:
         locs = torch.rand(K, D).requires_grad_(True)
     if mix_dist == GaussianScaleMixture:
-        component_scale = 1.5 * torch.ones(K) + 0.5 * torch.rand(K).requires_grad_(True)
+        component_scale = 1.5 * torch.ones(K) + 0.5 * torch.rand(K)
+        component_scale.requires_grad_(True)
     else:
         component_scale = torch.ones(K, requires_grad=True)
     if mix_dist == MixtureOfDiagNormals:
