@@ -11,7 +11,7 @@ import pytest
 @pytest.mark.parametrize('Model', [NcpContinuous, NcvContinuous])
 @pytest.mark.parametrize('dim', [2, 3])
 @pytest.mark.parametrize('time', [1, 2, 3])
-def test_EKFDistribution(Model, dim, time):
+def test_EKFDistribution_smoke(Model, dim, time):
     x0 = torch.rand(dim)
     ys = torch.randn(time, dim)
     P0 = torch.eye(dim).requires_grad_()

@@ -11,8 +11,18 @@ from pyro.contrib.tracking.measurements import PositionMeasurement
 
 class EKFDistribution(TorchDistribution):
     r"""
-    EKF Distribution
+    Distribution over EKF states.  See :class:`~pyro.contrib.tracking.extended_kalman_filter.EKFState`.
+    Currently only supports `log_prob`.
 
+    :param x0: position (mean)
+    :type x0: torch.Tensor
+    :param P0: covariance
+    :type P0: torch.Tensor
+    :param dynamic_model: :class:`~pyro.contrib.tracking.dynamic_models.DynamicModel` object
+    :param measurement_cov: measurement covariance
+    :type measurement_cov: torch.Tensor
+    :param dt: time step
+    :type dt: torch.Tensor
     """
     arg_constraints = {'measurement_cov': constraints.positive_definite,
                        'P0': constraints.positive_definite,
@@ -34,6 +44,12 @@ class EKFDistribution(TorchDistribution):
         raise NotImplementedError('TODO: implement forward filter backward sample')
 
     def log_prob(self, value):
+        """
+        Returns the joint log probability of the innovations of a list of measurements
+
+        :param value: measurement means
+        :type value: torch.Tensor
+        """
         state = EKFState(self.dynamic_model, self.x0, self.P0, time=0.)
         result = 0.
         zero = value.new_zeros(self.event_shape)
