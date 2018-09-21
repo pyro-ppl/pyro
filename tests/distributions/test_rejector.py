@@ -142,8 +142,8 @@ def test_shape_augmented_gamma_elbo(alpha, beta):
 @pytest.mark.parametrize('beta', [0.5, 1.0, 4.0])
 def test_shape_augmented_beta(alpha, beta):
     num_samples = 10000
-    alphas = torch.tensor(alpha).expand(num_samples, 1).contiguous().requires_grad_(True)
-    betas = torch.tensor(beta).expand(num_samples, 1).contiguous().requires_grad_(True)
+    alphas = torch.empty(num_samples, 1).fill_(alpha).requires_grad_()
+    betas = torch.empty(num_samples, 1).fill_(beta).requires_grad_()
     dist = ShapeAugmentedBeta(alphas, betas)  # implemented using Rejector
     z = dist.rsample()
     cost = z.sum()
