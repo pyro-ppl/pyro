@@ -21,6 +21,8 @@ class EKFDistribution(TorchDistribution):
     :param dynamic_model: :class:`~pyro.contrib.tracking.dynamic_models.DynamicModel` object
     :param measurement_cov: measurement covariance
     :type measurement_cov: torch.Tensor
+    :param time_steps: number time step
+    :type time_steps: int
     :param dt: time step
     :type dt: torch.Tensor
     """
@@ -29,14 +31,14 @@ class EKFDistribution(TorchDistribution):
                        'x0': constraints.real_vector}
     has_rsample = True
 
-    def __init__(self, x0, P0, dynamic_model, measurement_cov, time=1, dt=1., validate_args=None):
+    def __init__(self, x0, P0, dynamic_model, measurement_cov, time_steps=1, dt=1., validate_args=None):
         self.x0 = x0
         self.P0 = P0
         self.dynamic_model = dynamic_model
         self.measurement_cov = measurement_cov
         self.dt = dt
         batch_shape = x0.shape[:-1]
-        event_shape = (time,) + x0.shape[-1:]
+        event_shape = (time_steps,) + x0.shape[-1:]
         super(EKFDistribution, self).__init__(batch_shape, event_shape,
                                               validate_args=validate_args)
 
@@ -54,8 +56,9 @@ class EKFDistribution(TorchDistribution):
         result = 0.
         assert value.shape[-2:] == self.event_shape
         zero = value.new_zeros(self.event_shape[-1])
-        for measurement_mean in value[1:]:
-            state = state.predict(self.dt)
+        for i, measurement_mean in enumerate(value):
+            if i:
+                state = state.predict(self.dt)
             measurement = PositionMeasurement(measurement_mean, self.measurement_cov,
                                               time=state.time)
             state, (dz, S) = state.update(measurement)

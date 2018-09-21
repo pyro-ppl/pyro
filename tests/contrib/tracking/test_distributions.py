@@ -17,7 +17,7 @@ def test_EKFDistribution_smoke(Model, dim, time):
     P0 = torch.eye(dim).requires_grad_()
     R = torch.eye(dim).requires_grad_()
     model = Model(dim, 2.0)
-    dist = EKFDistribution(x0, P0, model, R, time=time)
+    dist = EKFDistribution(x0, P0, model, R, time_steps=time)
     log_prob = dist.log_prob(ys)
     assert log_prob.shape == torch.Size()
     dP0, dR = torch.autograd.grad(log_prob, [P0, R])
