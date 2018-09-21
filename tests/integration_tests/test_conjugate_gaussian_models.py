@@ -82,19 +82,14 @@ class GaussianChain(TestCase):
     def guide(self, reparameterized, difficulty=0.0):
         previous_sample = None
         for k in reversed(range(1, self.N + 1)):
-            loc_q = pyro.param("loc_q_%d" % k, torch.tensor(self.target_mus[k].data +
-                                                            difficulty * (0.1 * torch.randn(1) - 0.53),
-                                                            requires_grad=True))
-            log_sig_q = pyro.param("log_sig_q_%d" % k,
-                                   torch.tensor(-0.5 * torch.log(self.lambda_posts[k]).data +
-                                                difficulty * (0.1 * torch.randn(1) - 0.53),
-                                                requires_grad=True))
+            loc_q = pyro.param("loc_q_%d" % k, self.target_mus[k].detach() + difficulty * (0.1 * torch.randn(1) - 0.53))
+            log_sig_q = pyro.param("log_sig_q_%d" % k, -0.5 * torch.log(self.lambda_posts[k]).data +
+                                   difficulty * (0.1 * torch.randn(1) - 0.53))
             sig_q = torch.exp(log_sig_q)
             kappa_q = None
             if k != self.N:
-                kappa_q = pyro.param("kappa_q_%d" % k, torch.tensor(self.target_kappas[k].data +
-                                                                    difficulty * (0.1 * torch.randn(1) - 0.53),
-                                                                    requires_grad=True))
+                kappa_q = pyro.param("kappa_q_%d" % k, self.target_kappas[k].data +
+                                     difficulty * (0.1 * torch.randn(1) - 0.53))
             mean_function = loc_q if k == self.N else kappa_q * previous_sample + loc_q
             node_flagged = True if self.which_nodes_reparam[k - 1] == 1.0 else False
             Normal = dist.Normal if reparameterized or node_flagged else fakes.NonreparameterizedNormal

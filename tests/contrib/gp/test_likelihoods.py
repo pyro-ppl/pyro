@@ -120,7 +120,7 @@ def test_forward(model_class, X, y, kernel, likelihood):
         gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
 
     Xnew_shape = (X.shape[0] * 2,) + X.shape[1:]
-    Xnew = X.new_tensor(torch.rand(Xnew_shape))
+    Xnew = torch.rand(Xnew_shape, dtype=X.dtype, device=X.device)
     f_loc, f_var = gp(Xnew)
     ynew = gp.likelihood(f_loc, f_var)
 
@@ -139,7 +139,7 @@ def test_forward_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
         gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
 
     Xnew_shape = (X.shape[0] * 2,) + X.shape[1:]
-    Xnew = X.new_tensor(torch.rand(Xnew_shape))
+    Xnew = torch.rand(Xnew_shape, dtype=X.dtype, device=X.device)
     f_loc, f_var = gp(Xnew)
     ynew = gp.likelihood(f_loc, f_var)
 

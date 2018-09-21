@@ -55,7 +55,7 @@ class Delta(TorchDistribution):
 
     def log_prob(self, x):
         v = self.v.expand(self.shape())
-        log_prob = x.new_tensor(x == v).log()
+        log_prob = (x == v).type(x.dtype).log()
         log_prob = sum_rightmost(log_prob, self.event_dim)
         return log_prob + self.log_density
 
