@@ -1,12 +1,66 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
 from collections import OrderedDict
 
 import pytest
 import torch
 
-from pyro.infer.contract import _partition_terms, contract_to_tensor
+from pyro.infer.contract import _partition_terms, contract_tensor_tree, contract_to_tensor
 from pyro.poutine.indep_messenger import CondIndepStackFrame
+
+
+def deep_copy(x):
+    """
+    Deep copy to detect mutation, assuming tensors will not be mutated.
+    """
+    if isinstance(x, (tuple, frozenset, numbers.Number, torch.Tensor)):
+        return x  # assume x is immutable
+    if isinstance(x, (list, set)):
+        return type(x)(deep_copy(value) for value in x)
+    if isinstance(x, (dict, OrderedDict)):
+        return type(x)((deep_copy(key), deep_copy(value)) for key, value in x.items())
+    raise TypeError(type(x))
+
+
+def deep_equal(x, y):
+    """
+    Deep comparison, assuming tensors will not be mutated.
+    """
+    if type(x) != type(y):
+        return False
+    if isinstance(x, (tuple, frozenset, set, numbers.Number)):
+        return x == y
+    if isinstance(x, torch.Tensor):
+        return x is y
+    if isinstance(x, list):
+        if len(x) != len(y):
+            return False
+        return all((deep_equal(xi, yi) for xi, yi in zip(x, y)))
+    if isinstance(x, (dict, OrderedDict)):
+        if len(x) != len(y):
+            return False
+        if any(key not in y for key in x):
+            return False
+        return all(deep_equal(x[key], y[key]) for key in x)
+    raise TypeError(type(x))
+
+
+def assert_immutable(fn):
+    """
+    Decorator to check that function args are not mutated.
+    """
+
+    def checked_fn(*args):
+        copies = tuple(deep_copy(arg) for arg in args)
+        result = fn(*args)
+        for pos, (arg, copy) in enumerate(zip(args, copies)):
+            if not deep_equal(arg, copy):
+                raise AssertionError('{} mutated arg {} of type {}.\nOld:\n{}\nNew:\n{}'
+                                     .format(fn.__name__, pos, type(arg).__name__, copy, arg))
+        return result
+
+    return checked_fn
 
 
 @pytest.mark.parametrize('shapes,dims,expected_num_components', [
@@ -143,5 +197,21 @@ def test_contract_to_tensor(example):
     target_ordinal = frozenset(example['target_ordinal'])
     expected_shape = example['expected_shape']
 
-    actual = contract_to_tensor(tensor_tree, sum_dims, target_ordinal)
+    actual = assert_immutable(contract_to_tensor)(tensor_tree, sum_dims, target_ordinal)
     assert actual.shape == expected_shape
+
+
+@pytest.mark.parametrize('example', EXAMPLES)
+def test_contract_tensor_tree(example):
+    tensor_tree = OrderedDict((frozenset(t), [torch.randn(shape) for shape in shapes])
+                              for t, shapes in example['shape_tree'].items())
+    sum_dims = {x: set(d for d in example['sum_dims'] if -d <= x.dim() and x.shape[d] > 1)
+                for terms in tensor_tree.values()
+                for x in terms}
+
+    actual = assert_immutable(contract_tensor_tree)(tensor_tree, sum_dims)
+    assert actual
+    for ordinal, terms in actual.items():
+        for term in terms:
+            for frame in ordinal:
+                assert term.shape[frame.dim] == frame.size

@@ -120,14 +120,14 @@ def test_custom_subsample(model):
 def iarange_cuda_model(subsample_size):
     loc = torch.zeros(20).cuda()
     scale = torch.ones(20).cuda()
-    with pyro.iarange("data", 20, subsample_size, use_cuda=True) as batch:
+    with pyro.iarange("data", 20, subsample_size, device=loc.device) as batch:
         pyro.sample("x", dist.Normal(loc[batch], scale[batch]))
 
 
 def irange_cuda_model(subsample_size):
     loc = torch.zeros(20).cuda()
     scale = torch.ones(20).cuda()
-    for i in pyro.irange("data", 20, subsample_size, use_cuda=True):
+    for i in pyro.irange("data", 20, subsample_size, device=loc.device):
         pyro.sample("x_{}".format(i), dist.Normal(loc[i], scale[i]))
 
 

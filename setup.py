@@ -79,7 +79,7 @@ setup(
         # add them to `docs/requirements.txt`
         'contextlib2',
         'graphviz>=0.8',
-        'networkx>=2.0.0',
+        'networkx>=2.2rc1',
         'numpy>=1.7',
         'opt_einsum>=2.2.0',
         'six>=1.10.0',
@@ -90,7 +90,7 @@ setup(
         'extras': EXTRAS_REQUIRE,
         'test': EXTRAS_REQUIRE + [
             'nbval',
-            'pytest>=3.5',
+            'pytest==3.7',
             'pytest-cov',
             'scipy>=0.19.0',
         ],
@@ -103,7 +103,7 @@ setup(
             'nbstripout',
             'nbval',
             'pypandoc',
-            'pytest',
+            'pytest==3.7',
             'pytest-xdist',
             'scipy>=0.19.0',
             'sphinx',
@@ -111,7 +111,7 @@ setup(
             'yapf',
         ],
     },
-    tests_require=['flake8', 'pytest'],
+    tests_require=['flake8', 'pytest==3.7'],
     keywords='machine learning statistics probabilistic programming bayesian modeling pytorch',
     license='MIT License',
     classifiers=[

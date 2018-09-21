@@ -1,7 +1,7 @@
+from __future__ import absolute_import, division, print_function
+
 import sys
 
-import numpy as np
-import torch
 import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -34,17 +34,3 @@ def print_and_log(logger, msg):
     if logger is not None:
         logger.write("{}\n".format(msg))
         logger.flush()
-
-
-def set_seed(seed, use_cuda):
-    """
-    setting the seed for controlling randomness in this example
-    :param seed: seed value (int)
-    :param use_cuda: set the random seed for torch.cuda or not
-    :return: None
-    """
-    if seed is not None:
-        torch.manual_seed(seed)
-        np.random.seed(seed)
-        if use_cuda:
-            torch.cuda.manual_seed(seed)

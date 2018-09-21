@@ -108,6 +108,11 @@ class EKFState(object):
             after integration. If this is not provided, then
             `destination_frame_num` must be.
         '''
+        assert (dt is None) ^ (destination_time is None)
+        if dt is None:
+            dt = destination_time - self._time
+        elif destination_time is None:
+            destination_time = self._time + dt
         pred_mean = self._dynamic_model(self._mean, dt)
 
         F = self._dynamic_model.jacobian(dt)
@@ -187,7 +192,7 @@ class EKFState(object):
         S = H.mm(P).mm(H.transpose(-1, -2)) + R  # innovation cov
 
         K_prefix = self._cov.mm(H.transpose(-1, -2))
-        dx = K_prefix.mm(torch.gesv(dz, S)[0]).squeeze(1)  # K*dz
+        dx = K_prefix.mm(torch.gesv(dz.unsqueeze(1), S)[0]).squeeze(1)  # K*dz
         x = self._dynamic_model.geodesic_difference(x, -dx)
 
         I = eye_like(x, self._dynamic_model.dimension)  # noqa: E741

@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 import math
+import os
 import timeit
 from collections import defaultdict
 
@@ -20,7 +21,7 @@ from pyro.infer.enum import iter_discrete_traces
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from pyro.infer.util import LAST_CACHE_SIZE
 from pyro.util import torch_isnan
-from tests.common import assert_equal
+from tests.common import assert_equal, skipif_param
 
 try:
     from contextlib import ExitStack  # python 3
@@ -28,6 +29,12 @@ except ImportError:
     from contextlib2 import ExitStack  # python 2
 
 logger = logging.getLogger(__name__)
+
+
+def _skip_cuda(*args):
+    return skipif_param(*args,
+                        condition="CUDA_TEST" in os.environ,
+                        reason="https://github.com/uber/pyro/issues/1380")
 
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
@@ -290,7 +297,7 @@ def test_svi_step_guide_uses_grad(enumerate1):
 def test_elbo_bern(method, enumerate1, scale):
     pyro.clear_param_store()
     num_particles = 1 if enumerate1 else 10000
-    prec = 0.001 if enumerate1 else 0.1
+    prec = 0.001 if enumerate1 else 0.2
     q = pyro.param("q", torch.tensor(0.5, requires_grad=True))
     kl = kl_divergence(dist.Bernoulli(q), dist.Bernoulli(0.25))
 
@@ -396,7 +403,7 @@ def test_elbo_bern_bern(method, enumerate1, enumerate2, num_samples1, num_sample
         for n in [num_samples1, num_samples2]:
             if n is not None:
                 num_particles = num_particles // n
-        prec = 0.1
+        prec = 0.2
 
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
 
@@ -1084,7 +1091,7 @@ def test_elbo_rsvi(enumerate1):
     ("parallel", 3, False),
     ("parallel", 10, False),
     ("parallel", 20, False),
-    ("parallel", 30, False),
+    _skip_cuda("parallel", 30, False),
 ])
 def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
     pyro.clear_param_store()
@@ -1142,9 +1149,9 @@ def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
     ("parallel", 3, False),
     ("parallel", 10, False),
     ("parallel", 20, False),
-    ("parallel", 30, False),
-    ("parallel", 40, False),
-    ("parallel", 50, False),
+    _skip_cuda("parallel", 30, False),
+    _skip_cuda("parallel", 40, False),
+    _skip_cuda("parallel", 50, False),
 ])
 def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
     pyro.clear_param_store()
@@ -1216,7 +1223,7 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
         ]))
 
 
-@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, 30])
+@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, _skip_cuda(30)])
 def test_hmm_enumerate_model(num_steps):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
 
@@ -1241,7 +1248,7 @@ def test_hmm_enumerate_model(num_steps):
     elbo.differentiable_loss(model, guide, data)
 
 
-@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, 30])
+@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, _skip_cuda(30)])
 def test_hmm_enumerate_model_and_guide(num_steps):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
 
@@ -2543,6 +2550,7 @@ def test_elbo_hmm_growth():
 
 
 @pytest.mark.xfail(reason="flakey on travis due to nondeterministic computations")
+@pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/uber/pyro/issues/1380")
 def test_elbo_dbn_growth():
     pyro.clear_param_store()
     elbo = TraceEnum_ELBO(max_iarange_nesting=0)
@@ -2820,3 +2828,254 @@ def test_mixture_of_diag_normals(mixture, scale):
     auto_loss = elbo.differentiable_loss(auto_model, guide)
     hand_loss = elbo.differentiable_loss(hand_model, guide)
     _check_loss_and_grads(hand_loss, auto_loss)
+
+
+@pytest.mark.parametrize("Dist, prior", [
+    (dist.Bernoulli, 0.2),
+    (dist.Categorical, [0.2, 0.8]),
+    (dist.Categorical, [0.2, 0.3, 0.5]),
+    (dist.Categorical, [0.2, 0.3, 0.3, 0.2]),
+    (dist.OneHotCategorical, [0.2, 0.8]),
+    (dist.OneHotCategorical, [0.2, 0.3, 0.5]),
+    (dist.OneHotCategorical, [0.2, 0.3, 0.3, 0.2]),
+])
+def test_compute_marginals_single(Dist, prior):
+    prior = torch.tensor(prior)
+    data = torch.tensor([0., 0.1, 0.2, 0.9, 1.0, 1.1])
+
+    @config_enumerate(default="parallel")
+    def model():
+        locs = torch.tensor([-1., 0., 1., 2.])
+        x = pyro.sample("x", Dist(prior))
+        if Dist is dist.Bernoulli:
+            x = x.long()
+        elif Dist is dist.OneHotCategorical:
+            x = x.max(-1)[1]
+        with pyro.iarange("data", len(data)):
+            pyro.sample("obs", dist.Normal(locs[x], 1.), obs=data)
+
+    # First compute marginals using an empty guide.
+    def empty_guide():
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    marginals = elbo.compute_marginals(model, empty_guide)
+    assert len(marginals) == 1
+    assert type(marginals["x"]) is Dist
+    probs = marginals["x"].probs
+    assert probs.shape == prior.shape
+
+    # Next insert the computed marginals in an enumerating guide
+    # and ensure that they are exact, or at least locally optimal.
+    pyro.param("probs", probs)
+
+    @config_enumerate(default="parallel")
+    def exact_guide():
+        probs = pyro.param("probs")
+        pyro.sample("x", Dist(probs))
+
+    loss = elbo.differentiable_loss(model, exact_guide)
+    assert_equal(grad(loss, [pyro.param("probs")])[0], torch.zeros_like(probs))
+
+
+@pytest.mark.parametrize('ok,enumerate_guide,num_particles,vectorize_particles', [
+    (True, None, 1, False),
+    (False, "sequential", 1, False),
+    (False, "parallel", 1, False),
+    (False, None, 2, False),
+    (False, None, 2, True),
+])
+def test_compute_marginals_restrictions(ok, enumerate_guide, num_particles, vectorize_particles):
+
+    @config_enumerate(default="parallel")
+    def model():
+        w = pyro.sample("w", dist.Bernoulli(0.1))
+        x = pyro.sample("x", dist.Bernoulli(0.2))
+        y = pyro.sample("y", dist.Bernoulli(0.3))
+        z = pyro.sample("z", dist.Bernoulli(0.4))
+        pyro.sample("obs", dist.Normal(0., 1.), obs=w + x + y + z)
+
+    @config_enumerate(default=enumerate_guide)
+    def guide():
+        pyro.sample("w", dist.Bernoulli(0.4))
+        pyro.sample("y", dist.Bernoulli(0.7))
+
+    # Check that the ELBO works fine.
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
+                          num_particles=num_particles,
+                          vectorize_particles=vectorize_particles)
+    loss = elbo.loss(model, guide)
+    assert not torch_isnan(loss)
+
+    if ok:
+        marginals = elbo.compute_marginals(model, guide)
+        assert set(marginals.keys()) == {"x", "z"}
+    else:
+        with pytest.raises(NotImplementedError, match="compute_marginals"):
+            elbo.compute_marginals(model, guide)
+
+
+@pytest.mark.parametrize('size', [1, 2, 3, 4, 10, 20, _skip_cuda(30)])
+def test_compute_marginals_hmm(size):
+
+    @config_enumerate(default="parallel")
+    def model(data):
+        transition_probs = torch.tensor([[0.75, 0.25], [0.25, 0.75]])
+        emission_probs = torch.tensor([[0.75, 0.25], [0.25, 0.75]])
+        x = torch.tensor(0)
+        for i, y in enumerate(data):
+            x = pyro.sample("x_{}".format(i), dist.Categorical(transition_probs[x]))
+            pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=y)
+
+        pyro.sample("x_{}".format(len(data)), dist.Categorical(transition_probs[x]),
+                    obs=torch.tensor(1))
+
+    def guide(data):
+        pass
+
+    data = torch.zeros(size, dtype=torch.long)
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0)
+    marginals = elbo.compute_marginals(model, guide, data)
+    assert set(marginals.keys()) == {"x_{}".format(i) for i in range(size)}
+    for i in range(size):
+        d = marginals["x_{}".format(i)]
+        assert d.batch_shape == ()
+
+    # The x's should be monotonically increasing, since we've observed x[-1]==0
+    # and x[size]==1, and since the y's are constant.
+    for i in range(size - 1):
+        d1 = marginals["x_{}".format(i)]
+        d2 = marginals["x_{}".format(i + 1)]
+        assert d1.probs[0] > d2.probs[0]
+        assert d1.probs[1] < d2.probs[1]
+
+
+@pytest.mark.parametrize("data", [
+    [None, None],
+    [torch.tensor(0.), None],
+    [None, torch.tensor(0.)],
+    [torch.tensor(0.), torch.tensor(0)],
+])
+def test_backwardsample_posterior_smoke(data):
+
+    @config_enumerate(default="parallel")
+    def model(data):
+        xs = list(data)
+        zs = []
+        for i in range(2):
+            K = i + 2  # number of mixture components
+            zs.append(pyro.sample("z_{}".format(i),
+                                  dist.Categorical(torch.ones(K))))
+            if i == 0:
+                loc = pyro.param("loc", torch.randn(K))[zs[i]]
+                xs[i] = pyro.sample("x_{}".format(i),
+                                    dist.Normal(loc, 1.), obs=data[i])
+            elif i == 1:
+                logits = pyro.param("logits", torch.randn(K, 2))[zs[i]]
+                xs[i] = pyro.sample("x_{}".format(i),
+                                    dist.Categorical(logits=logits),
+                                    obs=data[i])
+
+        z12 = zs[0] + 2 * zs[1]
+        pyro.sample("z_12", dist.Categorical(torch.arange(6.)), obs=z12)
+        return xs, zs
+
+    def guide(data):
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    xs, zs = elbo.sample_posterior(model, guide, data)
+    for x, datum in zip(xs, data):
+        assert datum is None or datum is x
+    for z in zs:
+        assert z.shape == ()
+
+
+def test_backwardsample_posterior_2():
+    num_particles = 10000
+
+    @config_enumerate(default="parallel")
+    def model(data):
+        with pyro.iarange("particles", num_particles):
+            p_z = torch.tensor([0.1, 0.9])
+            x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+            z = pyro.sample("z", dist.Bernoulli(p_z[x]), obs=data)
+        return x, z
+
+    def guide(data):
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    x, z = elbo.sample_posterior(model, guide, data=torch.zeros(num_particles))
+    expected = 0.9
+    actual = (x.type_as(z) == z).float().mean().item()
+    assert abs(expected - actual) < 0.05
+
+
+def test_backwardsample_posterior_3():
+    num_particles = 10000
+
+    @config_enumerate(default="parallel")
+    def model(data):
+        with pyro.iarange("particles", num_particles):
+            p_z = torch.tensor([[0.9, 0.1], [0.1, 0.9]])
+            x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+            y = pyro.sample("y", dist.Categorical(torch.tensor([0.5, 0.5])))
+            z = pyro.sample("z", dist.Bernoulli(p_z[x, y]), obs=data)
+        return x, y, z
+
+    def guide(data):
+        pass
+
+    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+
+    x, y, z = elbo.sample_posterior(model, guide, data=torch.ones(num_particles))
+    expected = 0.9
+    actual = (x == y).float().mean().item()
+    assert abs(expected - actual) < 0.05
+
+    x, y, z = elbo.sample_posterior(model, guide, data=torch.zeros(num_particles))
+    expected = 0.1
+    actual = (x == y).float().mean().item()
+    assert abs(expected - actual) < 0.05
+
+
+@pytest.mark.parametrize('ok,enumerate_guide,num_particles,vectorize_particles', [
+    (True, None, 1, False),
+    (False, "sequential", 1, False),
+    (False, "parallel", 1, False),
+    (False, None, 2, False),
+    (False, None, 2, True),
+])
+def test_backwardsample_posterior_restrictions(ok, enumerate_guide, num_particles, vectorize_particles):
+
+    @config_enumerate(default="parallel")
+    def model():
+        w = pyro.sample("w", dist.Bernoulli(0.1))
+        x = pyro.sample("x", dist.Bernoulli(0.2))
+        y = pyro.sample("y", dist.Bernoulli(0.3))
+        z = pyro.sample("z", dist.Bernoulli(0.4))
+        pyro.sample("obs", dist.Normal(0., 1.), obs=w + x + y + z)
+        return w, x, y, z
+
+    @config_enumerate(default=enumerate_guide)
+    def guide():
+        pyro.sample("w", dist.Bernoulli(0.4))
+        pyro.sample("y", dist.Bernoulli(0.7))
+
+    # Check that the ELBO works fine.
+    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
+                          num_particles=num_particles,
+                          vectorize_particles=vectorize_particles)
+    loss = elbo.loss(model, guide)
+    assert not torch_isnan(loss)
+
+    if ok:
+        w, x, y, z = elbo.sample_posterior(model, guide)
+        assert w.shape == ()
+        assert x.shape == ()
+        assert y.shape == ()
+        assert z.shape == ()
+    else:
+        with pytest.raises(NotImplementedError, match="sample_posterior"):
+            elbo.sample_posterior(model, guide)

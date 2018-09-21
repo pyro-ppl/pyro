@@ -1,18 +1,21 @@
+from __future__ import absolute_import, division, print_function
+
 import argparse
 from functools import partial
 import torch
 from torch.distributions import constraints
+import numpy as np
 
 import pyro
 from pyro import optim
 from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import vi_ape
 import pyro.contrib.gp as gp
+from pyro.contrib.glmm import (
+    zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov
+)
 
 from gp_bayes_opt import GPBayesOptimizer
-from models.bayes_linear import (
-    zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_entropy
-)
 
 """
 Example builds on the Bayesian regression tutorial [1]. It demonstrates how
@@ -58,6 +61,7 @@ def estimated_ape(ns, num_vi_steps):
         model,
         X,
         observation_labels="y",
+        target_labels="w",
         vi_parameters={
             "guide": guide,
             "optim": optim.Adam({"lr": 0.05}),
@@ -75,22 +79,24 @@ def true_ape(ns):
     designs = [group_assignment_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
     for i in range(len(ns)):
         x = designs[i]
-        true_ape.append(analytic_posterior_entropy(prior_cov, x, torch.tensor(1.)))
+        posterior_cov = analytic_posterior_cov(prior_cov, x, torch.tensor(1.))
+        true_ape.append(0.5*torch.logdet(2*np.pi*np.e*posterior_cov))
     return torch.tensor(true_ape)
 
 
-def main(num_vi_steps, num_acquisitions, num_bo_steps):
+def main(num_vi_steps, num_bo_steps):
 
-    pyro.set_rng_seed(0)
+    pyro.set_rng_seed(42)
     pyro.clear_param_store()
 
     est_ape = partial(estimated_ape, num_vi_steps=num_vi_steps)
     est_ape.__doc__ = "Estimated APE by VI"
 
     estimators = [true_ape, est_ape]
-    noises = [0.0001, 0.1]
+    noises = [0.0001, 0.25]
+    num_acqs = [2, 10]
 
-    for f, noise in zip(estimators, noises):
+    for f, noise, num_acquisitions in zip(estimators, noises, num_acqs):
         X = torch.tensor([25., 75.])
         y = f(X)
         gpmodel = gp.models.GPRegression(
@@ -99,8 +105,8 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
         gpmodel.optimize(loss=TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss)
         gpbo = GPBayesOptimizer(constraints.interval(0, 100), gpmodel,
                                 num_acquisitions=num_acquisitions)
+        pyro.clear_param_store()
         for i in range(num_bo_steps):
-            pyro.clear_param_store()
             result = gpbo.get_step(f, None, verbose=True)
 
         print(f.__doc__)
@@ -110,7 +116,6 @@ def main(num_vi_steps, num_acquisitions, num_bo_steps):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
     parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
-    parser.add_argument('--num-acquisitions', nargs="?", default=10, type=int)
     parser.add_argument('--num-bo-steps', nargs="?", default=5, type=int)
     args = parser.parse_args()
-    main(args.num_vi_steps, args.num_acquisitions, args.num_bo_steps)
+    main(args.num_vi_steps, args.num_bo_steps)

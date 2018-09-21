@@ -163,7 +163,7 @@ class AIR(nn.Module):
 
     def model(self, data, batch_size, **kwargs):
         pyro.module("decode", self.decode)
-        with pyro.iarange('data', data.size(0), use_cuda=self.use_cuda) as ix:
+        with pyro.iarange('data', data.size(0), device=data.device) as ix:
             batch = data[ix]
             n = batch.size(0)
             (z_where, z_pres), x = self.prior(n, **kwargs)
@@ -189,7 +189,7 @@ class AIR(nn.Module):
         pyro.param('bl_h_init', self.bl_h_init)
         pyro.param('bl_c_init', self.bl_c_init)
 
-        with pyro.iarange('data', data.size(0), subsample_size=batch_size, use_cuda=self.use_cuda) as ix:
+        with pyro.iarange('data', data.size(0), subsample_size=batch_size, device=data.device) as ix:
             batch = data[ix]
             n = batch.size(0)
 
@@ -282,7 +282,7 @@ class AIR(nn.Module):
         if self.baseline_scalar is not None:
             bl_value = bl_value * self.baseline_scalar
 
-        infer_dict = dict(baseline_value=bl_value.squeeze(-1))
+        infer_dict = dict(baseline=dict(baseline_value=bl_value.squeeze(-1)))
         return infer_dict, bl_h, bl_c
 
 
