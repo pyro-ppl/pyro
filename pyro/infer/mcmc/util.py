@@ -164,6 +164,11 @@ class TraceEinsumEvaluator(object):
         Populate the ordinals (set of ``CondIndepStack`` frames)
         and enum_dims for each sample site.
         """
+        if not self.has_enumerable_sites:
+            return
+        if self.max_iarange_nesting == float("inf"):
+            raise ValueError("Finite value required for `max_iarange_nesting` when model "
+                             "has discrete (enumerable) sites.")
         model_trace.compute_log_prob()
         self.ordering = {name: frozenset(site["cond_indep_stack"])
                          for name, site in model_trace.nodes.items()
@@ -198,7 +203,10 @@ class TraceEinsumEvaluator(object):
 
         :return: log pdf of the trace.
         """
-        log_probs = self._get_log_factors(model_trace)
-        sum_dims = {site["log_prob"]: self._enum_dims[name] for name, site in model_trace.nodes.items()
-                    if site["type"] == "sample" and not isinstance(site["fn"], _Subsample)}
-        return contract_to_tensor(log_probs, sum_dims, frozenset()).sum()
+        with shared_intermediates():
+            if not self.has_enumerable_sites:
+                return model_trace.log_prob_sum()
+            log_probs = self._get_log_factors(model_trace)
+            sum_dims = {site["log_prob"]: self._enum_dims[name] for name, site in model_trace.nodes.items()
+                        if site["type"] == "sample" and not isinstance(site["fn"], _Subsample)}
+            return contract_to_tensor(log_probs, sum_dims, frozenset()).sum()

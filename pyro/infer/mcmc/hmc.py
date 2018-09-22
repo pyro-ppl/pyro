@@ -203,7 +203,7 @@ class HMC(TraceKernel):
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
 
     def _validate_trace(self, trace):
-        trace_eval = TraceTreeEvaluator if self.use_einsum else TraceEinsumEvaluator
+        trace_eval = TraceEinsumEvaluator if self.use_einsum else TraceTreeEvaluator
         self._trace_prob_evaluator = trace_eval(trace,
                                                 self._has_enumerable_sites,
                                                 self.max_iarange_nesting)
