@@ -7,6 +7,7 @@ from pyro.distributions.util import logsumexp, broadcast_shape
 from pyro.infer.contract import contract_tensor_tree
 from pyro.infer.util import is_validation_enabled
 from pyro.ops.sumproduct import sumproduct, logsumproductexp
+from pyro.primitives import _Subsample
 from pyro.util import check_site_shape
 
 
@@ -156,6 +157,7 @@ class TraceEinsumEvaluator(object):
         self.max_iarange_nesting = max_iarange_nesting
         # To be populated using the model trace once.
         self._enum_dims = {}
+        self.ordering = {}
         self._populate_cache(model_trace)
 
     def _populate_cache(self, model_trace):
@@ -167,7 +169,6 @@ class TraceEinsumEvaluator(object):
         self.ordering = {name: frozenset(site["cond_indep_stack"])
                          for name, site in model_trace.nodes.items()
                          if site["type"] == "sample"}
-        self._enum_dims = {}
         for name, site in model_trace.nodes.items():
             if site["type"] == "sample":
                 if is_validation_enabled():
@@ -185,7 +186,7 @@ class TraceEinsumEvaluator(object):
         log_probs = OrderedDict()
         # Collect log prob terms per independence context.
         for name, site in model_trace.nodes.items():
-            if site["type"] == "sample":
+            if site["type"] == "sample" and not isinstance(site["fn"], _Subsample):
                 if is_validation_enabled():
                     check_site_shape(site, self.max_iarange_nesting)
                 log_probs.setdefault(self.ordering[name], []).append(site["log_prob"])
