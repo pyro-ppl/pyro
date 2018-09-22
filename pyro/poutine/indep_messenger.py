@@ -25,6 +25,9 @@ class CondIndepStackFrame(namedtuple("CondIndepStackFrame", ["name", "dim", "siz
     def __hash__(self):
         return hash(self._key())
 
+    def __str__(self):
+        return self.name
+
 
 class IndepMessenger(Messenger):
     """

@@ -6,7 +6,7 @@ from collections import OrderedDict
 import pytest
 import torch
 
-from pyro.infer.contract import _partition_terms, contract_tensor_tree, contract_to_tensor
+from pyro.infer.contract import UnpackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 
 
@@ -84,9 +84,10 @@ def assert_immutable(fn):
     ([(4, 1, 1), (4, 3, 1), (1, 3, 2), (1, 1, 2)], set([-1, -3]), 2),
     ([(4, 1, 1), (4, 3, 1), (1, 3, 2), (1, 1, 2)], set([-1, -2, -3]), 1),
 ])
-def test_partition_terms(shapes, dims, expected_num_components):
+def test_partition_terms_unpacked(shapes, dims, expected_num_components):
+    ring = UnpackedLogRing()
     tensors = [torch.randn(shape) for shape in shapes]
-    components = list(_partition_terms(tensors, dims))
+    components = list(_partition_terms(ring, tensors, dims))
 
     # Check that result is a partition.
     expected_terms = sorted(tensors, key=id)

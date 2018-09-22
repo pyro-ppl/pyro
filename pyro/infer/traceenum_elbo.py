@@ -140,7 +140,7 @@ def _compute_marginals(model_trace, guide_trace):
     marginal_costs, log_factors, ordering, sum_dims, scale = args
 
     marginal_dists = OrderedDict()
-    with shared_intermediates():
+    with shared_intermediates() as cache:
         for name, site in model_trace.nodes.items():
             if (site["type"] != "sample" or
                     name in guide_trace.nodes or
@@ -150,7 +150,7 @@ def _compute_marginals(model_trace, guide_trace):
             enum_dim = site["fn"].event_dim - site["value"].dim()
             site_sum_dims = {term: dims - {enum_dim} for term, dims in sum_dims.items()}
             ordinal = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
-            logits = contract_to_tensor(log_factors, site_sum_dims, ordinal)
+            logits = contract_to_tensor(log_factors, site_sum_dims, ordinal, cache=cache)
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
             while logits.shape[0] == 1:
                 logits.squeeze_(0)
@@ -187,9 +187,9 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
             assert enum_dim < 0, "{} {}".format(msg["name"], enum_dim)
             for value in self.sum_dims.values():
                 value.discard(enum_dim)
-            with shared_intermediates(self.cache):
+            with shared_intermediates(self.cache) as cache:
                 ordinal = frozenset(f for f in msg["cond_indep_stack"] if f.vectorized)
-                logits = contract_to_tensor(self.log_factors, self.sum_dims, ordinal)
+                logits = contract_to_tensor(self.log_factors, self.sum_dims, ordinal, cache=cache)
                 logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
                 while logits.shape[0] == 1:
                     logits.squeeze_(0)
