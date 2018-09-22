@@ -3,11 +3,13 @@ from __future__ import absolute_import, division, print_function
 import numbers
 from collections import OrderedDict
 
+import opt_einsum
 import pytest
 import torch
 
-from pyro.infer.contract import UnpackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor
+from pyro.infer.contract import UnpackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor, ubersum
 from pyro.poutine.indep_messenger import CondIndepStackFrame
+from tests.common import assert_equal
 
 
 def deep_copy(x):
@@ -216,3 +218,36 @@ def test_contract_tensor_tree(example):
         for term in terms:
             for frame in ordinal:
                 assert term.shape[frame.dim] == frame.size
+
+
+UBERSUM_EXAMPLES = [
+    ('->', ''),
+    ('a->', ''),
+    ('ab->', ''),
+    ('ab,bc->ac', ''),
+    ('ab,bc->ca', ''),
+    ('ab,bc->a,b,c', ''),
+    ('ab,bc,cd->cb,da', ''),
+]
+
+
+@pytest.mark.parametrize('equation,batch_dims', UBERSUM_EXAMPLES)
+def test_ubersum(equation, batch_dims):
+    symbols = sorted(set(equation) - set(',->'))
+    sizes = {dim: size for dim, size in zip(symbols, range(2, 2 + len(symbols)))}
+    inputs, outputs = equation.split('->')
+    operands = []
+    for dims in inputs.split(','):
+        shape = tuple(sizes[dim] for dim in dims)
+        operands.append(torch.randn(shape))
+
+    actual = ubersum(equation, *operands, batch_dims=batch_dims)
+
+    outputs = outputs.split(',')
+    assert len(actual) == len(outputs)
+    for output, actual_part in zip(outputs, actual):
+        if not batch_dims:
+            equation_part = inputs + '->' + output
+            expected_part = opt_einsum.contract(equation_part, *operands,
+                                                backend='pyro.ops.einsum.torch_log')
+            assert_equal(actual_part, expected_part)

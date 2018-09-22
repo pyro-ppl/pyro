@@ -14,24 +14,68 @@ from pyro.ops.sumproduct import logsumproductexp
 
 @add_metaclass(ABCMeta)
 class TensorRing(object):
+    """
+    Abstract tensor ring class.
+
+    Each tensor ring class has a notion of ``dims`` that can be sum-contracted
+    out, and a notion of ``ordinal`` that represents a set of batch dimensions
+    that can be broadcasted-up or product-contracted out.
+    """
     @abstractmethod
     def dims(self, term):
+        """
+        Iterates over the nontrivial dims associted with this term.
+        Derived classes may use any hashable type for dims.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def sumproduct(self, terms, dims):
+        """
+        Multiply all ``terms`` together, then sum-contract out all ``dims``
+        from the result.
+
+        :param list terms: a list of tensors
+        :dims: an iterable of dims
+        """
         raise NotImplementedError
 
     @abstractmethod
     def product(self, term, ordinal):
+        """
+        Product-contract the given ``term`` along any batch dimensions
+        present in given ``ordinal``.
+
+        :param torch.Tensor term: the term to contract
+        :param frozenset ordinal: an ordinal specifying batch context
+        """
         raise NotImplementedError
 
     @abstractmethod
     def broadcast(self, tensor, ordinal):
+        """
+        Broadcast the given ``term`` by expanding along any batch dimensions
+        present in given ``ordinal``.
+
+        :param torch.Tensor term: the term to expand
+        :param frozenset ordinal: an ordinal specifying batch context
+        """
         raise NotImplementedError
 
 
 class UnpackedLogRing(TensorRing):
+    """
+    Tensor Ring defined by high-dimensional unpacked tensors in log space.
+
+    Tensor values are in log units, so ``sum`` is implemented as ``logsumexp``,
+    and ``product`` is implemented as ``sum``.
+    Tensor shapes are typically wide with only a few nontrivial dimensions::
+
+        torch.Size((7, 1, 1, 1, 1, 1, 3, 1, 1, 2))
+
+    Dims are negative integers indexing into tensors shapes from the right.
+    Ordinals are frozensets of ``CondIndepStackFrame``s.
+    """
     def __init__(self, cache=None):
         if cache is None:
             cache = {}
@@ -43,6 +87,7 @@ class UnpackedLogRing(TensorRing):
                 yield dim
 
     def sumproduct(self, terms, dims):
+        assert all(dim < 0 for dim in dims)
         if not dims:
             return sum(terms)
         shape = list(broadcast_shape(*set(x.shape for x in terms)))
@@ -83,6 +128,18 @@ class UnpackedLogRing(TensorRing):
 
 
 class PackedLogRing(TensorRing):
+    """
+    Tensor Ring of packed tensors with named dimensions in log space.
+
+    Tensor values are in log units, so ``sum`` is implemented as ``logsumexp``,
+    and ``product`` is implemented as ``sum``.
+    Tensor dimensions are packed; to read the name of a tensor, call
+    :meth:`dims`, which returns a string of dimension names aligned with the
+    tensor's shape.
+
+    Dims are characters (string or unicode).
+    Ordinals are frozensets of characters.
+    """
     def __init__(self, inputs, operands, cache=None):
         if cache is None:
             cache = {}
@@ -99,8 +156,8 @@ class PackedLogRing(TensorRing):
 
     def sumproduct(self, terms, dims):
         inputs = [self.dims(term) for term in terms]
-        output = ''.join(sorted(set(sum(inputs)) - set(dims)))
-        equation = ''.join(inputs) + '->' + output
+        output = ''.join(sorted(set(''.join(inputs)) - set(dims)))
+        equation = ','.join(inputs) + '->' + output
         term = contract(equation, *terms, backend='pyro.ops.einsum.torch_log')
         self._cache['tensor', id(term)] = term
         self._cache['dims', id(term)] = output
@@ -118,7 +175,7 @@ class PackedLogRing(TensorRing):
                     term = term.sum(pos)
                     dims = dims.replace(dim, '')
                     self._cache[key] = term
-                    self._cache['dim', id(term)] = dims
+                    self._cache['dims', id(term)] = dims
         return term
 
     def broadcast(self, term, ordinal):
@@ -189,8 +246,6 @@ def _partition_terms(ring, terms, dims):
     up into sets that must be contracted together. By separating these
     components we avoid broadcasting. This function should be deterministic.
     """
-    assert all(dim < 0 for dim in dims)
-
     # Construct a bipartite graph between terms and the dims in which they
     # are enumerated. This conflates terms and dims (tensors and ints).
     neighbors = OrderedDict([(t, []) for t in terms] + [(d, []) for d in dims])
@@ -374,12 +429,33 @@ def ubersum(equation, *operands, **kwargs):
     """
     Generalized batched einsum via tensor message passing.
 
+    This generalizes :func:``~opt_einsum.contract`` in two ways:
+    1. multiple outputs are allowed, and intermediate results can be shared.
+    2. inputs and outputs can be batched along symbols given in ``batch_dims``;
+        reductions along ``batch_dim``s are product reductions.
+
+    To illustrate multiple outputs, note that the following are equivalent::
+
+        z1, z2, z3 = ubersum('ab,bc->a,b,c', x, y)  # multiple outputs
+
+        backend = 'pyro.ops.einsum.torch_log'
+        z1 = contract('ab,bc->a', x, y, backend=backend)
+        z2 = contract('ab,bc->b', x, y, backend=backend)
+        z3 = contract('ab,bc->c', x, y, backend=backend)
+
+    To illustrate batched inputs, note that the following are equivalent::
+
+        z = ubersum('c,abc,acd->bd', w, x, y, batch_dims='a')
+
+        z = w + sum(contract('bc,cd->bd', xi, yi, backend=backend)
+                    for xi, yi in zip(x, y))
+
     :param str equation: an einsum equation, optionally with multuple outputs.
     :param torch.Tensor operands: a collection of tensors
     :param str batch_dims: a string of batch dims.
     :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`
         cache.
-    :return: a tuple of tensors of requested shape.
+    :return: a tuple of tensors of requested shape, one entry per output.
     :rtype: tuple
     """
     # Extract kwargs.
@@ -395,7 +471,7 @@ def ubersum(equation, *operands, **kwargs):
     inputs, outputs = equation.split('->')
     inputs = inputs.split(',')
     outputs = outputs.split(',')
-    assert len(inputs) == len(outputs)
+    assert len(inputs) == len(operands)
     assert all(isinstance(x, torch.Tensor) for x in operands)
 
     # Construct a tensor tree shared by all outputs.
