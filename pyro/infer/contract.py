@@ -126,7 +126,7 @@ def _contract_component(tensor_tree, sum_dims, target_ordinal=None):
     for t, terms in tensor_tree.items():
         dims_tree[t] = set.union(set(), *(sum_dims[term] for term in terms))
 
-    enum_boundary = max(set.union(*sum_dims.values(), {float("-inf")}))
+    enum_boundary = max(set.union({float("-inf")}, *sum_dims.values()))
 
     # Recursively combine terms in different iarange contexts.
     while len(tensor_tree) > 1 or any(dims_tree.values()):
