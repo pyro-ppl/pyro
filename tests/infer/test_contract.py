@@ -7,6 +7,7 @@ import opt_einsum
 import pytest
 import torch
 
+from pyro.distributions.util import logsumexp
 from pyro.infer.contract import UnpackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor, ubersum
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from tests.common import assert_equal
@@ -228,6 +229,7 @@ UBERSUM_EXAMPLES = [
     ('ab,bc->ca', ''),
     ('ab,bc->a,b,c', ''),
     ('ab,bc,cd->cb,da', ''),
+    ('ab,ac->,b,c,cb,a,ca,ba,ab,ac,bac', 'a'),
 ]
 
 
@@ -246,8 +248,53 @@ def test_ubersum(equation, batch_dims):
     outputs = outputs.split(',')
     assert len(actual) == len(outputs)
     for output, actual_part in zip(outputs, actual):
-        if not batch_dims:
+        expected_shape = tuple(sizes[dim] for dim in output)
+        assert actual_part.shape == expected_shape
+        if set(batch_dims) <= set(output):
             equation_part = inputs + '->' + output
             expected_part = opt_einsum.contract(equation_part, *operands,
                                                 backend='pyro.ops.einsum.torch_log')
             assert_equal(actual_part, expected_part)
+
+
+def test_ubersum_1():
+    # y {a}   z {b}
+    #      \  /
+    #     x {} <--- target
+    a, b, c, d, e = 2, 3, 4, 5, 6
+    x = torch.randn(c)
+    y = torch.randn(c, d, a)
+    z = torch.randn(e, c, b)
+    actual, = ubersum('c,cda,ecb->', x, y, z, batch_dims='ab')
+    expected = logsumexp(x + logsumexp(y, -2).sum(-1) + logsumexp(z, -3).sum(-1), -1)
+    assert_equal(actual, expected)
+
+
+def test_ubersum_2():
+    # y {a}   z {b} <--- target
+    #      \  /
+    #     x {}
+    a, b, c, d, e = 2, 3, 4, 5, 6
+    x = torch.randn(c)
+    y = torch.randn(c, d, a)
+    z = torch.randn(e, c, b)
+    actual, = ubersum('c,cda,ecb->b', x, y, z, batch_dims='ab')
+    expected = logsumexp((x + logsumexp(y, -2).sum(-1)).unsqueeze(-1) + logsumexp(z, -3), -2)
+    assert_equal(actual, expected)
+
+
+def test_ubersum_3():
+    #        z {c}
+    #           |
+    # w {a}  y {b}  <--- target
+    #      \  /
+    #     x {}
+    a, b, c, d, e = 2, 3, 4, 5, 6
+    w = torch.randn(a, e)
+    x = torch.randn(d)
+    y = torch.randn(b, d)
+    z = torch.randn(b, c, d, e)
+    actual, = ubersum('ae,d,bd,bcde->be', w, x, y, z, batch_dims='abc')
+    wxyz = w.sum(0) + x.reshape(d, 1) + y.reshape(b, d, 1) + z.sum(1)
+    expected = logsumexp(wxyz, 1)
+    assert_equal(actual, expected)
