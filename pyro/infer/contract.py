@@ -20,11 +20,26 @@ class TensorRing(object):
     Each tensor ring class has a notion of ``dims`` that can be sum-contracted
     out, and a notion of ``ordinal`` that represents a set of batch dimensions
     that can be broadcasted-up or product-contracted out.
+    Implementations should cache intermediate results to be compatible with
+    :func:`~opt_einsum.shared_intermediates`.
+
+    :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`
+        cache.
     """
+    def __init__(self, cache=None):
+        self._cache = {} if cache is None else cache
+
+    def _save_tensor(self, tensor):
+        """
+        Saves a tensor in the cache so that ``id(tensor)`` can be used as a
+        key in the cache without risk if the id being recycled.
+        """
+        self._cache['tensor', id(tensor)] = tensor
+
     @abstractmethod
     def dims(self, term):
         """
-        Iterates over the nontrivial dims associted with this term.
+        Returns an iterable of nontrivial dims associted with this term.
         Derived classes may use any hashable type for dims.
         """
         raise NotImplementedError
@@ -55,7 +70,7 @@ class TensorRing(object):
     def broadcast(self, tensor, ordinal):
         """
         Broadcast the given ``term`` by expanding along any batch dimensions
-        present in given ``ordinal``.
+        present in ``ordinal`` but not ``term``.
 
         :param torch.Tensor term: the term to expand
         :param frozenset ordinal: an ordinal specifying batch context
@@ -76,15 +91,8 @@ class UnpackedLogRing(TensorRing):
     Dims are negative integers indexing into tensors shapes from the right.
     Ordinals are frozensets of ``CondIndepStackFrame``s.
     """
-    def __init__(self, cache=None):
-        if cache is None:
-            cache = {}
-        self._cache = cache
-
     def dims(self, term):
-        for dim in range(-term.dim(), 0):
-            if term.shape[dim] > 1:
-                yield dim
+        return [d for d in range(-term.dim(), 0) if term.size(d) > 1]
 
     def sumproduct(self, terms, dims):
         assert all(dim < 0 for dim in dims)
@@ -107,6 +115,7 @@ class UnpackedLogRing(TensorRing):
                 if key in self._cache:
                     term = self._cache[key]
                 else:
+                    self._save_tensor(term)
                     term = term.sum(frame.dim, keepdim=True)
                     self._cache[key] = term
         return term
@@ -119,9 +128,10 @@ class UnpackedLogRing(TensorRing):
         shape = torch.Size(shape)
         if term.shape == shape:
             return term
-        key = 'expand', id(term), shape
+        key = 'broadcast', id(term), shape
         if key in self._cache:
             return self._cache[key]
+        self._save_tensor(term)
         term = term.expand(shape)
         self._cache[key] = term
         return term
@@ -141,15 +151,16 @@ class PackedLogRing(TensorRing):
     Ordinals are frozensets of characters.
     """
     def __init__(self, inputs, operands, cache=None):
-        if cache is None:
-            cache = {}
+        super(PackedLogRing, self).__init__(cache=cache)
         self._batch_size = {}
         for dims, term in zip(inputs, operands):
-            cache['tensor', id(term)] = term
-            cache['dims', id(term)] = dims
+            self._save_tensor(term)
+            self._cache['dims', id(term)] = dims
             for dim, size in zip(dims, term.shape):
-                self._batch_size[dim] = size
-        self._cache = cache
+                old = self._batch_size.setdefault(dim, size)
+                if old != size:
+                    raise ValueError(u"Dimension size mismatch at dim '{}': {} vs {}"
+                                     .format(dim, size, old))
 
     def dims(self, term):
         return self._cache['dims', id(term)]
@@ -159,7 +170,7 @@ class PackedLogRing(TensorRing):
         output = ''.join(sorted(set(''.join(inputs)) - set(dims)))
         equation = ','.join(inputs) + '->' + output
         term = contract(equation, *terms, backend='pyro.ops.einsum.torch_log')
-        self._cache['tensor', id(term)] = term
+        self._save_tensor(term)
         self._cache['dims', id(term)] = output
         return term
 
@@ -172,6 +183,7 @@ class PackedLogRing(TensorRing):
                 if key in self._cache:
                     term = self._cache[key]
                 else:
+                    self._save_tensor(term)
                     term = term.sum(pos)
                     dims = dims.replace(dim, '')
                     self._cache[key] = term
@@ -245,10 +257,12 @@ def _partition_terms(ring, terms, dims):
     Given a list of terms and a set of contraction dims, partitions the terms
     up into sets that must be contracted together. By separating these
     components we avoid broadcasting. This function should be deterministic.
+
+    This function should be deterministic and free of side effects.
     """
     # Construct a bipartite graph between terms and the dims in which they
     # are enumerated. This conflates terms and dims (tensors and ints).
-    neighbors = OrderedDict([(t, []) for t in terms] + [(d, []) for d in dims])
+    neighbors = OrderedDict([(t, []) for t in terms] + [(d, []) for d in sorted(dims)])
     for term in terms:
         for dim in ring.dims(term):
             if dim in dims:
@@ -274,11 +288,11 @@ def _partition_terms(ring, terms, dims):
         yield component_terms, component_dims
 
 
-def _contract_component(ring, tensor_tree, sum_dims, target_ordinal=None):
+def _contract_component(ring, tensor_tree, sum_dims):
     """
     Contract out ``sum_dims`` in a tree of tensors in-place, via message
-    passing. This reduces all tensors down to a single iarange context
-    ``target_ordinal``, by default the minimum shared iarange context.
+    passing. This reduces all tensors down to the minimum shared iarange
+    context.
 
     This function should be deterministic.
     This function has side-effects: it modifies ``tensor_tree`` in-place.
@@ -288,14 +302,10 @@ def _contract_component(ring, tensor_tree, sum_dims, target_ordinal=None):
         tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
     :param dict sum_dims: a dictionary mapping tensors to sets of dimensions
         (indexed from the right) that should be summed out.
-    :param frozenset target_ordinal: An optional ordinal to which results will
-        be contracted or broadcasted.
     """
-    if target_ordinal is None:
-        target_ordinal = frozenset.intersection(*tensor_tree)
-
     # First close the set of ordinals under intersection (greatest lower bound),
     # ensuring that the ordinals are arranged in a tree structure.
+    target_ordinal = frozenset.intersection(*tensor_tree)
     tensor_tree.setdefault(target_ordinal, [])
     pending = list(tensor_tree)
     while pending:
@@ -314,20 +324,16 @@ def _contract_component(ring, tensor_tree, sum_dims, target_ordinal=None):
 
     # Recursively combine terms in different iarange contexts.
     while len(tensor_tree) > 1 or any(dims_tree.values()):
-        leaf = max(tensor_tree, key=lambda t: len(t ^ target_ordinal))
+        leaf = max(tensor_tree, key=len)
         leaf_terms = tensor_tree.pop(leaf)
+        assert len(leaf_terms) == len(set(leaf_terms))
         leaf_dims = dims_tree.pop(leaf)
         remaining_dims = set.union(set(), *dims_tree.values())
         contract_dims = leaf_dims - remaining_dims
         contract_frames = frozenset()
-        broadcast_frames = frozenset()
         if leaf - target_ordinal:
-            # Contract out unneeded iaranges.
             contract_frames = frozenset.intersection(*(leaf - t for t in tensor_tree if t < leaf))
-        elif target_ordinal - leaf:
-            # Broadcast up needed iaranges.
-            broadcast_frames = frozenset.intersection(*(t - leaf for t in tensor_tree if t > leaf))
-        parent = leaf - contract_frames | broadcast_frames
+        parent = leaf - contract_frames
         dims_tree[parent] |= leaf_dims & remaining_dims
         tensor_tree.setdefault(parent, [])
 
@@ -338,13 +344,9 @@ def _contract_component(ring, tensor_tree, sum_dims, target_ordinal=None):
             if dims:
                 terms = [ring.sumproduct(terms, dims)]
 
+            # Eliminate extra iarange dims via product contractions.
             for term in terms:
-                if contract_frames:
-                    # Eliminate extra iarange dims via product contractions.
-                    term = ring.product(term, contract_frames)
-                elif broadcast_frames:
-                    # Broadcast to any missing iaranges via .expand().
-                    term = ring.broadcast(term, broadcast_frames)
+                term = ring.product(term, contract_frames)
                 tensor_tree[parent].append(term)
 
 
@@ -384,9 +386,9 @@ def contract_tensor_tree(tensor_tree, sum_dims, ring=None, cache=None):
         # Contract this connected component down to a single tensor.
         _contract_component(ring, component, sum_dims)
         assert len(component) == 1
-        assert len(next(iter(component.values()))) == 1
-        for t, terms in component.items():
-            contracted_tree.setdefault(t, []).extend(terms)
+        t, terms = component.popitem()
+        assert len(terms) == 1
+        contracted_tree.setdefault(t, []).extend(terms)
 
     return contracted_tree
 
@@ -418,11 +420,24 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal, ring=None, cache=N
     assert isinstance(target_ordinal, frozenset)
     assert isinstance(ring, TensorRing)
 
-    contracted_tree = OrderedDict((t, terms[:]) for t, terms in tensor_tree.items())
-    _contract_component(ring, contracted_tree, sum_dims, target_ordinal)
-    t, terms = contracted_tree.popitem()
-    assert t == target_ordinal
-    return ring.sumproduct(terms, {})
+    # Contract out all sum dims via sumproduct contractions.
+    tensor_tree = contract_tensor_tree(tensor_tree, sum_dims, ring=ring)
+
+    # Eliminate extra iarange dims via product contractions.
+    lower_terms = []
+    lower_ordinal = frozenset()
+    for ordinal, terms in tensor_tree.items():
+        contract_frames = ordinal - target_ordinal
+        if contract_frames:
+            ordinal = ordinal & target_ordinal
+            terms = [ring.product(term, contract_frames) for term in terms]
+        lower_terms.extend(terms)
+        lower_ordinal = lower_ordinal | ordinal
+    assert lower_ordinal <= target_ordinal
+
+    # Combine and broadcast terms.
+    lower_term = ring.sumproduct(lower_terms, {})
+    return ring.broadcast(lower_term, target_ordinal)
 
 
 def ubersum(equation, *operands, **kwargs):
@@ -473,6 +488,8 @@ def ubersum(equation, *operands, **kwargs):
     outputs = outputs.split(',')
     assert len(inputs) == len(operands)
     assert all(isinstance(x, torch.Tensor) for x in operands)
+    if len(operands) != len(set(operands)):
+        operands = [x[...] for x in operands]  # ensure tensors are unique
 
     # Construct a tensor tree shared by all outputs.
     tensor_tree = OrderedDict()

@@ -230,6 +230,7 @@ UBERSUM_EXAMPLES = [
     ('ab,bc->a,b,c', ''),
     ('ab,bc,cd->cb,da', ''),
     ('ab,ac->,b,c,cb,a,ca,ba,ab,ac,bac', 'a'),
+    ('e,ae,be,bce,bde->,e,a,ae,b,be,bc,bce,bd,bde', 'abcd'),
 ]
 
 
@@ -260,7 +261,7 @@ def test_ubersum(equation, batch_dims):
 def test_ubersum_1():
     # y {a}   z {b}
     #      \  /
-    #     x {} <--- target
+    #     x {}  <--- target
     a, b, c, d, e = 2, 3, 4, 5, 6
     x = torch.randn(c)
     y = torch.randn(c, d, a)
@@ -271,7 +272,7 @@ def test_ubersum_1():
 
 
 def test_ubersum_2():
-    # y {a}   z {b} <--- target
+    # y {a}   z {b}  <--- target
     #      \  /
     #     x {}
     a, b, c, d, e = 2, 3, 4, 5, 6
@@ -279,12 +280,13 @@ def test_ubersum_2():
     y = torch.randn(c, d, a)
     z = torch.randn(e, c, b)
     actual, = ubersum('c,cda,ecb->b', x, y, z, batch_dims='ab')
-    expected = logsumexp((x + logsumexp(y, -2).sum(-1)).unsqueeze(-1) + logsumexp(z, -3), -2)
+    xyz = logsumexp(x + logsumexp(y, -2).sum(-1) + logsumexp(z, -3).sum(-1), -1)
+    expected = xyz.expand(b)
     assert_equal(actual, expected)
 
 
 def test_ubersum_3():
-    #        z {c}
+    #       z {b,c}
     #           |
     # w {a}  y {b}  <--- target
     #      \  /
@@ -295,6 +297,60 @@ def test_ubersum_3():
     y = torch.randn(b, d)
     z = torch.randn(b, c, d, e)
     actual, = ubersum('ae,d,bd,bcde->be', w, x, y, z, batch_dims='abc')
-    wxyz = w.sum(0) + x.reshape(d, 1) + y.reshape(b, d, 1) + z.sum(1)
-    expected = logsumexp(wxyz, 1)
+    yz = y.reshape(b, d, 1) + z.sum(-3)  # eliminate c
+    assert yz.shape == (b, d, e)
+    yz = yz.sum(0)  # eliminate b
+    assert yz.shape == (d, e)
+    wxyz = w.sum(0) + x.reshape(d, 1) + yz  # eliminate a
+    assert wxyz.shape == (d, e)
+    wxyz = logsumexp(wxyz, 0)  # eliminate d
+    assert wxyz.shape == (e,)
+    expected = wxyz.expand(b, e)  # broadcast to b
     assert_equal(actual, expected)
+
+
+def test_ubersum_collide_error():
+    # Non-tree iaranges cause exponential blowup,
+    # so ubersum() refuses to evaluate them.
+    #
+    #   z {a,b}
+    #     /   \
+    # x {a}  y {b}
+    #      \  /
+    #       {}  <--- target
+    a, b, c, d = 2, 3, 4, 5
+    x = torch.randn(a, c)
+    y = torch.randn(b, d)
+    z = torch.randn(a, b, c, d)
+    with pytest.raises(ValueError, match='Expected tree-structured iarange nesting'):
+        ubersum('ac,bd,abcd->', x, y, z, batch_dims='ab')
+
+
+def test_ubersum_collide_ok():
+    # The following is ok because it splits into connected components
+    # {x,z1} and {y,z2}, thereby avoiding exponential blowup.
+    #
+    # z1,z2 {a,b}
+    #       /   \
+    #   x {a}  y {b}
+    #        \  /
+    #         {}  <--- target
+    a, b, c, d = 2, 3, 4, 5
+    x = torch.randn(a, c)
+    y = torch.randn(b, d)
+    z1 = torch.randn(a, b, c)
+    z2 = torch.randn(a, b, d)
+    ubersum('ac,bd,abc,abd->', x, y, z1, z2, batch_dims='ab')
+
+
+UBERSUM_ERRORS = [
+    ('ab,bc->', [(2, 3), (4, 5)], ''),
+    ('ab,bc->', [(2, 3), (4, 5)], 'b'),
+]
+
+
+@pytest.mark.parametrize('equation,shapes,batch_dims', UBERSUM_ERRORS)
+def test_ubersum_size_error(equation, shapes, batch_dims):
+    operands = [torch.randn(shape) for shape in shapes]
+    with pytest.raises(ValueError, match='Dimension size mismatch'):
+        ubersum(equation, *operands, batch_dims=batch_dims)
