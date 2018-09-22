@@ -129,24 +129,25 @@ def test_log_prob_eval_iterates_in_correct_order():
 def test_all_discrete_sites_log_prob(Eval):
     p = 0.3
 
-    @poutine.enum(first_available_dim=2)
+    @poutine.enum(first_available_dim=3)
     @config_enumerate(default="parallel")
     @poutine.broadcast
     def model():
         d = dist.Bernoulli(p)
         context1 = pyro.iarange("outer", 2, dim=-1)
-        context2 = pyro.iarange("inner", 1, dim=-2)
+        context2 = pyro.iarange("inner1", 1, dim=-2)
+        context3 = pyro.iarange("inner2", 1, dim=-3)
         pyro.sample("w", d)
         with context1:
             pyro.sample("x", d)
-        with context2:
-            pyro.sample("y", d)
         with context1, context2:
+            pyro.sample("y", d)
+        with context1, context3:
             pyro.sample("z", d)
 
     model_trace = poutine.trace(model).get_trace()
     print_debug_info(model_trace)
-    trace_prob_evaluator = Eval(model_trace, True, 2)
+    trace_prob_evaluator = Eval(model_trace, True, 3)
     # all discrete sites enumerated out.
     assert_equal(trace_prob_evaluator.log_prob(model_trace), torch.tensor(0.))
 

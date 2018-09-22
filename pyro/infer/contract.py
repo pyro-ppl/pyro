@@ -126,6 +126,8 @@ def _contract_component(tensor_tree, sum_dims, target_ordinal=None):
     for t, terms in tensor_tree.items():
         dims_tree[t] = set.union(set(), *(sum_dims[term] for term in terms))
 
+    enum_boundary = max(set.union(*sum_dims.values(), {float("-inf")}))
+
     # Recursively combine terms in different iarange contexts.
     while len(tensor_tree) > 1 or any(dims_tree.values()):
         leaf = max(tensor_tree, key=lambda t: len(t ^ target_ordinal))
@@ -153,7 +155,7 @@ def _contract_component(tensor_tree, sum_dims, target_ordinal=None):
                 for dim in dims:
                     shape[dim] = 1
                 shape.reverse()
-                while shape and shape[-1] == 1:
+                while shape and len(shape) >= -enum_boundary and shape[-1] == 1:
                     shape.pop()
                 shape.reverse()
                 shape = tuple(shape)

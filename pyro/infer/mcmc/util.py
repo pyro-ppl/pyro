@@ -4,9 +4,8 @@ import torch
 from opt_einsum import shared_intermediates
 
 from pyro.distributions.util import logsumexp, broadcast_shape
-from pyro.infer.contract import contract_tensor_tree
+from pyro.infer.contract import contract_to_tensor
 from pyro.infer.util import is_validation_enabled
-from pyro.ops.sumproduct import sumproduct, logsumproductexp
 from pyro.primitives import _Subsample
 from pyro.util import check_site_shape
 
@@ -141,7 +140,7 @@ class TraceEinsumEvaluator(object):
     tree structure) that possibly contains discrete sample sites
     enumerated in parallel. This uses optimized `einsum` operations
     to marginalize out the the enumerated dimensions in the trace
-    via :class:`~pyro.infer.contract.contract_tensor_tree`.
+    via :class:`~pyro.infer.contract.contract_to_tensor`.
 
     :param model_trace: execution trace from a static model.
     :param bool has_enumerable_sites: whether the trace contains any
@@ -170,7 +169,7 @@ class TraceEinsumEvaluator(object):
                          for name, site in model_trace.nodes.items()
                          if site["type"] == "sample"}
         for name, site in model_trace.nodes.items():
-            if site["type"] == "sample":
+            if site["type"] == "sample" and not isinstance(site["fn"], _Subsample):
                 if is_validation_enabled():
                     check_site_shape(site, self.max_iarange_nesting)
                 log_prob_shape = site["log_prob"].shape
@@ -201,5 +200,5 @@ class TraceEinsumEvaluator(object):
         """
         log_probs = self._get_log_factors(model_trace)
         sum_dims = {site["log_prob"]: self._enum_dims[name] for name, site in model_trace.nodes.items()
-                    if site["type"] == "sample"}
-        return sum(contract_tensor_tree(log_probs, sum_dims)[frozenset()])
+                    if site["type"] == "sample" and not isinstance(site["fn"], _Subsample)}
+        return contract_to_tensor(log_probs, sum_dims, frozenset()).sum()
