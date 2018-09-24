@@ -193,7 +193,7 @@ def gmm_batch_model(data):
 def gmm_batch_guide(data):
     with pyro.iarange("data", len(data)) as batch:
         n = len(batch)
-        probs = pyro.param("probs", torch.tensor(torch.ones(n, 1) * 0.6, requires_grad=True))
+        probs = pyro.param("probs", torch.ones(n, 1) * 0.6)
         probs = torch.cat([probs, 1 - probs], dim=1)
         z = pyro.sample("z", dist.OneHotCategorical(probs))
         assert z.shape[-1] == 2

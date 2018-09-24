@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import warnings
 from collections import OrderedDict
-from contextlib2 import ExitStack
 from functools import partial
 import torch
 from torch.nn.functional import softplus
@@ -12,6 +11,11 @@ from torch.distributions.transforms import AffineTransform, SigmoidTransform
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.util import rmv
+
+try:
+    from contextlib import ExitStack  # python 3
+except ImportError:
+    from contextlib2 import ExitStack  # python 2
 
 
 def known_covariance_linear_model(coef_mean, coef_sd, observation_sd,

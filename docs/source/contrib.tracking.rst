@@ -9,6 +9,12 @@ Data Association
     :members:
     :member-order: bysource
 
+Distributions
+-------------
+.. automodule:: pyro.contrib.tracking.distributions
+    :members:
+    :member-order: bysource
+
 Dynamic Models
 --------------
 .. automodule:: pyro.contrib.tracking.dynamic_models

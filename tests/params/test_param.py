@@ -25,7 +25,7 @@ class ParamStoreDictTests(TestCase):
         lin = pyro.module("mymodule", self.linear_module)
         pyro.module("mymodule2", self.linear_module2)
         x = torch.randn(1, 3)
-        myparam = pyro.param("myparam", torch.tensor(1.234 * torch.ones(1), requires_grad=True))
+        myparam = pyro.param("myparam", 1.234 * torch.ones(1))
 
         cost = torch.sum(torch.pow(lin(x), 2.0)) * torch.pow(myparam, 4.0)
         cost.backward()
