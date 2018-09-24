@@ -95,22 +95,29 @@ class UnpackedLogRing(TensorRing):
         return [d for d in range(-term.dim(), 0) if term.size(d) > 1]
 
     def sumproduct(self, terms, dims):
-        assert all(dim < 0 for dim in dims)
-        if not dims:
-            return sum(terms)
-        shape = list(broadcast_shape(*set(x.shape for x in terms)))
-        for dim in dims:
-            shape[dim] = 1
-        shape.reverse()
-        while shape and shape[-1] == 1:
-            shape.pop()
-        shape.reverse()
-        shape = tuple(shape)
-        return logsumproductexp(terms, shape)
+        key = 'sumproduct', frozenset(id(x) for x in terms), frozenset(dims)
+        if key in self._cache:
+            return self._cache[key]
+
+        if dims:
+            assert all(dim < 0 for dim in dims)
+            shape = list(broadcast_shape(*set(x.shape for x in terms)))
+            for dim in dims:
+                shape[dim] = 1
+            term = logsumproductexp(terms, tuple(shape))
+        else:
+            term = sum(terms)
+
+        # Aggressively squeeze to improve sharing.
+        while term.dim() and term.size(0) == 1:
+            term = term.squeeze(0)
+        self._save_tensor(term)
+        self._cache[key] = term
+        return term
 
     def product(self, term, ordinal):
         for frame in sorted(ordinal, key=lambda f: -f.dim):
-            if term.shape[frame.dim] != 1:
+            if -frame.dim <= term.dim() and term.size(frame.dim) != 1:
                 key = 'product', id(term), frame.dim
                 if key in self._cache:
                     term = self._cache[key]
@@ -341,7 +348,7 @@ def _contract_component(ring, tensor_tree, sum_dims):
         for terms, dims in _partition_terms(ring, leaf_terms, contract_dims):
 
             # Eliminate any enumeration dims via a sumproduct contraction.
-            if dims:
+            if terms and dims:
                 terms = [ring.sumproduct(terms, dims)]
 
             # Eliminate extra iarange dims via product contractions.
@@ -379,6 +386,9 @@ def contract_tensor_tree(tensor_tree, sum_dims, ring=None, cache=None):
 
     # Split this tensor tree into connected components.
     for terms, dims in _partition_terms(ring, all_terms, all_dims):
+        if not terms:
+            continue
+
         component = OrderedDict()
         for term in terms:
             component.setdefault(ordinals[term], []).append(term)
@@ -465,7 +475,7 @@ def ubersum(equation, *operands, **kwargs):
         z = w + sum(contract('bc,cd->bd', xi, yi, backend=backend)
                     for xi, yi in zip(x, y))
 
-    :param str equation: an einsum equation, optionally with multuple outputs.
+    :param str equation: an einsum equation, optionally with multiple outputs.
     :param torch.Tensor operands: a collection of tensors
     :param str batch_dims: a string of batch dims.
     :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`

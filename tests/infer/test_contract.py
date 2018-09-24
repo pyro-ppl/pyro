@@ -221,6 +221,32 @@ def test_contract_tensor_tree(example):
                 assert term.shape[frame.dim] == frame.size
 
 
+@pytest.mark.parametrize('a', [2, 1])
+@pytest.mark.parametrize('b', [3, 1])
+@pytest.mark.parametrize('c', [3, 1])
+@pytest.mark.parametrize('d', [4, 1])
+def test_contract_to_tensor_sizes(a, b, c, d):
+    X = torch.randn(a, 1, c, 1)
+    Y = torch.randn(a, b, 1, 1)
+    Z = torch.randn(b, 1, d)
+    tensor_tree = OrderedDict([(frozenset([frame(-2, c)]), [X]),
+                               (frozenset(), [Y]),
+                               (frozenset([frame(-1, d)]), [Z])])
+    sum_dims = {X: {-4}, Y: {-4, -3}, Z: {-3}}
+
+    target_ordinal = frozenset()
+    actual = contract_to_tensor(tensor_tree, sum_dims, target_ordinal)
+    assert actual.shape == ()
+
+    target_ordinal = frozenset([frame(-2, c)])
+    actual = contract_to_tensor(tensor_tree, sum_dims, target_ordinal)
+    assert actual.shape == (c, 1)
+
+    target_ordinal = frozenset([frame(-1, d)])
+    actual = contract_to_tensor(tensor_tree, sum_dims, target_ordinal)
+    assert actual.shape == (d,)
+
+
 UBERSUM_EXAMPLES = [
     ('->', ''),
     ('a->', ''),
@@ -256,6 +282,22 @@ def test_ubersum(equation, batch_dims):
             expected_part = opt_einsum.contract(equation_part, *operands,
                                                 backend='pyro.ops.einsum.torch_log')
             assert_equal(actual_part, expected_part)
+
+
+@pytest.mark.parametrize('a', [2, 1])
+@pytest.mark.parametrize('b', [3, 1])
+@pytest.mark.parametrize('c', [3, 1])
+@pytest.mark.parametrize('d', [4, 1])
+def test_ubersum_sizes(a, b, c, d):
+    X = torch.randn(a, b)
+    Y = torch.randn(b, c)
+    Z = torch.randn(c, d)
+    actual = ubersum('ab,bc,cd->a,b,c,d', X, Y, Z, batch_dims='ad')
+    actual_a, actual_b, actual_c, actual_d = actual
+    assert actual_a.shape == (a,)
+    assert actual_b.shape == (b,)
+    assert actual_c.shape == (c,)
+    assert actual_d.shape == (d,)
 
 
 def test_ubersum_1():
