@@ -209,4 +209,4 @@ class TraceEinsumEvaluator(object):
             log_probs = self._get_log_factors(model_trace)
             sum_dims = {site["log_prob"]: self._enum_dims[name] for name, site in model_trace.nodes.items()
                         if site["type"] == "sample" and not isinstance(site["fn"], _Subsample)}
-            return contract_to_tensor(log_probs, sum_dims, frozenset()).sum()
+            return contract_to_tensor(log_probs, sum_dims, frozenset())
