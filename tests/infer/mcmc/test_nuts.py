@@ -229,6 +229,7 @@ def test_bernoulli_latent_model():
 @pytest.mark.parametrize("num_steps,use_einsum", [
     (2, False),
     (3, False),
+    (3, True),
     # This will crash without the einsum backend
     pytest.param(30, True,
                  marks=pytest.mark.skip(reason="https://github.com/pytorch/pytorch/issues/10661")),
