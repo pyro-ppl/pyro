@@ -170,13 +170,11 @@ class TraceEinsumEvaluator(object):
             raise ValueError("Finite value required for `max_iarange_nesting` when model "
                              "has discrete (enumerable) sites.")
         model_trace.compute_log_prob()
-        self.ordering = {name: frozenset(site["cond_indep_stack"])
-                         for name, site in model_trace.nodes.items()
-                         if site["type"] == "sample"}
         for name, site in model_trace.nodes.items():
             if site["type"] == "sample" and not isinstance(site["fn"], _Subsample):
                 if is_validation_enabled():
                     check_site_shape(site, self.max_iarange_nesting)
+                self.ordering[name] = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
                 log_prob_shape = site["log_prob"].shape
                 self._enum_dims[site["name"]] = set((i for i in range(-len(log_prob_shape), -self.max_iarange_nesting)
                                                      if log_prob_shape[i] > 1))
@@ -203,10 +201,9 @@ class TraceEinsumEvaluator(object):
 
         :return: log pdf of the trace.
         """
+        if not self.has_enumerable_sites:
+            return model_trace.log_prob_sum()
         with shared_intermediates():
-            if not self.has_enumerable_sites:
-                return model_trace.log_prob_sum()
             log_probs = self._get_log_factors(model_trace)
-            sum_dims = {site["log_prob"]: self._enum_dims[name] for name, site in model_trace.nodes.items()
-                        if site["type"] == "sample" and not isinstance(site["fn"], _Subsample)}
+            sum_dims = {model_trace.nodes[name]["log_prob"]: dims for name, dims in self._enum_dims.items()}
             return contract_to_tensor(log_probs, sum_dims, frozenset())
