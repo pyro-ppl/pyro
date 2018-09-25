@@ -88,7 +88,7 @@ def initialize_progbar(warmup_steps, num_samples, min_width=100, max_width=120, 
     total_steps = warmup_steps + num_samples
     # Disable progress bar in "CI"
     # (see https://github.com/travis-ci/travis-ci/issues/1337).
-    disable = "CI" in os.environ
+    disable = "CI" in os.environ or "PYTEST_XDIST_WORKER" in os.environ
     progress_bar = tqdm(total=total_steps, desc=description,
                         position=pos, file=sys.stderr, disable=disable)
 
