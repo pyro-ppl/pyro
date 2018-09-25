@@ -29,22 +29,6 @@ def memoized_squeeze(tensor):
     return result
 
 
-def memoized_sum_keepdim(tensor, dim):
-    """
-    Computes ``tensor.sum(dim, keepdim=True)`` memoizing the result for the
-    lifetime of ``tensor``. This enables sharing when used inside
-    :func:`~opt_einsum.shared_intermediates`.
-    """
-    if dim < 0:
-        dim += tensor.dim()
-    name = '_pyro_memoized_sum_keepdim_{}'.format(dim)
-    if hasattr(tensor, name):
-        return getattr(tensor, name)
-    result = tensor.sum(dim, keepdim=True)
-    setattr(tensor, name, result)
-    return result
-
-
 def sumproduct(factors, target_shape=(), optimize=True, device=None):
     """
     Compute product of factors; then sum down extra dims and broadcast up

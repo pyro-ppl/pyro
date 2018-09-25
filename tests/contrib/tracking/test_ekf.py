@@ -5,6 +5,7 @@ import torch
 from pyro.contrib.tracking.extended_kalman_filter import EKFState
 from pyro.contrib.tracking.dynamic_models import NcpContinuous, NcvContinuous
 from pyro.contrib.tracking.measurements import PositionMeasurement
+
 from tests.common import assert_equal, assert_not_equal
 
 
@@ -28,7 +29,7 @@ def test_EKFState_with_NcpContinuous():
     assert_equal(t, ekf_state.time, prec=1e-5)
 
     ekf_state1 = EKFState(ncp, 2*x, 2*P, t)
-    ekf_state2 = ekf_state1.predict(dt, destination_time=t+dt)
+    ekf_state2 = ekf_state1.predict(dt)
     assert ekf_state2.dynamic_model.__class__ == NcpContinuous
 
     measurement = PositionMeasurement(
@@ -64,7 +65,7 @@ def test_EKFState_with_NcvContinuous():
     assert_equal(t, ekf_state.time, prec=1e-5)
 
     ekf_state1 = EKFState(ncv, 2*x, 2*P, t)
-    ekf_state2 = ekf_state1.predict(dt, destination_time=t+dt)
+    ekf_state2 = ekf_state1.predict(dt)
     assert ekf_state2.dynamic_model.__class__ == NcvContinuous
 
     measurement = PositionMeasurement(

@@ -108,6 +108,11 @@ class EKFState(object):
             after integration. If this is not provided, then
             `destination_frame_num` must be.
         '''
+        assert (dt is None) ^ (destination_time is None)
+        if dt is None:
+            dt = destination_time - self._time
+        elif destination_time is None:
+            destination_time = self._time + dt
         pred_mean = self._dynamic_model(self._mean, dt)
 
         F = self._dynamic_model.jacobian(dt)
