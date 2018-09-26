@@ -315,7 +315,7 @@ def test_gaussian_mixture_model(jit):
     data = dist.Normal(true_cluster_means[cluster_assignments], 1.0).sample()
     hmc_kernel = HMC(gmm, trajectory_length=1, adapt_step_size=True,
                      max_iarange_nesting=1, jit_compile=jit)
-    mcmc_run = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
+    mcmc_run = MCMC(hmc_kernel, num_samples=300, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites=["phi", "cluster_means"]).mean.sort()[0]
     assert_equal(posterior[0], true_mix_proportions, prec=0.05)
     assert_equal(posterior[1], true_cluster_means, prec=0.2)
