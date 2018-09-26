@@ -99,7 +99,7 @@ def test_logistic_regression(jit):
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
-    nuts_kernel = NUTS(model, step_size=0.0855, jit_compile=jit)
+    nuts_kernel = NUTS(model, step_size=0.0855, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='beta')
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
@@ -116,7 +116,7 @@ def test_beta_bernoulli(jit):
 
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    nuts_kernel = NUTS(model, step_size=0.02, jit_compile=jit)
+    nuts_kernel = NUTS(model, step_size=0.02, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_probs, prec=0.02)
@@ -133,7 +133,7 @@ def test_gamma_normal(jit):
 
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
-    nuts_kernel = NUTS(model, step_size=0.01, jit_compile=jit)
+    nuts_kernel = NUTS(model, step_size=0.01, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_std, prec=0.05)
@@ -152,7 +152,7 @@ def test_logistic_regression_with_dual_averaging(jit):
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
-    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit)
+    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='beta')
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
@@ -169,7 +169,8 @@ def test_beta_bernoulli_with_dual_averaging(jit):
 
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit)
+    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit,
+                       ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites="p_latent")
     assert_equal(posterior.mean, true_probs, prec=0.03)
@@ -185,7 +186,7 @@ def test_dirichlet_categorical(jit):
 
     true_probs = torch.tensor([0.1, 0.6, 0.3])
     data = dist.Categorical(true_probs).sample(sample_shape=(torch.Size((2000,))))
-    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit)
+    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_probs, prec=0.02)
@@ -201,7 +202,7 @@ def test_gamma_beta(jit):
     true_alpha = torch.tensor(5.)
     true_beta = torch.tensor(1.)
     data = dist.Beta(concentration1=true_alpha, concentration0=true_beta).sample(torch.Size((5000,)))
-    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit)
+    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=200).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites=['alpha', 'beta'])
     assert_equal(posterior.mean, torch.stack([true_alpha, true_beta]), prec=0.05)
