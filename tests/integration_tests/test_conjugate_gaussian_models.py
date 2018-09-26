@@ -409,7 +409,7 @@ class GaussianPyramidTests(TestCase):
             node_suffix = node[11:]
             log_sig_node = pyro.param("log_sig_" + node_suffix,
                                       -0.5 * torch.log(self.target_lambdas[node_suffix]) +
-                                                   difficulty * (torch.Tensor([-0.3]) - 0.3 * (torch.randn(1) ** 2)))
+                                      difficulty * (torch.Tensor([-0.3]) - 0.3 * (torch.randn(1) ** 2)))
             mean_function_node = pyro.param("constant_term_" + node,
                                             self.loc0 + torch.Tensor([difficulty * i / n_nodes]))
             for dep in deps:

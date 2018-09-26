@@ -21,20 +21,20 @@ def _patch(target):
 
     return decorator
 
-
-@_patch('torch._standard_gamma')
-def _torch_standard_gamma(concentration):
-    unpatched_fn = _torch_standard_gamma._pyro_unpatched
-    if concentration.is_cuda:
-        return unpatched_fn(concentration.cpu()).cuda(concentration.get_device())
-    return unpatched_fn(concentration)
-
-
-@_patch('torch.distributions.gamma._standard_gamma')
-def _standard_gamma(concentration):
-    if concentration.is_cuda:
-        return concentration.cpu()._standard_gamma().cuda(concentration.get_device())
-    return concentration._standard_gamma()
+#
+# @_patch('torch._standard_gamma')
+# def _torch_standard_gamma(concentration):
+#     unpatched_fn = _torch_standard_gamma._pyro_unpatched
+#     if concentration.is_cuda:
+#         return unpatched_fn(concentration.cpu()).cuda(concentration.get_device())
+#     return unpatched_fn(concentration)
+#
+#
+# @_patch('torch.distributions.gamma._standard_gamma')
+# def _standard_gamma(concentration):
+#     if concentration.is_cuda:
+#         return concentration.cpu()._standard_gamma().cuda(concentration.get_device())
+#     return concentration._standard_gamma()
 
 
 @_patch('torch._dirichlet_grad')
