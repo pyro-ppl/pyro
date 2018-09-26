@@ -403,6 +403,22 @@ def test_ubersum_collide_ok_2():
     ubersum('cd,ac,bd,abc,abd->', w, x, y, z1, z2, batch_dims='ab')
 
 
+def test_ubersum_collide_ok_3():
+    # The following is ok because x, y, and z can be independently contracted to w.
+    #
+    #      z {a,b}
+    # x {a}   |   y {b}
+    #      \  |  /
+    #       \ | /
+    #       w {}  <--- target
+    a, b, c = 2, 3, 4
+    w = torch.randn(c)
+    x = torch.randn(a, c)
+    y = torch.randn(b, c)
+    z = torch.randn(a, b, c)
+    ubersum('c,ac,bc,abc->', w, x, y, z, batch_dims='ab')
+
+
 UBERSUM_ERRORS = [
     ('ab,bc->', [(2, 3), (4, 5)], ''),
     ('ab,bc->', [(2, 3), (4, 5)], 'b'),

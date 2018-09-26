@@ -280,19 +280,23 @@ def _contract_component(ring, tensor_tree, sum_dims):
                 pending.append(tu)
 
     # Collect contraction dimensions by ordinal.
-    dims_tree = defaultdict(set)
+    dim_to_ordinal = {}
     for t, terms in tensor_tree.items():
-        dims_tree[t] = set.union(set(), *(sum_dims[term] for term in terms))
+        for term in terms:
+            for dim in sum_dims[term]:
+                dim_to_ordinal[dim] = dim_to_ordinal.get(dim, t) & t
+    dims_tree = defaultdict(set)
+    for dim, t in dim_to_ordinal.items():
+        dims_tree[t].add(dim)
 
     # Recursively combine terms in different iarange contexts.
     while any(dims_tree.values()):
         leaf = max(tensor_tree, key=len)
         leaf_terms = tensor_tree.pop(leaf)
         leaf_dims = dims_tree.pop(leaf, set())
-        contract_dims = leaf_dims.difference(*dims_tree.values())
 
         # Split terms at the current ordinal into connected components.
-        for terms, dims in _partition_terms(ring, leaf_terms, contract_dims):
+        for terms, dims in _partition_terms(ring, leaf_terms, leaf_dims):
 
             # Eliminate any enumeration dims via a sumproduct contraction.
             term = ring.sumproduct(terms, dims)
@@ -302,8 +306,7 @@ def _contract_component(ring, tensor_tree, sum_dims):
             if leaf == target_ordinal:
                 parent = leaf
             else:
-                parent = frozenset.union(*(t for t, d in dims_tree.items()
-                                         if t < leaf and d & remaining_dims))
+                parent = frozenset.union(*(t for t, d in dims_tree.items() if d & remaining_dims))
                 if parent == leaf:
                     raise ValueError("Expected tree-structured iarange nesting, but found "
                                      "dependencies on independent iaranges [{}]. "
