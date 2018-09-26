@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
 import math
 
 import torch
@@ -8,6 +9,9 @@ import pytest
 from pyro.distributions import MixtureOfDiagNormalsSharedCovariance, GaussianScaleMixture
 from pyro.distributions import MixtureOfDiagNormals
 from tests.common import assert_equal
+
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize('mix_dist', [MixtureOfDiagNormals, MixtureOfDiagNormalsSharedCovariance, GaussianScaleMixture])
@@ -109,7 +113,7 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
     assert_equal(analytic, cost, prec=0.1,
                  msg='bad cost function evaluation for {} test (expected {}, got {})'.format(
                      mix_dist.__name__, analytic.item(), cost.item()))
-    print("analytic_grads_logit", analytic_grads['component_logits'].detach().cpu().numpy())
+    logger.debug("analytic_grads_logit", analytic_grads['component_logits'].detach().cpu().numpy())
 
     for param_name, param in params.items():
         assert_equal(param.grad, analytic_grads[param_name], prec=0.06,

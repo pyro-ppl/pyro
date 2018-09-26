@@ -156,8 +156,8 @@ def train_test_split(pd_dataframe):
     Training data - 45 initial at-bats and hits for each player.
     Validation data - Full season at-bats and hits for each player.
     """
-    train_data = torch.tensor(pd_dataframe.as_matrix(["At-Bats", "Hits"]), dtype=torch.float)
-    test_data = torch.tensor(pd_dataframe.as_matrix(["SeasonAt-Bats", "SeasonHits"]), dtype=torch.float)
+    train_data = torch.tensor(pd_dataframe[["At-Bats", "Hits"]].values, dtype=torch.float)
+    test_data = torch.tensor(pd_dataframe[["SeasonAt-Bats", "SeasonHits"]].values, dtype=torch.float)
     first_name = pd_dataframe["FirstName"].values
     last_name = pd_dataframe["LastName"].values
     player_names = [" ".join([first, last]) for first, last in zip(first_name, last_name)]

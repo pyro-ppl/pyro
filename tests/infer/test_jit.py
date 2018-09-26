@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import warnings
+import logging
 
 import pytest
 import torch
@@ -24,25 +25,28 @@ def constant(*args, **kwargs):
         return torch.tensor(*args, **kwargs)
 
 
+logger = logging.getLogger(__name__)
+
+
 def test_simple():
     y = torch.ones(2)
 
     def f(x):
-        print('Inside f')
+        logger.debug('Inside f')
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
             assert x is y
         return y + 1.0
 
-    print('Compiling f')
+    logger.debug('Compiling f')
     f = torch.jit.trace(f, (y,), check_trace=False)
-    print('Calling f(y)')
+    logger.debug('Calling f(y)')
     assert_equal(f(y), y.new_tensor([2., 2.]))
-    print('Calling f(y)')
+    logger.debug('Calling f(y)')
     assert_equal(f(y), y.new_tensor([2., 2.]))
-    print('Calling f(torch.zeros(2))')
+    logger.debug('Calling f(torch.zeros(2))')
     assert_equal(f(torch.zeros(2)), y.new_tensor([1., 1.]))
-    print('Calling f(torch.zeros(5))')
+    logger.debug('Calling f(torch.zeros(5))')
     assert_equal(f(torch.ones(5)), y.new_tensor([2., 2., 2., 2., 2.]))
 
 
@@ -50,21 +54,21 @@ def test_multi_output():
     y = torch.ones(2)
 
     def f(x):
-        print('Inside f')
+        logger.debug('Inside f')
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
             assert x is y
         return y - 1.0, y + 1.0
 
-    print('Compiling f')
+    logger.debug('Compiling f')
     f = torch.jit.trace(f, (y,), check_trace=False)
-    print('Calling f(y)')
+    logger.debug('Calling f(y)')
     assert_equal(f(y)[1], y.new_tensor([2., 2.]))
-    print('Calling f(y)')
+    logger.debug('Calling f(y)')
     assert_equal(f(y)[1], y.new_tensor([2., 2.]))
-    print('Calling f(torch.zeros(2))')
+    logger.debug('Calling f(torch.zeros(2))')
     assert_equal(f(torch.zeros(2))[1], y.new_tensor([1., 1.]))
-    print('Calling f(torch.zeros(5))')
+    logger.debug('Calling f(torch.zeros(5))')
     assert_equal(f(torch.ones(5))[1], y.new_tensor([2., 2., 2., 2., 2.]))
 
 
@@ -72,21 +76,21 @@ def test_backward():
     y = torch.ones(2, requires_grad=True)
 
     def f(x):
-        print('Inside f')
+        logger.debug('Inside f')
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
             assert x is y
         return (y + 1.0).sum()
 
-    print('Compiling f')
+    logger.debug('Compiling f')
     f = torch.jit.trace(f, (y,), check_trace=False)
-    print('Calling f(y)')
+    logger.debug('Calling f(y)')
     f(y).backward()
-    print('Calling f(y)')
+    logger.debug('Calling f(y)')
     f(y)
-    print('Calling f(torch.zeros(2))')
+    logger.debug('Calling f(torch.zeros(2))')
     f(torch.zeros(2, requires_grad=True))
-    print('Calling f(torch.zeros(5))')
+    logger.debug('Calling f(torch.zeros(5))')
     f(torch.ones(5, requires_grad=True))
 
 
@@ -94,15 +98,15 @@ def test_backward():
 def test_grad():
 
     def f(x, y):
-        print('Inside f')
+        logger.debug('Inside f')
         loss = (x - y).pow(2).sum()
         return torch.autograd.grad(loss, [x, y], allow_unused=True)
 
-    print('Compiling f')
+    logger.debug('Compiling f')
     f = torch.jit.trace(f, (torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True)))
-    print('Invoking f')
+    logger.debug('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True))
-    print('Invoking f')
+    logger.debug('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.zeros(2, requires_grad=True))
 
 
@@ -110,15 +114,15 @@ def test_grad():
 def test_grad_expand():
 
     def f(x, y):
-        print('Inside f')
+        logger.debug('Inside f')
         loss = (x - y).pow(2).sum()
         return torch.autograd.grad(loss, [x, y], allow_unused=True)
 
-    print('Compiling f')
+    logger.debug('Compiling f')
     f = torch.jit.trace(f, (torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True)))
-    print('Invoking f')
+    logger.debug('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True))
-    print('Invoking f')
+    logger.debug('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
 
 

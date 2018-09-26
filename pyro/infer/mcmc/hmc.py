@@ -11,7 +11,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import config_enumerate
 from pyro.infer.mcmc.trace_kernel import TraceKernel
-from pyro.infer.mcmc.util import EnumTraceProbEvaluator
+from pyro.infer.mcmc.util import TraceEinsumEvaluator, TraceTreeEvaluator
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
 from pyro.primitives import _Subsample
@@ -241,10 +241,10 @@ class HMC(TraceKernel):
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
 
     def _validate_trace(self, trace):
-        self._trace_prob_evaluator = EnumTraceProbEvaluator(trace,
-                                                            self._has_enumerable_sites,
-                                                            self.max_iarange_nesting,
-                                                            use_einsum=self.use_einsum)
+        trace_eval = TraceEinsumEvaluator if self.use_einsum else TraceTreeEvaluator
+        self._trace_prob_evaluator = trace_eval(trace,
+                                                self._has_enumerable_sites,
+                                                self.max_iarange_nesting)
         trace_log_prob_sum = self._compute_trace_log_prob(trace)
         if torch_isnan(trace_log_prob_sum) or torch_isinf(trace_log_prob_sum):
             raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")

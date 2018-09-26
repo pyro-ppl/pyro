@@ -47,7 +47,10 @@ def _torch_linspace(*args, **kwargs):
 def _einsum(equation, operands):
     # work around torch.einsum performance issues
     # see https://github.com/pytorch/pytorch/issues/10661
-    if equation == 'ac,abc->cb':
+    if equation == 'ac,abc->bc':
+        x, y = operands
+        return (x.unsqueeze(1) * y).sum(0)
+    elif equation == 'ac,abc->cb':
         x, y = operands
         return (x.unsqueeze(1) * y).sum(0).transpose(0, 1)
     elif equation == 'abc,ac->cb':

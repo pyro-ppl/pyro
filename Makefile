@@ -22,7 +22,7 @@ scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python tutorial/source/cleannb.py
 
 doctest: FORCE
-	python -m pytest --doctest-modules -p tests.doctest_fixtures -p no:warnings pyro
+	pytest -p tests.doctest_fixtures --doctest-modules -o filterwarnings=ignore pyro
 
 format: FORCE
 	isort --recursive *.py pyro/ examples/ tests/ profiler/*.py docs/source/conf.py
@@ -54,8 +54,8 @@ test-all: lint FORCE
 	  | xargs pytest -vx --nbval-lax
 
 test-cuda: lint FORCE
-	CUDA_TEST=1 PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx -n 4 --stage unit
-	CUDA_TEST=1 pytest -vx -n 4 tests/test_examples.py::test_cuda
+	CUDA_TEST=1 PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx --stage unit
+	CUDA_TEST=1 pytest -vx tests/test_examples.py::test_cuda
 
 test-jit: FORCE
 	@echo See jit.log
