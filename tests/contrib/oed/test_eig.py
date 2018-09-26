@@ -1,25 +1,28 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
 from collections import namedtuple, OrderedDict
-import torch
-import scipy.special as sc
-import pytest
+
 import numpy as np
+import pytest
+import scipy.special as sc
+import torch
 
 import pyro
 import pyro.distributions as dist
 from pyro import optim
-from pyro.infer import TraceEnum_ELBO
-from pyro.contrib.oed.eig import (
-    vi_ape, naive_rainforth_eig, donsker_varadhan_eig, barber_agakov_ape
-)
-from pyro.contrib.oed.util import linear_model_ground_truth
 from pyro.contrib.glmm import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix,
     group_linear_model, group_normal_guide
 )
 from pyro.contrib.glmm.guides import LinearModelGuide, GuideDV
+from pyro.contrib.oed.eig import (
+    vi_ape, naive_rainforth_eig, donsker_varadhan_eig, barber_agakov_ape
+)
+from pyro.contrib.oed.util import linear_model_ground_truth
+from pyro.infer import TraceEnum_ELBO
 
+logger = logging.getLogger(__name__)
 
 #########################################################################################
 # Designs
@@ -234,9 +237,8 @@ def test_eig_lm(model, design, observation_labels, target_labels, estimator, arg
         y_true = bernoulli_ground_truth(model, design, observation_labels, target_labels, eig=eig)
     else:
         y_true = linear_model_ground_truth(model, design, observation_labels, target_labels, eig=eig)
-    print()
-    print(estimator.__name__)
-    print(y)
-    print(y_true)
+    logger.debug(estimator.__name__)
+    logger.debug(y)
+    logger.debug(y_true)
     error = torch.max(torch.abs(y - y_true))
     assert error < allow_error

@@ -28,6 +28,7 @@ try:
 except ImportError:
     from contextlib2 import ExitStack  # python 2
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -1239,7 +1240,7 @@ def test_hmm_enumerate_model(num_steps):
         for t, y in enumerate(data):
             x = pyro.sample("x_{}".format(t), dist.Categorical(transition_probs[x]))
             pyro.sample("y_{}".format(t), dist.Categorical(emission_probs[x]), obs=y)
-            print('{}\t{}'.format(t, tuple(x.shape)))
+            logger.debug('{}\t{}'.format(t, tuple(x.shape)))
 
     def guide(data):
         pass
@@ -1260,12 +1261,12 @@ def test_hmm_enumerate_model_and_guide(num_steps):
                                     torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
                                     constraint=constraints.simplex)
         x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
-        print('-1\t{}'.format(tuple(x.shape)))
+        logger.debug('-1\t{}'.format(tuple(x.shape)))
         for t, y in enumerate(data):
             x = pyro.sample("x_{}".format(t), dist.Categorical(transition_probs[x]),
                             infer={"enumerate": "parallel"})
             pyro.sample("y_{}".format(t), dist.Categorical(emission_probs[x]), obs=y)
-            print('{}\t{}'.format(t, tuple(x.shape)))
+            logger.debug('{}\t{}'.format(t, tuple(x.shape)))
 
     def guide(data):
         init_probs = pyro.param("init_probs",
@@ -2538,11 +2539,11 @@ def test_elbo_hmm_growth():
     for counts in costs:
         for key, cost in counts.items():
             collated_costs[key].append(cost)
-    print('Growth:')
-    print('sizes = {}'.format(repr(sizes)))
-    print('costs = {}'.format(repr(dict(collated_costs))))
-    print('times1 = {}'.format(repr(times1)))
-    print('times2 = {}'.format(repr(times2)))
+    logger.debug('Growth:')
+    logger.debug('sizes = {}'.format(repr(sizes)))
+    logger.debug('costs = {}'.format(repr(dict(collated_costs))))
+    logger.debug('times1 = {}'.format(repr(times1)))
+    logger.debug('times2 = {}'.format(repr(times2)))
 
     for key, cost in collated_costs.items():
         dt = 3
@@ -2601,11 +2602,11 @@ def test_elbo_dbn_growth():
     for counts in costs:
         for key, cost in counts.items():
             collated_costs[key].append(cost)
-    print('Growth:')
-    print('sizes = {}'.format(repr(sizes)))
-    print('costs = {}'.format(repr(dict(collated_costs))))
-    print('times1 = {}'.format(repr(times1)))
-    print('times2 = {}'.format(repr(times2)))
+    logger.debug('Growth:')
+    logger.debug('sizes = {}'.format(repr(sizes)))
+    logger.debug('costs = {}'.format(repr(dict(collated_costs))))
+    logger.debug('times1 = {}'.format(repr(times1)))
+    logger.debug('times2 = {}'.format(repr(times2)))
 
     for key, cost in collated_costs.items():
         dt = 4
