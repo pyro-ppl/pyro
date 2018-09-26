@@ -15,7 +15,7 @@ import pyro.ops.jit
 import pyro.poutine as poutine
 from pyro.distributions.torch_distribution import ReshapedDistribution
 from pyro.distributions.util import is_identically_zero, scale_and_mask
-from pyro.infer.contract import contract_tensor_tree, contract_to_tensor
+from pyro.ops.contract import contract_tensor_tree, contract_to_tensor
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
 from pyro.infer.util import Dice, is_validation_enabled

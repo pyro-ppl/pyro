@@ -36,3 +36,5 @@ Tensor Contraction
     :undoc-members:
     :show-inheritance:
     :member-order: bysource
+
+.. autofunction:: pyro.ops.contract.ubersum

@@ -4,7 +4,7 @@ import torch
 from opt_einsum import shared_intermediates
 
 from pyro.distributions.util import logsumexp, broadcast_shape
-from pyro.infer.contract import contract_to_tensor
+from pyro.ops.contract import contract_to_tensor
 from pyro.infer.util import is_validation_enabled
 from pyro.primitives import _Subsample
 from pyro.util import check_site_shape
@@ -140,7 +140,7 @@ class TraceEinsumEvaluator(object):
     tree structure) that possibly contains discrete sample sites
     enumerated in parallel. This uses optimized `einsum` operations
     to marginalize out the the enumerated dimensions in the trace
-    via :class:`~pyro.infer.contract.contract_to_tensor`.
+    via :class:`~pyro.ops.contract.contract_to_tensor`.
 
     :param model_trace: execution trace from a static model.
     :param bool has_enumerable_sites: whether the trace contains any
