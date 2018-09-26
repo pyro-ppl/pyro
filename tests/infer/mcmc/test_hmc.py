@@ -276,7 +276,7 @@ def test_gaussian_mixture_model():
     @poutine.broadcast
     def gmm(data):
         with pyro.iarange("num_clusters", K):
-            mix_proportions = pyro.sample("phi", dist.Dirichlet(torch.tensor(1.)))
+            mix_proportions = pyro.sample("phi", dist.Dirichlet(torch.tensor([1.])))
             cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(float(K)), 1.))
         with pyro.iarange("data", data.shape[0]):
             assignments = pyro.sample("assignments", dist.Categorical(mix_proportions))
