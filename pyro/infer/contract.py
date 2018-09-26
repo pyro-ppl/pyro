@@ -213,52 +213,6 @@ class PackedLogRing(TensorRing):
         return term
 
 
-def _check_tree_structure(tensor_tree):
-    # Check for absence of diamonds, i.e. collider iaranges.
-    # This is required to avoid loops in message passing.
-    #
-    # For example let f1, f2 be two CondIndepStackFrames, and consider
-    # all nesting structures closed under intersection.
-    # The following nesting structures are all valid:
-    #
-    #                 {f1}         {f2}           {}
-    #                  |            |            /  \
-    #  {f1,f2}      {f1,f2}      {f1,f2}      {f1}  {f2}
-    #
-    #           {}           {}           {}
-    #            |            |            |
-    #            |          {f1}          {f2}
-    #            |            |            |
-    #         {f1,f2}      {f1,f2}      {f1,f2}
-    #
-    # But the "diamond" nesting structure is invalid:
-    #
-    #         {}
-    #        /  \
-    #     {f1}  {f2}
-    #        \  /
-    #      {f1,f2}
-    #
-    # In this case the {f1,f2} context contains an enumerated variable that
-    # depends on enumerated variables in both {f1} and {f2}.
-    for t in tensor_tree:
-        for u in tensor_tree:
-            if not (u < t):
-                continue
-            for v in tensor_tree:
-                if not (v < t):
-                    continue
-                if u <= v or v <= u:
-                    continue
-                left = ', '.join(sorted(getattr(f, 'name', str(f)) for f in u - v))
-                right = ', '.join(sorted(getattr(f, 'name', str(f)) for f in v - u))
-                raise ValueError("Expected tree-structured iarange nesting, but found "
-                                 "dependencies on independent iarange sets [{}] and [{}]. "
-                                 "Try converting one of the iaranges to an irange (but beware "
-                                 "exponential cost in the size of that irange)"
-                                 .format(left, right))
-
-
 def _partition_terms(ring, terms, dims):
     """
     Given a list of terms and a set of contraction dims, partitions the terms
@@ -291,18 +245,20 @@ def _partition_terms(ring, terms, dims):
 
         # Split this connected component into tensors and dims.
         component_terms = [v for v in component if isinstance(v, torch.Tensor)]
-        component_dims = set(v for v in component if not isinstance(v, torch.Tensor))
-        yield component_terms, component_dims
+        if component_terms:
+            component_dims = set(v for v in component if not isinstance(v, torch.Tensor))
+            yield component_terms, component_dims
 
 
 def _contract_component(ring, tensor_tree, sum_dims):
     """
     Contract out ``sum_dims`` in a tree of tensors in-place, via message
-    passing. This reduces all tensors down to the minimum shared iarange
-    context.
+    passing. This reduces all tensors down to a single tensor in the greatest
+    lower bound iarange context.
 
     This function should be deterministic.
-    This function has side-effects: it modifies ``tensor_tree`` in-place.
+    This function has side-effects: it modifies ``tensor_tree`` and
+    ``sum_dims`` in-place.
 
     :param TensorRing ring: an algebraic ring defining tensor operations.
     :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
@@ -322,39 +278,46 @@ def _contract_component(ring, tensor_tree, sum_dims):
             if tu not in tensor_tree:
                 tensor_tree[tu] = []
                 pending.append(tu)
-    _check_tree_structure(tensor_tree)
 
-    # Collect contraction dimension by ordinal.
-    dims_tree = defaultdict(set)
+    # Collect contraction dimensions by ordinal.
+    dim_to_ordinal = {}
     for t, terms in tensor_tree.items():
-        dims_tree[t] = set.union(set(), *(sum_dims[term] for term in terms))
+        for term in terms:
+            for dim in sum_dims[term]:
+                dim_to_ordinal[dim] = dim_to_ordinal.get(dim, t) & t
+    dims_tree = defaultdict(set)
+    for dim, t in dim_to_ordinal.items():
+        dims_tree[t].add(dim)
 
     # Recursively combine terms in different iarange contexts.
-    while len(tensor_tree) > 1 or any(dims_tree.values()):
+    while any(dims_tree.values()):
         leaf = max(tensor_tree, key=len)
         leaf_terms = tensor_tree.pop(leaf)
-        assert len(leaf_terms) == len(set(leaf_terms))
-        leaf_dims = dims_tree.pop(leaf)
-        remaining_dims = set.union(set(), *dims_tree.values())
-        contract_dims = leaf_dims - remaining_dims
-        contract_frames = frozenset()
-        if leaf - target_ordinal:
-            contract_frames = frozenset.intersection(*(leaf - t for t in tensor_tree if t < leaf))
-        parent = leaf - contract_frames
-        dims_tree[parent] |= leaf_dims & remaining_dims
-        tensor_tree.setdefault(parent, [])
+        leaf_dims = dims_tree.pop(leaf, set())
 
-        # Split the current node into connected components.
-        for terms, dims in _partition_terms(ring, leaf_terms, contract_dims):
+        # Split terms at the current ordinal into connected components.
+        for terms, dims in _partition_terms(ring, leaf_terms, leaf_dims):
 
             # Eliminate any enumeration dims via a sumproduct contraction.
-            if terms and dims:
-                terms = [ring.sumproduct(terms, dims)]
+            term = ring.sumproduct(terms, dims)
+            remaining_dims = set.union(*map(sum_dims.pop, terms)) - dims
 
             # Eliminate extra iarange dims via product contractions.
-            for term in terms:
+            if leaf == target_ordinal:
+                parent = leaf
+            else:
+                parent = frozenset.union(*(t for t, d in dims_tree.items() if d & remaining_dims))
+                if parent == leaf:
+                    raise ValueError("Expected tree-structured iarange nesting, but found "
+                                     "dependencies on independent iaranges [{}]. "
+                                     "Try converting one of the iaranges to an irange (but beware "
+                                     "exponential cost in the size of that irange)"
+                                     .format(', '.join(getattr(f, 'name', str(f)) for f in leaf)))
+                contract_frames = leaf - parent
                 term = ring.product(term, contract_frames)
-                tensor_tree[parent].append(term)
+
+            tensor_tree.setdefault(parent, []).append(term)
+            sum_dims[term] = remaining_dims
 
 
 def contract_tensor_tree(tensor_tree, sum_dims, ring=None, cache=None):
@@ -386,15 +349,15 @@ def contract_tensor_tree(tensor_tree, sum_dims, ring=None, cache=None):
 
     # Split this tensor tree into connected components.
     for terms, dims in _partition_terms(ring, all_terms, all_dims):
-        if not terms:
-            continue
 
         component = OrderedDict()
+        component_dims = {}
         for term in terms:
             component.setdefault(ordinals[term], []).append(term)
+            component_dims[term] = sum_dims[term]
 
         # Contract this connected component down to a single tensor.
-        _contract_component(ring, component, sum_dims)
+        _contract_component(ring, component, component_dims)
         assert len(component) == 1
         t, terms = component.popitem()
         assert len(terms) == 1
@@ -446,7 +409,7 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal, ring=None, cache=N
     assert lower_ordinal <= target_ordinal
 
     # Combine and broadcast terms.
-    lower_term = ring.sumproduct(lower_terms, {})
+    lower_term = ring.sumproduct(lower_terms, set())
     return ring.broadcast(lower_term, target_ordinal)
 
 

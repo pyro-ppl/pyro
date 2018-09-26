@@ -368,7 +368,7 @@ def test_ubersum_collide_error():
         ubersum('ac,bd,abcd->', x, y, z, batch_dims='ab')
 
 
-def test_ubersum_collide_ok():
+def test_ubersum_collide_ok_1():
     # The following is ok because it splits into connected components
     # {x,z1} and {y,z2}, thereby avoiding exponential blowup.
     #
@@ -383,6 +383,40 @@ def test_ubersum_collide_ok():
     z1 = torch.randn(a, b, c)
     z2 = torch.randn(a, b, d)
     ubersum('ac,bd,abc,abd->', x, y, z1, z2, batch_dims='ab')
+
+
+def test_ubersum_collide_ok_2():
+    # The following is ok because z1 can be contracted to x and
+    # z2 can be contracted to y.
+    #
+    # z1,z2 {a,b}
+    #       /   \
+    #   x {a}  y {b}
+    #        \  /
+    #       w {}  <--- target
+    a, b, c, d = 2, 3, 4, 5
+    w = torch.randn(c, d)
+    x = torch.randn(a, c)
+    y = torch.randn(b, d)
+    z1 = torch.randn(a, b, c)
+    z2 = torch.randn(a, b, d)
+    ubersum('cd,ac,bd,abc,abd->', w, x, y, z1, z2, batch_dims='ab')
+
+
+def test_ubersum_collide_ok_3():
+    # The following is ok because x, y, and z can be independently contracted to w.
+    #
+    #      z {a,b}
+    # x {a}   |   y {b}
+    #      \  |  /
+    #       \ | /
+    #       w {}  <--- target
+    a, b, c = 2, 3, 4
+    w = torch.randn(c)
+    x = torch.randn(a, c)
+    y = torch.randn(b, c)
+    z = torch.randn(a, b, c)
+    ubersum('c,ac,bc,abc->', w, x, y, z, batch_dims='ab')
 
 
 UBERSUM_ERRORS = [
