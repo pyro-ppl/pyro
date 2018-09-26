@@ -287,7 +287,7 @@ if __name__ == '__main__':
                         help='number of steps between parameter saves')
     parser.add_argument('--cuda', action='store_true', default=False,
                         help='use cuda')
-    parser.add_argument('--jit', action='store_true', default=True,
+    parser.add_argument('--jit', action='store_true',
                         help='use PyTorch jit')
     parser.add_argument('-t', '--model-steps', type=int, default=3,
                         help='number of time steps')
