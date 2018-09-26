@@ -1,11 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
+import itertools
+import logging
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict, defaultdict
 
+import opt_einsum
 import torch
 from opt_einsum import shared_intermediates
 from six import add_metaclass
+from six.moves import map
 
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.einsum import contract
@@ -308,11 +312,12 @@ def _contract_component(ring, tensor_tree, sum_dims):
             else:
                 parent = frozenset.union(*(t for t, d in dims_tree.items() if d & remaining_dims))
                 if parent == leaf:
-                    raise ValueError("Expected tree-structured iarange nesting, but found "
-                                     "dependencies on independent iaranges [{}]. "
-                                     "Try converting one of the iaranges to an irange (but beware "
-                                     "exponential cost in the size of that irange)"
-                                     .format(', '.join(getattr(f, 'name', str(f)) for f in leaf)))
+                    raise NotImplementedError(
+                        "Expected tree-structured iarange nesting, but found "
+                        "dependencies on independent iaranges [{}]. "
+                        "Try converting one of the iaranges to an irange (but beware "
+                        "exponential cost in the size of that irange)"
+                        .format(', '.join(getattr(f, 'name', str(f)) for f in leaf)))
                 contract_frames = leaf - parent
                 term = ring.product(term, contract_frames)
 
@@ -487,3 +492,97 @@ def ubersum(equation, *operands, **kwargs):
                 term = term.permute(*map(dims.index, output))
             results.append(term)
     return tuple(results)
+
+
+def naive_ubersum(equation, *operands, **kwargs):
+    """
+    Slow reference implementation of :func:`ubersum`.
+
+    The two implementations should agree whenever both are implemented and
+    :func:`ubersum` does not raise an error.
+    """
+    # Evaluate each output separately.
+    inputs, outputs = equation.split('->')
+    return tuple(_naive_batch_einsum(inputs + '->' + output, *operands, **kwargs)
+                 for output in outputs.split(','))
+
+
+class _DimNormalizer(object):
+    """
+    Object to map batched dims to batches of unbatched dims.
+
+    :param dict dim_to_ordinal: a mapping from contraction dim to the set of
+        batch dims over which the contraction dim is batched.
+    """
+    def __init__(self, dim_to_ordinal):
+        self._plates = {d: tuple(sorted(ordinal)) for d, ordinal in dim_to_ordinal.items()}
+        self._symbols = map(opt_einsum.get_symbol, itertools.count())
+        self._map = {}
+
+    def __call__(self, dim, indices):
+        """
+        Assigns a normalized dim to a base dim, given indices into a batch.
+
+        :param str dim: a dimension to normalize
+        :param dict indices: a mapping from batch dimension to int
+        :return: a normalied dim
+        :rtype: str
+        """
+        plate = self._plates.get(dim, ())
+        index = tuple(indices[d] for d in plate)
+        key = dim, index
+        if key in self._map:
+            return self._map[key]
+        normal_dim = next(self._symbols)
+        self._map[key] = normal_dim
+        return normal_dim
+
+
+def _naive_batch_einsum(equation, *operands, **kwargs):
+    batch_dims = set(kwargs.pop('batch_dims', ''))
+    inputs, output = equation.split('->')
+    inputs = inputs.split(',')
+    output_dims = set(output)
+    keep_dims = output_dims - batch_dims
+    sizes = {dim: size
+             for dims, term in zip(inputs, operands)
+             for dim, size in zip(dims, term.shape)}
+
+    # It is unclear what the desired behavior is in this case.
+    if batch_dims & output_dims:
+        raise NotImplementedError
+
+    # Compute batch dims for each contraction dim.
+    # By convention a sum dim's batch context is is the intersection over all
+    # batch contexts of tensors in which the sum dim appears.
+    dim_to_ordinal = {}
+    for dims in inputs:
+        dims = set(dims)
+        sum_dims = dims - batch_dims - keep_dims
+        ordinal = dims & batch_dims
+        for dim in sum_dims:
+            dim_to_ordinal[dim] = dim_to_ordinal.get(dim, ordinal) & ordinal
+
+    # Normalize by expanding batch dimensions.
+    normalize_dim = _DimNormalizer(dim_to_ordinal)
+    normal_inputs = []
+    normal_operands = []
+    normal_output = ''.join(normalize_dim(d, {})
+                            for d in output if d not in batch_dims)
+    for base_dims, term in zip(inputs, operands):
+        local_dims = [d for d in base_dims if d in batch_dims]
+        offsets = [base_dims.index(d) - len(base_dims) for d in local_dims]
+        for index in itertools.product(*(range(sizes[d]) for d in local_dims)):
+            normal_dims = ''.join(normalize_dim(d, dict(zip(local_dims, index)))
+                                  for d in base_dims if d not in batch_dims)
+            normal_term = term
+            for offset, i in zip(offsets, index):
+                normal_term = normal_term.select(offset, i)
+            normal_inputs.append(normal_dims)
+            normal_operands.append(normal_term)
+
+    # Defer to unbatched einsum.
+    normal_equation = ','.join(normal_inputs) + '->' + normal_output
+    logging.debug('normal_equation = ' + normal_equation)
+    return opt_einsum.contract(normal_equation, *normal_operands,
+                               backend='pyro.ops.einsum.torch_log')

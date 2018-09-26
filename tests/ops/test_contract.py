@@ -8,7 +8,8 @@ import pytest
 import torch
 
 from pyro.distributions.util import logsumexp
-from pyro.ops.contract import UnpackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor, ubersum
+from pyro.ops.contract import (UnpackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor,
+                               naive_ubersum, ubersum)
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from tests.common import assert_equal
 
@@ -248,6 +249,7 @@ def test_contract_to_tensor_sizes(a, b, c, d):
 
 
 UBERSUM_EXAMPLES = [
+    # non-batched examples
     ('->', ''),
     ('a->', ''),
     ('ab->', ''),
@@ -255,13 +257,24 @@ UBERSUM_EXAMPLES = [
     ('ab,bc->ca', ''),
     ('ab,bc->a,b,c', ''),
     ('ab,bc,cd->cb,da', ''),
-    ('ab,ac->,b,c,cb,a,ca,ba,ab,ac,bac', 'a'),
-    ('e,ae,be,bce,bde->,e,a,ae,b,be,bc,bce,bd,bde', 'abcd'),
+    # batched examples
+    ('a->', 'a'),
+    (',a->', 'a'),
+    (',a,ab->,b', 'a'),
+    ('ca,ab->,b,c,bc', 'a'),
+    ('ac,bc,abc->,c', 'ab'),
+    ('a,bd,abcd->,c', 'ab'),
+    ('ac,bd,abcd->,c', 'ab'),
+    (',a,b,c,ab,ac,bc,abc->,c', 'ab'),
+    ('ab,ac->,b,c,cb,bc', 'a'),
+    ('ab,ac->a,ca,ba,ab,ac,bac', 'a'),
+    (',ad,abd,acd->,d', 'abc'),
+    ('e,ae,be,bce,bde->,e', 'abcd'),
+    ('e,ae,be,bce,bde->a,ae,b,be,bc,bce,bd,bde', 'abcd'),
 ]
 
 
-@pytest.mark.parametrize('equation,batch_dims', UBERSUM_EXAMPLES)
-def test_ubersum(equation, batch_dims):
+def make_example(equation):
     symbols = sorted(set(equation) - set(',->'))
     sizes = {dim: size for dim, size in zip(symbols, range(2, 2 + len(symbols)))}
     inputs, outputs = equation.split('->')
@@ -269,9 +282,20 @@ def test_ubersum(equation, batch_dims):
     for dims in inputs.split(','):
         shape = tuple(sizes[dim] for dim in dims)
         operands.append(torch.randn(shape))
+    return operands, sizes
 
-    actual = ubersum(equation, *operands, batch_dims=batch_dims)
 
+@pytest.mark.parametrize('equation,batch_dims', UBERSUM_EXAMPLES)
+def test_ubersum_simple(equation, batch_dims):
+    operands, sizes = make_example(equation)
+
+    try:
+        actual = ubersum(equation, *operands, batch_dims=batch_dims)
+    except NotImplementedError:
+        pytest.skip()
+
+    assert isinstance(actual, tuple)
+    inputs, outputs = equation.split('->')
     outputs = outputs.split(',')
     assert len(actual) == len(outputs)
     for output, actual_part in zip(outputs, actual):
@@ -282,6 +306,21 @@ def test_ubersum(equation, batch_dims):
             expected_part = opt_einsum.contract(equation_part, *operands,
                                                 backend='pyro.ops.einsum.torch_log')
             assert_equal(actual_part, expected_part)
+
+
+@pytest.mark.parametrize('equation,batch_dims', UBERSUM_EXAMPLES)
+def test_ubersum_naive(equation, batch_dims):
+    operands, sizes = make_example(equation)
+
+    try:
+        actual = ubersum(equation, *operands, batch_dims=batch_dims)
+        expected = naive_ubersum(equation, *operands, batch_dims=batch_dims)
+    except NotImplementedError:
+        pytest.skip()
+
+    assert len(actual) == len(expected)
+    for a, e in zip(actual, expected):
+        assert_equal(a, e)
 
 
 @pytest.mark.parametrize('a', [2, 1])
@@ -364,7 +403,7 @@ def test_ubersum_collide_error():
     x = torch.randn(a, c)
     y = torch.randn(b, d)
     z = torch.randn(a, b, c, d)
-    with pytest.raises(ValueError, match='Expected tree-structured iarange nesting'):
+    with pytest.raises(NotImplementedError, match='Expected tree-structured iarange nesting'):
         ubersum('ac,bd,abcd->', x, y, z, batch_dims='ab')
 
 

@@ -2325,7 +2325,7 @@ def test_elbo_enumerate_iaranges_6(scale):
 
     # But promoting both to iaranges should result in an error.
     elbo = TraceEnum_ELBO(max_iarange_nesting=2)
-    with pytest.raises(ValueError, match="Expected tree-structured iarange nesting.*"):
+    with pytest.raises(NotImplementedError, match="Expected tree-structured iarange nesting.*"):
         elbo.differentiable_loss(model_iarange_iarange, guide, data)
 
 
