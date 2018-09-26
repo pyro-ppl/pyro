@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
 import math
 
 import pytest
@@ -13,6 +14,9 @@ from pyro.contrib.tracking.assignment import MarginalAssignment
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
 from pyro.optim.multi import MixedMultiOptimizer, Newton
+
+
+logger = logging.getLogger(__name__)
 
 
 def make_args():
@@ -137,7 +141,7 @@ def test_em(assignment_grad):
         objects_loc = pyro.param('objects_loc').detach_().requires_grad_()
         loss = elbo.differentiable_loss(model, guide, detections, args)  # E-step
         newton.step(loss, {'objects_loc': objects_loc})  # M-step
-        print('step {}, loss = {}'.format(step, loss.item()))
+        logger.debug('step {}, loss = {}'.format(step, loss.item()))
 
 
 @pytest.mark.parametrize('assignment_grad', [False, True])
@@ -167,7 +171,7 @@ def test_em_nested_in_svi(assignment_grad):
             pyro.get_param_store().replace_param('objects_loc', updated['objects_loc'], objects_loc)
             assert pyro.param('objects_loc').grad_fn is not None
         loss = svi.step(detections, args)
-        print('step {: >2d}, loss = {:0.6f}, noise_scale = {:0.6f}'.format(
+        logger.debug('step {: >2d}, loss = {:0.6f}, noise_scale = {:0.6f}'.format(
             svi_step, loss, pyro.param('noise_scale').item()))
 
 
@@ -193,5 +197,5 @@ def test_svi_multi():
         params = {name: pyro.param(name).unconstrained()
                   for name in param_capture.trace.nodes.keys()}
         optim.step(loss, params)
-        print('step {: >2d}, loss = {:0.6f}, noise_scale = {:0.6f}'.format(
+        logger.debug('step {: >2d}, loss = {:0.6f}, noise_scale = {:0.6f}'.format(
             svi_step, loss.item(), pyro.param('noise_scale').item()))
