@@ -417,10 +417,11 @@ def ubersum(equation, *operands, **kwargs):
     """
     Generalized batched einsum via tensor message passing.
 
-    This generalizes :func:``~opt_einsum.contract`` in two ways:
-    1. multiple outputs are allowed, and intermediate results can be shared.
-    2. inputs and outputs can be batched along symbols given in ``batch_dims``;
-        reductions along ``batch_dim``s are product reductions.
+    This generalizes :func:`~pyro.ops.einsum.contract` in two ways:
+
+    1.  Multiple outputs are allowed, and intermediate results can be shared.
+    2.  Inputs and outputs can be batched along symbols given in ``batch_dims``;
+        reductions along ``batch_dims`` are product reductions.
 
     To illustrate multiple outputs, note that the following are equivalent::
 
@@ -440,7 +441,7 @@ def ubersum(equation, *operands, **kwargs):
 
     :param str equation: an einsum equation, optionally with multiple outputs.
     :param torch.Tensor operands: a collection of tensors
-    :param str batch_dims: a string of batch dims.
+    :param str batch_dims: an optional string of batch dims.
     :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`
         cache.
     :return: a tuple of tensors of requested shape, one entry per output.

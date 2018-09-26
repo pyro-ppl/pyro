@@ -8,7 +8,7 @@ import pytest
 import torch
 
 from pyro.distributions.util import logsumexp
-from pyro.infer.contract import UnpackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor, ubersum
+from pyro.ops.contract import UnpackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor, ubersum
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from tests.common import assert_equal
 
