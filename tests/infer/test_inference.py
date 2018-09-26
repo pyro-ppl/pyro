@@ -324,9 +324,9 @@ class BernoulliBetaTests(TestCase):
 
         def guide():
             alpha_q_log = pyro.param("alpha_q_log",
-                                     self.log_alpha_n.clone() + 0.17)
+                                     self.log_alpha_n + 0.17)
             beta_q_log = pyro.param("beta_q_log",
-                                    self.log_beta_n.clone() - 0.143)
+                                    self.log_beta_n - 0.143)
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("p_latent", Beta(alpha_q, beta_q))
 
