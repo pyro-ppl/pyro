@@ -12,6 +12,7 @@ addons:
 install:
     - pip install -U pip
     - sudo apt-get update
+    - export LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
     - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then
           wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
       else
