@@ -2,13 +2,6 @@ language: python
 
 sudo: true
 
-addons:
-  apt:
-    packages:
-    - libblas-dev
-    - liblapack-dev
-    - gfortran
-
 install:
     - pip install -U pip
     - sudo apt-get update
@@ -25,7 +18,7 @@ install:
     - conda config --add channels pytorch
     - conda update -q conda
     - conda info -a
-    - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy mkl mkl-include pytorch-nightly
+    - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pytorch-nightly pip
     - source activate test-environment
     - pip install -e .[test]
     - pip freeze
