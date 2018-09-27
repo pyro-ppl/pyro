@@ -2,6 +2,9 @@ language: python
 
 sudo: true
 
+before_install:
+    - sudo apt-get install libblas-dev liblapack-dev
+
 install:
     - pip install -U pip
     - sudo apt-get update
@@ -18,7 +21,7 @@ install:
     - conda config --add channels pytorch
     - conda update -q conda
     - conda info -a
-    - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pytorch pip
+    - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pytorch-nightly pip
     - source activate test-environment
     - pip install -e .[test]
     - pip freeze
