@@ -176,7 +176,9 @@ def test_beta_bernoulli_with_dual_averaging(jit):
     assert_equal(posterior.mean, true_probs, prec=0.03)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False,
+                                 mark_jit(True, marks=[pytest.mark.xfail("https://github.com/uber/pyro/issues/1418")])
+                                 ], ids=jit_idfn)
 def test_dirichlet_categorical(jit):
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
