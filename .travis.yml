@@ -18,7 +18,7 @@ install:
     - conda config --add channels pytorch
     - conda update -q conda
     - conda info -a
-    - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pytorch-nightly pip
+    - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pytorch pip
     - source activate test-environment
     - pip install -e .[test]
     - pip freeze
