@@ -93,6 +93,8 @@ setup(
             'pytest==3.7',
             'pytest-cov',
             'scipy>=0.19.0',
+            # https://github.com/ipython/ipython/issues/11335
+            'ipython==7.00rc1',
         ],
         'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
         'dev': EXTRAS_REQUIRE + [
