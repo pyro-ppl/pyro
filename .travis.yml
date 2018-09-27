@@ -26,7 +26,7 @@ install:
     - conda info -a
     - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy mkl mkl-include pytorch-nightly
     - source activate test-environment
-    - pip install .[test]
+    - pip install -e .[test]
     - pip freeze
 
 branches:
