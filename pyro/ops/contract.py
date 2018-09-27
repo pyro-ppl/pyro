@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import itertools
-import logging
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict, defaultdict
 
@@ -494,22 +493,15 @@ def ubersum(equation, *operands, **kwargs):
     return tuple(results)
 
 
-def naive_ubersum(equation, *operands, **kwargs):
-    """
-    Slow reference implementation of :func:`ubersum`.
-
-    The two implementations should agree whenever both are implemented and
-    :func:`ubersum` does not raise an error.
-    """
-    # Evaluate each output separately.
-    inputs, outputs = equation.split('->')
-    return tuple(_naive_batch_einsum(inputs + '->' + output, *operands, **kwargs)
-                 for output in outputs.split(','))
+def _select(tensor, dims, indices):
+    for dim, index in zip(dims, indices):
+        tensor = tensor.select(dim, index)
+    return tensor
 
 
-class _DimNormalizer(object):
+class _DimFlattener(object):
     """
-    Object to map batched dims to batches of unbatched dims.
+    Object to map batched dims to batches of flat dims.
 
     :param dict dim_to_ordinal: a mapping from contraction dim to the set of
         batch dims over which the contraction dim is batched.
@@ -521,11 +513,11 @@ class _DimNormalizer(object):
 
     def __call__(self, dim, indices):
         """
-        Assigns a normalized dim to a base dim, given indices into a batch.
+        Converts a batched dim + batch indices to a flattened dim.
 
-        :param str dim: a dimension to normalize
+        :param str dim: a batched dimension to flatten
         :param dict indices: a mapping from batch dimension to int
-        :return: a normalied dim
+        :return: a flattened dim
         :rtype: str
         """
         plate = self._plates.get(dim, ())
@@ -538,51 +530,75 @@ class _DimNormalizer(object):
         return normal_dim
 
 
-def _naive_batch_einsum(equation, *operands, **kwargs):
-    batch_dims = set(kwargs.pop('batch_dims', ''))
-    inputs, output = equation.split('->')
+def naive_ubersum(equation, *operands, **kwargs):
+    """
+    Naive reference implementation of :func:`ubersum`.
+
+    This implementation should never raise ``NotImplementedError``.
+    This implementation should agree with :func:`ubersum` whenver
+    :func:`ubersum` does not raise ``NotImplementedError``.
+    """
+    # Parse equation, without loss of generality assuming a single output.
+    inputs, outputs = equation.split('->')
+    outputs = outputs.split(',')
+    if len(outputs) > 1:
+        return tuple(naive_ubersum(inputs + '->' + output, *operands, **kwargs)[0]
+                     for output in outputs)
+    output, = outputs
     inputs = inputs.split(',')
+
+    # Split dims into batch dims, contraction dims, and dims to keep.
+    batch_dims = set(kwargs.pop('batch_dims', ''))
+    if not batch_dims:
+        result = opt_einsum.contract(equation, *operands, backend='pyro.ops.einsum.torch_log')
+        return (result,)
     output_dims = set(output)
     keep_dims = output_dims - batch_dims
-    sizes = {dim: size
-             for dims, term in zip(inputs, operands)
-             for dim, size in zip(dims, term.shape)}
 
-    # It is unclear what the desired behavior is in this case.
-    if batch_dims & output_dims:
-        raise NotImplementedError
+    # Collect sizes of all dimensions.
+    sizes = {}
+    for input_, operand in zip(inputs, operands):
+        for dim, size in zip(input_, operand.shape):
+            old = sizes.setdefault(dim, size)
+            if old != size:
+                raise ValueError(u"Dimension size mismatch at dim '{}': {} vs {}"
+                                 .format(dim, size, old))
 
-    # Compute batch dims for each contraction dim.
-    # By convention a sum dim's batch context is is the intersection over all
-    # batch contexts of tensors in which the sum dim appears.
+    # Compute batch context for each non-batch dim, by convention the
+    # intersection over all batch contexts of tensors in which the dim appears.
     dim_to_ordinal = {}
-    for dims in inputs:
-        dims = set(dims)
-        sum_dims = dims - batch_dims - keep_dims
+    for dims in map(set, inputs):
         ordinal = dims & batch_dims
-        for dim in sum_dims:
+        for dim in dims - batch_dims:
             dim_to_ordinal[dim] = dim_to_ordinal.get(dim, ordinal) & ordinal
+    for dim in keep_dims:
+        missing_dims = dim_to_ordinal[dim] - output_dims
+        if missing_dims:
+            raise ValueError(u"It is nonsensical to preserve a batched dim without preserving "
+                             u"all of that dim's batch dims, but found '{}' without '{}' in '{}'"
+                             .format(dim, ','.join(missing_dims), equation))
 
-    # Normalize by expanding batch dimensions.
-    normalize_dim = _DimNormalizer(dim_to_ordinal)
-    normal_inputs = []
-    normal_operands = []
-    normal_output = ''.join(normalize_dim(d, {})
-                            for d in output if d not in batch_dims)
-    for base_dims, term in zip(inputs, operands):
-        local_dims = [d for d in base_dims if d in batch_dims]
-        offsets = [base_dims.index(d) - len(base_dims) for d in local_dims]
+    # Flatten by replicating along batch dimensions.
+    flatten_dim = _DimFlattener(dim_to_ordinal)
+    flat_inputs = []
+    flat_operands = []
+    for input_, operand in zip(inputs, operands):
+        local_dims = [d for d in input_ if d in batch_dims]
+        offsets = [input_.index(d) - len(input_) for d in local_dims]
         for index in itertools.product(*(range(sizes[d]) for d in local_dims)):
-            normal_dims = ''.join(normalize_dim(d, dict(zip(local_dims, index)))
-                                  for d in base_dims if d not in batch_dims)
-            normal_term = term
-            for offset, i in zip(offsets, index):
-                normal_term = normal_term.select(offset, i)
-            normal_inputs.append(normal_dims)
-            normal_operands.append(normal_term)
+            flat_inputs.append(''.join(flatten_dim(d, dict(zip(local_dims, index)))
+                                       for d in input_ if d not in batch_dims))
+            flat_operands.append(_select(operand, offsets, index))
 
     # Defer to unbatched einsum.
-    normal_equation = ','.join(normal_inputs) + '->' + normal_output
-    logging.debug('normal_equation = ' + normal_equation)
-    return opt_einsum.contract(normal_equation, *normal_operands,
-                               backend='pyro.ops.einsum.torch_log')
+    result = operands[0].new_empty(torch.Size(sizes[d] for d in output))
+    local_dims = [d for d in output if d in batch_dims]
+    offsets = [output.index(d) - len(output) for d in local_dims]
+    for index in itertools.product(*(range(sizes[d]) for d in local_dims)):
+        flat_output = ''.join(flatten_dim(d, dict(zip(local_dims, index)))
+                              for d in output if d not in batch_dims)
+        flat_equation = ','.join(flat_inputs) + '->' + flat_output
+        flat_result = opt_einsum.contract(flat_equation, *flat_operands,
+                                          backend='pyro.ops.einsum.torch_log')
+        _select(result, offsets, index).copy_(flat_result)
+    return (result,)

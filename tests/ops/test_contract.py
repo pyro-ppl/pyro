@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import itertools
 import numbers
 from collections import OrderedDict
 
@@ -249,45 +250,61 @@ def test_contract_to_tensor_sizes(a, b, c, d):
 
 
 UBERSUM_EXAMPLES = [
-    # non-batched examples
     ('->', ''),
-    ('a->', ''),
-    ('ab->', ''),
-    ('ab,bc->ac', ''),
-    ('ab,bc->ca', ''),
-    ('ab,bc->a,b,c', ''),
-    ('ab,bc,cd->cb,da', ''),
-    # batched examples
+    ('a->,a', ''),
+    ('ab->,a,b,ab,ba', ''),
+    ('ab,bc->,a,b,c,ab,bc,ac,abc', ''),
+    ('ab,bc,cd->,a,b,c,d,ab,ac,ad,bc,bd,cd,abc,acd,bcd,abcd', ''),
     ('a->', 'a'),
     (',a->', 'a'),
-    (',a,ab->,b', 'a'),
-    ('ca,ab->,b,c,bc', 'a'),
-    ('ac,bc,abc->,c', 'ab'),
-    ('a,bd,abcd->,c', 'ab'),
-    ('ac,bd,abcd->,c', 'ab'),
-    (',a,b,c,ab,ac,bc,abc->,c', 'ab'),
-    ('ab,ac->,b,c,cb,bc', 'a'),
-    ('ab,ac->a,ca,ba,ab,ac,bac', 'a'),
-    (',ad,abd,acd->,d', 'abc'),
-    ('e,ae,be,bce,bde->,e', 'abcd'),
-    ('e,ae,be,bce,bde->a,ae,b,be,bc,bce,bd,bde', 'abcd'),
+    (',a,a->', 'a'),
+    (',a,ab->,a,ab', 'a'),
+    (',a,a,ab,ab->,a,ab', 'a'),
+    ('ca,ab->,a,ab,ac,abc', 'a'),
+    ('ac,bc,abc->,c,a,ac,b,bc,abc', 'ab'),
+    ('a,bd,abcd->,a,b,bd,ab,abc,abd,abcd', 'ab'),
+    ('ac,bd,abcd->,a,ac,b,bd,ab,abc,abd,abcd', 'ab'),
+    (',a,b,c,ab,ac,bc,abc->,c,a,b,ac,bc,ab,abc', 'ab'),
+    (',ad,abd,acd->,a,b,c,ab,ac,abc,ad,abd,acd,abcd', 'abc'),
 ]
 
 
 def make_example(equation):
     symbols = sorted(set(equation) - set(',->'))
-    sizes = {dim: size for dim, size in zip(symbols, range(2, 2 + len(symbols)))}
+    sizes = {dim: size for dim, size in zip(symbols, itertools.cycle([2, 3, 4]))}
     inputs, outputs = equation.split('->')
+    inputs = inputs.split(',')
+    outputs = outputs.split(',')
     operands = []
-    for dims in inputs.split(','):
+    for dims in inputs:
         shape = tuple(sizes[dim] for dim in dims)
         operands.append(torch.randn(shape))
-    return operands, sizes
+    return inputs, outputs, operands, sizes
 
 
 @pytest.mark.parametrize('equation,batch_dims', UBERSUM_EXAMPLES)
-def test_ubersum_simple(equation, batch_dims):
-    operands, sizes = make_example(equation)
+def test_naive_ubersum(equation, batch_dims):
+    inputs, outputs, operands, sizes = make_example(equation)
+
+    actual = naive_ubersum(equation, *operands, batch_dims=batch_dims)
+
+    assert isinstance(actual, tuple)
+    assert len(actual) == len(outputs)
+    for output, actual_part in zip(outputs, actual):
+        expected_shape = tuple(sizes[dim] for dim in output)
+        assert actual_part.shape == expected_shape
+        if not batch_dims:
+            equation_part = ','.join(inputs) + '->' + output
+            expected_part = opt_einsum.contract(equation_part, *operands,
+                                                backend='pyro.ops.einsum.torch_log')
+            assert_equal(expected_part, actual_part,
+                         msg=u"For output '{}':\nExpected:\n{}\nActual:\n{}".format(
+                             output, expected_part.detach().cpu(), actual_part.detach().cpu()))
+
+
+@pytest.mark.parametrize('equation,batch_dims', UBERSUM_EXAMPLES)
+def test_ubersum(equation, batch_dims):
+    inputs, outputs, operands, sizes = make_example(equation)
 
     try:
         actual = ubersum(equation, *operands, batch_dims=batch_dims)
@@ -295,32 +312,12 @@ def test_ubersum_simple(equation, batch_dims):
         pytest.skip()
 
     assert isinstance(actual, tuple)
-    inputs, outputs = equation.split('->')
-    outputs = outputs.split(',')
     assert len(actual) == len(outputs)
-    for output, actual_part in zip(outputs, actual):
-        expected_shape = tuple(sizes[dim] for dim in output)
-        assert actual_part.shape == expected_shape
-        if set(batch_dims) <= set(output):
-            equation_part = inputs + '->' + output
-            expected_part = opt_einsum.contract(equation_part, *operands,
-                                                backend='pyro.ops.einsum.torch_log')
-            assert_equal(actual_part, expected_part)
-
-
-@pytest.mark.parametrize('equation,batch_dims', UBERSUM_EXAMPLES)
-def test_ubersum_naive(equation, batch_dims):
-    operands, sizes = make_example(equation)
-
-    try:
-        actual = ubersum(equation, *operands, batch_dims=batch_dims)
-        expected = naive_ubersum(equation, *operands, batch_dims=batch_dims)
-    except NotImplementedError:
-        pytest.skip()
-
-    assert len(actual) == len(expected)
-    for a, e in zip(actual, expected):
-        assert_equal(a, e)
+    expected = naive_ubersum(equation, *operands, batch_dims=batch_dims)
+    for output, expected_part, actual_part in zip(outputs, expected, actual):
+        assert_equal(expected_part, actual_part,
+                     msg=u"For output '{}':\nExpected:\n{}\nActual:\n{}".format(
+                         output, expected_part.detach().cpu(), actual_part.detach().cpu()))
 
 
 @pytest.mark.parametrize('a', [2, 1])
