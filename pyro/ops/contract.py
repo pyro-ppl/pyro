@@ -579,7 +579,6 @@ def naive_ubersum(equation, *operands, **kwargs):
         result = opt_einsum.contract(equation, *operands, backend='pyro.ops.einsum.torch_log')
         return (result,)
     output_dims = set(output)
-    keep_dims = output_dims - batch_dims
 
     # Collect sizes of all dimensions.
     sizes = {}
@@ -597,7 +596,7 @@ def naive_ubersum(equation, *operands, **kwargs):
         ordinal = dims & batch_dims
         for dim in dims - batch_dims:
             dim_to_ordinal[dim] = dim_to_ordinal.get(dim, ordinal) & ordinal
-    for dim in keep_dims:
+    for dim in output_dims - batch_dims:
         missing_dims = dim_to_ordinal[dim] - output_dims
         if missing_dims:
             raise ValueError(u"It is nonsensical to preserve a batched dim without preserving "
