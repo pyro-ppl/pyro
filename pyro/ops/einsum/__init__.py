@@ -11,7 +11,7 @@ _PATH_CACHE = {}
 
 def contract(equation, *operands, **kwargs):
     """
-    Wrpper around :func:`opt_einsum.contract` that caches contraction paths.
+    Wrapper around :func:`opt_einsum.contract` that caches contraction paths.
 
     :param bool cache_path: whether to cache the contraction path.
         Defaults to True.

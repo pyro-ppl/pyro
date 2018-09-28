@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import itertools
 import numbers
 from collections import OrderedDict
 
@@ -8,9 +9,11 @@ import pytest
 import torch
 
 from pyro.distributions.util import logsumexp
-from pyro.ops.contract import UnpackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor, ubersum
+from pyro.ops.contract import (UnpackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor,
+                               naive_ubersum, ubersum)
 from pyro.poutine.indep_messenger import CondIndepStackFrame
-from tests.common import assert_equal
+from pyro.util import optional
+from tests.common import assert_equal, xfail_param
 
 
 def deep_copy(x):
@@ -249,51 +252,86 @@ def test_contract_to_tensor_sizes(a, b, c, d):
 
 UBERSUM_EXAMPLES = [
     ('->', ''),
-    ('a->', ''),
-    ('ab->', ''),
-    ('ab,bc->ac', ''),
-    ('ab,bc->ca', ''),
-    ('ab,bc->a,b,c', ''),
-    ('ab,bc,cd->cb,da', ''),
-    ('ab,ac->,b,c,cb,a,ca,ba,ab,ac,bac', 'a'),
-    ('e,ae,be,bce,bde->,e,a,ae,b,be,bc,bce,bd,bde', 'abcd'),
+    ('a->,a', ''),
+    ('ab->,a,b,ab,ba', ''),
+    ('ab,bc->,a,b,c,ab,bc,ac,abc', ''),
+    ('ab,bc,cd->,a,b,c,d,ab,ac,ad,bc,bd,cd,abc,acd,bcd,abcd', ''),
+    ('a->,a', 'a'),
+    (',a->,a', 'a'),
+    (',a,a->,a', 'a'),
+    (',a,ab->,a,ab', 'a'),
+    (',a,a,ab,ab->,a,ab', 'a'),
+    ('ca,ab->,a,ab,ac,abc', 'a'),
+    ('ac,bc,abc->,c,a,ac,b,bc,abc', 'ab'),
+    ('a,bd,abcd->,a,b,bd,ab,abc,abd,abcd', 'ab'),
+    ('ac,bd,abcd->,a,ac,b,bd,ab,abc,abd,abcd', 'ab'),
+    (',a,b,c,ab,ac,bc,abc->,c,a,b,ac,bc,ab,abc', 'ab'),
+    (',ad,abd,acd->,a,b,c,ab,ac,abc,ad,abd,acd,abcd', 'abc'),
 ]
 
 
-@pytest.mark.parametrize('equation,batch_dims', UBERSUM_EXAMPLES)
-def test_ubersum(equation, batch_dims):
+def make_example(equation):
     symbols = sorted(set(equation) - set(',->'))
-    sizes = {dim: size for dim, size in zip(symbols, range(2, 2 + len(symbols)))}
+    sizes = {dim: size for dim, size in zip(symbols, itertools.cycle([2, 3, 4]))}
     inputs, outputs = equation.split('->')
+    inputs = inputs.split(',')
+    outputs = outputs.split(',')
     operands = []
-    for dims in inputs.split(','):
+    for dims in inputs:
         shape = tuple(sizes[dim] for dim in dims)
         operands.append(torch.randn(shape))
+    return inputs, outputs, operands, sizes
 
-    actual = ubersum(equation, *operands, batch_dims=batch_dims)
 
-    outputs = outputs.split(',')
+@pytest.mark.parametrize('equation,batch_dims', UBERSUM_EXAMPLES)
+def test_naive_ubersum(equation, batch_dims):
+    inputs, outputs, operands, sizes = make_example(equation)
+
+    actual = naive_ubersum(equation, *operands, batch_dims=batch_dims)
+
+    assert isinstance(actual, tuple)
     assert len(actual) == len(outputs)
     for output, actual_part in zip(outputs, actual):
         expected_shape = tuple(sizes[dim] for dim in output)
         assert actual_part.shape == expected_shape
-        if set(batch_dims) <= set(output):
-            equation_part = inputs + '->' + output
+        if not batch_dims:
+            equation_part = ','.join(inputs) + '->' + output
             expected_part = opt_einsum.contract(equation_part, *operands,
                                                 backend='pyro.ops.einsum.torch_log')
-            assert_equal(actual_part, expected_part)
+            assert_equal(expected_part, actual_part,
+                         msg=u"For output '{}':\nExpected:\n{}\nActual:\n{}".format(
+                             output, expected_part.detach().cpu(), actual_part.detach().cpu()))
+
+
+@pytest.mark.xfail(reason='improper handling of batched output')
+@pytest.mark.parametrize('equation,batch_dims', UBERSUM_EXAMPLES)
+def test_ubersum(equation, batch_dims):
+    inputs, outputs, operands, sizes = make_example(equation)
+
+    try:
+        actual = ubersum(equation, *operands, batch_dims=batch_dims)
+    except NotImplementedError:
+        pytest.skip()
+
+    assert isinstance(actual, tuple)
+    assert len(actual) == len(outputs)
+    expected = naive_ubersum(equation, *operands, batch_dims=batch_dims)
+    for output, expected_part, actual_part in zip(outputs, expected, actual):
+        assert_equal(expected_part, actual_part,
+                     msg=u"For output '{}':\nExpected:\n{}\nActual:\n{}".format(
+                         output, expected_part.detach().cpu(), actual_part.detach().cpu()))
 
 
 @pytest.mark.parametrize('a', [2, 1])
 @pytest.mark.parametrize('b', [3, 1])
 @pytest.mark.parametrize('c', [3, 1])
 @pytest.mark.parametrize('d', [4, 1])
-@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/1418")
-def test_ubersum_sizes(a, b, c, d):
+@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+def test_ubersum_sizes(impl, a, b, c, d):
     X = torch.randn(a, b)
     Y = torch.randn(b, c)
     Z = torch.randn(c, d)
-    actual = ubersum('ab,bc,cd->a,b,c,d', X, Y, Z, batch_dims='ad')
+    actual = impl('ab,bc,cd->a,b,c,d', X, Y, Z, batch_dims='ad')
     actual_a, actual_b, actual_c, actual_d = actual
     assert actual_a.shape == (a,)
     assert actual_b.shape == (b,)
@@ -301,7 +339,8 @@ def test_ubersum_sizes(a, b, c, d):
     assert actual_d.shape == (d,)
 
 
-def test_ubersum_1():
+@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+def test_ubersum_1(impl):
     # y {a}   z {b}
     #      \  /
     #     x {}  <--- target
@@ -309,12 +348,13 @@ def test_ubersum_1():
     x = torch.randn(c)
     y = torch.randn(c, d, a)
     z = torch.randn(e, c, b)
-    actual, = ubersum('c,cda,ecb->', x, y, z, batch_dims='ab')
+    actual, = impl('c,cda,ecb->', x, y, z, batch_dims='ab')
     expected = logsumexp(x + logsumexp(y, -2).sum(-1) + logsumexp(z, -3).sum(-1), -1)
     assert_equal(actual, expected)
 
 
-def test_ubersum_2():
+@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+def test_ubersum_2(impl):
     # y {a}   z {b}  <--- target
     #      \  /
     #     x {}
@@ -322,13 +362,14 @@ def test_ubersum_2():
     x = torch.randn(c)
     y = torch.randn(c, d, a)
     z = torch.randn(e, c, b)
-    actual, = ubersum('c,cda,ecb->b', x, y, z, batch_dims='ab')
+    actual, = impl('c,cda,ecb->b', x, y, z, batch_dims='ab')
     xyz = logsumexp(x + logsumexp(y, -2).sum(-1) + logsumexp(z, -3).sum(-1), -1)
     expected = xyz.expand(b)
     assert_equal(actual, expected)
 
 
-def test_ubersum_3():
+@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+def test_ubersum_3(impl):
     #       z {b,c}
     #           |
     # w {a}  y {b}  <--- target
@@ -339,7 +380,7 @@ def test_ubersum_3():
     x = torch.randn(d)
     y = torch.randn(b, d)
     z = torch.randn(b, c, d, e)
-    actual, = ubersum('ae,d,bd,bcde->be', w, x, y, z, batch_dims='abc')
+    actual, = impl('ae,d,bd,bcde->be', w, x, y, z, batch_dims='abc')
     yz = y.reshape(b, d, 1) + z.sum(-3)  # eliminate c
     assert yz.shape == (b, d, e)
     yz = yz.sum(0)  # eliminate b
@@ -352,7 +393,32 @@ def test_ubersum_3():
     assert_equal(actual, expected)
 
 
-def test_ubersum_collide_error():
+@pytest.mark.parametrize('impl', [
+    naive_ubersum,
+    xfail_param(ubersum, reason='incorrect forward-backward implementation'),
+])
+def test_ubersum_4(impl):
+    # x,y {b}  <--- target
+    #      |
+    #     {}
+    a, b, c, d = 2, 3, 4, 5
+    x = torch.randn(a, b)
+    y = torch.randn(d, b, c)
+    actual, = impl('ab,dbc->dc', x, y, batch_dims='d')
+    x_b1 = logsumexp(x, 0).unsqueeze(-1)
+    assert x_b1.shape == (b, 1)
+    y_db1 = logsumexp(y, 2, keepdim=True)
+    assert y_db1.shape == (d, b, 1)
+    y_dbc = y_db1.sum(0) - y_db1 + y  # avoid double counting
+    assert y_dbc.shape == (d, b, c)
+    xy_dc = logsumexp(x_b1 + y_dbc, 1)
+    assert xy_dc.shape == (d, c)
+    expected = xy_dc
+    assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize('impl,implemented', [(naive_ubersum, True), (ubersum, False)])
+def test_ubersum_collide_implemented(impl, implemented):
     # Non-tree iaranges cause exponential blowup,
     # so ubersum() refuses to evaluate them.
     #
@@ -365,11 +431,13 @@ def test_ubersum_collide_error():
     x = torch.randn(a, c)
     y = torch.randn(b, d)
     z = torch.randn(a, b, c, d)
-    with pytest.raises(ValueError, match='Expected tree-structured iarange nesting'):
-        ubersum('ac,bd,abcd->', x, y, z, batch_dims='ab')
+    raises = pytest.raises(NotImplementedError, match='Expected tree-structured iarange nesting')
+    with optional(raises, not implemented):
+        impl('ac,bd,abcd->', x, y, z, batch_dims='ab')
 
 
-def test_ubersum_collide_ok_1():
+@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+def test_ubersum_collide_ok_1(impl):
     # The following is ok because it splits into connected components
     # {x,z1} and {y,z2}, thereby avoiding exponential blowup.
     #
@@ -383,10 +451,11 @@ def test_ubersum_collide_ok_1():
     y = torch.randn(b, d)
     z1 = torch.randn(a, b, c)
     z2 = torch.randn(a, b, d)
-    ubersum('ac,bd,abc,abd->', x, y, z1, z2, batch_dims='ab')
+    impl('ac,bd,abc,abd->', x, y, z1, z2, batch_dims='ab')
 
 
-def test_ubersum_collide_ok_2():
+@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+def test_ubersum_collide_ok_2(impl):
     # The following is ok because z1 can be contracted to x and
     # z2 can be contracted to y.
     #
@@ -401,10 +470,11 @@ def test_ubersum_collide_ok_2():
     y = torch.randn(b, d)
     z1 = torch.randn(a, b, c)
     z2 = torch.randn(a, b, d)
-    ubersum('cd,ac,bd,abc,abd->', w, x, y, z1, z2, batch_dims='ab')
+    impl('cd,ac,bd,abc,abd->', w, x, y, z1, z2, batch_dims='ab')
 
 
-def test_ubersum_collide_ok_3():
+@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+def test_ubersum_collide_ok_3(impl):
     # The following is ok because x, y, and z can be independently contracted to w.
     #
     #      z {a,b}
@@ -417,17 +487,41 @@ def test_ubersum_collide_ok_3():
     x = torch.randn(a, c)
     y = torch.randn(b, c)
     z = torch.randn(a, b, c)
-    ubersum('c,ac,bc,abc->', w, x, y, z, batch_dims='ab')
+    impl('c,ac,bc,abc->', w, x, y, z, batch_dims='ab')
 
 
-UBERSUM_ERRORS = [
+UBERSUM_SHAPE_ERRORS = [
     ('ab,bc->', [(2, 3), (4, 5)], ''),
     ('ab,bc->', [(2, 3), (4, 5)], 'b'),
 ]
 
 
-@pytest.mark.parametrize('equation,shapes,batch_dims', UBERSUM_ERRORS)
-def test_ubersum_size_error(equation, shapes, batch_dims):
+@pytest.mark.parametrize('equation,shapes,batch_dims', UBERSUM_SHAPE_ERRORS)
+@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+def test_ubersum_size_error(impl, equation, shapes, batch_dims):
     operands = [torch.randn(shape) for shape in shapes]
-    with pytest.raises(ValueError, match='Dimension size mismatch'):
-        ubersum(equation, *operands, batch_dims=batch_dims)
+    with pytest.raises(ValueError, match='Dimension size mismatch|Size of label'):
+        impl(equation, *operands, batch_dims=batch_dims)
+
+
+UBERSUM_BATCH_ERRORS = [
+    ('ab->b', 'a'),
+    (',ab->b', 'a'),
+    ('ac,abc->c', 'a'),
+    (',ac,abc->c', 'a'),
+    ('abc->ac', 'ab'),
+    ('abc->bc', 'ab'),
+]
+
+
+@pytest.mark.parametrize('equation,batch_dims', UBERSUM_BATCH_ERRORS)
+@pytest.mark.parametrize('impl', [
+    naive_ubersum,
+    xfail_param(ubersum, reason='does not detect senseless batch output'),
+])
+def test_ubersum_batch_error(impl, equation, batch_dims):
+    inputs, outputs = equation.split('->')
+    operands = [torch.randn(torch.Size((2,) * len(input_)))
+                for input_ in inputs.split(',')]
+    with pytest.raises(ValueError, match='It is nonsensical to preserve a batched dim'):
+        impl(equation, *operands, batch_dims=batch_dims)

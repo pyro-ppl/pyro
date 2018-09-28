@@ -32,11 +32,12 @@ def einsum(equation, *operands):
         exp_operands.append((operand - shift).exp())
 
         # permute shift to match output
-        shift = shift.squeeze()
-        dims = [dim for dim in dims if dim in output]
-        dims = [dim for dim in output if dim not in dims] + dims
-        shift = shift.reshape((1,) * (len(output) - len(shift.shape)) + shift.shape)
-        if dims:
+        shift = shift.reshape(torch.Size(size for size, dim in zip(operand.shape, dims)
+                                         if dim in output))
+        if shift.dim():
+            shift = shift.reshape((1,) * (len(output) - shift.dim()) + shift.shape)
+            dims = [dim for dim in dims if dim in output]
+            dims = [dim for dim in output if dim not in dims] + dims
             shift = shift.permute(*(dims.index(dim) for dim in output))
         shifts.append(shift)
 
