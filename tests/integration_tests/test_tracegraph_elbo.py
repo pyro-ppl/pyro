@@ -71,9 +71,9 @@ class NormalNormalTests(TestCase):
             return loc_latent
 
         def guide():
-            loc_q = pyro.param("loc_q", torch.tensor(self.analytic_loc_n.expand(2) + 0.334, requires_grad=True))
+            loc_q = pyro.param("loc_q", self.analytic_loc_n.expand(2) + 0.334)
             log_sig_q = pyro.param("log_sig_q",
-                                   torch.tensor(self.analytic_log_sig_n.expand(2) - 0.29, requires_grad=True))
+                                   self.analytic_log_sig_n.expand(2) - 0.29)
             sig_q = torch.exp(log_sig_q)
             with pyro.iarange("iarange", 2):
                 loc_latent = pyro.sample("loc_latent", Normal(loc_q, sig_q))
@@ -164,15 +164,14 @@ class NormalNormalNormalTests(TestCase):
 
         # note that the exact posterior is not mean field!
         def guide():
-            loc_q = pyro.param("loc_q", torch.tensor(self.analytic_loc_n.expand(2) + 0.334, requires_grad=True))
+            loc_q = pyro.param("loc_q", self.analytic_loc_n.expand(2) + 0.334)
             log_sig_q = pyro.param("log_sig_q",
-                                   torch.tensor(self.analytic_log_sig_n.expand(2) - 0.29, requires_grad=True))
+                                   self.analytic_log_sig_n.expand(2) - 0.29)
             loc_q_prime = pyro.param("loc_q_prime",
-                                     torch.tensor([-0.34, 0.52], requires_grad=True))
-            kappa_q = pyro.param("kappa_q", torch.tensor([0.74],
-                                 requires_grad=True))
+                                     torch.tensor([-0.34, 0.52]))
+            kappa_q = pyro.param("kappa_q", torch.tensor([0.74]))
             log_sig_q_prime = pyro.param("log_sig_q_prime",
-                                         torch.tensor(-0.5 * torch.log(1.2 * self.lam0), requires_grad=True))
+                                         -0.5 * torch.log(1.2 * self.lam0))
             sig_q, sig_q_prime = torch.exp(log_sig_q), torch.exp(log_sig_q_prime)
             with pyro.iarange("iarange", 2):
                 loc_latent = pyro.sample("loc_latent", Normal2(loc_q, sig_q),
@@ -244,9 +243,9 @@ class BernoulliBetaTests(TestCase):
 
         def guide():
             alpha_q_log = pyro.param("alpha_q_log",
-                                     torch.tensor(self.log_alpha_n + 0.17, requires_grad=True))
+                                     self.log_alpha_n + 0.17)
             beta_q_log = pyro.param("beta_q_log",
-                                    torch.tensor(self.log_beta_n - 0.143, requires_grad=True))
+                                    self.log_beta_n - 0.143)
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             p_latent = pyro.sample("p_latent", Beta(alpha_q, beta_q),
                                    infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
@@ -302,10 +301,10 @@ class ExponentialGammaTests(TestCase):
         def guide():
             alpha_q_log = pyro.param(
                 "alpha_q_log",
-                torch.tensor(self.log_alpha_n + 0.17, requires_grad=True))
+                self.log_alpha_n + 0.17)
             beta_q_log = pyro.param(
                 "beta_q_log",
-                torch.tensor(self.log_beta_n - 0.143, requires_grad=True))
+                self.log_beta_n - 0.143)
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", Gamma(alpha_q, beta_q),
                         infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
@@ -366,9 +365,9 @@ class RaoBlackwellizationTests(TestCase):
                                 obs=self.data[i][j])
 
         def guide():
-            loc_q = pyro.param("loc_q", torch.tensor(self.analytic_loc_n.expand(2) + 0.234, requires_grad=True))
+            loc_q = pyro.param("loc_q", self.analytic_loc_n.expand(2) + 0.234)
             log_sig_q = pyro.param("log_sig_q",
-                                   torch.tensor(self.analytic_log_sig_n.expand(2) - 0.27, requires_grad=True))
+                                   self.analytic_log_sig_n.expand(2) - 0.27)
             sig_q = torch.exp(log_sig_q)
             pyro.sample("loc_latent", fakes.NonreparameterizedNormal(loc_q, sig_q).independent(1),
                         infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
@@ -440,9 +439,9 @@ class RaoBlackwellizationTests(TestCase):
                                              torch.nn.Linear(2, 2)])
 
         def guide():
-            loc_q = pyro.param("loc_q", torch.tensor(self.analytic_loc_n.expand(2) + 0.094, requires_grad=True))
+            loc_q = pyro.param("loc_q", self.analytic_loc_n.expand(2) + 0.094)
             log_sig_q = pyro.param("log_sig_q",
-                                   torch.tensor(self.analytic_log_sig_n.expand(2) - 0.07, requires_grad=True))
+                                   self.analytic_log_sig_n.expand(2) - 0.07)
             sig_q = torch.exp(log_sig_q)
             trivial_baseline = pyro.module("loc_baseline", pt_loc_baseline)
             baseline_value = trivial_baseline(torch.ones(1)).squeeze()
@@ -457,7 +456,7 @@ class RaoBlackwellizationTests(TestCase):
                                                  pt_superfluous_baselines[3 * k + i])
                         baseline_value = z_baseline(loc_latent.detach())
                         mean_i = pyro.param("mean_%d_%d" % (i, k),
-                                            torch.tensor(0.5 * torch.ones(4 - i), requires_grad=True))
+                                            0.5 * torch.ones(4 - i))
                         z_i_k = pyro.sample("z_%d_%d" % (i, k),
                                             fakes.NonreparameterizedNormal(mean_i, 1),
                                             infer=dict(baseline=dict(baseline_value=baseline_value)))

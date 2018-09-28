@@ -408,18 +408,13 @@ class GaussianPyramidTests(TestCase):
             deps = self.q_dag.predecessors(node)
             node_suffix = node[11:]
             log_sig_node = pyro.param("log_sig_" + node_suffix,
-                                      torch.tensor(-0.5 * torch.log(self.target_lambdas[node_suffix]).data +
-                                                   difficulty * (torch.Tensor([-0.3]) -
-                                                                 0.3 * (torch.randn(1) ** 2)),
-                                                   requires_grad=True))
+                                      -0.5 * torch.log(self.target_lambdas[node_suffix]) +
+                                      difficulty * (torch.Tensor([-0.3]) - 0.3 * (torch.randn(1) ** 2)))
             mean_function_node = pyro.param("constant_term_" + node,
-                                            torch.tensor(self.loc0.data +
-                                                         torch.Tensor([difficulty * i / n_nodes]),
-                                                         requires_grad=True))
+                                            self.loc0 + torch.Tensor([difficulty * i / n_nodes]))
             for dep in deps:
                 kappa_dep = pyro.param("kappa_" + node_suffix + '_' + dep[11:],
-                                       torch.tensor([0.5 + difficulty * i / n_nodes],
-                                                    requires_grad=True))
+                                       torch.tensor([0.5 + difficulty * i / n_nodes]))
                 mean_function_node = mean_function_node + kappa_dep * latents_dict[dep]
             node_flagged = True if self.which_nodes_reparam[i] == 1.0 else False
             Normal = dist.Normal if reparameterized or node_flagged else fakes.NonreparameterizedNormal
