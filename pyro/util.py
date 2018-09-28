@@ -5,7 +5,7 @@ import numbers
 import random
 import warnings
 from collections import defaultdict
-from contextlib import contextmanager
+from contextlib2 import contextmanager
 
 import graphviz
 import torch
