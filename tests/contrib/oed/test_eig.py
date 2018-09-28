@@ -21,6 +21,7 @@ from pyro.contrib.oed.eig import (
 )
 from pyro.contrib.oed.util import linear_model_ground_truth
 from pyro.infer import TraceEnum_ELBO
+from tests.common import xfail_param
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +148,7 @@ TEST_CASES = [
         False,
         0.3
     ),
-    T(
+    xfail_param(*T(
         basic_2p_linear_model_sds_10_2pt5,
         X_circle_5d_1n_2p,
         "y",
@@ -157,7 +158,7 @@ TEST_CASES = [
          optim.Adam({"lr": 0.025}), False, None, 500],
         True,
         0.3
-    ),
+    ), reason="https://github.com/uber/pyro/issues/1418"),
     T(
         basic_2p_linear_model_sds_10_2pt5,
         AB_test_2d_10n_2p,
@@ -203,7 +204,7 @@ TEST_CASES = [
         0.3,
         marks=pytest.mark.xfail
     ),
-    T(
+    xfail_param(*T(
         group_2p_linear_model_sds_10_2pt5,
         X_circle_5d_1n_2p,
         "y",
@@ -213,7 +214,7 @@ TEST_CASES = [
          optim.Adam({"lr": 0.025}), False, None, 500],
         True,
         0.3
-    ),
+    ), reason="https://github.com/uber/pyro/issues/1418"),
     T(
         group_2p_linear_model_sds_10_2pt5,
         X_circle_5d_1n_2p,
