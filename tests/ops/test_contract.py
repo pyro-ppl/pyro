@@ -288,6 +288,7 @@ def test_ubersum(equation, batch_dims):
 @pytest.mark.parametrize('b', [3, 1])
 @pytest.mark.parametrize('c', [3, 1])
 @pytest.mark.parametrize('d', [4, 1])
+@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/1418")
 def test_ubersum_sizes(a, b, c, d):
     X = torch.randn(a, b)
     Y = torch.randn(b, c)
