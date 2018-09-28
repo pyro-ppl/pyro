@@ -419,13 +419,17 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal, ring=None, cache=N
 
 def ubersum(equation, *operands, **kwargs):
     """
-    Generalized batched einsum via tensor message passing.
+    Generalized batched sum-product algorithm via tensor message passing.
 
     This generalizes :func:`~pyro.ops.einsum.contract` in two ways:
 
     1.  Multiple outputs are allowed, and intermediate results can be shared.
     2.  Inputs and outputs can be batched along symbols given in ``batch_dims``;
         reductions along ``batch_dims`` are product reductions.
+
+    The best way to understand this function is to try the examples below,
+    which show how :func:`ubersum` calls can be implemented as multiple calls
+    to :func:`~pyro.ops.einsum.contract` (which is generally more expensive).
 
     To illustrate multiple outputs, note that the following are equivalent::
 
@@ -438,16 +442,16 @@ def ubersum(equation, *operands, **kwargs):
 
     To illustrate batched inputs, note that the following are equivalent::
 
+        assert len(x) == 3 and len(y) == 3
         z = ubersum('c,abc,acd->bd', w, x, y, batch_dims='a')
 
-        z = w + sum(contract('bc,cd->bd', xi, yi, backend=backend)
-                    for xi, yi in zip(x, y))
+        z = contract('c,bc,bc,bc,cd,cd,cd->bd', w, *x, *y, backend=backend)
 
     When a non-batch dimension `i` always appears with a batch dimension `a`,
     then `i` corresponds to a distinct symbol for each slice of `a`. Thus
     the following are equivalent::
 
-        assert len(x) == 3
+        assert len(x) == 3 and len(y) == 3
         z = ubersum('abi,abi->', x, y, batch_dims='a')
 
         z = contract('bi,bj,bk,bi,bj,bk->', *x, *y, backend=backend)
@@ -456,7 +460,7 @@ def ubersum(equation, *operands, **kwargs):
     accompanied by all of its batch dimensions, e.g. the following are
     equivalent::
 
-        assert len(x) == 3
+        assert len(x) == 3 and len(y) == 3
         z = ubersum('abi,abi->ai', x, y, batch_dims='a')
 
         z0 = contract('bi,bj,bk,bi,bj,bk->i', *x, *y, backend=backend)
@@ -466,8 +470,8 @@ def ubersum(equation, *operands, **kwargs):
 
     Among all valid inputs, some computations are polynomial in the sizes of
     the input tensors and other computations are exponential in the sizes of
-    the input tensors. This function raises `NotImplementedError` whenever the
-    computation is exponential.
+    the input tensors. This function raises :py:class:`NotImplementedError`
+    whenever the computation is exponential.
 
     :param str equation: an einsum equation, optionally with multiple outputs.
     :param torch.Tensor operands: a collection of tensors
@@ -476,6 +480,10 @@ def ubersum(equation, *operands, **kwargs):
         cache.
     :return: a tuple of tensors of requested shape, one entry per output.
     :rtype: tuple
+    :raises ValueError: if tensor sizes mismatch or an output requests a
+        batched dim without that dim's batch dims.
+    :raises NotImplementedError: if contraction would have cost exponential in
+        the size of any input tensor.
     """
     # Extract kwargs.
     cache = kwargs.pop('cache', None)

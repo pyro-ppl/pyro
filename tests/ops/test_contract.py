@@ -13,7 +13,7 @@ from pyro.ops.contract import (UnpackedLogRing, _partition_terms, contract_tenso
                                naive_ubersum, ubersum)
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import optional
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_param
 
 
 def deep_copy(x):
@@ -256,9 +256,9 @@ UBERSUM_EXAMPLES = [
     ('ab->,a,b,ab,ba', ''),
     ('ab,bc->,a,b,c,ab,bc,ac,abc', ''),
     ('ab,bc,cd->,a,b,c,d,ab,ac,ad,bc,bd,cd,abc,acd,bcd,abcd', ''),
-    ('a->', 'a'),
-    (',a->', 'a'),
-    (',a,a->', 'a'),
+    ('a->,a', 'a'),
+    (',a->,a', 'a'),
+    (',a,a->,a', 'a'),
     (',a,ab->,a,ab', 'a'),
     (',a,a,ab,ab->,a,ab', 'a'),
     ('ca,ab->,a,ab,ac,abc', 'a'),
@@ -303,6 +303,7 @@ def test_naive_ubersum(equation, batch_dims):
                              output, expected_part.detach().cpu(), actual_part.detach().cpu()))
 
 
+@pytest.mark.xfail(reason='improper handling of batched output')
 @pytest.mark.parametrize('equation,batch_dims', UBERSUM_EXAMPLES)
 def test_ubersum(equation, batch_dims):
     inputs, outputs, operands, sizes = make_example(equation)
@@ -392,7 +393,10 @@ def test_ubersum_3(impl):
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+@pytest.mark.parametrize('impl', [
+    naive_ubersum,
+    xfail_param(ubersum, reason='incorrect forward-backward implementation'),
+])
 def test_ubersum_4(impl):
     # x,y {b}  <--- target
     #      |
@@ -486,15 +490,38 @@ def test_ubersum_collide_ok_3(impl):
     impl('c,ac,bc,abc->', w, x, y, z, batch_dims='ab')
 
 
-UBERSUM_ERRORS = [
+UBERSUM_SHAPE_ERRORS = [
     ('ab,bc->', [(2, 3), (4, 5)], ''),
     ('ab,bc->', [(2, 3), (4, 5)], 'b'),
 ]
 
 
-@pytest.mark.parametrize('equation,shapes,batch_dims', UBERSUM_ERRORS)
+@pytest.mark.parametrize('equation,shapes,batch_dims', UBERSUM_SHAPE_ERRORS)
 @pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
 def test_ubersum_size_error(impl, equation, shapes, batch_dims):
     operands = [torch.randn(shape) for shape in shapes]
     with pytest.raises(ValueError, match='Dimension size mismatch|Size of label'):
+        impl(equation, *operands, batch_dims=batch_dims)
+
+
+UBERSUM_BATCH_ERRORS = [
+    ('ab->b', 'a'),
+    (',ab->b', 'a'),
+    ('ac,abc->c', 'a'),
+    (',ac,abc->c', 'a'),
+    ('abc->ac', 'ab'),
+    ('abc->bc', 'ab'),
+]
+
+
+@pytest.mark.parametrize('equation,batch_dims', UBERSUM_BATCH_ERRORS)
+@pytest.mark.parametrize('impl', [
+    naive_ubersum,
+    xfail_param(ubersum, reason='does not detect senseless batch output'),
+])
+def test_ubersum_batch_error(impl, equation, batch_dims):
+    inputs, outputs = equation.split('->')
+    operands = [torch.randn(torch.Size((2,) * len(input_)))
+                for input_ in inputs.split(',')]
+    with pytest.raises(ValueError, match='It is nonsensical to preserve a batched dim'):
         impl(equation, *operands, batch_dims=batch_dims)
