@@ -66,18 +66,8 @@ def poisson_gamma_model(reparameterized, Elbo):
         return lambda_latent
 
     def guide():
-        alpha_q_log = pyro.param(
-            "alpha_q_log",
-            torch.tensor(
-                log_alpha_n.data +
-                0.17,
-                requires_grad=True))
-        beta_q_log = pyro.param(
-            "beta_q_log",
-            torch.tensor(
-                log_beta_n.data -
-                0.143,
-                requires_grad=True))
+        alpha_q_log = pyro.param("alpha_q_log", log_alpha_n + 0.17)
+        beta_q_log = pyro.param("beta_q_log", log_beta_n - 0.143)
         alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
         pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
 
