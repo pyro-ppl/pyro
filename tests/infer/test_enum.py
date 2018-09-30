@@ -2619,7 +2619,6 @@ def test_elbo_scale():
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.xfail(reason="flakey due to nondeterministic computations")
 def test_elbo_hmm_growth():
     pyro.clear_param_store()
     init_probs = torch.tensor([0.5, 0.5])
@@ -2670,7 +2669,7 @@ def test_elbo_hmm_growth():
         for key, cost in counts.items():
             collated_costs[key].append(cost)
     logger.debug('\n'.join([
-        'Growth:',
+        'HMM Growth:',
         'sizes = {}'.format(repr(sizes)),
         'costs = {}'.format(repr(dict(collated_costs))),
         'times1 = {}'.format(repr(times1)),
@@ -2682,7 +2681,6 @@ def test_elbo_hmm_growth():
         assert cost[-1 - dt - dt] - 2 * cost[-1 - dt] + cost[-1] == 0, '{} cost is not linear'.format(key)
 
 
-@pytest.mark.xfail(reason="flakey due to nondeterministic computations")
 @pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/uber/pyro/issues/1380")
 def test_elbo_dbn_growth():
     pyro.clear_param_store()
@@ -2735,7 +2733,7 @@ def test_elbo_dbn_growth():
         for key, cost in counts.items():
             collated_costs[key].append(cost)
     logger.debug('\n'.join([
-        'Growth:',
+        'DBN Growth:',
         'sizes = {}'.format(repr(sizes)),
         'costs = {}'.format(repr(dict(collated_costs))),
         'times1 = {}'.format(repr(times1)),
