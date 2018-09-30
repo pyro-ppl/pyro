@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import heapq
 import itertools
-import math
 from collections import defaultdict
 
 import numpy as np
@@ -40,25 +39,28 @@ def linear_to_ssa(path):
 
 
 def _footprint(sizes, dims):
-    return sum(map(sizes.__getitem__, dims))
+    result = 1
+    for dim in dims:
+        result *= sizes[dim]
+    return result
 
 
-def _get_candidate(output, log_sizes, remaining, footprints, dim_ref_counts, k1, k2):
+def _get_candidate(output, sizes, remaining, footprints, dim_ref_counts, k1, k2):
     either = k1 | k2
     two = k1 & k2
     one = either - two
     k12 = (either & output) | (two & dim_ref_counts[3]) | (one & dim_ref_counts[2])
-    cost = _footprint(log_sizes, k12) - footprints[k1] - footprints[k2]
+    cost = _footprint(sizes, k12) - footprints[k1] - footprints[k2]
     id1 = remaining[k1]
     id2 = remaining[k2]
     cost = cost, min(id1, id2), max(id1, id2)  # break ties to ensure determinism
     return cost, k1, k2, k12
 
 
-def _push_candidate(output, log_sizes, remaining, footprints, dim_ref_counts, k1, k2s, queue):
+def _push_candidate(output, sizes, remaining, footprints, dim_ref_counts, k1, k2s, queue):
     if not k2s:
         return
-    candidate = min(_get_candidate(output, log_sizes, remaining, footprints, dim_ref_counts, k1, k2)
+    candidate = min(_get_candidate(output, sizes, remaining, footprints, dim_ref_counts, k1, k2)
                     for k2 in k2s)
     heapq.heappush(queue, candidate)
 
@@ -83,7 +85,6 @@ def _ssa_optimize(inputs, output, sizes):
     static single assignment ids rather than recycled linear ids.
     SSA ids are cheaper to work with and easier to reason about.
     """
-    log_sizes = {dim: math.log(size) for dim, size in sizes.items()}
     output = frozenset(output)
     ssa_path = []
 
@@ -98,7 +99,7 @@ def _ssa_optimize(inputs, output, sizes):
             remaining[key] = ssa_id
 
     # Compute footprints of each tensor.
-    footprints = {key: _footprint(log_sizes, key) for key in remaining}
+    footprints = {key: _footprint(sizes, key) for key in remaining}
 
     # Keep track of possible contraction dims.
     dim_to_keys = defaultdict(set)
@@ -119,7 +120,7 @@ def _ssa_optimize(inputs, output, sizes):
         keys = list(keys)
         for i, k1 in enumerate(keys):
             k2s = keys[:i]
-            _push_candidate(output, log_sizes, remaining, footprints, dim_ref_counts, k1, k2s, queue)
+            _push_candidate(output, sizes, remaining, footprints, dim_ref_counts, k1, k2s, queue)
 
     # Greedily contract pairs of tensors.
     while queue:
@@ -137,7 +138,7 @@ def _ssa_optimize(inputs, output, sizes):
         if k12 in remaining:
             ssa_path.append((remaining[k12], next(ssa_ids)))
         else:
-            footprints[k12] = _footprint(log_sizes, k12)
+            footprints[k12] = _footprint(sizes, k12)
             for dim in k12:
                 dim_to_keys[dim].add(k12)
         remaining[k12] = next(ssa_ids)
@@ -146,7 +147,7 @@ def _ssa_optimize(inputs, output, sizes):
         # Find new candidate contractions.
         k1 = k12
         k2s = set(k2 for dim in k1 for k2 in dim_to_keys[dim] if k2 != k1)
-        _push_candidate(output, log_sizes, remaining, footprints, dim_ref_counts, k1, k2s, queue)
+        _push_candidate(output, sizes, remaining, footprints, dim_ref_counts, k1, k2s, queue)
 
     # Greedily compute pairwise outer products.
     queue = [(len(key & output), ssa_id, key) for key, ssa_id in remaining.items()]
