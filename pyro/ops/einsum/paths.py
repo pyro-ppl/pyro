@@ -85,13 +85,15 @@ def _ssa_optimize(inputs, output, sizes):
     static single assignment ids rather than recycled linear ids.
     SSA ids are cheaper to work with and easier to reason about.
     """
-    output = frozenset(output)
-    ssa_path = []
+    # A dim common to all terms might as well be an output dim.
+    inputs = list(map(frozenset, inputs))
+    output = frozenset(output) | frozenset.intersection(*inputs)
 
-    # Deduplicate by eagerly computing Hadamard products.
+    # Deduplicate shapes by eagerly computing Hadamard products.
     remaining = {}  # key -> ssa_id
     ssa_ids = itertools.count(len(inputs))
-    for ssa_id, key in enumerate(map(frozenset, inputs)):
+    ssa_path = []
+    for ssa_id, key in enumerate(inputs):
         if key in remaining:
             ssa_path.append((remaining[key], ssa_id))
             remaining[key] = next(ssa_ids)
@@ -104,14 +106,14 @@ def _ssa_optimize(inputs, output, sizes):
     # Keep track of possible contraction dims.
     dim_to_keys = defaultdict(set)
     for key in remaining:
-        for dim in key:
+        for dim in key - output:
             dim_to_keys[dim].add(key)
 
     # Keep track of the number of tensors using each dim; when the dim is no longer
     # used it can be contracted. Since we specialize to binary ops, we only care about
     # ref counts of >=2 or >=3.
     dim_ref_counts = {
-        count: set(dim for dim, keys in dim_to_keys.items() if len(keys) >= count)
+        count: set(dim for dim, keys in dim_to_keys.items() if len(keys) >= count) - output
         for count in [2, 3]}
 
     # Find initial candidate contractions.
@@ -130,19 +132,19 @@ def _ssa_optimize(inputs, output, sizes):
 
         ssa_id1 = remaining.pop(k1)
         ssa_id2 = remaining.pop(k2)
-        for dim in k1:
+        for dim in k1 - output:
             dim_to_keys[dim].remove(k1)
-        for dim in k2:
+        for dim in k2 - output:
             dim_to_keys[dim].remove(k2)
         ssa_path.append((ssa_id2, ssa_id1))
         if k12 in remaining:
             ssa_path.append((remaining[k12], next(ssa_ids)))
         else:
             footprints[k12] = _footprint(sizes, k12)
-            for dim in k12:
+            for dim in k12 - output:
                 dim_to_keys[dim].add(k12)
         remaining[k12] = next(ssa_ids)
-        _update_ref_counts(dim_to_keys, dim_ref_counts, k1 | k2)
+        _update_ref_counts(dim_to_keys, dim_ref_counts, k1 | k2 - output)
 
         # Find new candidate contractions.
         k1 = k12

@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 import logging
+import re
 import timeit
 
 import opt_einsum
@@ -139,9 +140,14 @@ def _test_path(equation, shapes):
     opt_time += timeit.default_timer()
     opt_info = '\n'.join(opt_info.splitlines()[1:7])
 
+    # Check path quality.
     logging.debug(u'Pyro path took {}s:\n{}'.format(pyro_time, pyro_info))
     logging.debug(u'opt_einsum took {}s:\n{}'.format(opt_time, opt_info))
+    pyro_flops = float(re.search('Optimized FLOP count:(.*)', pyro_info).group(1))
+    opt_flops = float(re.search('Optimized FLOP count:(.*)', opt_info).group(1))
+    assert pyro_flops <= opt_flops * 1.5 + 2.0
 
+    # Check path correctness.
     try:
         expected = opt_einsum.contract(equation, *operands, backend='torch', optimize=opt_path)
     except RuntimeError:
