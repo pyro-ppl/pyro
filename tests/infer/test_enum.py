@@ -2678,7 +2678,8 @@ def test_elbo_hmm_growth():
 
     for key, cost in collated_costs.items():
         dt = 3
-        assert cost[-1 - dt - dt] - 2 * cost[-1 - dt] + cost[-1] == 0, '{} cost is not linear'.format(key)
+        assert cost[-1 - dt - dt] - 2 * cost[-1 - dt] + cost[-1] == 0, \
+            '{} cost is not linear'.format(key)
 
 
 @pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/uber/pyro/issues/1380")
@@ -2741,9 +2742,9 @@ def test_elbo_dbn_growth():
     ]))
 
     for key, cost in collated_costs.items():
-        dt = 4
-        assert cost[-1 - dt - dt] - 2 * cost[-1 - dt] + cost[-1] <= 2, \
-            '{} cost is not approximately linear'.format(key)
+        dt = 3
+        assert cost[-1 - dt - dt] - 2 * cost[-1 - dt] + cost[-1] == 0, \
+            '{} cost is not linear'.format(key)
 
 
 @pytest.mark.parametrize("pi_a", [0.33])
