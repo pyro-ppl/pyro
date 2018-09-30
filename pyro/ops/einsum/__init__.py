@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import logging
-
 import opt_einsum
 
 from pyro.ops.einsum.paths import optimize
@@ -29,7 +27,6 @@ def contract_expression(equation, *shapes, **kwargs):
 
     # use Pyro's cheap optimizer for contraction paths
     if kwargs.get('optimize', 'pyro') == 'pyro':
-        logging.debug(equation)
         inputs, output = equation.split('->')
         inputs = inputs.split(',')
         sizes = {dim: size for dims, shape in zip(inputs, shapes)

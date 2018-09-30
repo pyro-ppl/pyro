@@ -2619,6 +2619,7 @@ def test_elbo_scale():
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
+@pytest.mark.xfail(reason="flakey due to nondeterministic computations")
 def test_elbo_hmm_growth():
     pyro.clear_param_store()
     init_probs = torch.tensor([0.5, 0.5])
@@ -2647,7 +2648,7 @@ def test_elbo_hmm_growth():
             probs = init_probs if x is None else transition_probs[x]
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
 
-    sizes = range(2, 16)
+    sizes = range(2, 1 + int(os.environ.get('GROWTH_SIZE', 15)))
     costs = []
     times1 = []
     times2 = []
@@ -2668,18 +2669,20 @@ def test_elbo_hmm_growth():
     for counts in costs:
         for key, cost in counts.items():
             collated_costs[key].append(cost)
-    logger.debug('Growth:')
-    logger.debug('sizes = {}'.format(repr(sizes)))
-    logger.debug('costs = {}'.format(repr(dict(collated_costs))))
-    logger.debug('times1 = {}'.format(repr(times1)))
-    logger.debug('times2 = {}'.format(repr(times2)))
+    logger.debug('\n'.join([
+        'Growth:',
+        'sizes = {}'.format(repr(sizes)),
+        'costs = {}'.format(repr(dict(collated_costs))),
+        'times1 = {}'.format(repr(times1)),
+        'times2 = {}'.format(repr(times2)),
+    ]))
 
     for key, cost in collated_costs.items():
         dt = 3
         assert cost[-1 - dt - dt] - 2 * cost[-1 - dt] + cost[-1] == 0, '{} cost is not linear'.format(key)
 
 
-@pytest.mark.xfail(reason="flakey on travis due to nondeterministic computations")
+@pytest.mark.xfail(reason="flakey due to nondeterministic computations")
 @pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/uber/pyro/issues/1380")
 def test_elbo_dbn_growth():
     pyro.clear_param_store()
@@ -2710,7 +2713,7 @@ def test_elbo_dbn_growth():
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs_x[x]))
             y = pyro.sample("y_{}".format(i), dist.Categorical(probs_y[x, y]))
 
-    sizes = range(2, 16)
+    sizes = range(2, 1 + int(os.environ.get('GROWTH_SIZE', 15)))
     costs = []
     times1 = []
     times2 = []
@@ -2731,11 +2734,13 @@ def test_elbo_dbn_growth():
     for counts in costs:
         for key, cost in counts.items():
             collated_costs[key].append(cost)
-    logger.debug('Growth:')
-    logger.debug('sizes = {}'.format(repr(sizes)))
-    logger.debug('costs = {}'.format(repr(dict(collated_costs))))
-    logger.debug('times1 = {}'.format(repr(times1)))
-    logger.debug('times2 = {}'.format(repr(times2)))
+    logger.debug('\n'.join([
+        'Growth:',
+        'sizes = {}'.format(repr(sizes)),
+        'costs = {}'.format(repr(dict(collated_costs))),
+        'times1 = {}'.format(repr(times1)),
+        'times2 = {}'.format(repr(times2)),
+    ]))
 
     for key, cost in collated_costs.items():
         dt = 4
