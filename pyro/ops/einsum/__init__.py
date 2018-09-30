@@ -5,6 +5,7 @@ import os
 
 import opt_einsum
 from six.moves import cPickle as pickle
+from pyro.ops.einsum.paths import optimize
 
 _PATH_CACHE = {}
 
@@ -17,7 +18,15 @@ def contract(equation, *operands, **kwargs):
         Defaults to True.
     """
     backend = kwargs.pop('backend', 'numpy')
-    cache_path = kwargs.pop('cache_path', True)
+
+    if kwargs.get('optimize', 'pyro') == 'pyro':
+        inputs, output = equation.split('->')
+        inputs = inputs.split(',')
+        sizes = {dim: size for dims, x in zip(inputs, operands)
+                 for dim, size in zip(dims, x.shape)}
+        kwargs['optimize'] = optimize(inputs, output, sizes)
+
+    cache_path = kwargs.pop('cache_path', False)
     if not cache_path:
         return opt_einsum.contract(equation, *operands, backend=backend, **kwargs)
 
