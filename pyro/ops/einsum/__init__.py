@@ -1,10 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 import contextlib
+import logging
 import os
 
 import opt_einsum
 from six.moves import cPickle as pickle
+
 from pyro.ops.einsum.paths import optimize
 
 _PATH_CACHE = {}
@@ -12,21 +14,14 @@ _PATH_CACHE = {}
 
 def contract(equation, *operands, **kwargs):
     """
-    Wrapper around :func:`opt_einsum.contract` that caches contraction paths.
+    Wrapper around :func:`opt_einsum.contract` that optionally caches
+    contraction paths.
 
     :param bool cache_path: whether to cache the contraction path.
         Defaults to True.
     """
     backend = kwargs.pop('backend', 'numpy')
-
-    if kwargs.get('optimize', 'pyro') == 'pyro':
-        inputs, output = equation.split('->')
-        inputs = inputs.split(',')
-        sizes = {dim: size for dims, x in zip(inputs, operands)
-                 for dim, size in zip(dims, x.shape)}
-        kwargs['optimize'] = optimize(inputs, output, sizes)
-
-    cache_path = kwargs.pop('cache_path', False)
+    cache_path = kwargs.pop('cache_path', True)
     if not cache_path:
         return opt_einsum.contract(equation, *operands, backend=backend, **kwargs)
 
@@ -38,6 +33,16 @@ def contract(equation, *operands, **kwargs):
     if key in _PATH_CACHE:
         expr = _PATH_CACHE[key]
     else:
+        # use Pyro's cheap optimizer for contraction paths
+        if kwargs.get('optimize', 'pyro') == 'pyro':
+            logging.debug(equation)
+            inputs, output = equation.split('->')
+            inputs = inputs.split(',')
+            sizes = {dim: size for dims, x in zip(inputs, operands)
+                     for dim, size in zip(dims, x.shape)}
+            path = optimize(inputs, output, sizes)
+            kwargs['optimize'] = path
+
         expr = opt_einsum.contract_expression(equation, *shapes, **kwargs)
         _PATH_CACHE[key] = expr
     return expr(*operands, backend=backend, out=out)
