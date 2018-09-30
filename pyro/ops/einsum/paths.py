@@ -2,11 +2,10 @@ from __future__ import absolute_import, division, print_function
 
 import heapq
 import itertools
-import operator
-from collections import defaultdict
+import math
+from collections import defaultdict, deque
 
 import numpy as np
-from six.moves import reduce
 
 
 def ssa_to_linear(ssa_path):
@@ -41,25 +40,41 @@ def linear_to_ssa(path):
 
 
 def footprint(sizes, dims):
-    factors = map(sizes.__getitem__, dims)
-    return reduce(operator.mul, factors, 1)
+    return sum(map(sizes.__getitem__, dims))
 
 
-def get_candidate(output, sizes, footprints, dim_to_keys, k1, k2):
-    both = k1 & k2
+def get_candidate(output, log_sizes, remaining, footprints, dim_ref_counts, k1, k2):
     either = k1 | k2
-    k12 = frozenset(dim for dim in either
-                    if dim in output or len(dim_to_keys[dim]) > 1 + int(dim in both))
-    cost = footprint(sizes, k12) - footprints[k1] - footprints[k2]
+    two = k1 & k2
+    one = either - two
+    k12 = (either & output) | (two & dim_ref_counts[3]) | (one & dim_ref_counts[2])
+    cost = footprint(log_sizes, k12) - footprints[k1] - footprints[k2]
+    id1 = remaining[k1]
+    id2 = remaining[k2]
+    cost = cost, min(id1, id2), max(id1, id2)  # break ties
     return cost, k1, k2, k12
 
 
-def push_candidate(output, sizes, footprints, dim_to_keys, k1, k2s, queue):
+def push_candidate(output, log_sizes, remaining, footprints, dim_ref_counts, k1, k2s, queue):
     if not k2s:
         return
-    candidate = min(get_candidate(output, sizes, footprints, dim_to_keys, k1, k2)
+    candidate = min(get_candidate(output, log_sizes, remaining, footprints, dim_ref_counts, k1, k2)
                     for k2 in k2s)
     heapq.heappush(queue, candidate)
+
+
+def update_ref_counts(dim_to_keys, dim_ref_counts, dims):
+    for dim in dims:
+        count = len(dim_to_keys[dim])
+        if count <= 1:
+            dim_ref_counts[2].discard(dim)
+            dim_ref_counts[3].discard(dim)
+        elif count == 2:
+            dim_ref_counts[2].add(dim)
+            dim_ref_counts[3].discard(dim)
+        else:
+            dim_ref_counts[2].add(dim)
+            dim_ref_counts[3].add(dim)
 
 
 def ssa_optimize(inputs, output, sizes):
@@ -68,6 +83,7 @@ def ssa_optimize(inputs, output, sizes):
     static single assignment ids rather than recycled linear ids.
     SSA ids are cheaper to work with and easier to reason about.
     """
+    log_sizes = {dim: math.log(size) for dim, size in sizes.items()}
     output = frozenset(output)
     ssa_path = []
 
@@ -81,11 +97,14 @@ def ssa_optimize(inputs, output, sizes):
         remaining[key] = ssa_id
 
     # Initialize footprints of each tensor and contraction candidates.
-    footprints = {key: footprint(sizes, key) for key in remaining}
+    footprints = {key: footprint(log_sizes, key) for key in remaining}
     dim_to_keys = defaultdict(set)
     for key in remaining:
         for dim in key:
             dim_to_keys[dim].add(key)
+    dim_ref_counts = {
+        count: set(dim for dim, keys in dim_to_keys.items() if len(keys) >= count)
+        for count in [2, 3]}
 
     # Find initial candidate contractions.
     queue = []
@@ -93,7 +112,7 @@ def ssa_optimize(inputs, output, sizes):
         keys = list(keys)
         for i, k1 in enumerate(keys):
             k2s = keys[:i]
-            push_candidate(output, sizes, footprints, dim_to_keys, k1, k2s, queue)
+            push_candidate(output, log_sizes, remaining, footprints, dim_ref_counts, k1, k2s, queue)
 
     # Greedily contract pairs of tensors.
     while queue:
@@ -107,23 +126,27 @@ def ssa_optimize(inputs, output, sizes):
             dim_to_keys[dim].remove(k1)
         for dim in k2:
             dim_to_keys[dim].remove(k2)
+        ssa_path.append((ssa_id2, ssa_id1))
         if k12 in remaining:
-            ssa_id12 = remaining[k12]
-            ssa_path.append((ssa_id1, ssa_id2, ssa_id12))
+            ssa_path.append((remaining[k12], next(ssa_ids)))
         else:
-            ssa_path.append((ssa_id1, ssa_id2))
-            footprints[k12] = footprint(sizes, k12)
+            footprints[k12] = footprint(log_sizes, k12)
             for dim in k12:
                 dim_to_keys[dim].add(k12)
         remaining[k12] = next(ssa_ids)
+        update_ref_counts(dim_to_keys, dim_ref_counts, k1 | k2)
 
         # Find new candidate contractions.
         k1 = k12
         k2s = set(k2 for dim in k1 for k2 in dim_to_keys[dim] if k2 != k1)
-        push_candidate(output, sizes, footprints, dim_to_keys, k1, k2s, queue)
+        push_candidate(output, log_sizes, remaining, footprints, dim_ref_counts, k1, k2s, queue)
 
-    # Compute remaining outer products.
-    ssa_path.append(tuple(remaining.values()))
+    # Compute remaining outer products in arbitrary order.
+    queue = deque(sorted(remaining.values()))
+    while len(queue) > 1:
+        ssa_path.append((queue.popleft(), queue.popleft()))
+        queue.append(next(ssa_ids))
+
     return ssa_path
 
 

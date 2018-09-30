@@ -9,8 +9,7 @@ import pytest
 import torch
 
 from pyro.ops.einsum.paths import linear_to_ssa, optimize, ssa_to_linear
-from tests.common import assert_equal
-
+from tests.common import assert_equal, xfail_param
 
 # These test cases were adapted from opt_einsum
 # https://github.com/dgasmith/opt_einsum/blob/master/opt_einsum/tests/test_contract.py
@@ -104,10 +103,10 @@ EQUATIONS = [
 ]
 
 EQUATIONS += [
-    '->',
+    xfail_param('->', reason='opt_einsum printing bug'),
     ',,,,->',
-    'a->',
-    'a->a',
+    xfail_param('a->', reason='opt_einsum printing bug'),
+    xfail_param('a->a', reason='opt_einsum printing bug'),
     'a,a->a',
     ',a,a->a',
     'ij,jk,kl->il',
@@ -227,3 +226,7 @@ def test_contract_large():
         (16, 16, 8), (16, 8), (16, 16, 8), (16, 8), (16, 16, 8), (16, 8),
         (16, 16, 8), (16, 8), (16, 8)]
     _test_path(equation, shapes)
+
+
+if __name__ == '__main__':
+    test_contract_large()
