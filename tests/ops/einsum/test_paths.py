@@ -146,7 +146,8 @@ def _test_path(equation, shapes):
     pyro_flops = float(re.search('Optimized FLOP count:(.*)', pyro_info).group(1))
     opt_flops = float(re.search('Optimized FLOP count:(.*)', opt_info).group(1))
     if pyro_flops > opt_flops * 1.5 + 2.0:
-        pytest.xfail("https://github.com/uber/pyro/issues/1427")
+        logging.error("WARNING: pyro_flops ({}) > opt_flops ({}) * 1.5 + 2 "
+                      "(https://github.com/uber/pyro/issues/1427)".format(pyro_flops, opt_flops))
 
     # Check path correctness.
     try:
