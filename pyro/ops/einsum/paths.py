@@ -87,7 +87,14 @@ def _ssa_optimize(inputs, output, sizes):
     static single assignment ids rather than recycled linear ids.
     SSA ids are cheaper to work with and easier to reason about.
     """
-    # A dim common to all terms might as well be an output dim.
+    if len(inputs) == 1:
+        # Perform a single contraction to match output shape.
+        return [(0,)]
+
+    # A dim that is common to all tensors might as well be an output dim, since it
+    # cannot be contracted until the final step. This avoids an expensive all-pairs
+    # comparison to search for possible contractions at each step, leading to speedup
+    # in many practical problems where all tensors share a common batch dimension.
     inputs = list(map(frozenset, inputs))
     output = frozenset(output) | frozenset.intersection(*inputs)
 
@@ -162,8 +169,6 @@ def _ssa_optimize(inputs, output, sizes):
         ssa_id12 = next(ssa_ids)
         _, ssa_id1, k1 = heapq.heappushpop(queue, (cost, ssa_id12, k12))
 
-    # Perform one final reduction to match output shape.
-    ssa_path.append((ssa_id1,))
     return ssa_path
 
 

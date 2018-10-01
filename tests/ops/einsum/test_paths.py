@@ -8,6 +8,7 @@ import timeit
 import opt_einsum
 import pytest
 import torch
+from six import text_type
 
 from pyro.ops.einsum.paths import linear_to_ssa, optimize, ssa_to_linear
 from tests.common import assert_equal
@@ -126,9 +127,7 @@ def _test_path(equation, shapes):
     # Compute path using Pyro.
     pyro_time = -timeit.default_timer()
     pyro_path = optimize(inputs, output, dim_sizes)
-    _, pyro_info = opt_einsum.contract_path(equation, *operands, path=pyro_path)
     pyro_time += timeit.default_timer()
-    pyro_info = '\n'.join(pyro_info.splitlines()[1:7])
 
     assert sum(map(len, pyro_path)) - len(pyro_path) + 1 == len(inputs)
     path = ssa_to_linear(linear_to_ssa(pyro_path))
@@ -138,9 +137,11 @@ def _test_path(equation, shapes):
     opt_time = -timeit.default_timer()
     opt_path, opt_info = opt_einsum.contract_path(equation, *operands, path='greedy')
     opt_time += timeit.default_timer()
-    opt_info = '\n'.join(opt_info.splitlines()[1:7])
 
     # Check path quality.
+    _, pyro_info = opt_einsum.contract_path(equation, *operands, path=pyro_path)
+    pyro_info = '\n'.join(text_type(pyro_info).splitlines()[1:7])
+    opt_info = '\n'.join(text_type(opt_info).splitlines()[1:7])
     logging.debug(u'Pyro path took {}s:\n{}'.format(pyro_time, pyro_info))
     logging.debug(u'opt_einsum took {}s:\n{}'.format(opt_time, opt_info))
     pyro_flops = float(re.search('Optimized FLOP count:(.*)', pyro_info).group(1))
