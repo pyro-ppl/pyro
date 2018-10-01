@@ -71,7 +71,7 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
     tones_iarange = pyro.iarange("tones", data_dim, dim=-1)
     with pyro.iarange("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
-        x = 0
+        x = 0 * batch
         for t in range(lengths.max()):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 # On the next line, we'll overwrite the value of x with an updated
