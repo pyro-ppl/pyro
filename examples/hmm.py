@@ -28,7 +28,6 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
-from pyro.ops.einsum import cached_paths
 from pyro.optim import Adam
 
 logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.INFO)
@@ -251,37 +250,33 @@ def main(args):
     optim = Adam({'lr': args.learning_rate})
     svi = SVI(model, guide, optim, elbo)
 
-    # We'll speed up parameter tuning by caching the message passing paths
-    # created by opt_einsum. It's always safe to delete this temp file.
-    with cached_paths('data/opt_einsum_path_cache.pkl'):
+    # We'll train on small minibatches.
+    logging.info('Step\tLoss')
+    for step in range(args.num_steps):
+        loss = svi.step(sequences, lengths, args, batch_size=args.batch_size)
+        logging.info('{: >5d}\t{}'.format(step, loss / num_observations))
 
-        # We'll train on small minibatches.
-        logging.info('Step\tLoss')
-        for step in range(args.num_steps):
-            loss = svi.step(sequences, lengths, args=args, batch_size=args.batch_size)
-            logging.info('{: >5d}\t{}'.format(step, loss / num_observations))
+    # We evaluate on the entire training dataset,
+    # excluding the prior term so our results are comparable across models.
+    train_loss = elbo.loss(model, guide, sequences, lengths, args, include_prior=False)
+    logging.info('training loss = {}'.format(train_loss / num_observations))
 
-        # We evaluate on the entire training dataset,
-        # excluding the prior term so our results are comparable across models.
-        train_loss = elbo.loss(model, guide, sequences, lengths, args, include_prior=False)
-        logging.info('training loss = {}'.format(train_loss / num_observations))
+    # Finally we evaluate on the test dataset.
+    logging.info('-' * 40)
+    logging.info('Evaluating on {} test sequences'.format(len(data['test']['sequences'])))
+    sequences = torch.tensor(data['test']['sequences'], dtype=torch.float32)
+    lengths = torch.tensor(data['test']['sequence_lengths'], dtype=torch.long)
+    if args.truncate:
+        lengths.clamp_(max=args.truncate)
+    num_observations = float(lengths.sum())
+    test_loss = elbo.loss(model, guide, sequences, lengths, args, include_prior=False)
+    logging.info('test loss = {}'.format(test_loss / num_observations))
 
-        # Finally we evaluate on the test dataset.
-        logging.info('-' * 40)
-        logging.info('Evaluating on {} test sequences'.format(len(data['test']['sequences'])))
-        sequences = torch.tensor(data['test']['sequences'], dtype=torch.float32)
-        lengths = torch.tensor(data['test']['sequence_lengths'], dtype=torch.long)
-        if args.truncate:
-            lengths.clamp_(max=args.truncate)
-        num_observations = float(lengths.sum())
-        test_loss = elbo.loss(model, guide, sequences, lengths, args, include_prior=False)
-        logging.info('test loss = {}'.format(test_loss / num_observations))
-
-        # We expect models with higher capacity to perform better,
-        # but eventually overfit to the training set.
-        capacity = sum(len(pyro.param(name).reshape(-1))
-                       for name in pyro.get_param_store().get_all_param_names())
-        logging.info('{} capacity = {} parameters'.format(model.__name__, capacity))
+    # We expect models with higher capacity to perform better,
+    # but eventually overfit to the training set.
+    capacity = sum(len(pyro.param(name).reshape(-1))
+                   for name in pyro.get_param_store().get_all_param_names())
+    logging.info('{} capacity = {} parameters'.format(model.__name__, capacity))
 
 
 if __name__ == '__main__':
