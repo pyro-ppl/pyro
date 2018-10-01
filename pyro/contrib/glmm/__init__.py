@@ -31,5 +31,5 @@ Random effects may be incorporated as regular Bayesian regression coefficients.
 For random effects with a shared covariance matrix, see :meth:`pyro.contrib.glmm.lmer_model`.
 """
 
-from pyro.contrib.glmm.glmm import *  # noqa: F403, F401
+from pyro.contrib.glmm.glmm import *  # noqa: F403,F401
 from pyro.contrib.glmm import guides  # noqa: F401

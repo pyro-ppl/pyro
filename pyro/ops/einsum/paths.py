@@ -38,17 +38,24 @@ def linear_to_ssa(path):
     return ssa_path
 
 
+def _footprint(dims, sizes):
+    result = 1
+    for dim in dims:
+        result *= sizes[dim]
+    return result
+
+
 def _get_candidate(output, sizes, remaining, dim_ref_counts, k1, k2):
     either = k1 | k2
     two = k1 & k2
     one = either - two
     k12 = (either & output) | (two & dim_ref_counts[3]) | (one & dim_ref_counts[2])
-    cost = 1
-    for dim in k12:
-        cost *= sizes[dim]
+    cost = _footprint(k12, sizes)
     id1 = remaining[k1]
     id2 = remaining[k2]
-    cost = cost, min(id1, id2), max(id1, id2)  # break ties to ensure determinism
+    if id1 > id2:
+        k1, id1, k2, id2 = k2, id2, k1, id1
+    cost = cost, id1, id2  # break ties to ensure determinism
     return cost, k1, k2, k12
 
 
@@ -128,7 +135,7 @@ def _ssa_optimize(inputs, output, sizes):
             dim_to_keys[dim].remove(k1)
         for dim in k2 - output:
             dim_to_keys[dim].remove(k2)
-        ssa_path.append((ssa_id2, ssa_id1))
+        ssa_path.append((ssa_id1, ssa_id2))
         if k12 in remaining:
             ssa_path.append((remaining[k12], next(ssa_ids)))
         else:
@@ -143,14 +150,15 @@ def _ssa_optimize(inputs, output, sizes):
         _push_candidate(output, sizes, remaining, dim_ref_counts, k1, k2s, queue)
 
     # Greedily compute pairwise outer products.
-    queue = [(len(key & output), ssa_id, key) for key, ssa_id in remaining.items()]
+    queue = [(_footprint(key, sizes), ssa_id, key)
+             for key, ssa_id in remaining.items()]
     heapq.heapify(queue)
     _, ssa_id1, k1 = heapq.heappop(queue)
     while queue:
         _, ssa_id2, k2 = heapq.heappop(queue)
-        ssa_path.append((ssa_id1, ssa_id2))
+        ssa_path.append((min(ssa_id1, ssa_id2), max(ssa_id1, ssa_id2)))
         k12 = (k1 | k2) & output
-        cost = len(k12)
+        cost = _footprint(k12, sizes)
         ssa_id12 = next(ssa_ids)
         _, ssa_id1, k1 = heapq.heappushpop(queue, (cost, ssa_id12, k12))
 
