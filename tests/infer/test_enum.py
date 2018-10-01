@@ -2925,6 +2925,7 @@ def test_elbo_zip(gate, rate):
     (dist.MixtureOfDiagNormals, [[2., 1.], [1., 2], [4., 4.]]),
     (dist.MixtureOfDiagNormalsSharedCovariance, [2., 1.]),
 ])
+@pytest.mark.xfail(reason="https://github.com/uber/pyro/issues/1425")
 def test_mixture_of_diag_normals(mixture, scale):
     # K = 3, D = 2
     pyro.param("locs", torch.tensor([[0., 0.], [0., 1.], [0., 10.]]))
