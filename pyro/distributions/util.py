@@ -176,7 +176,8 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
     if mask is None:
         return tensor * scale
     tensor, mask = broadcast_all(tensor, mask)
-    tensor = tensor * scale  # triggers a copy, avoiding in-place op errors
+    # TODO: Remove .contiguous once https://github.com/pytorch/pytorch/issues/12230 is fixed.
+    tensor = (tensor * scale).contiguous()
     if torch._C._get_tracing_state():
         tensor[~mask] = 0.
     else:
