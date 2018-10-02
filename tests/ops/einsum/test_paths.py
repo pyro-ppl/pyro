@@ -140,6 +140,7 @@ def _test_path(equation, shapes):
 
     # Check path quality.
     _, pyro_info = opt_einsum.contract_path(equation, *operands, path=pyro_path)
+    # Wrap in text_type to avoid breaking after https://github.com/dgasmith/opt_einsum/pull/61
     pyro_info = '\n'.join(text_type(pyro_info).splitlines()[1:7])
     opt_info = '\n'.join(text_type(opt_info).splitlines()[1:7])
     logging.debug(u'Pyro path took {}s:\n{}'.format(pyro_time, pyro_info))
@@ -163,7 +164,7 @@ def _test_path(equation, shapes):
 def test_contract(equation):
     inputs, output = equation.split('->')
     inputs = inputs.split(',')
-    symbols = set(output).union(*inputs)
+    symbols = sorted(set(output).union(*inputs))
     sizes = {dim: size for dim, size in zip(symbols, itertools.cycle([2, 3, 4]))}
     shapes = [tuple(sizes[dim] for dim in input_) for input_ in inputs]
     _test_path(equation, shapes)
