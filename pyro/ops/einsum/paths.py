@@ -10,7 +10,10 @@ import numpy as np
 def ssa_to_linear(ssa_path):
     """
     Convert a path with static single assignment ids to a path with recycled
-    linear ids.
+    linear ids. For example::
+
+        >>> ssa_to_linear([(0, 3), (1, 4), (2, 5)])
+        [(0, 3), (1, 2), (0, 1)]
     """
     ids = np.arange(sum(map(len, ssa_path)), dtype=np.int64)
     path = []
@@ -24,7 +27,10 @@ def ssa_to_linear(ssa_path):
 def linear_to_ssa(path):
     """
     Convert a path with recycled linear ids to a path with static single
-    assignment ids.
+    assignment ids. For example::
+
+        >>> linear_to_ssa([(0, 3), (1, 2), (0, 1)])
+        [(0, 3), (1, 4), (2, 5)]
     """
     num_inputs = sum(map(len, path)) - len(path) + 1
     linear_to_ssa = list(range(num_inputs))
@@ -50,7 +56,7 @@ def _get_candidate(output, sizes, remaining, costs, dim_ref_counts, k1, k2):
     two = k1 & k2
     one = either - two
     k12 = (either & output) | (two & dim_ref_counts[3]) | (one & dim_ref_counts[2])
-    cost = costs[k1] + costs[k2] + 2 * _footprint(k12, sizes)
+    cost = costs[k1] + costs[k2] + _footprint(k12, sizes)
     id1 = remaining[k1]
     id2 = remaining[k2]
     if id1 > id2:
@@ -121,7 +127,7 @@ def _ssa_optimize(inputs, output, sizes):
         for count in [2, 3]}
 
     # Compute separable part of the objective function for contractions.
-    costs = {key: -_footprint(key, sizes) for key in remaining}
+    costs = {key: -0.5 * _footprint(key, sizes) for key in remaining}
 
     # Find initial candidate contractions.
     queue = []
@@ -151,7 +157,7 @@ def _ssa_optimize(inputs, output, sizes):
                 dim_to_keys[dim].add(k12)
         remaining[k12] = next(ssa_ids)
         _update_ref_counts(dim_to_keys, dim_ref_counts, k1 | k2 - output)
-        costs[k12] = -_footprint(k12, sizes)
+        costs[k12] = -0.5 * _footprint(k12, sizes)
 
         # Find new candidate contractions.
         k1 = k12
