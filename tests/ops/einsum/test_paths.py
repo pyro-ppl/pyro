@@ -147,9 +147,7 @@ def _test_path(equation, shapes):
     logging.debug(u'opt_einsum took {}s:\n{}'.format(opt_time, opt_info))
     pyro_flops = float(re.search('Optimized FLOP count:(.*)', pyro_info).group(1))
     opt_flops = float(re.search('Optimized FLOP count:(.*)', opt_info).group(1))
-    if pyro_flops > opt_flops * 1.5 + 2.0:
-        logging.error("WARNING: pyro_flops ({}) > opt_flops ({}) * 1.5 + 2 "
-                      "(https://github.com/uber/pyro/issues/1427)".format(pyro_flops, opt_flops))
+    assert pyro_flops <= opt_flops * 1.5 + 2.0
 
     # Check path correctness.
     try:

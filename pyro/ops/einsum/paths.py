@@ -167,7 +167,7 @@ def _ssa_optimize(inputs, output, sizes):
             _push_candidate(output, sizes, remaining, footprints, dim_ref_counts, k1, k2s, queue)
 
     # Greedily compute pairwise outer products.
-    queue = [(_footprint(key, sizes), ssa_id, key)
+    queue = [(_footprint(key & output, sizes), ssa_id, key)
              for key, ssa_id in remaining.items()]
     heapq.heapify(queue)
     _, ssa_id1, k1 = heapq.heappop(queue)
