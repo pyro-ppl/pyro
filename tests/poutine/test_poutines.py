@@ -1,6 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 import functools
+import logging
+import warnings
 from unittest import TestCase
 
 import pytest
@@ -15,6 +17,8 @@ from pyro.distributions import Bernoulli, Categorical, Normal
 from pyro.poutine.runtime import _DIM_ALLOCATOR, NonlocalExit
 from pyro.poutine.util import all_escape, discrete_escape
 from tests.common import assert_equal
+
+logger = logging.getLogger(__name__)
 
 
 def eq(x, y, prec=1e-10):
@@ -369,11 +373,23 @@ class LiftHandlerTests(TestCase):
 
     def test_random_module(self):
         pyro.clear_param_store()
-        lifted_tr = poutine.trace(pyro.random_module("name", self.model, prior=self.prior)).get_trace()
+        with pyro.validation_enabled():
+            lifted_tr = poutine.trace(pyro.random_module("name", self.model, prior=self.prior)).get_trace()
         for name in lifted_tr.nodes.keys():
             if lifted_tr.nodes[name]["type"] == "param":
                 assert lifted_tr.nodes[name]["type"] == "sample"
                 assert not lifted_tr.nodes[name]["is_observed"]
+
+    def test_random_module_warn(self):
+        pyro.clear_param_store()
+        bad_prior = {'foo': None}
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            with pyro.validation_enabled():
+                poutine.trace(pyro.random_module("name", self.model, prior=bad_prior)).get_trace()
+            assert len(w), 'No warnings were raised'
+            for warning in w:
+                logger.info(warning)
 
     def test_random_module_prior_dict(self):
         pyro.clear_param_store()
