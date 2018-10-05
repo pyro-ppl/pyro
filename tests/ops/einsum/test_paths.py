@@ -147,7 +147,7 @@ def _test_path(equation, shapes):
     logging.debug(u'opt_einsum took {}s:\n{}'.format(opt_time, opt_info))
     pyro_flops = float(re.search('Optimized FLOP count:(.*)', pyro_info).group(1))
     opt_flops = float(re.search('Optimized FLOP count:(.*)', opt_info).group(1))
-    assert pyro_flops <= opt_flops * 1.5 + 2.0
+    assert pyro_flops <= opt_flops * 1.4
 
     # Check path correctness.
     try:
@@ -158,12 +158,14 @@ def _test_path(equation, shapes):
     assert_equal(expected, actual)
 
 
+@pytest.mark.parametrize('sizes', [
+    [2], [2, 3], [3, 2], [2, 3, 4], [2, 4, 3], [3, 2, 4], [3, 4, 2], [4, 2, 3], [4, 3, 2]])
 @pytest.mark.parametrize('equation', EQUATIONS)
-def test_contract(equation):
+def test_contract(equation, sizes):
     inputs, output = equation.split('->')
     inputs = inputs.split(',')
     symbols = sorted(set(output).union(*inputs))
-    sizes = {dim: size for dim, size in zip(symbols, itertools.cycle([2, 3, 4]))}
+    sizes = {dim: size for dim, size in zip(symbols, itertools.cycle(sizes))}
     shapes = [tuple(sizes[dim] for dim in input_) for input_ in inputs]
     _test_path(equation, shapes)
 
