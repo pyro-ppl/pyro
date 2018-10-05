@@ -1,7 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
+
 from pyro import params
 from pyro.distributions import Distribution
+from pyro.poutine.util import is_validation_enabled
 
 from .messenger import Messenger
 
@@ -26,6 +29,23 @@ class LiftMessenger(Messenger):
         super(LiftMessenger, self).__init__()
         self.prior = prior
 
+    def __enter__(self):
+        if is_validation_enabled() and isinstance(self.prior, dict):
+            self._param_hits = set()
+            self._param_misses = set()
+        return super(LiftMessenger, self).__enter__()
+
+    def __exit__(self, *args, **kwargs):
+        if is_validation_enabled() and isinstance(self.prior, dict):
+            print('DEBUG {}'.format(self._param_hits))
+            extra = set(self.prior) - self._param_hits
+            if extra:
+                warnings.warn(
+                    "pyro.module prior did not find params ['{}']. "
+                    "Did you instead mean one of ['{}']?"
+                    .format("', '".join(extra), "', '".join(self._param_misses)))
+        return super(LiftMessenger, self).__exit__(*args, **kwargs)
+
     def _pyro_sample(self, msg):
         return None
 
@@ -47,7 +67,11 @@ class LiftMessenger(Messenger):
                     msg["args"] = ()
                     msg["kwargs"] = {}
                     msg["infer"] = {}
+                if is_validation_enabled():
+                    self._param_hits.add(param_name)
             else:
+                if is_validation_enabled():
+                    self._param_misses.add(param_name)
                 return None
         elif isinstance(self.prior, Distribution):
             # prior is a distribution
