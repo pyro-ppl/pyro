@@ -37,7 +37,6 @@ class LiftMessenger(Messenger):
 
     def __exit__(self, *args, **kwargs):
         if is_validation_enabled() and isinstance(self.prior, dict):
-            print('DEBUG {}'.format(self._param_hits))
             extra = set(self.prior) - self._param_hits
             if extra:
                 warnings.warn(
