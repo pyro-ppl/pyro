@@ -15,7 +15,7 @@
 [Community](http://forum.pyro.ai/) |
 [Contributing](https://github.com/uber/pyro/blob/master/CONTRIBUTING.md)
 
-Pyro is a flexible, scalable deep probabilistic programming library built on PyTorch.  Notably, it was designed with these principles in mind:
+Pyro is a flexible, scalable deep probabilistic programming library built on PyTorch.  Notably, it was designed with the following principles in mind:
 - **Universal**: Pyro is a universal PPL -- it can represent any computable probability distribution.
 - **Scalable**: Pyro scales to large data sets with little overhead compared to hand-written code.
 - **Minimal**: Pyro is agile and maintainable. It is implemented with a small core of powerful, composable abstractions.
@@ -37,7 +37,7 @@ Install via pip:
 pip install pyro-ppl
 ```
 
-**Python 3.5:**
+**Python 3.5 and above :**
 ```sh
 pip3 install pyro-ppl
 ```
