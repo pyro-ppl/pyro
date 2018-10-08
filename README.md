@@ -97,12 +97,11 @@ with the PyTorch's forthcoming 1.0 release e.g. JIT compilation, you will
 need to use the `pytorch-1.0` branch of Pyro.
 
 First install the PyTorch release candidate using the Preview tab from
-the [PyTorch](https://pytorch.org/) website.
-
-Alternatively, you could build PyTorch following instructions in the PyTorch
+the [PyTorch](https://pytorch.org/) website. Alternatively, you could
+build PyTorch following instructions in the PyTorch
 [README](https://github.com/pytorch/pytorch/blob/master/README.md).
 
-Finally install Pyro using the `pytorch-1.0` branch.
+Then, install Pyro using the `pytorch-1.0` branch.
 
 **Install using pip:**
 
