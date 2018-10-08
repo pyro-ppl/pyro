@@ -46,6 +46,26 @@ class EKFDistribution(TorchDistribution):
     def rsample(self, sample_shape=torch.Size()):
         raise NotImplementedError('TODO: implement forward filter backward sample')
 
+    def get_states(self, value):
+        """
+        Returns the ekf states given measurements
+
+        :param value: measurement means of shape `(time_steps, event_shape)`
+        :type value: torch.Tensor
+        """
+        states, innovations = [], []
+        state = EKFState(self.dynamic_model, self.x0, self.P0, time=0.)
+        assert value.shape[-1] == self.event_shape[-1]
+        for i, measurement_mean in enumerate(value):
+            if i:
+                state = state.predict(self.dt)
+            measurement = PositionMeasurement(measurement_mean, self.measurement_cov,
+                                              time=state.time)
+            state, (dz, S) = state.update(measurement)
+            states.append(state)
+            innovations.append((dz, S))
+        return states, innovations
+
     def log_prob(self, value):
         """
         Returns the joint log probability of the innovations of a tensor of measurements
