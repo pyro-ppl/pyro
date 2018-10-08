@@ -89,6 +89,41 @@ cd pyro
 pip install .
 ```
 
+
+### Installing Pyro's branch tracking PyTorch 1.0 release
+
+To use Pyro features that are under active development and only available
+with the PyTorch's forthcoming 1.0 release e.g. JIT compilation, you will
+need to use the `pytorch-1.0` branch of Pyro.
+
+First install the PyTorch release candidate using the Preview tab from
+the [PyTorch](https://pytorch.org/) website.
+
+Alternatively, you could build PyTorch following instructions in the PyTorch
+[README](https://github.com/pytorch/pytorch/blob/master/README.md).
+
+Finally install Pyro using the `pytorch-1.0` branch.
+
+**Install using pip:**
+
+```sh
+pip install git+https://github.com/uber/pyro.git@pytorch-1.0
+```
+
+or, with the `extras` dependency to run examples/tutorials.
+```sh
+pip install -e git+https://github.com/uber/pyro.git@pytorch-1.0#egg=project[extras]
+```
+
+**Install from source:**
+
+```sh
+git clone https://github.com/uber/pyro
+cd pyro
+git checkout pytorch-1.0  # branch compatible with PyTorch 1.0 release candidate
+pip install .  # pip install .[extras] for running examples/tutorials
+```
+
 ## Running Pyro from a Docker Container
 
 Refer to the instructions [here](docker/README.md).
