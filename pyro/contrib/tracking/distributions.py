@@ -53,7 +53,7 @@ class EKFDistribution(TorchDistribution):
         :param value: measurement means of shape `(time_steps, event_shape)`
         :type value: torch.Tensor
         """
-        states, innovations = [], []
+        states = []
         state = EKFState(self.dynamic_model, self.x0, self.P0, time=0.)
         assert value.shape[-1] == self.event_shape[-1]
         for i, measurement_mean in enumerate(value):
@@ -63,8 +63,7 @@ class EKFDistribution(TorchDistribution):
                                               time=state.time)
             state, (dz, S) = state.update(measurement)
             states.append(state)
-            innovations.append((dz, S))
-        return states, innovations
+        return states
 
     def log_prob(self, value):
         """
