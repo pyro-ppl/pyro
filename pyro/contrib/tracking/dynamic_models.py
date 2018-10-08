@@ -293,7 +293,7 @@ class Ncv(DifferentiableDynamicModel):
             d = self._dimension
             with torch.no_grad():
                 F = eye_like(self.sa2, d)
-                F[:d/2, d/2:] = dt * eye_like(self.sa2, d/2)
+                F[:d//2, d//2:] = dt * eye_like(self.sa2, d//2)
                 self._F_cache[dt] = F
 
         return self._F_cache[dt]

@@ -14,7 +14,7 @@ class EKFDistribution(TorchDistribution):
     Distribution over EKF states.  See :class:`~pyro.contrib.tracking.extended_kalman_filter.EKFState`.
     Currently only supports `log_prob`.
 
-    :param x0: position (mean)
+    :param x0: PV tensor (mean)
     :type x0: torch.Tensor
     :param P0: covariance
     :type P0: torch.Tensor
@@ -37,8 +37,9 @@ class EKFDistribution(TorchDistribution):
         self.dynamic_model = dynamic_model
         self.measurement_cov = measurement_cov
         self.dt = dt
+        assert not x0.shape[-1] % 2, 'position and velocity vectors must be the same dimension'
         batch_shape = x0.shape[:-1]
-        event_shape = (time_steps,) + x0.shape[-1:]
+        event_shape = (time_steps,) + (x0.shape[-1] // 2,)
         super(EKFDistribution, self).__init__(batch_shape, event_shape,
                                               validate_args=validate_args)
 
@@ -54,7 +55,7 @@ class EKFDistribution(TorchDistribution):
         """
         state = EKFState(self.dynamic_model, self.x0, self.P0, time=0.)
         result = 0.
-        assert value.shape[-2:] == self.event_shape
+        assert value.shape[-1] == self.event_shape[-1]
         zero = value.new_zeros(self.event_shape[-1])
         for i, measurement_mean in enumerate(value):
             if i:
