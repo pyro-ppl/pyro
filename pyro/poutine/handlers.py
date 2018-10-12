@@ -300,8 +300,8 @@ def condition(fn=None, data=None):
 def uncondition(fn=None):
     """
     Given a stochastic funtion with sample statements, conditioned on observed
-    values at some sample statements, forces the observed nodes to be sampled,
-    ignoring the conditioning.
+    values at some sample statements, removes the conditioning so that all
+    nodes are sampled from.
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
     :returns: a stochastic function decorated with a :class: `~pyro.poutine.uncondition_messenger.UnconditionMessenger`

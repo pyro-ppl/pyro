@@ -19,16 +19,19 @@ class CSIS(Importance):
     **Reference**
     "Inference Compilation and Universal Probabilistic Programming" `pdf https://arxiv.org/pdf/1610.09900.pdf`
 
-    :param model: probabilistic model defined as a function. Must accept
-        keyword arguments with names of observed sites in model.
+    :param model: probabilistic model defined as a function. Must accept a
+        keyword argument named `observations`, in which observed values are
+        passed as, with the names of nodes as the keys.
     :param guide: guide function which is used as an approximate posterior. Must
-        accept keyword arguments with names of observed sites in model.
+        also accept `observations` as keyword argument.
     :param optim: a PyTorch optimizer
     :type optim: torch.optim.Optimizer
     :param num_inference_samples: The number of importance-weighted samples to
         draw during inference.
     :param training_batch_size: Number of samples to use to approximate the loss
         before each gradient descent step during training.
+    :param validation_batch_size: Number of samples to use for calculating
+        validation loss (will only be used if `.validation_loss` is called).
     """
     def __init__(self,
                  model,
@@ -48,6 +51,8 @@ class CSIS(Importance):
     def set_validation_batch(self, *args, **kwargs):
         """
         Samples a batch of model traces and stores it as an object property.
+
+        Arguments are passed directly to model.
         """
         self.validation_batch = [self._sample_from_joint(*args, **kwargs)
                                  for _ in range(self.validation_batch_size)]
@@ -57,8 +62,8 @@ class CSIS(Importance):
         :returns: estimate of the loss
         :rtype: float
 
-        Take a gradient step on the loss function. Any args or kwargs are
-        passed to the model and guide.
+        Take a gradient step on the loss function. Arguments are passed to the
+        model and guide.
         """
         loss = self.loss(True, None, *args, **kwargs)
         self.optim.step()
@@ -76,6 +81,8 @@ class CSIS(Importance):
         Otherwise, a fresh batch is generated from the model.
 
         If grads is True, will also call `torch_backward` on loss.
+
+        `args` and `kwargs` are passed to the model and guide.
         """
         if batch is None:
             batch = (self._sample_from_joint(*args, **kwargs)
@@ -100,9 +107,11 @@ class CSIS(Importance):
         :returns: loss estimated using validation batch
         :rtype: float
 
-        Calculates loss on validation batch. `set_validation_batch` must have
-        been called previously. Can be used to track loss in a less noisy way
-        during training.
+        Calculates loss on validation batch. If no validation batch is set,
+        will set one by calling `set_validation_batch`. Can be used to track
+        the loss in a less noisy way during training.
+
+        Arguments are passed to the model and guide.
         """
         if self.validation_batch is None:
             self.set_validation_batch(*args, **kwargs)
@@ -116,8 +125,10 @@ class CSIS(Importance):
         :returns: guide trace with sampled values matched to model_trace
         :rtype: pyro.poutine.trace_struct.Trace
 
-        Returnss a guide trace with values at sample and observe statements
-        matched to those in model_trace
+        Returns a guide trace with values at sample and observe statements
+        matched to those in model_trace.
+
+        `args` and `kwargs` are passed to the guide.
         """
         kwargs["observations"] = {}
         for node in itertools.chain(model_trace.stochastic_nodes, model_trace.observation_nodes):
@@ -141,6 +152,8 @@ class CSIS(Importance):
         :rtype: pyro.poutine.trace_struct.Trace
 
         Returns a trace of the model without conditioning on any observations.
+
+        Arguments are passed directly to the model.
         """
         unconditioned_model = pyro.poutine.uncondition(self.model)
         return poutine.trace(unconditioned_model).get_trace(*args, **kwargs)
