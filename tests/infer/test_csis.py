@@ -9,10 +9,10 @@ import pyro.optim
 from tests.common import assert_equal, assert_not_equal
 
 
-def model(y1=0, y2=0):
+def model(observations={"y1": 0, "y2": 0}):
     x = pyro.sample("x", dist.Normal(torch.tensor(0.), torch.tensor(5**0.5)))
-    y1 = pyro.sample("y1", dist.Normal(x, torch.tensor(2**0.5)), obs=y1)
-    y2 = pyro.sample("y2", dist.Normal(x, torch.tensor(2**0.5)), obs=y2)
+    y1 = pyro.sample("y1", dist.Normal(x, torch.tensor(2**0.5)), obs=observations["y1"])
+    y2 = pyro.sample("y2", dist.Normal(x, torch.tensor(2**0.5)), obs=observations["y2"])
     return x
 
 
@@ -22,8 +22,9 @@ class Guide(nn.Module):
         self.linear = torch.nn.Linear(1, 1, bias=False)
         self.std = torch.nn.Parameter(torch.tensor(1.))
 
-    def forward(self, y1, y2):
-        mean = self.linear((y1+y2).view(1, 1))[0, 0]
+    def forward(self, observations={"y1": 0, "y2": 0}):
+        summed_obs = observations["y1"] + observations["y2"]
+        mean = self.linear(summed_obs.view(1, 1))[0, 0]
         pyro.sample("x", dist.Normal(mean, self.std))
 
 
@@ -35,8 +36,8 @@ def test_csis_sampling():
                            torch.optim.Adam(guide.parameters()),
                            num_inference_samples=100)
     # observations chosen so that proposal distribution and true posterior will both have zero mean
-    posterior = csis.run(y1=torch.tensor(-1.0),
-                         y2=torch.tensor(1.0))
+    posterior = csis.run({"y1": torch.tensor(-1.0),
+                          "y2": torch.tensor(1.0)})
     assert_equal(len(posterior.exec_traces), 100)
     marginal = pyro.infer.EmpiricalMarginal(posterior, "x")
     assert_equal(marginal.mean, torch.tensor(0.0), prec=0.25)

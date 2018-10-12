@@ -117,13 +117,13 @@ class CSIS(Importance):
         Returnss a guide trace with values at sample and observe statements
         matched to those in model_trace
         """
-        updated_kwargs = kwargs
+        kwargs["observations"] = {}
         for name in model_trace.observation_nodes:
-            updated_kwargs[name] = model_trace.nodes[name]["value"]
+            kwargs["observations"][name] = model_trace.nodes[name]["value"]
 
         guide_trace = poutine.trace(poutine.replay(self.guide,
                                                    model_trace)
-                                    ).get_trace(*args, **updated_kwargs)
+                                    ).get_trace(*args, **kwargs)
 
         check_model_guide_match(model_trace, guide_trace)
         guide_trace = prune_subsample_sites(guide_trace)
