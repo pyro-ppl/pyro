@@ -34,13 +34,13 @@ def test_csis_sampling():
     csis = pyro.infer.CSIS(model,
                            guide,
                            torch.optim.Adam(guide.parameters()),
-                           num_inference_samples=100)
+                           num_inference_samples=500)
     # observations chosen so that proposal distribution and true posterior will both have zero mean
     posterior = csis.run({"y1": torch.tensor(-1.0),
                           "y2": torch.tensor(1.0)})
-    assert_equal(len(posterior.exec_traces), 100)
+    assert_equal(len(posterior.exec_traces), 500)
     marginal = pyro.infer.EmpiricalMarginal(posterior, "x")
-    assert_equal(marginal.mean, torch.tensor(0.0), prec=0.25)
+    assert_equal(marginal.mean, torch.tensor(0.0), prec=0.1)
 
 
 @pytest.mark.init(rng_seed=7)
