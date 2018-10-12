@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import itertools
+
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.importance import Importance
@@ -118,8 +120,10 @@ class CSIS(Importance):
         matched to those in model_trace
         """
         kwargs["observations"] = {}
-        for name in model_trace.observation_nodes:
-            kwargs["observations"][name] = model_trace.nodes[name]["value"]
+        for node in itertools.chain(model_trace.stochastic_nodes, model_trace.observation_nodes):
+            if "was_observed" in model_trace.nodes[node]["infer"]:
+                model_trace.nodes[node]["is_observed"] = True
+                kwargs["observations"][node] = model_trace.nodes[node]["value"]
 
         guide_trace = poutine.trace(poutine.replay(self.guide,
                                                    model_trace)

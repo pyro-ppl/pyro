@@ -18,5 +18,9 @@ class UnconditionMessenger(Messenger):
         Samples value from distribution, irrespective of whether or not the
         node has an observed value.
         """
-        msg["value"] = msg["fn"](*msg["args"], **msg["kwargs"])
+        if msg["is_observed"]:
+            msg["is_observed"] = False
+            msg["infer"]["was_observed"] = True
+            msg["value"] = None
+            msg["done"] = False
         return None
