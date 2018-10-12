@@ -40,36 +40,15 @@ class CSIS(Importance):
         self.optim = optim
         self.training_batch_size = training_batch_size
         self.validation_batch = None
-        self.args = []
-        self.kwargs = {}
 
-    def set_validation_batch(self, validation_batch_size=20):
+    def set_validation_batch(self, validation_batch_size, *args, **kwargs):
         """
         Samples a batch of model traces and stores it as an object property.
         """
-        self.validation_batch = [self._sample_from_joint()
+        self.validation_batch = [self._sample_from_joint(*args, **kwargs)
                                  for _ in range(validation_batch_size)]
 
-    def set_args(self, *args, **kwargs):
-        """
-        Arguments are stored and passed to both the model and guide during
-        training and inference.
-        """
-        self.args = args
-        self.kwargs = kwargs
-
-    def _traces(self, **kwargs):
-        """
-        Wrapping inherited _traces function to allow inference to be performed
-        with the arguments set in set_args. Intended to allow user to specify
-        keyword arguments containing observations when performing inference.
-        """
-        merged_kwargs = self.kwargs.copy()
-        for k, v in kwargs.items():
-            merged_kwargs[k] = v
-        return super(CSIS, self)._traces(*self.args, **merged_kwargs)
-
-    def step(self):
+    def step(self, *args, **kwargs):
         """
         :returns: estimate of the loss
         :rtype: float
@@ -77,13 +56,13 @@ class CSIS(Importance):
         Take a gradient step on the loss function. Any args or kwargs are
         passed to the model and guide.
         """
-        loss = self.loss(grads=True)
+        loss = self.loss(True, None, *args, **kwargs)
         self.optim.step()
         self.optim.zero_grad()
 
         return torch_item(loss)
 
-    def loss(self, grads=False, batch=None):
+    def loss(self, grads, batch, *args, **kwargs):
         """
         :returns: an estimate of the loss (expectation over p(x, y) of
             -log q(x, y) ) - where p is the model and q is the guide
@@ -95,7 +74,7 @@ class CSIS(Importance):
         If grads is True, will also call `torch_backward` on loss.
         """
         if batch is None:
-            batch = (self._sample_from_joint()
+            batch = (self._sample_from_joint(*args, **kwargs)
                      for _ in range(self.training_batch_size))
             batch_size = self.training_batch_size
         else:
@@ -103,7 +82,7 @@ class CSIS(Importance):
 
         loss = 0
         for model_trace in batch:
-            guide_trace = self._get_matched_trace(model_trace)
+            guide_trace = self._get_matched_trace(model_trace, *args, **kwargs)
             particle_loss = -guide_trace.log_prob_sum() / batch_size
             if grads:
                 torch_backward(particle_loss)
@@ -112,7 +91,7 @@ class CSIS(Importance):
         warn_if_nan(loss, "loss")
         return loss
 
-    def validation_loss(self):
+    def validation_loss(self, *args, **kwargs):
         """
         :returns: loss estimated using validation batch
         :rtype: float
@@ -124,9 +103,9 @@ class CSIS(Importance):
         if self.validation_batch is None:
             raise ValueError("Validation batch not set.")
 
-        return self.loss(grads=False, batch=self.validation_batch)
+        return self.loss(grads=False, batch=self.validation_batch, *args, **kwargs)
 
-    def _get_matched_trace(self, model_trace):
+    def _get_matched_trace(self, model_trace, *args, **kwargs):
         """
         :param model_trace: a trace from the model
         :type model_trace: pyro.poutine.trace_struct.Trace
@@ -136,20 +115,20 @@ class CSIS(Importance):
         Returnss a guide trace with values at sample and observe statements
         matched to those in model_trace
         """
-        updated_kwargs = self.kwargs
+        updated_kwargs = kwargs
         for name in model_trace.observation_nodes:
             updated_kwargs[name] = model_trace.nodes[name]["value"]
 
         guide_trace = poutine.trace(poutine.replay(self.guide,
                                                    model_trace)
-                                    ).get_trace(*self.args, **updated_kwargs)
+                                    ).get_trace(*args, **updated_kwargs)
 
         check_model_guide_match(model_trace, guide_trace)
         guide_trace = prune_subsample_sites(guide_trace)
 
         return guide_trace
 
-    def _sample_from_joint(self):
+    def _sample_from_joint(self, *args, **kwargs):
         """
         :returns: a sample from the joint distribution over unobserved and
             observed variables
@@ -158,4 +137,4 @@ class CSIS(Importance):
         Returns a trace of the model without conditioning on any observations.
         """
         unconditioned_model = pyro.poutine.uncondition(self.model)
-        return poutine.trace(unconditioned_model).get_trace(*self.args, **self.kwargs)
+        return poutine.trace(unconditioned_model).get_trace(*args, **kwargs)
