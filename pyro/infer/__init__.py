@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from pyro.infer.abstract_infer import EmpiricalMarginal, TracePosterior, TracePredictive
+from pyro.infer.csis import CSIS
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import config_enumerate
 from pyro.infer.importance import Importance
