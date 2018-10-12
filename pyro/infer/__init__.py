@@ -14,6 +14,7 @@ from pyro.infer.util import enable_validation, is_validation_enabled
 
 __all__ = [
     "config_enumerate",
+    "CSIS",
     "enable_validation",
     "is_validation_enabled",
     "ELBO",
