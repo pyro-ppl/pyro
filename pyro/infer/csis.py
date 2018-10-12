@@ -33,20 +33,22 @@ class CSIS(Importance):
                  guide,
                  optim,
                  num_inference_samples=10,
-                 training_batch_size=10):
+                 training_batch_size=10,
+                 validation_batch_size=20):
         super(CSIS, self).__init__(model, guide, num_inference_samples)
         self.model = model
         self.guide = guide
         self.optim = optim
         self.training_batch_size = training_batch_size
+        self.validation_batch_size = validation_batch_size
         self.validation_batch = None
 
-    def set_validation_batch(self, validation_batch_size, *args, **kwargs):
+    def set_validation_batch(self, *args, **kwargs):
         """
         Samples a batch of model traces and stores it as an object property.
         """
         self.validation_batch = [self._sample_from_joint(*args, **kwargs)
-                                 for _ in range(validation_batch_size)]
+                                 for _ in range(self.validation_batch_size)]
 
     def step(self, *args, **kwargs):
         """
@@ -101,7 +103,7 @@ class CSIS(Importance):
         during training.
         """
         if self.validation_batch is None:
-            raise ValueError("Validation batch not set.")
+            self.set_validation_batch(*args, **kwargs)
 
         return self.loss(grads=False, batch=self.validation_batch, *args, **kwargs)
 

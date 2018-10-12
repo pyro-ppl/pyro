@@ -60,8 +60,8 @@ def test_csis_validation_batch():
     guide = Guide()
     csis = pyro.infer.CSIS(model,
                            guide,
-                           torch.optim.Adam(guide.parameters()))
-    csis.set_validation_batch(5)
+                           torch.optim.Adam(guide.parameters()),
+                           validation_batch_size=5)
     init_loss_1 = csis.validation_loss()
     init_loss_2 = csis.validation_loss()
     csis.step()
