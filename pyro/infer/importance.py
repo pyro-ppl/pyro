@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 import torch
-import warnings
 import logging
 
 import pyro.poutine as poutine
@@ -8,6 +7,7 @@ import pyro.poutine as poutine
 from .abstract_infer import TracePosterior
 
 logger = logging.getLogger(__name__)
+
 
 class Importance(TracePosterior):
     """
@@ -47,40 +47,42 @@ class Importance(TracePosterior):
 
     def get_log_normalizer(self):
         """
-        Estimator of the normalizing constant of the target distribution. 
+        Estimator of the normalizing constant of the target distribution.
         (mean of the unnormalized weights)
         """
         log_w = torch.tensor(self.log_weights)
         log_num_samples = torch.log(torch.tensor(self.num_samples, dtype=torch.float))
-        return torch.logsumexp(log_w - log_num_samples,0)
+        return torch.logsumexp(log_w - log_num_samples, 0)
     
     def get_normalized_weights(self, log_scale=False):
         """
-        Compute the normalized importance weights. 
+        Compute the normalized importance weights.
         """
         log_w = torch.tensor(self.log_weights)
-        log_w_norm = log_w - torch.logsumexp(log_w,0)
+        log_w_norm = log_w - torch.logsumexp(log_w, 0)
         return log_w_norm if log_scale else torch.exp(log_w_norm)
-   
-    def get_ESS(self): 
+
+    def get_ESS(self):
         """
-        Compute (Importance Sampling) Effective Sample Size (ESS). 
-        """ 
+        Compute (Importance Sampling) Effective Sample Size (ESS).
+        """
         # check to make sure list is not empty
         if self.log_weights:
             log_w_norm = self.get_normalized_weights(log_scale=True)
-            ess = torch.exp(-torch.logsumexp(2*log_w_norm,0))
+            ess = torch.exp(-torch.logsumexp(2*log_w_norm, 0))
         else:
             logger.warn("The log_weights list is empty, effective sample size is zero.")
-            ess = 0 
+            ess = 0
         return ess
-        
-        # tests to make sure it matches with simpler (but 
+
+        # tests to make sure it matches with simpler (but
         # numerically unstable) ways of computing.
-        # Can be removed. 
-       
+        # Can be removed.
         # print("ESS (log-scale computation (main)) {:3f}".format(ess))
         # ess_check1 = (torch.sum(torch.exp(log_w))**2) / (torch.sum(torch.exp(2*log_w)))
         # print("ESS (semi-log-scale computation) {:3f}".format(ess_check1))
         # ess_check2 = (torch.sum(torch.exp(log_w))**2) / (torch.sum(torch.exp(2*log_w)))
         # print("ESS (numerically unstable computation) {:3f}".format(ess_check2))
+       
+
+    
