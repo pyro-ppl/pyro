@@ -53,7 +53,7 @@ class Importance(TracePosterior):
         log_w = torch.tensor(self.log_weights)
         log_num_samples = torch.log(torch.tensor(self.num_samples, dtype=torch.float))
         return torch.logsumexp(log_w - log_num_samples, 0)
-    
+
     def get_normalized_weights(self, log_scale=False):
         """
         Compute the normalized importance weights.
@@ -74,15 +74,3 @@ class Importance(TracePosterior):
             logger.warn("The log_weights list is empty, effective sample size is zero.")
             ess = 0
         return ess
-
-        # tests to make sure it matches with simpler (but
-        # numerically unstable) ways of computing.
-        # Can be removed.
-        # print("ESS (log-scale computation (main)) {:3f}".format(ess))
-        # ess_check1 = (torch.sum(torch.exp(log_w))**2) / (torch.sum(torch.exp(2*log_w)))
-        # print("ESS (semi-log-scale computation) {:3f}".format(ess_check1))
-        # ess_check2 = (torch.sum(torch.exp(log_w))**2) / (torch.sum(torch.exp(2*log_w)))
-        # print("ESS (numerically unstable computation) {:3f}".format(ess_check2))
-       
-
-    
