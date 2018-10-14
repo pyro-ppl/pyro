@@ -5,7 +5,7 @@ import itertools
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.importance import Importance
-from pyro.infer.util import torch_backward, torch_item
+from pyro.infer.util import torch_item
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match, warn_if_nan
 
@@ -24,8 +24,8 @@ class CSIS(Importance):
         passed as, with the names of nodes as the keys.
     :param guide: guide function which is used as an approximate posterior. Must
         also accept `observations` as keyword argument.
-    :param optim: a PyTorch optimizer
-    :type optim: torch.optim.Optimizer
+    :param optim: a Pyro optimizer
+    :type optim: pyro.optim.PyroOptim
     :param num_inference_samples: The number of importance-weighted samples to
         draw during inference.
     :param training_batch_size: Number of samples to use to approximate the loss
@@ -65,13 +65,19 @@ class CSIS(Importance):
         Take a gradient step on the loss function. Arguments are passed to the
         model and guide.
         """
-        loss = self.loss(True, None, *args, **kwargs)
-        self.optim.step()
-        self.optim.zero_grad()
+        with poutine.trace(param_only=True) as param_capture:
+            loss = self.loss_and_grads(True, None, *args, **kwargs)
+
+        params = set(site["value"].unconstrained()
+                     for site in param_capture.trace.nodes.values())
+
+        self.optim(params)
+
+        pyro.infer.util.zero_grads(params)
 
         return torch_item(loss)
 
-    def loss(self, grads, batch, *args, **kwargs):
+    def loss_and_grads(self, grads, batch, *args, **kwargs):
         """
         :returns: an estimate of the loss (expectation over p(x, y) of
             -log q(x, y) ) - where p is the model and q is the guide
@@ -80,7 +86,7 @@ class CSIS(Importance):
         If a batch is provided, the loss is estimated using these traces
         Otherwise, a fresh batch is generated from the model.
 
-        If grads is True, will also call `torch_backward` on loss.
+        If grads is True, will also call `backward` on loss.
 
         `args` and `kwargs` are passed to the model and guide.
         """
@@ -93,14 +99,20 @@ class CSIS(Importance):
 
         loss = 0
         for model_trace in batch:
-            guide_trace = self._get_matched_trace(model_trace, *args, **kwargs)
-            particle_loss = -guide_trace.log_prob_sum() / batch_size
+            particle_loss = self._differentiable_loss_particle(model_trace, *args, **kwargs)
+            particle_loss /= batch_size
+
             if grads:
-                torch_backward(particle_loss)
+                particle_loss.backward()
+
             loss += torch_item(particle_loss)
 
         warn_if_nan(loss, "loss")
         return loss
+
+    def _differentiable_loss_particle(self, model_trace, *args, **kwargs):
+        guide_trace = self._get_matched_trace(model_trace, *args, **kwargs)
+        return -guide_trace.log_prob_sum()
 
     def validation_loss(self, *args, **kwargs):
         """
@@ -116,7 +128,7 @@ class CSIS(Importance):
         if self.validation_batch is None:
             self.set_validation_batch(*args, **kwargs)
 
-        return self.loss(grads=False, batch=self.validation_batch, *args, **kwargs)
+        return self.loss_and_grads(False, self.validation_batch, *args, **kwargs)
 
     def _get_matched_trace(self, model_trace, *args, **kwargs):
         """

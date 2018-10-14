@@ -23,6 +23,7 @@ class Guide(nn.Module):
         self.std = torch.nn.Parameter(torch.tensor(1.))
 
     def forward(self, observations={"y1": 0, "y2": 0}):
+        pyro.module("guide", self)
         summed_obs = observations["y1"] + observations["y2"]
         mean = self.linear(summed_obs.view(1, 1))[0, 0]
         pyro.sample("x", dist.Normal(mean, self.std))
@@ -30,10 +31,11 @@ class Guide(nn.Module):
 
 @pytest.mark.init(rng_seed=7)
 def test_csis_sampling():
+    pyro.clear_param_store()
     guide = Guide()
     csis = pyro.infer.CSIS(model,
                            guide,
-                           torch.optim.Adam(guide.parameters()),
+                           pyro.optim.Adam({}),
                            num_inference_samples=500)
     # observations chosen so that proposal distribution and true posterior will both have zero mean
     posterior = csis.run({"y1": torch.tensor(-1.0),
@@ -45,11 +47,12 @@ def test_csis_sampling():
 
 @pytest.mark.init(rng_seed=7)
 def test_csis_parameter_update():
+    pyro.clear_param_store()
     guide = Guide()
     initial_parameters = {k: v.item() for k, v in guide.named_parameters()}
     csis = pyro.infer.CSIS(model,
                            guide,
-                           torch.optim.Adam(guide.parameters()))
+                           pyro.optim.Adam({'lr': 1e-2}))
     csis.step()
     updated_parameters = {k: v.item() for k, v in guide.named_parameters()}
     for k, init_v in initial_parameters.items():
@@ -58,10 +61,11 @@ def test_csis_parameter_update():
 
 @pytest.mark.init(rng_seed=7)
 def test_csis_validation_batch():
+    pyro.clear_param_store()
     guide = Guide()
     csis = pyro.infer.CSIS(model,
                            guide,
-                           torch.optim.Adam(guide.parameters()),
+                           pyro.optim.Adam({}),
                            validation_batch_size=5)
     init_loss_1 = csis.validation_loss()
     init_loss_2 = csis.validation_loss()
