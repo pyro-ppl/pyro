@@ -99,7 +99,8 @@ class CSIS(Importance):
 
         loss = 0
         for model_trace in batch:
-            particle_loss = self._differentiable_loss_particle(model_trace, *args, **kwargs)
+            guide_trace = self._get_matched_trace(model_trace, *args, **kwargs)
+            particle_loss = self._differentiable_loss_particle(guide_trace)
             particle_loss /= batch_size
 
             if grads:
@@ -110,8 +111,7 @@ class CSIS(Importance):
         warn_if_nan(loss, "loss")
         return loss
 
-    def _differentiable_loss_particle(self, model_trace, *args, **kwargs):
-        guide_trace = self._get_matched_trace(model_trace, *args, **kwargs)
+    def _differentiable_loss_particle(self, guide_trace):
         return -guide_trace.log_prob_sum()
 
     def validation_loss(self, *args, **kwargs):
