@@ -244,7 +244,7 @@ class HMC(TraceKernel):
         self._adapt_mass_matrix_phase_ending = self._warmup_steps - self._adapt_end_buffer
 
         if self.adapt_step_size:
-            z = {name: node["value"] for name, node in self._iter_latent_nodes(trace)}
+            z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
             for name, transform in self.transforms.items():
                 z[name] = transform(z[name])
             with pyro.validation_enabled(False):
@@ -408,7 +408,7 @@ class HMC(TraceKernel):
                 self._adapt_step_size(accept_prob)
             if self._adapt_mass_matrix_phase:
                 z_flat = torch.cat([z[name].reshape(-1) for name in sorted(z)])
-                self._mass_matrix_adapt_scheme.update(z_flat)
+                self._mass_matrix_adapt_scheme.update(z_flat.detach())
             if self._t == self._adapt_window_ending:
                 self._end_adapt_window()
 

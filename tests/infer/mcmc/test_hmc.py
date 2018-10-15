@@ -199,8 +199,9 @@ def test_logistic_regression(step_size, trajectory_length, num_steps,
 def test_beta_bernoulli(step_size, trajectory_length, num_steps,
                         adapt_step_size, adapt_mass_matrix, full_mass):
     def model(data):
-        alpha = torch.tensor([1.1, 1.1])
-        beta = torch.tensor([1.1, 1.1])
+        # wrapped by `pyro.param` to test if it works
+        alpha = pyro.param('alpha', torch.tensor([1.1, 1.1]))
+        beta = pyro.param('beta', torch.tensor([1.1, 1.1]))
         p_latent = pyro.sample('p_latent', dist.Beta(alpha, beta))
         pyro.sample('obs', dist.Bernoulli(p_latent), obs=data)
         return p_latent
