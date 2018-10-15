@@ -16,7 +16,7 @@ pytestmark = pytest.mark.stage('test_examples')
 CPU_EXAMPLES = [
     'air/main.py --num-steps=1',
     'air/main.py --num-steps=1 --no-baseline',
-    'baseball.py --num-samples=200 --warmup-steps=100',
+    'baseball.py --num-samples=200 --warmup-steps=100 --num-chains=2',
     'bayesian_regression.py --num-epochs=1',
     'contrib/autoname/scoping_mixture.py --num-epochs=1',
     'contrib/autoname/mixture.py --num-epochs=1',

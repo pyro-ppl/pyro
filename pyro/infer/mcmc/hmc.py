@@ -84,12 +84,7 @@ class HMC(TraceKernel):
                  transforms=None,
                  max_iarange_nesting=float("inf"),
                  experimental_use_einsum=False):
-        # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
-        # No-op if model does not have any discrete latents.
-        self.model = poutine.enum(config_enumerate(model, default="parallel"),
-                                  first_available_dim=max_iarange_nesting)
-        # broadcast sample sites inside iarange.
-        self.model = poutine.broadcast(self.model)
+        self.model = model
         self.step_size = step_size if step_size is not None else 1  # from Stan
         if trajectory_length is not None:
             self.trajectory_length = trajectory_length
@@ -217,6 +212,12 @@ class HMC(TraceKernel):
     def setup(self, *args, **kwargs):
         self._args = args
         self._kwargs = kwargs
+        # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
+        # No-op if model does not have any discrete latents.
+        self.model = poutine.enum(config_enumerate(self.model, default="parallel"),
+                                  first_available_dim=self.max_iarange_nesting)
+        # broadcast sample sites inside iarange.
+        self.model = poutine.broadcast(self.model)
         # set the trace prototype to inter-convert between trace object
         # and dict object used by the integrator
         trace = poutine.trace(self.model).get_trace(*args, **kwargs)

@@ -223,8 +223,10 @@ def main(args):
     logging.info(baseball_dataset)
 
     # (1) Full Pooling Model
-    posterior_fully_pooled = MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps) \
-        .run(fully_pooled, at_bats, hits)
+    posterior_fully_pooled = MCMC(nuts_kernel,
+                                  num_samples=args.num_samples,
+                                  warmup_steps=args.warmup_steps,
+                                  num_chains=args.num_chains).run(fully_pooled, at_bats, hits)
     logging.info("\nModel: Fully Pooled")
     logging.info("===================")
     logging.info("\nphi:")
@@ -236,8 +238,10 @@ def main(args):
     evaluate_log_predictive_density(fully_pooled, posterior_fully_pooled, baseball_dataset)
 
     # (2) No Pooling Model
-    posterior_not_pooled = MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps) \
-        .run(not_pooled, at_bats, hits)
+    posterior_not_pooled = MCMC(nuts_kernel,
+                                num_samples=args.num_samples,
+                                warmup_steps=args.warmup_steps,
+                                num_chains=args.num_chains).run(not_pooled, at_bats, hits)
     logging.info("\nModel: Not Pooled")
     logging.info("=================")
     logging.info("\nphi:")
@@ -249,8 +253,10 @@ def main(args):
     evaluate_log_predictive_density(not_pooled, posterior_not_pooled, baseball_dataset)
 
     # (3) Partially Pooled Model
-    posterior_partially_pooled = MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps) \
-        .run(partially_pooled, at_bats, hits)
+    posterior_partially_pooled = MCMC(nuts_kernel,
+                                      num_samples=args.num_samples,
+                                      warmup_steps=args.warmup_steps,
+                                      num_chains=args.num_chains).run(partially_pooled, at_bats, hits)
     logging.info("\nModel: Partially Pooled")
     logging.info("=======================")
     logging.info("\nSigmoid(alpha):")
@@ -270,5 +276,6 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--num-samples", nargs="?", default=1200, type=int)
     parser.add_argument("--warmup-steps", nargs='?', default=300, type=int)
     parser.add_argument("--rng_seed", nargs='?', default=0, type=int)
+    parser.add_argument("--num-chains", nargs='?', default=1, type=int)
     args = parser.parse_args()
     main(args)
