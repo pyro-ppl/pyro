@@ -14,12 +14,13 @@ from pyro.util import check_if_enumerated, warn_if_nan
 class RenyiELBO(ELBO):
     r"""
     An implementation of Renyi's :math:`\alpha`-divergence variational inference
-    follows reference [1].
+    following reference [1].
 
-    To have a lower bound, we require :math:`\alpha \ge 0`. However, according to
-    reference [1], depending on the dataset, :math:`\alpha < 0` might give better
-    results. In the special case :math:`\alpha = 0`, we have important weighted
-    lower bound derived in reference [2].
+    In order for the objective to be a strict lower bound, we require
+    :math:`\alpha \ge 0`. Note, however, that according to reference [1], depending
+    on the dataset :math:`\alpha < 0` might give better results. In the special case
+    :math:`\alpha = 0`, the objective function is that of the important weighted
+    autoencoder derived in reference [2].
 
     .. note:: Setting :math:`\alpha < 1` gives a better bound than the usual ELBO.
         For :math:`\alpha = 1`, it is better to use
@@ -30,10 +31,10 @@ class RenyiELBO(ELBO):
 
     :param float alpha: The order of :math:`\alpha`-divergence. Here
         :math:`\alpha \neq 1`. Default is 0.
-    :param num_particles: The number of particles/samples used to form the ELBO
-        (gradient) estimators. Default is 2.
+    :param num_particles: The number of particles/samples used to form the objective
+        (gradient) estimator. Default is 2.
     :param int max_iarange_nesting: Bound on max number of nested
-        :func:`pyro.iarange` contexts. Default is 2.
+        :func:`pyro.iarange` contexts. Default is infinity.
     :param bool strict_enumeration_warning: Whether to warn about possible
         misuse of enumeration, i.e. that
         :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO` is used iff there
@@ -50,7 +51,7 @@ class RenyiELBO(ELBO):
 
     def __init__(self,
                  alpha=0,
-                 num_particles=1,
+                 num_particles=2,
                  max_iarange_nesting=float('inf'),
                  vectorize_particles=False,
                  strict_enumeration_warning=True):

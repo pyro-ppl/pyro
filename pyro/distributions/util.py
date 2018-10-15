@@ -3,8 +3,8 @@ from __future__ import absolute_import, division, print_function
 import numbers
 from contextlib import contextmanager
 
-import torch
 import torch.distributions as torch_dist
+from torch.distributions.utils import broadcast_all
 
 _VALIDATION_ENABLED = False
 
@@ -146,46 +146,36 @@ def sum_leftmost(value, dim):
     return value.reshape(-1, *value.shape[dim:]).sum(0)
 
 
-def scale_tensor(tensor, scale):
+def scale_and_mask(tensor, scale=1.0, mask=None):
     """
-    Safely scale a tensor, avoiding NANs by assuming::
+    Scale and mask a tensor, broadcasting and avoiding unnecessary ops.
 
-        inf * 0 = 0 * inf = 0
+    :param tensor: an input tensor or zero
+    :type tensor: torch.Tensor or the number zero
+    :param scale: a positive scale
+    :type scale: torch.Tensor or number
+    :param mask: an optional masking tensor
+    :type mask: torch.ByteTensor or None
     """
-    # Check for trivial cases.
-    if isinstance(tensor, numbers.Number):
-        if tensor == 0:
-            if isinstance(scale, numbers.Number):
-                return 0.0
-            return scale.new_zeros(scale.shape)
-        if tensor == 1:
-            return scale
-    if isinstance(scale, numbers.Number):
-        if scale == 0:
-            if isinstance(tensor, numbers.Number):
-                return 0.0
-            return tensor.new_zeros(tensor.shape)
-        if scale == 1:
+    if is_identically_zero(tensor):
+        return tensor
+    if mask is None:
+        if is_identically_one(scale):
             return tensor
-
-    result = tensor * scale
-
-    # avoid NANs
-    if not isinstance(scale, numbers.Number):
-        result[(scale == 0).expand_as(result)] = 0
-    if not isinstance(tensor, numbers.Number):
-        result[(tensor == 0).expand_as(result)] = 0
-
-    return result
+        return tensor * scale
+    tensor, mask = broadcast_all(tensor, mask)
+    tensor = tensor * scale  # triggers a copy, avoiding in-place op errors
+    tensor.masked_fill_(~mask, 0.)
+    return tensor
 
 
-def torch_sign(value):
-    """
-    Like :func:`torch.sign`` but also works for numbers.
-    """
-    if isinstance(value, numbers.Number):
-        return (value > 0) - (value < 0)
-    return torch.sign(value)
+# work around lack of jit support for torch.eye(..., out=value)
+def eye_like(value, m, n=None):
+    if n is None:
+        n = m
+    eye = value.new_zeros(m, n)
+    eye.view(-1)[:min(m, n) * n:n + 1] = 1
+    return eye
 
 
 try:

@@ -15,15 +15,23 @@ class _Subsample(Distribution):
     Internal use only. This should only be used by `iarange`.
     """
 
-    def __init__(self, size, subsample_size, use_cuda=None):
+    def __init__(self, size, subsample_size, use_cuda=None, device=None):
         """
         :param int size: the size of the range to subsample from
         :param int subsample_size: the size of the returned subsample
-        :param bool use_cuda: whether to use cuda tensors
+        :param bool use_cuda: DEPRECATED, use the `device` arg instead.
+            Whether to use cuda tensors.
+        :param str device: device to place the `sample` and `log_prob`
+            results on.
         """
         self.size = size
         self.subsample_size = subsample_size
-        self.use_cuda = torch.Tensor().is_cuda if use_cuda is None else use_cuda
+        self.use_cuda = use_cuda
+        if self.use_cuda is not None:
+            if self.use_cuda ^ (device != "cpu"):
+                raise ValueError("Incompatible arg values use_cuda={}, device={}."
+                                 .format(use_cuda, device))
+        self.device = torch.Tensor().device if not device else device
 
     def sample(self, sample_shape=torch.Size()):
         """
@@ -35,17 +43,17 @@ class _Subsample(Distribution):
         subsample_size = self.subsample_size
         if subsample_size is None or subsample_size > self.size:
             subsample_size = self.size
-        if subsample_size == self.size:
-            result = torch.LongTensor(list(range(self.size)))
+        if subsample_size >= self.size:
+            result = torch.arange(self.size, dtype=torch.long).to(self.device)
         else:
-            # torch.randperm does not have a CUDA implementation
-            result = torch.randperm(self.size, device=torch.device('cpu'))[:self.subsample_size]
+            result = torch.multinomial(torch.ones(self.size), self.subsample_size,
+                                       replacement=False).to(self.device)
         return result.cuda() if self.use_cuda else result
 
     def log_prob(self, x):
         # This is zero so that iarange can provide an unbiased estimate of
         # the non-subsampled log_prob.
-        result = torch.zeros(1)
+        result = torch.tensor(0., device=self.device)
         return result.cuda() if self.use_cuda else result
 
 
@@ -54,20 +62,21 @@ class SubsampleMessenger(IndepMessenger):
     Drop-in replacement for irange and iarange, including subsampling!
     """
 
-    def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None, use_cuda=None, sites=None):
+    def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None, use_cuda=None, sites=None, device=None):
         super(SubsampleMessenger, self).__init__(name, size, dim, sites)
         self._size = size
         self.subsample_size = subsample_size
         self.indices = subsample
         self.use_cuda = use_cuda
+        self.device = device
 
         if am_i_wrapped():
             self._size, self.subsample_size, self.indices = self._subsample(
                 self.name, self._size, self.subsample_size,
-                self.indices, self.use_cuda)
+                self.indices, self.use_cuda, self.device)
             self.size = self.subsample_size
 
-    def _subsample(self, name, size=None, subsample_size=None, subsample=None, use_cuda=None):
+    def _subsample(self, name, size=None, subsample_size=None, subsample=None, use_cuda=None, device=None):
         """
         Helper function for iarange and irange. See their docstrings for details.
         """
@@ -80,7 +89,7 @@ class SubsampleMessenger(IndepMessenger):
             msg = {
                 "type": "sample",
                 "name": name,
-                "fn": _Subsample(size, subsample_size, use_cuda),
+                "fn": _Subsample(size, subsample_size, use_cuda, device),
                 "is_observed": False,
                 "args": (),
                 "kwargs": {},
@@ -107,7 +116,7 @@ class SubsampleMessenger(IndepMessenger):
     def __enter__(self):
         if self.indices is None and self.size is None:
             self._size, self.subsample_size, self.indices = self._subsample(
-                self.name, self._size, self.subsample_size, self.indices, self.use_cuda)
+                self.name, self._size, self.subsample_size, self.indices, self.use_cuda, self.device)
         self.size = self.subsample_size
         return super(SubsampleMessenger, self).__enter__()
 

@@ -46,7 +46,7 @@ def sample(name, fn, *args, **kwargs):
     :returns: sample
     """
     obs = kwargs.pop("obs", None)
-    infer = kwargs.pop("infer", {})
+    infer = kwargs.pop("infer", {}).copy()
     # check if stack is empty
     # if stack empty, default behavior (defined here)
     if not am_i_wrapped():
@@ -68,6 +68,7 @@ def sample(name, fn, *args, **kwargs):
             "value": None,
             "infer": infer,
             "scale": 1.0,
+            "mask": None,
             "cond_indep_stack": (),
             "done": False,
             "stop": False,
@@ -128,8 +129,12 @@ class iarange(SubsampleMessenger):
         If specified, ``dim`` should be negative, i.e. should index from the
         right. If not specified, ``dim`` is set to the rightmost dim that is
         left of all enclosing ``iarange`` contexts.
-    :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for `subsample` and `log_prob`. Defaults to `torch.Tensor.is_cuda`.
+    :param bool use_cuda: DEPRECATED, use the `device` arg instead.
+        Optional bool specifying whether to use cuda tensors for `subsample`
+        and `log_prob`. Defaults to ``torch.Tensor.is_cuda``.
+    :param str device: Optional keyword specifying which device to place
+        the results of `subsample` and `log_prob` on. By default, results
+        are placed on the same device as the default tensor.
     :return: A reusabe context manager yielding a single 1-dimensional
         :class:`torch.Tensor` of indices.
 
@@ -188,9 +193,12 @@ class irange(SubsampleMessenger):
         schemes. If specified, then ``subsample_size`` will be set to
         ``len(subsample)``.
     :type subsample: Anything supporting ``len()``.
-    :param bool use_cuda: Optional bool specifying whether to use cuda tensors
-        for internal ``log_prob`` computations. Defaults to
-        ``torch.Tensor.is_cuda``.
+    :param bool use_cuda: DEPRECATED, use the `device` arg instead.
+        Optional bool specifying whether to use cuda tensors for `subsample`
+        and `log_prob`. Defaults to ``torch.Tensor.is_cuda``.
+    :param str device: Optional keyword specifying which device to place
+        the results of `subsample` and `log_prob` on. By default, results
+        are placed on the same device as the default tensor.
     :return: A reusable iterator yielding a sequence of integers.
 
     Examples:
@@ -246,6 +254,7 @@ def param(name, *args, **kwargs):
             "kwargs": kwargs,
             "infer": {},
             "scale": 1.0,
+            "mask": None,
             "cond_indep_stack": (),
             "value": None,
             "done": False,
@@ -352,6 +361,7 @@ def enable_validation(is_validate=True):
     """
     dist.enable_validation(is_validate)
     infer.enable_validation(is_validate)
+    poutine.enable_validation(is_validate)
 
 
 @contextmanager

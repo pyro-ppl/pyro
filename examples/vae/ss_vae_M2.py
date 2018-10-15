@@ -6,7 +6,7 @@ from visdom import Visdom
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.examples.util import print_and_log, set_seed
+from pyro.contrib.examples.util import print_and_log
 from pyro.infer import SVI, JitTrace_ELBO, JitTraceEnum_ELBO, Trace_ELBO, TraceEnum_ELBO, config_enumerate
 from pyro.optim import Adam
 from utils.custom_mlp import MLP, Exp
@@ -279,7 +279,7 @@ def main(args):
     :return: None
     """
     if args.seed is not None:
-        set_seed(args.seed, args.cuda)
+        pyro.set_rng_seed(args.seed)
 
     viz = None
     if args.visualize:
@@ -299,7 +299,7 @@ def main(args):
 
     # set up the loss(es) for inference. wrapping the guide in config_enumerate builds the loss as a sum
     # by enumerating each class label for the sampled discrete categorical distribution in the model
-    guide = config_enumerate(ss_vae.guide, args.enum_discrete)
+    guide = config_enumerate(ss_vae.guide, args.enum_discrete, expand=True)
     elbo = (JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO)(max_iarange_nesting=1)
     loss_basic = SVI(ss_vae.model, guide, optimizer, loss=elbo)
 

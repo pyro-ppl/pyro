@@ -8,9 +8,9 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import config_enumerate
 from pyro.infer.mcmc import HMC, MCMC, NUTS
-from pyro.infer.mcmc.util import EnumTraceProbEvaluator
+from pyro.infer.mcmc.util import TraceTreeEvaluator, TraceEinsumEvaluator
 from pyro.primitives import _Subsample
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_param
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,8 @@ def print_debug_info(model_trace):
     (HMC, {"adapt_step_size": True, "num_steps": 3}),
     (NUTS, {"adapt_step_size": True}),
 ])
-def test_model_error_stray_batch_dims(kernel, kwargs):
+@pytest.mark.parametrize("use_einsum", [False, True])
+def test_model_error_stray_batch_dims(kernel, kwargs, use_einsum):
 
     @poutine.broadcast
     def gmm():
@@ -53,11 +54,11 @@ def test_model_error_stray_batch_dims(kernel, kwargs):
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)
         return cluster_means
 
-    mcmc_kernel = kernel(gmm, **kwargs)
+    mcmc_kernel = kernel(gmm, experimental_use_einsum=use_einsum, **kwargs)
     # Error due to non finite value for `max_iarange_nesting`.
     assert_error(mcmc_kernel)
     # Error due to batch dims not inside iarange.
-    mcmc_kernel = kernel(gmm, max_iarange_nesting=1, **kwargs)
+    mcmc_kernel = kernel(gmm, max_iarange_nesting=1, experimental_use_einsum=use_einsum, **kwargs)
     assert_error(mcmc_kernel)
 
 
@@ -65,7 +66,8 @@ def test_model_error_stray_batch_dims(kernel, kwargs):
     (HMC, {"adapt_step_size": True, "num_steps": 3}),
     (NUTS, {"adapt_step_size": True}),
 ])
-def test_model_error_enum_dim_clash(kernel, kwargs):
+@pytest.mark.parametrize("use_einsum", [False, True])
+def test_model_error_enum_dim_clash(kernel, kwargs, use_einsum):
 
     @poutine.broadcast
     def gmm():
@@ -78,7 +80,8 @@ def test_model_error_enum_dim_clash(kernel, kwargs):
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)
         return cluster_means
 
-    mcmc_kernel = kernel(gmm, max_iarange_nesting=0, **kwargs)
+    mcmc_kernel = kernel(gmm, max_iarange_nesting=0,
+                         experimental_use_einsum=use_einsum, **kwargs)
     assert_error(mcmc_kernel)
 
 
@@ -110,7 +113,7 @@ def test_log_prob_eval_iterates_in_correct_order():
                 pyro.sample("obs2", dist.Normal(2 * z2 - 1, 1.), obs=torch.ones(5, 3))
 
     model_trace = poutine.trace(model).get_trace()
-    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 4)
+    trace_prob_evaluator = TraceTreeEvaluator(model_trace, True, 4)
     trace_prob_evaluator.log_prob(model_trace)
     iarange_dims, enum_dims = [], []
     for key in reversed(sorted(trace_prob_evaluator._log_probs.keys(), key=lambda x: (len(x), x))):
@@ -122,32 +125,36 @@ def test_log_prob_eval_iterates_in_correct_order():
     assert enum_dims, [[-8], [-9, -6], [-7], [-5]]
 
 
-def test_all_discrete_sites_log_prob():
+@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+def test_all_discrete_sites_log_prob(Eval):
     p = 0.3
 
-    @poutine.enum(first_available_dim=2)
+    @poutine.enum(first_available_dim=3)
     @config_enumerate(default="parallel")
     @poutine.broadcast
     def model():
         d = dist.Bernoulli(p)
         context1 = pyro.iarange("outer", 2, dim=-1)
-        context2 = pyro.iarange("inner", 1, dim=-2)
+        context2 = pyro.iarange("inner1", 1, dim=-2)
+        context3 = pyro.iarange("inner2", 1, dim=-3)
         pyro.sample("w", d)
         with context1:
             pyro.sample("x", d)
-        with context2:
-            pyro.sample("y", d)
         with context1, context2:
+            pyro.sample("y", d)
+        with context1, context3:
             pyro.sample("z", d)
 
     model_trace = poutine.trace(model).get_trace()
     print_debug_info(model_trace)
-    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 2)
+    trace_prob_evaluator = Eval(model_trace, True, 3)
     # all discrete sites enumerated out.
     assert_equal(trace_prob_evaluator.log_prob(model_trace), torch.tensor(0.))
 
 
-def test_enumeration_in_tree():
+@pytest.mark.parametrize("Eval", [TraceTreeEvaluator,
+                                  xfail_param(TraceEinsumEvaluator, reason="TODO: Debug this failure case.")])
+def test_enumeration_in_tree(Eval):
     @poutine.enum(first_available_dim=4)
     @config_enumerate(default="parallel")
     @poutine.condition(data={"sample1": torch.tensor(0.),
@@ -177,14 +184,14 @@ def test_enumeration_in_tree():
 
     model_trace = poutine.trace(model).get_trace()
     print_debug_info(model_trace)
-    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 4)
+    trace_prob_evaluator = Eval(model_trace, True, 4)
     # p_n(0.) * p_n(2.)^2 * p_n(1.)^6
     assert_equal(trace_prob_evaluator.log_prob(model_trace), torch.tensor(-15.2704), prec=1e-4)
 
 
-@pytest.mark.xfail(reason="Enumeration currently does not work for general DAGs "
-                          "(indep contexts with multiple parents)")
-def test_enumeration_in_dag():
+@pytest.mark.xfail(reason="Enumeration currently does not work for general DAGs")
+@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+def test_enumeration_in_dag(Eval):
     p = 0.3
 
     @poutine.enum(first_available_dim=2)
@@ -207,7 +214,7 @@ def test_enumeration_in_dag():
 
     model_trace = poutine.trace(model).get_trace()
     print_debug_info(model_trace)
-    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 2)
+    trace_prob_evaluator = Eval(model_trace, True, 2)
     assert_equal(trace_prob_evaluator.log_prob(model_trace), torch.tensor(0.16196))  # p_beta(0.3)^3
 
 
@@ -216,7 +223,8 @@ def test_enumeration_in_dag():
     (torch.tensor([0.]), torch.tensor(-1.4189)),
     (torch.tensor([1., 0., 0.]), torch.tensor(-4.1813)),
 ])
-def test_enum_log_prob_continuous_observed(data, expected_log_prob):
+@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+def test_enum_log_prob_continuous_observed(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=1)
     @config_enumerate(default="parallel")
@@ -233,7 +241,7 @@ def test_enum_log_prob_continuous_observed(data, expected_log_prob):
 
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
-    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 1)
+    trace_prob_evaluator = Eval(model_trace, True, 1)
     assert_equal(trace_prob_evaluator.log_prob(model_trace),
                  expected_log_prob,
                  prec=1e-3)
@@ -245,7 +253,8 @@ def test_enum_log_prob_continuous_observed(data, expected_log_prob):
     (torch.tensor([1., 1.]), torch.tensor(-3.9699)),
     (torch.tensor([1., 0., 0.]), torch.tensor(-5.3357)),
 ])
-def test_enum_log_prob_continuous_sampled(data, expected_log_prob):
+@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+def test_enum_log_prob_continuous_sampled(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=1)
     @config_enumerate(default="parallel")
@@ -262,7 +271,7 @@ def test_enum_log_prob_continuous_sampled(data, expected_log_prob):
 
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
-    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 1)
+    trace_prob_evaluator = Eval(model_trace, True, 1)
     assert_equal(trace_prob_evaluator.log_prob(model_trace),
                  expected_log_prob,
                  prec=1e-3)
@@ -273,7 +282,8 @@ def test_enum_log_prob_continuous_sampled(data, expected_log_prob):
     (torch.tensor([1., 1.]), torch.tensor(-0.9808)),
     (torch.tensor([1., 0., 0.]), torch.tensor(-2.3671)),
 ])
-def test_enum_log_prob_discrete_observed(data, expected_log_prob):
+@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+def test_enum_log_prob_discrete_observed(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=1)
     @config_enumerate(default="parallel")
@@ -288,7 +298,7 @@ def test_enum_log_prob_discrete_observed(data, expected_log_prob):
 
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
-    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 1)
+    trace_prob_evaluator = Eval(model_trace, True, 1)
     assert_equal(trace_prob_evaluator.log_prob(model_trace),
                  expected_log_prob,
                  prec=1e-3)
@@ -299,7 +309,8 @@ def test_enum_log_prob_discrete_observed(data, expected_log_prob):
     (torch.tensor([0.]), torch.tensor(-1.46)),
     (torch.tensor([1., 1.]), torch.tensor(-2.1998)),
 ])
-def test_enum_log_prob_multiple_iarange(data, expected_log_prob):
+@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+def test_enum_log_prob_multiple_iarange(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=1)
     @config_enumerate(default="parallel")
@@ -317,7 +328,7 @@ def test_enum_log_prob_multiple_iarange(data, expected_log_prob):
 
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
-    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 1)
+    trace_prob_evaluator = Eval(model_trace, True, 1)
     assert_equal(trace_prob_evaluator.log_prob(model_trace),
                  expected_log_prob,
                  prec=1e-3)
@@ -328,7 +339,8 @@ def test_enum_log_prob_multiple_iarange(data, expected_log_prob):
     (torch.tensor([0.]), torch.tensor(-1.4189)),
     (torch.tensor([1., 0., 0.]), torch.tensor(-4.3857)),
 ])
-def test_enum_log_prob_nested_iarange(data, expected_log_prob):
+@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+def test_enum_log_prob_nested_iarange(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=2)
     @config_enumerate(default="parallel")
@@ -347,7 +359,7 @@ def test_enum_log_prob_nested_iarange(data, expected_log_prob):
 
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
-    trace_prob_evaluator = EnumTraceProbEvaluator(model_trace, True, 2)
+    trace_prob_evaluator = Eval(model_trace, True, 2)
     assert_equal(trace_prob_evaluator.log_prob(model_trace),
                  expected_log_prob,
                  prec=1e-3)

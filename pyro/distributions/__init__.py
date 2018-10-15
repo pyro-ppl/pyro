@@ -5,6 +5,7 @@ from pyro.distributions.avf_mvn import AVFMultivariateNormal
 from pyro.distributions.binomial import Binomial
 from pyro.distributions.delta import Delta
 from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNormalsSharedCovariance
+from pyro.distributions.diag_normal_mixture import MixtureOfDiagNormals
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
@@ -22,6 +23,7 @@ from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
 from pyro.distributions.von_mises import VonMises
 from pyro.distributions.von_mises_3d import VonMises3D
+from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
 
 __all__ = [
     "enable_validation",
@@ -38,6 +40,7 @@ __all__ = [
     "LowRankMultivariateNormal",
     "MaskedMixture",
     "MixtureOfDiagNormalsSharedCovariance",
+    "MixtureOfDiagNormals",
     "OMTMultivariateNormal",
     "Rejector",
     "RelaxedBernoulliStraightThrough",
@@ -45,6 +48,7 @@ __all__ = [
     "TorchDistribution",
     "VonMises",
     "VonMises3D",
+    "ZeroInflatedPoisson"
 ]
 
 # Import all torch distributions from `pyro.distributions.torch_distribution`

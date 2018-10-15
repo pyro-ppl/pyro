@@ -26,6 +26,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.util import sum_rightmost
 from pyro.infer.enum import config_enumerate
+from pyro.nn import AutoRegressiveNN
 from pyro.poutine.util import prune_subsample_sites
 
 try:
@@ -618,7 +619,7 @@ class AutoIAFNormal(AutoContinuous):
             raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
         if self.hidden_dim is None:
             self.hidden_dim = self.latent_dim
-        iaf = dist.InverseAutoregressiveFlow(self.latent_dim, self.hidden_dim,
+        iaf = dist.InverseAutoregressiveFlow(AutoRegressiveNN(self.latent_dim, [self.hidden_dim]),
                                              sigmoid_bias=self.sigmoid_bias)
         pyro.module("{}_iaf".format(self.prefix), iaf.module)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
@@ -672,13 +673,11 @@ class AutoLaplaceApproximation(AutoContinuous):
         scale_tril = cov.potrf(upper=False)
 
         # calculate scale_tril from self.guide()
-        param_store = pyro.get_param_store()
         scale_tril_name = "{}_scale_tril".format(self.prefix)
-        if scale_tril_name in param_store.get_all_param_names():
-            param_store.replace_param(scale_tril_name, scale_tril, pyro.param(scale_tril_name))
-        else:
-            pyro.param(scale_tril_name, lambda: scale_tril.detach(),
-                       constraint=constraints.lower_cholesky)
+        pyro.param(scale_tril_name, scale_tril,
+                   constraint=constraints.lower_cholesky)
+        # force an update to scale_tril even if it already exists
+        pyro.get_param_store()[scale_tril_name] = scale_tril
 
         gaussian_guide = AutoMultivariateNormal(self.model, prefix=self.prefix)
         gaussian_guide._setup_prototype(*args, **kwargs)
@@ -755,18 +754,22 @@ class AutoDiscreteParallel(AutoGuide):
         return result
 
 
-def mean_field_guide_entropy(guide, *args):
+def mean_field_guide_entropy(guide, args, whitelist=None):
     """Computes the entropy of a guide program, assuming
     that the guide is fully mean-field (i.e. all sample sites
     in the guide are independent).
 
     The entropy is simply the sum of the entropies at the
-    individual sites.
+    individual sites. If `whitelist` is not `None`, only sites
+    listed in `whitelist` will have their entropies included
+    in the sum. If `whitelist` is `None`, all non-subsample
+    sites are included.
     """
     trace = poutine.trace(guide).get_trace(*args)
     entropy = 0.
     for name, site in trace.nodes.items():
         if site["type"] == "sample":
             if not poutine.util.site_is_subsample(site):
-                entropy += site["fn"].entropy()
+                if whitelist is None or name in whitelist:
+                    entropy += site["fn"].entropy()
     return entropy

@@ -11,7 +11,7 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import config_enumerate
 from pyro.infer.mcmc.trace_kernel import TraceKernel
-from pyro.infer.mcmc.util import EnumTraceProbEvaluator
+from pyro.infer.mcmc.util import TraceEinsumEvaluator, TraceTreeEvaluator
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
 from pyro.primitives import _Subsample
@@ -50,6 +50,10 @@ class HMC(TraceKernel):
     :param int max_iarange_nesting: Optional bound on max number of nested
         :func:`pyro.iarange` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
+    :param bool experimental_use_einsum: Whether to use an einsum operation
+        to evaluate log pdf for the model trace. No-op unless the trace has
+        discrete sample sites. This flag is experimental and will most likely
+        be removed in a future release.
 
     Example:
 
@@ -78,10 +82,11 @@ class HMC(TraceKernel):
                  num_steps=None,
                  adapt_step_size=False,
                  transforms=None,
-                 max_iarange_nesting=float("inf")):
+                 max_iarange_nesting=float("inf"),
+                 experimental_use_einsum=False):
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
-        self.model = poutine.enum(config_enumerate(model, default="parallel", expand=False),
+        self.model = poutine.enum(config_enumerate(model, default="parallel"),
                                   first_available_dim=max_iarange_nesting)
         # broadcast sample sites inside iarange.
         self.model = poutine.broadcast(self.model)
@@ -94,6 +99,7 @@ class HMC(TraceKernel):
             self.trajectory_length = 2 * math.pi  # from Stan
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
         self.adapt_step_size = adapt_step_size
+        self.use_einsum = experimental_use_einsum
         self._target_accept_prob = 0.8  # from Stan
 
         self.transforms = {} if transforms is None else transforms
@@ -197,9 +203,10 @@ class HMC(TraceKernel):
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
 
     def _validate_trace(self, trace):
-        self._trace_prob_evaluator = EnumTraceProbEvaluator(trace,
-                                                            self._has_enumerable_sites,
-                                                            self.max_iarange_nesting)
+        trace_eval = TraceEinsumEvaluator if self.use_einsum else TraceTreeEvaluator
+        self._trace_prob_evaluator = trace_eval(trace,
+                                                self._has_enumerable_sites,
+                                                self.max_iarange_nesting)
         trace_log_prob_sum = self._compute_trace_log_prob(trace)
         if torch_isnan(trace_log_prob_sum) or torch_isinf(trace_log_prob_sum):
             raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")
@@ -293,5 +300,7 @@ class HMC(TraceKernel):
         return self._get_trace(z)
 
     def diagnostics(self):
-        return "Step size: {:.6f} \t Acceptance rate: {:.6f}".format(
-            self.step_size, self._accept_cnt / self._t)
+        return OrderedDict([
+            ("Step size", self.step_size),
+            ("Acceptance rate", self._accept_cnt / self._t)
+        ])

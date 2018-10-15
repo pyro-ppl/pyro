@@ -8,7 +8,7 @@ from torch.distributions import biject_to, constraints, transform_to
 import pyro.distributions.torch
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.score_parts import ScoreParts
-from pyro.distributions.util import broadcast_shape, sum_rightmost
+from pyro.distributions.util import broadcast_shape, scale_and_mask, sum_rightmost
 
 
 class TorchDistributionMixin(Distribution):
@@ -386,7 +386,7 @@ class MaskedDistribution(TorchDistribution):
     Masks a distribution by a zero-one tensor that is broadcastable to the
     distribution's :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
 
-    :param torch.Tensor mask: A zero-one valued float tensor.
+    :param torch.Tensor mask: A zero-one valued tensor.
     """
     arg_constraints = {}
 
@@ -395,7 +395,7 @@ class MaskedDistribution(TorchDistribution):
             raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "
                              "actual {} vs {}".format(mask.shape, base_dist.batch_shape))
         self.base_dist = base_dist
-        self._mask = mask
+        self._mask = mask.byte()
         super(MaskedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
 
     @property
@@ -417,10 +417,10 @@ class MaskedDistribution(TorchDistribution):
         return self.base_dist.rsample(sample_shape)
 
     def log_prob(self, value):
-        return self.base_dist.log_prob(value) * self._mask
+        return scale_and_mask(self.base_dist.log_prob(value), mask=self._mask)
 
     def score_parts(self, value):
-        return self.base_dist.score_parts(value) * self._mask
+        return self.base_dist.score_parts(value).scale_and_mask(mask=self._mask)
 
     def enumerate_support(self, expand=True):
         return self.base_dist.enumerate_support(expand=expand)
