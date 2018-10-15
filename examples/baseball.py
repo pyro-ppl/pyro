@@ -296,7 +296,7 @@ def main(args):
                                            posterior_partially_pooled_with_logit,
                                            num_samples=args.num_samples)
     sample_posterior_predictive(posterior_predictive, baseball_dataset)
-    evaluate_log_predictive_density(partially_pooled_with_logit, 
+    evaluate_log_predictive_density(partially_pooled_with_logit,
                                     posterior_partially_pooled_with_logit, baseball_dataset)
 
 
