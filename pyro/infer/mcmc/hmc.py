@@ -178,6 +178,7 @@ class HMC(TraceKernel):
         self._inverse_mass_matrix = None
         self._r_dist = None
         self._r_shapes = {}
+        self._r_numels = {}
         self._args = None
         self._kwargs = None
         self._prototype_trace = None
@@ -310,7 +311,7 @@ class HMC(TraceKernel):
         r = {}
         pos = 0
         for name in sorted(self._r_shapes):
-            next_pos = pos + self._r_shapes[name].numel()
+            next_pos = pos + self._r_numels[name]
             r[name] = r_flat[pos:next_pos].reshape(self._r_shapes[name])
             pos = next_pos
         assert pos == r_flat.size(0)
@@ -338,7 +339,6 @@ class HMC(TraceKernel):
         self._prototype_trace = trace
         if self._automatic_transform_enabled:
             self.transforms = {}
-        mass_matrix_numel = 0
         for name, node in trace.iter_stochastic_nodes():
             if isinstance(node["fn"], _Subsample):
                 continue
@@ -350,13 +350,14 @@ class HMC(TraceKernel):
                 self.transforms[name] = biject_to(node["fn"].support).inv
                 site_value = self.transforms[name](node["value"])
             self._r_shapes[name] = site_value.shape
-            mass_matrix_numel += site_value.numel()
+            self._r_numels[name] = site_value.numel()
 
         self._validate_trace(trace)
+        mass_matrix_size = sum(self._r_numels.values())
         if self.full_mass:
-            self._inverse_mass_matrix = eye_like(site_value, mass_matrix_numel)
+            self._inverse_mass_matrix = eye_like(site_value, mass_matrix_size)
         else:
-            self._inverse_mass_matrix = site_value.new_ones(mass_matrix_numel)
+            self._inverse_mass_matrix = site_value.new_ones(mass_matrix_size)
         self._update_r_dist()
         if self.adapt_step_size or self.adapt_mass_matrix:
             self._configure_adaptation(trace)
