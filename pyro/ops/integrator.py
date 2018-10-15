@@ -5,7 +5,7 @@ from torch.autograd import grad
 
 
 def velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, num_steps=1):
-    """
+    r"""
     Second order symplectic integrator that uses the velocity verlet algorithm.
 
     :param dict z: dictionary of sample site names and their current values
@@ -16,9 +16,9 @@ def velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, num_step
         for each sample site. The negative gradient of the function with respect
         to ``z`` determines the rate of change of the corresponding sites'
         momenta ``r``.
-    :param inverse_mass_matrix: a tensor :math:`M^{-1}` which is used to calculate
-        kinetic energy: :math:`kinetic_energy = \frac{z^TM^{-1}z}{2}`. Here
-        :math:`M` can be a 1D tensor (diagonal matrix) or a 2D tensor (dense matrix).
+    :param torch.Tensor inverse_mass_matrix: a tensor :math:`M^{-1}` which is used
+        to calculate kinetic energy: :math:`E_{kinetic} = \frac{1}{2}z^T M^{-1} z`.
+        Here :math:`M` can be a 1D tensor (diagonal matrix) or a 2D tensor (dense matrix).
     :param float step_size: step size for each time step iteration.
     :param int num_steps: number of discrete time steps over which to integrate.
     :return tuple (z_next, r_next): final position and momenta, having same types as (z, r).
