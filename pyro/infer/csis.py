@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 
+import torch
+
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.importance import Importance
@@ -99,12 +101,17 @@ class CSIS(Importance):
 
         loss = 0
         for model_trace in batch:
-            guide_trace = self._get_matched_trace(model_trace, *args, **kwargs)
+            with poutine.trace(param_only=True) as particle_param_capture:
+                guide_trace = self._get_matched_trace(model_trace, *args, **kwargs)
             particle_loss = self._differentiable_loss_particle(guide_trace)
             particle_loss /= batch_size
 
             if grads:
-                particle_loss.backward()
+                guide_params = set(site["value"].unconstrained()
+                                   for site in particle_param_capture.trace.nodes.values())
+                guide_grads = torch.autograd.grad(particle_loss, guide_params)
+                for guide_grad, guide_param in zip(guide_grads, guide_params):
+                    guide_param.grad = guide_grad if guide_param.grad is None else guide_param.grad + guide_grad
 
             loss += torch_item(particle_loss)
 
