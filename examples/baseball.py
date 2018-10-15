@@ -10,7 +10,7 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
-from pyro.distributions import Binomial, HalfCauchy, Normal, Uniform
+from pyro.distributions import Beta, Binomial, HalfCauchy, Normal, Pareto, Uniform
 from pyro.distributions.util import logsumexp
 from pyro.infer import EmpiricalMarginal
 from pyro.infer.abstract_infer import TracePredictive
@@ -92,6 +92,25 @@ def not_pooled(at_bats):
 
 
 def partially_pooled(at_bats):
+    """
+    Number of hits has a Binomial distribution with independent
+    probability of success, $\phi_i$. Each $\phi_i$ follows a Beta
+    distribution with concentration parameters $c_1$ and $c_2$, where
+    $c_1 = m * kappa$, $c_2 = (1 - m) * kappa$, $m ~ Uniform(0, 1)$,
+    and $kappa ~ Pareto(1, 1.5)$.
+
+    :param (torch.Tensor) at_bats: Number of at bats for each player.
+    :return: Number of hits predicted by the model.
+    """
+    num_players = at_bats.shape[0]
+    m = pyro.sample("m", Uniform(at_bats.new_tensor(0), at_bats.new_tensor(1)))
+    kappa = pyro.sample("kappa", Pareto(at_bats.new_tensor(1), at_bats.new_tensor(1.5)))
+    phi_prior = Beta(m * kappa, (1 - m) * kappa).expand_by([num_players]).independent(1)
+    phi = pyro.sample("phi", phi_prior)
+    return pyro.sample("obs", Binomial(at_bats, phi))
+
+
+def partially_pooled_with_logit(at_bats):
     """
     Number of hits has a Binomial distribution with a logit link function.
     The logits $\alpha$ for each player is normally distributed with the
@@ -218,7 +237,7 @@ def main(args):
     baseball_dataset = pd.read_csv(DATA_URL, "\t")
     train, _, player_names = train_test_split(baseball_dataset)
     at_bats, hits = train[:, 0], train[:, 1]
-    nuts_kernel = NUTS(conditioned_model, adapt_step_size=True)
+    nuts_kernel = NUTS(conditioned_model)
     logging.info("Original Dataset:")
     logging.info(baseball_dataset)
 
@@ -253,16 +272,32 @@ def main(args):
         .run(partially_pooled, at_bats, hits)
     logging.info("\nModel: Partially Pooled")
     logging.info("=======================")
-    logging.info("\nSigmoid(alpha):")
-    logging.info(summary(posterior_partially_pooled,
-                         sites=["alpha"],
-                         player_names=player_names,
-                         transforms={"alpha": lambda x: 1. / (1 + np.exp(-x))})["alpha"])
+    logging.info("\nphi:")
+    logging.info(summary(posterior_partially_pooled, sites=["phi"],
+                         player_names=player_names)["phi"])
     posterior_predictive = TracePredictive(partially_pooled,
                                            posterior_partially_pooled,
                                            num_samples=args.num_samples)
     sample_posterior_predictive(posterior_predictive, baseball_dataset)
     evaluate_log_predictive_density(partially_pooled, posterior_partially_pooled, baseball_dataset)
+
+    # (4) Partially Pooled with Logit Model
+    posterior_partially_pooled_with_logit = MCMC(nuts_kernel, num_samples=args.num_samples,
+                                                 warmup_steps=args.warmup_steps) \
+        .run(partially_pooled_with_logit, at_bats, hits)
+    logging.info("\nModel: Partially Pooled with Logit")
+    logging.info("==================================")
+    logging.info("\nSigmoid(alpha):")
+    logging.info(summary(posterior_partially_pooled_with_logit,
+                         sites=["alpha"],
+                         player_names=player_names,
+                         transforms={"alpha": lambda x: 1. / (1 + np.exp(-x))})["alpha"])
+    posterior_predictive = TracePredictive(partially_pooled_with_logit,
+                                           posterior_partially_pooled_with_logit,
+                                           num_samples=args.num_samples)
+    sample_posterior_predictive(posterior_predictive, baseball_dataset)
+    evaluate_log_predictive_density(partially_pooled_with_logit, 
+                                    posterior_partially_pooled_with_logit, baseball_dataset)
 
 
 if __name__ == "__main__":
