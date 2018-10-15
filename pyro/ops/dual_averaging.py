@@ -44,9 +44,9 @@ class DualAveraging(object):
         self.t0 = t0
         self.kappa = kappa
         self.gamma = gamma
-        self.restart()
+        self.reset()
 
-    def restart(self):
+    def reset(self):
         self._x_avg = 0  # average of primal sequence
         self._g_avg = 0  # average of dual sequence
         self._t = 0

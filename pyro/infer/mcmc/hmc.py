@@ -271,12 +271,12 @@ class HMC(TraceKernel):
         else:
             if self.adapt_step_size:
                 self._step_size_adapt_scheme.prox_center = math.log(10 * self.step_size)
-                self._step_size_adapt_scheme.restart()
+                self._step_size_adapt_scheme.reset()
 
             if self.adapt_mass_matrix:
                 self._inverse_mass_matrix = self._mass_matrix_adapt_scheme.get_covariance()
                 self._update_r_dist()
-                self._mass_matrix_adapt_scheme.restart()
+                self._mass_matrix_adapt_scheme.reset()
 
             self._adapt_window = 2 * self._adapt_window
             if self._adapt_window_ending == self._adapt_mass_matrix_phase_ending:
@@ -299,7 +299,7 @@ class HMC(TraceKernel):
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
 
     def _update_r_dist(self):
-        loc = self._inverse_mass_matrix.new_zeros(self._inverse_mass_matrix.shape)
+        loc = self._inverse_mass_matrix.new_zeros(self._inverse_mass_matrix.size(0))
         if self.full_mass:
             self._r_dist = dist.MultivariateNormal(loc, precision_matrix=self._inverse_mass_matrix)
         else:
