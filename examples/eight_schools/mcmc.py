@@ -54,7 +54,7 @@ if __name__ == '__main__':
     parser.add_argument('--num-samples', type=int, default=1000,
                         help='number of MCMC samples (default: 1000)')
     parser.add_argument('--num-chains', type=int, default=1,
-                        help='number of parallel MCMC chains (default: 4)')
+                        help='number of parallel MCMC chains (default: 1)')
     parser.add_argument('--warmup-steps', type=int, default=1000,
                         help='number of MCMC samples for warmup (default: 1000)')
     args = parser.parse_args()
