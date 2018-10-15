@@ -60,6 +60,10 @@ class HMC(TraceKernel):
         discrete sample sites. This flag is experimental and will most likely
         be removed in a future release.
 
+    .. note:: Internally, the mass matrix will be ordered according to the order
+        of the names of latent variables, not the order of their appearance in
+        the model.
+
     Example:
 
         >>> true_coefs = torch.tensor([1., 2., 3.])
@@ -85,8 +89,8 @@ class HMC(TraceKernel):
                  step_size=None,
                  trajectory_length=None,
                  num_steps=None,
-                 adapt_step_size=False,
-                 adapt_mass_matrix=False,
+                 adapt_step_size=True,
+                 adapt_mass_matrix=True,
                  full_mass=False,
                  transforms=None,
                  max_iarange_nesting=float("inf"),
@@ -281,7 +285,7 @@ class HMC(TraceKernel):
 
             self._adapt_window = 2 * self._adapt_window
             if self._adapt_window_ending == self._adapt_mass_matrix_phase_ending:
-                self._adapt_mass_matrix_phase_ending = False
+                self._adapt_mass_matrix_phase = False
                 self._adapt_window_ending = self._warmup_steps
                 return
 
@@ -302,7 +306,8 @@ class HMC(TraceKernel):
     def _update_r_dist(self):
         loc = self._inverse_mass_matrix.new_zeros(self._inverse_mass_matrix.size(0))
         if self.full_mass:
-            self._r_dist = dist.MultivariateNormal(loc, precision_matrix=self._inverse_mass_matrix)
+            self._r_dist = dist.MultivariateNormal(loc,
+                                                   precision_matrix=self._inverse_mass_matrix)
         else:
             self._r_dist = dist.Normal(loc, self._inverse_mass_matrix.rsqrt())
 
