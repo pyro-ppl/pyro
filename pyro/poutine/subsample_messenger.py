@@ -62,7 +62,8 @@ class SubsampleMessenger(IndepMessenger):
     Drop-in replacement for irange and iarange, including subsampling!
     """
 
-    def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None, use_cuda=None, sites=None, device=None):
+    def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None,
+                 use_cuda=None, sites=None, device=None):
         super(SubsampleMessenger, self).__init__(name, size, dim, sites)
         self._size = size
         self.subsample_size = subsample_size
