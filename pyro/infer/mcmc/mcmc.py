@@ -117,14 +117,19 @@ class _ParallelSampler(TracePosterior):
             for w in self.workers:
                 w.start()
             while active_workers:
-                chain_id, val = self.result_queue.get()
+                try:
+                    chain_id, val = self.result_queue.get()
+                # This can happen when the worker process has terminated.
+                # See https://github.com/pytorch/pytorch/pull/5380 for motivation.
+                except FileNotFoundError:
+                    pass
                 if isinstance(val, Exception):
                     raise Exception("Exception in chain {}.".format(chain_id))
                 elif val is not None:
                     yield val
                 else:
                     active_workers -= 1
-        except (KeyboardInterrupt, SystemExit) as e:
+        except Exception as e:
             for w in self.workers:
                 w.terminate()
             raise e
