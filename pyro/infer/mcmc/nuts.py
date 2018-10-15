@@ -7,7 +7,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.ops.integrator import single_step_velocity_verlet
-from pyro.util import torch_isnan
+from pyro.util import torch_isnan, optional
 
 from pyro.infer.mcmc.hmc import HMC
 
@@ -258,8 +258,7 @@ class NUTS(HMC):
 
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation.
-        dist_arg_check = False if self._adapt_phase else pyro.distributions.is_validation_enabled()
-        with dist.validation_enabled(dist_arg_check):
+        with optional(pyro.validation_enabled(False), self._adapt_phase):
             # doubling process, stop when turning or diverging
             for tree_depth in range(self._max_tree_depth + 1):
                 direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),

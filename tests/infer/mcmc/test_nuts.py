@@ -195,7 +195,7 @@ def test_gaussian_mixture_model():
     true_mix_proportions = torch.tensor([0.1, 0.3, 0.6])
     cluster_assignments = dist.Categorical(true_mix_proportions).sample(torch.Size((N,)))
     data = dist.Normal(true_cluster_means[cluster_assignments], 1.0).sample()
-    nuts_kernel = NUTS(gmm, step_size=0.1, max_iarange_nesting=1)
+    nuts_kernel = NUTS(gmm, max_iarange_nesting=1)
     mcmc_run = MCMC(nuts_kernel, num_samples=300, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites=["phi", "cluster_means"]).mean.sort()[0]
     assert_equal(posterior[0], true_mix_proportions, prec=0.05)
