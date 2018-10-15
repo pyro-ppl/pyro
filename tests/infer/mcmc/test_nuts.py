@@ -68,7 +68,16 @@ def test_nuts_conjugate_gaussian(fixture,
         assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 
-def test_logistic_regression():
+@pytest.mark.parametrize(
+    "step_size, adapt_step_size, adapt_mass_matrix, full_mass",
+    [
+        (0.0855, False, False, False),
+        (None, True, False, False),
+        (None, True, True, False),
+        (None, True, True, True),
+    ]
+)
+def test_logistic_regression(step_size, adapt_step_size, adapt_mass_matrix, full_mass):
     dim = 3
     data = torch.randn(2000, dim)
     true_coefs = torch.arange(1., dim + 1.)
@@ -80,7 +89,7 @@ def test_logistic_regression():
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
-    nuts_kernel = NUTS(model, step_size=0.0855)
+    nuts_kernel = NUTS(model, step_size, adapt_step_size, adapt_mass_matrix, full_mass)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='beta')
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
@@ -116,24 +125,6 @@ def test_gamma_normal():
     mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_std, prec=0.05)
-
-
-def test_logistic_regression_with_dual_averaging():
-    dim = 3
-    data = torch.randn(2000, dim)
-    true_coefs = torch.arange(1., dim + 1.)
-    labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
-
-    def model(data):
-        coefs_mean = torch.zeros(dim)
-        coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(dim)))
-        y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
-        return y
-
-    nuts_kernel = NUTS(model, adapt_step_size=True)
-    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='beta')
-    assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
 
 
 def test_beta_bernoulli_with_dual_averaging():
