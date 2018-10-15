@@ -42,6 +42,6 @@ class WelfordCovariance(object):
             if self.diagonal:
                 cov = scaled_cov + shrinkage
             else:
-                scaled_cov.view(-1)[::scaled_cov.shape[0]+1] += shrinkage
+                scaled_cov.view(-1)[::scaled_cov.size(0) + 1] += shrinkage
                 cov = scaled_cov
         return cov

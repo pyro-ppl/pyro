@@ -47,6 +47,9 @@ class NUTS(HMC):
         dynamics. If not specified, it will be set to 1.
     :param bool adapt_step_size: A flag to decide if we want to adapt step_size
         during warm-up phase using Dual Averaging scheme.
+    :param bool adapt_mass_matrix: A flag to decide if we want to adapt mass
+        matrix during warm-up phase using Welford scheme.
+    :param bool full_mass: A flag to decide if mass matrix is dense or diagonal.
     :param dict transforms: Optional dictionary that specifies a transform
         for a sample site with constrained support to unconstrained space. The
         transform should be invertible, and implement `log_abs_det_jacobian`.
@@ -85,6 +88,8 @@ class NUTS(HMC):
                  model,
                  step_size=None,
                  adapt_step_size=False,
+                 adapt_mass_matrix=False,
+                 full_mass=False,
                  transforms=None,
                  max_iarange_nesting=float("inf"),
                  experimental_use_einsum=False):
@@ -111,7 +116,7 @@ class NUTS(HMC):
     def _is_turning(self, z_left, r_left, z_right, r_right):
         diff_left = 0
         diff_right = 0
-        for name in self._r_dist:
+        for name in self._r_shapes:
             dz = z_right[name] - z_left[name]
             diff_left += (dz * r_left[name]).sum()
             diff_right += (dz * r_right[name]).sum()
@@ -139,7 +144,7 @@ class NUTS(HMC):
         else:
             diverging = (sliced_energy >= self._max_sliced_energy)
             delta_energy = energy_new - energy_current
-            accept_prob = (-delta_energy).exp().clamp(max=1)
+            accept_prob = (-delta_energy).exp().clamp(max=1.0)
         return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads,
                          z_new, tree_size, False, diverging, accept_prob, 1)
 
@@ -182,8 +187,8 @@ class NUTS(HMC):
         #     (any is fine, because the probability of picking it at the end is 0!).
         if tree_size != 0:
             other_half_tree_prob = other_half_tree.size / tree_size
-            is_other_half_tree = pyro.sample("is_other_halftree",
-                                             dist.Bernoulli(probs=torch.ones(1) * other_half_tree_prob))
+            is_other_half_tree = pyro.sample(
+                "is_other_halftree", dist.Bernoulli(probs=torch.tensor(other_half_tree_prob)))
             if int(is_other_half_tree.item()) == 1:
                 z_proposal = other_half_tree.z_proposal
 
@@ -218,18 +223,19 @@ class NUTS(HMC):
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
-        r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name])
-             for name in self._r_dist}
+        r = self._sample_r()
         energy_current = self._energy(z, r)
 
         # Ideally, following a symplectic integrator trajectory, the energy is constant.
         # In that case, we can sample the proposal uniformly, and there is no need to use "slice".
         # However, it is not the case for real situation: there are errors during the computation.
-        # To deal with that problem, as in [1], we introduce an auxiliary "slice" variable (denoted by u).
+        # To deal with that problem, as in [1], we introduce an auxiliary "slice" variable (denoted
+        # by u).
         # The sampling process goes as follows:
-        #     first sampling u from initial state (z_0, r_0) according to u ~ Uniform(0, p(z_0, r_0)),
-        #     then sampling state (z, r) from the integrator trajectory according to
-        #         (z, r) ~ Uniform({(z', r') in trajectory | p(z', r') >= u}).
+        #   first sampling u from initial state (z_0, r_0) according to
+        #     u ~ Uniform(0, p(z_0, r_0)),
+        #   then sampling state (z, r) from the integrator trajectory according to
+        #     (z, r) ~ Uniform({(z', r') in trajectory | p(z', r') >= u}).
         #
         # For more information about slice sampling method, see [3].
         # For another version of NUTS which uses multinomial sampling instead of slice sampling, see
@@ -285,13 +291,20 @@ class NUTS(HMC):
                 else:  # update tree_size
                     tree_size += new_tree.size
 
+        self._t += 1
+
         if self._adapt_phase:
-            accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
-            self._adapt_step_size(accept_prob)
+            if self.adapt_step_size:
+                accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
+                self._adapt_step_size(accept_prob)
+            if self._adapt_mass_matrix_phase:
+                z_flat = torch.cat([z[name].reshape(-1) for name in sorted(z)])
+                self._mass_matrix_adapt_scheme.update(z_flat)
+            if self._t == self._adapt_window_ending:
+                self._end_adapt_window()
 
         if accepted:
             self._accept_cnt += 1
-        self._t += 1
         # get trace with the constrained values for `z`.
         for name, transform in self.transforms.items():
             z[name] = transform.inv(z[name])
