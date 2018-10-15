@@ -253,7 +253,7 @@ def main(args):
     # We'll train on small minibatches.
     logging.info('Step\tLoss')
     for step in range(args.num_steps):
-        loss = svi.step(sequences, lengths, args, batch_size=args.batch_size)
+        loss = svi.step(sequences, lengths, args=args, batch_size=args.batch_size)
         logging.info('{: >5d}\t{}'.format(step, loss / num_observations))
 
     # We evaluate on the entire training dataset,
@@ -269,7 +269,7 @@ def main(args):
     if args.truncate:
         lengths.clamp_(max=args.truncate)
     num_observations = float(lengths.sum())
-    test_loss = elbo.loss(model, guide, sequences, lengths, args, include_prior=False)
+    test_loss = elbo.loss(model, guide, sequences, lengths, args=args, include_prior=False)
     logging.info('test loss = {}'.format(test_loss / num_observations))
 
     # We expect models with higher capacity to perform better,
