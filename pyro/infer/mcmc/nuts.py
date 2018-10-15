@@ -125,7 +125,7 @@ class NUTS(HMC):
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
-            z, r, self._potential_energy, step_size, z_grads=z_grads)
+            z, r, self._potential_energy, self._inverse_mass_matrix, step_size, z_grads=z_grads)
         energy_new = potential_energy + self._kinetic_energy(r_new)
         sliced_energy = energy_new + log_slice
 
@@ -223,7 +223,7 @@ class NUTS(HMC):
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
-        r = self._sample_r()
+        r = self._sample_r(name="r_t={}".format(self._t))
         energy_current = self._energy(z, r)
 
         # Ideally, following a symplectic integrator trajectory, the energy is constant.

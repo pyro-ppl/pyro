@@ -151,10 +151,10 @@ class HMC(TraceKernel):
 
     def _kinetic_energy(self, r):
         r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)])
-        if self.mass_mass_structure != "dense":
-            return 0.5 * self._inverse_mass_matrix.dot(r_flat ** 2)
-        else:
+        if self.full_mass:
             return 0.5 * r_flat.dot(self._inverse_mass_matrix.matmul(r_flat))
+        else:
+            return 0.5 * self._inverse_mass_matrix.dot(r_flat ** 2)
 
     def _potential_energy(self, z):
         # Since the model is specified in the constrained space, transform the
@@ -177,6 +177,7 @@ class HMC(TraceKernel):
         self._accept_cnt = 0
         self._inverse_mass_matrix = None
         self._r_dist = None
+        self._r_shapes = {}
         self._args = None
         self._kwargs = None
         self._prototype_trace = None
@@ -193,8 +194,7 @@ class HMC(TraceKernel):
         # We are going to find a step_size which make accept_prob (Metropolis correction)
         # near the target_accept_prob. If accept_prob:=exp(-delta_energy) is small,
         # then we have to decrease step_size; otherwise, increase step_size.
-        r = {name: pyro.sample("r_{}_presample".format(name), self._r_dist[name])
-             for name in self._r_dist}
+        r = self._sample_r(name="r_presample")
         energy_current = self._energy(z, r)
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
             z, r, self._potential_energy, self._inverse_mass_matrix, step_size)
@@ -247,16 +247,16 @@ class HMC(TraceKernel):
             self.num_steps = max(1, int(self.trajectory_length / self.step_size))
             # make prox-center for Dual Averaging scheme
             loc = math.log(10 * self.step_size)
-            self._step_size_adaptation_scheme = DualAveraging(prox_center=loc)
+            self._step_size_adapt_scheme = DualAveraging(prox_center=loc)
 
         if self.adapt_mass_matrix:
             is_diag = not self.full_mass
-            self._mass_matrix_adaptation_scheme = WelfordCovariance(diagonal=is_diag)
+            self._mass_matrix_adapt_scheme = WelfordCovariance(diagonal=is_diag)
 
     def _end_warmup(self):
         self._adapt_phase = False
         if self.adapt_step_size:
-            _, log_step_size_avg = self._step_size_adaptation_scheme.get_state()
+            _, log_step_size_avg = self._step_size_adapt_scheme.get_state()
             self.step_size = math.exp(log_step_size_avg)
             self.num_steps = max(1, int(self.trajectory_length / self.step_size))
 
@@ -293,7 +293,7 @@ class HMC(TraceKernel):
     def _adapt_step_size(self, accept_prob):
         # calculate a statistic for Dual Averaging scheme
         H = self._target_accept_prob - accept_prob
-        self._step_size_adaptation_scheme.step(H)
+        self._step_size_adapt_scheme.step(H)
         log_step_size, _ = self._step_size_adapt_scheme.get_state()
         self.step_size = math.exp(log_step_size)
         self.num_steps = max(1, int(self.trajectory_length / self.step_size))
@@ -301,12 +301,12 @@ class HMC(TraceKernel):
     def _update_r_dist(self):
         loc = self._inverse_mass_matrix.new_zeros(self._inverse_mass_matrix.shape)
         if self.full_mass:
-            return dist.MultivariateNormal(loc, precision_matrix=self._inverse_mass_matrix)
+            self._r_dist = dist.MultivariateNormal(loc, precision_matrix=self._inverse_mass_matrix)
         else:
-            return dist.Normal(loc, self._inverse_mass_matrix.rsqrt())
+            self._r_dist = dist.Normal(loc, self._inverse_mass_matrix.rsqrt())
 
-    def _sample_r(self):
-        r_flat = pyro.sample("r_t={}".format(self._t), self._r_dist)
+    def _sample_r(self, name):
+        r_flat = pyro.sample(name, self._r_dist)
         r = {}
         pos = 0
         for name in sorted(self._r_shapes):
@@ -370,7 +370,7 @@ class HMC(TraceKernel):
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
 
-        r = self._sample_r()
+        r = self._sample_r(name="r_t={}".format(self._t))
 
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation
