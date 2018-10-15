@@ -72,11 +72,8 @@ class NormalNormalTests(TestCase):
             return loc_latent
 
         def guide():
-            loc_q = pyro.param("loc_q", torch.tensor(self.analytic_loc_n.data + 0.134 * torch.ones(2),
-                                                     requires_grad=True))
-            log_sig_q = pyro.param("log_sig_q", torch.tensor(
-                                   self.analytic_log_sig_n.data - 0.14 * torch.ones(2),
-                                   requires_grad=True))
+            loc_q = pyro.param("loc_q", self.analytic_loc_n.detach() + 0.134)
+            log_sig_q = pyro.param("log_sig_q", self.analytic_log_sig_n.data.detach() - 0.14)
             sig_q = torch.exp(log_sig_q)
             Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
             pyro.sample("loc_latent", Normal(loc_q, sig_q).independent(1))
@@ -107,11 +104,9 @@ class TestFixedModelGuide(TestCase):
 
         def model():
             alpha_p_log = pyro.param(
-                "alpha_p_log", torch.tensor(
-                    self.alpha_p_log_0.clone()))
+                "alpha_p_log", self.alpha_p_log_0.clone())
             beta_p_log = pyro.param(
-                "beta_p_log", torch.tensor(
-                    self.beta_p_log_0.clone()))
+                "beta_p_log", self.beta_p_log_0.clone())
             alpha_p, beta_p = torch.exp(alpha_p_log), torch.exp(beta_p_log)
             lambda_latent = pyro.sample("lambda_latent", dist.Gamma(alpha_p, beta_p))
             pyro.sample("obs", dist.Poisson(lambda_latent), obs=self.data)
@@ -119,11 +114,9 @@ class TestFixedModelGuide(TestCase):
 
         def guide():
             alpha_q_log = pyro.param(
-                "alpha_q_log", torch.tensor(
-                    self.alpha_q_log_0.clone()))
+                "alpha_q_log", self.alpha_q_log_0.clone())
             beta_q_log = pyro.param(
-                "beta_q_log", torch.tensor(
-                    self.beta_q_log_0.clone()))
+                "beta_q_log", self.beta_q_log_0.clone())
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.Gamma(alpha_q, beta_q))
 
@@ -331,9 +324,9 @@ class BernoulliBetaTests(TestCase):
 
         def guide():
             alpha_q_log = pyro.param("alpha_q_log",
-                                     torch.tensor(self.log_alpha_n.data + 0.17, requires_grad=True))
+                                     self.log_alpha_n + 0.17)
             beta_q_log = pyro.param("beta_q_log",
-                                    torch.tensor(self.log_beta_n.data - 0.143, requires_grad=True))
+                                    self.log_beta_n - 0.143)
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("p_latent", Beta(alpha_q, beta_q))
 

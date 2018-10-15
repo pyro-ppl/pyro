@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
 import numbers
 import operator
 import timeit
@@ -14,6 +15,9 @@ from pyro.infer.util import torch_exp
 from pyro.ops.einsum import contract
 from pyro.ops.sumproduct import logsumproductexp, sumproduct, zip_align_right
 from tests.common import assert_equal
+
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize('xs,ys,expected', [
@@ -135,4 +139,4 @@ def test_einsum_speed(equation, shapes, backend):
     for _ in range(1000):
         contract(equation, *operands, backend=backend)
     elapsed = timeit.default_timer() - start_time
-    print('{} {}: {}'.format(backend, equation, elapsed))
+    logger.debug('{} {}: {}'.format(backend, equation, elapsed))

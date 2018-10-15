@@ -51,7 +51,7 @@ class _OMTMVNSample(Function):
         g = grad_output
         loc_grad = sum_leftmost(grad_output, -1)
 
-        identity = torch.eye(dim, out=torch.tensor(g.new_empty(dim, dim)))
+        identity = torch.eye(dim, out=g.new_empty(dim, dim))
         R_inv = torch.trtrs(identity, L.t(), transpose=False, upper=True)[0]
 
         z_ja = z.unsqueeze(-1)

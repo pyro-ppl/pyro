@@ -71,10 +71,8 @@ def test_elbo_mapdata(batch_size, map_type):
         return loc_latent
 
     def guide():
-        loc_q = pyro.param("loc_q", torch.tensor(
-            analytic_loc_n.data + torch.tensor([-0.18, 0.23]), requires_grad=True))
-        log_sig_q = pyro.param("log_sig_q", torch.tensor(
-            analytic_log_sig_n.data - torch.tensor([-0.18, 0.23]), requires_grad=True))
+        loc_q = pyro.param("loc_q", analytic_loc_n.detach().clone() + torch.tensor([-0.18, 0.23]))
+        log_sig_q = pyro.param("log_sig_q", analytic_log_sig_n.detach().clone() - torch.tensor([-0.18, 0.23]))
         sig_q = torch.exp(log_sig_q)
         pyro.sample("loc_latent", dist.Normal(loc_q, sig_q).independent(1))
         if map_type == "irange" or map_type is None:
