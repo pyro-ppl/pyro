@@ -68,6 +68,7 @@ def single_step_velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_si
     z_grads, potential_energy = _potential_grad(potential_fn, z_next)
     for site_name in r_next:
         r_next[site_name] = r_next[site_name] + 0.5 * step_size * (-z_grads[site_name])
+
     return z_next, r_next, z_grads, potential_energy
 
 
