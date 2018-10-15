@@ -96,6 +96,8 @@ class NUTS(HMC):
         super(NUTS, self).__init__(model,
                                    step_size,
                                    adapt_step_size=adapt_step_size,
+                                   adapt_mass_matrix=adapt_mass_matrix,
+                                   full_mass=full_mass,
                                    transforms=transforms,
                                    max_iarange_nesting=max_iarange_nesting,
                                    experimental_use_einsum=experimental_use_einsum)
