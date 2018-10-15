@@ -276,6 +276,6 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--num-samples", nargs="?", default=1200, type=int)
     parser.add_argument("--warmup-steps", nargs='?', default=300, type=int)
     parser.add_argument("--rng_seed", nargs='?', default=0, type=int)
-    parser.add_argument("--num-chains", nargs='?', default=1, type=int)
+    parser.add_argument("--num-chains", nargs='?', default=4, type=int)
     args = parser.parse_args()
     main(args)

@@ -82,12 +82,14 @@ class NUTS(HMC):
     """
 
     def __init__(self,
+                 model,
                  step_size=None,
                  adapt_step_size=False,
                  transforms=None,
                  max_iarange_nesting=float("inf"),
                  experimental_use_einsum=False):
-        super(NUTS, self).__init__(step_size,
+        super(NUTS, self).__init__(model,
+                                   step_size,
                                    adapt_step_size=adapt_step_size,
                                    transforms=transforms,
                                    max_iarange_nesting=max_iarange_nesting,
