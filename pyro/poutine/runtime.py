@@ -1,3 +1,5 @@
+import functools
+
 from pyro.params.param_store import _MODULE_NAMESPACE_DIVIDER, ParamStoreDict  # noqa: F401
 
 # the global pyro stack
@@ -158,14 +160,12 @@ def effectful(fn=None, type=None):
     Wrapper for calling apply_stack to apply any active effects.
     """
     if fn is None:
-        return lambda x: effectful(x, type=type)
+        return functools.partial(effectful, type=type)
 
     if getattr(fn, "__wrapped", None):
         return fn
     else:
-        if type is None:
-            type = fn.__code__.co_name
-
+        assert type is not None, "must provide a type label for operation {}".format(fn)
         assert type != "message", "cannot use 'message' as keyword"
 
         def _fn(*args, **kwargs):
