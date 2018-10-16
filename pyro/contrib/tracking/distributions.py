@@ -46,7 +46,7 @@ class EKFDistribution(TorchDistribution):
     def rsample(self, sample_shape=torch.Size()):
         raise NotImplementedError('TODO: implement forward filter backward sample')
 
-    def get_states(self, value):
+    def filter_states(self, value):
         """
         Returns the ekf states given measurements
 
