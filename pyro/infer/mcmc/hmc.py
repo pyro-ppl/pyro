@@ -16,7 +16,7 @@ from pyro.infer.mcmc.util import TraceEinsumEvaluator, TraceTreeEvaluator
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
 from pyro.ops.welford import WelfordCovariance
-from pyro.primitives import _Subsample
+from pyro.poutine.subsample_messenger import _Subsample
 from pyro.util import torch_isinf, torch_isnan, optional
 
 

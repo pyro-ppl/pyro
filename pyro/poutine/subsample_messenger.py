@@ -128,4 +128,5 @@ class SubsampleMessenger(IndepMessenger):
     def _process_message(self, msg):
         super(SubsampleMessenger, self)._process_message(msg)
         if self._installed:
-            msg["scale"] = (self._size / self.subsample_size) * msg["scale"]
+            # XXX this check is a hack caused by all the gross state in this class
+            msg["scale"] = (self._size / (1 or self.subsample_size)) * msg["scale"]

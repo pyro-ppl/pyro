@@ -9,7 +9,7 @@ import pyro.poutine as poutine
 from pyro.infer import config_enumerate
 from pyro.infer.mcmc import HMC, MCMC, NUTS
 from pyro.infer.mcmc.util import TraceTreeEvaluator, TraceEinsumEvaluator
-from pyro.primitives import _Subsample
+from pyro.poutine.subsample_messenger import _Subsample
 from tests.common import assert_equal, xfail_param
 
 logger = logging.getLogger(__name__)
