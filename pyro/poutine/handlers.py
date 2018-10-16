@@ -354,7 +354,7 @@ def mask(fn=None, mask=None):
     return msngr(fn) if fn is not None else msngr
 
 
-def indep(fn=None, name=None, size=None, dim=None, sites=None):
+def indep(fn=None, name=None, size=None, dim=None):
     """
     .. note:: Low-level; use :class:`~pyro.iarange` instead.
 
@@ -362,15 +362,6 @@ def indep(fn=None, name=None, size=None, dim=None, sites=None):
     nested ``irange`` and ``iarange`` contexts. This information is stored in
     a ``cond_indep_stack`` at each sample/observe site for consumption by
     :class:`~pyro.poutine.trace_messenger.TraceMessenger`.
-
-    Example::
-
-        @plate(name="outer", sites=["x_noise", "xy_noise"], size=320, dim=-1)
-        @plate(name="inner", sites=["y_noise", "xy_noise"], size=200, dim=-2)
-        def model():
-            x_noise = sample("x_noise", dist.Normal(0., 1.).expand_by([320]))
-            y_noise = sample("y_noise", dist.Normal(0., 1.).expand_by([200, 1]))
-            xy_noise = sample("xy_noise", dist.Normal(0., 1.).expand_by([200, 320]))
 
     Example::
 
@@ -383,7 +374,7 @@ def indep(fn=None, name=None, size=None, dim=None, sites=None):
         with x_axis, y_axis:
             xy_noise = sample("xy_noise", dist.Normal(loc, scale).expand_by([200, 320]))
     """
-    msngr = IndepMessenger(name=name, size=size, dim=dim, sites=sites)
+    msngr = IndepMessenger(name=name, size=size, dim=dim)
     return msngr(fn) if fn is not None else msngr
 
 

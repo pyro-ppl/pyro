@@ -37,17 +37,6 @@ class IndepMessenger(Messenger):
     a ``cond_indep_stack`` at each sample/observe site for consumption by
     ``TraceMessenger``.
 
-    Allows specifying iarange contexts outside of a model
-
-    Example::
-
-        @plate(name="outer", sites=["x_noise", "xy_noise"], size=320, dim=-1)
-        @plate(name="inner", sites=["y_noise", "xy_noise"], size=200, dim=-2)
-        def model():
-            x_noise = sample("x_noise", dist.Normal(0., 1.).expand_by([320]))
-            y_noise = sample("y_noise", dist.Normal(0., 1.).expand_by([200, 1]))
-            xy_noise = sample("xy_noise", dist.Normal(0., 1.).expand_by([200, 320]))
-
     Example::
 
         x_axis = plate('outer', 320, dim=-1)
@@ -60,11 +49,13 @@ class IndepMessenger(Messenger):
             xy_noise = sample("xy_noise", dist.Normal(loc, scale).expand_by([200, 320]))
 
     """
-    def __init__(self, name=None, size=None, dim=None, sites=None):
+    def __init__(self, name=None, size=None, dim=None):
         super(IndepMessenger, self).__init__()
-        self.sites = sites
-        self._installed = False
-        self._vectorized = True
+
+        self._vectorized = None
+        if dim is not None:
+            self._vectorized = None
+
         if size == 0:
             # XXX hack to pass poutine tests
             raise ZeroDivisionError("size cannot be zero")
@@ -79,32 +70,40 @@ class IndepMessenger(Messenger):
         """
         self.counter += 1
 
+    def __enter__(self):
+        if self._vectorized is not False:
+            self._vectorized = True
+
+        if self._vectorized is True:
+            self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
+
+        return super(IndepMessenger, self).__enter__()
+
     def __exit__(self, *args):
-        if self._installed:
-            if self._vectorized:
-                _DIM_ALLOCATOR.free(self.name, self.dim)
-            self._installed = False
-        # self.counter = 0
+        if self._vectorized is True:
+            _DIM_ALLOCATOR.free(self.name, self.dim)
         return super(IndepMessenger, self).__exit__(*args)
 
+    def __iter__(self):
+        if self._vectorized is True or self.dim is not None:
+            raise ValueError(
+                "cannot use plate {} as both vectorized and non-vectorized"
+                "independence context".format(self.name))
+
+        self._vectorized = False
+        self.dim = None
+
+        for i in self.indices:
+            self.next_context()
+            with self:
+                yield i if isinstance(i, numbers.Number) else i.item()
+
     def _reset(self):
-        if self._installed:
-            if self._vectorized:
-                _DIM_ALLOCATOR.free(self.name, self.dim)
-        self._installed = False
-        self._vectorized = True
+        if self._vectorized:
+            _DIM_ALLOCATOR.free(self.name, self.dim)
+        self._vectorized = None
         self.counter = 0
 
     def _process_message(self, msg):
-        if self.sites is None or msg["name"] in self.sites:
-            if not self._installed:
-                if self._vectorized:
-                    self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
-                self._installed = True
-            frame = CondIndepStackFrame(self.name, self.dim, self.size, self.counter)
-            msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
-        elif self.sites is not None and msg["name"] not in self.sites:
-            if self._installed:
-                if self._vectorized:
-                    _DIM_ALLOCATOR.free(self.name, self.dim)
-                self._installed = False
+        frame = CondIndepStackFrame(self.name, self.dim, self.size, self.counter)
+        msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]

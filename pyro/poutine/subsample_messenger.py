@@ -63,8 +63,8 @@ class SubsampleMessenger(IndepMessenger):
     """
 
     def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None,
-                 use_cuda=None, sites=None, device=None):
-        super(SubsampleMessenger, self).__init__(name, size, dim, sites)
+                 use_cuda=None, device=None):
+        super(SubsampleMessenger, self).__init__(name, size, dim)
         self._size = size
         self.subsample_size = subsample_size
         self.indices = subsample
@@ -127,6 +127,5 @@ class SubsampleMessenger(IndepMessenger):
 
     def _process_message(self, msg):
         super(SubsampleMessenger, self)._process_message(msg)
-        if self._installed:
-            # XXX this check is a hack caused by all the gross state in this class
-            msg["scale"] = (self._size / (1 or self.subsample_size)) * msg["scale"]
+        # XXX this check is a hack caused by all the gross state in this class
+        msg["scale"] = (self._size / (1 or self.subsample_size)) * msg["scale"]
