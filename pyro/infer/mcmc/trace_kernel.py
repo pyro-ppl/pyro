@@ -8,7 +8,7 @@ from six import add_metaclass
 @add_metaclass(ABCMeta)
 class TraceKernel(object):
 
-    def setup(self, warmup_steps=None, *args, **kwargs):
+    def setup(self, warmup_steps, *args, **kwargs):
         """
         Optional method to set up any state required at the start of the
         simulation run.

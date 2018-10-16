@@ -229,20 +229,6 @@ class HMC(TraceKernel):
         self._adapt_phase = True
         self._adapt_window = self._adapt_initial_window
 
-        # from Stan, for small warmup_steps
-        if self._warmup_steps < 20:
-            self._adapt_start_buffer = self._warmup_steps
-        elif (self._adapt_start_buffer + self._adapt_end_buffer
-                + self._adapt_initial_window > self._warmup_steps):
-            self._adapt_start_buffer = int(0.15 * self._warmup_steps)
-            self._adapt_end_buffer = int(0.1 * self._warmup_steps)
-            self._adapt_window = (self._warmup_steps - self._adapt_start_buffer
-                                  - self._adapt_end_buffer)
-
-        # define ending pointer of the current window
-        self._adapt_window_ending = self._adapt_start_buffer
-        self._adapt_mass_matrix_phase_ending = self._warmup_steps - self._adapt_end_buffer
-
         if self.adapt_step_size:
             z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
             for name, transform in self.transforms.items():
@@ -253,6 +239,22 @@ class HMC(TraceKernel):
             # make prox-center for Dual Averaging scheme
             loc = math.log(10 * self.step_size)
             self._step_size_adapt_scheme = DualAveraging(prox_center=loc)
+
+        # from Stan, for small warmup_steps
+        if self._warmup_steps < 20:
+            self._adapt_window_ending = self._warmup_steps
+            return
+
+        if (self._adapt_start_buffer + self._adapt_end_buffer
+                + self._adapt_initial_window > self._warmup_steps):
+            self._adapt_start_buffer = int(0.15 * self._warmup_steps)
+            self._adapt_end_buffer = int(0.1 * self._warmup_steps)
+            self._adapt_window = (self._warmup_steps - self._adapt_start_buffer
+                                  - self._adapt_end_buffer)
+
+        # define ending pointer of the current window
+        self._adapt_window_ending = self._adapt_start_buffer
+        self._adapt_mass_matrix_phase_ending = self._warmup_steps - self._adapt_end_buffer
 
         if self.adapt_mass_matrix:
             is_diag = not self.full_mass

@@ -68,17 +68,7 @@ def test_nuts_conjugate_gaussian(fixture,
         assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 
-@pytest.mark.parametrize(
-    "step_size, adapt_step_size, adapt_mass_matrix, full_mass",
-    [
-        (0.0855, False, False, False),
-        (0.0855, False, True, False),
-        (None, True, False, False),
-        (None, True, True, False),
-        (None, True, True, True),
-    ]
-)
-def test_logistic_regression(step_size, adapt_step_size, adapt_mass_matrix, full_mass):
+def test_logistic_regression():
     dim = 3
     data = torch.randn(2000, dim)
     true_coefs = torch.arange(1., dim + 1.)
@@ -90,7 +80,7 @@ def test_logistic_regression(step_size, adapt_step_size, adapt_mass_matrix, full
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
-    nuts_kernel = NUTS(model, step_size, adapt_step_size, adapt_mass_matrix, full_mass)
+    nuts_kernel = NUTS(model)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='beta')
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
@@ -122,17 +112,7 @@ def test_beta_bernoulli(step_size, adapt_step_size, adapt_mass_matrix, full_mass
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
-@pytest.mark.parametrize(
-    "step_size, adapt_step_size, adapt_mass_matrix, full_mass",
-    [
-        (0.01, False, False, False),
-        (0.01, False, True, False),
-        (None, True, False, False),
-        (None, True, True, False),
-        (None, True, True, True),
-    ]
-)
-def test_gamma_normal(step_size, adapt_step_size, adapt_mass_matrix, full_mass):
+def test_gamma_normal():
     def model(data):
         rate = torch.tensor([1.0, 1.0])
         concentration = torch.tensor([1.0, 1.0])
@@ -142,7 +122,7 @@ def test_gamma_normal(step_size, adapt_step_size, adapt_mass_matrix, full_mass):
 
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
-    nuts_kernel = NUTS(model, step_size, adapt_step_size, adapt_mass_matrix, full_mass)
+    nuts_kernel = NUTS(model)
     mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_std, prec=0.05)
