@@ -21,11 +21,11 @@ logger = logging.getLogger(__name__)
 T2 = T(*TEST_CASES[2].values)._replace(num_samples=800, warmup_steps=200)
 TEST_CASES[2] = pytest.param(*T2, marks=pytest.mark.skipif(
     'CI' in os.environ or 'CUDA_TEST' in os.environ,
-    reason='Slow test - skip on CI'))
+    reason='Slow test - skip on CI/CUDA'))
 T3 = T(*TEST_CASES[3].values)._replace(num_samples=1000, warmup_steps=200)
 TEST_CASES[3] = pytest.param(*T3, marks=[
     pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
-                       reason='Slow test - skip on CI')]
+                       reason='Slow test - skip on CI/CUDA')]
 )
 
 

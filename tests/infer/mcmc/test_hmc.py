@@ -93,8 +93,8 @@ TEST_CASES = [
         mean_tol=0.05,
         std_tol=0.05,
     ), marks=[pytest.mark.xfail(reason="flaky"),
-              pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
-                                 reason='Slow test - skip on CI')]),
+              pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
+                                 reason='Slow test - skip on CI/CUDA')]),
     pytest.param(*T(
         GaussianChain(dim=5, chain_len=9, num_obs=1),
         num_samples=3000,
@@ -106,8 +106,8 @@ TEST_CASES = [
         mean_tol=0.08,
         std_tol=0.08,
     ), marks=[pytest.mark.xfail(reason="flaky"),
-              pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
-                                 reason='Slow test - skip on CI')])
+              pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
+                                 reason='Slow test - skip on CI/CUDA')])
 ]
 
 TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
