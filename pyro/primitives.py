@@ -31,6 +31,8 @@ def clear_param_store():
     return _PYRO_PARAM_STORE.clear()
 
 
+_param = effectful(_PYRO_PARAM_STORE.get_param, type="param")
+
 def param(name, *args, **kwargs):
     """
     Saves the variable as a parameter in the param store.
@@ -41,8 +43,7 @@ def param(name, *args, **kwargs):
     :returns: parameter
     """
     kwargs["name"] = name
-    return effectful(_PYRO_PARAM_STORE.get_param, type="param")(
-        name, *args, **kwargs)
+    return _param(name, *args, **kwargs)
 
 
 def sample(name, fn, *args, **kwargs):
@@ -66,7 +67,10 @@ def sample(name, fn, *args, **kwargs):
         kwargs["infer"] = {}
     if "obs" not in kwargs:
         kwargs["obs"] = None
-    return effectful(fn, type="sample")(*args, **kwargs)
+    if getattr(fn.__call__, "__wrapped", None):
+        return fn(*args, **kwargs)
+    else:
+        return effectful(fn, type="sample")(*args, **kwargs)
 
 
 class _Subsample(Distribution):
