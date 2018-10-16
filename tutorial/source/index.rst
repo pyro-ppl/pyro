@@ -35,6 +35,8 @@ Welcome to Pyro Examples and Tutorials!
    gp
    bo
    tracking_1d
+   RSA-implicature
+   RSA-hyperbole
 
 
 Indices and tables
