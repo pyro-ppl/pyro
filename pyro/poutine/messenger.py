@@ -114,13 +114,15 @@ class Messenger(object):
         Process the message by calling appropriate method of itself based
         on message type. The message is updated in place.
         """
-        if hasattr(self, "_pyro_{}".format(msg["type"])):
-            return getattr(self, "_pyro_{}".format(msg["type"]))(msg)
+        method_name = "_pyro_{}".format(msg["type"])
+        if hasattr(self, method_name):
+            return getattr(self, method_name)(msg)
         return None
 
     def _postprocess_message(self, msg):
-        if hasattr(self, "_pyro_post_{}".format(msg["type"])):
-            return getattr(self, "_pyro_post_{}".format(msg["type"]))(msg)
+        method_name = "_pyro_post_{}".format(msg["type"])
+        if hasattr(self, method_name):
+            return getattr(self, method_name)(msg)
         return None
 
     @classmethod
@@ -133,7 +135,7 @@ class Messenger(object):
             return lambda x: cls.register(x, type=type, post=post)
 
         if type is None:
-            type = fn.__code__.co_name
+            raise ValueError("An operation type name must be provided")
 
         setattr(cls, "_pyro_" + ("post_" if post else "") + type, staticmethod(fn))
         return fn
