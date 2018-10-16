@@ -26,8 +26,6 @@ Welcome to Pyro Examples and Tutorials!
    dmm
    air
    ss-vae
-   RSA-implicature
-   RSA-hyperbole
 
 .. toctree::
    :maxdepth: 2
@@ -37,6 +35,8 @@ Welcome to Pyro Examples and Tutorials!
    gp
    bo
    tracking_1d
+   RSA-implicature
+   RSA-hyperbole
 
 
 Indices and tables
