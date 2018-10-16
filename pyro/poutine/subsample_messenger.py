@@ -5,7 +5,7 @@ import torch
 from pyro.distributions.distribution import Distribution
 
 from .indep_messenger import CondIndepStackFrame, IndepMessenger
-from .runtime import apply_stack, am_i_wrapped
+from .runtime import apply_stack
 
 
 class _Subsample(Distribution):
