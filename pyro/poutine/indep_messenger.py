@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
 from collections import namedtuple
 
 import torch
@@ -50,15 +51,15 @@ class IndepMessenger(Messenger):
 
     """
     def __init__(self, name=None, size=None, dim=None):
-        super(IndepMessenger, self).__init__()
+        if size == 0:
+            raise ZeroDivisionError("size cannot be zero")
 
+        super(IndepMessenger, self).__init__()
         self._vectorized = None
         if dim is not None:
             self._vectorized = None
 
-        if size == 0:
-            # XXX hack to pass poutine tests
-            raise ZeroDivisionError("size cannot be zero")
+        self._indices = None
         self.name = name
         self.dim = dim
         self.size = size
@@ -103,6 +104,12 @@ class IndepMessenger(Messenger):
             _DIM_ALLOCATOR.free(self.name, self.dim)
         self._vectorized = None
         self.counter = 0
+
+    @property
+    def indices(self):
+        if self._indices is None:
+            self._indices = torch.arange(self.size, dtype=torch.long)
+        return self._indices
 
     def _process_message(self, msg):
         frame = CondIndepStackFrame(self.name, self.dim, self.size, self.counter)

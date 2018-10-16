@@ -174,10 +174,9 @@ class iarange(SubsampleMessenger):
     """
     def __enter__(self):
         super(iarange, self).__enter__()
-        return self.indices
-
-    def __call__(self, fn):
-        raise NotImplementedError
+        if self._vectorized and self._indices is not None:
+            return self.indices
+        return None
 
 
 class irange(SubsampleMessenger):
@@ -216,22 +215,7 @@ class irange(SubsampleMessenger):
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
-    def __init__(self, *args, **kwargs):
-        super(irange, self).__init__(*args, **kwargs)
-        self._vectorized = False
-
-    def __call__(self, fn):
-        raise NotImplementedError
-
-    def __iter__(self):
-        self.size, self.subsample_size, self.indices = self._subsample(
-            self.name, self.size, self.subsample_size, self.indices, self.use_cuda)
-        self._vectorized = False
-        self.dim = None
-        for i in self.indices:
-            self.next_context()
-            with self:
-                yield i if isinstance(i, numbers.Number) else i.item()
+    pass
 
 
 # XXX this should have the same call signature as torch.Tensor constructors

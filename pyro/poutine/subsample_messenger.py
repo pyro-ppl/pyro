@@ -66,15 +66,16 @@ class SubsampleMessenger(IndepMessenger):
                  use_cuda=None, device=None):
         super(SubsampleMessenger, self).__init__(name, size, dim)
         self.subsample_size = subsample_size
-        self.indices = subsample
+        self._indices = subsample
         self.use_cuda = use_cuda
         self.device = device
 
-        self.size, self.subsample_size, self.indices = self._subsample(
+        self.size, self.subsample_size, self._indices = self._subsample(
             self.name, self.size, self.subsample_size,
-            self.indices, self.use_cuda, self.device)
+            self._indices, self.use_cuda, self.device)
 
-    def _subsample(self, name, size=None, subsample_size=None, subsample=None, use_cuda=None, device=None):
+    @staticmethod
+    def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=None, device=None):
         """
         Helper function for iarange and irange. See their docstrings for details.
         """
@@ -110,10 +111,6 @@ class SubsampleMessenger(IndepMessenger):
                 " Did you accidentally use different subsample_size in the model and guide?")
 
         return size, subsample_size, subsample
-
-    def __enter__(self):
-        # self.size = self.subsample_size
-        return super(SubsampleMessenger, self).__enter__()
 
     def _reset(self):
         self.subsample = None
