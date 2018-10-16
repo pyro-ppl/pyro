@@ -71,11 +71,10 @@ class SubsampleMessenger(IndepMessenger):
         self.use_cuda = use_cuda
         self.device = device
 
-        if am_i_wrapped():
-            self._size, self.subsample_size, self.indices = self._subsample(
-                self.name, self._size, self.subsample_size,
-                self.indices, self.use_cuda, self.device)
-            self.size = self.subsample_size
+        self._size, self.subsample_size, self.indices = self._subsample(
+            self.name, self._size, self.subsample_size,
+            self.indices, self.use_cuda, self.device)
+        self.size = self.subsample_size
 
     def _subsample(self, name, size=None, subsample_size=None, subsample=None, use_cuda=None, device=None):
         """
@@ -115,9 +114,6 @@ class SubsampleMessenger(IndepMessenger):
         return size, subsample_size, subsample
 
     def __enter__(self):
-        if self.indices is None and self.size is None:
-            self._size, self.subsample_size, self.indices = self._subsample(
-                self.name, self._size, self.subsample_size, self.indices, self.use_cuda, self.device)
         self.size = self.subsample_size
         return super(SubsampleMessenger, self).__enter__()
 
