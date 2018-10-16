@@ -26,6 +26,8 @@ Welcome to Pyro Examples and Tutorials!
    dmm
    air
    ss-vae
+   RSA-implicature
+   RSA-hyperbole
 
 .. toctree::
    :maxdepth: 2
