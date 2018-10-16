@@ -1,9 +1,3 @@
-import six
-if six.PY3:
-    import functools
-else:
-    import functools32 as functools
-
 from pyro.params.param_store import _MODULE_NAMESPACE_DIVIDER, ParamStoreDict  # noqa: F401
 
 # the global pyro stack
@@ -159,7 +153,6 @@ def am_i_wrapped():
     return len(_PYRO_STACK) > 0
 
 
-@functools.lru_cache(maxsize=1000)
 def effectful(fn=None, type=None):
     """
     Wrapper for calling apply_stack to apply any active effects.
