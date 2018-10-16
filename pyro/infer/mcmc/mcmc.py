@@ -22,10 +22,10 @@ class MCMC(TracePosterior):
         during the warmup phase are discarded.
     """
 
-    def __init__(self, kernel, num_samples, warmup_steps=0):
+    def __init__(self, kernel, num_samples, warmup_steps=None):
         self.kernel = kernel
-        self.warmup_steps = warmup_steps
         self.num_samples = num_samples
+        self.warmup_steps = warmup_steps if warmup_steps is not None else num_samples // 2  # Stan
         self.logger = logging.getLogger("pyro.infer.mcmc")
         super(MCMC, self).__init__()
 
@@ -41,12 +41,11 @@ class MCMC(TracePosterior):
         chain_id = kwargs.pop("chain_id", 0)
         progress_bar = initialize_progbar(self.warmup_steps, self.num_samples)
         self.logger = initialize_logger(self.logger, chain_id, progress_bar)
-        self.kernel.setup(*args, **kwargs)
+        self.kernel.setup(self.warmup_steps, *args, **kwargs)
         trace = self.kernel.initial_trace()
         with progress_bar:
             for trace in self._gen_samples(self.warmup_steps, trace):
                 continue
-            self.kernel.end_warmup()
             if progress_bar:
                 progress_bar.set_description("Sample")
             for trace in self._gen_samples(self.num_samples, trace):
