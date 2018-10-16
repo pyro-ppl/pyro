@@ -7,7 +7,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.ops.integrator import single_step_velocity_verlet
-from pyro.util import torch_isnan
+from pyro.util import torch_isnan, optional
 
 from pyro.infer.mcmc.hmc import HMC
 
@@ -47,6 +47,9 @@ class NUTS(HMC):
         dynamics. If not specified, it will be set to 1.
     :param bool adapt_step_size: A flag to decide if we want to adapt step_size
         during warm-up phase using Dual Averaging scheme.
+    :param bool adapt_mass_matrix: A flag to decide if we want to adapt mass
+        matrix during warm-up phase using Welford scheme.
+    :param bool full_mass: A flag to decide if mass matrix is dense or diagonal.
     :param dict transforms: Optional dictionary that specifies a transform
         for a sample site with constrained support to unconstrained space. The
         transform should be invertible, and implement `log_abs_det_jacobian`.
@@ -84,13 +87,17 @@ class NUTS(HMC):
     def __init__(self,
                  model,
                  step_size=None,
-                 adapt_step_size=False,
+                 adapt_step_size=True,
+                 adapt_mass_matrix=True,
+                 full_mass=False,
                  transforms=None,
                  max_iarange_nesting=float("inf"),
                  experimental_use_einsum=False):
         super(NUTS, self).__init__(model,
                                    step_size,
                                    adapt_step_size=adapt_step_size,
+                                   adapt_mass_matrix=adapt_mass_matrix,
+                                   full_mass=full_mass,
                                    transforms=transforms,
                                    max_iarange_nesting=max_iarange_nesting,
                                    experimental_use_einsum=experimental_use_einsum)
@@ -111,7 +118,7 @@ class NUTS(HMC):
     def _is_turning(self, z_left, r_left, z_right, r_right):
         diff_left = 0
         diff_right = 0
-        for name in self._r_dist:
+        for name in self._r_shapes:
             dz = z_right[name] - z_left[name]
             diff_left += (dz * r_left[name]).sum()
             diff_right += (dz * r_right[name]).sum()
@@ -120,7 +127,7 @@ class NUTS(HMC):
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
-            z, r, self._potential_energy, step_size, z_grads=z_grads)
+            z, r, self._potential_energy, self._inverse_mass_matrix, step_size, z_grads=z_grads)
         energy_new = potential_energy + self._kinetic_energy(r_new)
         sliced_energy = energy_new + log_slice
 
@@ -139,7 +146,7 @@ class NUTS(HMC):
         else:
             diverging = (sliced_energy >= self._max_sliced_energy)
             delta_energy = energy_new - energy_current
-            accept_prob = (-delta_energy).exp().clamp(max=1)
+            accept_prob = (-delta_energy).exp().clamp(max=1.0)
         return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads,
                          z_new, tree_size, False, diverging, accept_prob, 1)
 
@@ -182,8 +189,8 @@ class NUTS(HMC):
         #     (any is fine, because the probability of picking it at the end is 0!).
         if tree_size != 0:
             other_half_tree_prob = other_half_tree.size / tree_size
-            is_other_half_tree = pyro.sample("is_other_halftree",
-                                             dist.Bernoulli(probs=torch.ones(1) * other_half_tree_prob))
+            is_other_half_tree = pyro.sample(
+                "is_other_halftree", dist.Bernoulli(probs=torch.tensor(other_half_tree_prob)))
             if int(is_other_half_tree.item()) == 1:
                 z_proposal = other_half_tree.z_proposal
 
@@ -218,18 +225,19 @@ class NUTS(HMC):
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
-        r = {name: pyro.sample("r_{}_t={}".format(name, self._t), self._r_dist[name])
-             for name in self._r_dist}
+        r = self._sample_r(name="r_t={}".format(self._t))
         energy_current = self._energy(z, r)
 
         # Ideally, following a symplectic integrator trajectory, the energy is constant.
         # In that case, we can sample the proposal uniformly, and there is no need to use "slice".
         # However, it is not the case for real situation: there are errors during the computation.
-        # To deal with that problem, as in [1], we introduce an auxiliary "slice" variable (denoted by u).
+        # To deal with that problem, as in [1], we introduce an auxiliary "slice" variable (denoted
+        # by u).
         # The sampling process goes as follows:
-        #     first sampling u from initial state (z_0, r_0) according to u ~ Uniform(0, p(z_0, r_0)),
-        #     then sampling state (z, r) from the integrator trajectory according to
-        #         (z, r) ~ Uniform({(z', r') in trajectory | p(z', r') >= u}).
+        #   first sampling u from initial state (z_0, r_0) according to
+        #     u ~ Uniform(0, p(z_0, r_0)),
+        #   then sampling state (z, r) from the integrator trajectory according to
+        #     (z, r) ~ Uniform({(z', r') in trajectory | p(z', r') >= u}).
         #
         # For more information about slice sampling method, see [3].
         # For another version of NUTS which uses multinomial sampling instead of slice sampling, see
@@ -250,8 +258,7 @@ class NUTS(HMC):
 
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation.
-        dist_arg_check = False if self._adapt_phase else pyro.distributions.is_validation_enabled()
-        with dist.validation_enabled(dist_arg_check):
+        with optional(pyro.validation_enabled(False), self._adapt_phase):
             # doubling process, stop when turning or diverging
             for tree_depth in range(self._max_tree_depth + 1):
                 direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
@@ -285,13 +292,20 @@ class NUTS(HMC):
                 else:  # update tree_size
                     tree_size += new_tree.size
 
+        self._t += 1
+
         if self._adapt_phase:
-            accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
-            self._adapt_step_size(accept_prob)
+            if self.adapt_step_size:
+                accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
+                self._adapt_step_size(accept_prob)
+            if self._adapt_mass_matrix_phase:
+                z_flat = torch.cat([z[name].reshape(-1) for name in sorted(z)])
+                self._mass_matrix_adapt_scheme.update(z_flat)
+            if self._t == self._adapt_window_ending:
+                self._end_adapt_window()
 
         if accepted:
             self._accept_cnt += 1
-        self._t += 1
         # get trace with the constrained values for `z`.
         for name, transform in self.transforms.items():
             z[name] = transform.inv(z[name])

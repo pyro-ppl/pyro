@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
+
 import pytest
 import torch
 from torch.autograd import grad
@@ -15,20 +17,23 @@ from pyro.poutine.indep_messenger import CondIndepStackFrame
 from tests.common import assert_equal, xfail_param
 
 
+logger = logging.getLogger(__name__)
+
+
 def test_simple():
     y = torch.ones(2)
 
     @torch.jit.compile(nderivs=0)
     def f(x):
-        print('Inside f')
+        logger.debug('Inside f')
         assert x is y
         return y + 1.0
 
-    print('Calling f(y)')
+    logger.debug('Calling f(y)')
     assert_equal(f(y), y.new_tensor([2, 2]))
-    print('Calling f(y)')
+    logger.debug('Calling f(y)')
     assert_equal(f(y), y.new_tensor([2, 2]))
-    print('Calling f(torch.zeros(2))')
+    logger.debug('Calling f(torch.zeros(2))')
     assert_equal(f(torch.zeros(2)), y.new_tensor([1, 1]))
     with pytest.raises(AssertionError):
         assert_equal(f(torch.ones(5)), y.new_tensor([2, 2, 2, 2, 2]))
@@ -39,15 +44,15 @@ def test_backward():
 
     @torch.jit.compile(nderivs=1)
     def f(x):
-        print('Inside f')
+        logger.debug('Inside f')
         assert x is y
         return (y + 1.0).sum()
 
-    print('Calling f(y)')
+    logger.debug('Calling f(y)')
     f(y).backward()
-    print('Calling f(y)')
+    logger.debug('Calling f(y)')
     f(y)
-    print('Calling f(torch.zeros(2))')
+    logger.debug('Calling f(torch.zeros(2))')
     f(torch.zeros(2, requires_grad=True))
     with pytest.raises(AssertionError):
         f(torch.ones(5, requires_grad=True))
@@ -57,13 +62,13 @@ def test_grad():
 
     @torch.jit.compile(nderivs=0)
     def f(x, y):
-        print('Inside f')
+        logger.debug('Inside f')
         loss = (x - y).pow(2).sum()
         return torch.autograd.grad(loss, [x, y], allow_unused=True)
 
-    print('Invoking f')
+    logger.debug('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True))
-    print('Invoking f')
+    logger.debug('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.zeros(2, requires_grad=True))
 
 
@@ -73,13 +78,13 @@ def test_grad_expand():
 
     @torch.jit.compile(nderivs=0)
     def f(x, y):
-        print('Inside f')
+        logger.debug('Inside f')
         loss = (x - y).pow(2).sum()
         return torch.autograd.grad(loss, [x, y], allow_unused=True)
 
-    print('Invoking f')
+    logger.debug('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True))
-    print('Invoking f')
+    logger.debug('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
 
 

@@ -455,6 +455,7 @@ def enable_validation(is_validate=True):
     """
     dist.enable_validation(is_validate)
     infer.enable_validation(is_validate)
+    poutine.enable_validation(is_validate)
 
 
 @contextmanager

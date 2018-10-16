@@ -689,8 +689,8 @@ def test_enum_discrete_parallel_nested_ok(max_iarange_nesting):
     iarange_shape = torch.Size([1] * max_iarange_nesting)
 
     def model():
-        p2 = torch.tensor(torch.ones(2) / 2)
-        p3 = torch.tensor(torch.ones(3) / 3)
+        p2 = torch.ones(2) / 2
+        p3 = torch.ones(3) / 3
         x2 = pyro.sample("x2", dist.OneHotCategorical(p2))
         x3 = pyro.sample("x3", dist.OneHotCategorical(p3))
         assert x2.shape == torch.Size([2]) + iarange_shape + p2.shape

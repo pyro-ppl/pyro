@@ -1,10 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
+
 import pytest
 import torch
 
 from pyro.contrib.tracking.hashing import LSH, ApproxSet, merge_points
 from tests.common import assert_equal
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize('scale', [-1., 0., -1 * torch.ones(2, 2)])
@@ -140,7 +144,7 @@ def test_merge_points_small():
 def test_merge_points_large(dim, radius):
     points = 10 * torch.randn(200, dim)
     merged_points, groups = merge_points(points, radius)
-    print('merged {} -> {}'.format(len(points), len(merged_points)))
+    logger.debug('merged {} -> {}'.format(len(points), len(merged_points)))
 
     assert merged_points.dim() == 2
     assert merged_points.shape[-1] == dim

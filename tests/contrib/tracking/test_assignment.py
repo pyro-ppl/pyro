@@ -4,12 +4,15 @@ import pytest
 import torch
 from torch.autograd import grad
 
+import logging
+
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.tracking.assignment import MarginalAssignment, MarginalAssignmentPersistent, MarginalAssignmentSparse
 from tests.common import assert_equal
 
 INF = float('inf')
+logger = logging.getLogger(__name__)
 
 
 def assert_finite(tensor, name):
@@ -270,5 +273,5 @@ def test_persistent_exact_5_4_3(e1, e2, e3, bp_iters, bp_momentum):
     actual = MarginalAssignmentPersistent(exists_logits, assign_logits, bp_iters, bp_momentum)
     assert_equal(expected.exists_dist.probs, actual.exists_dist.probs)
     assert_equal(expected.assign_dist.probs, actual.assign_dist.probs)
-    print(actual.exists_dist.probs)
-    print(actual.assign_dist.probs)
+    logger.debug(actual.exists_dist.probs)
+    logger.debug(actual.assign_dist.probs)

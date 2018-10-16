@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
 import math
 
 import torch
@@ -10,6 +11,9 @@ from pyro.distributions import MixtureOfDiagNormals
 from tests.common import assert_equal
 
 
+logger = logging.getLogger(__name__)
+
+
 @pytest.mark.parametrize('mix_dist', [MixtureOfDiagNormals, MixtureOfDiagNormalsSharedCovariance, GaussianScaleMixture])
 @pytest.mark.parametrize('K', [3])
 @pytest.mark.parametrize('D', [2, 4])
@@ -17,7 +21,7 @@ from tests.common import assert_equal
 @pytest.mark.parametrize('flat_logits', [True, False])
 @pytest.mark.parametrize('cost_function', ['quadratic'])
 def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
-    n_samples = 2000 * 1000
+    n_samples = 200000
     if batch_mode:
         sample_shape = torch.Size(())
     else:
@@ -25,23 +29,23 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
     if mix_dist == GaussianScaleMixture:
         locs = torch.zeros(K, D, requires_grad=True)
     else:
-        locs = torch.tensor(torch.rand(K, D), requires_grad=True)
+        locs = torch.rand(K, D).requires_grad_(True)
     if mix_dist == GaussianScaleMixture:
         component_scale = 1.5 * torch.ones(K) + 0.5 * torch.rand(K)
-        component_scale = torch.tensor(component_scale, requires_grad=True)
+        component_scale.requires_grad_(True)
     else:
         component_scale = torch.ones(K, requires_grad=True)
     if mix_dist == MixtureOfDiagNormals:
         coord_scale = torch.ones(K, D) + 0.5 * torch.rand(K, D)
-        coord_scale = torch.tensor(coord_scale, requires_grad=True)
+        coord_scale.requires_grad_(True)
     else:
         coord_scale = torch.ones(D) + 0.5 * torch.rand(D)
-        coord_scale = torch.tensor(coord_scale, requires_grad=True)
+        coord_scale.requires_grad_(True)
     if not flat_logits:
-        component_logits = torch.tensor(1.5 * torch.rand(K), requires_grad=True)
+        component_logits = (1.5 * torch.rand(K)).requires_grad_(True)
     else:
-        component_logits = torch.tensor(0.1 * torch.rand(K), requires_grad=True)
-    omega = torch.tensor(0.2 * torch.ones(D) + 0.1 * torch.rand(D), requires_grad=False)
+        component_logits = (0.1 * torch.rand(K)).requires_grad_(True)
+    omega = (0.2 * torch.ones(D) + 0.1 * torch.rand(D)).requires_grad_(False)
 
     _pis = torch.exp(component_logits)
     pis = _pis / _pis.sum()
@@ -109,10 +113,11 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
     assert_equal(analytic, cost, prec=0.1,
                  msg='bad cost function evaluation for {} test (expected {}, got {})'.format(
                      mix_dist.__name__, analytic.item(), cost.item()))
-    print("analytic_grads_logit", analytic_grads['component_logits'].detach().cpu().numpy())
+    logger.debug("analytic_grads_logit: {}"
+                 .format(analytic_grads['component_logits'].detach().cpu().numpy()))
 
     for param_name, param in params.items():
-        assert_equal(param.grad, analytic_grads[param_name], prec=0.06,
+        assert_equal(param.grad, analytic_grads[param_name], prec=0.1,
                      msg='bad {} grad for {} (expected {}, got {})'.format(
                          param_name, mix_dist.__name__, analytic_grads[param_name], param.grad))
 

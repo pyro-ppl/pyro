@@ -75,10 +75,10 @@ def model(data):
 
 
 def guide(data):
-    w_loc = data.new_tensor(torch.randn(1, p))
-    w_log_sig = data.new_tensor(-3.0 * torch.ones(1, p) + 0.05 * torch.randn(1, p))
-    b_loc = data.new_tensor(torch.randn(1))
-    b_log_sig = data.new_tensor(-3.0 * torch.ones(1) + 0.05 * torch.randn(1))
+    w_loc = torch.randn(1, p, dtype=data.dtype, device=data.device)
+    w_log_sig = -3 + 0.05 * torch.randn(1, p, dtype=data.dtype, device=data.device)
+    b_loc = torch.randn(1, dtype=data.dtype, device=data.device)
+    b_log_sig = -3 + 0.05 * torch.randn(1, dtype=data.dtype, device=data.device)
     # register learnable params in the param store
     mw_param = pyro.param("guide_mean_weight", w_loc)
     sw_param = softplus(pyro.param("guide_log_scale_weight", w_log_sig))

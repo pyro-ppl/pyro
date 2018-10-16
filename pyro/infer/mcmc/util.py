@@ -1,18 +1,21 @@
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 
 import torch
 from opt_einsum import shared_intermediates
 
 from pyro.distributions.util import logsumexp, broadcast_shape
+from pyro.ops.contract import contract_to_tensor
 from pyro.infer.util import is_validation_enabled
-from pyro.ops.sumproduct import sumproduct, logsumproductexp
+from pyro.primitives import _Subsample
 from pyro.util import check_site_shape
 
 
-class EnumTraceProbEvaluator(object):
+class TraceTreeEvaluator(object):
     """
-    Computes the log probability density of a trace that possibly contains
-    discrete sample sites enumerated in parallel.
+    Computes the log probability density of a trace (of a model with
+    tree structure) that possibly contains discrete sample sites
+    enumerated in parallel. This will be deprecated in favor of
+    :class:`~pyro.infer.mcmc.util.EinsumTraceProbEvaluator`.
 
     :param model_trace: execution trace from a static model.
     :param bool has_enumerable_sites: whether the trace contains any
@@ -23,11 +26,9 @@ class EnumTraceProbEvaluator(object):
     def __init__(self,
                  model_trace,
                  has_enumerable_sites=False,
-                 max_iarange_nesting=float("inf"),
-                 use_einsum=True):
+                 max_iarange_nesting=float("inf")):
         self.has_enumerable_sites = has_enumerable_sites
         self.max_iarange_nesting = max_iarange_nesting
-        self.use_einsum = use_einsum
         # To be populated using the model trace once.
         self._log_probs = defaultdict(list)
         self._log_prob_shapes = defaultdict(tuple)
@@ -103,33 +104,11 @@ class EnumTraceProbEvaluator(object):
         :return: `log_prob` with marginalized `iarange` and `enum`
             dims.
         """
-        if self.use_einsum:
-            return self._reduce_einsum(ordinal, agg_log_prob)
         log_prob = sum(self._log_probs[ordinal]) + agg_log_prob
         for enum_dim in self._enum_dims[ordinal]:
             log_prob = logsumexp(log_prob, dim=enum_dim, keepdim=True)
         for marginal_dim in self._iarange_dims[ordinal]:
             log_prob = log_prob.sum(dim=marginal_dim, keepdim=True)
-        return log_prob
-
-    def _reduce_einsum(self, ordinal, agg_log_prob=0.):
-        """
-        Same operation as `_reduce` except that the tensors are passed to
-        the einsum backend.
-
-        :param ordinal: node (ordinal)
-        :param torch.Tensor agg_log_prob: aggregated `log_prob`
-            terms from the downstream nodes.
-        :return: `log_prob` with marginalized `iarange` and `enum`
-            dims.
-        """
-        shape = broadcast_shape(self._log_prob_shapes[ordinal], agg_log_prob.shape)
-        enum_shape = [shape[i] if -len(shape) + i not in self._enum_dims[ordinal] else 1
-                      for i in range(len(shape))]
-        iarange_shape = [enum_shape[i] if -len(enum_shape) + i not in self._iarange_dims[ordinal] else 1
-                         for i in range(len(enum_shape))]
-        log_prob = logsumproductexp(self._log_probs[ordinal] + [agg_log_prob], target_shape=enum_shape)
-        log_prob = sumproduct([log_prob], target_shape=iarange_shape)
         return log_prob
 
     def _aggregate_log_probs(self, ordinal):
@@ -153,3 +132,78 @@ class EnumTraceProbEvaluator(object):
                 return model_trace.log_prob_sum()
             self._compute_log_prob_terms(model_trace)
             return self._aggregate_log_probs(ordinal=frozenset()).sum()
+
+
+class TraceEinsumEvaluator(object):
+    """
+    Computes the log probability density of a trace (of a model with
+    tree structure) that possibly contains discrete sample sites
+    enumerated in parallel. This uses optimized `einsum` operations
+    to marginalize out the the enumerated dimensions in the trace
+    via :class:`~pyro.ops.contract.contract_to_tensor`.
+
+    :param model_trace: execution trace from a static model.
+    :param bool has_enumerable_sites: whether the trace contains any
+        discrete enumerable sites.
+    :param int max_iarange_nesting: Optional bound on max number of nested
+        :func:`pyro.iarange` contexts.
+    """
+    def __init__(self,
+                 model_trace,
+                 has_enumerable_sites=False,
+                 max_iarange_nesting=float("inf")):
+        self.has_enumerable_sites = has_enumerable_sites
+        self.max_iarange_nesting = max_iarange_nesting
+        # To be populated using the model trace once.
+        self._enum_dims = {}
+        self.ordering = {}
+        self._populate_cache(model_trace)
+
+    def _populate_cache(self, model_trace):
+        """
+        Populate the ordinals (set of ``CondIndepStack`` frames)
+        and enum_dims for each sample site.
+        """
+        if not self.has_enumerable_sites:
+            return
+        if self.max_iarange_nesting == float("inf"):
+            raise ValueError("Finite value required for `max_iarange_nesting` when model "
+                             "has discrete (enumerable) sites.")
+        model_trace.compute_log_prob()
+        for name, site in model_trace.nodes.items():
+            if site["type"] == "sample" and not isinstance(site["fn"], _Subsample):
+                if is_validation_enabled():
+                    check_site_shape(site, self.max_iarange_nesting)
+                self.ordering[name] = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
+                log_prob_shape = site["log_prob"].shape
+                self._enum_dims[site["name"]] = set((i for i in range(-len(log_prob_shape), -self.max_iarange_nesting)
+                                                     if log_prob_shape[i] > 1))
+
+    def _get_log_factors(self, model_trace):
+        """
+        Aggregates the `log_prob` terms into a list for each
+        ordinal.
+        """
+        model_trace.compute_log_prob()
+        log_probs = OrderedDict()
+        # Collect log prob terms per independence context.
+        for name, site in model_trace.nodes.items():
+            if site["type"] == "sample" and not isinstance(site["fn"], _Subsample):
+                if is_validation_enabled():
+                    check_site_shape(site, self.max_iarange_nesting)
+                log_probs.setdefault(self.ordering[name], []).append(site["log_prob"])
+        return log_probs
+
+    def log_prob(self, model_trace):
+        """
+        Returns the log pdf of `model_trace` by appropriately handling
+        enumerated log prob factors.
+
+        :return: log pdf of the trace.
+        """
+        if not self.has_enumerable_sites:
+            return model_trace.log_prob_sum()
+        with shared_intermediates():
+            log_probs = self._get_log_factors(model_trace)
+            sum_dims = {model_trace.nodes[name]["log_prob"]: dims for name, dims in self._enum_dims.items()}
+            return contract_to_tensor(log_probs, sum_dims, frozenset())

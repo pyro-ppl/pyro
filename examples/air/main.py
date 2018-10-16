@@ -188,9 +188,9 @@ def main(**kwargs):
         print('Loading parameters...')
         air.load_state_dict(torch.load(args.load))
 
-    vis = visdom.Visdom(env=args.visdom_env)
     # Viz sample from prior.
     if args.viz:
+        vis = visdom.Visdom(env=args.visdom_env)
         z, x = air.prior(5, z_pres_prior_p=partial(z_pres_prior_p, 0))
         vis.images(draw_many(x, tensor_to_objs(latents_to_tensor(z))))
 

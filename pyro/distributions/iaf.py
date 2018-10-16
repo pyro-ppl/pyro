@@ -79,7 +79,8 @@ class InverseAutoregressiveFlow(Transform):
         sample from the base distribution (or the output of a previous flow)
         """
         mean, scale = self.module.arn(x)
-        scale = self.module.sigmoid(scale + scale.new_tensor(self.module.sigmoid_bias))
+        scale = self.module.sigmoid(scale + self.module.sigmoid_bias.to(dtype=x.dtype,
+                                                                        device=x.device))
 
         y = scale * x + (1 - scale) * mean
         self._add_intermediate_to_cache(x, y, 'x')
