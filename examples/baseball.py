@@ -291,7 +291,7 @@ def main(args):
     posterior_partially_pooled_with_logit = MCMC(nuts_kernel,
                                                  num_samples=args.num_samples,
                                                  warmup_steps=args.warmup_steps,
-                                                 num_chains = args.num_chains)\
+                                                 num_chains=args.num_chains)\
         .run(partially_pooled_with_logit, at_bats, hits)
     logging.info("\nModel: Partially Pooled with Logit")
     logging.info("==================================")
