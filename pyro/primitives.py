@@ -68,10 +68,7 @@ def sample(name, fn, *args, **kwargs):
         kwargs["infer"] = {}
     if "obs" not in kwargs:
         kwargs["obs"] = None
-    if getattr(fn.__call__, "__wrapped", None):
-        return fn(*args, **kwargs)
-    else:
-        return effectful(fn, type="sample")(*args, **kwargs)
+    return effectful(fn, type="sample")(*args, **kwargs)
 
 
 class _Subsample(Distribution):

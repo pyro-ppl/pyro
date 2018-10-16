@@ -5,7 +5,6 @@ from abc import ABCMeta, abstractmethod
 from six import add_metaclass
 
 from pyro.distributions.score_parts import ScoreParts
-from pyro.poutine.runtime import effectful
 
 
 @add_metaclass(ABCMeta)
@@ -34,7 +33,6 @@ class Distribution(object):
     has_rsample = False
     has_enumerate_support = False
 
-    @effectful(type="sample")
     def __call__(self, *args, **kwargs):
         """
         Samples a random value (just an alias for ``.sample(*args, **kwargs)``).
