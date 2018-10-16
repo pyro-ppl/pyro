@@ -1,66 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
-import math
-
 import torch
 from torch.autograd import grad
 
 from pyro.util import warn_if_nan
-
-
-def _determinant_3d(H):
-    """
-    Returns the determinants of a batched 3-D matrix
-    """
-    detH = (H[..., 0, 0] * (H[..., 1, 1] * H[..., 2, 2] - H[..., 2, 1] * H[..., 1, 2]) +
-            H[..., 0, 1] * (H[..., 1, 2] * H[..., 2, 0] - H[..., 1, 0] * H[..., 2, 2]) +
-            H[..., 0, 2] * (H[..., 1, 0] * H[..., 2, 1] - H[..., 2, 0] * H[..., 1, 1]))
-    return detH
-
-
-def _eig_3d(H):
-    """
-    Returns the eigenvalues of a symmetric batched 3-D matrix
-    """
-    p1 = H[..., 0, 1].pow(2) + H[..., 0, 2].pow(2) + H[..., 1, 2].pow(2)
-    q = (H[..., 0, 0] + H[..., 1, 1] + H[..., 2, 2]) / 3
-    p2 = (H[..., 0, 0] - q).pow(2) + (H[..., 1, 1] - q).pow(2) + (H[..., 2, 2] - q).pow(2) + 2 * p1
-    p = torch.sqrt(p2 / 6)
-    B = (1 / p).unsqueeze(-1).unsqueeze(-1) * (H - q.unsqueeze(-1).unsqueeze(-1) * torch.eye(3))
-    r = _determinant_3d(B) / 2
-    phi = (r.acos() / 3).unsqueeze(-1).unsqueeze(-1).expand(r.shape + (3, 3))
-    phi[r < -1 + 1e-6] = math.pi / 3
-    phi[r > 1 - 1e-6] = 0.
-
-    eig1 = q + 2 * p * torch.cos(phi[..., 0, 0])
-    eig2 = q + 2 * p * torch.cos(phi[..., 0, 0] + (2 * math.pi/3))
-    eig3 = 3 * q - eig1 - eig2
-    # eig2 <= eig3 <= eig1
-    return eig2, eig3, eig1
-
-
-def _inv_symmetric_3d(H):
-    """
-    Calculates the inverse of a batched 3-D matrix
-    """
-    detH = _determinant_3d(H)
-    Hinv = H.new_empty(H.shape)
-    Hinv[..., 0, 0] = H[..., 1, 1] * H[..., 2, 2] - H[..., 1, 2] * H[..., 2, 1]
-    Hinv[..., 1, 1] = H[..., 0, 0] * H[..., 2, 2] - H[..., 0, 2] * H[..., 2, 0]
-    Hinv[..., 2, 2] = H[..., 0, 0] * H[..., 1, 1] - H[..., 0, 1] * H[..., 1, 0]
-
-    Hinv01 = H[..., 0, 2] * H[..., 2, 1] - H[..., 0, 1] * H[..., 2, 2]
-    Hinv02 = H[..., 0, 1] * H[..., 1, 2] - H[..., 0, 2] * H[..., 1, 1]
-    Hinv12 = H[..., 0, 2] * H[..., 1, 0] - H[..., 0, 0] * H[..., 1, 2]
-
-    Hinv[..., 0, 1] = Hinv01
-    Hinv[..., 1, 0] = Hinv01
-    Hinv[..., 0, 2] = Hinv02
-    Hinv[..., 2, 0] = Hinv02
-    Hinv[..., 1, 2] = Hinv12
-    Hinv[..., 2, 1] = Hinv12
-    Hinv = Hinv / detH.unsqueeze(-1).unsqueeze(-1)
-    return Hinv
+from pyro.ops.linalg import rinverse, eig_3d
 
 
 def newton_step(loss, x, trust_radius=None):
@@ -203,19 +147,13 @@ def newton_step_2d(loss, x, trust_radius=None):
         # regularize to keep update within ball of given trust_radius
         detH = H[..., 0, 0] * H[..., 1, 1] - H[..., 0, 1] * H[..., 1, 0]
         mean_eig = (H[..., 0, 0] + H[..., 1, 1]) / 2
-        min_eig = mean_eig - (mean_eig ** 2 - detH).sqrt()
+        min_eig = mean_eig - (mean_eig ** 2 - detH).clamp(min=0).sqrt()
         regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
         warn_if_nan(regularizer, 'regularizer')
-        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new_tensor(torch.eye(2))
+        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * torch.eye(2, dtype=H.dtype, device=H.device)
 
     # compute newton update
-    detH = H[..., 0, 0] * H[..., 1, 1] - H[..., 0, 1] * H[..., 1, 0]
-    Hinv = H.new_empty(H.shape)
-    Hinv[..., 0, 0] = H[..., 1, 1]
-    Hinv[..., 0, 1] = -H[..., 0, 1]
-    Hinv[..., 1, 0] = -H[..., 1, 0]
-    Hinv[..., 1, 1] = H[..., 0, 0]
-    Hinv = Hinv / detH.unsqueeze(-1).unsqueeze(-1)
+    Hinv = rinverse(H, sym=True)
     warn_if_nan(Hinv, 'Hinv')
 
     # apply update
@@ -260,13 +198,13 @@ def newton_step_3d(loss, x, trust_radius=None):
     if trust_radius is not None:
         # regularize to keep update within ball of given trust_radius
         # calculate eigenvalues of symmetric matrix
-        min_eig, _, _ = _eig_3d(H)
+        min_eig, _, _ = eig_3d(H)
         regularizer = (g.pow(2).sum(-1).sqrt() / trust_radius - min_eig).clamp_(min=1e-8)
         warn_if_nan(regularizer, 'regularizer')
-        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * H.new_tensor(torch.eye(3))
+        H = H + regularizer.unsqueeze(-1).unsqueeze(-1) * torch.eye(3, dtype=H.dtype, device=H.device)
 
     # compute newton update
-    Hinv = _inv_symmetric_3d(H)
+    Hinv = rinverse(H, sym=True)
     warn_if_nan(Hinv, 'Hinv')
 
     # apply update

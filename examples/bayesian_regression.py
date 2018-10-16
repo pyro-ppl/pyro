@@ -7,7 +7,7 @@ from torch.nn.functional import normalize  # noqa: F401
 
 import pyro
 from pyro.distributions import Bernoulli, Normal  # noqa: F401
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
 
 
@@ -75,10 +75,10 @@ def model(data):
 
 
 def guide(data):
-    w_loc = data.new_tensor(torch.randn(1, p))
-    w_log_sig = data.new_tensor(-3.0 * torch.ones(1, p) + 0.05 * torch.randn(1, p))
-    b_loc = data.new_tensor(torch.randn(1))
-    b_log_sig = data.new_tensor(-3.0 * torch.ones(1) + 0.05 * torch.randn(1))
+    w_loc = torch.randn(1, p, dtype=data.dtype, device=data.device)
+    w_log_sig = -3 + 0.05 * torch.randn(1, p, dtype=data.dtype, device=data.device)
+    b_loc = torch.randn(1, dtype=data.dtype, device=data.device)
+    b_log_sig = -3 + 0.05 * torch.randn(1, dtype=data.dtype, device=data.device)
     # register learnable params in the param store
     mw_param = pyro.param("guide_mean_weight", w_loc)
     sw_param = softplus(pyro.param("guide_log_scale_weight", w_log_sig))
@@ -92,11 +92,6 @@ def guide(data):
     lifted_module = pyro.random_module("module", regression_model, dists)
     # sample a regressor
     return lifted_module()
-
-
-# instantiate optim and inference objects
-optim = Adam({"lr": 0.05})
-svi = SVI(model, guide, optim, loss=Trace_ELBO())
 
 
 # get array of batch indices
@@ -115,6 +110,11 @@ def main(args):
         data = data.cuda()
         softplus.cuda()
         regression_model.cuda()
+
+    # perform inference
+    optim = Adam({"lr": 0.05})
+    elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
+    svi = SVI(model, guide, optim, loss=elbo)
     for j in range(args.num_epochs):
         if args.batch_size == N:
             # use the entire data set
@@ -140,5 +140,6 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--num-epochs', default=1000, type=int)
     parser.add_argument('-b', '--batch-size', default=N, type=int)
     parser.add_argument('--cuda', action='store_true')
+    parser.add_argument('--jit', action='store_true')
     args = parser.parse_args()
     main(args)

@@ -43,6 +43,6 @@ def test_welford_dense(n_samples, dim_size):
         samples.append(sample)
         w.update(sample)
 
-    sample_cov = np.cov(torch.stack(samples).data.numpy(), bias=False, rowvar=False)
-    estimates = w.get_covariance(regularize=False).data.numpy()
+    sample_cov = np.cov(torch.stack(samples).data.cpu().numpy(), bias=False, rowvar=False)
+    estimates = w.get_covariance(regularize=False).data.cpu().numpy()
     assert_equal(estimates, sample_cov)

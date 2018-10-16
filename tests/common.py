@@ -3,6 +3,8 @@ from __future__ import absolute_import, division, print_function
 import contextlib
 import numbers
 import os
+import shutil
+import tempfile
 import warnings
 from itertools import product
 
@@ -12,8 +14,6 @@ import torch
 import torch.cuda
 from numpy.testing import assert_allclose
 from pytest import approx
-
-torch.set_default_tensor_type(os.environ.get('PYRO_TENSOR_TYPE', 'torch.DoubleTensor'))
 
 """
 Contains test utilities for assertions, approximate comparison (of tensors and other objects).
@@ -31,6 +31,10 @@ def xfail_param(*args, **kwargs):
     return pytest.param(*args, marks=[pytest.mark.xfail(**kwargs)])
 
 
+def skipif_param(*args, **kwargs):
+    return pytest.param(*args, marks=[pytest.mark.skipif(**kwargs)])
+
+
 def suppress_warnings(fn):
     def wrapper(*args, **kwargs):
         with warnings.catch_warnings():
@@ -38,6 +42,17 @@ def suppress_warnings(fn):
             fn(*args, **kwargs)
 
     return wrapper
+
+
+# backport of Python 3's context manager
+@contextlib.contextmanager
+def TemporaryDirectory():
+    try:
+        path = tempfile.mkdtemp()
+        yield path
+    finally:
+        if os.path.exists(path):
+            shutil.rmtree(path)
 
 
 requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(),
@@ -117,6 +132,7 @@ def assert_tensors_equal(a, b, prec=1e-5, msg=''):
         nan_mask = a != a
         assert torch.equal(nan_mask, b != b), msg
         diff = a - b
+        diff[a == b] = 0  # handle inf
         diff[nan_mask] = 0
         if diff.is_signed():
             diff = diff.abs()
@@ -198,5 +214,5 @@ def assert_not_equal(x, y, prec=1e-5, msg=''):
     try:
         assert_equal(x, y, prec)
     except AssertionError:
-        pass
+        return
     raise AssertionError("{} \nValues are equal: x={}, y={}, prec={}".format(msg, x, y, prec))

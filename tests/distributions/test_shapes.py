@@ -42,6 +42,16 @@ def test_dirichlet_shape():
     assert d.sample().size() == d.shape()
 
 
+def test_zip_shape():
+    gate = torch.ones(3, 2) / 2
+    rate = torch.ones(3, 2) / 2
+    d = dist.ZeroInflatedPoisson(gate, rate)
+    assert d.batch_shape == (3, 2)
+    assert d.event_shape == ()
+    assert d.shape() == (3, 2)
+    assert d.sample().size() == d.shape()
+
+
 def test_bernoulli_log_prob_shape():
     probs = torch.ones(3, 2)
     x = torch.ones(3, 2)

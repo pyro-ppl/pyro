@@ -79,18 +79,21 @@ setup(
         # add them to `docs/requirements.txt`
         'contextlib2',
         'graphviz>=0.8',
-        'networkx>=2.0.0',
+        'networkx>=2.2',
         'numpy>=1.7',
+        'opt_einsum>=2.2.0',
         'six>=1.10.0',
-        'torch>=0.4.0',
+        'torch==0.4.0',
+        'tqdm>=4.25',
     ],
     extras_require={
         'extras': EXTRAS_REQUIRE,
         'test': EXTRAS_REQUIRE + [
             'nbval',
-            'pytest>=3.5',
+            'pytest==3.7',
             'pytest-cov',
             'scipy>=0.19.0',
+            'ipython<=6.5.0',  # https://github.com/jupyter/jupyter_console/issues/158
         ],
         'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
         'dev': EXTRAS_REQUIRE + [
@@ -101,15 +104,16 @@ setup(
             'nbstripout',
             'nbval',
             'pypandoc',
-            'pytest',
+            'pytest==3.7',
             'pytest-xdist',
+            'ipython<=6.5.0',  # https://github.com/jupyter/jupyter_console/issues/158
             'scipy>=0.19.0',
             'sphinx',
             'sphinx_rtd_theme',
             'yapf',
         ],
     },
-    tests_require=['flake8', 'pytest'],
+    tests_require=['flake8', 'pytest==3.7'],
     keywords='machine learning statistics probabilistic programming bayesian modeling pytorch',
     license='MIT License',
     classifiers=[

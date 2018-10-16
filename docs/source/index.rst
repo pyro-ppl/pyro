@@ -33,6 +33,8 @@ Pyro Documentation
    contrib.autoname
    contrib.gp
    contrib.tracking
+   contrib.oed
+   contrib.glmm
 
 
 Indices and tables

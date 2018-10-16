@@ -54,7 +54,7 @@ def warn_if_nan(value, msg=""):
     if torch.is_tensor(value) and value.requires_grad:
         value.register_hook(lambda x: warn_if_nan(x, msg))
     if torch_isnan(value):
-        warnings.warn("Encountered NaN{}".format((': ' if msg else '.') + msg))
+        warnings.warn("Encountered NaN{}".format((': ' if msg else '.') + msg), stacklevel=2)
 
 
 def warn_if_inf(value, msg="", allow_posinf=False, allow_neginf=False):
@@ -66,10 +66,10 @@ def warn_if_inf(value, msg="", allow_posinf=False, allow_neginf=False):
             value.register_hook(lambda x: warn_if_inf(x, msg, allow_posinf, allow_neginf))
     if (not allow_posinf) and (value == float('inf') if isinstance(value, numbers.Number)
                                else (value == float('inf')).any()):
-        warnings.warn("Encountered +inf{}".format((': ' if msg else '.') + msg))
+        warnings.warn("Encountered +inf{}".format((': ' if msg else '.') + msg), stacklevel=2)
     if (not allow_neginf) and (value == -float('inf') if isinstance(value, numbers.Number)
                                else (value == -float('inf')).any()):
-        warnings.warn("Encountered -inf{}".format((': ' if msg else '.') + msg))
+        warnings.warn("Encountered -inf{}".format((': ' if msg else '.') + msg), stacklevel=2)
 
 
 def save_visualization(trace, graph_output):
@@ -160,23 +160,28 @@ def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float(
         and guide agree on sample shape.
     """
     # Check ordinary sample sites.
-    model_vars = set(name for name, site in model_trace.nodes.items()
-                     if site["type"] == "sample" and not site["is_observed"]
-                     if type(site["fn"]).__name__ != "_Subsample")
     guide_vars = set(name for name, site in guide_trace.nodes.items()
                      if site["type"] == "sample"
                      if type(site["fn"]).__name__ != "_Subsample")
     aux_vars = set(name for name, site in guide_trace.nodes.items()
                    if site["type"] == "sample"
                    if site["infer"].get("is_auxiliary"))
+    model_vars = set(name for name, site in model_trace.nodes.items()
+                     if site["type"] == "sample" and not site["is_observed"]
+                     if type(site["fn"]).__name__ != "_Subsample")
+    enum_vars = set(name for name, site in model_trace.nodes.items()
+                    if site["type"] == "sample" and not site["is_observed"]
+                    if type(site["fn"]).__name__ != "_Subsample"
+                    if site["infer"].get("_enumerate_dim") is not None
+                    if name not in guide_vars)
     if aux_vars & model_vars:
         warnings.warn("Found auxiliary vars in the model: {}".format(aux_vars & model_vars))
     if not (guide_vars <= model_vars | aux_vars):
         warnings.warn("Found non-auxiliary vars in guide but not model, "
                       "consider marking these infer={{'is_auxiliary': True}}:\n{}".format(
                           guide_vars - aux_vars - model_vars))
-    if not (model_vars <= guide_vars):
-        warnings.warn("Found vars in model but not guide: {}".format(model_vars - guide_vars))
+    if not (model_vars <= guide_vars | enum_vars):
+        warnings.warn("Found vars in model but not guide: {}".format(model_vars - guide_vars - enum_vars))
 
     # Check shapes agree.
     for name in model_vars & guide_vars:
@@ -307,6 +312,16 @@ def check_traceenum_requirements(model_trace, guide_trace):
             irange_counters[name] = irange_counter
             if name in enumerated_sites:
                 enumerated_contexts[context].add(name)
+
+
+def check_if_enumerated(guide_trace):
+    enumerated_sites = [name for name, site in guide_trace.nodes.items()
+                        if site["type"] == "sample" and site["infer"].get("enumerate")]
+    if enumerated_sites:
+        warnings.warn('\n'.join([
+            'Found sample sites configured for enumeration:'
+            ', '.join(enumerated_sites),
+            'If you want to enumerate sites, you need to use TraceEnum_ELBO instead.']))
 
 
 @contextmanager

@@ -78,6 +78,13 @@ EmpiricalDistribution
     :undoc-members:
     :show-inheritance:
 
+GaussianScaleMixture
+------------------------------------
+.. autoclass:: pyro.distributions.GaussianScaleMixture
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 HalfCauchy
 ----------
 .. autoclass:: pyro.distributions.HalfCauchy
@@ -88,6 +95,20 @@ HalfCauchy
 LowRankMultivariateNormal
 -------------------------
 .. autoclass:: pyro.distributions.LowRankMultivariateNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+MaskedMixture
+-------------
+.. autoclass:: pyro.distributions.MaskedMixture
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+MixtureOfDiagNormalsSharedCovariance
+------------------------------------
+.. autoclass:: pyro.distributions.MixtureOfDiagNormalsSharedCovariance
     :members:
     :undoc-members:
     :show-inheritance:
@@ -123,6 +144,13 @@ Rejector
 VonMises
 --------
 .. autoclass:: pyro.distributions.VonMises
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+VonMises3D
+----------
+.. autoclass:: pyro.distributions.VonMises3D
     :members:
     :undoc-members:
     :show-inheritance:

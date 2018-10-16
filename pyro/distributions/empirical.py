@@ -8,7 +8,7 @@ from torch.distributions import constraints
 
 from pyro.distributions.torch import Categorical
 from pyro.distributions.torch_distribution import TorchDistribution
-from pyro.distributions.util import copy_docs_from, log_sum_exp
+from pyro.distributions.util import copy_docs_from, logsumexp
 
 
 @copy_docs_from(TorchDistribution)
@@ -127,7 +127,7 @@ class Empirical(TorchDistribution):
             return self._log_weights.new_zeros(torch.Size()).log()
         idxs = torch.arange(self.sample_size)[selection_mask.min(dim=-1)[0]]
         log_probs = self._categorical.log_prob(idxs)
-        return log_sum_exp(log_probs, dim=-1)
+        return logsumexp(log_probs, dim=-1)
 
     def _weighted_mean(self, value, dim=0):
         weights = self._log_weights
@@ -170,6 +170,7 @@ class Empirical(TorchDistribution):
         self._finalize()
         return self._samples, self._log_weights
 
-    def enumerate_support(self):
+    def enumerate_support(self, expand=True):
+        # Empirical does not support batching, so expanding is a no-op.
         self._finalize()
         return self._samples

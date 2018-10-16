@@ -46,6 +46,12 @@ extensions = [
     'sphinx.ext.doctest',
 ]
 
+# Disable documentation inheritance so as to avoid inheriting
+# docstrings in a different format, e.g. when the parent class
+# is a PyTorch class.
+
+autodoc_inherit_docstrings = False
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
@@ -180,6 +186,7 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
     'torch': ('http://pytorch.org/docs/master/', None),
     'networkx': ('https://networkx.github.io/documentation/stable/', None),
+    'opt_einsum': ('https://optimized-einsum.readthedocs.io/en/stable/', None)
 }
 
 # document class constructors (__init__ methods):

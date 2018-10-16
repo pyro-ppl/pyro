@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
 import weakref
 from operator import itemgetter
 
@@ -9,13 +8,12 @@ import torch
 
 import pyro
 import pyro.ops.jit
-import pyro.poutine as poutine
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
-from pyro.infer.util import (MultiFrameTensor, detach_iterable, get_iarange_stacks, is_validation_enabled,
-                             torch_backward, torch_item)
-from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape, torch_isnan
+from pyro.infer.enum import get_importance_trace
+from pyro.infer.util import (MultiFrameTensor, detach_iterable, get_iarange_stacks,
+                             is_validation_enabled, torch_backward, torch_item)
+from pyro.util import check_if_enumerated, warn_if_nan
 
 
 def _get_baseline_options(site):
@@ -140,8 +138,7 @@ def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
                                                      guide_site['value'].new_zeros(dc_shape))
                 avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
                     baseline_beta * avg_downstream_cost_old
-            pyro.get_param_store().replace_param(param_name, avg_downstream_cost_new,
-                                                 avg_downstream_cost_old)
+            pyro.get_param_store()[param_name] = avg_downstream_cost_new
             baseline += avg_downstream_cost_old
         if use_nn_baseline:
             # block nn_baseline_input gradients except in baseline loss
@@ -192,25 +189,11 @@ class TraceGraph_ELBO(ELBO):
         Returns a single trace from the guide, and the model that is run
         against it.
         """
-        guide_trace = poutine.trace(guide,
-                                    graph_type="dense").get_trace(*args, **kwargs)
-        model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
-                                    graph_type="dense").get_trace(*args, **kwargs)
+        model_trace, guide_trace = get_importance_trace(
+            "dense", self.max_iarange_nesting, model, guide, *args, **kwargs)
         if is_validation_enabled():
-            check_model_guide_match(model_trace, guide_trace)
-            enumerated_sites = [name for name, site in guide_trace.nodes.items()
-                                if site["type"] == "sample" and site["infer"].get("enumerate")]
-            if enumerated_sites:
-                warnings.warn('\n'.join([
-                    'TraceGraph_ELBO found sample sites configured for enumeration:'
-                    ', '.join(enumerated_sites),
-                    'If you want to enumerate sites, you need to use TraceEnum_ELBO instead.']))
-
-        guide_trace = prune_subsample_sites(guide_trace)
-        model_trace = prune_subsample_sites(model_trace)
-
-        weight = 1.0 / self.num_particles
-        return weight, model_trace, guide_trace
+            check_if_enumerated(guide_trace)
+        return model_trace, guide_trace
 
     def loss(self, model, guide, *args, **kwargs):
         """
@@ -220,13 +203,12 @@ class TraceGraph_ELBO(ELBO):
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
         elbo = 0.0
-        for weight, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             elbo_particle = torch_item(model_trace.log_prob_sum()) - torch_item(guide_trace.log_prob_sum())
-            elbo += weight * elbo_particle
+            elbo += elbo_particle / float(self.num_particles)
 
         loss = -elbo
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return loss
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
@@ -239,23 +221,12 @@ class TraceGraph_ELBO(ELBO):
         If baselines are present, a baseline loss is also constructed and differentiated.
         """
         loss = 0.0
-        for weight, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+        weight = 1./self.num_particles
+        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             loss += self._loss_and_grads_particle(weight, model_trace, guide_trace)
         return loss
 
     def _loss_and_grads_particle(self, weight, model_trace, guide_trace):
-        # have the trace compute all the individual (batch) log pdf terms
-        # and score function terms (if present) so that they are available below
-        model_trace.compute_log_prob()
-        guide_trace.compute_score_parts()
-        if is_validation_enabled():
-            for site in model_trace.nodes.values():
-                if site["type"] == "sample":
-                    check_site_shape(site, self.max_iarange_nesting)
-            for site in guide_trace.nodes.values():
-                if site["type"] == "sample":
-                    check_site_shape(site, self.max_iarange_nesting)
-
         # compute elbo for reparameterized nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
         elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes)
@@ -278,8 +249,7 @@ class TraceGraph_ELBO(ELBO):
             torch_backward(weight * (surrogate_loss + baseline_loss))
 
         loss = -torch_item(elbo)
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return weight * loss
 
 
@@ -310,17 +280,8 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
                 self = weakself()
                 loss = 0.0
                 surrogate_loss = 0.0
-                for weight, model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-                    model_trace.compute_log_prob()
-                    guide_trace.compute_score_parts()
-                    if is_validation_enabled():
-                        for site in model_trace.nodes.values():
-                            if site["type"] == "sample":
-                                check_site_shape(site, self.max_iarange_nesting)
-                        for site in guide_trace.nodes.values():
-                            if site["type"] == "sample":
-                                check_site_shape(site, self.max_iarange_nesting)
-
+                weight = 1.0 / self.num_particles
+                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
                     # compute elbo for reparameterized nodes
                     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
                     elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes)
@@ -345,6 +306,5 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
         surrogate_loss.backward()  # this line triggers jit compilation
         loss = loss.item()
 
-        if torch_isnan(loss):
-            warnings.warn('Encountered NAN loss')
+        warn_if_nan(loss, "loss")
         return loss

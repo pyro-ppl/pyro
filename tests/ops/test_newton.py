@@ -1,13 +1,17 @@
 from __future__ import absolute_import, division, print_function
 
 import itertools
+import logging
 
 import pytest
 import torch
 from torch.autograd import grad
 
-from pyro.ops.newton import newton_step, _inv_symmetric_3d
+from pyro.ops.newton import newton_step
 from tests.common import assert_equal
+
+
+logger = logging.getLogger(__name__)
 
 
 def random_inside_unit_circle(shape, requires_grad=False):
@@ -18,15 +22,6 @@ def random_inside_unit_circle(shape, requires_grad=False):
     if requires_grad:
         x.requires_grad = requires_grad
     return x
-
-
-def test_inverse():
-    A = torch.tensor([[1., 2, 0], [2, -2, 4], [0, 4, 5]])
-    assert_equal(_inv_symmetric_3d(A), torch.inverse(A), prec=1e-8)
-    assert_equal(torch.mm(A, _inv_symmetric_3d(A)), torch.eye(3), prec=1e-8)
-    batched_A = A.unsqueeze(0).unsqueeze(0).expand(5, 4, 3, 3)
-    expected_A = torch.inverse(A).unsqueeze(0).unsqueeze(0).expand(5, 4, 3, 3)
-    assert_equal(_inv_symmetric_3d(batched_A), expected_A, prec=1e-8)
 
 
 @pytest.mark.parametrize('batch_shape', [(), (1,), (2,), (10,), (3, 2), (2, 3)])
@@ -129,6 +124,6 @@ def test_newton_step_converges(trust_radius, dims):
         loss = loss_fn(x)
         x, cov = newton_step(loss, x, trust_radius=trust_radius)
         if ((x - mode).pow(2).sum(-1) < 1e-4).all():
-            print('Newton iteration converged after {} steps'.format(2 + i))
+            logger.debug('Newton iteration converged after {} steps'.format(2 + i))
             return
     pytest.fail('Newton iteration did not converge')

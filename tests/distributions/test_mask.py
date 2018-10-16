@@ -5,14 +5,15 @@ import torch
 from torch import tensor
 
 from pyro.distributions.torch import Bernoulli
+from pyro.distributions.util import scale_and_mask
 from tests.common import assert_equal
 
 
 def checker_mask(shape):
     mask = tensor(0.)
     for size in shape:
-        mask = mask.unsqueeze(-1) + torch.arange(size)
-    return mask.fmod(2)
+        mask = mask.unsqueeze(-1) + torch.arange(float(size))
+    return mask.fmod(2).byte()
 
 
 @pytest.mark.parametrize('batch_dim,mask_dim',
@@ -39,10 +40,14 @@ def test_mask(batch_dim, event_dim, mask_dim):
     # Check values.
     assert_equal(dist.mean, base_dist.mean)
     assert_equal(dist.variance, base_dist.variance)
-    assert_equal(dist.log_prob(sample), base_dist.log_prob(sample) * mask)
-    assert_equal(dist.score_parts(sample), base_dist.score_parts(sample) * mask, prec=0)
+    assert_equal(dist.log_prob(sample),
+                 scale_and_mask(base_dist.log_prob(sample), mask=mask))
+    assert_equal(dist.score_parts(sample),
+                 base_dist.score_parts(sample).scale_and_mask(mask=mask), prec=0)
     if not dist.event_shape:
         assert_equal(dist.enumerate_support(), base_dist.enumerate_support())
+        assert_equal(dist.enumerate_support(expand=True), base_dist.enumerate_support(expand=True))
+        assert_equal(dist.enumerate_support(expand=False), base_dist.enumerate_support(expand=False))
 
 
 @pytest.mark.parametrize('batch_shape,mask_shape', [

@@ -22,7 +22,7 @@ scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python tutorial/source/cleannb.py
 
 doctest: FORCE
-	python -m pytest --doctest-modules -p tests.doctest_fixtures -p no:warnings pyro
+	pytest -p tests.doctest_fixtures --doctest-modules -o filterwarnings=ignore pyro
 
 format: FORCE
 	isort --recursive *.py pyro/ examples/ tests/ profiler/*.py docs/source/conf.py
@@ -42,8 +42,8 @@ test-examples: lint FORCE
 	pytest -vx -n auto --stage test_examples
 
 test-tutorials: lint FORCE
-	CI=1 grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
-		| xargs pytest -vx --nbval-lax --current-env
+	grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
+		| CI=1 xargs pytest -vx --nbval-lax --current-env
 
 integration-test: lint FORCE
 	pytest -vx -n auto --stage integration
@@ -54,8 +54,8 @@ test-all: lint FORCE
 	  | xargs pytest -vx --nbval-lax
 
 test-cuda: lint FORCE
-	CUDA_TEST=1 PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx -n 4 --stage unit
-	CUDA_TEST=1 pytest -vx -n 4 tests/test_examples.py::test_cuda
+	CUDA_TEST=1 PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx --stage unit
+	CUDA_TEST=1 pytest -vx tests/test_examples.py::test_cuda
 
 clean: FORCE
 	git clean -dfx -e pyro-egg.info
