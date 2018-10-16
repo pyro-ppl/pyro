@@ -95,6 +95,7 @@ class SubsampleMessenger(IndepMessenger):
                 "value": None,
                 "infer": {},
                 "scale": 1.0,
+                "mask": None,
                 "cond_indep_stack": (),
                 "done": False,
                 "stop": False,
