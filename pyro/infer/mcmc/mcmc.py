@@ -1,7 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
+import errno
 import json
 import logging
+import socket
 import sys
 import threading
 from collections import OrderedDict
@@ -99,6 +101,7 @@ class _ParallelSampler(TracePosterior):
         for i in range(self.num_chains):
             worker = _Worker(i, self.result_queue, self.log_queue, self.kernel,
                              self.num_samples[i], self.warmup_steps)
+            worker.daemon = True
             self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
                                                  args=args, kwargs=kwargs))
 
@@ -121,18 +124,17 @@ class _ParallelSampler(TracePosterior):
                     chain_id, val = self.result_queue.get()
                 # This can happen when the worker process has terminated.
                 # See https://github.com/pytorch/pytorch/pull/5380 for motivation.
-                except FileNotFoundError:
-                    pass
+                except socket.error as e:
+                    if getattr(e, "errno", None) == errno.ENOENT:
+                        pass
+                    else:
+                        raise e
                 if isinstance(val, Exception):
                     raise Exception("Exception in chain {}.".format(chain_id))
                 elif val is not None:
                     yield val
                 else:
                     active_workers -= 1
-        except Exception as e:
-            for w in self.workers:
-                w.terminate()
-            raise e
         finally:
             self.join()
 
