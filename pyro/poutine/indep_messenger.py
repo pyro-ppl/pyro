@@ -50,19 +50,20 @@ class IndepMessenger(Messenger):
             xy_noise = sample("xy_noise", dist.Normal(loc, scale).expand_by([200, 320]))
 
     """
-    def __init__(self, name=None, size=None, dim=None):
+    def __init__(self, name=None, size=None, dim=None, device=None):
         if size == 0:
             raise ZeroDivisionError("size cannot be zero")
 
         super(IndepMessenger, self).__init__()
         self._vectorized = None
         if dim is not None:
-            self._vectorized = None
+            self._vectorized = True
 
         self._indices = None
         self.name = name
         self.dim = dim
         self.size = size
+        self.device = device
         self.counter = 0
 
     def next_context(self):
@@ -108,7 +109,7 @@ class IndepMessenger(Messenger):
     @property
     def indices(self):
         if self._indices is None:
-            self._indices = torch.arange(self.size, dtype=torch.long)
+            self._indices = torch.arange(self.size, dtype=torch.long).to(self.device)
         return self._indices
 
     def _process_message(self, msg):
