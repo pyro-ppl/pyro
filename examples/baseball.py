@@ -288,8 +288,10 @@ def main(args):
     evaluate_log_predictive_density(partially_pooled, posterior_partially_pooled, baseball_dataset)
 
     # (4) Partially Pooled with Logit Model
-    posterior_partially_pooled_with_logit = MCMC(nuts_kernel, num_samples=args.num_samples,
-                                                 warmup_steps=args.warmup_steps) \
+    posterior_partially_pooled_with_logit = MCMC(nuts_kernel,
+                                                 num_samples=args.num_samples,
+                                                 warmup_steps=args.warmup_steps,
+                                                 num_chains = args.num_chains)\
         .run(partially_pooled_with_logit, at_bats, hits)
     logging.info("\nModel: Partially Pooled with Logit")
     logging.info("==================================")
@@ -308,8 +310,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
-    parser.add_argument("-n", "--num-samples", nargs="?", default=1000, type=int)
-    parser.add_argument("--warmup-steps", nargs='?', default=200, type=int)
+    parser.add_argument("-n", "--num-samples", nargs="?", default=600, type=int)
+    parser.add_argument("--warmup-steps", nargs='?', default=100, type=int)
     parser.add_argument("--rng_seed", nargs='?', default=0, type=int)
     parser.add_argument("--num-chains", nargs='?', default=4, type=int)
     args = parser.parse_args()

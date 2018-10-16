@@ -135,6 +135,10 @@ class _ParallelSampler(TracePosterior):
                     yield val
                 else:
                     active_workers -= 1
+        except Exception:
+            for w in self.workers:
+                w.terminate()
+            raise e
         finally:
             self.join()
 
