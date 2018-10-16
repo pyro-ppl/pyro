@@ -4,7 +4,7 @@ import torch
 
 from pyro.distributions.distribution import Distribution
 
-from .indep_messenger import IndepMessenger
+from .indep_messenger import CondIndepStackFrame, IndepMessenger
 from .runtime import apply_stack, am_i_wrapped
 
 
@@ -65,16 +65,14 @@ class SubsampleMessenger(IndepMessenger):
     def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None,
                  use_cuda=None, device=None):
         super(SubsampleMessenger, self).__init__(name, size, dim)
-        self._size = size
         self.subsample_size = subsample_size
         self.indices = subsample
         self.use_cuda = use_cuda
         self.device = device
 
-        self._size, self.subsample_size, self.indices = self._subsample(
-            self.name, self._size, self.subsample_size,
+        self.size, self.subsample_size, self.indices = self._subsample(
+            self.name, self.size, self.subsample_size,
             self.indices, self.use_cuda, self.device)
-        self.size = self.subsample_size
 
     def _subsample(self, name, size=None, subsample_size=None, subsample=None, use_cuda=None, device=None):
         """
@@ -114,7 +112,7 @@ class SubsampleMessenger(IndepMessenger):
         return size, subsample_size, subsample
 
     def __enter__(self):
-        self.size = self.subsample_size
+        # self.size = self.subsample_size
         return super(SubsampleMessenger, self).__enter__()
 
     def _reset(self):
@@ -122,6 +120,6 @@ class SubsampleMessenger(IndepMessenger):
         super(SubsampleMessenger, self)._reset()
 
     def _process_message(self, msg):
-        super(SubsampleMessenger, self)._process_message(msg)
-        # XXX this check is a hack caused by all the gross state in this class
-        msg["scale"] = (self._size / (1 or self.subsample_size)) * msg["scale"]
+        frame = CondIndepStackFrame(self.name, self.dim, self.subsample_size, self.counter)
+        msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
+        msg["scale"] = (self.size / self.subsample_size) * msg["scale"]

@@ -224,8 +224,8 @@ class irange(SubsampleMessenger):
         raise NotImplementedError
 
     def __iter__(self):
-        self._size, self.subsample_size, self.indices = self._subsample(
-            self.name, self._size, self.subsample_size, self.indices, self.use_cuda)
+        self.size, self.subsample_size, self.indices = self._subsample(
+            self.name, self.size, self.subsample_size, self.indices, self.use_cuda)
         self._vectorized = False
         self.dim = None
         for i in self.indices:
