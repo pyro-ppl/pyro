@@ -33,6 +33,7 @@ def clear_param_store():
 
 _param = effectful(_PYRO_PARAM_STORE.get_param, type="param")
 
+
 def param(name, *args, **kwargs):
     """
     Saves the variable as a parameter in the param store.
