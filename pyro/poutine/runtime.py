@@ -159,7 +159,7 @@ def am_i_wrapped():
     return len(_PYRO_STACK) > 0
 
 
-@functools.lru_cache(maxsize=1000, typed=True)
+@functools.lru_cache(maxsize=1000)
 def effectful(fn=None, type=None):
     """
     Wrapper for calling apply_stack to apply any active effects.
