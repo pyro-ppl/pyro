@@ -214,7 +214,7 @@ def test_gamma_normal():
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
     hmc_kernel = HMC(model, trajectory_length=1)
-    mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100).run(data)
+    mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_std, prec=0.05)
 
