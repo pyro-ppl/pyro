@@ -161,13 +161,11 @@ class RenyiELBO(ELBO):
                     elbo_particle = elbo_particle - log_prob_sum.detach()
 
                     if not is_identically_zero(entropy_term):
+                        # XXX for Rejector distribution which both entropy_term and
+                        # score_function_term are not zero, we can drop score_function_term
+                        # at the cost of small bias (https://arxiv.org/abs/1806.01851)
                         surrogate_elbo_particle = surrogate_elbo_particle - log_prob_sum
-
-                        if not is_identically_zero(score_function_term):
-                            # link to the issue: https://github.com/uber/pyro/issues/1222
-                            raise NotImplementedError
-
-                    if not is_identically_zero(score_function_term):
+                    elif not is_identically_zero(score_function_term):
                         surrogate_elbo_particle = (surrogate_elbo_particle +
                                                    (self.alpha / (1. - self.alpha)) * log_prob_sum)
 
