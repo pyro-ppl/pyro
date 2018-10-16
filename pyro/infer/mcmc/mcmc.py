@@ -166,12 +166,11 @@ class _SingleSampler(TracePosterior):
         progress_bar = initialize_progbar(self.warmup_steps, self.num_samples) \
             if not is_multiprocessing else None
         self.logger = initialize_logger(self.logger, chain_id, progress_bar, log_queue)
-        self.kernel.setup(*args, **kwargs)
+        self.kernel.setup(self.warmup_steps, *args, **kwargs)
         trace = self.kernel.initial_trace()
         with optional(progress_bar, not is_multiprocessing):
             for trace in self._gen_samples(self.warmup_steps, trace):
                 continue
-            self.kernel.end_warmup()
             if progress_bar:
                 progress_bar.set_description("Sample")
             for trace in self._gen_samples(self.num_samples, trace):
@@ -191,14 +190,15 @@ class MCMC(TracePosterior):
     :param int num_samples: The number of samples that need to be generated,
         excluding the samples discarded during the warmup phase.
     :param int warmup_steps: Number of warmup iterations. The samples generated
-        during the warmup phase are discarded.
+        during the warmup phase are discarded. If not provided, default is
+        half of `num_samples`.
     :param int num_chain: Number of MCMC chains to run in parallel.
     :param str mp_context: Multiprocessing context to use when `num_chains > 1`.
         Only applicable for Python 3.5 and above.
     """
     def __init__(self, kernel, num_samples, warmup_steps=0,
                  num_chains=1, mp_context=None):
-        self.warmup_steps = warmup_steps
+        self.warmup_steps = warmup_steps if warmup_steps is not None else num_samples // 2  # Stan
         self.num_samples = num_samples
         if num_chains > 1:
             self.sampler = _ParallelSampler(kernel, num_samples, warmup_steps,
