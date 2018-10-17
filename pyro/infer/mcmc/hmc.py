@@ -94,13 +94,15 @@ class HMC(TraceKernel):
                  full_mass=False,
                  transforms=None,
                  max_plate_nesting=float("inf"),
+                 max_iarange_nesting=None,  # DEPRECATED
                  experimental_use_einsum=False):
+        if max_iarange_nesting is not None:
+            max_plate_nesting = max_iarange_nesting  # for backwards compatibility
+
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
         self.model = poutine.enum(config_enumerate(model, default="parallel"),
                                   first_available_dim=max_plate_nesting)
-        # broadcast sample sites inside plate.
-        self.model = poutine.broadcast(self.model)
         self.step_size = step_size if step_size is not None else 1  # from Stan
         if trajectory_length is not None:
             self.trajectory_length = trajectory_length

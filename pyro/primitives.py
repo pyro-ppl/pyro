@@ -175,11 +175,7 @@ class plate(PlateMessenger):
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
     extended discussion.
     """
-    def __enter__(self):
-        super(plate, self).__enter__()
-        if self._vectorized and self._indices is not None:
-            return self.indices
-        return None
+    pass
 
 
 iarange = plate  # for backwards-compatibility

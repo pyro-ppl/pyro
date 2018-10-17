@@ -92,7 +92,11 @@ class NUTS(HMC):
                  full_mass=False,
                  transforms=None,
                  max_plate_nesting=float("inf"),
+                 max_iarange_nesting=None,  # DEPRECATED
                  experimental_use_einsum=False):
+        if max_iarange_nesting is not None:
+            max_plate_nesting = max_iarange_nesting  # for backwards compatibility
+
         super(NUTS, self).__init__(model,
                                    step_size,
                                    adapt_step_size=adapt_step_size,

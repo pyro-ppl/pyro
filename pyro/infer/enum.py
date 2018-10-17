@@ -35,8 +35,6 @@ def get_importance_trace(graph_type, max_plate_nesting, model, guide, *args, **k
     Returns a single trace from the guide, and the model that is run
     against it.
     """
-    guide = poutine.broadcast(guide)
-    model = poutine.broadcast(model)
     guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
     model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                 graph_type=graph_type).get_trace(*args, **kwargs)

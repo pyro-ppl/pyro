@@ -259,9 +259,6 @@ class TraceEnum_ELBO(ELBO):
         if self.vectorize_particles:
             guide = self._vectorized_num_particles(guide)
             model = self._vectorized_num_particles(model)
-        else:
-            guide = poutine.broadcast(guide)
-            model = poutine.broadcast(model)
 
         # Enable parallel enumeration over the vectorized guide and model.
         # The model allocates enumeration dimensions after (to the left of) the guide,
@@ -393,8 +390,7 @@ class TraceEnum_ELBO(ELBO):
                                               "compatible with guide enumeration.")
 
         with BackwardSampleMessenger(model_trace, guide_trace):
-            return poutine.replay(poutine.broadcast(model),
-                                  trace=guide_trace)(*args, **kwargs)
+            return poutine.replay(model, trace=guide_trace)(*args, **kwargs)
 
 
 class JitTraceEnum_ELBO(TraceEnum_ELBO):

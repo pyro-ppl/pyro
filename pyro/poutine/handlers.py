@@ -232,8 +232,8 @@ def broadcast(fn=None):
     :class:`~pyro.plate` contexts.
 
     >>> def model_broadcast_by_hand():
-    ...     with pyro.plate("batch", 100, dim=-2):
-    ...         with pyro.plate("components", 3, dim=-1):
+    ...     with IndepMessenger("batch", 100, dim=-2):
+    ...         with IndepMessenger("components", 3, dim=-1):
     ...             sample = pyro.sample("sample", dist.Bernoulli(torch.ones(3) * 0.5)
     ...                                                .expand_by(100))
     ...             assert sample.shape == torch.Size((100, 3))
@@ -241,8 +241,8 @@ def broadcast(fn=None):
 
     >>> @poutine.broadcast
     ... def model_automatic_broadcast():
-    ...     with pyro.plate("batch", 100, dim=-2):
-    ...         with pyro.plate("components", 3, dim=-1):
+    ...     with IndepMessenger("batch", 100, dim=-2):
+    ...         with IndepMessenger("components", 3, dim=-1):
     ...             sample = pyro.sample("sample", dist.Bernoulli(torch.tensor(0.5)))
     ...             assert sample.shape == torch.Size((100, 3))
     ...     return sample

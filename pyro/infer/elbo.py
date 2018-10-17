@@ -5,7 +5,6 @@ from abc import abstractmethod, ABCMeta
 from six import add_metaclass
 
 import pyro
-import pyro.poutine as poutine
 
 
 @add_metaclass(ABCMeta)
@@ -28,10 +27,8 @@ class ELBO(object):
         ``infer={"enumerate": "parallel"}``.
     :param bool vectorize_particles: Whether to vectorize the ELBO computation
         over `num_particles`. Defaults to False. This requires static structure
-        in model and guide. In addition, this wraps the model and guide inside a
-        :class:`~pyro.poutine.broadcast` poutine for automatic broadcasting of
-        sample site batch shapes, and requires specifying a finite value for
-        `max_plate_nesting`.
+        in model and guide. In addition, this requires specifying a finite
+        value for `max_plate_nesting`.
     :param bool strict_enumeration_warning: Whether to warn about possible
         misuse of enumeration, i.e. that
         :class:`pyro.infer.traceenum_elbo.TraceEnum_ELBO` is used iff there
@@ -49,8 +46,12 @@ class ELBO(object):
     def __init__(self,
                  num_particles=1,
                  max_plate_nesting=float('inf'),
+                 max_iarange_nesting=None,  # DEPRECATED
                  vectorize_particles=False,
                  strict_enumeration_warning=True):
+        if max_iarange_nesting is not None:
+            max_plate_nesting = max_iarange_nesting  # for backwards compatibility
+
         self.num_particles = num_particles
         self.max_plate_nesting = max_plate_nesting
         self.vectorize_particles = vectorize_particles
@@ -65,9 +66,9 @@ class ELBO(object):
     def _vectorized_num_particles(self, fn):
         """
         Wraps a callable inside an outermost :class:`~pyro.plate` to parallelize
-        ELBO computation over `num_particles`, and a :class:`~pyro.poutine.broadcast`
-        poutine to broadcast batch shapes of sample site functions in accordance
-        with the `~pyro.plate` contexts within which they are embedded.
+        ELBO computation over `num_particles`, and to broadcast batch shapes of
+        sample site functions in accordance with the `~pyro.plate` contexts
+        within which they are embedded.
 
         :param fn: arbitrary callable containing Pyro primitives.
         :return: wrapped callable.
@@ -79,7 +80,7 @@ class ELBO(object):
             with pyro.plate("num_particles_vectorized", self.num_particles, dim=-self.max_plate_nesting):
                 return fn(*args, **kwargs)
 
-        return poutine.broadcast(wrapped_fn)
+        return wrapped_fn
 
     def _get_vectorized_trace(self, model, guide, *args, **kwargs):
         """
