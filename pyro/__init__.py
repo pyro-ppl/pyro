@@ -1,10 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
-from pyro.logger import log
 import pyro.poutine as poutine
+from pyro.logger import log
 from pyro.poutine import condition, do
-from pyro.primitives import (clear_param_store, enable_validation, get_param_store, iarange, irange, module, param,
-                             random_module, sample, validation_enabled)
+from pyro.primitives import (clear_param_store, enable_validation, get_param_store, plate, irange, module, param,
+                             plate, random_module, sample, validation_enabled)
 from pyro.util import set_rng_seed
 
 version_prefix = '0.2.1'
@@ -22,11 +22,12 @@ __all__ = [
     "do",
     "enable_validation",
     "get_param_store",
-    "iarange",
+    "plate",
     "irange",
     "log",
     "module",
     "param",
+    "plate",
     "poutine",
     "random_module",
     "sample",

@@ -221,19 +221,19 @@ def block(fn=None, hide_fn=None, expose_fn=None, hide=None, expose=None, hide_ty
 def broadcast(fn=None):
     """
     Automatically broadcasts the batch shape of the stochastic function
-    at a sample site when inside a single or nested iarange context.
+    at a sample site when inside a single or nested plate context.
     The existing `batch_shape` must be broadcastable with the size
-    of the :class:`~pyro.iarange` contexts installed in the
+    of the :class:`~pyro.plate` contexts installed in the
     `cond_indep_stack`.
 
     Notice how `model_automatic_broadcast` below automates expanding of
     distribution batch shapes. This makes it easy to modularize a
     Pyro model as the sub-components are agnostic of the wrapping
-    :class:`~pyro.iarange` contexts.
+    :class:`~pyro.plate` contexts.
 
     >>> def model_broadcast_by_hand():
-    ...     with pyro.iarange("batch", 100, dim=-2):
-    ...         with pyro.iarange("components", 3, dim=-1):
+    ...     with pyro.plate("batch", 100, dim=-2):
+    ...         with pyro.plate("components", 3, dim=-1):
     ...             sample = pyro.sample("sample", dist.Bernoulli(torch.ones(3) * 0.5)
     ...                                                .expand_by(100))
     ...             assert sample.shape == torch.Size((100, 3))
@@ -241,8 +241,8 @@ def broadcast(fn=None):
 
     >>> @poutine.broadcast
     ... def model_automatic_broadcast():
-    ...     with pyro.iarange("batch", 100, dim=-2):
-    ...         with pyro.iarange("components", 3, dim=-1):
+    ...     with pyro.plate("batch", 100, dim=-2):
+    ...         with pyro.plate("components", 3, dim=-1):
     ...             sample = pyro.sample("sample", dist.Bernoulli(torch.tensor(0.5)))
     ...             assert sample.shape == torch.Size((100, 3))
     ...     return sample
@@ -351,24 +351,6 @@ def mask(fn=None, mask=None):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.scale_messenger.MaskMessenger`
     """
     msngr = MaskMessenger(mask=mask)
-    return msngr(fn) if fn is not None else msngr
-
-
-def plate(fn=None, name=None, size=None, subsample_size=None, subsample=None, dim=None, device=None):
-    """
-    Example::
-
-        x_axis = plate('outer', 320, dim=-1)
-        y_axis = plate('inner', 200, dim=-2)
-        with x_axis:
-            x_noise = sample("x_noise", dist.Normal(loc, scale))
-        with y_axis:
-            y_noise = sample("y_noise", dist.Normal(loc, scale))
-        with x_axis, y_axis:
-            xy_noise = sample("xy_noise", dist.Normal(loc, scale))
-    """
-    msngr = PlateMessenger(name=name, size=size, subsample_size=subsample_size,
-                           subsample=subsample, dim=dim, device=device)
     return msngr(fn) if fn is not None else msngr
 
 

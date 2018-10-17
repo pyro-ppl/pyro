@@ -56,8 +56,8 @@ class NUTS(HMC):
         If not specified and the model has sites with constrained support,
         automatic transformations will be applied, as specified in
         :mod:`torch.distributions.constraint_registry`.
-    :param int max_iarange_nesting: Optional bound on max number of nested
-        :func:`pyro.iarange` contexts. This is required if model contains
+    :param int max_plate_nesting: Optional bound on max number of nested
+        :func:`pyro.plate` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
     :param bool experimental_use_einsum: Whether to use an einsum operation
         to evaluat log pdf for the model trace. No-op unless the trace has
@@ -91,7 +91,7 @@ class NUTS(HMC):
                  adapt_mass_matrix=True,
                  full_mass=False,
                  transforms=None,
-                 max_iarange_nesting=float("inf"),
+                 max_plate_nesting=float("inf"),
                  experimental_use_einsum=False):
         super(NUTS, self).__init__(model,
                                    step_size,
@@ -99,7 +99,7 @@ class NUTS(HMC):
                                    adapt_mass_matrix=adapt_mass_matrix,
                                    full_mass=full_mass,
                                    transforms=transforms,
-                                   max_iarange_nesting=max_iarange_nesting,
+                                   max_plate_nesting=max_plate_nesting,
                                    experimental_use_einsum=experimental_use_einsum)
 
         self._max_tree_depth = 10  # from Stan

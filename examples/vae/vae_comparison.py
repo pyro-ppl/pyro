@@ -181,7 +181,7 @@ class PyroVAEImpl(VAE):
     def model(self, data):
         decoder = pyro.module('decoder', self.vae_decoder)
         z_mean, z_std = torch.zeros([data.size(0), 20]), torch.ones([data.size(0), 20])
-        with pyro.iarange('data', data.size(0)):
+        with pyro.plate('data', data.size(0)):
             z = pyro.sample('latent', Normal(z_mean, z_std).independent(1))
             img = decoder.forward(z)
             pyro.sample('obs',
@@ -190,7 +190,7 @@ class PyroVAEImpl(VAE):
 
     def guide(self, data):
         encoder = pyro.module('encoder', self.vae_encoder)
-        with pyro.iarange('data', data.size(0)):
+        with pyro.plate('data', data.size(0)):
             z_mean, z_var = encoder.forward(data)
             pyro.sample('latent', Normal(z_mean, z_var.sqrt()).independent(1))
 

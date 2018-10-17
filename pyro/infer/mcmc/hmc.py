@@ -52,8 +52,8 @@ class HMC(TraceKernel):
         If not specified and the model has sites with constrained support,
         automatic transformations will be applied, as specified in
         :mod:`torch.distributions.constraint_registry`.
-    :param int max_iarange_nesting: Optional bound on max number of nested
-        :func:`pyro.iarange` contexts. This is required if model contains
+    :param int max_plate_nesting: Optional bound on max number of nested
+        :func:`pyro.plate` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
     :param bool experimental_use_einsum: Whether to use an einsum operation
         to evaluate log pdf for the model trace. No-op unless the trace has
@@ -93,13 +93,13 @@ class HMC(TraceKernel):
                  adapt_mass_matrix=True,
                  full_mass=False,
                  transforms=None,
-                 max_iarange_nesting=float("inf"),
+                 max_plate_nesting=float("inf"),
                  experimental_use_einsum=False):
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
         self.model = poutine.enum(config_enumerate(model, default="parallel"),
-                                  first_available_dim=max_iarange_nesting)
-        # broadcast sample sites inside iarange.
+                                  first_available_dim=max_plate_nesting)
+        # broadcast sample sites inside plate.
         self.model = poutine.broadcast(self.model)
         self.step_size = step_size if step_size is not None else 1  # from Stan
         if trajectory_length is not None:
@@ -131,7 +131,7 @@ class HMC(TraceKernel):
         self._adapt_initial_window = 25  # from Stan
 
         self.transforms = {} if transforms is None else transforms
-        self.max_iarange_nesting = max_iarange_nesting
+        self.max_plate_nesting = max_plate_nesting
         self._automatic_transform_enabled = True if transforms is None else False
         self._reset()
         super(HMC, self).__init__()
@@ -328,7 +328,7 @@ class HMC(TraceKernel):
         trace_eval = TraceEinsumEvaluator if self.use_einsum else TraceTreeEvaluator
         self._trace_prob_evaluator = trace_eval(trace,
                                                 self._has_enumerable_sites,
-                                                self.max_iarange_nesting)
+                                                self.max_plate_nesting)
         trace_log_prob_sum = self._compute_trace_log_prob(trace)
         if torch_isnan(trace_log_prob_sum) or torch_isinf(trace_log_prob_sum):
             raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")

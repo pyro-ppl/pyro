@@ -65,7 +65,7 @@ class NormalNormalTests(TestCase):
             loc_latent = pyro.sample("loc_latent",
                                      dist.Normal(self.loc0, torch.pow(self.lam0, -0.5))
                                      .independent(1))
-            with pyro.iarange('data', self.batch_size):
+            with pyro.plate('data', self.batch_size):
                 pyro.sample("obs",
                             dist.Normal(loc_latent, torch.pow(self.lam, -0.5)).independent(1),
                             obs=self.data)
@@ -187,7 +187,7 @@ class PoissonGammaTests(TestCase):
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", Gamma(self.alpha0, self.beta0))
-            with pyro.iarange("data", self.n_data):
+            with pyro.plate("data", self.n_data):
                 pyro.sample("obs", dist.Poisson(lambda_latent), obs=self.data)
             return lambda_latent
 
@@ -239,7 +239,7 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
 
     def model(alpha0, beta0, alpha_n, beta_n):
         lambda_latent = pyro.sample("lambda_latent", gamma_dist(alpha0, beta0))
-        with pyro.iarange("data", n_data):
+        with pyro.plate("data", n_data):
             pyro.sample("obs", dist.Exponential(lambda_latent), obs=data)
         return lambda_latent
 
@@ -250,9 +250,9 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
 
     adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
     if elbo_impl is RenyiELBO:
-        elbo = elbo_impl(alpha=0.2, num_particles=3, max_iarange_nesting=1, strict_enumeration_warning=False)
+        elbo = elbo_impl(alpha=0.2, num_particles=3, max_plate_nesting=1, strict_enumeration_warning=False)
     else:
-        elbo = elbo_impl(max_iarange_nesting=1, strict_enumeration_warning=False)
+        elbo = elbo_impl(max_plate_nesting=1, strict_enumeration_warning=False)
     svi = SVI(model, guide, adam, loss=elbo)
 
     with xfail_if_not_implemented():
@@ -291,12 +291,12 @@ class BernoulliBetaTests(TestCase):
     # this is used to detect bugs related to https://github.com/pytorch/pytorch/issues/9521
     def test_elbo_reparameterized_vectorized(self):
         self.do_elbo_test(True, 5000, Trace_ELBO(num_particles=2, vectorize_particles=True,
-                                                 max_iarange_nesting=1))
+                                                 max_plate_nesting=1))
 
     # this is used to detect bugs related to https://github.com/pytorch/pytorch/issues/9521
     def test_elbo_nonreparameterized_vectorized(self):
         self.do_elbo_test(False, 5000, Trace_ELBO(num_particles=2, vectorize_particles=True,
-                                                  max_iarange_nesting=1))
+                                                  max_plate_nesting=1))
 
     def test_renyi_reparameterized(self):
         self.do_elbo_test(True, 5000, RenyiELBO(num_particles=2))
@@ -306,11 +306,11 @@ class BernoulliBetaTests(TestCase):
 
     def test_renyi_reparameterized_vectorized(self):
         self.do_elbo_test(True, 5000, RenyiELBO(num_particles=2, vectorize_particles=True,
-                                                max_iarange_nesting=1))
+                                                max_plate_nesting=1))
 
     def test_renyi_nonreparameterized_vectorized(self):
         self.do_elbo_test(False, 5000, RenyiELBO(alpha=0.2, num_particles=2, vectorize_particles=True,
-                                                 max_iarange_nesting=1))
+                                                 max_plate_nesting=1))
 
     def do_elbo_test(self, reparameterized, n_steps, loss):
         pyro.clear_param_store()
@@ -318,7 +318,7 @@ class BernoulliBetaTests(TestCase):
 
         def model():
             p_latent = pyro.sample("p_latent", Beta(self.alpha0, self.beta0))
-            with pyro.iarange("data", self.batch_size):
+            with pyro.plate("data", self.batch_size):
                 pyro.sample("obs", dist.Bernoulli(p_latent), obs=self.data)
             return p_latent
 

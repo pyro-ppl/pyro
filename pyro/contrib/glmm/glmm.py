@@ -188,8 +188,8 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
     # tau is size batch
     tau_shape = design.shape[:-2]
     with ExitStack() as stack:
-        for iarange in iter_iaranges_to_shape(tau_shape):
-            stack.enter_context(iarange)
+        for plate in iter_plates_to_shape(tau_shape):
+            stack.enter_context(plate)
 
         if obs_sd is None:
             # First, sample tau (observation precision)
@@ -272,8 +272,8 @@ def normal_inv_gamma_family_guide(design, obs_sd, w_sizes, mf=False):
     # tau is size batch
     tau_shape = design.shape[:-2]
     with ExitStack() as stack:
-        for iarange in iter_iaranges_to_shape(tau_shape):
-            stack.enter_context(iarange)
+        for plate in iter_plates_to_shape(tau_shape):
+            stack.enter_context(plate)
 
         if obs_sd is None:
             # First, sample tau (observation precision)
@@ -358,7 +358,7 @@ def analytic_posterior_cov(prior_cov, x, obs_sd):
     return posterior_cov
 
 
-def iter_iaranges_to_shape(shape):
+def iter_plates_to_shape(shape):
     # Go backwards (right to left)
     for i, s in enumerate(shape[::-1]):
-        yield pyro.iarange("iarange_" + str(i), s)
+        yield pyro.plate("plate_" + str(i), s)

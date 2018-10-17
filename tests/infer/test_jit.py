@@ -149,7 +149,7 @@ def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
 
     inner_particles = 2
     outer_particles = num_particles // inner_particles
-    elbo = TraceEnum_ELBO(max_iarange_nesting=0,
+    elbo = TraceEnum_ELBO(max_plate_nesting=0,
                           strict_enumeration_warning=any([enumerate1, enumerate2]),
                           num_particles=inner_particles)
     actual_loss = sum(elbo.loss_and_grads(model, guide)

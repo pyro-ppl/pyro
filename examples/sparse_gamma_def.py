@@ -46,21 +46,20 @@ class SparseGammaDEF(object):
         self.softplus = torch.nn.Softplus()
 
     # define the model
-    @poutine.broadcast
     def model(self, x):
         x_size = x.size(0)
 
         # sample the global weights
-        with pyro.iarange("w_top_iarange", self.top_width * self.mid_width):
+        with pyro.plate("w_top_plate", self.top_width * self.mid_width):
             w_top = pyro.sample("w_top", Gamma(self.alpha_w, self.beta_w))
-        with pyro.iarange("w_mid_iarange", self.mid_width * self.bottom_width):
+        with pyro.plate("w_mid_plate", self.mid_width * self.bottom_width):
             w_mid = pyro.sample("w_mid", Gamma(self.alpha_w, self.beta_w))
-        with pyro.iarange("w_bottom_iarange", self.bottom_width * self.image_size):
+        with pyro.plate("w_bottom_plate", self.bottom_width * self.image_size):
             w_bottom = pyro.sample("w_bottom", Gamma(self.alpha_w, self.beta_w))
 
         # sample the local latent random variables
-        # (the iarange encodes the fact that the z's for different datapoints are conditionally independent)
-        with pyro.iarange("data", x_size):
+        # (the plate encodes the fact that the z's for different datapoints are conditionally independent)
+        with pyro.plate("data", x_size):
             z_top = pyro.sample("z_top", Gamma(self.alpha_z, self.beta_z).expand([self.top_width]).independent(1))
             mean_mid = torch.mm(z_top, w_top.reshape(self.top_width, self.mid_width))
             z_mid = pyro.sample("z_mid", Gamma(self.alpha_z, self.beta_z / mean_mid).independent(1))
@@ -73,7 +72,6 @@ class SparseGammaDEF(object):
 
     # define the guide a.k.a. variational distribution.
     # (note the guide is mean field)
-    @poutine.broadcast
     def guide(self, x):
         x_size = x.size(0)
 
@@ -100,15 +98,15 @@ class SparseGammaDEF(object):
             pyro.sample("w_%s" % name, Gamma(alpha_w_q, alpha_w_q / mean_w_q))
 
         # sample the global weights
-        with pyro.iarange("w_top_iarange", self.top_width * self.mid_width):
+        with pyro.plate("w_top_plate", self.top_width * self.mid_width):
             sample_ws("top", self.top_width * self.mid_width)
-        with pyro.iarange("w_mid_iarange", self.mid_width * self.bottom_width):
+        with pyro.plate("w_mid_plate", self.mid_width * self.bottom_width):
             sample_ws("mid", self.mid_width * self.bottom_width)
-        with pyro.iarange("w_bottom_iarange", self.bottom_width * self.image_size):
+        with pyro.plate("w_bottom_plate", self.bottom_width * self.image_size):
             sample_ws("bottom", self.bottom_width * self.image_size)
 
         # sample the local latent random variables
-        with pyro.iarange("data", x_size):
+        with pyro.plate("data", x_size):
             sample_zs("top", self.top_width)
             sample_zs("mid", self.mid_width)
             sample_zs("bottom", self.bottom_width)

@@ -12,8 +12,6 @@ Handlers
 
 .. autofunction:: pyro.poutine.block
 
-.. autofunction:: pyro.poutine.broadcast
-
 .. autofunction:: pyro.poutine.condition
 
 .. autofunction:: pyro.poutine.do
@@ -27,8 +25,6 @@ Handlers
 .. autofunction:: pyro.poutine.lift
 
 .. autofunction:: pyro.poutine.mask
-
-.. autofunction:: pyro.poutine.plate
 
 .. autofunction:: pyro.poutine.queue
 

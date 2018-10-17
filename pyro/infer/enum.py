@@ -30,7 +30,7 @@ def iter_discrete_extend(trace, site, **ignored):
         yield extended_trace
 
 
-def get_importance_trace(graph_type, max_iarange_nesting, model, guide, *args, **kwargs):
+def get_importance_trace(graph_type, max_plate_nesting, model, guide, *args, **kwargs):
     """
     Returns a single trace from the guide, and the model that is run
     against it.
@@ -41,7 +41,7 @@ def get_importance_trace(graph_type, max_iarange_nesting, model, guide, *args, *
     model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                 graph_type=graph_type).get_trace(*args, **kwargs)
     if is_validation_enabled():
-        check_model_guide_match(model_trace, guide_trace, max_iarange_nesting)
+        check_model_guide_match(model_trace, guide_trace, max_plate_nesting)
 
     guide_trace = prune_subsample_sites(guide_trace)
     model_trace = prune_subsample_sites(model_trace)
@@ -51,10 +51,10 @@ def get_importance_trace(graph_type, max_iarange_nesting, model, guide, *args, *
     if is_validation_enabled():
         for site in model_trace.nodes.values():
             if site["type"] == "sample":
-                check_site_shape(site, max_iarange_nesting)
+                check_site_shape(site, max_plate_nesting)
         for site in guide_trace.nodes.values():
             if site["type"] == "sample":
-                check_site_shape(site, max_iarange_nesting)
+                check_site_shape(site, max_plate_nesting)
 
     return model_trace, guide_trace
 

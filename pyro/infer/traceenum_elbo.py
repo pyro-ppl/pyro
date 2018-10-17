@@ -40,7 +40,7 @@ def _check_model_guide_enumeration_constraint(model_enum_sites, guide_trace):
             for f in site["cond_indep_stack"]:
                 if f.vectorized and f not in min_ordinal:
                     raise ValueError("Expected model enumeration to be no more global than guide enumeration, "
-                                     "but found model enumeration sites upstream of guide site '{}' in iarange('{}'). "
+                                     "but found model enumeration sites upstream of guide site '{}' in plate('{}'). "
                                      "Try converting some model enumeration sites to guide enumeration sites."
                                      .format(name, f.name))
 
@@ -223,8 +223,8 @@ class TraceEnum_ELBO(ELBO):
     and ensure the site does not appear in the ``guide``.
 
     This assumes restricted dependency structure on the model and guide:
-    variables outside of an :class:`~pyro.iarange` can never depend on
-    variables inside that :class:`~pyro.iarange`.
+    variables outside of an :class:`~pyro.plate` can never depend on
+    variables inside that :class:`~pyro.plate`.
     """
 
     def _get_trace(self, model, guide, *args, **kwargs):
@@ -233,7 +233,7 @@ class TraceEnum_ELBO(ELBO):
         against it.
         """
         model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_iarange_nesting, model, guide, *args, **kwargs)
+            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)
 
         if is_validation_enabled():
             check_traceenum_requirements(model_trace, guide_trace)
@@ -268,7 +268,7 @@ class TraceEnum_ELBO(ELBO):
         # accomplished by letting the model_enum lazily query the guide_enum for its
         # final .next_available_dim. The laziness is accomplished via a lambda.
         # Note this relies on the guide being run before the model.
-        guide_enum = EnumerateMessenger(first_available_dim=self.max_iarange_nesting)
+        guide_enum = EnumerateMessenger(first_available_dim=self.max_plate_nesting)
         model_enum = EnumerateMessenger(first_available_dim=lambda: guide_enum.next_available_dim)
         guide = guide_enum(guide)
         model = model_enum(model)

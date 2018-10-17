@@ -76,7 +76,7 @@ class AutoGuide(object):
         self.model = model
         self.prefix = prefix
         self.prototype_trace = None
-        self._iaranges = {}
+        self._plates = {}
 
     def __call__(self, *args, **kwargs):
         """
@@ -94,11 +94,11 @@ class AutoGuide(object):
         """
         pass
 
-    def _create_iaranges(self):
+    def _create_plates(self):
         if self.master is not None:
-            return self.master().iaranges
-        return {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
-                for frame in sorted(self._iaranges.values())}
+            return self.master().plates
+        return {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
+                for frame in sorted(self._plates.values())}
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
@@ -107,11 +107,11 @@ class AutoGuide(object):
         if self.master is not None:
             self.master()._check_prototype(self.prototype_trace)
 
-        self._iaranges = {}
+        self._plates = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             for frame in site["cond_indep_stack"]:
                 if frame.vectorized:
-                    self._iaranges[frame.name] = frame
+                    self._plates[frame.name] = frame
                 else:
                     raise NotImplementedError("AutoGuideList does not support pyro.irange")
 
@@ -142,7 +142,7 @@ class AutoGuideList(AutoGuide):
     def __init__(self, model, prefix="auto"):
         super(AutoGuideList, self).__init__(model, prefix)
         self.parts = []
-        self.iaranges = {}
+        self.plates = {}
 
     def _check_prototype(self, part_trace):
         for name, part_site in part_trace.nodes.items():
@@ -179,9 +179,9 @@ class AutoGuideList(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        # create all iaranges
-        self.iaranges = {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
-                         for frame in sorted(self._iaranges.values())}
+        # create all plates
+        self.plates = {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
+                         for frame in sorted(self._plates.values())}
 
         # run slave guides
         result = {}
@@ -223,7 +223,7 @@ class AutoCallable(AutoGuide):
 
         guide.add(AutoCallable(model, my_local_guide, my_local_median))
 
-    For more complex guides that need e.g. access to iaranges, users should
+    For more complex guides that need e.g. access to plates, users should
     instead subclass ``AutoGuide``.
 
     :param callable model: a Pyro model
@@ -286,13 +286,13 @@ class AutoDelta(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        iaranges = self._create_iaranges()
+        plates = self._create_plates()
         result = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             with ExitStack() as stack:
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
-                        stack.enter_context(iaranges[frame.name])
+                        stack.enter_context(plates[frame.name])
                 value = pyro.param("{}_{}".format(self.prefix, name), site["value"].detach(),
                                    constraint=site["fn"].support)
                 result[name] = pyro.sample(name, dist.Delta(value, event_dim=site["fn"].event_dim))
@@ -401,7 +401,7 @@ class AutoContinuous(AutoGuide):
             self._setup_prototype(*args, **kwargs)
 
         latent = self.sample_latent(*args, **kwargs)
-        iaranges = self._create_iaranges()
+        plates = self._create_plates()
 
         # unpack continuous latent samples
         result = {}
@@ -415,7 +415,7 @@ class AutoContinuous(AutoGuide):
 
             with ExitStack() as stack:
                 for frame in self._cond_indep_stacks[name]:
-                    stack.enter_context(iaranges[frame.name])
+                    stack.enter_context(plates[frame.name])
                 result[name] = pyro.sample(name, delta_dist)
 
         return result
@@ -699,7 +699,7 @@ class AutoDiscreteParallel(AutoGuide):
 
         self._discrete_sites = []
         self._cond_indep_stacks = {}
-        self._iaranges = {}
+        self._plates = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             if site["infer"].get("enumerate") != "parallel":
                 raise NotImplementedError('Expected sample site "{}" to be discrete and '
@@ -718,7 +718,7 @@ class AutoDiscreteParallel(AutoGuide):
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
             for frame in site["cond_indep_stack"]:
                 if frame.vectorized:
-                    self._iaranges[frame.name] = frame
+                    self._plates[frame.name] = frame
                 else:
                     raise NotImplementedError("AutoDiscreteParallel does not support pyro.irange")
 
@@ -733,7 +733,7 @@ class AutoDiscreteParallel(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        iaranges = self._create_iaranges()
+        plates = self._create_plates()
 
         # enumerate discrete latent samples
         result = {}
@@ -748,7 +748,7 @@ class AutoDiscreteParallel(AutoGuide):
 
             with ExitStack() as stack:
                 for frame in self._cond_indep_stacks[name]:
-                    stack.enter_context(iaranges[frame.name])
+                    stack.enter_context(plates[frame.name])
                 result[name] = pyro.sample(name, discrete_dist, infer={"enumerate": "parallel"})
 
         return result

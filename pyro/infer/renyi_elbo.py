@@ -33,8 +33,8 @@ class RenyiELBO(ELBO):
         :math:`\alpha \neq 1`. Default is 0.
     :param num_particles: The number of particles/samples used to form the objective
         (gradient) estimator. Default is 2.
-    :param int max_iarange_nesting: Bound on max number of nested
-        :func:`pyro.iarange` contexts. Default is infinity.
+    :param int max_plate_nesting: Bound on max number of nested
+        :func:`pyro.plate` contexts. Default is infinity.
     :param bool strict_enumeration_warning: Whether to warn about possible
         misuse of enumeration, i.e. that
         :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO` is used iff there
@@ -52,14 +52,14 @@ class RenyiELBO(ELBO):
     def __init__(self,
                  alpha=0,
                  num_particles=2,
-                 max_iarange_nesting=float('inf'),
+                 max_plate_nesting=float('inf'),
                  vectorize_particles=False,
                  strict_enumeration_warning=True):
         if alpha == 1:
             raise ValueError("The order alpha should not be equal to 1. Please use Trace_ELBO class"
                              "for the case alpha = 1.")
         self.alpha = alpha
-        super(RenyiELBO, self).__init__(num_particles, max_iarange_nesting, vectorize_particles,
+        super(RenyiELBO, self).__init__(num_particles, max_plate_nesting, vectorize_particles,
                                         strict_enumeration_warning)
 
     def _get_trace(self, model, guide, *args, **kwargs):
@@ -68,7 +68,7 @@ class RenyiELBO(ELBO):
         against it.
         """
         model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_iarange_nesting, model, guide, *args, **kwargs)
+            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
