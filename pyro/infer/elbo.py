@@ -33,6 +33,8 @@ class ELBO(object):
         misuse of enumeration, i.e. that
         :class:`pyro.infer.traceenum_elbo.TraceEnum_ELBO` is used iff there
         are enumerated sample sites.
+    :param bool retain_graph: Whether to retain autograd graph during an SVI step.
+        Defaults to None (False).
 
     References
 
@@ -48,13 +50,15 @@ class ELBO(object):
                  max_plate_nesting=float('inf'),
                  max_iarange_nesting=None,  # DEPRECATED
                  vectorize_particles=False,
-                 strict_enumeration_warning=True):
+                 strict_enumeration_warning=True,
+                 retain_graph=None):
         if max_iarange_nesting is not None:
             max_plate_nesting = max_iarange_nesting  # for backwards compatibility
 
         self.num_particles = num_particles
         self.max_plate_nesting = max_plate_nesting
         self.vectorize_particles = vectorize_particles
+        self.retain_graph = retain_graph
         if self.vectorize_particles:
             if self.num_particles > 1:
                 if self.max_plate_nesting == float('inf'):

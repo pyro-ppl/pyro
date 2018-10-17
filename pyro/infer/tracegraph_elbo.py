@@ -246,7 +246,7 @@ class TraceGraph_ELBO(ELBO):
 
         if trainable_params:
             surrogate_loss = -surrogate_elbo
-            torch_backward(weight * (surrogate_loss + baseline_loss))
+            torch_backward(weight * (surrogate_loss + baseline_loss), retain_graph=self.retain_graph)
 
         loss = -torch_item(elbo)
         warn_if_nan(loss, "loss")
