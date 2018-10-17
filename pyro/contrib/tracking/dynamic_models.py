@@ -367,22 +367,20 @@ class NcvContinuous(Ncv):
             stochastic integration (for use with EKF).
         '''
         if dt not in self._Q_cache:
+
             with torch.no_grad():
-                # q: continuous-time process noise intensity with
-                # units length^2/time^3 (m^2/s^3). Choose ``q`` so that
-                # changes in velocity, over a sampling period ``dt``,
-                # are roughly ``sqrt(q*dt)``.
-                q = self.sa2 * dt
                 d = self._dimension
                 dt2 = dt * dt
                 dt3 = dt2 * dt
-                Q = torch.zeros((d, d))
+                Q = self.sa2.new_zeros(d, d)
                 eye = eye_like(self.sa2, d//2)
                 Q[:d//2, :d//2] = dt3 * eye / 3.0
                 Q[:d//2, d//2:] = dt2 * eye / 2.0
                 Q[d//2:, :d//2] = dt2 * eye / 2.0
                 Q[d//2:, d//2:] = dt * eye
-            Q = Q * q
+            # sa2 * dt is an intensity factor that changes in velocity
+            # over a sampling period ``dt``, ideally should be ~``sqrt(q*dt)``.
+            Q = Q * (self.sa2 * dt)
             self._Q_cache[dt] = Q
 
         return self._Q_cache[dt]
