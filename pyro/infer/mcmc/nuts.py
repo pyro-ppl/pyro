@@ -115,14 +115,29 @@ class NUTS(HMC):
         # Here, as suggested in [1], we set dE_max = 1000.
         self._max_sliced_energy = 1000
 
+        # Set a flag to decide if we want to eliminate the initial point from the candidates to
+        # choose uniformly along the trajectory. In [1], this flag is True, but in Stan, they set
+        # it to False (implicitly).
+        self._eliminate_starting_point = True
+
     def _is_turning(self, z_left, r_left, z_right, r_right):
+        z_left_flat = torch.cat([z_left[site_name].reshape(-1) for site_name in sorted(z_left)])
+        r_left_flat = torch.cat([r_left[site_name].reshape(-1) for site_name in sorted(r_left)])
+        z_right_flat = torch.cat([z_right[site_name].reshape(-1) for site_name in sorted(z_right)])
+        r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in sorted(r_right)])
+        dz = z_right_flat - z_left_flat
+        z_left_flat.dot(self._inverse_mass_matrix.matmul(r_left_flat))
+        if self.full_mass:
+            return 0.5 * r_flat.dot(self._inverse_mass_matrix.matmul(r_flat))
+        else:
+            return 0.5 * self._inverse_mass_matrix.dot(r_flat ** 2)
         diff_left = 0
         diff_right = 0
         for name in self._r_shapes:
             dz = z_right[name] - z_left[name]
             diff_left += (dz * r_left[name]).sum()
             diff_right += (dz * r_right[name]).sum()
-        return diff_left < 0 or diff_right < 0
+        return diff_left <= 0 or diff_right <= 0
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size
@@ -253,7 +268,7 @@ class NUTS(HMC):
         z_left = z_right = z
         r_left = r_right = r
         z_left_grads = z_right_grads = None
-        tree_size = 1
+        tree_size = 0 if self._eliminate_starting_point else 1
         accepted = False
 
         # Temporarily disable distributions args checking as
@@ -283,7 +298,8 @@ class NUTS(HMC):
 
                 rand = pyro.sample("rand_t={}_treedepth={}".format(self._t, tree_depth),
                                    dist.Uniform(torch.zeros(1), torch.ones(1)))
-                if rand < new_tree.size / tree_size:
+                if ((tree_size > 0) and (rand < new_tree.size / tree_size))\
+                        or ((tree_size == 0) and (new_tree.size > 0)): 
                     accepted = True
                     z = new_tree.z_proposal
 
