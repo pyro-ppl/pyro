@@ -189,7 +189,7 @@ def initialize_logger(logger, chain_id, progress_bar=None, log_queue=None):
     logger.propagate = False
     if log_queue:
         handler = QueueHandler(log_queue)
-        format = "[%(chain_id)s %(msg_type)s]%(message)s"
+        format = "[%(levelname)s %(msg_type)s CHAIN: %(chain_id)s]%(message)s"
         progress_bar = None
     elif progress_bar:
         format = "%(levelname).1s \t %(message)s"

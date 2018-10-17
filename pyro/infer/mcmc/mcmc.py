@@ -3,11 +3,14 @@ from __future__ import absolute_import, division, print_function
 import errno
 import json
 import logging
+import signal
 import socket
 import sys
 import threading
 from collections import OrderedDict
 
+import six
+from six.moves import queue
 import torch
 import torch.multiprocessing as mp
 
@@ -29,7 +32,7 @@ def logger_thread(queue, warmup_steps, num_samples, num_chains):
         if record is None:
             break
         metadata, msg = record.getMessage().split("]", 1)
-        chain_id, msg_type = metadata[1:].split()
+        _, msg_type, _, chain_id = metadata[1:].split()
         chain_id = int(chain_id)
         if msg_type == TQDM_MSG:
             num_samples[chain_id] += 1
@@ -65,11 +68,11 @@ class _Worker(object):
         kwargs["log_queue"] = self.log_queue
         try:
             for sample in self.trace_gen._traces(*args, **kwargs):
-                self.result_queue.put((self.chain_id, sample))
-            self.result_queue.put((self.chain_id, None))
+                self.result_queue.put_nowait((self.chain_id, sample))
+            self.result_queue.put_nowait((self.chain_id, None))
         except Exception as e:
-            self.result_queue.put((self.chain_id, e))
-            raise e
+            self.trace_gen.logger.exception(e)
+            self.result_queue.put_nowait((self.chain_id, e))
 
 
 class _ParallelSampler(TracePosterior):
@@ -84,9 +87,12 @@ class _ParallelSampler(TracePosterior):
         self.workers = []
         self.ctx = mp
         if mp_context:
+            if six.PY2:
+                raise ValueError("multiprocessing.get_context() is "
+                                 "not supported in Python 2.")
             self.ctx = mp.get_context(mp_context)
-        self.result_queue = self.ctx.Queue()
-        self.log_queue = self.ctx.Queue()
+        self.result_queue = self.ctx.Manager().Queue()
+        self.log_queue = self.ctx.Manager().Queue()
         # initialize number of samples per chain
         samples_per_chain = num_samples // num_chains
         self.num_samples = [samples_per_chain] * num_chains
@@ -95,6 +101,7 @@ class _ParallelSampler(TracePosterior):
         self.log_thread = threading.Thread(target=logger_thread,
                                            args=(self.log_queue, self.warmup_steps,
                                                  self.num_samples, self.num_chains))
+        self.log_thread.daemon = True
         self.log_thread.start()
 
     def init_workers(self, *args, **kwargs):
@@ -111,18 +118,20 @@ class _ParallelSampler(TracePosterior):
             if w.is_alive():
                 w.join(timeout=1)
         if self.log_thread.is_alive():
-            self.log_queue.put(None)
+            self.log_queue.put_nowait(None)
             self.log_thread.join(timeout=1)
 
     def _traces(self, *args, **kwargs):
+        sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
         self.init_workers(*args, **kwargs)
+        signal.signal(signal.SIGINT, sigint_handler)
         active_workers = self.num_chains
         try:
             for w in self.workers:
                 w.start()
             while active_workers:
                 try:
-                    chain_id, val = self.result_queue.get()
+                    chain_id, val = self.result_queue.get(block=False)
                 # This can happen when the worker process has terminated.
                 # See https://github.com/pytorch/pytorch/pull/5380 for motivation.
                 except socket.error as e:
@@ -130,16 +139,14 @@ class _ParallelSampler(TracePosterior):
                         pass
                     else:
                         raise e
+                except queue.Empty:
+                    continue
                 if isinstance(val, Exception):
                     raise Exception("Exception in chain {}.".format(chain_id))
                 elif val is not None:
                     yield val
                 else:
                     active_workers -= 1
-        except Exception as e:
-            for w in self.workers:
-                w.terminate()
-            raise e
         finally:
             self.join()
 
