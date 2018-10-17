@@ -17,7 +17,6 @@ import torch
 
 import pyro
 import pyro.optim as optim
-import pyro.poutine as poutine
 import wget
 from pyro.distributions import Gamma, Poisson
 from pyro.infer import SVI, Trace_ELBO

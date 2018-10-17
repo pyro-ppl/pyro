@@ -20,7 +20,6 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro import poutine
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.optim import Adam
 

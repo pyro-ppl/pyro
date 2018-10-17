@@ -181,7 +181,7 @@ class AutoGuideList(AutoGuide):
 
         # create all plates
         self.plates = {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
-                         for frame in sorted(self._plates.values())}
+                       for frame in sorted(self._plates.values())}
 
         # run slave guides
         result = {}

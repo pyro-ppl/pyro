@@ -12,7 +12,6 @@ import pyro.distributions as dist
 from pyro.infer import EmpiricalMarginal
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
-import pyro.poutine as poutine
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)

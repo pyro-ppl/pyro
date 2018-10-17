@@ -11,7 +11,6 @@ import pyro.distributions as dist
 from pyro.infer import EmpiricalMarginal
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.nuts import NUTS
-import pyro.poutine as poutine
 from tests.common import assert_equal
 
 from .test_hmc import TEST_CASES, TEST_IDS, T, rmse

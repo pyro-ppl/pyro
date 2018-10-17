@@ -62,7 +62,7 @@ from .escape_messenger import EscapeMessenger
 from .infer_config_messenger import InferConfigMessenger
 from .lift_messenger import LiftMessenger
 from .mask_messenger import MaskMessenger
-from .plate_messenger import PlateMessenger
+from .plate_messenger import PlateMessenger  # noqa F403
 from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
