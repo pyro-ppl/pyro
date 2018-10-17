@@ -71,7 +71,7 @@ def test_pickle(Dist):
         args = (1,) * nargs
     try:
         dist = Dist(*args)
-    except:
+    except Exception:
         pytest.skip(reason='cannot construct distribution')
 
     # Note that pickling torch.Size() requires protocol >= 2
