@@ -240,8 +240,8 @@ class NUTS(HMC):
         #     (z, r) ~ Uniform({(z', r') in trajectory | p(z', r') >= u}).
         #
         # For more information about slice sampling method, see [3].
-        # For another version of NUTS which uses multinomial sampling instead of slice sampling, see
-        # [2].
+        # For another version of NUTS which uses multinomial sampling instead of slice sampling,
+        # see [2].
 
         # Rather than sampling the slice variable from `Uniform(0, exp(-energy))`, we can
         # sample log_slice directly using `energy`, so as to avoid potential underflow or
