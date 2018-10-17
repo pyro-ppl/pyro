@@ -275,7 +275,10 @@ def main(args):
     # (3) Partially Pooled Model
     # TODO: remove once htps://github.com/uber/pyro/issues/1458 is resolved
     if "CI" not in os.environ:
-        posterior_partially_pooled = MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps) \
+        posterior_partially_pooled = MCMC(nuts_kernel,
+                                          num_samples=args.num_samples,
+                                          warmup_steps=args.warmup_steps,
+                                          num_chains=args.num_chains) \
             .run(partially_pooled, at_bats, hits)
         logging.info("\nModel: Partially Pooled")
         logging.info("=======================")
