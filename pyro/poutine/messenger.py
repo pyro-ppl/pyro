@@ -129,7 +129,8 @@ class Messenger(object):
     def register(cls, fn=None, type=None, post=None):
         """
         :param fn: function implementing operation
-        :param str type: name of the operation (also passed to `effectful`)
+        :param str type: name of the operation
+            (also passed to :func:~`pyro.poutine.runtime.effectful`)
         :param bool post: if `True`, use this operation as postprocess
 
         Dynamically add operations to an effect.
@@ -141,6 +142,7 @@ class Messenger(object):
             def some_function(msg)
                 ...do_something...
                 return msg
+
         """
         if fn is None:
             return lambda x: cls.register(x, type=type, post=post)
@@ -155,7 +157,8 @@ class Messenger(object):
     def unregister(cls, fn=None, type=None, post=None):
         """
         :param fn: function implementing operation
-        :param str type: name of the operation (also passed to `effectful`)
+        :param str type: name of the operation
+            (also passed to :func:~`pyro.poutine.runtime.effectful`)
 
         Dynamically remove operations from an effect.
         Useful for removing wrappers from libraries.

@@ -157,7 +157,10 @@ def am_i_wrapped():
 
 def effectful(fn=None, type=None):
     """
-    Wrapper for calling apply_stack to apply any active effects.
+    :param fn: function or callable that performs an effectful computation
+    :param str type: the type label of the operation, e.g. `"sample"`
+
+    Wrapper for calling :func:~`pyro.poutine.runtime.apply_stack` to apply any active effects.
     """
     if fn is None:
         return functools.partial(effectful, type=type)
