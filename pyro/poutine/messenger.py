@@ -128,8 +128,19 @@ class Messenger(object):
     @classmethod
     def register(cls, fn=None, type=None, post=None):
         """
-        @SomeMessengerClass.register
-        def some_function(...)
+        :param fn: function implementing operation
+        :param str type: name of the operation (also passed to `effectful`)
+        :param bool post: if `True`, use this operation as postprocess
+
+        Dynamically add operations to an effect.
+        Useful for generating wrappers for libraries.
+
+        Example::
+
+            @SomeMessengerClass.register
+            def some_function(msg)
+                ...do_something...
+                return msg
         """
         if fn is None:
             return lambda x: cls.register(x, type=type, post=post)
@@ -143,10 +154,27 @@ class Messenger(object):
     @classmethod
     def unregister(cls, fn=None, type=None, post=None):
         """
-        SomeMessengerClass.unregister(fn) or SomeMessengerClass.unregister("name")
+        :param fn: function implementing operation
+        :param str type: name of the operation (also passed to `effectful`)
+
+        Dynamically remove operations from an effect.
+        Useful for removing wrappers from libraries.
+
+        Example::
+
+            SomeMessengerClass.unregister(some_function, "name")
         """
         if type is None:
-            type = fn.__code__.co_name
+            raise ValueError("An operation type name must be provided")
 
-        delattr(cls, "_pyro_" + ("post_" if post else "") + type)
+        try:
+            delattr(cls, "_pyro_post_" + type)
+        except AttributeError:
+            pass
+
+        try:
+            delattr(cls, "_pyro_" + type)
+        except AttributeError:
+            pass
+
         return fn
