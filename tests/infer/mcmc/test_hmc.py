@@ -93,8 +93,8 @@ TEST_CASES = [
         mean_tol=0.05,
         std_tol=0.05,
     ), marks=[pytest.mark.xfail(reason="flaky"),
-              pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
-                                 reason='Slow test - skip on CI')]),
+              pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
+                                 reason='Slow test - skip on CI/CUDA')]),
     pytest.param(*T(
         GaussianChain(dim=5, chain_len=9, num_obs=1),
         num_samples=3000,
@@ -106,8 +106,8 @@ TEST_CASES = [
         mean_tol=0.08,
         std_tol=0.08,
     ), marks=[pytest.mark.xfail(reason="flaky"),
-              pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
-                                 reason='Slow test - skip on CI')])
+              pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
+                                 reason='Slow test - skip on CI/CUDA')])
 ]
 
 TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
@@ -214,7 +214,7 @@ def test_gamma_normal():
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
     hmc_kernel = HMC(model, trajectory_length=1)
-    mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100).run(data)
+    mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_std, prec=0.05)
 
