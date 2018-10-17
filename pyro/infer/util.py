@@ -35,7 +35,7 @@ def torch_item(x):
     return x if isinstance(x, numbers.Number) else x.item()
 
 
-def torch_backward(x, retain_graph=False):
+def torch_backward(x, retain_graph=None):
     """
     Like ``x.backward()`` for a :class:`~torch.Tensor`, but also accepts
     numbers (a no-op if given a number).

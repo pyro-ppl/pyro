@@ -51,7 +51,7 @@ class ELBO(object):
                  max_iarange_nesting=float('inf'),
                  vectorize_particles=False,
                  strict_enumeration_warning=True,
-                 retain_graph=False):
+                 retain_graph=None):
         self.num_particles = num_particles
         self.max_iarange_nesting = max_iarange_nesting
         self.vectorize_particles = vectorize_particles
