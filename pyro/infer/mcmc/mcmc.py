@@ -122,8 +122,11 @@ class _ParallelSampler(TracePosterior):
             self.log_thread.join(timeout=1)
 
     def _traces(self, *args, **kwargs):
+        # Ignore sigint in worker processes; they will be shut down
+        # when the main process terminates.
         sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
         self.init_workers(*args, **kwargs)
+        # restore original handler
         signal.signal(signal.SIGINT, sigint_handler)
         active_workers = self.num_chains
         try:
