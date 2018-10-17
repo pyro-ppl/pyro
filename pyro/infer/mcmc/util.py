@@ -6,7 +6,7 @@ from opt_einsum import shared_intermediates
 from pyro.distributions.util import logsumexp, broadcast_shape
 from pyro.ops.contract import contract_to_tensor
 from pyro.infer.util import is_validation_enabled
-from pyro.primitives import _Subsample
+from pyro.poutine.subsample_messenger import _Subsample
 from pyro.util import check_site_shape
 
 

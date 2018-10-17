@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import argparse
 import logging
 import math
+import os
 
 import numpy as np
 import pandas as pd
@@ -272,20 +273,20 @@ def main(args):
     evaluate_log_predictive_density(not_pooled, posterior_not_pooled, baseball_dataset)
 
     # (3) Partially Pooled Model
-    posterior_partially_pooled = MCMC(nuts_kernel,
-                                      num_samples=args.num_samples,
-                                      warmup_steps=args.warmup_steps,
-                                      num_chains=args.num_chains).run(partially_pooled, at_bats, hits)
-    logging.info("\nModel: Partially Pooled")
-    logging.info("=======================")
-    logging.info("\nphi:")
-    logging.info(summary(posterior_partially_pooled, sites=["phi"],
-                         player_names=player_names)["phi"])
-    posterior_predictive = TracePredictive(partially_pooled,
-                                           posterior_partially_pooled,
-                                           num_samples=args.num_samples)
-    sample_posterior_predictive(posterior_predictive, baseball_dataset)
-    evaluate_log_predictive_density(partially_pooled, posterior_partially_pooled, baseball_dataset)
+    # TODO: remove once htps://github.com/uber/pyro/issues/1458 is resolved
+    if "CI" not in os.environ:
+        posterior_partially_pooled = MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps) \
+            .run(partially_pooled, at_bats, hits)
+        logging.info("\nModel: Partially Pooled")
+        logging.info("=======================")
+        logging.info("\nphi:")
+        logging.info(summary(posterior_partially_pooled, sites=["phi"],
+                             player_names=player_names)["phi"])
+        posterior_predictive = TracePredictive(partially_pooled,
+                                               posterior_partially_pooled,
+                                               num_samples=args.num_samples)
+        sample_posterior_predictive(posterior_predictive, baseball_dataset)
+        evaluate_log_predictive_density(partially_pooled, posterior_partially_pooled, baseball_dataset)
 
     # (4) Partially Pooled with Logit Model
     posterior_partially_pooled_with_logit = MCMC(nuts_kernel,
