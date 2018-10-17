@@ -36,6 +36,8 @@ class ELBO(object):
         misuse of enumeration, i.e. that
         :class:`pyro.infer.traceenum_elbo.TraceEnum_ELBO` is used iff there
         are enumerated sample sites.
+    :param bool retain_graph: Whether to retain autograd graph during an SVI step.
+        Defaults to None (False).
 
     References
 
