@@ -192,7 +192,7 @@ def test_gamma_beta():
     true_beta = torch.tensor(1.)
     data = dist.Beta(concentration1=true_alpha, concentration0=true_beta).sample(torch.Size((5000,)))
     nuts_kernel = NUTS(model)
-    mcmc_run = MCMC(nuts_kernel, num_samples=600, warmup_steps=200).run(data)
+    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=200).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites=['alpha', 'beta'])
     assert_equal(posterior.mean, torch.stack([true_alpha, true_beta]), prec=0.05)
 
