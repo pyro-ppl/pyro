@@ -125,12 +125,17 @@ class NUTS(HMC):
         # We follow the strategy in Section A.4.2 of [2] for this implementation.
         r_left_flat = torch.cat([r_left[site_name].reshape(-1) for site_name in sorted(r_left)])
         r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in sorted(r_right)])
+        # TODO: change to torch.dot for pytorch 1.0
         if self.full_mass:
-            return (r_sum - r_left_flat).dot(self._inverse_mass_matrix.matmul(r_left_flat)) <= 0 \
-                or (r_sum - r_right_flat).dot(self._inverse_mass_matrix.matmul(r_right_flat)) <= 0
+            if ((r_sum - r_left_flat) * (self._inverse_mass_matrix.matmul(r_left_flat))).sum() > 0:
+                if ((r_sum - r_right_flat) * (self._inverse_mass_matrix.matmul(r_right_flat))) \
+                        .sum() > 0:
+                    return False
         else:
-            return self._inverse_mass_matrix.dot((r_sum - r_left_flat) * r_left_flat) <= 0 \
-                or self._inverse_mass_matrix.dot((r_sum - r_right_flat) * r_right_flat) <= 0
+            if (self._inverse_mass_matrix * (r_sum - r_left_flat) * r_left_flat).sum() > 0:
+                if (self._inverse_mass_matrix * (r_sum - r_right_flat) * r_right_flat).sum() > 0:
+                    return False
+        return True
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size

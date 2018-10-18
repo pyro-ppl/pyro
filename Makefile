@@ -5,9 +5,6 @@ all: docs test
 install: FORCE
 	pip install -e .[dev,profile]
 
-reinstall: FORCE
-	pip uninstall -y pyro-ppl && pip install . --no-deps
-
 docs: FORCE
 	$(MAKE) -C docs html
 
