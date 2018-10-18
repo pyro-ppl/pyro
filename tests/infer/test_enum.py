@@ -133,8 +133,7 @@ def test_avoid_nan(enumerate1):
         with pyro.plate("batch", 3):
             pyro.sample("z", UnsafeBernoulli(p))
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=1,
-                          strict_enumeration_warning=any([enumerate1]))
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=any([enumerate1]))
     loss = elbo.loss(model, guide)
     assert not math.isnan(loss), loss
     loss = elbo.differentiable_loss(model, guide)
@@ -223,8 +222,7 @@ def test_svi_step_smoke(model, guide, enumerate1):
 
     guide = config_enumerate(guide, default=enumerate1)
     optimizer = pyro.optim.Adam({"lr": .001})
-    elbo = TraceEnum_ELBO(max_plate_nesting=1,
-                          strict_enumeration_warning=any([enumerate1]))
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=any([enumerate1]))
     inference = SVI(model, guide, optimizer, loss=elbo)
     inference.step(data)
 
@@ -285,8 +283,7 @@ def test_svi_step_guide_uses_grad(enumerate1):
         pyro.sample("loc", dist.Normal(loc, var))
         pyro.sample("b", dist.Bernoulli(p))
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=1,
-                          strict_enumeration_warning=any([enumerate1]))
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=any([enumerate1]))
     inference = SVI(model, guide, pyro.optim.Adam({}), elbo)
     inference.step()
 
@@ -313,8 +310,7 @@ def test_elbo_bern(method, enumerate1, scale):
         with pyro.plate("particles", num_particles):
             pyro.sample("z", dist.Bernoulli(q).expand_by([num_particles]))
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=1,
-                          strict_enumeration_warning=any([enumerate1]))
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=any([enumerate1]))
 
     if method == "loss":
         actual = elbo.loss(model, guide) / num_particles
@@ -356,8 +352,7 @@ def test_elbo_normal(method, enumerate1):
         with pyro.plate("particles", num_particles):
             pyro.sample("z", dist.Normal(q, 1.).expand_by([num_particles]))
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=1,
-                          strict_enumeration_warning=any([enumerate1]))
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=any([enumerate1]))
 
     if method == "loss":
         actual = elbo.loss(model, guide) / num_particles
@@ -420,8 +415,7 @@ def test_elbo_bern_bern(method, enumerate1, enumerate2, num_samples1, num_sample
     expected_loss = kl.item()
     expected_grad = grad(kl, [q])[0]
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=0,
-                          num_particles=num_particles,
+    elbo = TraceEnum_ELBO(num_particles=num_particles,
                           vectorize_particles=True,
                           strict_enumeration_warning=any([enumerate1, enumerate2]))
     if method == "differentiable_loss":
@@ -467,8 +461,7 @@ def test_elbo_berns(method, enumerate1, enumerate2, enumerate3):
     expected_loss = kl.item()
     expected_grad = grad(kl, [q])[0]
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=0,
-                          num_particles=num_particles,
+    elbo = TraceEnum_ELBO(num_particles=num_particles,
                           vectorize_particles=True,
                           strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
     if method == "differentiable_loss":
@@ -559,8 +552,7 @@ def test_elbo_normals(method, enumerate1, enumerate2, enumerate3):
     expected_loss = kl.item()
     expected_grad = grad(kl, [q])[0]
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=0,
-                          num_particles=num_particles,
+    elbo = TraceEnum_ELBO(num_particles=num_particles,
                           vectorize_particles=True,
                           strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
     if method == "differentiable_loss":
@@ -609,8 +601,7 @@ def test_elbo_plate(plate_dim, enumerate1, enumerate2):
     expected_loss = kl.item()
     expected_grad = grad(kl, [q])[0]
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=2,
-                          strict_enumeration_warning=any([enumerate1, enumerate2]))
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=any([enumerate1, enumerate2]))
     actual_loss = elbo.loss_and_grads(model, guide) / num_particles
     actual_grad = pyro.param('q').grad / num_particles
 
@@ -629,7 +620,7 @@ def test_elbo_plate(plate_dim, enumerate1, enumerate2):
 @pytest.mark.parametrize("irange_dim", [1, 2])
 def test_elbo_irange(irange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
-    num_particles = 1 if all([enumerate1, enumerate2]) else 10000
+    num_particles = 1 if all([enumerate1, enumerate2]) else 20000
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
@@ -652,8 +643,7 @@ def test_elbo_irange(irange_dim, enumerate1, enumerate2):
     expected_loss = kl.item()
     expected_grad = grad(kl, [q])[0]
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=1,
-                          strict_enumeration_warning=any([enumerate1, enumerate2]))
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=any([enumerate1, enumerate2]))
     actual_loss = elbo.loss_and_grads(model, guide) / num_particles
     actual_grad = pyro.param('q').grad / num_particles
 
@@ -708,8 +698,7 @@ def test_elbo_plate_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumerat
     expected_loss = kl.item()
     expected_grad = grad(kl, [q])[0]
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=3,
-                          num_particles=num_particles,
+    elbo = TraceEnum_ELBO(num_particles=num_particles,
                           vectorize_particles=True,
                           strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
     actual_loss = elbo.loss_and_grads(model, guide)
@@ -760,8 +749,7 @@ def test_elbo_plate_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumera
     expected_loss = kl.item()
     expected_grad = grad(kl, [q])[0]
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=2,
-                          strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
     actual_loss = elbo.loss_and_grads(model, guide) / num_particles
     actual_grad = pyro.param('q').grad / num_particles
 
@@ -812,8 +800,7 @@ def test_elbo_irange_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumera
     expected_loss = kl.item()
     expected_grad = grad(kl, [q])[0]
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=2,
-                          strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
     actual_loss = elbo.loss_and_grads(model, guide) / num_particles
     actual_grad = pyro.param('q').grad / num_particles
 
@@ -864,8 +851,7 @@ def test_elbo_irange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumer
     expected_loss = kl.item()
     expected_grad = grad(kl, [q])[0]
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=1,
-                          strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=any([enumerate1, enumerate2, enumerate3]))
     actual_loss = elbo.loss_and_grads(model, guide) / num_particles
     actual_grad = pyro.param('q').grad / num_particles
 
@@ -899,8 +885,7 @@ def test_non_mean_field_bern_bern_elbo_gradient(enumerate1, pi1, pi2):
             pyro.sample("z", dist.Bernoulli(q2 * y + 0.10))
 
     logger.info("Computing gradients using surrogate loss")
-    elbo = TraceEnum_ELBO(max_plate_nesting=1,
-                          strict_enumeration_warning=any([enumerate1]))
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=any([enumerate1]))
     elbo.loss_and_grads(model, config_enumerate(guide, default=enumerate1))
     actual_grad_q1 = pyro.param('q1').grad / num_particles
     actual_grad_q2 = pyro.param('q2').grad / num_particles
@@ -955,8 +940,7 @@ def test_non_mean_field_bern_normal_elbo_gradient(enumerate1, pi1, pi2, pi3, num
                 pyro.sample("z", dist.Normal(q2 * y + 0.10, 1.0))
 
     logger.info("Computing gradients using surrogate loss")
-    elbo = TraceEnum_ELBO(max_plate_nesting=1,
-                          strict_enumeration_warning=any([enumerate1]))
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=any([enumerate1]))
     elbo.loss_and_grads(model, guide)
     actual_grad_q1 = pyro.param('q1').grad / num_particles
     if include_z:
@@ -1018,8 +1002,7 @@ def test_non_mean_field_normal_bern_elbo_gradient(pi1, pi2, pi3):
 
     for ed, num_particles in zip([None, 'parallel', 'sequential'], [30000, 20000, 20000]):
         pyro.clear_param_store()
-        elbo = TraceEnum_ELBO(max_plate_nesting=1,
-                              strict_enumeration_warning=any([ed]))
+        elbo = TraceEnum_ELBO(strict_enumeration_warning=any([ed]))
         elbo.loss_and_grads(model, config_enumerate(guide, default=ed), num_particles)
         results[str(ed)] = {}
         for q in qs:
@@ -1060,8 +1043,7 @@ def test_elbo_rsvi(enumerate1):
             pyro.sample("z", dist.Bernoulli(q).expand_by([num_particles]))
             pyro.sample("y", ShapeAugmentedGamma(a, torch.tensor(1.0)).expand_by([num_particles]))
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=1,
-                          strict_enumeration_warning=any([enumerate1]))
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=any([enumerate1]))
     elbo.loss_and_grads(model, guide)
 
     actual_q = q.grad / num_particles
@@ -1117,7 +1099,7 @@ def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
         for i in range(num_steps):
             pyro.sample("x_{}".format(i), dist.Categorical(mean_field_probs[i]))
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=0)
+    elbo = TraceEnum_ELBO()
     elbo.loss_and_grads(model, guide, data)
 
     expected_unconstrained_grads = {
@@ -1179,7 +1161,7 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
             probs = init_probs if x is None else transition_probs[x]
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=0)
+    elbo = TraceEnum_ELBO()
     elbo.loss_and_grads(model, guide, data)
 
     # These golden values simply test agreement between parallel and sequential.
@@ -1242,7 +1224,7 @@ def test_hmm_enumerate_model(num_steps):
     def guide(data):
         pass
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=0)
+    elbo = TraceEnum_ELBO()
     elbo.differentiable_loss(model, guide, data)
 
 
@@ -1272,7 +1254,7 @@ def test_hmm_enumerate_model_and_guide(num_steps):
         pyro.sample("x", dist.Categorical(init_probs),
                     infer={"enumerate": "parallel"})
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=0)
+    elbo = TraceEnum_ELBO()
     elbo.differentiable_loss(model, guide, data)
 
 
@@ -1332,7 +1314,7 @@ def test_elbo_enumerate_1(scale):
         probs_x = pyro.param("guide_probs_x")
         pyro.sample("x", dist.Categorical(probs_x))
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=0, strict_enumeration_warning=False)
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=False)
     auto_loss = elbo.differentiable_loss(auto_model, guide)
     hand_loss = elbo.differentiable_loss(hand_model, guide)
     _check_loss_and_grads(hand_loss, auto_loss)
@@ -1378,7 +1360,7 @@ def test_elbo_enumerate_2(scale):
         probs_x = pyro.param("guide_probs_x")
         pyro.sample("x", dist.Categorical(probs_x))
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=0, strict_enumeration_warning=False)
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=False)
     auto_loss = elbo.differentiable_loss(auto_model, guide)
     hand_loss = elbo.differentiable_loss(hand_model, guide)
     _check_loss_and_grads(hand_loss, auto_loss)
@@ -1423,7 +1405,7 @@ def test_elbo_enumerate_3(scale):
         probs_x = pyro.param("guide_probs_x")
         pyro.sample("x", dist.Categorical(probs_x))
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=0, strict_enumeration_warning=False)
+    elbo = TraceEnum_ELBO(strict_enumeration_warning=False)
     auto_loss = elbo.differentiable_loss(auto_model, guide)
     hand_loss = elbo.differentiable_loss(hand_model, guide)
     _check_loss_and_grads(hand_loss, auto_loss)
