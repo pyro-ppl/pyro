@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from .handlers import block, broadcast, condition, do, enum, escape, indep, infer_config, lift, \
+from .handlers import block, broadcast, condition, do, enum, escape, plate, infer_config, lift, \
     mask, replay, queue, scale, trace, uncondition
 from .runtime import NonlocalExit
 from .trace_struct import Trace
@@ -15,7 +15,7 @@ __all__ = [
     "enable_validation",
     "enum",
     "escape",
-    "indep",
+    "plate",
     "infer_config",
     "is_validation_enabled",
     "lift",

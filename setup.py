@@ -79,7 +79,7 @@ setup(
         # add them to `docs/requirements.txt`
         'contextlib2',
         'graphviz>=0.8',
-        'networkx>=2.2rc1',
+        'networkx>=2.2',
         'numpy>=1.7',
         'opt_einsum>=2.2.0',
         'six>=1.10.0',
@@ -123,7 +123,7 @@ setup(
         'Operating System :: POSIX :: Linux',
         'Operating System :: MacOS :: MacOS X',
         'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.6',
     ],
     # yapf
 )

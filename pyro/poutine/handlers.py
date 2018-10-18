@@ -59,10 +59,10 @@ from .broadcast_messenger import BroadcastMessenger
 from .condition_messenger import ConditionMessenger
 from .enumerate_messenger import EnumerateMessenger
 from .escape_messenger import EscapeMessenger
-from .indep_messenger import IndepMessenger
 from .infer_config_messenger import InferConfigMessenger
 from .lift_messenger import LiftMessenger
 from .mask_messenger import MaskMessenger
+from .plate_messenger import PlateMessenger
 from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
@@ -368,16 +368,21 @@ def mask(fn=None, mask=None):
     return msngr(fn) if fn is not None else msngr
 
 
-def indep(fn=None, name=None, size=None, dim=None):
+def plate(fn=None, name=None, size=None, subsample_size=None, subsample=None, dim=None, device=None):
     """
-    .. note:: Low-level; use :class:`~pyro.iarange` instead.
+    Example::
 
-    This messenger keeps track of stack of independence information declared by
-    nested ``irange`` and ``iarange`` contexts. This information is stored in
-    a ``cond_indep_stack`` at each sample/observe site for consumption by
-    :class:`~pyro.poutine.trace_messenger.TraceMessenger`.
+        x_axis = plate('outer', 320, dim=-1)
+        y_axis = plate('inner', 200, dim=-2)
+        with x_axis:
+            x_noise = sample("x_noise", dist.Normal(loc, scale))
+        with y_axis:
+            y_noise = sample("y_noise", dist.Normal(loc, scale))
+        with x_axis, y_axis:
+            xy_noise = sample("xy_noise", dist.Normal(loc, scale))
     """
-    msngr = IndepMessenger(name=name, size=size, dim=dim)
+    msngr = PlateMessenger(name=name, size=size, subsample_size=subsample_size,
+                           subsample=subsample, dim=dim, device=device)
     return msngr(fn) if fn is not None else msngr
 
 

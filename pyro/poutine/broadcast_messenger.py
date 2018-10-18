@@ -11,7 +11,8 @@ class BroadcastMessenger(Messenger):
     broadcastable with the size of the :class:`~pyro.iarange`
     contexts installed in the `cond_indep_stack`.
     """
-    def _pyro_sample(self, msg):
+    @staticmethod
+    def _pyro_sample(msg):
         """
         :param msg: current message at a trace site.
         """
