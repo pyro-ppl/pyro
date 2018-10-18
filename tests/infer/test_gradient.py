@@ -117,7 +117,8 @@ def test_plate(Elbo, reparameterized):
         pyro.sample("nuisance_a", Normal(0, 1))
 
     optim = Adam({"lr": 0.1})
-    inference = SVI(model, guide, optim, loss=Elbo(strict_enumeration_warning=False))
+    elbo = Elbo(max_plate_nesting=2, strict_enumeration_warning=False)
+    inference = SVI(model, guide, optim, loss=elbo)
     inference.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
     actual_grads = {name: param.grad.detach().cpu().numpy() / num_particles
