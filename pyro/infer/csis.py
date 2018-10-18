@@ -71,7 +71,8 @@ class CSIS(Importance):
             loss = self.loss_and_grads(True, None, *args, **kwargs)
 
         params = set(site["value"].unconstrained()
-                     for site in param_capture.trace.nodes.values())
+                     for site in param_capture.trace.nodes.values()
+                     if site["value"].grad is not None)
 
         self.optim(params)
 
