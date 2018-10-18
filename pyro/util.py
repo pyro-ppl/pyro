@@ -201,9 +201,9 @@ def check_model_guide_match(model_trace, guide_trace, max_plate_nesting=float('i
 
             # Allow broadcasting outside of max_plate_nesting.
             if len(model_shape) > max_plate_nesting:
-                model_shape = model_shape[len(model_shape) - max_plate_nesting:]
+                model_shape = model_shape[len(model_shape) - max_plate_nesting - model_site["fn"].event_dim:]
             if len(guide_shape) > max_plate_nesting:
-                guide_shape = guide_shape[len(guide_shape) - max_plate_nesting:]
+                guide_shape = guide_shape[len(guide_shape) - max_plate_nesting - guide_site["fn"].event_dim:]
             if model_shape == guide_shape:
                 continue
             for model_size, guide_size in zip_longest(reversed(model_shape), reversed(guide_shape), fillvalue=1):
