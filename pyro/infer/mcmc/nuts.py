@@ -1,15 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
 from collections import namedtuple
 
 import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.ops.integrator import single_step_velocity_verlet
-from pyro.util import torch_isnan, optional
-
 from pyro.infer.mcmc.hmc import HMC
+from pyro.ops.integrator import single_step_velocity_verlet
+from pyro.util import optional, torch_isnan
 
 # sum_accept_probs and num_proposals are used to calculate
 # the statistic accept_prob for Dual Averaging scheme;
@@ -95,7 +95,9 @@ class NUTS(HMC):
                  max_iarange_nesting=None,  # DEPRECATED
                  experimental_use_einsum=False):
         if max_iarange_nesting is not None:
-            max_plate_nesting = max_iarange_nesting  # for backwards compatibility
+            warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
+                          DeprecationWarning)
+            max_plate_nesting = max_iarange_nesting
 
         super(NUTS, self).__init__(model,
                                    step_size,

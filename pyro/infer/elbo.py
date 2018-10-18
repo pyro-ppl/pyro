@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from abc import abstractmethod, ABCMeta
+import warnings
+from abc import ABCMeta, abstractmethod
 
 from six import add_metaclass
 
@@ -53,7 +54,9 @@ class ELBO(object):
                  strict_enumeration_warning=True,
                  retain_graph=None):
         if max_iarange_nesting is not None:
-            max_plate_nesting = max_iarange_nesting  # for backwards compatibility
+            warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
+                          DeprecationWarning)
+            max_plate_nesting = max_iarange_nesting
 
         self.num_particles = num_particles
         self.max_plate_nesting = max_plate_nesting

@@ -178,7 +178,10 @@ class plate(PlateMessenger):
     pass
 
 
-iarange = plate  # for backwards-compatibility
+class iarange(plate):
+    def __init__(self, *args, **kwargs):
+        warnings.warn("pyro.iarange is deprecated; use pyro.plate instead", DeprecationWarning)
+        super(iarange, self).__init__(*args, **kwargs)
 
 
 class irange(SubsampleMessenger):

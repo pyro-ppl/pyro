@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import math
+import warnings
 from collections import OrderedDict
 
 import torch
@@ -17,7 +18,7 @@ from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
 from pyro.ops.welford import WelfordCovariance
 from pyro.poutine.subsample_messenger import _Subsample
-from pyro.util import torch_isinf, torch_isnan, optional
+from pyro.util import optional, torch_isinf, torch_isnan
 
 
 class HMC(TraceKernel):
@@ -97,7 +98,9 @@ class HMC(TraceKernel):
                  max_iarange_nesting=None,  # DEPRECATED
                  experimental_use_einsum=False):
         if max_iarange_nesting is not None:
-            max_plate_nesting = max_iarange_nesting  # for backwards compatibility
+            warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
+                          DeprecationWarning)
+            max_plate_nesting = max_iarange_nesting
 
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.

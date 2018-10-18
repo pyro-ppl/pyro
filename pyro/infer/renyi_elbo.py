@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import math
+import warnings
 
 import torch
 
@@ -57,7 +58,9 @@ class RenyiELBO(ELBO):
                  vectorize_particles=False,
                  strict_enumeration_warning=True):
         if max_iarange_nesting is not None:
-            max_plate_nesting = max_iarange_nesting  # for backwards compatibility
+            warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
+                          DeprecationWarning)
+            max_plate_nesting = max_iarange_nesting
 
         if alpha == 1:
             raise ValueError("The order alpha should not be equal to 1. Please use Trace_ELBO class"
