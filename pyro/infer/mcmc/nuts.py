@@ -14,10 +14,11 @@ from pyro.infer.mcmc.hmc import HMC
 # sum_accept_probs and num_proposals are used to calculate
 # the statistic accept_prob for Dual Averaging scheme;
 # z_left_grads and z_right_grads are kept to avoid recalculating
-# grads at left and right leaves
+# grads at left and right leaves;
+# r_sum is used to check turning condition
 _TreeInfo = namedtuple("TreeInfo", ["z_left", "r_left", "z_left_grads",
                                     "z_right", "r_right", "z_right_grads",
-                                    "z_proposal", "size", "turning", "diverging",
+                                    "z_proposal", "r_sum", "size", "turning", "diverging",
                                     "sum_accept_probs", "num_proposals"])
 
 
@@ -120,29 +121,22 @@ class NUTS(HMC):
         # it to False (implicitly).
         self._eliminate_starting_point = True
 
-    def _is_turning(self, z_left, r_left, z_right, r_right):
-        z_left_flat = torch.cat([z_left[site_name].reshape(-1) for site_name in sorted(z_left)])
+    def _is_turning(self, r_left, r_right, r_sum):
+        # We follow the strategy in Section A.4.2 of [2] for this implementation.
         r_left_flat = torch.cat([r_left[site_name].reshape(-1) for site_name in sorted(r_left)])
-        z_right_flat = torch.cat([z_right[site_name].reshape(-1) for site_name in sorted(z_right)])
         r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in sorted(r_right)])
-        dz = z_right_flat - z_left_flat
-        z_left_flat.dot(self._inverse_mass_matrix.matmul(r_left_flat))
         if self.full_mass:
-            return 0.5 * r_flat.dot(self._inverse_mass_matrix.matmul(r_flat))
+            return (r_sum - r_left_flat).dot(self._inverse_mass_matrix.matmul(r_left_flat)) <= 0 \
+                and (r_sum - r_right_flat).dot(self._inverse_mass_matrix.matmul(r_right_flat)) <= 0
         else:
-            return 0.5 * self._inverse_mass_matrix.dot(r_flat ** 2)
-        diff_left = 0
-        diff_right = 0
-        for name in self._r_shapes:
-            dz = z_right[name] - z_left[name]
-            diff_left += (dz * r_left[name]).sum()
-            diff_right += (dz * r_right[name]).sum()
-        return diff_left <= 0 or diff_right <= 0
+            return self._inverse_mass_matrix.dot((r_sum - r_left_flat) * r_left_flat) <= 0 \
+                and self._inverse_mass_matrix.dot((r_sum - r_right_flat) * r_right_flat) <= 0
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
             z, r, self._potential_energy, self._inverse_mass_matrix, step_size, z_grads=z_grads)
+        r_new_flat = torch.cat([r_new[site_name].reshape(-1) for site_name in sorted(r_new)])
         energy_new = potential_energy + self._kinetic_energy(r_new)
         sliced_energy = energy_new + log_slice
 
@@ -163,7 +157,7 @@ class NUTS(HMC):
             delta_energy = energy_new - energy_current
             accept_prob = (-delta_energy).exp().clamp(max=1.0)
         return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads,
-                         z_new, tree_size, False, diverging, accept_prob, 1)
+                         z_new, r_new_flat, tree_size, False, diverging, accept_prob, 1)
 
     def _build_tree(self, z, r, z_grads, log_slice, direction, tree_depth, energy_current):
         if tree_depth == 0:
@@ -195,6 +189,7 @@ class NUTS(HMC):
         tree_size = half_tree.size + other_half_tree.size
         sum_accept_probs = half_tree.sum_accept_probs + other_half_tree.sum_accept_probs
         num_proposals = half_tree.num_proposals + other_half_tree.num_proposals
+        r_sum = half_tree.r_sum + other_half_tree.r_sum
 
         # Under the slice sampling process, a proposal for z is uniformly picked.
         # The probability of that proposal belongs to which half of tree
@@ -227,20 +222,20 @@ class NUTS(HMC):
 
         # We already check if first half tree is turning. Now, we check
         #     if the other half tree or full tree are turning.
-        turning = other_half_tree.turning or self._is_turning(z_left, r_left, z_right, r_right)
+        turning = other_half_tree.turning or self._is_turning(r_left, r_right, r_sum)
 
         # The divergence is checked by the second half tree (the first half is already checked).
         diverging = other_half_tree.diverging
 
         return _TreeInfo(z_left, r_left, z_left_grads, z_right, r_right, z_right_grads, z_proposal,
-                         tree_size, turning, diverging, sum_accept_probs, num_proposals)
+                         r_sum, tree_size, turning, diverging, sum_accept_probs, num_proposals)
 
     def sample(self, trace):
         z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
-        r = self._sample_r(name="r_t={}".format(self._t))
+        r, r_flat = self._sample_r(name="r_t={}".format(self._t))
         energy_current = self._energy(z, r)
 
         # Ideally, following a symplectic integrator trajectory, the energy is constant.
@@ -270,6 +265,7 @@ class NUTS(HMC):
         z_left_grads = z_right_grads = None
         tree_size = 0 if self._eliminate_starting_point else 1
         accepted = False
+        r_sum = r_flat
 
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation.
@@ -298,12 +294,13 @@ class NUTS(HMC):
 
                 rand = pyro.sample("rand_t={}_treedepth={}".format(self._t, tree_depth),
                                    dist.Uniform(torch.zeros(1), torch.ones(1)))
-                if ((tree_size > 0) and (rand < new_tree.size / tree_size))\
-                        or ((tree_size == 0) and (new_tree.size > 0)): 
+                if ((tree_size > 0) and (rand < new_tree.size / tree_size)) \
+                        or ((tree_size == 0) and (new_tree.size > 0)):
                     accepted = True
                     z = new_tree.z_proposal
 
-                if self._is_turning(z_left, r_left, z_right, r_right):  # stop doubling
+                r_sum += new_tree.r_sum
+                if self._is_turning(r_left, r_right, r_sum):  # stop doubling
                     break
                 else:  # update tree_size
                     tree_size += new_tree.size
