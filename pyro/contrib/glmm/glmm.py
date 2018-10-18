@@ -220,7 +220,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
             alpha, beta = re_alphas[name], re_betas[name]
             group_p = alpha.shape[-1]
             G_prior = dist.Gamma(alpha.expand(tau_shape + (group_p,)),
-                                 beta.expand(tau_shape + (group_p,)))
+                                 beta.expand(tau_shape + (group_p,))).independent(1)
             G = 1./torch.sqrt(pyro.sample("G_" + name, G_prior))
             # Repeat `G` for each group
             repeat_shape = tuple(1 for _ in tau_shape) + (group_size,)
