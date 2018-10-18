@@ -127,10 +127,10 @@ class NUTS(HMC):
         r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in sorted(r_right)])
         if self.full_mass:
             return (r_sum - r_left_flat).dot(self._inverse_mass_matrix.matmul(r_left_flat)) <= 0 \
-                and (r_sum - r_right_flat).dot(self._inverse_mass_matrix.matmul(r_right_flat)) <= 0
+                or (r_sum - r_right_flat).dot(self._inverse_mass_matrix.matmul(r_right_flat)) <= 0
         else:
             return self._inverse_mass_matrix.dot((r_sum - r_left_flat) * r_left_flat) <= 0 \
-                and self._inverse_mass_matrix.dot((r_sum - r_right_flat) * r_right_flat) <= 0
+                or self._inverse_mass_matrix.dot((r_sum - r_right_flat) * r_right_flat) <= 0
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size

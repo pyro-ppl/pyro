@@ -90,8 +90,8 @@ def test_logistic_regression():
 @pytest.mark.parametrize(
     "step_size, adapt_step_size, adapt_mass_matrix, full_mass",
     [
-        (0.02, False, False, False),
-        (0.02, False, True, False),
+        (0.03, False, False, False),
+        (0.03, False, True, False),
         (None, True, False, False),
         (None, True, True, False),
         (None, True, True, True),
@@ -154,7 +154,7 @@ def test_gamma_beta():
     true_beta = torch.tensor(1.)
     data = dist.Beta(concentration1=true_alpha, concentration0=true_beta).sample(torch.Size((5000,)))
     nuts_kernel = NUTS(model)
-    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=200).run(data)
+    mcmc_run = MCMC(nuts_kernel, num_samples=600, warmup_steps=200).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites=['alpha', 'beta'])
     assert_equal(posterior.mean, torch.stack([true_alpha, true_beta]), prec=0.05)
 
@@ -177,7 +177,7 @@ def test_gaussian_mixture_model():
     cluster_assignments = dist.Categorical(true_mix_proportions).sample(torch.Size((N,)))
     data = dist.Normal(true_cluster_means[cluster_assignments], 1.0).sample()
     nuts_kernel = NUTS(gmm, max_iarange_nesting=1)
-    mcmc_run = MCMC(nuts_kernel, num_samples=300, warmup_steps=100).run(data)
+    mcmc_run = MCMC(nuts_kernel, num_samples=400, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites=["phi", "cluster_means"]).mean.sort()[0]
     assert_equal(posterior[0], true_mix_proportions, prec=0.05)
     assert_equal(posterior[1], true_cluster_means, prec=0.2)
