@@ -299,7 +299,7 @@ class NUTS(HMC):
                     accepted = True
                     z = new_tree.z_proposal
 
-                r_sum += new_tree.r_sum
+                r_sum = r_sum + new_tree.r_sum
                 if self._is_turning(r_left, r_right, r_sum):  # stop doubling
                     break
                 else:  # update tree_size
