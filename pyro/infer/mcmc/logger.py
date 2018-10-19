@@ -136,15 +136,15 @@ class MCMCLoggingHandler(logging.Handler):
 
 class MetadataFilter(logging.Filter):
     """
-    Adds auxiliary information to log records, like `chain_id` and
+    Adds auxiliary information to log records, like `logger_id` and
     `msg_type`.
     """
-    def __init__(self, chain_id):
-        self.chain_id = chain_id
+    def __init__(self, logger_id):
+        self.logger_id = logger_id
         super(MetadataFilter, self).__init__()
 
     def filter(self, record):
-        record.chain_id = self.chain_id
+        record.logger_id = self.logger_id
         if not getattr(record, "msg_type", None):
             record.msg_type = LOG_MSG
         return True
@@ -175,13 +175,13 @@ def initialize_progbar(warmup_steps, num_samples, min_width=80, max_width=120, p
     return progress_bar
 
 
-def initialize_logger(logger, chain_id, progress_bar=None, log_queue=None):
+def initialize_logger(logger, logger_id, progress_bar=None, log_queue=None):
     """
     Initialize logger for the :class:`pyro.infer.mcmc` module.
 
     :param logger: logger instance.
-    :param int chain_id: `id` of the sampler, in case of
-        multiple samplers.
+    :param str logger_id: identifier for the log record,
+        e.g. chain id in case of multiple samplers.
     :param progress_bar: a :class:`tqdm.tqdm` instance.
     """
     # Reset handler with new `progress_bar`.
@@ -189,7 +189,7 @@ def initialize_logger(logger, chain_id, progress_bar=None, log_queue=None):
     logger.propagate = False
     if log_queue:
         handler = QueueHandler(log_queue)
-        format = "[%(levelname)s %(msg_type)s CHAIN: %(chain_id)s]%(message)s"
+        format = "[%(levelname)s %(msg_type)s %(logger_id)s]%(message)s"
         progress_bar = None
     elif progress_bar:
         format = "%(levelname).1s \t %(message)s"
@@ -199,6 +199,6 @@ def initialize_logger(logger, chain_id, progress_bar=None, log_queue=None):
                          "valid handler.")
     handler.setFormatter(logging.Formatter(format))
     logging_handler = MCMCLoggingHandler(handler, progress_bar)
-    logging_handler.addFilter(MetadataFilter(chain_id))
+    logging_handler.addFilter(MetadataFilter(logger_id))
     logger.addHandler(logging_handler)
     return logger

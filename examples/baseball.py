@@ -7,6 +7,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import six
 import torch
 
 import pyro
@@ -170,13 +171,17 @@ def summary(traces, sites, player_names, transforms={}):
     return site_stats
 
 
-def train_test_split(pd_dataframe):
+def train_test_split(pd_dataframe, device=None):
     """
     Training data - 45 initial at-bats and hits for each player.
     Validation data - Full season at-bats and hits for each player.
     """
-    train_data = torch.tensor(pd_dataframe[["At-Bats", "Hits"]].values, dtype=torch.float)
-    test_data = torch.tensor(pd_dataframe[["SeasonAt-Bats", "SeasonHits"]].values, dtype=torch.float)
+    train_data = torch.tensor(pd_dataframe[["At-Bats", "Hits"]].values,
+                              dtype=torch.float,
+                              device=device)
+    test_data = torch.tensor(pd_dataframe[["SeasonAt-Bats", "SeasonHits"]].values,
+                             dtype=torch.float,
+                             device=device)
     first_name = pd_dataframe["FirstName"].values
     last_name = pd_dataframe["LastName"].values
     player_names = [" ".join([first, last]) for first, last in zip(first_name, last_name)]
@@ -188,36 +193,34 @@ def train_test_split(pd_dataframe):
 # ===================================
 
 
-def sample_posterior_predictive(posterior_predictive, baseball_dataset):
+def sample_posterior_predictive(posterior_predictive, train_dataset, test_dataset, player_names):
     """
     Generate samples from posterior predictive distribution.
     """
-    train, test, player_names = train_test_split(baseball_dataset)
-    at_bats = train[:, 0]
-    at_bats_season = test[:, 0]
+    at_bats = train_dataset[:, 0]
+    at_bats_season = test_dataset[:, 0]
     logging.Formatter("%(message)s")
     logging.info("\nPosterior Predictive:")
     logging.info("Hit Rate - Initial 45 At Bats")
     logging.info("-----------------------------")
     train_predict = posterior_predictive.run(at_bats)
     train_summary = summary(train_predict, sites=["obs"], player_names=player_names)["obs"]
-    train_summary = train_summary.assign(ActualHits=baseball_dataset[["Hits"]].values)
+    train_summary = train_summary.assign(ActualHits=train_dataset[:, 1])
     logging.info(train_summary)
     logging.info("\nHit Rate - Season Predictions")
     logging.info("-----------------------------")
     test_predict = posterior_predictive.run(at_bats_season)
     test_summary = summary(test_predict, sites=["obs"], player_names=player_names)["obs"]
-    test_summary = test_summary.assign(ActualHits=baseball_dataset[["SeasonHits"]].values)
+    test_summary = test_summary.assign(ActualHits=test_dataset[:, 1])
     logging.info(test_summary)
 
 
-def evaluate_log_predictive_density(model, model_trace_posterior, baseball_dataset):
+def evaluate_log_predictive_density(model, model_trace_posterior, test_dataset):
     """
     Evaluate the log probability density of observing the unseen data (season hits)
     given a model and empirical distribution over the parameters.
     """
-    _, test, player_names = train_test_split(baseball_dataset)
-    at_bats_season, hits_season = test[:, 0], test[:, 1]
+    at_bats_season, hits_season = test_dataset[:, 0], test_dataset[:, 1]
     test_eval = TracePredictive(conditioned_model,
                                 model_trace_posterior,
                                 num_samples=args.num_samples)
@@ -236,8 +239,15 @@ def evaluate_log_predictive_density(model, model_trace_posterior, baseball_datas
 def main(args):
     pyro.set_rng_seed(args.rng_seed)
     baseball_dataset = pd.read_csv(DATA_URL, "\t")
-    train, _, player_names = train_test_split(baseball_dataset)
-    at_bats, hits = train[:, 0], train[:, 1]
+    mp_context = None
+    if args.cuda and args.num_chains > 1:
+        if six.PY2:
+            raise ValueError("CUDA support with multiple chains only available in Python 3.5+.")
+        else:
+            mp_context = "spawn"
+    device = "cuda" if args.cuda else None
+    train_dataset, test_dataset, player_names = train_test_split(baseball_dataset, device=device)
+    at_bats, hits = train_dataset[:, 0], train_dataset[:, 1]
     nuts_kernel = NUTS(conditioned_model)
     logging.info("Original Dataset:")
     logging.info(baseball_dataset)
@@ -246,7 +256,8 @@ def main(args):
     posterior_fully_pooled = MCMC(nuts_kernel,
                                   num_samples=args.num_samples,
                                   warmup_steps=args.warmup_steps,
-                                  num_chains=args.num_chains).run(fully_pooled, at_bats, hits)
+                                  num_chains=args.num_chains,
+                                  mp_context=mp_context).run(fully_pooled, at_bats, hits)
     logging.info("\nModel: Fully Pooled")
     logging.info("===================")
     logging.info("\nphi:")
@@ -254,14 +265,15 @@ def main(args):
     posterior_predictive = TracePredictive(fully_pooled,
                                            posterior_fully_pooled,
                                            num_samples=args.num_samples)
-    sample_posterior_predictive(posterior_predictive, baseball_dataset)
-    evaluate_log_predictive_density(fully_pooled, posterior_fully_pooled, baseball_dataset)
+    sample_posterior_predictive(posterior_predictive, train_dataset, test_dataset, player_names)
+    evaluate_log_predictive_density(fully_pooled, posterior_fully_pooled, test_dataset)
 
     # (2) No Pooling Model
     posterior_not_pooled = MCMC(nuts_kernel,
                                 num_samples=args.num_samples,
                                 warmup_steps=args.warmup_steps,
-                                num_chains=args.num_chains).run(not_pooled, at_bats, hits)
+                                num_chains=args.num_chains,
+                                mp_context=mp_context).run(not_pooled, at_bats, hits)
     logging.info("\nModel: Not Pooled")
     logging.info("=================")
     logging.info("\nphi:")
@@ -269,8 +281,8 @@ def main(args):
     posterior_predictive = TracePredictive(not_pooled,
                                            posterior_not_pooled,
                                            num_samples=args.num_samples)
-    sample_posterior_predictive(posterior_predictive, baseball_dataset)
-    evaluate_log_predictive_density(not_pooled, posterior_not_pooled, baseball_dataset)
+    sample_posterior_predictive(posterior_predictive, train_dataset, test_dataset, player_names)
+    evaluate_log_predictive_density(not_pooled, posterior_not_pooled, test_dataset)
 
     # (3) Partially Pooled Model
     # TODO: remove once htps://github.com/uber/pyro/issues/1458 is resolved
@@ -278,7 +290,8 @@ def main(args):
         posterior_partially_pooled = MCMC(nuts_kernel,
                                           num_samples=args.num_samples,
                                           warmup_steps=args.warmup_steps,
-                                          num_chains=args.num_chains) \
+                                          num_chains=args.num_chains,
+                                          mp_context=mp_context) \
             .run(partially_pooled, at_bats, hits)
         logging.info("\nModel: Partially Pooled")
         logging.info("=======================")
@@ -288,14 +301,15 @@ def main(args):
         posterior_predictive = TracePredictive(partially_pooled,
                                                posterior_partially_pooled,
                                                num_samples=args.num_samples)
-        sample_posterior_predictive(posterior_predictive, baseball_dataset)
-        evaluate_log_predictive_density(partially_pooled, posterior_partially_pooled, baseball_dataset)
+        sample_posterior_predictive(posterior_predictive, train_dataset, test_dataset, player_names)
+        evaluate_log_predictive_density(partially_pooled, posterior_partially_pooled, test_dataset)
 
     # (4) Partially Pooled with Logit Model
     posterior_partially_pooled_with_logit = MCMC(nuts_kernel,
                                                  num_samples=args.num_samples,
                                                  warmup_steps=args.warmup_steps,
-                                                 num_chains=args.num_chains)\
+                                                 num_chains=args.num_chains,
+                                                 mp_context=mp_context) \
         .run(partially_pooled_with_logit, at_bats, hits)
     logging.info("\nModel: Partially Pooled with Logit")
     logging.info("==================================")
@@ -307,9 +321,10 @@ def main(args):
     posterior_predictive = TracePredictive(partially_pooled_with_logit,
                                            posterior_partially_pooled_with_logit,
                                            num_samples=args.num_samples)
-    sample_posterior_predictive(posterior_predictive, baseball_dataset)
+    sample_posterior_predictive(posterior_predictive, train_dataset, test_dataset, player_names)
     evaluate_log_predictive_density(partially_pooled_with_logit,
-                                    posterior_partially_pooled_with_logit, baseball_dataset)
+                                    posterior_partially_pooled_with_logit,
+                                    test_dataset)
 
 
 if __name__ == "__main__":
@@ -318,5 +333,6 @@ if __name__ == "__main__":
     parser.add_argument("--warmup-steps", nargs='?', default=100, type=int)
     parser.add_argument("--rng-seed", nargs='?', default=0, type=int)
     parser.add_argument("--num-chains", nargs='?', default=4, type=int)
+    parser.add_argument('--cuda', action='store_true', default=False, help='whether to use cuda')
     args = parser.parse_args()
     main(args)

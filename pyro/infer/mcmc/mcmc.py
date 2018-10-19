@@ -20,32 +20,41 @@ from pyro.infer.mcmc.logger import initialize_logger, initialize_progbar, TQDM_M
 from pyro.util import optional
 
 
-def logger_thread(queue, warmup_steps, num_samples, num_chains):
+def logger_thread(log_queue, warmup_steps, num_samples, num_chains):
+    """
+    Logging thread that asynchronously consumes logging events from `log_queue`,
+    and handles them appropriately.
+    """
     progress_bars = [initialize_progbar(warmup_steps, s, pos=i)
                      for i, s in enumerate(num_samples)]
     logger = logging.getLogger(__name__)
     logger.propagate = False
     logger.addHandler(TqdmHandler())
     num_samples = [0] * len(num_samples)
-    while True:
-        record = queue.get()
-        if record is None:
-            break
-        metadata, msg = record.getMessage().split("]", 1)
-        _, msg_type, _, chain_id = metadata[1:].split()
-        chain_id = int(chain_id)
-        if msg_type == TQDM_MSG:
-            num_samples[chain_id] += 1
-            if num_samples[chain_id] == warmup_steps:
-                progress_bars[chain_id].set_description("Sample [{}]".format(chain_id))
-            diagnostics = json.loads(msg, object_pairs_hook=OrderedDict)
-            progress_bars[chain_id].set_postfix(diagnostics)
-            progress_bars[chain_id].update()
-        else:
-            logger.handle(record)
-    for pbar in progress_bars:
-        pbar.close()
-    sys.stderr.write("\n" * num_chains)
+    try:
+        while True:
+            try:
+                record = log_queue.get_nowait()
+            except queue.Empty:
+                continue
+            if record is None:
+                break
+            metadata, msg = record.getMessage().split("]", 1)
+            _, msg_type, logger_id = metadata[1:].split()
+            if msg_type == TQDM_MSG:
+                pbar_pos = int(logger_id.split(":")[-1]) - 1
+                num_samples[pbar_pos] += 1
+                if num_samples[pbar_pos] == warmup_steps:
+                    progress_bars[pbar_pos].set_description("Sample [{}]".format(pbar_pos + 1))
+                diagnostics = json.loads(msg, object_pairs_hook=OrderedDict)
+                progress_bars[pbar_pos].set_postfix(diagnostics)
+                progress_bars[pbar_pos].update()
+            else:
+                logger.handle(record)
+    finally:
+        for pbar in progress_bars:
+            pbar.close()
+        sys.stderr.write("\n" * num_chains)
 
 
 class _Worker(object):
@@ -64,7 +73,7 @@ class _Worker(object):
     def run(self, *args, **kwargs):
         pyro.set_rng_seed(self.chain_id + self.rng_seed)
         torch.set_default_tensor_type(self.default_tensor_type)
-        kwargs["chain_id"] = self.chain_id
+        kwargs["logger_id"] = "CHAIN:{}".format(self.chain_id)
         kwargs["log_queue"] = self.log_queue
         try:
             for sample in self.trace_gen._traces(*args, **kwargs):
@@ -93,6 +102,8 @@ class _ParallelSampler(TracePosterior):
             self.ctx = mp.get_context(mp_context)
         self.result_queue = self.ctx.Manager().Queue()
         self.log_queue = self.ctx.Manager().Queue()
+        self.logger = initialize_logger(logging.getLogger("pyro.infer.mcmc"),
+                                        "MAIN", log_queue=self.log_queue)
         # initialize number of samples per chain
         samples_per_chain = num_samples // num_chains
         self.num_samples = [samples_per_chain] * num_chains
@@ -107,7 +118,7 @@ class _ParallelSampler(TracePosterior):
     def init_workers(self, *args, **kwargs):
         self.workers = []
         for i in range(self.num_chains):
-            worker = _Worker(i, self.result_queue, self.log_queue, self.kernel,
+            worker = _Worker(i + 1, self.result_queue, self.log_queue, self.kernel,
                              self.num_samples[i], self.warmup_steps)
             worker.daemon = True
             self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
@@ -134,7 +145,7 @@ class _ParallelSampler(TracePosterior):
                 w.start()
             while active_workers:
                 try:
-                    chain_id, val = self.result_queue.get(block=False)
+                    chain_id, val = self.result_queue.get_nowait()
                 # This can happen when the worker process has terminated.
                 # See https://github.com/pytorch/pytorch/pull/5380 for motivation.
                 except socket.error as e:
@@ -145,7 +156,11 @@ class _ParallelSampler(TracePosterior):
                 except queue.Empty:
                     continue
                 if isinstance(val, Exception):
-                    raise Exception("Exception in chain {}.".format(chain_id))
+                    # Exception trace is already logged by worker.
+                    self.logger.warn("Exception in chain {}. Number of samples returned will "
+                                     "be less than requested, and resulting estimates may be "
+                                     "biased.".format(chain_id))
+                    active_workers -= 1
                 elif val is not None:
                     yield val
                 else:
@@ -174,13 +189,13 @@ class _SingleSampler(TracePosterior):
             yield trace
 
     def _traces(self, *args, **kwargs):
-        chain_id = kwargs.pop("chain_id", 0)
+        logger_id = kwargs.pop("logger_id", "")
         log_queue = kwargs.pop("log_queue", None)
         self.logger = logging.getLogger("pyro.infer.mcmc")
         is_multiprocessing = log_queue is not None
         progress_bar = initialize_progbar(self.warmup_steps, self.num_samples) \
             if not is_multiprocessing else None
-        self.logger = initialize_logger(self.logger, chain_id, progress_bar, log_queue)
+        self.logger = initialize_logger(self.logger, logger_id, progress_bar, log_queue)
         self.kernel.setup(self.warmup_steps, *args, **kwargs)
         trace = self.kernel.initial_trace()
         with optional(progress_bar, not is_multiprocessing):
@@ -207,9 +222,10 @@ class MCMC(TracePosterior):
     :param int warmup_steps: Number of warmup iterations. The samples generated
         during the warmup phase are discarded. If not provided, default is
         half of `num_samples`.
-    :param int num_chain: Number of MCMC chains to run in parallel.
+    :param int num_chains: Number of MCMC chains to run in parallel.
     :param str mp_context: Multiprocessing context to use when `num_chains > 1`.
-        Only applicable for Python 3.5 and above.
+        Only applicable for Python 3.5 and above. Use `mp_context="spawn"` for
+        CUDA.
     """
     def __init__(self, kernel, num_samples, warmup_steps=0,
                  num_chains=1, mp_context=None):
