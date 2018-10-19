@@ -218,6 +218,14 @@ class MCMC(TracePosterior):
     are TraceKernel instances and need to be supplied as a ``kernel`` argument
     to the constructor.
 
+    .. note:: The case of `num_chains > 1` uses python multiprocessing to
+        run parallel chains in multiple processes. This goes with the usual
+        caveats around multiprocessing in python, e.g. the model used to
+        initialize the ``kernel`` must be serializable via `pickle`, and the
+        performance / constraints will be platform dependent (e.g. only
+        the "spawn" context is available in Windows). This has also not
+        been extensively tested on the Windows platform.
+
     :param kernel: An instance of the ``TraceKernel`` class, which when
         given an execution trace returns another sample trace from the target
         (posterior) distribution.
