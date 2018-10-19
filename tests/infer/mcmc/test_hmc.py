@@ -12,7 +12,6 @@ import pyro.distributions as dist
 from pyro.infer import EmpiricalMarginal
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
-import pyro.poutine as poutine
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -237,12 +236,11 @@ def test_dirichlet_categorical():
 def test_gaussian_mixture_model():
     K, N = 3, 1000
 
-    @poutine.broadcast
     def gmm(data):
         mix_proportions = pyro.sample("phi", dist.Dirichlet(torch.ones(K)))
-        with pyro.iarange("num_clusters", K):
+        with pyro.plate("num_clusters", K):
             cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(float(K)), 1.))
-        with pyro.iarange("data", data.shape[0]):
+        with pyro.plate("data", data.shape[0]):
             assignments = pyro.sample("assignments", dist.Categorical(mix_proportions))
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)
         return cluster_means
@@ -251,7 +249,7 @@ def test_gaussian_mixture_model():
     true_mix_proportions = torch.tensor([0.1, 0.3, 0.6])
     cluster_assignments = dist.Categorical(true_mix_proportions).sample(torch.Size((N,)))
     data = dist.Normal(true_cluster_means[cluster_assignments], 1.0).sample()
-    hmc_kernel = HMC(gmm, trajectory_length=1, max_iarange_nesting=1)
+    hmc_kernel = HMC(gmm, trajectory_length=1, max_plate_nesting=1)
     mcmc_run = MCMC(hmc_kernel, num_samples=300, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites=["phi", "cluster_means"]).mean.sort()[0]
     assert_equal(posterior[0], true_mix_proportions, prec=0.05)
@@ -260,11 +258,10 @@ def test_gaussian_mixture_model():
 
 @pytest.mark.parametrize("use_einsum", [False, True])
 def test_bernoulli_latent_model(use_einsum):
-    @poutine.broadcast
     def model(data):
         y_prob = pyro.sample("y_prob", dist.Beta(1.0, 1.0))
         y = pyro.sample("y", dist.Bernoulli(y_prob))
-        with pyro.iarange("data", data.shape[0]):
+        with pyro.plate("data", data.shape[0]):
             z = pyro.sample("z", dist.Bernoulli(0.65 * y + 0.1))
             pyro.sample("obs", dist.Normal(2. * z, 1.), obs=data)
         pyro.sample("nuisance", dist.Bernoulli(0.3))
@@ -274,7 +271,7 @@ def test_bernoulli_latent_model(use_einsum):
     y = dist.Bernoulli(y_prob).sample(torch.Size((N,)))
     z = dist.Bernoulli(0.65 * y + 0.1).sample()
     data = dist.Normal(2. * z, 1.0).sample()
-    hmc_kernel = HMC(model, trajectory_length=1, max_iarange_nesting=1,
+    hmc_kernel = HMC(model, trajectory_length=1, max_plate_nesting=1,
                      experimental_use_einsum=use_einsum)
     mcmc_run = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites="y_prob").mean

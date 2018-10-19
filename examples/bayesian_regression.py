@@ -65,7 +65,7 @@ def model(data):
     # sample a regressor (which also samples w and b)
     lifted_reg_model = lifted_module()
 
-    with pyro.iarange("map", N, subsample=data):
+    with pyro.plate("map", N, subsample=data):
         x_data = data[:, :-1]
         y_data = data[:, -1]
         # run the regressor forward conditioned on inputs
