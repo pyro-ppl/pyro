@@ -201,7 +201,7 @@ class HMC(TraceKernel):
         # We are going to find a step_size which make accept_prob (Metropolis correction)
         # near the target_accept_prob. If accept_prob:=exp(-delta_energy) is small,
         # then we have to decrease step_size; otherwise, increase step_size.
-        r = self._sample_r(name="r_presample")
+        r, _ = self._sample_r(name="r_presample")
         energy_current = self._energy(z, r)
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
             z, r, self._potential_energy, self._inverse_mass_matrix, step_size)
@@ -324,7 +324,7 @@ class HMC(TraceKernel):
             r[name] = r_flat[pos:next_pos].reshape(self._r_shapes[name])
             pos = next_pos
         assert pos == r_flat.size(0)
-        return r
+        return r, r_flat
 
     def _validate_trace(self, trace):
         trace_eval = TraceEinsumEvaluator if self.use_einsum else TraceTreeEvaluator
@@ -380,7 +380,7 @@ class HMC(TraceKernel):
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
 
-        r = self._sample_r(name="r_t={}".format(self._t))
+        r, _ = self._sample_r(name="r_t={}".format(self._t))
 
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation

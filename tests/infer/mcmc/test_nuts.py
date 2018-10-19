@@ -14,19 +14,57 @@ from pyro.infer.mcmc.nuts import NUTS
 import pyro.poutine as poutine
 from tests.common import assert_equal
 
-from .test_hmc import TEST_CASES, TEST_IDS, T, rmse
+from .test_hmc import GaussianChain, T, rmse
 
 logger = logging.getLogger(__name__)
 
-T2 = T(*TEST_CASES[2].values)._replace(num_samples=800, warmup_steps=200)
-TEST_CASES[2] = pytest.param(*T2, marks=pytest.mark.skipif(
-    'CI' in os.environ or 'CUDA_TEST' in os.environ,
-    reason='Slow test - skip on CI/CUDA'))
-T3 = T(*TEST_CASES[3].values)._replace(num_samples=1000, warmup_steps=200)
-TEST_CASES[3] = pytest.param(*T3, marks=[
-    pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
-                       reason='Slow test - skip on CI/CUDA')]
-)
+TEST_CASES = [
+    T(
+        GaussianChain(dim=10, chain_len=3, num_obs=1),
+        num_samples=800,
+        warmup_steps=200,
+        hmc_params=None,
+        expected_means=[0.25, 0.50, 0.75],
+        expected_precs=[1.33, 1, 1.33],
+        mean_tol=0.06,
+        std_tol=0.06,
+    ),
+    T(
+        GaussianChain(dim=10, chain_len=4, num_obs=1),
+        num_samples=800,
+        warmup_steps=200,
+        hmc_params=None,
+        expected_means=[0.20, 0.40, 0.60, 0.80],
+        expected_precs=[1.25, 0.83, 0.83, 1.25],
+        mean_tol=0.06,
+        std_tol=0.06,
+    ),
+    pytest.param(*T(
+        GaussianChain(dim=5, chain_len=2, num_obs=10000),
+        num_samples=800,
+        warmup_steps=200,
+        hmc_params=None,
+        expected_means=[0.5, 1.0],
+        expected_precs=[2.0, 10000],
+        mean_tol=0.04,
+        std_tol=0.04,
+    ), marks=[pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
+                                 reason='Slow test - skip on CI/CUDA')]),
+    pytest.param(*T(
+        GaussianChain(dim=5, chain_len=9, num_obs=1),
+        num_samples=1200,
+        warmup_steps=200,
+        hmc_params=None,
+        expected_means=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90],
+        expected_precs=[1.11, 0.63, 0.48, 0.42, 0.4, 0.42, 0.48, 0.63, 1.11],
+        mean_tol=0.07,
+        std_tol=0.07,
+    ), marks=[pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
+                                 reason='Slow test - skip on CI/CUDA')])
+]
+
+TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
+            else t[0][0].id_fn() for t in TEST_CASES]
 
 
 @pytest.mark.parametrize(
@@ -44,7 +82,7 @@ def test_nuts_conjugate_gaussian(fixture,
                                  mean_tol,
                                  std_tol):
     pyro.get_param_store().clear()
-    nuts_kernel = NUTS(fixture.model, hmc_params['step_size'])
+    nuts_kernel = NUTS(fixture.model)
     mcmc_run = MCMC(nuts_kernel, num_samples, warmup_steps).run(fixture.data)
     for i in range(1, fixture.chain_len + 1):
         param_name = 'loc_' + str(i)
@@ -90,8 +128,8 @@ def test_logistic_regression():
 @pytest.mark.parametrize(
     "step_size, adapt_step_size, adapt_mass_matrix, full_mass",
     [
-        (0.02, False, False, False),
-        (0.02, False, True, False),
+        (0.1, False, False, False),
+        (0.1, False, True, False),
         (None, True, False, False),
         (None, True, True, False),
         (None, True, True, True),
