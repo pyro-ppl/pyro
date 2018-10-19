@@ -7,6 +7,7 @@ import signal
 import socket
 import sys
 import threading
+import warnings
 from collections import OrderedDict
 
 import six
@@ -16,7 +17,7 @@ import torch.multiprocessing as mp
 
 import pyro
 from pyro.infer import TracePosterior
-from pyro.infer.mcmc.logger import initialize_logger, initialize_progbar, TQDM_MSG, TqdmHandler
+from pyro.infer.mcmc.logger import initialize_logger, initialize_progbar, DIAGNOSTIC_MSG, TqdmHandler
 from pyro.util import optional
 
 
@@ -41,7 +42,7 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains):
                 break
             metadata, msg = record.getMessage().split("]", 1)
             _, msg_type, logger_id = metadata[1:].split()
-            if msg_type == TQDM_MSG:
+            if msg_type == DIAGNOSTIC_MSG:
                 pbar_pos = int(logger_id.split(":")[-1]) - 1
                 num_samples[pbar_pos] += 1
                 if num_samples[pbar_pos] == warmup_steps:
@@ -54,6 +55,7 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains):
     finally:
         for pbar in progress_bars:
             pbar.close()
+        # Required to not overwrite multiple progress bars on exit.
         sys.stderr.write("\n" * num_chains)
 
 
@@ -86,7 +88,9 @@ class _Worker(object):
 
 class _ParallelSampler(TracePosterior):
     """
-    Parallel runner when MCMC is run with multiple chains.
+    Parallel runner class for running MCMC chains in parallel. This uses the
+    `torch.multiprocessing` module (itself a light wrapper over the python
+    `multiprocessing` module) to spin up parallel workers.
     """
     def __init__(self, kernel, num_samples, warmup_steps, num_chains, mp_context):
         super(_ParallelSampler, self).__init__()
@@ -171,7 +175,7 @@ class _ParallelSampler(TracePosterior):
 
 class _SingleSampler(TracePosterior):
     """
-    Single runner instance optimized for the case `num_chains=1`.
+    Single process runner class optimized for the case `num_chains=1`.
     """
     def __init__(self, kernel, num_samples, warmup_steps):
         self.kernel = kernel
@@ -185,7 +189,7 @@ class _SingleSampler(TracePosterior):
         for _ in range(num_samples):
             trace = self.kernel.sample(trace)
             diagnostics = json.dumps(self.kernel.diagnostics())
-            self.logger.info(diagnostics, extra={"msg_type": TQDM_MSG})
+            self.logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
             yield trace
 
     def _traces(self, *args, **kwargs):
@@ -222,7 +226,9 @@ class MCMC(TracePosterior):
     :param int warmup_steps: Number of warmup iterations. The samples generated
         during the warmup phase are discarded. If not provided, default is
         half of `num_samples`.
-    :param int num_chains: Number of MCMC chains to run in parallel.
+    :param int num_chains: Number of MCMC chains to run in parallel. Depending on
+        whether `num_chains` is 1 or more than 1, this class internally dispatches
+        to either `_SingleSampler` or `_ParallelSampler`.
     :param str mp_context: Multiprocessing context to use when `num_chains > 1`.
         Only applicable for Python 3.5 and above. Use `mp_context="spawn"` for
         CUDA.
@@ -232,6 +238,9 @@ class MCMC(TracePosterior):
         self.warmup_steps = warmup_steps if warmup_steps is not None else num_samples // 2  # Stan
         self.num_samples = num_samples
         if num_chains > 1:
+            cpu_count = mp.cpu_count()
+            if num_chains > cpu_count:
+                warnings.warn("Resetting num_chains to max CPU count - {}").format(cpu_count)
             self.sampler = _ParallelSampler(kernel, num_samples, warmup_steps,
                                             num_chains, mp_context)
         else:

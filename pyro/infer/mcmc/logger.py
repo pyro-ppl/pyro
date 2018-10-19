@@ -6,8 +6,10 @@ from collections import OrderedDict
 
 from tqdm import tqdm
 
+# Identifiers to distinguish between diagnostic messages for progress bars
+# vs. logging output. Useful when using QueueHandler in multiprocessing.
 LOG_MSG = "LOG"
-TQDM_MSG = "TQDM"
+DIAGNOSTIC_MSG = "DIAGNOSTICS"
 
 
 # Following compatibility code is for Python 2 (available in Python 3.2+).
@@ -121,7 +123,7 @@ class MCMCLoggingHandler(logging.Handler):
 
     def emit(self, record):
         try:
-            if self.progress_bar and record.msg_type == TQDM_MSG:
+            if self.progress_bar and record.msg_type == DIAGNOSTIC_MSG:
                 diagnostics = json.loads(record.getMessage(),
                                          object_pairs_hook=OrderedDict)
                 self.progress_bar.set_postfix(diagnostics)
