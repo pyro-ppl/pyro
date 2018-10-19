@@ -44,7 +44,7 @@ class MaskedMixture(TorchDistribution):
                                    dist.Categorical(torch.ones(len(data) + 1)),
                                    infer={'enumerate': 'parallel'})
         mask = torch.arange(len(data), dtype=torch.long) >= changepoint
-        with pyro.iarange("data", len(data)):
+        with pyro.plate("data", len(data)):
             pyro.sample("obs", MaskedMixture(mask, dist1, dist2), obs=data)
 
     :param torch.Tensor mask: A byte tensor toggling between ``component0``

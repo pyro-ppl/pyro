@@ -102,7 +102,7 @@ class SSVAE(nn.Module):
         pyro.module("ss_vae", self)
 
         batch_size = xs.size(0)
-        with pyro.iarange("data"):
+        with pyro.plate("data"):
 
             # sample the handwriting style from the constant prior distribution
             prior_loc = xs.new_zeros([batch_size, self.z_dim])
@@ -137,7 +137,7 @@ class SSVAE(nn.Module):
         :return: None
         """
         # inform Pyro that the variables in the batch of xs, ys are conditionally independent
-        with pyro.iarange("data"):
+        with pyro.plate("data"):
 
             # if the class label (the digit) is not supervised, sample
             # (and score) the digit with the variational distribution
@@ -180,7 +180,7 @@ class SSVAE(nn.Module):
         pyro.module("ss_vae", self)
 
         # inform Pyro that the variables in the batch of xs, ys are conditionally independent
-        with pyro.iarange("data"):
+        with pyro.plate("data"):
             # this here is the extra term to yield an auxiliary loss that we do gradient descent on
             if ys is not None:
                 alpha = self.encoder_y.forward(xs)
@@ -300,7 +300,7 @@ def main(args):
     # set up the loss(es) for inference. wrapping the guide in config_enumerate builds the loss as a sum
     # by enumerating each class label for the sampled discrete categorical distribution in the model
     guide = config_enumerate(ss_vae.guide, args.enum_discrete, expand=True)
-    elbo = (JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO)(max_iarange_nesting=1)
+    elbo = (JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO)(max_plate_nesting=1)
     loss_basic = SVI(ss_vae.model, guide, optimizer, loss=elbo)
 
     # build a list of all losses considered
