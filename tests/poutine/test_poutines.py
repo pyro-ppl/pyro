@@ -720,9 +720,9 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
         assert actual_shape == expected_shape, 'error on iteration {}'.format(i)
 
 
-def test_iarange_error_on_enter():
+def test_plate_error_on_enter():
     def model():
-        with pyro.iarange('foo', 0):
+        with pyro.plate('foo', 0):
             pass
 
     assert len(_DIM_ALLOCATOR._stack) == 0

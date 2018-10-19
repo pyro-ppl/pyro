@@ -28,8 +28,6 @@ Handlers
 
 .. autofunction:: pyro.poutine.mask
 
-.. autofunction:: pyro.poutine.plate
-
 .. autofunction:: pyro.poutine.queue
 
 .. autofunction:: pyro.poutine.replay

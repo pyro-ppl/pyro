@@ -49,7 +49,7 @@ class EnumerateMessenger(Messenger):
             target_dim = self.next_available_dim  # possibly even farther left than actual_dim
             self.next_available_dim += 1
             if target_dim == float('inf'):
-                raise ValueError("max_iarange_nesting must be set to a finite value for parallel enumeration")
+                raise ValueError("max_plate_nesting must be set to a finite value for parallel enumeration")
             if actual_dim > target_dim:
                 raise ValueError("Expected enumerated value to have dim at most {} but got shape {}".format(
                     target_dim + len(dist.event_shape), value.shape))

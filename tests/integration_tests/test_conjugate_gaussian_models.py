@@ -74,7 +74,7 @@ class GaussianChain(TestCase):
             next_mean = loc_latent
 
         loc_N = next_mean
-        with pyro.iarange("data", self.data.size(0)):
+        with pyro.plate("data", self.data.size(0)):
             pyro.sample("obs", dist.Normal(loc_N,
                                            torch.pow(self.lambdas[self.N], -0.5)), obs=self.data)
         return loc_N

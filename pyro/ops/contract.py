@@ -257,7 +257,7 @@ def _contract_component(ring, tensor_tree, sum_dims):
     """
     Contract out ``sum_dims`` in a tree of tensors in-place, via message
     passing. This reduces all tensors down to a single tensor in the greatest
-    lower bound iarange context.
+    lower bound plate context.
 
     This function should be deterministic.
     This function has side-effects: it modifies ``tensor_tree`` and
@@ -292,7 +292,7 @@ def _contract_component(ring, tensor_tree, sum_dims):
     for dim, t in dim_to_ordinal.items():
         dims_tree[t].add(dim)
 
-    # Recursively combine terms in different iarange contexts.
+    # Recursively combine terms in different plate contexts.
     while any(dims_tree.values()):
         leaf = max(tensor_tree, key=len)
         leaf_terms = tensor_tree.pop(leaf)
@@ -305,16 +305,16 @@ def _contract_component(ring, tensor_tree, sum_dims):
             term = ring.sumproduct(terms, dims)
             remaining_dims = set.union(*map(sum_dims.pop, terms)) - dims
 
-            # Eliminate extra iarange dims via product contractions.
+            # Eliminate extra plate dims via product contractions.
             if leaf == target_ordinal:
                 parent = leaf
             else:
                 parent = frozenset.union(*(t for t, d in dims_tree.items() if d & remaining_dims))
                 if parent == leaf:
                     raise NotImplementedError(
-                        "Expected tree-structured iarange nesting, but found "
-                        "dependencies on independent iaranges [{}]. "
-                        "Try converting one of the iaranges to an irange (but beware "
+                        "Expected tree-structured plate nesting, but found "
+                        "dependencies on independent plates [{}]. "
+                        "Try converting one of the plates to an irange (but beware "
                         "exponential cost in the size of that irange)"
                         .format(', '.join(getattr(f, 'name', str(f)) for f in leaf)))
                 contract_frames = leaf - parent
@@ -373,7 +373,7 @@ def contract_tensor_tree(tensor_tree, sum_dims, ring=None, cache=None):
 def contract_to_tensor(tensor_tree, sum_dims, target_ordinal, ring=None, cache=None):
     """
     Contract out ``sum_dims`` in a tree of tensors, via message
-    passing. This reduces all terms down to a single tensor in the iarange
+    passing. This reduces all terms down to a single tensor in the plate
     context specified by ``target_ordinal``.
 
     This function should be deterministic and free of side effects.
@@ -400,7 +400,7 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal, ring=None, cache=N
     # Contract out all sum dims via sumproduct contractions.
     tensor_tree = contract_tensor_tree(tensor_tree, sum_dims, ring=ring)
 
-    # Eliminate extra iarange dims via product contractions.
+    # Eliminate extra plate dims via product contractions.
     lower_terms = []
     lower_ordinal = frozenset()
     for ordinal, terms in tensor_tree.items():
