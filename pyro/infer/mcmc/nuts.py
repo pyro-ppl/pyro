@@ -111,6 +111,7 @@ class NUTS(HMC):
                                    transforms=transforms,
                                    max_iarange_nesting=max_iarange_nesting,
                                    experimental_use_einsum=experimental_use_einsum)
+        self.use_multinomial_sampling = use_multinomial_sampling
 
         self._max_tree_depth = 10  # from Stan
         # There are three conditions to stop doubling process:
@@ -124,10 +125,6 @@ class NUTS(HMC):
         #     when the energy E_p diverges from E_u too much, we stop doubling.
         # Here, as suggested in [1], we set dE_max = 1000.
         self._max_sliced_energy = 1000
-
-        # A flag to decide if we want to sample candidates along its trajectory using
-        # multinomial sampling instead of slice sampling (see [2, Section A.2.1])
-        self.use_multinomial_sampling = use_multinomial_sampling
 
     def _is_turning(self, r_left, r_right, r_sum):
         # We follow the strategy in Section A.4.2 of [2] for this implementation.
