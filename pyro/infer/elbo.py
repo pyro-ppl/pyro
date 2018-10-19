@@ -152,6 +152,8 @@ class ELBO(object):
         the result packaged as a trace generator.
         """
         if self.vectorize_particles:
+            if self.max_plate_nesting == float('inf'):
+                self._guess_max_plate_nesting(model, guide, *args, **kwargs)
             yield self._get_vectorized_trace(model, guide, *args, **kwargs)
         else:
             for i in range(self.num_particles):
