@@ -40,18 +40,16 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, sca
     precision = 0.06 * scale
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
-    @poutine.broadcast
     def model(subsample):
-        with pyro.iarange("data", len(data), subsample_size, subsample) as ind:
+        with pyro.plate("data", len(data), subsample_size, subsample) as ind:
             x = data[ind]
             z = pyro.sample("z", Normal(0, 1))
             pyro.sample("x", Normal(z, 1), obs=x)
 
-    @poutine.broadcast
     def guide(subsample):
         loc = pyro.param("loc", lambda: torch.zeros(len(data), requires_grad=True))
         scale = pyro.param("scale", lambda: torch.tensor([1.0], requires_grad=True))
-        with pyro.iarange("data", len(data), subsample_size, subsample) as ind:
+        with pyro.plate("data", len(data), subsample_size, subsample) as ind:
             loc_ind = loc[ind]
             pyro.sample("z", Normal(loc_ind, scale))
 
@@ -65,7 +63,7 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, sca
         num_particles = 1
 
     optim = Adam({"lr": 0.1})
-    elbo = Elbo(max_iarange_nesting=1,
+    elbo = Elbo(max_plate_nesting=1,
                 num_particles=num_particles,
                 vectorize_particles=True,
                 strict_enumeration_warning=False)
@@ -88,34 +86,32 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, sca
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, DiffTrace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-def test_iarange(Elbo, reparameterized):
+def test_plate(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     num_particles = 100000
     precision = 0.06
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
-    @poutine.broadcast
     def model():
-        particles_iarange = pyro.iarange("particles", num_particles, dim=-2)
-        data_iarange = pyro.iarange("data", len(data), dim=-1)
+        particles_plate = pyro.plate("particles", num_particles, dim=-2)
+        data_plate = pyro.plate("data", len(data), dim=-1)
 
         pyro.sample("nuisance_a", Normal(0, 1))
-        with particles_iarange, data_iarange:
+        with particles_plate, data_plate:
             z = pyro.sample("z", Normal(0, 1))
         pyro.sample("nuisance_b", Normal(2, 3))
-        with data_iarange, particles_iarange:
+        with data_plate, particles_plate:
             pyro.sample("x", Normal(z, 1), obs=data)
         pyro.sample("nuisance_c", Normal(4, 5))
 
-    @poutine.broadcast
     def guide():
         loc = pyro.param("loc", torch.zeros(len(data)))
         scale = pyro.param("scale", torch.tensor([1.]))
 
         pyro.sample("nuisance_c", Normal(4, 5))
-        with pyro.iarange("particles", num_particles, dim=-2):
-            with pyro.iarange("data", len(data), dim=-1):
+        with pyro.plate("particles", num_particles, dim=-2):
+            with pyro.plate("data", len(data), dim=-1):
                 pyro.sample("z", Normal(loc, scale))
         pyro.sample("nuisance_b", Normal(2, 3))
         pyro.sample("nuisance_a", Normal(0, 1))
@@ -136,38 +132,36 @@ def test_iarange(Elbo, reparameterized):
 
 @pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, DiffTrace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-def test_iarange_elbo_vectorized_particles(Elbo, reparameterized):
+def test_plate_elbo_vectorized_particles(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     num_particles = 200000
     precision = 0.06
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
-    @poutine.broadcast
     def model():
-        data_iarange = pyro.iarange("data", len(data))
+        data_plate = pyro.plate("data", len(data))
 
         pyro.sample("nuisance_a", Normal(0, 1))
-        with data_iarange:
+        with data_plate:
             z = pyro.sample("z", Normal(0, 1))
         pyro.sample("nuisance_b", Normal(2, 3))
-        with data_iarange:
+        with data_plate:
             pyro.sample("x", Normal(z, 1), obs=data)
         pyro.sample("nuisance_c", Normal(4, 5))
 
-    @poutine.broadcast
     def guide():
         loc = pyro.param("loc", torch.zeros(len(data)))
         scale = pyro.param("scale", torch.tensor([1.]))
 
         pyro.sample("nuisance_c", Normal(4, 5))
-        with pyro.iarange("data", len(data)):
+        with pyro.plate("data", len(data)):
             pyro.sample("z", Normal(loc, scale))
         pyro.sample("nuisance_b", Normal(2, 3))
         pyro.sample("nuisance_a", Normal(0, 1))
 
     optim = Adam({"lr": 0.1})
-    loss = Elbo(max_iarange_nesting=1,
+    loss = Elbo(max_plate_nesting=1,
                 num_particles=num_particles,
                 vectorize_particles=True,
                 strict_enumeration_warning=False)
@@ -206,7 +200,7 @@ def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
     def model():
-        with pyro.iarange("data", len(data), subsample_size) as ind:
+        with pyro.plate("data", len(data), subsample_size) as ind:
             x = data[ind]
             z = pyro.sample("z", Normal(0, 1).expand_by(x.shape))
             pyro.sample("x", Normal(z, 1), obs=x)
@@ -214,7 +208,7 @@ def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
     def guide():
         loc = pyro.param("loc", lambda: torch.zeros(len(data), requires_grad=True))
         scale = pyro.param("scale", lambda: torch.tensor([1.0], requires_grad=True))
-        with pyro.iarange("data", len(data), subsample_size) as ind:
+        with pyro.plate("data", len(data), subsample_size) as ind:
             pyro.sample("z", Normal(loc[ind], scale))
 
     optim = Adam({"lr": 0.1})

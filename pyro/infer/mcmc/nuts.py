@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
 from collections import namedtuple
 
 import torch
@@ -7,10 +8,9 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import logsumexp
-from pyro.ops.integrator import single_step_velocity_verlet
-from pyro.util import torch_isnan, optional
-
 from pyro.infer.mcmc.hmc import HMC
+from pyro.ops.integrator import single_step_velocity_verlet
+from pyro.util import optional, torch_isnan
 
 # sum_accept_probs and num_proposals are used to calculate
 # the statistic accept_prob for Dual Averaging scheme;
@@ -65,8 +65,8 @@ class NUTS(HMC):
         If not specified and the model has sites with constrained support,
         automatic transformations will be applied, as specified in
         :mod:`torch.distributions.constraint_registry`.
-    :param int max_iarange_nesting: Optional bound on max number of nested
-        :func:`pyro.iarange` contexts. This is required if model contains
+    :param int max_plate_nesting: Optional bound on max number of nested
+        :func:`pyro.plate` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
     :param bool experimental_use_einsum: Whether to use an einsum operation
         to evaluat log pdf for the model trace. No-op unless the trace has
@@ -101,15 +101,21 @@ class NUTS(HMC):
                  full_mass=False,
                  use_multinomial_sampling=True,
                  transforms=None,
-                 max_iarange_nesting=float("inf"),
+                 max_plate_nesting=float("inf"),
+                 max_iarange_nesting=None,  # DEPRECATED
                  experimental_use_einsum=False):
+        if max_iarange_nesting is not None:
+            warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
+                          DeprecationWarning)
+            max_plate_nesting = max_iarange_nesting
+
         super(NUTS, self).__init__(model,
                                    step_size,
                                    adapt_step_size=adapt_step_size,
                                    adapt_mass_matrix=adapt_mass_matrix,
                                    full_mass=full_mass,
                                    transforms=transforms,
-                                   max_iarange_nesting=max_iarange_nesting,
+                                   max_plate_nesting=max_plate_nesting,
                                    experimental_use_einsum=experimental_use_einsum)
         self.use_multinomial_sampling = use_multinomial_sampling
 
