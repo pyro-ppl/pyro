@@ -108,14 +108,15 @@ def test_model_guide_dim_mismatch_error(Elbo):
     def model():
         loc = torch.zeros(2)
         scale = torch.ones(2)
-        pyro.sample("x", dist.Normal(loc, scale))
+        pyro.sample("x", dist.Normal(loc, scale).independent(1))
 
     def guide():
         loc = pyro.param("loc", torch.zeros(2, 1, requires_grad=True))
         scale = pyro.param("scale", torch.ones(2, 1, requires_grad=True))
-        pyro.sample("x", dist.Normal(loc, scale))
+        pyro.sample("x", dist.Normal(loc, scale).independent(2))
 
-    assert_error(model, guide, Elbo(), match='Model and guide shapes disagree')
+    assert_error(model, guide, Elbo(strict_enumeration_warning=False),
+                 match='invalid log_prob shape|Model and guide event_dims disagree')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -124,14 +125,15 @@ def test_model_guide_shape_mismatch_error(Elbo):
     def model():
         loc = torch.zeros(1, 2)
         scale = torch.ones(1, 2)
-        pyro.sample("x", dist.Normal(loc, scale))
+        pyro.sample("x", dist.Normal(loc, scale).independent(2))
 
     def guide():
         loc = pyro.param("loc", torch.zeros(2, 1, requires_grad=True))
         scale = pyro.param("scale", torch.ones(2, 1, requires_grad=True))
-        pyro.sample("x", dist.Normal(loc, scale))
+        pyro.sample("x", dist.Normal(loc, scale).independent(2))
 
-    assert_error(model, guide, Elbo(), match='Model and guide shapes disagree')
+    assert_error(model, guide, Elbo(strict_enumeration_warning=False),
+                 match='Model and guide shapes disagree')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -229,9 +231,10 @@ def test_plate_no_size_ok(Elbo):
     assert_ok(model, guide, Elbo())
 
 
+@pytest.mark.parametrize("max_plate_nesting", [0, float('inf')])
 @pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-def test_irange_irange_ok(subsample_size, Elbo):
+def test_irange_irange_ok(subsample_size, Elbo, max_plate_nesting):
 
     def model():
         p = torch.tensor(0.5)
@@ -252,12 +255,13 @@ def test_irange_irange_ok(subsample_size, Elbo):
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide, "parallel")
 
-    assert_ok(model, guide, Elbo(max_plate_nesting=0))
+    assert_ok(model, guide, Elbo(max_plate_nesting=max_plate_nesting))
 
 
+@pytest.mark.parametrize("max_plate_nesting", [0, float('inf')])
 @pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-def test_irange_irange_swap_ok(subsample_size, Elbo):
+def test_irange_irange_swap_ok(subsample_size, Elbo, max_plate_nesting):
 
     def model():
         p = torch.tensor(0.5)
@@ -278,7 +282,7 @@ def test_irange_irange_swap_ok(subsample_size, Elbo):
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(guide, "parallel")
 
-    assert_ok(model, guide, Elbo(max_plate_nesting=0))
+    assert_ok(model, guide, Elbo(max_plate_nesting=max_plate_nesting))
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
@@ -453,7 +457,7 @@ def test_nested_plate_plate_dim_error_3(Elbo):
                 pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_inner), 1]))  # error here
 
     guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
-    assert_error(model, guide, Elbo(), match='invalid log_prob shape')
+    assert_error(model, guide, Elbo(), match='invalid log_prob shape|shape mismatch')
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -666,35 +670,40 @@ def test_no_plate_enum_discrete_batch_error():
                  match='invalid log_prob shape')
 
 
-@pytest.mark.parametrize('max_plate_nesting', [0, 1, 2])
+@pytest.mark.parametrize('max_plate_nesting', [0, 1, 2, float('inf')])
 def test_enum_discrete_parallel_ok(max_plate_nesting):
-    plate_shape = torch.Size([1] * max_plate_nesting)
+    guessed_nesting = 0 if max_plate_nesting == float('inf') else max_plate_nesting
+    plate_shape = torch.Size([1] * guessed_nesting)
 
     def model():
         p = torch.tensor(0.5)
         x = pyro.sample("x", dist.Bernoulli(p))
-        assert x.shape == torch.Size([2]) + plate_shape
+        if max_plate_nesting != float('inf'):
+            assert x.shape == torch.Size([2]) + plate_shape
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         x = pyro.sample("x", dist.Bernoulli(p))
-        assert x.shape == torch.Size([2]) + plate_shape
+        if max_plate_nesting != float('inf'):
+            assert x.shape == torch.Size([2]) + plate_shape
 
     assert_ok(model, config_enumerate(guide, "parallel"),
               TraceEnum_ELBO(max_plate_nesting=max_plate_nesting))
 
 
-@pytest.mark.parametrize('max_plate_nesting', [0, 1, 2])
+@pytest.mark.parametrize('max_plate_nesting', [0, 1, 2, float('inf')])
 def test_enum_discrete_parallel_nested_ok(max_plate_nesting):
-    plate_shape = torch.Size([1] * max_plate_nesting)
+    guessed_nesting = 0 if max_plate_nesting == float('inf') else max_plate_nesting
+    plate_shape = torch.Size([1] * guessed_nesting)
 
     def model():
         p2 = torch.ones(2) / 2
         p3 = torch.ones(3) / 3
         x2 = pyro.sample("x2", dist.OneHotCategorical(p2))
         x3 = pyro.sample("x3", dist.OneHotCategorical(p3))
-        assert x2.shape == torch.Size([2]) + plate_shape + p2.shape
-        assert x3.shape == torch.Size([3, 1]) + plate_shape + p3.shape
+        if max_plate_nesting != float('inf'):
+            assert x2.shape == torch.Size([2]) + plate_shape + p2.shape
+            assert x3.shape == torch.Size([3, 1]) + plate_shape + p3.shape
 
     assert_ok(model, config_enumerate(model, "parallel"),
               TraceEnum_ELBO(max_plate_nesting=max_plate_nesting))
@@ -761,9 +770,10 @@ def test_enumerate_parallel_plate_ok(enumerate_, expand, num_samples):
     assert_ok(model, guide, elbo)
 
 
+@pytest.mark.parametrize('max_plate_nesting', [1, float('inf')])
 @pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
 @pytest.mark.parametrize('is_validate', [True, False])
-def test_enum_discrete_plate_dependency_warning(enumerate_, is_validate):
+def test_enum_discrete_plate_dependency_warning(enumerate_, is_validate, max_plate_nesting):
 
     def model():
         pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
@@ -773,14 +783,16 @@ def test_enum_discrete_plate_dependency_warning(enumerate_, is_validate):
         pyro.sample("y", dist.Bernoulli(x.mean()))  # user should move this line up
 
     with pyro.validation_enabled(is_validate):
+        elbo = TraceEnum_ELBO(max_plate_nesting=max_plate_nesting)
         if enumerate_ and is_validate:
-            assert_warning(model, model, TraceEnum_ELBO(max_plate_nesting=1))
+            assert_warning(model, model, elbo)
         else:
-            assert_ok(model, model, TraceEnum_ELBO(max_plate_nesting=1))
+            assert_ok(model, model, elbo)
 
 
+@pytest.mark.parametrize('max_plate_nesting', [1, float('inf')])
 @pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
-def test_enum_discrete_irange_plate_dependency_ok(enumerate_):
+def test_enum_discrete_irange_plate_dependency_ok(enumerate_, max_plate_nesting):
 
     def model():
         pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
@@ -791,12 +803,13 @@ def test_enum_discrete_irange_plate_dependency_ok(enumerate_):
                 pyro.sample("x_{}".format(i), dist.Bernoulli(0.5).expand_by([5]),
                             infer={'enumerate': enumerate_})
 
-    assert_ok(model, model, TraceEnum_ELBO(max_plate_nesting=1))
+    assert_ok(model, model, TraceEnum_ELBO(max_plate_nesting=max_plate_nesting))
 
 
+@pytest.mark.parametrize('max_plate_nesting', [1, float('inf')])
 @pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
 @pytest.mark.parametrize('is_validate', [True, False])
-def test_enum_discrete_iranges_plate_dependency_warning(enumerate_, is_validate):
+def test_enum_discrete_iranges_plate_dependency_warning(enumerate_, is_validate, max_plate_nesting):
 
     def model():
         pyro.sample("w", dist.Bernoulli(0.5), infer={'enumerate': 'parallel'})
@@ -811,10 +824,11 @@ def test_enum_discrete_iranges_plate_dependency_warning(enumerate_, is_validate)
             pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
 
     with pyro.validation_enabled(is_validate):
+        elbo = TraceEnum_ELBO(max_plate_nesting=max_plate_nesting)
         if enumerate_ and is_validate:
-            assert_warning(model, model, TraceEnum_ELBO(max_plate_nesting=1))
+            assert_warning(model, model, elbo)
         else:
-            assert_ok(model, model, TraceEnum_ELBO(max_plate_nesting=1))
+            assert_ok(model, model, elbo)
 
 
 @pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
@@ -966,7 +980,7 @@ def test_dim_allocation_ok(Elbo, expand):
             assert q.shape == (8, 5, 7, 6)
 
     guide = config_enumerate(model, expand=expand) if enumerate_ else model
-    assert_ok(model, guide, Elbo())
+    assert_ok(model, guide, Elbo(max_plate_nesting=4))
 
 
 @pytest.mark.parametrize("Elbo,expand", [

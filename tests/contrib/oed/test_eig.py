@@ -20,7 +20,7 @@ from pyro.contrib.oed.eig import (
     vi_ape, naive_rainforth_eig, donsker_varadhan_eig, barber_agakov_ape
 )
 from pyro.contrib.oed.util import linear_model_ground_truth
-from pyro.infer import TraceEnum_ELBO
+from pyro.infer import Trace_ELBO
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ group_2p_ba_guide = lambda d: LinearModelGuide(d, OrderedDict([("w1", 1), ("w2",
 # Aux
 ########################################################################################
 
-elbo = TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss
+elbo = Trace_ELBO().differentiable_loss
 
 
 def bernoulli_guide(design):

@@ -63,7 +63,7 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, sca
         num_particles = 1
 
     optim = Adam({"lr": 0.1})
-    elbo = Elbo(max_plate_nesting=1,
+    elbo = Elbo(max_plate_nesting=1,  # set this to ensure rng agrees across runs
                 num_particles=num_particles,
                 vectorize_particles=True,
                 strict_enumeration_warning=False)
@@ -89,7 +89,7 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, sca
 def test_plate(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
-    num_particles = 100000
+    num_particles = 200000
     precision = 0.06
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
@@ -117,7 +117,8 @@ def test_plate(Elbo, reparameterized):
         pyro.sample("nuisance_a", Normal(0, 1))
 
     optim = Adam({"lr": 0.1})
-    inference = SVI(model, guide, optim, loss=Elbo(strict_enumeration_warning=False))
+    elbo = Elbo(strict_enumeration_warning=False)
+    inference = SVI(model, guide, optim, loss=elbo)
     inference.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
     actual_grads = {name: param.grad.detach().cpu().numpy() / num_particles
@@ -161,8 +162,7 @@ def test_plate_elbo_vectorized_particles(Elbo, reparameterized):
         pyro.sample("nuisance_a", Normal(0, 1))
 
     optim = Adam({"lr": 0.1})
-    loss = Elbo(max_plate_nesting=1,
-                num_particles=num_particles,
+    loss = Elbo(num_particles=num_particles,
                 vectorize_particles=True,
                 strict_enumeration_warning=False)
     inference = SVI(model, guide, optim, loss=loss)
