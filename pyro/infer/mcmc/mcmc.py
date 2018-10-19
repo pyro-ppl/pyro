@@ -128,13 +128,13 @@ class _ParallelSampler(TracePosterior):
             self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
                                                  args=args, kwargs=kwargs))
 
-    def join(self):
-        for w in self.workers:
-            if w.is_alive():
-                w.join(timeout=1)
+    def terminate(self):
         if self.log_thread.is_alive():
             self.log_queue.put_nowait(None)
             self.log_thread.join(timeout=1)
+        for w in self.workers:
+            if w.is_alive():
+                w.terminate()
 
     def _traces(self, *args, **kwargs):
         # Ignore sigint in worker processes; they will be shut down
@@ -161,16 +161,13 @@ class _ParallelSampler(TracePosterior):
                     continue
                 if isinstance(val, Exception):
                     # Exception trace is already logged by worker.
-                    self.logger.warn("Exception in chain {}. Number of samples returned will "
-                                     "be less than requested, and resulting estimates may be "
-                                     "biased.".format(chain_id))
-                    active_workers -= 1
+                    raise val
                 elif val is not None:
                     yield val
                 else:
                     active_workers -= 1
         finally:
-            self.join()
+            self.terminate()
 
 
 class _SingleSampler(TracePosterior):

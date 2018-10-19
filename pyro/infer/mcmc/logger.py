@@ -163,7 +163,7 @@ def initialize_progbar(warmup_steps, num_samples, min_width=80, max_width=120, p
     :param int pos: Position of the bar (e.g. in the case of
         multiple parallel samplers).
     """
-    description = "Warmup" if pos is None else "Warmup [{}]".format(pos)
+    description = "Warmup" if pos is None else "Warmup [{}]".format(pos + 1)
     total_steps = warmup_steps + num_samples
     # Disable progress bar in "CI"
     # (see https://github.com/travis-ci/travis-ci/issues/1337).
