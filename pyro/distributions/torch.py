@@ -298,17 +298,6 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
             return type(self)(low, high, validate_args=validate_args)
 
 
-class Pareto(torch.distributions.Pareto, TorchDistributionMixin):
-    def expand(self, batch_shape):
-        try:
-            return super(Pareto, self).expand(batch_shape)
-        except NotImplementedError:
-            validate_args = self.__dict__.get('_validate_args')
-            scale = self.scale.expand(batch_shape)
-            alpha = self.alpha.expand(batch_shape)
-            return type(self)(scale, alpha, validate_args=validate_args)
-
-
 # Programmatically load all distributions from PyTorch.
 __all__ = []
 for _name, _Dist in torch.distributions.__dict__.items():

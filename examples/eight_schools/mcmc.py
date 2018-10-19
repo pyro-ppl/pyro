@@ -35,9 +35,10 @@ def conditioned_model(model, sigma, y):
 
 def main(args):
     nuts_kernel = NUTS(conditioned_model, adapt_step_size=True)
-    posterior = MCMC(nuts_kernel, num_samples=args.num_samples,
-                     warmup_steps=args.warmup_steps, num_chains=args.num_chains)\
-        .run(model, data.sigma, data.y)
+    posterior = MCMC(nuts_kernel,
+                     num_samples=args.num_samples,
+                     warmup_steps=args.warmup_steps,
+                     num_chains=args.num_chains).run(model, data.sigma, data.y)
     marginal_mu_tau = EmpiricalMarginal(posterior, sites=["mu", "tau"])\
         .get_samples_and_weights()[0].squeeze().numpy()
     marginal_eta = EmpiricalMarginal(posterior, sites=["eta"])\
