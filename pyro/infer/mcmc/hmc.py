@@ -135,6 +135,9 @@ class HMC(TraceKernel):
         self._adapt_end_buffer = 50  # from Stan
         self._adapt_initial_window = 25  # from Stan
 
+        # number of tries to get a valid prototype trace
+        self._max_tries_prototype_trace = 100
+
         self.transforms = {} if transforms is None else transforms
         self.max_plate_nesting = max_plate_nesting
         self._automatic_transform_enabled = True if transforms is None else False
@@ -336,9 +339,13 @@ class HMC(TraceKernel):
         self._trace_prob_evaluator = trace_eval(trace,
                                                 self._has_enumerable_sites,
                                                 self.max_plate_nesting)
-        trace_log_prob_sum = self._compute_trace_log_prob(trace)
-        if torch_isnan(trace_log_prob_sum) or torch_isinf(trace_log_prob_sum):
-            raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")
+        for i in range(self._max_tries_prototype_trace):
+            trace_log_prob_sum = self._compute_trace_log_prob(trace)
+            if not torch_isnan(trace_log_prob_sum) and not torch_isinf(trace_log_prob_sum):
+                self._prototype_trace = trace
+                return
+            trace = poutine.trace(self.model).get_trace(self._args, self._kwargs)
+        raise ValueError("Model specification seems incorrect - can not find a valid trace.")
 
     def initial_trace(self):
         return self._prototype_trace
@@ -350,7 +357,6 @@ class HMC(TraceKernel):
         # set the trace prototype to inter-convert between trace object
         # and dict object used by the integrator
         trace = poutine.trace(self.model).get_trace(*args, **kwargs)
-        self._prototype_trace = trace
         if self._automatic_transform_enabled:
             self.transforms = {}
         for name, node in trace.iter_stochastic_nodes():
