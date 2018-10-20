@@ -35,7 +35,7 @@ TEST_CASES = [
         hmc_params=None,
         expected_means=[0.20, 0.40, 0.60, 0.80],
         expected_precs=[1.25, 0.83, 0.83, 1.25],
-        mean_tol=0.06,
+        mean_tol=0.07,
         std_tol=0.06,
     ),
     pytest.param(*T(
