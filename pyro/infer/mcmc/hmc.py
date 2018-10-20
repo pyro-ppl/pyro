@@ -334,7 +334,7 @@ class HMC(TraceKernel):
         assert pos == r_flat.size(0)
         return r, r_flat
 
-    def _validate_trace(self, trace):
+    def _get_valid_prototype_trace(self, trace):
         trace_eval = TraceEinsumEvaluator if self.use_einsum else TraceTreeEvaluator
         self._trace_prob_evaluator = trace_eval(trace,
                                                 self._has_enumerable_sites,
@@ -372,7 +372,7 @@ class HMC(TraceKernel):
             self._r_shapes[name] = site_value.shape
             self._r_numels[name] = site_value.numel()
 
-        self._validate_trace(trace)
+        self._get_valid_prototype_trace(trace)
         mass_matrix_size = sum(self._r_numels.values())
         if self.full_mass:
             self._inverse_mass_matrix = eye_like(site_value, mass_matrix_size)
