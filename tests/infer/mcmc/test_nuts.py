@@ -51,13 +51,13 @@ TEST_CASES = [
                                  reason='Slow test - skip on CI/CUDA')]),
     pytest.param(*T(
         GaussianChain(dim=5, chain_len=9, num_obs=1),
-        num_samples=1200,
+        num_samples=1400,
         warmup_steps=200,
         hmc_params=None,
         expected_means=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90],
         expected_precs=[1.11, 0.63, 0.48, 0.42, 0.4, 0.42, 0.48, 0.63, 1.11],
-        mean_tol=0.07,
-        std_tol=0.07,
+        mean_tol=0.08,
+        std_tol=0.08,
     ), marks=[pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
                                  reason='Slow test - skip on CI/CUDA')])
 ]
@@ -106,7 +106,8 @@ def test_nuts_conjugate_gaussian(fixture,
         assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 
-def test_logistic_regression():
+@pytest.mark.parametrize("use_multinomial_sampling", [True, False])
+def test_logistic_regression(use_multinomial_sampling):
     dim = 3
     data = torch.randn(2000, dim)
     true_coefs = torch.arange(1., dim + 1.)
@@ -118,7 +119,7 @@ def test_logistic_regression():
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
-    nuts_kernel = NUTS(model)
+    nuts_kernel = NUTS(model, use_multinomial_sampling=use_multinomial_sampling)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='beta')
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
@@ -150,7 +151,8 @@ def test_beta_bernoulli(step_size, adapt_step_size, adapt_mass_matrix, full_mass
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
-def test_gamma_normal():
+@pytest.mark.parametrize("use_multinomial_sampling", [True, False])
+def test_gamma_normal(use_multinomial_sampling):
     def model(data):
         rate = torch.tensor([1.0, 1.0])
         concentration = torch.tensor([1.0, 1.0])
@@ -160,7 +162,7 @@ def test_gamma_normal():
 
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
-    nuts_kernel = NUTS(model)
+    nuts_kernel = NUTS(model, use_multinomial_sampling=use_multinomial_sampling)
     mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_std, prec=0.05)

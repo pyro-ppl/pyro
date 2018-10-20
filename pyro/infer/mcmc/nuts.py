@@ -7,6 +7,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
+from pyro.distributions.util import logsumexp
 from pyro.infer.mcmc.hmc import HMC
 from pyro.ops.integrator import single_step_velocity_verlet
 from pyro.util import optional, torch_isnan
@@ -15,10 +16,13 @@ from pyro.util import optional, torch_isnan
 # the statistic accept_prob for Dual Averaging scheme;
 # z_left_grads and z_right_grads are kept to avoid recalculating
 # grads at left and right leaves;
-# r_sum is used to check turning condition
+# r_sum is used to check turning condition;
+# weight is the number of valid points in case we use slice sampling
+#   and is the log sum of (unnormalized) probabilites of valid points
+#   when we use multinomial sampling
 _TreeInfo = namedtuple("TreeInfo", ["z_left", "r_left", "z_left_grads",
                                     "z_right", "r_right", "z_right_grads",
-                                    "z_proposal", "r_sum", "size", "turning", "diverging",
+                                    "z_proposal", "r_sum", "weight", "turning", "diverging",
                                     "sum_accept_probs", "num_proposals"])
 
 
@@ -51,6 +55,11 @@ class NUTS(HMC):
     :param bool adapt_mass_matrix: A flag to decide if we want to adapt mass
         matrix during warm-up phase using Welford scheme.
     :param bool full_mass: A flag to decide if mass matrix is dense or diagonal.
+    :param bool use_multinomial_sampling: A flag to decide if we want to sample
+        candidates along its trajectory using "multinomial sampling" or using
+        "slice sampling". Slice sampling is used in the original NUTS paper [1],
+        while multinomial sampling is suggested in [2]. By default, this flag is
+        set to True. If it is set to `False`, NUTS uses slice sampling.
     :param dict transforms: Optional dictionary that specifies a transform
         for a sample site with constrained support to unconstrained space. The
         transform should be invertible, and implement `log_abs_det_jacobian`.
@@ -91,6 +100,7 @@ class NUTS(HMC):
                  adapt_step_size=True,
                  adapt_mass_matrix=True,
                  full_mass=False,
+                 use_multinomial_sampling=True,
                  transforms=None,
                  max_plate_nesting=float("inf"),
                  max_iarange_nesting=None,  # DEPRECATED
@@ -108,6 +118,7 @@ class NUTS(HMC):
                                    transforms=transforms,
                                    max_plate_nesting=max_plate_nesting,
                                    experimental_use_einsum=experimental_use_einsum)
+        self.use_multinomial_sampling = use_multinomial_sampling
 
         self._max_tree_depth = 10  # from Stan
         # There are three conditions to stop doubling process:
@@ -116,16 +127,11 @@ class NUTS(HMC):
         #     + The probability of the states becoming negligible: p(z, r) << u,
         # here u is the "slice" variable introduced at the `self.sample(...)` method.
         # Denote E_p = -log p(z, r), E_u = -log u, the third condition is equivalent to
-        #     sliced_energy := E_p - E_u >= some constant =: max_sliced_energy.
+        #     sliced_energy := E_p - E_u > some constant =: max_sliced_energy.
         # This also suggests the notion "diverging" in the implemenation:
         #     when the energy E_p diverges from E_u too much, we stop doubling.
         # Here, as suggested in [1], we set dE_max = 1000.
         self._max_sliced_energy = 1000
-
-        # Set a flag to decide if we want to eliminate the initial point from the candidates to
-        # choose uniformly along the trajectory. In [1], this flag is True, but in Stan, they set
-        # it to False (implicitly).
-        self._eliminate_starting_point = True
 
     def _is_turning(self, r_left, r_right, r_sum):
         # We follow the strategy in Section A.4.2 of [2] for this implementation.
@@ -150,26 +156,25 @@ class NUTS(HMC):
             z, r, self._potential_energy, self._inverse_mass_matrix, step_size, z_grads=z_grads)
         r_new_flat = torch.cat([r_new[site_name].reshape(-1) for site_name in sorted(r_new)])
         energy_new = potential_energy + self._kinetic_energy(r_new)
+        # handle the NaN case
+        energy_new = energy_new.new_tensor(float("inf")) if torch_isnan(energy_new) else energy_new
         sliced_energy = energy_new + log_slice
+        diverging = (sliced_energy > self._max_sliced_energy)
+        delta_energy = energy_new - energy_current
+        accept_prob = (-delta_energy).exp().clamp(max=1.0)
 
-        # As a part of the slice sampling process (see below), along the trajectory
-        #     we eliminate states which p(z, r) < u, or dE > 0.
-        # Due to this elimination (and stop doubling conditions),
-        #     the size of binary tree might not equal to 2^tree_depth.
-        tree_size = 1 if sliced_energy <= 0 else 0
-        # Special case: Set diverging to True and accept prob to 0 if the
-        # diverging trajectory returns `NaN` energy (e.g. in the case of
-        # evaluating log prob of a value simulated using a large step size
-        # for a constrained sample site).
-        if torch_isnan(energy_new):
-            diverging = True
-            accept_prob = energy_new.new_tensor(0.0)
+        if self.use_multinomial_sampling:
+            tree_weight = -sliced_energy
         else:
-            diverging = (sliced_energy >= self._max_sliced_energy)
-            delta_energy = energy_new - energy_current
-            accept_prob = (-delta_energy).exp().clamp(max=1.0)
-        return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads,
-                         z_new, r_new_flat, tree_size, False, diverging, accept_prob, 1)
+            # As a part of the slice sampling process (see below), along the trajectory
+            #   we eliminate states which p(z, r) < u, or dE > 0.
+            # Due to this elimination (and stop doubling conditions),
+            #   the weight of binary tree might not equal to 2^tree_depth.
+            tree_weight = (sliced_energy.new_ones(()) if sliced_energy <= 0
+                           else sliced_energy.new_zeros(()))
+
+        return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads, z_new, r_new_flat,
+                         tree_weight, False, diverging, accept_prob, 1)
 
     def _build_tree(self, z, r, z_grads, log_slice, direction, tree_depth, energy_current):
         if tree_depth == 0:
@@ -198,23 +203,29 @@ class NUTS(HMC):
         other_half_tree = self._build_tree(z, r, z_grads, log_slice,
                                            direction, tree_depth-1, energy_current)
 
-        tree_size = half_tree.size + other_half_tree.size
+        if self.use_multinomial_sampling:
+            tree_weight = logsumexp(torch.stack([half_tree.weight, other_half_tree.weight]), dim=0)
+        else:
+            tree_weight = half_tree.weight + other_half_tree.weight
         sum_accept_probs = half_tree.sum_accept_probs + other_half_tree.sum_accept_probs
         num_proposals = half_tree.num_proposals + other_half_tree.num_proposals
         r_sum = half_tree.r_sum + other_half_tree.r_sum
 
-        # Under the slice sampling process, a proposal for z is uniformly picked.
         # The probability of that proposal belongs to which half of tree
-        #     is computed based on the sizes of each half.
-        # For the special case that the sizes of each half are both 0,
-        #     we choose the proposal from the first half
-        #     (any is fine, because the probability of picking it at the end is 0!).
-        if tree_size != 0:
-            other_half_tree_prob = other_half_tree.size / tree_size
-            is_other_half_tree = pyro.sample(
-                "is_other_halftree", dist.Bernoulli(probs=torch.tensor(other_half_tree_prob)))
-            if int(is_other_half_tree.item()) == 1:
-                z_proposal = other_half_tree.z_proposal
+        #     is computed based on the weights of each half.
+        if self.use_multinomial_sampling:
+            other_half_tree_prob = (other_half_tree.weight - tree_weight).exp()
+        else:
+            # For the special case that the weights of each half are both 0,
+            #   we choose the proposal from the first half
+            #   (any is fine, because the probability of picking it at the end is 0!).
+            other_half_tree_prob = (other_half_tree.weight / tree_weight if tree_weight > 0
+                                    else tree_weight.new_zeros(()))
+        is_other_half_tree = pyro.sample("is_other_half_tree",
+                                         dist.Bernoulli(probs=other_half_tree_prob))
+
+        if is_other_half_tree == 1:
+            z_proposal = other_half_tree.z_proposal
 
         # leaves of the full tree are determined by the direction
         if direction == 1:
@@ -240,7 +251,7 @@ class NUTS(HMC):
         diverging = other_half_tree.diverging
 
         return _TreeInfo(z_left, r_left, z_left_grads, z_right, r_right, z_right_grads, z_proposal,
-                         r_sum, tree_size, turning, diverging, sum_accept_probs, num_proposals)
+                         r_sum, tree_weight, turning, diverging, sum_accept_probs, num_proposals)
 
     def sample(self, trace):
         z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
@@ -265,19 +276,25 @@ class NUTS(HMC):
         # For another version of NUTS which uses multinomial sampling instead of slice sampling,
         # see [2].
 
-        # Rather than sampling the slice variable from `Uniform(0, exp(-energy))`, we can
-        # sample log_slice directly using `energy`, so as to avoid potential underflow or
-        # overflow issues ([2]).
-        slice_exp_term = pyro.sample("slicevar_exp_t={}".format(self._t),
-                                     dist.Exponential(energy_current.new_tensor(1.)))
-        log_slice = -energy_current - slice_exp_term
+        if self.use_multinomial_sampling:
+            log_slice = -energy_current
+        else:
+            # Rather than sampling the slice variable from `Uniform(0, exp(-energy))`, we can
+            # sample log_slice directly using `energy`, so as to avoid potential underflow or
+            # overflow issues ([2]).
+            slice_exp_term = pyro.sample("slicevar_exp_t={}".format(self._t),
+                                         dist.Exponential(energy_current.new_tensor(1.)))
+            log_slice = -energy_current - slice_exp_term
 
         z_left = z_right = z
         r_left = r_right = r
         z_left_grads = z_right_grads = None
-        tree_size = 0 if self._eliminate_starting_point else 1
         accepted = False
         r_sum = r_flat
+        if self.use_multinomial_sampling:
+            tree_weight = energy_current.new_zeros(())
+        else:
+            tree_weight = energy_current.new_ones(())
 
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation.
@@ -304,18 +321,24 @@ class NUTS(HMC):
                 if new_tree.turning or new_tree.diverging:  # stop doubling
                     break
 
+                if self.use_multinomial_sampling:
+                    new_tree_prob = (new_tree.weight - tree_weight).exp()
+                else:
+                    new_tree_prob = new_tree.weight / tree_weight
                 rand = pyro.sample("rand_t={}_treedepth={}".format(self._t, tree_depth),
                                    dist.Uniform(torch.zeros(1), torch.ones(1)))
-                if ((tree_size > 0) and (rand < new_tree.size / tree_size)) \
-                        or ((tree_size == 0) and (new_tree.size > 0)):
+                if rand < new_tree_prob:
                     accepted = True
                     z = new_tree.z_proposal
 
                 r_sum = r_sum + new_tree.r_sum
                 if self._is_turning(r_left, r_right, r_sum):  # stop doubling
                     break
-                else:  # update tree_size
-                    tree_size += new_tree.size
+                else:  # update tree_weight
+                    if self.use_multinomial_sampling:
+                        tree_weight = logsumexp(torch.stack([tree_weight, new_tree.weight]), dim=0)
+                    else:
+                        tree_weight = tree_weight + new_tree.weight
 
         self._t += 1
 
