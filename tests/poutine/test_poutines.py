@@ -16,7 +16,7 @@ import pyro.poutine as poutine
 from pyro.distributions import Bernoulli, Categorical, Normal
 from pyro.poutine.runtime import _DIM_ALLOCATOR, NonlocalExit
 from pyro.poutine.util import all_escape, discrete_escape
-from tests.common import assert_equal
+from tests.common import assert_equal, assert_not_equal
 
 logger = logging.getLogger(__name__)
 
@@ -559,6 +559,22 @@ class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
 
         assert eq(sample_from_model, torch.ones(1))
         assert eq(sample_from_do_model, torch.zeros(1))
+
+
+class UnconditionHandlerTests(NormalNormalNormalHandlerTestCase):
+
+    def test_uncondition(self):
+        unconditioned_model = poutine.uncondition(self.model)
+        unconditioned_trace = poutine.trace(unconditioned_model).get_trace()
+        conditioned_trace = poutine.trace(self.model).get_trace()
+        assert_equal(conditioned_trace.nodes["obs"]["value"], torch.ones(2))
+        assert_not_equal(unconditioned_trace.nodes["obs"]["value"], torch.ones(2))
+
+    def test_undo_uncondition(self):
+        unconditioned_model = poutine.uncondition(self.model)
+        reconditioned_model = pyro.condition(unconditioned_model, {"obs": torch.ones(2)})
+        reconditioned_trace = poutine.trace(reconditioned_model).get_trace()
+        assert_equal(reconditioned_trace.nodes["obs"]["value"], torch.ones(2))
 
 
 class EscapeHandlerTests(TestCase):
