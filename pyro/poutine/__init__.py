@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from .handlers import (block, broadcast, condition, do, enum, escape, plate, infer_config, lift, mask, queue, replay,
+from .handlers import (block, broadcast, condition, do, enum, escape, infer_config, lift, mask, queue, replay,
                        scale, trace, uncondition)
 from .runtime import NonlocalExit
 from .trace_struct import Trace
@@ -19,7 +19,6 @@ __all__ = [
     "lift",
     "mask",
     "NonlocalExit",
-    "plate",
     "replay",
     "queue",
     "scale",
