@@ -97,15 +97,12 @@ class HMC(TraceKernel):
                  max_plate_nesting=float("inf"),
                  max_iarange_nesting=None,  # DEPRECATED
                  experimental_use_einsum=False):
+        self.model = model
         if max_iarange_nesting is not None:
             warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
                           DeprecationWarning)
             max_plate_nesting = max_iarange_nesting
-
-        # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
-        # No-op if model does not have any discrete latents.
-        self.model = poutine.enum(config_enumerate(model, default="parallel"),
-                                  first_available_dim=max_plate_nesting)
+        self.max_plate_nesting = max_plate_nesting
         self.step_size = step_size if step_size is not None else 1  # from Stan
         if trajectory_length is not None:
             self.trajectory_length = trajectory_length
@@ -136,7 +133,6 @@ class HMC(TraceKernel):
         self._adapt_initial_window = 25  # from Stan
 
         self.transforms = {} if transforms is None else transforms
-        self.max_plate_nesting = max_plate_nesting
         self._automatic_transform_enabled = True if transforms is None else False
         self._reset()
         super(HMC, self).__init__()
@@ -347,6 +343,10 @@ class HMC(TraceKernel):
         self._warmup_steps = warmup_steps
         self._args = args
         self._kwargs = kwargs
+        # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
+        # No-op if model does not have any discrete latents.
+        self.model = poutine.enum(config_enumerate(self.model, default="parallel"),
+                                  first_available_dim=self.max_plate_nesting)
         # set the trace prototype to inter-convert between trace object
         # and dict object used by the integrator
         trace = poutine.trace(self.model).get_trace(*args, **kwargs)
