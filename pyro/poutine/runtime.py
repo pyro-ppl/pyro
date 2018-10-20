@@ -11,7 +11,7 @@ _PYRO_PARAM_STORE = ParamStoreDict()
 
 class _DimAllocator(object):
     """
-    Dimension allocator for internal use by :class:`iarange`.
+    Dimension allocator for internal use by :class:`plate`.
     There is a single global instance.
 
     Note that dimensions are indexed from the right, e.g. -1, -2.
@@ -21,12 +21,12 @@ class _DimAllocator(object):
 
     def allocate(self, name, dim):
         """
-        Allocate a dimension to an :class:`iarange` with given name.
+        Allocate a dimension to an :class:`plate` with given name.
         Dim should be either None for automatic allocation or a negative
         integer for manual allocation.
         """
         if name in self._stack:
-            raise ValueError('duplicate iarange "{}"'.format(name))
+            raise ValueError('duplicate plate "{}"'.format(name))
         if dim is None:
             # Automatically designate the rightmost available dim for allocation.
             dim = -1
@@ -40,8 +40,8 @@ class _DimAllocator(object):
             self._stack.append(None)
         if self._stack[-1 - dim] is not None:
             raise ValueError('\n'.join([
-                'at iaranges "{}" and "{}", collide at dim={}'.format(name, self._stack[-1 - dim], dim),
-                '\nTry moving the dim of one iarange to the left, e.g. dim={}'.format(dim - 1)]))
+                'at plates "{}" and "{}", collide at dim={}'.format(name, self._stack[-1 - dim], dim),
+                '\nTry moving the dim of one plate to the left, e.g. dim={}'.format(dim - 1)]))
         self._stack[-1 - dim] = name
         return dim
 

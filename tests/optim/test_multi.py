@@ -31,9 +31,9 @@ def test_optimizers(factory):
         y = pyro.param("y", torch.randn(3, 2))
         z = pyro.param("z", torch.randn(4, 2).abs(), constraint=constraints.greater_than(-1))
         pyro.sample("obs_x", dist.MultivariateNormal(loc, cov), obs=x)
-        with pyro.iarange("y_iarange", 3):
+        with pyro.plate("y_plate", 3):
             pyro.sample("obs_y", dist.MultivariateNormal(loc, cov), obs=y)
-        with pyro.iarange("z_iarange", 4):
+        with pyro.plate("z_plate", 4):
             pyro.sample("obs_z", dist.MultivariateNormal(loc, cov), obs=z)
 
     loc = torch.tensor([-0.5, 0.5])

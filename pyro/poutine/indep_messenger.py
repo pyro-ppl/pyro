@@ -34,14 +34,14 @@ class CondIndepStackFrame(namedtuple("CondIndepStackFrame", ["name", "dim", "siz
 class IndepMessenger(Messenger):
     """
     This messenger keeps track of stack of independence information declared by
-    nested ``irange`` and ``iarange`` contexts. This information is stored in
+    nested ``irange`` and ``plate`` contexts. This information is stored in
     a ``cond_indep_stack`` at each sample/observe site for consumption by
     ``TraceMessenger``.
 
     Example::
 
-        x_axis = plate('outer', 320, dim=-1)
-        y_axis = plate('inner', 200, dim=-2)
+        x_axis = IndepMessenger('outer', 320, dim=-1)
+        y_axis = IndepMessenger('inner', 200, dim=-2)
         with x_axis:
             x_noise = sample("x_noise", dist.Normal(loc, scale).expand_by([320]))
         with y_axis:

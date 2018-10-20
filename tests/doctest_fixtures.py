@@ -12,6 +12,10 @@ from pyro.infer.mcmc import HMC, MCMC, NUTS
 from pyro.params import param_with_module_name
 
 
+# Fix seed for all doctest runs.
+pyro.set_rng_seed(0)
+
+
 @pytest.fixture(autouse=True)
 def add_imports(doctest_namespace):
     doctest_namespace['dist'] = dist

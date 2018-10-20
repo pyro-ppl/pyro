@@ -62,7 +62,7 @@ class NormalNormalTests(TestCase):
         Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
         def model():
-            with pyro.iarange("iarange", 2):
+            with pyro.plate("plate", 2):
                 loc_latent = pyro.sample("loc_latent", Normal(self.loc0, torch.pow(self.lam0, -0.5)))
                 for i, x in enumerate(self.data):
                     pyro.sample("obs_%d" % i,
@@ -75,7 +75,7 @@ class NormalNormalTests(TestCase):
             log_sig_q = pyro.param("log_sig_q",
                                    self.analytic_log_sig_n.expand(2) - 0.29)
             sig_q = torch.exp(log_sig_q)
-            with pyro.iarange("iarange", 2):
+            with pyro.plate("plate", 2):
                 loc_latent = pyro.sample("loc_latent", Normal(loc_q, sig_q))
             return loc_latent
 
@@ -152,10 +152,10 @@ class NormalNormalNormalTests(TestCase):
             loc_prime_baseline = None
 
         def model():
-            with pyro.iarange("iarange", 2):
+            with pyro.plate("plate", 2):
                 loc_latent_prime = pyro.sample("loc_latent_prime", Normal1(self.loc0, torch.pow(self.lam0, -0.5)))
                 loc_latent = pyro.sample("loc_latent", Normal2(loc_latent_prime, torch.pow(self.lam0, -0.5)))
-                with pyro.iarange("data", len(self.data)):
+                with pyro.plate("data", len(self.data)):
                     pyro.sample("obs",
                                 dist.Normal(loc_latent, torch.pow(self.lam, -0.5))
                                     .expand_by(self.data.shape[:1]),
@@ -173,7 +173,7 @@ class NormalNormalNormalTests(TestCase):
             log_sig_q_prime = pyro.param("log_sig_q_prime",
                                          -0.5 * torch.log(1.2 * self.lam0))
             sig_q, sig_q_prime = torch.exp(log_sig_q), torch.exp(log_sig_q_prime)
-            with pyro.iarange("iarange", 2):
+            with pyro.plate("plate", 2):
                 loc_latent = pyro.sample("loc_latent", Normal2(loc_q, sig_q),
                                          infer=dict(baseline=dict(use_decaying_avg_baseline=use_decaying_avg_baseline)))
                 pyro.sample("loc_latent_prime",
@@ -181,7 +181,7 @@ class NormalNormalNormalTests(TestCase):
                             infer=dict(baseline=dict(nn_baseline=loc_prime_baseline,
                                                      nn_baseline_input=loc_latent,
                                                      use_decaying_avg_baseline=use_decaying_avg_baseline)))
-                with pyro.iarange("data", len(self.data)):
+                with pyro.plate("data", len(self.data)):
                     pass
 
             return loc_latent
@@ -237,7 +237,7 @@ class BernoulliBetaTests(TestCase):
 
         def model():
             p_latent = pyro.sample("p_latent", Beta(self.alpha0, self.beta0))
-            with pyro.iarange("data", len(self.data)):
+            with pyro.plate("data", len(self.data)):
                 pyro.sample("obs", dist.Bernoulli(p_latent), obs=self.data)
             return p_latent
 
@@ -249,7 +249,7 @@ class BernoulliBetaTests(TestCase):
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             p_latent = pyro.sample("p_latent", Beta(alpha_q, beta_q),
                                    infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
-            with pyro.iarange("data", len(self.data)):
+            with pyro.plate("data", len(self.data)):
                 pass
             return p_latent
 
@@ -294,7 +294,7 @@ class ExponentialGammaTests(TestCase):
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", Gamma(self.alpha0, self.beta0))
-            with pyro.iarange("data", len(self.data)):
+            with pyro.plate("data", len(self.data)):
                 pyro.sample("obs", dist.Exponential(lambda_latent), obs=self.data)
             return lambda_latent
 
@@ -308,7 +308,7 @@ class ExponentialGammaTests(TestCase):
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", Gamma(alpha_q, beta_q),
                         infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
-            with pyro.iarange("data", len(self.data)):
+            with pyro.plate("data", len(self.data)):
                 pass
 
         adam = optim.Adam({"lr": lr, "betas": (beta1, 0.999)})
@@ -397,13 +397,13 @@ class RaoBlackwellizationTests(TestCase):
         assert_equal(0.0, loc_error, prec=0.04)
         assert_equal(0.0, log_sig_error, prec=0.04)
 
-    # this tests rao-blackwellization and baselines for iarange
+    # this tests rao-blackwellization and baselines for plate
     # inside of an irange with superfluous random torch.tensors to complexify the
     # graph structure and introduce additional baselines
-    def test_iarange_in_elbo_with_superfluous_rvs(self):
-        self._test_iarange_in_elbo(n_superfluous_top=1, n_superfluous_bottom=1, n_steps=5000)
+    def test_plate_in_elbo_with_superfluous_rvs(self):
+        self._test_plate_in_elbo(n_superfluous_top=1, n_superfluous_bottom=1, n_steps=5000)
 
-    def _test_iarange_in_elbo(self, n_superfluous_top, n_superfluous_bottom, n_steps):
+    def _test_plate_in_elbo(self, n_superfluous_top, n_superfluous_bottom, n_steps):
         pyro.clear_param_store()
         self.data_tensor = torch.zeros(9, 2)
         for _out in range(self.n_outer):
@@ -419,7 +419,7 @@ class RaoBlackwellizationTests(TestCase):
 
             for i in pyro.irange("outer", 3):
                 x_i = self.data_as_list[i]
-                with pyro.iarange("inner_%d" % i, x_i.size(0)):
+                with pyro.plate("inner_%d" % i, x_i.size(0)):
                     for k in range(n_superfluous_top):
                         z_i_k = pyro.sample("z_%d_%d" % (i, k),
                                             fakes.NonreparameterizedNormal(0, 1).expand_by([4 - i]))
@@ -450,7 +450,7 @@ class RaoBlackwellizationTests(TestCase):
                                      infer=dict(baseline=dict(baseline_value=baseline_value)))
 
             for i in pyro.irange("outer", 3):
-                with pyro.iarange("inner_%d" % i, 4 - i):
+                with pyro.plate("inner_%d" % i, 4 - i):
                     for k in range(n_superfluous_top + n_superfluous_bottom):
                         z_baseline = pyro.module("z_baseline_%d_%d" % (i, k),
                                                  pt_superfluous_baselines[3 * k + i])
