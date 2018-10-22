@@ -148,7 +148,7 @@ def test_auto_dirichlet(auto_class):
 
     def model(data):
         p = pyro.sample("p", dist.Dirichlet(prior))
-        with pyro.iarange("data_iarange"):
+        with pyro.plate("data_plate"):
             pyro.sample("data", dist.Categorical(p).expand_by(data.shape), obs=data)
 
     guide = auto_class(model)

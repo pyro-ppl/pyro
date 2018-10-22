@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.parametrize('flat_logits', [True, False])
 @pytest.mark.parametrize('cost_function', ['quadratic'])
 def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
-    n_samples = 2000 * 1000
+    n_samples = 200000
     if batch_mode:
         sample_shape = torch.Size(())
     else:
@@ -113,10 +113,11 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
     assert_equal(analytic, cost, prec=0.1,
                  msg='bad cost function evaluation for {} test (expected {}, got {})'.format(
                      mix_dist.__name__, analytic.item(), cost.item()))
-    logger.debug("analytic_grads_logit", analytic_grads['component_logits'].detach().cpu().numpy())
+    logger.debug("analytic_grads_logit: {}"
+                 .format(analytic_grads['component_logits'].detach().cpu().numpy()))
 
     for param_name, param in params.items():
-        assert_equal(param.grad, analytic_grads[param_name], prec=0.06,
+        assert_equal(param.grad, analytic_grads[param_name], prec=0.1,
                      msg='bad {} grad for {} (expected {}, got {})'.format(
                          param_name, mix_dist.__name__, analytic_grads[param_name], param.grad))
 

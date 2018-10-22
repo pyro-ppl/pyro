@@ -291,7 +291,7 @@ def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
 
     inner_particles = 2
     outer_particles = num_particles // inner_particles
-    elbo = Elbo(max_iarange_nesting=0,
+    elbo = Elbo(max_plate_nesting=0,
                 strict_enumeration_warning=any([enumerate1, enumerate2]),
                 num_particles=inner_particles,
                 ignore_jit_warnings=True)
@@ -369,7 +369,7 @@ def test_svi_irregular_batch_size(Elbo):
         pass
 
     pyro.clear_param_store()
-    elbo = Elbo(strict_enumeration_warning=False, max_iarange_nesting=1)
+    elbo = Elbo(strict_enumeration_warning=False, max_plate_nesting=1)
     inference = SVI(model, guide, Adam({"lr": 1e-6}), elbo)
     inference.step(torch.ones(10))
     inference.step(torch.ones(3))

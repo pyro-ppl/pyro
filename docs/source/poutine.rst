@@ -22,8 +22,6 @@ Handlers
 
 .. autofunction:: pyro.poutine.escape
 
-.. autofunction:: pyro.poutine.indep
-
 .. autofunction:: pyro.poutine.infer_config
 
 .. autofunction:: pyro.poutine.lift

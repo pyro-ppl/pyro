@@ -35,13 +35,13 @@ def torch_item(x):
     return x if isinstance(x, numbers.Number) else x.item()
 
 
-def torch_backward(x):
+def torch_backward(x, retain_graph=None):
     """
     Like ``x.backward()`` for a :class:`~torch.Tensor`, but also accepts
     numbers (a no-op if given a number).
     """
     if torch.is_tensor(x):
-        x.backward()
+        x.backward(retain_graph=retain_graph)
 
 
 def torch_exp(x):
@@ -71,11 +71,11 @@ def zero_grads(tensors):
             p.grad = p.grad.new_zeros(p.shape)
 
 
-def get_iarange_stacks(trace):
+def get_plate_stacks(trace):
     """
-    This builds a dict mapping site name to a set of iarange stacks.  Each
-    iarange stack is a list of :class:`CondIndepStackFrame`s corresponding to
-    an :class:`iarange`.  This information is used by :class:`Trace_ELBO` and
+    This builds a dict mapping site name to a set of plate stacks.  Each
+    plate stack is a list of :class:`CondIndepStackFrame`s corresponding to
+    an :class:`plate`.  This information is used by :class:`Trace_ELBO` and
     :class:`TraceGraph_ELBO`.
     """
     return {name: [f for f in node["cond_indep_stack"] if f.vectorized]
@@ -85,7 +85,7 @@ def get_iarange_stacks(trace):
 
 class MultiFrameTensor(dict):
     """
-    A container for sums of Tensors among different :class:`iarange` contexts.
+    A container for sums of Tensors among different :class:`plate` contexts.
 
     Used in :class:`~pyro.infer.tracegraph_elbo.TraceGraph_ELBO` to simplify
     downstream cost computation logic.
@@ -145,13 +145,13 @@ class Dice(object):
 
     This implementation correctly handles:
     - scaled log-probability due to subsampling
-    - independence in different ordinals due to iarange
+    - independence in different ordinals due to plate
     - weights due to parallel and sequential enumeration
     - weights due to local multiple sampling
 
     This assumes restricted dependency structure on the model and guide:
-    variables outside of an :class:`~pyro.iarange` can never depend on
-    variables inside that :class:`~pyro.iarange`.
+    variables outside of an :class:`~pyro.plate` can never depend on
+    variables inside that :class:`~pyro.plate`.
 
     References:
     [1] Jakob Foerster, Greg Farquhar, Maruan Al-Shedivat, Tim Rocktaeschel,

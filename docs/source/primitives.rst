@@ -10,7 +10,7 @@ Primitives
     :members:
     :undoc-members:
 
-.. autoclass:: pyro.iarange
+.. autoclass:: pyro.plate
     :members:
     :undoc-members:
 

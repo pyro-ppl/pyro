@@ -10,12 +10,15 @@ import numpy as np
 def ssa_to_linear(ssa_path):
     """
     Convert a path with static single assignment ids to a path with recycled
-    linear ids.
+    linear ids. For example::
+
+        >>> ssa_to_linear([(0, 3), (2, 4), (1, 5)])
+        [(0, 3), (1, 2), (0, 1)]
     """
-    ids = np.arange(sum(map(len, ssa_path)), dtype=np.int64)
+    ids = np.arange(1 + max(map(max, ssa_path)), dtype=np.int32)
     path = []
-    for i, ssa_ids in enumerate(ssa_path):
-        path.append(tuple(ids[ssa_id] for ssa_id in ssa_ids))
+    for ssa_ids in ssa_path:
+        path.append(tuple(int(ids[ssa_id]) for ssa_id in ssa_ids))
         for ssa_id in ssa_ids:
             ids[ssa_id:] -= 1
     return path
@@ -24,7 +27,10 @@ def ssa_to_linear(ssa_path):
 def linear_to_ssa(path):
     """
     Convert a path with recycled linear ids to a path with static single
-    assignment ids.
+    assignment ids. For example::
+
+        >>> linear_to_ssa([(0, 3), (1, 2), (0, 1)])
+        [(0, 3), (2, 4), (1, 5)]
     """
     num_inputs = sum(map(len, path)) - len(path) + 1
     linear_to_ssa = list(range(num_inputs))
@@ -38,24 +44,29 @@ def linear_to_ssa(path):
     return ssa_path
 
 
-def _get_candidate(output, sizes, remaining, dim_ref_counts, k1, k2):
+def _footprint(dims, sizes):
+    result = 1
+    for dim in dims:
+        result *= sizes[dim]
+    return result
+
+
+def _get_candidate(output, sizes, remaining, footprints, dim_ref_counts, k1, k2):
     either = k1 | k2
     two = k1 & k2
     one = either - two
     k12 = (either & output) | (two & dim_ref_counts[3]) | (one & dim_ref_counts[2])
-    cost = 1
-    for dim in k12:
-        cost *= sizes[dim]
+    cost = 2 * _footprint(k12, sizes) - footprints[k1] - footprints[k2]
     id1 = remaining[k1]
     id2 = remaining[k2]
-    cost = cost, min(id1, id2), max(id1, id2)  # break ties to ensure determinism
+    if id1 > id2:
+        k1, id1, k2, id2 = k2, id2, k1, id1
+    cost = cost, id2, id1  # break ties to ensure determinism
     return cost, k1, k2, k12
 
 
-def _push_candidate(output, sizes, remaining, dim_ref_counts, k1, k2s, queue):
-    if not k2s:
-        return
-    candidate = min(_get_candidate(output, sizes, remaining, dim_ref_counts, k1, k2)
+def _push_candidate(output, sizes, remaining, footprints, dim_ref_counts, k1, k2s, queue):
+    candidate = min(_get_candidate(output, sizes, remaining, footprints, dim_ref_counts, k1, k2)
                     for k2 in k2s)
     heapq.heappush(queue, candidate)
 
@@ -80,7 +91,14 @@ def _ssa_optimize(inputs, output, sizes):
     static single assignment ids rather than recycled linear ids.
     SSA ids are cheaper to work with and easier to reason about.
     """
-    # A dim common to all terms might as well be an output dim.
+    if len(inputs) == 1:
+        # Perform a single contraction to match output shape.
+        return [(0,)]
+
+    # A dim that is common to all tensors might as well be an output dim, since it
+    # cannot be contracted until the final step. This avoids an expensive all-pairs
+    # comparison to search for possible contractions at each step, leading to speedup
+    # in many practical problems where all tensors share a common batch dimension.
     inputs = list(map(frozenset, inputs))
     output = frozenset(output) | frozenset.intersection(*inputs)
 
@@ -108,13 +126,16 @@ def _ssa_optimize(inputs, output, sizes):
         count: set(dim for dim, keys in dim_to_keys.items() if len(keys) >= count) - output
         for count in [2, 3]}
 
+    # Compute separable part of the objective function for contractions.
+    footprints = {key: _footprint(key, sizes) for key in remaining}
+
     # Find initial candidate contractions.
     queue = []
     for dim, keys in dim_to_keys.items():
         keys = sorted(keys, key=remaining.__getitem__)
-        for i, k1 in enumerate(keys):
+        for i, k1 in enumerate(keys[:-1]):
             k2s = keys[1 + i:]
-            _push_candidate(output, sizes, remaining, dim_ref_counts, k1, k2s, queue)
+            _push_candidate(output, sizes, remaining, footprints, dim_ref_counts, k1, k2s, queue)
 
     # Greedily contract pairs of tensors.
     while queue:
@@ -128,7 +149,7 @@ def _ssa_optimize(inputs, output, sizes):
             dim_to_keys[dim].remove(k1)
         for dim in k2 - output:
             dim_to_keys[dim].remove(k2)
-        ssa_path.append((ssa_id2, ssa_id1))
+        ssa_path.append((ssa_id1, ssa_id2))
         if k12 in remaining:
             ssa_path.append((remaining[k12], next(ssa_ids)))
         else:
@@ -136,26 +157,28 @@ def _ssa_optimize(inputs, output, sizes):
                 dim_to_keys[dim].add(k12)
         remaining[k12] = next(ssa_ids)
         _update_ref_counts(dim_to_keys, dim_ref_counts, k1 | k2 - output)
+        footprints[k12] = _footprint(k12, sizes)
 
         # Find new candidate contractions.
         k1 = k12
-        k2s = set(k2 for dim in k1 for k2 in dim_to_keys[dim] if k2 != k1)
-        _push_candidate(output, sizes, remaining, dim_ref_counts, k1, k2s, queue)
+        k2s = set(k2 for dim in k1 for k2 in dim_to_keys[dim])
+        k2s.discard(k1)
+        if k2s:
+            _push_candidate(output, sizes, remaining, footprints, dim_ref_counts, k1, k2s, queue)
 
     # Greedily compute pairwise outer products.
-    queue = [(len(key & output), ssa_id, key) for key, ssa_id in remaining.items()]
+    queue = [(_footprint(key & output, sizes), ssa_id, key)
+             for key, ssa_id in remaining.items()]
     heapq.heapify(queue)
     _, ssa_id1, k1 = heapq.heappop(queue)
     while queue:
         _, ssa_id2, k2 = heapq.heappop(queue)
-        ssa_path.append((ssa_id1, ssa_id2))
+        ssa_path.append((min(ssa_id1, ssa_id2), max(ssa_id1, ssa_id2)))
         k12 = (k1 | k2) & output
-        cost = len(k12)
+        cost = _footprint(k12, sizes)
         ssa_id12 = next(ssa_ids)
         _, ssa_id1, k1 = heapq.heappushpop(queue, (cost, ssa_id12, k12))
 
-    # Perform one final reduction to match output shape.
-    ssa_path.append((ssa_id1,))
     return ssa_path
 
 

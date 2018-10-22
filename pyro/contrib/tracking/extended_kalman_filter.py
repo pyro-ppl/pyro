@@ -172,7 +172,7 @@ class EKFState(object):
         of an ``IMMFState``.
 
         :param: measurement.
-        :returns: Innovation mean and covariance.
+        :returns: EKF State, Innovation mean and covariance.
         '''
         if self._time is not None:
             assert self._time == measurement.time, \

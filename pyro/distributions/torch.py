@@ -37,11 +37,8 @@ for _name, _Dist in torch.distributions.__dict__.items():
     try:
         _PyroDist = locals()[_name]
     except KeyError:
-
-        class _PyroDist(_Dist, TorchDistributionMixin):
-            pass
-
-        _PyroDist.__name__ = _name
+        _PyroDist = type(_name, (_Dist, TorchDistributionMixin), {})
+        _PyroDist.__module__ = __name__
         locals()[_name] = _PyroDist
 
     _PyroDist.__doc__ = '''

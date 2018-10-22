@@ -8,16 +8,65 @@ import torch
 
 import pyro
 import pyro.distributions as dist
+import pyro.poutine as poutine
 from pyro.infer import EmpiricalMarginal
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.nuts import NUTS
-import pyro.poutine as poutine
 from pyro.util import ignore_jit_warnings
 from tests.common import assert_equal
-
-from .test_hmc import TEST_CASES, TEST_IDS, T, rmse
+from .test_hmc import GaussianChain, T, rmse
 
 logger = logging.getLogger(__name__)
+
+
+TEST_CASES = [
+    T(
+        GaussianChain(dim=10, chain_len=3, num_obs=1),
+        num_samples=800,
+        warmup_steps=200,
+        hmc_params=None,
+        expected_means=[0.25, 0.50, 0.75],
+        expected_precs=[1.33, 1, 1.33],
+        mean_tol=0.06,
+        std_tol=0.06,
+    ),
+    T(
+        GaussianChain(dim=10, chain_len=4, num_obs=1),
+        num_samples=800,
+        warmup_steps=200,
+        hmc_params=None,
+        expected_means=[0.20, 0.40, 0.60, 0.80],
+        expected_precs=[1.25, 0.83, 0.83, 1.25],
+        mean_tol=0.07,
+        std_tol=0.06,
+    ),
+    pytest.param(*T(
+        GaussianChain(dim=5, chain_len=2, num_obs=10000),
+        num_samples=800,
+        warmup_steps=200,
+        hmc_params=None,
+        expected_means=[0.5, 1.0],
+        expected_precs=[2.0, 10000],
+        mean_tol=0.04,
+        std_tol=0.04,
+    ), marks=[pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
+                                 reason='Slow test - skip on CI/CUDA')]),
+    pytest.param(*T(
+        GaussianChain(dim=5, chain_len=9, num_obs=1),
+        num_samples=1400,
+        warmup_steps=200,
+        hmc_params=None,
+        expected_means=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90],
+        expected_precs=[1.11, 0.63, 0.48, 0.42, 0.4, 0.42, 0.48, 0.63, 1.11],
+        mean_tol=0.08,
+        std_tol=0.08,
+    ), marks=[pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
+                                 reason='Slow test - skip on CI/CUDA')])
+]
+
+
+TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
+            else t[0][0].id_fn() for t in TEST_CASES]
 
 
 def mark_jit(*args, **kwargs):
@@ -36,16 +85,6 @@ def jit_idfn(param):
     return "JIT={}".format(param)
 
 
-T2 = T(*TEST_CASES[2].values)._replace(num_samples=800, warmup_steps=200)
-TEST_CASES[2] = pytest.param(*T2, marks=pytest.mark.skipif(
-    'CI' in os.environ and os.environ['CI'] == 'true', reason='Slow test - skip on CI'))
-T3 = T(*TEST_CASES[3].values)._replace(num_samples=1000, warmup_steps=200)
-TEST_CASES[3] = pytest.param(*T3, marks=[
-    pytest.mark.skipif('CI' in os.environ and os.environ['CI'] == 'true',
-                       reason='Slow test - skip on CI')]
-)
-
-
 @pytest.mark.parametrize(
     'fixture, num_samples, warmup_steps, hmc_params, expected_means, expected_precs, mean_tol, std_tol',
     TEST_CASES,
@@ -61,7 +100,7 @@ def test_nuts_conjugate_gaussian(fixture,
                                  mean_tol,
                                  std_tol):
     pyro.get_param_store().clear()
-    nuts_kernel = NUTS(fixture.model, hmc_params['step_size'])
+    nuts_kernel = NUTS(fixture.model)
     mcmc_run = MCMC(nuts_kernel, num_samples, warmup_steps).run(fixture.data)
     for i in range(1, fixture.chain_len + 1):
         param_name = 'loc_' + str(i)
@@ -86,8 +125,10 @@ def test_nuts_conjugate_gaussian(fixture,
         assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 
+@pytest.mark.parametrize()
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-def test_logistic_regression(jit):
+@pytest.mark.parametrize("use_multinomial_sampling", [True, False])
+def test_logistic_regression(jit, use_multinomial_sampling):
     dim = 3
     data = torch.randn(2000, dim)
     true_coefs = torch.arange(1., dim + 1.)
@@ -99,14 +140,26 @@ def test_logistic_regression(jit):
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
-    nuts_kernel = NUTS(model, step_size=0.0855, jit_compile=jit, ignore_jit_warnings=True)
+    nuts_kernel = NUTS(model,
+                       use_multinomial_sampling=use_multinomial_sampling,
+                       jit_compile=jit,
+                       ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='beta')
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-def test_beta_bernoulli(jit):
+@pytest.mark.parametrize(
+    "step_size, adapt_step_size, adapt_mass_matrix, full_mass",
+    [
+        (0.1, False, False, False),
+        (0.1, False, True, False),
+        (None, True, False, False),
+        (None, True, True, False),
+        (None, True, True, True),
+    ]
+)
+def test_beta_bernoulli(step_size, adapt_step_size, adapt_mass_matrix, full_mass):
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
         beta = torch.tensor([1.1, 1.1])
@@ -116,14 +169,15 @@ def test_beta_bernoulli(jit):
 
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    nuts_kernel = NUTS(model, step_size=0.02, jit_compile=jit, ignore_jit_warnings=True)
+    nuts_kernel = NUTS(model, step_size, adapt_step_size, adapt_mass_matrix, full_mass)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-def test_gamma_normal(jit):
+@pytest.mark.parametrize("use_multinomial_sampling", [True, False])
+def test_gamma_normal(jit, use_multinomial_sampling):
     def model(data):
         rate = torch.tensor([1.0, 1.0])
         concentration = torch.tensor([1.0, 1.0])
@@ -133,7 +187,10 @@ def test_gamma_normal(jit):
 
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
-    nuts_kernel = NUTS(model, step_size=0.01, jit_compile=jit, ignore_jit_warnings=True)
+    nuts_kernel = NUTS(model,
+                       use_multinomial_sampling=use_multinomial_sampling,
+                       jit_compile=jit,
+                       ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_std, prec=0.05)
@@ -188,7 +245,7 @@ def test_dirichlet_categorical(jit):
 
     true_probs = torch.tensor([0.1, 0.6, 0.3])
     data = dist.Categorical(true_probs).sample(sample_shape=(torch.Size((2000,))))
-    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit, ignore_jit_warnings=True)
+    nuts_kernel = NUTS(model, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
     assert_equal(posterior.mean, true_probs, prec=0.02)
@@ -204,7 +261,7 @@ def test_gamma_beta(jit):
     true_alpha = torch.tensor(5.)
     true_beta = torch.tensor(1.)
     data = dist.Beta(concentration1=true_alpha, concentration0=true_beta).sample(torch.Size((5000,)))
-    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit, ignore_jit_warnings=True)
+    nuts_kernel = NUTS(model, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=200).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites=['alpha', 'beta'])
     assert_equal(posterior.mean, torch.stack([true_alpha, true_beta]), prec=0.05)
@@ -216,12 +273,11 @@ def test_gamma_beta(jit):
 def test_gaussian_mixture_model(jit):
     K, N = 3, 1000
 
-    @poutine.broadcast
     def gmm(data):
         mix_proportions = pyro.sample("phi", dist.Dirichlet(torch.ones(K)))
-        with pyro.iarange("num_clusters", K):
+        with pyro.plate("num_clusters", K):
             cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(float(K)), 1.))
-        with pyro.iarange("data", data.shape[0]):
+        with pyro.plate("data", data.shape[0]):
             assignments = pyro.sample("assignments", dist.Categorical(mix_proportions))
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)
         return cluster_means
@@ -230,7 +286,7 @@ def test_gaussian_mixture_model(jit):
     true_mix_proportions = torch.tensor([0.1, 0.3, 0.6])
     cluster_assignments = dist.Categorical(true_mix_proportions).sample(torch.Size((N,)))
     data = dist.Normal(true_cluster_means[cluster_assignments], 1.0).sample()
-    nuts_kernel = NUTS(gmm, adapt_step_size=True, max_iarange_nesting=1,
+    nuts_kernel = NUTS(gmm, adapt_step_size=True, max_plate_nesting=1,
                        jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=300, warmup_steps=100).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites=["phi", "cluster_means"]).mean.sort()[0]
@@ -243,7 +299,7 @@ def test_bernoulli_latent_model(jit):
     @poutine.broadcast
     def model(data):
         y_prob = pyro.sample("y_prob", dist.Beta(1., 1.))
-        with pyro.iarange("data", data.shape[0]):
+        with pyro.plate("data", data.shape[0]):
             y = pyro.sample("y", dist.Bernoulli(y_prob))
             z = pyro.sample("z", dist.Bernoulli(0.65 * y + 0.1))
             pyro.sample("obs", dist.Normal(2. * z, 1.), obs=data)
@@ -253,7 +309,7 @@ def test_bernoulli_latent_model(jit):
     y = dist.Bernoulli(y_prob).sample(torch.Size((N,)))
     z = dist.Bernoulli(0.65 * y + 0.1).sample()
     data = dist.Normal(2. * z, 1.0).sample()
-    nuts_kernel = NUTS(model, adapt_step_size=True, max_iarange_nesting=1,
+    nuts_kernel = NUTS(model, adapt_step_size=True, max_plate_nesting=1,
                        jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=600, warmup_steps=200).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites="y_prob").mean
@@ -287,7 +343,7 @@ def test_gaussian_hmm_enum_shape(jit, num_steps, use_einsum):
                 assert effective_dim == 1
 
     data = torch.ones(num_steps)
-    nuts_kernel = NUTS(model, adapt_step_size=True, max_iarange_nesting=0,
+    nuts_kernel = NUTS(model, adapt_step_size=True, max_plate_nesting=0,
                        jit_compile=jit, ignore_jit_warnings=True,
                        experimental_use_einsum=use_einsum)
     MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)

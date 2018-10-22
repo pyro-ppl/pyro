@@ -61,7 +61,7 @@ def poisson_gamma_model(reparameterized, Elbo):
 
     def model():
         lambda_latent = pyro.sample("lambda_latent", Gamma(alpha0, beta0))
-        with pyro.iarange("data", n_data):
+        with pyro.plate("data", n_data):
             pyro.sample("obs", dist.Poisson(lambda_latent), obs=data)
         return lambda_latent
 
