@@ -165,41 +165,41 @@ def effectful(fn=None, type=None):
     if fn is None:
         return functools.partial(effectful, type=type)
 
-    if getattr(fn, "__wrapped", None):
+    if getattr(fn, "_is_effectful", None):
         return fn
-    else:
-        assert type is not None, "must provide a type label for operation {}".format(fn)
-        assert type != "message", "cannot use 'message' as keyword"
 
-        def _fn(*args, **kwargs):
+    assert type is not None, "must provide a type label for operation {}".format(fn)
+    assert type != "message", "cannot use 'message' as keyword"
 
-            name = kwargs.pop("name", None)
-            infer = kwargs.pop("infer", {})
+    def _fn(*args, **kwargs):
 
-            value = kwargs.pop("obs", None)
-            is_observed = value is not None
+        name = kwargs.pop("name", None)
+        infer = kwargs.pop("infer", {})
 
-            if not am_i_wrapped():
-                return fn(*args, **kwargs)
-            else:
-                msg = {
-                    "type": type,
-                    "name": name,
-                    "fn": fn,
-                    "is_observed": is_observed,
-                    "args": args,
-                    "kwargs": kwargs,
-                    "value": value,
-                    "scale": 1.0,
-                    "mask": None,
-                    "cond_indep_stack": (),
-                    "done": False,
-                    "stop": False,
-                    "continuation": None,
-                    "infer": infer,
-                }
-                # apply the stack and return its return value
-                apply_stack(msg)
-                return msg["value"]
-        _fn.__wrapped = True
-        return _fn
+        value = kwargs.pop("obs", None)
+        is_observed = value is not None
+
+        if not am_i_wrapped():
+            return fn(*args, **kwargs)
+        else:
+            msg = {
+                "type": type,
+                "name": name,
+                "fn": fn,
+                "is_observed": is_observed,
+                "args": args,
+                "kwargs": kwargs,
+                "value": value,
+                "scale": 1.0,
+                "mask": None,
+                "cond_indep_stack": (),
+                "done": False,
+                "stop": False,
+                "continuation": None,
+                "infer": infer,
+            }
+            # apply the stack and return its return value
+            apply_stack(msg)
+            return msg["value"]
+    _fn._is_effectful = True
+    return _fn

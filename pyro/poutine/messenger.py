@@ -154,7 +154,7 @@ class Messenger(object):
         return fn
 
     @classmethod
-    def unregister(cls, fn=None, type=None, post=None):
+    def unregister(cls, fn=None, type=None):
         """
         :param fn: function implementing operation
         :param str type: name of the operation
