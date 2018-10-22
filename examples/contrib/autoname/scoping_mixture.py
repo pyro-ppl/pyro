@@ -19,7 +19,7 @@ def model(K, data):
     locs = pyro.param('locs', 10 * torch.randn(K))
     scale = pyro.param('scale', torch.tensor(0.5), constraint=constraints.positive)
 
-    with pyro.iarange('data'):
+    with pyro.plate('data'):
         return local_model(weights, locs, scale, data)
 
 
@@ -33,7 +33,7 @@ def local_model(weights, locs, scale, data):
 def guide(K, data):
     assignment_probs = pyro.param('assignment_probs', torch.ones(len(data), K) / K,
                                   constraint=constraints.unit_interval)
-    with pyro.iarange('data'):
+    with pyro.plate('data'):
         return local_guide(assignment_probs)
 
 
@@ -50,7 +50,7 @@ def main(args):
     data = torch.tensor([0.0, 1.0, 2.0, 20.0, 30.0, 40.0])
     optim = pyro.optim.Adam({'lr': 0.1})
     inference = SVI(model, config_enumerate(guide, 'parallel'), optim,
-                    loss=TraceEnum_ELBO(max_iarange_nesting=1))
+                    loss=TraceEnum_ELBO(max_plate_nesting=1))
 
     print('Step\tLoss')
     loss = 0.0

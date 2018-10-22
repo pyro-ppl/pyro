@@ -6,7 +6,7 @@ from opt_einsum import shared_intermediates
 from pyro.distributions.util import logsumexp, broadcast_shape
 from pyro.ops.contract import contract_to_tensor
 from pyro.infer.util import is_validation_enabled
-from pyro.primitives import _Subsample
+from pyro.poutine.subsample_messenger import _Subsample
 from pyro.util import check_site_shape
 
 
@@ -20,28 +20,28 @@ class TraceTreeEvaluator(object):
     :param model_trace: execution trace from a static model.
     :param bool has_enumerable_sites: whether the trace contains any
         discrete enumerable sites.
-    :param int max_iarange_nesting: Optional bound on max number of nested
-        :func:`pyro.iarange` contexts.
+    :param int max_plate_nesting: Optional bound on max number of nested
+        :func:`pyro.plate` contexts.
     """
     def __init__(self,
                  model_trace,
                  has_enumerable_sites=False,
-                 max_iarange_nesting=float("inf")):
+                 max_plate_nesting=float("inf")):
         self.has_enumerable_sites = has_enumerable_sites
-        self.max_iarange_nesting = max_iarange_nesting
+        self.max_plate_nesting = max_plate_nesting
         # To be populated using the model trace once.
         self._log_probs = defaultdict(list)
         self._log_prob_shapes = defaultdict(tuple)
         self._children = defaultdict(list)
         self._enum_dims = {}
-        self._iarange_dims = {}
+        self._plate_dims = {}
         self._parse_model_structure(model_trace)
 
     def _parse_model_structure(self, model_trace):
         if not self.has_enumerable_sites:
             return
-        if self.max_iarange_nesting == float("inf"):
-            raise ValueError("Finite value required for `max_iarange_nesting` when model "
+        if self.max_plate_nesting == float("inf"):
+            raise ValueError("Finite value required for `max_plate_nesting` when model "
                              "has discrete (enumerable) sites.")
         self._compute_log_prob_terms(model_trace)
         # 1. Infer model structure - compute parent-child relationship.
@@ -52,20 +52,20 @@ class TraceTreeEvaluator(object):
                 if cur_node < child_node:
                     self._children[cur_node].append(child_node)
                     break  # at most 1 parent.
-        # 2. Populate `iarange_dims` and `enum_dims` to be evaluated/
+        # 2. Populate `plate_dims` and `enum_dims` to be evaluated/
         #    enumerated out at each ordinal.
         self._populate_cache(frozenset(), frozenset(), set())
 
     def _populate_cache(self, ordinal, parent_ordinal, parent_enum_dims):
         """
-        For each ordinal, populate the `iarange` and `enum` dims to be
+        For each ordinal, populate the `plate` and `enum` dims to be
         evaluated or enumerated out.
         """
         log_prob_shape = self._log_prob_shapes[ordinal]
-        iarange_dims = sorted([frame.dim for frame in ordinal - parent_ordinal])
-        enum_dims = set((i for i in range(-len(log_prob_shape), -self.max_iarange_nesting)
+        plate_dims = sorted([frame.dim for frame in ordinal - parent_ordinal])
+        enum_dims = set((i for i in range(-len(log_prob_shape), -self.max_plate_nesting)
                          if log_prob_shape[i] > 1))
-        self._iarange_dims[ordinal] = iarange_dims
+        self._plate_dims[ordinal] = plate_dims
         self._enum_dims[ordinal] = sorted(enum_dims - parent_enum_dims)
         for c in self._children[ordinal]:
             self._populate_cache(c, ordinal, enum_dims)
@@ -84,7 +84,7 @@ class TraceTreeEvaluator(object):
         for name, site in model_trace.nodes.items():
             if site["type"] == "sample":
                 if is_validation_enabled():
-                    check_site_shape(site, self.max_iarange_nesting)
+                    check_site_shape(site, self.max_plate_nesting)
                 self._log_probs[ordering[name]].append(site["log_prob"])
         if not self._log_prob_shapes:
             for ordinal, log_prob in self._log_probs.items():
@@ -95,19 +95,19 @@ class TraceTreeEvaluator(object):
         Reduce the log prob terms for the given ordinal:
           - taking log_sum_exp of factors in enum dims (i.e.
             adding up the probability terms).
-          - summing up the dims within `max_iarange_nesting`.
+          - summing up the dims within `max_plate_nesting`.
             (i.e. multiplying probs within independent batches).
 
         :param ordinal: node (ordinal)
         :param torch.Tensor agg_log_prob: aggregated `log_prob`
             terms from the downstream nodes.
-        :return: `log_prob` with marginalized `iarange` and `enum`
+        :return: `log_prob` with marginalized `plate` and `enum`
             dims.
         """
         log_prob = sum(self._log_probs[ordinal]) + agg_log_prob
         for enum_dim in self._enum_dims[ordinal]:
             log_prob = logsumexp(log_prob, dim=enum_dim, keepdim=True)
-        for marginal_dim in self._iarange_dims[ordinal]:
+        for marginal_dim in self._plate_dims[ordinal]:
             log_prob = log_prob.sum(dim=marginal_dim, keepdim=True)
         return log_prob
 
@@ -145,15 +145,15 @@ class TraceEinsumEvaluator(object):
     :param model_trace: execution trace from a static model.
     :param bool has_enumerable_sites: whether the trace contains any
         discrete enumerable sites.
-    :param int max_iarange_nesting: Optional bound on max number of nested
-        :func:`pyro.iarange` contexts.
+    :param int max_plate_nesting: Optional bound on max number of nested
+        :func:`pyro.plate` contexts.
     """
     def __init__(self,
                  model_trace,
                  has_enumerable_sites=False,
-                 max_iarange_nesting=float("inf")):
+                 max_plate_nesting=float("inf")):
         self.has_enumerable_sites = has_enumerable_sites
-        self.max_iarange_nesting = max_iarange_nesting
+        self.max_plate_nesting = max_plate_nesting
         # To be populated using the model trace once.
         self._enum_dims = {}
         self.ordering = {}
@@ -166,17 +166,17 @@ class TraceEinsumEvaluator(object):
         """
         if not self.has_enumerable_sites:
             return
-        if self.max_iarange_nesting == float("inf"):
-            raise ValueError("Finite value required for `max_iarange_nesting` when model "
+        if self.max_plate_nesting == float("inf"):
+            raise ValueError("Finite value required for `max_plate_nesting` when model "
                              "has discrete (enumerable) sites.")
         model_trace.compute_log_prob()
         for name, site in model_trace.nodes.items():
             if site["type"] == "sample" and not isinstance(site["fn"], _Subsample):
                 if is_validation_enabled():
-                    check_site_shape(site, self.max_iarange_nesting)
+                    check_site_shape(site, self.max_plate_nesting)
                 self.ordering[name] = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
                 log_prob_shape = site["log_prob"].shape
-                self._enum_dims[site["name"]] = set((i for i in range(-len(log_prob_shape), -self.max_iarange_nesting)
+                self._enum_dims[site["name"]] = set((i for i in range(-len(log_prob_shape), -self.max_plate_nesting)
                                                      if log_prob_shape[i] > 1))
 
     def _get_log_factors(self, model_trace):
@@ -190,7 +190,7 @@ class TraceEinsumEvaluator(object):
         for name, site in model_trace.nodes.items():
             if site["type"] == "sample" and not isinstance(site["fn"], _Subsample):
                 if is_validation_enabled():
-                    check_site_shape(site, self.max_iarange_nesting)
+                    check_site_shape(site, self.max_plate_nesting)
                 log_probs.setdefault(self.ordering[name], []).append(site["log_prob"])
         return log_probs
 

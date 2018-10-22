@@ -36,7 +36,6 @@ def make_args():
     return args
 
 
-@poutine.broadcast
 def model(detections, args):
     noise_scale = pyro.param('noise_scale')
     objects = pyro.param('objects_loc').squeeze(-1)
@@ -45,14 +44,14 @@ def model(detections, args):
 
     # Existence part.
     p_exists = args.expected_num_objects / max_num_objects
-    with pyro.iarange('objects_iarange', max_num_objects):
+    with pyro.plate('objects_plate', max_num_objects):
         exists = pyro.sample('exists', dist.Bernoulli(p_exists))
         with poutine.mask(mask=exists.byte()):
             pyro.sample('objects', dist.Normal(0., 1.), obs=objects)
 
     # Assignment part.
     p_fake = args.num_fake_detections / num_detections
-    with pyro.iarange('detections_iarange', num_detections):
+    with pyro.plate('detections_plate', num_detections):
         assign_probs = torch.empty(max_num_objects + 1)
         assign_probs[:-1] = (1 - p_fake) / max_num_objects
         assign_probs[-1] = p_fake
@@ -102,10 +101,10 @@ def guide(detections, args):
         # Compute soft assignments.
         assignment = MarginalAssignment(exists_logits, assign_logits, bp_iters=10)
 
-    with pyro.iarange('objects_iarange', max_num_objects):
+    with pyro.plate('objects_plate', max_num_objects):
         pyro.sample('exists', assignment.exists_dist,
                     infer={'enumerate': 'parallel'})
-    with pyro.iarange('detections_iarange', num_detections):
+    with pyro.plate('detections_plate', num_detections):
         pyro.sample('assign', assignment.assign_dist,
                     infer={'enumerate': 'parallel'})
 
@@ -134,7 +133,7 @@ def test_em(assignment_grad):
     pyro.param('objects_loc', torch.randn(args.max_num_objects, 1))
 
     # Learn object_loc via EM algorithm.
-    elbo = TraceEnum_ELBO(max_iarange_nesting=2)
+    elbo = TraceEnum_ELBO(max_plate_nesting=2)
     newton = Newton(trust_radii={'objects_loc': 1.0})
     for step in range(10):
         # Detach previous iterations.
@@ -157,7 +156,7 @@ def test_em_nested_in_svi(assignment_grad):
 
     # Learn object_loc via EM and noise_scale via SVI.
     optim = Adam({'lr': 0.1})
-    elbo = TraceEnum_ELBO(max_iarange_nesting=2)
+    elbo = TraceEnum_ELBO(max_plate_nesting=2)
     newton = Newton(trust_radii={'objects_loc': 1.0})
     svi = SVI(poutine.block(model, hide=['objects_loc']),
               poutine.block(guide, hide=['objects_loc']), optim, elbo)
@@ -186,7 +185,7 @@ def test_svi_multi():
     pyro.param('objects_loc', torch.randn(args.max_num_objects, 1))
 
     # Learn object_loc via Newton and noise_scale via Adam.
-    elbo = TraceEnum_ELBO(max_iarange_nesting=2)
+    elbo = TraceEnum_ELBO(max_plate_nesting=2)
     adam = Adam({'lr': 0.1})
     newton = Newton(trust_radii={'objects_loc': 1.0})
     optim = MixedMultiOptimizer([(['noise_scale'], adam),

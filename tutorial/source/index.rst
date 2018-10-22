@@ -36,6 +36,9 @@ Welcome to Pyro Examples and Tutorials!
    bo
    tracking_1d
    csis
+   RSA-implicature
+   RSA-hyperbole
+   ekf
 
 
 Indices and tables

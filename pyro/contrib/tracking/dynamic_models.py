@@ -181,8 +181,9 @@ class Ncp(DifferentiableDynamicModel):
         :param x: native state estimate mean.
         :return: PV state estimate mean.
         '''
-        x_pv = x.new_zeros(2*self._dimension)
-        x_pv[:self._dimension] = x
+        with torch.no_grad():
+            x_pv = x.new_zeros(2*self._dimension)
+            x_pv[:self._dimension] = x
         return x_pv
 
     def cov2pv(self, P):
@@ -195,8 +196,9 @@ class Ncp(DifferentiableDynamicModel):
         :return: PV state estimate covariance.
         '''
         d = 2*self._dimension
-        P_pv = P.new_zeros((d, d))
-        P_pv[:self._dimension, :self._dimension] = P
+        with torch.no_grad():
+            P_pv = P.new_zeros((d, d))
+            P_pv[:self._dimension, :self._dimension] = P
         return P_pv
 
     def jacobian(self, dt):
@@ -289,8 +291,9 @@ class Ncv(DifferentiableDynamicModel):
         '''
         if dt not in self._F_cache:
             d = self._dimension
-            F = eye_like(self.sa2, d)
-            F[:d//2, d//2:] = dt * eye_like(self.sa2, d//2)
+            with torch.no_grad():
+                F = eye_like(self.sa2, d)
+                F[:d//2, d//2:] = dt * eye_like(self.sa2, d//2)
             self._F_cache[dt] = F
 
         return self._F_cache[dt]
@@ -364,21 +367,20 @@ class NcvContinuous(Ncv):
             stochastic integration (for use with EKF).
         '''
         if dt not in self._Q_cache:
-            # q: continuous-time process noise intensity with units
-            #   length^2/time^3 (m^2/s^3). Choose ``q`` so that changes in
-            #   velocity, over a sampling period ``dt``, are roughly
-            #   ``sqrt(q*dt)``.
-            q = self.sa2 * dt
-            d = self._dimension
-            dt2 = dt * dt
-            dt3 = dt2 * dt
-            Q = torch.zeros((d, d))
-            eye = eye_like(self.sa2, d//2)
-            Q[:d//2, :d//2] = dt3 * eye / 3.0
-            Q[:d//2, d//2:] = dt2 * eye / 2.0
-            Q[d//2:, :d//2] = dt2 * eye / 2.0
-            Q[d//2:, d//2:] = dt * eye
-            Q *= q
+
+            with torch.no_grad():
+                d = self._dimension
+                dt2 = dt * dt
+                dt3 = dt2 * dt
+                Q = self.sa2.new_zeros(d, d)
+                eye = eye_like(self.sa2, d//2)
+                Q[:d//2, :d//2] = dt3 * eye / 3.0
+                Q[:d//2, d//2:] = dt2 * eye / 2.0
+                Q[d//2:, :d//2] = dt2 * eye / 2.0
+                Q[d//2:, d//2:] = dt * eye
+            # sa2 * dt is an intensity factor that changes in velocity
+            # over a sampling period ``dt``, ideally should be ~``sqrt(q*dt)``.
+            Q = Q * (self.sa2 * dt)
             self._Q_cache[dt] = Q
 
         return self._Q_cache[dt]
@@ -438,16 +440,17 @@ class NcvDiscrete(Ncv):
             semi-definite.)
         '''
         if dt not in self._Q_cache:
-            d = self._dimension
-            dt2 = dt*dt
-            dt3 = dt2*dt
-            dt4 = dt2*dt2
-            Q = self.sa2.new_zeros(d, d)
-            Q[:d//2, :d//2] = 0.25 * dt4 * eye_like(self.sa2, d//2)
-            Q[:d//2, d//2:] = 0.5 * dt3 * eye_like(self.sa2, d//2)
-            Q[d//2:, :d//2] = 0.5 * dt3 * eye_like(self.sa2, d//2)
-            Q[d//2:, d//2:] = dt2 * eye_like(self.sa2, d//2)
-            Q *= self.sa2
+            with torch.no_grad():
+                d = self._dimension
+                dt2 = dt*dt
+                dt3 = dt2*dt
+                dt4 = dt2*dt2
+                Q = self.sa2.new_zeros(d, d)
+                Q[:d//2, :d//2] = 0.25 * dt4 * eye_like(self.sa2, d//2)
+                Q[:d//2, d//2:] = 0.5 * dt3 * eye_like(self.sa2, d//2)
+                Q[d//2:, :d//2] = 0.5 * dt3 * eye_like(self.sa2, d//2)
+                Q[d//2:, d//2:] = dt2 * eye_like(self.sa2, d//2)
+            Q = Q * self.sa2
             self._Q_cache[dt] = Q
 
         return self._Q_cache[dt]

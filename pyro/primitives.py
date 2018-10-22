@@ -1,20 +1,18 @@
 from __future__ import absolute_import, division, print_function
 
 import copy
-import numbers
 import warnings
 from collections import OrderedDict
 from contextlib import contextmanager
 from inspect import isclass
 
-import torch
-
 import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
-from pyro.distributions.distribution import Distribution
 from pyro.params import param_with_module_name
-from pyro.poutine.runtime import _DIM_ALLOCATOR, _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack
+from pyro.poutine.plate_messenger import PlateMessenger
+from pyro.poutine.runtime import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack
+from pyro.poutine.subsample_messenger import SubsampleMessenger
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 
 
@@ -85,98 +83,27 @@ def sample(name, fn, *args, **kwargs):
         return msg["value"]
 
 
-class _Subsample(Distribution):
-    """
-    Randomly select a subsample of a range of indices.
-
-    Internal use only. This should only be used by `iarange`.
-    """
-
-    def __init__(self, size, subsample_size, use_cuda=None, device=None):
-        """
-        :param int size: the size of the range to subsample from
-        :param int subsample_size: the size of the returned subsample
-        :param bool use_cuda: DEPRECATED, use the `device` arg instead.
-            Whether to use cuda tensors.
-        :param str device: device to place the `sample` and `log_prob`
-            results on.
-        """
-        self.size = size
-        self.subsample_size = subsample_size
-        self.use_cuda = use_cuda
-        if self.use_cuda is not None:
-            if self.use_cuda ^ (device != "cpu"):
-                raise ValueError("Incompatible arg values use_cuda={}, device={}."
-                                 .format(use_cuda, device))
-        self.device = torch.Tensor().device if not device else device
-
-    def sample(self, sample_shape=torch.Size()):
-        """
-        :returns: a random subsample of `range(size)`
-        :rtype: torch.LongTensor
-        """
-        if sample_shape:
-            raise NotImplementedError
-        subsample_size = self.subsample_size
-        if subsample_size is None or subsample_size > self.size:
-            subsample_size = self.size
-        if subsample_size >= self.size:
-            result = torch.arange(self.size, dtype=torch.long).to(self.device)
-        else:
-            result = torch.multinomial(torch.ones(self.size), self.subsample_size,
-                                       replacement=False).to(self.device)
-        return result.cuda() if self.use_cuda else result
-
-    def log_prob(self, x):
-        # This is zero so that iarange can provide an unbiased estimate of
-        # the non-subsampled log_prob.
-        result = torch.tensor(0., device=self.device)
-        return result.cuda() if self.use_cuda else result
-
-
-def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=None, device=None):
-    """
-    Helper function for iarange and irange. See their docstrings for details.
-    """
-    if size is None:
-        assert subsample_size is None
-        assert subsample is None
-        size = -1  # This is PyTorch convention for "arbitrary size"
-        subsample_size = -1
-    elif subsample is None:
-        subsample = sample(name, _Subsample(size, subsample_size, use_cuda=use_cuda, device=device))
-
-    if subsample_size is None:
-        subsample_size = len(subsample)
-    elif subsample is not None and subsample_size != len(subsample):
-        raise ValueError("subsample_size does not match len(subsample), {} vs {}.".format(
-            subsample_size, len(subsample)) +
-            " Did you accidentally use different subsample_size in the model and guide?")
-
-    return size, subsample_size, subsample
-
-
-class iarange(object):
+class plate(PlateMessenger):
     """
     Context manager for conditionally independent ranges of variables.
 
-    :class:`iarange` is similar to :func:`torch.arange` in that it yields an
-    array of indices by which other tensors can be indexed. :class:`iarange`
+    :class:`plate` is similar to :func:`torch.arange` in that it yields an
+    array of indices by which other tensors can be indexed. :class:`plate`
     differs from :func:`torch.arange` in that it also informs inference
     algorithms that the variables being indexed are conditionally independent.
-    To do this, :class:`iarange` is a provided as context manager rather than a
+    To do this, :class:`plate` is a provided as context manager rather than a
     function, and users must guarantee that all computation within an
-    :class:`iarange` context is conditionally independent::
+    :class:`plate` context is conditionally independent::
 
-        with iarange("name", size) as ind:
+        with plate("name", size) as ind:
             # ...do conditionally independent stuff with ind...
 
-    Additionally, :class:`iarange` can take advantage of the conditional
+    Additionally, :class:`plate` can take advantage of the conditional
     independence assumptions by subsampling the indices and informing inference
     algorithms to scale various computed values. This is typically used to
     subsample minibatches of data::
 
-        with iarange("data", len(data), subsample_size=100) as ind:
+        with plate("data", len(data), subsample_size=100) as ind:
             batch = data[ind]
             assert len(batch) == 100
 
@@ -189,7 +116,7 @@ class iarange(object):
         independent within the context.
 
     :param str name: A unique name to help inference algorithms match
-        :class:`iarange` sites between models and guides.
+        :class:`plate` sites between models and guides.
     :param int size: Optional size of the collection being subsampled
         (like `stop` in builtin `range`).
     :param int subsample_size: Size of minibatches used in subsampling.
@@ -201,7 +128,7 @@ class iarange(object):
     :param int dim: An optional dimension to use for this independence index.
         If specified, ``dim`` should be negative, i.e. should index from the
         right. If not specified, ``dim`` is set to the rightmost dim that is
-        left of all enclosing ``iarange`` contexts.
+        left of all enclosing ``plate`` contexts.
     :param bool use_cuda: DEPRECATED, use the `device` arg instead.
         Optional bool specifying whether to use cuda tensors for `subsample`
         and `log_prob`. Defaults to ``torch.Tensor.is_cuda``.
@@ -220,61 +147,46 @@ class iarange(object):
            >>> data = torch.randn(100)
 
         >>> # This version simply declares independence:
-        >>> with iarange('data'):
+        >>> with plate('data'):
         ...     obs = sample('obs', dist.Normal(loc, scale), obs=data)
 
         >>> # This version subsamples data in vectorized way:
-        >>> with iarange('data', 100, subsample_size=10) as ind:
+        >>> with plate('data', 100, subsample_size=10) as ind:
         ...     obs = sample('obs', dist.Normal(loc, scale), obs=data[ind])
 
         >>> # This wraps a user-defined subsampling method for use in pyro:
         >>> ind = torch.randint(0, 100, (10,)).long() # custom subsample
-        >>> with iarange('data', 100, subsample=ind):
+        >>> with plate('data', 100, subsample=ind):
         ...     obs = sample('obs', dist.Normal(loc, scale), obs=data[ind])
 
         >>> # This reuses two different independence contexts.
-        >>> x_axis = iarange('outer', 320, dim=-1)
-        >>> y_axis = iarange('inner', 200, dim=-2)
+        >>> x_axis = plate('outer', 320, dim=-1)
+        >>> y_axis = plate('inner', 200, dim=-2)
         >>> with x_axis:
-        ...     x_noise = sample("x_noise", dist.Normal(loc, scale).expand_by([320]))
+        ...     x_noise = sample("x_noise", dist.Normal(loc, scale))
+        ...     assert x_noise.shape == (320,)
         >>> with y_axis:
-        ...     y_noise = sample("y_noise", dist.Normal(loc, scale).expand_by([200, 1]))
+        ...     y_noise = sample("y_noise", dist.Normal(loc, scale))
+        ...     assert y_noise.shape == (200, 1)
         >>> with x_axis, y_axis:
-        ...     xy_noise = sample("xy_noise", dist.Normal(loc, scale).expand_by([200, 320]))
+        ...     xy_noise = sample("xy_noise", dist.Normal(loc, scale))
+        ...     assert xy_noise.shape == (200, 320)
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
     extended discussion.
     """
-    def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None, use_cuda=None, device=None):
-        self.name = name
-        self.dim = dim
-        self.size, self.subsample_size, self.subsample = _subsample(name, size, subsample_size, subsample,
-                                                                    use_cuda=use_cuda, device=device)
-
-    def __enter__(self):
-        self._wrapped = am_i_wrapped()
-        self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
-        if self._wrapped:
-            try:
-                self._scale_messenger = poutine.scale(scale=self.size / self.subsample_size)
-                self._indep_messenger = poutine.indep(name=self.name, size=self.subsample_size, dim=self.dim)
-                self._scale_messenger.__enter__()
-                self._indep_messenger.__enter__()
-            except BaseException:
-                _DIM_ALLOCATOR.free(self.name, self.dim)
-                raise
-        return self.subsample
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if self._wrapped:
-            self._indep_messenger.__exit__(exc_type, exc_value, traceback)
-            self._scale_messenger.__exit__(exc_type, exc_value, traceback)
-        _DIM_ALLOCATOR.free(self.name, self.dim)
+    pass
 
 
-class irange(object):
+class iarange(plate):
+    def __init__(self, *args, **kwargs):
+        warnings.warn("pyro.iarange is deprecated; use pyro.plate instead", DeprecationWarning)
+        super(iarange, self).__init__(*args, **kwargs)
+
+
+class irange(SubsampleMessenger):
     """
-    Non-vectorized version of :class:`iarange`. See :class:`iarange` for details.
+    Non-vectorized version of :class:`plate`. See :class:`plate` for details.
 
     :param str name: A name that will be used for this site in a Trace.
     :param int size: The size of the collection being subsampled (like ``stop``
@@ -308,24 +220,7 @@ class irange(object):
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
-    def __init__(self, name, size, subsample_size=None, subsample=None, use_cuda=None, device=None):
-        self.name = name
-        self.size, self.subsample_size, self.subsample = _subsample(name, size, subsample_size, subsample,
-                                                                    use_cuda=use_cuda, device=device)
-
-    def __iter__(self):
-        if not am_i_wrapped():
-            for i in self.subsample:
-                yield i if isinstance(i, numbers.Number) else i.item()
-        else:
-            indep_context = poutine.indep(name=self.name, size=self.subsample_size)
-            with poutine.scale(scale=self.size / self.subsample_size):
-                for i in self.subsample:
-                    indep_context.next_context()
-                    with indep_context:
-                        # convert to python numeric type as functions like torch.ones(*args)
-                        # do not work with dim 0 torch.Tensor instances.
-                        yield i if isinstance(i, numbers.Number) else i.item()
+    pass
 
 
 # XXX this should have the same call signature as torch.Tensor constructors
