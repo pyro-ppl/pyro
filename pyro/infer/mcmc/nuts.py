@@ -326,7 +326,8 @@ class NUTS(HMC):
                 else:
                     new_tree_prob = new_tree.weight / tree_weight
                 rand = pyro.sample("rand_t={}_treedepth={}".format(self._t, tree_depth),
-                                   dist.Uniform(torch.zeros(1), torch.ones(1)))
+                                   dist.Uniform(new_tree_prob.new_tensor(0.),
+                                                new_tree_prob.new_tensor(1.)))
                 if rand < new_tree_prob:
                     accepted = True
                     z = new_tree.z_proposal

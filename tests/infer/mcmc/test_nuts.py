@@ -30,7 +30,7 @@ TEST_CASES = [
     ),
     T(
         GaussianChain(dim=10, chain_len=4, num_obs=1),
-        num_samples=800,
+        num_samples=1000,
         warmup_steps=200,
         hmc_params=None,
         expected_means=[0.20, 0.40, 0.60, 0.80],
