@@ -8,8 +8,8 @@ class BroadcastMessenger(Messenger):
     """
     `BroadcastMessenger` automatically broadcasts the batch shape of
     the stochastic function at a sample site when inside a single
-    or nested iarange context. The existing `batch_shape` must be
-    broadcastable with the size of the :class:`~pyro.iarange`
+    or nested plate context. The existing `batch_shape` must be
+    broadcastable with the size of the :class:`~pyro.plate`
     contexts installed in the `cond_indep_stack`.
     """
     @ignore_jit_warnings(["Converting a tensor to a Python boolean"])
@@ -30,8 +30,8 @@ class BroadcastMessenger(Messenger):
                     continue
                 assert f.dim < 0
                 target_batch_shape = [None] * (-f.dim - len(target_batch_shape)) + target_batch_shape
-                if target_batch_shape[f.dim] is not None and target_batch_shape[f.dim] != f.size:
-                    raise ValueError("Shape mismatch inside iarange('{}') at site {} dim {}, {} vs {}".format(
+                if target_batch_shape[f.dim] not in (None, f.size):
+                    raise ValueError("Shape mismatch inside plate('{}') at site {} dim {}, {} vs {}".format(
                         f.name, msg['name'], f.dim, f.size, target_batch_shape[f.dim]))
                 target_batch_shape[f.dim] = f.size
             # Starting from the right, if expected size is None at an index,

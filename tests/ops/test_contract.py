@@ -115,7 +115,7 @@ def test_partition_terms_unpacked(shapes, dims, expected_num_components):
 
 
 def frame(dim, size):
-    return CondIndepStackFrame(name="iarange_{}".format(size), dim=dim, size=size, counter=0)
+    return CondIndepStackFrame(name="plate_{}".format(size), dim=dim, size=size, counter=0)
 
 
 EXAMPLES = [
@@ -139,7 +139,7 @@ EXAMPLES = [
     },
     # ------------------------------------------------------
     #          z
-    #          | 4    max_iarange_nesting=2
+    #          | 4    max_plate_nesting=2
     #    x     y      w, x, y, z are all enumerated in dims:
     #   2 \   / 3    -3 -4 -5 -6
     #       w
@@ -419,7 +419,7 @@ def test_ubersum_4(impl):
 
 @pytest.mark.parametrize('impl,implemented', [(naive_ubersum, True), (ubersum, False)])
 def test_ubersum_collide_implemented(impl, implemented):
-    # Non-tree iaranges cause exponential blowup,
+    # Non-tree plates cause exponential blowup,
     # so ubersum() refuses to evaluate them.
     #
     #   z {a,b}
@@ -431,7 +431,7 @@ def test_ubersum_collide_implemented(impl, implemented):
     x = torch.randn(a, c)
     y = torch.randn(b, d)
     z = torch.randn(a, b, c, d)
-    raises = pytest.raises(NotImplementedError, match='Expected tree-structured iarange nesting')
+    raises = pytest.raises(NotImplementedError, match='Expected tree-structured plate nesting')
     with optional(raises, not implemented):
         impl('ac,bd,abcd->', x, y, z, batch_dims='ab')
 

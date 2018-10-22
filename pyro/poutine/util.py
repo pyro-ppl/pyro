@@ -15,7 +15,7 @@ def is_validation_enabled():
 
 def site_is_subsample(site):
     """
-    Determines whether a trace site originated from a subsample statement inside an `iarange`.
+    Determines whether a trace site originated from a subsample statement inside an `plate`.
     """
     return site["type"] == "sample" and type(site["fn"]).__name__ == "_Subsample"
 

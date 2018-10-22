@@ -30,7 +30,7 @@ jobs:
               #- make scrub;
               #  git diff-index --quiet HEAD
         - stage: auxiliary modules
-          python: 3.5
+          python: 3.6
           env: STAGE=docs
           script:
               - pip install -r docs/requirements.txt
@@ -42,7 +42,7 @@ jobs:
           script:
               - pip install -e .[profile]
               - pytest -vs --benchmark-disable tests/perf/test_benchmark.py
-        - python: 3.5
+        - python: 3.6
           if: type = cron
           env: STAGE=perf
           script:
@@ -61,13 +61,13 @@ jobs:
         - python: 2.7
           env: STAGE=examples
           script:
-              - pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples
+              - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples
               - grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
                   | CI=1 xargs pytest -vx --nbval-lax --current-env
-        - python: 3.5
+        - python: 3.6
           env: STAGE=unit
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
-        - python: 3.5
+        - python: 3.6
           env: STAGE=examples
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples
         - stage: integration test
@@ -77,10 +77,10 @@ jobs:
         - python: 2.7
           env: STAGE=integration_batch_2
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
-        - python: 3.5
+        - python: 3.6
           env: STAGE=integration_batch_1
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
-        - python: 3.5
+        - python: 3.6
           env: STAGE=integration_batch_2
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
 

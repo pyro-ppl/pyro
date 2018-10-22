@@ -11,8 +11,8 @@ from tests.common import assert_equal
 
 def xy_model():
     d = dist.Bernoulli(0.5)
-    x_axis = pyro.iarange('x_axis', 2, dim=-1)
-    y_axis = pyro.iarange('y_axis', 3, dim=-2)
+    x_axis = pyro.plate('x_axis', 2, dim=-1)
+    y_axis = pyro.plate('y_axis', 3, dim=-2)
     pyro.sample('b', d)
     with x_axis:
         pyro.sample('bx', d.expand_by([2]))
