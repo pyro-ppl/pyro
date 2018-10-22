@@ -18,7 +18,6 @@ from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
 from pyro.ops.welford import WelfordCovariance
 from pyro.poutine.subsample_messenger import _Subsample
-from pyro.primitives import _Subsample
 from pyro.util import optional, torch_isinf, torch_isnan, ignore_jit_warnings
 
 
@@ -102,8 +101,8 @@ class HMC(TraceKernel):
                  transforms=None,
                  max_plate_nesting=float("inf"),
                  max_iarange_nesting=None,  # DEPRECATED
-                 jit_compile = False,
-                 ignore_jit_warnings = False,
+                 jit_compile=False,
+                 ignore_jit_warnings=False,
                  experimental_use_einsum=False):
         self.model = model
         if max_iarange_nesting is not None:

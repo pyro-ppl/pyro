@@ -107,8 +107,8 @@ class NUTS(HMC):
                  transforms=None,
                  max_plate_nesting=float("inf"),
                  max_iarange_nesting=None,  # DEPRECATED
-                 jit_compile = False,
-                 ignore_jit_warnings = False,
+                 jit_compile=False,
+                 ignore_jit_warnings=False,
                  experimental_use_einsum=False):
         if max_iarange_nesting is not None:
             warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
@@ -121,7 +121,7 @@ class NUTS(HMC):
                                    adapt_mass_matrix=adapt_mass_matrix,
                                    full_mass=full_mass,
                                    transforms=transforms,
-                                   max_plate_nesting = max_plate_nesting,
+                                   max_plate_nesting=max_plate_nesting,
                                    max_iarange_nesting=max_iarange_nesting,
                                    jit_compile=jit_compile,
                                    ignore_jit_warnings=ignore_jit_warnings,
