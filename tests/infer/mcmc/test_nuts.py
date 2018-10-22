@@ -125,7 +125,6 @@ def test_nuts_conjugate_gaussian(fixture,
         assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 
-@pytest.mark.parametrize()
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 @pytest.mark.parametrize("use_multinomial_sampling", [True, False])
 def test_logistic_regression(jit, use_multinomial_sampling):
