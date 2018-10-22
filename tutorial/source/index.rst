@@ -35,7 +35,7 @@ Welcome to Pyro Examples and Tutorials!
    gp
    bo
    tracking_1d
-   csis_gaussian_unknown_mean
+   csis
 
 
 Indices and tables
