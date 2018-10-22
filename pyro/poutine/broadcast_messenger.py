@@ -12,8 +12,9 @@ class BroadcastMessenger(Messenger):
     broadcastable with the size of the :class:`~pyro.plate`
     contexts installed in the `cond_indep_stack`.
     """
+    @staticmethod
     @ignore_jit_warnings(["Converting a tensor to a Python boolean"])
-    def _pyro_sample(self, msg):
+    def _pyro_sample(msg):
         """
         :param msg: current message at a trace site.
         """
