@@ -7,7 +7,6 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-from pyro.distributions.iaf import InverseAutoregressiveFlow
 from pyro.nn import AutoRegressiveNN
 
 pytestmark = pytest.mark.init(rng_seed=123)
@@ -77,7 +76,7 @@ class AutoregressiveFlowTests(TestCase):
 
     def _make_flipflow(self, input_dim):
         permutation = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
-        return dist.FlipFlow(permutation)
+        return dist.PermutationFlow(permutation)
 
     def test_iaf_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
