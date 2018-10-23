@@ -53,7 +53,7 @@ class IndepMessenger(Messenger):
 
     """
     def __init__(self, name=None, size=None, dim=None, device=None):
-        if size == 0:
+        if not torch._C._get_tracing_state() and size == 0:
             raise ZeroDivisionError("size cannot be zero")
 
         super(IndepMessenger, self).__init__()
@@ -96,11 +96,11 @@ class IndepMessenger(Messenger):
 
         self._vectorized = False
         self.dim = None
-
-        for i in self.indices:
-            self.next_context()
-            with self:
-                yield i if isinstance(i, numbers.Number) else i.item()
+        with ignore_jit_warnings([("Iterating over a tensor", RuntimeWarning)]):
+            for i in self.indices:
+                self.next_context()
+                with self:
+                    yield i if isinstance(i, numbers.Number) else i.item()
 
     def _reset(self):
         if self._vectorized:

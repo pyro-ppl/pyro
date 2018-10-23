@@ -267,7 +267,7 @@ def test_svi(Elbo, num_particles):
 @pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
 @pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
 @pytest.mark.parametrize("irange_dim", [1, 2])
-@pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
+@pytest.mark.parametrize('Elbo', [JitTraceEnum_ELBO])
 def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
     num_particles = 10

@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 from pyro.distributions.distribution import Distribution
+from pyro.util import ignore_jit_warnings
 
 from .indep_messenger import CondIndepStackFrame, IndepMessenger
 from .runtime import apply_stack
@@ -31,7 +32,8 @@ class _Subsample(Distribution):
             if self.use_cuda ^ (device != "cpu"):
                 raise ValueError("Incompatible arg values use_cuda={}, device={}."
                                  .format(use_cuda, device))
-        self.device = torch.Tensor().device if not device else device
+        with ignore_jit_warnings(["torch.Tensor results are registered as constants"]):
+            self.device = torch.Tensor().device if not device else device
 
     def sample(self, sample_shape=torch.Size()):
         """
