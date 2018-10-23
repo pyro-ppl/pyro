@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import math
+import warnings
 from collections import OrderedDict
 
 import torch
@@ -17,7 +18,7 @@ from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
 from pyro.ops.welford import WelfordCovariance
 from pyro.poutine.subsample_messenger import _Subsample
-from pyro.util import torch_isinf, torch_isnan, optional
+from pyro.util import optional, torch_isinf, torch_isnan
 
 
 class HMC(TraceKernel):
@@ -52,8 +53,8 @@ class HMC(TraceKernel):
         If not specified and the model has sites with constrained support,
         automatic transformations will be applied, as specified in
         :mod:`torch.distributions.constraint_registry`.
-    :param int max_iarange_nesting: Optional bound on max number of nested
-        :func:`pyro.iarange` contexts. This is required if model contains
+    :param int max_plate_nesting: Optional bound on max number of nested
+        :func:`pyro.plate` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
     :param bool experimental_use_einsum: Whether to use an einsum operation
         to evaluate log pdf for the model trace. No-op unless the trace has
@@ -93,14 +94,18 @@ class HMC(TraceKernel):
                  adapt_mass_matrix=True,
                  full_mass=False,
                  transforms=None,
-                 max_iarange_nesting=float("inf"),
+                 max_plate_nesting=float("inf"),
+                 max_iarange_nesting=None,  # DEPRECATED
                  experimental_use_einsum=False):
+        if max_iarange_nesting is not None:
+            warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
+                          DeprecationWarning)
+            max_plate_nesting = max_iarange_nesting
+
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
         self.model = poutine.enum(config_enumerate(model, default="parallel"),
-                                  first_available_dim=max_iarange_nesting)
-        # broadcast sample sites inside iarange.
-        self.model = poutine.broadcast(self.model)
+                                  first_available_dim=max_plate_nesting)
         self.step_size = step_size if step_size is not None else 1  # from Stan
         if trajectory_length is not None:
             self.trajectory_length = trajectory_length
@@ -131,7 +136,7 @@ class HMC(TraceKernel):
         self._adapt_initial_window = 25  # from Stan
 
         self.transforms = {} if transforms is None else transforms
-        self.max_iarange_nesting = max_iarange_nesting
+        self.max_plate_nesting = max_plate_nesting
         self._automatic_transform_enabled = True if transforms is None else False
         self._reset()
         super(HMC, self).__init__()
@@ -154,11 +159,13 @@ class HMC(TraceKernel):
         return self._trace_prob_evaluator.log_prob(model_trace)
 
     def _kinetic_energy(self, r):
+        # TODO: revert to `torch.dot` in pytorch==1.0
+        # See: https://github.com/uber/pyro/issues/1458
         r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)])
         if self.full_mass:
-            return 0.5 * r_flat.dot(self._inverse_mass_matrix.matmul(r_flat))
+            return 0.5 * (r_flat * (self._inverse_mass_matrix.matmul(r_flat))).sum()
         else:
-            return 0.5 * self._inverse_mass_matrix.dot(r_flat ** 2)
+            return 0.5 * (self._inverse_mass_matrix * (r_flat ** 2)).sum()
 
     def _potential_energy(self, z):
         # Since the model is specified in the constrained space, transform the
@@ -199,7 +206,7 @@ class HMC(TraceKernel):
         # We are going to find a step_size which make accept_prob (Metropolis correction)
         # near the target_accept_prob. If accept_prob:=exp(-delta_energy) is small,
         # then we have to decrease step_size; otherwise, increase step_size.
-        r = self._sample_r(name="r_presample")
+        r, _ = self._sample_r(name="r_presample")
         energy_current = self._energy(z, r)
         z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
             z, r, self._potential_energy, self._inverse_mass_matrix, step_size)
@@ -322,13 +329,13 @@ class HMC(TraceKernel):
             r[name] = r_flat[pos:next_pos].reshape(self._r_shapes[name])
             pos = next_pos
         assert pos == r_flat.size(0)
-        return r
+        return r, r_flat
 
     def _validate_trace(self, trace):
         trace_eval = TraceEinsumEvaluator if self.use_einsum else TraceTreeEvaluator
         self._trace_prob_evaluator = trace_eval(trace,
                                                 self._has_enumerable_sites,
-                                                self.max_iarange_nesting)
+                                                self.max_plate_nesting)
         trace_log_prob_sum = self._compute_trace_log_prob(trace)
         if torch_isnan(trace_log_prob_sum) or torch_isinf(trace_log_prob_sum):
             raise ValueError("Model specification incorrect - trace log pdf is NaN or Inf.")
@@ -378,7 +385,7 @@ class HMC(TraceKernel):
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
 
-        r = self._sample_r(name="r_t={}".format(self._t))
+        r, _ = self._sample_r(name="r_t={}".format(self._t))
 
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation

@@ -56,7 +56,6 @@ hyper-parameters) of running HMC on different problems.
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 # Enable validation checks
 pyro.enable_validation(True)
-pyro.set_rng_seed(1)
 DATA_URL = "https://d2fefpcigoriu7.cloudfront.net/datasets/EfronMorrisBB.txt"
 
 
@@ -235,6 +234,7 @@ def evaluate_log_predictive_density(model, model_trace_posterior, baseball_datas
 
 
 def main(args):
+    pyro.set_rng_seed(args.rng_seed)
     baseball_dataset = pd.read_csv(DATA_URL, "\t")
     train, _, player_names = train_test_split(baseball_dataset)
     at_bats, hits = train[:, 0], train[:, 1]

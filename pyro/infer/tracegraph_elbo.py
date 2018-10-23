@@ -11,7 +11,7 @@ import pyro.ops.jit
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
 from pyro.infer.enum import get_importance_trace
-from pyro.infer.util import (MultiFrameTensor, detach_iterable, get_iarange_stacks,
+from pyro.infer.util import (MultiFrameTensor, detach_iterable, get_plate_stacks,
                              is_validation_enabled, torch_backward, torch_item)
 from pyro.util import check_if_enumerated, warn_if_nan
 
@@ -46,7 +46,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
 
     downstream_guide_cost_nodes = {}
     downstream_costs = {}
-    stacks = get_iarange_stacks(model_trace)
+    stacks = get_plate_stacks(model_trace)
 
     for node in topo_sort_guide_nodes:
         downstream_costs[node] = MultiFrameTensor((stacks[node],
@@ -172,7 +172,7 @@ class TraceGraph_ELBO(ELBO):
     In particular three kinds of conditional dependency information are
     used to reduce variance:
     - the sequential order of samples (z is sampled after y => y does not depend on z)
-    - :class:`~pyro.iarange` generators
+    - :class:`~pyro.plate` generators
     - :class:`~pyro.irange` generators
 
     References
@@ -190,7 +190,7 @@ class TraceGraph_ELBO(ELBO):
         against it.
         """
         model_trace, guide_trace = get_importance_trace(
-            "dense", self.max_iarange_nesting, model, guide, *args, **kwargs)
+            "dense", self.max_plate_nesting, model, guide, *args, **kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
@@ -246,7 +246,7 @@ class TraceGraph_ELBO(ELBO):
 
         if trainable_params:
             surrogate_loss = -surrogate_elbo
-            torch_backward(weight * (surrogate_loss + baseline_loss))
+            torch_backward(weight * (surrogate_loss + baseline_loss), retain_graph=self.retain_graph)
 
         loss = -torch_item(elbo)
         warn_if_nan(loss, "loss")

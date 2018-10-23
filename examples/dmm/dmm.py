@@ -179,9 +179,9 @@ class DMM(nn.Module):
         # set z_prev = z_0 to setup the recursive conditioning in p(z_t | z_{t-1})
         z_prev = self.z_0.expand(mini_batch.size(0), self.z_0.size(0))
 
-        # we enclose all the sample statements in the model in a iarange.
+        # we enclose all the sample statements in the model in a plate.
         # this marks that each datapoint is conditionally independent of the others
-        with pyro.iarange("z_minibatch", len(mini_batch)):
+        with pyro.plate("z_minibatch", len(mini_batch)):
             # sample the latents z and observed x's one time step at a time
             for t in range(1, T_max + 1):
                 # the next chunk of code samples z_t ~ p(z_t | z_{t-1})
@@ -235,9 +235,9 @@ class DMM(nn.Module):
         # set z_prev = z_q_0 to setup the recursive conditioning in q(z_t |...)
         z_prev = self.z_q_0.expand(mini_batch.size(0), self.z_q_0.size(0))
 
-        # we enclose all the sample statements in the guide in a iarange.
+        # we enclose all the sample statements in the guide in a plate.
         # this marks that each datapoint is conditionally independent of the others.
-        with pyro.iarange("z_minibatch", len(mini_batch)):
+        with pyro.plate("z_minibatch", len(mini_batch)):
             # sample the latents z one time step at a time
             for t in range(1, T_max + 1):
                 # the next two lines assemble the distribution q(z_t | z_{t-1}, x_{t:T})
