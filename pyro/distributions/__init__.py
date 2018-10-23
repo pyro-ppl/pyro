@@ -24,6 +24,7 @@ from pyro.distributions.util import enable_validation, is_validation_enabled, va
 from pyro.distributions.von_mises import VonMises
 from pyro.distributions.von_mises_3d import VonMises3D
 from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
+from pyro.distributions.censored import CensoredDistribution
 
 __all__ = [
     "enable_validation",
