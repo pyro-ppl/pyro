@@ -19,7 +19,7 @@ class CensoredDistribution(TorchDistribution):
 
     @constraints.dependent_property
     def support(self):
-        raise NotImplemented
+        return constraints.interval(self.lower_lim, self.upper_lim)
 
     def sample(self, sample_shape=torch.Size()):
         with torch.no_grad():
