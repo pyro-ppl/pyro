@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 from pyro.distributions.distribution import Distribution
-from pyro.util import ignore_jit_warnings
+from pyro.util import ignore_jit_warnings, jit_compatible_arange
 
 from .indep_messenger import CondIndepStackFrame, IndepMessenger
 from .runtime import apply_stack
@@ -35,6 +35,7 @@ class _Subsample(Distribution):
         with ignore_jit_warnings(["torch.Tensor results are registered as constants"]):
             self.device = torch.Tensor().device if not device else device
 
+    @ignore_jit_warnings(["Converting a tensor to a Python boolean"])
     def sample(self, sample_shape=torch.Size()):
         """
         :returns: a random subsample of `range(size)`
@@ -43,10 +44,8 @@ class _Subsample(Distribution):
         if sample_shape:
             raise NotImplementedError
         subsample_size = self.subsample_size
-        if subsample_size is None or subsample_size > self.size:
-            subsample_size = self.size
-        if subsample_size >= self.size:
-            result = torch.arange(self.size, dtype=torch.long).to(self.device)
+        if subsample_size is None or subsample_size >= self.size:
+            result = jit_compatible_arange(self.size, device=self.device)
         else:
             result = torch.multinomial(torch.ones(self.size), self.subsample_size,
                                        replacement=False).to(self.device)
@@ -107,10 +106,10 @@ class SubsampleMessenger(IndepMessenger):
             subsample = msg["value"]
 
         if subsample_size is None:
-            subsample_size = len(subsample)
+            subsample_size = subsample.size(0)
         elif subsample is not None and subsample_size != len(subsample):
             raise ValueError("subsample_size does not match len(subsample), {} vs {}.".format(
-                subsample_size, len(subsample)) +
+                subsample_size, subsample.size(0)) +
                 " Did you accidentally use different subsample_size in the model and guide?")
 
         return size, subsample_size, subsample

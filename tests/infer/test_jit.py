@@ -360,7 +360,7 @@ def test_svi_irregular_batch_size(Elbo):
     def model(data):
         loc = pyro.param("loc", constant(0.0))
         scale = pyro.param("scale", constant(1.0), constraint=constraints.positive)
-        with pyro.iarange("data", data.shape[0]):
+        with pyro.plate("data", data.shape[0]):
             pyro.sample("x",
                         dist.Normal(loc, scale).expand([data.shape[0]]),
                         obs=data)
