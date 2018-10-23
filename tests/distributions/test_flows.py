@@ -9,18 +9,21 @@ import torch
 import pyro.distributions as dist
 from pyro.distributions.iaf import InverseAutoregressiveFlow
 from pyro.nn import AutoRegressiveNN
-from pyro.nn.auto_reg_nn import create_mask
 
 pytestmark = pytest.mark.init(rng_seed=123)
 
 
 class AutoregressiveFlowTests(TestCase):
     def setUp(self):
-        self.epsilon = 1.0e-3
+        # Epsilon is used to compare numerical gradient to analytical one
+        self.epsilon = 1e-3
 
-    def _test_jacobian(self, input_dim, hidden_dim):
+        # Delta is tolerance for testing f(f^{-1}(x)) = x
+        self.delta = 1e-6
+
+    def _test_jacobian(self, input_dim, make_flow):
         jacobian = torch.zeros(input_dim, input_dim)
-        iaf = InverseAutoregressiveFlow(AutoRegressiveNN(input_dim, [40]), sigmoid_bias=0.5)
+        iaf = make_flow(input_dim)
 
         def nonzero(x):
             return torch.sign(torch.abs(x))
@@ -51,17 +54,43 @@ class AutoregressiveFlowTests(TestCase):
         assert diag_sum == float(input_dim)
         assert lower_sum == float(0.0)
 
-    def _test_shape(self, base_shape):
+    def _test_inverse(self, input_dim, make_flow):
+        base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+        iaf = make_flow(input_dim)
+
+        x_true = base_dist.sample(torch.Size([10]))
+        y = iaf._call(x_true)
+        x_calculated = iaf._inverse(y)
+
+        assert torch.norm(x_true - x_calculated, dim=-1).max().item() < self.delta
+
+    def _test_shape(self, base_shape, make_flow):
         base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
         last_dim = base_shape[-1] if isinstance(base_shape, tuple) else base_shape
-        iaf = InverseAutoregressiveFlow(AutoRegressiveNN(last_dim, [40]))
+        iaf = make_flow(input_dim=last_dim)
         sample = dist.TransformedDistribution(base_dist, [iaf]).sample()
         assert sample.shape == base_shape
 
-    def test_jacobians(self):
-        for input_dim in [2, 3, 5, 7, 9, 11]:
-            self._test_jacobian(input_dim, 3 * input_dim + 1)
+    def _make_iaf(self, input_dim):
+        arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
+        return dist.InverseAutoregressiveFlow(arn)
 
-    def test_shapes(self):
+    def _make_flipflow(self, input_dim):
+        permutation = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
+        return dist.FlipFlow(permutation)
+
+    def test_iaf_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_iaf)
+
+    def test_flipflow_inverses(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_inverse(input_dim, self._make_flipflow)
+
+    def test_iaf_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
-            self._test_shape(shape)
+            self._test_shape(shape, self._make_iaf)
+
+    def test_flipflow_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_flipflow)
