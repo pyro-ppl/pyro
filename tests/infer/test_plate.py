@@ -165,3 +165,79 @@ def test_plate_parallel_autoguide():
     guide = AutoDiagonalNormal(model)
 
     assert_ok(model, guide)
+
+
+def test_plate_parallel_decorator():
+
+    def model():
+        scale = pyro.param("prior_scale", torch.tensor(1.))
+        assert scale.shape == ()
+        with pyro.plate("plate", len(data)):
+            loc = pyro.param("prior_loc", torch.tensor(0.).expand(len(data)))
+            z = pyro.sample("z", dist.Normal(loc, scale))
+            x = pyro.sample("x", dist.Normal(z, scale), obs=data)
+            assert loc.shape == (len(data),)
+            assert z.shape == (len(data),)
+            assert x.shape == (len(data),)
+
+    @pyro.plate("plate", len(data))
+    def guide():
+        scale = pyro.param("post_scale", torch.tensor(1.).expand(len(data)))
+        loc = pyro.param("post_loc", torch.tensor(0.).expand(len(data)))
+        z = pyro.sample("z", dist.Normal(loc, scale))
+        assert scale.shape == (len(data),)
+        assert loc.shape == (len(data),)
+        assert z.shape == (len(data),)
+
+    assert_ok(model, guide)
+
+
+def test_plate_sequential_nested():
+    x_size, y_size = 4, 5
+    x_data = torch.randn(x_size)
+    y_data = torch.randn(y_size)
+    xy_data = torch.randn(x_size, y_size)
+
+    def model():
+        scale = pyro.param("prior_scale", torch.tensor(1.))
+        assert scale.shape == ()
+
+        x_plate = pyro.plate("x_plate", x_size)
+        y_plate = pyro.plate("y_plate", y_size)
+        for i in x_plate:
+            pyro.sample("x_{}".format(i), dist.Normal(0., scale), obs=x_data[i])
+        for j in y_plate:
+            pyro.sample("y_{}".format(j), dist.Normal(0., scale), obs=y_data[j])
+        for i in x_plate:
+            for j in y_plate:
+                pyro.sample("z_{}_{}".format(i, j), dist.Normal(0., scale), obs=xy_data[i, j])
+
+    def guide():
+        pass
+
+    assert_ok(model, guide)
+
+
+def test_plate_parallel_nested():
+    x_size, y_size = 4, 5
+    x_data = torch.randn(x_size)
+    y_data = torch.randn(y_size)
+    xy_data = torch.randn(x_size, y_size)
+
+    def model():
+        scale = pyro.param("prior_scale", torch.tensor(1.))
+        assert scale.shape == ()
+
+        x_plate = pyro.plate("x_plate", x_size, dim=-2)
+        y_plate = pyro.plate("y_plate", y_size, dim=-1)
+        with x_plate:
+            pyro.sample("x", dist.Normal(0., scale), obs=x_data.unsqueeze(-1))  # gross
+        with y_plate:
+            pyro.sample("y", dist.Normal(0., scale), obs=y_data)
+        with x_plate, y_plate:
+            pyro.sample("z", dist.Normal(0., scale), obs=xy_data)
+
+    def guide():
+        pass
+
+    assert_ok(model, guide)
