@@ -107,10 +107,11 @@ class SubsampleMessenger(IndepMessenger):
 
         with ignore_jit_warnings():
             if subsample_size is None:
-                subsample_size = subsample.size(0)
+                subsample_size = subsample.size(0) if isinstance(subsample, torch.Tensor) \
+                    else len(subsample)
             elif subsample is not None and subsample_size != len(subsample):
                 raise ValueError("subsample_size does not match len(subsample), {} vs {}.".format(
-                    subsample_size, subsample.size(0)) +
+                    subsample_size, len(subsample)) +
                     " Did you accidentally use different subsample_size in the model and guide?")
 
         return size, subsample_size, subsample
