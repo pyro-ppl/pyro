@@ -31,7 +31,7 @@ class BroadcastMessenger(Messenger):
                     continue
                 assert f.dim < 0
                 target_batch_shape = [None] * (-f.dim - len(target_batch_shape)) + target_batch_shape
-                if target_batch_shape[f.dim] not in (None, f.size):
+                if target_batch_shape[f.dim] is not None and target_batch_shape[f.dim] != f.size:
                     raise ValueError("Shape mismatch inside plate('{}') at site {} dim {}, {} vs {}".format(
                         f.name, msg['name'], f.dim, f.size, target_batch_shape[f.dim]))
                 target_batch_shape[f.dim] = f.size

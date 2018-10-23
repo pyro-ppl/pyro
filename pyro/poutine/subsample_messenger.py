@@ -105,12 +105,13 @@ class SubsampleMessenger(IndepMessenger):
             apply_stack(msg)
             subsample = msg["value"]
 
-        if subsample_size is None:
-            subsample_size = subsample.size(0)
-        elif subsample is not None and subsample_size != len(subsample):
-            raise ValueError("subsample_size does not match len(subsample), {} vs {}.".format(
-                subsample_size, subsample.size(0)) +
-                " Did you accidentally use different subsample_size in the model and guide?")
+        with ignore_jit_warnings():
+            if subsample_size is None:
+                subsample_size = subsample.size(0)
+            elif subsample is not None and subsample_size != len(subsample):
+                raise ValueError("subsample_size does not match len(subsample), {} vs {}.".format(
+                    subsample_size, subsample.size(0)) +
+                    " Did you accidentally use different subsample_size in the model and guide?")
 
         return size, subsample_size, subsample
 

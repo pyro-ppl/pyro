@@ -237,7 +237,8 @@ def test_gamma_normal(jit):
 
 
 @pytest.mark.parametrize("jit", [False,
-                                 mark_jit(True, marks=[pytest.mark.xfail("https://github.com/uber/pyro/issues/1418")])
+                                 mark_jit(True, marks=[pytest.mark.xfail(
+                                     reason="https://github.com/uber/pyro/issues/1418")])
                                  ], ids=jit_idfn)
 def test_dirichlet_categorical(jit):
     def model(data):

@@ -174,7 +174,8 @@ def test_beta_bernoulli(step_size, adapt_step_size, adapt_mass_matrix, full_mass
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True, marks=[pytest.mark.skip("Doesn't finish")])],
+                         ids=jit_idfn)
 @pytest.mark.parametrize("use_multinomial_sampling", [True, False])
 def test_gamma_normal(jit, use_multinomial_sampling):
     def model(data):
@@ -233,7 +234,8 @@ def test_beta_bernoulli_with_dual_averaging(jit):
 
 
 @pytest.mark.parametrize("jit", [False,
-                                 mark_jit(True, marks=[pytest.mark.xfail("https://github.com/uber/pyro/issues/1418")])
+                                 mark_jit(True, marks=[pytest.mark.xfail(
+                                     reason="https://github.com/uber/pyro/issues/1418")])
                                  ], ids=jit_idfn)
 def test_dirichlet_categorical(jit):
     def model(data):
