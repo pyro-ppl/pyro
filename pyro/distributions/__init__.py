@@ -49,7 +49,8 @@ __all__ = [
     "TorchDistribution",
     "VonMises",
     "VonMises3D",
-    "ZeroInflatedPoisson"
+    "ZeroInflatedPoisson",
+    "CensoredDistribution"
 ]
 
 # Import all torch distributions from `pyro.distributions.torch_distribution`
