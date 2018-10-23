@@ -14,6 +14,7 @@ from pyro.distributions.iaf import InverseAutoregressiveFlow
 from pyro.distributions.lowrank_mvn import LowRankMultivariateNormal
 from pyro.distributions.mixture import MaskedMixture
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
+from pyro.distributions.permutation_flow import PermutationFlow
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.relaxed_straight_through import (RelaxedBernoulliStraightThrough,
                                                          RelaxedOneHotCategoricalStraightThrough)
@@ -42,6 +43,7 @@ __all__ = [
     "MixtureOfDiagNormalsSharedCovariance",
     "MixtureOfDiagNormals",
     "OMTMultivariateNormal",
+    "PermutationFlow",
     "Rejector",
     "RelaxedBernoulliStraightThrough",
     "RelaxedOneHotCategoricalStraightThrough",
