@@ -13,12 +13,6 @@ def einsum(equation, *operands):
     """
     Log-sum-exp implementation of einsum.
     """
-    # rename symbols to support PyTorch 0.4.1 and earlier,
-    # which allow only symbols a-z.
-    symbols = sorted(set(equation) - set(',->'))
-    rename = dict(zip(symbols, 'abcdefghijklmnopqrstuvwxyz'))
-    equation = ''.join(rename.get(s, s) for s in equation)
-
     inputs, output = equation.split('->')
     inputs = inputs.split(',')
 

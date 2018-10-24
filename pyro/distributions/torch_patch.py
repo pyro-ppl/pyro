@@ -60,6 +60,12 @@ def _torch_linspace(*args, **kwargs):
 
 @_patch('torch.einsum')
 def _einsum(equation, operands):
+    # rename symbols to support PyTorch 0.4.1 and earlier,
+    # which allow only symbols a-z.
+    symbols = sorted(set(equation) - set('.,->'))
+    rename = dict(zip(symbols, 'abcdefghijklmnopqrstuvwxyz'))
+    equation = ''.join(rename.get(s, s) for s in equation)
+
     # work around torch.einsum performance issues
     # see https://github.com/pytorch/pytorch/issues/10661
     if equation == 'ac,abc->bc':
