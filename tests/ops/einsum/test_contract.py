@@ -43,16 +43,14 @@ def test_large():
     # test pyro contraction
     expr = ContractExpression(equation, *shapes)
     pyro_time = -timeit.default_timer()
-    for i in range(10):
-        actual = expr(*operands, backend=backend)
+    actual = expr(*operands, backend=backend)
     pyro_time += timeit.default_timer()
 
     # test opt_einsum contraction
     path = optimize(inputs, output, dim_sizes)
     expr = opt_einsum.contract_expression(equation, *shapes, optimize=path)
     opt_time = -timeit.default_timer()
-    for i in range(10):
-        expected = expr(*operands, backend=backend)
+    expected = expr(*operands, backend=backend)
     opt_time += timeit.default_timer()
 
     logging.debug(u'Pyro contract took {}s'.format(pyro_time))
