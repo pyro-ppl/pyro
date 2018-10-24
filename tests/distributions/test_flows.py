@@ -76,7 +76,7 @@ class AutoregressiveFlowTests(TestCase):
 
     def _make_flipflow(self, input_dim):
         permutation = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
-        return dist.PermutationFlow(permutation)
+        return dist.PermuteTransform(permutation)
 
     def test_iaf_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:

@@ -8,22 +8,22 @@ from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(Transform)
-class PermutationFlow(Transform):
+class PermuteTransform(Transform):
     """
     A normalizing flow that reorders the input dimensions, that is, multiplies the input by a permutation matrix.
     This is useful in between IAF transforms to increase the flexibility of the resulting distribution and
     stabilize learning. Whilst not being an autoregressive flow, the log absolute determinate of the Jacobian is
     easily calculable as 0. Note that reordering the input dimension between two layers of IAF is not equivalent
-    to reordering the dimension inside the MADE networks that those IAFs use; using a PermutationFlow results in a
+    to reordering the dimension inside the MADE networks that those IAFs use; using a PermuteTransform results in a
     distribution with more flexibility.
 
     Example usage:
 
     >>> from pyro.nn import AutoRegressiveNN
-    >>> from pyro.distributions import InverseAutoregressiveFlow, PermutationFlow
+    >>> from pyro.distributions import InverseAutoregressiveFlow, PermuteTransform
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> iaf1 = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
-    >>> ff = PermutationFlow(torch.randperm(10, dtype=torch.long))
+    >>> ff = PermuteTransform(torch.randperm(10, dtype=torch.long))
     >>> iaf2 = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
     >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf1, ff, iaf2])
     >>> iaf_dist.sample()  # doctest: +SKIP
@@ -38,7 +38,7 @@ class PermutationFlow(Transform):
     codomain = constraints.real
 
     def __init__(self, permutation):
-        super(PermutationFlow, self).__init__()
+        super(PermuteTransform, self).__init__()
 
         self.permutation = permutation
 
