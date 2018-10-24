@@ -12,6 +12,15 @@ def torch_einsum(equation, *operands):
     return torch.einsum(equation, operands)
 
 
+def ubersum_step(equation, *operands, **kwargs):
+    einsum = kwargs.get('einsum')
+    batch_dims = kwargs.get('batch_dims', '')
+
+    operands = list(operands)
+    for i, operand in enumerate(operands):
+        raise NotImplementedError('TODO')
+
+
 class ContractExpression(object):
     def __init__(self, equation, *shapes):
         self.equation = equation
@@ -33,20 +42,22 @@ class ContractExpression(object):
         ref_counts = Counter(self.equation)
         inputs, output = self.equation.split('->')
         inputs = inputs.split(',')
-
-        tensors = list(operands)
+        remaining = list(zip(inputs, operands))
         for op in self.path:
             op_inputs = []
             op_tensors = []
-            for i in reversed(sorted(op)):
-                op_tensors.append(tensors.pop(i))
-                op_inputs.append(inputs.pop(i))
-                ref_counts.subtract(op_inputs[-1])
-            op_output = ''.join(sorted(d for d in set(op_inputs) if ref_counts[d]))
+            for i in sorted(op, reverse=True):
+                dims, tensor = remaining.pop(i)
+                op_tensors.append(tensor)
+                op_inputs.append(dims)
+                ref_counts.subtract(dims)
+            if remaining:
+                op_output = ''.join(sorted(d for d in set(''.join(op_inputs)) if ref_counts[d]))
+            else:
+                op_output = output
             op_equation = ','.join(op_inputs) + '->' + op_output
             # TODO share intermediates
-            tensors.append(einsum(op_equation, *op_tensors))
-            inputs.append(op_output if inputs else output)
-        assert len(tensors) == 1
-
-        return tensors[0]
+            tensor = einsum(op_equation, *op_tensors)
+            remaining.append((op_output, tensor))
+        assert len(remaining) == 1
+        return remaining[0][1]
