@@ -36,6 +36,7 @@ class PermuteTransform(Transform):
     """
 
     codomain = constraints.real
+    bijective = True
 
     def __init__(self, permutation):
         super(PermuteTransform, self).__init__()
@@ -43,8 +44,8 @@ class PermuteTransform(Transform):
         self.permutation = permutation
 
         # Calculate the inverse permutation order
-        self.inv_permutation = torch.empty(permutation.shape, dtype=torch.long)
-        self.inv_permutation[permutation] = torch.arange(permutation.size(0), dtype=torch.long)
+        self.inv_permutation = torch.empty_like(permutation, dtype=torch.long)
+        self.inv_permutation[permutation] = torch.arange(permutation.size(0), dtype=torch.long, device=permutation.device)
 
     def _call(self, x):
         """
