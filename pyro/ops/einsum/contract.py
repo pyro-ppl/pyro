@@ -4,12 +4,19 @@ import importlib
 from collections import Counter
 
 import torch
+from opt_einsum.sharing import einsum_cache_wrap
 
 from pyro.ops.einsum.paths import optimize
 
 
-def torch_einsum(equation, *operands):
-    return torch.einsum(equation, operands)
+@einsum_cache_wrap
+def _einsum(equation, *operands, **kwargs):
+    backend = kwargs.pop('backend', 'numpy')
+    if backend == 'torch':
+        # provide np.einsum interface for torch.einsum.
+        return torch.einsum(equation, operands)
+    einsum = getattr(importlib.import_module(backend), 'einsum')
+    return einsum(equation, *operands, **kwargs)
 
 
 class ContractExpression(object):
@@ -24,14 +31,9 @@ class ContractExpression(object):
         self.path = optimize(inputs, output, sizes)
 
     def __call__(self, *operands, **kwargs):
-        backend = kwargs.pop('backend', 'torch')
-        if backend == 'torch':
-            einsum = torch_einsum
-        else:
-            einsum = getattr(importlib.import_module(backend), 'einsum')
+        out = kwargs.pop('out', None)
 
         ref_counts = Counter(self.equation)
-        print(ref_counts)
         inputs, output = self.equation.split('->')
         inputs = inputs.split(',')
         remaining = list(zip(inputs, operands))
@@ -49,9 +51,11 @@ class ContractExpression(object):
                 op_output = output
             ref_counts.update(op_output)
             op_equation = ','.join(op_inputs) + '->' + op_output
-            # TODO share intermediates
-            tensor = einsum(op_equation, *op_tensors)
-            print(op_equation)
+            tensor = _einsum(op_equation, *op_tensors, **kwargs)
             remaining.append((op_output, tensor))
         assert len(remaining) == 1
-        return remaining[0][1]
+
+        result = remaining[0][1]
+        if out is not None:
+            out.copy_(result)
+        return result
