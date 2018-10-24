@@ -58,7 +58,7 @@ class Kernel(Parameterized):
         raise NotImplementedError
 
     def _slice_input(self, X):
-        """
+        r"""
         Slices :math:`X` according to ``self.active_dims``. If ``X`` is 1D then returns
         a 2D tensor with shape :math:`N \times 1`.
 
@@ -99,7 +99,7 @@ class Kernel(Parameterized):
         return Product(self, other, name)
 
     def exp(self, name=None):
-        """
+        r"""
         Creates a new kernel according to
 
             :math:`k_{new}(x, z) = \exp(k(x, z)).`
@@ -247,7 +247,7 @@ class Transforming(Kernel):
 
 
 class Exponent(Transforming):
-    """
+    r"""
     Creates a new kernel according to
 
         :math:`k_{new}(x, z) = \exp(k(x, z)).`
