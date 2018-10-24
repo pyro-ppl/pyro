@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import importlib
+import itertools
 from collections import Counter
 
 import torch
@@ -23,20 +24,17 @@ class ContractExpression(object):
     def __init__(self, equation, *shapes):
         self.equation = equation
         self.shapes = shapes
-
-        inputs, output = equation.split('->')
-        inputs = inputs.split(',')
-        sizes = {dim: size for dims, shape in zip(inputs, shapes)
+        self.inputs, self.output = equation.split('->')
+        self.inputs = self.inputs.split(',')
+        sizes = {dim: size for dims, shape in zip(self.inputs, shapes)
                  for dim, size in zip(dims, shape)}
-        self.path = optimize(inputs, output, sizes)
+        self.path = optimize(self.inputs, self.output, sizes)
 
     def __call__(self, *operands, **kwargs):
         out = kwargs.pop('out', None)
 
         ref_counts = Counter(self.equation)
-        inputs, output = self.equation.split('->')
-        inputs = inputs.split(',')
-        remaining = list(zip(inputs, operands))
+        remaining = list(zip(self.inputs, operands))
         for op in self.path:
             op_inputs = []
             op_tensors = []
@@ -46,9 +44,9 @@ class ContractExpression(object):
                 op_inputs.append(dims)
                 ref_counts.subtract(dims)
             if remaining:
-                op_output = ''.join(sorted(d for d in set(''.join(op_inputs)) if ref_counts[d]))
+                op_output = ''.join(sorted(d for d in set(itertools.chain(*op_inputs)) if ref_counts[d]))
             else:
-                op_output = output
+                op_output = self.output
             ref_counts.update(op_output)
             op_equation = ','.join(op_inputs) + '->' + op_output
             tensor = _einsum(op_equation, *op_tensors, **kwargs)
