@@ -13,6 +13,8 @@ from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
 
+backend = 'pyro.ops.einsum.torch_log'
+
 
 def compute_cost(cache):
     return sum(1 for key in cache.keys() if key[0] in ('einsum', 'tensordot'))
@@ -25,9 +27,9 @@ def test_shared_backend():
     z = torch.randn(5, 6, 7)
     expr = 'abc,bcd,cde,def->af'
 
-    expected = contract(expr, w, x, y, z, backend='torch')
+    expected = contract(expr, w, x, y, z, backend=backend)
     with shared_intermediates():
-        actual = contract(expr, w, x, y, z, backend='torch')
+        actual = contract(expr, w, x, y, z, backend=backend)
 
     assert_equal(actual, expected)
 
@@ -40,14 +42,14 @@ def test_complete_sharing():
     logger.debug('-' * 40)
     logger.debug('Without sharing:')
     with shared_intermediates() as cache:
-        contract('ab,bc,cd->', x, y, z, backend='torch')
+        contract('ab,bc,cd->', x, y, z, backend=backend)
         expected = len(cache)
 
     logger.debug('-' * 40)
     logger.debug('With sharing:')
     with shared_intermediates() as cache:
-        contract('ab,bc,cd->', x, y, z, backend='torch')
-        contract('ab,bc,cd->', x, y, z, backend='torch')
+        contract('ab,bc,cd->', x, y, z, backend=backend)
+        contract('ab,bc,cd->', x, y, z, backend=backend)
         actual = len(cache)
 
     logger.debug('-' * 40)
@@ -66,17 +68,17 @@ def test_partial_sharing():
     logger.debug('Without sharing:')
     num_exprs_nosharing = 0
     with shared_intermediates() as cache:
-        contract('ab,bc,cd->', x, y, z1, backend='torch')
+        contract('ab,bc,cd->', x, y, z1, backend=backend)
         num_exprs_nosharing += len(cache)
     with shared_intermediates() as cache:
-        contract('ab,bc,cd->', x, y, z2, backend='torch')
+        contract('ab,bc,cd->', x, y, z2, backend=backend)
         num_exprs_nosharing += len(cache)
 
     logger.debug('-' * 40)
     logger.debug('With sharing:')
     with shared_intermediates() as cache:
-        contract('ab,bc,cd->', x, y, z1, backend='torch')
-        contract('ab,bc,cd->', x, y, z2, backend='torch')
+        contract('ab,bc,cd->', x, y, z1, backend=backend)
+        contract('ab,bc,cd->', x, y, z2, backend=backend)
         num_exprs_sharing = len(cache)
 
     logger.debug('-' * 40)
@@ -99,7 +101,7 @@ def test_chain(size):
             equation = '{}->{}'.format(inputs, target)
             path_info = opt_einsum.contract_path(equation, *xs)
             logger.debug(path_info[1])
-            contract(equation, *xs, backend='torch')
+            contract(equation, *xs, backend=backend)
         logger.debug('-' * 40)
 
 
@@ -117,7 +119,7 @@ def test_chain_2(size):
             equation = '{}->{}'.format(inputs, target)
             path_info = opt_einsum.contract_path(equation, *xs)
             logger.debug(path_info[1])
-            contract(equation, *xs, backend='torch')
+            contract(equation, *xs, backend=backend)
         logger.debug('-' * 40)
 
 
@@ -134,7 +136,7 @@ def test_chain_2_growth():
             for i in range(size):
                 target = alphabet[i:i+2]
                 equation = '{}->{}'.format(inputs, target)
-                contract(equation, *xs, backend='torch')
+                contract(equation, *xs, backend=backend)
             costs.append(compute_cost(cache))
 
     logger.debug('sizes = {}'.format(repr(sizes)))
@@ -155,7 +157,7 @@ def test_chain_sharing(size):
         with shared_intermediates() as cache:
             target = alphabet[i]
             equation = '{}->{}'.format(inputs, target)
-            contract(equation, *xs, backend='torch')
+            contract(equation, *xs, backend=backend)
             num_exprs_nosharing += compute_cost(cache)
 
     with shared_intermediates() as cache:
@@ -165,7 +167,7 @@ def test_chain_sharing(size):
             equation = '{}->{}'.format(inputs, target)
             path_info = opt_einsum.contract_path(equation, *xs)
             logger.debug(path_info[1])
-            contract(equation, *xs, backend='torch')
+            contract(equation, *xs, backend=backend)
         num_exprs_sharing = compute_cost(cache)
 
     logger.debug('-' * 40)

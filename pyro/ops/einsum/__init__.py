@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import opt_einsum
 
-from pyro.ops.einsum.paths import optimize
+from pyro.ops.einsum.contract import ContractExpression
 
 _PATH_CACHE = {}
 
@@ -27,14 +27,10 @@ def contract_expression(equation, *shapes, **kwargs):
 
     # use Pyro's cheap optimizer for contraction paths
     if kwargs.get('optimize', 'pyro') == 'pyro':
-        inputs, output = equation.split('->')
-        inputs = inputs.split(',')
-        sizes = {dim: size for dims, shape in zip(inputs, shapes)
-                 for dim, size in zip(dims, shape)}
-        path = optimize(inputs, output, sizes)
-        kwargs['optimize'] = path
+        expr = ContractExpression(equation, *shapes, **kwargs)
+    else:
+        expr = opt_einsum.contract_expression(equation, *shapes, **kwargs)
 
-    expr = opt_einsum.contract_expression(equation, *shapes, **kwargs)
     if cache_path:
         _PATH_CACHE[key] = expr
     return expr
