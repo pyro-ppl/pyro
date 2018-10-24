@@ -11,7 +11,7 @@ from pyro.params import param_with_module_name
 
 
 class SparseGPRegression(GPModel):
-    u"""
+    ur"""
     Sparse Gaussian Process Regression model.
 
     In :class:`.GPRegression` model, when the number of input data :math:`X` is large,

@@ -8,7 +8,7 @@ from .kernel import Kernel
 
 
 class DotProduct(Kernel):
-    """
+    r"""
     Base class for kernels which are functions of :math:`x \cdot z`.
     """
 
@@ -21,7 +21,7 @@ class DotProduct(Kernel):
         self.set_constraint("variance", constraints.positive)
 
     def _dot_product(self, X, Z=None, diag=False):
-        """
+        r"""
         Returns :math:`X \cdot Z`.
         """
         if Z is None:
@@ -38,7 +38,7 @@ class DotProduct(Kernel):
 
 
 class Linear(DotProduct):
-    """
+    r"""
     Implementation of Linear kernel:
 
         :math:`k(x, z) = \sigma^2 x \cdot z.`
