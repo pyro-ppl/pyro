@@ -120,7 +120,8 @@ def main(args):
     logging.info('Generating data')
     logging.info(args)
 
-    retfile = '/Users/ruijili/Documents/3_correlation/tsa/pao/sssm/ret.npz'
+    # retfile = '/Users/ruijili/Documents/3_correlation/tsa/pao/sssm/ret.npz'
+    retfile = 'slds_ret.npz'
 
 
 
@@ -239,7 +240,7 @@ def main(args):
     for name in pyro.get_param_store().get_all_param_names():
         dict_ret[name] = pyro.param(name).data.numpy()
 
-    if 1:
+    if args.map:
         logging.info("computing marginals")
         r1 = elbo.compute_marginals(model, guide, sequences, lengths, args)
         for k,v in r1.items():
