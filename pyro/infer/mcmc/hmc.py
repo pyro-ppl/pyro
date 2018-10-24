@@ -22,7 +22,7 @@ from pyro.util import optional, torch_isinf, torch_isnan
 
 
 class HMC(TraceKernel):
-    """
+    r"""
     Simple Hamiltonian Monte Carlo kernel, where ``step_size`` and ``num_steps``
     need to be explicitly specified by the user.
 

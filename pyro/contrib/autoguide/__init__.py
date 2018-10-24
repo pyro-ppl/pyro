@@ -627,7 +627,7 @@ class AutoIAFNormal(AutoContinuous):
 
 
 class AutoLaplaceApproximation(AutoContinuous):
-    """
+    r"""
     Laplace approximation (quadratic approximation) approximates the posterior
     math:`log p(z | x)` by a multivariate normal distribution in the
     unconstrained space. Under the hood, it uses Delta distributions to
