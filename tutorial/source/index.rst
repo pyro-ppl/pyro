@@ -35,6 +35,7 @@ Welcome to Pyro Examples and Tutorials!
    gp
    bo
    tracking_1d
+   csis
    RSA-implicature
    RSA-hyperbole
    ekf

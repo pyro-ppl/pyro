@@ -82,7 +82,7 @@ class LSH(object):
         self._hash_to_key[_hash].remove(key)
 
     def nearby(self, key):
-        """
+        r"""
         Returns a set of keys which are neighbours of the point identified by ``key``.
 
 
