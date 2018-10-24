@@ -255,7 +255,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
-    parser.add_argument("-n", "--num-steps", default=50, type=int)
+    parser.add_argument("-n", "--num-steps", default=1, type=int)
     parser.add_argument("-l", "--num-latent", default=2, type=int)
     parser.add_argument("-s", "--num-state", default=5, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.1, type=float)
