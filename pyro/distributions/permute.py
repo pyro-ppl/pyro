@@ -45,7 +45,8 @@ class PermuteTransform(Transform):
 
         # Calculate the inverse permutation order
         self.inv_permutation = torch.empty_like(permutation, dtype=torch.long)
-        self.inv_permutation[permutation] = torch.arange(permutation.size(0), dtype=torch.long, device=permutation.device)
+        self.inv_permutation[permutation] = torch.arange(permutation.size(0), dtype=torch.long,
+                                                         device=permutation.device)
 
     def _call(self, x):
         """
