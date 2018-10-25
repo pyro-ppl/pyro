@@ -165,6 +165,13 @@ InverseAutoRegressiveFlow
     :undoc-members:
     :show-inheritance:
 
+InverseAutoRegressiveFlowStable
+-------------------------
+.. autoclass:: pyro.distributions.InverseAutoregressiveFlowStable
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 PermuteTransform
 -------------------------
 .. autoclass:: pyro.distributions.PermuteTransform
