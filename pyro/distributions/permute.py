@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 from torch.distributions.transforms import Transform
+from torch.distributions.utils import lazy_property
 from torch.distributions import constraints
 
 from pyro.distributions.util import copy_docs_from
@@ -44,10 +45,13 @@ class PermuteTransform(Transform):
 
         self.permutation = permutation
 
-        # Calculate the inverse permutation order
-        self.inv_permutation = torch.empty_like(permutation, dtype=torch.long)
-        self.inv_permutation[permutation] = torch.arange(permutation.size(0), dtype=torch.long,
-                                                         device=permutation.device)
+    @lazy_property
+    def inv_permutation(self):
+        result = torch.empty_like(self.permutation, dtype=torch.long)
+        result[self.permutation] = torch.arange(self.permutation.size(0),
+                                                dtype=torch.long,
+                                                device=self.permutation.device)
+        return result
 
     def _call(self, x):
         """
