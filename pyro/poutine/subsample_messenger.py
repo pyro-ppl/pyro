@@ -12,7 +12,7 @@ class _Subsample(Distribution):
     """
     Randomly select a subsample of a range of indices.
 
-    Internal use only. This should only be used by `iarange`.
+    Internal use only. This should only be used by `plate`.
     """
 
     def __init__(self, size, subsample_size, use_cuda=None, device=None):
@@ -51,7 +51,7 @@ class _Subsample(Distribution):
         return result.cuda() if self.use_cuda else result
 
     def log_prob(self, x):
-        # This is zero so that iarange can provide an unbiased estimate of
+        # This is zero so that plate can provide an unbiased estimate of
         # the non-subsampled log_prob.
         result = torch.tensor(0., device=self.device)
         return result.cuda() if self.use_cuda else result
@@ -59,7 +59,7 @@ class _Subsample(Distribution):
 
 class SubsampleMessenger(IndepMessenger):
     """
-    Drop-in replacement for irange and iarange, including subsampling!
+    Extension of IndepMessenger that includes subsampling.
     """
 
     def __init__(self, name, size=None, subsample_size=None, subsample=None, dim=None,
@@ -77,7 +77,7 @@ class SubsampleMessenger(IndepMessenger):
     @staticmethod
     def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=None, device=None):
         """
-        Helper function for iarange and irange. See their docstrings for details.
+        Helper function for plate and irange. See their docstrings for details.
         """
         if size is None:
             assert subsample_size is None

@@ -27,7 +27,7 @@ class Gaussian(Likelihood):
         self.set_constraint("variance", constraints.positive)
 
     def forward(self, f_loc, f_var, y=None):
-        """
+        r"""
         Samples :math:`y` given :math:`f_{loc}`, :math:`f_{var}` according to
 
             .. math:: y \sim \mathbb{Normal}(f_{loc}, f_{var} + \epsilon),

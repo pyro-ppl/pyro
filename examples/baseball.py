@@ -56,7 +56,6 @@ hyper-parameters) of running HMC on different problems.
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 # Enable validation checks
 pyro.enable_validation(True)
-pyro.set_rng_seed(1)
 DATA_URL = "https://d2fefpcigoriu7.cloudfront.net/datasets/EfronMorrisBB.txt"
 
 
@@ -66,7 +65,7 @@ DATA_URL = "https://d2fefpcigoriu7.cloudfront.net/datasets/EfronMorrisBB.txt"
 
 
 def fully_pooled(at_bats):
-    """
+    r"""
     Number of hits in $K$ at bats for each player has a Binomial
     distribution with a common probability of success, $\phi$.
 
@@ -79,7 +78,7 @@ def fully_pooled(at_bats):
 
 
 def not_pooled(at_bats):
-    """
+    r"""
     Number of hits in $K$ at bats for each player has a Binomial
     distribution with independent probability of success, $\phi_i$.
 
@@ -93,7 +92,7 @@ def not_pooled(at_bats):
 
 
 def partially_pooled(at_bats):
-    """
+    r"""
     Number of hits has a Binomial distribution with independent
     probability of success, $\phi_i$. Each $\phi_i$ follows a Beta
     distribution with concentration parameters $c_1$ and $c_2$, where
@@ -112,7 +111,7 @@ def partially_pooled(at_bats):
 
 
 def partially_pooled_with_logit(at_bats):
-    """
+    r"""
     Number of hits has a Binomial distribution with a logit link function.
     The logits $\alpha$ for each player is normally distributed with the
     mean and scale parameters sharing a common prior.
@@ -235,6 +234,7 @@ def evaluate_log_predictive_density(model, model_trace_posterior, baseball_datas
 
 
 def main(args):
+    pyro.set_rng_seed(args.rng_seed)
     baseball_dataset = pd.read_csv(DATA_URL, "\t")
     train, _, player_names = train_test_split(baseball_dataset)
     at_bats, hits = train[:, 0], train[:, 1]
@@ -243,7 +243,10 @@ def main(args):
     logging.info(baseball_dataset)
 
     # (1) Full Pooling Model
-    posterior_fully_pooled = MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps) \
+    posterior_fully_pooled = MCMC(nuts_kernel,
+                                  num_samples=args.num_samples,
+                                  warmup_steps=args.warmup_steps,
+                                  num_chains=args.num_chains) \
         .run(fully_pooled, at_bats, hits)
     logging.info("\nModel: Fully Pooled")
     logging.info("===================")
@@ -256,7 +259,10 @@ def main(args):
     evaluate_log_predictive_density(fully_pooled, posterior_fully_pooled, baseball_dataset)
 
     # (2) No Pooling Model
-    posterior_not_pooled = MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps) \
+    posterior_not_pooled = MCMC(nuts_kernel,
+                                num_samples=args.num_samples,
+                                warmup_steps=args.warmup_steps,
+                                num_chains=args.num_chains) \
         .run(not_pooled, at_bats, hits)
     logging.info("\nModel: Not Pooled")
     logging.info("=================")
@@ -271,7 +277,10 @@ def main(args):
     # (3) Partially Pooled Model
     # TODO: remove once htps://github.com/uber/pyro/issues/1458 is resolved
     if "CI" not in os.environ:
-        posterior_partially_pooled = MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps) \
+        posterior_partially_pooled = MCMC(nuts_kernel,
+                                          num_samples=args.num_samples,
+                                          warmup_steps=args.warmup_steps,
+                                          num_chains=args.num_chains) \
             .run(partially_pooled, at_bats, hits)
         logging.info("\nModel: Partially Pooled")
         logging.info("=======================")
@@ -285,8 +294,10 @@ def main(args):
         evaluate_log_predictive_density(partially_pooled, posterior_partially_pooled, baseball_dataset)
 
     # (4) Partially Pooled with Logit Model
-    posterior_partially_pooled_with_logit = MCMC(nuts_kernel, num_samples=args.num_samples,
-                                                 warmup_steps=args.warmup_steps) \
+    posterior_partially_pooled_with_logit = MCMC(nuts_kernel,
+                                                 num_samples=args.num_samples,
+                                                 warmup_steps=args.warmup_steps,
+                                                 num_chains=args.num_chains) \
         .run(partially_pooled_with_logit, at_bats, hits)
     logging.info("\nModel: Partially Pooled with Logit")
     logging.info("==================================")
@@ -306,6 +317,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
     parser.add_argument("-n", "--num-samples", nargs="?", default=200, type=int)
+    parser.add_argument("--num-chains", nargs='?', default=4, type=int)
     parser.add_argument("--warmup-steps", nargs='?', default=100, type=int)
     parser.add_argument("--rng_seed", nargs='?', default=0, type=int)
     args = parser.parse_args()

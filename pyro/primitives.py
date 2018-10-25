@@ -10,6 +10,7 @@ import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.params import param_with_module_name
+from pyro.poutine.plate_messenger import PlateMessenger
 from pyro.poutine.runtime import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack
 from pyro.poutine.subsample_messenger import SubsampleMessenger
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
@@ -82,27 +83,27 @@ def sample(name, fn, *args, **kwargs):
         return msg["value"]
 
 
-class iarange(SubsampleMessenger):
+class plate(PlateMessenger):
     """
     Context manager for conditionally independent ranges of variables.
 
-    :class:`iarange` is similar to :func:`torch.arange` in that it yields an
-    array of indices by which other tensors can be indexed. :class:`iarange`
+    :class:`plate` is similar to :func:`torch.arange` in that it yields an
+    array of indices by which other tensors can be indexed. :class:`plate`
     differs from :func:`torch.arange` in that it also informs inference
     algorithms that the variables being indexed are conditionally independent.
-    To do this, :class:`iarange` is a provided as context manager rather than a
+    To do this, :class:`plate` is a provided as context manager rather than a
     function, and users must guarantee that all computation within an
-    :class:`iarange` context is conditionally independent::
+    :class:`plate` context is conditionally independent::
 
-        with iarange("name", size) as ind:
+        with plate("name", size) as ind:
             # ...do conditionally independent stuff with ind...
 
-    Additionally, :class:`iarange` can take advantage of the conditional
+    Additionally, :class:`plate` can take advantage of the conditional
     independence assumptions by subsampling the indices and informing inference
     algorithms to scale various computed values. This is typically used to
     subsample minibatches of data::
 
-        with iarange("data", len(data), subsample_size=100) as ind:
+        with plate("data", len(data), subsample_size=100) as ind:
             batch = data[ind]
             assert len(batch) == 100
 
@@ -115,7 +116,7 @@ class iarange(SubsampleMessenger):
         independent within the context.
 
     :param str name: A unique name to help inference algorithms match
-        :class:`iarange` sites between models and guides.
+        :class:`plate` sites between models and guides.
     :param int size: Optional size of the collection being subsampled
         (like `stop` in builtin `range`).
     :param int subsample_size: Size of minibatches used in subsampling.
@@ -127,7 +128,7 @@ class iarange(SubsampleMessenger):
     :param int dim: An optional dimension to use for this independence index.
         If specified, ``dim`` should be negative, i.e. should index from the
         right. If not specified, ``dim`` is set to the rightmost dim that is
-        left of all enclosing ``iarange`` contexts.
+        left of all enclosing ``plate`` contexts.
     :param bool use_cuda: DEPRECATED, use the `device` arg instead.
         Optional bool specifying whether to use cuda tensors for `subsample`
         and `log_prob`. Defaults to ``torch.Tensor.is_cuda``.
@@ -146,41 +147,46 @@ class iarange(SubsampleMessenger):
            >>> data = torch.randn(100)
 
         >>> # This version simply declares independence:
-        >>> with iarange('data'):
+        >>> with plate('data'):
         ...     obs = sample('obs', dist.Normal(loc, scale), obs=data)
 
         >>> # This version subsamples data in vectorized way:
-        >>> with iarange('data', 100, subsample_size=10) as ind:
+        >>> with plate('data', 100, subsample_size=10) as ind:
         ...     obs = sample('obs', dist.Normal(loc, scale), obs=data[ind])
 
         >>> # This wraps a user-defined subsampling method for use in pyro:
         >>> ind = torch.randint(0, 100, (10,)).long() # custom subsample
-        >>> with iarange('data', 100, subsample=ind):
+        >>> with plate('data', 100, subsample=ind):
         ...     obs = sample('obs', dist.Normal(loc, scale), obs=data[ind])
 
         >>> # This reuses two different independence contexts.
-        >>> x_axis = iarange('outer', 320, dim=-1)
-        >>> y_axis = iarange('inner', 200, dim=-2)
+        >>> x_axis = plate('outer', 320, dim=-1)
+        >>> y_axis = plate('inner', 200, dim=-2)
         >>> with x_axis:
-        ...     x_noise = sample("x_noise", dist.Normal(loc, scale).expand_by([320]))
+        ...     x_noise = sample("x_noise", dist.Normal(loc, scale))
+        ...     assert x_noise.shape == (320,)
         >>> with y_axis:
-        ...     y_noise = sample("y_noise", dist.Normal(loc, scale).expand_by([200, 1]))
+        ...     y_noise = sample("y_noise", dist.Normal(loc, scale))
+        ...     assert y_noise.shape == (200, 1)
         >>> with x_axis, y_axis:
-        ...     xy_noise = sample("xy_noise", dist.Normal(loc, scale).expand_by([200, 320]))
+        ...     xy_noise = sample("xy_noise", dist.Normal(loc, scale))
+        ...     assert xy_noise.shape == (200, 320)
 
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an
     extended discussion.
     """
-    def __enter__(self):
-        super(iarange, self).__enter__()
-        if self._vectorized and self._indices is not None:
-            return self.indices
-        return None
+    pass
+
+
+class iarange(plate):
+    def __init__(self, *args, **kwargs):
+        warnings.warn("pyro.iarange is deprecated; use pyro.plate instead", DeprecationWarning)
+        super(iarange, self).__init__(*args, **kwargs)
 
 
 class irange(SubsampleMessenger):
     """
-    Non-vectorized version of :class:`iarange`. See :class:`iarange` for details.
+    Non-vectorized version of :class:`plate`. See :class:`plate` for details.
 
     :param str name: A name that will be used for this site in a Trace.
     :param int size: The size of the collection being subsampled (like ``stop``

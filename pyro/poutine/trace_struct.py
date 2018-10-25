@@ -58,7 +58,7 @@ class Trace(networkx.DiGraph):
     ``'args'`` and ``'kwargs'`` are the arguments passed via ``pyro.sample``
     to ``fn.__call__`` or ``fn.log_prob``.
     ``'scale'`` is used to scale the log-probability of the site when computing the log-joint.
-    ``'cond_indep_stack'`` contains data structures corresponding to ``pyro.iarange`` contexts
+    ``'cond_indep_stack'`` contains data structures corresponding to ``pyro.plate`` contexts
     appearing in the execution.
     ``'done'``, ``'stop'``, and ``'continuation'`` are only used by Pyro's internals.
     """
