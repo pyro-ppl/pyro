@@ -63,9 +63,10 @@ class CollapseSampleMessenger(pyro.poutine.messenger.Messenger):
 
     def __enter__(self):
 
-        self.log_factors = OrderedDict(
-            (frozenset(f for f in site["cond_indep_stack"] if f.vectorized), site["log_prob"])
-            for site in self.enum_trace.nodes.values())
+        self.log_factors = OrderedDict()
+        for site in self.enum_trace.nodes.values():
+            ordinal = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
+            self.log_factors.setdefault(ordinal, []).append(site["log_prob"])
 
         self.sum_dims = {x: set(i for i in range(-x.dim(), 0) if x.shape[i] > 1) & self.enum_dims
                          for xs in self.log_factors.values() for x in xs}
