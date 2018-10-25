@@ -10,12 +10,13 @@ from pyro.distributions.util import copy_docs_from
 @copy_docs_from(Transform)
 class PermuteTransform(Transform):
     """
-    A normalizing flow that reorders the input dimensions, that is, multiplies the input by a permutation matrix.
-    This is useful in between IAF transforms to increase the flexibility of the resulting distribution and
-    stabilize learning. Whilst not being an autoregressive flow, the log absolute determinate of the Jacobian is
-    easily calculable as 0. Note that reordering the input dimension between two layers of IAF is not equivalent
-    to reordering the dimension inside the MADE networks that those IAFs use; using a PermuteTransform results in a
-    distribution with more flexibility.
+    A bijection that reorders the input dimensions, that is, multiplies the input by a permutation matrix.
+    This is useful in between :class:`~pyro.distributions.InverseAutoregressiveFlow` transforms to increase the
+    flexibility of the resulting distribution and stabilize learning. Whilst not being an autoregressive flow,
+    the log absolute determinate of the Jacobian is easily calculable as 0. Note that reordering the input dimension
+    between two layers of :class:`~pyro.distributions.InverseAutoregressiveFlow` is not equivalent to reordering
+    the dimension inside the MADE networks that those IAFs use; using a PermuteTransform results in a distribution
+    with more flexibility.
 
     Example usage:
 
@@ -72,7 +73,7 @@ class PermuteTransform(Transform):
     def log_abs_det_jacobian(self, x, y):
         """
         Calculates the elementwise determinant of the log Jacobian, i.e. log(abs([dy_0/dx_0, ..., dy_{N-1}/dx_{N-1}])).
-        Note that this type of flow is not autoregressive, so the log Jacobian is not the sum of the previous
+        Note that this type of transform is not autoregressive, so the log Jacobian is not the sum of the previous
         expression. However, it turns out it's always 0 (since the determinant is -1 or +1), and so returning a
         vector of zeros works.
         """
