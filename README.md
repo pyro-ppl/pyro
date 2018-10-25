@@ -126,3 +126,14 @@ pip install .  # pip install .[extras] for running examples/tutorials
 ## Running Pyro from a Docker Container
 
 Refer to the instructions [here](docker/README.md).
+
+## Citation
+If you use Pyro, please consider citing:
+```
+@article{bingham2018pyro,
+  author = {Bingham, Eli and Chen, Jonathan P. and Jankowiak, Martin and Obermeyer, Fritz and Pradhan, Neeraj and Karaletsos, Theofanis and Singh, Rohit and Szerlip, Paul and Horsfall, Paul and Goodman, Noah D.},
+  title = {{Pyro: Deep Universal Probabilistic Programming}},
+  journal = {arXiv preprint arXiv:1810.09538},
+  year = {2018}
+}
+```
