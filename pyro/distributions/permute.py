@@ -12,7 +12,7 @@ class PermuteTransform(Transform):
     """
     A bijection that reorders the input dimensions, that is, multiplies the input by a permutation matrix.
     This is useful in between :class:`~pyro.distributions.InverseAutoregressiveFlow` transforms to increase the
-    flexibility of the resulting distribution and stabilize learning. Whilst not being an autoregressive flow,
+    flexibility of the resulting distribution and stabilize learning. Whilst not being an autoregressive transform,
     the log absolute determinate of the Jacobian is easily calculable as 0. Note that reordering the input dimension
     between two layers of :class:`~pyro.distributions.InverseAutoregressiveFlow` is not equivalent to reordering
     the dimension inside the MADE networks that those IAFs use; using a PermuteTransform results in a distribution
@@ -55,7 +55,7 @@ class PermuteTransform(Transform):
         :type x: torch.Tensor
 
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous flow)
+        sample from the base distribution (or the output of a previous transform)
         """
 
         return x[..., self.permutation]
