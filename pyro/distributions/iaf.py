@@ -20,10 +20,10 @@ class InverseAutoregressiveFlow(Transform):
     """
     An implementation of Inverse Autoregressive Flow, using Eq (10) from Kingma Et Al., 2016,
 
-        :math:`\mathbf{y} = \mu_t + \sigma_t\odot\mathbf{x}`
+        :math:`\\mathbf{y} = \\mu_t + \\sigma_t\\odot\\mathbf{x}`
 
-    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs, :math:`\mu_t,\sigma_t`
-    are calculated from an autoregressive network on :math:`\mathbf{x}`, and :math:`\sigma_t>0`.
+    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, :math:`\\mu_t,\\sigma_t`
+    are calculated from an autoregressive network on :math:`\\mathbf{x}`, and :math:`\\sigma_t>0`.
 
     Together with `TransformedDistribution` this provides a way to create richer variational approximations.
 
@@ -155,10 +155,10 @@ class InverseAutoregressiveFlowStable(Transform):
     """
     An implementation of an Inverse Autoregressive Flow, using Eqs (13)/(14) from Kingma Et Al., 2016,
 
-        :math:`\mathbf{y} = \sigma_t\odot\mathbf{x} + (1-\sigma_t)\odot\mu_t`
+        :math:`\\mathbf{y} = \\sigma_t\\odot\\mathbf{x} + (1-\\sigma_t)\\odot\\mu_t`
 
-    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs, :math:`\mu_t,\sigma_t`
-    are calculated from an autoregressive network on :math:`\mathbf{x}`, and :math:`\sigma_t` is
+    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, :math:`\\mu_t,\\sigma_t`
+    are calculated from an autoregressive network on :math:`\\mathbf{x}`, and :math:`\\sigma_t` is
     restricted to :math:`[0,1]`.
 
     This variant of IAF is claimed by the authors to be more numerically stable than one using Eq (10),
