@@ -246,23 +246,46 @@ def test_contract_to_tensor_sizes(a, b, c, d):
     assert actual.shape == (d,)
 
 
+# Let abcde be enum dims and ijk be batch dims.
 UBERSUM_EXAMPLES = [
     ('->', ''),
     ('a->,a', ''),
     ('ab->,a,b,ab,ba', ''),
     ('ab,bc->,a,b,c,ab,bc,ac,abc', ''),
     ('ab,bc,cd->,a,b,c,d,ab,ac,ad,bc,bd,cd,abc,acd,bcd,abcd', ''),
-    ('a->,a', 'a'),
-    (',a->,a', 'a'),
-    (',a,a->,a', 'a'),
-    (',a,ab->,a,ab', 'a'),
-    (',a,a,ab,ab->,a,ab', 'a'),
-    ('ca,ab->,a,ab,ac,abc', 'a'),
-    ('ac,bc,abc->,c,a,ac,b,bc,abc', 'ab'),
-    ('a,bd,abcd->,a,b,bd,ab,abc,abd,abcd', 'ab'),
-    ('ac,bd,abcd->,a,ac,b,bd,ab,abc,abd,abcd', 'ab'),
-    (',a,b,c,ab,ac,bc,abc->,c,a,b,ac,bc,ab,abc', 'ab'),
-    (',ad,abd,acd->,a,b,c,ab,ac,abc,ad,abd,acd,abcd', 'abc'),
+    ('i->,i', 'i'),
+    (',i->,i', 'i'),
+    (',i,i->,i', 'i'),
+    (',i,ia->,i,ia', 'i'),
+    (',i,i,ia,ia->,i,ia', 'i'),
+    ('bi,ia->,i,ia,ib,iab', 'i'),
+    ('abi,b->,b,ai,abi', 'i'),
+    ('ia,ja,ija->,a,i,ia,j,ja,ija', 'ij'),
+    ('i,jb,ijab->,i,j,jb,ij,ija,ijb,ijab', 'ij'),
+    ('ia,jb,ijab->,i,ia,j,jb,ij,ija,ijb,ijab', 'ij'),
+    (',i,j,a,ij,ia,ja,ija->,a,i,j,ia,ja,ij,ija', 'ij'),
+    # {ij}   {ik}
+    #   a\   /a
+    #     {i}      {}
+    (',ia,ija,ika->,i,j,k,ij,ik,ijk,ia,ija,ika,ijka', 'ijk'),
+    # {ij} a
+    #   |b
+    #  {i} c
+    #   |d
+    #  {} e
+    ('abij,bcdi,de->,e,ci,bi,bci,aij', 'ij'),
+    # {ik}  {ij}   {ij}
+    #   a\   /b    /e
+    #     {i}    {j}
+    #       c\  /d
+    #         {}
+    ('aik,bij,abci,cd,dej,eij->,ai,bi,ej,aik,bij,eij', 'ijk'),
+    # {ij}    {ij}
+    #  a|      |d
+    #  {i}    {j}
+    #    b\  /c
+    #      {}
+    ('aij,abi,bc,cdj,dij->,bi,cj,aij,dij,adij', 'ij'),
 ]
 
 
@@ -405,7 +428,7 @@ def test_ubersum_4(impl):
     assert x_b1.shape == (b, 1)
     y_db1 = logsumexp(y, 2, keepdim=True)
     assert y_db1.shape == (d, b, 1)
-    y_dbc = y_db1.sum(0) - y_db1 + y  # avoid double counting
+    y_dbc = y_db1.sum(0) - y_db1 + y  # inclusion-exclusion
     assert y_dbc.shape == (d, b, c)
     xy_dc = logsumexp(x_b1 + y_dbc, 1)
     assert xy_dc.shape == (d, c)
