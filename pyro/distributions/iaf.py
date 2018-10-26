@@ -18,7 +18,13 @@ def clamp_preserve_gradients(x, min, max):
 @copy_docs_from(Transform)
 class InverseAutoregressiveFlow(Transform):
     """
-    An implementation of an Inverse Autoregressive Flow, using Eq (10) from Kingma Et Al., 2016.
+    An implementation of Inverse Autoregressive Flow, using Eq (10) from Kingma Et Al., 2016,
+
+        :math:`\mathbf{y} = \mu_t + \sigma_t\odot\mathbf{x}`
+
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs, :math:`\mu_t,\sigma_t`
+    are calculated from an autoregressive network on :math:`\mathbf{x}`, and :math:`\sigma_t>0`.
+
     Together with `TransformedDistribution` this provides a way to create richer variational approximations.
 
     Example usage:
@@ -147,9 +153,17 @@ class InverseAutoregressiveFlow(Transform):
 @copy_docs_from(Transform)
 class InverseAutoregressiveFlowStable(Transform):
     """
-    An implementation of an Inverse Autoregressive Flow, using Eqs (13)/(14) from Kingma Et Al., 2016.
+    An implementation of an Inverse Autoregressive Flow, using Eqs (13)/(14) from Kingma Et Al., 2016,
+
+        :math:`\mathbf{y} = \sigma_t\odot\mathbf{x} + (1-\sigma_t)\odot\mu_t`
+
+    where :math:`\mathbf{x}` are the inputs, :math:`\mathbf{y}` are the outputs, :math:`\mu_t,\sigma_t`
+    are calculated from an autoregressive network on :math:`\mathbf{x}`, and :math:`\sigma_t` is
+    restricted to :math:`[0,1]`.
+
     This variant of IAF is claimed by the authors to be more numerically stable than one using Eq (10),
-    although in practice it leads to a restriction on the distributions that can be represented.
+    although in practice it leads to a restriction on the distributions that can be represented,
+    presumably since the input is restricted to rescaling by a number on :math:`[0,1]`.
 
     Example usage:
 
