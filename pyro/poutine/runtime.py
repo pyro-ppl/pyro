@@ -1,3 +1,5 @@
+import functools
+
 from pyro.params.param_store import _MODULE_NAMESPACE_DIVIDER, ParamStoreDict  # noqa: F401
 
 # the global pyro stack
@@ -84,64 +86,20 @@ class NonlocalExit(Exception):
                 break
 
 
-def validate_message(msg):
-    """
-    Asserts that the message has a valid format.
-    :returns: None
-    """
-    assert msg["type"] in ("sample", "param"), \
-        "{} is an invalid site type, how did that get there?".format(msg["type"])
-
-
 def default_process_message(msg):
     """
     Default method for processing messages in inference.
     :param msg: a message to be processed
     :returns: None
     """
-    validate_message(msg)
-    if msg["type"] == "sample":
-        fn, args, kwargs = \
-            msg["fn"], msg["args"], msg["kwargs"]
-
-        # msg["done"] enforces the guarantee in the poutine execution model
-        # that a site's non-effectful primary computation should only be executed once:
-        # if the site already has a stored return value,
-        # don't reexecute the function at the site,
-        # and do any side effects using the stored return value.
-        if msg["done"]:
-            return msg
-
-        if msg["is_observed"]:
-            assert msg["value"] is not None
-            val = msg["value"]
-        else:
-            val = fn(*args, **kwargs)
-
-        # after fn has been called, update msg to prevent it from being called again.
+    if msg["done"] or msg["is_observed"]:
         msg["done"] = True
-        msg["value"] = val
-    elif msg["type"] == "param":
-        name, args, kwargs = \
-            msg["name"], msg["args"], msg["kwargs"]
+        return msg
 
-        # msg["done"] enforces the guarantee in the poutine execution model
-        # that a site's non-effectful primary computation should only be executed once:
-        # if the site already has a stored return value,
-        # don't reexecute the function at the site,
-        # and do any side effects using the stored return value.
-        if msg["done"]:
-            return msg
+    msg["value"] = msg["fn"](*msg["args"], **msg["kwargs"])
 
-        ret = _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
-
-        # after the param store has been queried, update msg["done"]
-        # to prevent it from being queried again.
-        msg["done"] = True
-        msg["value"] = ret
-    else:
-        assert False
-    return None
+    # after fn has been called, update msg to prevent it from being called again.
+    msg["done"] = True
 
 
 def apply_stack(initial_msg):
@@ -169,7 +127,6 @@ def apply_stack(initial_msg):
     counter = 0
     # go until time to stop?
     for frame in stack:
-        validate_message(msg)
 
         counter = counter + 1
 
@@ -196,3 +153,53 @@ def am_i_wrapped():
     :returns: bool
     """
     return len(_PYRO_STACK) > 0
+
+
+def effectful(fn=None, type=None):
+    """
+    :param fn: function or callable that performs an effectful computation
+    :param str type: the type label of the operation, e.g. `"sample"`
+
+    Wrapper for calling :func:~`pyro.poutine.runtime.apply_stack` to apply any active effects.
+    """
+    if fn is None:
+        return functools.partial(effectful, type=type)
+
+    if getattr(fn, "_is_effectful", None):
+        return fn
+
+    assert type is not None, "must provide a type label for operation {}".format(fn)
+    assert type != "message", "cannot use 'message' as keyword"
+
+    def _fn(*args, **kwargs):
+
+        name = kwargs.pop("name", None)
+        infer = kwargs.pop("infer", {})
+
+        value = kwargs.pop("obs", None)
+        is_observed = value is not None
+
+        if not am_i_wrapped():
+            return fn(*args, **kwargs)
+        else:
+            msg = {
+                "type": type,
+                "name": name,
+                "fn": fn,
+                "is_observed": is_observed,
+                "args": args,
+                "kwargs": kwargs,
+                "value": value,
+                "scale": 1.0,
+                "mask": None,
+                "cond_indep_stack": (),
+                "done": False,
+                "stop": False,
+                "continuation": None,
+                "infer": infer,
+            }
+            # apply the stack and return its return value
+            apply_stack(msg)
+            return msg["value"]
+    _fn._is_effectful = True
+    return _fn
