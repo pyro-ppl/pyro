@@ -62,6 +62,7 @@ class LiftMessenger(Messenger):
             # prior is a dict of distributions
             if param_name in self.prior.keys():
                 msg["fn"] = self.prior[param_name]
+                msg["args"] = msg["args"][1:]
                 if isinstance(msg['fn'], Distribution):
                     msg["args"] = ()
                     msg["kwargs"] = {}
@@ -83,6 +84,7 @@ class LiftMessenger(Messenger):
                 # prior is a stochastic fn. block sample
                 msg["stop"] = True
             msg["fn"] = self.prior
+            msg["args"] = msg["args"][1:]
         else:
             # otherwise leave as is
             return None

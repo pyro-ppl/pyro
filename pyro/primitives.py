@@ -11,7 +11,7 @@ import pyro.infer as infer
 import pyro.poutine as poutine
 from pyro.params import param_with_module_name
 from pyro.poutine.plate_messenger import PlateMessenger
-from pyro.poutine.runtime import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack
+from pyro.poutine.runtime import _MODULE_NAMESPACE_DIVIDER, _PYRO_PARAM_STORE, am_i_wrapped, apply_stack, effectful
 from pyro.poutine.subsample_messenger import SubsampleMessenger
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 
@@ -28,6 +28,22 @@ def clear_param_store():
     Clears the ParamStore. This is especially useful if you're working in a REPL.
     """
     return _PYRO_PARAM_STORE.clear()
+
+
+_param = effectful(_PYRO_PARAM_STORE.get_param, type="param")
+
+
+def param(name, *args, **kwargs):
+    """
+    Saves the variable as a parameter in the param store.
+    To interact with the param store or write to disk,
+    see `Parameters <parameters.html>`_.
+
+    :param name: name of parameter
+    :returns: parameter
+    """
+    kwargs["name"] = name
+    return _param(name, *args, **kwargs)
 
 
 def sample(name, fn, *args, **kwargs):
@@ -221,38 +237,6 @@ class irange(SubsampleMessenger):
     See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
     """
     pass
-
-
-# XXX this should have the same call signature as torch.Tensor constructors
-def param(name, *args, **kwargs):
-    """
-    Saves the variable as a parameter in the param store.
-    To interact with the param store or write to disk,
-    see `Parameters <parameters.html>`_.
-
-    :param name: name of parameter
-    :returns: parameter
-    """
-    if not am_i_wrapped():
-        return _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
-    else:
-        msg = {
-            "type": "param",
-            "name": name,
-            "args": args,
-            "kwargs": kwargs,
-            "infer": {},
-            "scale": 1.0,
-            "mask": None,
-            "cond_indep_stack": (),
-            "value": None,
-            "done": False,
-            "stop": False,
-            "continuation": None
-        }
-        # apply the stack and return its return value
-        apply_stack(msg)
-        return msg["value"]
 
 
 def module(name, nn_module, update_module_params=False):
