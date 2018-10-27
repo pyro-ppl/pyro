@@ -46,12 +46,12 @@ class CollapseSampleMessenger(pyro.poutine.messenger.Messenger):
         self.cache = None
         self.enum_dims = set()
 
-        for name, site in self.enum_trace.items():
+        for name, site in self.enum_trace.nodes.items():
             if _is_collapsed(site):
                 self.enum_dims.add(site["fn"].event_dim - site["value"].dim())
 
         self.log_probs = {}
-        for name, site in self.enum_trace.items():
+        for name, site in self.enum_trace.nodes.items():
             if site["type"] == "sample":
                 log_prob = site["log_prob"]
                 for dim in range(-log_prob.dim(), 0):
@@ -65,6 +65,8 @@ class CollapseSampleMessenger(pyro.poutine.messenger.Messenger):
 
         self.log_factors = OrderedDict()
         for site in self.enum_trace.nodes.values():
+            if site["type"] != "sample":
+                continue
             ordinal = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
             self.log_factors.setdefault(ordinal, []).append(site["log_prob"])
 
@@ -91,7 +93,8 @@ class CollapseSampleMessenger(pyro.poutine.messenger.Messenger):
             msg["log_prob"] = self.log_probs[name]
 
         if not _is_collapsed(msg):
-            return super(CollapseSampleMessenger, self)._pyro_sample(msg)
+            return None
+            #return super(CollapseSampleMessenger, self)._process_message(msg)
 
         enum_dim = self.enum_trace.nodes[name]["infer"].get("_enumerate_dim")
         assert enum_dim is not None
@@ -126,12 +129,17 @@ class CollapseSampleMessenger(pyro.poutine.messenger.Messenger):
                         self.sum_dims[sampled_term] = self.sum_dims.pop(term) - {enum_dim}
 
 
-def collapse(model):
+def collapse(model, first_available_dim):
+    """
+    Use `ubersum` to collapse sample sites marked with `site["infer"]["collapse"] = True`
+
+    .. warning:: Cannot be wrapped with :func:~`pyro.poutine.replay`
+    """
 
     def _collapsed_model(*args, **kwargs):
         with poutine.block():
             enum_trace = poutine.trace(
-                CollapseEnumMessenger(model)  # XXX need first_available_dim
+                CollapseEnumMessenger(first_available_dim)(model)
             ).get_trace(*args, **kwargs)
 
         with CollapseSampleMessenger(enum_trace):
