@@ -84,7 +84,8 @@ class CollapseSampleMessenger(pyro.poutine.messenger.Messenger):
                 break
         # TODO put this into the right plate (the intersection of collapsed variable plates)
         # used for e.g. vectorized num_particles
-        pyro.sample(name, dist.Bernoulli(logits=self.log_prob_sum), obs=torch.tensor(1.))
+        pyro.sample(name, dist.Bernoulli(logits=self.log_prob_sum), obs=torch.tensor(1.),
+                    infer={"is_auxiliary": True})
         return super(CollapseSampleMessenger, self).__exit__(*args, **kwargs)
 
     def _pyro_sample(self, msg):
@@ -93,8 +94,8 @@ class CollapseSampleMessenger(pyro.poutine.messenger.Messenger):
             msg["log_prob"] = self.log_probs[name]
 
         if not _is_collapsed(msg):
+            # return super(CollapseSampleMessenger, self)._process_message(msg)
             return None
-            #return super(CollapseSampleMessenger, self)._process_message(msg)
 
         enum_dim = self.enum_trace.nodes[name]["infer"].get("_enumerate_dim")
         assert enum_dim is not None
