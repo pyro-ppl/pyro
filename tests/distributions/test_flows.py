@@ -59,6 +59,11 @@ class AutoregressiveFlowTests(TestCase):
 
         x_true = base_dist.sample(torch.Size([10]))
         y = iaf._call(x_true)
+
+        # This line empties the inverse cache, if the flow uses it
+        iaf._inverse(y)
+
+        # Cache is empty, hence must be calculating inverse afresh
         x_calculated = iaf._inverse(y)
 
         assert torch.norm(x_true - x_calculated, dim=-1).max().item() < self.delta
@@ -74,6 +79,10 @@ class AutoregressiveFlowTests(TestCase):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
         return dist.InverseAutoregressiveFlow(arn)
 
+    def _make_iaf_stable(self, input_dim):
+        arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
+        return dist.InverseAutoregressiveFlowStable(arn, sigmoid_bias=0.5)
+
     def _make_flipflow(self, input_dim):
         permutation = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
         return dist.PermuteTransform(permutation)
@@ -82,6 +91,18 @@ class AutoregressiveFlowTests(TestCase):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_iaf)
 
+    def test_iaf_stable_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_iaf_stable)
+
+    def test_iaf_inverses(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_inverse(input_dim, self._make_iaf)
+
+    def test_iaf_stable_inverses(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_inverse(input_dim, self._make_iaf_stable)
+
     def test_flipflow_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_inverse(input_dim, self._make_flipflow)
@@ -89,6 +110,10 @@ class AutoregressiveFlowTests(TestCase):
     def test_iaf_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_iaf)
+
+    def test_iaf_stable_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_iaf_stable)
 
     def test_flipflow_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
