@@ -198,9 +198,7 @@ EXAMPLES = [
 def test_contract_to_tensor(example):
     tensor_tree = OrderedDict((frozenset(t), [torch.randn(shape) for shape in shapes])
                               for t, shapes in example['shape_tree'].items())
-    sum_dims = {x: set(d for d in example['sum_dims'] if -d <= x.dim() and x.shape[d] > 1)
-                for terms in tensor_tree.values()
-                for x in terms}
+    sum_dims = set(example['sum_dims'])
     target_ordinal = frozenset(example['target_ordinal'])
     expected_shape = example['expected_shape']
 
@@ -212,9 +210,7 @@ def test_contract_to_tensor(example):
 def test_contract_tensor_tree(example):
     tensor_tree = OrderedDict((frozenset(t), [torch.randn(shape) for shape in shapes])
                               for t, shapes in example['shape_tree'].items())
-    sum_dims = {x: set(d for d in example['sum_dims'] if -d <= x.dim() and x.shape[d] > 1)
-                for terms in tensor_tree.values()
-                for x in terms}
+    sum_dims = set(example['sum_dims'])
 
     actual = assert_immutable(contract_tensor_tree)(tensor_tree, sum_dims)
     assert actual
@@ -235,7 +231,7 @@ def test_contract_to_tensor_sizes(a, b, c, d):
     tensor_tree = OrderedDict([(frozenset([frame(-2, c)]), [X]),
                                (frozenset(), [Y]),
                                (frozenset([frame(-1, d)]), [Z])])
-    sum_dims = {X: {-4}, Y: {-4, -3}, Z: {-3}}
+    sum_dims = {-4, -3}
 
     target_ordinal = frozenset()
     actual = contract_to_tensor(tensor_tree, sum_dims, target_ordinal)

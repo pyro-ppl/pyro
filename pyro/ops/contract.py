@@ -95,7 +95,10 @@ class UnpackedLogRing(TensorRing):
     Ordinals are frozensets of ``CondIndepStackFrame``s.
     """
     def dims(self, term):
-        return [d for d in range(-term.dim(), 0) if term.size(d) > 1]
+        key = 'dims', id(term)
+        if key not in self._cache:
+            self._cache[key] = tuple(d for d in range(-term.dim(), 0) if term.size(d) > 1)
+        return self._cache[key]
 
     def sumproduct(self, terms, dims):
         key = 'sumproduct', frozenset(id(x) for x in terms), frozenset(dims)
@@ -260,14 +263,13 @@ def _contract_component(ring, tensor_tree, sum_dims):
     lower bound plate context.
 
     This function should be deterministic.
-    This function has side-effects: it modifies ``tensor_tree`` and
-    ``sum_dims`` in-place.
+    This function has side-effects: it modifies ``tensor_tree`` in-place.
 
     :param TensorRing ring: an algebraic ring defining tensor operations.
     :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
         tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
-    :param dict sum_dims: a dictionary mapping tensors to sets of dimensions
-        (indexed from the right) that should be summed out.
+    :param set sum_dims: a set of dimensions (indexed from the right) that
+        should be summed out.
     """
     # First close the set of ordinals under intersection (greatest lower bound),
     # ensuring that the ordinals are arranged in a tree structure.
@@ -286,8 +288,9 @@ def _contract_component(ring, tensor_tree, sum_dims):
     dim_to_ordinal = {}
     for t, terms in tensor_tree.items():
         for term in terms:
-            for dim in sum_dims[term]:
-                dim_to_ordinal[dim] = dim_to_ordinal.get(dim, t) & t
+            for dim in ring.dims(term):
+                if dim in sum_dims:
+                    dim_to_ordinal[dim] = dim_to_ordinal.get(dim, t) & t
     dims_tree = defaultdict(set)
     for dim, t in dim_to_ordinal.items():
         dims_tree[t].add(dim)
@@ -303,7 +306,7 @@ def _contract_component(ring, tensor_tree, sum_dims):
 
             # Eliminate any enumeration dims via a sumproduct contraction.
             term = ring.sumproduct(terms, dims)
-            remaining_dims = set.union(*map(sum_dims.pop, terms)) - dims
+            remaining_dims = set(ring.dims(term)) & sum_dims
 
             # Eliminate extra plate dims via product contractions.
             if leaf == target_ordinal:
@@ -321,7 +324,6 @@ def _contract_component(ring, tensor_tree, sum_dims):
                 term = ring.product(term, contract_frames)
 
             tensor_tree.setdefault(parent, []).append(term)
-            sum_dims[term] = remaining_dims
 
 
 def contract_tensor_tree(tensor_tree, sum_dims, ring=None, cache=None):
@@ -332,8 +334,8 @@ def contract_tensor_tree(tensor_tree, sum_dims, ring=None, cache=None):
 
     :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
         tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
-    :param dict sum_dims: a dictionary mapping tensors to sets of dimensions
-        (indexed from the right) that should be summed out.
+    :param set sum_dims: a set of dimensions (indexed from the right) that
+        should be summed out.
     :param TensorRing ring: an algebraic ring defining tensor operations.
     :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`
         cache.
@@ -343,25 +345,22 @@ def contract_tensor_tree(tensor_tree, sum_dims, ring=None, cache=None):
     if ring is None:
         ring = UnpackedLogRing(cache=cache)
     assert isinstance(tensor_tree, OrderedDict)
-    assert isinstance(sum_dims, dict)
+    assert isinstance(sum_dims, set)
     assert isinstance(ring, TensorRing)
 
     ordinals = {term: t for t, terms in tensor_tree.items() for term in terms}
     all_terms = [term for terms in tensor_tree.values() for term in terms]
-    all_dims = set.union(*sum_dims.values())
     contracted_tree = OrderedDict()
 
     # Split this tensor tree into connected components.
-    for terms, dims in _partition_terms(ring, all_terms, all_dims):
+    for terms, dims in _partition_terms(ring, all_terms, sum_dims):
 
         component = OrderedDict()
-        component_dims = {}
         for term in terms:
             component.setdefault(ordinals[term], []).append(term)
-            component_dims[term] = sum_dims[term]
 
         # Contract this connected component down to a single tensor.
-        _contract_component(ring, component, component_dims)
+        _contract_component(ring, component, dims)
         assert len(component) == 1
         t, terms = component.popitem()
         assert len(terms) == 1
@@ -380,8 +379,8 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal, ring=None, cache=N
 
     :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
         tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
-    :param dict sum_dims: a dictionary mapping tensors to sets of dimensions
-        (indexed from the right) that should be summed out.
+    :param set sum_dims: a set of dimensions (indexed from the right) that
+        should be summed out.
     :param frozendset target_ordinal: An optional ordinal to which results will
         be contracted or broadcasted.
     :param TensorRing ring: an algebraic ring defining tensor operations.
@@ -393,7 +392,7 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal, ring=None, cache=N
     if ring is None:
         ring = UnpackedLogRing(cache=cache)
     assert isinstance(tensor_tree, OrderedDict)
-    assert isinstance(sum_dims, dict)
+    assert isinstance(sum_dims, set)
     assert isinstance(target_ordinal, frozenset)
     assert isinstance(ring, TensorRing)
 
@@ -516,8 +515,7 @@ def ubersum(equation, *operands, **kwargs):
     with shared_intermediates(cache) as cache:
         ring = PackedLogRing(inputs, operands, cache=cache)
         for output in outputs:
-            nosum_dims = set(batch_dims + output)
-            sum_dims = {term: set(dims) - nosum_dims for dims, term in zip(inputs, operands)}
+            sum_dims = set(''.join(inputs)) - set(batch_dims) - set(output)
             target_ordinal = frozenset(output) & max_ordinal
             term = contract_to_tensor(tensor_tree, sum_dims, target_ordinal, ring=ring)
             dims = ring.dims(term)

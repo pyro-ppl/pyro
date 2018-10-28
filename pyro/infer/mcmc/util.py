@@ -66,7 +66,7 @@ class TraceTreeEvaluator(object):
         enum_dims = set((i for i in range(-len(log_prob_shape), -self.max_plate_nesting)
                          if log_prob_shape[i] > 1))
         self._plate_dims[ordinal] = plate_dims
-        self._enum_dims[ordinal] = sorted(enum_dims - parent_enum_dims)
+        self._enum_dims[ordinal] = set(enum_dims - parent_enum_dims)
         for c in self._children[ordinal]:
             self._populate_cache(c, ordinal, enum_dims)
 
@@ -205,5 +205,5 @@ class TraceEinsumEvaluator(object):
             return model_trace.log_prob_sum()
         with shared_intermediates():
             log_probs = self._get_log_factors(model_trace)
-            sum_dims = {model_trace.nodes[name]["log_prob"]: dims for name, dims in self._enum_dims.items()}
+            sum_dims = set.union(*self._enum_dims.values())
             return contract_to_tensor(log_probs, sum_dims, frozenset())
