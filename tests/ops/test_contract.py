@@ -321,7 +321,7 @@ UBERSUM_EXAMPLES = [
 ]
 
 
-def make_example(equation):
+def make_example(equation, fill=None):
     symbols = sorted(set(equation) - set(',->'))
     sizes = {dim: size for dim, size in zip(symbols, itertools.cycle([2, 3, 4]))}
     inputs, outputs = equation.split('->')
@@ -330,7 +330,7 @@ def make_example(equation):
     operands = []
     for dims in inputs:
         shape = tuple(sizes[dim] for dim in dims)
-        operands.append(torch.randn(shape))
+        operands.append(torch.randn(shape) if fill is None else torch.empty(shape).fill_(fill))
     return inputs, outputs, operands, sizes
 
 
@@ -370,6 +370,22 @@ def test_ubersum(equation, batch_dims):
         assert_equal(expected_part, actual_part,
                      msg=u"For output '{}':\nExpected:\n{}\nActual:\n{}".format(
                          output, expected_part.detach().cpu(), actual_part.detach().cpu()))
+
+
+@pytest.mark.parametrize('equation,batch_dims', [
+    ('i->', 'i'),
+    ('i->i', 'i'),
+    (',i->', 'i'),
+    (',i->i', 'i'),
+])
+def test_ubersum_total(equation, batch_dims):
+    inputs, outputs, operands, sizes = make_example(equation, fill=1)
+
+    expected = naive_ubersum(equation, *operands, batch_dims=batch_dims)[0]
+    actual = ubersum(equation, *operands, batch_dims=batch_dims)[0]
+    assert_equal(expected, actual,
+                 msg=u"Expected:\n{}\nActual:\n{}".format(
+                     expected.detach().cpu(), actual.detach().cpu()))
 
 
 @pytest.mark.parametrize('a', [2, 1])

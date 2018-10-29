@@ -477,7 +477,11 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
                                      .format(bad_dims, ','.join(contract_frames)))
             ordinal = ordinal & target_ordinal
             terms = [ring.product(term, contract_frames) for term in terms]
-        lower_terms.extend(terms)
+        for term in terms:
+            if ordinal and ring.dims(term):
+                dims = target_dims.intersection(ring.dims(term))
+                term = ring.inclusion_exclusion(term, dims, ordinal)
+            lower_terms.append(term)
         lower_ordinal = lower_ordinal | ordinal
     assert lower_ordinal <= target_ordinal
 
@@ -536,6 +540,14 @@ def ubersum(equation, *operands, **kwargs):
         z1 = contract('ab,ac,ad,ab,ac,ad->c', *x, *y, backend=backend)
         z2 = contract('ab,ac,ad,ab,ac,ad->d', *x, *y, backend=backend)
         z = torch.stack([z0, z1, z2])
+
+    Note that each batch slice through the output is multilinear in all batch
+    slices through all inptus, thus e.g. batch matrix multiply would be
+    implemented *without* ``batch_dims``, so the following are all equivalent::
+
+        xy = ubersum('abc,acd->abd', x, y, batch_dims='')
+        xy = torch.stack([xa.mm(ya) for xa, ya in zip(x, y)])
+        xy = torch.bmm(x, y)
 
     Among all valid equations, some computations are polynomial in the sizes of
     the input tensors and other computations are exponential in the sizes of
