@@ -113,6 +113,8 @@ class TensorRing(object):
         :param dims: an iterable of sum dims to contract
         :param frozenset ordinal: an ordinal specifying batch dims to contract
         """
+        if not dims:
+            return self.product(term, ordinal)
         key = 'inclusion_exclusion', id(term), frozenset(dims), ordinal
         if key not in self._cache:
             term_sum = self.sumproduct([term], dims)
@@ -369,11 +371,7 @@ def _contract_component(ring, tensor_tree, sum_dims, target_dims):
                         "exponential cost in the size of that irange)"
                         .format(', '.join(getattr(f, 'name', str(f)) for f in leaf)))
                 contract_frames = leaf - parent
-                inclusion_exclusion_dims = dims & target_dims
-                if inclusion_exclusion_dims:
-                    term = ring.inclusion_exclusion(term, inclusion_exclusion_dims, contract_frames)
-                else:
-                    term = ring.product(term, contract_frames)
+                term = ring.inclusion_exclusion(term, dims & target_dims, contract_frames)
 
             tensor_tree.setdefault(parent, []).append(term)
 
