@@ -99,7 +99,7 @@ class TensorRing(object):
         if key not in self._cache:
             value = -term
             value.clamp_(max=_finfo(value).max)  # avoid nan due to inf - inf
-            self._cache['dims', value] = self.dims(term)
+            self._cache['dims', id(value)] = self.dims(term)
             self._cache[key] = value
         return self._cache[key]
 
@@ -471,6 +471,12 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
     for ordinal, terms in tensor_tree.items():
         contract_frames = ordinal - target_ordinal
         if contract_frames:
+            for term in terms:
+                bad_dims = target_dims.intersection(ring.dims(term))
+                if bad_dims:
+                    raise ValueError(u"It is nonsensical to preserve a batched dim without preserving "
+                                     u"all of that dim's batch dims, but found '{}' without '{}'"
+                                     .format(bad_dims, ','.join(contract_frames)))
             ordinal = ordinal & target_ordinal
             terms = [ring.product(term, contract_frames) for term in terms]
         lower_terms.extend(terms)
@@ -571,7 +577,6 @@ def ubersum(equation, *operands, **kwargs):
     # Construct a tensor tree shared by all outputs.
     tensor_tree = OrderedDict()
     batch_dims = frozenset(batch_dims)
-    sum_dims = set(''.join(inputs)) - set(batch_dims)
     for dims, term in zip(inputs, operands):
         assert len(dims) == term.dim()
         ordinal = batch_dims.intersection(dims)
@@ -582,6 +587,7 @@ def ubersum(equation, *operands, **kwargs):
     with shared_intermediates(cache) as cache:
         ring = PackedLogRing(inputs, operands, cache=cache)
         for output in outputs:
+            sum_dims = set(output).union(*inputs) - set(batch_dims)
             term = contract_to_tensor(tensor_tree, sum_dims,
                                       target_ordinal=batch_dims.intersection(output),
                                       target_dims=sum_dims.intersection(output),

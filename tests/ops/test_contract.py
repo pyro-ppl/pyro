@@ -13,7 +13,7 @@ from pyro.ops.contract import (UnpackedLogRing, _partition_terms, contract_tenso
                                naive_ubersum, ubersum)
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import optional
-from tests.common import assert_equal, xfail_param
+from tests.common import assert_equal
 
 
 def deep_copy(x):
@@ -354,7 +354,6 @@ def test_naive_ubersum(equation, batch_dims):
                              output, expected_part.detach().cpu(), actual_part.detach().cpu()))
 
 
-@pytest.mark.xfail(reason='improper handling of batched output')
 @pytest.mark.parametrize('equation,batch_dims', UBERSUM_EXAMPLES)
 def test_ubersum(equation, batch_dims):
     inputs, outputs, operands, sizes = make_example(equation)
@@ -444,10 +443,7 @@ def test_ubersum_3(impl):
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize('impl', [
-    naive_ubersum,
-    xfail_param(ubersum, reason='incorrect forward-backward implementation'),
-])
+@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
 def test_ubersum_4(impl):
     # x,y {b}  <--- target
     #      |
@@ -566,10 +562,7 @@ UBERSUM_BATCH_ERRORS = [
 
 
 @pytest.mark.parametrize('equation,batch_dims', UBERSUM_BATCH_ERRORS)
-@pytest.mark.parametrize('impl', [
-    naive_ubersum,
-    xfail_param(ubersum, reason='does not detect senseless batch output'),
-])
+@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
 def test_ubersum_batch_error(impl, equation, batch_dims):
     inputs, outputs = equation.split('->')
     operands = [torch.randn(torch.Size((2,) * len(input_)))
