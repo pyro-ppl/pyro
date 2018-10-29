@@ -300,12 +300,32 @@ UBERSUM_EXAMPLES = [
     #   a\   /a
     #     {i}      {}
     (',ia,ija,ika->,i,j,k,ij,ik,ijk,ia,ija,ika,ijka', 'ijk'),
-    # {ij} a
-    #   |b
     #  {i} c
+    #   |b
+    #  {} a
+    ('ab,bci->,a,b,ab,i,ai,bi,ci,abi,bci,abci', 'i'),
+    #  {ij} c
+    #   |b
+    #  {} a
+    ('ab,bcij->,a,b,ab,i,j,ij,ai,aj,aij,bi,bj,aij,bij,cij,abij,acij,bcij,abcij', 'ij'),
+    #  {ij} c
+    #   |b
+    #  {i} a
+    ('abi,bcij->,i,ai,bi,abi,j,ij,aij,bij,cij,abij,bcij,abcij', 'ij'),
+    # {ij} e
     #   |d
-    #  {} e
-    ('abij,bcdi,de->,e,ci,bi,bci,aij', 'ij'),
+    #  {i} c
+    #   |b
+    #  {} a
+    ('ab,bcdi,deij->,a,b,ci,di,eij', 'ij'),
+    # {ijk} g
+    #   |f
+    # {ij} e
+    #   |d
+    #  {i} c
+    #   |b
+    #  {} a
+    ('ab,bcdi,defij,fgijk->,a,b,ci,di,eij,fij,gijk', 'ijk'),
     # {ik}  {ij}   {ij}
     #   a\   /b    /e
     #     {i}    {j}
@@ -377,6 +397,11 @@ def test_ubersum(equation, batch_dims):
     ('i->i', 'i'),
     (',i->', 'i'),
     (',i->i', 'i'),
+    ('a,abi,bcij->a', 'ij'),
+    ('a,abi,bcij->bi', 'ij'),
+    ('a,abi,bcij->bij', 'ij'),
+    ('a,abi,bcij->cij', 'ij'),
+    ('ab,bcdi,deij->eij', 'ij'),
 ])
 def test_ubersum_total(equation, batch_dims):
     inputs, outputs, operands, sizes = make_example(equation, fill=1)
