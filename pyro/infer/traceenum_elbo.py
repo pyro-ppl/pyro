@@ -151,9 +151,9 @@ def _compute_marginals(model_trace, guide_trace):
                 continue
 
             enum_dim = site["fn"].event_dim - site["value"].dim()
-            site_sum_dims = sum_dims - {enum_dim}
             ordinal = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
-            logits = contract_to_tensor(log_factors, site_sum_dims, ordinal, cache=cache)
+            logits = contract_to_tensor(log_factors, sum_dims,
+                                        target_ordinal=ordinal, target_dims={enum_dim}, cache=cache)
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
             while logits.shape[0] == 1:
                 logits.squeeze_(0)
@@ -188,10 +188,10 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
         if enum_dim is not None:
             msg["infer"]["_enumerate_dim"] = enum_dim
             assert enum_dim < 0, "{} {}".format(msg["name"], enum_dim)
-            self.sum_dims.discard(enum_dim)
             with shared_intermediates(self.cache) as cache:
                 ordinal = frozenset(f for f in msg["cond_indep_stack"] if f.vectorized)
-                logits = contract_to_tensor(self.log_factors, self.sum_dims, ordinal, cache=cache)
+                logits = contract_to_tensor(self.log_factors, self.sum_dims,
+                                            target_ordinal=ordinal, target_dims={enum_dim}, cache=cache)
                 logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
                 while logits.shape[0] == 1:
                     logits.squeeze_(0)
@@ -208,6 +208,7 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
                             value_ = value_.index_select(enum_dim, value_.new_tensor([0], dtype=torch.long))
                             sampled_term = term_.gather(enum_dim, value_.long())
                             terms[i] = sampled_term
+                self.sum_dims.discard(enum_dim)
 
 
 class TraceEnum_ELBO(ELBO):

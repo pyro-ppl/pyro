@@ -101,7 +101,7 @@ def test_partition_terms_unpacked(shapes, dims, expected_num_components):
     assert actual_terms == expected_terms
     assert dims == set.union(set(), *(c[1] for c in components))
 
-    # Check that partition is not too coarse.
+    # Check that the partition is not too coarse.
     assert len(components) == expected_num_components
 
     # Check that partition is not too fine.
@@ -119,21 +119,47 @@ def frame(dim, size):
 
 
 EXAMPLES = [
+    # ------------------------------------------------------
+    #  y      max_plate_nesting=1
+    #  | 4    x, y are enumerated in dims:
+    #  x     -2 -3
     {
         'shape_tree': {
-            (): [(2, 3, 1)],
+            (): [(3, 1)],
             (frame(-1, 4),): [(2, 3, 4)],
         },
-        'sum_dims': [],
+        'sum_dims': {-2, -3},
+        'target_dims': set(),
         'target_ordinal': (),
-        'expected_shape': (2, 3, 1),
+        'expected_shape': (),
     },
     {
         'shape_tree': {
-            (): [(2, 3, 1)],
+            (): [(3, 1)],
             (frame(-1, 4),): [(2, 3, 4)],
         },
-        'sum_dims': [],
+        'sum_dims': {-2, -3},
+        'target_dims': {-2},
+        'target_ordinal': (),
+        'expected_shape': (3, 1),
+    },
+    {
+        'shape_tree': {
+            (): [(3, 1)],
+            (frame(-1, 4),): [(2, 3, 4)],
+        },
+        'sum_dims': {-2, -3},
+        'target_dims': {-3},
+        'target_ordinal': (frame(-1, 4),),
+        'expected_shape': (2, 1, 4),
+    },
+    {
+        'shape_tree': {
+            (): [(3, 1)],
+            (frame(-1, 4),): [(2, 3, 4)],
+        },
+        'sum_dims': {-2, -3},
+        'target_dims': {-2, -3},
         'target_ordinal': (frame(-1, 4),),
         'expected_shape': (2, 3, 4),
     },
@@ -151,7 +177,8 @@ EXAMPLES = [
             (frame(-1, 3), frame(-2, 4)): [(2, 2, 1, 1, 4, 3)],  # z
         },
         # query for w
-        'sum_dims': [-4, -5, -6],
+        'sum_dims': {-3, -4, -5, -6},
+        'target_dims': {-3},
         'target_ordinal': (),
         'expected_shape': (2, 1, 1),
     },
@@ -163,7 +190,8 @@ EXAMPLES = [
             (frame(-1, 3), frame(-2, 4)): [(2, 2, 1, 1, 4, 3)],  # z
         },
         # query for x
-        'sum_dims': [-3, -5, -6],
+        'sum_dims': {-3, -4, -5, -6},
+        'target_dims': {-4},
         'target_ordinal': (frame(-1, 2),),
         'expected_shape': (2, 1, 1, 2),
     },
@@ -175,7 +203,8 @@ EXAMPLES = [
             (frame(-1, 3), frame(-2, 4)): [(2, 2, 1, 1, 4, 3)],  # z
         },
         # query for x
-        'sum_dims': [-3, -4, -6],
+        'sum_dims': {-3, -4, -5, -6},
+        'target_dims': {-5},
         'target_ordinal': (frame(-1, 3),),
         'expected_shape': (2, 1, 1, 1, 3),
     },
@@ -187,7 +216,8 @@ EXAMPLES = [
             (frame(-1, 3), frame(-2, 4)): [(2, 2, 1, 1, 4, 3)],  # z
         },
         # query for z
-        'sum_dims': [-3, -4, -5],
+        'sum_dims': {-3, -4, -5, -6},
+        'target_dims': {-6},
         'target_ordinal': (frame(-1, 3), frame(-2, 4)),
         'expected_shape': (2, 1, 1, 1, 4, 3),
     },
@@ -198,11 +228,12 @@ EXAMPLES = [
 def test_contract_to_tensor(example):
     tensor_tree = OrderedDict((frozenset(t), [torch.randn(shape) for shape in shapes])
                               for t, shapes in example['shape_tree'].items())
-    sum_dims = set(example['sum_dims'])
+    sum_dims = example['sum_dims']
+    target_dims = example['target_dims']
     target_ordinal = frozenset(example['target_ordinal'])
     expected_shape = example['expected_shape']
 
-    actual = assert_immutable(contract_to_tensor)(tensor_tree, sum_dims, target_ordinal)
+    actual = assert_immutable(contract_to_tensor)(tensor_tree, sum_dims, target_ordinal, target_dims)
     assert actual.shape == expected_shape
 
 
@@ -210,9 +241,10 @@ def test_contract_to_tensor(example):
 def test_contract_tensor_tree(example):
     tensor_tree = OrderedDict((frozenset(t), [torch.randn(shape) for shape in shapes])
                               for t, shapes in example['shape_tree'].items())
-    sum_dims = set(example['sum_dims'])
+    sum_dims = example['sum_dims']
+    target_dims = example['target_dims']
 
-    actual = assert_immutable(contract_tensor_tree)(tensor_tree, sum_dims)
+    actual = assert_immutable(contract_tensor_tree)(tensor_tree, sum_dims, target_dims)
     assert actual
     for ordinal, terms in actual.items():
         for term in terms:
@@ -524,12 +556,12 @@ def test_ubersum_size_error(impl, equation, shapes, batch_dims):
 
 
 UBERSUM_BATCH_ERRORS = [
-    ('ab->b', 'a'),
-    (',ab->b', 'a'),
-    ('ac,abc->c', 'a'),
-    (',ac,abc->c', 'a'),
-    ('abc->ac', 'ab'),
-    ('abc->bc', 'ab'),
+    ('ai->a', 'i'),
+    (',ai->a', 'i'),
+    ('bi,abi->b', 'i'),
+    (',bi,abi->b', 'i'),
+    ('aij->ai', 'ij'),
+    ('aij->aj', 'ij'),
 ]
 
 
