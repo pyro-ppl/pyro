@@ -512,32 +512,32 @@ def ubersum(equation, *operands, **kwargs):
     To illustrate batched inputs, note that the following are equivalent::
 
         assert len(x) == 3 and len(y) == 3
-        z = ubersum('c,abc,acd->bd', w, x, y, batch_dims='a')
+        z = ubersum('ab,ai,bi->b', w, x, y, batch_dims='i')
 
-        z = contract('c,bc,bc,bc,cd,cd,cd->bd', w, *x, *y, backend=backend)
+        z = contract('ab,a,a,a,b,b,b->b', w, *x, *y, backend=backend)
 
-    When a non-batch dimension `i` always appears with a batch dimension `a`,
-    then `i` corresponds to a distinct symbol for each slice of `a`. Thus
+    When a sum dimension `a` always appears with a batch dimension `i`,
+    then `a` corresponds to a distinct symbol for each slice of `a`. Thus
     the following are equivalent::
 
         assert len(x) == 3 and len(y) == 3
-        z = ubersum('abi,abi->', x, y, batch_dims='a')
+        z = ubersum('ai,ai->', x, y, batch_dims='i')
 
-        z = contract('bi,bj,bk,bi,bj,bk->', *x, *y, backend=backend)
+        z = contract('a,b,c,a,b,c->', *x, *y, backend=backend)
 
-    When such a non-batched dimension appears in the output, it must be
+    When such a sum dimension appears in the output, it must be
     accompanied by all of its batch dimensions, e.g. the following are
     equivalent::
 
         assert len(x) == 3 and len(y) == 3
-        z = ubersum('abi,abi->ai', x, y, batch_dims='a')
+        z = ubersum('abi,abi->bi', x, y, batch_dims='i')
 
-        z0 = contract('bi,bj,bk,bi,bj,bk->i', *x, *y, backend=backend)
-        z1 = contract('bi,bj,bk,bi,bj,bk->j', *x, *y, backend=backend)
-        z2 = contract('bi,bj,bk,bi,bj,bk->k', *x, *y, backend=backend)
+        z0 = contract('ab,ac,ad,ab,ac,ad->b', *x, *y, backend=backend)
+        z1 = contract('ab,ac,ad,ab,ac,ad->c', *x, *y, backend=backend)
+        z2 = contract('ab,ac,ad,ab,ac,ad->d', *x, *y, backend=backend)
         z = torch.stack([z0, z1, z2])
 
-    Among all valid inputs, some computations are polynomial in the sizes of
+    Among all valid equations, some computations are polynomial in the sizes of
     the input tensors and other computations are exponential in the sizes of
     the input tensors. This function raises :py:class:`NotImplementedError`
     whenever the computation is exponential.
