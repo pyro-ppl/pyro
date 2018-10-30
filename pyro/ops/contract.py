@@ -22,6 +22,13 @@ def _finfo(tensor):
     return np.finfo(torch.empty(torch.Size(), dtype=tensor.dtype).numpy().dtype)
 
 
+def _check_batch_dims_are_sensible(output_dims, nonoutput_ordinal):
+    if output_dims and nonoutput_ordinal:
+        raise ValueError(u"It is nonsensical to preserve a batched dim without preserving "
+                         u"all of that dim's batch dims, but found '{}' without '{}'"
+                         .format(output_dims, ','.join(nonoutput_ordinal)))
+
+
 @add_metaclass(ABCMeta)
 class TensorRing(object):
     """
@@ -460,30 +467,26 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
     assert isinstance(target_dims, set) and target_dims <= sum_dims
     assert isinstance(ring, TensorRing)
 
-    # Contract out all sum dims via sumproduct contractions.
+    # Eliminate extra sum dims via sumproduct contractions.
     tensor_tree = contract_tensor_tree(tensor_tree, sum_dims, target_dims, ring=ring)
 
-    # Eliminate extra plate dims via product contractions.
     lower_terms = []
-    lower_ordinal = frozenset()
     for ordinal, terms in tensor_tree.items():
+
+        # Eliminate extra plate dims via product contractions.
         contract_frames = ordinal - target_ordinal
         if contract_frames:
             for term in terms:
-                bad_dims = target_dims.intersection(ring.dims(term))
-                if bad_dims:
-                    raise ValueError(u"It is nonsensical to preserve a batched dim without preserving "
-                                     u"all of that dim's batch dims, but found '{}' without '{}'"
-                                     .format(bad_dims, ','.join(contract_frames)))
+                _check_batch_dims_are_sensible(target_dims.intersection(ring.dims(term)), contract_frames)
             ordinal = ordinal & target_ordinal
             terms = [ring.product(term, contract_frames) for term in terms]
+
+        # Eliminate off-diagonal sum dims via inclusion-exclusion.
         for term in terms:
             if ordinal and ring.dims(term):
                 dims = target_dims.intersection(ring.dims(term))
                 term = ring.inclusion_exclusion(term, dims, ordinal)
             lower_terms.append(term)
-        lower_ordinal = lower_ordinal | ordinal
-    assert lower_ordinal <= target_ordinal
 
     # Combine and broadcast terms.
     lower_term = ring.sumproduct(lower_terms, set())
@@ -687,11 +690,7 @@ def naive_ubersum(equation, *operands, **kwargs):
         for dim in dims - batch_dims:
             dim_to_ordinal[dim] = dim_to_ordinal.get(dim, ordinal) & ordinal
     for dim in output_dims - batch_dims:
-        missing_dims = dim_to_ordinal[dim] - output_dims
-        if missing_dims:
-            raise ValueError(u"It is nonsensical to preserve a batched dim without preserving "
-                             u"all of that dim's batch dims, but found '{}' without '{}' in '{}'"
-                             .format(dim, ','.join(missing_dims), equation))
+        _check_batch_dims_are_sensible({dim}, dim_to_ordinal[dim] - output_dims)
 
     # Flatten by replicating along batch dimensions.
     flatten_dim = _DimFlattener(dim_to_ordinal)
