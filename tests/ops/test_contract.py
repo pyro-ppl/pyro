@@ -243,13 +243,16 @@ def test_contract_tensor_tree(example):
                               for t, shapes in example['shape_tree'].items())
     sum_dims = example['sum_dims']
     target_dims = example['target_dims']
+    ring = UnpackedLogRing()
 
-    actual = assert_immutable(contract_tensor_tree)(tensor_tree, sum_dims, target_dims)
-    assert actual
-    for ordinal, terms in actual.items():
-        for term in terms:
-            for frame in ordinal:
-                assert term.shape[frame.dim] == frame.size
+    forward_tree, backward_tree = assert_immutable(contract_tensor_tree)(tensor_tree, sum_dims, target_dims)
+    assert forward_tree
+    for tree in (forward_tree, backward_tree):
+        for ordinal, terms in tree.items():
+            for term in terms:
+                for frame in ordinal:
+                    assert term.shape[frame.dim] == frame.size
+                assert set(ring.dims(term)) <= target_dims
 
 
 @pytest.mark.parametrize('a', [2, 1])
@@ -298,12 +301,20 @@ UBERSUM_EXAMPLES = [
     (',i,j,a,ij,ia,ja,ija->,a,i,j,ia,ja,ij,ija', 'ij'),
     # {ij}   {ik}
     #   a\   /a
+    #     {i}
+    ('ija,ika->,i,j,k,ij,ik,ijk,ia,ija,ika,ijka', 'ijk'),
+    # {ij}   {ik}
+    #   a\   /a
     #     {i}      {}
     (',ia,ija,ika->,i,j,k,ij,ik,ijk,ia,ija,ika,ijka', 'ijk'),
     #  {i} c
     #   |b
     #  {} a
     ('ab,bci->,a,b,ab,i,ai,bi,ci,abi,bci,abci', 'i'),
+    #  {i} cd
+    #   |b
+    #  {} a
+    ('ab,bci,bdi->,a,b,ab,i,ai,bi,ci,abi,bci,bdi,cdi,abci,abdi,abcdi', 'i'),
     #  {ij} c
     #   |b
     #  {} a
@@ -341,7 +352,7 @@ UBERSUM_EXAMPLES = [
 ]
 
 
-def make_example(equation, fill=None, sizes=(2, 3, 4)):
+def make_example(equation, fill=None, sizes=(2, 3)):
     symbols = sorted(set(equation) - set(',->'))
     sizes = {dim: size for dim, size in zip(symbols, itertools.cycle(sizes))}
     inputs, outputs = equation.split('->')
@@ -397,9 +408,9 @@ def test_ubersum(equation, batch_dims):
     ('i->i', 'i'),
     (',i->', 'i'),
     (',i->i', 'i'),
+    (',ai,abij->aij', 'ij'),
     ('a,ai,bij->bij', 'ij'),
     ('a,ai,abij->bij', 'ij'),
-    (',ai,abij->aij', 'ij'),
     ('a,abi,bcij->a', 'ij'),
     ('a,abi,bcij->bi', 'ij'),
     ('a,abi,bcij->bij', 'ij'),
@@ -505,6 +516,42 @@ def test_ubersum_4(impl):
     xy_dc = logsumexp(x_b1 + y_dbc, 1)
     assert xy_dc.shape == (d, c)
     expected = xy_dc
+    assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+def test_ubersum_5(impl):
+    # z {ij}  <--- target
+    #     |
+    #  y {i}
+    #     |
+    #  x {}
+    i, j, a, b, c = 2, 3, 6, 5, 4
+    x = torch.randn(a)
+    y = torch.randn(a, b, i)
+    z = torch.randn(b, c, i, j)
+    actual, = impl('a,abi,bcij->cij', x, y, z, batch_dims='ij')
+
+    # contract plate j
+    s1 = logsumexp(z, 1)
+    assert s1.shape == (b, i, j)
+    p1 = s1.sum(2)
+    assert p1.shape == (b, i)
+    q1 = z - s1.unsqueeze(-3)
+    assert q1.shape == (b, c, i, j)
+
+    # contract plate i
+    x2 = y + p1
+    assert x2.shape == (a, b, i)
+    s2 = logsumexp(x2, 1)
+    assert s2.shape == (a, i)
+    p2 = s2.sum(1)
+    assert p2.shape == (a,)
+    q2 = x2 - s2.unsqueeze(-2)
+    assert q2.shape == (a, b, i)
+
+    expected = opt_einsum.contract('a,a,abi,bcij->cij', x, p2, q2, q1,
+                                   backend='pyro.ops.einsum.torch_log')
     assert_equal(actual, expected)
 
 
