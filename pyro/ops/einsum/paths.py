@@ -4,7 +4,7 @@ import heapq
 import itertools
 from collections import defaultdict
 
-import torch
+import numpy as np
 
 
 def ssa_to_linear(ssa_path):
@@ -15,7 +15,7 @@ def ssa_to_linear(ssa_path):
         >>> ssa_to_linear([(0, 3), (2, 4), (1, 5)])
         [(0, 3), (1, 2), (0, 1)]
     """
-    ids = torch.arange(1 + max(map(max, ssa_path)), dtype=torch.long)
+    ids = np.arange(1 + max(map(max, ssa_path)), dtype=np.int32)
     path = []
     for ssa_ids in ssa_path:
         path.append(tuple(int(ids[ssa_id]) for ssa_id in ssa_ids))
