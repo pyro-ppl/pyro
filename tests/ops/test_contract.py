@@ -341,9 +341,9 @@ UBERSUM_EXAMPLES = [
 ]
 
 
-def make_example(equation, fill=None):
+def make_example(equation, fill=None, sizes=(2, 3, 4)):
     symbols = sorted(set(equation) - set(',->'))
-    sizes = {dim: size for dim, size in zip(symbols, itertools.cycle([2, 3, 4]))}
+    sizes = {dim: size for dim, size in zip(symbols, itertools.cycle(sizes))}
     inputs, outputs = equation.split('->')
     inputs = inputs.split(',')
     outputs = outputs.split(',')
@@ -397,6 +397,9 @@ def test_ubersum(equation, batch_dims):
     ('i->i', 'i'),
     (',i->', 'i'),
     (',i->i', 'i'),
+    ('a,ai,bij->bij', 'ij'),
+    ('a,ai,abij->bij', 'ij'),
+    (',ai,abij->aij', 'ij'),
     ('a,abi,bcij->a', 'ij'),
     ('a,abi,bcij->bi', 'ij'),
     ('a,abi,bcij->bij', 'ij'),
@@ -404,7 +407,7 @@ def test_ubersum(equation, batch_dims):
     ('ab,bcdi,deij->eij', 'ij'),
 ])
 def test_ubersum_total(equation, batch_dims):
-    inputs, outputs, operands, sizes = make_example(equation, fill=1)
+    inputs, outputs, operands, sizes = make_example(equation, fill=1, sizes=(2,))
 
     expected = naive_ubersum(equation, *operands, batch_dims=batch_dims)[0]
     actual = ubersum(equation, *operands, batch_dims=batch_dims)[0]

@@ -327,27 +327,14 @@ def _contract_component(ring, tensor_tree, sum_dims, target_dims):
         in the result.
     """
     assert target_dims <= sum_dims
-
-    # First close the set of ordinals under intersection (greatest lower bound),
-    # ensuring that the ordinals are arranged in a tree structure.
     target_ordinal = frozenset.intersection(*tensor_tree)
-    tensor_tree.setdefault(target_ordinal, [])
-    pending = list(tensor_tree)
-    while pending:
-        t = pending.pop()
-        for u in list(tensor_tree):
-            tu = t & u
-            if tu not in tensor_tree:
-                tensor_tree[tu] = []
-                pending.append(tu)
 
     # Collect contraction dimensions by ordinal.
     dim_to_ordinal = {}
     for t, terms in tensor_tree.items():
         for term in terms:
-            for dim in ring.dims(term):
-                if dim in sum_dims:
-                    dim_to_ordinal[dim] = dim_to_ordinal.get(dim, t) & t
+            for dim in sum_dims.intersection(ring.dims(term)):
+                dim_to_ordinal[dim] = dim_to_ordinal.get(dim, t) & t
     dims_tree = defaultdict(set)
     for dim, t in dim_to_ordinal.items():
         dims_tree[t].add(dim)
