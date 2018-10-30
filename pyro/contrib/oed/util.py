@@ -20,10 +20,10 @@ def linear_model_ground_truth(model, design, observation_labels, target_labels, 
     target_posterior_covs = [S[target_indices, :][:, target_indices] for S in posterior_covs]
     if eig:
         prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
-        return prior_entropy - torch.tensor([0.5*torch.logdet(2 * math.pi * math.e *C)
+        return prior_entropy - torch.tensor([0.5 * torch.logdet(2 * math.pi * math.e * C)
                                              for C in target_posterior_covs])
     else:
-        return torch.tensor([0.5*torch.logdet(2 * math.pi * math.e * C)
+        return torch.tensor([0.5 * torch.logdet(2 * math.pi * math.e * C)
                              for C in target_posterior_covs])
 
 
