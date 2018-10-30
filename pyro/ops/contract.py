@@ -103,18 +103,23 @@ class TensorRing(object):
         :param torch.Tensor term: the term to invert
         """
         key = 'inv', id(term)
-        if key not in self._cache:
-            value = -term
-            value.clamp_(max=_finfo(value).max)  # avoid nan due to inf - inf
-            self._cache['dims', id(value)] = self.dims(term)
-            self._cache[key] = value
-        return self._cache[key]
+        if key in self._cache:
+            return self._cache[key]
+
+        result = -term
+        result.clamp_(max=_finfo(result).max)  # avoid nan due to inf - inf
+        self._cache['dims', id(result)] = self.dims(term)
+        self._cache[key] = result
+        return result
 
     def inclusion_exclusion(self, term, dims, ordinal):
-        """
-        Computes the inclusion-exclusion message for tensor message passing::
+        r"""
+        Computes forward and backward messages for tensor message passing
+        using inclusion-exclusion::
 
             term / sum(term, dims) * product(sum(term, dims), ordinal)
+            \____________________/   \_______________________________/
+                backward part                  forward part
 
         :param torch.Tensor term: the term to contract
         :param dims: an iterable of sum dims to contract
@@ -147,9 +152,12 @@ class UnpackedLogRing(TensorRing):
     """
     def dims(self, term):
         key = 'dims', id(term)
-        if key not in self._cache:
-            self._cache[key] = tuple(d for d in range(-term.dim(), 0) if term.size(d) > 1)
-        return self._cache[key]
+        if key in self._cache:
+            return self._cache[key]
+
+        result = tuple(d for d in range(-term.dim(), 0) if term.size(d) > 1)
+        self._cache[key] = result
+        return result
 
     def sumproduct(self, terms, dims):
         key = 'sumproduct', frozenset(id(x) for x in terms), frozenset(dims)
@@ -274,7 +282,7 @@ def _partition_terms(ring, terms, dims):
     """
     Given a list of terms and a set of contraction dims, partitions the terms
     up into sets that must be contracted together. By separating these
-    components we avoid broadcasting. This function should be deterministic.
+    components we avoid broadcasting.
 
     This function should be deterministic and free of side effects.
     """
@@ -329,7 +337,7 @@ def _contract_component(ring, tensor_tree, sum_dims, target_dims):
     assert target_dims <= sum_dims
     target_ordinal = frozenset.intersection(*tensor_tree)
 
-    # Collect contraction dimensions by ordinal.
+    # Group sum dims by ordinal.
     dim_to_ordinal = {}
     for t, terms in tensor_tree.items():
         for term in terms:
@@ -373,6 +381,7 @@ def _contract_component(ring, tensor_tree, sum_dims, target_dims):
 def contract_tensor_tree(tensor_tree, sum_dims, target_dims=None, ring=None, cache=None):
     """
     Contract out ``sum_dims`` in a tree of tensors via message passing.
+    This partially contracts out plate dimensions.
 
     This function should be deterministic and free of side effects.
 
@@ -422,8 +431,8 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
     """
     Contract out ``sum_dims`` in a tree of tensors, via message
     passing. This reduces all terms down to a single tensor in the plate
-    context specified by ``target_ordinal``, preserving dimensions
-    ``target_dims``.
+    context specified by ``target_ordinal``, optionally preserving sum
+    dimensions ``target_dims``.
 
     This function should be deterministic and free of side effects.
 
