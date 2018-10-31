@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 import torch
-import numpy as np
 
 import pyro
 from pyro import poutine
@@ -127,7 +127,7 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
         retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
         retrace.compute_log_prob()
         conditional_lp = logsumexp(sum(retrace.nodes[l]["log_prob"] for l in observation_labels), 0) \
-            - np.log(M_prime)
+            - math.log(M_prime)
     else:
         # This assumes that y are independent conditional on theta
         # Furthermore assume that there are no other variables besides theta
@@ -142,7 +142,7 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
     retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
     retrace.compute_log_prob()
     marginal_lp = logsumexp(sum(retrace.nodes[l]["log_prob"] for l in observation_labels), 0) \
-        - np.log(M)
+        - math.log(M)
 
     return (conditional_lp - marginal_lp).sum(0)/N
 
@@ -298,7 +298,7 @@ def donsker_varadhan_loss(model, T, observation_labels, target_labels):
 
         joint_expectation = T_joint.sum(0)/num_particles
 
-        A = T_independent - np.log(num_particles)
+        A = T_independent - math.log(num_particles)
         s, _ = torch.max(A, dim=0)
         independent_expectation = s + ewma_log((A - s).exp().sum(dim=0), s)
 
