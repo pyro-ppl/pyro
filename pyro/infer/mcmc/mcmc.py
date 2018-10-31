@@ -136,21 +136,6 @@ class _ParallelSampler(TracePosterior):
             if w.is_alive():
                 w.terminate()
 
-    @staticmethod
-    def _next(results_buffer, buffer_idx):
-        """
-        Returns value from buffer indexed by `buffer_idx`. Also, removes
-        exhausted worker queues from `results_buffer`, and returns the
-        next round robin index to be queried.
-        """
-        val = results_buffer[buffer_idx].popleft()
-        if val is None:
-            results_buffer.pop(buffer_idx)
-            buffer_idx = buffer_idx - 1
-        next_idx = (buffer_idx + 1) % len(results_buffer) if len(results_buffer) \
-            else None
-        return results_buffer, next_idx, val
-
     def _traces(self, *args, **kwargs):
         # Ignore sigint in worker processes; they will be shut down
         # when the main process terminates.
@@ -159,10 +144,10 @@ class _ParallelSampler(TracePosterior):
         # restore original handler
         signal.signal(signal.SIGINT, sigint_handler)
         active_workers = self.num_chains
-        # To yield deterministic results we hold intermediate
-        # traces from each of the workers in `results_buffer` and
-        # yield these in a round robin fashion.
-        buffer_idx = 0
+        # To yield a deterministic ordering, we hold intermediate traces
+        # from each of the workers in its own queue in `results_buffer`
+        # and yield these in a round robin fashion.
+        cur_idx = 0
         results_buffer = [deque() for _ in range(self.num_chains)]
         try:
             for w in self.workers:
@@ -182,20 +167,23 @@ class _ParallelSampler(TracePosterior):
                 if isinstance(val, Exception):
                     # Exception trace is already logged by worker.
                     raise val
-                elif val is not None:
-                    results_buffer[chain_id - 1].append(val)
-                else:
+                results_buffer[chain_id - 1].append(val)
+                if val is None:
                     active_workers -= 1
-                    results_buffer[chain_id - 1].append(None)
-                if results_buffer[buffer_idx]:
-                    results_buffer, buffer_idx, val = self._next(results_buffer, buffer_idx)
-                    if val is not None:
+                while results_buffer[cur_idx]:
+                    val = results_buffer[cur_idx].popleft()
+                    if val:
                         yield val
+                    cur_idx = (cur_idx + 1) % self.num_chains
             # empty out the results buffer
-            while results_buffer:
-                results_buffer, sample_idx, val = self._next(results_buffer, buffer_idx)
-                if val is not None:
-                    yield val
+            non_empty_buffers = set(range(self.num_chains))
+            while non_empty_buffers:
+                if results_buffer[cur_idx]:
+                    yield results_buffer[cur_idx].popleft()
+                else:
+                    if cur_idx in non_empty_buffers:
+                        non_empty_buffers.remove(cur_idx)
+                cur_idx = (cur_idx + 1) % self.num_chains
         finally:
             self.terminate()
 
