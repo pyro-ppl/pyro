@@ -147,7 +147,7 @@ class _ParallelSampler(TracePosterior):
         # To yield a deterministic ordering, we hold intermediate traces
         # from each of the workers in its own queue in `results_buffer`
         # and yield these in a round robin fashion.
-        cur_idx = 0
+        buffer_idx = 0
         results_buffer = [deque() for _ in range(self.num_chains)]
         try:
             for w in self.workers:
@@ -167,23 +167,22 @@ class _ParallelSampler(TracePosterior):
                 if isinstance(val, Exception):
                     # Exception trace is already logged by worker.
                     raise val
-                results_buffer[chain_id - 1].append(val)
                 if val is None:
                     active_workers -= 1
-                while results_buffer[cur_idx]:
-                    val = results_buffer[cur_idx].popleft()
-                    if val:
-                        yield val
-                    cur_idx = (cur_idx + 1) % self.num_chains
+                else:
+                    results_buffer[chain_id - 1].append(val)
+                while results_buffer[buffer_idx]:
+                    yield results_buffer[buffer_idx].popleft()
+                    buffer_idx = (buffer_idx + 1) % self.num_chains
             # empty out the results buffer
             non_empty_buffers = set(range(self.num_chains))
             while non_empty_buffers:
-                if results_buffer[cur_idx]:
-                    yield results_buffer[cur_idx].popleft()
+                if results_buffer[buffer_idx]:
+                    yield results_buffer[buffer_idx].popleft()
                 else:
-                    if cur_idx in non_empty_buffers:
-                        non_empty_buffers.remove(cur_idx)
-                cur_idx = (cur_idx + 1) % self.num_chains
+                    if buffer_idx in non_empty_buffers:
+                        non_empty_buffers.remove(buffer_idx)
+                buffer_idx = (buffer_idx + 1) % self.num_chains
         finally:
             self.terminate()
 
