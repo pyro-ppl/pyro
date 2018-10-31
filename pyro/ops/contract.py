@@ -29,6 +29,16 @@ def _check_batch_dims_are_sensible(output_dims, nonoutput_ordinal):
                          .format(output_dims, ','.join(nonoutput_ordinal)))
 
 
+def _check_tree_structure(parent, leaf):
+    if parent == leaf:
+        raise NotImplementedError(
+            "Expected tree-structured plate nesting, but found "
+            "dependencies on independent plates [{}]. "
+            "Try converting one of the plates to an irange (but beware "
+            "exponential cost in the size of that irange)"
+            .format(', '.join(getattr(f, 'name', str(f)) for f in leaf)))
+
+
 @add_metaclass(ABCMeta)
 class TensorRing(object):
     """
@@ -112,7 +122,7 @@ class TensorRing(object):
         self._cache[key] = result
         return result
 
-    def inclusion_exclusion(self, term, dims, ordinal):
+    def forward_backward(self, term, dims, ordinal):
         r"""
         Computes forward and backward messages for tensor message passing
         using inclusion-exclusion::
@@ -124,17 +134,22 @@ class TensorRing(object):
         :param torch.Tensor term: the term to contract
         :param dims: an iterable of sum dims to contract
         :param frozenset ordinal: an ordinal specifying batch dims to contract
+        :return: a tuple
+            ``(product(sum(term, dims), ordinal), term / sum(term, dims))``
+        :rtype: tuple
         """
-        if not dims:
-            return self.product(term, ordinal)
-        key = 'inclusion_exclusion', id(term), frozenset(dims), ordinal
-        if key not in self._cache:
-            term_sum = self.sumproduct([term], dims)
-            term_sum_prod = self.product(term_sum, ordinal)
-            value = self.sumproduct([term, self.inv(term_sum), term_sum_prod], set())
-            assert self.dims(value) == self.dims(term)
-            self._cache[key] = value
-        return self._cache[key]
+        assert dims, 'dims was empty, use .product() instead'
+        key = 'forward_backward', id(term), frozenset(dims), ordinal
+        if key in self._cache:
+            return self._cache[key]
+
+        term_sum = self.sumproduct([term], dims)
+        global_part = self.product(term_sum, ordinal)
+        local_part = self.sumproduct([term, self.inv(term_sum)], set())
+        assert self.dims(local_part) == self.dims(term)
+        result = global_part, local_part
+        self._cache[key] = result
+        return result
 
 
 class UnpackedLogRing(TensorRing):
@@ -317,13 +332,12 @@ def _partition_terms(ring, terms, dims):
 
 def _contract_component(ring, tensor_tree, sum_dims, target_dims):
     """
-    Contract out ``sum_dims`` in a tree of tensors in-place, via message
-    passing. This reduces all tensors down to a single tensor in the greatest
-    lower bound plate context.
+    Contract out ``sum_dims - target_dims`` in a tree of tensors in-place, via
+    message passing. This reduces all tensors down to a single tensor in the
+    minimum plate context.
 
     This function should be deterministic.
-    This function has side-effects: it modifies ``tensor_tree``, ``sum_dims``,
-    and ``target_dims`` in-place.
+    This function has side-effects: it modifies ``tensor_tree``.
 
     :param TensorRing ring: an algebraic ring defining tensor operations.
     :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
@@ -331,12 +345,11 @@ def _contract_component(ring, tensor_tree, sum_dims, target_dims):
     :param set sum_dims: the complete set of sum-contractions dimensions
         (indexed from the right). This is needed to distinguish sum-contraction
         dimensions from product-contraction dimensions.
-    :param set target_dims: A subset of ``sum_dims`` that should be preserved
+    :param set target_dims: An subset of ``sum_dims`` that should be preserved
         in the result.
+    :return: a pair ``(ordinal, tensor)``
+    :rtype: tuple of frozenset and torch.Tensor
     """
-    assert target_dims <= sum_dims
-    target_ordinal = frozenset.intersection(*tensor_tree)
-
     # Group sum dims by ordinal.
     dim_to_ordinal = {}
     for t, terms in tensor_tree.items():
@@ -348,6 +361,10 @@ def _contract_component(ring, tensor_tree, sum_dims, target_dims):
         dims_tree[t].add(dim)
 
     # Recursively combine terms in different plate contexts.
+    backward_terms = []
+    backward_dims = target_dims.copy()
+    backward_ordinal = frozenset()
+    min_ordinal = frozenset.intersection(*tensor_tree)
     while any(dims_tree.values()):
         leaf = max(tensor_tree, key=len)
         leaf_terms = tensor_tree.pop(leaf)
@@ -357,28 +374,42 @@ def _contract_component(ring, tensor_tree, sum_dims, target_dims):
         for terms, dims in _partition_terms(ring, leaf_terms, leaf_dims):
 
             # Eliminate sum dims via a sumproduct contraction.
-            term = ring.sumproduct(terms, dims - target_dims)
-            pending_dims = sum_dims.intersection(ring.dims(term))
+            term = ring.sumproduct(terms, dims - backward_dims)
 
             # Eliminate extra plate dims via product contractions.
-            if leaf == target_ordinal:
+            if leaf == min_ordinal:
                 parent = leaf
             else:
+                pending_dims = sum_dims.intersection(ring.dims(term))
                 parent = frozenset.union(*(t for t, d in dims_tree.items() if d & pending_dims))
-                if parent == leaf:
-                    raise NotImplementedError(
-                        "Expected tree-structured plate nesting, but found "
-                        "dependencies on independent plates [{}]. "
-                        "Try converting one of the plates to an irange (but beware "
-                        "exponential cost in the size of that irange)"
-                        .format(', '.join(getattr(f, 'name', str(f)) for f in leaf)))
+                _check_tree_structure(parent, leaf)
                 contract_frames = leaf - parent
-                term = ring.inclusion_exclusion(term, dims & target_dims, contract_frames)
-
+                contract_dims = dims & backward_dims
+                if contract_dims:
+                    term, backward_term = ring.forward_backward(term, contract_dims, contract_frames)
+                    backward_terms.append(backward_term)
+                    backward_dims |= sum_dims.intersection(ring.dims(backward_term))
+                    backward_ordinal |= leaf
+                else:
+                    term = ring.product(term, contract_frames)
             tensor_tree.setdefault(parent, []).append(term)
 
+    # Extract single tensor at root ordinal.
+    assert len(tensor_tree) == 1
+    ordinal, (term,) = tensor_tree.popitem()
+    assert ordinal == min_ordinal
 
-def contract_tensor_tree(tensor_tree, sum_dims, target_dims=None, ring=None, cache=None):
+    # Perform optional backward pass.
+    if backward_terms:
+        assert target_dims
+        backward_terms.append(term)
+        term = ring.sumproduct(backward_terms, backward_dims - target_dims)
+        ordinal |= backward_ordinal
+
+    return ordinal, term
+
+
+def contract_tensor_tree(tensor_tree, sum_dims, ring=None, cache=None):
     """
     Contract out ``sum_dims`` in a tree of tensors via message passing.
     This partially contracts out plate dimensions.
@@ -390,21 +421,16 @@ def contract_tensor_tree(tensor_tree, sum_dims, target_dims=None, ring=None, cac
     :param set sum_dims: the complete set of sum-contractions dimensions
         (indexed from the right). This is needed to distinguish sum-contraction
         dimensions from product-contraction dimensions.
-    :param set target_dims: An optional subset of ``sum_dims`` that should be
-        preserved in the result.
     :param TensorRing ring: an algebraic ring defining tensor operations.
     :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`
         cache.
     :returns: A contracted version of ``tensor_tree``
     :rtype: OrderedDict
     """
-    if target_dims is None:
-        target_dims = set()
     if ring is None:
         ring = UnpackedLogRing(cache=cache)
     assert isinstance(tensor_tree, OrderedDict)
     assert isinstance(sum_dims, set)
-    assert isinstance(target_dims, set) and target_dims <= sum_dims
     assert isinstance(ring, TensorRing)
 
     ordinals = {term: t for t, terms in tensor_tree.items() for term in terms}
@@ -418,11 +444,8 @@ def contract_tensor_tree(tensor_tree, sum_dims, target_dims=None, ring=None, cac
             component.setdefault(ordinals[term], []).append(term)
 
         # Contract this connected component down to a single tensor.
-        _contract_component(ring, component, dims, target_dims & dims)
-        assert len(component) == 1
-        t, terms = component.popitem()
-        assert len(terms) == 1
-        contracted_tree.setdefault(t, []).extend(terms)
+        ordinal, term = _contract_component(ring, component, dims, set())
+        contracted_tree.setdefault(ordinal, []).append(term)
 
     return contracted_tree
 
@@ -463,30 +486,33 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
     assert isinstance(target_dims, set) and target_dims <= sum_dims
     assert isinstance(ring, TensorRing)
 
-    # Eliminate extra sum dims via sumproduct contractions.
-    tensor_tree = contract_tensor_tree(tensor_tree, sum_dims, target_dims, ring=ring)
+    ordinals = {term: t for t, terms in tensor_tree.items() for term in terms}
+    all_terms = [term for terms in tensor_tree.values() for term in terms]
+    contracted_terms = []
 
-    lower_terms = []
-    for ordinal, terms in tensor_tree.items():
+    # Split this tensor tree into connected components.
+    for terms, dims in _partition_terms(ring, all_terms, sum_dims):
+        component = OrderedDict()
+        for term in terms:
+            component.setdefault(ordinals[term], []).append(term)
+
+        # Contract this connected component down to a single tensor.
+        ordinal, term = _contract_component(ring, component, dims, target_dims & dims)
+        _check_batch_dims_are_sensible(target_dims.intersection(ring.dims(term)),
+                                       ordinal - target_ordinal)
 
         # Eliminate extra plate dims via product contractions.
         contract_frames = ordinal - target_ordinal
         if contract_frames:
-            for term in terms:
-                _check_batch_dims_are_sensible(target_dims.intersection(ring.dims(term)), contract_frames)
-            ordinal = ordinal & target_ordinal
-            terms = [ring.product(term, contract_frames) for term in terms]
+            assert not sum_dims.intersection(ring.dims(term))
+            term = ring.product(term, contract_frames)
 
-        # Eliminate off-diagonal sum dims via inclusion-exclusion.
-        for term in terms:
-            if ordinal and ring.dims(term):
-                dims = target_dims.intersection(ring.dims(term))
-                term = ring.inclusion_exclusion(term, dims, ordinal)
-            lower_terms.append(term)
+        contracted_terms.append(term)
 
-    # Combine and broadcast terms.
-    lower_term = ring.sumproduct(lower_terms, set())
-    return ring.broadcast(lower_term, target_ordinal)
+    # Combine contracted tensors via product, then broadcast.
+    term = ring.sumproduct(contracted_terms, set())
+    assert sum_dims.intersection(ring.dims(term)) <= target_dims
+    return ring.broadcast(term, target_ordinal)
 
 
 def ubersum(equation, *operands, **kwargs):

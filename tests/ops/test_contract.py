@@ -69,6 +69,14 @@ def assert_immutable(fn):
     return checked_fn
 
 
+def _normalize(tensor, dims, batch_dims):
+    total = tensor
+    for i, dim in enumerate(dims):
+        if dim not in batch_dims:
+            total = logsumexp(total, i, keepdim=True)
+    return tensor - total
+
+
 @pytest.mark.parametrize('shapes,dims,expected_num_components', [
     ([()], set(), 1),
     ([(2,)], set(), 1),
@@ -242,17 +250,13 @@ def test_contract_tensor_tree(example):
     tensor_tree = OrderedDict((frozenset(t), [torch.randn(shape) for shape in shapes])
                               for t, shapes in example['shape_tree'].items())
     sum_dims = example['sum_dims']
-    target_dims = example['target_dims']
-    ring = UnpackedLogRing()
 
-    forward_tree, backward_tree = assert_immutable(contract_tensor_tree)(tensor_tree, sum_dims, target_dims)
-    assert forward_tree
-    for tree in (forward_tree, backward_tree):
-        for ordinal, terms in tree.items():
-            for term in terms:
-                for frame in ordinal:
-                    assert term.shape[frame.dim] == frame.size
-                assert set(ring.dims(term)) <= target_dims
+    tensor_tree = assert_immutable(contract_tensor_tree)(tensor_tree, sum_dims)
+    assert tensor_tree
+    for ordinal, terms in tensor_tree.items():
+        for term in terms:
+            for frame in ordinal:
+                assert term.shape[frame.dim] == frame.size
 
 
 @pytest.mark.parametrize('a', [2, 1])
@@ -398,6 +402,8 @@ def test_ubersum(equation, batch_dims):
     assert len(actual) == len(outputs)
     expected = naive_ubersum(equation, *operands, batch_dims=batch_dims)
     for output, expected_part, actual_part in zip(outputs, expected, actual):
+        actual_part = _normalize(actual_part, output, batch_dims)
+        expected_part = _normalize(expected_part, output, batch_dims)
         assert_equal(expected_part, actual_part,
                      msg=u"For output '{}':\nExpected:\n{}\nActual:\n{}".format(
                          output, expected_part.detach().cpu(), actual_part.detach().cpu()))
@@ -408,6 +414,9 @@ def test_ubersum(equation, batch_dims):
     ('i->i', 'i'),
     (',i->', 'i'),
     (',i->i', 'i'),
+    ('ai->', 'i'),
+    ('ai->i', 'i'),
+    ('ai->ai', 'i'),
     (',ai,abij->aij', 'ij'),
     ('a,ai,bij->bij', 'ij'),
     ('a,ai,abij->bij', 'ij'),
@@ -419,9 +428,12 @@ def test_ubersum(equation, batch_dims):
 ])
 def test_ubersum_total(equation, batch_dims):
     inputs, outputs, operands, sizes = make_example(equation, fill=1, sizes=(2,))
+    output = outputs[0]
 
     expected = naive_ubersum(equation, *operands, batch_dims=batch_dims)[0]
     actual = ubersum(equation, *operands, batch_dims=batch_dims)[0]
+    expected = _normalize(expected, output, batch_dims)
+    actual = _normalize(actual, output, batch_dims)
     assert_equal(expected, actual,
                  msg=u"Expected:\n{}\nActual:\n{}".format(
                      expected.detach().cpu(), actual.detach().cpu()))
