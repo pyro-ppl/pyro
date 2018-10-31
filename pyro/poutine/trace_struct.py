@@ -6,7 +6,7 @@ import networkx
 
 from pyro.distributions.util import scale_and_mask
 from pyro.poutine.util import is_validation_enabled
-from pyro.util import warn_if_nan, warn_if_inf
+from pyro.util import warn_if_inf, warn_if_nan
 
 
 class Trace(networkx.DiGraph):
@@ -148,14 +148,18 @@ class Trace(networkx.DiGraph):
                 try:
                     site["log_prob"]
                 except KeyError:
-                    log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
-                    site["unscaled_log_prob"] = log_p
-                    log_p = scale_and_mask(log_p, site["scale"], site["mask"])
-                    site["log_prob"] = log_p
-                    site["log_prob_sum"] = log_p.sum()
-                    if is_validation_enabled():
-                        warn_if_nan(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name))
-                        warn_if_inf(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name), allow_neginf=True)
+                    try:
+                        log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
+                        site["unscaled_log_prob"] = log_p
+                        log_p = scale_and_mask(log_p, site["scale"], site["mask"])
+                        site["log_prob"] = log_p
+                        site["log_prob_sum"] = log_p.sum()
+                        if is_validation_enabled():
+                            warn_if_nan(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name))
+                            warn_if_inf(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name),
+                                        allow_neginf=True)
+                    except ValueError as e:
+                        raise ValueError("Error while computing log_prob at site '{}'".format(name)) from e
 
     def compute_score_parts(self):
         """
