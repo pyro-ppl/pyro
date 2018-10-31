@@ -137,14 +137,19 @@ class _ParallelSampler(TracePosterior):
                 w.terminate()
 
     @staticmethod
-    def _next(results_buffer, sample_idx):
-        val = results_buffer[sample_idx].popleft()
+    def _next(results_buffer, buffer_idx):
+        """
+        Returns value from buffer indexed by `buffer_idx`. Also, removes
+        exhausted worker queues from `results_buffer`, and returns the
+        next round robin index to be queried.
+        """
+        val = results_buffer[buffer_idx].popleft()
         if val is None:
-            results_buffer.pop(sample_idx)
-            sample_idx -= 1
-        sample_idx = (sample_idx + 1) % len(results_buffer) if len(results_buffer) \
+            results_buffer.pop(buffer_idx)
+            buffer_idx = buffer_idx - 1
+        next_idx = (buffer_idx + 1) % len(results_buffer) if len(results_buffer) \
             else None
-        return results_buffer, sample_idx, val
+        return results_buffer, next_idx, val
 
     def _traces(self, *args, **kwargs):
         # Ignore sigint in worker processes; they will be shut down
@@ -154,10 +159,10 @@ class _ParallelSampler(TracePosterior):
         # restore original handler
         signal.signal(signal.SIGINT, sigint_handler)
         active_workers = self.num_chains
-        # To yield deterministic results we will hold intermediate
+        # To yield deterministic results we hold intermediate
         # traces from each of the workers in `results_buffer` and
         # yield these in a round robin fashion.
-        sample_idx = 0
+        buffer_idx = 0
         results_buffer = [deque() for _ in range(self.num_chains)]
         try:
             for w in self.workers:
@@ -182,13 +187,13 @@ class _ParallelSampler(TracePosterior):
                 else:
                     active_workers -= 1
                     results_buffer[chain_id - 1].append(None)
-                if results_buffer[sample_idx]:
-                    results_buffer, sample_idx, val = self._next(results_buffer, sample_idx)
+                if results_buffer[buffer_idx]:
+                    results_buffer, buffer_idx, val = self._next(results_buffer, buffer_idx)
                     if val is not None:
                         yield val
             # empty out the results buffer
             while results_buffer:
-                results_buffer, sample_idx, val = self._next(results_buffer, sample_idx)
+                results_buffer, sample_idx, val = self._next(results_buffer, buffer_idx)
                 if val is not None:
                     yield val
         finally:
