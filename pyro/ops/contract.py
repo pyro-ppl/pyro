@@ -366,6 +366,7 @@ def _contract_component(ring, tensor_tree, sum_dims, target_dims):
     backward_ordinal = frozenset()
     min_ordinal = frozenset.intersection(*tensor_tree)
     while any(dims_tree.values()):
+        # Arbitrarily deterministically choose a leaf.
         leaf = max(tensor_tree, key=len)
         leaf_terms = tensor_tree.pop(leaf)
         leaf_dims = dims_tree.pop(leaf, set())

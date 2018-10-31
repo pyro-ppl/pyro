@@ -113,6 +113,14 @@ def _compute_dice_elbo(model_trace, guide_trace):
     marginal_costs, log_factors, ordering, sum_dims, scale = _compute_model_factors(
             model_trace, guide_trace)
     if log_factors:
+        # Note that while most applications of tensor message passing use the
+        # contract_to_tensor() interface and can be easily refactored to use ubersum(),
+        # the application here relies on contract_tensor_tree() to extract the dependency
+        # structure of different log_prob terms, which is used by Dice to eliminate
+        # zero-expectation terms. One possible refactoring would be to replace
+        # contract_to_tensor() with a RaggedTensor -> Tensor contraction operation, but
+        # replace contract_tensor_tree() with a RaggedTensor -> RaggedTensor contraction
+        # that preserves some dependency structure.
         log_factors = contract_tensor_tree(log_factors, sum_dims)
         for t, log_factors_t in log_factors.items():
             marginal_costs_t = marginal_costs.setdefault(t, [])
