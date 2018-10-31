@@ -35,7 +35,7 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains):
     try:
         while True:
             try:
-                record = log_queue.get_nowait()
+                record = log_queue.get(1)
             except queue.Empty:
                 continue
             if record is None:
@@ -154,7 +154,7 @@ class _ParallelSampler(TracePosterior):
                 w.start()
             while active_workers:
                 try:
-                    chain_id, val = self.result_queue.get_nowait()
+                    chain_id, val = self.result_queue.get(1)
                 # This can happen when the worker process has terminated.
                 # See https://github.com/pytorch/pytorch/pull/5380 for motivation.
                 except socket.error as e:
