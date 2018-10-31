@@ -8,7 +8,7 @@ import socket
 import sys
 import threading
 import warnings
-from collections import OrderedDict
+from collections import OrderedDict, deque
 
 import six
 from six.moves import queue
@@ -136,6 +136,16 @@ class _ParallelSampler(TracePosterior):
             if w.is_alive():
                 w.terminate()
 
+    @staticmethod
+    def _next(results_buffer, sample_idx):
+        val = results_buffer[sample_idx].popleft()
+        if val is None:
+            results_buffer.pop(sample_idx)
+            sample_idx -= 1
+        sample_idx = (sample_idx + 1) % len(results_buffer) if len(results_buffer) \
+            else None
+        return results_buffer, sample_idx, val
+
     def _traces(self, *args, **kwargs):
         # Ignore sigint in worker processes; they will be shut down
         # when the main process terminates.
@@ -144,6 +154,11 @@ class _ParallelSampler(TracePosterior):
         # restore original handler
         signal.signal(signal.SIGINT, sigint_handler)
         active_workers = self.num_chains
+        # To yield deterministic results we will hold intermediate
+        # traces from each of the workers in `results_buffer` and
+        # yield these in a round robin fashion.
+        sample_idx = 0
+        results_buffer = [deque() for _ in range(self.num_chains)]
         try:
             for w in self.workers:
                 w.start()
@@ -163,9 +178,19 @@ class _ParallelSampler(TracePosterior):
                     # Exception trace is already logged by worker.
                     raise val
                 elif val is not None:
-                    yield val
+                    results_buffer[chain_id - 1].append(val)
                 else:
                     active_workers -= 1
+                    results_buffer[chain_id - 1].append(None)
+                if results_buffer[sample_idx]:
+                    results_buffer, sample_idx, val = self._next(results_buffer, sample_idx)
+                    if val is not None:
+                        yield val
+            # empty out the results buffer
+            while results_buffer:
+                results_buffer, sample_idx, val = self._next(results_buffer, sample_idx)
+                if val is not None:
+                    yield val
         finally:
             self.terminate()
 
