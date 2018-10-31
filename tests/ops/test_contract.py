@@ -394,7 +394,7 @@ def test_ubersum(equation, batch_dims):
     inputs, outputs, operands, sizes = make_example(equation)
 
     try:
-        actual = ubersum(equation, *operands, batch_dims=batch_dims)
+        actual = ubersum(equation, *operands, batch_dims=batch_dims, modulo_total=True)
     except NotImplementedError:
         pytest.skip()
 
@@ -431,7 +431,7 @@ def test_ubersum_total(equation, batch_dims):
     output = outputs[0]
 
     expected = naive_ubersum(equation, *operands, batch_dims=batch_dims)[0]
-    actual = ubersum(equation, *operands, batch_dims=batch_dims)[0]
+    actual = ubersum(equation, *operands, batch_dims=batch_dims, modulo_total=True)[0]
     expected = _normalize(expected, output, batch_dims)
     actual = _normalize(actual, output, batch_dims)
     assert_equal(expected, actual,
@@ -448,7 +448,7 @@ def test_ubersum_sizes(impl, a, b, c, d):
     X = torch.randn(a, b)
     Y = torch.randn(b, c)
     Z = torch.randn(c, d)
-    actual = impl('ab,bc,cd->a,b,c,d', X, Y, Z, batch_dims='ad')
+    actual = impl('ab,bc,cd->a,b,c,d', X, Y, Z, batch_dims='ad', modulo_total=True)
     actual_a, actual_b, actual_c, actual_d = actual
     assert actual_a.shape == (a,)
     assert actual_b.shape == (b,)
@@ -465,7 +465,7 @@ def test_ubersum_1(impl):
     x = torch.randn(c)
     y = torch.randn(c, d, a)
     z = torch.randn(e, c, b)
-    actual, = impl('c,cda,ecb->', x, y, z, batch_dims='ab')
+    actual, = impl('c,cda,ecb->', x, y, z, batch_dims='ab', modulo_total=True)
     expected = logsumexp(x + logsumexp(y, -2).sum(-1) + logsumexp(z, -3).sum(-1), -1)
     assert_equal(actual, expected)
 
@@ -479,7 +479,7 @@ def test_ubersum_2(impl):
     x = torch.randn(c)
     y = torch.randn(c, d, a)
     z = torch.randn(e, c, b)
-    actual, = impl('c,cda,ecb->b', x, y, z, batch_dims='ab')
+    actual, = impl('c,cda,ecb->b', x, y, z, batch_dims='ab', modulo_total=True)
     xyz = logsumexp(x + logsumexp(y, -2).sum(-1) + logsumexp(z, -3).sum(-1), -1)
     expected = xyz.expand(b)
     assert_equal(actual, expected)
@@ -497,7 +497,7 @@ def test_ubersum_3(impl):
     x = torch.randn(d)
     y = torch.randn(b, d)
     z = torch.randn(b, c, d, e)
-    actual, = impl('ae,d,bd,bcde->be', w, x, y, z, batch_dims='abc')
+    actual, = impl('ae,d,bd,bcde->be', w, x, y, z, batch_dims='abc', modulo_total=True)
     yz = y.reshape(b, d, 1) + z.sum(-3)  # eliminate c
     assert yz.shape == (b, d, e)
     yz = yz.sum(0)  # eliminate b
@@ -518,7 +518,7 @@ def test_ubersum_4(impl):
     a, b, c, d = 2, 3, 4, 5
     x = torch.randn(a, b)
     y = torch.randn(d, b, c)
-    actual, = impl('ab,dbc->dc', x, y, batch_dims='d')
+    actual, = impl('ab,dbc->dc', x, y, batch_dims='d', modulo_total=True)
     x_b1 = logsumexp(x, 0).unsqueeze(-1)
     assert x_b1.shape == (b, 1)
     y_db1 = logsumexp(y, 2, keepdim=True)
@@ -542,7 +542,7 @@ def test_ubersum_5(impl):
     x = torch.randn(a)
     y = torch.randn(a, b, i)
     z = torch.randn(b, c, i, j)
-    actual, = impl('a,abi,bcij->cij', x, y, z, batch_dims='ij')
+    actual, = impl('a,abi,bcij->cij', x, y, z, batch_dims='ij', modulo_total=True)
 
     # contract plate j
     s1 = logsumexp(z, 1)
@@ -583,7 +583,7 @@ def test_ubersum_collide_implemented(impl, implemented):
     z = torch.randn(a, b, c, d)
     raises = pytest.raises(NotImplementedError, match='Expected tree-structured plate nesting')
     with optional(raises, not implemented):
-        impl('ac,bd,abcd->', x, y, z, batch_dims='ab')
+        impl('ac,bd,abcd->', x, y, z, batch_dims='ab', modulo_total=True)
 
 
 @pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
@@ -601,7 +601,7 @@ def test_ubersum_collide_ok_1(impl):
     y = torch.randn(b, d)
     z1 = torch.randn(a, b, c)
     z2 = torch.randn(a, b, d)
-    impl('ac,bd,abc,abd->', x, y, z1, z2, batch_dims='ab')
+    impl('ac,bd,abc,abd->', x, y, z1, z2, batch_dims='ab', modulo_total=True)
 
 
 @pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
@@ -620,7 +620,7 @@ def test_ubersum_collide_ok_2(impl):
     y = torch.randn(b, d)
     z1 = torch.randn(a, b, c)
     z2 = torch.randn(a, b, d)
-    impl('cd,ac,bd,abc,abd->', w, x, y, z1, z2, batch_dims='ab')
+    impl('cd,ac,bd,abc,abd->', w, x, y, z1, z2, batch_dims='ab', modulo_total=True)
 
 
 @pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
@@ -637,7 +637,7 @@ def test_ubersum_collide_ok_3(impl):
     x = torch.randn(a, c)
     y = torch.randn(b, c)
     z = torch.randn(a, b, c)
-    impl('c,ac,bc,abc->', w, x, y, z, batch_dims='ab')
+    impl('c,ac,bc,abc->', w, x, y, z, batch_dims='ab', modulo_total=True)
 
 
 UBERSUM_SHAPE_ERRORS = [
@@ -651,7 +651,7 @@ UBERSUM_SHAPE_ERRORS = [
 def test_ubersum_size_error(impl, equation, shapes, batch_dims):
     operands = [torch.randn(shape) for shape in shapes]
     with pytest.raises(ValueError, match='Dimension size mismatch|Size of label'):
-        impl(equation, *operands, batch_dims=batch_dims)
+        impl(equation, *operands, batch_dims=batch_dims, modulo_total=True)
 
 
 UBERSUM_BATCH_ERRORS = [
@@ -671,4 +671,4 @@ def test_ubersum_batch_error(impl, equation, batch_dims):
     operands = [torch.randn(torch.Size((2,) * len(input_)))
                 for input_ in inputs.split(',')]
     with pytest.raises(ValueError, match='It is nonsensical to preserve a batched dim'):
-        impl(equation, *operands, batch_dims=batch_dims)
+        impl(equation, *operands, batch_dims=batch_dims, modulo_total=True)

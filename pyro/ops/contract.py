@@ -579,11 +579,15 @@ def ubersum(equation, *operands, **kwargs):
     the input tensors. This function raises :py:class:`NotImplementedError`
     whenever the computation is exponential.
 
-    :param str equation: an einsum equation, optionally with multiple outputs.
-    :param torch.Tensor operands: a collection of tensors
-    :param str batch_dims: an optional string of batch dims.
-    :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`
+    :param str equation: An einsum equation, optionally with multiple outputs.
+    :param torch.Tensor operands: A collection of tensors.
+    :param str batch_dims: An optional string of batch dims.
+    :param dict cache: An optional :func:`~opt_einsum.shared_intermediates`
         cache.
+    :param bool modulo_total: Optionally allow ubersum to arbitrarily scale
+        each result batch, which can significantly reduce computation. This is
+        safe to set whenever each result batch denotes a nonnormalized
+        probability distribution whose total is not of interest.
     :return: a tuple of tensors of requested shape, one entry per output.
     :rtype: tuple
     :raises ValueError: if tensor sizes mismatch or an output requests a
@@ -595,8 +599,12 @@ def ubersum(equation, *operands, **kwargs):
     cache = kwargs.pop('cache', None)
     batch_dims = kwargs.pop('batch_dims', '')
     backend = kwargs.pop('backend', 'pyro.ops.einsum.torch_log')
+    modulo_total = kwargs.pop('modulo_total', False)
     if backend != 'pyro.ops.einsum.torch_log':
-        raise NotImplementedError
+        raise NotImplementedError('Only the torch logsumexp backend is currently implemented.')
+    if batch_dims and not modulo_total:
+        raise NotImplementedError('Try setting modulo_total=True and ensuring that your use case '
+                                  'allows an arbitrary scale factor on each result batch.')
 
     # Parse generalized einsum equation.
     if '.' in equation:
