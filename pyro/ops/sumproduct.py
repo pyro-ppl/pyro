@@ -125,7 +125,7 @@ def opt_sumproduct(factors, target_shape, backend='torch'):
             smaller_shape = smaller_shape[1:]
         smaller_shape = tuple(smaller_shape)
         result = opt_sumproduct(factors, smaller_shape, backend=backend)
-        return result.expand(target_shape)
+        return result.expand(target_shape)  # TODO memoize in sharing cache
 
     # Construct low-dimensional tensors with symbolic names.
     num_symbols = max(len(target_shape), max(len(t.shape) for t in factors))
@@ -151,4 +151,4 @@ def opt_sumproduct(factors, target_shape, backend='torch'):
     packed_result = contract(expr, *packed_factors, backend=backend)
 
     # Unpack result.
-    return packed_result.reshape(target_shape)
+    return packed_result.reshape(target_shape)  # TODO memoize in sharing cache

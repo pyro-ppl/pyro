@@ -206,4 +206,4 @@ class TraceEinsumEvaluator(object):
         with shared_intermediates():
             log_probs = self._get_log_factors(model_trace)
             sum_dims = set.union(*self._enum_dims.values())
-            return contract_to_tensor(log_probs, sum_dims, frozenset())
+            return contract_to_tensor(log_probs, sum_dims)
