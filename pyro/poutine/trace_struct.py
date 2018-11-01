@@ -1,5 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import sys
+import six
+
 import collections
 
 import networkx
@@ -158,8 +161,11 @@ class Trace(networkx.DiGraph):
                             warn_if_nan(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name))
                             warn_if_inf(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name),
                                         allow_neginf=True)
-                    except ValueError as e:
-                        raise ValueError("Error while computing log_prob at site '{}'".format(name)) from e
+                    except ValueError:
+                        et, ev, traceback = sys.exc_info()
+                        six.reraise(ValueError,
+                                    ValueError("Error while computing log_prob at site '{}': {}".format(name, ev)),
+                                    traceback)
 
     def compute_score_parts(self):
         """
