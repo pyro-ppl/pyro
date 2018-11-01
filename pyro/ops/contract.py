@@ -144,10 +144,10 @@ class TensorRing(object):
             return self._cache[key]
 
         term_sum = self.sumproduct([term], dims)
-        global_part = self.product(term_sum, ordinal)
-        local_part = self.sumproduct([term, self.inv(term_sum)], set())
-        assert self.dims(local_part) == self.dims(term)
-        result = global_part, local_part
+        forward_part = self.product(term_sum, ordinal)
+        backward_part = self.sumproduct([term, self.inv(term_sum)], set())
+        assert self.dims(backward_part) == self.dims(term)
+        result = forward_part, backward_part
         self._cache[key] = result
         return result
 
@@ -170,7 +170,8 @@ class UnpackedLogRing(TensorRing):
         if key in self._cache:
             return self._cache[key]
 
-        result = tuple(d for d in range(-term.dim(), 0) if term.size(d) > 1)
+        shift = term.dim()
+        result = tuple(d - shift for d, size in enumerate(term.shape) if size > 1)
         self._cache[key] = result
         return result
 
@@ -311,6 +312,7 @@ def _partition_terms(ring, terms, dims):
                 neighbors[dim].append(term)
 
     # Partition the bipartite graph into connected components for contraction.
+    components = []
     while neighbors:
         v, pending = neighbors.popitem()
         component = OrderedDict([(v, None)])  # used as an OrderedSet
@@ -327,7 +329,8 @@ def _partition_terms(ring, terms, dims):
         component_terms = [v for v in component if isinstance(v, torch.Tensor)]
         if component_terms:
             component_dims = set(v for v in component if not isinstance(v, torch.Tensor))
-            yield component_terms, component_dims
+            components.append((component_terms, component_dims))
+    return components
 
 
 def _contract_component(ring, tensor_tree, sum_dims, target_dims):
