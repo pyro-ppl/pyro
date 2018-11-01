@@ -127,12 +127,18 @@ class Trace(networkx.DiGraph):
         result = 0.0
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
-                try:
+                if "log_prob_sum" in site:
                     log_p = site["log_prob_sum"]
-                except KeyError:
-                    log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
-                    log_p = scale_and_mask(log_p, site["scale"], site["mask"]).sum()
-                    site["log_prob_sum"] = log_p
+                else:
+                    try:
+                        log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
+                        log_p = scale_and_mask(log_p, site["scale"], site["mask"]).sum()
+                        site["log_prob_sum"] = log_p
+                    except ValueError:
+                        et, ev, traceback = sys.exc_info()
+                        six.reraise(ValueError,
+                                    ValueError("Error while computing log_prob_sum at site '{}': {}".format(name, ev)),
+                                    traceback)
                     if is_validation_enabled():
                         warn_if_nan(log_p, "log_prob_sum at site '{}'".format(name))
                         warn_if_inf(log_p, "log_prob_sum at site '{}'".format(name), allow_neginf=True)
@@ -148,9 +154,7 @@ class Trace(networkx.DiGraph):
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
-                if "log_prob" in site:
-                    site["log_prob"]
-                else:
+                if "log_prob" not in site:
                     try:
                         log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
                         site["unscaled_log_prob"] = log_p
