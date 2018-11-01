@@ -148,9 +148,9 @@ class Trace(networkx.DiGraph):
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
-                try:
+                if "log_prob" in site:
                     site["log_prob"]
-                except KeyError:
+                else:
                     try:
                         log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
                         site["unscaled_log_prob"] = log_p
