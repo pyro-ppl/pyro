@@ -56,12 +56,14 @@ class TensorRing(object):
     def __init__(self, cache=None):
         self._cache = {} if cache is None else cache
 
-    def _save_tensor(self, tensor):
+    def _hash_by_id(self, tensor):
         """
-        Saves a tensor in the cache so that ``id(tensor)`` can be used as a
-        key in the cache without risk if the id being recycled.
+        Returns the id of a tensor and saves the tensor so that this id can be
+        used as a key in the cache without risk of the id being recycled.
         """
-        self._cache['tensor', id(tensor)] = tensor
+        result = id(tensor)
+        assert self._cache.setdefault(('tensor', result), tensor) is tensor
+        return result
 
     @abstractmethod
     def dims(self, term):
@@ -112,13 +114,13 @@ class TensorRing(object):
 
         :param torch.Tensor term: the term to invert
         """
-        key = 'inv', id(term)
+        key = 'inv', self._hash_by_id(term)
         if key in self._cache:
             return self._cache[key]
 
         result = -term
         result.clamp_(max=_finfo(result).max)  # avoid nan due to inf - inf
-        self._cache['dims', id(result)] = self.dims(term)
+        self._cache['dims', self._hash_by_id(result)] = self.dims(term)
         self._cache[key] = result
         return result
 
@@ -139,7 +141,7 @@ class TensorRing(object):
         :rtype: tuple
         """
         assert dims, 'dims was empty, use .product() instead'
-        key = 'forward_backward', id(term), frozenset(dims), ordinal
+        key = 'forward_backward', self._hash_by_id(term), frozenset(dims), ordinal
         if key in self._cache:
             return self._cache[key]
 
@@ -166,7 +168,7 @@ class UnpackedLogRing(TensorRing):
     Ordinals are frozensets of ``CondIndepStackFrame``s.
     """
     def dims(self, term):
-        key = 'dims', id(term)
+        key = 'dims', self._hash_by_id(term)
         if key in self._cache:
             return self._cache[key]
 
@@ -176,7 +178,7 @@ class UnpackedLogRing(TensorRing):
         return result
 
     def sumproduct(self, terms, dims):
-        key = 'sumproduct', frozenset(id(x) for x in terms), frozenset(dims)
+        key = 'sumproduct', frozenset(self._hash_by_id(x) for x in terms), frozenset(dims)
         if key in self._cache:
             return self._cache[key]
 
@@ -192,18 +194,16 @@ class UnpackedLogRing(TensorRing):
         # Aggressively squeeze to improve sharing.
         while term.dim() and term.size(0) == 1:
             term = term.squeeze(0)
-        self._save_tensor(term)
         self._cache[key] = term
         return term
 
     def product(self, term, ordinal):
         for frame in sorted(ordinal, key=lambda f: -f.dim):
             if -frame.dim <= term.dim() and term.size(frame.dim) != 1:
-                key = 'product', id(term), frame.dim
+                key = 'product', self._hash_by_id(term), frame.dim
                 if key in self._cache:
                     term = self._cache[key]
                 else:
-                    self._save_tensor(term)
                     term = term.sum(frame.dim, keepdim=True)
                     self._cache[key] = term
         return term
@@ -216,10 +216,9 @@ class UnpackedLogRing(TensorRing):
         shape = torch.Size(shape)
         if term.shape == shape:
             return term
-        key = 'broadcast', id(term), shape
+        key = 'broadcast', self._hash_by_id(term), shape
         if key in self._cache:
             return self._cache[key]
-        self._save_tensor(term)
         term = term.expand(shape)
         self._cache[key] = term
         return term
@@ -242,8 +241,7 @@ class PackedLogRing(TensorRing):
         super(PackedLogRing, self).__init__(cache=cache)
         self._batch_size = {}
         for dims, term in zip(inputs, operands):
-            self._save_tensor(term)
-            self._cache['dims', id(term)] = dims
+            self._cache['dims', self._hash_by_id(term)] = dims
             for dim, size in zip(dims, term.shape):
                 old = self._batch_size.setdefault(dim, size)
                 if old != size:
@@ -251,15 +249,14 @@ class PackedLogRing(TensorRing):
                                      .format(dim, size, old))
 
     def dims(self, term):
-        return self._cache['dims', id(term)]
+        return self._cache['dims', self._hash_by_id(term)]
 
     def sumproduct(self, terms, dims):
         inputs = [self.dims(term) for term in terms]
         output = ''.join(sorted(set(''.join(inputs)) - set(dims)))
         equation = ','.join(inputs) + '->' + output
         term = contract(equation, *terms, backend='pyro.ops.einsum.torch_log')
-        self._save_tensor(term)
-        self._cache['dims', id(term)] = output
+        self._cache['dims', self._hash_by_id(term)] = output
         return term
 
     def product(self, term, ordinal):
@@ -267,22 +264,21 @@ class PackedLogRing(TensorRing):
         for dim in sorted(ordinal, reverse=True):
             pos = dims.find(dim)
             if pos != -1:
-                key = 'product', id(term), dim
+                key = 'product', self._hash_by_id(term), dim
                 if key in self._cache:
                     term = self._cache[key]
                 else:
-                    self._save_tensor(term)
                     term = term.sum(pos)
                     dims = dims.replace(dim, '')
                     self._cache[key] = term
-                    self._cache['dims', id(term)] = dims
+                    self._cache['dims', self._hash_by_id(term)] = dims
         return term
 
     def broadcast(self, term, ordinal):
         dims = self.dims(term)
         missing_dims = ''.join(sorted(set(ordinal) - set(dims)))
         if missing_dims:
-            key = 'broadcast', id(term), missing_dims
+            key = 'broadcast', self._hash_by_id(term), missing_dims
             if key in self._cache:
                 term = self._cache[key]
             else:
@@ -290,7 +286,7 @@ class PackedLogRing(TensorRing):
                 term = term.expand(missing_shape + term.shape)
                 dims = missing_dims + dims
                 self._cache[key] = term
-                self._cache['dims', id(term)] = dims
+                self._cache['dims', self._hash_by_id(term)] = dims
         return term
 
 

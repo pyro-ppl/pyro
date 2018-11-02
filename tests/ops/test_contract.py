@@ -303,6 +303,7 @@ UBERSUM_EXAMPLES = [
     ('i,jb,ijab->,i,j,jb,ij,ija,ijb,ijab', 'ij'),
     ('ia,jb,ijab->,i,ia,j,jb,ij,ija,ijb,ijab', 'ij'),
     (',i,j,a,ij,ia,ja,ija->,a,i,j,ia,ja,ij,ija', 'ij'),
+    ('a,b,c,di,ei,fj->,a,b,c,di,ei,fj', 'ij'),
     # {ij}   {ik}
     #   a\   /a
     #     {i}
