@@ -823,3 +823,36 @@ def test_method_decorator_interface_condition():
     assert isinstance(tr, poutine.Trace)
     assert tr.graph_type == "flat"
     assert tr.nodes["b"]["is_observed"] and tr.nodes["b"]["value"].item() == 1.
+
+
+def test_trace_log_prob_err_msg():
+    def model(v):
+        pyro.sample("test_site", dist.Beta(1., 1.), obs=v)
+
+    tr = poutine.trace(model).get_trace(torch.tensor(2.))
+    exp_msg = "Error while computing log_prob at site 'test_site': " \
+              "The value argument must be within the support"
+    with pytest.raises(ValueError, match=exp_msg):
+        tr.compute_log_prob()
+
+
+def test_trace_log_prob_sum_err_msg():
+    def model(v):
+        pyro.sample("test_site", dist.Beta(1., 1.), obs=v)
+
+    tr = poutine.trace(model).get_trace(torch.tensor(2.))
+    exp_msg = "Error while computing log_prob_sum at site 'test_site': " \
+              "The value argument must be within the support"
+    with pytest.raises(ValueError, match=exp_msg):
+        tr.log_prob_sum()
+
+
+def test_trace_score_parts_err_msg():
+    def guide(v):
+        pyro.sample("test_site", dist.Beta(1., 1.), obs=v)
+
+    tr = poutine.trace(guide).get_trace(torch.tensor(2.))
+    exp_msg = "Error while computing score_parts at site 'test_site': " \
+              "The value argument must be within the support"
+    with pytest.raises(ValueError, match=exp_msg):
+        tr.compute_score_parts()

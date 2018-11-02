@@ -1,12 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
+import sys
+import six
+
 import collections
 
 import networkx
 
 from pyro.distributions.util import scale_and_mask
 from pyro.poutine.util import is_validation_enabled
-from pyro.util import warn_if_nan, warn_if_inf
+from pyro.util import warn_if_inf, warn_if_nan
 
 
 class Trace(networkx.DiGraph):
@@ -124,10 +127,17 @@ class Trace(networkx.DiGraph):
         result = 0.0
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
-                try:
+                if "log_prob_sum" in site:
                     log_p = site["log_prob_sum"]
-                except KeyError:
-                    log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
+                else:
+                    try:
+                        log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
+                    except ValueError:
+                        _, exc_value, traceback = sys.exc_info()
+                        six.reraise(ValueError,
+                                    ValueError("Error while computing log_prob_sum at site '{}': {}"
+                                               .format(name, exc_value)),
+                                    traceback)
                     log_p = scale_and_mask(log_p, site["scale"], site["mask"]).sum()
                     site["log_prob_sum"] = log_p
                     if is_validation_enabled():
@@ -145,17 +155,23 @@ class Trace(networkx.DiGraph):
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
-                try:
-                    site["log_prob"]
-                except KeyError:
-                    log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
+                if "log_prob" not in site:
+                    try:
+                        log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
+                    except ValueError:
+                        _, exc_value, traceback = sys.exc_info()
+                        six.reraise(ValueError,
+                                    ValueError("Error while computing log_prob at site '{}': {}"
+                                               .format(name, exc_value)),
+                                    traceback)
                     site["unscaled_log_prob"] = log_p
                     log_p = scale_and_mask(log_p, site["scale"], site["mask"])
                     site["log_prob"] = log_p
                     site["log_prob_sum"] = log_p.sum()
                     if is_validation_enabled():
                         warn_if_nan(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name))
-                        warn_if_inf(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name), allow_neginf=True)
+                        warn_if_inf(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name),
+                                    allow_neginf=True)
 
     def compute_score_parts(self):
         """
@@ -168,7 +184,14 @@ class Trace(networkx.DiGraph):
             if site["type"] == "sample" and "score_parts" not in site:
                 # Note that ScoreParts overloads the multiplication operator
                 # to correctly scale each of its three parts.
-                value = site["fn"].score_parts(site["value"], *site["args"], **site["kwargs"])
+                try:
+                    value = site["fn"].score_parts(site["value"], *site["args"], **site["kwargs"])
+                except ValueError:
+                    _, exc_value, traceback = sys.exc_info()
+                    six.reraise(ValueError,
+                                ValueError("Error while computing score_parts at site '{}': {}"
+                                           .format(name, exc_value)),
+                                traceback)
                 site["unscaled_log_prob"] = value.log_prob
                 value = value.scale_and_mask(site["scale"], site["mask"])
                 site["score_parts"] = value
