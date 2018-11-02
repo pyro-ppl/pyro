@@ -835,6 +835,7 @@ def test_trace_log_prob_err_msg():
     with pytest.raises(ValueError, match=exp_msg):
         tr.compute_log_prob()
 
+
 def test_trace_log_prob_sum_err_msg():
     def model(v):
         pyro.sample("test_site", dist.Beta(1., 1.), obs=v)
