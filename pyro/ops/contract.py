@@ -495,7 +495,10 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
     contracted_terms = []
 
     # Split this tensor tree into connected components.
+    modulo_total = bool(target_dims)
     for terms, dims in _partition_terms(ring, all_terms, sum_dims):
+        if modulo_total and dims.isdisjoint(target_dims):
+            continue
         component = OrderedDict()
         for term in terms:
             component.setdefault(ordinals[term], []).append(term)
@@ -606,9 +609,6 @@ def ubersum(equation, *operands, **kwargs):
     modulo_total = kwargs.pop('modulo_total', False)
     if backend != 'pyro.ops.einsum.torch_log':
         raise NotImplementedError('Only the torch logsumexp backend is currently implemented.')
-    if batch_dims and not modulo_total:
-        raise NotImplementedError('Try setting modulo_total=True and ensuring that your use case '
-                                  'allows an arbitrary scale factor on each result batch.')
 
     # Parse generalized einsum equation.
     if '.' in equation:
@@ -618,6 +618,9 @@ def ubersum(equation, *operands, **kwargs):
     outputs = outputs.split(',')
     assert len(inputs) == len(operands)
     assert all(isinstance(x, torch.Tensor) for x in operands)
+    if not modulo_total and any(outputs):
+        raise NotImplementedError('Try setting modulo_total=True and ensuring that your use case '
+                                  'allows an arbitrary scale factor on each result batch.')
     if len(operands) != len(set(operands)):
         operands = [x[...] for x in operands]  # ensure tensors are unique
 
