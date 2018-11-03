@@ -17,12 +17,16 @@ from pyro.util import optional, torch_isnan
 # z_left_grads and z_right_grads are kept to avoid recalculating
 # grads at left and right leaves;
 # r_sum is used to check turning condition;
+# z_proposal_pe and z_proposal_grads are used to cache the
+#   potential energy and potential energy gradient values for
+#   the proposal trace.
 # weight is the number of valid points in case we use slice sampling
 #   and is the log sum of (unnormalized) probabilites of valid points
 #   when we use multinomial sampling
 _TreeInfo = namedtuple("TreeInfo", ["z_left", "r_left", "z_left_grads",
                                     "z_right", "r_right", "z_right_grads",
-                                    "z_proposal", "r_sum", "weight", "turning", "diverging",
+                                    "z_proposal", "z_proposal_pe", "z_proposal_grads",
+                                    "r_sum", "weight", "turning", "diverging",
                                     "sum_accept_probs", "num_proposals"])
 
 
@@ -173,8 +177,8 @@ class NUTS(HMC):
             tree_weight = (sliced_energy.new_ones(()) if sliced_energy <= 0
                            else sliced_energy.new_zeros(()))
 
-        return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads, z_new, r_new_flat,
-                         tree_weight, False, diverging, accept_prob, 1)
+        return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads, z_new, potential_energy,
+                         z_grads, r_new_flat, tree_weight, False, diverging, accept_prob, 1)
 
     def _build_tree(self, z, r, z_grads, log_slice, direction, tree_depth, energy_current):
         if tree_depth == 0:
@@ -184,6 +188,8 @@ class NUTS(HMC):
         half_tree = self._build_tree(z, r, z_grads, log_slice,
                                      direction, tree_depth-1, energy_current)
         z_proposal = half_tree.z_proposal
+        z_proposal_pe = half_tree.z_proposal_pe
+        z_proposal_grads = half_tree.z_proposal_grads
 
         # Check conditions to stop doubling. If we meet that condition,
         #     there is no need to build the other tree.
@@ -226,6 +232,8 @@ class NUTS(HMC):
 
         if is_other_half_tree == 1:
             z_proposal = other_half_tree.z_proposal
+            z_proposal_pe = other_half_tree.z_proposal_pe
+            z_proposal_grads = other_half_tree.z_proposal_grads
 
         # leaves of the full tree are determined by the direction
         if direction == 1:
@@ -251,15 +259,18 @@ class NUTS(HMC):
         diverging = other_half_tree.diverging
 
         return _TreeInfo(z_left, r_left, z_left_grads, z_right, r_right, z_right_grads, z_proposal,
-                         r_sum, tree_weight, turning, diverging, sum_accept_probs, num_proposals)
+                         z_proposal_pe, z_proposal_grads, r_sum, tree_weight, turning, diverging,
+                         sum_accept_probs, num_proposals)
 
     def sample(self, trace):
         z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
+        potential_energy, z_grads = self._fetch_from_cache()
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
         r, r_flat = self._sample_r(name="r_t={}".format(self._t))
-        energy_current = self._energy(z, r)
+        energy_current = self._kinetic_energy(r) + potential_energy if potential_energy is not None \
+            else self._energy(z, r)
 
         # Ideally, following a symplectic integrator trajectory, the energy is constant.
         # In that case, we can sample the proposal uniformly, and there is no need to use "slice".
@@ -288,7 +299,7 @@ class NUTS(HMC):
 
         z_left = z_right = z
         r_left = r_right = r
-        z_left_grads = z_right_grads = None
+        z_left_grads = z_right_grads = z_grads
         accepted = False
         r_sum = r_flat
         if self.use_multinomial_sampling:
@@ -331,6 +342,7 @@ class NUTS(HMC):
                 if rand < new_tree_prob:
                     accepted = True
                     z = new_tree.z_proposal
+                    self._cache(new_tree.z_proposal_pe, new_tree.z_proposal_grads)
 
                 r_sum = r_sum + new_tree.r_sum
                 if self._is_turning(r_left, r_right, r_sum):  # stop doubling

@@ -4,7 +4,7 @@ import torch
 from torch.autograd import grad
 
 
-def velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, num_steps=1):
+def velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, num_steps=1, z_grads=None):
     r"""
     Second order symplectic integrator that uses the velocity verlet algorithm.
 
@@ -25,28 +25,18 @@ def velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, num_step
     """
     z_next = z.copy()
     r_next = r.copy()
-    z_grads, _ = _potential_grad(potential_fn, z_next)
-
     for _ in range(num_steps):
-        for site_name in r_next:
-            # r(n+1/2)
-            r_next[site_name] = r_next[site_name] + 0.5 * step_size * (-z_grads[site_name])
-
-        r_grads = _kinetic_grad(inverse_mass_matrix, r_next)
-        for site_name in z_next:
-            # z(n+1)
-            z_next[site_name] = z_next[site_name] + step_size * r_grads[site_name]
-
-        z_grads, _ = _potential_grad(potential_fn, z_next)
-        for site_name in r_next:
-            # r(n+1)
-            r_next[site_name] = r_next[site_name] + 0.5 * step_size * (-z_grads[site_name])
-
-    return z_next, r_next
+        z_next, r_next, z_grads, potential_energy = _single_step_inplace_verlet(z_next,
+                                                                                r_next,
+                                                                                potential_fn,
+                                                                                inverse_mass_matrix,
+                                                                                step_size,
+                                                                                z_grads)
+    return z_next, r_next, z_grads, potential_energy
 
 
 def single_step_velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, z_grads=None):
-    """
+    r"""
     A special case of ``velocity_verlet`` integrator where ``num_steps=1``. It is particular
     helpful for NUTS kernel.
 
@@ -56,30 +46,38 @@ def single_step_velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_si
     """
     z_next = z.copy()
     r_next = r.copy()
-    z_grads = _potential_grad(potential_fn, z_next)[0] if z_grads is None else z_grads
+    return _single_step_inplace_verlet(z_next, r_next, potential_fn, inverse_mass_matrix, step_size, z_grads)
 
-    for site_name in r_next:
-        r_next[site_name] = r_next[site_name] + 0.5 * step_size * (-z_grads[site_name])
 
-    r_grads = _kinetic_grad(inverse_mass_matrix, r_next)
-    for site_name in z_next:
-        z_next[site_name] = z_next[site_name] + step_size * r_grads[site_name]
+def _single_step_inplace_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, z_grads=None):
+    r"""
+    Single step velocity verlet that modifies the `z`, `r` dicts in place.
+    """
 
-    z_grads, potential_energy = _potential_grad(potential_fn, z_next)
-    for site_name in r_next:
-        r_next[site_name] = r_next[site_name] + 0.5 * step_size * (-z_grads[site_name])
+    z_grads = _potential_grad(potential_fn, z)[0] if z_grads is None else z_grads
 
-    return z_next, r_next, z_grads, potential_energy
+    for site_name in r:
+        r[site_name] = r[site_name] + 0.5 * step_size * (-z_grads[site_name])  # r(n+1/2)
+
+    r_grads = _kinetic_grad(inverse_mass_matrix, r)
+    for site_name in z:
+        z[site_name] = z[site_name] + step_size * r_grads[site_name]  # z(n+1)
+
+    z_grads, potential_energy = _potential_grad(potential_fn, z)
+    for site_name in r:
+        r[site_name] = r[site_name] + 0.5 * step_size * (-z_grads[site_name])  # r(n+1)
+
+    return z, r, z_grads, potential_energy
 
 
 def _potential_grad(potential_fn, z):
     z_keys, z_nodes = zip(*z.items())
     for node in z_nodes:
-        node.requires_grad = True
+        node.requires_grad_(True)
     potential_energy = potential_fn(z)
     grads = grad(potential_energy, z_nodes)
     for node in z_nodes:
-        node.requires_grad = False
+        node.requires_grad_(False)
     return dict(zip(z_keys, grads)), potential_energy
 
 

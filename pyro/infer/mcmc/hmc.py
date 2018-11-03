@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import math
 import warnings
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -198,6 +198,8 @@ class HMC(TraceKernel):
         self._mass_matrix_adapt_scheme = None
         self._has_enumerable_sites = False
         self._trace_prob_evaluator = None
+        self._potential_energy_last = None
+        self._z_grads_last = None
 
     def _find_reasonable_step_size(self, z):
         step_size = self.step_size
@@ -385,6 +387,13 @@ class HMC(TraceKernel):
     def cleanup(self):
         self._reset()
 
+    def _cache(self, potential_energy, z_grads):
+        self._potential_energy_last = potential_energy
+        self._z_grads_last = z_grads
+
+    def _fetch_from_cache(self):
+        return self._potential_energy_last, self._z_grads_last
+
     def sample(self, trace):
         z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
         # automatically transform `z` to unconstrained space, if needed.
@@ -393,17 +402,19 @@ class HMC(TraceKernel):
 
         r, _ = self._sample_r(name="r_t={}".format(self._t))
 
+        potential_energy, z_grads = self._fetch_from_cache()
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation
         with optional(pyro.validation_enabled(False), self._adapt_phase):
-            z_new, r_new = velocity_verlet(z, r,
-                                           self._potential_energy,
-                                           self._inverse_mass_matrix,
-                                           self.step_size,
-                                           self.num_steps)
+            z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(z, r, self._potential_energy,
+                                                                              self._inverse_mass_matrix,
+                                                                              self.step_size,
+                                                                              self.num_steps,
+                                                                              z_grads=z_grads)
             # apply Metropolis correction.
-            energy_proposal = self._energy(z_new, r_new)
-            energy_current = self._energy(z, r)
+            energy_proposal = self._kinetic_energy(r_new) + potential_energy_new
+            energy_current = self._kinetic_energy(r) + potential_energy if potential_energy is not None \
+                else self._energy(z, r)
         delta_energy = energy_proposal - energy_current
         rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(torch.zeros(1), torch.ones(1)))
         if rand < (-delta_energy).exp():
