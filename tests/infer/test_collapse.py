@@ -70,7 +70,7 @@ def test_collapse_traceenumelbo_smoke():
     elbo.differentiable_loss(model, collapsed_guide)
 
 
-@pytest.mark.xfail(reason="EnumerateMessenger and collapse produce bad shapes")
+# @pytest.mark.xfail(reason="EnumerateMessenger and collapse produce bad shapes")
 def test_collapse_elbo_categorical():
 
     @config_enumerate(default="parallel")
@@ -84,7 +84,8 @@ def test_collapse_elbo_categorical():
             z2 = pyro.sample("z2", dist.Categorical(p))
             print("uncollapsed guide z2 shape = {}".format(z2.shape))
         else:
-            z1 = pyro.sample("z1", dist.Categorical(p1), infer={"collapse": True})
+            z1 = pyro.sample("z1", dist.Categorical(p1),
+                infer={"collapse": True, "enumerate": "parallel"})
             print("collapsed guide z1 shape = {}".format(z1.shape))
             z2 = pyro.sample("z2", dist.Categorical(p2[z1]))
             print("collapsed guide z2 shape = {}".format(z2.shape))
@@ -99,11 +100,73 @@ def test_collapse_elbo_categorical():
 
     collapsed_guide = collapse(guide, first_available_dim=0)
 
+    # actual test
+    pyro.infer.enable_validation(False)
+
     elbo = pyro.infer.TraceEnum_ELBO(
-        max_plate_nesting=0, strict_enumeration_warning=False)
+        max_plate_nesting=0,  # XXX what should this be?
+        strict_enumeration_warning=False)
 
     expected = elbo.differentiable_loss(model, guide, True)
-
     actual = elbo.differentiable_loss(model, collapsed_guide, False)
 
     assert_equal(expected, actual)
+
+
+# @pytest.mark.xfail(reason="EnumerateMessenger and collapse produce bad shapes")
+def test_collapse_enum_interaction_smoke():
+
+    # @config_enumerate(default="parallel")
+    def guide(by_hand):
+
+        p1 = pyro.param("p1", torch.tensor([0.25, 0.75]))
+        p2 = pyro.param("p2", torch.tensor([[0.4, 0.2, 0.4], [0.2, 0.4, 0.4]]))
+
+        if by_hand:
+            p = p2.t().mv(p1)
+            z2 = pyro.sample("z2", dist.Categorical(p))
+            print("uncollapsed guide z2 shape = {}".format(z2.shape))
+        else:
+            z1 = pyro.sample("z1", dist.Categorical(p1),
+                infer={"collapse": True, "enumerate": "parallel"})
+            print("collapsed guide z1 shape = {}".format(z1.shape))
+            z2 = pyro.sample("z2", dist.Categorical(p2[z1]))
+            print("collapsed guide z2 shape = {}".format(z2.shape))
+
+    @config_enumerate(default="parallel")
+    def model(by_hand):
+        p = pyro.param("p2_model", torch.tensor([0.3, 0.6, 0.1]))
+        locs = pyro.param("loc_x", torch.tensor([1.5, -0.8, 0.5]))
+        z2 = pyro.sample("z2", dist.Categorical(p))
+        print("model z2 shape = {}".format(z2.shape))
+        pyro.sample("x", dist.Normal(locs[z2], 1.), obs=torch.tensor(0.))
+
+    elbo = pyro.infer.TraceEnum_ELBO(
+        max_plate_nesting=2,  # XXX what should this be?
+        strict_enumeration_warning=False)
+
+    collapsed_guide = collapse(guide, first_available_dim=0)
+    # XXX not correct first_available_dim
+    enum_collapsed_guide = poutine.enum(
+        config_enumerate(collapsed_guide, default="parallel"),
+        first_available_dim=0)
+
+    # smoke tests
+    print("\n-------- hand collapsed, no enum")
+    tr1 = poutine.trace(guide).get_trace(True)
+    assert tr1.nodes["z2"]["value"].shape == ()
+
+    print("\n-------- collapsed, no enum")
+    tr2 = poutine.trace(collapsed_guide).get_trace(False)
+    assert tr2.nodes["z2"]["value"].shape == () and "z1" not in tr2
+
+    tr12 = poutine.trace(poutine.replay(guide, trace=tr2)).get_trace(True)
+    assert tr12.log_prob_sum() == tr2.log_prob_sum()
+
+    print("\n-------- collapsed, enum")
+    tr3 = poutine.trace(enum_collapsed_guide).get_trace(False)
+    assert tr3.nodes["z2"]["value"].shape == (3,)
+
+    print("\n-------- collapsed, backwardsample")
+    tr4 = poutine.trace(elbo.sample_posterior).get_trace(
+        model, collapsed_guide, False)

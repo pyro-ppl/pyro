@@ -94,7 +94,6 @@ class CollapseSampleMessenger(pyro.poutine.messenger.Messenger):
             msg["log_prob"] = self.log_probs[name]
 
         if not _is_collapsed(msg):
-            # return super(CollapseSampleMessenger, self)._process_message(msg)
             return None
 
         enum_dim = self.enum_trace.nodes[name]["infer"].get("_enumerate_dim")
