@@ -6,10 +6,10 @@ import sys
 import networkx
 import opt_einsum
 import six
-import torch
 
 from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import scale_and_mask
+from pyro.ops.packed import pack
 from pyro.poutine.util import is_validation_enabled
 from pyro.util import warn_if_inf, warn_if_nan
 
@@ -286,23 +286,15 @@ class Trace(networkx.DiGraph):
             packed = {}
             if "score_parts" in site:
                 log_prob, score_function, entropy_term = site["score_parts"]
-                log_prob = _pack(log_prob)
-                score_function = _pack(score_function)
-                entropy_term = _pack(entropy_term)
+                log_prob = pack(log_prob, dim_to_symbol)
+                score_function = pack(score_function, dim_to_symbol)
+                entropy_term = pack(entropy_term, dim_to_symbol)
                 packed["score_parts"] = ScoreParts(log_prob, score_function, entropy_term)
                 packed["log_prob"] = log_prob
+                packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
             elif "log_prob" in site:
-                packed["log_prob"] = _pack(site["log_prob"], dim_to_symbol)
+                packed["log_prob"] = pack(site["log_prob"], dim_to_symbol)
+                packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
             site["packed"] = packed
 
         return plate_to_symbol
-
-
-def _pack(value, dim_to_symbol):
-    if isinstance(value, torch.Tensor):
-        shape = value.shape
-        shift = len(shape)
-        dims = ''.join(dim_to_symbol[dim - shift] for dim, size in enumerate(shape) if size > 1)
-        value = value.squeeze()
-        value._pyro_dims = dims
-    return value

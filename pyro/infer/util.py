@@ -2,17 +2,14 @@ from __future__ import absolute_import, division, print_function
 
 import math
 import numbers
-import operator
 from collections import Counter, defaultdict
 
 import torch
 from opt_einsum import shared_intermediates
 from opt_einsum.sharing import count_cached_ops
-from six.moves import reduce
-from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.util import is_identically_zero
-from pyro.ops.sumproduct import sumproduct
+from pyro.ops import packed
 from pyro.poutine.util import site_is_subsample
 
 _VALIDATION_ENABLED = False
@@ -132,13 +129,6 @@ class MultiFrameTensor(dict):
             '({}, ...)'.format(frames) for frames in self]))
 
 
-def deduplicate_by_shape(tensors, combine=operator.add):
-    grouped = defaultdict(list)
-    for tensor in tensors:
-        grouped[getattr(tensor, 'shape', None)].append(tensor)
-    return [reduce(combine, parts) for parts in grouped.values()]
-
-
 class Dice(object):
     """
     An implementation of the DiCE operator compatible with Pyro features.
@@ -175,7 +165,8 @@ class Dice(object):
             if site["type"] != "sample":
                 continue
 
-            log_prob = site['score_parts'].score_function  # not scaled by subsampling
+            log_prob = site["packed"]["score_parts"].score_function  # not scaled by subsampling
+            dims = getattr(log_prob, "_pyro_dims", "")
             ordinal = ordering[name]
             if site["infer"].get("enumerate"):
                 num_samples = site["infer"].get("num_samples")
@@ -184,16 +175,15 @@ class Dice(object):
                         log_prob = log_prob - log_prob.detach()
                     log_prob = log_prob - math.log(num_samples)
                     if not isinstance(log_prob, torch.Tensor):
-                        value = site["value"]
-                        ones_shape = len(value.shape[1:]) - len(site["fn"].event_shape)
-                        shape = value.shape[:1] + (1,) * ones_shape
-                        log_prob = value.new_tensor(log_prob).expand(shape)
+                        log_prob = site["value"].new_tensor(log_prob)
+                    log_prob._pyro_dims = dims
                 elif site["infer"]["enumerate"] == "sequential":
                     log_denom[ordinal] += math.log(site["infer"]["_enum_total"])
             else:  # site was monte carlo sampled
                 if is_identically_zero(log_prob):
                     continue
                 log_prob = log_prob - log_prob.detach()
+                log_prob._pyro_dims = dims
             log_probs[ordinal].append(log_prob)
 
         self.log_denom = log_denom
@@ -216,10 +206,10 @@ class Dice(object):
             if not ordinal <= target_ordinal:  # not downstream
                 log_denom += term  # term = log(# times this ordinal is counted)
 
-        log_factors = [] if is_identically_zero(log_denom) else [-log_denom]
-        for ordinal, term in self.log_probs.items():
+        log_factors = [] if is_identically_zero(log_denom) else [packed.neg(log_denom)]
+        for ordinal, terms in self.log_probs.items():
             if ordinal <= target_ordinal:  # upstream
-                log_factors += term  # term = [log(dice weight of this ordinal)]
+                log_factors.extend(terms)  # terms = [log(dice weight of this ordinal)]
 
         self._log_factors_cache[target_ordinal] = log_factors
         return log_factors
@@ -241,15 +231,9 @@ class Dice(object):
                 if key in exp_table:
                     factor = exp_table[key]
                 else:
-                    factor = torch_exp(log_factor)
+                    factor = packed.exp(log_factor)
                     exp_table[key] = factor
                 factors_table[ordinal].append(factor)
-
-        # deduplicate by shape to increase sharing
-        costs = [(ordinal, deduplicate_by_shape(group))
-                 for ordinal, group in costs.items()]
-        factors_table = {ordinal: deduplicate_by_shape(group, combine=operator.mul)
-                         for ordinal, group in factors_table.items()}
 
         # share computation across all cost terms
         with shared_intermediates() as cache:
@@ -257,10 +241,10 @@ class Dice(object):
             for ordinal, cost_terms in costs:
                 factors = factors_table.get(ordinal, [])
                 for cost in cost_terms:
-                    prob = sumproduct(factors, cost.shape, device=cost.device)
+                    prob = packed.sumproduct(factors, cost.shape, device=cost.device)
                     mask = prob > 0
                     if torch.is_tensor(mask) and not mask.all():
-                        cost, prob, mask = broadcast_all(cost, prob, mask)
+                        cost, prob, mask = packed.broadcast_all(cost, prob, mask)
                         prob = prob[mask]
                         cost = cost[mask]
                     expected_cost = expected_cost + (prob * cost).sum()

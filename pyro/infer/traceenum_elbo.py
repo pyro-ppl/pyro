@@ -75,7 +75,7 @@ def _compute_model_factors(model_trace, guide_trace):
     sum_dims = set()
     scale = 1
     if not enum_sites:
-        marginal_costs = OrderedDict((t, [site["log_prob"] for site in sites_t])
+        marginal_costs = OrderedDict((t, [site["packed"]["log_prob"] for site in sites_t])
                                      for t, sites_t in cost_sites.items())
         return marginal_costs, log_factors, ordering, sum_dims, scale
     _check_model_guide_enumeration_constraint(enum_sites, guide_trace)
@@ -89,11 +89,12 @@ def _compute_model_factors(model_trace, guide_trace):
         for site in sites_t:
             if site["log_prob"].dim() <= -enum_boundary:
                 # For sites that do not depend on an enumerated variable, proceed as usual.
-                marginal_costs.setdefault(t, []).append(site["log_prob"])
+                marginal_costs.setdefault(t, []).append(site["packed"]["log_prob"])
             else:
                 # For sites that depend on an enumerated variable, we need to apply
                 # the mask inside- and the scale outside- of the log expectation.
-                cost = scale_and_mask(site["unscaled_log_prob"], mask=site["mask"])
+                cost = scale_and_mask(site["unscaled_log_prob"], mask=site["mask"]).squeeze()
+                cost._pyro_dims = site["packed"]["log_prob"]._pyro_dims
                 log_factors.setdefault(t, []).append(cost)
                 scales.add(site["scale"])
     if log_factors:
@@ -101,11 +102,12 @@ def _compute_model_factors(model_trace, guide_trace):
             # TODO refine this coarse dependency ordering using time and tensor shapes.
             if any(t <= u for u in log_factors):
                 for site in sites_t:
-                    logprob = site["unscaled_log_prob"]
+                    logprob = site["packed"]["unscaled_log_prob"]
                     log_factors.setdefault(t, []).append(logprob)
                     scales.add(site["scale"])
         _check_shared_scale(scales)
         scale = scales.pop()
+        assert not scale.dim(), 'enumeration only supports scalar poutine.scale'
     sum_dims = set(i
                    for xs in log_factors.values()
                    for x in xs
@@ -138,7 +140,9 @@ def _compute_dice_elbo(model_trace, guide_trace):
     # Accumulate negative guide costs.
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample":
-            costs.setdefault(ordering[name], []).append(-site["log_prob"])
+            cost = -site["packed"]["log_prob"]
+            cost._pyro_dims = site["packed"]["log_prob"]._pyro_dims
+            costs.setdefault(ordering[name], []).append(cost)
 
     return Dice(guide_trace, ordering).compute_expectation(costs)
 
