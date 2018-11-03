@@ -193,6 +193,7 @@ def effectful(fn=None, type=None):
                 "scale": 1.0,
                 "mask": None,
                 "cond_indep_stack": (),
+                "cond_dep_set": None,
                 "done": False,
                 "stop": False,
                 "continuation": None,

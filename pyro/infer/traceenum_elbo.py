@@ -18,9 +18,15 @@ from pyro.distributions.util import is_identically_zero, scale_and_mask
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
 from pyro.infer.util import Dice, is_validation_enabled
-from pyro.ops.contract import contract_tensor_tree, contract_to_tensor
+from pyro.ops.contract import PackedLogRing, contract_tensor_tree, contract_to_tensor
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
+
+
+def packed_ring(tensor_tree):
+    tensors = [x for xs in tensor_tree.values() for x in xs]
+    dims = [x._pyro_dims for x in tensors]
+    return PackedLogRing(dims, tensors)
 
 
 def _check_shared_scale(scales):
@@ -121,7 +127,7 @@ def _compute_dice_elbo(model_trace, guide_trace):
         # contract_to_tensor() with a RaggedTensor -> Tensor contraction operation, but
         # replace contract_tensor_tree() with a RaggedTensor -> RaggedTensor contraction
         # that preserves some dependency structure.
-        log_factors = contract_tensor_tree(log_factors, sum_dims)
+        log_factors = contract_tensor_tree(log_factors, sum_dims, ring=packed_ring(log_factors))
         for t, log_factors_t in log_factors.items():
             marginal_costs_t = marginal_costs.setdefault(t, [])
             for term in log_factors_t:
@@ -259,6 +265,8 @@ class TraceEnum_ELBO(ELBO):
                               'infer={"enumerate": "sequential"} or infer={"enumerate": "parallel"}? '
                               'If you do not want to enumerate, consider using Trace_ELBO instead.')
 
+        plate_to_symbol = guide_trace.pack_tensors()
+        model_trace.pack_tensors(plate_to_symbol)
         return model_trace, guide_trace
 
     def _get_traces(self, model, guide, *args, **kwargs):
@@ -278,7 +286,8 @@ class TraceEnum_ELBO(ELBO):
         # final .next_available_dim. The laziness is accomplished via a lambda.
         # Note this relies on the guide being run before the model.
         guide_enum = EnumerateMessenger(first_available_dim=self.max_plate_nesting)
-        model_enum = EnumerateMessenger(first_available_dim=lambda: guide_enum.next_available_dim)
+        model_enum = EnumerateMessenger(first_available_dim=lambda: guide_enum.next_available_dim,
+                                        first_available_symbol=lambda: guide_enum.next_available_symbol)
         guide = guide_enum(guide)
         model = model_enum(model)
 

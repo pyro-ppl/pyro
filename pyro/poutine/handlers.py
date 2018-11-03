@@ -61,6 +61,7 @@ from .enumerate_messenger import EnumerateMessenger
 from .escape_messenger import EscapeMessenger
 from .infer_config_messenger import InferConfigMessenger
 from .lift_messenger import LiftMessenger
+from .markov_messenger import MarkovMessenger
 from .mask_messenger import MaskMessenger
 from .plate_messenger import PlateMessenger  # noqa F403
 from .replay_messenger import ReplayMessenger
@@ -471,3 +472,17 @@ def queue(fn=None, queue=None, max_tries=None,
         return _fn
 
     return wrapper(fn) if fn is not None else wrapper
+
+
+def markov(fn=None, window=1):
+    """
+    Markov dependency declaration.
+    """
+    if fn is None:
+        # Used as a decorator with bound args
+        return MarkovMessenger(window=window)
+    if not callable(fn):
+        # Used as a generator
+        return MarkovMessenger(window=window).generator(iterable=fn)
+    # Used as a decorator with bound args
+    return MarkovMessenger(window=window)(fn)

@@ -1,12 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
-import sys
-import six
-
 import collections
+import sys
 
 import networkx
+import opt_einsum
+import six
+import torch
 
+from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import scale_and_mask
 from pyro.poutine.util import is_validation_enabled
 from pyro.util import warn_if_inf, warn_if_nan
@@ -253,3 +255,54 @@ class Trace(networkx.DiGraph):
         for name, node in self.nodes.items():
             if node["type"] == "sample" and not node["is_observed"]:
                 yield name, node
+
+    def pack_tensors(self, site, plate_to_symbol=None):
+        """
+        Computes packed representations of tensors in the trace.
+        This should be called after :meth:`compute_log_prob` or :meth:`compute_score_parts`.
+        """
+        plate_to_symbol = {} if plate_to_symbol is None else plate_to_symbol
+        dim_to_symbol = {}
+        for site in self.nodes.values():
+            if site["type"] != "sample":
+                continue
+
+            # allocate even symbols for plate dims
+            for frame in site["cond_indep_stack"]:
+                if frame.vectorized:
+                    if frame.name in plate_to_symbol:
+                        symbol = plate_to_symbol[frame.name]
+                    else:
+                        symbol = opt_einsum.get_symbol(2 * len(plate_to_symbol))
+                        plate_to_symbol[frame.name] = symbol
+                    dim_to_symbol[frame.dim] = symbol
+
+            # allocate odd symbols for enum dims
+            dim = site["infer"].get("_enumerate_dim")
+            if dim is not None:
+                dim_to_symbol[dim] = opt_einsum.get_symbol(1 + 2 * site["infer"]["_enumerate_symbol"])
+
+            # pack tensors
+            packed = {}
+            if "score_parts" in site:
+                log_prob, score_function, entropy_term = site["score_parts"]
+                log_prob = _pack(log_prob)
+                score_function = _pack(score_function)
+                entropy_term = _pack(entropy_term)
+                packed["score_parts"] = ScoreParts(log_prob, score_function, entropy_term)
+                packed["log_prob"] = log_prob
+            elif "log_prob" in site:
+                packed["log_prob"] = _pack(site["log_prob"], dim_to_symbol)
+            site["packed"] = packed
+
+        return plate_to_symbol
+
+
+def _pack(value, dim_to_symbol):
+    if isinstance(value, torch.Tensor):
+        shape = value.shape
+        shift = len(shape)
+        dims = ''.join(dim_to_symbol[dim - shift] for dim, size in enumerate(shape) if size > 1)
+        value = value.squeeze()
+        value._pyro_dims = dims
+    return value
