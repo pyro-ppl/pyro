@@ -39,6 +39,9 @@ class PlanarFlow(Transform):
     the inverse is cached when the forward operation is called during sampling, and so samples drawn using
     planar flow can be scored.
 
+    :param input_dim: the dimension of the input (and output) variable.
+    :type autoregressive_nn: int
+
     References:
 
     Variational Inference with Normalizing Flows [arXiv:1505.05770]
