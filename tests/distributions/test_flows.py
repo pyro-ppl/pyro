@@ -12,7 +12,7 @@ from pyro.nn import AutoRegressiveNN
 pytestmark = pytest.mark.init(rng_seed=123)
 
 
-class AutoregressiveFlowTests(TestCase):
+class FlowTests(TestCase):
     def setUp(self):
         # Epsilon is used to compare numerical gradient to analytical one
         self.epsilon = 1e-3
@@ -22,32 +22,36 @@ class AutoregressiveFlowTests(TestCase):
 
     def _test_jacobian(self, input_dim, make_flow):
         jacobian = torch.zeros(input_dim, input_dim)
-        iaf = make_flow(input_dim)
+        flow = make_flow(input_dim)
 
         def nonzero(x):
             return torch.sign(torch.abs(x))
 
         x = torch.randn(1, input_dim)
-        iaf_x = iaf(x)
-        analytic_ldt = iaf.log_abs_det_jacobian(x, iaf_x).data.sum()
+        flow_x = flow(x)
+        analytic_ldt = flow.log_abs_det_jacobian(x, flow_x).data.sum()
 
         for j in range(input_dim):
             for k in range(input_dim):
                 epsilon_vector = torch.zeros(1, input_dim)
                 epsilon_vector[0, j] = self.epsilon
-                delta = (iaf(x + 0.5 * epsilon_vector) - iaf(x - 0.5 * epsilon_vector)) / self.epsilon
+                delta = (flow(x + 0.5 * epsilon_vector) - flow(x - 0.5 * epsilon_vector)) / self.epsilon
                 jacobian[j, k] = float(delta[0, k].data.sum())
 
-        permutation = iaf.arn.get_permutation()
-        permuted_jacobian = jacobian.clone()
-        for j in range(input_dim):
-            for k in range(input_dim):
-                permuted_jacobian[j, k] = jacobian[permutation[j], permutation[k]]
-        numeric_ldt = torch.sum(torch.log(torch.diag(permuted_jacobian)))
+        # Apply permutation for autoregressive flows
+        if hasattr(flow, 'arn'):
+          permutation = flow.arn.get_permutation()
+          permuted_jacobian = jacobian.clone()
+          for j in range(input_dim):
+              for k in range(input_dim):
+                  permuted_jacobian[j, k] = jacobian[permutation[j], permutation[k]]
+          jacobian = permuted_jacobian
+        
+        numeric_ldt = torch.sum(torch.log(torch.diag(jacobian)))
         ldt_discrepancy = np.fabs(analytic_ldt - numeric_ldt)
 
-        diag_sum = torch.sum(torch.diag(nonzero(permuted_jacobian)))
-        lower_sum = torch.sum(torch.tril(nonzero(permuted_jacobian), diagonal=-1))
+        diag_sum = torch.sum(torch.diag(nonzero(jacobian)))
+        lower_sum = torch.sum(torch.tril(nonzero(jacobian), diagonal=-1))
 
         assert ldt_discrepancy < self.epsilon
         assert diag_sum == float(input_dim)
@@ -87,6 +91,9 @@ class AutoregressiveFlowTests(TestCase):
         permutation = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
         return dist.PermuteTransform(permutation)
 
+    def _make_planar(self, input_dim):
+        return dist.PlanarFlow(input_dim)
+
     def test_iaf_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_iaf)
@@ -94,6 +101,10 @@ class AutoregressiveFlowTests(TestCase):
     def test_iaf_stable_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_iaf_stable)
+
+    def test_planar_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_planar)
 
     def test_iaf_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -118,3 +129,7 @@ class AutoregressiveFlowTests(TestCase):
     def test_flipflow_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_flipflow)
+
+    def test_planar_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_planar)

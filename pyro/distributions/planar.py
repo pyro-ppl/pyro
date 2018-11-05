@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from torch.distributions.transforms import Transform
 from torch.distributions import constraints
+import torch.nn.functional as F
 
 from pyro.distributions.util import copy_docs_from
 
@@ -61,10 +62,23 @@ class PlanarFlow(Transform):
         self.module.lin = nn.Linear(input_dim, 1)
         self.module.u = nn.Parameter(torch.Tensor(input_dim))
         self.reset_parameters()
+        self._intermediates_cache = {}
+        self.add_inverse_to_cache = True
 
     def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.module.u.size(1))
-        self.module.lin.data.uniform_(-stdv, stdv)
+        stdv = 1. / math.sqrt(self.module.u.size(0))
+        self.module.lin.weight.data.uniform_(-stdv, stdv)
+
+    def u_hat(self):
+      u = self.module.u
+
+      # TODO: Reshape W?
+      w = self.module.lin.weight.squeeze(0)
+
+      alpha = torch.dot(u, w)
+      a_prime = -1 + F.softplus(alpha)
+
+      return u + (a_prime - alpha) * w.div(w.norm())
     
     def _call(self, x):
         """
@@ -74,7 +88,8 @@ class PlanarFlow(Transform):
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
-        y = x + self.module.u * torch.tanh(self.module.lin(x))
+
+        y = x + self.u_hat() * torch.tanh(self.module.lin(x))
 
         self._add_intermediate_to_cache(x, y, 'x')
         return y
@@ -107,10 +122,13 @@ class PlanarFlow(Transform):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        psi_z = (1 - torch.tanh(self.module.lin(x)).pow(2))*self.module.lin.W
+        psi_z = (1 - torch.tanh(self.module.lin(x)).pow(2))*self.module.lin.weight
 
         # TODO: Check that dimensions of W broadcast properly!
-        print('W', self.module.lin.W.size(), 'psi_z', psi_z.size(), 'u', self.u.size())
-        raise Exception()
+        #print('W', self.module.lin.weight.size(), 'psi_z', psi_z.size(), 'u', self.module.u.size())
+        #raise Exception()
 
-        return torch.abs(1 + torch.dot(self.u, psi_z))
+        # TODO: Continue from here, 5/11/2018!
+        # *** Need to take account of fact that psi_z has a batch dimension
+        #return torch.abs(1 + torch.dot(self.u_hat(), psi_z))
+        return torch.abs(1 + psi_z * self.u_hat())
