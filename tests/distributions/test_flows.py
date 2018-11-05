@@ -40,43 +40,51 @@ class FlowTests(TestCase):
 
         # Apply permutation for autoregressive flows
         if hasattr(flow, 'arn'):
-          permutation = flow.arn.get_permutation()
-          permuted_jacobian = jacobian.clone()
-          for j in range(input_dim):
-              for k in range(input_dim):
-                  permuted_jacobian[j, k] = jacobian[permutation[j], permutation[k]]
-          jacobian = permuted_jacobian
-        
-        numeric_ldt = torch.sum(torch.log(torch.diag(jacobian)))
+            permutation = flow.arn.get_permutation()
+            permuted_jacobian = jacobian.clone()
+            for j in range(input_dim):
+                for k in range(input_dim):
+                    permuted_jacobian[j, k] = jacobian[permutation[j], permutation[k]]
+            jacobian = permuted_jacobian
+
+        # For autoregressive flow, Jacobian is sum of diagonal, otherwise need full determinate
+        if hasattr(flow, 'arn'):
+            numeric_ldt = torch.sum(torch.log(torch.diag(jacobian)))
+        else:
+            numeric_ldt = torch.log(torch.abs(jacobian.det()))
+
         ldt_discrepancy = np.fabs(analytic_ldt - numeric_ldt)
-
-        diag_sum = torch.sum(torch.diag(nonzero(jacobian)))
-        lower_sum = torch.sum(torch.tril(nonzero(jacobian), diagonal=-1))
-
         assert ldt_discrepancy < self.epsilon
-        assert diag_sum == float(input_dim)
-        assert lower_sum == float(0.0)
+
+        # Test that lower triangular with unit diagonal for autoregressive flows
+        if hasattr(flow, 'arn'):
+            diag_sum = torch.sum(torch.diag(nonzero(jacobian)))
+            lower_sum = torch.sum(torch.tril(nonzero(jacobian), diagonal=-1))
+            assert diag_sum == float(input_dim)
+            assert lower_sum == float(0.0)
 
     def _test_inverse(self, input_dim, make_flow):
         base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
-        iaf = make_flow(input_dim)
+        flow = make_flow(input_dim)
 
         x_true = base_dist.sample(torch.Size([10]))
-        y = iaf._call(x_true)
+        y = flow._call(x_true)
 
         # This line empties the inverse cache, if the flow uses it
-        iaf._inverse(y)
+        if hasattr(flow, '_intermediates_cache'):
+            flow._intermediates_cache.pop((y, 'log_scale'))
+            flow._intermediates_cache.pop((y, 'x'))
 
         # Cache is empty, hence must be calculating inverse afresh
-        x_calculated = iaf._inverse(y)
+        x_calculated = flow._inverse(y)
 
         assert torch.norm(x_true - x_calculated, dim=-1).max().item() < self.delta
 
     def _test_shape(self, base_shape, make_flow):
         base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
         last_dim = base_shape[-1] if isinstance(base_shape, tuple) else base_shape
-        iaf = make_flow(input_dim=last_dim)
-        sample = dist.TransformedDistribution(base_dist, [iaf]).sample()
+        flow = make_flow(input_dim=last_dim)
+        sample = dist.TransformedDistribution(base_dist, [flow]).sample()
         assert sample.shape == base_shape
 
     def _make_iaf(self, input_dim):

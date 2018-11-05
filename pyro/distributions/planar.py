@@ -10,13 +10,6 @@ import torch.nn.functional as F
 
 from pyro.distributions.util import copy_docs_from
 
-# This helper function clamps gradients but still passes through the gradient in clamped regions
-# NOTE: Not sure how necessary this is, but I was copying the design of the TensorFlow implementation
-
-
-def clamp_preserve_gradients(x, min, max):
-    return x + (x.clamp(min, max) - x).detach()
-
 
 @copy_docs_from(Transform)
 class PlanarFlow(Transform):
@@ -27,7 +20,7 @@ class PlanarFlow(Transform):
 
     where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, and the learnable parameters
     are :math:`b\\in\\mathbb{R}`, :math:`\\mathbf{u}\\in\\mathbb{R}^D`, :math:`\\mathbf{w}\\in\\mathbb{R}^D` for input
-    dimension :math:`D`. For this to be an invertible transformation, the condition 
+    dimension :math:`D`. For this to be an invertible transformation, the condition
     :math:`\\mathbf{w}^T\\mathbf{u}>-1` is enforced.
 
     Together with `TransformedDistribution` this provides a way to create richer variational approximations.
@@ -68,18 +61,16 @@ class PlanarFlow(Transform):
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.module.u.size(0))
         self.module.lin.weight.data.uniform_(-stdv, stdv)
+        self.module.u.data.uniform_(-stdv, stdv)
 
+    # This method ensures that torch(u_hat, w) > -1, required for invertibility
     def u_hat(self):
-      u = self.module.u
+        u = self.module.u
+        w = self.module.lin.weight.squeeze(0)
+        alpha = torch.dot(u, w)
+        a_prime = -1 + F.softplus(alpha)
+        return u + (a_prime - alpha) * w.div(w.norm())
 
-      # TODO: Reshape W?
-      w = self.module.lin.weight.squeeze(0)
-
-      alpha = torch.dot(u, w)
-      a_prime = -1 + F.softplus(alpha)
-
-      return u + (a_prime - alpha) * w.div(w.norm())
-    
     def _call(self, x):
         """
         :param x: the input into the bijection
@@ -122,13 +113,8 @@ class PlanarFlow(Transform):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        psi_z = (1 - torch.tanh(self.module.lin(x)).pow(2))*self.module.lin.weight
+        psi_z = (1 - torch.tanh(self.module.lin(x)).pow(2)) * self.module.lin.weight
 
-        # TODO: Check that dimensions of W broadcast properly!
-        #print('W', self.module.lin.weight.size(), 'psi_z', psi_z.size(), 'u', self.module.u.size())
-        #raise Exception()
-
-        # TODO: Continue from here, 5/11/2018!
-        # *** Need to take account of fact that psi_z has a batch dimension
-        #return torch.abs(1 + torch.dot(self.u_hat(), psi_z))
-        return torch.abs(1 + psi_z * self.u_hat())
+        # TODO: Simplify following line once using multivariate base distributions for multivariate flows
+        return torch.log(torch.abs(1 + torch.matmul(psi_z, self.u_hat())).unsqueeze(-1)) * \
+            torch.ones_like(x) / x.size(-1)
