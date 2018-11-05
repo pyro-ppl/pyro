@@ -9,7 +9,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import logsumexp
 from pyro.infer.mcmc.hmc import HMC
-from pyro.ops.integrator import single_step_velocity_verlet
+from pyro.ops.integrator import velocity_verlet
 from pyro.util import optional, torch_isnan
 
 # sum_accept_probs and num_proposals are used to calculate
@@ -156,7 +156,7 @@ class NUTS(HMC):
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size
-        z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
+        z_new, r_new, z_grads, potential_energy = velocity_verlet(
             z, r, self._potential_energy, self._inverse_mass_matrix, step_size, z_grads=z_grads)
         r_new_flat = torch.cat([r_new[site_name].reshape(-1) for site_name in sorted(r_new)])
         energy_new = potential_energy + self._kinetic_energy(r_new)

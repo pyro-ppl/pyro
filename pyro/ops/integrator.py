@@ -21,35 +21,23 @@ def velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, num_step
         Here :math:`M` can be a 1D tensor (diagonal matrix) or a 2D tensor (dense matrix).
     :param float step_size: step size for each time step iteration.
     :param int num_steps: number of discrete time steps over which to integrate.
-    :return tuple (z_next, r_next): final position and momenta, having same types as (z, r).
-    """
-    z_next = z.copy()
-    r_next = r.copy()
-    for _ in range(num_steps):
-        z_next, r_next, z_grads, potential_energy = _single_step_inplace_verlet(z_next,
-                                                                                r_next,
-                                                                                potential_fn,
-                                                                                inverse_mass_matrix,
-                                                                                step_size,
-                                                                                z_grads)
-    return z_next, r_next, z_grads, potential_energy
-
-
-def single_step_velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, z_grads=None):
-    r"""
-    A special case of ``velocity_verlet`` integrator where ``num_steps=1``. It is particular
-    helpful for NUTS kernel.
-
     :param torch.Tensor z_grads: optional gradients of potential energy at current ``z``.
     :return tuple (z_next, r_next, z_grads, potential_energy): next position and momenta,
         together with the potential energy and its gradient w.r.t. ``z_next``.
     """
     z_next = z.copy()
     r_next = r.copy()
-    return _single_step_inplace_verlet(z_next, r_next, potential_fn, inverse_mass_matrix, step_size, z_grads)
+    for _ in range(num_steps):
+        z_next, r_next, z_grads, potential_energy = _single_step_verlet(z_next,
+                                                                        r_next,
+                                                                        potential_fn,
+                                                                        inverse_mass_matrix,
+                                                                        step_size,
+                                                                        z_grads)
+    return z_next, r_next, z_grads, potential_energy
 
 
-def _single_step_inplace_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, z_grads=None):
+def _single_step_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, z_grads=None):
     r"""
     Single step velocity verlet that modifies the `z`, `r` dicts in place.
     """

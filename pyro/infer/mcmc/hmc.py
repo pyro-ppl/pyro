@@ -15,7 +15,7 @@ from pyro.infer import config_enumerate
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.infer.mcmc.util import TraceEinsumEvaluator, TraceTreeEvaluator
 from pyro.ops.dual_averaging import DualAveraging
-from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
+from pyro.ops.integrator import velocity_verlet
 from pyro.ops.welford import WelfordCovariance
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.util import optional, torch_isinf, torch_isnan
@@ -209,7 +209,7 @@ class HMC(TraceKernel):
         # then we have to decrease step_size; otherwise, increase step_size.
         r, _ = self._sample_r(name="r_presample")
         energy_current = self._energy(z, r)
-        z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
+        z_new, r_new, z_grads, potential_energy = velocity_verlet(
             z, r, self._potential_energy, self._inverse_mass_matrix, step_size)
         energy_new = potential_energy + self._kinetic_energy(r_new)
         delta_energy = energy_new - energy_current
@@ -226,7 +226,7 @@ class HMC(TraceKernel):
         # TODO: make thresholds for too small step_size or too large step_size
         while direction_new == direction:
             step_size = step_size_scale * step_size
-            z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
+            z_new, r_new, z_grads, potential_energy = velocity_verlet(
                 z, r, self._potential_energy, self._inverse_mass_matrix, step_size)
             energy_new = potential_energy + self._kinetic_energy(r_new)
             delta_energy = energy_new - energy_current
