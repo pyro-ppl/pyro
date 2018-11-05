@@ -39,6 +39,7 @@ Welcome to Pyro Examples and Tutorials!
    RSA-implicature
    RSA-hyperbole
    ekf
+   baseball
 
 
 Indices and tables
