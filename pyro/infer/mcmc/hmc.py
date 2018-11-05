@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import math
 import warnings
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict
 
 import torch
 from torch.distributions import biject_to, constraints
