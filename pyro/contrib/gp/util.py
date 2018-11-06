@@ -138,7 +138,7 @@ class Parameterized(nn.Module):
 
 def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=False,
                 whiten=False, jitter=1e-6):
-    """
+    r"""
     Given :math:`X_{new}`, predicts loc and covariance matrix of the conditional
     multivariate normal distribution
 

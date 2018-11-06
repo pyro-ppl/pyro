@@ -490,7 +490,7 @@ def test_nonnested_plate_plate_ok(Elbo):
 
 
 def test_three_indep_plate_at_different_depths_ok():
-    """
+    r"""
       /\
      /\ ia
     ia ia

@@ -67,6 +67,7 @@ from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
 from .trace_messenger import TraceMessenger
+from .uncondition_messenger import UnconditionMessenger
 
 ############################################
 # Begin primitive operations
@@ -293,6 +294,19 @@ def condition(fn=None, data=None):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.condition_messenger.ConditionMessenger`
     """
     msngr = ConditionMessenger(data=data)
+    return msngr(fn) if fn is not None else msngr
+
+
+def uncondition(fn=None):
+    """
+    Given a stochastic funtion with sample statements, conditioned on observed
+    values at some sample statements, removes the conditioning so that all
+    nodes are sampled from.
+
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
+    :returns: a stochastic function decorated with a :class: `~pyro.poutine.uncondition_messenger.UnconditionMessenger`
+    """
+    msngr = UnconditionMessenger()
     return msngr(fn) if fn is not None else msngr
 
 

@@ -16,7 +16,7 @@ import pyro.poutine as poutine
 from pyro.distributions import Bernoulli, Categorical, Normal
 from pyro.poutine.runtime import _DIM_ALLOCATOR, NonlocalExit
 from pyro.poutine.util import all_escape, discrete_escape
-from tests.common import assert_equal
+from tests.common import assert_equal, assert_not_equal
 
 logger = logging.getLogger(__name__)
 
@@ -561,6 +561,22 @@ class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
         assert eq(sample_from_do_model, torch.zeros(1))
 
 
+class UnconditionHandlerTests(NormalNormalNormalHandlerTestCase):
+
+    def test_uncondition(self):
+        unconditioned_model = poutine.uncondition(self.model)
+        unconditioned_trace = poutine.trace(unconditioned_model).get_trace()
+        conditioned_trace = poutine.trace(self.model).get_trace()
+        assert_equal(conditioned_trace.nodes["obs"]["value"], torch.ones(2))
+        assert_not_equal(unconditioned_trace.nodes["obs"]["value"], torch.ones(2))
+
+    def test_undo_uncondition(self):
+        unconditioned_model = poutine.uncondition(self.model)
+        reconditioned_model = pyro.condition(unconditioned_model, {"obs": torch.ones(2)})
+        reconditioned_trace = poutine.trace(reconditioned_model).get_trace()
+        assert_equal(reconditioned_trace.nodes["obs"]["value"], torch.ones(2))
+
+
 class EscapeHandlerTests(TestCase):
 
     def setUp(self):
@@ -807,3 +823,36 @@ def test_method_decorator_interface_condition():
     assert isinstance(tr, poutine.Trace)
     assert tr.graph_type == "flat"
     assert tr.nodes["b"]["is_observed"] and tr.nodes["b"]["value"].item() == 1.
+
+
+def test_trace_log_prob_err_msg():
+    def model(v):
+        pyro.sample("test_site", dist.Beta(1., 1.), obs=v)
+
+    tr = poutine.trace(model).get_trace(torch.tensor(2.))
+    exp_msg = "Error while computing log_prob at site 'test_site': " \
+              "The value argument must be within the support"
+    with pytest.raises(ValueError, match=exp_msg):
+        tr.compute_log_prob()
+
+
+def test_trace_log_prob_sum_err_msg():
+    def model(v):
+        pyro.sample("test_site", dist.Beta(1., 1.), obs=v)
+
+    tr = poutine.trace(model).get_trace(torch.tensor(2.))
+    exp_msg = "Error while computing log_prob_sum at site 'test_site': " \
+              "The value argument must be within the support"
+    with pytest.raises(ValueError, match=exp_msg):
+        tr.log_prob_sum()
+
+
+def test_trace_score_parts_err_msg():
+    def guide(v):
+        pyro.sample("test_site", dist.Beta(1., 1.), obs=v)
+
+    tr = poutine.trace(guide).get_trace(torch.tensor(2.))
+    exp_msg = "Error while computing score_parts at site 'test_site': " \
+              "The value argument must be within the support"
+    with pytest.raises(ValueError, match=exp_msg):
+        tr.compute_score_parts()

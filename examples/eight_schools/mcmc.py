@@ -35,8 +35,10 @@ def conditioned_model(model, sigma, y):
 
 def main(args):
     nuts_kernel = NUTS(conditioned_model, adapt_step_size=True)
-    posterior = MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps)\
-        .run(model, data.sigma, data.y)
+    posterior = MCMC(nuts_kernel,
+                     num_samples=args.num_samples,
+                     warmup_steps=args.warmup_steps,
+                     num_chains=args.num_chains).run(model, data.sigma, data.y)
     marginal_mu_tau = EmpiricalMarginal(posterior, sites=["mu", "tau"])\
         .get_samples_and_weights()[0].squeeze().numpy()
     marginal_eta = EmpiricalMarginal(posterior, sites=["eta"])\
@@ -52,6 +54,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Eight Schools MCMC')
     parser.add_argument('--num-samples', type=int, default=1000,
                         help='number of MCMC samples (default: 1000)')
+    parser.add_argument('--num-chains', type=int, default=1,
+                        help='number of parallel MCMC chains (default: 1)')
     parser.add_argument('--warmup-steps', type=int, default=1000,
                         help='number of MCMC samples for warmup (default: 1000)')
     args = parser.parse_args()

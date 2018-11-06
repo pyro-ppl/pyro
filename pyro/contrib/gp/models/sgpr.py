@@ -27,45 +27,45 @@ class SparseGPRegression(GPModel):
     parameters :math:`X_u`, the model takes the form:
 
     .. math::
-        u & \sim \mathcal{GP}(0, k(X_u, X_u)),\\\\
-        f & \sim q(f \mid X, X_u) = \mathbb{E}_{p(u)}q(f\mid X, X_u, u),\\\\
-        y & \sim f + \epsilon,
+        u & \\sim \\mathcal{GP}(0, k(X_u, X_u)),\\\\
+        f & \\sim q(f \\mid X, X_u) = \\mathbb{E}_{p(u)}q(f\\mid X, X_u, u),\\\\
+        y & \\sim f + \\epsilon,
 
-    where :math:`\epsilon` is Gaussian noise and the conditional distribution
-    :math:`q(f\mid X, X_u, u)` is an approximation of
+    where :math:`\\epsilon` is Gaussian noise and the conditional distribution
+    :math:`q(f\\mid X, X_u, u)` is an approximation of
 
-    .. math:: p(f\mid X, X_u, u) = \mathcal{N}(m, k(X, X) - Q),
+    .. math:: p(f\\mid X, X_u, u) = \\mathcal{N}(m, k(X, X) - Q),
 
     whose terms :math:`m` and :math:`k(X, X) - Q` is derived from the joint
     multivariate normal distribution:
 
-    .. math:: [f, u] \sim \mathcal{GP}(0, k([X, X_u], [X, X_u])).
+    .. math:: [f, u] \\sim \\mathcal{GP}(0, k([X, X_u], [X, X_u])).
 
     This class implements three approximation methods:
 
     + Deterministic Training Conditional (DTC):
 
-        .. math:: q(f\mid X, X_u, u) = \mathcal{N}(m, 0),
+        .. math:: q(f\\mid X, X_u, u) = \\mathcal{N}(m, 0),
 
       which in turns will imply
 
-        .. math:: f \sim \mathcal{N}(0, Q).
+        .. math:: f \\sim \\mathcal{N}(0, Q).
 
     + Fully Independent Training Conditional (FITC):
 
-        .. math:: q(f\mid X, X_u, u) = \mathcal{N}(m, diag(k(X, X) - Q)),
+        .. math:: q(f\\mid X, X_u, u) = \\mathcal{N}(m, diag(k(X, X) - Q)),
 
       which in turns will correct the diagonal part of the approximation in DTC:
 
-        .. math:: f \sim \mathcal{N}(0, Q + diag(k(X, X) - Q)).
+        .. math:: f \\sim \\mathcal{N}(0, Q + diag(k(X, X) - Q)).
 
     + Variational Free Energy (VFE), which is similar to DTC but has an additional
       `trace_term` in the model's log likelihood. This additional term makes "VFE"
       equivalent to the variational approach in :class:`.SparseVariationalGP`
       (see reference [2]).
 
-    .. note:: This model has :math:`\mathcal{O}(NM^2)` complexity for training,
-        :math:`\mathcal{O}(NM^2)` complexity for testing. Here, :math:`N` is the number
+    .. note:: This model has :math:`\\mathcal{O}(NM^2)` complexity for training,
+        :math:`\\mathcal{O}(NM^2)` complexity for testing. Here, :math:`N` is the number
         of train inputs, :math:`M` is the number of inducing inputs.
 
     References:

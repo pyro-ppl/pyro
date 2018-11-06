@@ -602,11 +602,9 @@ class AutoIAFNormal(AutoContinuous):
 
     :param callable model: a generative model
     :param int hidden_dim: number of hidden dimensions in the IAF
-    :param float sigmoid_bias: sigmoid bias in the IAF. Defaults to ``2.0``
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
-    def __init__(self, model, hidden_dim=None, sigmoid_bias=2.0, prefix="auto"):
-        self.sigmoid_bias = sigmoid_bias
+    def __init__(self, model, hidden_dim=None, prefix="auto"):
         self.hidden_dim = hidden_dim
         super(AutoIAFNormal, self).__init__(model, prefix)
 
@@ -619,15 +617,14 @@ class AutoIAFNormal(AutoContinuous):
             raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
         if self.hidden_dim is None:
             self.hidden_dim = self.latent_dim
-        iaf = dist.InverseAutoregressiveFlow(AutoRegressiveNN(self.latent_dim, [self.hidden_dim]),
-                                             sigmoid_bias=self.sigmoid_bias)
+        iaf = dist.InverseAutoregressiveFlow(AutoRegressiveNN(self.latent_dim, [self.hidden_dim]))
         pyro.module("{}_iaf".format(self.prefix), iaf.module)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
         return iaf_dist.independent(1)
 
 
 class AutoLaplaceApproximation(AutoContinuous):
-    """
+    r"""
     Laplace approximation (quadratic approximation) approximates the posterior
     math:`log p(z | x)` by a multivariate normal distribution in the
     unconstrained space. Under the hood, it uses Delta distributions to

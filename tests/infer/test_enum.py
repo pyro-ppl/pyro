@@ -346,7 +346,7 @@ def test_elbo_normal(method, enumerate1):
         with pyro.plate("particles", num_particles):
             pyro.sample("z", dist.Normal(0., 1.).expand_by([num_particles]))
 
-    @config_enumerate(default=enumerate1, num_samples=10000)
+    @config_enumerate(default=enumerate1, num_samples=20000)
     def guide():
         q = pyro.param("q")
         with pyro.plate("particles", num_particles):
@@ -821,7 +821,7 @@ def test_elbo_irange_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumera
 @pytest.mark.parametrize("outer_dim", [2])
 def test_elbo_irange_irange(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
-    num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 50000
+    num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 150000
     q = pyro.param("q", torch.tensor(0.75, requires_grad=True))
     p = 0.2693204236205713  # for which kl(Bernoulli(q), Bernoulli(p)) = 0.5
 
