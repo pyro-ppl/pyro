@@ -17,12 +17,14 @@ import pyro.distributions as dist
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
 
+from pyro.infer.collapse import collapse
+
 logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.INFO)
 
 
 def model(sequences, args, batch_size=None):
     zs = []
-    with pyro.plate("sequences", args.num_sequences, batch_size, dim=-1) as batch:
+    with pyro.plate("sequences", args.num_sequences, batch_size) as batch:
         y = 0.0
         for t in range(args.length):
             y = pyro.sample("y_{}".format(t), dist.Normal(y, 1.0))
@@ -35,18 +37,21 @@ def model(sequences, args, batch_size=None):
 
 
 def guide(sequences, args, batch_size=None):
-    shape = torch.Size((args.num_sequences, args.length, args.hidden_dim))
-    probs_x = pyro.param("probs_x", torch.ones(shape), constraint=constraints.simplex)
-    loc_y = pyro.param("loc", 0.03 * torch.randn(shape))
-    scale_y = pyro.param("scale", (0.03 * torch.randn(shape)).exp(), constraint=constraints.positive)
-    with pyro.plate("sequences", args.num_sequences, batch_size, dim=-1) as batch:
+    px_shape = torch.Size((args.length, args.num_sequences, args.hidden_dim,))
+    probs_x = pyro.param("probs_x", torch.ones(px_shape), constraint=constraints.simplex)
+
+    y_shape = torch.Size((args.length, args.hidden_dim, args.num_sequences))
+    loc_y = pyro.param("loc", 0.03 * torch.randn(y_shape))
+    scale_y = pyro.param("scale", (0.03 * torch.randn(y_shape)).exp(), constraint=constraints.positive)
+    with pyro.plate("sequences", args.num_sequences, batch_size) as batch:
         for t in range(args.length):
-            x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[batch, t]),
-                            infer={"enumerate": "parallel"})
-            # print('x', x.shape)
-            # print('locy', (loc_y[batch][:, t, x]).shape)
-            pyro.sample("y_{}".format(t), dist.Normal(loc_y[batch][:, t, x], scale_y[batch][:, t, x]),
-                        infer={"num_samples": args.num_samples})
+            x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[t, batch]),
+                    infer={"enumerate": "parallel", "collapse": True})
+            print('x', x.shape)
+            print('locy', (loc_y[t][x, batch].shape))
+            pyro.sample("y_{}".format(t),
+                dist.Normal(loc_y[t][x, batch], scale_y[t][x, batch]))
+                # infer={"num_samples": args.num_samples})
 
 
 def main(args):
@@ -61,9 +66,11 @@ def main(args):
 
     sequences = model(None, args)
 
-    elbo = TraceEnum_ELBO(max_plate_nesting=1)
+    elbo = TraceEnum_ELBO(max_plate_nesting=1, strict_enumeration_warning=False)
     optim = Adam({'lr': args.learning_rate})
-    svi = SVI(model, guide, optim, elbo)
+
+    collapsed_guide = collapse(guide, 1)
+    svi = SVI(model, collapsed_guide, optim, elbo)
 
     logging.info('Step\tLoss')
     for step in range(args.num_steps):

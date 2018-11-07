@@ -103,6 +103,9 @@ class CollapseSampleMessenger(pyro.poutine.messenger.Messenger):
         assert enum_dim < 0, "{} {}".format(name, enum_dim)
         for value in self.sum_dims.values():
             value.discard(enum_dim)
+
+        # import pdb; pdb.set_trace()
+
         with shared_intermediates(self.cache) as cache:
             ordinal = frozenset(f for f in msg["cond_indep_stack"] if f.vectorized)
             logits = contract_to_tensor(self.log_factors, self.sum_dims, ordinal, cache=cache)
