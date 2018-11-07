@@ -15,7 +15,7 @@ from pyro.infer import config_enumerate
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.infer.mcmc.util import TraceEinsumEvaluator, TraceTreeEvaluator
 from pyro.ops.dual_averaging import DualAveraging
-from pyro.ops.integrator import single_step_velocity_verlet, velocity_verlet
+from pyro.ops.integrator import velocity_verlet
 from pyro.ops.welford import WelfordCovariance
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.util import optional, torch_isinf, torch_isnan
@@ -198,6 +198,8 @@ class HMC(TraceKernel):
         self._mass_matrix_adapt_scheme = None
         self._has_enumerable_sites = False
         self._trace_prob_evaluator = None
+        self._potential_energy_last = None
+        self._z_grads_last = None
 
     def _find_reasonable_step_size(self, z):
         step_size = self.step_size
@@ -207,7 +209,7 @@ class HMC(TraceKernel):
         # then we have to decrease step_size; otherwise, increase step_size.
         r, _ = self._sample_r(name="r_presample")
         energy_current = self._energy(z, r)
-        z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
+        z_new, r_new, z_grads, potential_energy = velocity_verlet(
             z, r, self._potential_energy, self._inverse_mass_matrix, step_size)
         energy_new = potential_energy + self._kinetic_energy(r_new)
         delta_energy = energy_new - energy_current
@@ -224,7 +226,7 @@ class HMC(TraceKernel):
         # TODO: make thresholds for too small step_size or too large step_size
         while direction_new == direction:
             step_size = step_size_scale * step_size
-            z_new, r_new, z_grads, potential_energy = single_step_velocity_verlet(
+            z_new, r_new, z_grads, potential_energy = velocity_verlet(
                 z, r, self._potential_energy, self._inverse_mass_matrix, step_size)
             energy_new = potential_energy + self._kinetic_energy(r_new)
             delta_energy = energy_new - energy_current
@@ -385,6 +387,13 @@ class HMC(TraceKernel):
     def cleanup(self):
         self._reset()
 
+    def _cache(self, potential_energy, z_grads):
+        self._potential_energy_last = potential_energy
+        self._z_grads_last = z_grads
+
+    def _fetch_from_cache(self):
+        return self._potential_energy_last, self._z_grads_last
+
     def sample(self, trace):
         z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
         # automatically transform `z` to unconstrained space, if needed.
@@ -393,17 +402,19 @@ class HMC(TraceKernel):
 
         r, _ = self._sample_r(name="r_t={}".format(self._t))
 
+        potential_energy, z_grads = self._fetch_from_cache()
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation
         with optional(pyro.validation_enabled(False), self._adapt_phase):
-            z_new, r_new = velocity_verlet(z, r,
-                                           self._potential_energy,
-                                           self._inverse_mass_matrix,
-                                           self.step_size,
-                                           self.num_steps)
+            z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(z, r, self._potential_energy,
+                                                                              self._inverse_mass_matrix,
+                                                                              self.step_size,
+                                                                              self.num_steps,
+                                                                              z_grads=z_grads)
             # apply Metropolis correction.
-            energy_proposal = self._energy(z_new, r_new)
-            energy_current = self._energy(z, r)
+            energy_proposal = self._kinetic_energy(r_new) + potential_energy_new
+            energy_current = self._kinetic_energy(r) + potential_energy if potential_energy is not None \
+                else self._energy(z, r)
         delta_energy = energy_proposal - energy_current
         rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(torch.zeros(1), torch.ones(1)))
         if rand < (-delta_energy).exp():
