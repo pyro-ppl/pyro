@@ -45,13 +45,15 @@ def guide(sequences, args, batch_size=None):
     scale_y = pyro.param("scale", (0.03 * torch.randn(y_shape)).exp(), constraint=constraints.positive)
     with pyro.plate("sequences", args.num_sequences, batch_size) as batch:
         for t in range(args.length):
-            x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[t, batch]),
+            x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[t][batch]),
                     infer={"enumerate": "parallel", "collapse": True})
-            print('x', x.shape)
-            print('locy', (loc_y[t][x, batch].shape))
-            pyro.sample("y_{}".format(t),
+            # print('probx', dist.Categorical(probs_x[t][batch]).shape())
+            # print('x', x.shape)
+            # print('locy', (loc_y[t][x, batch].shape))
+            y = pyro.sample("y_{}".format(t),
                 dist.Normal(loc_y[t][x, batch], scale_y[t][x, batch]))
                 # infer={"num_samples": args.num_samples})
+            # print('y', y.shape)
 
 
 def main(args):
