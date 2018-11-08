@@ -101,9 +101,18 @@ class WarmupAdapter(object):
             self._r_dist = dist.MultivariateNormal(loc,
                                                    precision_matrix=self._inverse_mass_matrix)
 
+    def _end_adaptation(self):
+        if self.adapt_step_size:
+            _, log_step_size_avg = self._step_size_adapt_scheme.get_state()
+            self._step_size = math.exp(log_step_size_avg)
+
     def configure(self, warmup_steps, inv_mass_matrix, initial_step_size=None):
         r"""
         Model specific properties that are specified when the HMC kernel is setup.
+
+        :param warmup_steps: Number of warmup steps that the sampler is initialized with.
+        :param inv_mass_matrix: Initial value of the inverse mass matrix.
+        :param initial_step_size: Step size to use to initialize the Dual Averaging scheme.
         """
         self._warmup_steps = warmup_steps
         if initial_step_size is not None and self.adapt_step_size:
@@ -114,12 +123,15 @@ class WarmupAdapter(object):
         if not self._adaptation_disabled:
             self._adaptation_schedule = self._build_adaptation_schedule()
 
-    def _end_adaptation(self):
-        if self.adapt_step_size:
-            _, log_step_size_avg = self._step_size_adapt_scheme.get_state()
-            self._step_size = math.exp(log_step_size_avg)
-
     def step(self, t, z, accept_prob):
+        r"""
+        Called at each step during the warmup phase to learn tunable
+        parameters.
+
+        :param int t: time step, beginning at 0.
+        :param dict z: latent variables.
+        :param float accept_prob: acceptance probability of the proposal.
+        """
         if t > self._warmup_steps or self._adaptation_disabled:
             return
         window = self._adaptation_schedule[self._current_window]
