@@ -56,8 +56,37 @@ class _DimAllocator(object):
             self._stack.pop()
 
 
-# Handles placement of enumeration and independence dimensions
+# Handles placement of plate dimensions
 _DIM_ALLOCATOR = _DimAllocator()
+
+
+class _EnumAllocator(object):
+    def __init__(self):
+        self.next_available_dim = None
+        self.next_available_symbol = None
+
+    def set_first_available_dim(self, first_available_dim):
+        self.next_available_dim = first_available_dim
+        self.next_available_symbol = 0
+
+    def allocate(self, upstream_dims=None):
+        dim = self.next_available_dim
+        if dim == float('inf'):
+            raise ValueError("max_plate_nesting must be set to a finite value for parallel enumeration")
+        if upstream_dims is None:
+            # allocate a new global dimension
+            self.next_available_dim += 1
+        else:
+            # allocate a new local dimension
+            while dim in upstream_dims:
+                dim += 1
+        symbol = self.next_available_symbol
+        self.next_available_symbol += 1
+        return dim, symbol
+
+
+# Handles placement of enumeration dimensions
+_ENUM_ALLOCATOR = _EnumAllocator()
 
 
 class NonlocalExit(Exception):
@@ -193,7 +222,6 @@ def effectful(fn=None, type=None):
                 "scale": 1.0,
                 "mask": None,
                 "cond_indep_stack": (),
-                "cond_dep_set": None,
                 "done": False,
                 "stop": False,
                 "continuation": None,

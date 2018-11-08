@@ -474,15 +474,30 @@ def queue(fn=None, queue=None, max_tries=None,
     return wrapper(fn) if fn is not None else wrapper
 
 
-def markov(fn=None, window=1):
+def markov(fn=None, history=1, keep=False):
     """
     Markov dependency declaration.
+    .. warning:: This assumes markov contexts can be reentrant but cannot be
+        interleaved. I.e. the following is invalid::
+
+        with pyro.markov() as x_axis:
+            with pyro.markov():
+                with x_axis:  # <--- error here
+                    ...
+
+    :param int history: The number of previous contexts visible from the
+        current context. Defaults to 1. If zero, this is similar to
+        :class:`pyro.plate`.
+    :param bool keep: If true, frames are replayable. This is important
+        when branching: if ``keep=True``, neighboring branches at the same
+        level can depend on each other; if ``keep=False``, neighboring branches
+        are independent (conditioned on their share"
     """
     if fn is None:
         # Used as a decorator with bound args
-        return MarkovMessenger(window=window)
+        return MarkovMessenger(history=history, keep=keep)
     if not callable(fn):
         # Used as a generator
-        return MarkovMessenger(window=window).generator(iterable=fn)
+        return MarkovMessenger(history=history, keep=keep).generator(iterable=fn)
     # Used as a decorator with bound args
-    return MarkovMessenger(window=window)(fn)
+    return MarkovMessenger(history=history, keep=keep)(fn)
