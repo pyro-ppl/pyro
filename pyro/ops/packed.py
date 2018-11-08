@@ -22,8 +22,36 @@ def pack(value, dim_to_symbol):
     return value
 
 
+def unpack(value, symbol_to_dim):
+    """
+    Converts a packed tensor to an unpacked tensor.
+    """
+    if isinstance(value, torch.Tensor):
+        dims = [symbol_to_dim[dim] for dim in value._pyro_dims]
+        shape = [1] * -min(dims) if dims else []
+        for dim, size in zip(dims, value.shape):
+            shape[dim] = size
+        value = value.reshape(shape)
+    return value
+
+
 def broadcast_all(*values):
-    raise NotImplementedError('TODO')
+    """
+    Packed broadcasting of multiple tensors.
+    """
+    sizes = {dim: size for value in values for dim, size in zip(value._pyro_dims, value.shape)}
+    dims = ''.join(sorted(sizes))
+    shape = torch.Size(sizes[dim] for dim in dims)
+    values = list(values)
+    for i, x in enumerate(values):
+        old_dims = x._pyro_dims
+        if old_dims != dims:
+            x = x.permute(tuple(old_dims.index(dim) for dim in dims if dim in old_dims))
+            x = x.reshape(tuple(sizes[dim] for dim in dims if dim in old_dims))
+            x = x.expand(shape)
+            x._pyro_dims = dims
+            values[i] = x
+    return tuple(values)
 
 
 def neg(value):
@@ -69,7 +97,7 @@ def mul(lhs, rhs):
     return result
 
 
-def sumproduct(factors, output_dims):
+def sumproduct(factors, output_dims, device=None):
     """
     Packed sum-product contraction.
     """
@@ -78,15 +106,17 @@ def sumproduct(factors, output_dims):
     for x in factors:
         (tensors if isinstance(x, torch.Tensor) else numbers).append(x)
     if tensors:
-        equation = ','.join(x._pyro_dim for x in tensors) + '->' + output_dims
+        equation = ','.join(x._pyro_dims for x in tensors) + '->' + output_dims
         result = contract(equation, *tensors, backend='torch')
         if numbers:
             result = result * reduce(operator.mul, numbers, 1.)
         result._pyro_dims = output_dims
-    return reduce(operator.mul, numbers, 1.)
+    result = torch.tensor(reduce(operator.add, numbers, 0.), device=device)
+    result._pyro_dims = ''
+    return result
 
 
-def logsumproductexp(factors, output_dims):
+def logsumproductexp(factors, output_dims, device=None):
     """
     Packed sum-product contraction in log space.
     """
@@ -95,9 +125,11 @@ def logsumproductexp(factors, output_dims):
     for x in factors:
         (tensors if isinstance(x, torch.Tensor) else numbers).append(x)
     if tensors:
-        equation = ','.join(x._pyro_dim for x in tensors) + '->' + output_dims
+        equation = ','.join(x._pyro_dims for x in tensors) + '->' + output_dims
         result = contract(equation, *tensors, backend='pyro.ops.einsum.torch_log')
         if numbers:
             result = result + reduce(operator.add, numbers, 0.)
         result._pyro_dims = output_dims
-    return reduce(operator.add, numbers, 0.)
+    result = torch.tensor(reduce(operator.add, numbers, 0.), device=device)
+    result._pyro_dims = ''
+    return result

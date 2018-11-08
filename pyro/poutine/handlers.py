@@ -477,6 +477,7 @@ def queue(fn=None, queue=None, max_tries=None,
 def markov(fn=None, history=1, keep=False):
     """
     Markov dependency declaration.
+
     .. warning:: This assumes markov contexts can be reentrant but cannot be
         interleaved. I.e. the following is invalid::
 

@@ -77,7 +77,7 @@ class IndepMessenger(Messenger):
             self._vectorized = True
 
         if self._vectorized is True:
-            self.dim, self.symbol = _DIM_ALLOCATOR.allocate(self.name, self.dim)
+            self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
 
         return super(IndepMessenger, self).__enter__()
 

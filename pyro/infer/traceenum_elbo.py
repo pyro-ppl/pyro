@@ -93,7 +93,7 @@ def _compute_model_factors(model_trace, guide_trace):
             else:
                 # For sites that depend on an enumerated variable, we need to apply
                 # the mask inside- and the scale outside- of the log expectation.
-                cost = scale_and_mask(site["unscaled_log_prob"], mask=site["mask"]).squeeze()
+                cost = scale_and_mask(site["packed"]["unscaled_log_prob"], mask=site["packed"]["mask"])
                 cost._pyro_dims = site["packed"]["log_prob"]._pyro_dims
                 log_factors.setdefault(t, []).append(cost)
                 scales.add(site["scale"])
@@ -107,7 +107,8 @@ def _compute_model_factors(model_trace, guide_trace):
                     scales.add(site["scale"])
         _check_shared_scale(scales)
         scale = scales.pop()
-        assert not scale.dim(), 'enumeration only supports scalar poutine.scale'
+        assert not (isinstance(scale, torch.Tensor) and scale.dim()), \
+            'enumeration only supports scalar poutine.scale'
     sum_dims = set(i
                    for xs in log_factors.values()
                    for x in xs

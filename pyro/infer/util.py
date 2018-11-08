@@ -238,15 +238,20 @@ class Dice(object):
         # share computation across all cost terms
         with shared_intermediates() as cache:
             expected_cost = 0.
-            for ordinal, cost_terms in costs:
+            for ordinal, cost_terms in costs.items():
                 factors = factors_table.get(ordinal, [])
                 for cost in cost_terms:
-                    prob = packed.sumproduct(factors, cost.shape, device=cost.device)
+                    dims = ''.join(dim for dim in cost._pyro_dims
+                                   if any(dim in getattr(f, '_pyro_dims', '') for f in factors))
+                    prob = packed.sumproduct(factors, dims, device=cost.device)
                     mask = prob > 0
+                    mask._pyro_dims = prob._pyro_dims
                     if torch.is_tensor(mask) and not mask.all():
                         cost, prob, mask = packed.broadcast_all(cost, prob, mask)
                         prob = prob[mask]
                         cost = cost[mask]
-                    expected_cost = expected_cost + (prob * cost).sum()
+                        expected_cost = expected_cost + (prob * cost).sum()
+                    else:
+                        expected_cost = expected_cost + packed.sumproduct([prob, cost], '')
         LAST_CACHE_SIZE[0] = count_cached_ops(cache)
         return expected_cost

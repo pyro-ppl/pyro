@@ -256,7 +256,7 @@ class Trace(networkx.DiGraph):
             if node["type"] == "sample" and not node["is_observed"]:
                 yield name, node
 
-    def pack_tensors(self, site, plate_to_symbol=None):
+    def pack_tensors(self, plate_to_symbol=None):
         """
         Computes packed representations of tensors in the trace.
         This should be called after :meth:`compute_log_prob` or :meth:`compute_score_parts`.
@@ -284,6 +284,7 @@ class Trace(networkx.DiGraph):
 
             # pack tensors
             packed = {}
+            packed["mask"] = pack(site["mask"], dim_to_symbol)
             if "score_parts" in site:
                 log_prob, score_function, entropy_term = site["score_parts"]
                 log_prob = pack(log_prob, dim_to_symbol)

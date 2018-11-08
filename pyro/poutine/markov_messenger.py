@@ -1,34 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
-import functools
 from collections import Counter
 
-from .messenger import Messenger
+from .reentrant_messenger import ReentrantMessenger
 
 try:
     from contextlib import ExitStack  # python 3
 except ImportError:
     from contextlib2 import ExitStack  # python 2
-
-
-class ReentrantMessenger(Messenger):
-    def __init__(self):
-        self._ref_count = 0
-        super(ReentrantMessenger, self).__init__()
-
-    def __call__(self, fn):
-        return functools.wraps(fn)(super(ReentrantMessenger, self).__call__(fn))
-
-    def __enter__(self):
-        self._ref_count += 1
-        if self._ref_count == 1:
-            super(ReentrantMessenger, self).__enter__()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self._ref_count -= 1
-        if self._ref_count == 0:
-            super(ReentrantMessenger, self).__exit__(exc_type, exc_value, traceback)
 
 
 class MarkovMessenger(ReentrantMessenger):
@@ -58,9 +37,9 @@ class MarkovMessenger(ReentrantMessenger):
         self.history = history
         self.keep = keep
         self._iterable = None
-
         self._pos = -1
         self._stack = []
+        super(MarkovMessenger, self).__init__()
 
     def generator(self, iterable):
         self._iterable = iterable
@@ -75,7 +54,7 @@ class MarkovMessenger(ReentrantMessenger):
     def __enter__(self):
         self._pos += 1
         if len(self._stack) <= self._pos:
-            self._stack.push(set())
+            self._stack.append(set())
         return super(MarkovMessenger, self).__enter__()
 
     def __exit__(self, *args, **kwargs):
@@ -90,7 +69,8 @@ class MarkovMessenger(ReentrantMessenger):
             return
 
         infer = msg["infer"]
-        infer["_markov_depth"] = 1 + infer.get("_markov_depth", 0)
         upstream = infer.setdefault("_markov_upstream", Counter())
         for pos in range(max(0, self._pos - self.history), self._pos + 1):
             upstream.update(self._stack[pos])
+        infer["_markov_depth"] = 1 + infer.get("_markov_depth", 0)
+        self._stack[self._pos].add(msg["name"])

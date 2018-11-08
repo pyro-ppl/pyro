@@ -1421,13 +1421,13 @@ def test_enum_recycling_reentrant():
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0), data=data)
 
 
-@pytest.mark.parametrize('window', [1, 2])
-def test_enum_recycling_reentrant_window(window):
+@pytest.mark.parametrize('history', [1, 2])
+def test_enum_recycling_reentrant_history(history):
     data = (True, False)
     for i in range(6):
         data = (data, data, False)
 
-    @pyro.markov(window=window)
+    @pyro.markov(history=history)
     def model(data, state=0, address=""):
         if isinstance(data, bool):
             p = pyro.param("p_leaf", torch.ones(10, 2))
@@ -1456,7 +1456,7 @@ def test_enum_recycling_interleave_error():
                 with m:  # error here
                     pass
 
-    def guide(data):
+    def guide():
         pass
 
     assert_error(model, guide, TraceEnum_ELBO(max_plate_nesting=0),
