@@ -10,7 +10,7 @@ from tests.common import assert_equal
     (False, True, 50, [(0, 6), (7, 44), (45, 49)]),
     (True, False, 150, [(0, 74), (75, 99), (100, 149)]),
     (True, True, 200, [(0, 74), (75, 99), (100, 149), (150, 199)]),
-    (True, True, 280, [(0, 74), (75, 99), (100, 149), (150, 229), (230, 279)]),
+    (True, True, 280, [(0, 74), (75, 99), (100, 229), (230, 279)]),
     (True, True, 18, [(0, 17)]),
 ])
 def test_adaptation_schedule(adapt_step_size, adapt_mass, warmup_steps, expected):

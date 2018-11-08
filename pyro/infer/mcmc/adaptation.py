@@ -73,11 +73,14 @@ class WarmupAdapter(object):
         next_window_size = init_window_size
         next_window_start = start_buffer_size
         while next_window_start < end_window_start:
-            cur_window_start = next_window_start
-            next_window_start = min(end_window_start, cur_window_start + next_window_size)
+            cur_window_start, cur_window_size = next_window_start, next_window_size
+            # Ensure that slow adaptation windows are monotonically increasing
+            if 3 * cur_window_size <= end_window_start - cur_window_start:
+                next_window_size = 2 * cur_window_size
+            else:
+                cur_window_size = end_window_start - cur_window_start
+            next_window_start = cur_window_start + cur_window_size
             adaptation_schedule.append(adapt_window(cur_window_start, next_window_start - 1))
-            next_window_size = 2 * next_window_size
-
         adaptation_schedule.append(adapt_window(end_window_start,
                                                 self._warmup_steps - 1))
         return adaptation_schedule
