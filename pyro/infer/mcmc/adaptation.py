@@ -1,0 +1,163 @@
+import math
+import torch
+from collections import namedtuple
+
+import pyro.distributions as dist
+from pyro.ops.dual_averaging import DualAveraging
+from pyro.ops.welford import WelfordCovariance
+
+adapt_window = namedtuple("adapt_window", ["start", "end"])
+
+
+class WarmupAdapter(object):
+    r"""
+    Adapts tunable parameters, namely step size and mass matrix, during the
+    warmup phase. This class provides lookup properties to read the latest
+    values of ``step_size`` and ``inverse_mass_matrix``. These values are
+    periodically updated when adaptation is engaged.
+    """
+
+    def __init__(self,
+                 step_size,
+                 adapt_step_size=False,
+                 target_accept_prob=0.8,
+                 adapt_mass_matrix=False,
+                 is_diag_mass=True):
+        self.adapt_step_size = adapt_step_size
+        self.adapt_mass_matrix = adapt_mass_matrix
+        self.target_accept_prob = target_accept_prob
+        self.is_diag_mass = is_diag_mass
+        self._step_size = step_size if step_size is not None else 1
+        self._adaptation_disabled = not (adapt_step_size or adapt_mass_matrix)
+        if adapt_step_size:
+            self._step_size_adapt_scheme = DualAveraging()
+        if adapt_mass_matrix:
+            self._mass_matrix_adapt_scheme = WelfordCovariance(diagonal=is_diag_mass)
+
+        # We separate warmup_steps into windows:
+        #   start_buffer + window 1 + window 2 + window 3 + ... + end_buffer
+        # where the length of each window will be doubled for the next window.
+        # We won't adapt mass matrix during start and end buffers; and mass
+        # matrix will be updated at the end of each window. This is helpful
+        # for dealing with the intense computation of sampling momentum from the
+        # inverse of mass matrix.
+        self._adapt_start_buffer = 75  # from Stan
+        self._adapt_end_buffer = 50  # from Stan
+        self._adapt_initial_window = 25  # from Stan
+        self._current_window = 0  # starting window index
+
+        # configured later on setup
+        self._warmup_steps = None
+        self._inverse_mass_matrix = None
+        self._r_dist = None
+        self._adaptation_schedule = []
+
+    def _build_adaptation_schedule(self):
+        adaptation_schedule = []
+        # from Stan, for small warmup_steps < 20
+        if self._warmup_steps <= 20:
+            adaptation_schedule.append(adapt_window(0, self._warmup_steps - 1))
+            return adaptation_schedule
+
+        start_buffer_size = self._adapt_start_buffer
+        end_buffer_size = self._adapt_end_buffer
+        init_window_size = self._adapt_initial_window
+        if (self._adapt_start_buffer + self._adapt_end_buffer
+                + self._adapt_initial_window > self._warmup_steps):
+            start_buffer_size = int(0.15 * self._warmup_steps)
+            end_buffer_size = int(0.1 * self._warmup_steps)
+            init_window_size = self._warmup_steps - start_buffer_size - end_buffer_size
+        adaptation_schedule.append(adapt_window(start=0, end=start_buffer_size - 1))
+        end_window_start = self._warmup_steps - end_buffer_size
+
+        next_window_size = init_window_size
+        next_window_start = start_buffer_size
+        while next_window_start < end_window_start:
+            cur_window_start = next_window_start
+            next_window_start = min(end_window_start, cur_window_start + next_window_size)
+            adaptation_schedule.append(adapt_window(cur_window_start, next_window_start - 1))
+            next_window_size = 2 * next_window_size
+
+        adaptation_schedule.append(adapt_window(end_window_start,
+                                                self._warmup_steps - 1))
+        return adaptation_schedule
+
+    def reset_step_size(self, step_size):
+        self._step_size_adapt_scheme.prox_center = math.log(10 * step_size)
+        self._step_size_adapt_scheme.reset()
+
+    def _update_step_size(self, accept_prob):
+        # calculate a statistic for Dual Averaging scheme
+        H = self.target_accept_prob - accept_prob
+        self._step_size_adapt_scheme.step(H)
+        log_step_size, _ = self._step_size_adapt_scheme.get_state()
+        self._step_size = math.exp(log_step_size)
+
+    def _update_r_dist(self):
+        loc = self._inverse_mass_matrix.new_zeros(self._inverse_mass_matrix.size(0))
+        if self.is_diag_mass:
+            self._r_dist = dist.Normal(loc, self._inverse_mass_matrix.rsqrt())
+        else:
+            self._r_dist = dist.MultivariateNormal(loc,
+                                                   precision_matrix=self._inverse_mass_matrix)
+
+    def configure(self, warmup_steps, inv_mass_matrix, initial_step_size=None):
+        r"""
+        Model specific properties that are specified when the HMC kernel is setup.
+        """
+        self._warmup_steps = warmup_steps
+        if initial_step_size is not None and self.adapt_step_size:
+            self._step_size = initial_step_size
+            self.reset_step_size(initial_step_size)
+        self._inverse_mass_matrix = inv_mass_matrix
+        self._update_r_dist()
+        if not self._adaptation_disabled:
+            self._adaptation_schedule = self._build_adaptation_schedule()
+
+    def _end_adaptation(self):
+        if self.adapt_step_size:
+            _, log_step_size_avg = self._step_size_adapt_scheme.get_state()
+            self._step_size = math.exp(log_step_size_avg)
+
+    def step(self, t, z, accept_prob):
+        if t > self._warmup_steps or self._adaptation_disabled:
+            return
+        window = self._adaptation_schedule[self._current_window]
+        num_windows = len(self._adaptation_schedule)
+        mass_matrix_adaptation_phase = self.adapt_mass_matrix and \
+            (0 < self._current_window < num_windows - 1)
+        if self.adapt_step_size:
+            self._update_step_size(accept_prob)
+        if mass_matrix_adaptation_phase:
+            z_flat = torch.cat([z[name].reshape(-1) for name in sorted(z)])
+            self._mass_matrix_adapt_scheme.update(z_flat.detach())
+        if t == window.end:
+            if self._current_window == num_windows - 1:
+                self._end_adaptation()
+                return
+
+            if self.adapt_step_size:
+                self._step_size_adapt_scheme.prox_center = math.log(10 * self.step_size)
+                self._step_size_adapt_scheme.reset()
+
+            if mass_matrix_adaptation_phase:
+                self._inverse_mass_matrix = self._mass_matrix_adapt_scheme.get_covariance()
+                self._update_r_dist()
+                self._mass_matrix_adapt_scheme.reset()
+            self._current_window += 1
+
+    @property
+    def adaptation_schedule(self):
+        return self._adaptation_schedule
+
+    @property
+    def step_size(self):
+        return self._step_size
+
+    @property
+    def inverse_mass_matrix(self):
+        return self._inverse_mass_matrix
+
+    @property
+    def r_dist(self):
+        return self._r_dist

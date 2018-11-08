@@ -12,11 +12,10 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.util import eye_like
 from pyro.infer import config_enumerate
+from pyro.infer.mcmc.adaptation import WarmupAdapter
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.infer.mcmc.util import TraceEinsumEvaluator, TraceTreeEvaluator
-from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.integrator import velocity_verlet
-from pyro.ops.welford import WelfordCovariance
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.util import optional, torch_isinf, torch_isnan
 
@@ -87,7 +86,7 @@ class HMC(TraceKernel):
 
     def __init__(self,
                  model,
-                 step_size=None,
+                 step_size=1,  # from Stan
                  trajectory_length=None,
                  num_steps=None,
                  adapt_step_size=True,
@@ -103,16 +102,13 @@ class HMC(TraceKernel):
                           DeprecationWarning)
             max_plate_nesting = max_iarange_nesting
         self.max_plate_nesting = max_plate_nesting
-        self.step_size = step_size if step_size is not None else 1  # from Stan
         if trajectory_length is not None:
             self.trajectory_length = trajectory_length
         elif num_steps is not None:
-            self.trajectory_length = self.step_size * num_steps
+            self.trajectory_length = step_size * num_steps
         else:
             self.trajectory_length = 2 * math.pi  # from Stan
-        self.num_steps = max(1, int(self.trajectory_length / self.step_size))
         self.adapt_step_size = adapt_step_size
-        self.adapt_mass_matrix = adapt_mass_matrix
         self.full_mass = full_mass
         self.use_einsum = experimental_use_einsum
         self._target_accept_prob = 0.8  # from Stan
@@ -120,24 +116,15 @@ class HMC(TraceKernel):
         # In NUTS paper, this threshold is set to a fixed log(0.5).
         # After https://github.com/stan-dev/stan/pull/356, it is set to a fixed log(0.8).
         self._direction_threshold = math.log(0.8)  # from Stan
-
-        # We separate warmup_steps into windows:
-        #   start_buffer + window 1 + window 2 + window 3 + ... + end_buffer
-        # where the length of each window will be doubled for the next window.
-        # We won't adapt mass matrix during start and end buffers; and mass
-        # matrix will be updated at the end of each window. This is helpful
-        # for dealing with the intense computation of sampling momentum from the
-        # inverse of mass matrix.
-        self._adapt_start_buffer = 75  # from Stan
-        self._adapt_end_buffer = 50  # from Stan
-        self._adapt_initial_window = 25  # from Stan
-
         # number of tries to get a valid prototype trace
         self._max_tries_prototype_trace = 100
-
         self.transforms = {} if transforms is None else transforms
         self._automatic_transform_enabled = True if transforms is None else False
         self._reset()
+        self._adapter = WarmupAdapter(step_size,
+                                      adapt_step_size=adapt_step_size,
+                                      adapt_mass_matrix=adapt_mass_matrix,
+                                      is_diag_mass=not full_mass)
         super(HMC, self).__init__()
 
     def _get_trace(self, z):
@@ -162,9 +149,9 @@ class HMC(TraceKernel):
         # See: https://github.com/uber/pyro/issues/1458
         r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)])
         if self.full_mass:
-            return 0.5 * (r_flat * (self._inverse_mass_matrix.matmul(r_flat))).sum()
+            return 0.5 * (r_flat * (self.inverse_mass_matrix.matmul(r_flat))).sum()
         else:
-            return 0.5 * (self._inverse_mass_matrix * (r_flat ** 2)).sum()
+            return 0.5 * (self.inverse_mass_matrix * (r_flat ** 2)).sum()
 
     def _potential_energy(self, z):
         # Since the model is specified in the constrained space, transform the
@@ -185,17 +172,12 @@ class HMC(TraceKernel):
     def _reset(self):
         self._t = 0
         self._accept_cnt = 0
-        self._inverse_mass_matrix = None
-        self._r_dist = None
         self._r_shapes = {}
         self._r_numels = {}
+        self._initial_mass_matrix = None
         self._args = None
         self._kwargs = None
         self._prototype_trace = None
-        self._adapt_phase = False
-        self._adapt_mass_matrix_phase = False
-        self._step_size_adapt_scheme = None
-        self._mass_matrix_adapt_scheme = None
         self._has_enumerable_sites = False
         self._trace_prob_evaluator = None
         self._potential_energy_last = None
@@ -210,7 +192,7 @@ class HMC(TraceKernel):
         r, _ = self._sample_r(name="r_presample")
         energy_current = self._energy(z, r)
         z_new, r_new, z_grads, potential_energy = velocity_verlet(
-            z, r, self._potential_energy, self._inverse_mass_matrix, step_size)
+            z, r, self._potential_energy, self.inverse_mass_matrix, step_size)
         energy_new = potential_energy + self._kinetic_energy(r_new)
         delta_energy = energy_new - energy_current
         # direction=1 means keep increasing step_size, otherwise decreasing step_size.
@@ -227,102 +209,36 @@ class HMC(TraceKernel):
         while direction_new == direction:
             step_size = step_size_scale * step_size
             z_new, r_new, z_grads, potential_energy = velocity_verlet(
-                z, r, self._potential_energy, self._inverse_mass_matrix, step_size)
+                z, r, self._potential_energy, self.inverse_mass_matrix, step_size)
             energy_new = potential_energy + self._kinetic_energy(r_new)
             delta_energy = energy_new - energy_current
             direction_new = 1 if self._direction_threshold < -delta_energy else -1
         return step_size
 
     def _configure_adaptation(self, trace):
-        self._adapt_phase = True
-        self._adapt_window = self._adapt_initial_window
-
+        initial_step_size = None
         if self.adapt_step_size:
             z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
             for name, transform in self.transforms.items():
                 z[name] = transform(z[name])
             with pyro.validation_enabled(False):
-                self.step_size = self._find_reasonable_step_size(z)
-            self.num_steps = max(1, int(self.trajectory_length / self.step_size))
-            # make prox-center for Dual Averaging scheme
-            loc = math.log(10 * self.step_size)
-            self._step_size_adapt_scheme = DualAveraging(prox_center=loc)
+                initial_step_size = self._find_reasonable_step_size(z)
 
-        # from Stan, for small warmup_steps
-        if self._warmup_steps < 20:
-            self._adapt_window_ending = self._warmup_steps
-            return
-
-        if (self._adapt_start_buffer + self._adapt_end_buffer
-                + self._adapt_initial_window > self._warmup_steps):
-            self._adapt_start_buffer = int(0.15 * self._warmup_steps)
-            self._adapt_end_buffer = int(0.1 * self._warmup_steps)
-            self._adapt_window = (self._warmup_steps - self._adapt_start_buffer
-                                  - self._adapt_end_buffer)
-
-        # define ending pointer of the current window
-        self._adapt_window_ending = self._adapt_start_buffer
-        self._adapt_mass_matrix_phase_ending = self._warmup_steps - self._adapt_end_buffer
-
-        if self.adapt_mass_matrix:
-            is_diag = not self.full_mass
-            self._mass_matrix_adapt_scheme = WelfordCovariance(diagonal=is_diag)
-
-    def _end_warmup(self):
-        self._adapt_phase = False
-        if self.adapt_step_size:
-            _, log_step_size_avg = self._step_size_adapt_scheme.get_state()
-            self.step_size = math.exp(log_step_size_avg)
-            self.num_steps = max(1, int(self.trajectory_length / self.step_size))
-
-    def _end_adapt_window(self):
-        if self._adapt_window_ending == self._warmup_steps:
-            self._end_warmup()
-            return
-
-        if self._adapt_window_ending == self._adapt_start_buffer:
-            if self.adapt_mass_matrix:
-                self._adapt_mass_matrix_phase = True
-        else:
-            if self.adapt_step_size:
-                self._step_size_adapt_scheme.prox_center = math.log(10 * self.step_size)
-                self._step_size_adapt_scheme.reset()
-
-            if self.adapt_mass_matrix:
-                self._inverse_mass_matrix = self._mass_matrix_adapt_scheme.get_covariance()
-                self._update_r_dist()
-                self._mass_matrix_adapt_scheme.reset()
-
-            self._adapt_window = 2 * self._adapt_window
-            if self._adapt_window_ending == self._adapt_mass_matrix_phase_ending:
-                self._adapt_mass_matrix_phase = False
-                self._adapt_window_ending = self._warmup_steps
-                return
-
-        self._adapt_window_ending = self._adapt_window_ending + self._adapt_window
-        # expanding the current window if length of the next one is too large
-        next_adapt_window_ending = self._adapt_window_ending + 2 * self._adapt_window
-        if next_adapt_window_ending > self._adapt_mass_matrix_phase_ending:
-            self._adapt_window_ending = self._adapt_mass_matrix_phase_ending
-
-    def _adapt_step_size(self, accept_prob):
-        # calculate a statistic for Dual Averaging scheme
-        H = self._target_accept_prob - accept_prob
-        self._step_size_adapt_scheme.step(H)
-        log_step_size, _ = self._step_size_adapt_scheme.get_state()
-        self.step_size = math.exp(log_step_size)
-        self.num_steps = max(1, int(self.trajectory_length / self.step_size))
-
-    def _update_r_dist(self):
-        loc = self._inverse_mass_matrix.new_zeros(self._inverse_mass_matrix.size(0))
-        if self.full_mass:
-            self._r_dist = dist.MultivariateNormal(loc,
-                                                   precision_matrix=self._inverse_mass_matrix)
-        else:
-            self._r_dist = dist.Normal(loc, self._inverse_mass_matrix.rsqrt())
+        self._adapter.configure(self._warmup_steps,
+                                self._initial_mass_matrix,
+                                initial_step_size)
 
     def _sample_r(self, name):
-        r_flat = pyro.sample(name, self._r_dist)
+        r_dist = self._adapter.r_dist
+        # For finding a reasonable step size before adapter is initialized.
+        if r_dist is None:
+            inv_mass_matrix = self._initial_mass_matrix
+            loc = inv_mass_matrix.new_zeros(inv_mass_matrix.size(0))
+            if self.full_mass:
+                r_dist = dist.MultivariateNormal(loc, precision_matrix=inv_mass_matrix)
+            else:
+                r_dist = dist.Normal(loc, inv_mass_matrix.rsqrt())
+        r_flat = pyro.sample(name, r_dist)
         r = {}
         pos = 0
         for name in sorted(self._r_shapes):
@@ -344,6 +260,19 @@ class HMC(TraceKernel):
                 return
             trace = poutine.trace(self.model).get_trace(self._args, self._kwargs)
         raise ValueError("Model specification seems incorrect - can not find a valid trace.")
+
+    @property
+    def inverse_mass_matrix(self):
+        inv_mass_matrix = self._adapter.inverse_mass_matrix
+        return inv_mass_matrix if inv_mass_matrix is not None else self._initial_mass_matrix
+
+    @property
+    def step_size(self):
+        return self._adapter.step_size
+
+    @property
+    def num_steps(self):
+        return max(1, int(self.trajectory_length / self.step_size))
 
     def initial_trace(self):
         return self._prototype_trace
@@ -374,15 +303,13 @@ class HMC(TraceKernel):
             self._r_shapes[name] = site_value.shape
             self._r_numels[name] = site_value.numel()
 
-        self._set_valid_prototype_trace(trace)
         mass_matrix_size = sum(self._r_numels.values())
         if self.full_mass:
-            self._inverse_mass_matrix = eye_like(site_value, mass_matrix_size)
+            self._initial_mass_matrix = eye_like(site_value, mass_matrix_size)
         else:
-            self._inverse_mass_matrix = site_value.new_ones(mass_matrix_size)
-        self._update_r_dist()
-        if self.adapt_step_size or self.adapt_mass_matrix:
-            self._configure_adaptation(trace)
+            self._initial_mass_matrix = site_value.new_ones(mass_matrix_size)
+        self._set_valid_prototype_trace(trace)
+        self._configure_adaptation(trace)
 
     def cleanup(self):
         self._reset()
@@ -405,9 +332,9 @@ class HMC(TraceKernel):
         potential_energy, z_grads = self._fetch_from_cache()
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation
-        with optional(pyro.validation_enabled(False), self._adapt_phase):
+        with optional(pyro.validation_enabled(False), self._t < self._warmup_steps):
             z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(z, r, self._potential_energy,
-                                                                              self._inverse_mass_matrix,
+                                                                              self.inverse_mass_matrix,
                                                                               self.step_size,
                                                                               self.num_steps,
                                                                               z_grads=z_grads)
@@ -416,27 +343,21 @@ class HMC(TraceKernel):
             energy_current = self._kinetic_energy(r) + potential_energy if potential_energy is not None \
                 else self._energy(z, r)
         delta_energy = energy_proposal - energy_current
+        # Set accept prob to 0.0 if delta_energy is `NaN` which may be
+        # the case for a diverging trajectory when using a large step size.
+        if torch_isnan(delta_energy):
+            accept_prob = delta_energy.new_tensor(0.0)
+        else:
+            accept_prob = (-delta_energy).exp().clamp(max=1.)
         rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(torch.zeros(1), torch.ones(1)))
-        if rand < (-delta_energy).exp():
+        if rand < accept_prob:
             self._accept_cnt += 1
             z = z_new
 
-        self._t += 1
+        if self._t < self._warmup_steps:
+            self._adapter.step(self._t, z, accept_prob)
 
-        if self._adapt_phase:
-            if self.adapt_step_size:
-                # Set accept prob to 0.0 if delta_energy is `NaN` which may be
-                # the case for a diverging trajectory when using a large step size.
-                if torch_isnan(delta_energy):
-                    accept_prob = delta_energy.new_tensor(0.0)
-                else:
-                    accept_prob = (-delta_energy).exp().clamp(max=1).item()
-                self._adapt_step_size(accept_prob)
-            if self._adapt_mass_matrix_phase:
-                z_flat = torch.cat([z[name].reshape(-1) for name in sorted(z)])
-                self._mass_matrix_adapt_scheme.update(z_flat.detach())
-            if self._t == self._adapt_window_ending:
-                self._end_adapt_window()
+        self._t += 1
 
         # get trace with the constrained values for `z`.
         for name, transform in self.transforms.items():
