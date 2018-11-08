@@ -147,7 +147,12 @@ class WarmupAdapter(object):
             z_flat = torch.cat([z[name].reshape(-1) for name in sorted(z)])
             self._mass_matrix_adapt_scheme.update(z_flat.detach())
         if t == window.end:
+            if self._current_window == 0:
+                self._current_window += 1
+                return
+
             if self._current_window == num_windows - 1:
+                self._current_window += 1
                 self._end_adaptation()
                 return
 
