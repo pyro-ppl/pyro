@@ -24,6 +24,7 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.contrib.util import hessian
 from pyro.distributions.util import sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
@@ -241,17 +242,6 @@ class AutoCallable(AutoGuide):
         return {} if result is None else result
 
 
-def _hessian(y, xs):
-    dys = torch.autograd.grad(y, xs, create_graph=True)
-    flat_dy = torch.cat([dy.reshape(-1) for dy in dys])
-    H = []
-    for dyi in flat_dy:
-        Hi = torch.cat([Hij.reshape(-1) for Hij in torch.autograd.grad(dyi, xs, retain_graph=True)])
-        H.append(Hi)
-    H = torch.stack(H)
-    return H
-
-
 class AutoDelta(AutoGuide):
     """
     This implementation of :class:`AutoGuide` uses Delta distributions to
@@ -306,24 +296,6 @@ class AutoDelta(AutoGuide):
         :rtype: dict
         """
         return self(*args, **kwargs)
-
-    def covariance(self, *args, **kwargs):
-        """
-        Returns covariance of the packed latent variable under Laplace (quadratic) approximation.
-        The packed latent variable is packed from the flat versions of latent variables, which are
-        arranged according to their appearance in the base ``model``.
-        """
-        guide_trace = poutine.trace(self).get_trace(*args, **kwargs)
-        model_trace = poutine.trace(
-            poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
-        loss = -model_trace.log_prob_sum()
-
-        latents = []
-        for _, site in guide_trace.iter_stochastic_nodes():
-            latents.append(site["value"])
-
-        H = _hessian(loss, latents)
-        return torch.inverse(H)
 
 
 class AutoContinuous(AutoGuide):
@@ -665,7 +637,7 @@ class AutoLaplaceApproximation(AutoContinuous):
         loss = guide_trace.log_prob_sum() - model_trace.log_prob_sum()
 
         loc = pyro.param("{}_loc".format(self.prefix))
-        H = _hessian(loss, loc.unconstrained())
+        H = hessian(loss, loc.unconstrained())
         cov = H.inverse()
         scale_tril = cov.potrf(upper=False)
 
