@@ -23,9 +23,9 @@ class EnumerateMessenger(Messenger):
     def __enter__(self):
         if self.first_available_dim is not None:
             _ENUM_ALLOCATOR.set_first_available_dim(self.first_available_dim)
-        self._enum_dims = {}
-        self._enum_symbols = {}
-        self._markov_depths = {}
+        self._enum_dims = {}  # maps site name -> recyclable dim (negative integer)
+        self._enum_symbols = {}  # maps site name -> unique symbol (nonnegative integer)
+        self._markov_depths = {}  # maps site name -> depth (nonnegative integer)
         return super(EnumerateMessenger, self).__enter__()
 
     def _pyro_sample(self, msg):
@@ -46,38 +46,42 @@ class EnumerateMessenger(Messenger):
         else:
             # Monte Carlo sample the distribution.
             value = dist(sample_shape=(num_samples,))
-        assert len(value.shape) == 1 + len(dist.batch_shape) + len(dist.event_shape)
+        event_dim = len(dist.event_shape)
+        assert value.dim() == 1 + len(dist.batch_shape) + event_dim
 
         # Ensure enumeration happens at an available tensor dimension.
         # This allocates the next available dim for enumeration, to the left all other dims.
-        actual_dim = -1 - len(dist.batch_shape)  # the leftmost dim of log_prob, counting from the right
+        actual_dim = -1 - len(dist.batch_shape)  # the leftmost dim of log_prob, indexed from the right
 
         # Find a target_dim, possibly even farther left than actual_dim.
         upstream = msg["infer"].get("_markov_upstream")
+        dim_to_symbol = {}
         if upstream is None:
             target_dim, symbol = _ENUM_ALLOCATOR.allocate()
-            msg["infer"]["_dim_to_symbol"] = {target_dim: symbol}
         else:
-            upstream_names = set(name for name, depth in upstream.items()
-                                 if self._markov_depths[name] == depth)
-            upstream_dims = set(map(self._enum_dims.__getitem__, upstream_names))
+            upstream_dims = set()
+            for name, depth in upstream.items():
+                if self._markov_depths[name] == depth:
+                    dim = self._enum_dims[name]
+                    upstream_dims.add(dim)
+                    dim_to_symbol[dim] = self._enum_symbols[name]
             target_dim, symbol = _ENUM_ALLOCATOR.allocate(upstream_dims)
             self._enum_dims[msg["name"]] = target_dim
             self._enum_symbols[msg["name"]] = symbol
             self._markov_depths[msg["name"]] = msg["infer"]["_markov_depth"]
-            msg["infer"]["_dim_to_symbol"] = {self._enum_dims[name]: self._enum_symbols[name]
-                                              for name in upstream_names}
+        dim_to_symbol[target_dim] = symbol
+        msg["infer"]["_dim_to_symbol"] = dim_to_symbol
 
         # Reshape to move actual_dim to target_dim.
-        if target_dim < actual_dim:
-            assert value.size(actual_dim) == 1, 'pyro.markov dim conflict at dim {}'.format(actual_dim)
-            value = value.transpose(target_dim, actual_dim)
-            while value.size(0) == 1:
+        if actual_dim < target_dim:
+            assert value.size(target_dim - event_dim) == 1, 'pyro.markov dim conflict at dim {}'.format(actual_dim)
+            value = value.transpose(target_dim - event_dim, actual_dim - event_dim)
+            while value.dim() and value.size(0) == 1:
                 value = value.squeeze(0)
-        elif target_dim > actual_dim:
-            diff = target_dim - actual_dim
+        elif target_dim < actual_dim:
+            diff = actual_dim - target_dim
             value = value.reshape(value.shape[:1] + (1,) * diff + value.shape[1:])
 
-        msg["infer"]["_enumerate_dim"] = -1 - target_dim
+        msg["infer"]["_enumerate_dim"] = target_dim
         msg["value"] = value
         msg["done"] = True

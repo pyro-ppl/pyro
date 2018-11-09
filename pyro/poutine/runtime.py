@@ -61,16 +61,40 @@ _DIM_ALLOCATOR = _DimAllocator()
 
 
 class _EnumAllocator(object):
+    """
+    Dimension allocator for internal use by :func:`~pyro.poutine.markov`.
+    There is a single global instance.
+
+    Note that dimensions are indexed from the right, e.g. -1, -2.
+    Note that symbols are simply nonnegative integers here.
+    """
     def __init__(self):
         self.next_available_dim = None
         self.next_available_symbol = None
 
     def set_first_available_dim(self, first_available_dim):
+        """
+        Set the first available dim, which should be to the left of all
+        :class:`plate` dimensions, e.g. ``-1 - max_plate_nesting``. This should
+        be called once per program. In SVI this should be called only once per
+        (guide,model) pair.
+        """
         assert first_available_dim < 0, first_available_dim
         self.next_available_dim = first_available_dim
         self.next_available_symbol = 0
 
     def allocate(self, upstream_dims=None):
+        """
+        Allocate a new recyclable dim and a unique symbol.
+
+        If ``upstream_dims`` is None, this allocates a global enumeration dim
+        that will never be recycled. If ``upstream_dims`` is specified, this
+        allocates a local enumeration dim that can be reused by at any other
+        local site that is not downstream of this site.
+
+        :param set upstream_dims: An optional set of (negative integer)
+            local enumeration dims to avoid when allocating this dim.
+        """
         dim = self.next_available_dim
         if dim == -float('inf'):
             raise ValueError("max_plate_nesting must be set to a finite value for parallel enumeration")
