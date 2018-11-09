@@ -85,7 +85,7 @@ class WarmupAdapter(object):
                                                 self._warmup_steps - 1))
         return adaptation_schedule
 
-    def reset_step_size(self, step_size):
+    def _reset_step_size(self, step_size):
         self._step_size_adapt_scheme.prox_center = math.log(10 * step_size)
         self._step_size_adapt_scheme.reset()
 
@@ -120,7 +120,7 @@ class WarmupAdapter(object):
         self._warmup_steps = warmup_steps
         if initial_step_size is not None and self.adapt_step_size:
             self._step_size = initial_step_size
-            self.reset_step_size(initial_step_size)
+            self._reset_step_size(initial_step_size)
         self._inverse_mass_matrix = inv_mass_matrix
         self._update_r_dist()
         if not self._adaptation_disabled:
