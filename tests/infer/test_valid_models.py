@@ -24,7 +24,7 @@ def assert_ok(model, guide, elbo, **kwargs):
     """
     pyro.clear_param_store()
     inference = SVI(model, guide, Adam({"lr": 1e-6}), elbo)
-    inference.step(*kwargs)
+    inference.step(**kwargs)
 
 
 def assert_error(model, guide, elbo, match=None):
@@ -1310,13 +1310,14 @@ def test_enum_recycling_dbn():
         p = pyro.param("p", torch.ones(3, 3))
         q = pyro.param("q", torch.ones(2))
         r = pyro.param("r", torch.ones(3, 2, 4))
-        z_ind = torch.arange(3, dtype=torch.long)
+        z_ind = torch.arange(4, dtype=torch.long)
 
         x = 0
         for t in pyro.markov(range(100)):
             x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
             y = pyro.sample("y_{}".format(t), dist.Categorical(q))
-            pyro.sample("z_{}".format(t), dist.Categorical(r[x, y, z_ind]),
+            pyro.sample("z_{}".format(t),
+                        dist.Categorical(r[x.unsqueeze(-1), y.unsqueeze(-1), z_ind]),
                         obs=torch.tensor(0.))
 
     def guide():
@@ -1381,7 +1382,7 @@ def test_enum_recycling_grid():
     @config_enumerate(default="parallel")
     def model():
         p = pyro.param("p_leaf", torch.ones(2, 2, 2))
-        ind = torch.arange(4, dtype=torch.long)
+        ind = torch.arange(2, dtype=torch.long)
         x = defaultdict(lambda: torch.tensor(0))
         y_axis = pyro.markov(range(4), keep=True)
         for i in pyro.markov(range(4)):
@@ -1411,7 +1412,7 @@ def test_enum_recycling_reentrant():
         else:
             p = pyro.param("p_branch", torch.ones(10, 10))
             for branch, letter in zip(data, "abcdefg"):
-                next_state = pyro.sample("branch_{}".format(address),
+                next_state = pyro.sample("branch_{}".format(address + letter),
                                          dist.Categorical(p[state]),
                                          infer={"enumerate": "parallel"})
                 model(branch, next_state, address + letter)
@@ -1430,12 +1431,14 @@ def test_enum_recycling_reentrant_history(history):
 
     @pyro.markov(history=history)
     def model(data, state=0, address=""):
+        print(address)
         if isinstance(data, bool):
             p = pyro.param("p_leaf", torch.ones(10, 2))
             pyro.sample("leaf_{}".format(address),
                         dist.Bernoulli(p[state]),
                         obs=torch.tensor(1. if data else 0.))
         else:
+            assert isinstance(data, tuple)
             p = pyro.param("p_branch", torch.ones(10, 10))
             for branch, letter in zip(data, "abcdefg"):
                 next_state = pyro.sample("branch_{}".format(address),

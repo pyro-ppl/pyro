@@ -23,9 +23,12 @@ class EnumerateMessenger(Messenger):
     def __enter__(self):
         if self.first_available_dim is not None:
             _ENUM_ALLOCATOR.set_first_available_dim(self.first_available_dim)
-        self._enum_dims = {}  # maps site name -> recyclable dim (negative integer)
-        self._enum_symbols = {}  # maps site name -> unique symbol (nonnegative integer)
-        self._markov_depths = {}  # maps site name -> depth (nonnegative integer)
+        self._enum_dims = {}  # site name -> reusable dim (negative integer)
+        self._enum_symbols = {}  # site name -> unique symbol (nonnegative integer)
+        self._markov_depths = {}  # site name -> depth (nonnegative integer)
+
+        self._param_dim_to_symbol = {}  # site name -> (enum dim -> unique symbol)
+        self._value_dim_to_symbol = {}  # site name -> (enum dim -> unique symbol)
         return super(EnumerateMessenger, self).__enter__()
 
     def _pyro_sample(self, msg):
@@ -33,9 +36,21 @@ class EnumerateMessenger(Messenger):
         :param msg: current message at a trace site.
         :returns: a sample from the stochastic function at the site.
         """
-        if msg["done"] or msg["type"] != "sample" or msg["is_observed"]:
+        if msg["done"]:
             return
-        if msg["infer"].get("enumerate") != "parallel":
+
+        upstream = msg["infer"].get("_markov_upstream")  # site name -> markov depth
+        dim_to_symbol = {}  # reusable dim -> unique symbol
+        if upstream is not None:
+            upstream_dims = set()
+            for name, depth in upstream.items():
+                if self._markov_depths[name] == depth:  # hide sites whose markov context has exited
+                    dim = self._enum_dims[name]
+                    upstream_dims.add(dim)
+                    dim_to_symbol[dim] = self._enum_symbols[name]
+            self._markov_depths[msg["name"]] = msg["infer"]["_markov_depth"]
+        msg["infer"]["_dim_to_symbol"] = dim_to_symbol
+        if msg["is_observed"] or msg["infer"].get("enumerate") != "parallel":
             return
 
         dist = msg["fn"]
@@ -53,24 +68,12 @@ class EnumerateMessenger(Messenger):
         # This allocates the next available dim for enumeration, to the left all other dims.
         actual_dim = -1 - len(dist.batch_shape)  # the leftmost dim of log_prob, indexed from the right
 
-        # Find a target_dim, possibly even farther left than actual_dim.
-        upstream = msg["infer"].get("_markov_upstream")
-        dim_to_symbol = {}
-        if upstream is None:
-            target_dim, symbol = _ENUM_ALLOCATOR.allocate()
-        else:
-            upstream_dims = set()
-            for name, depth in upstream.items():
-                if self._markov_depths[name] == depth:
-                    dim = self._enum_dims[name]
-                    upstream_dims.add(dim)
-                    dim_to_symbol[dim] = self._enum_symbols[name]
-            target_dim, symbol = _ENUM_ALLOCATOR.allocate(upstream_dims)
+        # Find a target_dim, possibly different from actual_dim.
+        target_dim, symbol = _ENUM_ALLOCATOR.allocate()
+        if upstream is not None:
             self._enum_dims[msg["name"]] = target_dim
             self._enum_symbols[msg["name"]] = symbol
-            self._markov_depths[msg["name"]] = msg["infer"]["_markov_depth"]
         dim_to_symbol[target_dim] = symbol
-        msg["infer"]["_dim_to_symbol"] = dim_to_symbol
 
         # Reshape to move actual_dim to target_dim.
         if actual_dim < target_dim:
@@ -81,6 +84,12 @@ class EnumerateMessenger(Messenger):
         elif target_dim < actual_dim:
             diff = actual_dim - target_dim
             value = value.reshape(value.shape[:1] + (1,) * diff + value.shape[1:])
+
+        shape = msg["fn"].batch_shape
+        self._param_dim_to_symbol = {d: s for d, s in dim_to_symbol.items() if len(shape) > -d and shape[d] > 1}
+        shape = value.shape[:value.dim() - event_dim]
+        self._value_dim_to_symbol = {d: s for d, s in dim_to_symbol.items() if len(shape) > -d and shape[d] > 1}
+        print('DEBUG {} dim = {}'.format(msg["name"], target_dim))
 
         msg["infer"]["_enumerate_dim"] = target_dim
         msg["value"] = value

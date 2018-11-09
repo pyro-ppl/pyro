@@ -65,7 +65,7 @@ class MarkovMessenger(ReentrantMessenger):
         return super(MarkovMessenger, self).__exit__(*args, **kwargs)
 
     def _pyro_sample(self, msg):
-        if msg["done"] or msg["is_observed"]:
+        if msg["done"]:
             return
 
         infer = msg["infer"]
