@@ -288,7 +288,7 @@ class TraceEnum_ELBO(ELBO):
         # Enable parallel enumeration over the vectorized guide and model.
         # The model allocates enumeration dimensions after (to the left of) the guide,
         # accomplished by preserving the _ENUM_ALLOCATOR state after the guide call.
-        guide_enum = EnumerateMessenger(first_available_dim=self.max_plate_nesting)
+        guide_enum = EnumerateMessenger(first_available_dim=-1 - self.max_plate_nesting)
         model_enum = EnumerateMessenger()  # preserve _ENUM_ALLOCATOR state
         guide = guide_enum(guide)
         model = model_enum(model)

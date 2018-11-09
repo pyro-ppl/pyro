@@ -16,13 +16,15 @@ class EnumerateMessenger(Messenger):
     :type first_available_dim: int or callable
     """
     def __init__(self, first_available_dim=None):
-        super(EnumerateMessenger, self).__init__()
+        assert first_available_dim is None or first_available_dim < 0, first_available_dim
         self.first_available_dim = first_available_dim
+        super(EnumerateMessenger, self).__init__()
 
     def __enter__(self):
         if self.first_available_dim is not None:
             _ENUM_ALLOCATOR.set_first_available_dim(self.first_available_dim)
         self._enum_dims = {}
+        self._enum_symbols = {}
         self._markov_depths = {}
         return super(EnumerateMessenger, self).__enter__()
 
@@ -48,30 +50,34 @@ class EnumerateMessenger(Messenger):
 
         # Ensure enumeration happens at an available tensor dimension.
         # This allocates the next available dim for enumeration, to the left all other dims.
-        actual_dim = len(dist.batch_shape)  # the leftmost dim of log_prob, counting from the right
+        actual_dim = -1 - len(dist.batch_shape)  # the leftmost dim of log_prob, counting from the right
 
         # Find a target_dim, possibly even farther left than actual_dim.
         upstream = msg["infer"].get("_markov_upstream")
         if upstream is None:
             target_dim, symbol = _ENUM_ALLOCATOR.allocate()
+            msg["infer"]["_dim_to_symbol"] = {target_dim: symbol}
         else:
-            upstream_dims = set(self._enum_dims[name]
-                                for name, depth in upstream.items()
-                                if self._markov_depths[name] == depth)
+            upstream_names = set(name for name, depth in upstream.items()
+                                 if self._markov_depths[name] == depth)
+            upstream_dims = set(map(self._enum_dims.__getitem__, upstream_names))
             target_dim, symbol = _ENUM_ALLOCATOR.allocate(upstream_dims)
             self._enum_dims[msg["name"]] = target_dim
+            self._enum_symbols[msg["name"]] = symbol
             self._markov_depths[msg["name"]] = msg["infer"]["_markov_depth"]
+            msg["infer"]["_dim_to_symbol"] = {self._enum_dims[name]: self._enum_symbols[name]
+                                              for name in upstream_names}
 
-        # Ensure value is enumerated at target_dim.
-        if actual_dim > target_dim:
-            raise ValueError("Expected enumerated value to have dim at most {} but got shape {}".format(
-                target_dim + len(dist.event_shape), value.shape))
+        # Reshape to move actual_dim to target_dim.
+        if target_dim < actual_dim:
+            assert value.size(actual_dim) == 1, 'pyro.markov dim conflict at dim {}'.format(actual_dim)
+            value = value.transpose(target_dim, actual_dim)
+            while value.size(0) == 1:
+                value = value.squeeze(0)
         elif target_dim > actual_dim:
-            # Reshape to move actual_dim to target_dim.
             diff = target_dim - actual_dim
             value = value.reshape(value.shape[:1] + (1,) * diff + value.shape[1:])
 
         msg["infer"]["_enumerate_dim"] = -1 - target_dim
-        msg["infer"]["_enumerate_symbol"] = symbol
         msg["value"] = value
         msg["done"] = True

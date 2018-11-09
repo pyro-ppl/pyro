@@ -1291,6 +1291,7 @@ def test_enum_recycling_chain():
         x = 0
         for t in pyro.markov(range(100)):
             x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
+            assert x.dim() <= 2
 
     def guide():
         pass
@@ -1305,7 +1306,7 @@ def test_enum_recycling_dbn():
     #    z     z     z  obs
 
     @config_enumerate(default="parallel")
-    def model(data):
+    def model():
         p = pyro.param("p", torch.ones(3, 3))
         q = pyro.param("q", torch.ones(2))
         r = pyro.param("r", torch.ones(3, 2, 4))
@@ -1352,7 +1353,7 @@ def test_enum_recycling_nested():
     # z22: x y1 y2 z21
 
     @config_enumerate(default="parallel")
-    def model(data):
+    def model():
         p = pyro.param("p", torch.ones(3, 3))
         x = pyro.sample("x", dist.Categorical(p[0]))
         y = x
@@ -1369,20 +1370,20 @@ def test_enum_recycling_nested():
 
 
 def test_enum_recycling_grid():
-    #  x---x---x---x   -----> i
-    #  |   |   |   |  |
-    #  x---x---x---x  |
-    #  |   |   |   |  V
-    #  x---x---x--(x) j
+    #  x---x---x---x    -----> i
+    #  |   |   |   |   |
+    #  x---x---x---x   |
+    #  |   |   |   |   V
+    #  x---x---x--(x)  j
     #  |   |   |   |
     #  x---x--(x)--x <-- what can this depend on?
 
     @config_enumerate(default="parallel")
-    def model(data):
+    def model():
         p = pyro.param("p_leaf", torch.ones(2, 2, 2))
         ind = torch.arange(4, dtype=torch.long)
-        x = defaultdict(int)
-        y_axis = pyro.markov(range(4))
+        x = defaultdict(lambda: torch.tensor(0))
+        y_axis = pyro.markov(range(4), keep=True)
         for i in pyro.markov(range(4)):
             for j in y_axis:
                 x[i, j] = pyro.sample("x_{}_{}".format(i, j),
@@ -1454,10 +1455,11 @@ def test_enum_recycling_interleave_error():
         with pyro.markov() as m:
             with pyro.markov():
                 with m:  # error here
-                    pass
+                    pyro.sample("x", dist.Categorical(torch.ones(4)),
+                                infer={"enumerate": "parallel"})
 
     def guide():
         pass
 
-    assert_error(model, guide, TraceEnum_ELBO(max_plate_nesting=0),
+    assert_error(model, guide, TraceEnum_ELBO(max_plate_nesting=0, strict_enumeration_warning=False),
                  match="Markov contexts cannot be interleaved")

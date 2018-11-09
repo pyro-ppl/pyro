@@ -66,20 +66,21 @@ class _EnumAllocator(object):
         self.next_available_symbol = None
 
     def set_first_available_dim(self, first_available_dim):
+        assert first_available_dim < 0, first_available_dim
         self.next_available_dim = first_available_dim
         self.next_available_symbol = 0
 
     def allocate(self, upstream_dims=None):
         dim = self.next_available_dim
-        if dim == float('inf'):
+        if dim == -float('inf'):
             raise ValueError("max_plate_nesting must be set to a finite value for parallel enumeration")
         if upstream_dims is None:
             # allocate a new global dimension
-            self.next_available_dim += 1
+            self.next_available_dim -= 1
         else:
             # allocate a new local dimension
             while dim in upstream_dims:
-                dim += 1
+                dim -= 1
         symbol = self.next_available_symbol
         self.next_available_symbol += 1
         return dim, symbol
