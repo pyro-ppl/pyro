@@ -18,7 +18,7 @@ class WarmupAdapter(object):
     """
 
     def __init__(self,
-                 step_size,
+                 step_size=1,
                  adapt_step_size=False,
                  target_accept_prob=0.8,
                  adapt_mass_matrix=False,
@@ -27,7 +27,7 @@ class WarmupAdapter(object):
         self.adapt_mass_matrix = adapt_mass_matrix
         self.target_accept_prob = target_accept_prob
         self.is_diag_mass = is_diag_mass
-        self._step_size = step_size if step_size is not None else 1
+        self._step_size = step_size
         self._adaptation_disabled = not (adapt_step_size or adapt_mass_matrix)
         if adapt_step_size:
             self._step_size_adapt_scheme = DualAveraging()

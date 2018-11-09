@@ -100,7 +100,7 @@ class NUTS(HMC):
 
     def __init__(self,
                  model,
-                 step_size=None,
+                 step_size=1,
                  adapt_step_size=True,
                  adapt_mass_matrix=True,
                  full_mass=False,

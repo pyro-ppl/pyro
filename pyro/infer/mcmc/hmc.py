@@ -86,7 +86,7 @@ class HMC(TraceKernel):
 
     def __init__(self,
                  model,
-                 step_size=1,  # from Stan
+                 step_size=1,
                  trajectory_length=None,
                  num_steps=None,
                  adapt_step_size=True,
