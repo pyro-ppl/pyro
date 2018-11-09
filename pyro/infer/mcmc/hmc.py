@@ -174,7 +174,6 @@ class HMC(TraceKernel):
         self._accept_cnt = 0
         self._r_shapes = {}
         self._r_numels = {}
-        self._initial_mass_matrix = None
         self._args = None
         self._kwargs = None
         self._prototype_trace = None
@@ -225,19 +224,10 @@ class HMC(TraceKernel):
                 initial_step_size = self._find_reasonable_step_size(z)
 
         self._adapter.configure(self._warmup_steps,
-                                self._initial_mass_matrix,
                                 initial_step_size)
 
     def _sample_r(self, name):
         r_dist = self._adapter.r_dist
-        # For finding a reasonable step size before adapter is initialized.
-        if r_dist is None:
-            inv_mass_matrix = self._initial_mass_matrix
-            loc = inv_mass_matrix.new_zeros(inv_mass_matrix.size(0))
-            if self.full_mass:
-                r_dist = dist.MultivariateNormal(loc, precision_matrix=inv_mass_matrix)
-            else:
-                r_dist = dist.Normal(loc, inv_mass_matrix.rsqrt())
         r_flat = pyro.sample(name, r_dist)
         r = {}
         pos = 0
@@ -263,8 +253,7 @@ class HMC(TraceKernel):
 
     @property
     def inverse_mass_matrix(self):
-        inv_mass_matrix = self._adapter.inverse_mass_matrix
-        return inv_mass_matrix if inv_mass_matrix is not None else self._initial_mass_matrix
+        return self._adapter.inverse_mass_matrix
 
     @property
     def step_size(self):
@@ -305,9 +294,10 @@ class HMC(TraceKernel):
 
         mass_matrix_size = sum(self._r_numels.values())
         if self.full_mass:
-            self._initial_mass_matrix = eye_like(site_value, mass_matrix_size)
+            initial_mass_matrix = eye_like(site_value, mass_matrix_size)
         else:
-            self._initial_mass_matrix = site_value.new_ones(mass_matrix_size)
+            initial_mass_matrix = site_value.new_ones(mass_matrix_size)
+        self._adapter.inverse_mass_matrix = initial_mass_matrix
         self._set_valid_prototype_trace(trace)
         self._configure_adaptation(trace)
 

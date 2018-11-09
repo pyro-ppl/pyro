@@ -55,7 +55,7 @@ class WarmupAdapter(object):
     def _build_adaptation_schedule(self):
         adaptation_schedule = []
         # from Stan, for small warmup_steps < 20
-        if self._warmup_steps <= 20:
+        if self._warmup_steps < 20:
             adaptation_schedule.append(adapt_window(0, self._warmup_steps - 1))
             return adaptation_schedule
 
@@ -85,7 +85,7 @@ class WarmupAdapter(object):
                                                 self._warmup_steps - 1))
         return adaptation_schedule
 
-    def _reset_step_size(self, step_size):
+    def _reset_step_size_adaptation(self, step_size):
         self._step_size_adapt_scheme.prox_center = math.log(10 * step_size)
         self._step_size_adapt_scheme.reset()
 
@@ -109,7 +109,7 @@ class WarmupAdapter(object):
             _, log_step_size_avg = self._step_size_adapt_scheme.get_state()
             self._step_size = math.exp(log_step_size_avg)
 
-    def configure(self, warmup_steps, inv_mass_matrix, initial_step_size=None):
+    def configure(self, warmup_steps, initial_step_size=None, inv_mass_matrix=None):
         r"""
         Model specific properties that are specified when the HMC kernel is setup.
 
@@ -119,10 +119,12 @@ class WarmupAdapter(object):
         """
         self._warmup_steps = warmup_steps
         if initial_step_size is not None and self.adapt_step_size:
-            self._step_size = initial_step_size
-            self._reset_step_size(initial_step_size)
-        self._inverse_mass_matrix = inv_mass_matrix
-        self._update_r_dist()
+            self.step_size = initial_step_size
+        if inv_mass_matrix is not None:
+            self.inverse_mass_matrix = inv_mass_matrix
+        if self.inverse_mass_matrix is None or self.step_size is None:
+            raise ValueError("Incomplete configuration - step size and inverse mass matrix "
+                             "need to be initialized.")
         if not self._adaptation_disabled:
             self._adaptation_schedule = self._build_adaptation_schedule()
 
@@ -135,7 +137,7 @@ class WarmupAdapter(object):
         :param dict z: latent variables.
         :param float accept_prob: acceptance probability of the proposal.
         """
-        if t > self._warmup_steps or self._adaptation_disabled:
+        if t >= self._warmup_steps or self._adaptation_disabled:
             return
         window = self._adaptation_schedule[self._current_window]
         num_windows = len(self._adaptation_schedule)
@@ -147,23 +149,21 @@ class WarmupAdapter(object):
             z_flat = torch.cat([z[name].reshape(-1) for name in sorted(z)])
             self._mass_matrix_adapt_scheme.update(z_flat.detach())
         if t == window.end:
-            if self._current_window == 0:
-                self._current_window += 1
-                return
-
             if self._current_window == num_windows - 1:
                 self._current_window += 1
                 self._end_adaptation()
                 return
 
+            if self._current_window == 0:
+                self._current_window += 1
+                return
+
             if self.adapt_step_size:
-                self._step_size_adapt_scheme.prox_center = math.log(10 * self.step_size)
-                self._step_size_adapt_scheme.reset()
+                self._reset_step_size_adaptation(self._step_size)
 
             if mass_matrix_adaptation_phase:
-                self._inverse_mass_matrix = self._mass_matrix_adapt_scheme.get_covariance()
-                self._update_r_dist()
-                self._mass_matrix_adapt_scheme.reset()
+                self.inverse_mass_matrix = self._mass_matrix_adapt_scheme.get_covariance()
+
             self._current_window += 1
 
     @property
@@ -174,9 +174,22 @@ class WarmupAdapter(object):
     def step_size(self):
         return self._step_size
 
+    @step_size.setter
+    def step_size(self, value):
+        self._step_size = value
+        if self.adapt_step_size:
+            self._reset_step_size_adaptation(value)
+
     @property
     def inverse_mass_matrix(self):
         return self._inverse_mass_matrix
+
+    @inverse_mass_matrix.setter
+    def inverse_mass_matrix(self, value):
+        self._inverse_mass_matrix = value
+        self._update_r_dist()
+        if self.adapt_mass_matrix:
+            self._mass_matrix_adapt_scheme.reset()
 
     @property
     def r_dist(self):
