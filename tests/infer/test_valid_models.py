@@ -1433,7 +1433,6 @@ def test_enum_recycling_reentrant_history(history):
 
     @pyro.markov(history=history)
     def model(data, state=0, address=""):
-        print(address)
         if isinstance(data, bool):
             p = pyro.param("p_leaf", torch.ones(10))
             pyro.sample("leaf_{}".format(address),

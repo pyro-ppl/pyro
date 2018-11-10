@@ -6,6 +6,7 @@ import operator
 import torch
 from six.moves import reduce
 
+from pyro.distributions.util import is_identically_one
 from pyro.ops.einsum import contract
 
 
@@ -13,6 +14,7 @@ def pack(value, dim_to_symbol):
     """
     Converts an unpacked tensor to a packed tensor.
 
+    :param value: a number or tensor
     :param dim_to_symbol: a map from negative integers to characters
     """
     if isinstance(value, torch.Tensor):
@@ -29,7 +31,8 @@ def unpack(value, symbol_to_dim):
     """
     Converts a packed tensor to an unpacked tensor.
 
-    :param dim_to_symbol: a map from negative integers to characters
+    :param value: a number or tensor
+    :param symbol_to_dim: a map from characters to negative integers
     """
     if isinstance(value, torch.Tensor):
         dims = [symbol_to_dim[dim] for dim in value._pyro_dims]
@@ -57,6 +60,49 @@ def broadcast_all(*values):
             x._pyro_dims = dims
             values[i] = x
     return tuple(values)
+
+
+def mul(lhs, rhs):
+    """
+    Packed broadcasted multiplication.
+    """
+    if isinstance(lhs, torch.Tensor) and isinstance(rhs, torch.Tensor):
+        dims = ''.join(sorted(set(lhs._pyro_dims + rhs._pyro_dims)))
+        equation = lhs._pyro_dims + ',' + rhs._pyro_dims + '->' + dims
+        result = torch.einsum(equation, lhs, rhs, backend='torch')
+        result._pyro_dims = dims
+        return result
+    result = lhs * rhs
+    if isinstance(lhs, torch.Tensor):
+        result._pyro_dims = lhs._pyro_dims
+    elif isinstance(rhs, torch.Tensor):
+        result._pyro_dims = rhs._pyro_dims
+    return result
+
+
+def scale_and_mask(tensor, scale=1.0, mask=None):
+    """
+    Scale and mask a packed tensor, broadcasting and avoiding unnecessary ops.
+
+    :param torch.Tensor tensor: a packed tensor
+    :param scale: a positive scale
+    :type scale: torch.Tensor or number
+    :param mask: an optional packed tensor mask
+    :type mask: torch.ByteTensor or None
+    """
+    if isinstance(scale, torch.Tensor) and scale.dim():
+        raise NotImplementedError('non-scalar scale is not supported')
+    if mask is None:
+        if is_identically_one(scale):
+            return tensor
+        result = tensor * scale
+        result._pyro_dims = tensor._pyro_dims
+        return result
+    tensor, mask = broadcast_all(tensor, mask)
+    result = tensor * scale  # triggers a copy, avoiding in-place op errors
+    result.masked_fill_(~mask, 0.)
+    result._pyro_dims = tensor._pyro_dims
+    return result
 
 
 def neg(value):

@@ -252,6 +252,6 @@ class Dice(object):
                         cost = cost[mask]
                         expected_cost = expected_cost + (prob * cost).sum()
                     else:
-                        expected_cost = expected_cost + packed.sumproduct([prob, cost], '')
+                        expected_cost = expected_cost + packed.sumproduct([prob, cost])
         LAST_CACHE_SIZE[0] = count_cached_ops(cache)
         return expected_cost

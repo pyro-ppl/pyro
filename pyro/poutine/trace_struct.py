@@ -297,4 +297,4 @@ class Trace(networkx.DiGraph):
                 packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
             site["packed"] = packed
 
-        return plate_to_symbol
+        self.plate_to_symbol = plate_to_symbol
