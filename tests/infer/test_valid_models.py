@@ -1405,7 +1405,7 @@ def test_enum_recycling_reentrant():
     @pyro.markov
     def model(data, state=0, address=""):
         if isinstance(data, bool):
-            p = pyro.param("p_leaf", torch.ones(10, 2))
+            p = pyro.param("p_leaf", torch.ones(10))
             pyro.sample("leaf_{}".format(address),
                         dist.Bernoulli(p[state]),
                         obs=torch.tensor(1. if data else 0.))
@@ -1433,7 +1433,7 @@ def test_enum_recycling_reentrant_history(history):
     def model(data, state=0, address=""):
         print(address)
         if isinstance(data, bool):
-            p = pyro.param("p_leaf", torch.ones(10, 2))
+            p = pyro.param("p_leaf", torch.ones(10))
             pyro.sample("leaf_{}".format(address),
                         dist.Bernoulli(p[state]),
                         obs=torch.tensor(1. if data else 0.))
@@ -1441,7 +1441,7 @@ def test_enum_recycling_reentrant_history(history):
             assert isinstance(data, tuple)
             p = pyro.param("p_branch", torch.ones(10, 10))
             for branch, letter in zip(data, "abcdefg"):
-                next_state = pyro.sample("branch_{}".format(address),
+                next_state = pyro.sample("branch_{}".format(address + letter),
                                          dist.Categorical(p[state]),
                                          infer={"enumerate": "parallel"})
                 model(branch, next_state, address + letter)
@@ -1452,7 +1452,7 @@ def test_enum_recycling_reentrant_history(history):
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0), data=data)
 
 
-def test_enum_recycling_interleave_error():
+def test_enum_recycling_interleave():
 
     def model():
         with pyro.markov() as m:
@@ -1464,5 +1464,4 @@ def test_enum_recycling_interleave_error():
     def guide():
         pass
 
-    assert_error(model, guide, TraceEnum_ELBO(max_plate_nesting=0, strict_enumeration_warning=False),
-                 match="Markov contexts cannot be interleaved")
+    assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0, strict_enumeration_warning=False))

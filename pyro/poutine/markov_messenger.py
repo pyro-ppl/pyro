@@ -68,9 +68,13 @@ class MarkovMessenger(ReentrantMessenger):
         if msg["done"]:
             return
 
+        # We use a Counter rather than a set here so that sites can correctly
+        # go out of scope when any one of their markov contexts exits.
+        # This accounting can be done by users of these fields,
+        # e.g. EnumerateMessenger.
         infer = msg["infer"]
-        upstream = infer.setdefault("_markov_upstream", Counter())
+        scope = infer.setdefault("_markov_scope", Counter())  # site name -> markov depth
         for pos in range(max(0, self._pos - self.history), self._pos + 1):
-            upstream.update(self._stack[pos])
+            scope.update(self._stack[pos])
         infer["_markov_depth"] = 1 + infer.get("_markov_depth", 0)
         self._stack[self._pos].add(msg["name"])
