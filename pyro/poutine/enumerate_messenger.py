@@ -47,7 +47,6 @@ class EnumerateMessenger(Messenger):
         :param msg: current message at a trace site.
         :returns: a sample from the stochastic function at the site.
         """
-        # if msg["done"] or type(msg["fn"]).__name__ == "_Subsample":
         if msg["done"] or not isinstance(msg["fn"], TorchDistributionMixin):
             return
 
@@ -92,10 +91,11 @@ class EnumerateMessenger(Messenger):
         # Save all dims exposed in this sample value.
         # Whereas dim_to_symbol is needed to interpret a site's log_prob tensor,
         # only a filtered subset is needed to interpret a sites value.
+        value = msg["value"]
         dim_to_symbol = msg["infer"].get("_dim_to_symbol")
-        if dim_to_symbol is not None:
-            value = msg["value"]
-            shape = value.shape[:value.dim() - msg["fn"].event_dim]
-            self._dim_to_symbol[msg["name"]] = {dim: symbol
-                                                for dim, symbol in dim_to_symbol.items()
-                                                if len(shape) >= -dim and shape[dim] > 1}
+        if value is None or dim_to_symbol is None:
+            return
+        shape = value.shape[:value.dim() - msg["fn"].event_dim]
+        self._dim_to_symbol[msg["name"]] = {dim: symbol
+                                            for dim, symbol in dim_to_symbol.items()
+                                            if len(shape) >= -dim and shape[dim] > 1}
