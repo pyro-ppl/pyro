@@ -42,7 +42,7 @@ Many inference algorithms or algorithmic components can be implemented
 in just a few lines of code::
 
     guide_tr = poutine.trace(guide).get_trace(...)
-    model_tr = poutine.trace(poutine.replay(conditioned_model, trace=tr)).get_trace(...)
+    model_tr = poutine.trace(poutine.replay(conditioned_model, trace=guide_tr)).get_trace(...)
     monte_carlo_elbo = model_tr.log_prob_sum() - guide_tr.log_prob_sum()
 """
 
