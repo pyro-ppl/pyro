@@ -206,7 +206,7 @@ class Dice(object):
             if not ordinal <= target_ordinal:  # not downstream
                 log_denom += term  # term = log(# times this ordinal is counted)
 
-        log_factors = [] if is_identically_zero(log_denom) else [packed.neg(log_denom)]
+        log_factors = [] if is_identically_zero(log_denom) else [-log_denom]
         for ordinal, terms in self.log_probs.items():
             if ordinal <= target_ordinal:  # upstream
                 log_factors.extend(terms)  # terms = [log(dice weight of this ordinal)]

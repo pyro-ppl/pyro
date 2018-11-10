@@ -66,35 +66,34 @@ def _compute_model_factors(model_trace, guide_trace):
                 for trace in (model_trace, guide_trace)
                 for name, site in trace.nodes.items()
                 if site["type"] == "sample"}
+    plate_dims = frozenset().union(*ordering.values())
 
     # Collect model sites that may have been enumerated in the model.
     cost_sites = OrderedDict()
     enum_sites = OrderedDict()
-    enum_dims = []
+    enum_dims = set()
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
             if name in guide_trace.nodes or site["infer"].get("_enumerate_dim") is None:
                 cost_sites.setdefault(ordering[name], []).append(site)
             else:
                 enum_sites.setdefault(ordering[name], []).append(site)
-                enum_dims.append(site["fn"].event_dim - site["value"].dim())
+                enum_dims.update(site["packed"]["log_prob"]._pyro_dims)
+    enum_dims -= plate_dims
     log_factors = OrderedDict()
-    sum_dims = set()
     scale = 1
     if not enum_sites:
         marginal_costs = OrderedDict((t, [site["packed"]["log_prob"] for site in sites_t])
                                      for t, sites_t in cost_sites.items())
-        return marginal_costs, log_factors, ordering, sum_dims, scale
+        return marginal_costs, log_factors, ordering, enum_dims, scale
     _check_model_guide_enumeration_constraint(enum_sites, guide_trace)
 
     # Marginalize out all variables that have been enumerated in the model.
-    enum_boundary = max(enum_dims) + 1
-    assert enum_boundary <= 0
     marginal_costs = OrderedDict()
     scales = set()
     for t, sites_t in cost_sites.items():
         for site in sites_t:
-            if site["log_prob"].dim() <= -enum_boundary:
+            if enum_dims.isdisjoint(site["packed"]["log_prob"]._pyro_dims):
                 # For sites that do not depend on an enumerated variable, proceed as usual.
                 marginal_costs.setdefault(t, []).append(site["packed"]["log_prob"])
             else:
@@ -115,12 +114,7 @@ def _compute_model_factors(model_trace, guide_trace):
         scale = scales.pop()
         assert not (isinstance(scale, torch.Tensor) and scale.dim()), \
             'enumeration only supports scalar poutine.scale'
-    sum_dims = set(x._pyro_dims[i]
-                   for xs in log_factors.values()
-                   for x in xs
-                   for i in range(-x.dim(), enum_boundary)
-                   if x.size(i) > 1)
-    return marginal_costs, log_factors, ordering, sum_dims, scale
+    return marginal_costs, log_factors, ordering, enum_dims, scale
 
 
 def _compute_dice_elbo(model_trace, guide_trace):
