@@ -66,20 +66,23 @@ def _compute_model_factors(model_trace, guide_trace):
                 for trace in (model_trace, guide_trace)
                 for name, site in trace.nodes.items()
                 if site["type"] == "sample"}
-    plate_dims = frozenset().union(*ordering.values())
 
     # Collect model sites that may have been enumerated in the model.
     cost_sites = OrderedDict()
     enum_sites = OrderedDict()
     enum_dims = set()
+    non_enum_dims = set().union(*ordering.values())
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
-            if name in guide_trace.nodes or site["infer"].get("_enumerate_dim") is None:
+            if name in guide_trace.nodes:
+                cost_sites.setdefault(ordering[name], []).append(site)
+                non_enum_dims.update(site["packed"]["log_prob"]._pyro_dims)
+            elif site["infer"].get("_enumerate_dim") is None:
                 cost_sites.setdefault(ordering[name], []).append(site)
             else:
                 enum_sites.setdefault(ordering[name], []).append(site)
                 enum_dims.update(site["packed"]["log_prob"]._pyro_dims)
-    enum_dims -= plate_dims
+    enum_dims -= non_enum_dims
     log_factors = OrderedDict()
     scale = 1
     if not enum_sites:
