@@ -16,14 +16,6 @@ class MarkovMessenger(ReentrantMessenger):
 
     This is a statistical equivalent of a memory management arena.
 
-    .. warning:: This assumes markov contexts can be reentrant but cannot be
-        interleaved. I.e. the following is invalid::
-
-        with pyro.markov() as x_axis:
-            with pyro.markov():
-                with x_axis:  # <--- error here
-                    ...
-
     :param int history: The number of previous contexts visible from the
         current context. Defaults to 1. If zero, this is similar to
         :class:`pyro.plate`.
