@@ -121,15 +121,14 @@ class TraceMessenger(Messenger):
         and return the return value.
         """
         name = msg["name"]
-        if not self.strict_names and name in self.trace:  # and msg["type"] == "sample":
+        while not self.strict_names and name in self.trace:  # and msg["type"] == "sample":
             split_name = name.split("__")
             if "__" in name and split_name[-1].isdigit():
                 counter = int(split_name[-1]) + 1
-                new_name = "__".join(split_name[:-1] + [str(counter)])
+                name = "__".join(split_name[:-1] + [str(counter)])
             else:
-                new_name = name + "__0"
-            msg["name"] = new_name
-            self._pyro_sample(msg)  # recursively update name
+                name = name + "__0"
+        msg["name"] = name
         return None
 
     def _postprocess_message(self, msg):
