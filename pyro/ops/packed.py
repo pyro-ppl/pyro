@@ -62,6 +62,21 @@ def broadcast_all(*values):
     return tuple(values)
 
 
+def gather(value, index, dim):
+    """
+    Packed broadcasted gather of indexed values along a named dim.
+    """
+    assert dim in value._pyro_dims
+    assert dim not in index._pyro_dims
+    value, index = broadcast_all(value, index)
+    dims = value._pyro_dims.replace(dim, '')
+    index = index.index_select(index._pyro_dims.index(dim),
+                               index.new_tensor([0], dtype=torch.long))
+    value = value.gather(dim, index.long())
+    value._pyro_dims = dims
+    return value
+
+
 def mul(lhs, rhs):
     """
     Packed broadcasted multiplication.

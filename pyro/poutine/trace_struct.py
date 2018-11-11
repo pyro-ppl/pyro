@@ -262,7 +262,8 @@ class Trace(networkx.DiGraph):
         This should be called after :meth:`compute_log_prob` or :meth:`compute_score_parts`.
         """
         plate_to_symbol = {} if plate_to_symbol is None else plate_to_symbol
-        dim_to_symbol = {}
+        symbol_to_dim = {}
+        dim_to_symbol = {}  # different at each site
         for site in self.nodes.values():
             if site["type"] != "sample":
                 continue
@@ -275,11 +276,17 @@ class Trace(networkx.DiGraph):
                     else:
                         symbol = opt_einsum.get_symbol(2 * len(plate_to_symbol))
                         plate_to_symbol[frame.name] = symbol
+                    symbol_to_dim[symbol] = frame.dim
                     dim_to_symbol[frame.dim] = symbol
 
             # allocate odd symbols for enum dims
             for dim, symbol in site["infer"].get("_dim_to_symbol", {}).items():
-                dim_to_symbol[dim] = opt_einsum.get_symbol(1 + 2 * symbol)
+                symbol = opt_einsum.get_symbol(1 + 2 * symbol)
+                symbol_to_dim[symbol] = dim
+                dim_to_symbol[dim] = symbol
+            enum_dim = site["infer"].get("_enumerate_dim")
+            if enum_dim is not None:
+                site["infer"]["_enumerate_symbol"] = dim_to_symbol[enum_dim]
 
             # pack tensors
             packed = {}
@@ -298,3 +305,4 @@ class Trace(networkx.DiGraph):
             site["packed"] = packed
 
         self.plate_to_symbol = plate_to_symbol
+        self.symbol_to_dim = symbol_to_dim

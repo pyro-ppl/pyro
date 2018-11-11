@@ -237,7 +237,7 @@ class PackedLogRing(TensorRing):
     Dims are characters (string or unicode).
     Ordinals are frozensets of characters.
     """
-    def __init__(self, inputs, operands, cache=None):
+    def __init__(self, inputs=(), operands=(), cache=None):
         super(PackedLogRing, self).__init__(cache=cache)
         self._batch_size = {}
         for dims, term in zip(inputs, operands):
@@ -249,7 +249,11 @@ class PackedLogRing(TensorRing):
                                      .format(dim, size, old))
 
     def dims(self, term):
-        return self._cache['dims', self._hash_by_id(term)]
+        key = 'dims', self._hash_by_id(term)
+        try:
+            return self._cache[key]
+        except KeyError:
+            return self._cache.setdefault(key, term._pyro_dims)
 
     def sumproduct(self, terms, dims):
         inputs = [self.dims(term) for term in terms]
