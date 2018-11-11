@@ -14,9 +14,9 @@ from tests.common import assert_equal
 def test_hidden_layer_rsample(non_linearity, include_hidden_bias, covariance, B=2, D=3, H=4, N=900000):
     X = torch.randn(B, D)
     A_mean = torch.rand(D, H)
-    if covariance=='diagonal':
+    if covariance == 'diagonal':
         A_scale = 0.3 * torch.exp(0.3 * torch.rand(D, H))
-    elif covariance=='cholesky':
+    elif covariance == 'cholesky':
         A_scale = 0.3 * torch.exp(0.3 * torch.rand(D, D, H))
 
     # test naive weight space sampling against sampling in pre-activation space
