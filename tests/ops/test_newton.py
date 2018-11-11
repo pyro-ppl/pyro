@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import itertools
+import logging
 
 import pytest
 import torch
@@ -8,6 +9,9 @@ from torch.autograd import grad
 
 from pyro.ops.newton import newton_step
 from tests.common import assert_equal
+
+
+logger = logging.getLogger(__name__)
 
 
 def random_inside_unit_circle(shape, requires_grad=False):
@@ -120,6 +124,6 @@ def test_newton_step_converges(trust_radius, dims):
         loss = loss_fn(x)
         x, cov = newton_step(loss, x, trust_radius=trust_radius)
         if ((x - mode).pow(2).sum(-1) < 1e-4).all():
-            print('Newton iteration converged after {} steps'.format(2 + i))
+            logger.debug('Newton iteration converged after {} steps'.format(2 + i))
             return
     pytest.fail('Newton iteration did not converge')

@@ -29,7 +29,7 @@ class WelfordCovariance(object):
         if self.diagonal:
             self._m2 += delta_pre * delta_post
         else:
-            self._m2 += torch.matmul(delta_post.unsqueeze(-1), delta_pre.unsqueeze(-2))
+            self._m2 += torch.ger(delta_post, delta_pre)
 
     def get_covariance(self, regularize=True):
         if self.n_samples < 2:
@@ -42,6 +42,6 @@ class WelfordCovariance(object):
             if self.diagonal:
                 cov = scaled_cov + shrinkage
             else:
-                scaled_cov.view(-1)[::scaled_cov.shape[0]+1] += shrinkage
+                scaled_cov.view(-1)[::scaled_cov.size(0) + 1] += shrinkage
                 cov = scaled_cov
         return cov

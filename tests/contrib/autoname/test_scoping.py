@@ -1,10 +1,13 @@
+import logging
+
 import torch
 
 import pyro
-import pyro.poutine as poutine
 import pyro.distributions.torch as dist
-
+import pyro.poutine as poutine
 from pyro.contrib.autoname import scope
+
+logger = logging.getLogger(__name__)
 
 
 def test_multi_nested():
@@ -36,7 +39,7 @@ def test_multi_nested():
 
     samples = [name for name, node in tr.nodes.items()
                if node["type"] == "sample"]
-    print(samples)
+    logger.debug(samples)
     assert true_samples == samples
 
 
@@ -66,7 +69,7 @@ def test_recur_multi():
 
     samples = [name for name, node in tr.nodes.items()
                if node["type"] == "sample"]
-    print(samples)
+    logger.debug(samples)
     assert true_samples == samples
 
 
@@ -122,7 +125,7 @@ def test_simple_recur():
     prev_name = "x"
     for name, node in poutine.trace(geometric, strict_names=False).get_trace(0.9).nodes.items():
         if node["type"] == "sample":
-            print(name)
+            logger.debug(name)
             assert name == "geometric/" + prev_name
             prev_name = "geometric/" + prev_name
 

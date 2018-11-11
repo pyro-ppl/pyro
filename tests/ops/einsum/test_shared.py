@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
+
 import opt_einsum
 import pytest
 import torch
@@ -7,6 +9,9 @@ from opt_einsum import shared_intermediates
 
 from pyro.ops.einsum import contract
 from tests.common import assert_equal
+
+
+logger = logging.getLogger(__name__)
 
 
 def compute_cost(cache):
@@ -32,22 +37,22 @@ def test_complete_sharing():
     y = torch.randn(4, 3)
     z = torch.randn(3, 2)
 
-    print('-' * 40)
-    print('Without sharing:')
+    logger.debug('-' * 40)
+    logger.debug('Without sharing:')
     with shared_intermediates() as cache:
         contract('ab,bc,cd->', x, y, z, backend='torch')
         expected = len(cache)
 
-    print('-' * 40)
-    print('With sharing:')
+    logger.debug('-' * 40)
+    logger.debug('With sharing:')
     with shared_intermediates() as cache:
         contract('ab,bc,cd->', x, y, z, backend='torch')
         contract('ab,bc,cd->', x, y, z, backend='torch')
         actual = len(cache)
 
-    print('-' * 40)
-    print('Without sharing: {} expressions'.format(expected))
-    print('With sharing: {} expressions'.format(actual))
+    logger.debug('-' * 40)
+    logger.debug('Without sharing: {} expressions'.format(expected))
+    logger.debug('With sharing: {} expressions'.format(actual))
     assert actual == expected
 
 
@@ -57,8 +62,8 @@ def test_partial_sharing():
     z1 = torch.randn(3, 2)
     z2 = torch.randn(3, 2)
 
-    print('-' * 40)
-    print('Without sharing:')
+    logger.debug('-' * 40)
+    logger.debug('Without sharing:')
     num_exprs_nosharing = 0
     with shared_intermediates() as cache:
         contract('ab,bc,cd->', x, y, z1, backend='torch')
@@ -67,16 +72,16 @@ def test_partial_sharing():
         contract('ab,bc,cd->', x, y, z2, backend='torch')
         num_exprs_nosharing += len(cache)
 
-    print('-' * 40)
-    print('With sharing:')
+    logger.debug('-' * 40)
+    logger.debug('With sharing:')
     with shared_intermediates() as cache:
         contract('ab,bc,cd->', x, y, z1, backend='torch')
         contract('ab,bc,cd->', x, y, z2, backend='torch')
         num_exprs_sharing = len(cache)
 
-    print('-' * 40)
-    print('Without sharing: {} expressions'.format(num_exprs_nosharing))
-    print('With sharing: {} expressions'.format(num_exprs_sharing))
+    logger.debug('-' * 40)
+    logger.debug('Without sharing: {} expressions'.format(num_exprs_nosharing))
+    logger.debug('With sharing: {} expressions'.format(num_exprs_sharing))
     assert num_exprs_nosharing > num_exprs_sharing
 
 
@@ -88,14 +93,14 @@ def test_chain(size):
     inputs = ','.join(names)
 
     with shared_intermediates():
-        print(inputs)
+        logger.debug(inputs)
         for i in range(size + 1):
             target = alphabet[i]
             equation = '{}->{}'.format(inputs, target)
             path_info = opt_einsum.contract_path(equation, *xs)
-            print(path_info[1])
+            logger.debug(path_info[1])
             contract(equation, *xs, backend='torch')
-        print('-' * 40)
+        logger.debug('-' * 40)
 
 
 @pytest.mark.parametrize('size', [3, 4, 5, 10])
@@ -106,14 +111,14 @@ def test_chain_2(size):
     inputs = ','.join(names)
 
     with shared_intermediates():
-        print(inputs)
+        logger.debug(inputs)
         for i in range(size):
             target = alphabet[i:i+2]
             equation = '{}->{}'.format(inputs, target)
             path_info = opt_einsum.contract_path(equation, *xs)
-            print(path_info[1])
+            logger.debug(path_info[1])
             contract(equation, *xs, backend='torch')
-        print('-' * 40)
+        logger.debug('-' * 40)
 
 
 def test_chain_2_growth():
@@ -132,10 +137,10 @@ def test_chain_2_growth():
                 contract(equation, *xs, backend='torch')
             costs.append(compute_cost(cache))
 
-    print('sizes = {}'.format(repr(sizes)))
-    print('costs = {}'.format(repr(costs)))
+    logger.debug('sizes = {}'.format(repr(sizes)))
+    logger.debug('costs = {}'.format(repr(costs)))
     for size, cost in zip(sizes, costs):
-        print('{}\t{}'.format(size, cost))
+        logger.debug('{}\t{}'.format(size, cost))
 
 
 @pytest.mark.parametrize('size', [3, 4, 5])
@@ -154,16 +159,16 @@ def test_chain_sharing(size):
             num_exprs_nosharing += compute_cost(cache)
 
     with shared_intermediates() as cache:
-        print(inputs)
+        logger.debug(inputs)
         for i in range(size + 1):
             target = alphabet[i]
             equation = '{}->{}'.format(inputs, target)
             path_info = opt_einsum.contract_path(equation, *xs)
-            print(path_info[1])
+            logger.debug(path_info[1])
             contract(equation, *xs, backend='torch')
         num_exprs_sharing = compute_cost(cache)
 
-    print('-' * 40)
-    print('Without sharing: {} expressions'.format(num_exprs_nosharing))
-    print('With sharing: {} expressions'.format(num_exprs_sharing))
+    logger.debug('-' * 40)
+    logger.debug('Without sharing: {} expressions'.format(num_exprs_nosharing))
+    logger.debug('With sharing: {} expressions'.format(num_exprs_sharing))
     assert num_exprs_nosharing > num_exprs_sharing

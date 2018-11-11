@@ -53,10 +53,10 @@ class NormalNormalTests(TestCase):
         self.do_elbo_test(False, 15000, Trace_ELBO())
 
     def test_renyi_reparameterized(self):
-        self.do_elbo_test(True, 2500, RenyiELBO(num_particles=2))
+        self.do_elbo_test(True, 2500, RenyiELBO(num_particles=3))
 
     def test_renyi_nonreparameterized(self):
-        self.do_elbo_test(False, 7500, RenyiELBO(num_particles=2))
+        self.do_elbo_test(False, 7500, RenyiELBO(num_particles=3))
 
     def do_elbo_test(self, reparameterized, n_steps, loss):
         pyro.clear_param_store()
@@ -65,18 +65,15 @@ class NormalNormalTests(TestCase):
             loc_latent = pyro.sample("loc_latent",
                                      dist.Normal(self.loc0, torch.pow(self.lam0, -0.5))
                                      .independent(1))
-            with pyro.iarange('data', self.batch_size):
+            with pyro.plate('data', self.batch_size):
                 pyro.sample("obs",
                             dist.Normal(loc_latent, torch.pow(self.lam, -0.5)).independent(1),
                             obs=self.data)
             return loc_latent
 
         def guide():
-            loc_q = pyro.param("loc_q", torch.tensor(self.analytic_loc_n.data + 0.134 * torch.ones(2),
-                                                     requires_grad=True))
-            log_sig_q = pyro.param("log_sig_q", torch.tensor(
-                                   self.analytic_log_sig_n.data - 0.14 * torch.ones(2),
-                                   requires_grad=True))
+            loc_q = pyro.param("loc_q", self.analytic_loc_n.detach() + 0.134)
+            log_sig_q = pyro.param("log_sig_q", self.analytic_log_sig_n.data.detach() - 0.14)
             sig_q = torch.exp(log_sig_q)
             Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
             pyro.sample("loc_latent", Normal(loc_q, sig_q).independent(1))
@@ -107,11 +104,9 @@ class TestFixedModelGuide(TestCase):
 
         def model():
             alpha_p_log = pyro.param(
-                "alpha_p_log", torch.tensor(
-                    self.alpha_p_log_0.clone()))
+                "alpha_p_log", self.alpha_p_log_0.clone())
             beta_p_log = pyro.param(
-                "beta_p_log", torch.tensor(
-                    self.beta_p_log_0.clone()))
+                "beta_p_log", self.beta_p_log_0.clone())
             alpha_p, beta_p = torch.exp(alpha_p_log), torch.exp(beta_p_log)
             lambda_latent = pyro.sample("lambda_latent", dist.Gamma(alpha_p, beta_p))
             pyro.sample("obs", dist.Poisson(lambda_latent), obs=self.data)
@@ -119,11 +114,9 @@ class TestFixedModelGuide(TestCase):
 
         def guide():
             alpha_q_log = pyro.param(
-                "alpha_q_log", torch.tensor(
-                    self.alpha_q_log_0.clone()))
+                "alpha_q_log", self.alpha_q_log_0.clone())
             beta_q_log = pyro.param(
-                "beta_q_log", torch.tensor(
-                    self.beta_q_log_0.clone()))
+                "beta_q_log", self.beta_q_log_0.clone())
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("lambda_latent", dist.Gamma(alpha_q, beta_q))
 
@@ -194,7 +187,7 @@ class PoissonGammaTests(TestCase):
 
         def model():
             lambda_latent = pyro.sample("lambda_latent", Gamma(self.alpha0, self.beta0))
-            with pyro.iarange("data", self.n_data):
+            with pyro.plate("data", self.n_data):
                 pyro.sample("obs", dist.Poisson(lambda_latent), obs=self.data)
             return lambda_latent
 
@@ -246,7 +239,7 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
 
     def model(alpha0, beta0, alpha_n, beta_n):
         lambda_latent = pyro.sample("lambda_latent", gamma_dist(alpha0, beta0))
-        with pyro.iarange("data", n_data):
+        with pyro.plate("data", n_data):
             pyro.sample("obs", dist.Exponential(lambda_latent), obs=data)
         return lambda_latent
 
@@ -257,9 +250,9 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
 
     adam = optim.Adam({"lr": .0003, "betas": (0.97, 0.999)})
     if elbo_impl is RenyiELBO:
-        elbo = elbo_impl(alpha=0.2, num_particles=3, max_iarange_nesting=1, strict_enumeration_warning=False)
+        elbo = elbo_impl(alpha=0.2, num_particles=3, max_plate_nesting=1, strict_enumeration_warning=False)
     else:
-        elbo = elbo_impl(max_iarange_nesting=1, strict_enumeration_warning=False)
+        elbo = elbo_impl(max_plate_nesting=1, strict_enumeration_warning=False)
     svi = SVI(model, guide, adam, loss=elbo)
 
     with xfail_if_not_implemented():
@@ -298,12 +291,12 @@ class BernoulliBetaTests(TestCase):
     # this is used to detect bugs related to https://github.com/pytorch/pytorch/issues/9521
     def test_elbo_reparameterized_vectorized(self):
         self.do_elbo_test(True, 5000, Trace_ELBO(num_particles=2, vectorize_particles=True,
-                                                 max_iarange_nesting=1))
+                                                 max_plate_nesting=1))
 
     # this is used to detect bugs related to https://github.com/pytorch/pytorch/issues/9521
     def test_elbo_nonreparameterized_vectorized(self):
         self.do_elbo_test(False, 5000, Trace_ELBO(num_particles=2, vectorize_particles=True,
-                                                  max_iarange_nesting=1))
+                                                  max_plate_nesting=1))
 
     def test_renyi_reparameterized(self):
         self.do_elbo_test(True, 5000, RenyiELBO(num_particles=2))
@@ -313,11 +306,11 @@ class BernoulliBetaTests(TestCase):
 
     def test_renyi_reparameterized_vectorized(self):
         self.do_elbo_test(True, 5000, RenyiELBO(num_particles=2, vectorize_particles=True,
-                                                max_iarange_nesting=1))
+                                                max_plate_nesting=1))
 
     def test_renyi_nonreparameterized_vectorized(self):
         self.do_elbo_test(False, 5000, RenyiELBO(alpha=0.2, num_particles=2, vectorize_particles=True,
-                                                 max_iarange_nesting=1))
+                                                 max_plate_nesting=1))
 
     def do_elbo_test(self, reparameterized, n_steps, loss):
         pyro.clear_param_store()
@@ -325,15 +318,15 @@ class BernoulliBetaTests(TestCase):
 
         def model():
             p_latent = pyro.sample("p_latent", Beta(self.alpha0, self.beta0))
-            with pyro.iarange("data", self.batch_size):
+            with pyro.plate("data", self.batch_size):
                 pyro.sample("obs", dist.Bernoulli(p_latent), obs=self.data)
             return p_latent
 
         def guide():
             alpha_q_log = pyro.param("alpha_q_log",
-                                     torch.tensor(self.log_alpha_n.data + 0.17, requires_grad=True))
+                                     self.log_alpha_n + 0.17)
             beta_q_log = pyro.param("beta_q_log",
-                                    torch.tensor(self.log_beta_n.data - 0.143, requires_grad=True))
+                                    self.log_beta_n - 0.143)
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
             pyro.sample("p_latent", Beta(alpha_q, beta_q))
 

@@ -28,7 +28,6 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
-from pyro.ops.einsum import cached_paths
 from pyro.optim import Adam
 
 logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.INFO)
@@ -41,7 +40,7 @@ logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.IN
 #        V        V         V
 #     y[t-1]     y[t]     y[t+1]
 #
-# This model includes two iaranges: one for minibatches of data, and one
+# This model includes two plates: one for minibatches of data, and one
 # for the data_dim = 88 keys on the piano. This model has two "style" parameters
 # probs_x and probs_y that we'll draw from a prior. The latent state is x,
 # and the observed state is y. We'll drive probs_* with the guide, enumerate
@@ -69,8 +68,8 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
                               dist.Beta(0.1, 0.9)
                                   .expand([args.hidden_dim, data_dim])
                                   .independent(2))
-    tones_iarange = pyro.iarange("tones", data_dim, dim=-1)
-    with pyro.iarange("sequences", len(sequences), batch_size, dim=-2) as batch:
+    tones_plate = pyro.plate("tones", data_dim, dim=-1)
+    with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         x = 0
         for t in range(lengths.max()):
@@ -80,7 +79,7 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
                 # write x[t] = pyro.sample(...x[t-1]...).
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
                                 infer={"enumerate": "parallel"})
-                with tones_iarange:
+                with tones_plate:
                     pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x]),
                                 obs=sequences[batch, t])
 
@@ -104,8 +103,8 @@ def model_2(sequences, lengths, args, batch_size=None, include_prior=True):
                               dist.Beta(0.1, 0.9)
                                   .expand([args.hidden_dim, 2, data_dim])
                                   .independent(3))
-    tones_iarange = pyro.iarange("tones", data_dim, dim=-1)
-    with pyro.iarange("sequences", len(sequences), batch_size, dim=-2) as batch:
+    tones_plate = pyro.plate("tones", data_dim, dim=-1)
+    with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         x, y = 0, 0
         for t in range(lengths.max()):
@@ -114,8 +113,8 @@ def model_2(sequences, lengths, args, batch_size=None, include_prior=True):
                                 infer={"enumerate": "parallel"})
                 # Note the broadcasting tricks here: to index probs_y on tensors x and y,
                 # we also need a final tensor for the tones dimension. This is conveniently
-                # provided by the iarange associated with that dimension.
-                with tones_iarange as tones:
+                # provided by the plate associated with that dimension.
+                with tones_plate as tones:
                     y = pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x, y, tones]),
                                     obs=sequences[batch, t]).long()
 
@@ -149,8 +148,8 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
                               dist.Beta(0.1, 0.9)
                                   .expand([hidden_dim, hidden_dim, data_dim])
                                   .independent(3))
-    tones_iarange = pyro.iarange("tones", data_dim, dim=-1)
-    with pyro.iarange("sequences", len(sequences), batch_size, dim=-2) as batch:
+    tones_plate = pyro.plate("tones", data_dim, dim=-1)
+    with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         w, x = 0, 0
         for t in range(lengths.max()):
@@ -159,7 +158,7 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
                                 infer={"enumerate": "parallel"})
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
                                 infer={"enumerate": "parallel"})
-                with tones_iarange as tones:
+                with tones_plate as tones:
                     pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[w, x, tones]),
                                 obs=sequences[batch, t])
 
@@ -194,8 +193,8 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
                               dist.Beta(0.1, 0.9)
                                   .expand([hidden_dim, hidden_dim, data_dim])
                                   .independent(3))
-    tones_iarange = pyro.iarange("tones", data_dim, dim=-1)
-    with pyro.iarange("sequences", len(sequences), batch_size, dim=-2) as batch:
+    tones_plate = pyro.plate("tones", data_dim, dim=-1)
+    with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         # Note the broadcasting tricks here: we declare a hidden torch.arange and
         # ensure that w and x are always tensors so we can unsqueeze them below,
@@ -208,7 +207,7 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
                 x = pyro.sample("x_{}".format(t),
                                 dist.Categorical(probs_x[w.unsqueeze(-1), x.unsqueeze(-1), hidden]),
                                 infer={"enumerate": "parallel"})
-                with tones_iarange as tones:
+                with tones_plate as tones:
                     pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[w, x, tones]),
                                 obs=sequences[batch, t])
 
@@ -244,44 +243,40 @@ def main(args):
     # named probs_*.
     guide = AutoDelta(poutine.block(model, expose_fn=lambda msg: msg["name"].startswith("probs_")))
 
-    # Enumeration requires a TraceEnum elbo and declaring the max_iarange_nesting.
-    # All of our models have two iaranges: "data" and "tones".
+    # Enumeration requires a TraceEnum elbo and declaring the max_plate_nesting.
+    # All of our models have two plates: "data" and "tones".
     Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
-    elbo = Elbo(max_iarange_nesting=2)
+    elbo = Elbo(max_plate_nesting=2)
     optim = Adam({'lr': args.learning_rate})
     svi = SVI(model, guide, optim, elbo)
 
-    # We'll speed up parameter tuning by caching the message passing paths
-    # created by opt_einsum. It's always safe to delete this temp file.
-    with cached_paths('data/opt_einsum_path_cache.pkl'):
+    # We'll train on small minibatches.
+    logging.info('Step\tLoss')
+    for step in range(args.num_steps):
+        loss = svi.step(sequences, lengths, args, batch_size=args.batch_size)
+        logging.info('{: >5d}\t{}'.format(step, loss / num_observations))
 
-        # We'll train on small minibatches.
-        logging.info('Step\tLoss')
-        for step in range(args.num_steps):
-            loss = svi.step(sequences, lengths, args, batch_size=args.batch_size)
-            logging.info('{: >5d}\t{}'.format(step, loss / num_observations))
+    # We evaluate on the entire training dataset,
+    # excluding the prior term so our results are comparable across models.
+    train_loss = elbo.loss(model, guide, sequences, lengths, args, include_prior=False)
+    logging.info('training loss = {}'.format(train_loss / num_observations))
 
-        # We evaluate on the entire training dataset,
-        # excluding the prior term so our results are comparable across models.
-        train_loss = elbo.loss(model, guide, sequences, lengths, args, include_prior=False)
-        logging.info('training loss = {}'.format(train_loss / num_observations))
+    # Finally we evaluate on the test dataset.
+    logging.info('-' * 40)
+    logging.info('Evaluating on {} test sequences'.format(len(data['test']['sequences'])))
+    sequences = torch.tensor(data['test']['sequences'], dtype=torch.float32)
+    lengths = torch.tensor(data['test']['sequence_lengths'], dtype=torch.long)
+    if args.truncate:
+        lengths.clamp_(max=args.truncate)
+    num_observations = float(lengths.sum())
+    test_loss = elbo.loss(model, guide, sequences, lengths, args, include_prior=False)
+    logging.info('test loss = {}'.format(test_loss / num_observations))
 
-        # Finally we evaluate on the test dataset.
-        logging.info('-' * 40)
-        logging.info('Evaluating on {} test sequences'.format(len(data['test']['sequences'])))
-        sequences = torch.tensor(data['test']['sequences'], dtype=torch.float32)
-        lengths = torch.tensor(data['test']['sequence_lengths'], dtype=torch.long)
-        if args.truncate:
-            lengths.clamp_(max=args.truncate)
-        num_observations = float(lengths.sum())
-        test_loss = elbo.loss(model, guide, sequences, lengths, args, include_prior=False)
-        logging.info('test loss = {}'.format(test_loss / num_observations))
-
-        # We expect models with higher capacity to perform better,
-        # but eventually overfit to the training set.
-        capacity = sum(len(pyro.param(name).reshape(-1))
-                       for name in pyro.get_param_store().get_all_param_names())
-        logging.info('{} capacity = {} parameters'.format(model.__name__, capacity))
+    # We expect models with higher capacity to perform better,
+    # but eventually overfit to the training set.
+    capacity = sum(len(pyro.param(name).reshape(-1))
+                   for name in pyro.get_param_store().get_all_param_names())
+    logging.info('{} capacity = {} parameters'.format(model.__name__, capacity))
 
 
 if __name__ == '__main__':

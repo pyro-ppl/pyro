@@ -199,7 +199,7 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
       assert d.shape(sample_shape) == sample_shape + d.batch_shape + d.event_shape
 
     Distributions provide a vectorized
-    :meth`~torch.distributions.distribution.Distribution.log_prob` method that
+    :meth:`~torch.distributions.distribution.Distribution.log_prob` method that
     evaluates the log probability density of each event in a batch
     independently, returning a tensor of shape
     ``sample_shape + d.batch_shape``::

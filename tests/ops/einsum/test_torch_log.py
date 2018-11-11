@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import itertools
+
 import pytest
 import torch
 
@@ -9,6 +11,7 @@ from pyro.ops.sumproduct import logsumproductexp, sumproduct
 from tests.common import assert_equal
 
 
+@pytest.mark.parametrize('min_size', [1, 2])
 @pytest.mark.parametrize('equation', [
     ',ab->ab',
     'ab,,bc->a',
@@ -30,12 +33,13 @@ from tests.common import assert_equal
     'ab,bc,cd->ac',
     'ab,bc,cd->ad',
     'ab,bc,cd->bc',
+    'a,a,ab,b,b,b,b->a',
 ])
-def test_einsum(equation):
+def test_einsum(equation, min_size):
     inputs, output = equation.split('->')
     inputs = inputs.split(',')
     symbols = sorted(set(equation) - set(',->'))
-    sizes = dict(zip(symbols, range(2, 2 + len(symbols))))
+    sizes = dict(zip(symbols, itertools.count(min_size)))
     shapes = [torch.Size(tuple(sizes[dim] for dim in dims))
               for dims in inputs]
     operands = [torch.randn(shape) for shape in shapes]

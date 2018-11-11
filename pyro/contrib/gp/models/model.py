@@ -10,7 +10,7 @@ def _zero_mean_function(x):
 
 
 class GPModel(Parameterized):
-    """
+    r"""
     Base class for Gaussian Process models.
 
     The core of a Gaussian Process is a covariance function :math:`k` which governs

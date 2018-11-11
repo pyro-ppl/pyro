@@ -113,7 +113,7 @@ class Fixture(object):
         return log_prob
 
     def get_num_samples(self, idx):
-        """
+        r"""
         Number of samples needed to estimate the population variance within the tolerance limit
         Sample variance is normally distributed http://stats.stackexchange.com/a/105338/71884
         (see warning below).

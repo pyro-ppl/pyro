@@ -20,7 +20,6 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro import poutine
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.optim import Adam
 
@@ -31,21 +30,20 @@ logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.IN
 # data is a [num_words_per_doc, num_documents] shaped array of word ids
 # (specifically it is not a histogram). We assume in this simple example
 # that all documents have the same number of words.
-@poutine.broadcast
 def model(data=None, args=None, batch_size=None):
     # Globals.
-    with pyro.iarange("topics", args.num_topics):
+    with pyro.plate("topics", args.num_topics):
         topic_weights = pyro.sample("topic_weights", dist.Gamma(1. / args.num_topics, 1.))
         topic_words = pyro.sample("topic_words",
                                   dist.Dirichlet(torch.ones(args.num_words) / args.num_words))
 
     # Locals.
-    with pyro.iarange("documents", args.num_docs) as ind:
+    with pyro.plate("documents", args.num_docs) as ind:
         if data is not None:
             assert data.shape == (args.num_words_per_doc, args.num_docs)
             data = data[:, ind]
         doc_topics = pyro.sample("doc_topics", dist.Dirichlet(topic_weights))
-        with pyro.iarange("words", args.num_words_per_doc):
+        with pyro.plate("words", args.num_words_per_doc):
             # The word_topics variable is marginalized out during inference,
             # achieved by specifying infer={"enumerate": "parallel"} and using
             # TraceEnum_ELBO for inference. Thus we can ignore this variable in
@@ -75,7 +73,6 @@ def make_predictor(args):
     return nn.Sequential(*layers)
 
 
-@poutine.broadcast
 def parametrized_guide(predictor, data, args, batch_size=None):
     # Use a conjugate guide for global variables.
     topic_weights_posterior = pyro.param(
@@ -86,13 +83,13 @@ def parametrized_guide(predictor, data, args, batch_size=None):
             "topic_words_posterior",
             lambda: torch.ones(args.num_topics, args.num_words) / args.num_words,
             constraint=constraints.positive)
-    with pyro.iarange("topics", args.num_topics):
+    with pyro.plate("topics", args.num_topics):
         pyro.sample("topic_weights", dist.Gamma(topic_weights_posterior, 1.))
         pyro.sample("topic_words", dist.Dirichlet(topic_words_posterior))
 
     # Use an amortized guide for local variables.
     pyro.module("predictor", predictor)
-    with pyro.iarange("documents", args.num_docs, batch_size) as ind:
+    with pyro.plate("documents", args.num_docs, batch_size) as ind:
         # The neural network will operate on histograms rather than word
         # index vectors, so we'll convert the raw data to a histogram.
         counts = torch.zeros(args.num_words, len(ind))
@@ -113,7 +110,7 @@ def main(args):
     predictor = make_predictor(args)
     guide = functools.partial(parametrized_guide, predictor)
     Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
-    elbo = Elbo(max_iarange_nesting=2)
+    elbo = Elbo(max_plate_nesting=2)
     optim = Adam({'lr': args.learning_rate})
     svi = SVI(model, guide, optim, elbo)
     logging.info('Step\tLoss')

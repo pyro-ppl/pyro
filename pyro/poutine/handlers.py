@@ -42,7 +42,7 @@ Many inference algorithms or algorithmic components can be implemented
 in just a few lines of code::
 
     guide_tr = poutine.trace(guide).get_trace(...)
-    model_tr = poutine.trace(poutine.replay(conditioned_model, trace=tr)).get_trace(...)
+    model_tr = poutine.trace(poutine.replay(conditioned_model, trace=guide_tr)).get_trace(...)
     monte_carlo_elbo = model_tr.log_prob_sum() - guide_tr.log_prob_sum()
 """
 
@@ -59,14 +59,15 @@ from .broadcast_messenger import BroadcastMessenger
 from .condition_messenger import ConditionMessenger
 from .enumerate_messenger import EnumerateMessenger
 from .escape_messenger import EscapeMessenger
-from .indep_messenger import IndepMessenger
 from .infer_config_messenger import InferConfigMessenger
 from .lift_messenger import LiftMessenger
 from .mask_messenger import MaskMessenger
+from .plate_messenger import PlateMessenger  # noqa F403
 from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
 from .trace_messenger import TraceMessenger
+from .uncondition_messenger import UnconditionMessenger
 
 ############################################
 # Begin primitive operations
@@ -221,19 +222,19 @@ def block(fn=None, hide_fn=None, expose_fn=None, hide=None, expose=None, hide_ty
 def broadcast(fn=None):
     """
     Automatically broadcasts the batch shape of the stochastic function
-    at a sample site when inside a single or nested iarange context.
+    at a sample site when inside a single or nested plate context.
     The existing `batch_shape` must be broadcastable with the size
-    of the :class:`~pyro.iarange` contexts installed in the
+    of the :class:`~pyro.plate` contexts installed in the
     `cond_indep_stack`.
 
     Notice how `model_automatic_broadcast` below automates expanding of
     distribution batch shapes. This makes it easy to modularize a
     Pyro model as the sub-components are agnostic of the wrapping
-    :class:`~pyro.iarange` contexts.
+    :class:`~pyro.plate` contexts.
 
     >>> def model_broadcast_by_hand():
-    ...     with pyro.iarange("batch", 100, dim=-2):
-    ...         with pyro.iarange("components", 3, dim=-1):
+    ...     with IndepMessenger("batch", 100, dim=-2):
+    ...         with IndepMessenger("components", 3, dim=-1):
     ...             sample = pyro.sample("sample", dist.Bernoulli(torch.ones(3) * 0.5)
     ...                                                .expand_by(100))
     ...             assert sample.shape == torch.Size((100, 3))
@@ -241,8 +242,8 @@ def broadcast(fn=None):
 
     >>> @poutine.broadcast
     ... def model_automatic_broadcast():
-    ...     with pyro.iarange("batch", 100, dim=-2):
-    ...         with pyro.iarange("components", 3, dim=-1):
+    ...     with IndepMessenger("batch", 100, dim=-2):
+    ...         with IndepMessenger("components", 3, dim=-1):
     ...             sample = pyro.sample("sample", dist.Bernoulli(torch.tensor(0.5)))
     ...             assert sample.shape == torch.Size((100, 3))
     ...     return sample
@@ -293,6 +294,19 @@ def condition(fn=None, data=None):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.condition_messenger.ConditionMessenger`
     """
     msngr = ConditionMessenger(data=data)
+    return msngr(fn) if fn is not None else msngr
+
+
+def uncondition(fn=None):
+    """
+    Given a stochastic funtion with sample statements, conditioned on observed
+    values at some sample statements, removes the conditioning so that all
+    nodes are sampled from.
+
+    :param fn: a stochastic function (callable containing Pyro primitive calls)
+    :returns: a stochastic function decorated with a :class: `~pyro.poutine.uncondition_messenger.UnconditionMessenger`
+    """
+    msngr = UnconditionMessenger()
     return msngr(fn) if fn is not None else msngr
 
 
@@ -351,19 +365,6 @@ def mask(fn=None, mask=None):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.scale_messenger.MaskMessenger`
     """
     msngr = MaskMessenger(mask=mask)
-    return msngr(fn) if fn is not None else msngr
-
-
-def indep(fn=None, name=None, size=None, dim=None):
-    """
-    .. note:: Low-level; use :class:`~pyro.iarange` instead.
-
-    This messenger keeps track of stack of independence information declared by
-    nested ``irange`` and ``iarange`` contexts. This information is stored in
-    a ``cond_indep_stack`` at each sample/observe site for consumption by
-    :class:`~pyro.poutine.trace_messenger.TraceMessenger`.
-    """
-    msngr = IndepMessenger(name=name, size=size, dim=dim)
     return msngr(fn) if fn is not None else msngr
 
 

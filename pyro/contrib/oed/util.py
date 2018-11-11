@@ -1,65 +1,72 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import OrderedDict
+import math
 import torch
 
-
-def get_indices(labels, sizes=None, tensors=None):
-    indices = []
-    start = 0
-    if sizes is None:
-        sizes = OrderedDict([(l, t.shape[0]) for l, t in tensors.items()])
-    for label in sizes:
-        end = start+sizes[label]
-        if label in labels:
-            indices.extend(range(start, end))
-        start = end
-    return torch.tensor(indices)
+import pyro
+from pyro.contrib.util import get_indices, lexpand
+from pyro.contrib.glmm import analytic_posterior_cov
+from pyro.contrib.oed.eig import barber_agakov_ape, vi_ape
 
 
-def tensor_to_dict(sizes, tensor, subset=None):
-    if subset is None:
-        subset = sizes.keys()
-    start = 0
-    out = {}
-    for label, size in sizes.items():
-        end = start + size
-        if label in subset:
-            out[label] = tensor[..., start:end]
-        start = end
-    return out
+def linear_model_ground_truth(model, design, observation_labels, target_labels, eig=True):
+    if isinstance(target_labels, str):
+        target_labels = [target_labels]
+
+    w_sd = torch.cat(list(model.w_sds.values()), dim=-1)
+    prior_cov = torch.diag(w_sd**2)
+    posterior_covs = [analytic_posterior_cov(prior_cov, x, model.obs_sd) for x in torch.unbind(design)]
+    target_indices = get_indices(target_labels, tensors=model.w_sds)
+    target_posterior_covs = [S[target_indices, :][:, target_indices] for S in posterior_covs]
+    if eig:
+        prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
+        return prior_entropy - torch.tensor([0.5 * torch.logdet(2 * math.pi * math.e * C)
+                                             for C in target_posterior_covs])
+    else:
+        return torch.tensor([0.5 * torch.logdet(2 * math.pi * math.e * C)
+                             for C in target_posterior_covs])
 
 
-def rmm(A, B):
-    """Shorthand for `matmul`."""
-    return torch.matmul(A, B)
+def lm_H_prior(model, design, observation_labels, target_labels):
+    if isinstance(target_labels, str):
+        target_labels = [target_labels]
+
+    w_sd = torch.cat(list(model.w_sds.values()), dim=-1)
+    prior_cov = torch.diag(w_sd**2)
+    target_indices = get_indices(target_labels, tensors=model.w_sds)
+    target_prior_covs = prior_cov[target_indices, :][:, target_indices]
+    return 0.5*torch.logdet(2 * math.pi * math.e * target_prior_covs)
 
 
-def rmv(A, b):
-    """Tensorized matrix vector multiplication of rightmost dimensions."""
-    return torch.matmul(A, b.unsqueeze(-1)).squeeze(-1)
+def mc_H_prior(model, design, observation_labels, target_labels, num_samples=1000):
+    if isinstance(target_labels, str):
+        target_labels = [target_labels]
+
+    expanded_design = lexpand(design, num_samples)
+    trace = pyro.poutine.trace(model).get_trace(expanded_design)
+    trace.compute_log_prob()
+    lp = sum(trace.nodes[l]["log_prob"] for l in target_labels)
+    return -lp.sum(0)/num_samples
 
 
-def rvv(a, b):
-    """Tensorized vector vector multiplication of rightmost dimensions."""
-    return torch.matmul(a.unsqueeze(-2), b.unsqueeze(-1)).squeeze(-2).squeeze(-1)
+def vi_eig_lm(model, design, observation_labels, target_labels, *args, **kwargs):
+    # **Only** applies to linear models - analytic prior entropy
+    ape = vi_ape(model, design, observation_labels, target_labels, *args, **kwargs)
+    prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
+    return prior_entropy - ape
 
 
-def lexpand(A, *dimensions):
-    """Expand tensor, adding new dimensions on left."""
-    return A.expand(tuple(dimensions) + A.shape)
+def ba_eig_lm(model, design, observation_labels, target_labels, *args, **kwargs):
+    # **Only** applies to linear models - analytic prior entropy
+    ape = barber_agakov_ape(model, design, observation_labels, target_labels, *args, **kwargs)
+    prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
+    return prior_entropy - ape
 
 
-def rexpand(A, *dimensions):
-    """Expand tensor, adding new dimensions on right."""
-    return A.view(A.shape + (1,)*len(dimensions)).expand(A.shape + tuple(dimensions))
-
-
-def rdiag(v):
-    """Converts the rightmost dimension to a diagonal matrix."""
-    return rexpand(v, v.shape[-1])*torch.eye(v.shape[-1])
-
-
-def rtril(M, diagonal=0):
-    """Takes the lower-triangular of the rightmost 2 dimensions."""
-    return M*torch.tril(torch.ones(M.shape[-2], M.shape[-1]), diagonal=diagonal)
+def ba_eig_mc(model, design, observation_labels, target_labels, *args, **kwargs):
+    # Compute the prior entropy my Monte Carlo, the uses barber_agakov_ape
+    if "num_hprior_samples" in kwargs:
+        hprior = mc_H_prior(model, design, observation_labels, target_labels, kwargs["num_hprior_samples"])
+    else:
+        hprior = mc_H_prior(model, design, observation_labels, target_labels)
+    return hprior - barber_agakov_ape(model, design, observation_labels, target_labels, *args, **kwargs)

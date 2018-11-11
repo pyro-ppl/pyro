@@ -5,8 +5,7 @@ import torch
 
 import pyro
 from pyro.contrib.oed.eig import naive_rainforth_eig
-
-from models.bayes_linear import lmer_model
+from pyro.contrib.glmm import lmer_model
 
 """
 Item response example.

@@ -15,10 +15,10 @@ import pyro.ops.jit
 import pyro.poutine as poutine
 from pyro.distributions.torch_distribution import ReshapedDistribution
 from pyro.distributions.util import is_identically_zero, scale_and_mask
-from pyro.infer.contract import contract_tensor_tree, contract_to_tensor
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
 from pyro.infer.util import Dice, is_validation_enabled
+from pyro.ops.contract import contract_tensor_tree, contract_to_tensor
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
@@ -40,7 +40,7 @@ def _check_model_guide_enumeration_constraint(model_enum_sites, guide_trace):
             for f in site["cond_indep_stack"]:
                 if f.vectorized and f not in min_ordinal:
                     raise ValueError("Expected model enumeration to be no more global than guide enumeration, "
-                                     "but found model enumeration sites upstream of guide site '{}' in iarange('{}'). "
+                                     "but found model enumeration sites upstream of guide site '{}' in plate('{}'). "
                                      "Try converting some model enumeration sites to guide enumeration sites."
                                      .format(name, f.name))
 
@@ -66,7 +66,7 @@ def _compute_model_factors(model_trace, guide_trace):
                 enum_sites.setdefault(ordering[name], []).append(site)
                 enum_dims.append(site["fn"].event_dim - site["value"].dim())
     log_factors = OrderedDict()
-    sum_dims = {}
+    sum_dims = set()
     scale = 1
     if not enum_sites:
         marginal_costs = OrderedDict((t, [site["log_prob"] for site in sites_t])
@@ -100,8 +100,11 @@ def _compute_model_factors(model_trace, guide_trace):
                     scales.add(site["scale"])
         _check_shared_scale(scales)
         scale = scales.pop()
-    sum_dims = {x: set(i for i in range(-x.dim(), enum_boundary) if x.shape[i] > 1)
-                for xs in log_factors.values() for x in xs}
+    sum_dims = set(i
+                   for xs in log_factors.values()
+                   for x in xs
+                   for i in range(-x.dim(), enum_boundary)
+                   if x.size(i) > 1)
     return marginal_costs, log_factors, ordering, sum_dims, scale
 
 
@@ -110,6 +113,14 @@ def _compute_dice_elbo(model_trace, guide_trace):
     marginal_costs, log_factors, ordering, sum_dims, scale = _compute_model_factors(
             model_trace, guide_trace)
     if log_factors:
+        # Note that while most applications of tensor message passing use the
+        # contract_to_tensor() interface and can be easily refactored to use ubersum(),
+        # the application here relies on contract_tensor_tree() to extract the dependency
+        # structure of different log_prob terms, which is used by Dice to eliminate
+        # zero-expectation terms. One possible refactoring would be to replace
+        # contract_to_tensor() with a RaggedTensor -> Tensor contraction operation, but
+        # replace contract_tensor_tree() with a RaggedTensor -> RaggedTensor contraction
+        # that preserves some dependency structure.
         log_factors = contract_tensor_tree(log_factors, sum_dims)
         for t, log_factors_t in log_factors.items():
             marginal_costs_t = marginal_costs.setdefault(t, [])
@@ -140,7 +151,7 @@ def _compute_marginals(model_trace, guide_trace):
     marginal_costs, log_factors, ordering, sum_dims, scale = args
 
     marginal_dists = OrderedDict()
-    with shared_intermediates():
+    with shared_intermediates() as cache:
         for name, site in model_trace.nodes.items():
             if (site["type"] != "sample" or
                     name in guide_trace.nodes or
@@ -148,9 +159,9 @@ def _compute_marginals(model_trace, guide_trace):
                 continue
 
             enum_dim = site["fn"].event_dim - site["value"].dim()
-            site_sum_dims = {term: dims - {enum_dim} for term, dims in sum_dims.items()}
             ordinal = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
-            logits = contract_to_tensor(log_factors, site_sum_dims, ordinal)
+            logits = contract_to_tensor(log_factors, sum_dims,
+                                        target_ordinal=ordinal, target_dims={enum_dim}, cache=cache)
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
             while logits.shape[0] == 1:
                 logits.squeeze_(0)
@@ -175,7 +186,7 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
         return super(BackwardSampleMessenger, self).__enter__()
 
     def __exit__(self, *args, **kwargs):
-        assert not any(self.sum_dims.values())
+        assert not self.sum_dims
         return super(BackwardSampleMessenger, self).__exit__(*args, **kwargs)
 
     def _pyro_sample(self, msg):
@@ -185,11 +196,10 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
         if enum_dim is not None:
             msg["infer"]["_enumerate_dim"] = enum_dim
             assert enum_dim < 0, "{} {}".format(msg["name"], enum_dim)
-            for value in self.sum_dims.values():
-                value.discard(enum_dim)
-            with shared_intermediates(self.cache):
+            with shared_intermediates(self.cache) as cache:
                 ordinal = frozenset(f for f in msg["cond_indep_stack"] if f.vectorized)
-                logits = contract_to_tensor(self.log_factors, self.sum_dims, ordinal)
+                logits = contract_to_tensor(self.log_factors, self.sum_dims,
+                                            target_ordinal=ordinal, target_dims={enum_dim}, cache=cache)
                 logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
                 while logits.shape[0] == 1:
                     logits.squeeze_(0)
@@ -206,7 +216,7 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
                             value_ = value_.index_select(enum_dim, value_.new_tensor([0], dtype=torch.long))
                             sampled_term = term_.gather(enum_dim, value_.long())
                             terms[i] = sampled_term
-                            self.sum_dims[sampled_term] = self.sum_dims.pop(term) - {enum_dim}
+                self.sum_dims.discard(enum_dim)
 
 
 class TraceEnum_ELBO(ELBO):
@@ -223,8 +233,8 @@ class TraceEnum_ELBO(ELBO):
     and ensure the site does not appear in the ``guide``.
 
     This assumes restricted dependency structure on the model and guide:
-    variables outside of an :class:`~pyro.iarange` can never depend on
-    variables inside that :class:`~pyro.iarange`.
+    variables outside of an :class:`~pyro.plate` can never depend on
+    variables inside that :class:`~pyro.plate`.
     """
 
     def _get_trace(self, model, guide, *args, **kwargs):
@@ -233,7 +243,7 @@ class TraceEnum_ELBO(ELBO):
         against it.
         """
         model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_iarange_nesting, model, guide, *args, **kwargs)
+            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)
 
         if is_validation_enabled():
             check_traceenum_requirements(model_trace, guide_trace)
@@ -256,19 +266,18 @@ class TraceEnum_ELBO(ELBO):
         Runs the guide and runs the model against the guide with
         the result packaged as a trace generator.
         """
+        if self.max_plate_nesting == float('inf'):
+            self._guess_max_plate_nesting(model, guide, *args, **kwargs)
         if self.vectorize_particles:
             guide = self._vectorized_num_particles(guide)
             model = self._vectorized_num_particles(model)
-        else:
-            guide = poutine.broadcast(guide)
-            model = poutine.broadcast(model)
 
         # Enable parallel enumeration over the vectorized guide and model.
         # The model allocates enumeration dimensions after (to the left of) the guide,
         # accomplished by letting the model_enum lazily query the guide_enum for its
         # final .next_available_dim. The laziness is accomplished via a lambda.
         # Note this relies on the guide being run before the model.
-        guide_enum = EnumerateMessenger(first_available_dim=self.max_iarange_nesting)
+        guide_enum = EnumerateMessenger(first_available_dim=self.max_plate_nesting)
         model_enum = EnumerateMessenger(first_available_dim=lambda: guide_enum.next_available_dim)
         guide = guide_enum(guide)
         model = model_enum(model)
@@ -393,8 +402,7 @@ class TraceEnum_ELBO(ELBO):
                                               "compatible with guide enumeration.")
 
         with BackwardSampleMessenger(model_trace, guide_trace):
-            return poutine.replay(poutine.broadcast(model),
-                                  trace=guide_trace)(*args, **kwargs)
+            return poutine.replay(model, trace=guide_trace)(*args, **kwargs)
 
 
 class JitTraceEnum_ELBO(TraceEnum_ELBO):

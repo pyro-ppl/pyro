@@ -79,7 +79,7 @@ setup(
         # add them to `docs/requirements.txt`
         'contextlib2',
         'graphviz>=0.8',
-        'networkx>=2.0.0',
+        'networkx>=2.2',
         'numpy>=1.7',
         'opt_einsum>=2.2.0',
         'six>=1.10.0',
@@ -93,6 +93,7 @@ setup(
             'pytest==3.7',
             'pytest-cov',
             'scipy>=0.19.0',
+            'ipython<=6.5.0',  # https://github.com/jupyter/jupyter_console/issues/158
         ],
         'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
         'dev': EXTRAS_REQUIRE + [
@@ -105,6 +106,7 @@ setup(
             'pypandoc',
             'pytest==3.7',
             'pytest-xdist',
+            'ipython<=6.5.0',  # https://github.com/jupyter/jupyter_console/issues/158
             'scipy>=0.19.0',
             'sphinx',
             'sphinx_rtd_theme',
@@ -121,7 +123,7 @@ setup(
         'Operating System :: POSIX :: Linux',
         'Operating System :: MacOS :: MacOS X',
         'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.6',
     ],
     # yapf
 )
