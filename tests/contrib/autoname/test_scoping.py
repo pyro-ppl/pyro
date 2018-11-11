@@ -27,13 +27,13 @@ def test_multi_nested():
         return pyro.sample("y", dist.Normal(0.0, 1.0))
 
     true_samples = ["model1/model2/y",
-                    "model1/model2_0/y",
+                    "model1/model2__0/y",
                     "model1/inter/model2/y",
                     "model1/inter/model1/model2/y",
-                    "model1/inter/model1/model2_0/y",
+                    "model1/inter/model1/model2__0/y",
                     "model1/inter/model1/inter/model2/y",
-                    "model1/inter/model1/model2_1/y",
-                    "model1/model2_1/y"]
+                    "model1/inter/model1/model2__1/y",
+                    "model1/model2__1/y"]
 
     tr = poutine.trace(model1, strict_names=False).get_trace(r=True)
 
@@ -62,8 +62,8 @@ def test_recur_multi():
                     "model1/inter/model2/y",
                     "model1/inter/model1/model2/y",
                     "model1/inter/model1/inter/model2/y",
-                    "model1/inter/model1/model2/y_0",
-                    "model1/model2/y_0"]
+                    "model1/inter/model1/model2/y__0",
+                    "model1/model2/y__0"]
 
     tr = poutine.trace(model1, strict_names=False).get_trace()
 
@@ -162,7 +162,7 @@ def test_nested_traces():
         f1()
         return pyro.sample("y", dist.Bernoulli(0.5))
 
-    expected_names = ["f2/f1/x", "f2/f1_0/x", "f2/f1_1/x", "f2/y"]
+    expected_names = ["f2/f1/x", "f2/f1__0/x", "f2/f1__1/x", "f2/y"]
     tr2 = poutine.trace(poutine.trace(f2, strict_names=False), strict_names=False).get_trace()
     actual_names = [name for name, node in tr2.nodes.items()
                     if node['type'] == "sample"]
