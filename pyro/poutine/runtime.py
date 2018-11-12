@@ -66,7 +66,7 @@ class _EnumAllocator(object):
     There is a single global instance.
 
     Note that dimensions are indexed from the right, e.g. -1, -2.
-    Note that symbols are simply nonnegative integers here.
+    Note that ids are simply nonnegative integers here.
     """
     def set_first_available_dim(self, first_available_dim):
         """
@@ -77,12 +77,12 @@ class _EnumAllocator(object):
         """
         assert first_available_dim < 0, first_available_dim
         self.next_available_dim = first_available_dim
-        self.next_available_symbol = 0
-        self.dim_to_symbol = {}  # only the global symbols
+        self.next_available_id = 0
+        self.dim_to_id = {}  # only the global ids
 
     def allocate(self, scope_dims=None):
         """
-        Allocate a new recyclable dim and a unique symbol.
+        Allocate a new recyclable dim and a unique id.
 
         If ``scope_dims`` is None, this allocates a global enumeration dim
         that will never be recycled. If ``scope_dims`` is specified, this
@@ -91,12 +91,12 @@ class _EnumAllocator(object):
 
         :param set scope_dims: An optional set of (negative integer)
             local enumeration dims to avoid when allocating this dim.
-        :return: A pair ``(dim, symbol)``, where ``dim`` is a negative integer
-            and ``symbol`` is a nonnegative integer.
+        :return: A pair ``(dim, id)``, where ``dim`` is a negative integer
+            and ``id`` is a nonnegative integer.
         :rtype: tuple
         """
-        symbol = self.next_available_symbol
-        self.next_available_symbol += 1
+        id_ = self.next_available_id
+        self.next_available_id += 1
 
         dim = self.next_available_dim
         if dim == -float('inf'):
@@ -104,13 +104,13 @@ class _EnumAllocator(object):
         if scope_dims is None:
             # allocate a new global dimension
             self.next_available_dim -= 1
-            self.dim_to_symbol[dim] = symbol
+            self.dim_to_id[dim] = id_
         else:
             # allocate a new local dimension
             while dim in scope_dims:
                 dim -= 1
 
-        return dim, symbol
+        return dim, id_
 
 
 # Handles placement of enumeration dimensions

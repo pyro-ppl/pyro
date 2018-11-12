@@ -77,10 +77,11 @@ def gather(value, index, dim):
     assert dim not in index._pyro_dims
     value, index = broadcast_all(value, index)
     dims = value._pyro_dims.replace(dim, '')
-    index = index.index_select(index._pyro_dims.index(dim),
-                               index.new_tensor([0], dtype=torch.long))
-    value = value.gather(dim, index.long())
+    pos = value._pyro_dims.index(dim)
+    index = index.index_select(pos, index.new_tensor([0]))
+    value = value.gather(pos, index).squeeze(pos)
     value._pyro_dims = dims
+    assert value.dim() == len(dims)
     return value
 
 

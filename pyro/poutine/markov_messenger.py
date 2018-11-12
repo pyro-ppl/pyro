@@ -53,7 +53,6 @@ class MarkovMessenger(ReentrantMessenger):
         if not self.keep:
             self._stack.pop()
         self._pos -= 1
-        # FIXME handle exceptions correctly
         return super(MarkovMessenger, self).__exit__(*args, **kwargs)
 
     def _pyro_sample(self, msg):

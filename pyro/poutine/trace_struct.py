@@ -280,13 +280,14 @@ class Trace(networkx.DiGraph):
                     dim_to_symbol[frame.dim] = symbol
 
             # allocate odd symbols for enum dims
-            for dim, symbol in site["infer"].get("_dim_to_symbol", {}).items():
-                symbol = opt_einsum.get_symbol(1 + 2 * symbol)
+            for dim, id_ in site["infer"].get("_dim_to_id", {}).items():
+                symbol = opt_einsum.get_symbol(1 + 2 * id_)
                 symbol_to_dim[symbol] = dim
                 dim_to_symbol[dim] = symbol
             enum_dim = site["infer"].get("_enumerate_dim")
             if enum_dim is not None:
                 site["infer"]["_enumerate_symbol"] = dim_to_symbol[enum_dim]
+            site["infer"]["_dim_to_symbol"] = dim_to_symbol
 
             # pack tensors
             packed = site.setdefault("packed", {})

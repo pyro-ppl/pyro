@@ -39,8 +39,8 @@ class EnumerateMessenger(Messenger):
         if self.first_available_dim is not None:
             _ENUM_ALLOCATOR.set_first_available_dim(self.first_available_dim)
         self._markov_depths = {}  # site name -> depth (nonnegative integer)
-        self._param_dims = {}  # site name -> (enum dim -> unique symbol)
-        self._value_dims = {}  # site name -> (enum dim -> unique symbol)
+        self._param_dims = {}  # site name -> (enum dim -> unique id)
+        self._value_dims = {}  # site name -> (enum dim -> unique id)
         return super(EnumerateMessenger, self).__enter__()
 
     def _pyro_sample(self, msg):
@@ -51,9 +51,9 @@ class EnumerateMessenger(Messenger):
         if msg["done"] or not isinstance(msg["fn"], TorchDistributionMixin):
             return
 
-        # Compute dims in scope; these are unsafe to use for this site's target_dim.
+        # Compute upstream dims in scope; these are unsafe to use for this site's target_dim.
         scope = msg["infer"].get("_markov_scope")  # site name -> markov depth
-        param_dims = _ENUM_ALLOCATOR.dim_to_symbol.copy()  # enum dim -> unique symbol
+        param_dims = _ENUM_ALLOCATOR.dim_to_id.copy()  # enum dim -> unique id
         if scope is not None:
             for name, depth in scope.items():
                 if self._markov_depths[name] == depth:  # hide sites whose markov context has exited
@@ -68,9 +68,9 @@ class EnumerateMessenger(Messenger):
         actual_dim = -1 - len(msg["fn"].batch_shape)  # the leftmost dim of log_prob
 
         # Move actual_dim to a safe target_dim.
-        target_dim, symbol = _ENUM_ALLOCATOR.allocate(None if scope is None else param_dims)
+        target_dim, id_ = _ENUM_ALLOCATOR.allocate(None if scope is None else param_dims)
+        event_dim = msg["fn"].event_dim
         if actual_dim < target_dim:
-            event_dim = msg["fn"].event_dim
             assert value.size(target_dim - event_dim) == 1, \
                 'pyro.markov dim conflict at dim {}'.format(actual_dim)
             value = value.transpose(target_dim - event_dim, actual_dim - event_dim)
@@ -80,14 +80,19 @@ class EnumerateMessenger(Messenger):
             diff = actual_dim - target_dim
             value = value.reshape(value.shape[:1] + (1,) * diff + value.shape[1:])
 
+        # Compute dims passed downstream through the value.
+        value_dims = {dim: param_dims[dim] for dim in range(event_dim - value.dim(), 0)
+                      if value.size(dim - event_dim) > 1 and dim in param_dims}
+        value_dims[target_dim] = id_
+
         msg["infer"]["_enumerate_dim"] = target_dim
-        msg["infer"]["_dim_to_symbol"] = {target_dim: symbol}
+        msg["infer"]["_dim_to_id"] = value_dims
         msg["value"] = value
         msg["done"] = True
 
     def _pyro_post_sample(self, msg):
         # Save all dims exposed in this sample value.
-        # Whereas all of site["_dim_to_symbol"] are needed to interpret a
+        # Whereas all of site["_dim_to_id"] are needed to interpret a
         # site's log_prob tensor, only a filtered subset self._value_dims[msg["name"]]
         # are needed to interpret a site's value.
         if not isinstance(msg["fn"], TorchDistributionMixin):
@@ -96,8 +101,7 @@ class EnumerateMessenger(Messenger):
         if value is None:
             return
         shape = value.shape[:value.dim() - msg["fn"].event_dim]
-        dim_to_symbol = msg["infer"].setdefault("_dim_to_symbol", {})
-        dim_to_symbol.update(self._param_dims.get(msg["name"], {}))
-        self._value_dims[msg["name"]] = {dim: symbol
-                                         for dim, symbol in dim_to_symbol.items()
+        dim_to_id = msg["infer"].setdefault("_dim_to_id", {})
+        dim_to_id.update(self._param_dims.get(msg["name"], {}))
+        self._value_dims[msg["name"]] = {dim: id_ for dim, id_ in dim_to_id.items()
                                          if len(shape) >= -dim and shape[dim] > 1}

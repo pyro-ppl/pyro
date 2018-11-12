@@ -198,43 +198,45 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
         self.ring = PackedLogRing(cache=self.cache)
         return super(BackwardSampleMessenger, self).__enter__()
 
-    def __exit__(self, *args, **kwargs):
-        assert not self.sum_dims
-        return super(BackwardSampleMessenger, self).__exit__(*args, **kwargs)
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is None:
+            assert not self.sum_dims, self.sum_dims
+        return super(BackwardSampleMessenger, self).__exit__(exc_type, exc_value, traceback)
 
     def _pyro_sample(self, msg):
-        if msg["name"] not in self.enum_trace.nodes:
+        enum_msg = self.enum_trace.nodes.get(msg["name"])
+        if enum_msg is None:
             return
-        enum_infer = self.enum_trace.nodes[msg["name"]]["infer"]
-        enum_dim = enum_infer.get("_enumerate_dim")
-        if enum_dim is not None:
-            enum_symbol = enum_infer["_enumerate_symbol"]
-            msg["infer"]["_enumerate_dim"] = enum_dim
-            msg["infer"]["_enumerate_symbol"] = enum_symbol
-            assert enum_dim < 0
-            with shared_intermediates(self.cache):
-                ordinal = _find_ordinal(self.enum_trace, msg)
-                logits = contract_to_tensor(self.log_factors, self.sum_dims,
-                                            target_ordinal=ordinal, target_dims={enum_symbol},
-                                            ring=self.ring)
-                logits = packed.unpack(logits, self.enum_trace.symbol_to_dim)
-                logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
-                while logits.shape[0] == 1:
-                    logits.squeeze_(0)
-            msg["fn"] = _make_dist(msg["fn"], logits)
+        enum_symbol = enum_msg["infer"].get("_enumerate_symbol")
+        if enum_symbol is None:
+            return
+        enum_dim = enum_msg["infer"].get("_enumerate_dim")
+        assert enum_dim < 0
+        with shared_intermediates(self.cache):
+            ordinal = _find_ordinal(self.enum_trace, msg)
+            logits = contract_to_tensor(self.log_factors, self.sum_dims,
+                                        target_ordinal=ordinal, target_dims={enum_symbol},
+                                        ring=self.ring)
+            logits._pyro_dims = self.ring.dims(logits)
+            logits = packed.unpack(logits, self.enum_trace.symbol_to_dim)
+            logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
+            while logits.shape[0] == 1:
+                logits.squeeze_(0)
+        msg["fn"] = _make_dist(msg["fn"], logits)
 
     def _pyro_post_sample(self, msg):
-        if msg["name"] not in self.enum_trace.nodes:
+        enum_msg = self.enum_trace.nodes.get(msg["name"])
+        if enum_msg is None:
             return
-        enum_dim = msg["infer"].get("_enumerate_dim")
-        if enum_dim is not None:
-            enum_symbol = msg["infer"]["_enumerate_symbol"]
-            value = packed.pack(msg["value"], msg["infer"]["_dim_to_symbol"]).long()
-            for t, terms in self.log_factors.items():
-                for i, term in enumerate(terms):
-                    if enum_symbol in term._pyro_dims:
-                        terms[i] = packed.gather(value, enum_symbol)
-            self.sum_dims.remove(enum_symbol)
+        enum_symbol = enum_msg["infer"].get("_enumerate_symbol")
+        if enum_symbol is None:
+            return
+        value = packed.pack(msg["value"].long(), enum_msg["infer"]["_dim_to_symbol"])
+        for t, terms in self.log_factors.items():
+            for i, term in enumerate(terms):
+                if enum_symbol in term._pyro_dims:
+                    terms[i] = packed.gather(term, value, enum_symbol)
+        self.sum_dims.remove(enum_symbol)
 
 
 class TraceEnum_ELBO(ELBO):
