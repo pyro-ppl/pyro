@@ -132,7 +132,10 @@ ModelInfo = namedtuple("ModelInfo", ["name", "waic", "p_waic", "se",
                                      "waic_diff", "diff_se", "weight"])
 
 
-def compare(model_traces_dict):
+def model_selection(model_traces_dict):
+    """
+    Returns a list of `ModelInfo` according to its rank based on WAIC information criterion.
+    """
     model_waic_dict = {}
     obs = None
     for model, traces in model_traces_dict.items():
@@ -250,10 +253,10 @@ def _cummin(input):
     # FIXME: is there a better trick to find accumulate min of a sequence?
     N = input.size(0)
     input_tril = input.unsqueeze(0).expand((N,) + input.shape)
-    mask_triu = input.new_ones(N, N).triu(diagonal=1).reshape((N, N) + (1,) * (input.dim() - 1))
-    mask_triu = mask_triu.expand((N, N) + input.shape[1:])
-    input_tril[mask_triu > 0.5] = 0
-    return input_tril.mean(0)
+    triu_mask = input.new_ones(N, N).triu(diagonal=1).reshape((N, N) + (1,) * (input.dim() - 1))
+    triu_mask = triu_mask.expand((N, N) + input.shape[1:]) > 0.5
+    input_tril[triu_mask] = input.max()
+    return input_tril.min(0)
 
 
 def effective_sample_size(input):
