@@ -68,10 +68,6 @@ class _EnumAllocator(object):
     Note that dimensions are indexed from the right, e.g. -1, -2.
     Note that symbols are simply nonnegative integers here.
     """
-    def __init__(self):
-        self.next_available_dim = None
-        self.next_available_symbol = None
-
     def set_first_available_dim(self, first_available_dim):
         """
         Set the first available dim, which should be to the left of all
@@ -82,6 +78,7 @@ class _EnumAllocator(object):
         assert first_available_dim < 0, first_available_dim
         self.next_available_dim = first_available_dim
         self.next_available_symbol = 0
+        self.dim_to_symbol = {}  # only the global symbols
 
     def allocate(self, scope_dims=None):
         """
@@ -94,19 +91,25 @@ class _EnumAllocator(object):
 
         :param set scope_dims: An optional set of (negative integer)
             local enumeration dims to avoid when allocating this dim.
+        :return: A pair ``(dim, symbol)``, where ``dim`` is a negative integer
+            and ``symbol`` is a nonnegative integer.
+        :rtype: tuple
         """
+        symbol = self.next_available_symbol
+        self.next_available_symbol += 1
+
         dim = self.next_available_dim
         if dim == -float('inf'):
             raise ValueError("max_plate_nesting must be set to a finite value for parallel enumeration")
         if scope_dims is None:
             # allocate a new global dimension
             self.next_available_dim -= 1
+            self.dim_to_symbol[dim] = symbol
         else:
             # allocate a new local dimension
             while dim in scope_dims:
                 dim -= 1
-        symbol = self.next_available_symbol
-        self.next_available_symbol += 1
+
         return dim, symbol
 
 

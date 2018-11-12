@@ -263,12 +263,12 @@ class Trace(networkx.DiGraph):
         """
         plate_to_symbol = {} if plate_to_symbol is None else plate_to_symbol
         symbol_to_dim = {}
-        dim_to_symbol = {}  # different at each site
         for site in self.nodes.values():
             if site["type"] != "sample":
                 continue
 
             # allocate even symbols for plate dims
+            dim_to_symbol = {}
             for frame in site["cond_indep_stack"]:
                 if frame.vectorized:
                     if frame.name in plate_to_symbol:
@@ -289,20 +289,26 @@ class Trace(networkx.DiGraph):
                 site["infer"]["_enumerate_symbol"] = dim_to_symbol[enum_dim]
 
             # pack tensors
-            packed = {}
-            packed["mask"] = pack(site["mask"], dim_to_symbol)
-            if "score_parts" in site:
-                log_prob, score_function, entropy_term = site["score_parts"]
-                log_prob = pack(log_prob, dim_to_symbol)
-                score_function = pack(score_function, dim_to_symbol)
-                entropy_term = pack(entropy_term, dim_to_symbol)
-                packed["score_parts"] = ScoreParts(log_prob, score_function, entropy_term)
-                packed["log_prob"] = log_prob
-                packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
-            elif "log_prob" in site:
-                packed["log_prob"] = pack(site["log_prob"], dim_to_symbol)
-                packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
-            site["packed"] = packed
+            packed = site.setdefault("packed", {})
+            try:
+                packed["mask"] = pack(site["mask"], dim_to_symbol)
+                if "score_parts" in site:
+                    log_prob, score_function, entropy_term = site["score_parts"]
+                    log_prob = pack(log_prob, dim_to_symbol)
+                    score_function = pack(score_function, dim_to_symbol)
+                    entropy_term = pack(entropy_term, dim_to_symbol)
+                    packed["score_parts"] = ScoreParts(log_prob, score_function, entropy_term)
+                    packed["log_prob"] = log_prob
+                    packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
+                elif "log_prob" in site:
+                    packed["log_prob"] = pack(site["log_prob"], dim_to_symbol)
+                    packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
+            except ValueError:
+                _, exc_value, traceback = sys.exc_info()
+                six.reraise(ValueError,
+                            ValueError("Error while packing tensors at site '{}':\n  {}"
+                                       .format(site["name"], exc_value)),
+                            traceback)
 
         self.plate_to_symbol = plate_to_symbol
         self.symbol_to_dim = symbol_to_dim
