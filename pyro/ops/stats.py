@@ -165,7 +165,7 @@ def gelman_rubin(input):
     chain_biased_var_mean = chain_var.mean(dim=0)
     chain_var_mean = chain_biased_var_mean * N / (N - 1)
     variance_estimator = chain_biased_var_mean + chain_mean_var
-    return (variance_estimator / chain_var_mean).sqrt()
+    return (variance_estimator / chain_var_mean).sqrt(), chain_var_mean, variance_estimator
 
 
 def split_gelman_rubin(input):
@@ -179,6 +179,50 @@ def split_gelman_rubin(input):
     return gelman_rubin(new_input)
 
 
+def _fft_next_good_size(N):
+    # find the smallest number >= N such that the only divisors are 2, 3, 5
+    if N <= 2:
+        return 2
+    while True:
+        m = N
+        while m % 2 == 0:
+            m //= 2
+        while m % 3 == 0:
+            m //= 3
+        while m % 5 == 0:
+            m //= 5
+        if m == 1:
+            return N
+        N += 1
+
+
+def autocorrelation(input):
+    """
+    Computes the autocorrelation of a sample.
+
+    Reference: https://en.wikipedia.org/wiki/Autocorrelation#Efficient_computation
+    """
+    # Adapted from Stan implementation
+    # https://github.com/stan-dev/math/blob/develop/stan/math/prim/mat/fun/autocorrelation.hpp
+    N = input.size(0)
+    M = _fft_next_good_size(N)
+    M2 = 2 * M
+    # centering and padding x
+    centered_signal = input.new_zeros(M2)
+    centered_signal[:N] = input - input.mean()
+    # Fourier transform
+    freqvec = torch.rfft(centered_signal, signal_ndim=1, onesided=False)
+    # take square of magnitude of freqvec (or freqvec x freqvec*)
+    freqvec_gram = input.new_zeros(M2, 2)
+    freqvec_gram[:, 0] = freqvec.pow(2).sum(-1)
+    # inverse Fourier transform
+    ac = torch.irfft(freqvec_gram, signal_ndim=1, onesided=False)
+    ac = ac[:N]
+    ac = ac / input.new_tensor(range(N, 0, -1))
+    ac = ac / ac[0]
+    return ac
+
+
 def effective_number(input, dim=0):
-    """Compute effective number of input"""
+    """Compute effective number of input."""
     pass
