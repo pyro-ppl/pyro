@@ -65,7 +65,7 @@ def _compute_model_factors(model_trace, guide_trace):
                 enum_sites.setdefault(ordering[name], []).append(site)
                 enum_dims.append(site["fn"].event_dim - site["value"].dim())
     log_factors = OrderedDict()
-    sum_dims = {}
+    sum_dims = set()
     scale = 1
     if not enum_sites:
         marginal_costs = OrderedDict((t, [site["log_prob"] for site in sites_t])
@@ -99,8 +99,11 @@ def _compute_model_factors(model_trace, guide_trace):
                     scales.add(site["scale"])
         _check_shared_scale(scales)
         scale = scales.pop()
-    sum_dims = {x: set(i for i in range(-x.dim(), enum_boundary) if x.shape[i] > 1)
-                for xs in log_factors.values() for x in xs}
+    sum_dims = set(i
+                   for xs in log_factors.values()
+                   for x in xs
+                   for i in range(-x.dim(), enum_boundary)
+                   if x.size(i) > 1)
     return marginal_costs, log_factors, ordering, sum_dims, scale
 
 
@@ -109,6 +112,14 @@ def _compute_dice_elbo(model_trace, guide_trace):
     marginal_costs, log_factors, ordering, sum_dims, scale = _compute_model_factors(
             model_trace, guide_trace)
     if log_factors:
+        # Note that while most applications of tensor message passing use the
+        # contract_to_tensor() interface and can be easily refactored to use ubersum(),
+        # the application here relies on contract_tensor_tree() to extract the dependency
+        # structure of different log_prob terms, which is used by Dice to eliminate
+        # zero-expectation terms. One possible refactoring would be to replace
+        # contract_to_tensor() with a RaggedTensor -> Tensor contraction operation, but
+        # replace contract_tensor_tree() with a RaggedTensor -> RaggedTensor contraction
+        # that preserves some dependency structure.
         log_factors = contract_tensor_tree(log_factors, sum_dims)
         for t, log_factors_t in log_factors.items():
             marginal_costs_t = marginal_costs.setdefault(t, [])
@@ -145,9 +156,9 @@ def _compute_marginals(model_trace, guide_trace):
                 continue
 
             enum_dim = site["fn"].event_dim - site["value"].dim()
-            site_sum_dims = {term: dims - {enum_dim} for term, dims in sum_dims.items()}
             ordinal = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
-            logits = contract_to_tensor(log_factors, site_sum_dims, ordinal, cache=cache)
+            logits = contract_to_tensor(log_factors, sum_dims,
+                                        target_ordinal=ordinal, target_dims={enum_dim}, cache=cache)
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
             while logits.shape[0] == 1:
                 logits.squeeze_(0)
@@ -172,7 +183,7 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
         return super(BackwardSampleMessenger, self).__enter__()
 
     def __exit__(self, *args, **kwargs):
-        assert not any(self.sum_dims.values())
+        assert not self.sum_dims
         return super(BackwardSampleMessenger, self).__exit__(*args, **kwargs)
 
     def _pyro_sample(self, msg):
@@ -182,11 +193,10 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
         if enum_dim is not None:
             msg["infer"]["_enumerate_dim"] = enum_dim
             assert enum_dim < 0, "{} {}".format(msg["name"], enum_dim)
-            for value in self.sum_dims.values():
-                value.discard(enum_dim)
             with shared_intermediates(self.cache) as cache:
                 ordinal = frozenset(f for f in msg["cond_indep_stack"] if f.vectorized)
-                logits = contract_to_tensor(self.log_factors, self.sum_dims, ordinal, cache=cache)
+                logits = contract_to_tensor(self.log_factors, self.sum_dims,
+                                            target_ordinal=ordinal, target_dims={enum_dim}, cache=cache)
                 logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
                 while logits.shape[0] == 1:
                     logits.squeeze_(0)
@@ -203,7 +213,7 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
                             value_ = value_.index_select(enum_dim, value_.new_tensor([0], dtype=torch.long))
                             sampled_term = term_.gather(enum_dim, value_.long())
                             terms[i] = sampled_term
-                            self.sum_dims[sampled_term] = self.sum_dims.pop(term) - {enum_dim}
+                self.sum_dims.discard(enum_dim)
 
 
 class TraceEnum_ELBO(ELBO):

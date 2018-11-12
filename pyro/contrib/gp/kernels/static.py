@@ -8,7 +8,7 @@ from .kernel import Kernel
 
 
 class Constant(Kernel):
-    """
+    r"""
     Implementation of Constant kernel:
 
         :math:`k(x, z) = \sigma^2.`
@@ -32,7 +32,7 @@ class Constant(Kernel):
 
 
 class WhiteNoise(Kernel):
-    """
+    r"""
     Implementation of WhiteNoise kernel:
 
         :math:`k(x, z) = \sigma^2 \delta(x, z),`

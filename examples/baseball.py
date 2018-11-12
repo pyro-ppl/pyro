@@ -65,7 +65,7 @@ DATA_URL = "https://d2fefpcigoriu7.cloudfront.net/datasets/EfronMorrisBB.txt"
 
 
 def fully_pooled(at_bats):
-    """
+    r"""
     Number of hits in $K$ at bats for each player has a Binomial
     distribution with a common probability of success, $\phi$.
 
@@ -78,7 +78,7 @@ def fully_pooled(at_bats):
 
 
 def not_pooled(at_bats):
-    """
+    r"""
     Number of hits in $K$ at bats for each player has a Binomial
     distribution with independent probability of success, $\phi_i$.
 
@@ -92,7 +92,7 @@ def not_pooled(at_bats):
 
 
 def partially_pooled(at_bats):
-    """
+    r"""
     Number of hits has a Binomial distribution with independent
     probability of success, $\phi_i$. Each $\phi_i$ follows a Beta
     distribution with concentration parameters $c_1$ and $c_2$, where
@@ -111,7 +111,7 @@ def partially_pooled(at_bats):
 
 
 def partially_pooled_with_logit(at_bats):
-    """
+    r"""
     Number of hits has a Binomial distribution with a logit link function.
     The logits $\alpha$ for each player is normally distributed with the
     mean and scale parameters sharing a common prior.

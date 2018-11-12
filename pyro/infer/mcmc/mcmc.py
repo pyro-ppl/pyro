@@ -8,7 +8,7 @@ import socket
 import sys
 import threading
 import warnings
-from collections import OrderedDict
+from collections import OrderedDict, deque
 
 import six
 from six.moves import queue
@@ -144,6 +144,11 @@ class _ParallelSampler(TracePosterior):
         # restore original handler
         signal.signal(signal.SIGINT, sigint_handler)
         active_workers = self.num_chains
+        # To yield a deterministic ordering, we hold intermediate traces
+        # from each of the workers in its own queue in `results_buffer`
+        # and yield these in a round robin fashion.
+        buffer_idx = 0
+        results_buffer = [deque() for _ in range(self.num_chains)]
         try:
             for w in self.workers:
                 w.start()
@@ -162,10 +167,22 @@ class _ParallelSampler(TracePosterior):
                 if isinstance(val, Exception):
                     # Exception trace is already logged by worker.
                     raise val
-                elif val is not None:
-                    yield val
-                else:
+                if val is None:
                     active_workers -= 1
+                else:
+                    results_buffer[chain_id - 1].append(val)
+                while results_buffer[buffer_idx]:
+                    yield results_buffer[buffer_idx].popleft()
+                    buffer_idx = (buffer_idx + 1) % self.num_chains
+            # empty out the results buffer
+            non_empty_buffers = set(range(self.num_chains))
+            while non_empty_buffers:
+                if results_buffer[buffer_idx]:
+                    yield results_buffer[buffer_idx].popleft()
+                else:
+                    if buffer_idx in non_empty_buffers:
+                        non_empty_buffers.remove(buffer_idx)
+                buffer_idx = (buffer_idx + 1) % self.num_chains
         finally:
             self.terminate()
 
