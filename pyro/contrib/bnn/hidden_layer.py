@@ -11,16 +11,18 @@ from pyro.distributions.torch_distribution import TorchDistribution
 
 class HiddenLayer(TorchDistribution):
     r"""
-    This distribution is a basic building block in a Bayesian neural network. It represents
-    a single hidden layer, i.e. an affine transformation applied to a set of inputs `X` followed
-    by a non-linearity. The uncertainty in the weights is encoded in a Normal variational
-    distribution specified by the parameters `A_scale` and `A_mean`. The so-called 'local
-    reparameterization trick' is used to reduce variance (see reference below). In effect,
-    this means the weights are never sampled directly; instead one samples in pre-activation
-    space (i.e. before the non-linearity is applied). Since the weights are never directly
-    sampled, when this distribution is used within the context of variational inference,
-    care must be taken to correctly scale the KL divergence term that corresponds to the
-    weight matrix. This term is folded into the `log_prob` method of this distributions.
+    This distribution is a basic building block in a Bayesian neural network.
+    It represents a single hidden layer, i.e. an affine transformation applied
+    to a set of inputs `X` followed by a non-linearity. The uncertainty in the
+    weights is encoded in a Normal variational distribution specified by the
+    parameters `A_scale` and `A_mean`. The so-called 'local reparameterization
+    trick' is used to reduce variance (see reference below). In effect, this
+    means the weights are never sampled directly; instead one samples in
+    pre-activation space (i.e. before the non-linearity is applied). Since the
+    weights are never directly sampled, when this distribution is used within
+    the context of variational inference, care must be taken to correctly scale
+    the KL divergence term that corresponds to the weight matrix. This term is
+    folded into the `log_prob` method of this distributions.
 
     In effect, this distribution encodes the following generative process:
 
@@ -29,18 +31,23 @@ class HiddenLayer(TorchDistribution):
 
     :param torch.Tensor X: B x D dimensional mini-batch of inputs
     :param torch.Tensor A_mean:  D x H dimensional specifiying weight mean
-    :param torch.Tensor A_scale: D x H     dimensional (diagonal covariance matrix)
+    :param torch.Tensor A_scale: D x H dimensional (diagonal covariance matrix)
                                  specifying weight uncertainty
-    :param callable non_linearity: a callable that specifies the non-linearity used. defaults to ReLU.
-    :param float KL_factor: scaling factor for the KL divergence. prototypically this is equal to the
-                            size of the mini-batch divided by the size of the whole dataset. defaults to `1.0`.
-    :param A_prior: the prior over the weights is assumed to be normal with mean zero and scale factor `A_prior`.
-                    default value is 1.0.
+    :param callable non_linearity: a callable that specifies the
+                                   non-linearity used. defaults to ReLU.
+    :param float KL_factor: scaling factor for the KL divergence. prototypically
+                            this is equal to the size of the mini-batch divided
+                            by the size of the whole dataset. defaults to `1.0`.
+    :param A_prior: the prior over the weights is assumed to be normal with
+                    mean zero and scale factor `A_prior`. default value is 1.0.
     :type A_prior: float or torch.Tensor
-    :param bool include_hidden_bias: controls whether the activations should be augmented with a 1, which can
-                                     be used to incorporate bias terms. defaults to `True`.
-    :param bool weight_space_sampling: controls whether the local reparameterization trick is used. this is only
-                                       intended to be used for internal testing. defaults to `False`.
+    :param bool include_hidden_bias: controls whether the activations should be
+                                     augmented with a 1, which can be used to
+                                     incorporate bias terms. defaults to `True`.
+    :param bool weight_space_sampling: controls whether the local reparameterization
+                                       trick is used. this is only intended to be
+                                       used for internal testing.
+                                       defaults to `False`.
 
     Reference:
 

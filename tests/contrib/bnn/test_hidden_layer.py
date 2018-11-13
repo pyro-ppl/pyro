@@ -34,7 +34,7 @@ def test_hidden_layer_rsample(non_linearity, include_hidden_bias, B=2, D=3, H=4,
 
 @pytest.mark.parametrize("non_linearity", [F.relu])
 @pytest.mark.parametrize("include_hidden_bias", [True, False])
-def test_hidden_layer_log_prob(non_linearity, include_hidden_bias, B=2, D=3, H=2, N=1000000):
+def test_hidden_layer_log_prob(non_linearity, include_hidden_bias, B=2, D=3, H=2):
     X = torch.randn(B, D)
     A_mean = torch.rand(D, H)
     A_scale = 0.3 * torch.exp(0.3 * torch.rand(D, H))
