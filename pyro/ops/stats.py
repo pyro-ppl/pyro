@@ -96,6 +96,10 @@ def autocorrelation(input, dim=0):
     :param int dim: the dimension to calculate autocorrelation.
     :returns torch.Tensor: autocorrelation of `input`.
     """
+    if (not input.is_cuda) and (not torch.backends.mkl.is_available()):
+        raise NotImplementedError("For CPU tensor, this method is only supported "
+                                  "with MKL installed.")
+
     # Adapted from Stan implementation
     # https://github.com/stan-dev/math/blob/develop/stan/math/prim/mat/fun/autocorrelation.hpp
     N = input.size(dim)
@@ -139,6 +143,9 @@ def autocovariance(input, dim=0):
 def _cummin(input):
     """
     Computes cummulative minimum of input at dimension `dim=0`.
+
+    :param torch.Tensor input: the input tensor.
+    :returns torch.Tensor: accumulate min of `input` at dimension `dim=0`.
     """
     # FIXME: is there a better trick to find accumulate min of a sequence?
     N = input.size(0)
@@ -149,7 +156,7 @@ def _cummin(input):
     return input_tril.min(dim=1)[0]
 
 
-def effective_sample_size(input, chain_dim=0, sample_dim=1):
+def effective_sample_size(input, sample_dim=0, chain_dim=1):
     """
     Computes effective sample size of input.
 
@@ -160,8 +167,8 @@ def effective_sample_size(input, chain_dim=0, sample_dim=1):
         Stan Development Team
 
     :param torch.Tensor input: the input tensor.
-    :param int chain_dim: the chain dimension.
     :param int sample_dim: the sample dimension.
+    :param int chain_dim: the chain dimension.
     :returns torch.Tensor: effective sample size of `input`.
     """
     assert input.dim() >= 2

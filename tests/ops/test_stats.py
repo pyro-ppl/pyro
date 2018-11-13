@@ -76,10 +76,13 @@ def test_effective_sample_size():
         x[i].normal_(0.8 * x[i-1], 1)
     x = x.reshape(4, x.size(0) // 4)
 
-    assert_equal(effective_sample_size(x, sample_dim=1, chain_dim=0).item(), 268, prec=2)
+    try:
+        assert_equal(effective_sample_size(x, sample_dim=1, chain_dim=0).item(), 268, prec=2)
 
-    # test shape
-    y = torch.rand(3, 2, 7)
-    assert_equal(effective_sample_size(y).shape, torch.Size([7]))
-    assert_equal(effective_sample_size(y, sample_dim=-1, chain_dim=0).shape, torch.Size([2]))
-    assert_equal(effective_sample_size(y, sample_dim=1, chain_dim=2).shape, torch.Size([3]))
+        # test shape
+        y = torch.rand(3, 2, 7)
+        assert_equal(effective_sample_size(y).shape, torch.Size([7]))
+        assert_equal(effective_sample_size(y, sample_dim=-1, chain_dim=0).shape, torch.Size([2]))
+        assert_equal(effective_sample_size(y, sample_dim=1, chain_dim=2).shape, torch.Size([3]))
+    except NotImplementedError:
+        pytest.skip()
