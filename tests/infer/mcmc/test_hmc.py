@@ -86,7 +86,7 @@ TEST_CASES = [
     ),
     T(
         GaussianChain(dim=10, chain_len=4, num_obs=1),
-        num_samples=1200,
+        num_samples=1600,
         warmup_steps=300,
         hmc_params={'step_size': 0.46,
                     'num_steps': 5},
@@ -157,17 +157,17 @@ def test_hmc_conjugate_gaussian(fixture,
         expected_std = 1 / torch.sqrt(torch.ones(fixture.dim) * expected_precs[i - 1])
 
         # Actual vs expected posterior means for the latents
-        logger.info('Posterior mean (actual) - {}'.format(param_name))
-        logger.info(latent_loc)
-        logger.info('Posterior mean (expected) - {}'.format(param_name))
-        logger.info(expected_mean)
+        logger.debug('Posterior mean (actual) - {}'.format(param_name))
+        logger.debug(latent_loc)
+        logger.debug('Posterior mean (expected) - {}'.format(param_name))
+        logger.debug(expected_mean)
         assert_equal(rmse(latent_loc, expected_mean).item(), 0.0, prec=mean_tol)
 
         # Actual vs expected posterior precisions for the latents
-        logger.info('Posterior std (actual) - {}'.format(param_name))
-        logger.info(latent_std)
-        logger.info('Posterior std (expected) - {}'.format(param_name))
-        logger.info(expected_std)
+        logger.debug('Posterior std (actual) - {}'.format(param_name))
+        logger.debug(latent_std)
+        logger.debug('Posterior std (expected) - {}'.format(param_name))
+        logger.debug(expected_std)
         assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 

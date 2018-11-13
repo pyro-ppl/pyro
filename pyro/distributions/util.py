@@ -101,6 +101,15 @@ def broadcast_shape(*shapes, **kwargs):
     return tuple(reversed(reversed_shape))
 
 
+def gather(value, index, dim):
+    """
+    Broadcasted gather of indexed values along a named dim.
+    """
+    value, index = broadcast_all(value, index)
+    index = index.index_select(dim, index.new_tensor([0]))
+    return value.gather(dim, index)
+
+
 def sum_rightmost(value, dim):
     """
     Sum out ``dim`` many rightmost dimensions of a given tensor.

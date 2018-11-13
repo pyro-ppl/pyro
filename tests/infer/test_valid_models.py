@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 import warnings
+from collections import defaultdict
 
 import pytest
 import torch
@@ -17,13 +18,13 @@ logger = logging.getLogger(__name__)
 # This file tests a variety of model,guide pairs with valid and invalid structure.
 
 
-def assert_ok(model, guide, elbo):
+def assert_ok(model, guide, elbo, **kwargs):
     """
     Assert that inference works without warnings or errors.
     """
     pyro.clear_param_store()
     inference = SVI(model, guide, Adam({"lr": 1e-6}), elbo)
-    inference.step()
+    inference.step(**kwargs)
 
 
 def assert_error(model, guide, elbo, match=None):
@@ -1279,3 +1280,277 @@ def test_enum_discrete_vectorized_num_particles(enumerate_, expand, num_samples,
                                            num_particles=num_particles,
                                            vectorize_particles=True,
                                            strict_enumeration_warning=(enumerate_ == "parallel")))
+
+
+def test_enum_recycling_chain():
+
+    @config_enumerate(default="parallel")
+    def model():
+        p = pyro.param("p", torch.tensor([[0.2, 0.8], [0.1, 0.9]]))
+
+        x = 0
+        for t in pyro.markov(range(100)):
+            x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
+            assert x.dim() <= 2
+
+    def guide():
+        pass
+
+    assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
+
+
+@pytest.mark.parametrize('markov', [False, True])
+def test_enum_recycling_dbn(markov):
+    #    x --> x --> x  enum "state"
+    # y  |  y  |  y  |  enum "occlusion"
+    #  \ |   \ |   \ |
+    #    z     z     z  obs
+
+    @config_enumerate(default="parallel")
+    def model():
+        p = pyro.param("p", torch.ones(3, 3))
+        q = pyro.param("q", torch.ones(2))
+        r = pyro.param("r", torch.ones(3, 2, 4))
+        z_ind = torch.arange(4, dtype=torch.long)
+
+        x = 0
+        times = pyro.markov(range(100)) if markov else range(20)
+        for t in times:
+            x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
+            y = pyro.sample("y_{}".format(t), dist.Categorical(q))
+            pyro.sample("z_{}".format(t),
+                        dist.Categorical(r[x.unsqueeze(-1), y.unsqueeze(-1), z_ind]),
+                        obs=torch.tensor(0.))
+
+    def guide():
+        pass
+
+    assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
+
+
+def test_enum_recycling_nested():
+    # (x)
+    #   \
+    #    y0---(y1)--(y2)
+    #    |     |     |
+    #   z00   z10   z20
+    #    |     |     |
+    #   z01   z11  (z21)
+    #    |     |     |
+    #   z02   z12   z22 <-- what can this depend on?
+    #
+    # markov dependencies
+    # -------------------
+    #   x:
+    #  y0: x
+    # z00: x y0
+    # z01: x y0 z00
+    # z02: x y0 z01
+    #  y1: x y0
+    # z10: x y0 y1
+    # z11: x y0 y1 z10
+    # z12: x y0 y1 z11
+    #  y2: x y1
+    # z20: x y1 y2
+    # z21: x y1 y2 z20
+    # z22: x y1 y2 z21
+
+    @config_enumerate(default="parallel")
+    def model():
+        p = pyro.param("p", torch.ones(3, 3))
+        x = pyro.sample("x", dist.Categorical(p[0]))
+        y = x
+        for i in pyro.markov(range(10)):
+            y = pyro.sample("y_{}".format(i), dist.Categorical(p[y]))
+            z = y
+            for j in pyro.markov(range(10)):
+                z = pyro.sample("z_{}_{}".format(i, j), dist.Categorical(p[z]))
+
+    def guide():
+        pass
+
+    assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
+
+
+def test_enum_recycling_grid():
+    #  x---x---x---x    -----> i
+    #  |   |   |   |   |
+    #  x---x---x---x   |
+    #  |   |   |   |   V
+    #  x---x---x--(x)  j
+    #  |   |   |   |
+    #  x---x--(x)--x <-- what can this depend on?
+
+    @config_enumerate(default="parallel")
+    def model():
+        p = pyro.param("p_leaf", torch.ones(2, 2, 2))
+        ind = torch.arange(2, dtype=torch.long)
+        x = defaultdict(lambda: torch.tensor(0))
+        y_axis = pyro.markov(range(4), keep=True)
+        for i in pyro.markov(range(4)):
+            for j in y_axis:
+                x[i, j] = pyro.sample("x_{}_{}".format(i, j),
+                                      dist.Categorical(p[x[i - 1, j].unsqueeze(-1),
+                                                         x[i, j - 1].unsqueeze(-1), ind]))
+
+    def guide():
+        pass
+
+    assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
+
+
+def test_enum_recycling_reentrant():
+    data = (True, False)
+    for i in range(5):
+        data = (data, data, False)
+
+    @pyro.markov
+    def model(data, state=0, address=""):
+        if isinstance(data, bool):
+            p = pyro.param("p_leaf", torch.ones(10))
+            pyro.sample("leaf_{}".format(address),
+                        dist.Bernoulli(p[state]),
+                        obs=torch.tensor(1. if data else 0.))
+        else:
+            p = pyro.param("p_branch", torch.ones(10, 10))
+            for branch, letter in zip(data, "abcdefg"):
+                next_state = pyro.sample("branch_{}".format(address + letter),
+                                         dist.Categorical(p[state]),
+                                         infer={"enumerate": "parallel"})
+                model(branch, next_state, address + letter)
+
+    def guide(data):
+        pass
+
+    assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0), data=data)
+
+
+@pytest.mark.parametrize('history', [1, 2])
+def test_enum_recycling_reentrant_history(history):
+    data = (True, False)
+    for i in range(5):
+        data = (data, data, False)
+
+    @pyro.markov(history=history)
+    def model(data, state=0, address=""):
+        if isinstance(data, bool):
+            p = pyro.param("p_leaf", torch.ones(10))
+            pyro.sample("leaf_{}".format(address),
+                        dist.Bernoulli(p[state]),
+                        obs=torch.tensor(1. if data else 0.))
+        else:
+            assert isinstance(data, tuple)
+            p = pyro.param("p_branch", torch.ones(10, 10))
+            for branch, letter in zip(data, "abcdefg"):
+                next_state = pyro.sample("branch_{}".format(address + letter),
+                                         dist.Categorical(p[state]),
+                                         infer={"enumerate": "parallel"})
+                model(branch, next_state, address + letter)
+
+    def guide(data):
+        pass
+
+    assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0), data=data)
+
+
+def test_enum_recycling_mutual_recursion():
+    data = (True, False)
+    for i in range(5):
+        data = (data, data, False)
+
+    def model_leaf(data, state=0, address=""):
+        p = pyro.param("p_leaf", torch.ones(10))
+        pyro.sample("leaf_{}".format(address),
+                    dist.Bernoulli(p[state]),
+                    obs=torch.tensor(1. if data else 0.))
+
+    @pyro.markov
+    def model1(data, state=0, address=""):
+        if isinstance(data, bool):
+            model_leaf(data, state, address)
+        else:
+            p = pyro.param("p_branch", torch.ones(10, 10))
+            for branch, letter in zip(data, "abcdefg"):
+                next_state = pyro.sample("branch_{}".format(address + letter),
+                                         dist.Categorical(p[state]),
+                                         infer={"enumerate": "parallel"})
+                model2(branch, next_state, address + letter)
+
+    @pyro.markov
+    def model2(data, state=0, address=""):
+        if isinstance(data, bool):
+            model_leaf(data, state, address)
+        else:
+            p = pyro.param("p_branch", torch.ones(10, 10))
+            for branch, letter in zip(data, "abcdefg"):
+                next_state = pyro.sample("branch_{}".format(address + letter),
+                                         dist.Categorical(p[state]),
+                                         infer={"enumerate": "parallel"})
+                model1(branch, next_state, address + letter)
+
+    def guide(data):
+        pass
+
+    assert_ok(model1, guide, TraceEnum_ELBO(max_plate_nesting=0), data=data)
+
+
+def test_enum_recycling_interleave():
+
+    def model():
+        with pyro.markov() as m:
+            with pyro.markov():
+                with m:  # error here
+                    pyro.sample("x", dist.Categorical(torch.ones(4)),
+                                infer={"enumerate": "parallel"})
+
+    def guide():
+        pass
+
+    assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0, strict_enumeration_warning=False))
+
+
+def test_enum_recycling_plate():
+
+    @config_enumerate(default="parallel")
+    def model():
+        p = pyro.param("p", torch.ones(3, 3))
+        q = pyro.param("q", torch.tensor([0.5, 0.5]))
+        plate_x = pyro.plate("plate_x", 2, dim=-1)
+        plate_y = pyro.plate("plate_y", 3, dim=-1)
+        plate_z = pyro.plate("plate_z", 4, dim=-2)
+
+        a = pyro.sample("a", dist.Bernoulli(q[0])).long()
+        w = 0
+        for i in pyro.markov(range(5)):
+            w = pyro.sample("w_{}".format(i), dist.Categorical(p[w]))
+
+        with plate_x:
+            b = pyro.sample("b", dist.Bernoulli(q[a])).long()
+            x = 0
+            for i in pyro.markov(range(6)):
+                x = pyro.sample("x_{}".format(i), dist.Categorical(p[x]))
+
+        with plate_y:
+            c = pyro.sample("c", dist.Bernoulli(q[a])).long()
+            y = 0
+            for i in pyro.markov(range(7)):
+                y = pyro.sample("y_{}".format(i), dist.Categorical(p[y]))
+
+        with plate_z:
+            d = pyro.sample("d", dist.Bernoulli(q[a])).long()
+            z = 0
+            for i in pyro.markov(range(8)):
+                z = pyro.sample("z_{}".format(i), dist.Categorical(p[z]))
+
+        with plate_x, plate_z:
+            e = pyro.sample("e", dist.Bernoulli(q[b])).long()
+            xz = 0
+            for i in pyro.markov(range(9)):
+                xz = pyro.sample("xz_{}".format(i), dist.Categorical(p[xz]))
+
+        return a, b, c, d, e
+
+    def guide():
+        pass
+
+    assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=2))
