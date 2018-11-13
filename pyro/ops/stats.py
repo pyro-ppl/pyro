@@ -120,13 +120,13 @@ def autocorrelation(input, dim=0):
     freqvec_gram = freqvec.pow(2).sum(-1, keepdim=True)
     freqvec_gram = torch.cat([freqvec_gram, input.new_zeros(freqvec_gram.shape)], dim=-1)
     # inverse Fourier transform
-    ac = torch.irfft(freqvec_gram, signal_ndim=1, onesided=False)
+    autocorr = torch.irfft(freqvec_gram, signal_ndim=1, onesided=False)
 
     # truncate and normalize the result, then transpose back to original shape
-    ac = ac[..., :N]
-    ac = ac / input.new_tensor(range(N, 0, -1))
-    ac = ac / ac[..., :1]
-    return ac.transpose(dim, -1)
+    autocorr = autocorr[..., :N]
+    autocorr = autocorr / input.new_tensor(range(N, 0, -1))
+    autocorr = autocorr / autocorr[..., :1]
+    return autocorr.transpose(dim, -1)
 
 
 def autocovariance(input, dim=0):
