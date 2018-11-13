@@ -26,7 +26,7 @@ class TraceTreeEvaluator(object):
     def __init__(self,
                  model_trace,
                  has_enumerable_sites=False,
-                 max_plate_nesting=float("inf")):
+                 max_plate_nesting=None):
         self.has_enumerable_sites = has_enumerable_sites
         self.max_plate_nesting = max_plate_nesting
         # To be populated using the model trace once.
@@ -40,7 +40,7 @@ class TraceTreeEvaluator(object):
     def _parse_model_structure(self, model_trace):
         if not self.has_enumerable_sites:
             return
-        if self.max_plate_nesting == float("inf"):
+        if self.max_plate_nesting is None:
             raise ValueError("Finite value required for `max_plate_nesting` when model "
                              "has discrete (enumerable) sites.")
         self._compute_log_prob_terms(model_trace)
@@ -151,7 +151,7 @@ class TraceEinsumEvaluator(object):
     def __init__(self,
                  model_trace,
                  has_enumerable_sites=False,
-                 max_plate_nesting=float("inf")):
+                 max_plate_nesting=None):
         self.has_enumerable_sites = has_enumerable_sites
         self.max_plate_nesting = max_plate_nesting
         # To be populated using the model trace once.
@@ -166,7 +166,7 @@ class TraceEinsumEvaluator(object):
         """
         if not self.has_enumerable_sites:
             return
-        if self.max_plate_nesting == float("inf"):
+        if self.max_plate_nesting is None:
             raise ValueError("Finite value required for `max_plate_nesting` when model "
                              "has discrete (enumerable) sites.")
         model_trace.compute_log_prob()
