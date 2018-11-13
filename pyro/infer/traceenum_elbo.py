@@ -210,8 +210,7 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
         enum_symbol = enum_msg["infer"].get("_enumerate_symbol")
         if enum_symbol is None:
             return
-        enum_dim = enum_msg["infer"].get("_enumerate_dim")
-        assert enum_dim < 0
+        enum_dim = enum_msg["infer"]["_enumerate_dim"]
         with shared_intermediates(self.cache):
             ordinal = _find_ordinal(self.enum_trace, msg)
             logits = contract_to_tensor(self.log_factors, self.sum_dims,
@@ -232,6 +231,7 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
         if enum_symbol is None:
             return
         value = packed.pack(msg["value"].long(), enum_msg["infer"]["_dim_to_symbol"])
+        assert enum_symbol not in value._pyro_dims
         for t, terms in self.log_factors.items():
             for i, term in enumerate(terms):
                 if enum_symbol in term._pyro_dims:

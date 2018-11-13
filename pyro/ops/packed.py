@@ -31,6 +31,7 @@ def pack(value, dim_to_symbol):
                 "Try adding shape assertions for your model's sample values and distribution parameters."]))
         value = value.squeeze()
         value._pyro_dims = dims
+        assert value.dim() == len(value._pyro_dims)
     return value
 
 
@@ -42,11 +43,17 @@ def unpack(value, symbol_to_dim):
     :param symbol_to_dim: a map from characters to negative integers
     """
     if isinstance(value, torch.Tensor):
-        dims = [symbol_to_dim[dim] for dim in value._pyro_dims]
-        shape = [1] * -min(dims) if dims else []
-        for dim, size in zip(dims, value.shape):
-            shape[dim] = size
-        value = value.reshape(shape)
+        assert value.dim() == len(value._pyro_dims)
+        if value.dim():
+            unsorted_dims = [symbol_to_dim[dim] for dim in value._pyro_dims]
+            dims = sorted(unsorted_dims)
+            value = value.permute(*(unsorted_dims.index(dim) for dim in dims))
+            shape = [1] * -min(dims)
+            for dim, size in zip(dims, value.shape):
+                shape[dim] = size
+            value = value.reshape(shape)
+        else:
+            value = value[...]
     return value
 
 
@@ -65,6 +72,7 @@ def broadcast_all(*values):
             x = x.reshape(tuple(sizes[dim] if dim in old_dims else 1 for dim in dims))
             x = x.expand(shape)
             x._pyro_dims = dims
+            assert x.dim() == len(x._pyro_dims)
             values[i] = x
     return tuple(values)
 
@@ -81,7 +89,7 @@ def gather(value, index, dim):
     index = index.index_select(pos, index.new_tensor([0]))
     value = value.gather(pos, index).squeeze(pos)
     value._pyro_dims = dims
-    assert value.dim() == len(dims)
+    assert value.dim() == len(value._pyro_dims)
     return value
 
 
