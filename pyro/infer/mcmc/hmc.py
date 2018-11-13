@@ -232,8 +232,6 @@ class HMC(TraceKernel):
                 for frame in site["cond_indep_stack"]
                 if frame.vectorized]
         self.max_plate_nesting = -min(dims) if dims else 0
-        if self.vectorize_particles and self.num_particles > 1:
-            self.max_plate_nesting += 1
 
     def _configure_adaptation(self, trace):
         initial_step_size = None
