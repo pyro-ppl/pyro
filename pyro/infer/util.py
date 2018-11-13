@@ -177,6 +177,8 @@ class Dice(object):
                     if not isinstance(log_prob, torch.Tensor):
                         log_prob = site["value"].new_tensor(log_prob)
                     log_prob._pyro_dims = dims
+                    # I don't know why the following broadcast is needed, but it makes tests pass:
+                    log_prob, _ = packed.broadcast_all(log_prob, site["packed"]["log_prob"])
                 elif site["infer"]["enumerate"] == "sequential":
                     log_denom[ordinal] += math.log(site["infer"]["_enum_total"])
             else:  # site was monte carlo sampled
