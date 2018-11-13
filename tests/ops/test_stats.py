@@ -13,19 +13,20 @@ def test_gelman_rubin():
     x[0] = torch.arange(10.)
     x[1] = torch.arange(10.) + 1
 
-    r_hat = gelman_rubin(x)
+    r_hat = gelman_rubin(x, sample_dim=1, chain_dim=0)
     assert_equal(r_hat.item(), 0.98, prec=0.01)
 
     # test shape
     y = torch.rand(3, 7, 10)
-    r_hat = gelman_rubin(y)
-    assert_equal(r_hat.shape, torch.Size([10]))
+    assert_equal(gelman_rubin(y).shape, torch.Size([10]))
+    assert_equal(gelman_rubin(y, sample_dim=-1, chain_dim=0).shape, torch.Size([7]))
+    assert_equal(gelman_rubin(y, sample_dim=1, chain_dim=2).shape, torch.Size([3]))
 
 
 def test_split_gelman_rubin():
     x = torch.rand(4, 10, 5)
-    r_hat1 = gelman_rubin(x.reshape(4, 2, 5, 5).reshape(8, 5, 5))
-    r_hat2 = split_gelman_rubin(x)
+    r_hat1 = gelman_rubin(x.reshape(4, 2, 5, 5).reshape(8, 5, 5), sample_dim=1, chain_dim=0)
+    r_hat2 = split_gelman_rubin(x, sample_dim=1, chain_dim=0)
     assert_equal(r_hat1, r_hat2)
 
 
@@ -37,7 +38,8 @@ def test_autocorrelation():
 
     # test shape
     y = torch.rand(3, 7, 10)
-    assert_equal(autocorrelation(y).shape, torch.Size([3, 7, 10]))
+    for i in range(3):
+        assert_equal(autocorrelation(y, dim=i).shape, torch.Size([3, 7, 10]))
 
 
 def test_autocovariance():
@@ -45,6 +47,11 @@ def test_autocovariance():
     assert_equal(autocovariance(x),
                  torch.tensor([8.25, 6.42, 4.25, 1.75, -1.08,
                                -4.25, -7.75, -11.58, -15.75, -20.25]), prec=0.01)
+
+    # test shape
+    y = torch.rand(3, 7, 10)
+    for i in range(3):
+        assert_equal(autocovariance(y, dim=i).shape, torch.Size([3, 7, 10]))
 
 
 def test_fft_next_good_size():
@@ -69,8 +76,10 @@ def test_effective_sample_size():
         x[i].normal_(0.8 * x[i-1], 1)
     x = x.reshape(4, x.size(0) // 4)
 
-    assert_equal(effective_sample_size(x).item(), 268, prec=2)
+    assert_equal(effective_sample_size(x, sample_dim=1, chain_dim=0).item(), 268, prec=2)
 
     # test shape
-    x = torch.rand(3, 2, 7)
-    assert_equal(effective_sample_size(x), torch.Size([7]))
+    y = torch.rand(3, 2, 7)
+    assert_equal(effective_sample_size(y).shape, torch.Size([7]))
+    assert_equal(effective_sample_size(y, sample_dim=-1, chain_dim=0).shape, torch.Size([2]))
+    assert_equal(effective_sample_size(y, sample_dim=1, chain_dim=2).shape, torch.Size([3]))
