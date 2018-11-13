@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
+import torch.nn.functional as F
 from torch.distributions import Normal
 
 import pytest
@@ -8,7 +9,7 @@ from pyro.contrib.bnn import HiddenLayer
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize("non_linearity", ['linear', 'relu'])
+@pytest.mark.parametrize("non_linearity", [F.relu])
 @pytest.mark.parametrize("covariance", ['diagonal', 'cholesky'])
 @pytest.mark.parametrize("include_hidden_bias", [False, True])
 def test_hidden_layer_rsample(non_linearity, include_hidden_bias, covariance, B=2, D=3, H=4, N=900000):
@@ -35,10 +36,9 @@ def test_hidden_layer_rsample(non_linearity, include_hidden_bias, covariance, B=
     return
 
 
-@pytest.mark.parametrize("non_linearity", ['linear', 'relu'])
+@pytest.mark.parametrize("non_linearity", [F.relu])
 @pytest.mark.parametrize("include_hidden_bias", [True, False])
-def test_hidden_layer_log_prob(non_linearity, include_hidden_bias, B=2, D=3, H=2, N=1000000,
-                               leaky_epsilon=0.1, hard_sigmoid_alpha=1.0):
+def test_hidden_layer_log_prob(non_linearity, include_hidden_bias, B=2, D=3, H=2, N=1000000):
     X = torch.randn(B, D)
     A_mean = torch.rand(D, H)
     A_scale = 0.3 * torch.exp(0.3 * torch.rand(D, H))
