@@ -85,11 +85,25 @@ On OSX:
 MACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py install
 ```
 
-Finally install Pyro
+Finally install Pyro using pip or from source as shown below.
+
+**Install using pip:**
+
+```sh
+pip install git+https://github.com/uber/pyro.git
+```
+
+or, with the `extras` dependency to run the probabilistic models included in the `examples`/`tutorials` directories:
+```sh
+pip install git+https://github.com/uber/pyro.git#egg=project[extras]
+```
+
+**Install from source:**
+
 ```sh
 git clone https://github.com/uber/pyro
 cd pyro
-pip install .
+pip install .  # pip install .[extras] for running models in examples/tutorials
 ```
 
 
@@ -112,10 +126,7 @@ Then, install Pyro using the `pytorch-1.0` branch.
 pip install git+https://github.com/uber/pyro.git@pytorch-1.0
 ```
 
-or, with the `extras` dependency to run the probabilistic models included in the `examples`/`tutorials` directories:
-```sh
-pip install -e git+https://github.com/uber/pyro.git@pytorch-1.0#egg=project[extras]
-```
+or, with the `extras` dependency as shown above.
 
 **Install from source:**
 
