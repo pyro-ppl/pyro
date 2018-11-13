@@ -70,7 +70,7 @@ TEST_CASES = [
     ),
     T(
         GaussianChain(dim=10, chain_len=4, num_obs=1),
-        num_samples=1200,
+        num_samples=1600,
         warmup_steps=300,
         hmc_params={'step_size': 0.46,
                     'num_steps': 5},

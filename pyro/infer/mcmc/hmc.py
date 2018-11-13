@@ -93,7 +93,7 @@ class HMC(TraceKernel):
                  adapt_mass_matrix=True,
                  full_mass=False,
                  transforms=None,
-                 max_plate_nesting=float("inf"),
+                 max_plate_nesting=None,
                  max_iarange_nesting=None,  # DEPRECATED
                  experimental_use_einsum=False):
         self.model = model
@@ -214,6 +214,25 @@ class HMC(TraceKernel):
             direction_new = 1 if self._direction_threshold < -delta_energy else -1
         return step_size
 
+    def _guess_max_plate_nesting(self, model, *args, **kwargs):
+        """
+        Guesses max_plate_nesting by running the model once
+        without enumeration. This optimistically assumes static model
+        structure.
+        """
+        # Ignore validation to allow model-enumerated sites absent from the guide.
+        with poutine.block():
+            model_trace = poutine.trace(model).get_trace(*args, **kwargs)
+        sites = [site
+                 for site in model_trace.nodes.values()
+                 if site["type"] == "sample"]
+
+        dims = [frame.dim
+                for site in sites
+                for frame in site["cond_indep_stack"]
+                if frame.vectorized]
+        self.max_plate_nesting = -min(dims) if dims else 0
+
     def _configure_adaptation(self, trace):
         initial_step_size = None
         if self.adapt_step_size:
@@ -270,10 +289,12 @@ class HMC(TraceKernel):
         self._warmup_steps = warmup_steps
         self._args = args
         self._kwargs = kwargs
+        if self.max_plate_nesting is None:
+            self._guess_max_plate_nesting(self.model, *args, **kwargs)
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
         self.model = poutine.enum(config_enumerate(self.model, default="parallel"),
-                                  first_available_dim=self.max_plate_nesting)
+                                  first_available_dim=-1 - self.max_plate_nesting)
         # set the trace prototype to inter-convert between trace object
         # and dict object used by the integrator
         trace = poutine.trace(self.model).get_trace(*args, **kwargs)

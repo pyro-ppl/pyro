@@ -1,13 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
-import sys
-import six
-
 import collections
+import sys
 
 import networkx
+import opt_einsum
+import six
 
+from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import scale_and_mask
+from pyro.ops.packed import pack
 from pyro.poutine.util import is_validation_enabled
 from pyro.util import warn_if_inf, warn_if_nan
 
@@ -253,3 +255,61 @@ class Trace(networkx.DiGraph):
         for name, node in self.nodes.items():
             if node["type"] == "sample" and not node["is_observed"]:
                 yield name, node
+
+    def pack_tensors(self, plate_to_symbol=None):
+        """
+        Computes packed representations of tensors in the trace.
+        This should be called after :meth:`compute_log_prob` or :meth:`compute_score_parts`.
+        """
+        plate_to_symbol = {} if plate_to_symbol is None else plate_to_symbol
+        symbol_to_dim = {}
+        for site in self.nodes.values():
+            if site["type"] != "sample":
+                continue
+
+            # allocate even symbols for plate dims
+            dim_to_symbol = {}
+            for frame in site["cond_indep_stack"]:
+                if frame.vectorized:
+                    if frame.name in plate_to_symbol:
+                        symbol = plate_to_symbol[frame.name]
+                    else:
+                        symbol = opt_einsum.get_symbol(2 * len(plate_to_symbol))
+                        plate_to_symbol[frame.name] = symbol
+                    symbol_to_dim[symbol] = frame.dim
+                    dim_to_symbol[frame.dim] = symbol
+
+            # allocate odd symbols for enum dims
+            for dim, id_ in site["infer"].get("_dim_to_id", {}).items():
+                symbol = opt_einsum.get_symbol(1 + 2 * id_)
+                symbol_to_dim[symbol] = dim
+                dim_to_symbol[dim] = symbol
+            enum_dim = site["infer"].get("_enumerate_dim")
+            if enum_dim is not None:
+                site["infer"]["_enumerate_symbol"] = dim_to_symbol[enum_dim]
+            site["infer"]["_dim_to_symbol"] = dim_to_symbol
+
+            # pack tensors
+            packed = site.setdefault("packed", {})
+            try:
+                packed["mask"] = pack(site["mask"], dim_to_symbol)
+                if "score_parts" in site:
+                    log_prob, score_function, entropy_term = site["score_parts"]
+                    log_prob = pack(log_prob, dim_to_symbol)
+                    score_function = pack(score_function, dim_to_symbol)
+                    entropy_term = pack(entropy_term, dim_to_symbol)
+                    packed["score_parts"] = ScoreParts(log_prob, score_function, entropy_term)
+                    packed["log_prob"] = log_prob
+                    packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
+                elif "log_prob" in site:
+                    packed["log_prob"] = pack(site["log_prob"], dim_to_symbol)
+                    packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
+            except ValueError:
+                _, exc_value, traceback = sys.exc_info()
+                six.reraise(ValueError,
+                            ValueError("Error while packing tensors at site '{}':\n  {}"
+                                       .format(site["name"], exc_value)),
+                            traceback)
+
+        self.plate_to_symbol = plate_to_symbol
+        self.symbol_to_dim = symbol_to_dim
