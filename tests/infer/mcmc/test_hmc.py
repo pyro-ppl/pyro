@@ -281,13 +281,13 @@ def test_beta_bernoulli_with_dual_averaging(jit):
         alpha = torch.tensor([1.1, 1.1])
         beta = torch.tensor([1.1, 1.1])
         p_latent = pyro.sample('p_latent', dist.Beta(alpha, beta))
-        with pyro.iarange("data", data.shape[0], dim=-2):
+        with pyro.plate("data", data.shape[0], dim=-2):
             pyro.sample('obs', dist.Bernoulli(p_latent), obs=data)
         return p_latent
 
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True, max_iarange_nesting=2,
+    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True, max_plate_nesting=2,
                      jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
     posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
