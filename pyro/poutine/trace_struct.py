@@ -136,7 +136,7 @@ class Trace(networkx.DiGraph):
                         log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
                     except ValueError:
                         _, exc_value, traceback = sys.exc_info()
-                        shapes = self.print_shapes(last_site=site["name"])
+                        shapes = self.format_shapes(last_site=site["name"])
                         six.reraise(ValueError,
                                     ValueError("Error while computing log_prob_sum at site '{}':\n{}\n"
                                                .format(name, exc_value, shapes)),
@@ -163,7 +163,7 @@ class Trace(networkx.DiGraph):
                         log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
                     except ValueError:
                         _, exc_value, traceback = sys.exc_info()
-                        shapes = self.print_shapes(last_site=site["name"])
+                        shapes = self.format_shapes(last_site=site["name"])
                         six.reraise(ValueError,
                                     ValueError("Error while computing log_prob at site '{}':\n{}\n{}"
                                                .format(name, exc_value, shapes)),
@@ -192,7 +192,7 @@ class Trace(networkx.DiGraph):
                     value = site["fn"].score_parts(site["value"], *site["args"], **site["kwargs"])
                 except ValueError:
                     _, exc_value, traceback = sys.exc_info()
-                    shapes = self.print_shapes(last_site=site["name"])
+                    shapes = self.format_shapes(last_site=site["name"])
                     six.reraise(ValueError,
                                 ValueError("Error while computing score_parts at site '{}':\n{}\n{}"
                                            .format(name, exc_value, shapes)),
@@ -320,15 +320,15 @@ class Trace(networkx.DiGraph):
                     packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
             except ValueError:
                 _, exc_value, traceback = sys.exc_info()
-                shapes = self.print_shapes(last_site=site["name"])
+                shapes = self.format_shapes(last_site=site["name"])
                 six.reraise(ValueError,
                             ValueError("Error while packing tensors at site '{}':\n  {}\n{}"
                                        .format(site["name"], exc_value, shapes)),
                             traceback)
 
-    def print_shapes(self, title='Trace Shapes:', last_site=None):
+    def format_shapes(self, title='Trace Shapes:', last_site=None):
         """
-        Returns a string showing a table of the shapes of all values in the
+        Returns a string showing a table of the shapes of all sites in the
         trace.
         """
         if not self.nodes:
@@ -395,7 +395,10 @@ def _format_table(rows):
                 j += 1
             else:
                 cols[j].append(cell)
-        cols = [[""] * (width - len(col)) + col for width, col in zip(column_widths, cols)]
+        cols = [[""] * (width - len(col)) + col
+                if direction == 'r' else
+                col + [""] * (width - len(col))
+                for width, col, direction in zip(column_widths, cols, 'rrl')]
         rows[i] = sum(cols, [])
 
     # compute cell widths
