@@ -51,9 +51,12 @@ pip install .
 ```
 
 **Install with extra packages:**
+
+To install the dependencies required to run the probabilistic models included in the `examples`/`tutorials` directories, please use the following command:
 ```sh
-pip install pyro-ppl[extras]  # for running examples/tutorials
+pip install pyro-ppl[extras] 
 ```
+Make sure that the models come from the same release version of the [Pyro source code](https://github.com/uber/pyro/releases) as you have installed.
 
 ### Installing Pyro dev branch
 
@@ -109,7 +112,7 @@ Then, install Pyro using the `pytorch-1.0` branch.
 pip install git+https://github.com/uber/pyro.git@pytorch-1.0
 ```
 
-or, with the `extras` dependency to run examples/tutorials.
+or, with the `extras` dependency to run the probabilistic models included in the `examples`/`tutorials` directories:
 ```sh
 pip install -e git+https://github.com/uber/pyro.git@pytorch-1.0#egg=project[extras]
 ```
@@ -120,7 +123,7 @@ pip install -e git+https://github.com/uber/pyro.git@pytorch-1.0#egg=project[extr
 git clone https://github.com/uber/pyro
 cd pyro
 git checkout pytorch-1.0  # branch compatible with PyTorch 1.0 release candidate
-pip install .  # pip install .[extras] for running examples/tutorials
+pip install .  # pip install .[extras] for running models in examples/tutorials
 ```
 
 ## Running Pyro from a Docker Container
