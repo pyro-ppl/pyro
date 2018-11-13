@@ -10,15 +10,11 @@ from tests.common import assert_equal
 
 
 @pytest.mark.parametrize("non_linearity", [F.relu])
-@pytest.mark.parametrize("covariance", ['diagonal', 'cholesky'])
 @pytest.mark.parametrize("include_hidden_bias", [False, True])
-def test_hidden_layer_rsample(non_linearity, include_hidden_bias, covariance, B=2, D=3, H=4, N=900000):
+def test_hidden_layer_rsample(non_linearity, include_hidden_bias, B=2, D=3, H=4, N=900000):
     X = torch.randn(B, D)
     A_mean = torch.rand(D, H)
-    if covariance == 'diagonal':
-        A_scale = 0.3 * torch.exp(0.3 * torch.rand(D, H))
-    elif covariance == 'cholesky':
-        A_scale = 0.3 * torch.exp(0.3 * torch.rand(D, D, H))
+    A_scale = 0.3 * torch.exp(0.3 * torch.rand(D, H))
 
     # test naive weight space sampling against sampling in pre-activation space
     dist1 = HiddenLayer(X=X, A_mean=A_mean, A_scale=A_scale, non_linearity=non_linearity,

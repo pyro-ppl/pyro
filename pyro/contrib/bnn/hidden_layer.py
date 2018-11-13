@@ -29,8 +29,7 @@ class HiddenLayer(TorchDistribution):
 
     :param torch.Tensor X: B x D dimensional mini-batch of inputs
     :param torch.Tensor A_mean:  D x H dimensional specifiying weight mean
-    :param torch.Tensor A_scale: D x H     dimensional (diagonal covariance) or
-                                 D x D x H dimensional (cholesky factorization of covariance)
+    :param torch.Tensor A_scale: D x H     dimensional (diagonal covariance matrix)
                                  specifying weight uncertainty
     :param callable non_linearity: a callable that specifies the non-linearity used. defaults to ReLU.
     :param float KL_factor: scaling factor for the KL divergence. prototypically this is equal to the
@@ -63,12 +62,8 @@ class HiddenLayer(TorchDistribution):
         self.A_scale = A_scale
         self.non_linearity = non_linearity
         assert callable(non_linearity), "non_linearity must be callable"
-        if A_scale.dim() == 2:
-            self.A_covariance = "diagonal"
-        elif A_scale.dim() == 3:
-            self.A_covariance = "cholesky"
-        else:
-            raise NotImplementedError("A_scale must be 2 or 3-dimensional")
+        if A_scale.dim() != 2:
+            raise NotImplementedError("A_scale must be 2-dimensional")
 
         self.KL_factor = KL_factor
         self.A_prior_scale = A_prior_scale
@@ -83,33 +78,19 @@ class HiddenLayer(TorchDistribution):
         KL_A = torch.pow(self.A_mean / self.A_prior_scale, 2.0).sum()
         KL_A -= self.dim_X * self.dim_H
         KL_A += torch.pow(self.A_scale / self.A_prior_scale, 2.0).sum()
-        if self.A_covariance == 'diagonal':
-            KL_A -= 2.0 * torch.log(self.A_scale / self.A_prior_scale).sum()
-        elif self.A_covariance == 'cholesky':
-            KL_A -= 2.0 * (torch.diagonal(self.A_scale, dim1=-3, dim2=-2).log() - self.A_prior_scale.log()).sum()
+        KL_A -= 2.0 * torch.log(self.A_scale / self.A_prior_scale).sum()
         return 0.5 * KL_A
 
     def rsample(self, sample_shape=torch.Size()):
         # note: weight space sampling is only meant for testing
         if self.weight_space_sampling:
-            if self.A_covariance == 'diagonal':
-                A = self.A_mean + torch.randn(sample_shape + self.A_scale.shape).type_as(self.A_mean) * self.A_scale
-            elif self.A_covariance == 'cholesky':
-                eps = torch.randn(sample_shape + (1, self.dim_H, self.dim_X)).type_as(self.A_mean)
-                A = torch.matmul(eps, self.A_scale)
-                A = torch.diagonal(A, dim1=-2, dim2=-1) + self.A_mean
+            A = self.A_mean + torch.randn(sample_shape + self.A_scale.shape).type_as(self.A_mean) * self.A_scale
             activation = torch.matmul(self.X, A)
         else:
             _mean = torch.matmul(self.X, self.A_mean)
-            if self.A_covariance == 'diagonal':
-                X_sqr = torch.pow(self.X, 2.0).unsqueeze(-1)
-                A_scale_sqr = torch.pow(self.A_scale, 2.0)
-                _std = (X_sqr * A_scale_sqr).sum(-2).sqrt()
-            elif self.A_covariance == 'cholesky':
-                A_scale_trans = torch.transpose(self.A_scale, 0, 1)  # D x D x H
-                X_L_jbh = torch.matmul(self.X, A_scale_trans)  # D x B x H
-                X_L_sqr_bh = torch.pow(X_L_jbh, 2.0).sum(0)  # B x H
-                _std = X_L_sqr_bh.sqrt()
+            X_sqr = torch.pow(self.X, 2.0).unsqueeze(-1)
+            A_scale_sqr = torch.pow(self.A_scale, 2.0)
+            _std = (X_sqr * A_scale_sqr).sum(-2).sqrt()
             activation = _mean + torch.randn(sample_shape + _std.shape).type_as(_std) * _std
 
         # apply non-linearity
