@@ -6,7 +6,7 @@ import pytest
 import torch
 from pyro import util
 
-pytestmark = pytest.mark.stage('test_util')
+pytestmark = pytest.mark.stage('unit')
 
 
 def test_warn_if_nan():
