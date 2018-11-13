@@ -27,6 +27,7 @@ class EnumerateMessenger(Messenger):
     :param int first_available_dim: The first tensor dimension (counting
         from the right) that is available for parallel enumeration. This
         dimension and all dimensions left may be used internally by Pyro.
+        This should be a negative integer or None.
     """
     def __init__(self, first_available_dim=None):
         assert first_available_dim is None or first_available_dim < 0, first_available_dim

@@ -377,7 +377,9 @@ def enum(fn=None, first_available_dim=None):
     :param int first_available_dim: The first tensor dimension (counting
         from the right) that is available for parallel enumeration. This
         dimension and all dimensions left may be used internally by Pyro.
+        This should be a negative integer.
     """
+    assert first_available_dim < 0, first_available_dim
     msngr = EnumerateMessenger(first_available_dim=first_available_dim)
     return msngr(fn) if fn is not None else msngr
 
