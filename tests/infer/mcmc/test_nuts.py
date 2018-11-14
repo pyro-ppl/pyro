@@ -258,7 +258,7 @@ def test_gaussian_hmm_enum_shape(num_steps, use_einsum):
             emission_loc = pyro.sample("emission_loc", dist.Normal(torch.zeros(dim), torch.ones(dim)))
             emission_scale = pyro.sample("emission_scale", dist.LogNormal(torch.zeros(dim), torch.ones(dim)))
         x = None
-        for t, y in enumerate(data):
+        for t, y in pyro.markov(enumerate(data)):
             x = pyro.sample("x_{}".format(t), dist.Categorical(initialize if x is None else transition[x]))
             pyro.sample("y_{}".format(t), dist.Normal(emission_loc[x], emission_scale[x]), obs=y)
             # check shape
