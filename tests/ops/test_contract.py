@@ -10,8 +10,8 @@ import torch
 
 from pyro.distributions.util import logsumexp
 from pyro.ops import packed
-from pyro.ops.contract import (PackedLogRing, UnpackedLogRing, _partition_terms, contract_tensor_tree,
-                               contract_to_tensor, naive_ubersum, ubersum)
+from pyro.ops.contract import (PackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor, naive_ubersum,
+                               ubersum)
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import optional
 from tests.common import assert_equal
@@ -78,30 +78,34 @@ def _normalize(tensor, dims, batch_dims):
     return tensor - total
 
 
-@pytest.mark.parametrize('shapes,dims,expected_num_components', [
-    ([()], set(), 1),
-    ([(2,)], set(), 1),
-    ([(2,)], set([-1]), 1),
-    ([(2,), (2,)], set(), 2),
-    ([(2,), (2,)], set([-1]), 1),
-    ([(2, 1), (2, 1), (1, 3), (1, 3)], set(), 4),
-    ([(2, 1), (2, 1), (1, 3), (1, 3)], set([-1]), 3),
-    ([(2, 1), (2, 1), (1, 3), (1, 3)], set([-2]), 3),
-    ([(2, 1), (2, 1), (1, 3), (1, 3)], set([-1, -2]), 2),
-    ([(2, 1), (2, 3), (1, 3)], set(), 3),
-    ([(2, 1), (2, 3), (1, 3)], set([-1]), 2),
-    ([(2, 1), (2, 3), (1, 3)], set([-2]), 2),
-    ([(2, 1), (2, 3), (1, 3)], set([-1, -2]), 1),
-    ([(4, 1, 1), (4, 3, 1), (1, 3, 2), (1, 1, 2)], set(), 4),
-    ([(4, 1, 1), (4, 3, 1), (1, 3, 2), (1, 1, 2)], set([-1]), 3),
-    ([(4, 1, 1), (4, 3, 1), (1, 3, 2), (1, 1, 2)], set([-2]), 3),
-    ([(4, 1, 1), (4, 3, 1), (1, 3, 2), (1, 1, 2)], set([-3]), 3),
-    ([(4, 1, 1), (4, 3, 1), (1, 3, 2), (1, 1, 2)], set([-1, -3]), 2),
-    ([(4, 1, 1), (4, 3, 1), (1, 3, 2), (1, 1, 2)], set([-1, -2, -3]), 1),
+@pytest.mark.parametrize('inputs,dims,expected_num_components', [
+    ([''], set(), 1),
+    (['a'], set(), 1),
+    (['a'], set('a'), 1),
+    (['a', 'a'], set(), 2),
+    (['a', 'a'], set('a'), 1),
+    (['a', 'a', 'b', 'b'], set(), 4),
+    (['a', 'a', 'b', 'b'], set('a'), 3),
+    (['a', 'a', 'b', 'b'], set('b'), 3),
+    (['a', 'a', 'b', 'b'], set('ab'), 2),
+    (['a', 'ab', 'b'], set(), 3),
+    (['a', 'ab', 'b'], set('a'), 2),
+    (['a', 'ab', 'b'], set('b'), 2),
+    (['a', 'ab', 'b'], set('ab'), 1),
+    (['a', 'ab', 'bc', 'c'], set(), 4),
+    (['a', 'ab', 'bc', 'c'], set('c'), 3),
+    (['a', 'ab', 'bc', 'c'], set('b'), 3),
+    (['a', 'ab', 'bc', 'c'], set('a'), 3),
+    (['a', 'ab', 'bc', 'c'], set('ac'), 2),
+    (['a', 'ab', 'bc', 'c'], set('abc'), 1),
 ])
-def test_partition_terms_unpacked(shapes, dims, expected_num_components):
-    ring = UnpackedLogRing()
+def test_partition_terms(inputs, dims, expected_num_components):
+    ring = PackedLogRing()
+    symbol_to_size = dict(zip('abc', [2, 3, 4]))
+    shapes = [tuple(symbol_to_size[s] for s in input_) for input_ in inputs]
     tensors = [torch.randn(shape) for shape in shapes]
+    for input_, tensor in zip(inputs, tensors):
+        tensor._pyro_dims = input_
     components = list(_partition_terms(ring, tensors, dims))
 
     # Check that result is a partition.
@@ -118,8 +122,7 @@ def test_partition_terms_unpacked(shapes, dims, expected_num_components):
     for x in tensors:
         for y in tensors:
             if x is not y:
-                if any(dim >= -x.dim() and x.shape[dim] > 1 and
-                       dim >= -y.dim() and y.shape[dim] > 1 for dim in dims):
+                if dims.intersection(x._pyro_dims, y._pyro_dims):
                     assert component_dict[x] == component_dict[y]
 
 
