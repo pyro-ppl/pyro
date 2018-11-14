@@ -5,7 +5,7 @@ from opt_einsum import shared_intermediates
 
 from pyro.distributions.util import broadcast_shape, logsumexp
 from pyro.infer.util import is_validation_enabled
-from pyro.ops.contract import PackedLogRing, contract_to_tensor
+from pyro.ops.contract import contract_to_tensor
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.util import check_site_shape
 
@@ -207,5 +207,4 @@ class TraceEinsumEvaluator(object):
             return model_trace.log_prob_sum()
         log_probs = self._get_log_factors(model_trace)
         with shared_intermediates() as cache:
-            ring = PackedLogRing(cache=cache)
-            return contract_to_tensor(log_probs, self._enum_dims, ring=ring)
+            return contract_to_tensor(log_probs, self._enum_dims, cache=cache)
