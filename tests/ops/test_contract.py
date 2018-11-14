@@ -10,7 +10,6 @@ import six
 import torch
 
 from pyro.distributions.util import logsumexp
-from pyro.ops import packed
 from pyro.ops.contract import (PackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor, naive_ubersum,
                                ubersum)
 from pyro.poutine.indep_messenger import CondIndepStackFrame
