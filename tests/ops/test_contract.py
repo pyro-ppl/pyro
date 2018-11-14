@@ -6,6 +6,7 @@ from collections import OrderedDict
 
 import opt_einsum
 import pytest
+import six
 import torch
 
 from pyro.distributions.util import logsumexp
@@ -27,6 +28,8 @@ def deep_copy(x):
         return type(x)(deep_copy(value) for value in x)
     if isinstance(x, (dict, OrderedDict)):
         return type(x)((deep_copy(key), deep_copy(value)) for key, value in x.items())
+    if isinstance(x, six.string_types):
+        return x
     raise TypeError(type(x))
 
 
@@ -134,125 +137,135 @@ EXAMPLES = [
     # ------------------------------------------------------
     #  y      max_plate_nesting=1
     #  | 4    x, y are enumerated in dims:
-    #  x     -2 -3
+    #  x      a, b
     {
         'shape_tree': {
-            (): [(3, 1)],
-            (frame(-1, 4),): [(2, 3, 4)],
+            frozenset(): ['a'],
+            frozenset('i'): ['abi'],
         },
-        'sum_dims': {-2, -3},
+        'sum_dims': set('ab'),
         'target_dims': set(),
-        'target_ordinal': (),
-        'expected_shape': (),
+        'target_ordinal': frozenset(),
+        'expected_dims': (),
     },
     {
         'shape_tree': {
-            (): [(3, 1)],
-            (frame(-1, 4),): [(2, 3, 4)],
+            frozenset(): ['a'],
+            frozenset('i'): ['abi'],
         },
-        'sum_dims': {-2, -3},
-        'target_dims': {-2},
-        'target_ordinal': (),
-        'expected_shape': (3, 1),
+        'sum_dims': set('ab'),
+        'target_dims': set('a'),
+        'target_ordinal': frozenset(),
+        'expected_dims': 'a',
     },
     {
         'shape_tree': {
-            (): [(3, 1)],
-            (frame(-1, 4),): [(2, 3, 4)],
+            frozenset(): ['a'],
+            frozenset('i'): ['abi'],
         },
-        'sum_dims': {-2, -3},
-        'target_dims': {-3},
-        'target_ordinal': (frame(-1, 4),),
-        'expected_shape': (2, 1, 4),
+        'sum_dims': set('ab'),
+        'target_dims': set('b'),
+        'target_ordinal': frozenset('i'),
+        'expected_dims': 'bi',
     },
     {
         'shape_tree': {
-            (): [(3, 1)],
-            (frame(-1, 4),): [(2, 3, 4)],
+            frozenset(): ['a'],
+            frozenset('i'): ['abi'],
         },
-        'sum_dims': {-2, -3},
-        'target_dims': {-2, -3},
-        'target_ordinal': (frame(-1, 4),),
-        'expected_shape': (2, 3, 4),
+        'sum_dims': set('ab'),
+        'target_dims': set('ab'),
+        'target_ordinal': frozenset('i'),
+        'expected_dims': 'abi',
     },
     # ------------------------------------------------------
     #          z
     #          | 4    max_plate_nesting=2
     #    x     y      w, x, y, z are all enumerated in dims:
-    #   2 \   / 3    -3 -4 -5 -6
+    #   2 \   / 3     a, b, c, d
     #       w
     {
         'shape_tree': {
-            (): [(2, 1, 1)],  # w
-            (frame(-1, 2),): [(2, 2, 1, 2)],  # x
-            (frame(-1, 3),): [(2, 1, 2, 1, 3)],  # y
-            (frame(-1, 3), frame(-2, 4)): [(2, 2, 1, 1, 4, 3)],  # z
+            frozenset(): ['a'],  # w
+            frozenset('i'): ['abi'],  # x
+            frozenset('j'): ['acj'],  # y
+            frozenset('ij'): ['cdij'],  # z
         },
         # query for w
-        'sum_dims': {-3, -4, -5, -6},
-        'target_dims': {-3},
-        'target_ordinal': (),
-        'expected_shape': (2, 1, 1),
+        'sum_dims': set('abcd'),
+        'target_dims': set('a'),
+        'target_ordinal': frozenset(),
+        'expected_dims': 'a',
     },
     {
         'shape_tree': {
-            (): [(2, 1, 1)],  # w
-            (frame(-1, 2),): [(2, 2, 1, 2)],  # x
-            (frame(-1, 3),): [(2, 1, 2, 1, 3)],  # y
-            (frame(-1, 3), frame(-2, 4)): [(2, 2, 1, 1, 4, 3)],  # z
+            frozenset(): ['a'],  # w
+            frozenset('i'): ['abi'],  # x
+            frozenset('j'): ['acj'],  # y
+            frozenset('ij'): ['cdij'],  # z
         },
         # query for x
-        'sum_dims': {-3, -4, -5, -6},
-        'target_dims': {-4},
-        'target_ordinal': (frame(-1, 2),),
-        'expected_shape': (2, 1, 1, 2),
+        'sum_dims': set('abcd'),
+        'target_dims': set('b'),
+        'target_ordinal': frozenset('i'),
+        'expected_dims': 'bi',
     },
     {
         'shape_tree': {
-            (): [(2, 1, 1)],  # w
-            (frame(-1, 2),): [(2, 2, 1, 2)],  # x
-            (frame(-1, 3),): [(2, 1, 2, 1, 3)],  # y
-            (frame(-1, 3), frame(-2, 4)): [(2, 2, 1, 1, 4, 3)],  # z
+            frozenset(): ['a'],  # w
+            frozenset('i'): ['abi'],  # x
+            frozenset('j'): ['acj'],  # y
+            frozenset('ij'): ['cdij'],  # z
         },
-        # query for x
-        'sum_dims': {-3, -4, -5, -6},
-        'target_dims': {-5},
-        'target_ordinal': (frame(-1, 3),),
-        'expected_shape': (2, 1, 1, 1, 3),
+        # query for y
+        'sum_dims': set('abcd'),
+        'target_dims': set('c'),
+        'target_ordinal': frozenset('j'),
+        'expected_dims': 'cj',
     },
     {
         'shape_tree': {
-            (): [(2, 1, 1)],  # w
-            (frame(-1, 2),): [(2, 2, 1, 2)],  # x
-            (frame(-1, 3),): [(2, 1, 2, 1, 3)],  # y
-            (frame(-1, 3), frame(-2, 4)): [(2, 2, 1, 1, 4, 3)],  # z
+            frozenset(): ['a'],  # w
+            frozenset('i'): ['abi'],  # x
+            frozenset('j'): ['acj'],  # y
+            frozenset('ij'): ['cdij'],  # z
         },
         # query for z
-        'sum_dims': {-3, -4, -5, -6},
-        'target_dims': {-6},
-        'target_ordinal': (frame(-1, 3), frame(-2, 4)),
-        'expected_shape': (2, 1, 1, 1, 4, 3),
+        'sum_dims': set('abcd'),
+        'target_dims': set('d'),
+        'target_ordinal': frozenset('ij'),
+        'expected_dims': 'dij',
     },
 ]
 
 
 @pytest.mark.parametrize('example', EXAMPLES)
 def test_contract_to_tensor(example):
-    tensor_tree = OrderedDict((frozenset(t), [torch.randn(shape) for shape in shapes])
-                              for t, shapes in example['shape_tree'].items())
+    symbol_to_size = dict(zip('abcdij', [4, 5, 6, 7, 2, 3]))
+    tensor_tree = OrderedDict()
+    for t, shapes in example['shape_tree'].items():
+        for dims in shapes:
+            tensor = torch.randn(tuple(symbol_to_size[s] for s in dims))
+            tensor._pyro_dims = dims
+            tensor_tree.setdefault(t, []).append(tensor)
     sum_dims = example['sum_dims']
     target_dims = example['target_dims']
-    target_ordinal = frozenset(example['target_ordinal'])
-    expected_shape = example['expected_shape']
+    target_ordinal = example['target_ordinal']
+    expected_dims = example['expected_dims']
 
     actual = assert_immutable(contract_to_tensor)(tensor_tree, sum_dims, target_ordinal, target_dims)
-    assert actual.shape == expected_shape
+    assert set(actual._pyro_dims) == set(expected_dims)
 
 
 @pytest.mark.parametrize('example', EXAMPLES)
 def test_contract_tensor_tree(example):
-    tensor_tree = OrderedDict((frozenset(t), [torch.randn(shape) for shape in shapes])
-                              for t, shapes in example['shape_tree'].items())
+    symbol_to_size = dict(zip('abcdij', [4, 5, 6, 7, 2, 3]))
+    tensor_tree = OrderedDict()
+    for t, shapes in example['shape_tree'].items():
+        for dims in shapes:
+            tensor = torch.randn(tuple(symbol_to_size[s] for s in dims))
+            tensor._pyro_dims = dims
+            tensor_tree.setdefault(t, []).append(tensor)
     sum_dims = example['sum_dims']
 
     tensor_tree = assert_immutable(contract_tensor_tree)(tensor_tree, sum_dims)
@@ -261,61 +274,6 @@ def test_contract_tensor_tree(example):
         for term in terms:
             for frame in ordinal:
                 assert term.shape[frame.dim] == frame.size
-
-
-@pytest.mark.parametrize('example', EXAMPLES)
-def test_contract_tensor_tree_packed(example):
-    dim_to_symbol = 'ponmlkjihgfedcba'
-    symbol_to_size = {}
-    tensor_tree = OrderedDict()
-    for cond_indep_stack, shapes in example['shape_tree'].items():
-        ordinal = frozenset(dim_to_symbol[frame.dim] for frame in cond_indep_stack)
-        tensor_tree[ordinal] = [packed.pack(torch.randn(shape), dim_to_symbol)
-                                for shape in shapes]
-        for frame in cond_indep_stack:
-            symbol_to_size[dim_to_symbol[frame.dim]] = frame.size
-        for shape in shapes:
-            for dim, size in zip(range(-len(shape), 0), shape):
-                if size > 1:
-                    symbol_to_size[dim_to_symbol[dim]] = size
-    sum_dims = set(dim_to_symbol[dim] for dim in example['sum_dims'])
-
-    ring = PackedLogRing()
-    tensor_tree = contract_tensor_tree(tensor_tree, sum_dims, ring=ring)
-    assert tensor_tree
-    for ordinal, terms in tensor_tree.items():
-        for term in terms:
-            term._pyro_dims = ring.dims(term)
-            for dim in ordinal:
-                assert dim in term._pyro_dims
-            for dim, size in zip(term._pyro_dims, term.shape):
-                assert size == symbol_to_size[dim]
-
-
-@pytest.mark.parametrize('a', [2, 1])
-@pytest.mark.parametrize('b', [3, 1])
-@pytest.mark.parametrize('c', [3, 1])
-@pytest.mark.parametrize('d', [4, 1])
-def test_contract_to_tensor_sizes(a, b, c, d):
-    X = torch.randn(a, 1, c, 1)
-    Y = torch.randn(a, b, 1, 1)
-    Z = torch.randn(b, 1, d)
-    tensor_tree = OrderedDict([(frozenset([frame(-2, c)]), [X]),
-                               (frozenset(), [Y]),
-                               (frozenset([frame(-1, d)]), [Z])])
-    sum_dims = {-4, -3}
-
-    target_ordinal = frozenset()
-    actual = contract_to_tensor(tensor_tree, sum_dims, target_ordinal)
-    assert actual.shape == ()
-
-    target_ordinal = frozenset([frame(-2, c)])
-    actual = contract_to_tensor(tensor_tree, sum_dims, target_ordinal)
-    assert actual.shape == (c, 1)
-
-    target_ordinal = frozenset([frame(-1, d)])
-    actual = contract_to_tensor(tensor_tree, sum_dims, target_ordinal)
-    assert actual.shape == (d,)
 
 
 # Let abcde be enum dims and ijk be batch dims.
