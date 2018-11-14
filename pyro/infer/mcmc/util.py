@@ -1,11 +1,11 @@
-from collections import defaultdict, OrderedDict
+from collections import OrderedDict, defaultdict
 
 import torch
 from opt_einsum import shared_intermediates
 
-from pyro.distributions.util import logsumexp, broadcast_shape
-from pyro.ops.contract import contract_to_tensor
+from pyro.distributions.util import broadcast_shape, logsumexp
 from pyro.infer.util import is_validation_enabled
+from pyro.ops.contract import PackedLogRing, contract_to_tensor
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.util import check_site_shape
 
@@ -155,7 +155,7 @@ class TraceEinsumEvaluator(object):
         self.has_enumerable_sites = has_enumerable_sites
         self.max_plate_nesting = max_plate_nesting
         # To be populated using the model trace once.
-        self._enum_dims = {}
+        self._enum_dims = set()
         self.ordering = {}
         self._populate_cache(model_trace)
 
@@ -170,14 +170,15 @@ class TraceEinsumEvaluator(object):
             raise ValueError("Finite value required for `max_plate_nesting` when model "
                              "has discrete (enumerable) sites.")
         model_trace.compute_log_prob()
+        model_trace.pack_tensors()
         for name, site in model_trace.nodes.items():
             if site["type"] == "sample" and not isinstance(site["fn"], _Subsample):
                 if is_validation_enabled():
                     check_site_shape(site, self.max_plate_nesting)
-                self.ordering[name] = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
-                log_prob_shape = site["log_prob"].shape
-                self._enum_dims[site["name"]] = set((i for i in range(-len(log_prob_shape), -self.max_plate_nesting)
-                                                     if log_prob_shape[i] > 1))
+                self.ordering[name] = frozenset(model_trace.plate_to_symbol[f.name]
+                                                for f in site["cond_indep_stack"]
+                                                if f.vectorized)
+        self._enum_dims = set(model_trace.symbol_to_dim) - set(model_trace.plate_to_symbol.values())
 
     def _get_log_factors(self, model_trace):
         """
@@ -185,13 +186,14 @@ class TraceEinsumEvaluator(object):
         ordinal.
         """
         model_trace.compute_log_prob()
+        model_trace.pack_tensors()
         log_probs = OrderedDict()
         # Collect log prob terms per independence context.
         for name, site in model_trace.nodes.items():
             if site["type"] == "sample" and not isinstance(site["fn"], _Subsample):
                 if is_validation_enabled():
                     check_site_shape(site, self.max_plate_nesting)
-                log_probs.setdefault(self.ordering[name], []).append(site["log_prob"])
+                log_probs.setdefault(self.ordering[name], []).append(site["packed"]["log_prob"])
         return log_probs
 
     def log_prob(self, model_trace):
@@ -203,7 +205,7 @@ class TraceEinsumEvaluator(object):
         """
         if not self.has_enumerable_sites:
             return model_trace.log_prob_sum()
-        with shared_intermediates():
-            log_probs = self._get_log_factors(model_trace)
-            sum_dims = set.union(*self._enum_dims.values())
-            return contract_to_tensor(log_probs, sum_dims)
+        log_probs = self._get_log_factors(model_trace)
+        with shared_intermediates() as cache:
+            ring = PackedLogRing(cache=cache)
+            return contract_to_tensor(log_probs, self._enum_dims, ring=ring)
