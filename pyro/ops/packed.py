@@ -53,7 +53,7 @@ def unpack(value, symbol_to_dim):
                 shape[dim] = size
             value = value.reshape(shape)
         else:
-            value = value[...]
+            value = value[...]  # ensure ._pyro_dims attr is not set
     return value
 
 

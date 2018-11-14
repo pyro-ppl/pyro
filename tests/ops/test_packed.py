@@ -1,14 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
 import itertools
+import operator
 import random
 
 import pytest
 import torch
+from six.moves import reduce
 from torch.distributions.utils import broadcast_all
 
 from pyro.ops import packed
-from pyro.ops.sumproduct import logsumproductexp, sumproduct
 from tests.common import assert_equal
 
 EXAMPLE_DIMS = [
@@ -81,7 +82,10 @@ def test_sumproduct(shapes, num_numbers):
     packed_inputs = [packed.pack(x, dim_to_symbol) for x in inputs]
     packed_output = packed.sumproduct(packed_inputs)
     actual = packed.unpack(packed_output, symbol_to_dim)
-    expected = sumproduct(inputs)
+    expected = reduce(operator.mul, inputs, 1.)
+    if not isinstance(expected, torch.Tensor):
+        expected = torch.tensor(expected)
+    expected = expected.sum()
     assert_equal(actual, expected)
 
 
@@ -92,5 +96,8 @@ def test_logsumproductexp(shapes, num_numbers):
     packed_inputs = [packed.pack(x, dim_to_symbol) for x in inputs]
     packed_output = packed.logsumproductexp(packed_inputs)
     actual = packed.unpack(packed_output, symbol_to_dim)
-    expected = logsumproductexp(inputs)
+    expected = reduce(operator.add, inputs, 0.)
+    if not isinstance(expected, torch.Tensor):
+        expected = torch.tensor(expected)
+    expected = expected.exp().sum().log()
     assert_equal(actual, expected)
