@@ -404,7 +404,6 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
     ring = PackedLogRing(cache, dim_to_size)
     ordinals = {term: t for t, terms in tensor_tree.items() for term in terms}
     all_terms = [term for terms in tensor_tree.values() for term in terms]
-    [ring.dims(term) for term in all_terms]  # register sizes
     contracted_terms = []
 
     # Split this tensor tree into connected components.
