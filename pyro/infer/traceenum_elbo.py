@@ -126,7 +126,7 @@ def _compute_dice_elbo(model_trace, guide_trace):
         # contract_to_tensor() with a RaggedTensor -> Tensor contraction operation, but
         # replace contract_tensor_tree() with a RaggedTensor -> RaggedTensor contraction
         # that preserves some dependency structure.
-        with shared_intermediates():
+        with shared_intermediates() as cache:
             ring = PackedLogRing(cache=cache)
             log_factors = contract_tensor_tree(log_factors, sum_dims, ring=ring)
         for t, log_factors_t in log_factors.items():

@@ -9,8 +9,9 @@ import pytest
 import torch
 
 from pyro.distributions.util import logsumexp
-from pyro.ops.contract import (UnpackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor,
-                               naive_ubersum, ubersum)
+from pyro.ops import packed
+from pyro.ops.contract import (PackedLogRing, UnpackedLogRing, _partition_terms, contract_tensor_tree,
+                               contract_to_tensor, naive_ubersum, ubersum)
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import optional
 from tests.common import assert_equal
@@ -257,6 +258,35 @@ def test_contract_tensor_tree(example):
         for term in terms:
             for frame in ordinal:
                 assert term.shape[frame.dim] == frame.size
+
+
+@pytest.mark.parametrize('example', EXAMPLES)
+def test_contract_tensor_tree_packed(example):
+    dim_to_symbol = 'ponmlkjihgfedcba'
+    symbol_to_size = {}
+    tensor_tree = OrderedDict()
+    for cond_indep_stack, shapes in example['shape_tree'].items():
+        ordinal = frozenset(dim_to_symbol[frame.dim] for frame in cond_indep_stack)
+        tensor_tree[ordinal] = [packed.pack(torch.randn(shape), dim_to_symbol)
+                                for shape in shapes]
+        for frame in cond_indep_stack:
+            symbol_to_size[dim_to_symbol[frame.dim]] = frame.size
+        for shape in shapes:
+            for dim, size in zip(range(-len(shape), 0), shape):
+                if size > 1:
+                    symbol_to_size[dim_to_symbol[dim]] = size
+    sum_dims = set(dim_to_symbol[dim] for dim in example['sum_dims'])
+
+    ring = PackedLogRing()
+    tensor_tree = contract_tensor_tree(tensor_tree, sum_dims, ring=ring)
+    assert tensor_tree
+    for ordinal, terms in tensor_tree.items():
+        for term in terms:
+            term._pyro_dims = ring.dims(term)
+            for dim in ordinal:
+                assert dim in term._pyro_dims
+            for dim, size in zip(term._pyro_dims, term.shape):
+                assert size == symbol_to_size[dim]
 
 
 @pytest.mark.parametrize('a', [2, 1])
