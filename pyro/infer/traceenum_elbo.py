@@ -7,18 +7,18 @@ from collections import OrderedDict
 import torch
 from opt_einsum import shared_intermediates
 from six.moves import queue
-from torch.distributions.utils import broadcast_all
 
 import pyro
 import pyro.distributions as dist
 import pyro.ops.jit
 import pyro.poutine as poutine
 from pyro.distributions.torch_distribution import ReshapedDistribution
-from pyro.distributions.util import is_identically_zero, scale_and_mask
+from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
 from pyro.infer.util import Dice, is_validation_enabled
-from pyro.ops.contract import contract_tensor_tree, contract_to_tensor
+from pyro.ops import packed
+from pyro.ops.contract import PackedLogRing, contract_tensor_tree, contract_to_tensor
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
@@ -38,18 +38,24 @@ def _check_model_guide_enumeration_constraint(model_enum_sites, guide_trace):
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample" and site["infer"].get("_enumerate_dim") is not None:
             for f in site["cond_indep_stack"]:
-                if f.vectorized and f not in min_ordinal:
+                if f.vectorized and guide_trace.plate_to_symbol[f.name] not in min_ordinal:
                     raise ValueError("Expected model enumeration to be no more global than guide enumeration, "
                                      "but found model enumeration sites upstream of guide site '{}' in plate('{}'). "
                                      "Try converting some model enumeration sites to guide enumeration sites."
                                      .format(name, f.name))
 
 
+def _find_ordinal(trace, site):
+    return frozenset(trace.plate_to_symbol[f.name]
+                     for f in site["cond_indep_stack"]
+                     if f.vectorized)
+
+
 # TODO move this logic into a poutine
 def _compute_model_factors(model_trace, guide_trace):
     # y depends on x iff ordering[x] <= ordering[y]
     # TODO refine this coarse dependency ordering using time.
-    ordering = {name: frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
+    ordering = {name: _find_ordinal(trace, site)
                 for trace in (model_trace, guide_trace)
                 for name, site in trace.nodes.items()
                 if site["type"] == "sample"}
@@ -57,37 +63,39 @@ def _compute_model_factors(model_trace, guide_trace):
     # Collect model sites that may have been enumerated in the model.
     cost_sites = OrderedDict()
     enum_sites = OrderedDict()
-    enum_dims = []
+    enum_dims = set()
+    non_enum_dims = set().union(*ordering.values())
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
-            if name in guide_trace.nodes or site["infer"].get("_enumerate_dim") is None:
+            if name in guide_trace.nodes:
+                cost_sites.setdefault(ordering[name], []).append(site)
+                non_enum_dims.update(site["packed"]["log_prob"]._pyro_dims)
+            elif site["infer"].get("_enumerate_dim") is None:
                 cost_sites.setdefault(ordering[name], []).append(site)
             else:
                 enum_sites.setdefault(ordering[name], []).append(site)
-                enum_dims.append(site["fn"].event_dim - site["value"].dim())
+                enum_dims.update(site["packed"]["log_prob"]._pyro_dims)
+    enum_dims -= non_enum_dims
     log_factors = OrderedDict()
-    sum_dims = {}
     scale = 1
     if not enum_sites:
-        marginal_costs = OrderedDict((t, [site["log_prob"] for site in sites_t])
+        marginal_costs = OrderedDict((t, [site["packed"]["log_prob"] for site in sites_t])
                                      for t, sites_t in cost_sites.items())
-        return marginal_costs, log_factors, ordering, sum_dims, scale
+        return marginal_costs, log_factors, ordering, enum_dims, scale
     _check_model_guide_enumeration_constraint(enum_sites, guide_trace)
 
     # Marginalize out all variables that have been enumerated in the model.
-    enum_boundary = max(enum_dims) + 1
-    assert enum_boundary <= 0
     marginal_costs = OrderedDict()
     scales = set()
     for t, sites_t in cost_sites.items():
         for site in sites_t:
-            if site["log_prob"].dim() <= -enum_boundary:
+            if enum_dims.isdisjoint(site["packed"]["log_prob"]._pyro_dims):
                 # For sites that do not depend on an enumerated variable, proceed as usual.
-                marginal_costs.setdefault(t, []).append(site["log_prob"])
+                marginal_costs.setdefault(t, []).append(site["packed"]["log_prob"])
             else:
                 # For sites that depend on an enumerated variable, we need to apply
                 # the mask inside- and the scale outside- of the log expectation.
-                cost = scale_and_mask(site["unscaled_log_prob"], mask=site["mask"])
+                cost = packed.scale_and_mask(site["packed"]["unscaled_log_prob"], mask=site["packed"]["mask"])
                 log_factors.setdefault(t, []).append(cost)
                 scales.add(site["scale"])
     if log_factors:
@@ -95,14 +103,14 @@ def _compute_model_factors(model_trace, guide_trace):
             # TODO refine this coarse dependency ordering using time and tensor shapes.
             if any(t <= u for u in log_factors):
                 for site in sites_t:
-                    logprob = site["unscaled_log_prob"]
+                    logprob = site["packed"]["unscaled_log_prob"]
                     log_factors.setdefault(t, []).append(logprob)
                     scales.add(site["scale"])
         _check_shared_scale(scales)
         scale = scales.pop()
-    sum_dims = {x: set(i for i in range(-x.dim(), enum_boundary) if x.shape[i] > 1)
-                for xs in log_factors.values() for x in xs}
-    return marginal_costs, log_factors, ordering, sum_dims, scale
+        assert not (isinstance(scale, torch.Tensor) and scale.dim()), \
+            'enumeration only supports scalar poutine.scale'
+    return marginal_costs, log_factors, ordering, enum_dims, scale
 
 
 def _compute_dice_elbo(model_trace, guide_trace):
@@ -110,18 +118,30 @@ def _compute_dice_elbo(model_trace, guide_trace):
     marginal_costs, log_factors, ordering, sum_dims, scale = _compute_model_factors(
             model_trace, guide_trace)
     if log_factors:
-        log_factors = contract_tensor_tree(log_factors, sum_dims)
+        # Note that while most applications of tensor message passing use the
+        # contract_to_tensor() interface and can be easily refactored to use ubersum(),
+        # the application here relies on contract_tensor_tree() to extract the dependency
+        # structure of different log_prob terms, which is used by Dice to eliminate
+        # zero-expectation terms. One possible refactoring would be to replace
+        # contract_to_tensor() with a RaggedTensor -> Tensor contraction operation, but
+        # replace contract_tensor_tree() with a RaggedTensor -> RaggedTensor contraction
+        # that preserves some dependency structure.
+        with shared_intermediates() as cache:
+            ring = PackedLogRing(cache=cache)
+            log_factors = contract_tensor_tree(log_factors, sum_dims, ring=ring)
         for t, log_factors_t in log_factors.items():
             marginal_costs_t = marginal_costs.setdefault(t, [])
             for term in log_factors_t:
-                term = scale_and_mask(term, scale=scale)
+                term._pyro_dims = ring.dims(term)
+                term = packed.scale_and_mask(term, scale=scale)
                 marginal_costs_t.append(term)
     costs = marginal_costs
 
     # Accumulate negative guide costs.
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample":
-            costs.setdefault(ordering[name], []).append(-site["log_prob"])
+            cost = packed.neg(site["packed"]["log_prob"])
+            costs.setdefault(ordering[name], []).append(cost)
 
     return Dice(guide_trace, ordering).compute_expectation(costs)
 
@@ -141,16 +161,21 @@ def _compute_marginals(model_trace, guide_trace):
 
     marginal_dists = OrderedDict()
     with shared_intermediates() as cache:
+        ring = PackedLogRing(cache=cache)
         for name, site in model_trace.nodes.items():
             if (site["type"] != "sample" or
                     name in guide_trace.nodes or
                     site["infer"].get("_enumerate_dim") is None):
                 continue
 
-            enum_dim = site["fn"].event_dim - site["value"].dim()
-            site_sum_dims = {term: dims - {enum_dim} for term, dims in sum_dims.items()}
-            ordinal = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
-            logits = contract_to_tensor(log_factors, site_sum_dims, ordinal, cache=cache)
+            enum_dim = site["infer"]["_enumerate_dim"]
+            enum_symbol = site["infer"]["_enumerate_symbol"]
+            ordinal = _find_ordinal(model_trace, site)
+            logits = contract_to_tensor(log_factors, sum_dims,
+                                        target_ordinal=ordinal, target_dims={enum_symbol},
+                                        ring=ring)
+            logits._pyro_dims = ring.dims(logits)
+            logits = packed.unpack(logits, model_trace.symbol_to_dim)
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
             while logits.shape[0] == 1:
                 logits.squeeze_(0)
@@ -168,45 +193,51 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
         args = _compute_model_factors(enum_trace, guide_trace)
         self.log_factors = args[1]
         self.sum_dims = args[3]
-        self.cache = None
 
     def __enter__(self):
         self.cache = {}
+        self.ring = PackedLogRing(cache=self.cache)
         return super(BackwardSampleMessenger, self).__enter__()
 
-    def __exit__(self, *args, **kwargs):
-        assert not any(self.sum_dims.values())
-        return super(BackwardSampleMessenger, self).__exit__(*args, **kwargs)
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is None:
+            assert not self.sum_dims, self.sum_dims
+        return super(BackwardSampleMessenger, self).__exit__(exc_type, exc_value, traceback)
 
     def _pyro_sample(self, msg):
-        if msg["name"] not in self.enum_trace.nodes:
+        enum_msg = self.enum_trace.nodes.get(msg["name"])
+        if enum_msg is None:
             return
-        enum_dim = self.enum_trace.nodes[msg["name"]]["infer"].get("_enumerate_dim")
-        if enum_dim is not None:
-            msg["infer"]["_enumerate_dim"] = enum_dim
-            assert enum_dim < 0, "{} {}".format(msg["name"], enum_dim)
-            for value in self.sum_dims.values():
-                value.discard(enum_dim)
-            with shared_intermediates(self.cache) as cache:
-                ordinal = frozenset(f for f in msg["cond_indep_stack"] if f.vectorized)
-                logits = contract_to_tensor(self.log_factors, self.sum_dims, ordinal, cache=cache)
-                logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
-                while logits.shape[0] == 1:
-                    logits.squeeze_(0)
-            msg["fn"] = _make_dist(msg["fn"], logits)
+        enum_symbol = enum_msg["infer"].get("_enumerate_symbol")
+        if enum_symbol is None:
+            return
+        enum_dim = enum_msg["infer"]["_enumerate_dim"]
+        with shared_intermediates(self.cache):
+            ordinal = _find_ordinal(self.enum_trace, msg)
+            logits = contract_to_tensor(self.log_factors, self.sum_dims,
+                                        target_ordinal=ordinal, target_dims={enum_symbol},
+                                        ring=self.ring)
+            logits._pyro_dims = self.ring.dims(logits)
+            logits = packed.unpack(logits, self.enum_trace.symbol_to_dim)
+            logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
+            while logits.shape[0] == 1:
+                logits.squeeze_(0)
+        msg["fn"] = _make_dist(msg["fn"], logits)
 
-    def _postprocess_message(self, msg):
-        if msg["type"] == "sample":
-            enum_dim = msg["infer"].get("_enumerate_dim")
-            if enum_dim is not None:
-                for t, terms in self.log_factors.items():
-                    for i, term in enumerate(terms):
-                        if term.dim() >= -enum_dim and term.shape[enum_dim] > 1:
-                            term_, value_ = broadcast_all(term, msg["value"])
-                            value_ = value_.index_select(enum_dim, value_.new_tensor([0], dtype=torch.long))
-                            sampled_term = term_.gather(enum_dim, value_.long())
-                            terms[i] = sampled_term
-                            self.sum_dims[sampled_term] = self.sum_dims.pop(term) - {enum_dim}
+    def _pyro_post_sample(self, msg):
+        enum_msg = self.enum_trace.nodes.get(msg["name"])
+        if enum_msg is None:
+            return
+        enum_symbol = enum_msg["infer"].get("_enumerate_symbol")
+        if enum_symbol is None:
+            return
+        value = packed.pack(msg["value"].long(), enum_msg["infer"]["_dim_to_symbol"])
+        assert enum_symbol not in value._pyro_dims
+        for t, terms in self.log_factors.items():
+            for i, term in enumerate(terms):
+                if enum_symbol in term._pyro_dims:
+                    terms[i] = packed.gather(term, value, enum_symbol)
+        self.sum_dims.remove(enum_symbol)
 
 
 class TraceEnum_ELBO(ELBO):
@@ -249,6 +280,8 @@ class TraceEnum_ELBO(ELBO):
                               'infer={"enumerate": "sequential"} or infer={"enumerate": "parallel"}? '
                               'If you do not want to enumerate, consider using Trace_ELBO instead.')
 
+        guide_trace.pack_tensors()
+        model_trace.pack_tensors(guide_trace.plate_to_symbol)
         return model_trace, guide_trace
 
     def _get_traces(self, model, guide, *args, **kwargs):
@@ -264,11 +297,9 @@ class TraceEnum_ELBO(ELBO):
 
         # Enable parallel enumeration over the vectorized guide and model.
         # The model allocates enumeration dimensions after (to the left of) the guide,
-        # accomplished by letting the model_enum lazily query the guide_enum for its
-        # final .next_available_dim. The laziness is accomplished via a lambda.
-        # Note this relies on the guide being run before the model.
-        guide_enum = EnumerateMessenger(first_available_dim=self.max_plate_nesting)
-        model_enum = EnumerateMessenger(first_available_dim=lambda: guide_enum.next_available_dim)
+        # accomplished by preserving the _ENUM_ALLOCATOR state after the guide call.
+        guide_enum = EnumerateMessenger(first_available_dim=-1 - self.max_plate_nesting)
+        model_enum = EnumerateMessenger()  # preserve _ENUM_ALLOCATOR state
         guide = guide_enum(guide)
         model = model_enum(model)
 

@@ -10,7 +10,7 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.contrib.autoguide import (AutoDelta, AutoDiagonalNormal, AutoLaplaceApproximation,
+from pyro.contrib.autoguide import (AutoDiagonalNormal, AutoLaplaceApproximation,
                                     AutoLowRankMultivariateNormal, AutoMultivariateNormal)
 from pyro.infer import SVI, Trace_ELBO
 from tests.common import assert_equal
@@ -73,8 +73,7 @@ class AutoGaussianChain(GaussianChain):
 
 
 @pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
-                                        AutoLowRankMultivariateNormal, AutoDelta,
-                                        AutoLaplaceApproximation])
+                                        AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
 def test_auto_diagonal_gaussians(auto_class):
     n_steps = 3501 if auto_class == AutoDiagonalNormal else 6001
 
@@ -93,15 +92,10 @@ def test_auto_diagonal_gaussians(auto_class):
         loss = svi.step()
         assert np.isfinite(loss), loss
 
-    if auto_class is AutoDelta:
-        latents = guide.median()
-        loc = torch.tensor([latents["x"], latents["y"]])
-        scale = guide.covariance().diag().sqrt()
-    else:
-        if auto_class is AutoLaplaceApproximation:
-            guide = guide.laplace_approximation()
+    if auto_class is AutoLaplaceApproximation:
+        guide = guide.laplace_approximation()
 
-        loc, scale = guide._loc_scale()
+    loc, scale = guide._loc_scale()
 
     assert_equal(loc, torch.tensor([-0.2, 0.2]), prec=0.05,
                  msg="guide mean off")

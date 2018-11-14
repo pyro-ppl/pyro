@@ -15,16 +15,18 @@ def zip_align_right(xs, ys):
     return reversed(list(zip(reversed(xs), reversed(ys))))
 
 
-def memoized_squeeze(tensor):
+def torch_memoize(tensor, methodname, *args):
     """
-    Computes ``tensor.squeeze()`` memoizing the result for the lifetime of
-    ``tensor``. This enables sharing when used inside
+    Computes ``tensor.methodname(*args)`` memoizing the result for the lifetime
+    of ``tensor``. This enables sharing when used inside
     :func:`~opt_einsum.shared_intermediates`.
     """
-    if hasattr(tensor, '_pyro_memoized_squeeze'):
-        return tensor._pyro_memoized_squeeze
-    result = tensor.squeeze()
-    tensor._pyro_memoized_squeeze = result
+    cache = vars(tensor).setdefault('_pyro_memoized', {})
+    key = methodname, args
+    if key in cache:
+        return cache[key]
+    result = getattr(tensor, methodname)(*args)
+    cache[key] = result
     return result
 
 
@@ -125,7 +127,7 @@ def opt_sumproduct(factors, target_shape, backend='torch'):
             smaller_shape = smaller_shape[1:]
         smaller_shape = tuple(smaller_shape)
         result = opt_sumproduct(factors, smaller_shape, backend=backend)
-        return result.expand(target_shape)
+        return torch_memoize(result, 'expand', target_shape)
 
     # Construct low-dimensional tensors with symbolic names.
     num_symbols = max(len(target_shape), max(len(t.shape) for t in factors))
@@ -141,8 +143,8 @@ def opt_sumproduct(factors, target_shape, backend='torch'):
             for name, size in zip_align_right(symbols, factor.shape)
             if size != 1])
         # memoize the .squeeze() to support shared_intermediates
-        packed_factors.append(memoized_squeeze(factor))
-        assert len(packed_factors[-1].shape) == len(packed_names[-1])
+        packed_factors.append(torch_memoize(factor, 'squeeze'))
+        assert packed_factors[-1].dim() == len(packed_names[-1])
 
     # Contract packed tensors.
     inputs = ','.join(''.join(names) for names in packed_names)
@@ -151,4 +153,4 @@ def opt_sumproduct(factors, target_shape, backend='torch'):
     packed_result = contract(expr, *packed_factors, backend=backend)
 
     # Unpack result.
-    return packed_result.reshape(target_shape)
+    return torch_memoize(packed_result, 'reshape', target_shape)

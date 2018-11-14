@@ -30,7 +30,7 @@ TEST_CASES = [
     ),
     T(
         GaussianChain(dim=10, chain_len=4, num_obs=1),
-        num_samples=1000,
+        num_samples=1600,
         warmup_steps=200,
         hmc_params=None,
         expected_means=[0.20, 0.40, 0.60, 0.80],
@@ -92,17 +92,17 @@ def test_nuts_conjugate_gaussian(fixture,
         expected_std = 1 / torch.sqrt(torch.ones(fixture.dim) * expected_precs[i - 1])
 
         # Actual vs expected posterior means for the latents
-        logger.info('Posterior mean (actual) - {}'.format(param_name))
-        logger.info(latent_loc)
-        logger.info('Posterior mean (expected) - {}'.format(param_name))
-        logger.info(expected_mean)
+        logger.debug('Posterior mean (actual) - {}'.format(param_name))
+        logger.debug(latent_loc)
+        logger.debug('Posterior mean (expected) - {}'.format(param_name))
+        logger.debug(expected_mean)
         assert_equal(rmse(latent_loc, expected_mean).item(), 0.0, prec=mean_tol)
 
         # Actual vs expected posterior precisions for the latents
-        logger.info('Posterior std (actual) - {}'.format(param_name))
-        logger.info(latent_std)
-        logger.info('Posterior std (expected) - {}'.format(param_name))
-        logger.info(expected_std)
+        logger.debug('Posterior std (actual) - {}'.format(param_name))
+        logger.debug(latent_std)
+        logger.debug('Posterior std (expected) - {}'.format(param_name))
+        logger.debug(expected_std)
         assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 
@@ -253,11 +253,12 @@ def test_gaussian_hmm_enum_shape(num_steps, use_einsum):
 
     def model(data):
         initialize = pyro.sample("initialize", dist.Dirichlet(torch.ones(dim)))
-        transition = pyro.sample("transition", dist.Dirichlet(torch.ones(dim, dim)))
-        emission_loc = pyro.sample("emission_loc", dist.Normal(torch.zeros(dim), torch.ones(dim)))
-        emission_scale = pyro.sample("emission_scale", dist.LogNormal(torch.zeros(dim), torch.ones(dim)))
+        with pyro.plate("states", dim):
+            transition = pyro.sample("transition", dist.Dirichlet(torch.ones(dim, dim)))
+            emission_loc = pyro.sample("emission_loc", dist.Normal(torch.zeros(dim), torch.ones(dim)))
+            emission_scale = pyro.sample("emission_scale", dist.LogNormal(torch.zeros(dim), torch.ones(dim)))
         x = None
-        for t, y in enumerate(data):
+        for t, y in pyro.markov(enumerate(data)):
             x = pyro.sample("x_{}".format(t), dist.Categorical(initialize if x is None else transition[x]))
             pyro.sample("y_{}".format(t), dist.Normal(emission_loc[x], emission_scale[x]), obs=y)
             # check shape
@@ -265,5 +266,5 @@ def test_gaussian_hmm_enum_shape(num_steps, use_einsum):
             assert effective_dim == 1
 
     data = torch.ones(num_steps)
-    nuts_kernel = NUTS(model, max_plate_nesting=0, experimental_use_einsum=use_einsum)
+    nuts_kernel = NUTS(model, max_plate_nesting=1, experimental_use_einsum=use_einsum)
     MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)
