@@ -72,7 +72,7 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
     with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         x = 0
-        for t in range(lengths.max()):
+        for t in pyro.markov(range(lengths.max())):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 # On the next line, we'll overwrite the value of x with an updated
                 # value. If we wanted to record all x values, we could instead
@@ -80,7 +80,7 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
                                 infer={"enumerate": "parallel"})
                 with tones_plate:
-                    pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x]),
+                    pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x.squeeze(-1)]),
                                 obs=sequences[batch, t])
 
 
@@ -107,7 +107,7 @@ def model_2(sequences, lengths, args, batch_size=None, include_prior=True):
     with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         x, y = 0, 0
-        for t in range(lengths.max()):
+        for t in pyro.markov(range(lengths.max())):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
                                 infer={"enumerate": "parallel"})
@@ -152,7 +152,7 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
     with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         w, x = 0, 0
-        for t in range(lengths.max()):
+        for t in pyro.markov(range(lengths.max())):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
                                 infer={"enumerate": "parallel"})
@@ -200,7 +200,7 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
         # ensure that w and x are always tensors so we can unsqueeze them below,
         # thus ensuring that the x sample sites have correct distribution shape.
         w = x = torch.tensor(0, dtype=torch.long)
-        for t in range(lengths.max()):
+        for t in pyro.markov(range(lengths.max())):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
                                 infer={"enumerate": "parallel"})

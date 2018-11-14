@@ -63,7 +63,7 @@ def test_networkx_copy():
     g = nx.DiGraph()
     expected = count_objects_of_type(nx.DiGraph)
     for _ in range(10):
-        h = g.fresh_copy()
+        h = g.__class__()
         h.__dict__.clear()
         del h
         counts.append(count_objects_of_type(nx.DiGraph))

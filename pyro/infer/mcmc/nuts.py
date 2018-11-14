@@ -106,7 +106,7 @@ class NUTS(HMC):
                  full_mass=False,
                  use_multinomial_sampling=True,
                  transforms=None,
-                 max_plate_nesting=float("inf"),
+                 max_plate_nesting=None,
                  max_iarange_nesting=None,  # DEPRECATED
                  experimental_use_einsum=False):
         if max_iarange_nesting is not None:

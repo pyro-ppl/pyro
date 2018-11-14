@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import pyro.poutine as poutine
 from pyro.logger import log
-from pyro.poutine import condition, do
+from pyro.poutine import condition, do, markov
 from pyro.primitives import (clear_param_store, enable_validation, get_param_store, irange, module, param, plate,
                              random_module, sample, validation_enabled, iarange)
 from pyro.util import set_rng_seed
@@ -25,6 +25,7 @@ __all__ = [
     "iarange",
     "irange",
     "log",
+    "markov",
     "module",
     "param",
     "plate",

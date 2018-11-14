@@ -95,7 +95,7 @@ def test_grad_expand():
     TraceGraph_ELBO,
     JitTraceGraph_ELBO,
     TraceEnum_ELBO,
-    JitTraceEnum_ELBO,
+    xfail_param(JitTraceEnum_ELBO, reason='einsum not supported in jit'),
 ])
 def test_svi(Elbo, num_particles):
     pyro.clear_param_store()

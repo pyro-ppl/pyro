@@ -84,7 +84,7 @@ def test_model_error_enum_dim_clash(kernel, kwargs, use_einsum):
 
 
 def test_log_prob_eval_iterates_in_correct_order():
-    @poutine.enum(first_available_dim=4)
+    @poutine.enum(first_available_dim=-5)
     @config_enumerate(default="parallel")
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model():
@@ -126,7 +126,7 @@ def test_log_prob_eval_iterates_in_correct_order():
 def test_all_discrete_sites_log_prob(Eval):
     p = 0.3
 
-    @poutine.enum(first_available_dim=3)
+    @poutine.enum(first_available_dim=-4)
     @config_enumerate(default="parallel")
     def model():
         d = dist.Bernoulli(p)
@@ -151,7 +151,7 @@ def test_all_discrete_sites_log_prob(Eval):
 @pytest.mark.parametrize("Eval", [TraceTreeEvaluator,
                                   xfail_param(TraceEinsumEvaluator, reason="TODO: Debug this failure case.")])
 def test_enumeration_in_tree(Eval):
-    @poutine.enum(first_available_dim=4)
+    @poutine.enum(first_available_dim=-5)
     @config_enumerate(default="parallel")
     @poutine.condition(data={"sample1": torch.tensor(0.),
                              "sample2": torch.tensor(1.),
@@ -189,7 +189,7 @@ def test_enumeration_in_tree(Eval):
 def test_enumeration_in_dag(Eval):
     p = 0.3
 
-    @poutine.enum(first_available_dim=2)
+    @poutine.enum(first_available_dim=-3)
     @config_enumerate(default="parallel")
     @poutine.condition(data={"b": torch.tensor(0.4), "c": torch.tensor(0.4)})
     def model():
@@ -220,7 +220,7 @@ def test_enumeration_in_dag(Eval):
 @pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
 def test_enum_log_prob_continuous_observed(data, expected_log_prob, Eval):
 
-    @poutine.enum(first_available_dim=1)
+    @poutine.enum(first_available_dim=-2)
     @config_enumerate(default="parallel")
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model(data):
@@ -249,7 +249,7 @@ def test_enum_log_prob_continuous_observed(data, expected_log_prob, Eval):
 @pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
 def test_enum_log_prob_continuous_sampled(data, expected_log_prob, Eval):
 
-    @poutine.enum(first_available_dim=1)
+    @poutine.enum(first_available_dim=-2)
     @config_enumerate(default="parallel")
     @poutine.condition(data={"p": torch.tensor(0.4),
                              "n": torch.tensor([[1.], [-1.]])})
@@ -277,7 +277,7 @@ def test_enum_log_prob_continuous_sampled(data, expected_log_prob, Eval):
 @pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
 def test_enum_log_prob_discrete_observed(data, expected_log_prob, Eval):
 
-    @poutine.enum(first_available_dim=1)
+    @poutine.enum(first_available_dim=-2)
     @config_enumerate(default="parallel")
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model(data):
@@ -303,7 +303,7 @@ def test_enum_log_prob_discrete_observed(data, expected_log_prob, Eval):
 @pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
 def test_enum_log_prob_multiple_plate(data, expected_log_prob, Eval):
 
-    @poutine.enum(first_available_dim=1)
+    @poutine.enum(first_available_dim=-2)
     @config_enumerate(default="parallel")
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model(data):
@@ -332,7 +332,7 @@ def test_enum_log_prob_multiple_plate(data, expected_log_prob, Eval):
 @pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
 def test_enum_log_prob_nested_plate(data, expected_log_prob, Eval):
 
-    @poutine.enum(first_available_dim=2)
+    @poutine.enum(first_available_dim=-3)
     @config_enumerate(default="parallel")
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model(data):
