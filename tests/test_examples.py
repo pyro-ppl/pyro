@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import logging
 import os
 import sys
-from subprocess import check_call
+from subprocess import check_output
 
 import pytest
 
@@ -126,7 +126,7 @@ def test_cpu(example):
     example = example.split()
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
+    check_output([sys.executable, filename] + args)
 
 
 @requires_cuda
@@ -136,7 +136,7 @@ def test_cuda(example):
     example = example.split()
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
+    check_output([sys.executable, filename] + args)
 
 
 @pytest.mark.parametrize('example', JIT_EXAMPLES)
@@ -145,4 +145,4 @@ def test_jit(example):
     example = example.split()
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
+    check_output([sys.executable, filename] + args)
