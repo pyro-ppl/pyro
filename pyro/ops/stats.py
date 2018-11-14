@@ -110,7 +110,7 @@ def autocorrelation(input, dim=0):
     input = input.transpose(dim, -1)
 
     # centering and padding x
-    centered_signal = input - input.mean()
+    centered_signal = input - input.mean(dim=-1, keepdim=True)
     pad = input.new_zeros(input.shape[:-1] + (M2 - N,))
     centered_signal = torch.cat([centered_signal, pad], dim=-1)
 
@@ -137,7 +137,7 @@ def autocovariance(input, dim=0):
     :param int dim: the dimension to calculate autocorrelation.
     :returns torch.Tensor: autocorrelation of `input`.
     """
-    return autocorrelation(input) * input.var(dim, unbiased=False, keepdim=True)
+    return autocorrelation(input, dim) * input.var(dim, unbiased=False, keepdim=True)
 
 
 def _cummin(input):
