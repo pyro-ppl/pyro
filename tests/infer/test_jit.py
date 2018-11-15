@@ -351,7 +351,7 @@ def test_beta_bernoulli(Elbo, vectorized):
     TraceGraph_ELBO,
     JitTraceGraph_ELBO,
     TraceEnum_ELBO,
-    JitTraceEnum_ELBO,
+    xfail_param(JitTraceEnum_ELBO, reason="https://github.com/uber/pyro/issues/1418"),
 ])
 def test_svi_irregular_batch_size(Elbo):
     pyro.clear_param_store()
