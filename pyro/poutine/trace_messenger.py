@@ -1,5 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
+import sys
+
+import six
+
 from .messenger import Messenger
 from .trace_struct import Trace
 from .util import site_is_subsample
@@ -173,7 +177,14 @@ class TraceHandler(object):
             self.msngr.trace.add_node("_INPUT",
                                       name="_INPUT", type="args",
                                       args=args, kwargs=kwargs)
-            ret = self.fn(*args, **kwargs)
+            try:
+                ret = self.fn(*args, **kwargs)
+            except (ValueError, RuntimeError):
+                exc_type, exc_value, traceback = sys.exc_info()
+                shapes = self.msngr.trace.format_shapes()
+                six.reraise(exc_type,
+                            exc_type(u"{}\n{}".format(exc_value, shapes)),
+                            traceback)
             self.msngr.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
         return ret
 

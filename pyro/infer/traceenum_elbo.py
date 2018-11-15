@@ -17,7 +17,7 @@ from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
 from pyro.infer.util import Dice, is_validation_enabled
 from pyro.ops import packed
-from pyro.ops.contract import PackedLogRing, contract_tensor_tree, contract_to_tensor
+from pyro.ops.contract import contract_tensor_tree, contract_to_tensor
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
@@ -125,12 +125,11 @@ def _compute_dice_elbo(model_trace, guide_trace):
         # contract_to_tensor() with a RaggedTensor -> Tensor contraction operation, but
         # replace contract_tensor_tree() with a RaggedTensor -> RaggedTensor contraction
         # that preserves some dependency structure.
-        ring = PackedLogRing()
-        log_factors = contract_tensor_tree(log_factors, sum_dims, ring=ring)
+        with shared_intermediates() as cache:
+            log_factors = contract_tensor_tree(log_factors, sum_dims, cache=cache)
         for t, log_factors_t in log_factors.items():
             marginal_costs_t = marginal_costs.setdefault(t, [])
             for term in log_factors_t:
-                term._pyro_dims = ring.dims(term)
                 term = packed.scale_and_mask(term, scale=scale)
                 marginal_costs_t.append(term)
     costs = marginal_costs
@@ -157,7 +156,6 @@ def _compute_marginals(model_trace, guide_trace):
 
     marginal_dists = OrderedDict()
     with shared_intermediates() as cache:
-        ring = PackedLogRing(cache=cache)
         for name, site in model_trace.nodes.items():
             if (site["type"] != "sample" or
                     name in guide_trace.nodes or
@@ -169,8 +167,7 @@ def _compute_marginals(model_trace, guide_trace):
             ordinal = _find_ordinal(model_trace, site)
             logits = contract_to_tensor(log_factors, sum_dims,
                                         target_ordinal=ordinal, target_dims={enum_symbol},
-                                        ring=ring)
-            logits._pyro_dims = ring.dims(logits)
+                                        cache=cache)
             logits = packed.unpack(logits, model_trace.symbol_to_dim)
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
             while logits.shape[0] == 1:
@@ -192,7 +189,6 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
 
     def __enter__(self):
         self.cache = {}
-        self.ring = PackedLogRing(cache=self.cache)
         return super(BackwardSampleMessenger, self).__enter__()
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -212,8 +208,7 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
             ordinal = _find_ordinal(self.enum_trace, msg)
             logits = contract_to_tensor(self.log_factors, self.sum_dims,
                                         target_ordinal=ordinal, target_dims={enum_symbol},
-                                        ring=self.ring)
-            logits._pyro_dims = self.ring.dims(logits)
+                                        cache=self.cache)
             logits = packed.unpack(logits, self.enum_trace.symbol_to_dim)
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
             while logits.shape[0] == 1:
