@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import logging
+import os
 import warnings
 from collections import defaultdict
 
@@ -1300,6 +1301,7 @@ def test_enum_recycling_chain():
 
 
 @pytest.mark.parametrize('markov', [False, True])
+@pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/uber/pyro/issues/1380")
 def test_enum_recycling_dbn(markov):
     #    x --> x --> x  enum "state"
     # y  |  y  |  y  |  enum "occlusion"
