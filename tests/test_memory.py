@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import gc
+import warnings
 
 import networkx as nx
 import pytest
@@ -17,7 +18,9 @@ pytestmark = pytest.mark.stage('unit')
 
 
 def count_objects_of_type(type_):
-    return sum(1 for obj in gc.get_objects() if isinstance(obj, type_))
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        return sum(1 for obj in gc.get_objects() if isinstance(obj, type_))
 
 
 def test_trace():
