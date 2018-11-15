@@ -60,7 +60,7 @@ jobs:
           script:
               - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10
               - grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
-                  | CI=1 xargs pytest -vx --nbval-lax --current-env --durations 10
+                  | CI=1 xargs pytest -vx --nbval-lax --current-env
         - python: 3.6
           env: STAGE=unit
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
@@ -69,7 +69,7 @@ jobs:
           script:
               - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10
               - grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
-                  | CI=1 xargs pytest -vx --nbval-lax --current-env --durations 10
+                  | CI=1 xargs pytest -vx --nbval-lax --current-env
         - stage: integration test
           python: 2.7
           env: STAGE=integration_batch_1
