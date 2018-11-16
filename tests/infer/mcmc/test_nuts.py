@@ -2,66 +2,73 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 import os
+from collections import namedtuple
 
 import pytest
 import torch
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
-from pyro.infer import EmpiricalMarginal
+from pyro.contrib.autoguide import AutoDelta
+from pyro.infer import EmpiricalMarginal, TraceEnum_ELBO, SVI
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.nuts import NUTS
+import pyro.optim as optim
+import pyro.poutine as poutine
 from pyro.util import ignore_jit_warnings
 from tests.common import assert_equal
-from .test_hmc import GaussianChain, T, rmse
+
+from .test_hmc import GaussianChain, rmse
 
 logger = logging.getLogger(__name__)
 
+
+T = namedtuple('TestExample', [
+    'fixture',
+    'num_samples',
+    'warmup_steps',
+    'expected_means',
+    'expected_precs',
+    'mean_tol',
+    'std_tol'])
 
 TEST_CASES = [
     T(
         GaussianChain(dim=10, chain_len=3, num_obs=1),
         num_samples=800,
         warmup_steps=200,
-        hmc_params=None,
         expected_means=[0.25, 0.50, 0.75],
         expected_precs=[1.33, 1, 1.33],
-        mean_tol=0.06,
-        std_tol=0.06,
+        mean_tol=0.08,
+        std_tol=0.08,
     ),
     T(
         GaussianChain(dim=10, chain_len=4, num_obs=1),
         num_samples=1600,
         warmup_steps=200,
-        hmc_params=None,
         expected_means=[0.20, 0.40, 0.60, 0.80],
         expected_precs=[1.25, 0.83, 0.83, 1.25],
         mean_tol=0.07,
         std_tol=0.06,
     ),
-    pytest.param(*T(
+    T(
         GaussianChain(dim=5, chain_len=2, num_obs=10000),
         num_samples=800,
         warmup_steps=200,
-        hmc_params=None,
         expected_means=[0.5, 1.0],
         expected_precs=[2.0, 10000],
-        mean_tol=0.04,
-        std_tol=0.04,
-    ), marks=[pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
-                                 reason='Slow test - skip on CI/CUDA')]),
-    pytest.param(*T(
+        mean_tol=0.05,
+        std_tol=0.05,
+    ),
+    T(
         GaussianChain(dim=5, chain_len=9, num_obs=1),
         num_samples=1400,
         warmup_steps=200,
-        hmc_params=None,
         expected_means=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90],
         expected_precs=[1.11, 0.63, 0.48, 0.42, 0.4, 0.42, 0.48, 0.63, 1.11],
         mean_tol=0.08,
         std_tol=0.08,
-    ), marks=[pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
-                                 reason='Slow test - skip on CI/CUDA')])
+    )
 ]
 
 
@@ -86,15 +93,15 @@ def jit_idfn(param):
 
 
 @pytest.mark.parametrize(
-    'fixture, num_samples, warmup_steps, hmc_params, expected_means, expected_precs, mean_tol, std_tol',
+    'fixture, num_samples, warmup_steps, expected_means, expected_precs, mean_tol, std_tol',
     TEST_CASES,
     ids=TEST_IDS)
-@pytest.mark.init(rng_seed=34)
+@pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
+                    reason='Slow test - skip on CI/CUDA')
 @pytest.mark.disable_validation()
 def test_nuts_conjugate_gaussian(fixture,
                                  num_samples,
                                  warmup_steps,
-                                 hmc_params,
                                  expected_means,
                                  expected_precs,
                                  mean_tol,
@@ -322,11 +329,9 @@ def test_bernoulli_latent_model(jit):
     (2, False),
     (3, False),
     (3, True),
-    # This will crash without the einsum backend
-    pytest.param(30, True,
-                 marks=pytest.mark.skip(reason="https://github.com/pytorch/pytorch/issues/10661")),
+    (30, True),  # This will crash without the einsum backend
 ])
-def test_gaussian_hmm_enum_shape(jit, num_steps, use_einsum):
+def test_gaussian_hmm(jit, num_steps, use_einsum):
     dim = 4
 
     def model(data):
@@ -338,14 +343,33 @@ def test_gaussian_hmm_enum_shape(jit, num_steps, use_einsum):
         x = None
         with ignore_jit_warnings([("Iterating over a tensor", RuntimeWarning)]):
             for t, y in pyro.markov(enumerate(data)):
-                x = pyro.sample("x_{}".format(t), dist.Categorical(initialize if x is None else transition[x]))
+                x = pyro.sample("x_{}".format(t),
+                                dist.Categorical(initialize if x is None else transition[x]),
+                                infer={"enumerate": "parallel"})
                 pyro.sample("y_{}".format(t), dist.Normal(emission_loc[x], emission_scale[x]), obs=y)
-                # check shape
-                effective_dim = sum(1 for size in x.shape if size > 1)
-                assert effective_dim == 1
 
-    data = torch.ones(num_steps)
+    def _get_initial_trace():
+        guide = AutoDelta(poutine.block(model, expose_fn=lambda msg: not msg["name"].startswith("x") and
+                                        not msg["name"].startswith("y")))
+        elbo = TraceEnum_ELBO(max_plate_nesting=1)
+        svi = SVI(model, guide, optim.Adam({"lr": .01}), elbo, num_steps=100).run(data)
+        return svi.exec_traces[-1]
+
+    def _generate_data():
+        transition_probs = torch.rand(dim, dim)
+        emissions_loc = torch.arange(dim, dtype=torch.Tensor().dtype)
+        emissions_scale = 1.
+        state = torch.tensor(1)
+        obs = [dist.Normal(emissions_loc[state], emissions_scale).sample()]
+        for _ in range(num_steps):
+            state = dist.Categorical(transition_probs[state]).sample()
+            obs.append(dist.Normal(emissions_loc[state], emissions_scale).sample())
+        return torch.stack(obs)
+
+    data = _generate_data()
     nuts_kernel = NUTS(model, adapt_step_size=True, max_plate_nesting=1,
                        jit_compile=jit, ignore_jit_warnings=True,
                        experimental_use_einsum=use_einsum)
+    if use_einsum:
+        nuts_kernel.initial_trace = _get_initial_trace()
     MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)
