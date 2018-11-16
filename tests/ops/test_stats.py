@@ -2,9 +2,25 @@ import pytest
 import torch
 
 from pyro.ops.stats import (autocorrelation, autocovariance, effective_sample_size,
-                            gelman_rubin, split_gelman_rubin,
+                            gelman_rubin, resample, split_gelman_rubin,
                             _cummin, _fft_next_good_size)
 from tests.common import assert_equal, xfail_if_not_implemented
+
+
+@pytest.mark.parametrize('input', [autocorrelation, autocovariance, _cummin])
+@pytest.mark.parametrize('replacement', [True, False])
+@pytest.mark.parametrize('')
+@pytest.mark.init(rng_seed=3)
+def test_resample():
+    x = torch.empty(2, 10000)
+    x[0].normal_(3, 4)
+    x[1].normal_(5, 6)
+
+    y = resample(x, num_samples=2000, dim=1, replacement=False)
+    assert_equal(torch.unique(y(-1)
+    assert_equal(y.shape, torch.Size(2, 2000))
+    assert_equal(y.mean(dim=0), torch.tensor([3., 5.]))
+    assert_equal(y.std(dim=0), torch.tensor([4., 6.]))
 
 
 def test_autocorrelation():
