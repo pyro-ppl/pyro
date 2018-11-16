@@ -1301,7 +1301,6 @@ def test_enum_recycling_chain():
 
 
 @pytest.mark.parametrize('markov', [False, True])
-@pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/uber/pyro/issues/1380")
 def test_enum_recycling_dbn(markov):
     #    x --> x --> x  enum "state"
     # y  |  y  |  y  |  enum "occlusion"
@@ -1316,7 +1315,7 @@ def test_enum_recycling_dbn(markov):
         z_ind = torch.arange(4, dtype=torch.long)
 
         x = 0
-        times = pyro.markov(range(100)) if markov else range(20)
+        times = pyro.markov(range(100)) if markov else range(15)
         for t in times:
             x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
             y = pyro.sample("y_{}".format(t), dist.Categorical(q))

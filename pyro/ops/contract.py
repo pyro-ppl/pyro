@@ -17,7 +17,7 @@ from pyro.ops.einsum import contract
 def _finfo(tensor):
     # This can be replaced with torch.finfo once it is available
     # https://github.com/pytorch/pytorch/issues/10742
-    return np.finfo(torch.empty(torch.Size(), dtype=tensor.dtype).cpu().numpy().dtype)
+    return np.finfo(torch.empty(torch.Size(), dtype=tensor.dtype, device="cpu").numpy().dtype)
 
 
 def _check_batch_dims_are_sensible(output_dims, nonoutput_ordinal):
