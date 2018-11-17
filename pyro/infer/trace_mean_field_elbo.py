@@ -63,21 +63,17 @@ class TraceMeanField_ELBO(Trace_ELBO):
                     elbo_particle = elbo_particle + model_site["log_prob_sum"]
                 else:
                     guide_site = guide_trace.nodes[name]
-                    assert guide_site["fn"].has_rsample, \
-                        "All distributions must be fully reparameterized"
+                    log_prob, score_function_term, entropy_term = guide_site["score_parts"]
+
+                    fully_rep = guide_site["fn"].has_rsample and not is_identically_zero(entropy_term) \
+                        and is_identically_zero(score_function_term)
+                    assert fully_rep, "All distributions in the guide must be fully reparameterized."
 
                     # use kl divergence if available, else fall back on sampling
                     try:
                         kl_qp = kl_divergence(guide_site["fn"], model_site["fn"]).sum()
                         elbo_particle = elbo_particle - kl_qp
                     except NotImplementedError:
-                        log_prob, score_function_term, entropy_term = guide_site["score_parts"]
-
-                        assert not is_identically_zero(entropy_term), \
-                            "All distributions must be fully reparameterized"
-                        assert is_identically_zero(score_function_term), \
-                            "All distributions must be fully reparameterized"
-
                         elbo_particle = elbo_particle + model_site["log_prob_sum"] - entropy_term.sum()
 
         return -torch_item(elbo_particle), -elbo_particle
