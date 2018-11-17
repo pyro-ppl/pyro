@@ -129,7 +129,7 @@ class VariationalSparseGP(GPModel):
                         dist.MultivariateNormal(zero_loc, scale_tril=Luu)
                             .independent(zero_loc.dim() - 1))
 
-        f_loc, f_var = conditional(self.X, Xu, self.kernel, u_loc, u_scale_tril,
+        f_loc, f_var = conditional(self.X, Xu, self.kernel, self.u_loc, self.u_scale_tril,
                                    Luu, full_cov=False, whiten=self.whiten,
                                    jitter=self.jitter)
 

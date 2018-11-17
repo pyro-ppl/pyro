@@ -1,16 +1,18 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
+from collections import defaultdict
 
-import torch
 import torch.nn as nn
+from torch.distributions import constraints 
 
-
-ParamProperty = namedtuple("ParamProperty", ["prior,constraint,guide,fixed"])
+import pyro
+import pyro.distributions as dist
 
 
 class Parameterized(nn.Module):
     """
+    Base class for other modules in Gaussin Process module.
+
     Parameters of this object can be set priors, set constraints, or fixed to a
     specific value.
 
@@ -25,21 +27,10 @@ class Parameterized(nn.Module):
     def __init__(self, name=None):
         super(Parameterized, self).__init__()
         self.name = name
+        self._constraints = defaultdict(constraints.real)
         self._priors = {}
-        self._constraints = {}
-        self._fixed_params = {}
+        self._guides = defaultdict(dist.Delta)
         self._registered_params = {}
-        
-
-    def set_prior(self, param, prior):
-        """
-        Sets a prior to a parameter.
-
-        :param str param: Name of the parameter.
-        :param ~pyro.distributions.distribution.Distribution prior: A Pyro prior
-            distribution.
-        """
-        self._priors[param] = prior
 
     def set_constraint(self, param, constraint):
         """
@@ -52,19 +43,27 @@ class Parameterized(nn.Module):
         """
         self._constraints[param] = constraint
 
-    def fix_param(self, param, value=None):
+    def set_prior(self, param, prior):
         """
-        Fixes a parameter to a specic value. If ``value=None``, fixes the parameter
-        to the default value.
+        Sets a prior to a parameter.
 
         :param str param: Name of the parameter.
-        :param torch.Tensor value: Fixed value.
+        :param ~pyro.distributions.distribution.Distribution prior: A Pyro prior
+            distribution.
         """
-        if value is None:
-            value = getattr(self, param).detach()
-        self._fixed_params[param] = value
+        self._priors[param] = prior
 
-    def set_mode(self, mode, recursive=True):
+    def set_guide(self, param, guide):
+        """
+        Sets a prior to a parameter.
+
+        :param str param: Name of the parameter.
+        :param ~pyro.distributions.distribution.Distribution prior: A Pyro prior
+            distribution.
+        """
+        self._guides[param] = guide
+
+    def set_mode(self, mode):
         """
         Sets ``mode`` of this object to be able to use its parameters in stochastic
         functions. If ``mode="model"``, a parameter with prior will get its value
@@ -72,68 +71,73 @@ class Parameterized(nn.Module):
         prior on a parameter, :func:`pyro.param` will be called.
 
         This method automatically sets ``mode`` for submodules which belong to
-        :class:`Parameterized` class unless ``recursive=False``.
+        :class:`Parameterized` class.
 
-        :param str mode: Either "model" or "guide".
-        :param bool recursive: A flag to tell if we want to set mode for all
-            submodules.
+        :param str mode: Either "prior" or "guide".
         """
-        if mode not in ["model", "guide"]:
-            raise ValueError("Mode should be either 'model' or 'guide', but got {}."
-                             .format(mode))
-        if recursive:
-            for module in self.children():
-                if isinstance(module, Parameterized):
-                    module.set_mode(mode)
-        for param in self._parameters:
-            self._register_param(param, mode)
+        self.mode = mode
+        for module in self.children():
+            if isinstance(module, Parameterized):
+                module.set_mode(mode)
 
-    def get_param(self, param):
-        """
-        Gets the current value of a parameter. The correct behavior will depend on
-        ``mode`` of this object (see :meth:`set_mode` method).
+    @property
+    def mode(self):
+        return self._mode
 
-        :param str param: Name of the parameter.
-        """
-        if param not in self._registered_params:  # set_mode() has not been called yet
-            return getattr(self, param)
-        else:
-            return self._registered_params[param]
+    @mode.setter
+    def mode(self, mode):
+        if self._mode != mode:
+            self._mode = mode
+            self._register_param(param)
 
-    def _register_param(self, param, mode="model"):
+    def __setattr__(self, name, value):
+        if name in self._registered_params:
+            del self._registered_params[name]
+        super(Parameterized, self).__setattr__(name, value)
+
+    def __getattr__(self, name):
+        if name in self._registered_params:
+            return self._registered_params[name]
+        super(Parameterized, self).__getattr__(name)
+
+    def _register_param(self, param):
         """
         Registers a parameter to Pyro. It can be seen as a wrapper for
         :func:`pyro.param` and :func:`pyro.sample` primitives.
 
         :param str param: Name of the parameter.
-        :param str mode: Either "model" or "guide".
         """
-        if param in self._fixed_params:
-            self._registered_params[param] = self._fixed_params[param]
-            return
-        prior = self._priors.get(param)
-        if self.name is None:
-            param_name = param
-        else:
-            param_name = param_with_module_name(self.name, param)
-
-        if prior is None:
-            constraint = self._constraints.get(param)
-            default_value = getattr(self, param)
-            if constraint is None:
-                p = pyro.param(param_name, default_value)
+        value = self._parameters[param]
+        param_name = param_with_module_name(self.name, param) if self.name is not None else param
+        if param in self._priors:
+            if self.mode == "model":
+                p = pyro.sample(param_name, self._priors[param])
             else:
-                p = pyro.param(param_name, default_value, constraint=constraint)
-        elif mode == "model":
-            p = pyro.sample(param_name, prior)
-        else:  # prior != None and mode = "guide"
-            MAP_param_name = param_name + "_MAP"
-            # initiate randomly from prior
-            MAP_param = pyro.param(MAP_param_name, prior)
-            p = pyro.sample(param_name, dist.Delta(MAP_param))
-
+                guide = self._guides[param]
+                if guide is dist.Delta:
+                    p_MAP = pyro.param("{}_MAP".format(param_name), self._priors[param])
+                    p = pyro.sample(param_name, dist.Delta(p_MAP))
+                elif guide is dist.Normal:
+                    n = value.size(-1)
+                    loc = pyro.param("{}_loc".format(param_name),
+                                     lambda: value.new_zeros(value.shape))
+                    scale = pyro.param("{}_scale".format(self.prefix),
+                                       lambda: value.new_ones(value.shape),
+                                       constraint=constraints.positive)
+                    p = pyro.sample(param_name,
+                                    guide(p_loc, scale_tril=p_scale_tril)
+                                    .independent(value.dim() - 1))
+                elif guide is dist.MultivariateNormal:
+                    n = value.size(-1)
+                    p_loc = pyro.param("{}_loc".format(param_name),
+                                       lambda: value.new_zeros(value.shape))
+                    p_scale_tril = pyro.param("{}_scale_tril".format(param_name),
+                        lambda: torch.eye(self.latent_dim, out=value.new_empty(n, n)),
+                                              constraint=constraints.lower_cholesky)
+                    p = pyro.sample(param_name,
+                                    guide(p_loc, scale_tril=p_scale_tril)
+                                    .independent(value.dim() - 1))
+                elif guide is dis
+        else:
+            p = pyro.param(param_name, value, constraint=self._constraints[param])
         self._registered_params[param] = p
-
-    def __getattr__(self, name):
-        else
-        super(Parameterized, self).__getattr__(name)
