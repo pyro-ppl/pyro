@@ -27,19 +27,16 @@ class Brownian(Kernel):
             raise ValueError("Input dimensional for Brownian kernel must be 1.")
         super(Brownian, self).__init__(input_dim, active_dims, name)
 
-        if variance is None:
-            variance = torch.tensor(1.)
+        variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
     def forward(self, X, Z=None, diag=False):
-        variance = self.get_param("variance")
-
         if Z is None:
             Z = X
         X = self._slice_input(X)
         if diag:
-            return variance * X.abs().squeeze(1)
+            return self.variance * X.abs().squeeze(1)
 
         Z = self._slice_input(Z)
         if X.shape[1] != Z.shape[1]:
@@ -47,5 +44,5 @@ class Brownian(Kernel):
 
         Zt = Z.t()
         return torch.where(X.sign() == Zt.sign(),
-                           variance * torch.min(X.abs(), Zt.abs()),
+                           self.variance * torch.min(X.abs(), Zt.abs()),
                            X.data.new_zeros(X.shape[0], Z.shape[0]))

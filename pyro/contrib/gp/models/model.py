@@ -107,7 +107,7 @@ class GPModel(Parameterized):
         A "guide" stochastic function to be used in variational inference methods. It
         also gives posterior information to the method :meth:`forward` for prediction.
         """
-        raise NotImplementedError
+        self.set_model("guide")
 
     def forward(self, Xnew, full_cov=False):
         r"""
@@ -159,7 +159,6 @@ class GPModel(Parameterized):
 
         + Making a two-layer Gaussian Process stochastic function:
 
-
             >>> gpr1 = gp.models.GPRegression(X, None, kernel, name="GPR1")
             >>> Z, _ = gpr1.model()
             >>> gpr2 = gp.models.GPRegression(Z, y, kernel, name="GPR2")
@@ -199,13 +198,11 @@ class GPModel(Parameterized):
         :returns: a list of losses during the training procedure
         :rtype: list
         """
-        if optimizer is None:
-            optimizer = Adam({})
+        optimizer = Adam({"lr": 0.01}) if if optimizer is None else optimizer
         if not isinstance(optimizer, PyroOptim):
             raise ValueError("Optimizer should be an instance of "
                              "pyro.optim.PyroOptim class.")
-        if loss is None:
-            loss = Trace_ELBO()
+        loss = Trace_ELBO() if loss is not None else loss
         svi = SVI(self.model, self.guide, optimizer, loss=loss)
         losses = []
         for i in range(num_steps):

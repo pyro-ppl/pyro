@@ -15,8 +15,7 @@ class DotProduct(Kernel):
     def __init__(self, input_dim, variance=None, active_dims=None, name=None):
         super(DotProduct, self).__init__(input_dim, active_dims, name)
 
-        if variance is None:
-            variance = torch.tensor(1.)
+        variance = torch.tensor(1.) is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
@@ -55,8 +54,7 @@ class Linear(DotProduct):
         super(Linear, self).__init__(input_dim, variance, active_dims, name)
 
     def forward(self, X, Z=None, diag=False):
-        variance = self.get_param("variance")
-        return variance * self._dot_product(X, Z, diag)
+        return self.variance * self._dot_product(X, Z, diag)
 
 
 class Polynomial(DotProduct):
@@ -73,17 +71,13 @@ class Polynomial(DotProduct):
                  name="Polynomial"):
         super(Polynomial, self).__init__(input_dim, variance, active_dims, name)
 
-        if bias is None:
-            bias = torch.tensor(1.)
+        bias = torch.tensor(1.) if bias is None else bias
         self.bias = Parameter(bias)
         self.set_constraint("bias", constraints.positive)
 
         if not isinstance(degree, int) or degree < 1:
-            raise ValueError("Degree for Polynomial kernel should be a positive "
-                             "integer.")
+            raise ValueError("Degree for Polynomial kernel should be a positive integer.")
         self.degree = degree
 
     def forward(self, X, Z=None, diag=False):
-        variance = self.get_param("variance")
-        bias = self.get_param("bias")
-        return variance * ((bias + self._dot_product(X, Z, diag)) ** self.degree)
+        return self.variance * ((self.bias + self._dot_product(X, Z, diag)) ** self.degree)

@@ -161,14 +161,6 @@ class SparseGPRegression(GPModel):
                                    .independent(self.y.dim() - 1),
                                obs=self.y)
 
-    def guide(self):
-        self.set_mode("guide")
-
-        Xu = self.get_param("Xu")
-        noise = self.get_param("noise")
-
-        return Xu, noise
-
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
         Computes the mean and covariance matrix (or variance) of Gaussian Process

@@ -140,20 +140,6 @@ class VariationalSparseGP(GPModel):
             with poutine.scale(None, self.num_data / self.X.shape[0]):
                 return self.likelihood(f_loc, f_var, self.y)
 
-    def guide(self):
-        self.set_mode("guide")
-
-        Xu = self.get_param("Xu")
-        u_loc = self.get_param("u_loc")
-        u_scale_tril = self.get_param("u_scale_tril")
-
-        if self._sample_latent:
-            u_name = param_with_module_name(self.name, "u")
-            pyro.sample(u_name,
-                        dist.MultivariateNormal(u_loc, scale_tril=u_scale_tril)
-                            .independent(u_loc.dim()-1))
-        return Xu, u_loc, u_scale_tril
-
     def forward(self, Xnew, full_cov=False):
         r"""
         Computes the mean and covariance matrix (or variance) of Gaussian Process
@@ -174,12 +160,6 @@ class VariationalSparseGP(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        # avoid sampling the unnecessary latent u
-        self._sample_latent = False
-        Xu, u_loc, u_scale_tril = self.guide()
-        self._sample_latent = True
-
-        loc, cov = conditional(Xnew, Xu, self.kernel, u_loc, u_scale_tril,
-                               full_cov=full_cov, whiten=self.whiten,
-                               jitter=self.jitter)
+        loc, cov = conditional(Xnew, self.Xu, self.kernel, self.u_loc, self.u_scale_tril,
+                               full_cov=full_cov, whiten=self.whiten, jitter=self.jitter)
         return loc + self.mean_function(Xnew), cov

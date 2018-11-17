@@ -76,11 +76,9 @@ class GPRegression(GPModel):
     def model(self):
         self.set_mode("model")
 
-        noise = self.get_param("noise")
-
         N = self.X.shape[0]
         Kff = self.kernel(self.X)
-        Kff.view(-1)[::N + 1] += noise  # add noise to diagonal
+        Kff.view(-1)[::N + 1] += self.noise  # add noise to diagonal
         Lff = Kff.potrf(upper=False)
 
         zero_loc = self.X.new_zeros(self.X.shape[0])
@@ -95,13 +93,6 @@ class GPRegression(GPModel):
                                    .expand_by(self.y.shape[:-1])
                                    .independent(self.y.dim() - 1),
                                obs=self.y)
-
-    def guide(self):
-        self.set_mode("guide")
-
-        noise = self.get_param("noise")
-
-        return noise
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
@@ -124,11 +115,10 @@ class GPRegression(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        noise = self.guide()
 
         N = self.X.shape[0]
         Kff = self.kernel(self.X).contiguous()
-        Kff.view(-1)[::N + 1] += noise  # add noise to the diagonal
+        Kff.view(-1)[::N + 1] += self.noise  # add noise to the diagonal
         Lff = Kff.potrf(upper=False)
 
         y_residual = self.y - self.mean_function(self.X)
@@ -138,9 +128,9 @@ class GPRegression(GPModel):
         if full_cov and not noiseless:
             M = Xnew.shape[0]
             cov = cov.contiguous()
-            cov.view(-1, M * M)[:, ::M + 1] += noise  # add noise to the diagonal
+            cov.view(-1, M * M)[:, ::M + 1] += self.noise  # add noise to the diagonal
         if not full_cov and not noiseless:
-            cov = cov + noise
+            cov = cov + self.noise
 
         return loc + self.mean_function(Xnew), cov
 
@@ -166,7 +156,7 @@ class GPRegression(GPModel):
         :returns: sampler
         :rtype: function
         """
-        noise = self.guide().detach()
+        noise = self.noise.detach()
         X = self.X.clone().detach()
         y = self.y.clone().detach()
         N = X.shape[0]

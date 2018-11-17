@@ -27,17 +27,14 @@ class Isotropy(Kernel):
 
     :param torch.Tensor lengthscale: Length-scale parameter of this kernel.
     """
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name=None):
+    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name=None):
         super(Isotropy, self).__init__(input_dim, active_dims, name)
 
-        if variance is None:
-            variance = torch.tensor(1.)
+        variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
-        if lengthscale is None:
-            lengthscale = torch.tensor(1.)
+        lengthscale = torch.tensor(1.) if lengthscale is None else lengthscale
         self.lengthscale = Parameter(lengthscale)
         self.set_constraint("lengthscale", constraints.positive)
 
@@ -52,9 +49,8 @@ class Isotropy(Kernel):
         if X.shape[1] != Z.shape[1]:
             raise ValueError("Inputs must have the same number of features.")
 
-        lengthscale = self.get_param("lengthscale")
-        scaled_X = X / lengthscale
-        scaled_Z = Z / lengthscale
+        scaled_X = X / self.lengthscale
+        scaled_Z = Z / self.lengthscale
         X2 = (scaled_X ** 2).sum(1, keepdim=True)
         Z2 = (scaled_Z ** 2).sum(1, keepdim=True)
         XZ = scaled_X.matmul(scaled_Z.t())
@@ -71,8 +67,7 @@ class Isotropy(Kernel):
         """
         Calculates the diagonal part of covariance matrix on active features.
         """
-        variance = self.get_param("variance")
-        return variance.expand(X.shape[0])
+        return self.variance.expand(X.shape[0])
 
 
 class RBF(Isotropy):
@@ -91,9 +86,8 @@ class RBF(Isotropy):
         if diag:
             return self._diag(X)
 
-        variance = self.get_param("variance")
         r2 = self._square_scaled_dist(X, Z)
-        return variance * torch.exp(-0.5 * r2)
+        return self.variance * torch.exp(-0.5 * r2)
 
 
 class RationalQuadratic(Isotropy):
@@ -120,10 +114,8 @@ class RationalQuadratic(Isotropy):
         if diag:
             return self._diag(X)
 
-        variance = self.get_param("variance")
-        scale_mixture = self.get_param("scale_mixture")
         r2 = self._square_scaled_dist(X, Z)
-        return variance * (1 + (0.5 / scale_mixture) * r2).pow(-scale_mixture)
+        return self.variance * (1 + (0.5 / self.scale_mixture) * r2).pow(-scale_mixture)
 
 
 class Exponential(Isotropy):
@@ -134,16 +126,14 @@ class Exponential(Isotropy):
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
                  name="Exponential"):
-        super(Exponential, self).__init__(input_dim, variance, lengthscale,
-                                          active_dims, name)
+        super(Exponential, self).__init__(input_dim, variance, lengthscale, active_dims, name)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
             return self._diag(X)
 
-        variance = self.get_param("variance")
         r = self._scaled_dist(X, Z)
-        return variance * torch.exp(-r)
+        return self.variance * torch.exp(-r)
 
 
 class Matern32(Isotropy):
@@ -155,17 +145,15 @@ class Matern32(Isotropy):
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
                  name="Matern32"):
-        super(Matern32, self).__init__(input_dim, variance, lengthscale, active_dims,
-                                       name)
+        super(Matern32, self).__init__(input_dim, variance, lengthscale, active_dims, name)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
             return self._diag(X)
 
-        variance = self.get_param("variance")
         r = self._scaled_dist(X, Z)
         sqrt3_r = 3**0.5 * r
-        return variance * (1 + sqrt3_r) * torch.exp(-sqrt3_r)
+        return self.variance * (1 + sqrt3_r) * torch.exp(-sqrt3_r)
 
 
 class Matern52(Isotropy):
@@ -177,15 +165,13 @@ class Matern52(Isotropy):
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
                  name="Matern52"):
-        super(Matern52, self).__init__(input_dim, variance, lengthscale, active_dims,
-                                       name)
+        super(Matern52, self).__init__(input_dim, variance, lengthscale, active_dims, name)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
             return self._diag(X)
 
-        variance = self.get_param("variance")
         r2 = self._square_scaled_dist(X, Z)
         r = _torch_sqrt(r2)
         sqrt5_r = 5**0.5 * r
-        return variance * (1 + sqrt5_r + (5/3) * r2) * torch.exp(-sqrt5_r)
+        return self.variance * (1 + sqrt5_r + (5/3) * r2) * torch.exp(-sqrt5_r)
