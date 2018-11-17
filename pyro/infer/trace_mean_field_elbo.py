@@ -33,9 +33,11 @@ class TraceMeanField_ELBO(Trace_ELBO):
     The mean field condition is a sufficient but not necessary condition for
     this estimator to be correct. The precise condition is that for every
     latent variable `z` in the guide, its parents in the model must not include
-    any latent variables that are descendants of `z` in the guide. Here 'parents
-    in the model' and 'descendants in the guide' is with respect to the
-    corresponding (statistical) dependency structure.
+    any latent variables that are descendants of `z` in the guide. Here
+    'parents in the model' and 'descendants in the guide' is with respect
+    to the corresponding (statistical) dependency structure. For example, this
+    condition is always satisfied if the model and guide have identical
+    dependency structures.
     """
 
     def loss(self, model, guide, *args, **kwargs):
