@@ -116,6 +116,13 @@ class VariationalGP(GPModel):
         else:
             return self.likelihood(f_loc, f_var, self.y)
 
+    def guide(self):
+        self.set_mode("guide")
+        if self._sample_latent:
+            pyro.sample(param_with_module_name(self.name, "f"),
+                        dist.MultivariateNormal(self.f_loc, scale_tril=self.f_scale_tril)
+                            .independent(f_loc.dim()-1))
+
     def forward(self, Xnew, full_cov=False):
         r"""
         Computes the mean and covariance matrix (or variance) of Gaussian Process

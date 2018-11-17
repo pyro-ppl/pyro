@@ -545,18 +545,18 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
-        W_term = pyro.param("{}_W_term".format(self.prefix),
-                            lambda: torch.randn(self.latent_dim, self.rank) * (0.5 / self.rank) ** 0.5)
-        D_term = pyro.param("{}_D_term".format(self.prefix),
-                            lambda: torch.ones(self.latent_dim) * 0.5,
-                            constraint=constraints.positive)
-        return dist.LowRankMultivariateNormal(loc, W_term, D_term)
+        cov_factor = pyro.param("{}_cov_factor".format(self.prefix),
+            lambda: torch.randn(self.latent_dim, self.rank) * (0.5 / self.rank) ** 0.5)
+        cov_diag = pyro.param("{}_cov_diag".format(self.prefix),
+                              lambda: torch.ones(self.latent_dim) * 0.5,
+                              constraint=constraints.positive)
+        return dist.LowRankMultivariateNormal(loc, cov_factor, cov_diag)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
-        W_term = pyro.param("{}_W_term".format(self.prefix))
-        D_term = pyro.param("{}_D_term".format(self.prefix))
-        scale = (W_term.pow(2).sum(-1) + D_term).sqrt()
+        cov_factor = pyro.param("{}_cov_factor".format(self.prefix))
+        cov_diag = pyro.param("{}_cov_diag".format(self.prefix))
+        scale = (cov_factor.pow(2).sum(-1) + cov_diag).sqrt()
         return loc, scale
 
 

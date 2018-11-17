@@ -87,8 +87,7 @@ class GPRegression(GPModel):
             f_var = Lff.pow(2).sum(dim=-1)
             return f_loc, f_var
         else:
-            y_name = param_with_module_name(self.name, "y")
-            return pyro.sample(y_name,
+            return pyro.sample(param_with_module_name(self.name, "y"),
                                dist.MultivariateNormal(f_loc, scale_tril=Lff)
                                    .expand_by(self.y.shape[:-1])
                                    .independent(self.y.dim() - 1),

@@ -29,7 +29,7 @@ class Parameterized(nn.Module):
         self.name = name
         self._constraints = defaultdict(constraints.real)
         self._priors = {}
-        self._guides = defaultdict(dist.Delta)
+        self._guides = defaultdict("Delta")
         self._registered_params = {}
 
     def set_constraint(self, param, constraint):
@@ -58,8 +58,7 @@ class Parameterized(nn.Module):
         Sets a prior to a parameter.
 
         :param str param: Name of the parameter.
-        :param ~pyro.distributions.distribution.Distribution prior: A Pyro prior
-            distribution.
+        :param str guide: One of "Delta", "Normal", "MultivariateNormal".
         """
         self._guides[param] = guide
 
@@ -114,30 +113,27 @@ class Parameterized(nn.Module):
                 p = pyro.sample(param_name, self._priors[param])
             else:
                 guide = self._guides[param]
-                if guide is dist.Delta:
+                if guide == "Delta":
                     p_MAP = pyro.param("{}_MAP".format(param_name), self._priors[param])
                     p = pyro.sample(param_name, dist.Delta(p_MAP))
-                elif guide is dist.Normal:
-                    n = value.size(-1)
+                elif guide == "Normal":
                     loc = pyro.param("{}_loc".format(param_name),
                                      lambda: value.new_zeros(value.shape))
                     scale = pyro.param("{}_scale".format(self.prefix),
                                        lambda: value.new_ones(value.shape),
                                        constraint=constraints.positive)
                     p = pyro.sample(param_name,
-                                    guide(p_loc, scale_tril=p_scale_tril)
-                                    .independent(value.dim() - 1))
-                elif guide is dist.MultivariateNormal:
+                        dist.Normal(loc, scale_tril=scale_tril).independent(value.dim()))
+                elif guide == "MultivariateNormal":
                     n = value.size(-1)
-                    p_loc = pyro.param("{}_loc".format(param_name),
+                    loc = pyro.param("{}_loc".format(param_name),
                                        lambda: value.new_zeros(value.shape))
-                    p_scale_tril = pyro.param("{}_scale_tril".format(param_name),
-                        lambda: torch.eye(self.latent_dim, out=value.new_empty(n, n)),
-                                              constraint=constraints.lower_cholesky)
-                    p = pyro.sample(param_name,
-                                    guide(p_loc, scale_tril=p_scale_tril)
-                                    .independent(value.dim() - 1))
-                elif guide is dis
+                    scale_tril = pyro.param("{}_scale_tril".format(param_name),
+                        lambda: torch.eye(self.latent_dim, out=value.new_empty(n, n))
+                            .repeat(value.shape[:-1] + (1, 1)),
+                        constraint=constraints.lower_cholesky)
+                    p = pyro.sample(param_name, dist.MultivariateNormal(p_loc,
+                        scale_tril=p_scale_tril).independent(value.dim() - 1))
         else:
             p = pyro.param(param_name, value, constraint=self._constraints[param])
         self._registered_params[param] = p
