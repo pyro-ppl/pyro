@@ -22,7 +22,7 @@ class TraceMeanField_ELBO(Trace_ELBO):
     i.e. that it factorizes across the different latent variables present
     in the guide. It also assumes that all of the latent variables in the
     guide are reparameterized. This latter condition is satisfied for, e.g.,
-    the Normal distribution but is not satisfied for the Categorical
+    the Normal distribution but is not satisfied for, e.g., the Categorical
     distribution.
 
     .. warning:: This estimator may give incorrect results if the mean-field
