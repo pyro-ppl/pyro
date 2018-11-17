@@ -8,7 +8,7 @@ from pyro.infer.util import torch_item
 from pyro.util import warn_if_nan
 
 
-class Trace_MeanFieldELBO(Trace_ELBO):
+class TraceMeanField_ELBO(Trace_ELBO):
     """
     A trace implementation of ELBO-based SVI. This is currently the only
     ELBO estimator in Pyro that uses analytic KL divergences when those
@@ -63,6 +63,8 @@ class Trace_MeanFieldELBO(Trace_ELBO):
                     elbo_particle = elbo_particle + model_site["log_prob_sum"]
                 else:
                     guide_site = guide_trace.nodes[name]
+                    assert guide_site["fn"].has_rsample, \
+                        "All distributions must be fully reparameterized"
 
                     # use kl divergence if available, else fall back on sampling
                     try:
@@ -71,11 +73,11 @@ class Trace_MeanFieldELBO(Trace_ELBO):
                     except NotImplementedError:
                         log_prob, score_function_term, entropy_term = guide_site["score_parts"]
 
-                    assert not is_identically_zero(entropy_term), \
-                        "All distributions must be fully reparameterized"
-                    assert is_identically_zero(score_function_term), \
-                        "All distributions must be fully reparameterized"
+                        assert not is_identically_zero(entropy_term), \
+                            "All distributions must be fully reparameterized"
+                        assert is_identically_zero(score_function_term), \
+                            "All distributions must be fully reparameterized"
 
-                    elbo_particle = elbo_particle + model_site["log_prob_sum"] - entropy_term.sum()
+                        elbo_particle = elbo_particle + model_site["log_prob_sum"] - entropy_term.sum()
 
         return -torch_item(elbo_particle), -elbo_particle
