@@ -26,7 +26,7 @@ class TraceMeanField_ELBO(Trace_ELBO):
     distribution.
 
     .. warning:: This estimator may give incorrect results if the mean-field
-    condition is not satisfied.
+      condition is not satisfied.
 
     Note for advanced users:
 
