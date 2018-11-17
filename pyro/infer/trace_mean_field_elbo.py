@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 from torch.distributions import kl_divergence
 
-import pyro
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.util import torch_item
