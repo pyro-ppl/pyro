@@ -109,6 +109,8 @@ class _ParallelSampler(TracePosterior):
         self.log_queue = self.ctx.Manager().Queue()
         self.logger = initialize_logger(logging.getLogger("pyro.infer.mcmc"),
                                         "MAIN", log_queue=self.log_queue)
+        # initialize number of samples per chain
+        self.num_samples = [num_samples] * num_chains
         self.log_thread = threading.Thread(target=logger_thread,
                                            args=(self.log_queue, self.warmup_steps,
                                                  self.num_samples, self.num_chains))
@@ -119,7 +121,7 @@ class _ParallelSampler(TracePosterior):
         self.workers = []
         for i in range(self.num_chains):
             worker = _Worker(i + 1, self.result_queue, self.log_queue, self.kernel,
-                             self.num_samples, self.warmup_steps)
+                             self.num_samples[i], self.warmup_steps)
             worker.daemon = True
             self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
                                                  args=args, kwargs=kwargs))
@@ -133,17 +135,17 @@ class _ParallelSampler(TracePosterior):
                 w.terminate()
 
     def _traces(self, *args, **kwargs):
-        chain_indices = [[] for i in range(self.num_chains)]
+        chain_indices = [[] for _ in range(self.num_chains)]
         try:
             index = 0
-            for (trace, logit), chain in self._traces_and_chains(*args, **kwargs):
+            for (trace, logit), chain in self._chain_traces(*args, **kwargs):
                 chain_indices[chain].append(index)
                 yield trace, logit
                 index += 1
         finally:
             self.chain_indices = torch.tensor(chain_indices)  # num_chains x num_samples
 
-    def _traces_and_chains(self, *args, **kwargs):
+    def _chain_traces(self, *args, **kwargs):
         # Ignore sigint in worker processes; they will be shut down
         # when the main process terminates.
         sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)

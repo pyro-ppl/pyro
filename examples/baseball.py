@@ -9,7 +9,6 @@ import pandas as pd
 import torch
 
 import pyro
-import pyro.poutine as poutine
 from pyro.distributions import Beta, Binomial, HalfCauchy, Normal, Pareto, Uniform
 from pyro.distributions.util import logsumexp
 from pyro.infer import EmpiricalMarginal
@@ -53,6 +52,9 @@ hyper-parameters) of running HMC on different problems.
     path lengths in Hamiltonian Monte Carlo", (https://arxiv.org/abs/1111.4246)
 """
 
+# work around with the error "RuntimeError: received 0 items of ancdata"
+# see https://discuss.pytorch.org/t/received-0-items-of-ancdata-pytorch-0-4-0/19823
+torch.multiprocessing.set_sharing_strategy('file_system')
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 # Enable validation checks
 pyro.enable_validation(True)
@@ -167,9 +169,9 @@ def summary(trace_posterior, sites, player_names, transforms={}, diagnostics=Tru
         if site_name in transforms:
             marginal_site = transforms[site_name](marginal_site)
         site_stats[site_name] = get_site_stats(marginal_site.numpy(), player_names)
-        if chain_indices is not None:
-            site_stats[site_name].assign(n_eff=n_eff[i].numpy())
-            site_satts[site_name].assign(r_hat=r_hat[i].numpy())
+        if diagnostics and trace_posterior.sampler.num_chains > 1:
+            site_stats[site_name] = site_stats[site_name].assign(n_eff=n_eff[i].numpy(),
+                                                                 r_hat=r_hat[i].numpy())
     return site_stats
 
 
@@ -258,8 +260,7 @@ def main(args):
     posterior_fully_pooled = MCMC(nuts_kernel,
                                   num_samples=args.num_samples,
                                   warmup_steps=args.warmup_steps,
-                                  num_chains=args.num_chains) \
-        .run(at_bats, hits)
+                                  num_chains=args.num_chains).run(at_bats, hits)
     logging.info("\nModel: Fully Pooled")
     logging.info("===================")
     logging.info("\nphi:")
@@ -275,8 +276,7 @@ def main(args):
     posterior_not_pooled = MCMC(nuts_kernel,
                                 num_samples=args.num_samples,
                                 warmup_steps=args.warmup_steps,
-                                num_chains=args.num_chains) \
-        .run(not_pooled, at_bats, hits)
+                                num_chains=args.num_chains).run(at_bats, hits)
     logging.info("\nModel: Not Pooled")
     logging.info("=================")
     logging.info("\nphi:")
@@ -294,8 +294,7 @@ def main(args):
         posterior_partially_pooled = MCMC(nuts_kernel,
                                           num_samples=args.num_samples,
                                           warmup_steps=args.warmup_steps,
-                                          num_chains=args.num_chains) \
-            .run(partially_pooled, at_bats, hits)
+                                          num_chains=args.num_chains).run(at_bats, hits)
         logging.info("\nModel: Partially Pooled")
         logging.info("=======================")
         logging.info("\nphi:")
@@ -312,8 +311,7 @@ def main(args):
     posterior_partially_pooled_with_logit = MCMC(nuts_kernel,
                                                  num_samples=args.num_samples,
                                                  warmup_steps=args.warmup_steps,
-                                                 num_chains=args.num_chains) \
-        .run(partially_pooled_with_logit, at_bats, hits)
+                                                 num_chains=args.num_chains).run(at_bats, hits)
     logging.info("\nModel: Partially Pooled with Logit")
     logging.info("==================================")
     logging.info("\nSigmoid(alpha):")
