@@ -215,7 +215,7 @@ class _SingleSampler(TracePosterior):
             if not is_multiprocessing else None
         self.logger = initialize_logger(self.logger, logger_id, progress_bar, log_queue)
         self.kernel.setup(self.warmup_steps, *args, **kwargs)
-        trace = self.kernel.initial_trace()
+        trace = self.kernel.initial_trace
         with optional(progress_bar, not is_multiprocessing):
             for trace in self._gen_samples(self.warmup_steps, trace):
                 continue
