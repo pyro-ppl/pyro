@@ -97,7 +97,7 @@ class _ParallelSampler(TracePosterior):
         self.kernel = kernel
         self.warmup_steps = warmup_steps
         self.num_chains = num_chains
-        self._chains = [[] for i in range(num_chains)]
+        self.chain_indices = None
         self.workers = []
         self.ctx = mp
         if mp_context:
@@ -133,13 +133,17 @@ class _ParallelSampler(TracePosterior):
                 w.terminate()
 
     def _traces(self, *args, **kwargs):
-        index = 0
-        for (trace, logit), chain in self._chain_traces(*args, **kwargs):
-            self._chains[chain].append(index)
-            yield trace, logit
-            index += 1
+        chain_indices = [[] for i in range(self.num_chains)]
+        try:
+            index = 0
+            for (trace, logit), chain in self._traces_and_chains(*args, **kwargs):
+                chain_indices[chain].append(index)
+                yield trace, logit
+                index += 1
+        finally:
+            self.chain_indices = torch.tensor(chain_indices)  # num_chains x num_samples
 
-    def _chain_traces(self, *args, **kwargs):
+    def _traces_and_chains(self, *args, **kwargs):
         # Ignore sigint in worker processes; they will be shut down
         # when the main process terminates.
         sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)

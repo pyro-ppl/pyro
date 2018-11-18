@@ -9,6 +9,7 @@ from torch.distributions import constraints
 from pyro.distributions.torch import Categorical
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import copy_docs_from, logsumexp
+from pyro.ops.stats import effective_sample_size, split_gelman_rubin
 
 
 @copy_docs_from(TorchDistribution)
