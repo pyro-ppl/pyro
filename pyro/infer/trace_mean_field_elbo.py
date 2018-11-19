@@ -19,7 +19,7 @@ def _check_mean_field_requirement(model_trace, guide_trace):
                    if site["type"] == "sample" and name in guide_trace.nodes]
     guide_sites = [name for name, site in guide_trace.nodes.items()
                    if site["type"] == "sample" and name in model_trace.nodes]
-    assert set(model_sites) == set(guide_sites), "programmer error"
+    assert set(model_sites) == set(guide_sites)
     if model_sites != guide_sites:
         warnings.warn("Failed to verify mean field restriction on the guide. "
                       "To eliminate this warning, ensure model and guide sites "
