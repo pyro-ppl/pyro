@@ -268,6 +268,7 @@ class MCMC(TracePosterior):
                  num_chains=1, mp_context=None):
         self.warmup_steps = warmup_steps if warmup_steps is not None else num_samples // 2  # Stan
         self.num_samples = num_samples
+        self.num_chains = num_chains
         if num_chains > 1:
             cpu_count = mp.cpu_count()
             if num_chains > cpu_count:

@@ -158,7 +158,7 @@ def summary(trace_posterior, sites, player_names, transforms={}, diagnostics=Tru
     """
     marginal = EmpiricalMarginal(trace_posterior, sites).get_samples_and_weights()[0]
 
-    if diagnostics and trace_posterior.sampler.num_chains > 1:
+    if diagnostics and trace_posterior.num_chains > 1:
         chain_indices = trace_posterior.sampler.chain_indices
         n_eff, r_hat = chain_diagnostics(marginal, chain_indices)
 
@@ -169,7 +169,7 @@ def summary(trace_posterior, sites, player_names, transforms={}, diagnostics=Tru
         if site_name in transforms:
             marginal_site = transforms[site_name](marginal_site)
         site_stats[site_name] = get_site_stats(marginal_site.numpy(), player_names)
-        if diagnostics and trace_posterior.sampler.num_chains > 1:
+        if diagnostics and trace_posterior.num_chains > 1:
             site_stats[site_name] = site_stats[site_name].assign(n_eff=n_eff[i].numpy(),
                                                                  r_hat=r_hat[i].numpy())
     return site_stats
@@ -179,8 +179,8 @@ def chain_diagnostics(samples, chain_indices):
     assert samples.size(0) == chain_indices.numel()
     chain_samples = samples[chain_indices.reshape(-1)].reshape(
         chain_indices.shape + samples.shape[1:])
-    n_eff = effective_sample_size(chain_samples, sample_dim=1, chain_dim=0)
-    r_hat = split_gelman_rubin(chain_samples, sample_dim=1, chain_dim=0)
+    n_eff = effective_sample_size(chain_samples)
+    r_hat = split_gelman_rubin(chain_samples)
     return n_eff, r_hat
 
 
@@ -254,6 +254,7 @@ def main(args):
     at_bats, hits = train[:, 0], train[:, 1]
     logging.info("Original Dataset:")
     logging.info(baseball_dataset)
+    num_predictive_samples = args.num_samples * args.num_chains
 
     # (1) Full Pooling Model
     nuts_kernel = NUTS(fully_pooled)
@@ -267,7 +268,7 @@ def main(args):
     logging.info(summary(posterior_fully_pooled, sites=["phi"], player_names=player_names)["phi"])
     posterior_predictive = TracePredictive(fully_pooled,
                                            posterior_fully_pooled,
-                                           num_samples=args.num_samples)
+                                           num_samples=num_predictive_samples)
     sample_posterior_predictive(posterior_predictive, baseball_dataset)
     evaluate_log_predictive_density(posterior_predictive, baseball_dataset)
 
@@ -283,7 +284,7 @@ def main(args):
     logging.info(summary(posterior_not_pooled, sites=["phi"], player_names=player_names)["phi"])
     posterior_predictive = TracePredictive(not_pooled,
                                            posterior_not_pooled,
-                                           num_samples=args.num_samples)
+                                           num_samples=num_predictive_samples)
     sample_posterior_predictive(posterior_predictive, baseball_dataset)
     evaluate_log_predictive_density(posterior_predictive, baseball_dataset)
 
@@ -302,7 +303,7 @@ def main(args):
                              player_names=player_names)["phi"])
         posterior_predictive = TracePredictive(partially_pooled,
                                                posterior_partially_pooled,
-                                               num_samples=args.num_samples)
+                                               num_samples=num_predictive_samples)
         sample_posterior_predictive(posterior_predictive, baseball_dataset)
         evaluate_log_predictive_density(posterior_predictive, baseball_dataset)
 
@@ -321,7 +322,7 @@ def main(args):
                          transforms={"alpha": lambda x: 1. / (1 + (-x).exp())})["alpha"])
     posterior_predictive = TracePredictive(partially_pooled_with_logit,
                                            posterior_partially_pooled_with_logit,
-                                           num_samples=args.num_samples)
+                                           num_samples=num_predictive_samples)
     sample_posterior_predictive(posterior_predictive, baseball_dataset)
     evaluate_log_predictive_density(posterior_predictive, baseball_dataset)
 

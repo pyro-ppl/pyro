@@ -58,29 +58,29 @@ def test_fft_next_good_size():
 
 def test_gelman_rubin():
     # only need to test precision for small data
-    x = torch.empty(10, 2)
-    x[:, 0] = torch.arange(10.)
-    x[:, 1] = torch.arange(10.) + 1
+    x = torch.empty(2, 10)
+    x[0, :] = torch.arange(10.)
+    x[1, :] = torch.arange(10.) + 1
 
     r_hat = gelman_rubin(x)
     assert_equal(r_hat.item(), 0.98, prec=0.01)
 
 
 def test_split_gelman_rubin_agree_with_gelman_rubin():
-    x = torch.rand(10, 2)
-    r_hat1 = gelman_rubin(x.reshape(2, 5, 2).transpose(0, 1).reshape(5, 4))
+    x = torch.rand(2, 10)
+    r_hat1 = gelman_rubin(x.reshape(2, 2, 5).reshape(4, 5))
     r_hat2 = split_gelman_rubin(x)
     assert_equal(r_hat1, r_hat2)
 
 
 @pytest.mark.init(rng_seed=3)
 def test_effective_sample_size():
-    x = torch.empty(1000, 2)
+    x = torch.empty(2, 1000)
     x[0, 0].normal_(0, 1)
-    x[0, 1].normal_(0, 1)
-    for i in range(1, x.size(0)):
-        x[i, 0].normal_(0.8 * x[i - 1, 0], 1)
-        x[i, 1].normal_(0.9 * x[i - 1, 1], 1)
+    x[1, 0].normal_(0, 1)
+    for i in range(1, x.size(1)):
+        x[0, i].normal_(0.8 * x[0, i - 1], 1)
+        x[1, i].normal_(0.9 * x[1, i - 1], 1)
 
     with xfail_if_not_implemented():
         assert_equal(effective_sample_size(x).item(), 134.5, prec=1)
@@ -90,7 +90,7 @@ def test_effective_sample_size():
 @pytest.mark.parametrize('sample_shape', [(), (3,), (2, 3)])
 def test_diagnostics_ok_with_sample_shape(diagnostics, sample_shape):
     sample_shape = torch.Size(sample_shape)
-    xs = torch.rand((100, 4) + sample_shape)
+    xs = torch.rand((4, 100) + sample_shape)
 
     with xfail_if_not_implemented():
         y = diagnostics(xs)
@@ -100,7 +100,7 @@ def test_diagnostics_ok_with_sample_shape(diagnostics, sample_shape):
 
         # test correct batch calculation
         batch_diagnostics = []
-        for x in xs.reshape(100, 4, -1).split(1, dim=2):
+        for x in xs.reshape(4, 100, -1).split(1, dim=2):
             batch_diagnostics.append(diagnostics(x))
         assert_equal(torch.cat(batch_diagnostics, dim=0).reshape(sample_shape), y)
 
@@ -108,6 +108,6 @@ def test_diagnostics_ok_with_sample_shape(diagnostics, sample_shape):
         a = xs.transpose(0, 1)
         b = xs.unsqueeze(-1).transpose(0, -1).squeeze(0)
         c = xs.unsqueeze(-1).transpose(1, -1).squeeze(1)
-        assert_equal(diagnostics(a, sample_dim=1, chain_dim=0), y)
-        assert_equal(diagnostics(b, sample_dim=-1, chain_dim=0), y)
-        assert_equal(diagnostics(c, chain_dim=-1), y)
+        assert_equal(diagnostics(a, chain_dim=1, sample_dim=0), y)
+        assert_equal(diagnostics(b, chain_dim=-1, sample_dim=0), y)
+        assert_equal(diagnostics(c, sample_dim=-1), y)
