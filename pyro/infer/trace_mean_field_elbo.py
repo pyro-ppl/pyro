@@ -1,11 +1,31 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
+
 from torch.distributions import kl_divergence
 
-from pyro.distributions.util import is_identically_zero
+from pyro.distributions.util import is_identically_zero, scale_and_mask
 from pyro.infer.trace_elbo import Trace_ELBO
-from pyro.infer.util import torch_item
+from pyro.infer.util import is_validation_enabled, torch_item
 from pyro.util import warn_if_nan
+
+
+def _check_mean_field_requirement(model_trace, guide_trace):
+    """
+    Checks that the guide and model sample sites are ordered identically.
+    This is sufficient but not necessary for correctness.
+    """
+    model_sites = [name for name, site in model_trace.nodes.items()
+                   if site["type"] == "sample" and name in guide_trace.nodes]
+    guide_sites = [name for name, site in guide_trace.nodes.items()
+                   if site["type"] == "sample" and name in model_trace.nodes]
+    assert set(model_sites) == set(guide_sites), "programmer error"
+    if model_sites != guide_sites:
+        warnings.warn("Failed to verify mean field restriction on the guide. "
+                      "To eliminate this warning, ensure model and guide sites "
+                      "occur in the same order.\n" +
+                      "Model sites:\n  " + "\n  ".join(model_sites) +
+                      "Guide sites:\n  " + "\n  ".join(guide_sites))
 
 
 class TraceMeanField_ELBO(Trace_ELBO):
@@ -39,6 +59,12 @@ class TraceMeanField_ELBO(Trace_ELBO):
     condition is always satisfied if the model and guide have identical
     dependency structures.
     """
+    def _get_trace(self, model, guide, *args, **kwargs):
+        model_trace, guide_trace = super(TraceMeanField_ELBO, self)._get_trace(
+            model, guide, *args, **kwargs)
+        if is_validation_enabled():
+            _check_mean_field_requirement(model_trace, guide_trace)
+        return model_trace, guide_trace
 
     def loss(self, model, guide, *args, **kwargs):
         """
@@ -74,6 +100,7 @@ class TraceMeanField_ELBO(Trace_ELBO):
                     # use kl divergence if available, else fall back on sampling
                     try:
                         kl_qp = kl_divergence(guide_site["fn"], model_site["fn"])
+                        kl_qp = scale_and_mask(kl_qp, scale=guide_site["scale"], mask=guide_site["mask"])
                         assert kl_qp.shape == guide_site["fn"].batch_shape
                         elbo_particle = elbo_particle - kl_qp.sum()
                     except NotImplementedError:
