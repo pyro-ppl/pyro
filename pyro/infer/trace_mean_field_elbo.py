@@ -28,6 +28,14 @@ def _check_mean_field_requirement(model_trace, guide_trace):
                       "Guide sites:\n  " + "\n  ".join(guide_sites))
 
 
+def _check_fully_reparametrized(guide_site):
+    log_prob, score_function_term, entropy_term = guide_site["score_parts"]
+    fully_rep = (guide_site["fn"].has_rsample and not is_identically_zero(entropy_term) and
+                 is_identically_zero(score_function_term))
+    if not fully_rep:
+        raise NotImplementedError("All distributions in the guide must be fully reparameterized.")
+
+
 class TraceMeanField_ELBO(Trace_ELBO):
     """
     A trace implementation of ELBO-based SVI. This is currently the only
@@ -91,11 +99,8 @@ class TraceMeanField_ELBO(Trace_ELBO):
                     elbo_particle = elbo_particle + model_site["log_prob_sum"]
                 else:
                     guide_site = guide_trace.nodes[name]
-
-                    log_prob, score_function_term, entropy_term = guide_site["score_parts"]
-                    fully_rep = guide_site["fn"].has_rsample and not is_identically_zero(entropy_term) \
-                        and is_identically_zero(score_function_term)
-                    assert fully_rep, "All distributions in the guide must be fully reparameterized."
+                    if is_validation_enabled():
+                        _check_fully_reparametrized(guide_site)
 
                     # use kl divergence if available, else fall back on sampling
                     try:
@@ -104,18 +109,16 @@ class TraceMeanField_ELBO(Trace_ELBO):
                         assert kl_qp.shape == guide_site["fn"].batch_shape
                         elbo_particle = elbo_particle - kl_qp.sum()
                     except NotImplementedError:
+                        entropy_term = guide_site["score_parts"].entropy_term
                         elbo_particle = elbo_particle + model_site["log_prob_sum"] - entropy_term.sum()
 
         # handle auxiliary sites in the guide
         for name, guide_site in guide_trace.nodes.items():
             if guide_site["type"] == "sample" and name not in model_trace.nodes():
                 assert guide_site["infer"].get("is_auxiliary")
-
-                log_prob, score_function_term, entropy_term = guide_site["score_parts"]
-                fully_rep = guide_site["fn"].has_rsample and not is_identically_zero(entropy_term) \
-                    and is_identically_zero(score_function_term)
-                assert fully_rep, "All distributions in the guide must be fully reparameterized."
-
+                if is_validation_enabled():
+                    _check_fully_reparametrized(guide_site)
+                entropy_term = guide_site["score_parts"].entropy_term
                 elbo_particle = elbo_particle - entropy_term.sum()
 
         return -torch_item(elbo_particle), -elbo_particle
