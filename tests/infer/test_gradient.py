@@ -150,7 +150,7 @@ def test_plate(Elbo, reparameterized):
 def test_plate_elbo_vectorized_particles(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
-    num_particles = 300000
+    num_particles = 200000
     precision = 0.06
     Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
 
