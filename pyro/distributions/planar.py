@@ -12,7 +12,7 @@ from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(Transform)
-class PlanarFlow(Transform):
+class PlanarFlow(Transform, nn.Module):
     """
     A 'planar' normalizing flow that uses the transformation
 
@@ -29,7 +29,7 @@ class PlanarFlow(Transform):
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> plf = PlanarFlow(10)
-    >>> plf_module = pyro.module("my_plf", plf.module)
+    >>> plf_module = pyro.module("my_plf", plf)
     >>> plf_dist = dist.TransformedDistribution(base_dist, [plf])
     >>> plf_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
@@ -52,24 +52,28 @@ class PlanarFlow(Transform):
     codomain = constraints.real
 
     def __init__(self, input_dim):
-        super(PlanarFlow, self).__init__()
+        Transform.__init__(self)
+        nn.Module.__init__(self)
+
         self.input_dim = input_dim
-        self.module = nn.Module()
-        self.module.lin = nn.Linear(input_dim, 1)
-        self.module.u = nn.Parameter(torch.Tensor(input_dim))
+        self.lin = nn.Linear(input_dim, 1)
+        self.u = nn.Parameter(torch.Tensor(input_dim))
         self.reset_parameters()
         self._intermediates_cache = {}
         self.add_inverse_to_cache = True
 
     def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.module.u.size(0))
-        self.module.lin.weight.data.uniform_(-stdv, stdv)
-        self.module.u.data.uniform_(-stdv, stdv)
+        stdv = 1. / math.sqrt(self.u.size(0))
+        self.lin.weight.data.uniform_(-stdv, stdv)
+        self.u.data.uniform_(-stdv, stdv)
+
+    def __hash__(self):
+        return super(nn.Module, self).__hash__()
 
     # This method ensures that torch(u_hat, w) > -1, required for invertibility
     def u_hat(self):
-        u = self.module.u
-        w = self.module.lin.weight.squeeze(0)
+        u = self.u
+        w = self.lin.weight.squeeze(0)
         alpha = torch.dot(u, w)
         a_prime = -1 + F.softplus(alpha)
         return u + (a_prime - alpha) * w.div(w.norm())
@@ -83,7 +87,7 @@ class PlanarFlow(Transform):
         sample from the base distribution (or the output of a previous flow)
         """
 
-        y = x + self.u_hat() * torch.tanh(self.module.lin(x))
+        y = x + self.u_hat() * torch.tanh(self.lin(x))
 
         self._add_intermediate_to_cache(x, y, 'x')
         return y
@@ -116,7 +120,7 @@ class PlanarFlow(Transform):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        psi_z = (1 - torch.tanh(self.module.lin(x)).pow(2)) * self.module.lin.weight
+        psi_z = (1 - torch.tanh(self.lin(x)).pow(2)) * self.lin.weight
 
         # TODO: Simplify following line once using multivariate base distributions for multivariate flows
         return torch.log(torch.abs(1 + torch.matmul(psi_z, self.u_hat())).unsqueeze(-1)) * \
