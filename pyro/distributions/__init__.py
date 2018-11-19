@@ -49,6 +49,7 @@ __all__ = [
     "RelaxedBernoulliStraightThrough",
     "RelaxedOneHotCategoricalStraightThrough",
     "TorchDistribution",
+    "TransformModule",
     "VonMises",
     "VonMises3D",
     "ZeroInflatedPoisson"

@@ -282,9 +282,24 @@ class StudentT(torch.distributions.StudentT, TorchDistributionMixin):
             return type(self)(df, loc, scale, validate_args=validate_args)
 
 
-class TransformedDistribution(torch.distributions.TransformedDistribution, TorchDistributionMixin):
+class TransformedDistribution(torch.distributions.TransformedDistribution, TorchDistributionMixin, torch.nn.Module):
+    def __init__(self, *args, **kwargs):
+        torch.distributions.TransformedDistribution.__init__(self, *args, **kwargs)
+        TorchDistributionMixin.__init__(self)
+        torch.nn.Module.__init__(self)
+        self.transforms = torch.nn.ModuleList(self.transforms)
+
     def expand(self, batch_shape):
         return super(TransformedDistribution, self).expand(batch_shape)
+
+
+class TransformModule(torch.distributions.Transform, torch.nn.Module):
+    def __init__(self):
+        torch.distributions.Transform.__init__(self)
+        torch.nn.Module.__init__(self)
+
+    def __hash__(self):
+        return super(torch.nn.Module, self).__hash__()
 
 
 class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
@@ -324,6 +339,7 @@ for _name, _Dist in torch.distributions.__dict__.items():
 
     __all__.append(_name)
 
+__all__.append('TransformModule')
 
 # Create sphinx documentation.
 __doc__ = '\n\n'.join([
