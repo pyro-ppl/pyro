@@ -1314,7 +1314,7 @@ def test_enum_recycling_dbn(markov):
         z_ind = torch.arange(4, dtype=torch.long)
 
         x = 0
-        times = pyro.markov(range(100)) if markov else range(20)
+        times = pyro.markov(range(100)) if markov else range(11)
         for t in times:
             x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
             y = pyro.sample("y_{}".format(t), dist.Categorical(q))
