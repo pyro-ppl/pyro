@@ -384,9 +384,12 @@ class ReshapedDistribution(TorchDistribution):
 
 @register_kl(ReshapedDistribution, ReshapedDistribution)
 def _kl_reshaped_reshaped(p, q):
-    if p.reinterpreted_batch_ndims or q.reinterpreted_batch_ndims:
+    if p.reinterpreted_batch_ndims != q.reinterpreted_batch_ndims:
         raise NotImplementedError
-    return kl_divergence(p.base_dist, q.base_dist)
+    kl = kl_divergence(p.base_dist, q.base_dist)
+    if p.reinterpreted_batch_ndims:
+        kl = sum_rightmost(kl, p.reinterpreted_batch_ndims)
+    return kl
 
 
 class MaskedDistribution(TorchDistribution):
@@ -440,3 +443,10 @@ class MaskedDistribution(TorchDistribution):
     @property
     def variance(self):
         return self.base_dist.variance
+
+
+@register_kl(MaskedDistribution, MaskedDistribution)
+def _kl_masked_masked(p, q):
+    mask = p._mask if p._mask is q._mask else p._mask & q._mask
+    kl = kl_divergence(p.base_dist, q.base_dist)
+    return scale_and_mask(kl, mask=mask)
