@@ -98,16 +98,16 @@ def main(args):
         return pyro.module("CNN", cnn)(x)
     # Create deep kernel by warping RBF with CNN.
     # CNN will transform a high dimension image into a low dimension 2D tensors for RBF kernel.
-    # This kernel accepts inputs are inputs of CNN and gives outputs are covariance matrix of RBF on
-    # outputs of CNN.
+    # This kernel accepts inputs are inputs of CNN and gives outputs are covariance matrix of RBF
+    # on outputs of CNN.
     kernel = gp.kernels.RBF(input_dim=10, lengthscale=torch.ones(10)).warp(iwarping_fn=cnn_fn)
 
     # init inducing points (taken randomly from dataset)
     Xu = next(iter(train_loader))[0][:args.num_inducing]
     # use MultiClass likelihood for 10-class classification problem
     likelihood = gp.likelihoods.MultiClass(num_classes=10)
-    # Because we use Categorical distribution in MultiClass likelihood, we need GP model returns a list
-    # of probabilities of each class. Hence it is required to use latent_shape = 10.
+    # Because we use Categorical distribution in MultiClass likelihood, we need GP model returns a
+    # list of probabilities of each class. Hence it is required to use latent_shape = 10.
     # Turns on "whiten" flag will help optimization for variational models.
     gpmodel = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=kernel, Xu=Xu,
                                             likelihood=likelihood, latent_shape=torch.Size([10]),
@@ -117,7 +117,7 @@ def main(args):
 
     optimizer = optim.Adam({"lr": args.lr})
 
-    elbo = infer.JitTrace_ELBO() if args.jit else infer.Trace_ELBO()
+    elbo = infer.JitTrace_ELBO() if args.jit else infer.TraceMeanField_ELBO()
     svi = infer.SVI(gpmodel.model, gpmodel.guide, optimizer, elbo)
 
     for epoch in range(1, args.epochs + 1):
@@ -125,7 +125,8 @@ def main(args):
         train(args, train_loader, gpmodel, svi, epoch)
         with torch.no_grad():
             test(args, test_loader, gpmodel)
-        print("Amount of time spent for epoch {}: {}s\n".format(epoch, int(time.time() - start_time)))
+        print("Amount of time spent for epoch {}: {}s\n"
+              .format(epoch, int(time.time() - start_time)))
 
 
 if __name__ == '__main__':

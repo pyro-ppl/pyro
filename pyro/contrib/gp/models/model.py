@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import pyro.optim as optim
 from pyro.contrib.gp.util import Parameterized
 from pyro.infer import SVI, Trace_ELBO
-from pyro.optim import Adam, PyroOptim
 
 
 def _zero_mean_function(x):
@@ -192,17 +192,15 @@ class GPModel(Parameterized):
         A convenient method to optimize parameters for the Gaussian Process model
         using :class:`~pyro.infer.svi.SVI`.
 
-        :param PyroOptim optimizer: A Pyro optimizer.
-        :param ELBO loss: A Pyro loss instance.
+        :param ~optim.PyroOptim optimizer: A Pyro optimizer. By default,
+            we use :class:`~optim.Adam` with `lr=0.01`.
+        :param ~pyro.infer.elbo.ELBO loss: A Pyro loss instance.
         :param int num_steps: Number of steps to run SVI.
         :returns: a list of losses during the training procedure
         :rtype: list
         """
-        optimizer = Adam({"lr": 0.01}) if if optimizer is None else optimizer
-        if not isinstance(optimizer, PyroOptim):
-            raise ValueError("Optimizer should be an instance of "
-                             "pyro.optim.PyroOptim class.")
-        loss = Trace_ELBO() if loss is not None else loss
+        optimizer = optim.Adam({"lr": 0.01}) if optimizer is None else optimizer
+        loss = Trace_ELBO() if loss is None else loss
         svi = SVI(self.model, self.guide, optimizer, loss=loss)
         losses = []
         for i in range(num_steps):

@@ -11,10 +11,10 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
-from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
-                        TraceGraph_ELBO, config_enumerate)
+from pyro.infer import (SVI, Trace_ELBO, TraceMeanField_ELBO,
+                        TraceEnum_ELBO, TraceGraph_ELBO, config_enumerate)
 from pyro.optim import Adam
-from tests.common import assert_equal, xfail_param
+from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
 
@@ -24,14 +24,19 @@ def DiffTrace_ELBO(*args, **kwargs):
 
 
 @pytest.mark.parametrize("scale", [1., 2.], ids=["unscaled", "scaled"])
-@pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo,local_samples", [
-    (Trace_ELBO, False),
-    (DiffTrace_ELBO, False),
-    (TraceGraph_ELBO, False),
-    (TraceEnum_ELBO, False),
-    (TraceEnum_ELBO, True),
+@pytest.mark.parametrize("Elbo,local_samples,reparameterized", [
+    (DiffTrace_ELBO, False, False),
+    (DiffTrace_ELBO, False, True),
+    (TraceEnum_ELBO, False, False),
+    (TraceEnum_ELBO, False, True),
+    (TraceEnum_ELBO, True, False),
+    (TraceEnum_ELBO, True, True),
+    (TraceGraph_ELBO, False, False),
+    (TraceGraph_ELBO, False, True),
+    (Trace_ELBO, False, False),
+    (Trace_ELBO, False, True),
+    (TraceMeanField_ELBO, False, True),
 ])
 def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, scale):
     pyro.clear_param_store()
@@ -84,8 +89,17 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, sca
     assert_equal(actual_grads, expected_grads, prec=precision)
 
 
-@pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, DiffTrace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("Elbo,reparameterized", [
+    (DiffTrace_ELBO, False),
+    (DiffTrace_ELBO, True),
+    (TraceEnum_ELBO, False),
+    (TraceEnum_ELBO, True),
+    (TraceGraph_ELBO, False),
+    (TraceGraph_ELBO, True),
+    (Trace_ELBO, False),
+    (Trace_ELBO, True),
+    (TraceMeanField_ELBO, True),
+])
 def test_plate(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
@@ -178,19 +192,19 @@ def test_plate_elbo_vectorized_particles(Elbo, reparameterized):
     assert_equal(actual_grads, expected_grads, prec=precision)
 
 
-@pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [
-    Trace_ELBO,
-    TraceGraph_ELBO,
-    TraceEnum_ELBO,
-    xfail_param(JitTrace_ELBO,
-                reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
-    xfail_param(JitTraceGraph_ELBO,
-                reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
-    xfail_param(JitTraceEnum_ELBO,
-                reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
-])
+@pytest.mark.parametrize("Elbo, reparameterized", [
+    (Trace_ELBO, True),
+    (Trace_ELBO, False),
+    (TraceGraph_ELBO, True),
+    (TraceGraph_ELBO, False),
+    (TraceEnum_ELBO, True),
+    (TraceEnum_ELBO, False),
+    (TraceMeanField_ELBO, True)],
+    ids=["Trace_ELBO-rep", "Trace_ELBO-nonrep",
+         "TraceGraph_ELBO-rep", "TraceGraph_ELBO-nonrep",
+         "TraceEnum_ELBO-rep", "TraceEnum_ELBO-nonrep",
+         "TraceMeanField_ELBO-rep"])
 def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
