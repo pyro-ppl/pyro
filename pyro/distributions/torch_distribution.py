@@ -4,6 +4,7 @@ import numbers
 
 import torch
 from torch.distributions import biject_to, constraints, transform_to
+from torch.distributions.kl import kl_divergence, register_kl
 
 import pyro.distributions.torch
 from pyro.distributions.distribution import Distribution
@@ -379,6 +380,13 @@ class ReshapedDistribution(TorchDistribution):
 
     def entropy(self):
         return sum_rightmost(self.base_dist.entropy(), self.reinterpreted_batch_ndims)
+
+
+@register_kl(ReshapedDistribution, ReshapedDistribution)
+def _kl_reshaped_reshaped(p, q):
+    if p.reinterpreted_batch_ndims or q.reinterpreted_batch_ndims:
+        raise NotImplementedError
+    return kl_divergence(p.base_dist, q.base_dist)
 
 
 class MaskedDistribution(TorchDistribution):
