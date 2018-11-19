@@ -65,17 +65,30 @@ class TraceMeanField_ELBO(Trace_ELBO):
                     elbo_particle = elbo_particle + model_site["log_prob_sum"]
                 else:
                     guide_site = guide_trace.nodes[name]
-                    log_prob, score_function_term, entropy_term = guide_site["score_parts"]
 
+                    log_prob, score_function_term, entropy_term = guide_site["score_parts"]
                     fully_rep = guide_site["fn"].has_rsample and not is_identically_zero(entropy_term) \
                         and is_identically_zero(score_function_term)
                     assert fully_rep, "All distributions in the guide must be fully reparameterized."
 
                     # use kl divergence if available, else fall back on sampling
                     try:
-                        kl_qp = kl_divergence(guide_site["fn"], model_site["fn"]).sum()
-                        elbo_particle = elbo_particle - kl_qp
+                        kl_qp = kl_divergence(guide_site["fn"], model_site["fn"])
+                        assert kl_qp.shape == guide_site["fn"].batch_shape
+                        elbo_particle = elbo_particle - kl_qp.sum()
                     except NotImplementedError:
                         elbo_particle = elbo_particle + model_site["log_prob_sum"] - entropy_term.sum()
+
+        # handle auxiliary sites in the guide
+        for name, guide_site in guide_trace.nodes.items():
+            if guide_site["type"] == "sample" and name not in model_trace.nodes():
+                assert guide_site["infer"].get("is_auxiliary")
+
+                log_prob, score_function_term, entropy_term = guide_site["score_parts"]
+                fully_rep = guide_site["fn"].has_rsample and not is_identically_zero(entropy_term) \
+                    and is_identically_zero(score_function_term)
+                assert fully_rep, "All distributions in the guide must be fully reparameterized."
+
+                elbo_particle = elbo_particle - entropy_term.sum()
 
         return -torch_item(elbo_particle), -elbo_particle

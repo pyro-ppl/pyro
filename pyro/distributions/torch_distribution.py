@@ -389,7 +389,8 @@ def _kl_reshaped_reshaped(p, q):
     kl = kl_divergence(p.base_dist, q.base_dist)
     if p.reinterpreted_batch_ndims:
         kl = sum_rightmost(kl, p.reinterpreted_batch_ndims)
-    return kl
+    shape = broadcast_shape(p.batch_shape, q.batch_shape)
+    return kl.expand(shape)
 
 
 class MaskedDistribution(TorchDistribution):
