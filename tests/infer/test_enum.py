@@ -1087,7 +1087,7 @@ def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
                            constraint=constraints.positive)
 
         x = None
-        for i, y in enumerate(data):
+        for i, y in pyro.markov(enumerate(data)):
             probs = init_probs if x is None else transition_probs[x]
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
             pyro.sample("y_{}".format(i), dist.Normal(locs[x], scale), obs=y)
@@ -1096,7 +1096,7 @@ def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
     def guide(data):
         mean_field_probs = pyro.param("mean_field_probs", torch.ones(num_steps, 2) / 2,
                                       constraint=constraints.simplex)
-        for i in range(num_steps):
+        for i in pyro.markov(range(num_steps)):
             pyro.sample("x_{}".format(i), dist.Categorical(mean_field_probs[i]))
 
     elbo = TraceEnum_ELBO()
@@ -1146,7 +1146,7 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
                                     torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
                                     constraint=constraints.simplex)
         x = None
-        for i, y in enumerate(data):
+        for i, y in pyro.markov(enumerate(data)):
             probs = init_probs if x is None else transition_probs[x]
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
             pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=y)
@@ -1157,7 +1157,7 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
                                       torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
                                       constraint=constraints.simplex)
         x = None
-        for i, y in enumerate(data):
+        for i, y in pyro.markov(enumerate(data)):
             probs = init_probs if x is None else transition_probs[x]
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
 
@@ -1216,7 +1216,7 @@ def test_hmm_enumerate_model(num_steps):
                                     torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
                                     constraint=constraints.simplex)
         x = 0
-        for t, y in enumerate(data):
+        for t, y in pyro.markov(enumerate(data)):
             x = pyro.sample("x_{}".format(t), dist.Categorical(transition_probs[x]))
             pyro.sample("y_{}".format(t), dist.Categorical(emission_probs[x]), obs=y)
             logger.debug('{}\t{}'.format(t, tuple(x.shape)))
@@ -1241,7 +1241,7 @@ def test_hmm_enumerate_model_and_guide(num_steps):
                                     constraint=constraints.simplex)
         x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
         logger.debug('-1\t{}'.format(tuple(x.shape)))
-        for t, y in enumerate(data):
+        for t, y in pyro.markov(enumerate(data)):
             x = pyro.sample("x_{}".format(t), dist.Categorical(transition_probs[x]),
                             infer={"enumerate": "parallel"})
             pyro.sample("y_{}".format(t), dist.Categorical(emission_probs[x]), obs=y)
@@ -2611,7 +2611,7 @@ def test_elbo_hmm_growth():
                                     torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
                                     constraint=constraints.simplex)
         x = None
-        for i, y in enumerate(data):
+        for i, y in pyro.markov(enumerate(data)):
             probs = init_probs if x is None else transition_probs[x]
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
             pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=y)
@@ -2622,7 +2622,7 @@ def test_elbo_hmm_growth():
                                       torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
                                       constraint=constraints.simplex)
         x = None
-        for i, y in enumerate(data):
+        for i, y in pyro.markov(enumerate(data)):
             probs = init_probs if x is None else transition_probs[x]
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
 
@@ -2671,7 +2671,7 @@ def test_elbo_dbn_growth():
         probs_z = pyro.param("probs_z",
                              torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
                              constraint=constraints.simplex)
-        for i, z in enumerate(data):
+        for i, z in pyro.markov(enumerate(data)):
             pyro.sample("x_{}".format(i), dist.Categorical(uniform))
             y = pyro.sample("y_{}".format(i), dist.Categorical(uniform))
             pyro.sample("z_{}".format(i), dist.Categorical(probs_z[y]), obs=z)
@@ -2687,7 +2687,7 @@ def test_elbo_dbn_growth():
                              constraint=constraints.simplex)
         x = 0
         y = 0
-        for i in range(len(data)):
+        for i in pyro.markov(range(len(data))):
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs_x[x]))
             y = pyro.sample("y_{}".format(i), dist.Categorical(probs_y[x, y]))
 
@@ -3034,12 +3034,13 @@ def test_compute_marginals_hmm(size):
         transition_probs = torch.tensor([[0.75, 0.25], [0.25, 0.75]])
         emission_probs = torch.tensor([[0.75, 0.25], [0.25, 0.75]])
         x = torch.tensor(0)
-        for i, y in enumerate(data):
-            x = pyro.sample("x_{}".format(i), dist.Categorical(transition_probs[x]))
-            pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=y)
-
-        pyro.sample("x_{}".format(len(data)), dist.Categorical(transition_probs[x]),
-                    obs=torch.tensor(1))
+        for i in pyro.markov(range(len(data) + 1)):
+            if i < len(data):
+                x = pyro.sample("x_{}".format(i), dist.Categorical(transition_probs[x]))
+                pyro.sample("y_{}".format(i), dist.Categorical(emission_probs[x]), obs=data[i])
+            else:
+                pyro.sample("x_{}".format(i), dist.Categorical(transition_probs[x]),
+                            obs=torch.tensor(1))
 
     def guide(data):
         pass

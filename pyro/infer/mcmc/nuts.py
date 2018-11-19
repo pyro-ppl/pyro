@@ -100,13 +100,13 @@ class NUTS(HMC):
 
     def __init__(self,
                  model,
-                 step_size=None,
+                 step_size=1,
                  adapt_step_size=True,
                  adapt_mass_matrix=True,
                  full_mass=False,
                  use_multinomial_sampling=True,
                  transforms=None,
-                 max_plate_nesting=float("inf"),
+                 max_plate_nesting=None,
                  max_iarange_nesting=None,  # DEPRECATED
                  experimental_use_einsum=False):
         if max_iarange_nesting is not None:
@@ -143,21 +143,21 @@ class NUTS(HMC):
         r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in sorted(r_right)])
         # TODO: change to torch.dot for pytorch 1.0
         if self.full_mass:
-            if (((r_sum - r_left_flat) * (self._inverse_mass_matrix.matmul(r_left_flat)))
+            if (((r_sum - r_left_flat) * (self.inverse_mass_matrix.matmul(r_left_flat)))
                     .sum() > 0 and
-                    ((r_sum - r_right_flat) * (self._inverse_mass_matrix.matmul(r_right_flat)))
+                    ((r_sum - r_right_flat) * (self.inverse_mass_matrix.matmul(r_right_flat)))
                     .sum() > 0):
                 return False
         else:
-            if ((self._inverse_mass_matrix * (r_sum - r_left_flat) * r_left_flat).sum() > 0 and
-                    (self._inverse_mass_matrix * (r_sum - r_right_flat) * r_right_flat).sum() > 0):
+            if ((self.inverse_mass_matrix * (r_sum - r_left_flat) * r_left_flat).sum() > 0 and
+                    (self.inverse_mass_matrix * (r_sum - r_right_flat) * r_right_flat).sum() > 0):
                 return False
         return True
 
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size
         z_new, r_new, z_grads, potential_energy = velocity_verlet(
-            z, r, self._potential_energy, self._inverse_mass_matrix, step_size, z_grads=z_grads)
+            z, r, self._potential_energy, self.inverse_mass_matrix, step_size, z_grads=z_grads)
         r_new_flat = torch.cat([r_new[site_name].reshape(-1) for site_name in sorted(r_new)])
         energy_new = potential_energy + self._kinetic_energy(r_new)
         # handle the NaN case
@@ -309,7 +309,7 @@ class NUTS(HMC):
 
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation.
-        with optional(pyro.validation_enabled(False), self._adapt_phase):
+        with optional(pyro.validation_enabled(False), self._t < self._warmup_steps):
             # doubling process, stop when turning or diverging
             for tree_depth in range(self._max_tree_depth + 1):
                 direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
@@ -353,20 +353,14 @@ class NUTS(HMC):
                     else:
                         tree_weight = tree_weight + new_tree.weight
 
-        self._t += 1
-
-        if self._adapt_phase:
-            if self.adapt_step_size:
-                accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
-                self._adapt_step_size(accept_prob)
-            if self._adapt_mass_matrix_phase:
-                z_flat = torch.cat([z[name].reshape(-1) for name in sorted(z)])
-                self._mass_matrix_adapt_scheme.update(z_flat)
-            if self._t == self._adapt_window_ending:
-                self._end_adapt_window()
+        if self._t < self._warmup_steps:
+            accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
+            self._adapter.step(self._t, z, accept_prob)
 
         if accepted:
             self._accept_cnt += 1
+
+        self._t += 1
         # get trace with the constrained values for `z`.
         for name, transform in self.transforms.items():
             z[name] = transform.inv(z[name])
