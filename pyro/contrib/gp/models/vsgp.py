@@ -93,13 +93,10 @@ class VariationalSparseGP(GPModel):
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
 
         M = self.Xu.shape[0]
-        u_loc_shape = self.latent_shape + (M,)
-        u_loc = self.Xu.new_zeros(u_loc_shape)
+        u_loc = self.Xu.new_zeros(self.latent_shape + (M,))
         self.u_loc = Parameter(u_loc)
 
-        u_scale_tril_shape = self.latent_shape + (M, M)
-        Id = torch.eye(M, out=self.Xu.new_empty(M, M))
-        u_scale_tril = Id.expand(u_scale_tril_shape)
+        u_scale_tril = torch.eye(M, out=self.Xu.new_empty(M, M)).repeat(self.latent_shape + (1, 1))
         self.u_scale_tril = Parameter(u_scale_tril)
         self.set_constraint("u_scale_tril", constraints.lower_cholesky)
 

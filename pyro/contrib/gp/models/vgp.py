@@ -69,13 +69,10 @@ class VariationalGP(GPModel):
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
 
         N = self.X.shape[0]
-        f_loc_shape = self.latent_shape + (N,)
-        f_loc = self.X.new_zeros(f_loc_shape)
+        f_loc = self.X.new_zeros(self.latent_shape + (N,))
         self.f_loc = Parameter(f_loc)
 
-        f_scale_tril_shape = self.latent_shape + (N, N)
-        Id = torch.eye(N, out=self.X.new_empty(N, N))
-        f_scale_tril = Id.expand(f_scale_tril_shape)
+        f_scale_tril = torch.eye(N, out=self.X.new_empty(N, N)).repeat(self.latent_shape + (1, 1))
         self.f_scale_tril = Parameter(f_scale_tril)
         self.set_constraint("f_scale_tril", constraints.lower_cholesky)
 
