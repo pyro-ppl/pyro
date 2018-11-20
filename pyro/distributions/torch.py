@@ -282,16 +282,7 @@ class StudentT(torch.distributions.StudentT, TorchDistributionMixin):
             return type(self)(df, loc, scale, validate_args=validate_args)
 
 
-class TransformedDistribution(torch.distributions.TransformedDistribution, TorchDistributionMixin, torch.nn.Module):
-    def __init__(self, *args, **kwargs):
-        torch.distributions.TransformedDistribution.__init__(self, *args, **kwargs)
-        TorchDistributionMixin.__init__(self)
-        torch.nn.Module.__init__(self)
-
-        # Not all transforms have parameters, so only want to extract nn.Module ones
-        self.transform_modules = torch.nn.ModuleList([t for t in self.transforms +
-                                                      [self.base_dist] if isinstance(t, torch.nn.Module)])
-
+class TransformedDistribution(torch.distributions.TransformedDistribution, TorchDistributionMixin):
     def expand(self, batch_shape):
         return super(TransformedDistribution, self).expand(batch_shape)
 
