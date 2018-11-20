@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.stage("integration", "integration_batch_1")
 @pytest.mark.init(rng_seed=161)
 @pytest.mark.parametrize("batch_size", [3, 8, None])
-@pytest.mark.parametrize("map_type", ["plate", "irange", "range"])
+@pytest.mark.parametrize("map_type", ["plate", "iplate", "range"])
 def test_elbo_mapdata(batch_size, map_type):
     # normal-normal: known covariance
     lam0 = torch.tensor([0.1, 0.1])   # precision of prior
@@ -54,8 +54,8 @@ def test_elbo_mapdata(batch_size, map_type):
     def model():
         loc_latent = pyro.sample("loc_latent",
                                  dist.Normal(loc0, torch.pow(lam0, -0.5)).independent(1))
-        if map_type == "irange":
-            for i in pyro.irange("aaa", len(data), batch_size):
+        if map_type == "iplate":
+            for i in pyro.iplate("aaa", len(data), batch_size):
                 pyro.sample("obs_%d" % i, dist.Normal(loc_latent, torch.pow(lam, -0.5)) .independent(1),
                             obs=data[i]),
         elif map_type == "plate":
@@ -75,8 +75,8 @@ def test_elbo_mapdata(batch_size, map_type):
         log_sig_q = pyro.param("log_sig_q", analytic_log_sig_n.detach().clone() - torch.tensor([-0.18, 0.23]))
         sig_q = torch.exp(log_sig_q)
         pyro.sample("loc_latent", dist.Normal(loc_q, sig_q).independent(1))
-        if map_type == "irange" or map_type is None:
-            for i in pyro.irange("aaa", len(data), batch_size):
+        if map_type == "iplate" or map_type is None:
+            for i in pyro.iplate("aaa", len(data), batch_size):
                 pass
         elif map_type == "plate":
             # dummy plate to do subsampling for observe

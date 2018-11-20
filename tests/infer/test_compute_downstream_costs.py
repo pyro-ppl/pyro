@@ -207,7 +207,7 @@ def diamond_model(dim):
     p1 = torch.tensor(math.exp(-0.33), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
     pyro.sample("c1", dist.Bernoulli(p1))
-    for i in pyro.irange("irange", 2):
+    for i in pyro.plate("plate", 2):
         b_i = pyro.sample("b{}".format(i), dist.Bernoulli(p0 * p1))
         assert b_i.shape == ()
     pyro.sample("obs", dist.Bernoulli(p0), obs=torch.tensor(1.0))
@@ -217,7 +217,7 @@ def diamond_guide(dim):
     p0 = torch.tensor(math.exp(-0.70), requires_grad=True)
     p1 = torch.tensor(math.exp(-0.43), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
-    for i in pyro.irange("irange", dim):
+    for i in pyro.plate("plate", dim):
         pyro.sample("b{}".format(i), dist.Bernoulli(p1))
     pyro.sample("c1", dist.Bernoulli(p0))
 
@@ -274,7 +274,7 @@ def nested_model_guide(include_obs=True, dim1=11, dim2=7):
     p0 = torch.tensor(math.exp(-0.40 - include_obs * 0.2), requires_grad=True)
     p1 = torch.tensor(math.exp(-0.33 - include_obs * 0.1), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0 * p1))
-    for i in pyro.irange("irange", dim1):
+    for i in pyro.plate("plate", dim1):
         pyro.sample("b{}".format(i), dist.Bernoulli(p0))
         with pyro.plate("plate_{}".format(i), dim2 + i) as ind:
             c_i = pyro.sample("c{}".format(i), dist.Bernoulli(p1).expand_by([len(ind)]))
@@ -285,7 +285,7 @@ def nested_model_guide(include_obs=True, dim1=11, dim2=7):
 
 
 @pytest.mark.parametrize("dim1", [2, 5, 9])
-def test_compute_downstream_costs_plate_in_irange(dim1):
+def test_compute_downstream_costs_plate_in_iplate(dim1):
     guide_trace = poutine.trace(nested_model_guide,
                                 graph_type="dense").get_trace(include_obs=False, dim1=dim1)
     model_trace = poutine.trace(poutine.replay(nested_model_guide, trace=guide_trace),
@@ -336,7 +336,7 @@ def nested_model_guide2(include_obs=True, dim1=3, dim2=2):
     with pyro.plate("plate", dim1) as ind:
         c = pyro.sample("c", dist.Bernoulli(p1).expand_by([len(ind)]))
         assert c.shape == (dim1,)
-        for i in pyro.irange("irange", dim2):
+        for i in pyro.plate("plate", dim2):
             b_i = pyro.sample("b{}".format(i), dist.Bernoulli(p0).expand_by([len(ind)]))
             assert b_i.shape == (dim1,)
             if include_obs:
@@ -346,7 +346,7 @@ def nested_model_guide2(include_obs=True, dim1=3, dim2=2):
 
 @pytest.mark.parametrize("dim1", [2, 5])
 @pytest.mark.parametrize("dim2", [3, 4])
-def test_compute_downstream_costs_irange_in_plate(dim1, dim2):
+def test_compute_downstream_costs_iplate_in_plate(dim1, dim2):
     guide_trace = poutine.trace(nested_model_guide2,
                                 graph_type="dense").get_trace(include_obs=False, dim1=dim1, dim2=dim2)
     model_trace = poutine.trace(poutine.replay(nested_model_guide2, trace=guide_trace),

@@ -65,7 +65,7 @@ def test_shapes(auto_class, Elbo):
     assert np.isfinite(loss), loss
 
 
-@pytest.mark.xfail(reason="irange is not yet supported")
+@pytest.mark.xfail(reason="sequential plate is not yet supported")
 @pytest.mark.parametrize('auto_class', [
     AutoDelta,
     AutoDiagonalNormal,
@@ -75,13 +75,13 @@ def test_shapes(auto_class, Elbo):
     AutoLaplaceApproximation,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
-def test_irange_smoke(auto_class, Elbo):
+def test_iplate_smoke(auto_class, Elbo):
 
     def model():
         x = pyro.sample("x", dist.Normal(0, 1))
         assert x.shape == ()
 
-        for i in pyro.irange("irange", 3):
+        for i in pyro.plate("plate", 3):
             y = pyro.sample("y_{}".format(i), dist.Normal(0, 1).expand_by([2, 1 + i, 2]).independent(3))
             assert y.shape == (2, 1 + i, 2)
 
