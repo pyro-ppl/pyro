@@ -97,6 +97,7 @@ class _ParallelSampler(TracePosterior):
         self.kernel = kernel
         self.warmup_steps = warmup_steps
         self.num_chains = num_chains
+        self.chain_indices = None
         self.workers = []
         self.ctx = mp
         if mp_context:
@@ -109,10 +110,7 @@ class _ParallelSampler(TracePosterior):
         self.logger = initialize_logger(logging.getLogger("pyro.infer.mcmc"),
                                         "MAIN", log_queue=self.log_queue)
         # initialize number of samples per chain
-        samples_per_chain = num_samples // num_chains
-        self.num_samples = [samples_per_chain] * num_chains
-        for i in range(num_samples % num_chains):
-            self.num_samples[i] += 1
+        self.num_samples = [num_samples] * num_chains
         self.log_thread = threading.Thread(target=logger_thread,
                                            args=(self.log_queue, self.warmup_steps,
                                                  self.num_samples, self.num_chains))
@@ -137,6 +135,17 @@ class _ParallelSampler(TracePosterior):
                 w.terminate()
 
     def _traces(self, *args, **kwargs):
+        chain_indices = [[] for _ in range(self.num_chains)]
+        try:
+            index = 0
+            for (trace, logit), chain in self._chain_traces(*args, **kwargs):
+                chain_indices[chain].append(index)
+                yield trace, logit
+                index += 1
+        finally:
+            self.chain_indices = torch.tensor(chain_indices)  # num_chains x num_samples
+
+    def _chain_traces(self, *args, **kwargs):
         # Ignore sigint in worker processes; they will be shut down
         # when the main process terminates.
         sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -172,13 +181,13 @@ class _ParallelSampler(TracePosterior):
                 else:
                     results_buffer[chain_id - 1].append(val)
                 while results_buffer[buffer_idx]:
-                    yield results_buffer[buffer_idx].popleft()
+                    yield results_buffer[buffer_idx].popleft(), buffer_idx
                     buffer_idx = (buffer_idx + 1) % self.num_chains
             # empty out the results buffer
             non_empty_buffers = set(range(self.num_chains))
             while non_empty_buffers:
                 if results_buffer[buffer_idx]:
-                    yield results_buffer[buffer_idx].popleft()
+                    yield results_buffer[buffer_idx].popleft(), buffer_idx
                 else:
                     if buffer_idx in non_empty_buffers:
                         non_empty_buffers.remove(buffer_idx)
@@ -259,6 +268,7 @@ class MCMC(TracePosterior):
                  num_chains=1, mp_context=None):
         self.warmup_steps = warmup_steps if warmup_steps is not None else num_samples // 2  # Stan
         self.num_samples = num_samples
+        self.num_chains = num_chains
         if num_chains > 1:
             cpu_count = mp.cpu_count()
             if num_chains > cpu_count:

@@ -16,14 +16,14 @@ def _compute_chain_variance_stats(input):
     return var_within, var_estimator
 
 
-def gelman_rubin(input, sample_dim=0, chain_dim=1):
+def gelman_rubin(input, chain_dim=0, sample_dim=1):
     """
     Computes R-hat over chains of samples. It is required that
     `input.size(sample_dim) >= 2` and `input.size(chain_dim) >= 2`.
 
     :param torch.Tensor input: the input tensor.
-    :param int sample_dim: the sample dimension.
     :param int chain_dim: the chain dimension.
+    :param int sample_dim: the sample dimension.
     :returns torch.Tensor: R-hat of `input`.
     """
     assert input.dim() >= 2
@@ -42,29 +42,29 @@ def gelman_rubin(input, sample_dim=0, chain_dim=1):
     return rhat.squeeze(max(sample_dim, chain_dim)).squeeze(min(sample_dim, chain_dim))
 
 
-def split_gelman_rubin(input, sample_dim=0, chain_dim=1):
+def split_gelman_rubin(input, chain_dim=0, sample_dim=1):
     """
     Computes R-hat over chains of samples. It is required that
     `input.size(sample_dim) >= 4`.
 
     :param torch.Tensor input: the input tensor.
-    :param int sample_dim: the sample dimension.
     :param int chain_dim: the chain dimension.
+    :param int sample_dim: the sample dimension.
     :returns torch.Tensor: split R-hat of `input`.
     """
     assert input.dim() >= 2
     assert input.size(sample_dim) >= 4
     # change input.shape to 1 x 1 x input.shape
-    # then transpose sample_dim with 0, chain_dim with 1
+    # then transpose chain_dim with 0, sample_dim with 1
     sample_dim = input.dim() + sample_dim if sample_dim < 0 else sample_dim
     chain_dim = input.dim() + chain_dim if chain_dim < 0 else chain_dim
     assert chain_dim != sample_dim
     input = input.reshape((1, 1) + input.shape)
-    input = input.transpose(0, sample_dim + 2).transpose(1, chain_dim + 2)
+    input = input.transpose(0, chain_dim + 2).transpose(1, sample_dim + 2)
 
-    N_half = input.size(0) // 2
-    new_input = torch.stack([input[:N_half], input[-N_half:]], dim=1)
-    new_input = new_input.reshape((N_half, -1) + input.shape[2:])
+    N_half = input.size(1) // 2
+    new_input = torch.stack([input[:, :N_half], input[:, -N_half:]], dim=1)
+    new_input = new_input.reshape((-1, N_half) + input.shape[2:])
     split_rhat = gelman_rubin(new_input)
     return split_rhat.squeeze(max(sample_dim, chain_dim)).squeeze(min(sample_dim, chain_dim))
 
@@ -156,7 +156,7 @@ def _cummin(input):
     return input_tril.min(dim=1)[0]
 
 
-def effective_sample_size(input, sample_dim=0, chain_dim=1):
+def effective_sample_size(input, chain_dim=0, sample_dim=1):
     """
     Computes effective sample size of input.
 
@@ -167,8 +167,8 @@ def effective_sample_size(input, sample_dim=0, chain_dim=1):
         Stan Development Team
 
     :param torch.Tensor input: the input tensor.
-    :param int sample_dim: the sample dimension.
     :param int chain_dim: the chain dimension.
+    :param int sample_dim: the sample dimension.
     :returns torch.Tensor: effective sample size of `input`.
     """
     assert input.dim() >= 2
