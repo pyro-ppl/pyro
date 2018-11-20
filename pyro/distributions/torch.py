@@ -1,9 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
-from torch.distributions import constraints
+from torch.distributions import constraints, kl_divergence, register_kl
 
 from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistributionMixin
+from pyro.distributions.util import sum_rightmost
 
 
 class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
@@ -165,6 +166,16 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
         if self.reinterpreted_batch_ndims:
             raise NotImplementedError("Pyro does not enumerate over cartesian products")
         return self.base_dist.enumerate_support(expand=expand)
+
+
+@register_kl(Independent, Independent)
+def _kl_independent_independent(p, q):
+    if p.reinterpreted_batch_ndims != q.reinterpreted_batch_ndims:
+        raise NotImplementedError
+    kl = kl_divergence(p.base_dist, q.base_dist)
+    if p.reinterpreted_batch_ndims:
+        kl = sum_rightmost(kl, p.reinterpreted_batch_ndims)
+    return kl
 
 
 class Laplace(torch.distributions.Laplace, TorchDistributionMixin):

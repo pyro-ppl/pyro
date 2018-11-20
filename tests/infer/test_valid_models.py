@@ -10,7 +10,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, config_enumerate
+from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, config_enumerate
 from pyro.optim import Adam
 
 logger = logging.getLogger(__name__)
@@ -1554,3 +1554,31 @@ def test_enum_recycling_plate():
         pass
 
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=2))
+
+
+def test_mean_field_ok():
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.))
+        pyro.sample("y", dist.Normal(x, 1.))
+
+    def guide():
+        loc = pyro.param("loc", torch.tensor(0.))
+        x = pyro.sample("x", dist.Normal(loc, 1.))
+        pyro.sample("y", dist.Normal(x, 1.))
+
+    assert_ok(model, guide, TraceMeanField_ELBO())
+
+
+def test_mean_field_warn():
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.))
+        pyro.sample("y", dist.Normal(x, 1.))
+
+    def guide():
+        loc = pyro.param("loc", torch.tensor(0.))
+        y = pyro.sample("y", dist.Normal(loc, 1.))
+        pyro.sample("x", dist.Normal(y, 1.))
+
+    assert_warning(model, guide, TraceMeanField_ELBO())
