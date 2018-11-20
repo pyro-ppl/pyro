@@ -172,22 +172,13 @@ class ParamStoreDict(object):
         return self._params.items()
 
     def get_all_param_names(self):
-        """
-        Get all parameter names in the ParamStore
-        """
+        warnings.warn("ParamStore.get_all_param_names() is deprecated; use .keys() instead.",
+                      DeprecationWarning)
         return self.keys()
 
     def replace_param(self, param_name, new_param, old_param):
-        """
-        Replace the param param_name with current value old_param with the new value new_param
-
-        :param param_name: parameter name
-        :type param_name: str
-        :param new_param: the paramater to be put into the ParamStore
-        :type new_param: torch.Tensor
-        :param old_param: the paramater to be removed from the ParamStore
-        :type new_param: torch.Tensor
-        """
+        warnings.warn("ParamStore.replace_param() is deprecated; use .__setitem__() instead.",
+                      DeprecationWarning)
         assert self._params[param_name] is old_param.unconstrained()
         self[param_name] = new_param
 
