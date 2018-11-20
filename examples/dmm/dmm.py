@@ -150,7 +150,7 @@ class DMM(nn.Module):
 
         # if we're using normalizing flows, instantiate those too
         self.iafs = [InverseAutoregressiveFlow(AutoRegressiveNN(z_dim, [iaf_dim])) for _ in range(num_iafs)]
-        self.iafs_modules = nn.ModuleList([self.iafs])
+        self.iafs_modules = nn.ModuleList(self.iafs)
 
         # define a (trainable) parameters z_0 and z_q_0 that help define the probability
         # distributions p(z_1) and q(z_1)
