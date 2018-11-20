@@ -6,7 +6,36 @@ a semantically meaningful prefix to names of sample sites.
 import functools
 
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import apply_stack
+from pyro.poutine.runtime import effectful
+
+
+class NameCountMessenger(Messenger):
+
+    def __enter__(self):
+        self._names = set()
+        return super(NameCountMessenger, self).__enter__()
+
+    def _increment_name(self, name, label):
+        while (name, label) in self._names:
+            split_name = name.split("__")
+            if "__" in name and split_name[-1].isdigit():
+                counter = int(split_name[-1]) + 1
+                name = "__".join(split_name[:-1] + [str(counter)])
+            else:
+                name = name + "__0"
+        return name
+
+    def _pyro_sample(self, msg):
+        msg["name"] = self._increment_name(msg["name"], "sample")
+
+    def _pyro_post_sample(self, msg):
+        self._names.add((msg["name"], "sample"))
+
+    def _pyro_post_scope(self, msg):
+        self._names.add((msg["args"][0], "scope"))
+
+    def _pyro_scope(self, msg):
+        msg["args"] = (self._increment_name(msg["args"][0], "scope"),)
 
 
 class ScopeMessenger(Messenger):
@@ -18,33 +47,20 @@ class ScopeMessenger(Messenger):
         self.prefix = prefix
         self.inner = inner
 
+    @staticmethod
+    @effectful(type="scope")
+    def _collect_scope(prefixed_scope):
+        return prefixed_scope.split("/")[-1]
+
     def __enter__(self):
         if self.prefix is None:
             raise ValueError("no prefix was provided")
         if not self.inner:
             # to accomplish adding a counter to duplicate scopes,
-            # we will treat ScopeMessenger.__enter__ like a sample statement
+            # we make ScopeMessenger.__enter__ effectful
             # so that the same mechanism that adds counters to sample names
             # can be used to add a counter to a scope name
-            msg = {
-                "type": "sample",
-                "name": self.prefix,
-                "fn": lambda: True,
-                "is_observed": False,
-                "args": (),
-                "kwargs": {},
-                "value": None,
-                "infer": {},
-                "scale": 1.0,
-                "mask": None,
-                "cond_indep_stack": (),
-                "done": False,
-                "stop": False,
-                "continuation": None,
-                "PRUNE": True  # this keeps the dummy node from appearing in the trace
-            }
-            apply_stack(msg)
-            self.prefix = msg["name"].split("/")[-1]
+            self.prefix = self._collect_scope(self.prefix)
         return super(ScopeMessenger, self).__enter__()
 
     def __call__(self, fn):
@@ -57,9 +73,11 @@ class ScopeMessenger(Messenger):
                 return fn(*args, **kwargs)
         return _fn
 
+    def _pyro_scope(self, msg):
+        msg["args"] = ("{}/{}".format(self.prefix, msg["args"][0]),)
+
     def _pyro_sample(self, msg):
         msg["name"] = "{}/{}".format(self.prefix, msg["name"])
-        return None
 
 
 def scope(fn=None, prefix=None, inner=None):
@@ -114,4 +132,9 @@ def scope(fn=None, prefix=None, inner=None):
         >>> assert "model/x" in poutine.trace(model).get_trace()
     """
     msngr = ScopeMessenger(prefix=prefix, inner=inner)
+    return msngr(fn) if fn is not None else msngr
+
+
+def name_count(fn=None):
+    msngr = NameCountMessenger()
     return msngr(fn) if fn is not None else msngr
