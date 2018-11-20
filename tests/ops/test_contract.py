@@ -10,7 +10,7 @@ import six
 import torch
 
 from pyro.distributions.util import logsumexp
-from pyro.ops.contract import (PackedLogRing, _partition_terms, contract_tensor_tree, contract_to_tensor, naive_ubersum,
+from pyro.ops.contract import (LogRing, _partition_terms, contract_tensor_tree, contract_to_tensor, naive_ubersum,
                                ubersum)
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import optional
@@ -102,7 +102,7 @@ def _normalize(tensor, dims, batch_dims):
     (['a', 'ab', 'bc', 'c'], set('abc'), 1),
 ])
 def test_partition_terms(inputs, dims, expected_num_components):
-    ring = PackedLogRing()
+    ring = LogRing()
     symbol_to_size = dict(zip('abc', [2, 3, 4]))
     shapes = [tuple(symbol_to_size[s] for s in input_) for input_ in inputs]
     tensors = [torch.randn(shape) for shape in shapes]
