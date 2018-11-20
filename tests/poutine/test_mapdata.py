@@ -127,7 +127,7 @@ def plate_cuda_model(subsample_size):
 def iplate_cuda_model(subsample_size):
     loc = torch.zeros(20).cuda()
     scale = torch.ones(20).cuda()
-    for i in pyro.iplate("data", 20, subsample_size, device=loc.device):
+    for i in pyro.plate("data", 20, subsample_size, device=loc.device):
         pyro.sample("x_{}".format(i), dist.Normal(loc[i], scale[i]))
 
 
