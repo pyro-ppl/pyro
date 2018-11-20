@@ -346,13 +346,13 @@ def test_plate_iplate_ok(Elbo):
     def model():
         p = torch.tensor(0.5)
         with pyro.plate("plate", 3, 2) as ind:
-            for i in pyro.plate("plate", 3, 2):
+            for i in pyro.plate("iplate", 3, 2):
                 pyro.sample("x_{}".format(i), dist.Bernoulli(p).expand_by([len(ind)]))
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         with pyro.plate("plate", 3, 2) as ind:
-            for i in pyro.plate("plate", 3, 2):
+            for i in pyro.plate("iplate", 3, 2):
                 pyro.sample("x_{}".format(i), dist.Bernoulli(p).expand_by([len(ind)]))
 
     if Elbo is TraceEnum_ELBO:
@@ -498,7 +498,7 @@ def test_three_indep_plate_at_different_depths_ok():
     """
     def model():
         p = torch.tensor(0.5)
-        inner_plate = pyro.plate("plate1", 10, 5)
+        inner_plate = pyro.plate("plate2", 10, 5)
         for i in pyro.plate("plate0", 2):
             pyro.sample("x_%d" % i, dist.Bernoulli(p))
             if i == 0:
@@ -511,7 +511,7 @@ def test_three_indep_plate_at_different_depths_ok():
 
     def guide():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
-        inner_plate = pyro.plate("plate1", 10, 5)
+        inner_plate = pyro.plate("plate2", 10, 5)
         for i in pyro.plate("plate0", 2):
             pyro.sample("x_%d" % i, dist.Bernoulli(p))
             if i == 0:

@@ -333,10 +333,10 @@ def nested_model_guide2(include_obs=True, dim1=3, dim2=2):
     p0 = torch.tensor(math.exp(-0.40 - include_obs * 0.2), requires_grad=True)
     p1 = torch.tensor(math.exp(-0.33 - include_obs * 0.1), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0 * p1))
-    with pyro.plate("plate", dim1) as ind:
+    with pyro.plate("plate1", dim1) as ind:
         c = pyro.sample("c", dist.Bernoulli(p1).expand_by([len(ind)]))
         assert c.shape == (dim1,)
-        for i in pyro.plate("plate", dim2):
+        for i in pyro.plate("plate2", dim2):
             b_i = pyro.sample("b{}".format(i), dist.Bernoulli(p0).expand_by([len(ind)]))
             assert b_i.shape == (dim1,)
             if include_obs:
