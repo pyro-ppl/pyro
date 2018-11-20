@@ -35,7 +35,7 @@ CPU_EXAMPLES = [
     'hmm.py --num-steps=1 --truncate=65 --model=4',
     'inclined_plane.py --num-samples=1',
     'lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8',
-    'mini_pyro.py --num-steps=101',
+    'mini_pyro.py',
     'rsa/generics.py --num-samples=10',
     'rsa/hyperbole.py --price=10000',
     'rsa/schelling.py --num-samples=10',
