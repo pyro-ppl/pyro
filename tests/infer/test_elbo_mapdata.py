@@ -55,7 +55,7 @@ def test_elbo_mapdata(batch_size, map_type):
         loc_latent = pyro.sample("loc_latent",
                                  dist.Normal(loc0, torch.pow(lam0, -0.5)).independent(1))
         if map_type == "iplate":
-            for i in pyro.iplate("aaa", len(data), batch_size):
+            for i in pyro.plate("aaa", len(data), batch_size):
                 pyro.sample("obs_%d" % i, dist.Normal(loc_latent, torch.pow(lam, -0.5)) .independent(1),
                             obs=data[i]),
         elif map_type == "plate":
@@ -76,7 +76,7 @@ def test_elbo_mapdata(batch_size, map_type):
         sig_q = torch.exp(log_sig_q)
         pyro.sample("loc_latent", dist.Normal(loc_q, sig_q).independent(1))
         if map_type == "iplate" or map_type is None:
-            for i in pyro.iplate("aaa", len(data), batch_size):
+            for i in pyro.plate("aaa", len(data), batch_size):
                 pass
         elif map_type == "plate":
             # dummy plate to do subsampling for observe
