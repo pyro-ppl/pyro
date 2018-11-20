@@ -287,7 +287,9 @@ class TransformedDistribution(torch.distributions.TransformedDistribution, Torch
         torch.distributions.TransformedDistribution.__init__(self, *args, **kwargs)
         TorchDistributionMixin.__init__(self)
         torch.nn.Module.__init__(self)
-        self.transforms = torch.nn.ModuleList(self.transforms)
+
+        # Not all transforms have parameters, so only want to extract nn.Module ones
+        self.transform_modules = torch.nn.ModuleList([t for t in self.transforms if isinstance(t, torch.nn.Module)])
 
     def expand(self, batch_shape):
         return super(TransformedDistribution, self).expand(batch_shape)
