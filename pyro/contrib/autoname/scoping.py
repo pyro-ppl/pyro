@@ -139,8 +139,8 @@ def scope(fn=None, prefix=None, inner=None):
 
 def name_count(fn=None):
     """
-    ``name_count`` is a very simple autonaming scheme that simply appends a suffix
-    representing a counter to any name that appears multiple tims in an execution.
+    ``name_count`` is a very simple autonaming scheme that simply appends a suffix `"__"`
+    plus a counter to any name that appears multiple tims in an execution.
     Only duplicate instances of a name get a suffix; the first instance is not modified.
 
     Example::
