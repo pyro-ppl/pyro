@@ -24,7 +24,7 @@ class NameCountMessenger(Messenger):
                 counter = int(split_name[-1]) + 1
                 name = "__".join(split_name[:-1] + [str(counter)])
             else:
-                name = name + "__0"
+                name = name + "__1"
         return name
 
     def _pyro_sample(self, msg):
@@ -151,8 +151,8 @@ def name_count(fn=None):
         ...         pyro.sample("x", dist.Bernoulli(0.5))
         ...
         >>> assert "x" in poutine.trace(model).get_trace()
-        >>> assert "x__0" in poutine.trace(model).get_trace()
         >>> assert "x__1" in poutine.trace(model).get_trace()
+        >>> assert "x__2" in poutine.trace(model).get_trace()
 
     ``name_count`` also composes with :func:`~pyro.contrib.autoname.scope`
     by adding a suffix to duplicate scope entrances:
@@ -166,8 +166,8 @@ def name_count(fn=None):
         ...             pyro.sample("x", dist.Bernoulli(0.5))
         ...
         >>> assert "a/x" in poutine.trace(model).get_trace()
-        >>> assert "a__0/x" in poutine.trace(model).get_trace()
         >>> assert "a__1/x" in poutine.trace(model).get_trace()
+        >>> assert "a__2/x" in poutine.trace(model).get_trace()
 
     Example::
 
@@ -178,8 +178,8 @@ def name_count(fn=None):
         ...             pyro.sample("x", dist.Bernoulli(0.5))
         ...
         >>> assert "a/x" in poutine.trace(model).get_trace()
-        >>> assert "a/x__0" in poutine.trace(model).get_trace()
         >>> assert "a/x__1" in poutine.trace(model).get_trace()
+        >>> assert "a/x__2" in poutine.trace(model).get_trace()
     """
     msngr = NameCountMessenger()
     return msngr(fn) if fn is not None else msngr
