@@ -5,10 +5,10 @@ from torch.distributions import constraints
 from torch.nn import Parameter
 
 import pyro
-import pyro.distributions as dist
 from pyro.contrib.gp.util import Parameterized
-from pyro.infer import SVI, Trace_ELBO
-from pyro.optim import Adam
+import pyro.distributions as dist
+import pyro.infer as infer
+import pyro.optim as optim
 from pyro.params import param_with_module_name
 
 
@@ -121,20 +121,20 @@ class GPLVM(Parameterized):
         self._call_base_model_guide = True
         return self.base_model(**kwargs)
 
-    def optimize(self, optimizer=None, loss=None, num_steps=1000):
+    def optimize(self, optimizer=optim.Adam({}), num_steps=1000):
         """
         A convenient method to optimize parameters for GPLVM model using
         :class:`~pyro.infer.svi.SVI`.
 
-        :param ~pyro.optim.optim.PyroOptim optimizer: A Pyro optimizer.
-        :param ~pyro.infer.elbo.ELBO loss: A Pyro loss instance.
+        :param ~optim.PyroOptim optimizer: A Pyro optimizer.
         :param int num_steps: Number of steps to run SVI.
         :returns: a list of losses during the training procedure
         :rtype: list
         """
-        optimizer = Adam({}) if optimizer is None else optimizer
-        loss = Trace_ELBO() if loss is None else loss
-        svi = SVI(self.model, self.guide, optimizer, loss=loss)
+        if not isinstance(optimizer, optim.PyroOptim):
+            raise ValueError("Optimizer should be an instance of "
+                             "pyro.optim.PyroOptim class.")
+        svi = infer.SVI(self.model, self.guide, optimizer, loss=infer.Trace_ELBO())
         losses = []
         for i in range(num_steps):
             losses.append(svi.step())
