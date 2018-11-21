@@ -350,16 +350,16 @@ class RaoBlackwellizationTests(TestCase):
         self.analytic_loc_n = self.sum_data * (self.lam / self.analytic_lam_n) +\
             self.loc0 * (self.lam0 / self.analytic_lam_n)
 
-    # this tests rao-blackwellization in elbo for nested iranges
-    def test_nested_irange_in_elbo(self, n_steps=4000):
+    # this tests rao-blackwellization in elbo for nested sequential plates
+    def test_nested_iplate_in_elbo(self, n_steps=4000):
         pyro.clear_param_store()
 
         def model():
             loc_latent = pyro.sample("loc_latent",
                                      fakes.NonreparameterizedNormal(self.loc0, torch.pow(self.lam0, -0.5))
                                           .independent(1))
-            for i in pyro.irange("outer", self.n_outer):
-                for j in pyro.irange("inner_%d" % i, self.n_inner):
+            for i in pyro.plate("outer", self.n_outer):
+                for j in pyro.plate("inner_%d" % i, self.n_inner):
                     pyro.sample("obs_%d_%d" % (i, j),
                                 dist.Normal(loc_latent, torch.pow(self.lam, -0.5)).independent(1),
                                 obs=self.data[i][j])
@@ -372,8 +372,8 @@ class RaoBlackwellizationTests(TestCase):
             pyro.sample("loc_latent", fakes.NonreparameterizedNormal(loc_q, sig_q).independent(1),
                         infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
 
-            for i in pyro.irange("outer", self.n_outer):
-                for j in pyro.irange("inner_%d" % i, self.n_inner):
+            for i in pyro.plate("outer", self.n_outer):
+                for j in pyro.plate("inner_%d" % i, self.n_inner):
                     pass
 
         guide_trace = pyro.poutine.trace(guide, graph_type="dense").get_trace()
@@ -398,7 +398,7 @@ class RaoBlackwellizationTests(TestCase):
         assert_equal(0.0, log_sig_error, prec=0.04)
 
     # this tests rao-blackwellization and baselines for plate
-    # inside of an irange with superfluous random torch.tensors to complexify the
+    # inside of a sequential plate with superfluous random torch.tensors to complexify the
     # graph structure and introduce additional baselines
     def test_plate_in_elbo_with_superfluous_rvs(self):
         self._test_plate_in_elbo(n_superfluous_top=1, n_superfluous_bottom=1, n_steps=5000)
@@ -417,7 +417,7 @@ class RaoBlackwellizationTests(TestCase):
                                      fakes.NonreparameterizedNormal(self.loc0, torch.pow(self.lam0, -0.5))
                                      .independent(1))
 
-            for i in pyro.irange("outer", 3):
+            for i in pyro.plate("outer", 3):
                 x_i = self.data_as_list[i]
                 with pyro.plate("inner_%d" % i, x_i.size(0)):
                     for k in range(n_superfluous_top):
@@ -449,7 +449,7 @@ class RaoBlackwellizationTests(TestCase):
                                      fakes.NonreparameterizedNormal(loc_q, sig_q).independent(1),
                                      infer=dict(baseline=dict(baseline_value=baseline_value)))
 
-            for i in pyro.irange("outer", 3):
+            for i in pyro.plate("outer", 3):
                 with pyro.plate("inner_%d" % i, 4 - i):
                     for k in range(n_superfluous_top + n_superfluous_bottom):
                         z_baseline = pyro.module("z_baseline_%d_%d" % (i, k),
