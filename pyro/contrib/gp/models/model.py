@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from pyro.contrib.gp.util import Parameterized
 from pyro.infer import SVI, Trace_ELBO
-from pyro.optim import Adam, PyroOptim
+from pyro.optim import Adam
 
 
 def _zero_mean_function(x):
@@ -159,7 +159,6 @@ class GPModel(Parameterized):
 
         + Making a two-layer Gaussian Process stochastic function:
 
-
             >>> gpr1 = gp.models.GPRegression(X, None, kernel, name="GPR1")
             >>> Z, _ = gpr1.model()
             >>> gpr2 = gp.models.GPRegression(Z, y, kernel, name="GPR2")
@@ -193,19 +192,14 @@ class GPModel(Parameterized):
         A convenient method to optimize parameters for the Gaussian Process model
         using :class:`~pyro.infer.svi.SVI`.
 
-        :param PyroOptim optimizer: A Pyro optimizer.
-        :param ELBO loss: A Pyro loss instance.
+        :param ~pyro.optim.optim.PyroOptim optimizer: A Pyro optimizer.
+        :param ~pyro.infer.elbo.ELBO loss: A Pyro loss instance.
         :param int num_steps: Number of steps to run SVI.
         :returns: a list of losses during the training procedure
         :rtype: list
         """
-        if optimizer is None:
-            optimizer = Adam({})
-        if not isinstance(optimizer, PyroOptim):
-            raise ValueError("Optimizer should be an instance of "
-                             "pyro.optim.PyroOptim class.")
-        if loss is None:
-            loss = Trace_ELBO()
+        optimizer = Adam({}) if optimizer is None else optimizer
+        loss = Trace_ELBO() if loss is None else loss
         svi = SVI(self.model, self.guide, optimizer, loss=loss)
         losses = []
         for i in range(num_steps):
