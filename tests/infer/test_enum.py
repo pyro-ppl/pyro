@@ -242,7 +242,7 @@ def test_differentiable_loss(model, guide, enumerate1):
 
     pyro.set_rng_seed(0)
     loss = elbo.differentiable_loss(model, guide, data)
-    param_names = sorted(pyro.get_param_store().get_all_param_names())
+    param_names = sorted(pyro.get_param_store())
     actual_loss = loss.item()
     actual_grads = grad(loss, [pyro.param(name).unconstrained() for name in param_names])
 
@@ -1263,7 +1263,7 @@ def _check_loss_and_grads(expected_loss, actual_loss):
                  msg='Expected:\n{}\nActual:\n{}'.format(expected_loss.detach().cpu().numpy(),
                                                          actual_loss.detach().cpu().numpy()))
 
-    names = pyro.get_param_store().get_all_param_names()
+    names = pyro.get_param_store().keys()
     params = [pyro.param(name).unconstrained() for name in names]
     actual_grads = grad(actual_loss, params, allow_unused=True, retain_graph=True)
     expected_grads = grad(expected_loss, params, allow_unused=True, retain_graph=True)
