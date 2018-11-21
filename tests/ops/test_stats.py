@@ -1,26 +1,88 @@
 import pytest
 import torch
 
-from pyro.ops.stats import (autocorrelation, autocovariance, effective_sample_size,
-                            gelman_rubin, resample, split_gelman_rubin,
-                            _cummin, _fft_next_good_size)
+from pyro.ops.stats import (autocorrelation, autocovariance, effective_sample_size, gelman_rubin,
+                            hpdi, pi, quantile, resample, split_gelman_rubin, _cummin,
+                            _fft_next_good_size)
 from tests.common import assert_equal, xfail_if_not_implemented
 
 
-@pytest.mark.parametrize('input', [autocorrelation, autocovariance, _cummin])
 @pytest.mark.parametrize('replacement', [True, False])
-@pytest.mark.parametrize('')
 @pytest.mark.init(rng_seed=3)
-def test_resample():
-    x = torch.empty(2, 10000)
-    x[0].normal_(3, 4)
-    x[1].normal_(5, 6)
+def test_resample(replacement):
+    x = torch.empty(10000, 2)
+    x[:, 0].normal_(3, 4)
+    x[:, 1].normal_(5, 6)
 
-    y = resample(x, num_samples=2000, dim=1, replacement=False)
-    assert_equal(torch.unique(y(-1)
-    assert_equal(y.shape, torch.Size(2, 2000))
-    assert_equal(y.mean(dim=0), torch.tensor([3., 5.]))
-    assert_equal(y.std(dim=0), torch.tensor([4., 6.]))
+    num_samples = 5000
+    y = resample(x, num_samples=num_samples, replacement=replacement)
+    z = resample(x.t(), num_samples=num_samples, dim=1, replacement=replacement)
+    if not replacement:
+        assert_equal(torch.unique(y.reshape(-1)).numel(), y.numel())
+        assert_equal(torch.unique(z.reshape(-1)).numel(), z.numel())
+    assert_equal(y.shape, torch.Size([num_samples, 2]))
+    assert_equal(z.shape, torch.Size([2, num_samples]))
+    assert_equal(y.mean(dim=0), torch.tensor([3., 5.]), prec=0.1)
+    assert_equal(z.mean(dim=1), torch.tensor([3., 5.]), prec=0.1)
+    assert_equal(y.std(dim=0), torch.tensor([4., 6.]), prec=0.1)
+    assert_equal(z.std(dim=1), torch.tensor([4., 6.]), prec=0.1)
+
+
+@pytest.mark.init(rng_seed=3)
+def test_quantile():
+    x = torch.tensor([0., 1., 2.])
+    y = torch.rand(2000)
+    z = torch.randn(2000)
+
+    assert_equal(quantile(x, probs=[0., 0.4, 0.5, 1.]), torch.tensor([0., 0.8, 1., 2.]))
+    assert_equal(quantile(y, probs=0.2), torch.tensor(0.2), prec=0.01)
+    assert_equal(quantile(z, probs=0.8413), torch.tensor(1.), prec=0.001)
+
+
+def test_pi():
+    x = torch.empty(1000).log_normal_(0, 1)
+    assert_equal(pi(x, prob=0.8), quantile(x, probs=[0.1, 0.9]))
+
+
+@pytest.mark.init(rng_seed=3)
+def test_hpdi():
+    x = torch.randn(20000)
+    assert_equal(hpdi(x, prob=0.8), pi(x, prob=0.8), prec=0.01)
+
+    x = torch.empty(20000).exponential_(1)
+    assert_equal(hpdi(x, prob=0.2), torch.tensor([0., 0.22]), prec=0.01)
+
+
+def _quantile(x, dim=0):
+    return quantile(x, probs=[0.1, 0.6], dim=dim)
+
+
+def _pi(x, dim=0):
+    return pi(x, prob=0.8, dim=dim)
+
+
+def _hpdi(x, dim=0):
+    return hpdi(x, prob=0.8, dim=dim)
+
+
+@pytest.mark.parametrize('statistics', [_quantile, _pi, _hpdi])
+@pytest.mark.parametrize('sample_shape', [(), (3,), (2, 3)])
+def test_statistics_A_ok_with_sample_shape(statistics, sample_shape):
+    xs = torch.rand((10,) + torch.Size(sample_shape))
+    y = statistics(xs)
+
+    # test correct shape
+    assert_equal(y.shape, torch.Size([2]) + xs.shape[1:])
+
+    # test correct batch calculation
+    batch_statistics = []
+    for x in xs.reshape(10, -1).split(1, dim=1):
+        batch_statistics.append(statistics(x))
+    assert_equal(torch.cat(batch_statistics, dim=1).reshape(y.shape), y)
+
+    # test dim=-1
+    a = xs.transpose(0, -1)
+    assert_equal(statistics(a, dim=-1), y.transpose(0, -1))
 
 
 def test_autocorrelation():
@@ -49,7 +111,7 @@ def test_cummin():
 
 @pytest.mark.parametrize('statistics', [autocorrelation, autocovariance, _cummin])
 @pytest.mark.parametrize('sample_shape', [(), (3,), (2, 3)])
-def test_statistics_ok_with_sample_shape(statistics, sample_shape):
+def test_statistics_B_ok_with_sample_shape(statistics, sample_shape):
     xs = torch.rand((10,) + torch.Size(sample_shape))
     y = statistics(xs)
 
