@@ -48,9 +48,9 @@ class TracePosterior(object):
     that need access to the collected execution traces.
     """
     def __init__(self):
-        self._init()
+        self._reset()
 
-    def _init(self):
+    def _reset(self):
         self.log_weights = []
         self.exec_traces = []
         self._categorical = None
@@ -79,7 +79,7 @@ class TracePosterior(object):
         :param args: optional args taken by `self._traces`.
         :param kwargs: optional keywords args taken by `self._traces`.
         """
-        self._init()
+        self._reset()
         with poutine.block():
             for tr, logit in self._traces(*args, **kwargs):
                 self.exec_traces.append(tr)

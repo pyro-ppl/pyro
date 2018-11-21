@@ -173,7 +173,6 @@ class TraceGraph_ELBO(ELBO):
     used to reduce variance:
     - the sequential order of samples (z is sampled after y => y does not depend on z)
     - :class:`~pyro.plate` generators
-    - :class:`~pyro.irange` generators
 
     References
 
