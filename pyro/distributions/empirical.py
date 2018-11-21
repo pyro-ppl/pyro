@@ -130,10 +130,7 @@ class Empirical(TorchDistribution):
         return logsumexp(log_probs, dim=-1)
 
     def _weighted_mean(self, value, dim=0):
-        dims_to_prepend = dim
-        dims_to_append = value.dim() - dim - 1
-        new_shape = dims_to_prepend * [1] + [-1] + dims_to_append * [1]
-        weights = self._log_weights.reshape(new_shape)
+        weights = self._log_weights.reshape([-1] + (value.dim() - 1) * [1])
         max_weight = weights.max(dim=dim)[0]
         relative_probs = (weights - max_weight).exp()
         return (value * relative_probs).sum(dim=dim) / relative_probs.sum(dim=dim)

@@ -126,12 +126,10 @@ class HashingMarginal(dist.Distribution):
             return d
 
     def _weighted_mean(self, value, dim=0):
-        weights = self._dist_and_values()[0].logits
-        for _ in range(value.dim() - 1):
-            weights = weights.unsqueeze(-1)
-        max_val = weights.max(dim)[0]
-        normalization = (value.new_tensor([1.]) * (weights - max_val.unsqueeze(-1)).exp()).sum(dim=dim)
-        return (value * (weights - max_val.unsqueeze(-1)).exp()).sum(dim=dim) / normalization
+        weights = self._log_weights.reshape([-1] + (value.dim() - 1) * [1])
+        max_weight = weights.max(dim=dim)[0]
+        relative_probs = (weights - max_weight).exp()
+        return (value * relative_probs).sum(dim=dim) / relative_probs.sum(dim=dim)
 
     @property
     def mean(self):
