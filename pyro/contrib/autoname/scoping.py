@@ -10,7 +10,9 @@ from pyro.poutine.runtime import effectful
 
 
 class NameCountMessenger(Messenger):
-
+    """
+    ``NameCountMessenger`` is the implementation of :func:`pyro.contrib.autoname.name_count`
+    """
     def __enter__(self):
         self._names = set()
         return super(NameCountMessenger, self).__enter__()
@@ -136,5 +138,48 @@ def scope(fn=None, prefix=None, inner=None):
 
 
 def name_count(fn=None):
+    """
+    ``name_count`` is a very simple autonaming scheme that simply appends a suffix
+    representing a counter to any name that appears multiple tims in an execution.
+    Only duplicate instances of a name get a suffix; the first instance is not modified.
+
+    Example::
+
+        >>> @name_count
+        ... def model():
+        ...     for i in range(3):
+        ...         pyro.sample("x", dist.Bernoulli(0.5))
+        ...
+        >>> assert "x" in poutine.trace(model).get_trace()
+        >>> assert "x__0" in poutine.trace(model).get_trace()
+        >>> assert "x__1" in poutine.trace(model).get_trace()
+
+    ``name_count`` also composes with :func:`~pyro.contrib.autoname.scope`
+    by adding a suffix to duplicate scope entrances:
+
+    Example::
+
+        >>> @name_count
+        ... def model():
+        ...     for i in range(3):
+        ...         with pyro.contrib.autoname.scope(prefix="a"):
+        ...             pyro.sample("x", dist.Bernoulli(0.5))
+        ...
+        >>> assert "a/x" in poutine.trace(model).get_trace()
+        >>> assert "a__0/x" in poutine.trace(model).get_trace()
+        >>> assert "a__1/x" in poutine.trace(model).get_trace()
+
+    Example::
+
+        >>> @name_count
+        ... def model():
+        ...     with pyro.contrib.autoname.scope(prefix="a"):
+        ...         for i in range(3):
+        ...             pyro.sample("x", dist.Bernoulli(0.5))
+        ...
+        >>> assert "a/x" in poutine.trace(model).get_trace()
+        >>> assert "a/x__0" in poutine.trace(model).get_trace()
+        >>> assert "a/x__1" in poutine.trace(model).get_trace()
+    """
     msngr = NameCountMessenger()
     return msngr(fn) if fn is not None else msngr
