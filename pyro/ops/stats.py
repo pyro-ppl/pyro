@@ -286,9 +286,11 @@ def hpdi(input, prob, dim=0):
     sorted_input = input.sort(dim)[0]
     mass = input.size(dim)
     index_length = int(prob * mass)
-    intervals_lower = sorted_input.index_select(dim, torch.arange(mass - index_length))
-    intervals_upper = sorted_input.index_select(dim, torch.arange(index_length, mass))
-    intervals_length = intervals_upper - intervals_lower
+    intervals_left = sorted_input.index_select(
+        dim, input.new_tensor(range(mass - index_length), dtype=torch.long))
+    intervals_right = sorted_input.index_select(
+        dim, input.new_tensor(range(index_length, mass)), dtype=torch.long))
+    intervals_length = intervals_right - intervals_left
     index_start = intervals_length.argmin(dim)
     indices = torch.stack([index_start, index_start + index_length], dim)
     return torch.gather(sorted_input, dim, indices)
