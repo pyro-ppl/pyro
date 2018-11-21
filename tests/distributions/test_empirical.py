@@ -87,6 +87,7 @@ def test_weighted_mean_var(event_shape, dtype):
             empirical_dist.mean
             empirical_dist.variance
 
+
 def test_mean_var_non_nan():
     empirical_dist = Empirical()
     for i in range(10):
