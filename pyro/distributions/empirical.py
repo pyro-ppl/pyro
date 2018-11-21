@@ -2,13 +2,22 @@ from __future__ import absolute_import, division, print_function
 
 import math
 import numbers
+from collections import defaultdict
 
 import torch
+from contextlib2 import contextmanager
 from torch.distributions import constraints
 
 from pyro.distributions.torch import Categorical
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import copy_docs_from, logsumexp
+
+
+@contextmanager
+def accumulate_samples():
+    empirical_dist = Empirical()
+    yield empirical_dist
+    empirical_dist._finalize()
 
 
 @copy_docs_from(TorchDistribution)
@@ -25,35 +34,28 @@ class Empirical(TorchDistribution):
         self._samples = None
         self._log_weights = None
         self._categorical = None
-        self._samples_buffer = []
-        self._weights_buffer = []
+        self._samples_buffer = defaultdict(list)
+        self._weights_buffer = defaultdict(list)
         super(TorchDistribution, self).__init__(batch_shape=torch.Size(), validate_args=validate_args)
-
-    @staticmethod
-    def _append_from_buffer(tensor, buffer):
-        """
-        Append values from the buffer to the finalized tensor, along the
-        leftmost dimension.
-
-        :param torch.Tensor tensor: tensor containing existing values.
-        :param list buffer: list of new values.
-        :return: tensor with new values appended at the bottom.
-        """
-        buffer_tensor = torch.stack(buffer, dim=0)
-        return torch.cat([tensor, buffer_tensor], dim=0)
 
     def _finalize(self):
         """
         Appends values collected in the samples/weights buffers to their
         corresponding tensors.
         """
-        if not self._samples_buffer:
-            return
-        self._samples = self._append_from_buffer(self._samples, self._samples_buffer)
-        self._log_weights = self._append_from_buffer(self._log_weights, self._weights_buffer)
+        num_chains = len(self._samples_buffer)
+        samples_by_chain = []
+        weights_by_chain = []
+        for i in range(num_chains):
+            samples_by_chain.append(torch.stack(self._samples_buffer[i], dim=0))
+            weights_by_chain.append(torch.stack(self._weights_buffer[i], dim=0))
+        if num_chains == 1:
+            self._samples = samples_by_chain[0]
+            self._log_weights = weights_by_chain[0]
+        else:
+            self._samples = torch.stack(samples_by_chain, dim=0)
+            self._log_weights = torch.stack(weights_by_chain, dim=0)
         self._categorical = Categorical(logits=self._log_weights)
-        # Reset buffers.
-        self._samples_buffer, self._weights_buffer = [], []
 
     @property
     def sample_size(self):
@@ -67,7 +69,7 @@ class Empirical(TorchDistribution):
             return 0
         return self._samples.size(0)
 
-    def add(self, value, weight=None, log_weight=None):
+    def add(self, value, weight=None, log_weight=None, chain_id=0):
         """
         Adds a new data point to the sample. The values in successive calls to
         ``add`` must have the same tensor shape and size. Optionally, an
@@ -96,13 +98,9 @@ class Empirical(TorchDistribution):
         if self._validate_args and log_weight.dim() > 0:
             raise ValueError("``weight.dim() > 0``, but weight should be a scalar.")
 
-        # Seed the container tensors with the correct tensor types
-        if self._samples is None:
-            self._samples = value.new_tensor([])
-            self._log_weights = log_weight.new_tensor([])
         # Append to the buffer list
-        self._samples_buffer.append(value)
-        self._weights_buffer.append(log_weight)
+        self._samples_buffer[chain_id].append(value)
+        self._weights_buffer[chain_id].append(log_weight)
 
     def sample(self, sample_shape=torch.Size()):
         self._finalize()

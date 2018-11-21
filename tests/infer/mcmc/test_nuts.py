@@ -10,7 +10,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.autoguide import AutoDelta
-from pyro.infer import EmpiricalMarginal, TraceEnum_ELBO, SVI
+from pyro.infer import TraceEnum_ELBO, SVI
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.nuts import NUTS
 import pyro.optim as optim
@@ -93,7 +93,7 @@ def test_nuts_conjugate_gaussian(fixture,
     mcmc_run = MCMC(nuts_kernel, num_samples, warmup_steps).run(fixture.data)
     for i in range(1, fixture.chain_len + 1):
         param_name = 'loc_' + str(i)
-        marginal = EmpiricalMarginal(mcmc_run, sites=param_name)
+        marginal = mcmc_run.marginal(param_name).empirical()[param_name]
         latent_loc = marginal.mean
         latent_std = marginal.variance.sqrt()
         expected_mean = torch.ones(fixture.dim) * expected_means[i - 1]
@@ -129,7 +129,7 @@ def test_logistic_regression(use_multinomial_sampling):
 
     nuts_kernel = NUTS(model, use_multinomial_sampling=use_multinomial_sampling)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='beta')
+    posterior = mcmc_run.marginal('beta').empirical()['beta']
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
 
 
@@ -155,7 +155,7 @@ def test_beta_bernoulli(step_size, adapt_step_size, adapt_mass_matrix, full_mass
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     nuts_kernel = NUTS(model, step_size, adapt_step_size, adapt_mass_matrix, full_mass)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
+    posterior = mcmc_run.marginal(sites='p_latent').empirical()['p_latent']
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
@@ -172,7 +172,7 @@ def test_gamma_normal(use_multinomial_sampling):
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
     nuts_kernel = NUTS(model, use_multinomial_sampling=use_multinomial_sampling)
     mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
+    posterior = mcmc_run.marginal('p_latent').empirical()['p_latent']
     assert_equal(posterior.mean, true_std, prec=0.05)
 
 
@@ -187,7 +187,7 @@ def test_dirichlet_categorical():
     data = dist.Categorical(true_probs).sample(sample_shape=(torch.Size((2000,))))
     nuts_kernel = NUTS(model)
     mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
+    posterior = mcmc_run.marginal('p_latent').empirical()['p_latent']
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
@@ -202,8 +202,9 @@ def test_gamma_beta():
     data = dist.Beta(concentration1=true_alpha, concentration0=true_beta).sample(torch.Size((5000,)))
     nuts_kernel = NUTS(model)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=200).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites=['alpha', 'beta'])
-    assert_equal(posterior.mean, torch.stack([true_alpha, true_beta]), prec=0.05)
+    posterior = mcmc_run.marginal(['alpha', 'beta']).empirical()
+    assert_equal(posterior['alpha'].mean, true_alpha, prec=0.05)
+    assert_equal(posterior['beta'].mean, true_beta, prec=0.05)
 
 
 def test_gaussian_mixture_model():
@@ -224,9 +225,9 @@ def test_gaussian_mixture_model():
     data = dist.Normal(true_cluster_means[cluster_assignments], 1.0).sample()
     nuts_kernel = NUTS(gmm, max_plate_nesting=1)
     mcmc_run = MCMC(nuts_kernel, num_samples=300, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites=["phi", "cluster_means"]).mean.sort()[0]
-    assert_equal(posterior[0], true_mix_proportions, prec=0.05)
-    assert_equal(posterior[1], true_cluster_means, prec=0.2)
+    posterior = mcmc_run.marginal(["phi", "cluster_means"]).empirical()
+    assert_equal(posterior["phi"].mean.sort()[0], true_mix_proportions, prec=0.05)
+    assert_equal(posterior["cluster_means"].mean.sort()[0], true_cluster_means, prec=0.2)
 
 
 def test_bernoulli_latent_model():
@@ -244,8 +245,8 @@ def test_bernoulli_latent_model():
     data = dist.Normal(2. * z, 1.0).sample()
     nuts_kernel = NUTS(model, max_plate_nesting=1)
     mcmc_run = MCMC(nuts_kernel, num_samples=600, warmup_steps=200).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites="y_prob").mean
-    assert_equal(posterior, y_prob, prec=0.05)
+    posterior = mcmc_run.marginal("y_prob").empirical()["y_prob"]
+    assert_equal(posterior.mean, y_prob, prec=0.05)
 
 
 @pytest.mark.parametrize("num_steps,use_einsum", [

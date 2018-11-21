@@ -52,7 +52,7 @@ class GPModel(Parameterized):
         >>> mcmc_run = MCMC(hmc_kernel, num_samples=10)
         >>> posterior_ls_trace = []  # store lengthscale trace
         >>> ls_name = param_with_module_name(gpr.kernel.name, "lengthscale")
-        >>> for trace, _ in mcmc_run._traces():
+        >>> for trace, _, _ in mcmc_run._traces():
         ...     posterior_ls_trace.append(trace.nodes[ls_name]["value"])
 
     + Using a variational inference (e.g. :class:`~pyro.infer.svi.SVI`) on the pair

@@ -3,13 +3,15 @@ from __future__ import absolute_import, division, print_function
 from abc import ABCMeta, abstractmethod
 
 import torch
+from contextlib2 import ExitStack
 from six import add_metaclass
 
 import pyro.poutine as poutine
-from pyro.distributions import Categorical, Empirical
+from pyro.distributions import Categorical
+from pyro.distributions.empirical import accumulate_samples
 
 
-class EmpiricalMarginal(Empirical):
+class EmpiricalMarginal(object):
     """
     Marginal distribution, that wraps over a TracePosterior object to provide a
     a marginal over one or more latent sites or the return values of the
@@ -26,17 +28,32 @@ class EmpiricalMarginal(Empirical):
     def __init__(self, trace_posterior, sites=None, validate_args=None):
         assert isinstance(trace_posterior, TracePosterior), \
             "trace_dist must be trace posterior distribution object"
-        super(EmpiricalMarginal, self).__init__(validate_args=validate_args)
         if sites is None:
-            sites = "_RETURN"
-        self._populate_traces(trace_posterior, sites)
+            sites = ["_RETURN"]
+        elif isinstance(sites, str):
+            sites = [sites]
+        else:
+            assert isinstance(sites, list)
+        self.sites = sites
+        self._marginals = {}
+        self._diagnostics = {}
+        self._populate_traces(trace_posterior)
 
-    def _populate_traces(self, trace_posterior, sites):
-        assert isinstance(sites, (list, str))
-        for tr, log_weight in zip(trace_posterior.exec_traces, trace_posterior.log_weights):
-            value = tr.nodes[sites]["value"] if isinstance(sites, str) else \
-                torch.stack([tr.nodes[site]["value"] for site in sites], 0)
-            self.add(value, log_weight=log_weight)
+    def _populate_traces(self, trace_posterior):
+        with ExitStack() as stack:
+            self._marginals = {site: stack.enter_context(accumulate_samples()) for site in self.sites}
+            for tr, log_weight, chain_id in zip(trace_posterior.exec_traces,
+                                                trace_posterior.log_weights,
+                                                trace_posterior.chain_ids):
+                for site in self._marginals:
+                    value = tr.nodes[site]["value"]
+                    self._marginals[site].add(value, log_weight=log_weight, chain_id=chain_id)
+
+    def empirical(self):
+        return self._marginals
+
+    def diagnostics(self):
+        raise NotImplementedError("TracePosterior class must implement ``diagnostics``.")
 
 
 @add_metaclass(ABCMeta)
@@ -47,26 +64,38 @@ class TracePosterior(object):
     This is designed to be used by other utility classes like `EmpiricalMarginal`,
     that need access to the collected execution traces.
     """
-    def __init__(self):
+    def __init__(self, num_chains=1):
+        self.num_chains = num_chains
         self._reset()
 
     def _reset(self):
         self.log_weights = []
         self.exec_traces = []
+        self.chain_ids = []  # chain id corresponding to the sample
+        self._idx_by_chain = [[] for _ in range(self.num_chains)]  # indexes of samples by chain id
         self._categorical = None
+
+    def marginal(self, sites=None):
+        return EmpiricalMarginal(self, sites)
 
     @abstractmethod
     def _traces(self, *args, **kwargs):
         """
         Abstract method implemented by classes that inherit from `TracePosterior`.
 
-        :return: Generator over ``(exec_trace, weight)``.
+        :return: Generator over ``(exec_trace, weight)`` or
+        ``(exec_trace, weight, chain_id)``.
         """
-        raise NotImplementedError("inference algorithm must implement _traces")
+        raise NotImplementedError("Inference algorithm must implement ``_traces``.")
 
     def __call__(self, *args, **kwargs):
-        random_idx = self._categorical.sample()
-        trace = self.exec_traces[random_idx].copy()
+        # To ensure deterministic sampling in the presence of multiple chains,
+        # we get the index from ``idxs_by_chain`` instead of sampling from
+        # the marginal directly.
+        random_idx = self._categorical.sample().item()
+        chain_idx, sample_idx = random_idx % self.num_chains, random_idx // self.num_chains
+        sample_idx = self._idx_by_chain[chain_idx][sample_idx]
+        trace = self.exec_traces[sample_idx].copy()
         for name in trace.observation_nodes:
             trace.remove_node(name)
         return trace
@@ -81,9 +110,17 @@ class TracePosterior(object):
         """
         self._reset()
         with poutine.block():
-            for tr, logit in self._traces(*args, **kwargs):
+            for i, vals in enumerate(self._traces(*args, **kwargs)):
+                if len(vals) == 2:
+                    chain_id = 0
+                    tr, logit = vals
+                else:
+                    tr, logit, chain_id = vals
+                    assert chain_id < self.num_chains
                 self.exec_traces.append(tr)
                 self.log_weights.append(logit)
+                self.chain_ids.append(chain_id)
+                self._idx_by_chain[chain_id].append(i)
         self._categorical = Categorical(logits=torch.tensor(self.log_weights))
         return self
 
@@ -113,4 +150,4 @@ class TracePredictive(TracePosterior):
         for _ in range(self.num_samples):
             model_trace = self.posterior()
             replayed_trace = poutine.trace(poutine.replay(self.model, model_trace)).get_trace(*args, **kwargs)
-            yield (replayed_trace, 0.)
+            yield (replayed_trace, 0., 0)
