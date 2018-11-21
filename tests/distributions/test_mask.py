@@ -3,8 +3,9 @@ from __future__ import absolute_import, division, print_function
 import pytest
 import torch
 from torch import tensor
+from torch.distributions import kl_divergence
 
-from pyro.distributions.torch import Bernoulli
+from pyro.distributions.torch import Bernoulli, Normal
 from pyro.distributions.util import scale_and_mask
 from tests.common import assert_equal
 
@@ -63,3 +64,15 @@ def test_mask_invalid_shape(batch_shape, mask_shape):
     mask = checker_mask(mask_shape)
     with pytest.raises(ValueError):
         dist.mask(mask)
+
+
+def test_kl_divergence():
+    mask = torch.tensor([[0, 1], [1, 1]]).byte()
+    p = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())
+    q = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())
+    expected = kl_divergence(p.independent(2), q.independent(2))
+    actual = (kl_divergence(p.mask(mask).independent(2),
+                            q.mask(mask).independent(2)) +
+              kl_divergence(p.mask(~mask).independent(2),
+                            q.mask(~mask).independent(2)))
+    assert_equal(actual, expected)

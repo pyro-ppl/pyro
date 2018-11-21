@@ -87,14 +87,18 @@ def test_statistics_A_ok_with_sample_shape(statistics, sample_shape):
 
 def test_autocorrelation():
     x = torch.arange(10.)
-    assert_equal(autocorrelation(x),
+    with xfail_if_not_implemented():
+        actual = autocorrelation(x)
+    assert_equal(actual,
                  torch.tensor([1, 0.78, 0.52, 0.21, -0.13,
                                -0.52, -0.94, -1.4, -1.91, -2.45]), prec=0.01)
 
 
 def test_autocovariance():
     x = torch.arange(10.)
-    assert_equal(autocovariance(x),
+    with xfail_if_not_implemented():
+        actual = autocovariance(x)
+    assert_equal(actual,
                  torch.tensor([8.25, 6.42, 4.25, 1.75, -1.08,
                                -4.25, -7.75, -11.58, -15.75, -20.25]), prec=0.01)
 
@@ -113,7 +117,8 @@ def test_cummin():
 @pytest.mark.parametrize('sample_shape', [(), (3,), (2, 3)])
 def test_statistics_B_ok_with_sample_shape(statistics, sample_shape):
     xs = torch.rand((10,) + torch.Size(sample_shape))
-    y = statistics(xs)
+    with xfail_if_not_implemented():
+        y = statistics(xs)
 
     # test correct shape
     assert_equal(y.shape, xs.shape)

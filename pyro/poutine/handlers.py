@@ -75,7 +75,7 @@ from .uncondition_messenger import UnconditionMessenger
 ############################################
 
 
-def trace(fn=None, graph_type=None, param_only=None, strict_names=None):
+def trace(fn=None, graph_type=None, param_only=None):
     """
     Return a handler that records the inputs and outputs of primitive calls
     and their dependencies.
@@ -100,7 +100,7 @@ def trace(fn=None, graph_type=None, param_only=None, strict_names=None):
     :param param_only: if true, only records params and not samples
     :returns: stochastic function decorated with a :class:`~pyro.poutine.trace_messenger.TraceMessenger`
     """
-    msngr = TraceMessenger(graph_type=graph_type, param_only=param_only, strict_names=strict_names)
+    msngr = TraceMessenger(graph_type=graph_type, param_only=param_only)
     return msngr(fn) if fn is not None else msngr
 
 

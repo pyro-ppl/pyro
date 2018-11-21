@@ -5,10 +5,11 @@ generating unique, semantically meaningful names for sample sites.
 from __future__ import absolute_import, division, print_function
 
 from pyro.contrib.autoname import named
-from pyro.contrib.autoname.scoping import scope
+from pyro.contrib.autoname.scoping import scope, name_count
 
 
 __all__ = [
     "named",
-    "scope"
+    "scope",
+    "name_count",
 ]
