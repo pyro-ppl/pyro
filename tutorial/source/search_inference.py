@@ -130,18 +130,19 @@ class HashingMarginal(dist.Distribution):
         for _ in range(value.dim() - 1):
             weights = weights.unsqueeze(-1)
         max_val = weights.max(dim)[0]
-        return max_val.exp() * (value * (weights - max_val.unsqueeze(-1)).exp()).sum(dim=dim)
+        normalization = (value.new_tensor([1.]) * (weights - max_val.unsqueeze(-1)).exp()).sum(dim=dim)
+        return (value * (weights - max_val.unsqueeze(-1)).exp()).sum(dim=dim) / normalization
 
     @property
     def mean(self):
         samples = torch.stack(list(self._dist_and_values()[1].values()))
-        return self._weighted_mean(samples) / self._weighted_mean(samples.new_tensor([1.]))
+        return self._weighted_mean(samples)
 
     @property
     def variance(self):
         samples = torch.stack(list(self._dist_and_values()[1].values()))
         deviation_squared = torch.pow(samples - self.mean, 2)
-        return self._weighted_mean(deviation_squared) / self._weighted_mean(samples.new_tensor([1.]))
+        return self._weighted_mean(deviation_squared)
 
 
 ########################

@@ -134,7 +134,8 @@ class Empirical(TorchDistribution):
         for _ in range(value.dim() - 1):
             weights = weights.unsqueeze(-1)
         max_val = weights.max(dim)[0]
-        return max_val.exp() * (value * (weights - max_val.unsqueeze(-1)).exp()).sum(dim=dim)
+        normalization = (value.new_tensor([1.]) * (weights - max_val.unsqueeze(-1)).exp()).sum(dim=dim)
+        return (value * (weights - max_val.unsqueeze(-1)).exp()).sum(dim=dim) / normalization
 
     @property
     def event_shape(self):
@@ -152,7 +153,7 @@ class Empirical(TorchDistribution):
                              "or ``torch.float64``. If these are samples from a " +
                              "`Categorical` distribution, consider converting to a " +
                              "`OneHotCategorical` distribution.")
-        return self._weighted_mean(self._samples) / self._weighted_mean(self._samples.new_tensor([1.]))
+        return self._weighted_mean(self._samples)
 
     @property
     def variance(self):
@@ -164,7 +165,7 @@ class Empirical(TorchDistribution):
                              "`Categorical` distribution, consider converting to a " +
                              "`OneHotCategorical` distribution.")
         deviation_squared = torch.pow(self._samples - self.mean, 2)
-        return self._weighted_mean(deviation_squared) / self._weighted_mean(self._samples.new_tensor([1.]))
+        return self._weighted_mean(deviation_squared)
 
     def get_samples_and_weights(self):
         self._finalize()
