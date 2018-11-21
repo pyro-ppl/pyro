@@ -130,12 +130,13 @@ class Empirical(TorchDistribution):
         return logsumexp(log_probs, dim=-1)
 
     def _weighted_mean(self, value, dim=0):
-        weights = self._log_weights
-        for _ in range(value.dim() - 1):
-            weights = weights.unsqueeze(-1)
-        max_val = weights.max(dim)[0]
-        normalization = (value.new_tensor([1.]) * (weights - max_val.unsqueeze(-1)).exp()).sum(dim=dim)
-        return (value * (weights - max_val.unsqueeze(-1)).exp()).sum(dim=dim) / normalization
+        dims_to_prepend = dim
+        dims_to_append = value.dim() - dim - 1
+        new_shape = dims_to_prepend * [1] + [-1] + dims_to_append * [1]
+        weights = self._log_weights.reshape(new_shape)
+        max_weight = weights.max(dim=dim)[0]
+        relative_probs = (weights - max_weight).exp()
+        return (value * relative_probs).sum(dim=dim) / relative_probs.sum(dim=dim)
 
     @property
     def event_shape(self):

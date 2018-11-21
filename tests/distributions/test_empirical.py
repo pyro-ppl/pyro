@@ -91,6 +91,6 @@ def test_weighted_mean_var(event_shape, dtype):
 def test_mean_var_non_nan():
     empirical_dist = Empirical()
     for i in range(10):
-        empirical_dist.add(torch.ones(1), log_weight=-1000.)
-    assert not torch.isnan(empirical_dist.mean)
-    assert not torch.isnan(empirical_dist.variance)
+        empirical_dist.add(torch.ones([5, 2, 3]), log_weight=-1000.)
+    assert (~torch.isnan(empirical_dist.mean)).all()
+    assert (~torch.isnan(empirical_dist.variance)).all()
