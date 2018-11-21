@@ -14,26 +14,24 @@ class _EinsumBackward(object):
 
     def __call__(self, sample):
         logits = self.logits
-        if sample is None:
-            for i in range(sample.dim(-1)):
-                dim = sample._pyro_sample_dims[i]
-                index = sample[i]
+        if sample is not None:
+            for dim, index in zip(sample._pyro_sample_dims, sample):
                 logits = packed.gather(logits, index, dim)
 
-        flat_logits = logits.reshape('todo (-1,) + output_shape')
-        flat_sample = dist.categorical(logits=flat_logits)
+        flat_logits = logits.reshape("TODO (-1,) + output_shape")
+        flat_sample = dist.Categorical(logits=flat_logits).sample()
         if flat_logits.dim() == self.logits.dim():
             sample = flat_sample.unsqueeze(0)
         else:
-            raise NotImplementedError('todo modular arithmetic; torch.stack()')
+            raise NotImplementedError("TODO modular arithmetic; torch.stack()")
 
         for x in self.operands:
-            if requires_backward(x):
+            if not requires_backward(x):
                 continue
-            needed_dims = set(x._pyro_dims) & set(sample._pyro_sample_dims)
+            # needed_dims = set(x._pyro_dims) & set(sample._pyro_sample_dims)
             needed_idx = [sample._pyro_sample_dims.index(dim) for dim in x._pyro_dims]
             result = sample[needed_idx]
-            if hasattr(x, '_pyro_backward'):
+            if hasattr(x, "_pyro_backward"):
                 x._pyro_backward(result)
             else:  # a leaf variable
                 x._pyro_backward_result = result

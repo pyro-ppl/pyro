@@ -12,8 +12,8 @@ def requires_backward(tensor):
     """
     Returns true for internal and leaf nodes of the adjoint graph.
     """
-    return (hasattr(tensor, '_pyro_backward_result') or
-            hasattr(tensor, '_pyro_backward'))
+    return (hasattr(tensor, "_pyro_backward_result") or
+            hasattr(tensor, "_pyro_backward"))
 
 
 class _TransposeBackward(object):
