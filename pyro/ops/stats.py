@@ -251,9 +251,9 @@ def quantile(input, probs, dim=0):
     indices_above = (indices_below + 1).clamp(max=max_index)
     quantiles_above = sorted_input.index_select(dim, indices_above)
     quantiles_below = sorted_input.index_select(dim, indices_below)
-    shape_to_broadcast = [-1] * input.dim()
+    shape_to_broadcast = [1] * input.dim()
     shape_to_broadcast[dim] = indices.numel()
-    weights_above = indices - indices_below.type_as(indices.reshape(-1))
+    weights_above = indices - indices_below.type_as(indices)
     weights_above = weights_above.reshape(shape_to_broadcast)
     weights_below = 1 - weights_above
     quantiles = weights_below * quantiles_below + weights_above * quantiles_above

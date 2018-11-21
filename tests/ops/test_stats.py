@@ -23,7 +23,7 @@ def test_resample(replacement):
     assert_equal(y.shape, torch.Size([num_samples, 2]))
     assert_equal(z.shape, torch.Size([2, num_samples]))
     assert_equal(y.mean(dim=0), torch.tensor([3., 5.]), prec=0.1)
-    assert_equal(z.mean(dim=1), torch.tensor([3., 5.]), prec=0.1)
+    assert_equal(z.mean(dim=1), torch.tensor([3., 5.]), prec=0.12)
     assert_equal(y.std(dim=0), torch.tensor([4., 6.]), prec=0.1)
     assert_equal(z.std(dim=1), torch.tensor([4., 6.]), prec=0.1)
 
