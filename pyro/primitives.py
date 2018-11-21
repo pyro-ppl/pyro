@@ -101,15 +101,21 @@ def sample(name, fn, *args, **kwargs):
 
 class plate(PlateMessenger):
     """
-    Context manager for conditionally independent ranges of variables.
+    Construct for conditionally independent sequences of variables.
 
-    :class:`plate` is similar to :func:`torch.arange` in that it yields an
-    array of indices by which other tensors can be indexed. :class:`plate`
-    differs from :func:`torch.arange` in that it also informs inference
-    algorithms that the variables being indexed are conditionally independent.
-    To do this, :class:`plate` is a provided as context manager rather than a
-    function, and users must guarantee that all computation within an
-    :class:`plate` context is conditionally independent::
+    ``plate`` can be used either sequentially as a generator or in parallel as
+    a context manager (formerly ``irange`` and ``iarange``, respectively).
+
+    Sequential :class:`plate` is similar to :py:func:`range` in that it generates
+    a sequence of values.
+
+    Vectorized :class:`plate` is similar to :func:`torch.arange` in that it
+    yields an array of indices by which other tensors can be indexed.
+    :class:`plate` differs from :func:`torch.arange` in that it also informs
+    inference algorithms that the variables being indexed are conditionally
+    independent.  To do this, :class:`plate` is a provided as context manager
+    rather than a function, and users must guarantee that all computation
+    within an :class:`plate` context is conditionally independent::
 
         with plate("name", size) as ind:
             # ...do conditionally independent stuff with ind...
@@ -161,8 +167,14 @@ class plate(PlateMessenger):
 
            >>> loc, scale = torch.tensor(0.), torch.tensor(1.)
            >>> data = torch.randn(100)
+           >>> z = dist.Bernoulli(0.5).sample((100,))
 
-        >>> # This version simply declares independence:
+        >>> # This version declares sequential independence and subsamples data:
+        >>> for i in plate('data', 100, subsample_size=10):
+        ...     if z[i]:  # Control flow in this example prevents vectorization.
+        ...         obs = sample('obs_{}'.format(i), dist.Normal(loc, scale), obs=data[i])
+
+        >>> # This version declares vectorized independence:
         >>> with plate('data'):
         ...     obs = sample('obs', dist.Normal(loc, scale), obs=data)
 
@@ -201,42 +213,9 @@ class iarange(plate):
 
 
 class irange(SubsampleMessenger):
-    """
-    Non-vectorized version of :class:`plate`. See :class:`plate` for details.
-
-    :param str name: A name that will be used for this site in a Trace.
-    :param int size: The size of the collection being subsampled (like ``stop``
-        in builtin :func:`range`).
-    :param int subsample_size: Size of minibatches used in subsampling.
-        Defaults to ``size``.
-    :param subsample: Optional custom subsample for user-defined subsampling
-        schemes. If specified, then ``subsample_size`` will be set to
-        ``len(subsample)``.
-    :type subsample: Anything supporting ``len()``.
-    :param bool use_cuda: DEPRECATED, use the `device` arg instead.
-        Optional bool specifying whether to use cuda tensors for `subsample`
-        and `log_prob`. Defaults to ``torch.Tensor.is_cuda``.
-    :param str device: Optional keyword specifying which device to place
-        the results of `subsample` and `log_prob` on. By default, results
-        are placed on the same device as the default tensor.
-    :return: A reusable iterator yielding a sequence of integers.
-
-    Examples:
-
-        .. doctest::
-           :hide:
-
-           >>> loc, scale = torch.tensor(0.), torch.tensor(1.)
-           >>> data = torch.randn(100)
-           >>> z = dist.Bernoulli(0.5).sample((100,))
-
-        >>> for i in irange('data', 100, subsample_size=10):
-        ...     if z[i]:  # Prevents vectorization.
-        ...         obs = sample('obs_{}'.format(i), dist.Normal(loc, scale), obs=data[i])
-
-    See `SVI Part II <http://pyro.ai/examples/svi_part_ii.html>`_ for an extended discussion.
-    """
-    pass
+    def __init__(self, *args, **kwargs):
+        warnings.warn("pyro.irange is deprecated; use pyro.plate instead", DeprecationWarning)
+        super(irange, self).__init__(*args, **kwargs)
 
 
 def module(name, nn_module, update_module_params=False):

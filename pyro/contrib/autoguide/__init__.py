@@ -114,7 +114,7 @@ class AutoGuide(object):
                 if frame.vectorized:
                     self._plates[frame.name] = frame
                 else:
-                    raise NotImplementedError("AutoGuideList does not support pyro.irange")
+                    raise NotImplementedError("AutoGuideList does not support sequential pyro.plate")
 
     def median(self, *args, **kwargs):
         """
@@ -689,7 +689,7 @@ class AutoDiscreteParallel(AutoGuide):
                 if frame.vectorized:
                     self._plates[frame.name] = frame
                 else:
-                    raise NotImplementedError("AutoDiscreteParallel does not support pyro.irange")
+                    raise NotImplementedError("AutoDiscreteParallel does not support sequential pyro.plate")
 
     def __call__(self, *args, **kwargs):
         """
