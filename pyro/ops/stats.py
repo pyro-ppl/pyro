@@ -7,12 +7,13 @@ def _compute_chain_variance_stats(input):
     # compute within-chain variance and variance estimator
     # input has shape N x C x sample_shape
     N = input.size(0)
-    chain_mean = input.mean(dim=0)
-    var_between = chain_mean.var(dim=0)
-
     chain_var = input.var(dim=0)
     var_within = chain_var.mean(dim=0)
-    var_estimator = (N - 1) / N * var_within + var_between
+    var_estimator = (N - 1) / N * var_within
+    if input.size(1) > 1:
+        chain_mean = input.mean(dim=0)
+        var_between = chain_mean.var(dim=0)
+        var_estimator = var_estimator + var_between
     return var_within, var_estimator
 
 
@@ -173,7 +174,6 @@ def effective_sample_size(input, chain_dim=0, sample_dim=1):
     """
     assert input.dim() >= 2
     assert input.size(sample_dim) >= 2
-    assert input.size(chain_dim) >= 2
     # change input.shape to 1 x 1 x input.shape
     # then transpose sample_dim with 0, chain_dim with 1
     sample_dim = input.dim() + sample_dim if sample_dim < 0 else sample_dim
