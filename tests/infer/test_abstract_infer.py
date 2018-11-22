@@ -5,7 +5,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import EmpiricalMarginal, TracePredictive
+from pyro.infer import TracePredictive
 from pyro.infer.mcmc import MCMC, NUTS
 from tests.common import assert_equal
 
