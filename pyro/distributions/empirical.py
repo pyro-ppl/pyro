@@ -164,9 +164,14 @@ class Empirical(TorchDistribution):
         deviation_squared = torch.pow(self._samples - self.mean, 2)
         return self._weighted_mean(deviation_squared) / self._weighted_mean(self._samples.new_tensor([1.]))
 
-    def get_samples_and_weights(self):
+    @property
+    def samples(self):
         self._finalize()
         return self._samples, self._log_weights
+
+    @property
+    def weights(self):
+        return self._log_weights
 
     def enumerate_support(self, expand=True):
         # Empirical does not support batching, so expanding is a no-op.
