@@ -11,11 +11,13 @@ import warnings
 from collections import OrderedDict
 
 import six
+from contextlib2 import ExitStack
 from six.moves import queue
 import torch
 import torch.multiprocessing as mp
 
 import pyro
+from pyro.distributions.empirical import accumulate_samples
 from pyro.infer import TracePosterior, EmpiricalMarginal
 from pyro.infer.mcmc.logger import initialize_logger, initialize_progbar, DIAGNOSTIC_MSG, TqdmHandler
 import pyro.ops.stats as stats
@@ -255,10 +257,46 @@ class MCMC(TracePosterior):
             yield sample
 
     def marginal(self, sites=None):
-        return EmpiricalMarginalMCMC(self, sites)
+        return _EmpiricalMarginal(self, sites)
 
 
-class EmpiricalMarginalMCMC(EmpiricalMarginal):
+class _EmpiricalMarginal(object):
+    """
+    Marginal distribution for MCMC that provides a a marginal over one or more
+    latent sites as well as the return values of the TracePosterior's model.
+
+    :param TracePosterior trace_posterior: a TracePosterior instance representing
+        a Monte Carlo posterior.
+    :param list sites: optional list of sites for which we need to generate
+        the marginal distribution. Note that for multiple sites, the shape
+        for the site values must match (needed by the underlying ``Empirical``
+        class).
+    """
+    def __init__(self, trace_posterior, sites=None, validate_args=None):
+        assert isinstance(trace_posterior, TracePosterior), \
+            "trace_dist must be trace posterior distribution object"
+        if sites is None:
+            sites = ["_RETURN"]
+        elif isinstance(sites, str):
+            sites = [sites]
+        else:
+            assert isinstance(sites, list)
+        self.sites = sites
+        self._marginals = {}
+        self._diagnostics = {}
+        self._populate_traces(trace_posterior, validate_args)
+
+    def _populate_traces(self, trace_posterior, validate):
+        with ExitStack() as stack:
+            self._marginals = {site: stack.enter_context(accumulate_samples(validate))
+                               for site in self.sites}
+            for tr, log_weight, chain_id in zip(trace_posterior.exec_traces,
+                                                trace_posterior.log_weights,
+                                                trace_posterior.chain_ids):
+                for site in self._marginals:
+                    value = tr.nodes[site]["value"]
+                    self._marginals[site].add(value, log_weight=log_weight, chain_id=chain_id)
+
     def diagnostics(self):
         if self._diagnostics:
             return self._diagnostics
@@ -268,3 +306,6 @@ class EmpiricalMarginalMCMC(EmpiricalMarginal):
                 ("r_hat", stats.split_gelman_rubin(self._marginals[site].get_data()))
             ])
         return self._diagnostics
+
+    def empirical(self):
+        return self._marginals

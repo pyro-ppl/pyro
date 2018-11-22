@@ -8,6 +8,7 @@ import torch
 import pyro
 import pyro.infer
 from pyro.distributions import Bernoulli, Normal
+from pyro.infer import EmpiricalMarginal
 from tests.common import assert_equal
 
 
@@ -71,13 +72,13 @@ class ImportanceTest(NormalNormalSamplingTestCase):
     @pytest.mark.init(rng_seed=0)
     def test_importance_guide(self):
         posterior = pyro.infer.Importance(self.model, guide=self.guide, num_samples=5000).run()
-        marginal = posterior.marginal().empirical()['_RETURN']
+        marginal = EmpiricalMarginal(posterior)
         assert_equal(0, torch.norm(marginal.mean - self.loc_mean).item(), prec=0.01)
         assert_equal(0, torch.norm(marginal.variance.sqrt() - self.loc_stddev).item(), prec=0.1)
 
     @pytest.mark.init(rng_seed=0)
     def test_importance_prior(self):
         posterior = pyro.infer.Importance(self.model, guide=None, num_samples=10000).run()
-        marginal = posterior.marginal().empirical()['_RETURN']
+        marginal = EmpiricalMarginal(posterior)
         assert_equal(0, torch.norm(marginal.mean - self.loc_mean).item(), prec=0.01)
         assert_equal(0, torch.norm(marginal.variance.sqrt() - self.loc_stddev).item(), prec=0.1)

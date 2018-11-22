@@ -166,7 +166,6 @@ def summary(trace_posterior, sites, player_names, transforms={}, diagnostics=Tru
             diag = marginal.diagnostics()[site_name]
             site_stats[site_name] = site_stats[site_name].assign(n_eff=diag["n_eff"].numpy(),
                                                                  r_hat=diag["r_hat"].numpy())
-    print(site_stats[sites[0]].shape)
     return site_stats
 
 

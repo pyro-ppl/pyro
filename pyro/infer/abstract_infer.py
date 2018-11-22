@@ -3,57 +3,41 @@ from __future__ import absolute_import, division, print_function
 from abc import ABCMeta, abstractmethod
 
 import torch
-from contextlib2 import ExitStack
 from six import add_metaclass
 
 import pyro.poutine as poutine
-from pyro.distributions import Categorical
-from pyro.distributions.empirical import accumulate_samples
+from pyro.distributions import Categorical, Empirical
 
 
-class EmpiricalMarginal(object):
+class EmpiricalMarginal(Empirical):
     """
     Marginal distribution, that wraps over a TracePosterior object to provide a
     a marginal over one or more latent sites or the return values of the
-    TracePosterior's model. If multiple sites are specified, they must have the
-    same tensor shape.
+     TracePosterior's model. If multiple sites are specified, they must have the
+     same tensor shape.
 
-    :param TracePosterior trace_posterior: a TracePosterior instance representing
-        a Monte Carlo posterior.
-    :param list sites: optional list of sites for which we need to generate
-        the marginal distribution. Note that for multiple sites, the shape
-        for the site values must match (needed by the underlying ``Empirical``
-        class).
-    """
+     :param TracePosterior trace_posterior: a TracePosterior instance representing
+         a Monte Carlo posterior.
+     :param list sites: optional list of sites for which we need to generate
+         the marginal distribution. Note that for multiple sites, the shape
+         for the site values must match (needed by the underlying ``Empirical``
+         class).
+     """
+
     def __init__(self, trace_posterior, sites=None, validate_args=None):
         assert isinstance(trace_posterior, TracePosterior), \
             "trace_dist must be trace posterior distribution object"
+        super(EmpiricalMarginal, self).__init__(validate_args=validate_args)
         if sites is None:
-            sites = ["_RETURN"]
-        elif isinstance(sites, str):
-            sites = [sites]
-        else:
-            assert isinstance(sites, list)
-        self.sites = sites
-        self._marginals = {}
-        self._diagnostics = {}
-        self._populate_traces(trace_posterior)
+            sites = "_RETURN"
+        self._populate_traces(trace_posterior, sites)
 
-    def _populate_traces(self, trace_posterior):
-        with ExitStack() as stack:
-            self._marginals = {site: stack.enter_context(accumulate_samples()) for site in self.sites}
-            for tr, log_weight, chain_id in zip(trace_posterior.exec_traces,
-                                                trace_posterior.log_weights,
-                                                trace_posterior.chain_ids):
-                for site in self._marginals:
-                    value = tr.nodes[site]["value"]
-                    self._marginals[site].add(value, log_weight=log_weight, chain_id=chain_id)
-
-    def empirical(self):
-        return self._marginals
-
-    def diagnostics(self):
-        raise NotImplementedError("TracePosterior class must implement ``diagnostics``.")
+    def _populate_traces(self, trace_posterior, sites):
+        assert isinstance(sites, (list, str))
+        for tr, log_weight in zip(trace_posterior.exec_traces, trace_posterior.log_weights):
+            value = tr.nodes[sites]["value"] if isinstance(sites, str) else \
+                torch.stack([tr.nodes[site]["value"] for site in sites], 0)
+            self.add(value, log_weight=log_weight)
 
 
 @add_metaclass(ABCMeta)
@@ -151,3 +135,6 @@ class TracePredictive(TracePosterior):
             model_trace = self.posterior()
             replayed_trace = poutine.trace(poutine.replay(self.model, model_trace)).get_trace(*args, **kwargs)
             yield (replayed_trace, 0., 0)
+
+    def marginal(self, sites=None):
+        return self.posterior.marginal(sites)

@@ -15,8 +15,8 @@ from pyro.distributions.util import copy_docs_from, logsumexp
 
 
 @contextmanager
-def accumulate_samples():
-    empirical_dist = Empirical()
+def accumulate_samples(validate=False):
+    empirical_dist = Empirical(validate_args=validate)
     yield empirical_dist
     empirical_dist._finalize()
 
