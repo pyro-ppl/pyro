@@ -18,7 +18,7 @@ import torch.multiprocessing as mp
 
 import pyro
 from pyro.distributions.empirical import accumulate_samples
-from pyro.infer import TracePosterior, EmpiricalMarginal
+from pyro.infer import TracePosterior
 from pyro.infer.mcmc.logger import initialize_logger, initialize_progbar, DIAGNOSTIC_MSG, TqdmHandler
 import pyro.ops.stats as stats
 from pyro.util import optional

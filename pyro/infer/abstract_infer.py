@@ -13,16 +13,16 @@ class EmpiricalMarginal(Empirical):
     """
     Marginal distribution, that wraps over a TracePosterior object to provide a
     a marginal over one or more latent sites or the return values of the
-     TracePosterior's model. If multiple sites are specified, they must have the
-     same tensor shape.
+    TracePosterior's model. If multiple sites are specified, they must have the
+    same tensor shape.
 
-     :param TracePosterior trace_posterior: a TracePosterior instance representing
-         a Monte Carlo posterior.
-     :param list sites: optional list of sites for which we need to generate
-         the marginal distribution. Note that for multiple sites, the shape
-         for the site values must match (needed by the underlying ``Empirical``
-         class).
-     """
+    :param TracePosterior trace_posterior: a TracePosterior instance representing
+    a Monte Carlo posterior.
+    :param list sites: optional list of sites for which we need to generate
+    the marginal distribution. Note that for multiple sites, the shape
+    for the site values must match (needed by the underlying ``Empirical``
+    class).
+    """
 
     def __init__(self, trace_posterior, sites=None, validate_args=None):
         assert isinstance(trace_posterior, TracePosterior), \

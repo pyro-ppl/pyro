@@ -3,7 +3,6 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer import EmpiricalMarginal
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from tests.common import assert_equal
