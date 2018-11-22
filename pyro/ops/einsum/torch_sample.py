@@ -7,7 +7,7 @@ from six.moves import reduce
 import pyro.distributions as dist
 import pyro.ops.einsum.torch_log
 from pyro.ops import packed
-from pyro.ops.einsum.adjoint import Backward, einsum_backward_recurse, requires_backward, transpose, unflatten
+from pyro.ops.einsum.adjoint import Backward, einsum_backward_process, transpose, unflatten
 from pyro.ops.einsum.util import Tensordot, einbroadcast
 
 assert transpose  # pacify flake8
@@ -18,7 +18,7 @@ class _EinsumBackward(Backward):
         self.equation = equation
         self.operands = operands
 
-    def recurse(self, message):
+    def process(self, message):
         operands = list(self.operands)
         inputs, output = self.equation.split("->")
         inputs = inputs.split(",")
@@ -40,8 +40,6 @@ class _EinsumBackward(Backward):
 
         # Combine terms.
         logits = reduce(operator.add, einbroadcast(inputs, dims, operands))
-        logits._pyro_dims = dims
-        assert logits.dim() == len(logits._pyro_dims)
 
         # Sample.
         sample1 = None  # work around lack of pytorch support for zero-sized tensors
@@ -53,12 +51,12 @@ class _EinsumBackward(Backward):
             sample1 = unflatten(flat_sample, output, contract_dims, contract_shape)
 
         # Cut down samples to pass on to subsequent steps.
-        return einsum_backward_recurse(inputs, self.operands, sample1, sample2)
+        return einsum_backward_process(inputs, self.operands, sample1, sample2)
 
 
 def einsum(equation, *operands):
     result = pyro.ops.einsum.torch_log.einsum(equation, *operands)
-    if any(requires_backward(x) for x in operands):
+    if any(hasattr(x, '_pyro_backward') for x in operands):
         result._pyro_backward = _EinsumBackward(equation, operands)
     return result
 

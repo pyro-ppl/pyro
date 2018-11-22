@@ -4,7 +4,7 @@ import operator
 
 from six.moves import reduce
 
-from pyro.ops.einsum.adjoint import Backward, einsum_backward_recurse, requires_backward, transpose, unflatten
+from pyro.ops.einsum.adjoint import Backward, einsum_backward_process, transpose, unflatten
 from pyro.ops.einsum.util import Tensordot, einbroadcast
 
 assert transpose  # pacify flake8
@@ -16,10 +16,10 @@ class _EinsumBackward(Backward):
         self.operands = operands
         self.argmax = argmax
 
-    def recurse(self, message):
+    def process(self, message):
         sample1 = self.argmax
         sample2 = message
-        return einsum_backward_recurse(self.inputs, self.operands, sample1, sample2)
+        return einsum_backward_process(self.inputs, self.operands, sample1, sample2)
 
 
 def einsum(equation, *operands):
@@ -28,7 +28,7 @@ def einsum(equation, *operands):
     """
     inputs, output = equation.split("->")
     inputs = inputs.split(",")
-    any_requires_backward = any(requires_backward(x) for x in operands)
+    any_requires_backward = any(hasattr(x, '_pyro_backward') for x in operands)
 
     contract_dims = "".join(sorted(set().union(*inputs) - set(output)))
     dims = output + contract_dims

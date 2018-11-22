@@ -21,10 +21,10 @@ class Backward(object):
         stack = [(self, message)]
         while stack:
             bwd, message = stack.pop()
-            stack.extend(bwd.recurse(message))
+            stack.extend(bwd.process(message))
 
     @abstractmethod
-    def recurse(self, message):
+    def process(self, message):
         raise NotImplementedError
 
 
@@ -32,7 +32,7 @@ class _LeafBackward(Backward):
     def __init__(self, target):
         self.target = weakref.ref(target)
 
-    def recurse(self, message):
+    def process(self, message):
         target = self.target()
         target._pyro_backward_result = message
         return ()
@@ -45,19 +45,12 @@ def require_backward(tensor):
     tensor._pyro_backward = _LeafBackward(tensor)
 
 
-def requires_backward(tensor):
-    """
-    Returns true for internal and leaf nodes of the adjoint graph.
-    """
-    return hasattr(tensor, "_pyro_backward")
-
-
 class _TransposeBackward(Backward):
     def __init__(self, a, axes):
         self.a = a
         self.axes = axes
 
-    def recurse(self, message):
+    def process(self, message):
         inv_axes = [None] * len(self.axes)
         for i, j in enumerate(self.axes):
             inv_axes[j] = i
@@ -67,12 +60,12 @@ class _TransposeBackward(Backward):
 # this requires https://github.com/dgasmith/opt_einsum/pull/74
 def transpose(a, axes):
     result = a.permute(axes)
-    if requires_backward(a):
+    if hasattr(a, '_pyro_backward'):
         result._pyro_backward = _TransposeBackward(a, axes)
     return result
 
 
-def einsum_backward_recurse(inputs, operands, sample1, sample2):
+def einsum_backward_process(inputs, operands, sample1, sample2):
     """
     Cuts down samples to pass on to subsequent steps.
     This is typically used in ``_EinsumBackward.__call__()`` methods.
@@ -97,7 +90,7 @@ def einsum_backward_recurse(inputs, operands, sample1, sample2):
 
     # Cut down samples to pass on to downstream sites.
     for x_dims, x in zip(inputs, operands):
-        if not requires_backward(x):
+        if not hasattr(x, '_pyro_backward'):
             continue
         if sample is None:
             yield x._pyro_backward, None
