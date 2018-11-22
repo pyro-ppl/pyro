@@ -17,7 +17,7 @@ class _EinsumBackward(object):
         self.operands = operands
 
     def __call__(self, sample2=None):
-        operands = self.operands
+        operands = list(self.operands)
         inputs, output = self.equation.split("->")
         inputs = inputs.split(",")
         contract_dims = "".join(sorted(set().union(*inputs) - set(output)))
@@ -28,6 +28,8 @@ class _EinsumBackward(object):
             for i, (input_, x) in enumerate(zip(inputs, operands)):
                 for dim, index in zip(sample2._pyro_sample_dims, sample2):
                     if dim in input_:
+                        x._pyro_dims = input_
+                        index._pyro_dims = sample2._pyro_dims[1:]
                         x = packed.gather(x, index, dim)
                         input_ = input_.replace(dim, '')
                     inputs[i] = input_
@@ -48,7 +50,7 @@ class _EinsumBackward(object):
             sample1 = unflatten(flat_sample, output, contract_dims, contract_shape)
 
         # Cut down samples to pass on to subsequent steps.
-        einsum_backward_scatter(self.operands, sample1, sample2)
+        einsum_backward_scatter(inputs, self.operands, sample1, sample2)
 
 
 def einsum(equation, *operands):

@@ -9,14 +9,14 @@ from pyro.ops.einsum.util import Tensordot, einbroadcast
 
 
 class _EinsumBackward(object):
-    def __init__(self, equation, operands, argmax):
-        self.equation = equation
+    def __init__(self, inputs, operands, argmax):
+        self.inputs = inputs
         self.operands = operands
         self.argmax = argmax
 
     def __call__(self, sample2=None):
         sample1 = self.argmax
-        einsum_backward_scatter(self.operands, sample1, sample2)
+        einsum_backward_scatter(self.inputs, self.operands, sample1, sample2)
 
 
 def einsum(equation, *operands):
