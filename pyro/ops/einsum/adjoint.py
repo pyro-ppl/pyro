@@ -1,21 +1,41 @@
 from __future__ import absolute_import, division, print_function
 
 import weakref
+from abc import ABCMeta, abstractmethod
 
 import torch
+from six import add_metaclass
 
 from pyro.ops import packed
 
 SAMPLE_SYMBOL = " "  # must be unique and precede alphanumeric characters
 
 
-class _LeafBackward(object):
+@add_metaclass(ABCMeta)
+class Backward(object):
+    def __call__(self):
+        """
+        Performs entire backward pass in depth-first order.
+        """
+        message = None
+        stack = [(self, message)]
+        while stack:
+            bwd, message = stack.pop()
+            stack.extend(bwd.recurse(message))
+
+    @abstractmethod
+    def recurse(self, message):
+        raise NotImplementedError
+
+
+class _LeafBackward(Backward):
     def __init__(self, target):
         self.target = weakref.ref(target)
 
-    def __call__(self, result=None):
+    def recurse(self, message):
         target = self.target()
-        target._pyro_backward_result = result
+        target._pyro_backward_result = message
+        return ()
 
 
 def require_backward(tensor):
@@ -32,16 +52,16 @@ def requires_backward(tensor):
     return hasattr(tensor, "_pyro_backward")
 
 
-class _TransposeBackward(object):
+class _TransposeBackward(Backward):
     def __init__(self, a, axes):
         self.a = a
         self.axes = axes
 
-    def __call__(self, sample=None):
+    def recurse(self, message):
         inv_axes = [None] * len(self.axes)
         for i, j in enumerate(self.axes):
             inv_axes[j] = i
-        self.a._pyro_backward(sample.permute(inv_axes))
+        yield self.a._pyro_backward, message.permute(inv_axes)
 
 
 # this requires https://github.com/dgasmith/opt_einsum/pull/74
@@ -52,9 +72,9 @@ def transpose(a, axes):
     return result
 
 
-def einsum_backward_scatter(inputs, operands, sample1, sample2):
+def einsum_backward_recurse(inputs, operands, sample1, sample2):
     """
-    Cut down samples to pass on to subsequent steps.
+    Cuts down samples to pass on to subsequent steps.
     This is typically used in ``_EinsumBackward.__call__()`` methods.
     """
     # Combine upstream sample with sample at this site.
@@ -70,7 +90,8 @@ def einsum_backward_scatter(inputs, operands, sample1, sample2):
         parts = packed.broadcast_all(sample, sample2)
         sample = torch.cat(parts)
         sample._pyro_dims = parts[0]._pyro_dims
-        sample._pyro_sample_dims = sample1._pyro_sample_dims + sample2._pyro_sample_dims
+        sample._pyro_sample_dims = (sample1._pyro_sample_dims +
+                                    sample2._pyro_sample_dims)
         assert sample.dim() == len(sample._pyro_dims)
         assert sample.size(0) == len(sample._pyro_sample_dims)
 
@@ -79,23 +100,23 @@ def einsum_backward_scatter(inputs, operands, sample1, sample2):
         if not requires_backward(x):
             continue
         if sample is None:
-            x._pyro_backward()
+            yield x._pyro_backward, None
             continue
-        needed_dims = set(x_dims) & set(sample._pyro_sample_dims)
-        if not needed_dims:
-            x._pyro_backward()
+        x_sample_dims = set(x_dims) & set(sample._pyro_sample_dims)
+        if not x_sample_dims:
+            yield x._pyro_backward, None
             continue
-        if needed_dims == set(sample._pyro_sample_dims):
-            x._pyro_backward(sample)
+        if x_sample_dims == set(sample._pyro_sample_dims):
+            yield x._pyro_backward, sample
             continue
-        needed_dims = ''.join(sorted(needed_dims))
-        sample_x = sample[[sample._pyro_sample_dims.index(dim)
-                           for dim in needed_dims]]
-        sample_x._pyro_dims = sample._pyro_dims
-        sample_x._pyro_sample_dims = needed_dims
-        assert sample_x.dim() == len(sample_x._pyro_dims)
-        assert sample_x.size(0) == len(sample_x._pyro_sample_dims)
-        x._pyro_backward(sample_x)
+        x_sample_dims = ''.join(sorted(x_sample_dims))
+        x_sample = sample[[sample._pyro_sample_dims.index(dim)
+                           for dim in x_sample_dims]]
+        x_sample._pyro_dims = sample._pyro_dims
+        x_sample._pyro_sample_dims = x_sample_dims
+        assert x_sample.dim() == len(x_sample._pyro_dims)
+        assert x_sample.size(0) == len(x_sample._pyro_sample_dims)
+        yield x._pyro_backward, x_sample
 
 
 def unflatten(flat_sample, output_dims, contract_dims, contract_shape):
