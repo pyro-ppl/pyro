@@ -282,8 +282,8 @@ class _EmpiricalMarginal(object):
         else:
             assert isinstance(sites, list)
         self.sites = sites
-        self._marginals = {}
-        self._diagnostics = {}
+        self._marginals = OrderedDict()
+        self._diagnostics = OrderedDict()
         self._populate_traces(trace_posterior, validate_args)
 
     def _populate_traces(self, trace_posterior, validate):
