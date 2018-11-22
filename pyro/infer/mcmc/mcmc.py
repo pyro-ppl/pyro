@@ -264,7 +264,7 @@ class EmpiricalMarginalMCMC(EmpiricalMarginal):
             return self._diagnostics
         for site in self.sites:
             self._diagnostics[site] = OrderedDict([
-                ("n_eff", stats.effective_sample_size(self._marginals[site].get_samples_and_weights()[0])),
-                ("r_hat", stats.split_gelman_rubin(self._marginals[site].get_samples_and_weights()[0]))
+                ("n_eff", stats.effective_sample_size(self._marginals[site].get_data())),
+                ("r_hat", stats.split_gelman_rubin(self._marginals[site].get_data()))
             ])
         return self._diagnostics

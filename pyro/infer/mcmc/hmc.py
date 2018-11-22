@@ -79,7 +79,7 @@ class HMC(TraceKernel):
         >>>
         >>> hmc_kernel = HMC(model, step_size=0.0855, num_steps=4)
         >>> mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
-        >>> posterior = EmpiricalMarginal(mcmc_run, 'beta')
+        >>> posterior = mcmc_run.marginal('beta').empirical()['beta']
         >>> posterior.mean  # doctest: +SKIP
         tensor([ 0.9819,  1.9258,  2.9737])
     """

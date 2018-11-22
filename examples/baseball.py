@@ -157,10 +157,7 @@ def summary(trace_posterior, sites, player_names, transforms={}, diagnostics=Tru
     marginal = trace_posterior.marginal(sites)
     site_stats = {}
     for site_name in sites:
-        marginal_site = marginal.empirical()[site_name].get_samples_and_weights()[0]
-        if trace_posterior.num_chains > 1:
-            shape = marginal_site.reshape(marginal_site.size(0) * marginal_site.size(1), *marginal_site.shape[2:])
-            marginal_site = marginal_site.reshape(shape)
+        marginal_site = marginal.empirical()[site_name].get_data(flatten=True)
         if site_name in transforms:
             marginal_site = transforms[site_name](marginal_site)
 
