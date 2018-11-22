@@ -17,11 +17,11 @@ class EmpiricalMarginal(Empirical):
     same tensor shape.
 
     :param TracePosterior trace_posterior: a TracePosterior instance representing
-    a Monte Carlo posterior.
+        a Monte Carlo posterior.
     :param list sites: optional list of sites for which we need to generate
-    the marginal distribution. Note that for multiple sites, the shape
-    for the site values must match (needed by the underlying ``Empirical``
-    class).
+        the marginal distribution. Note that for multiple sites, the shape
+        for the site values must match (needed by the underlying ``Empirical``
+        class).
     """
 
     def __init__(self, trace_posterior, sites=None, validate_args=None):
