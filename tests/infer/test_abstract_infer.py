@@ -25,7 +25,7 @@ def test_posterior_predictive():
     nuts_kernel = NUTS(conditioned_model, adapt_step_size=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=1000, warmup_steps=200).run(num_trials)
     posterior_predictive = TracePredictive(model, mcmc_run, num_samples=10000).run(num_trials)
-    marginal_return_vals = EmpiricalMarginal(posterior_predictive).empirical()["_RETURN"]
+    marginal_return_vals = posterior_predictive.marginal().empirical()["_RETURN"]
     assert_equal(marginal_return_vals.mean, torch.ones(5) * 700, prec=30)
 
 
