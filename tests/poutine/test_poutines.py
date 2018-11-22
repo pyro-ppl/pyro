@@ -461,8 +461,8 @@ class IndirectLambdaHandlerTests(TestCase):
         def model(batch_size_outer=2, batch_size_inner=2):
             data = [[torch.ones(1)] * 2] * 2
             loc_latent = pyro.sample("loc_latent", dist.Normal(torch.zeros(1), torch.ones(1)))
-            for i in pyro.irange("irange_outer", 2, batch_size_outer):
-                for j in pyro.irange("irange_inner_%d" % i, 2, batch_size_inner):
+            for i in pyro.plate("plate_outer", 2, batch_size_outer):
+                for j in pyro.plate("plate_inner_%d" % i, 2, batch_size_inner):
                     pyro.sample("z_%d_%d" % (i, j), dist.Normal(loc_latent + data[i][j], torch.ones(1)))
 
         self.model = model
@@ -475,10 +475,10 @@ class IndirectLambdaHandlerTests(TestCase):
 
     def test_graph_structure(self):
         tracegraph = poutine.trace(self.model, graph_type="dense").get_trace()
-        # Ignore structure on irange_* nodes.
-        actual_nodes = set(n for n in tracegraph.nodes() if not n.startswith("irange_"))
+        # Ignore structure on plate_* nodes.
+        actual_nodes = set(n for n in tracegraph.nodes() if not n.startswith("plate_"))
         actual_edges = set((n1, n2) for n1, n2 in tracegraph.edges
-                           if not n1.startswith("irange_") if not n2.startswith("irange_"))
+                           if not n1.startswith("plate_") if not n2.startswith("plate_"))
         assert actual_nodes == self.expected_nodes
         assert actual_edges == self.expected_edges
 

@@ -86,3 +86,12 @@ def test_weighted_mean_var(event_shape, dtype):
         with pytest.raises(ValueError):
             empirical_dist.mean
             empirical_dist.variance
+
+
+def test_mean_var_non_nan():
+    true_mean = torch.randn([1, 2, 3])
+    empirical_dist = Empirical()
+    for i in range(10):
+        empirical_dist.add(true_mean, log_weight=-1000.)
+    assert_equal(empirical_dist.mean, true_mean)
+    assert_equal(empirical_dist.variance, torch.zeros_like(true_mean))

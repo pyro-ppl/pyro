@@ -32,8 +32,8 @@ def _check_tree_structure(parent, leaf):
         raise NotImplementedError(
             "Expected tree-structured plate nesting, but found "
             "dependencies on independent plates [{}]. "
-            "Try converting one of the plates to an irange (but beware "
-            "exponential cost in the size of that irange)"
+            "Try converting one of the vectorized plates to a sequential plate (but beware "
+            "exponential cost in the size of the sequence)"
             .format(', '.join(getattr(f, 'name', str(f)) for f in leaf)))
 
 
