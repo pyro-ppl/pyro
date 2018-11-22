@@ -12,6 +12,7 @@ import torch
 from pyro.distributions.util import logsumexp
 from pyro.ops.contract import (LogRing, _partition_terms, contract_tensor_tree, contract_to_tensor, naive_ubersum,
                                ubersum)
+from pyro.ops.einsum.adjoint import require_backward
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import optional
 from tests.common import assert_equal
@@ -663,3 +664,34 @@ def test_ubersum_batch_error(impl, equation, batch_dims):
                 for input_ in inputs.split(',')]
     with pytest.raises(ValueError, match='It is nonsensical to preserve a batched dim'):
         impl(equation, *operands, batch_dims=batch_dims, modulo_total=True)
+
+
+@pytest.mark.parametrize('equation,batch_dims', [
+    ('a->', ''),
+    ('a,a->', ''),
+    ('ab,bc->', ''),
+    ('ai,ai->i', 'i'),
+    ('a,abi->', 'i'),
+])
+@pytest.mark.parametrize('backend', ['map', 'sample'])
+def test_adjoint_shape(backend, equation, batch_dims):
+    backend = 'pyro.ops.einsum.torch_{}'.format(backend)
+    inputs, outputs = equation.split('->')
+    output, = outputs.split(',')
+    operands = [torch.randn(torch.Size((2,) * len(input_)))
+                for input_ in inputs.split(',')]
+
+    # run forward-backward algorithm
+    for x in operands:
+        require_backward(x)
+    result, = ubersum(equation, *operands, batch_dims=batch_dims,
+                      modulo_total=True, backend=backend)
+    result._pyro_backward()
+
+    for input_, x in zip(inputs, operands):
+        backward_result = x._pyro_backward_result
+        contract_dims = set(input_) - set(output) - set(batch_dims)
+        if contract_dims:
+            assert backward_result is not None
+        else:
+            assert backward_result is None

@@ -158,6 +158,8 @@ class LogRing(Ring):
     Dims are characters (string or unicode).
     Ordinals are frozensets of characters.
     """
+    _backend = 'pyro.ops.einsum.torch_log'
+
     def __init__(self, cache=None, dim_to_size=None):
         super(LogRing, self).__init__(cache=cache)
         self._dim_to_size = {} if dim_to_size is None else dim_to_size
@@ -166,7 +168,7 @@ class LogRing(Ring):
         inputs = [term._pyro_dims for term in terms]
         output = ''.join(sorted(set(''.join(inputs)) - set(dims)))
         equation = ','.join(inputs) + '->' + output
-        term = contract(equation, *terms, backend='pyro.ops.einsum.torch_log')
+        term = contract(equation, *terms, backend=self._backend)
         term._pyro_dims = output
         return term
 
@@ -195,6 +197,29 @@ class LogRing(Ring):
         result._pyro_dims = term._pyro_dims
         self._cache[key] = result
         return result
+
+
+class MapRing(LogRing):
+    """
+    Ring of forward-maxsum backward-argmax operations.
+    """
+    _backend = 'pyro.ops.einsum.torch_map'
+    # TODO implement product backward
+
+
+class SampleRing(LogRing):
+    """
+    Ring of forward-sumproduct backward-sample operations in log space.
+    """
+    _backend = 'pyro.ops.einsum.torch_sample'
+    # TODO implement product backward
+
+
+_BACKEND_TO_RING = {
+    'pyro.ops.einsum.torch_log': LogRing,
+    'pyro.ops.einsum.torch_map': MapRing,
+    'pyro.ops.einsum.torch_sample': SampleRing,
+}
 
 
 def _partition_terms(ring, terms, dims):
@@ -355,7 +380,7 @@ def contract_tensor_tree(tensor_tree, sum_dims, cache=None):
 
 
 def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=None,
-                       cache=None, dim_to_size=None):
+                       cache=None, ring=None, dim_to_size=None):
     """
     Contract out ``sum_dims`` in a tree of tensors, via message
     passing. This reduces all terms down to a single tensor in the plate
@@ -386,8 +411,9 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
     assert isinstance(sum_dims, set)
     assert isinstance(target_ordinal, frozenset)
     assert isinstance(target_dims, set) and target_dims <= sum_dims
+    if ring is None:
+        ring = LogRing(cache, dim_to_size)
 
-    ring = LogRing(cache, dim_to_size)
     ordinals = {term: t for t, terms in tensor_tree.items() for term in terms}
     all_terms = [term for terms in tensor_tree.values() for term in terms]
     contracted_terms = []
@@ -505,8 +531,12 @@ def ubersum(equation, *operands, **kwargs):
     batch_dims = kwargs.pop('batch_dims', '')
     backend = kwargs.pop('backend', 'pyro.ops.einsum.torch_log')
     modulo_total = kwargs.pop('modulo_total', False)
-    if backend != 'pyro.ops.einsum.torch_log':
-        raise NotImplementedError('Only the torch logsumexp backend is currently implemented.')
+    try:
+        Ring = _BACKEND_TO_RING[backend]
+    except KeyError:
+        raise NotImplementedError('\n'.join(
+            ['Only the following pyro backends are currently implemented:'] +
+            list(_BACKEND_TO_RING)))
 
     # Parse generalized einsum equation.
     if '.' in equation:
@@ -543,12 +573,13 @@ def ubersum(equation, *operands, **kwargs):
     # Compute outputs, sharing intermediate computations.
     results = []
     with shared_intermediates(cache) as cache:
+        ring = Ring(cache)
         for output in outputs:
             sum_dims = set(output).union(*inputs) - set(batch_dims)
             term = contract_to_tensor(tensor_tree, sum_dims,
                                       target_ordinal=batch_dims.intersection(output),
                                       target_dims=sum_dims.intersection(output),
-                                      cache=cache, dim_to_size=dim_to_size)
+                                      ring=ring, dim_to_size=dim_to_size)
             if term._pyro_dims != output:
                 term = term.permute(*map(term._pyro_dims.index, output))
                 term._pyro_dims = output

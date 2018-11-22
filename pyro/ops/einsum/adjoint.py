@@ -98,7 +98,7 @@ def unflatten(flat_sample, output_dims, contract_dims, contract_shape):
     sample = flat_sample.unsqueeze(0)
     if len(contract_dims) > 1:
         slices = [None] * len(contract_dims)
-        for i, size in reversed(enumerate(contract_shape)):
+        for i, size in reversed(list(enumerate(contract_shape))):
             slices[i] = sample % size
             sample /= size
         sample = torch.cat(slices)

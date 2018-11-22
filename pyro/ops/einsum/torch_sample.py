@@ -20,7 +20,7 @@ class _EinsumBackward(object):
         operands = self.operands
         inputs, output = self.equation.split("->")
         inputs = inputs.split(",")
-        contract_dims = "".join(sorted(set.union(*inputs) - set(output)))
+        contract_dims = "".join(sorted(set().union(*inputs) - set(output)))
         dims = output + contract_dims
 
         # Slice down operands before combining terms.
@@ -43,7 +43,7 @@ class _EinsumBackward(object):
         if contract_dims:
             output_shape = logits.shape[:len(output)]
             contract_shape = logits.shape[len(output):]
-            flat_logits = logits.reshape(output_shape + (-1))
+            flat_logits = logits.reshape(output_shape + (-1,))
             flat_sample = dist.Categorical(logits=flat_logits).sample()
             sample1 = unflatten(flat_sample, output, contract_dims, contract_shape)
 
