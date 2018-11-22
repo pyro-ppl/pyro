@@ -57,6 +57,9 @@ class Tensordot(object):
 
 
 def einbroadcast(inputs, output, operands):
+    """
+    Unpacks packed einsum inputs in preparation for a broadcasting operation.
+    """
     assert len(inputs) == len(operands)
     assert inputs
     sizes = {dim: size
