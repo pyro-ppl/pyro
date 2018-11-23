@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from pyro.ops.stats import (autocorrelation, autocovariance, effective_sample_size, gelman_rubin,
-                            hpdi, pi, quantile, resample, split_gelman_rubin, _cummin,
+                            hpdi, pi, quantile, resample, split_gelman_rubin, waic, _cummin,
                             _fft_next_good_size)
 from tests.common import assert_equal, xfail_if_not_implemented
 
@@ -194,3 +194,20 @@ def test_diagnostics_ok_with_sample_shape(diagnostics, sample_shape):
         assert_equal(diagnostics(a, chain_dim=1, sample_dim=0), y)
         assert_equal(diagnostics(b, chain_dim=-1, sample_dim=0), y)
         assert_equal(diagnostics(c, sample_dim=-1), y)
+
+
+def test_waic():
+    x = - torch.arange(1., 101).log().reshape(25, 4)
+    w_pw, p_pw = waic(x, pointwise=True)
+    w, p = waic(x)
+    w1, p1 = waic(x.t(), dim=1)
+
+    # test against loo package: http://mc-stan.org/loo/reference/waic.html
+    assert_equal(w_pw, torch.tensor([7.49, 7.75, 7.86, 7.92]), prec=0.01)
+    assert_equal(p_pw, torch.tensor([1.14, 0.91, 0.79, 0.70]), prec=0.01)
+
+    assert_equal(w, w_pw.sum())
+    assert_equal(p, p_pw.sum())
+
+    assert_equal(w, w1)
+    assert_equal(p, p1)

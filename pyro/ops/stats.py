@@ -1,8 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 import numbers
 
 import torch
+
+from pyro.distributions.util import logsumexp
 
 
 def _compute_chain_variance_stats(input):
@@ -294,3 +297,29 @@ def hpdi(input, prob, dim=0):
     index_start = intervals_length.argmin(dim)
     indices = torch.stack([index_start, index_start + index_length], dim)
     return torch.gather(sorted_input, dim, indices)
+
+
+def waic(input, pointwise=False, dim=0):
+    """
+    Computes "Widely Applicable/Watanabe–Akaike Information Criterion" (WAIC) and
+    its corresponding effective number of parameters.
+
+    Reference:
+
+    [1] `WAIC and cross-validation in Stan`,
+    Aki Vehtari, Andrew Gelman
+
+    :param torch.Tensor input: the input tensor, which is log likelihood of a model.
+    :param int dim: the sample dimension of `input`.
+    :returns tuple: tuple of WAIC and effective number of parameters.
+    """
+    # computes log pointwise predictive density: formula (3) of [1]
+    lpd = logsumexp(input, dim=dim) - math.log(input.size(dim))
+
+    # computes the effective number of parameters: formula (6) of [1]
+    p_waic = input.var(dim=dim)
+
+    # computes expected log pointwise predictive density: formula (4) of [1]
+    elpd = lpd - p_waic
+    waic = -2 * elpd
+    return (waic, p_waic) if pointwise else (waic.sum(), p_waic.sum())
