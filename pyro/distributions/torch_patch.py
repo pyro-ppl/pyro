@@ -45,6 +45,7 @@ def _torch_dirichlet_grad(x, concentration, total):
     return unpatched_fn(x, concentration, total)
 
 
+# This can be removed when super(...).__init__() is added upstream
 @_patch('torch.distributions.transforms.Transform.__init__')
 def _Transform__init__(self, cache_size=0):
     self._cache_size = cache_size
