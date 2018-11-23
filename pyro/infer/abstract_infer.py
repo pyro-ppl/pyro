@@ -92,7 +92,7 @@ class TracePosterior(object):
     def information_criterion(self, pointwise=False):
         """
         Computes information criterion of the model. Currently, returns only "Widely
-        Applicable/Watanabe–Akaike Information Criterion" (WAIC) and the corresponding
+        Applicable/Watanabe-Akaike Information Criterion" (WAIC) and the corresponding
         effective number of parameters.
 
         Reference:
