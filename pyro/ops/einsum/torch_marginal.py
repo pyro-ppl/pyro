@@ -26,8 +26,14 @@ class _EinsumBackward(Backward):
         for i, operand in enumerate(self.operands):
             if not hasattr(operand, "_pyro_backward"):
                 continue
-            equation = ",".join(inputs) + "->" + inputs[i]
-            message_i = pyro.ops.einsum.torch_log.einsum(equation, *operands)
+            output_i = inputs[i]
+            inputs_i = list(inputs)
+            operands_i = list(operands)
+            if not operand._pyro_backward.is_leaf:
+                del inputs_i[i]
+                del operands_i[i]
+            equation = ",".join(inputs_i) + "->" + output_i
+            message_i = pyro.ops.einsum.torch_log.einsum(equation, *operands_i)
             yield operand._pyro_backward, message_i
 
 

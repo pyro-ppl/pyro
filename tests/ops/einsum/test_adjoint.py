@@ -16,18 +16,21 @@ EQUATIONS = [
     'a,b->',
     'a,ab,b->',
     'a,ab,bc,cd->',
+    'ab,bc,cd,da->',
     'ai->i',
     'i,ai->i',
     'ai,ai->i',
     'ai,bi->i',
     'ai,abi,bi->i',
     'ai,abi,bci,cdi->i',
+    'abi,bci,cdi,dai->i',
     'iaj->ij',
     'ij,iaj->ij',
     'iaj,iaj->ij',
     'iaj,ibj->ij',
     'iaj,iabj,ibj->ij',
     'iaj,iabj,ibcj,icdj->ij',
+    'iabj,ibcj,icdj,idaj->ij',
 ]
 
 

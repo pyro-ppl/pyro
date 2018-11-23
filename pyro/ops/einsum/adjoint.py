@@ -13,6 +13,8 @@ SAMPLE_SYMBOL = " "  # must be unique and precede alphanumeric characters
 
 @add_metaclass(ABCMeta)
 class Backward(object):
+    is_leaf = False
+
     def __call__(self):
         """
         Performs entire backward pass in depth-first order.
@@ -29,6 +31,8 @@ class Backward(object):
 
 
 class _LeafBackward(Backward):
+    is_leaf = True
+
     def __init__(self, target):
         self.target = weakref.ref(target)
 
@@ -62,6 +66,7 @@ def transpose(a, axes):
     result = a.permute(axes)
     if hasattr(a, '_pyro_backward'):
         result._pyro_backward = _TransposeBackward(a, axes)
+        result._pyro_name = getattr(a, '_pyro_name', '?') + "'"
     return result
 
 
