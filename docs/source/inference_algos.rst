@@ -6,6 +6,14 @@ SVI
     :undoc-members:
     :show-inheritance:
 
+StaticSVI
+---------
+
+.. automodule:: pyro.infer.static_svi
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ELBO
 ----
 
