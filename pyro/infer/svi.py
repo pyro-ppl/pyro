@@ -19,6 +19,12 @@ class SVI(TracePosterior):
     :param callable guide: the guide (callable containing Pyro primitives)
     :param ~pyro.optim.PyroOptim optim: a wrapper for a PyTorch optimizer
     :param ~pyro.infer.elbo.ELBO loss: an instance of a subclass of :class:`~pyro.infer.elbo.ELBO`.
+        Pyro provides three built-in losses:
+        :class:`~pyro.infer.trace_elbo.Trace_ELBO`,
+        :class:`~pyro.infer.tracegraph_elbo.TraceGraph_ELBO`, and
+        :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO`.
+        See the :class:`~pyro.infer.elbo.ELBO` docs to learn how to implement
+        a custom loss.
     :param callable loss_and_grads: a function which takes inputs are `model`, `guide`,
         and their arguments, computes loss, runs backward, and returns the loss
     :param int num_samples: the number of samples for Monte Carlo posterior approximation
