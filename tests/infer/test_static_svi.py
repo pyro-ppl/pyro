@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import pytest
 import torch
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
@@ -41,6 +42,27 @@ def test_inference():
 
     assert_equal(pyro.param("alpha_q_log"), log_alpha_n, prec=0.04)
     assert_equal(pyro.param("beta_q_log"), log_beta_n, prec=0.04)
+
+
+def test_lbfgs():
+    x = 1 + torch.randn(10)
+    x_mean = x.mean()
+    x_std = x.std()
+
+    def model():
+        mu = pyro.param("mu", torch.tensor(0.))
+        sigma = pyro.param("sigma", torch.tensor(1.), constraint=constraints.positive)
+        return pyro.sample("x", dist.Normal(mu, sigma), obs=x)
+
+    def guide():
+        pass
+
+    adam = optim.LBFGS({"lr": 0.1, "max_iter": 100})
+    svi = StaticSVI(model, guide, adam, loss=Trace_ELBO())
+    svi.step()
+
+    assert_equal(pyro.param("mu"), x_mean)
+    assert_equal(pyro.param("sigma"), x_std)
 
 
 def test_params_not_match():
