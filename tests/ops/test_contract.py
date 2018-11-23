@@ -673,7 +673,7 @@ def test_ubersum_batch_error(impl, equation, batch_dims):
     ('ai,ai->i', 'i'),
     ('a,abi->', 'i'),
 ])
-@pytest.mark.parametrize('backend', ['map', 'sample'])
+@pytest.mark.parametrize('backend', ['map', 'sample', 'marginal'])
 def test_adjoint_shape(backend, equation, batch_dims):
     backend = 'pyro.ops.einsum.torch_{}'.format(backend)
     inputs, outputs = equation.split('->')

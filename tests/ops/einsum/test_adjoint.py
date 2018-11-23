@@ -32,7 +32,7 @@ EQUATIONS = [
 
 
 @pytest.mark.parametrize('equation', EQUATIONS)
-@pytest.mark.parametrize('backend', ['map', 'sample'])
+@pytest.mark.parametrize('backend', ['map', 'sample', 'marginal'])
 def test_shape(backend, equation):
     backend = 'pyro.ops.einsum.torch_{}'.format(backend)
     inputs, output = equation.split('->')
@@ -49,18 +49,21 @@ def test_shape(backend, equation):
         require_backward(x)
     expected = contract(equation, *operands, backend='pyro.ops.einsum.torch_log')
     actual = contract(equation, *operands, backend=backend)
-    if backend.endswith('sample'):
-        assert_equal(actual, expected)
-    else:
+    if backend.endswith('map'):
         assert actual.dtype == expected.dtype
         assert actual.shape == expected.shape
+    else:
+        assert_equal(actual, expected)
 
     # check backward pass
     actual._pyro_backward()
     for input_, x in zip(inputs, operands):
         backward_result = x._pyro_backward_result
-        contract_dims = set(input_) - set(output)
-        if contract_dims:
-            assert backward_result.shape == (len(contract_dims),) + output_shape
+        if backend.endswith('marginal'):
+            assert backward_result.shape == x.shape
         else:
-            assert backward_result is None
+            contract_dims = set(input_) - set(output)
+            if contract_dims:
+                assert backward_result.shape == (len(contract_dims),) + output_shape
+            else:
+                assert backward_result is None

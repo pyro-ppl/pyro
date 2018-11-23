@@ -65,7 +65,7 @@ def transpose(a, axes):
     return result
 
 
-def einsum_backward_process(inputs, operands, sample1, sample2):
+def einsum_backward_sample(inputs, operands, sample1, sample2):
     """
     Cuts down samples to pass on to subsequent steps.
     This is typically used in ``_EinsumBackward.__call__()`` methods.

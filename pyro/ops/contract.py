@@ -215,10 +215,19 @@ class SampleRing(LogRing):
     # TODO implement product backward
 
 
+class MarginalRing(LogRing):
+    """
+    Ring of forward-sumproduct backward-marginal operations in log space.
+    """
+    _backend = 'pyro.ops.einsum.torch_marginal'
+    # TODO implement product backward
+
+
 _BACKEND_TO_RING = {
     'pyro.ops.einsum.torch_log': LogRing,
     'pyro.ops.einsum.torch_map': MapRing,
     'pyro.ops.einsum.torch_sample': SampleRing,
+    'pyro.ops.einsum.torch_marginal': MarginalRing,
 }
 
 

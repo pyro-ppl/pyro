@@ -4,7 +4,7 @@ import operator
 
 from six.moves import reduce
 
-from pyro.ops.einsum.adjoint import Backward, einsum_backward_process, transpose, unflatten
+from pyro.ops.einsum.adjoint import Backward, einsum_backward_sample, transpose, unflatten
 from pyro.ops.einsum.util import Tensordot, einbroadcast
 
 assert transpose  # pacify flake8
@@ -19,12 +19,12 @@ class _EinsumBackward(Backward):
     def process(self, message):
         sample1 = self.argmax
         sample2 = message
-        return einsum_backward_process(self.inputs, self.operands, sample1, sample2)
+        return einsum_backward_sample(self.inputs, self.operands, sample1, sample2)
 
 
 def einsum(equation, *operands):
     """
-    Max-sum implementation of einsum (aka tropical einsum).
+    Forward-max-sum backward-argmax implementation of einsum.
     """
     inputs, output = equation.split("->")
     inputs = inputs.split(",")
