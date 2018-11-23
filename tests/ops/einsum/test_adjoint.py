@@ -67,3 +67,34 @@ def test_shape(backend, equation):
                 assert backward_result.shape == (len(contract_dims),) + output_shape
             else:
                 assert backward_result is None
+
+
+@pytest.mark.parametrize('equation', EQUATIONS)
+def test_marginal(equation):
+    inputs, output = equation.split('->')
+    inputs = inputs.split(',')
+    operands = [torch.randn(torch.Size((2,) * len(dims)))
+                for dims in inputs]
+
+    # check forward pass
+    for x in operands:
+        require_backward(x)
+    actual = contract(equation, *operands, backend='pyro.ops.einsum.torch_marginal')
+    expected = contract(equation, *operands,
+                        backend='pyro.ops.einsum.torch_log')
+    assert_equal(expected, actual, msg='\n'.join([
+        'Expected:', str(expected.detach().cpu().numpy()),
+        'Actual:', str(actual.detach().cpu().numpy()),
+    ]))
+
+    # check backward pass
+    actual._pyro_backward()
+    for input_, operand in zip(inputs, operands):
+        marginal_equation = ','.join(inputs) + '->' + input_
+        expected = contract(marginal_equation, *operands,
+                            backend='pyro.ops.einsum.torch_log')
+        actual = operand._pyro_backward_result
+        assert_equal(expected, actual, msg='\n'.join([
+            'Expected:', str(expected.detach().cpu().numpy()),
+            'Actual:', str(actual.detach().cpu().numpy()),
+        ]))
