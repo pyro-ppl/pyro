@@ -117,7 +117,7 @@ def main(args):
 
     optimizer = optim.Adam({"lr": args.lr})
 
-    elbo = infer.JitTrace_ELBO() if args.jit else infer.TraceMeanField_ELBO()
+    elbo = infer.JitTrace_ELBO() if args.jit else infer.Trace_ELBO()
     svi = infer.SVI(gpmodel.model, gpmodel.guide, optimizer, elbo)
 
     for epoch in range(1, args.epochs + 1):

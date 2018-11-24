@@ -107,7 +107,6 @@ class VariationalSparseGP(GPModel):
 
         Xu = self.get_param("Xu")
         u_loc = self.get_param("u_loc")
-        u_scale_tril = self.get_param("u_scale_tril")
 
         M = Xu.shape[0]
         Kuu = self.kernel(Xu).contiguous()

@@ -43,9 +43,8 @@ class Coregionalize(Kernel):
     :param str name: Name of the kernel.
     """
 
-    def __init__(self, input_dim, rank=None, components=None, diagonal=None, active_dims=None,
-                 name="Coregionalize"):
-        super(Coregionalize, self).__init__(input_dim, active_dims, name)
+    def __init__(self, input_dim, rank=None, components=None, diagonal=None, active_dims=None):
+        super(Coregionalize, self).__init__(input_dim, active_dims)
 
         # Add a low-rank kernel with expected value torch.eye(input_dim, input_dim) / 2.
         if components is None:

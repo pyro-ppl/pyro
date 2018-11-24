@@ -13,8 +13,8 @@ class Constant(Kernel):
 
         :math:`k(x, z) = \sigma^2.`
     """
-    def __init__(self, input_dim, variance=None, active_dims=None, name="Constant"):
-        super(Constant, self).__init__(input_dim, active_dims, name)
+    def __init__(self, input_dim, variance=None, active_dims=None):
+        super(Constant, self).__init__(input_dim, active_dims)
 
         variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
@@ -37,8 +37,8 @@ class WhiteNoise(Kernel):
 
     where :math:`\delta` is a Dirac delta function.
     """
-    def __init__(self, input_dim, variance=None, active_dims=None, name="WhiteNoise"):
-        super(WhiteNoise, self).__init__(input_dim, active_dims, name)
+    def __init__(self, input_dim, variance=None, active_dims=None):
+        super(WhiteNoise, self).__init__(input_dim, active_dims)
 
         variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)

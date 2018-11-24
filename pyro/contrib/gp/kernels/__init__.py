@@ -10,8 +10,8 @@ from pyro.contrib.gp.kernels.periodic import Cosine, Periodic
 from pyro.contrib.gp.kernels.static import Constant, WhiteNoise
 
 __all__ = [
+    "Kernel",
     "Brownian",
-    "Combination",
     "Constant",
     "Coregionalize",
     "Cosine",
@@ -19,20 +19,20 @@ __all__ = [
     "Exponent",
     "Exponential",
     "Isotropy",
-    "Kernel",
+    "RationalQuadratic",
     "Linear",
     "Matern32",
     "Matern52",
     "Periodic",
     "Polynomial",
-    "Product",
     "RBF",
-    "RationalQuadratic",
+    "WhiteNoise",
+    "Combination",
     "Sum",
+    "Product",
     "Transforming",
     "VerticalScaling",
     "Warping",
-    "WhiteNoise",
 ]
 
 # Create sphinx documentation.

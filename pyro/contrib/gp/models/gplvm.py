@@ -1,15 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-import torch
-from torch.distributions import constraints
 from torch.nn import Parameter
 
-import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.infer import SVI, Trace_ELBO
 from pyro.contrib.gp.util import Parameterized
-from pyro.params import param_with_module_name
 
 
 class GPLVM(Parameterized):
@@ -43,14 +39,14 @@ class GPLVM(Parameterized):
 
         >>> # First, define the initial values for X parameter:
         >>> X_init = torch.zeros(150, 2)
-        >>> # Then, define a Gaussian Process model with input X and output y:
+        >>> # Then, define a Gaussian Process model with input X_init and output y:
         >>> kernel = gp.kernels.RBF(input_dim=2, lengthscale=torch.ones(2))
         >>> Xu = torch.zeros(20, 2)  # initial inducing inputs of sparse model
         >>> gpmodel = gp.models.SparseGPRegression(X_init, y, kernel, Xu)
         >>> # Finally, wrap gpmodel by GPLVM, optimize, and get the "learned" mean of X:
         >>> gplvm = gp.models.GPLVM(gpmodel)
         >>> gplvm.optimize()  # doctest: +SKIP
-        >>> print(gplvm.X)
+        >>> X = gplvm.X
 
     Reference:
 
@@ -70,7 +66,7 @@ class GPLVM(Parameterized):
         self.base_model = base_model
         self.X = Parameter(self.base_model.X)
         self.set_prior("X", )
-        self.set_guide("X", dist.MultivariateNormal)
+        self.set_guide("X", dist.Normal)
         self._call_base_model_guide = True
 
     def model(self):

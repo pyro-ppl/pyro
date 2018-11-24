@@ -545,18 +545,18 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
-        cov_factor = pyro.param("{}_cov_factor".format(self.prefix),
-            lambda: torch.randn(self.latent_dim, self.rank) * (0.5 / self.rank) ** 0.5)
-        cov_diag = pyro.param("{}_cov_diag".format(self.prefix),
-                              lambda: torch.ones(self.latent_dim) * 0.5,
-                              constraint=constraints.positive)
-        return dist.LowRankMultivariateNormal(loc, cov_factor, cov_diag)
+        W_term = pyro.param("{}_W_term".format(self.prefix),
+                            lambda: torch.randn(self.latent_dim, self.rank) * (0.5 / self.rank) ** 0.5)
+        D_term = pyro.param("{}_D_term".format(self.prefix),
+                            lambda: torch.ones(self.latent_dim) * 0.5,
+                            constraint=constraints.positive)
+        return dist.LowRankMultivariateNormal(loc, W_term, D_term)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
-        cov_factor = pyro.param("{}_cov_factor".format(self.prefix))
-        cov_diag = pyro.param("{}_cov_diag".format(self.prefix))
-        scale = (cov_factor.pow(2).sum(-1) + cov_diag).sqrt()
+        W_term = pyro.param("{}_W_term".format(self.prefix))
+        D_term = pyro.param("{}_D_term".format(self.prefix))
+        scale = (W_term.pow(2).sum(-1) + D_term).sqrt()
         return loc, scale
 
 
@@ -590,7 +590,7 @@ class AutoIAFNormal(AutoContinuous):
         if self.hidden_dim is None:
             self.hidden_dim = self.latent_dim
         iaf = dist.InverseAutoregressiveFlow(AutoRegressiveNN(self.latent_dim, [self.hidden_dim]))
-        pyro.module("{}_iaf".format(self.prefix), iaf)
+        pyro.module("{}_iaf".format(self.prefix), iaf.module)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
         return iaf_dist.independent(1)
 

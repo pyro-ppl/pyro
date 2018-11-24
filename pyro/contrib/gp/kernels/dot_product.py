@@ -12,10 +12,10 @@ class DotProduct(Kernel):
     Base class for kernels which are functions of :math:`x \cdot z`.
     """
 
-    def __init__(self, input_dim, variance=None, active_dims=None, name=None):
-        super(DotProduct, self).__init__(input_dim, active_dims, name)
+    def __init__(self, input_dim, variance=None, active_dims=None):
+        super(DotProduct, self).__init__(input_dim, active_dims)
 
-        variance = torch.tensor(1.) is None else variance
+        variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
@@ -50,8 +50,8 @@ class Linear(DotProduct):
         a :class:`.Sum` with a :class:`.Bias` kernel.
     """
 
-    def __init__(self, input_dim, variance=None, active_dims=None, name="Linear"):
-        super(Linear, self).__init__(input_dim, variance, active_dims, name)
+    def __init__(self, input_dim, variance=None, active_dims=None):
+        super(Linear, self).__init__(input_dim, variance, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         return self.variance * self._dot_product(X, Z, diag)
@@ -67,9 +67,8 @@ class Polynomial(DotProduct):
     :param int degree: Degree :math:`d` of the polynomial.
     """
 
-    def __init__(self, input_dim, variance=None, bias=None, degree=1, active_dims=None,
-                 name="Polynomial"):
-        super(Polynomial, self).__init__(input_dim, variance, active_dims, name)
+    def __init__(self, input_dim, variance=None, bias=None, degree=1, active_dims=None):
+        super(Polynomial, self).__init__(input_dim, variance, active_dims)
 
         bias = torch.tensor(1.) if bias is None else bias
         self.bias = Parameter(bias)

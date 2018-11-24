@@ -27,8 +27,8 @@ class Isotropy(Kernel):
 
     :param torch.Tensor lengthscale: Length-scale parameter of this kernel.
     """
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None, name=None):
-        super(Isotropy, self).__init__(input_dim, active_dims, name)
+    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
+        super(Isotropy, self).__init__(input_dim, active_dims)
 
         variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
@@ -78,9 +78,8 @@ class RBF(Isotropy):
 
     .. note:: This kernel also has name `Squared Exponential` in literature.
     """
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name="RBF"):
-        super(RBF, self).__init__(input_dim, variance, lengthscale, active_dims, name)
+    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
+        super(RBF, self).__init__(input_dim, variance, lengthscale, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
@@ -101,9 +100,8 @@ class RationalQuadratic(Isotropy):
         kernel. Should have size 1.
     """
     def __init__(self, input_dim, variance=None, lengthscale=None, scale_mixture=None,
-                 active_dims=None, name="RationalQuadratic"):
-        super(RationalQuadratic, self).__init__(input_dim, variance, lengthscale,
-                                                active_dims, name)
+                 active_dims=None):
+        super(RationalQuadratic, self).__init__(input_dim, variance, lengthscale, active_dims)
 
         if scale_mixture is None:
             scale_mixture = torch.tensor(1.)
@@ -115,7 +113,7 @@ class RationalQuadratic(Isotropy):
             return self._diag(X)
 
         r2 = self._square_scaled_dist(X, Z)
-        return self.variance * (1 + (0.5 / self.scale_mixture) * r2).pow(-scale_mixture)
+        return self.variance * (1 + (0.5 / self.scale_mixture) * r2).pow(-self.scale_mixture)
 
 
 class Exponential(Isotropy):
@@ -124,9 +122,8 @@ class Exponential(Isotropy):
 
         :math:`k(x, z) = \sigma^2\exp\left(-\frac{|x-z|}{l}\right).`
     """
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name="Exponential"):
-        super(Exponential, self).__init__(input_dim, variance, lengthscale, active_dims, name)
+    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
+        super(Exponential, self).__init__(input_dim, variance, lengthscale, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
@@ -143,9 +140,8 @@ class Matern32(Isotropy):
         :math:`k(x, z) = \sigma^2\left(1 + \sqrt{3} \times \frac{|x-z|}{l}\right)
         \exp\left(-\sqrt{3} \times \frac{|x-z|}{l}\right).`
     """
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name="Matern32"):
-        super(Matern32, self).__init__(input_dim, variance, lengthscale, active_dims, name)
+    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
+        super(Matern32, self).__init__(input_dim, variance, lengthscale, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
@@ -163,9 +159,8 @@ class Matern52(Isotropy):
         :math:`k(x,z)=\sigma^2\left(1+\sqrt{5}\times\frac{|x-z|}{l}+\frac{5}{3}\times
         \frac{|x-z|^2}{l^2}\right)\exp\left(-\sqrt{5} \times \frac{|x-z|}{l}\right).`
     """
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name="Matern52"):
-        super(Matern52, self).__init__(input_dim, variance, lengthscale, active_dims, name)
+    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
+        super(Matern52, self).__init__(input_dim, variance, lengthscale, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
