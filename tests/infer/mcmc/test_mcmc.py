@@ -41,7 +41,7 @@ def test_mcmc_interface():
     data = torch.tensor([1.0])
     kernel = PriorKernel(normal_normal_model)
     mcmc = MCMC(kernel=kernel, num_samples=800, warmup_steps=100).run(data)
-    marginal = mcmc.marginal().empirical()["_RETURN"]
+    marginal = mcmc.marginal().empirical["_RETURN"]
     assert_equal(marginal.sample_size, 800)
     sample_mean = marginal.mean
     sample_std = marginal.variance.sqrt()
