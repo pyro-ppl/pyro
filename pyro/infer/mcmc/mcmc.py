@@ -295,16 +295,20 @@ class _Marginal(object):
                     value = tr.nodes[site]["value"]
                     self._marginals[site].add(value, log_weight=log_weight, chain_id=chain_id)
 
+    def support(self, flatten=True):
+        return OrderedDict([(site, value.enumerate_support(flatten=flatten))
+                            for site, value in self._marginals.items()])
+
+    @property
+    def empirical(self):
+        return self._marginals
+    
     def diagnostics(self):
         if self._diagnostics:
             return self._diagnostics
         for site in self.sites:
             self._diagnostics[site] = OrderedDict([
-                ("n_eff", stats.effective_sample_size(self._marginals[site].enumerate_support(flatten=False))),
-                ("r_hat", stats.split_gelman_rubin(self._marginals[site].enumerate_support(flatten=False)))
+                ("n_eff", stats.effective_sample_size(self.support(flatten=False)[site])),
+                ("r_hat", stats.split_gelman_rubin(self.support(flatten=False)[site]))
             ])
         return self._diagnostics
-
-    @property
-    def empirical(self):
-        return self._marginals
