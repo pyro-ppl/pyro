@@ -1,5 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
+import sys
+
+import six
+
 from .messenger import Messenger
 from .trace_struct import Trace
 from .util import site_is_subsample
@@ -41,7 +45,7 @@ class TraceMessenger(Messenger):
     We can also use this for visualization.
     """
 
-    def __init__(self, graph_type=None, param_only=None, strict_names=None):
+    def __init__(self, graph_type=None, param_only=None):
         """
         :param string graph_type: string that specifies the type of graph
             to construct (currently only "flat" or "dense" supported)
@@ -52,12 +56,9 @@ class TraceMessenger(Messenger):
             graph_type = "flat"
         if param_only is None:
             param_only = False
-        if strict_names is None:
-            strict_names = True
         assert graph_type in ("flat", "dense")
         self.graph_type = graph_type
         self.param_only = param_only
-        self.strict_names = strict_names
         self.trace = Trace(graph_type=self.graph_type)
 
     def __enter__(self):
@@ -69,10 +70,6 @@ class TraceMessenger(Messenger):
         Adds appropriate edges based on cond_indep_stack information
         upon exiting the context.
         """
-        for node in list(self.trace.nodes.values()):
-            if node.get("PRUNE"):
-                self.trace.remove_node(node["name"])
-            node.pop("PRUNE", None)
         if self.param_only:
             for node in list(self.trace.nodes.values()):
                 if node["type"] != "param":
@@ -107,39 +104,12 @@ class TraceMessenger(Messenger):
         self.trace = tr
         super(TraceMessenger, self)._reset()
 
-    def _pyro_sample(self, msg):
-        """
-        :param msg: current message at a trace site.
-        :returns: updated message
+    def _pyro_post_sample(self, msg):
+        if not self.param_only:
+            self.trace.add_node(msg["name"], **msg.copy())
 
-        Implements default pyro.sample Handler behavior with an additional side effect:
-        if the observation at the site is not None,
-        then store the observation in self.trace
-        and return the observation,
-        else call the function,
-        then store the return value in self.trace
-        and return the return value.
-        """
-        name = msg["name"]
-        if not self.strict_names and name in self.trace:  # and msg["type"] == "sample":
-            split_name = name.split("_")
-            if "_" in name and split_name[-1].isdigit():
-                counter = int(split_name[-1]) + 1
-                new_name = "_".join(split_name[:-1] + [str(counter)])
-            else:
-                new_name = name + "_0"
-            msg["name"] = new_name
-            self._pyro_sample(msg)  # recursively update name
-        return None
-
-    def _postprocess_message(self, msg):
-        if msg["type"] == "sample" and self.param_only:
-            return None
-        val = msg["value"]
-        site = msg.copy()
-        site.update(value=val)
-        self.trace.add_node(msg["name"], **site)
-        return None
+    def _pyro_post_param(self, msg):
+        self.trace.add_node(msg["name"], **msg.copy())
 
 
 class TraceHandler(object):
@@ -173,7 +143,14 @@ class TraceHandler(object):
             self.msngr.trace.add_node("_INPUT",
                                       name="_INPUT", type="args",
                                       args=args, kwargs=kwargs)
-            ret = self.fn(*args, **kwargs)
+            try:
+                ret = self.fn(*args, **kwargs)
+            except (ValueError, RuntimeError):
+                exc_type, exc_value, traceback = sys.exc_info()
+                shapes = self.msngr.trace.format_shapes()
+                six.reraise(exc_type,
+                            exc_type(u"{}\n{}".format(exc_value, shapes)),
+                            traceback)
             self.msngr.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
         return ret
 

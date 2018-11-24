@@ -461,8 +461,8 @@ class IndirectLambdaHandlerTests(TestCase):
         def model(batch_size_outer=2, batch_size_inner=2):
             data = [[torch.ones(1)] * 2] * 2
             loc_latent = pyro.sample("loc_latent", dist.Normal(torch.zeros(1), torch.ones(1)))
-            for i in pyro.irange("irange_outer", 2, batch_size_outer):
-                for j in pyro.irange("irange_inner_%d" % i, 2, batch_size_inner):
+            for i in pyro.plate("plate_outer", 2, batch_size_outer):
+                for j in pyro.plate("plate_inner_%d" % i, 2, batch_size_inner):
                     pyro.sample("z_%d_%d" % (i, j), dist.Normal(loc_latent + data[i][j], torch.ones(1)))
 
         self.model = model
@@ -475,10 +475,10 @@ class IndirectLambdaHandlerTests(TestCase):
 
     def test_graph_structure(self):
         tracegraph = poutine.trace(self.model, graph_type="dense").get_trace()
-        # Ignore structure on irange_* nodes.
-        actual_nodes = set(n for n in tracegraph.nodes() if not n.startswith("irange_"))
+        # Ignore structure on plate_* nodes.
+        actual_nodes = set(n for n in tracegraph.nodes() if not n.startswith("plate_"))
         actual_edges = set((n1, n2) for n1, n2 in tracegraph.edges
-                           if not n1.startswith("irange_") if not n2.startswith("irange_"))
+                           if not n1.startswith("plate_") if not n2.startswith("plate_"))
         assert actual_nodes == self.expected_nodes
         assert actual_edges == self.expected_edges
 
@@ -661,7 +661,7 @@ class InferConfigHandlerTests(TestCase):
         assert tr.nodes["p"]["infer"] == {}
 
 
-@pytest.mark.parametrize('first_available_dim', [0, 1, 2])
+@pytest.mark.parametrize('first_available_dim', [-1, -2, -3])
 @pytest.mark.parametrize('depth', [0, 1, 2])
 def test_enumerate_poutine(depth, first_available_dim):
     num_particles = 2
@@ -681,11 +681,11 @@ def test_enumerate_poutine(depth, first_available_dim):
         actual_shape = log_prob.shape
         expected_shape = (2,) * depth
         if depth:
-            expected_shape = expected_shape + (1,) * first_available_dim
+            expected_shape = expected_shape + (1,) * (-1 - first_available_dim)
         assert actual_shape == expected_shape, 'error on iteration {}'.format(i)
 
 
-@pytest.mark.parametrize('first_available_dim', [0, 1, 2])
+@pytest.mark.parametrize('first_available_dim', [-1, -2, -3])
 @pytest.mark.parametrize('depth', [0, 1, 2])
 def test_replay_enumerate_poutine(depth, first_available_dim):
     num_particles = 2
@@ -694,7 +694,7 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
     def guide():
         pyro.sample("y", y_dist, infer={"enumerate": "parallel"})
 
-    guide = poutine.enum(guide, first_available_dim=depth + first_available_dim)
+    guide = poutine.enum(guide, first_available_dim=first_available_dim - depth)
     guide = poutine.trace(guide)
     guide_trace = guide.get_trace()
 
@@ -716,7 +716,7 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
         tr.compute_log_prob()
         log_prob = sum(site["log_prob"] for name, site in tr.iter_stochastic_nodes())
         actual_shape = log_prob.shape
-        expected_shape = (2,) * depth + (3,) + (2,) * depth + (1,) * first_available_dim
+        expected_shape = (2,) * depth + (3,) + (2,) * depth + (1,) * (-1 - first_available_dim)
         assert actual_shape == expected_shape, 'error on iteration {}'.format(i)
 
 
@@ -830,8 +830,8 @@ def test_trace_log_prob_err_msg():
         pyro.sample("test_site", dist.Beta(1., 1.), obs=v)
 
     tr = poutine.trace(model).get_trace(torch.tensor(2.))
-    exp_msg = "Error while computing log_prob at site 'test_site': " \
-              "The value argument must be within the support"
+    exp_msg = r"Error while computing log_prob at site 'test_site':\s*" \
+              r"The value argument must be within the support"
     with pytest.raises(ValueError, match=exp_msg):
         tr.compute_log_prob()
 
@@ -841,8 +841,8 @@ def test_trace_log_prob_sum_err_msg():
         pyro.sample("test_site", dist.Beta(1., 1.), obs=v)
 
     tr = poutine.trace(model).get_trace(torch.tensor(2.))
-    exp_msg = "Error while computing log_prob_sum at site 'test_site': " \
-              "The value argument must be within the support"
+    exp_msg = r"Error while computing log_prob_sum at site 'test_site':\s*" \
+              r"The value argument must be within the support"
     with pytest.raises(ValueError, match=exp_msg):
         tr.log_prob_sum()
 
@@ -852,7 +852,7 @@ def test_trace_score_parts_err_msg():
         pyro.sample("test_site", dist.Beta(1., 1.), obs=v)
 
     tr = poutine.trace(guide).get_trace(torch.tensor(2.))
-    exp_msg = "Error while computing score_parts at site 'test_site': " \
-              "The value argument must be within the support"
+    exp_msg = r"Error while computing score_parts at site 'test_site':\s*" \
+              r"The value argument must be within the support"
     with pytest.raises(ValueError, match=exp_msg):
         tr.compute_score_parts()

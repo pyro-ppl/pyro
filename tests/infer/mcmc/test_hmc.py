@@ -70,7 +70,7 @@ TEST_CASES = [
     ),
     T(
         GaussianChain(dim=10, chain_len=4, num_obs=1),
-        num_samples=1200,
+        num_samples=1600,
         warmup_steps=300,
         hmc_params={'step_size': 0.46,
                     'num_steps': 5},
@@ -79,34 +79,27 @@ TEST_CASES = [
         mean_tol=0.06,
         std_tol=0.06,
     ),
-    # XXX: Very sensitive to HMC parameters. Biased estimate is obtained
-    # without enough samples and/or larger step size.
-    pytest.param(*T(
-        GaussianChain(dim=5, chain_len=2, num_obs=10000),
+    T(
+        GaussianChain(dim=5, chain_len=2, num_obs=100),
         num_samples=2000,
         warmup_steps=500,
-        hmc_params={'step_size': 0.013,
-                    'num_steps': 25},
+        hmc_params={'num_steps': 25},
         expected_means=[0.5, 1.0],
-        expected_precs=[2.0, 10000],
-        mean_tol=0.05,
-        std_tol=0.05,
-    ), marks=[pytest.mark.xfail(reason="flaky"),
-              pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
-                                 reason='Slow test - skip on CI/CUDA')]),
-    pytest.param(*T(
+        expected_precs=[2.0, 100],
+        mean_tol=0.06,
+        std_tol=0.06,
+    ),
+    T(
         GaussianChain(dim=5, chain_len=9, num_obs=1),
         num_samples=3000,
         warmup_steps=500,
-        hmc_params={'step_size': 0.3,
-                    'num_steps': 8},
+        hmc_params={'step_size': 0.1,
+                    'num_steps': 15},
         expected_means=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90],
         expected_precs=[1.11, 0.63, 0.48, 0.42, 0.4, 0.42, 0.48, 0.63, 1.11],
-        mean_tol=0.08,
-        std_tol=0.08,
-    ), marks=[pytest.mark.xfail(reason="flaky"),
-              pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
-                                 reason='Slow test - skip on CI/CUDA')])
+        mean_tol=0.1,
+        std_tol=0.1,
+    )
 ]
 
 TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
@@ -117,7 +110,8 @@ TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
     'fixture, num_samples, warmup_steps, hmc_params, expected_means, expected_precs, mean_tol, std_tol',
     TEST_CASES,
     ids=TEST_IDS)
-@pytest.mark.init(rng_seed=34)
+@pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
+                    reason='Slow test - skip on CI/CUDA')
 @pytest.mark.disable_validation()
 def test_hmc_conjugate_gaussian(fixture,
                                 num_samples,
@@ -128,8 +122,6 @@ def test_hmc_conjugate_gaussian(fixture,
                                 mean_tol,
                                 std_tol):
     pyro.get_param_store().clear()
-    hmc_params["adapt_step_size"] = False
-    hmc_params["adapt_mass_matrix"] = False
     hmc_kernel = HMC(fixture.model, **hmc_params)
     mcmc_run = MCMC(hmc_kernel, num_samples, warmup_steps).run(fixture.data)
     for i in range(1, fixture.chain_len + 1):
@@ -141,17 +133,17 @@ def test_hmc_conjugate_gaussian(fixture,
         expected_std = 1 / torch.sqrt(torch.ones(fixture.dim) * expected_precs[i - 1])
 
         # Actual vs expected posterior means for the latents
-        logger.info('Posterior mean (actual) - {}'.format(param_name))
-        logger.info(latent_loc)
-        logger.info('Posterior mean (expected) - {}'.format(param_name))
-        logger.info(expected_mean)
+        logger.debug('Posterior mean (actual) - {}'.format(param_name))
+        logger.debug(latent_loc)
+        logger.debug('Posterior mean (expected) - {}'.format(param_name))
+        logger.debug(expected_mean)
         assert_equal(rmse(latent_loc, expected_mean).item(), 0.0, prec=mean_tol)
 
         # Actual vs expected posterior precisions for the latents
-        logger.info('Posterior std (actual) - {}'.format(param_name))
-        logger.info(latent_std)
-        logger.info('Posterior std (expected) - {}'.format(param_name))
-        logger.info(expected_std)
+        logger.debug('Posterior std (actual) - {}'.format(param_name))
+        logger.debug(latent_std)
+        logger.debug('Posterior std (expected) - {}'.format(param_name))
+        logger.debug(expected_std)
         assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 

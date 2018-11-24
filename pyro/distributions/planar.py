@@ -4,15 +4,15 @@ import math
 
 import torch
 import torch.nn as nn
-from torch.distributions.transforms import Transform
 from torch.distributions import constraints
 import torch.nn.functional as F
 
+from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 
 
-@copy_docs_from(Transform)
-class PlanarFlow(Transform, nn.Module):
+@copy_docs_from(TransformModule)
+class PlanarFlow(TransformModule):
     """
     A 'planar' normalizing flow that uses the transformation
 
@@ -52,8 +52,7 @@ class PlanarFlow(Transform, nn.Module):
     codomain = constraints.real
 
     def __init__(self, input_dim):
-        Transform.__init__(self)
-        nn.Module.__init__(self)
+        super(PlanarFlow, self).__init__()
 
         self.input_dim = input_dim
         self.lin = nn.Linear(input_dim, 1)

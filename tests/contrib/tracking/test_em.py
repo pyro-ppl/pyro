@@ -167,7 +167,7 @@ def test_em_nested_in_svi(assignment_grad):
             loss = elbo.differentiable_loss(model, guide, detections, args)  # E-step
             updated = newton.get_step(loss, {'objects_loc': objects_loc})  # M-step
             assert updated['objects_loc'].grad_fn is not None
-            pyro.get_param_store().replace_param('objects_loc', updated['objects_loc'], objects_loc)
+            pyro.get_param_store()['objects_loc'] = updated['objects_loc']
             assert pyro.param('objects_loc').grad_fn is not None
         loss = svi.step(detections, args)
         logger.debug('step {: >2d}, loss = {:0.6f}, noise_scale = {:0.6f}'.format(

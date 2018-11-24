@@ -2,9 +2,9 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 import torch.nn as nn
-from torch.distributions.transforms import Transform
 from torch.distributions import constraints
 
+from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 
 # This helper function clamps gradients but still passes through the gradient in clamped regions
@@ -15,8 +15,8 @@ def clamp_preserve_gradients(x, min, max):
     return x + (x.clamp(min, max) - x).detach()
 
 
-@copy_docs_from(Transform)
-class InverseAutoregressiveFlow(Transform):
+@copy_docs_from(TransformModule)
+class InverseAutoregressiveFlow(TransformModule):
     """
     An implementation of Inverse Autoregressive Flow, using Eq (10) from Kingma Et Al., 2016,
 
@@ -32,7 +32,7 @@ class InverseAutoregressiveFlow(Transform):
     >>> from pyro.nn import AutoRegressiveNN
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> iaf = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
-    >>> iaf_module = pyro.module("my_iaf", iaf.module)
+    >>> iaf_module = pyro.module("my_iaf", iaf)
     >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf])
     >>> iaf_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
@@ -70,21 +70,11 @@ class InverseAutoregressiveFlow(Transform):
 
     def __init__(self, autoregressive_nn, log_scale_min_clip=-5., log_scale_max_clip=3.):
         super(InverseAutoregressiveFlow, self).__init__()
-        self.module = nn.Module()
-        self.module.arn = autoregressive_nn
+        self.arn = autoregressive_nn
         self._intermediates_cache = {}
         self.add_inverse_to_cache = True
         self.log_scale_min_clip = log_scale_min_clip
         self.log_scale_max_clip = log_scale_max_clip
-
-    @property
-    def arn(self):
-        """
-        :rtype: pyro.nn.AutoRegressiveNN
-
-        Return the AutoRegressiveNN associated with the InverseAutoregressiveFlow
-        """
-        return self.module.arn
 
     def _call(self, x):
         """
@@ -94,7 +84,7 @@ class InverseAutoregressiveFlow(Transform):
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
-        mean, log_scale = self.module.arn(x)
+        mean, log_scale = self.arn(x)
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         scale = torch.exp(log_scale)
 
@@ -115,13 +105,13 @@ class InverseAutoregressiveFlow(Transform):
             return x
         else:
             x_size = y.size()[:-1]
-            perm = self.module.arn.permutation
+            perm = self.arn.permutation
             input_dim = y.size(-1)
             x = [torch.zeros(x_size, device=y.device)] * input_dim
 
             # NOTE: Inversion is an expensive operation that scales in the dimension of the input
             for idx in perm:
-                mean, log_scale = self.module.arn(torch.stack(x, dim=-1))
+                mean, log_scale = self.arn(torch.stack(x, dim=-1))
                 inverse_scale = torch.exp(-clamp_preserve_gradients(
                     log_scale[..., idx], min=self.log_scale_min_clip, max=self.log_scale_max_clip))
                 mean = mean[..., idx]
@@ -148,8 +138,8 @@ class InverseAutoregressiveFlow(Transform):
         return log_scale
 
 
-@copy_docs_from(Transform)
-class InverseAutoregressiveFlowStable(Transform):
+@copy_docs_from(TransformModule)
+class InverseAutoregressiveFlowStable(TransformModule):
     """
     An implementation of an Inverse Autoregressive Flow, using Eqs (13)/(14) from Kingma Et Al., 2016,
 
@@ -168,7 +158,7 @@ class InverseAutoregressiveFlowStable(Transform):
     >>> from pyro.nn import AutoRegressiveNN
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> iaf = InverseAutoregressiveFlowStable(AutoRegressiveNN(10, [40]))
-    >>> iaf_module = pyro.module("my_iaf", iaf.module)
+    >>> iaf_module = pyro.module("my_iaf", iaf)
     >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf])
     >>> iaf_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
@@ -198,22 +188,12 @@ class InverseAutoregressiveFlowStable(Transform):
 
     def __init__(self, autoregressive_nn, sigmoid_bias=2.0):
         super(InverseAutoregressiveFlowStable, self).__init__()
-        self.module = nn.Module()
-        self.module.arn = autoregressive_nn
+        self.arn = autoregressive_nn
         self.sigmoid = nn.Sigmoid()
         self.logsigmoid = nn.LogSigmoid()
         self.sigmoid_bias = sigmoid_bias
         self._intermediates_cache = {}
         self.add_inverse_to_cache = True
-
-    @property
-    def arn(self):
-        """
-        :rtype: pyro.nn.AutoRegressiveNN
-
-        Return the AutoRegressiveNN associated with the InverseAutoregressiveFlow
-        """
-        return self.module.arn
 
     def _call(self, x):
         """
@@ -223,7 +203,7 @@ class InverseAutoregressiveFlowStable(Transform):
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
-        mean, logit_scale = self.module.arn(x)
+        mean, logit_scale = self.arn(x)
         logit_scale = logit_scale + self.sigmoid_bias
         scale = self.sigmoid(logit_scale)
         log_scale = self.logsigmoid(logit_scale)
@@ -245,13 +225,13 @@ class InverseAutoregressiveFlowStable(Transform):
             return x
         else:
             x_size = y.size()[:-1]
-            perm = self.module.arn.permutation
+            perm = self.arn.permutation
             input_dim = y.size(-1)
             x = [torch.zeros(x_size, device=y.device)] * input_dim
 
             # NOTE: Inversion is an expensive operation that scales in the dimension of the input
             for idx in perm:
-                mean, logit_scale = self.module.arn(torch.stack(x, dim=-1))
+                mean, logit_scale = self.arn(torch.stack(x, dim=-1))
                 inverse_scale = 1 + torch.exp(-logit_scale[..., idx] - self.sigmoid_bias)
                 x[idx] = inverse_scale * y[..., idx] + (1 - inverse_scale) * mean[..., idx]
 
@@ -273,6 +253,6 @@ class InverseAutoregressiveFlowStable(Transform):
         if (y, 'log_scale') in self._intermediates_cache:
             log_scale = self._intermediates_cache.pop((y, 'log_scale'))
         else:
-            _, logit_scale = self.module.arn(x)
+            _, logit_scale = self.arn(x)
             log_scale = self.logsigmoid(logit_scale + self.sigmoid_bias)
         return log_scale
