@@ -301,7 +301,7 @@ def hpdi(input, prob, dim=0):
 
 def waic(input, pointwise=False, dim=0):
     """
-    Computes "Widely Applicable/Watanabe–Akaike Information Criterion" (WAIC) and
+    Computes "Widely Applicable/Watanabe-Akaike Information Criterion" (WAIC) and
     its corresponding effective number of parameters.
 
     Reference:
