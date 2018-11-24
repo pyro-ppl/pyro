@@ -51,10 +51,6 @@ def _find_ordinal(trace, site):
                      if f.vectorized)
 
 
-def _compute_log_prob(model_trace):
-    raise NotImplementedError('TODO use Neerajs einsum evaluator?')
-
-
 # TODO move this logic into a poutine
 def _compute_model_factors(model_trace, guide_trace):
     # y depends on x iff ordering[x] <= ordering[y]
@@ -420,12 +416,9 @@ class TraceEnum_ELBO(ELBO):
                     raise NotImplementedError("TraceEnum_ELBO.sample_posterior() is not "
                                               "compatible with guide enumeration.")
 
-        log_prob = _compute_log_prob(model_trace)
-        with poutine.trace() as collapse_trace:
-            log_prob._pyro_backward()
-        with poutine.replay(trace=guide_trace):
-            with poutine.replay(trace=collapse_trace):
-                return model(*args, **kwargs)
+        # TODO replace BackwardSample with torch_sample backend to ubersum
+        with BackwardSampleMessenger(model_trace, guide_trace):
+            return poutine.replay(model, trace=guide_trace)(*args, **kwargs)
 
 
 class JitTraceEnum_ELBO(TraceEnum_ELBO):
