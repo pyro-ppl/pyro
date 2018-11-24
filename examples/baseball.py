@@ -157,7 +157,7 @@ def summary(trace_posterior, sites, player_names, transforms={}, diagnostics=Tru
     marginal = trace_posterior.marginal(sites)
     site_stats = {}
     for site_name in sites:
-        marginal_site = marginal.empirical()[site_name].get_data(flatten=True)
+        marginal_site = marginal.empirical[site_name].enumerate_support(flatten=True)
         if site_name in transforms:
             marginal_site = transforms[site_name](marginal_site)
 

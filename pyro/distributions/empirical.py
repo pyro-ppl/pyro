@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import functools
 import math
 import numbers
 from collections import defaultdict
@@ -19,18 +18,6 @@ def accumulate_samples(validate=False):
     empirical_dist = Empirical(validate_args=validate)
     yield empirical_dist
     empirical_dist._finalize()
-
-
-def _finalized(fn):
-    """
-    Call ``._finalized()`` before method call.
-    """
-    @functools.wraps(fn)
-    def wrapped(self, *args, **kwargs):
-        self._finalize()
-        return fn(self, *args, **kwargs)
-
-    return wrapped
 
 
 @copy_docs_from(TorchDistribution)
@@ -65,27 +52,21 @@ class Empirical(TorchDistribution):
         for i in range(num_chains):
             samples_by_chain.append(torch.stack(self._samples_buffer[i], dim=0))
             weights_by_chain.append(torch.stack(self._weights_buffer[i], dim=0))
-        if num_chains == 1:
-            self._samples = samples_by_chain[0]
-            self._log_weights = weights_by_chain[0]
-        else:
-            self._samples = torch.stack(samples_by_chain, dim=0)
-            self._log_weights = torch.stack(weights_by_chain, dim=0)
-        self._categorical = Categorical(logits=self._log_weights)
+        self._samples = torch.stack(samples_by_chain, dim=0)
+        self._log_weights = torch.stack(weights_by_chain, dim=0)
+        self._categorical = Categorical(logits=self._log_weights.reshape(-1))
 
     @property
-    @_finalized
     def sample_size(self):
         """
         Number of samples that constitute the empirical distribution.
 
         :return int: number of samples collected.
         """
+        self._finalize()
         if self._samples is None:
             return 0
-        if self._num_chains > 1:
-            return self._samples[:2].numel()
-        return self._samples.size(0)
+        return self._samples.size(0) * self._samples.size(1)
 
     def add(self, value, weight=None, log_weight=None, chain_id=0):
         """
@@ -97,9 +78,16 @@ class Empirical(TorchDistribution):
         :param torch.Tensor value: tensor to add to the sample.
         :param torch.Tensor weight: log weight (optional) corresponding
             to the sample.
+        :param int chain_id: chain id that generated the sample (optional).
+            Note that if this argument is provided, ``chain_id`` must lie
+            in ``[0, num_chains - 1]``, and there must be equal number
+            of samples per chain when ``_finalize`` is eventually called.
         :param torch.Tensor log_weight: weight (optional) corresponding
             to the sample.
         """
+        if self._samples is not None:
+            raise ValueError("Sample already accumulated. Samples can be "
+                             "accessed via ``.enumerate_support``.")
         if self._validate_args:
             if weight is not None and log_weight is not None:
                 raise ValueError("Only one of ```weight`` or ``log_weight`` should be specified.")
@@ -121,12 +109,12 @@ class Empirical(TorchDistribution):
         self._weights_buffer[chain_id].append(log_weight)
         self._num_chains = max(self._num_chains, chain_id + 1)
 
-    @_finalized
     def sample(self, sample_shape=torch.Size()):
-        idxs = self._categorical.sample(sample_shape=sample_shape)
-        return self._samples[idxs]
+        self._finalize()
+        idx = self._categorical.sample(sample_shape=sample_shape)
+        chain_idx, sample_idx = idx % self._num_chains, idx / self._num_chains
+        return self._samples[chain_idx, sample_idx]
 
-    @_finalized
     def log_prob(self, value):
         """
         Returns the log of the probability mass function evaluated at ``value``.
@@ -135,6 +123,7 @@ class Empirical(TorchDistribution):
 
         :param torch.Tensor value: scalar or tensor value to be scored.
         """
+        self._finalize()
         if self._validate_args:
             if value.shape != self.event_shape:
                 raise ValueError("``value.shape`` must be {}".format(self.event_shape))
@@ -146,59 +135,53 @@ class Empirical(TorchDistribution):
         log_probs = self._categorical.log_prob(idxs)
         return logsumexp(log_probs, dim=-1)
 
-    def _weighted_mean(self, value, dim=0):
-        weights = self._log_weights.reshape([-1] + (value.dim() - 1) * [1])
-        max_weight = weights.max(dim=dim)[0]
+    def _weighted_mean(self, value):
+        weights = self.weights().reshape([-1] + (value.dim() - 1) * [1])
+        max_weight = weights.max(0)[0]
         relative_probs = (weights - max_weight).exp()
-        return (value * relative_probs).sum(dim=dim) / relative_probs.sum(dim=dim)
+        return (value * relative_probs).sum(0) / relative_probs.sum(0)
+
+    @staticmethod
+    def _flatten_chain(value):
+        shape = value.size()
+        flattened_shape = torch.Size((shape[0] * shape[1],) + shape[2:])
+        return value.reshape(flattened_shape)
 
     @property
-    @_finalized
     def event_shape(self):
+        self._finalize()
         if self._samples is None:
             return None
-        return self._samples.shape[1:]
+        return self._samples.shape[2:]
 
     @property
-    @_finalized
     def mean(self):
+        self._finalize()
         if self._samples.dtype in (torch.int32, torch.int64):
             raise ValueError("Mean for discrete empirical distribution undefined. " +
                              "Consider converting samples to ``torch.float32`` " +
                              "or ``torch.float64``. If these are samples from a " +
                              "`Categorical` distribution, consider converting to a " +
                              "`OneHotCategorical` distribution.")
-        return self._weighted_mean(self._samples)
+        return self._weighted_mean(self._flatten_chain(self._samples))
 
     @property
-    @_finalized
     def variance(self):
+        self._finalize()
         if self._samples.dtype in (torch.int32, torch.int64):
             raise ValueError("Variance for discrete empirical distribution undefined. " +
                              "Consider converting samples to ``torch.float32`` " +
                              "or ``torch.float64``. If these are samples from a " +
                              "`Categorical` distribution, consider converting to a " +
                              "`OneHotCategorical` distribution.")
-        deviation_squared = torch.pow(self._samples - self.mean, 2)
+        deviation_squared = torch.pow(self._flatten_chain(self._samples) - self.mean, 2)
         return self._weighted_mean(deviation_squared)
 
-    @_finalized
-    def get_data(self, flatten=False):
-        data = self._samples
-        if flatten and self._num_chains > 1:
-            shape = (data.size(0) * data.size(1),) + data.size()[2:]
-        else:
-            shape = data.size()
-        return data.reshape(shape)
+    def weights(self, flatten=True):
+        self._finalize()
+        return self._log_weights.reshape(-1) if flatten else self._log_weights
 
-    @_finalized
-    def get_weights(self, flatten=False):
-        weights = self._log_weights
-        if flatten and self._num_chains > 1:
-            weights = weights.reshape(-1)
-        return weights
-
-    @_finalized
-    def enumerate_support(self, expand=True):
+    def enumerate_support(self, expand=True, flatten=True):
         # Empirical does not support batching, so expanding is a no-op.
-        return self._samples
+        self._finalize()
+        return self._flatten_chain(self._samples) if flatten else self._samples

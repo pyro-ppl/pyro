@@ -104,7 +104,7 @@ def bernoulli_beta_hmc(**kwargs):
     num_samples = kwargs.pop('num_samples')
     mcmc_kernel = kernel(model, **kwargs)
     mcmc_run = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100).run(data)
-    return mcmc_run.marginal('p_latent').empirical()
+    return mcmc_run.marginal('p_latent').empirical
 
 
 @register_model(num_steps=2000, whiten=False, id='SVGP::MultiClass_whiten=False')

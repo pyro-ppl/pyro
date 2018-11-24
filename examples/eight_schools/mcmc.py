@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import argparse
 import logging
 
-import numpy as np
 import pandas as pd
 import torch
 
@@ -11,7 +10,6 @@ import data
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import EmpiricalMarginal
 from pyro.infer.mcmc import MCMC, NUTS
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
@@ -39,8 +37,8 @@ def main(args):
                      num_samples=args.num_samples,
                      warmup_steps=args.warmup_steps,
                      num_chains=args.num_chains).run(model, data.sigma, data.y)
-    marginal = posterior.marginal(sites=["mu", "tau", "eta"]).empirical()
-    marginal = torch.cat([d.get_data() for d in marginal.values()], dim=-1).cpu().numpy()
+    marginal = posterior.marginal(sites=["mu", "tau", "eta"]).empirical
+    marginal = torch.cat([d.enumerate_support() for d in marginal.values()], dim=-1).cpu().numpy()
     params = ['mu', 'tau', 'eta[0]', 'eta[1]', 'eta[2]', 'eta[3]', 'eta[4]', 'eta[5]', 'eta[6]', 'eta[7]']
     df = pd.DataFrame(marginal, columns=params).transpose()
     df_summary = df.apply(pd.Series.describe, axis=1)[["mean", "std", "25%", "50%", "75%"]]

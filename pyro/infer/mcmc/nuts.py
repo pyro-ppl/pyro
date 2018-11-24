@@ -93,7 +93,7 @@ class NUTS(HMC):
         >>>
         >>> nuts_kernel = NUTS(model, adapt_step_size=True)
         >>> mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=300).run(data)
-        >>> posterior = mcmc_run.marginal('beta').empirical()['beta']
+        >>> posterior = mcmc_run.marginal('beta').empirical['beta']
         >>> posterior.mean  # doctest: +SKIP
         tensor([ 0.9221,  1.9464,  2.9228])
     """

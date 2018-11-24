@@ -257,10 +257,10 @@ class MCMC(TracePosterior):
             yield sample
 
     def marginal(self, sites=None):
-        return _EmpiricalMarginal(self, sites)
+        return _Marginal(self, sites)
 
 
-class _EmpiricalMarginal(object):
+class _Marginal(object):
     """
     Marginal distribution for MCMC that provides a a marginal over one or more
     latent sites as well as the return values of the TracePosterior's model.
@@ -268,9 +268,7 @@ class _EmpiricalMarginal(object):
     :param TracePosterior trace_posterior: a TracePosterior instance representing
         a Monte Carlo posterior.
     :param list sites: optional list of sites for which we need to generate
-        the marginal distribution. Note that for multiple sites, the shape
-        for the site values must match (needed by the underlying ``Empirical``
-        class).
+        the marginal distribution.
     """
     def __init__(self, trace_posterior, sites=None, validate_args=None):
         assert isinstance(trace_posterior, TracePosterior), \
@@ -302,10 +300,11 @@ class _EmpiricalMarginal(object):
             return self._diagnostics
         for site in self.sites:
             self._diagnostics[site] = OrderedDict([
-                ("n_eff", stats.effective_sample_size(self._marginals[site].get_data())),
-                ("r_hat", stats.split_gelman_rubin(self._marginals[site].get_data()))
+                ("n_eff", stats.effective_sample_size(self._marginals[site].enumerate_support(flatten=False))),
+                ("r_hat", stats.split_gelman_rubin(self._marginals[site].enumerate_support(flatten=False)))
             ])
         return self._diagnostics
 
+    @property
     def empirical(self):
         return self._marginals

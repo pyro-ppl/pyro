@@ -72,11 +72,15 @@ def test_weighted_sample_coherence(event_shape, dtype):
 
 @pytest.mark.parametrize("event_shape", [torch.Size(), torch.Size((1,)), torch.Size((2, 3))])
 @pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
-def test_weighted_mean_var(event_shape, dtype):
+@pytest.mark.parametrize("num_chains", [1, 2, 3])
+def test_weighted_mean_var(event_shape, dtype, num_chains):
     samples = [(1.0, 0.5), (0.0, 1.5), (1.0, 0.5), (0.0, 1.5)]
     empirical_dist = Empirical()
-    for sample, weight in samples:
-        empirical_dist.add(sample * torch.ones(event_shape, dtype=dtype), weight=weight)
+    for chain_id in range(num_chains):
+        for sample, weight in samples:
+            empirical_dist.add(sample * torch.ones(event_shape, dtype=dtype),
+                               weight=weight,
+                               chain_id=chain_id)
     if dtype in (torch.float32, torch.float64):
         true_mean = torch.ones(event_shape, dtype=dtype) * 0.25
         true_var = torch.ones(event_shape, dtype=dtype) * 0.1875
