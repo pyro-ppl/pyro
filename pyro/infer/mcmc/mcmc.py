@@ -302,7 +302,7 @@ class _Marginal(object):
     @property
     def empirical(self):
         return self._marginals
-    
+
     def diagnostics(self):
         if self._diagnostics:
             return self._diagnostics
