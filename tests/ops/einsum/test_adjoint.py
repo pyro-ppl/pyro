@@ -76,8 +76,8 @@ def test_shape(backend, equation):
 def test_marginal(equation):
     inputs, output = equation.split('->')
     inputs = inputs.split(',')
-    operands = [torch.randn(torch.Size((2,) * len(dims)))
-                for dims in inputs]
+    operands = [torch.randn(torch.Size((2,) * len(input_)))
+                for input_ in inputs]
 
     # check forward pass
     for x in operands:
@@ -85,10 +85,7 @@ def test_marginal(equation):
     actual = contract(equation, *operands, backend='pyro.ops.einsum.torch_marginal')
     expected = contract(equation, *operands,
                         backend='pyro.ops.einsum.torch_log')
-    assert_equal(expected, actual, msg='\n'.join([
-        'Expected:', str(expected.detach().cpu().numpy()),
-        'Actual:', str(actual.detach().cpu().numpy()),
-    ]))
+    assert_equal(expected, actual)
 
     # check backward pass
     actual._pyro_backward()
@@ -97,7 +94,4 @@ def test_marginal(equation):
         expected = contract(marginal_equation, *operands,
                             backend='pyro.ops.einsum.torch_log')
         actual = operand._pyro_backward_result
-        assert_equal(expected, actual, msg='\n'.join([
-            'Expected:', str(expected.detach().cpu().numpy()),
-            'Actual:', str(actual.detach().cpu().numpy()),
-        ]))
+        assert_equal(expected, actual)

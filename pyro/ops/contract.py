@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import itertools
+import weakref
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict, defaultdict
 
@@ -12,6 +13,7 @@ from six import add_metaclass
 from six.moves import map
 
 from pyro.ops.einsum import contract
+from pyro.ops.einsum.adjoint import Backward
 
 
 def _finfo(tensor):
@@ -165,6 +167,8 @@ class LogRing(Ring):
         self._dim_to_size = {} if dim_to_size is None else dim_to_size
 
     def sumproduct(self, terms, dims):
+        if len(terms) == 1 and not dims:
+            return terms[0]
         inputs = [term._pyro_dims for term in terms]
         output = ''.join(sorted(set(''.join(inputs)) - set(dims)))
         equation = ','.join(inputs) + '->' + output
@@ -215,12 +219,41 @@ class SampleRing(LogRing):
     # TODO implement product backward
 
 
+class _MarginalProductBackward(Backward):
+    def __init__(self, ring, term, ordinal, result):
+        self.ring = ring
+        self.term = term
+        self.ordinal = ordinal
+        self.result = weakref.ref(result)
+
+    def process(self, message):
+        ring = self.ring
+        term = self.term
+        result = self.result()
+        factors = [result]
+        if message is not None:
+            message._pyro_dims = result._pyro_dims
+            factors.append(message)
+        if term._pyro_backward.is_leaf:
+            product = ring.sumproduct(factors, set())
+            message = ring.broadcast(product, self.ordinal)
+        else:
+            factors.append(ring.inv(term))
+            message = ring.sumproduct(factors, set())
+        yield term._pyro_backward, message
+
+
 class MarginalRing(LogRing):
     """
     Ring of forward-sumproduct backward-marginal operations in log space.
     """
     _backend = 'pyro.ops.einsum.torch_marginal'
-    # TODO implement product backward
+
+    def product(self, term, ordinal):
+        result = super(MarginalRing, self).product(term, ordinal)
+        if hasattr(term, '_pyro_backward'):
+            result._pyro_backward = _MarginalProductBackward(self, term, ordinal, result)
+        return result
 
 
 _BACKEND_TO_RING = {

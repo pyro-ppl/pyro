@@ -666,20 +666,25 @@ def test_ubersum_batch_error(impl, equation, batch_dims):
         impl(equation, *operands, batch_dims=batch_dims, modulo_total=True)
 
 
-@pytest.mark.parametrize('equation,batch_dims', [
+ADJOINT_EXAMPLES = [
     ('a->', ''),
     ('a,a->', ''),
     ('ab,bc->', ''),
     ('ai,ai->i', 'i'),
     ('a,abi->', 'i'),
-])
+    ('a,abi,bcij->', 'ij'),
+    ('a,abi,bcij,bdik->', 'ijk'),
+]
+
+
+@pytest.mark.parametrize('equation,batch_dims', ADJOINT_EXAMPLES)
 @pytest.mark.parametrize('backend', ['map', 'sample', 'marginal'])
 def test_adjoint_shape(backend, equation, batch_dims):
     backend = 'pyro.ops.einsum.torch_{}'.format(backend)
-    inputs, outputs = equation.split('->')
-    output, = outputs.split(',')
+    inputs, output = equation.split('->')
+    inputs = inputs.split(',')
     operands = [torch.randn(torch.Size((2,) * len(input_)))
-                for input_ in inputs.split(',')]
+                for input_ in inputs]
 
     # run forward-backward algorithm
     for x in operands:
@@ -695,3 +700,29 @@ def test_adjoint_shape(backend, equation, batch_dims):
             assert backward_result is not None
         else:
             assert backward_result is None
+
+
+@pytest.mark.parametrize('equation,batch_dims', ADJOINT_EXAMPLES)
+def test_adjoint_marginal(equation, batch_dims):
+    inputs, output = equation.split('->')
+    inputs = inputs.split(',')
+    operands = [torch.randn(torch.Size((2,) * len(input_)))
+                for input_ in inputs]
+
+    # check forward pass
+    for x in operands:
+        require_backward(x)
+    actual, = ubersum(equation, *operands, batch_dims=batch_dims, modulo_total=True,
+                      backend='pyro.ops.einsum.torch_marginal')
+    expected, = ubersum(equation, *operands, batch_dims=batch_dims, modulo_total=True,
+                        backend='pyro.ops.einsum.torch_log')
+    assert_equal(expected, actual)
+
+    # check backward pass
+    actual._pyro_backward()
+    for input_, operand in zip(inputs, operands):
+        marginal_equation = ','.join(inputs) + '->' + input_
+        expected, = ubersum(marginal_equation, *operands, batch_dims=batch_dims, modulo_total=True,
+                            backend='pyro.ops.einsum.torch_log')
+        actual = operand._pyro_backward_result
+        assert_equal(expected, actual)

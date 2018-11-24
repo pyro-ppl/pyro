@@ -41,6 +41,7 @@ def einsum(equation, *operands):
     """
     Forward-log-sum-product-exp backward-marginal implementation of einsum.
     """
+    print('DEBUG forward: {}'.format(equation))
     result = pyro.ops.einsum.torch_log.einsum(equation, *operands)
     if any(hasattr(x, '_pyro_backward') for x in operands):
         result._pyro_backward = _EinsumBackward(equation, operands)
