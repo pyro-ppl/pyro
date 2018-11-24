@@ -117,7 +117,7 @@ def test_svi(Elbo, num_particles):
 
 @pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
 @pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
-@pytest.mark.parametrize("irange_dim", [1, 2])
+@pytest.mark.parametrize("plate_dim", [1, 2])
 @pytest.mark.parametrize('Elbo', [
     Trace_ELBO,
     JitTrace_ELBO,
@@ -126,7 +126,7 @@ def test_svi(Elbo, num_particles):
     TraceEnum_ELBO,
     JitTraceEnum_ELBO,
 ])
-def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
+def test_svi_enum(Elbo, plate_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
     num_particles = 10
     q = pyro.param("q", torch.tensor(0.75), constraint=constraints.unit_interval)
@@ -134,16 +134,16 @@ def test_svi_enum(Elbo, irange_dim, enumerate1, enumerate2):
 
     def model():
         pyro.sample("x", dist.Bernoulli(p))
-        for i in pyro.irange("irange", irange_dim):
+        for i in pyro.plate("plate", plate_dim):
             pyro.sample("y_{}".format(i), dist.Bernoulli(p))
 
     def guide():
         q = pyro.param("q")
         pyro.sample("x", dist.Bernoulli(q), infer={"enumerate": enumerate1})
-        for i in pyro.irange("irange", irange_dim):
+        for i in pyro.plate("plate", plate_dim):
             pyro.sample("y_{}".format(i), dist.Bernoulli(q), infer={"enumerate": enumerate2})
 
-    kl = (1 + irange_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
+    kl = (1 + plate_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
     expected_loss = kl.item()
     expected_grad = grad(kl, [q.unconstrained()])[0]
 
@@ -180,7 +180,7 @@ def test_beta_bernoulli(Elbo, vectorized):
         alpha0 = torch.tensor(10.0)
         beta0 = torch.tensor(10.0)
         f = pyro.sample("latent_fairness", dist.Beta(alpha0, beta0))
-        for i in pyro.irange("irange", len(data)):
+        for i in pyro.plate("plate", len(data)):
             pyro.sample("obs_{}".format(i), dist.Bernoulli(f), obs=data[i])
 
     def model2(data):
@@ -218,7 +218,7 @@ def test_dirichlet_bernoulli(Elbo, vectorized):
     def model1(data):
         concentration0 = torch.tensor([10.0, 10.0])
         f = pyro.sample("latent_fairness", dist.Dirichlet(concentration0))[1]
-        for i in pyro.irange("irange", len(data)):
+        for i in pyro.plate("plate", len(data)):
             pyro.sample("obs_{}".format(i), dist.Bernoulli(f), obs=data[i])
 
     def model2(data):

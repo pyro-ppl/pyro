@@ -12,7 +12,7 @@ import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.contrib.autoguide import (AutoDiagonalNormal, AutoLaplaceApproximation,
                                     AutoLowRankMultivariateNormal, AutoMultivariateNormal)
-from pyro.infer import SVI, Trace_ELBO
+from pyro.infer import SVI, Trace_ELBO, TraceMeanField_ELBO
 from tests.common import assert_equal
 from tests.integration_tests.test_conjugate_gaussian_models import GaussianChain
 
@@ -74,7 +74,8 @@ class AutoGaussianChain(GaussianChain):
 
 @pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
                                         AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
-def test_auto_diagonal_gaussians(auto_class):
+@pytest.mark.parametrize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
+def test_auto_diagonal_gaussians(auto_class, Elbo):
     n_steps = 3501 if auto_class == AutoDiagonalNormal else 6001
 
     def model():
@@ -86,7 +87,7 @@ def test_auto_diagonal_gaussians(auto_class):
     else:
         guide = auto_class(model)
     adam = optim.Adam({"lr": .001, "betas": (0.95, 0.999)})
-    svi = SVI(model, guide, adam, loss=Trace_ELBO())
+    svi = SVI(model, guide, adam, loss=Elbo())
 
     for k in range(n_steps):
         loss = svi.step()
@@ -97,10 +98,18 @@ def test_auto_diagonal_gaussians(auto_class):
 
     loc, scale = guide._loc_scale()
 
-    assert_equal(loc, torch.tensor([-0.2, 0.2]), prec=0.05,
-                 msg="guide mean off")
-    assert_equal(scale, torch.tensor([1.2, 0.7]), prec=0.08,
-                 msg="guide covariance off")
+    expected_loc = torch.tensor([-0.2, 0.2])
+    assert_equal(loc, expected_loc, prec=0.05,
+                 msg="\n".join(["Incorrect guide loc. Expected:",
+                                str(expected_loc.cpu().numpy()),
+                                "Actual:",
+                                str(loc.detach().cpu().numpy())]))
+    expected_scale = torch.tensor([1.2, 0.7])
+    assert_equal(scale, expected_scale, prec=0.08,
+                 msg="\n".join(["Incorrect guide scale. Expected:",
+                                str(expected_scale.cpu().numpy()),
+                                "Actual:",
+                                str(scale.detach().cpu().numpy())]))
 
 
 @pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
@@ -134,7 +143,8 @@ def test_auto_transform(auto_class):
 
 @pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
                                         AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
-def test_auto_dirichlet(auto_class):
+@pytest.mark.parametrize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
+def test_auto_dirichlet(auto_class, Elbo):
     num_steps = 2000
     prior = torch.tensor([0.5, 1.0, 1.5, 3.0])
     data = torch.tensor([0] * 4 + [1] * 2 + [2] * 5).long()
@@ -146,7 +156,7 @@ def test_auto_dirichlet(auto_class):
             pyro.sample("data", dist.Categorical(p).expand_by(data.shape), obs=data)
 
     guide = auto_class(model)
-    svi = SVI(model, guide, optim.Adam({"lr": .003}), loss=Trace_ELBO())
+    svi = SVI(model, guide, optim.Adam({"lr": .003}), loss=Elbo())
 
     for _ in range(num_steps):
         loss = svi.step(data)

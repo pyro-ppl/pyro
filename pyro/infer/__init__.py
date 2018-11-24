@@ -28,6 +28,7 @@ __all__ = [
     "SVI",
     "TraceEnum_ELBO",
     "TraceGraph_ELBO",
+    "TraceMeanField_ELBO",
     "TracePosterior",
     "TracePredictive",
     "Trace_ELBO",
