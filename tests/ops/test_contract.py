@@ -10,9 +10,9 @@ import six
 import torch
 
 from pyro.distributions.util import logsumexp
-from pyro.ops.contract import (LogRing, _partition_terms, contract_tensor_tree, contract_to_tensor, naive_ubersum,
-                               ubersum)
+from pyro.ops.contract import _partition_terms, contract_tensor_tree, contract_to_tensor, naive_ubersum, ubersum
 from pyro.ops.einsum.adjoint import require_backward
+from pyro.ops.rings import LogRing
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import optional
 from tests.common import assert_equal
