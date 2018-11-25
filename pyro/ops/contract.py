@@ -186,7 +186,7 @@ def contract_tensor_tree(tensor_tree, sum_dims, cache=None):
 
 
 def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=None,
-                       cache=None, ring=None, dim_to_size=None):
+                       cache=None, ring=None):
     """
     Contract out ``sum_dims`` in a tree of tensors, via message
     passing. This reduces all terms down to a single tensor in the plate
@@ -218,7 +218,7 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
     assert isinstance(target_ordinal, frozenset)
     assert isinstance(target_dims, set) and target_dims <= sum_dims
     if ring is None:
-        ring = LogRing(cache, dim_to_size)
+        ring = LogRing(cache)
 
     ordinals = {term: t for t, terms in tensor_tree.items() for term in terms}
     all_terms = [term for terms in tensor_tree.values() for term in terms]
@@ -385,7 +385,7 @@ def ubersum(equation, *operands, **kwargs):
             term = contract_to_tensor(tensor_tree, sum_dims,
                                       target_ordinal=batch_dims.intersection(output),
                                       target_dims=sum_dims.intersection(output),
-                                      ring=ring, dim_to_size=dim_to_size)
+                                      ring=ring)
             if term._pyro_dims != output:
                 term = term.permute(*map(term._pyro_dims.index, output))
                 term._pyro_dims = output
