@@ -81,8 +81,8 @@ def gather(value, index, dim):
     """
     Packed broadcasted gather of indexed values along a named dim.
     """
-    assert dim in value._pyro_dims, (dim, value._pyro_dims)
-    assert dim not in index._pyro_dims, (dim, index._pyro_dims)
+    assert dim in value._pyro_dims
+    assert dim not in index._pyro_dims
     value, index = broadcast_all(value, index)
     dims = value._pyro_dims.replace(dim, '')
     pos = value._pyro_dims.index(dim)
