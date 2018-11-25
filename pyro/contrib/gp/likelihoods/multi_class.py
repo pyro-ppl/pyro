@@ -25,8 +25,8 @@ class MultiClass(Likelihood):
     :param callable response_function: A mapping to correct domain for MultiClass
         likelihood.
     """
-    def __init__(self, num_classes, response_function=None, name="MultiClass"):
-        super(MultiClass, self).__init__(name)
+    def __init__(self, num_classes, response_function=None):
+        super(MultiClass, self).__init__()
         self.num_classes = num_classes
         self.response_function = (response_function if response_function is not None
                                   else _softmax)
