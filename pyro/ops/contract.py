@@ -379,7 +379,7 @@ def ubersum(equation, *operands, **kwargs):
     # Compute outputs, sharing intermediate computations.
     results = []
     with shared_intermediates(cache) as cache:
-        ring = Ring(cache)
+        ring = Ring(cache, dim_to_size=dim_to_size)
         for output in outputs:
             sum_dims = set(output).union(*inputs) - set(batch_dims)
             term = contract_to_tensor(tensor_tree, sum_dims,

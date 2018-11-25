@@ -55,6 +55,7 @@ class _EinsumBackward(Backward):
 def einsum(equation, *operands):
     """
     Forward-log-sum-product-exp backward-sample-exp implementation of einsum.
+    This assumes all operands have a ``._pyro_dims`` attribute set.
     """
     equation = packed.rename_equation(equation, *operands)
     inputs, output = equation.split('->')

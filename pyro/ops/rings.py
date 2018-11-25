@@ -81,8 +81,8 @@ class Ring(object):
                 term = self._cache[key]
             else:
                 missing_shape = tuple(self._dim_to_size[dim] for dim in missing_dims)
-                term = term.expand(missing_shape + term.shape)
-                dims = missing_dims + dims
+                term = term.expand(term.shape + missing_shape)
+                dims = dims + missing_dims
                 self._cache[key] = term
                 term._pyro_dims = dims
         return term
@@ -181,12 +181,40 @@ class LogRing(Ring):
         return result
 
 
+class _SampleProductBackward(Backward):
+    """
+    Backward-sample implementation of product.
+
+    This is agnostic to sampler implementation, and hence can be used both by
+    :class:`MapRing` (temperature 0 sampling) and :class:`SampleRing`
+    (temperature 1 sampling).
+    """
+    def __init__(self, ring, term, ordinal):
+        self.ring = ring
+        self.term = term
+        self.ordinal = ordinal
+
+    def process(self, message):
+        if message is not None:
+            sample_dims = message._pyro_sample_dims
+            message = self.ring.broadcast(message, self.ordinal)
+            message._pyro_sample_dims = sample_dims
+            assert message.size(0) == len(message._pyro_sample_dims)
+        yield self.term._pyro_backward, message
+
+
 class MapRing(LogRing):
     """
     Ring of forward-maxsum backward-argmax operations.
     """
     _backend = 'pyro.ops.einsum.torch_map'
-    # TODO implement product backward
+
+    def product(self, term, ordinal):
+        result = super(MapRing, self).product(term, ordinal)
+
+        if hasattr(term, '_pyro_backward'):
+            result._pyro_backward = _SampleProductBackward(self, term, ordinal)
+        return result
 
 
 class SampleRing(LogRing):
@@ -194,10 +222,19 @@ class SampleRing(LogRing):
     Ring of forward-sumproduct backward-sample operations in log space.
     """
     _backend = 'pyro.ops.einsum.torch_sample'
-    # TODO implement product backward
+
+    def product(self, term, ordinal):
+        result = super(SampleRing, self).product(term, ordinal)
+
+        if hasattr(term, '_pyro_backward'):
+            result._pyro_backward = _SampleProductBackward(self, term, ordinal)
+        return result
 
 
 class _MarginalProductBackward(Backward):
+    """
+    Backward-marginal implementation of product, using inclusion-exclusion.
+    """
     def __init__(self, ring, term, ordinal, result):
         self.ring = ring
         self.term = term
@@ -229,6 +266,7 @@ class MarginalRing(LogRing):
 
     def product(self, term, ordinal):
         result = super(MarginalRing, self).product(term, ordinal)
+
         if hasattr(term, '_pyro_backward'):
             result._pyro_backward = _MarginalProductBackward(self, term, ordinal, result)
         return result
