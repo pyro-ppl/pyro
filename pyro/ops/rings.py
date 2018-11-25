@@ -198,8 +198,7 @@ class _SampleProductBackward(Backward):
         if message is not None:
             sample_dims = message._pyro_sample_dims
             message = self.ring.broadcast(message, self.ordinal)
-            sample_pos = message._pyro_dims.index(SAMPLE_SYMBOL)
-            if sample_pos != 0:
+            if message._pyro_dims.index(SAMPLE_SYMBOL) != 0:
                 dims = SAMPLE_SYMBOL + message._pyro_dims.replace(SAMPLE_SYMBOL, '')
                 message = message.permute(tuple(map(message._pyro_dims.find, dims)))
                 message._pyro_dims = dims
@@ -217,7 +216,6 @@ class MapRing(LogRing):
 
     def product(self, term, ordinal):
         result = super(MapRing, self).product(term, ordinal)
-
         if hasattr(term, '_pyro_backward'):
             result._pyro_backward = _SampleProductBackward(self, term, ordinal)
         return result
@@ -231,7 +229,6 @@ class SampleRing(LogRing):
 
     def product(self, term, ordinal):
         result = super(SampleRing, self).product(term, ordinal)
-
         if hasattr(term, '_pyro_backward'):
             result._pyro_backward = _SampleProductBackward(self, term, ordinal)
         return result
@@ -272,7 +269,6 @@ class MarginalRing(LogRing):
 
     def product(self, term, ordinal):
         result = super(MarginalRing, self).product(term, ordinal)
-
         if hasattr(term, '_pyro_backward'):
             result._pyro_backward = _MarginalProductBackward(self, term, ordinal, result)
         return result
