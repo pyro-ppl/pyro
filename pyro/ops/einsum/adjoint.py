@@ -70,7 +70,7 @@ def transpose(a, axes):
     return result
 
 
-def einsum_backward_sample(inputs, operands, sample1, sample2):
+def einsum_backward_sample(operands, sample1, sample2):
     """
     Cuts down samples to pass on to subsequent steps.
     This is typically used in ``_EinsumBackward.__call__()`` methods.
@@ -81,26 +81,30 @@ def einsum_backward_sample(inputs, operands, sample1, sample2):
     elif sample2 is None:
         sample = sample1
     else:
-        sample = sample1
+        # Slice sample1 down based on choices in sample2.
+        assert set(sample1._pyro_sample_dims).isdisjoint(sample2._pyro_sample_dims)
+        sample_dims = sample1._pyro_sample_dims + sample2._pyro_sample_dims
         for dim, index in zip(sample2._pyro_sample_dims, sample2):
-            index._pyro_dims = sample2._pyro_dims[1:]
-            sample = packed.gather(sample, index, dim)
-        parts = packed.broadcast_all(sample, sample2)
+            if dim in sample1._pyro_dims:
+                index._pyro_dims = sample2._pyro_dims[1:]
+                sample1 = packed.gather(sample1, index, dim)
+
+        # Concatenate the two samples.
+        parts = packed.broadcast_all(sample1, sample2)
         sample = torch.cat(parts)
         sample._pyro_dims = parts[0]._pyro_dims
-        sample._pyro_sample_dims = (sample1._pyro_sample_dims +
-                                    sample2._pyro_sample_dims)
+        sample._pyro_sample_dims = sample_dims
         assert sample.dim() == len(sample._pyro_dims)
         assert sample.size(0) == len(sample._pyro_sample_dims)
 
-    # Cut down samples to pass on to downstream sites.
-    for x_dims, x in zip(inputs, operands):
+    # Select sample dimensions to pass on to downstream sites.
+    for x in operands:
         if not hasattr(x, '_pyro_backward'):
             continue
         if sample is None:
             yield x._pyro_backward, None
             continue
-        x_sample_dims = set(x_dims) & set(sample._pyro_sample_dims)
+        x_sample_dims = set(x._pyro_dims) & set(sample._pyro_sample_dims)
         if not x_sample_dims:
             yield x._pyro_backward, None
             continue

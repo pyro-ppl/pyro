@@ -54,21 +54,3 @@ class Tensordot(object):
         # form full string and contract!
         einsum_str = "{},{}->{}".format(*map("".join, (x_ix, y_ix, out_ix)))
         return self.einsum(einsum_str, x, y)
-
-
-def einbroadcast(inputs, output, operands):
-    """
-    Unpacks packed einsum inputs in preparation for a broadcasting operation.
-    """
-    assert len(inputs) == len(operands)
-    assert inputs
-    sizes = {dim: size
-             for input_, x in zip(inputs, operands)
-             for dim, size in zip(input_, x.shape)}
-    result = []
-    for old_dims, x in zip(inputs, operands):
-        if old_dims != output:
-            x = x.permute(tuple(old_dims.index(dim) for dim in output if dim in old_dims))
-            x = x.reshape(tuple(sizes[dim] if dim in old_dims else 1 for dim in output))
-        result.append(x)
-    return result

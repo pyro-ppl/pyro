@@ -10,27 +10,27 @@ from pyro.ops.einsum.adjoint import require_backward
 from tests.common import assert_equal
 
 EQUATIONS = [
-    'a->',
-    ',a->',
-    'a,a->',
-    'a,b->',
-    'a,ab,b->',
-    'a,ab,bc,cd->',
-    'ab,bc,cd,da->',
-    'ai->i',
-    'i,ai->i',
-    'ai,ai->i',
-    'ai,bi->i',
-    'ai,abi,bi->i',
-    'ai,abi,bci,cdi->i',
-    'abi,bci,cdi,dai->i',
-    'iaj->ij',
-    'ij,iaj->ij',
-    'iaj,iaj->ij',
-    'iaj,ibj->ij',
-    'iaj,iabj,ibj->ij',
-    'iaj,iabj,ibcj,icdj->ij',
-    'iabj,ibcj,icdj,idaj->ij',
+    'w->',
+    ',w->',
+    'w,w->',
+    'w,x->',
+    'w,wx,x->',
+    'w,wx,xy,yz->',
+    'wx,xy,yz,zw->',
+    'wi->i',
+    'i,wi->i',
+    'wi,wi->i',
+    'wi,xi->i',
+    'wi,wxi,xi->i',
+    'wi,wxi,xyi,yzi->i',
+    'wxi,xyi,yzi,zwi->i',
+    'iwj->ij',
+    'ij,iwj->ij',
+    'iwj,iwj->ij',
+    'iwj,ixj->ij',
+    'iwj,iwxj,ixj->ij',
+    'iwj,iwxj,ixyj,iyzj->ij',
+    'iwxj,ixyj,iyzj,izwj->ij',
 ]
 
 
@@ -46,6 +46,8 @@ def test_shape(backend, equation):
     input_shapes = [torch.Size(sizes[dim] for dim in dims)
                     for dims in inputs]
     operands = [torch.randn(shape) for shape in input_shapes]
+    for input_, x in zip(inputs, operands):
+        x._pyro_dims = input_
 
     # check forward pass
     for x in operands:
@@ -78,6 +80,8 @@ def test_marginal(equation):
     inputs = inputs.split(',')
     operands = [torch.randn(torch.Size((2,) * len(input_)))
                 for input_ in inputs]
+    for input_, x in zip(inputs, operands):
+        x._pyro_dims = input_
 
     # check forward pass
     for x in operands:

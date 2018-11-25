@@ -685,6 +685,8 @@ def test_adjoint_shape(backend, equation, batch_dims):
     inputs = inputs.split(',')
     operands = [torch.randn(torch.Size((2,) * len(input_)))
                 for input_ in inputs]
+    for input_, x in zip(inputs, operands):
+        x._pyro_dims = input_
 
     # run forward-backward algorithm
     for x in operands:
@@ -708,6 +710,8 @@ def test_adjoint_marginal(equation, batch_dims):
     inputs = inputs.split(',')
     operands = [torch.randn(torch.Size((2,) * len(input_)))
                 for input_ in inputs]
+    for input_, x in zip(inputs, operands):
+        x._pyro_dims = input_
 
     # check forward pass
     for x in operands:
