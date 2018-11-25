@@ -8,7 +8,7 @@ import torch
 from six import add_metaclass
 
 from pyro.ops.einsum import contract
-from pyro.ops.einsum.adjoint import Backward
+from pyro.ops.einsum.adjoint import SAMPLE_SYMBOL, Backward
 
 
 def _finfo(tensor):
@@ -81,8 +81,8 @@ class Ring(object):
                 term = self._cache[key]
             else:
                 missing_shape = tuple(self._dim_to_size[dim] for dim in missing_dims)
-                term = term.expand(term.shape + missing_shape)
-                dims = dims + missing_dims
+                term = term.expand(missing_shape + term.shape)
+                dims = missing_dims + dims
                 self._cache[key] = term
                 term._pyro_dims = dims
         return term
@@ -119,7 +119,7 @@ class Ring(object):
         term_sum = self.sumproduct([term], dims)
         global_part = self.product(term_sum, ordinal)
         local_part = self.sumproduct([term, self.inv(term_sum)], set())
-        assert local_part._pyro_dims == term._pyro_dims
+        assert sorted(local_part._pyro_dims) == sorted(term._pyro_dims)
         result = global_part, local_part
         self._cache[key] = result
         return result
@@ -198,6 +198,12 @@ class _SampleProductBackward(Backward):
         if message is not None:
             sample_dims = message._pyro_sample_dims
             message = self.ring.broadcast(message, self.ordinal)
+            sample_pos = message._pyro_dims.index(SAMPLE_SYMBOL)
+            if sample_pos != 0:
+                dims = SAMPLE_SYMBOL + message._pyro_dims.replace(SAMPLE_SYMBOL, '')
+                message = message.permute(tuple(map(message._pyro_dims.find, dims)))
+                message._pyro_dims = dims
+                assert message.dim() == len(message._pyro_dims)
             message._pyro_sample_dims = sample_dims
             assert message.size(0) == len(message._pyro_sample_dims)
         yield self.term._pyro_backward, message
