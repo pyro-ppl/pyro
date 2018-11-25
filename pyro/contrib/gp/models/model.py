@@ -88,12 +88,13 @@ class GPModel(Parameterized):
     :param str name: Name of this model.
     """
     def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6, name=None):
-        super(GPModel, self).__init__(name)
+        super(GPModel, self).__init__()
         self.set_data(X, y)
         self.kernel = kernel
         self.mean_function = (mean_function if mean_function is not None else
                               _zero_mean_function)
         self.jitter = jitter
+        self.name = name
 
     def model(self):
         """

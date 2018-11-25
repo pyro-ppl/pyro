@@ -1,10 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import defaultdict
-
 import torch
 import torch.nn as nn
-from torch.distributions import constraints
+from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
@@ -26,46 +24,95 @@ class Parameterized(nn.Module):
 
     :param str name: Name of this object.
     """
-    def __init__(self, name=None):
+    def __init__(self):
         super(Parameterized, self).__init__()
-        self._constraints = defaultdict(constraints.real)
+        self._constraints = {}
         self._priors = {}
-        self._guides = defaultdict(dist.Delta)
-        self._registered_params = {}
+        self._guides = {}
 
     @autoname.name_count
     def __call__(self, *args, **kwargs):
         super(Parameterized, self).__call__(*args, **kwargs)
 
-    def set_constraint(self, param, constraint):
+    def set_constraint(self, name, constraint):
         """
         Sets a constraint to a parameter.
 
-        :param str param: Name of the parameter.
+        :param str name: Name of the parameter.
         :param ~torch.distributions.constraints.Constraint constraint: A PyTorch
             constraint. See :mod:`torch.distributions.constraints` for a list of
             constraints.
         """
+        if name in self._parameters:
+            # move param to _buffers
+            p = self._parameters.pop(name)
+            self.register_buffer(name, p)
+        elif name in self._buffers:
+            p = self._buffers[name]
+        else:
+            raise ValueError("There is no parameter with name: {}".format(name))
+
+        p_unconstrained = nn.Parameter(transform_to(constraint).inv(p).detach())
+        self.register_parameter("{}_unconstrained".format(name), p_unconstrained)
         self._constraints[param] = constraint
 
-    def set_prior(self, param, prior):
+    def set_prior(self, name, prior):
         """
         Sets a prior to a parameter.
 
-        :param str param: Name of the parameter.
+        :param str name: Name of the parameter.
         :param ~pyro.distributions.distribution.Distribution prior: A Pyro prior
             distribution.
         """
-        self._priors[param] = prior
+        if name in self._parameters:
+            # move param to _buffers
+            p = self._parameters.pop(name)
+            self.register_buffer(name, p)
+        elif name not in self._buffers:
+            raise ValueError("There is no parameter with name: {}".format(name))
 
-    def set_guide(self, param, guide):
+        self._priors[name] = prior
+
+    def autoguide(self, name, dist_constructor):
         """
-        Sets a prior to a parameter.
+        Sets an autoguide for `param` (mimic the behavior of
+        :class:`~pyro.contrib.autoguide.AutoGuide`).
+
+        ..note:: `dist_constructor` should be one of :class:`~pyro.distributions.Delta`,
+            :class:`~pyro.distributions.Normal`, and
+            :class:`~pyro.distributions.MultivariateNormal`. More distribution constructor
+            will be supported in the future if needed.
 
         :param str param: Name of the parameter.
-        :param str guide: One of "Delta", "Normal", "MultivariateNormal".
+        :param dist_constructor: A `~pyro.distributions.distribution.Distribution` constructor.
         """
-        self._guides[param] = guide
+        if name not in self._priors:
+            raise ValueError("There is no prior for parameter: {}".format(name))
+
+        # TODO: create a new argument `autoguide_args` to store other args for other
+        # constructors. For example, in LowRankMVN, we need argument `rank`.
+        p = self._buffers[name]
+        if dist_constructor is dist.Delta:
+            p_map = nn.Paramter(biject_to(self._priors[param].support).inv(p))
+            self.register_parameter("{}_map".format(name), p_map)
+        elif dist_constructor is dist.Normal:
+            loc = nn.Parameter(biject_to(self._priors[param].support).inv(p))
+            scale = nn.Parameter(loc.new_ones(loc.shape))
+            self.register_parameter("{}_loc".format(name), loc)
+            self.register_parameter("{}_scale".format(name), scale)
+            self.set_constraint("{}_scale".format(name), constraints.positive)
+        elif dist_constructor is dist.MultivariateNormal:
+            loc = nn.Parameter(biject_to(self._priors[name].support).inv(p))
+            n = loc.size(-1)
+            identity = torch.eye(n, out=loc.new_empty(n, n))
+            scale_tril = nn.Parameter(identity.repeat(loc.shape[:-1] + (1, 1)))
+            self.register_parameter("{}_loc".format(name), loc)
+            self.register_parameter("{}_scale_tril".format(name), scale_tril)
+            self.set_constraint("{}_scale_tril".format(name), constraints.lower_cholesky)
+        else:
+            raise ValueError("Currently, only support autoguide for Delta, Normal, "
+                             "and MultivariateNormal distributions.")
+        self._guides[param] = dist_constructor
 
     def set_mode(self, mode):
         """
@@ -77,7 +124,7 @@ class Parameterized(nn.Module):
         This method automatically sets ``mode`` for submodules which belong to
         :class:`Parameterized` class.
 
-        :param str mode: Either "prior" or "guide".
+        :param str mode: Either "model" or "guide".
         """
         self.mode = mode
         for module in self.children():
@@ -90,59 +137,61 @@ class Parameterized(nn.Module):
 
     @mode.setter
     def mode(self, mode):
+        # no need to register params if the new mode is the same to current mode
         if self._mode != mode:
             self._mode = mode
-            for param in self._parameters:
-                self._register_param(param)
+            # We should get buffer values for constrained params first
+            # otherwise, autoguide will use the old buffer for `scale` or `scale_tril`
+            for name in self._constraints:
+                if name not in self._priors:
+                    self._register_param(name)
+            for name in self._priors:
+                self._register_param(name)
 
-    def __setattr__(self, name, value):
-        if name in self._registered_params:
-            del self._registered_params[name]
-        super(Parameterized, self).__setattr__(name, value)
+    def _sample_from_guide(self, name):
+        if self._guides[param] is dist.Delta:
+            p_map = getattr(self, "{}_map".format(name))
+            guide = dist.Delta(p_map)
+        elif self._guides[param] is dist.Normal:
+            loc = getattr(self, "{}_loc".format(name))
+            scale = getattr(self, "{}_scale".format(name))
+            guide = dist.Normal(loc, scale)
+        elif self._guides[param] is dist.MultivariateNormal:
+            loc = getattr(self, "{}_loc".format(name))
+            scale_tril = getattr(self, "{}_scale_tril".format(name))
+            guide = dist.MultivariateNormal(loc, scale_tril=scale_tril)
 
-    def __getattr__(self, name):
-        if name in self._registered_params:
-            return self._registered_params[name]
-        super(Parameterized, self).__getattr__(name)
+        if self._priors[param].support is constraints.real:
+            reinterpreted_batch_ndims = self._buffers[name].dim() - guide.event_dim
+            p = pyro.sample(name, guide.independent())
+        else:
+            unconstrained_value = pyro.sample("{}_latent".format(name), guide.independent(),
+                                              infer={"is_auxiliary": True})
+            transform = biject_to(self._priors[param].support)
+            value = transform(unconstrained_value)
+            log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
+            p = pyro.sample(name, dist.Delta(value, log_density.sum(), event_dim=value.dim()))
+        return p
 
-    def _register_param(self, param):
+    def _register_param(self, name):
         """
-        Registers a parameter to Pyro. It can be seen as a wrapper for
-        :func:`pyro.param` and :func:`pyro.sample` primitives.
+        In "model" mode, lifts the Parameter `param` to a random sample using
+        a predefined prior (from `set_prior(param, prior)` call).
 
         :param str param: Name of the parameter.
         """
-        value = self._parameters[param]
-        with autoname.scope(prefix=self.__class__.__name__):
-            if param in self._priors:
+        if name in self._priors:
+            with autoname.scope(prefix=self._get_name()):
                 if self.mode == "model":
                     p = pyro.sample(param, self._priors[param])
                 else:
-                    guide = self._guides[param] if param in self._guides else dist.Delta
-                    if guide is dist.Delta:
-                        p_MAP = pyro.param("{}_MAP".format(param), self._priors[param])
-                        p = pyro.sample(param, dist.Delta(p_MAP))
-                    elif guide is dist.Normal:
-                        loc = pyro.param("{}_loc".format(param),
-                                         lambda: value.new_zeros(value.shape))
-                        scale = pyro.param("{}_scale".format(param),
-                                           lambda: value.new_ones(value.shape),
-                                           constraint=constraints.positive)
-                        p = pyro.sample(param, dist.Normal(loc, scale).independent(value.dim()))
-                    elif guide is dist.MultivariateNormal:
-                        n = value.size(-1)
-                        loc = pyro.param("{}_loc".format(param),
-                                         lambda: value.new_zeros(value.shape))
-                        scale_tril = pyro.param("{}_scale_tril".format(param),
-                                                lambda: torch.eye(n, out=value.new_empty(n, n))
-                                                .repeat(value.shape[:-1] + (1, 1)),
-                                                constraint=constraints.lower_cholesky)
-                        p = pyro.sample(param,
-                                        dist.MultivariateNormal(loc, scale_tril=scale_tril)
-                                        .independent(value.dim() - 1))
-            else:
-                p = pyro.param(param, value, constraint=self._constraints[param])
-        self._registered_params[param] = p
+                    if name not in self._guides:
+                        self.autoguide(name, dist.Delta)
+                    p = self._sample_from_guide(param)
+        elif param in self._constraints:
+            unconstrained_param = self._parameters("{}_unconstrained".format(param))
+            p = transform_to(self._constraints[param])(unconstrained_param)
+        self.register_buffer(name, p)
 
 
 def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=False,

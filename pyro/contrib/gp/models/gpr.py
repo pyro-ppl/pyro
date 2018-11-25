@@ -12,7 +12,7 @@ from pyro.params import param_with_module_name
 from pyro.util import warn_if_nan
 
 
-class GPR(GPModel):
+class GPRegression(GPModel):
     r"""
     Gaussian Process Regression model.
 
@@ -66,7 +66,7 @@ class GPR(GPModel):
     :param str name: Name of this model.
     """
     def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6):
-        super(GPR, self).__init__(X, y, kernel, mean_function, jitter)
+        super(GPRegression, self).__init__(X, y, kernel, mean_function, jitter)
 
         noise = self.X.new_ones(()) if noise is None else noise
         self.noise = Parameter(noise)

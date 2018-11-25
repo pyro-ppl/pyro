@@ -59,30 +59,25 @@ class VariationalGP(GPModel):
     :param str name: Name of this model.
     """
     def __init__(self, X, y, kernel, likelihood, mean_function=None,
-                 latent_shape=None, whiten=False, jitter=1e-6, name="VGP"):
-        super(VariationalGP, self).__init__(X, y, kernel, mean_function, jitter, name)
+                 latent_shape=None, whiten=False, jitter=1e-6):
+        super(VariationalGP, self).__init__(X, y, kernel, mean_function, jitter)
         self.likelihood = likelihood
-
-        self.whiten = whiten
 
         y_batch_shape = self.y.shape[:-1] if self.y is not None else torch.Size([])
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
 
         N = self.X.shape[0]
-        f_loc = self.X.new_zeros(self.latent_shape + (N,))
-        self.f_loc = Parameter(f_loc)
+        self.f_loc = Parameter(self.X.new_zeros(self.latent_shape + (N,)))
 
-        f_scale_tril = torch.eye(N, out=self.X.new_empty(N, N)).repeat(self.latent_shape + (1, 1))
-        self.f_scale_tril = Parameter(f_scale_tril)
+        identity = torch.eye(N, out=self.X.new_empty(N, N))
+        self.f_scale_tril = Parameter(identity.repeat(self.latent_shape + (1, 1)))
         self.set_constraint("f_scale_tril", constraints.lower_cholesky)
 
-        self._sample_latent = True
+        self.whiten = whiten
 
+    @autoname.scope(prefix=self._get_name())
     def model(self):
         self.set_mode("model")
-
-        f_loc = self.get_param("f_loc")
-        f_scale_tril = self.get_param("f_scale_tril")
 
         N = self.X.shape[0]
         Kff = self.kernel(self.X).contiguous()
@@ -90,35 +85,29 @@ class VariationalGP(GPModel):
         Lff = Kff.potrf(upper=False)
 
         zero_loc = self.X.new_zeros(f_loc.shape)
-        f_name = param_with_module_name(self.name, "f")
-
         if self.whiten:
-            Id = torch.eye(N, out=self.X.new_empty(N, N))
-            pyro.sample(f_name,
-                        dist.MultivariateNormal(zero_loc, scale_tril=Id)
-                            .independent(zero_loc.dim() - 1))
-            f_scale_tril = Lff.matmul(f_scale_tril)
+            identity = torch.eye(N, out=self.X.new_empty(N, N))
+            pyro.sample("f", dist.MultivariateNormal(zero_loc, scale_tril=Id).independent())
+            f_scale_tril = Lff.matmul(self.f_scale_tril)
+            f_loc = Lff.matmul(self.f_loc.unsqueeze(-1)).squeeze(-1)
         else:
-            pyro.sample(f_name,
-                        dist.MultivariateNormal(zero_loc, scale_tril=Lff)
-                            .independent(zero_loc.dim() - 1))
+            pyro.sample("f", dist.MultivariateNormal(zero_loc, scale_tril=Lff).independent())
+            f_scale_tril = self.f_scale_tril
+            f_loc = self.f_loc
 
-        f_var = f_scale_tril.pow(2).sum(dim=-1)
-
-        if self.whiten:
-            f_loc = Lff.matmul(f_loc.unsqueeze(-1)).squeeze(-1)
         f_loc = f_loc + self.mean_function(self.X)
+        f_var = f_scale_tril.pow(2).sum(dim=-1)
         if self.y is None:
             return f_loc, f_var
         else:
             return self.likelihood(f_loc, f_var, self.y)
 
+    @autoname.scope(prefix=self._get_name())
     def guide(self):
         self.set_mode("guide")
-        if self._sample_latent:
-            pyro.sample(param_with_module_name(self.name, "f"),
-                        dist.MultivariateNormal(self.f_loc, scale_tril=self.f_scale_tril)
-                            .independent(self.f_loc.dim()-1))
+
+        pyro.sample("f", dist.MultivariateNormal(self.f_loc, scale_tril=self.f_scale_tril)
+                    .independent(self.f_loc.dim() - 1))
 
     def forward(self, Xnew, full_cov=False):
         r"""
@@ -140,12 +129,8 @@ class VariationalGP(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        # avoid sampling the unnecessary latent f
-        self._sample_latent = False
-        f_loc, f_scale_tril = self.guide()
-        self._sample_latent = True
+        self.set_mode("guide")
 
-        loc, cov = conditional(Xnew, self.X, self.kernel, f_loc, f_scale_tril,
-                               full_cov=full_cov, whiten=self.whiten,
-                               jitter=self.jitter)
+        loc, cov = conditional(Xnew, self.X, self.kernel, self.f_loc, self.f_scale_tril,
+                               full_cov=full_cov, whiten=self.whiten, jitter=self.jitter)
         return loc + self.mean_function(Xnew), cov
