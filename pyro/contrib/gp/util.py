@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 import torch.nn as nn
-from torch.distributions import biject_to, constraints
+from torch.distributions import biject_to, constraints, transform_to
+from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
@@ -13,16 +14,22 @@ class Parameterized(nn.Module):
     """
     Base class for other modules in Gaussin Process module.
 
-    Parameters of this object can be set priors, set constraints, or fixed to a
-    specific value.
+    Parameters of this object can be set constraints, set priors. This is achieved
+    by moving parameter value to a buffer store and creating "root" parameters which
+    are used to generate that parameter's value. For example, if we set a contraint
+    to a parameter, an "unconstrained" parameter will be created.
 
-    By default, data of a parameter is a float :class:`torch.Tensor` (unless we use
-    :func:`torch.set_default_tensor_type` to change default tensor type). To cast these
-    parameters to a correct data type or GPU device, we can call methods such as
+    By default, when we set a prior to a parameter, an auto Delta guide will be created.
+    We can use the method :meth:`autoguide` to setup other auto guides.
+
+    To fix a parameter to a specific value, it is enough to turn off its "root"
+    parameters' ``requires_grad`` flags.
+
+    Note that by default, data of a parameter is a float :class:`torch.Tensor` (unless we
+    use :func:`torch.set_default_tensor_type` to change default tensor type). To cast
+    these parameters to a correct data type or GPU device, we can call methods such as
     :meth:`~torch.nn.Module.double` or :meth:`~torch.nn.Module.cuda`. See
     :class:`torch.nn.Module` for more information.
-
-    :param str name: Name of this object.
     """
     def __init__(self):
         super(Parameterized, self).__init__()
@@ -52,9 +59,9 @@ class Parameterized(nn.Module):
         else:
             raise ValueError("There is no parameter with name: {}".format(name))
 
-        p_unconstrained = nn.Parameter(transform_to(constraint).inv(p).detach())
+        p_unconstrained = Parameter(transform_to(constraint).inv(p).detach())
         self.register_parameter("{}_unconstrained".format(name), p_unconstrained)
-        self._constraints[param] = constraint
+        self._constraints[name] = constraint
 
     def set_prior(self, name, prior):
         """
@@ -75,15 +82,15 @@ class Parameterized(nn.Module):
 
     def autoguide(self, name, dist_constructor):
         """
-        Sets an autoguide for `param` (mimic the behavior of
-        :class:`~pyro.contrib.autoguide.AutoGuide`).
+        Sets an autoguide for a parameter with name ``name`` (mimic the behavior of module
+        :mod:`pyro.contrib.autoguide`).
 
         ..note:: `dist_constructor` should be one of :class:`~pyro.distributions.Delta`,
             :class:`~pyro.distributions.Normal`, and
             :class:`~pyro.distributions.MultivariateNormal`. More distribution constructor
             will be supported in the future if needed.
 
-        :param str param: Name of the parameter.
+        :param str name: Name of the parameter.
         :param dist_constructor: A `~pyro.distributions.distribution.Distribution` constructor.
         """
         if name not in self._priors:
@@ -93,26 +100,26 @@ class Parameterized(nn.Module):
         # constructors. For example, in LowRankMVN, we need argument `rank`.
         p = self._buffers[name]
         if dist_constructor is dist.Delta:
-            p_map = nn.Paramter(biject_to(self._priors[param].support).inv(p))
+            p_map = Parameter(biject_to(self._priors[name].support).inv(p))
             self.register_parameter("{}_map".format(name), p_map)
         elif dist_constructor is dist.Normal:
-            loc = nn.Parameter(biject_to(self._priors[param].support).inv(p))
-            scale = nn.Parameter(loc.new_ones(loc.shape))
+            loc = Parameter(biject_to(self._priors[name].support).inv(p))
+            scale = Parameter(loc.new_ones(loc.shape))
             self.register_parameter("{}_loc".format(name), loc)
             self.register_parameter("{}_scale".format(name), scale)
             self.set_constraint("{}_scale".format(name), constraints.positive)
         elif dist_constructor is dist.MultivariateNormal:
-            loc = nn.Parameter(biject_to(self._priors[name].support).inv(p))
+            loc = Parameter(biject_to(self._priors[name].support).inv(p))
             n = loc.size(-1)
             identity = torch.eye(n, out=loc.new_empty(n, n))
-            scale_tril = nn.Parameter(identity.repeat(loc.shape[:-1] + (1, 1)))
+            scale_tril = Parameter(identity.repeat(loc.shape[:-1] + (1, 1)))
             self.register_parameter("{}_loc".format(name), loc)
             self.register_parameter("{}_scale_tril".format(name), scale_tril)
             self.set_constraint("{}_scale_tril".format(name), constraints.lower_cholesky)
         else:
             raise ValueError("Currently, only support autoguide for Delta, Normal, "
                              "and MultivariateNormal distributions.")
-        self._guides[param] = dist_constructor
+        self._guides[name] = dist_constructor
 
     def set_mode(self, mode):
         """
@@ -149,25 +156,24 @@ class Parameterized(nn.Module):
                 self._register_param(name)
 
     def _sample_from_guide(self, name):
-        if self._guides[param] is dist.Delta:
+        if self._guides[name] is dist.Delta:
             p_map = getattr(self, "{}_map".format(name))
             guide = dist.Delta(p_map)
-        elif self._guides[param] is dist.Normal:
+        elif self._guides[name] is dist.Normal:
             loc = getattr(self, "{}_loc".format(name))
             scale = getattr(self, "{}_scale".format(name))
             guide = dist.Normal(loc, scale)
-        elif self._guides[param] is dist.MultivariateNormal:
+        elif self._guides[name] is dist.MultivariateNormal:
             loc = getattr(self, "{}_loc".format(name))
             scale_tril = getattr(self, "{}_scale_tril".format(name))
             guide = dist.MultivariateNormal(loc, scale_tril=scale_tril)
 
-        if self._priors[param].support is constraints.real:
-            reinterpreted_batch_ndims = self._buffers[name].dim() - guide.event_dim
+        if self._priors[name].support is constraints.real:
             p = pyro.sample(name, guide.independent())
         else:
             unconstrained_value = pyro.sample("{}_latent".format(name), guide.independent(),
                                               infer={"is_auxiliary": True})
-            transform = biject_to(self._priors[param].support)
+            transform = biject_to(self._priors[name].support)
             value = transform(unconstrained_value)
             log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
             p = pyro.sample(name, dist.Delta(value, log_density.sum(), event_dim=value.dim()))
@@ -175,22 +181,22 @@ class Parameterized(nn.Module):
 
     def _register_param(self, name):
         """
-        In "model" mode, lifts the Parameter `param` to a random sample using
-        a predefined prior (from `set_prior(param, prior)` call).
+        In "model" mode, lifts the parameter with name ``name`` to a random sample using
+        a predefined prior (from :meth:`set_prior` method).
 
-        :param str param: Name of the parameter.
+        :param str name: Name of the parameter.
         """
         if name in self._priors:
             with autoname.scope(prefix=self._get_name()):
                 if self.mode == "model":
-                    p = pyro.sample(param, self._priors[param])
+                    p = pyro.sample(name, self._priors[name])
                 else:
                     if name not in self._guides:
                         self.autoguide(name, dist.Delta)
-                    p = self._sample_from_guide(param)
-        elif param in self._constraints:
-            unconstrained_param = self._parameters("{}_unconstrained".format(param))
-            p = transform_to(self._constraints[param])(unconstrained_param)
+                    p = self._sample_from_guide(name)
+        elif name in self._constraints:
+            p_unconstrained = self._parameters("{}_unconstrained".format(name))
+            p = transform_to(self._constraints[name])(p_unconstrained)
         self.register_buffer(name, p)
 
 

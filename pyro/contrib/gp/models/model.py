@@ -1,8 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import pyro.optim as optim
 from pyro.contrib.gp.util import Parameterized
-from pyro.infer import SVI, Trace_ELBO
 
 
 def _zero_mean_function(x):
@@ -87,14 +85,13 @@ class GPModel(Parameterized):
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6, name=None):
+    def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6):
         super(GPModel, self).__init__()
         self.set_data(X, y)
         self.kernel = kernel
         self.mean_function = (mean_function if mean_function is not None else
                               _zero_mean_function)
         self.jitter = jitter
-        self.name = name
 
     def model(self):
         """
@@ -108,7 +105,7 @@ class GPModel(Parameterized):
         A "guide" stochastic function to be used in variational inference methods. It
         also gives posterior information to the method :meth:`forward` for prediction.
         """
-        self.set_model("guide")
+        raise NotImplementedError
 
     def forward(self, Xnew, full_cov=False):
         r"""
@@ -187,26 +184,6 @@ class GPModel(Parameterized):
                              .format(X.shape[0], y.shape[-1]))
         self.X = X
         self.y = y
-
-    def optimize(self, optimizer=None, loss=None, num_steps=1000):
-        """
-        A convenient method to optimize parameters for the Gaussian Process model
-        using :class:`~pyro.infer.svi.SVI`.
-
-        :param ~optim.PyroOptim optimizer: A Pyro optimizer. By default,
-            we use :class:`~optim.Adam` with `lr=0.01`.
-        :param ~pyro.infer.elbo.ELBO loss: A Pyro loss instance.
-        :param int num_steps: Number of steps to run SVI.
-        :returns: a list of losses during the training procedure
-        :rtype: list
-        """
-        optimizer = optim.Adam({"lr": 0.01}) if optimizer is None else optimizer
-        loss = Trace_ELBO() if loss is None else loss
-        svi = SVI(self.model, self.guide, optimizer, loss=loss)
-        losses = []
-        for i in range(num_steps):
-            losses.append(svi.step())
-        return losses
 
     def _check_Xnew_shape(self, Xnew):
         """

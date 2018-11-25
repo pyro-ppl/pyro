@@ -6,9 +6,9 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
+from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
-from pyro.params import param_with_module_name
 from pyro.util import warn_if_nan
 
 
@@ -68,29 +68,36 @@ class GPRegression(GPModel):
     def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6):
         super(GPRegression, self).__init__(X, y, kernel, mean_function, jitter)
 
-        noise = self.X.new_ones(()) if noise is None else noise
+        noise = self.X.new_tensor(1.) if noise is None else noise
         self.noise = Parameter(noise)
         self.set_constraint("noise", torchdist.constraints.greater_than(self.jitter))
 
+        self._Lff = None  # cache for Lff
+
+    @autoname.scope(prefix="GPR")
     def model(self):
         self.set_mode("model")
 
-        N = self.X.shape[0]
+        N = self.X.size(0)
         Kff = self.kernel(self.X)
-        Kff.view(-1)[::N + 1] += self.noise  # add noise to diagonal
+        Kff.view(-1)[::N + 1] += self.noise  # add noise to the diagonal
         Lff = Kff.potrf(upper=False)
 
-        zero_loc = self.X.new_zeros(self.X.shape[0])
+        zero_loc = self.X.new_zeros(self.X.size(0))
         f_loc = zero_loc + self.mean_function(self.X)
         if self.y is None:
             f_var = Lff.pow(2).sum(dim=-1)
             return f_loc, f_var
         else:
-            return pyro.sample(param_with_module_name(self.name, "y"),
+            return pyro.sample("y",
                                dist.MultivariateNormal(f_loc, scale_tril=Lff)
                                    .expand_by(self.y.shape[:-1])
                                    .independent(self.y.dim() - 1),
                                obs=self.y)
+
+    @autoname.scope(prefix="GPR")
+    def guide(self):
+        self.set_mode("guide")
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
@@ -113,15 +120,11 @@ class GPRegression(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-
-        N = self.X.shape[0]
-        Kff = self.kernel(self.X).contiguous()
-        Kff.view(-1)[::N + 1] += self.noise  # add noise to the diagonal
-        Lff = Kff.potrf(upper=False)
+        self.set_mode("guide")
 
         y_residual = self.y - self.mean_function(self.X)
-        loc, cov = conditional(Xnew, self.X, self.kernel, y_residual, None, Lff,
-                               full_cov, jitter=self.jitter)
+        loc, cov = conditional(Xnew, self.X, self.kernel, y_residual, None, self._Lff,
+                               full_cov=full_cov, jitter=self.jitter)
 
         if full_cov and not noiseless:
             M = Xnew.shape[0]

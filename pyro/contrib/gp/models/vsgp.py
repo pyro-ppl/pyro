@@ -7,9 +7,9 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
-from pyro.params import param_with_module_name
 
 
 class VariationalSparseGP(GPModel):
@@ -78,56 +78,46 @@ class VariationalSparseGP(GPModel):
     :param str name: Name of this model.
     """
     def __init__(self, X, y, kernel, Xu, likelihood, mean_function=None,
-                 latent_shape=None, num_data=None, whiten=False, jitter=1e-6,
-                 name="SVGP"):
-        super(VariationalSparseGP, self).__init__(X, y, kernel, mean_function, jitter,
-                                                  name)
+                 latent_shape=None, num_data=None, whiten=False, jitter=1e-6):
+        super(VariationalSparseGP, self).__init__(X, y, kernel, mean_function, jitter)
         self.likelihood = likelihood
-
-        self.num_data = num_data if num_data is not None else self.X.shape[0]
-        self.whiten = whiten
-
         self.Xu = Parameter(Xu)
 
         y_batch_shape = self.y.shape[:-1] if self.y is not None else torch.Size([])
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
 
-        M = self.Xu.shape[0]
-        u_loc = self.Xu.new_zeros(self.latent_shape + (M,))
-        self.u_loc = Parameter(u_loc)
+        M = self.Xu.size(0)
+        self.u_loc = Parameter(self.Xu.new_zeros(self.latent_shape + (M,)))
 
-        u_scale_tril = torch.eye(M, out=self.Xu.new_empty(M, M)).repeat(self.latent_shape + (1, 1))
-        self.u_scale_tril = Parameter(u_scale_tril)
+        identity = torch.eye(M, out=self.Xu.new_empty(M, M))
+        self.u_scale_tril = Parameter(identity.repeat(self.latent_shape + (1, 1)))
         self.set_constraint("u_scale_tril", constraints.lower_cholesky)
 
-        self._sample_latent = True
+        self.num_data = num_data if num_data is not None else self.X.shape[0]
+        self.whiten = whiten
+        self._Luu = None  # cache for Luu
 
+    @autoname.scope(prefix="VSGP")
     def model(self):
         self.set_mode("model")
 
-        Xu = self.get_param("Xu")
-        u_loc = self.get_param("u_loc")
-
-        M = Xu.shape[0]
-        Kuu = self.kernel(Xu).contiguous()
+        M = self.Xu.size(0)
+        Kuu = self.kernel(self.Xu).contiguous()
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.potrf(upper=False)
+        self._Luu = Luu
 
-        zero_loc = Xu.new_zeros(u_loc.shape)
-        u_name = param_with_module_name(self.name, "u")
+        zero_loc = self.Xu.new_zeros(self.u_loc.shape)
         if self.whiten:
-            Id = torch.eye(M, out=Xu.new_empty(M, M))
-            pyro.sample(u_name,
-                        dist.MultivariateNormal(zero_loc, scale_tril=Id)
-                            .independent(zero_loc.dim() - 1))
+            identity = torch.eye(M, out=self.X.new_empty(M, M))
+            pyro.sample("u", dist.MultivariateNormal(zero_loc, scale_tril=identity)
+                        .independent(zero_loc.dim() - 1))
         else:
-            pyro.sample(u_name,
-                        dist.MultivariateNormal(zero_loc, scale_tril=Luu)
-                            .independent(zero_loc.dim() - 1))
+            pyro.sample("u", dist.MultivariateNormal(zero_loc, scale_tril=Luu)
+                        .independent(zero_loc.dim() - 1))
 
-        f_loc, f_var = conditional(self.X, Xu, self.kernel, self.u_loc, self.u_scale_tril,
-                                   Luu, full_cov=False, whiten=self.whiten,
-                                   jitter=self.jitter)
+        f_loc, f_var = conditional(self.X, self.Xu, self.kernel, self.u_loc, self.u_scale_tril,
+                                   Luu, full_cov=False, whiten=self.whiten, jitter=self.jitter)
 
         f_loc = f_loc + self.mean_function(self.X)
         if self.y is None:
@@ -135,6 +125,13 @@ class VariationalSparseGP(GPModel):
         else:
             with poutine.scale(None, self.num_data / self.X.shape[0]):
                 return self.likelihood(f_loc, f_var, self.y)
+
+    @autoname.scope(prefix="VSGP")
+    def guide(self):
+        self.set_mode("guide")
+
+        pyro.sample("u", dist.MultivariateNormal(self.u_loc, scale_tril=self.u_scale_tril)
+                    .independent(self.u_loc.dim() - 1))
 
     def forward(self, Xnew, full_cov=False):
         r"""
@@ -156,6 +153,9 @@ class VariationalSparseGP(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
+        self.set_mode("guide")
+
         loc, cov = conditional(Xnew, self.Xu, self.kernel, self.u_loc, self.u_scale_tril,
-                               full_cov=full_cov, whiten=self.whiten, jitter=self.jitter)
+                               self._Luu, full_cov=full_cov, whiten=self.whiten,
+                               jitter=self.jitter)
         return loc + self.mean_function(Xnew), cov

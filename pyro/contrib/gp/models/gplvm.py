@@ -3,8 +3,6 @@ from __future__ import absolute_import, division, print_function
 from torch.nn import Parameter
 
 import pyro.distributions as dist
-import pyro.optim as optim
-from pyro.infer import SVI, Trace_ELBO
 from pyro.contrib.gp.util import Parameterized
 
 
@@ -43,7 +41,7 @@ class GPLVM(Parameterized):
         >>> kernel = gp.kernels.RBF(input_dim=2, lengthscale=torch.ones(2))
         >>> Xu = torch.zeros(20, 2)  # initial inducing inputs of sparse model
         >>> gpmodel = gp.models.SparseGPRegression(X_init, y, kernel, Xu)
-        >>> # Finally, wrap gpmodel by GPLVM, optimize, and get the "learned" mean of X:
+        >>> # Finally, wrap gpmodel by GPLVM, optimize, and get a "learned" X
         >>> gplvm = gp.models.GPLVM(gpmodel)
         >>> gplvm.optimize()  # doctest: +SKIP
         >>> X = gplvm.X
@@ -58,16 +56,15 @@ class GPLVM(Parameterized):
         variational parameter ``X_loc``.
     :param str name: Name of this model.
     """
-    def __init__(self, base_model, name="GPLVM"):
-        super(GPLVM, self).__init__(name)
+    def __init__(self, base_model):
+        super(GPLVM, self).__init__()
         if base_model.X.dim() != 2:
             raise ValueError("GPLVM model only works with 2D latent X, but got "
                              "X.dim() = {}.".format(base_model.X.dim()))
         self.base_model = base_model
         self.X = Parameter(self.base_model.X)
-        self.set_prior("X", )
-        self.set_guide("X", dist.Normal)
-        self._call_base_model_guide = True
+        self.set_prior("X", dist.Normal(0, 1).expand(self.X.shape).independent(self.X.dim()))
+        self.autoguide("X", dist.Normal)
 
     def model(self):
         self.mode = "model"
@@ -86,23 +83,3 @@ class GPLVM(Parameterized):
         self.mode = "guide"
         self.base_model.set_data(self.X, self.y)
         return self.base_model(**kwargs)
-
-    def optimize(self, optimizer=None, loss=None, num_steps=1000):
-        """
-        A convenient method to optimize parameters for GPLVM model using
-        :class:`~pyro.infer.svi.SVI`.
-
-        :param ~optim.PyroOptim optimizer: A Pyro optimizer. By default,
-            we use :class:`~optim.Adam` with `lr=0.01`.
-        :param ~pyro.infer.elbo.ELBO loss: A Pyro loss instance.
-        :param int num_steps: Number of steps to run SVI.
-        :returns: a list of losses during the training procedure
-        :rtype: list
-        """
-        optimizer = optim.Adam({"lr": 0.01}) if optimizer is None else optimizer
-        loss = Trace_ELBO() if loss is None else loss
-        svi = SVI(self.model, self.guide, optimizer, loss=loss)
-        losses = []
-        for i in range(num_steps):
-            losses.append(svi.step())
-        return losses
