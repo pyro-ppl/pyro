@@ -178,3 +178,10 @@ PermuteTransform
     :members:
     :undoc-members:
     :show-inheritance:
+
+TransformModule
+----------------
+.. autoclass:: pyro.distributions.TransformModule
+    :members:
+    :undoc-members:
+    :show-inheritance:
