@@ -188,26 +188,25 @@ class GPModel(Parameterized):
         self.X = X
         self.y = y
 
-    def optimize(self, optim_constructor=None, optim_args=None, elbo=None, num_steps=1000):
+    def optimize(self, optimizer=None, loss_fn=None, num_steps=1000):
         """
-        A convenient method to optimize parameters for a GP model using
-        :class:`~pyro.infer.svi.SVI`.
+        A convenient method to optimize parameters for a GP model.
 
-        :param ~optim.PyroOptim optimizer: A Pyro optimizer. By default,
-            we use :class:`~optim.Adam` with `lr=0.01`.
-        :param ~pyro.infer.elbo.ELBO elbo: A Pyro loss instance.
+        :param ~torch.optim.Optimizer optimizer: A PyTorch optimizer instance.
+            By default, we use :class:`~torch.optim.Adam` with ``lr=0.01``.
+        :param callable loss_fn: A loss function which takes
+            inputs are ``self.model``, ``self.guide``.
         :param int num_steps: Number of steps to run SVI.
         :returns: a list of losses during the training procedure
         :rtype: list
         """
-        optim_constructor = torch.optim.Adam if optim_constructor is None else optim_constructor
-        optim_args = {"lr": 0.01} if optim_args is None else optim_args
-        optimizer = optim_constructor(self.parameters(), **optim_args)
-        elbo = Trace_ELBO() if elbo is None else elbo
+        optimizer = (torch.optim.Adam(self.parameters(), lr=0.01)
+                     if optimizer is None else optimizer)
+        loss_fn = Trace_ELBO().differentiable_loss if loss_fn is None else loss_fn
 
         def closure():
             optimizer.zero_grad()
-            loss = elbo.differentiable_loss(self.model, self.guide)
+            loss = loss_fn(self.model, self.guide)
             if torch.is_tensor(loss):
                 loss.backward()
             return loss

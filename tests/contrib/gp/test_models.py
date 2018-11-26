@@ -5,7 +5,6 @@ from collections import defaultdict, namedtuple
 
 import pytest
 import torch
-import torch.optim as optim
 
 import pyro
 import pyro.distributions as dist
@@ -13,7 +12,6 @@ from pyro.contrib.gp.kernels import Cosine, Matern32, RBF, WhiteNoise
 from pyro.contrib.gp.likelihoods import Gaussian
 from pyro.contrib.gp.models import (GPLVM, GPRegression, SparseGPRegression,
                                     VariationalGP, VariationalSparseGP)
-from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.params import param_with_module_name
@@ -208,7 +206,8 @@ def test_inference_vsgp():
     Xu = torch.arange(0., 5.5, 0.5)
 
     vsgp = VariationalSparseGP(X, y, kernel, Xu, Gaussian())
-    vsgp.optimize(optim_args={"lr": 0.03})
+    optimizer = torch.optim.Adam(vsgp.parameters(), lr=0.03)
+    vsgp.optimize(optimizer)
 
     Xnew = torch.arange(0., 5.05, 0.05)
     loc, var = vsgp(Xnew, full_cov=False)
@@ -337,10 +336,17 @@ def _pre_test_mean_function():
 
     kernel = Cosine(input_dim=1)
 
-    def trend(x):
-        a = pyro.param("a", torch.tensor(0.))
-        b = pyro.param("b", torch.tensor(1.))
-        return a * x + b
+    class Trend(torch.nn.Module):
+        def __init__(self):
+            super(Trend, self).__init__()
+
+            self.a = torch.nn.Parameter(torch.tensor(0.))
+            self.b = torch.nn.Parameter(torch.tensor(1.))
+
+        def forward(self, x):
+            return self.a * x + self.b
+
+    trend = Trend()
 
     return X, y, Xnew, ynew, kernel, trend
 
@@ -350,8 +356,8 @@ def _mape(y_true, y_pred):
 
 
 def _post_test_mean_function(model, Xnew, y_true):
-    assert_equal(pyro.param("a").item(), 2, prec=0.02)
-    assert_equal(pyro.param("b").item(), 3, prec=0.02)
+    assert_equal(model.mean_function.a.item(), 2, prec=0.02)
+    assert_equal(model.mean_function.b.item(), 3, prec=0.02)
 
     y_pred, _ = model(Xnew)
     assert_equal(_mape(y_true, y_pred).item(), 0, prec=0.02)
@@ -401,7 +407,8 @@ def test_mean_function_VGP_whiten():
     likelihood = Gaussian()
     model = VariationalGP(X, y, kernel, likelihood, mean_function=mean_fn,
                           whiten=True)
-    model.optimize(optim_args={"lr": 0.1})
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.1)
+    model.optimize(optimizer)
     _post_test_mean_function(model, Xnew, ynew)
 
 
@@ -410,7 +417,8 @@ def test_mean_function_VSGP():
     Xu = X[::20].clone()
     likelihood = Gaussian()
     model = VariationalSparseGP(X, y, kernel, Xu, likelihood, mean_function=mean_fn)
-    model.optimize(optim.Adam({"lr": 0.02}))
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.02)
+    model.optimize(optimizer)
     _post_test_mean_function(model, Xnew, ynew)
 
 
@@ -420,5 +428,6 @@ def test_mean_function_VSGP_whiten():
     likelihood = Gaussian()
     model = VariationalSparseGP(X, y, kernel, Xu, likelihood, mean_function=mean_fn,
                                 whiten=True)
-    model.optimize(optim.Adam({"lr": 0.1}))
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.1)
+    model.optimize(optimizer)
     _post_test_mean_function(model, Xnew, ynew)
