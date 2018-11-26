@@ -70,6 +70,9 @@ def test_shape(backend, equation):
             contract_dims = set(input_) - set(output)
             if contract_dims:
                 assert backward_result.shape == (len(contract_dims),) + output_shape
+                for sample, dim in zip(backward_result, backward_result._pyro_sample_dims):
+                    assert sample.min() >= 0
+                    assert sample.max() < sizes[dim]
             else:
                 assert backward_result is None
 

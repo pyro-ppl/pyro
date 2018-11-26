@@ -670,10 +670,12 @@ ADJOINT_EXAMPLES = [
     ('a->', ''),
     ('a,a->', ''),
     ('ab,bc->', ''),
-    ('ai,ai->i', 'i'),
     ('a,abi->', 'i'),
     ('a,abi,bcij->', 'ij'),
     ('a,abi,bcij,bdik->', 'ijk'),
+    ('ai,ai->i', 'i'),
+    ('ai,abij->i', 'ij'),
+    ('ai,abij,acik->i', 'ijk'),
 ]
 
 
