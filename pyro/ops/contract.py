@@ -76,7 +76,8 @@ def _contract_component(ring, tensor_tree, sum_dims, target_dims):
     This function should be deterministic.
     This function has side-effects: it modifies ``tensor_tree``.
 
-    :param Ring ring: an algebraic ring defining tensor operations.
+    :param pyro.ops.rings.Ring ring: an algebraic ring defining tensor
+        operations.
     :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
         tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
     :param set sum_dims: the complete set of sum-contractions dimensions
@@ -206,6 +207,8 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
         preserved in the result.
     :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`
         cache.
+    :param pyro.ops.rings.Ring ring: an optional algebraic ring defining tensor
+        operations.
     :returns: a single tensor
     :rtype: torch.Tensor
     """

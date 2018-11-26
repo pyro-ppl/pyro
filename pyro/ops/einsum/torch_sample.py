@@ -10,8 +10,6 @@ from pyro.ops import packed
 from pyro.ops.einsum.adjoint import Backward, einsum_backward_sample, transpose, unflatten
 from pyro.ops.einsum.util import Tensordot
 
-assert transpose  # pacify flake8
-
 
 class _EinsumBackward(Backward):
     def __init__(self, output, operands):

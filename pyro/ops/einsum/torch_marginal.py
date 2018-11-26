@@ -4,8 +4,6 @@ import pyro.ops.einsum.torch_log
 from pyro.ops.einsum.adjoint import Backward, transpose
 from pyro.ops.einsum.util import Tensordot
 
-assert transpose  # pacify flake8
-
 
 class _EinsumBackward(Backward):
     def __init__(self, equation, operands):

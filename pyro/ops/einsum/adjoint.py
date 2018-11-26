@@ -73,7 +73,7 @@ def transpose(a, axes):
 def einsum_backward_sample(operands, sample1, sample2):
     """
     Cuts down samples to pass on to subsequent steps.
-    This is used various in ``_EinsumBackward.__call__()`` methods.
+    This is used in various ``_EinsumBackward.__call__()`` methods.
     This assumes all operands have a ``._pyro_dims`` attribute set.
     """
     # Combine upstream sample with sample at this site.
