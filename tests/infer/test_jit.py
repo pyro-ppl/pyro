@@ -267,15 +267,7 @@ def test_svi(Elbo, num_particles):
 @pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
 @pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
 @pytest.mark.parametrize("plate_dim", [1, 2])
-@pytest.mark.parametrize('Elbo', [
-    Trace_ELBO,
-    JitTrace_ELBO,
-    TraceGraph_ELBO,
-    JitTraceGraph_ELBO,
-    TraceEnum_ELBO,
-    JitTraceEnum_ELBO,
-])
-def test_svi_enum(Elbo, plate_dim, enumerate1, enumerate2):
+def test_svi_enum(plate_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
     num_particles = 10
     q = pyro.param("q", constant(0.75), constraint=constraints.unit_interval)
@@ -298,10 +290,10 @@ def test_svi_enum(Elbo, plate_dim, enumerate1, enumerate2):
 
     inner_particles = 2
     outer_particles = num_particles // inner_particles
-    elbo = Elbo(max_plate_nesting=0,
-                strict_enumeration_warning=any([enumerate1, enumerate2]),
-                num_particles=inner_particles,
-                ignore_jit_warnings=True)
+    elbo = TraceEnum_ELBO(max_plate_nesting=0,
+                          strict_enumeration_warning=any([enumerate1, enumerate2]),
+                          num_particles=inner_particles,
+                          ignore_jit_warnings=True)
     actual_loss = sum(elbo.loss_and_grads(model, guide)
                       for i in range(outer_particles)) / outer_particles
     actual_grad = q.unconstrained().grad / outer_particles
