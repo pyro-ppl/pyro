@@ -168,13 +168,13 @@ def test_inference(model_class, X, y, kernel, likelihood):
     else:  # model_class is SparseGPRegression
         gp = model_class(X, y, RBF(input_dim=3), X, likelihood)
         # fix inducing points because variance/lengthscale highly depend on it
-        gp.fix_param("Xu")
+        gp.Xu.requires_grad_(False)
 
     generator = dist.MultivariateNormal(torch.zeros(X.shape[0]), kernel(X))
     target_y = generator(sample_shape=torch.Size([1000])).detach()
     gp.set_data(X, target_y)
 
-    gp.optimize(optim.Adam({"lr": 0.01}), num_steps=1000)
+    gp.optimize()
 
     y_cov = gp.kernel(X)
     target_y_cov = kernel(X)

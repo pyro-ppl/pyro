@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import OrderedDict
+
 import torch
 import torch.nn as nn
 from torch.distributions import biject_to, constraints, transform_to
@@ -33,13 +35,14 @@ class Parameterized(nn.Module):
     """
     def __init__(self):
         super(Parameterized, self).__init__()
-        self._constraints = {}
-        self._priors = {}
-        self._guides = {}
+        self._constraints = OrderedDict()
+        self._priors = OrderedDict()
+        self._guides = OrderedDict()
+        self._mode = None
 
-    @autoname.name_count
     def __call__(self, *args, **kwargs):
-        super(Parameterized, self).__call__(*args, **kwargs)
+        with autoname.name_count():
+            return super(Parameterized, self).__call__(*args, **kwargs)
 
     def set_constraint(self, name, constraint):
         """
@@ -134,9 +137,9 @@ class Parameterized(nn.Module):
         :param str mode: Either "model" or "guide".
         """
         self.mode = mode
-        for module in self.children():
+        for module in self.modules():
             if isinstance(module, Parameterized):
-                module.set_mode(mode)
+                module.mode = mode
 
     @property
     def mode(self):
@@ -144,16 +147,14 @@ class Parameterized(nn.Module):
 
     @mode.setter
     def mode(self, mode):
-        # no need to register params if the new mode is the same to current mode
-        if self._mode != mode:
-            self._mode = mode
-            # We should get buffer values for constrained params first
-            # otherwise, autoguide will use the old buffer for `scale` or `scale_tril`
-            for name in self._constraints:
-                if name not in self._priors:
-                    self._register_param(name)
-            for name in self._priors:
+        self._mode = mode
+        # We should get buffer values for constrained params first
+        # otherwise, autoguide will use the old buffer for `scale` or `scale_tril`
+        for name in self._constraints:
+            if name not in self._priors:
                 self._register_param(name)
+        for name in self._priors:
+            self._register_param(name)
 
     def _sample_from_guide(self, name):
         if self._guides[name] is dist.Delta:
@@ -195,7 +196,7 @@ class Parameterized(nn.Module):
                         self.autoguide(name, dist.Delta)
                     p = self._sample_from_guide(name)
         elif name in self._constraints:
-            p_unconstrained = self._parameters("{}_unconstrained".format(name))
+            p_unconstrained = self._parameters["{}_unconstrained".format(name)]
             p = transform_to(self._constraints[name])(p_unconstrained)
         self.register_buffer(name, p)
 

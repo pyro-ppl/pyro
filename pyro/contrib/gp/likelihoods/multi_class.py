@@ -28,8 +28,7 @@ class MultiClass(Likelihood):
     def __init__(self, num_classes, response_function=None):
         super(MultiClass, self).__init__()
         self.num_classes = num_classes
-        self.response_function = (response_function if response_function is not None
-                                  else _softmax)
+        self.response_function = _softmax if response_function is None else response_function
 
     def forward(self, f_loc, f_var, y=None):
         r"""
@@ -65,4 +64,4 @@ class MultiClass(Likelihood):
         y_dist = dist.Categorical(f_res)
         if y is not None:
             y_dist = y_dist.expand_by(y.shape[:-f_res.dim() + 1]).independent(y.dim())
-        return pyro.sample(self.y_name, y_dist, obs=y)
+        return pyro.sample("y", y_dist, obs=y)

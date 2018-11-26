@@ -1,6 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
+import torch
+
 from pyro.contrib.gp.util import Parameterized
+from pyro.infer import Trace_ELBO
 
 
 def _zero_mean_function(x):
@@ -184,6 +187,27 @@ class GPModel(Parameterized):
                              .format(X.shape[0], y.shape[-1]))
         self.X = X
         self.y = y
+
+    def optimize(self, loss=None):
+        """
+        A convenient method to optimize parameters for a GP model using
+        :class:`~pyro.infer.svi.SVI`.
+
+        :param ~optim.PyroOptim optimizer: A Pyro optimizer. By default,
+            we use :class:`~optim.Adam` with `lr=0.01`.
+        :param ~pyro.infer.elbo.ELBO loss: A Pyro loss instance.
+        :param int num_steps: Number of steps to run SVI.
+        :returns: a list of losses during the training procedure
+        :rtype: list
+        """
+        loss = Trace_ELBO() if loss is None else loss
+        optimizer = torch.optim.LBFGS(self.parameters(), max_iter=500)
+
+        def closure():
+            optimizer.zero_grad()
+            return loss.loss_and_grads(self.model, self.guide)
+
+        optimizer.step(closure)
 
     def _check_Xnew_shape(self, Xnew):
         """
