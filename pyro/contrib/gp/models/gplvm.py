@@ -86,23 +86,30 @@ class GPLVM(Parameterized):
         self.base_model.set_data(self.X, self.base_model.y)
         return self.base_model(**kwargs)
 
-    def optimize(self, optimizer=None, loss=None, num_steps=1000):
+    def optimize(self, optimizer=None, loss_fn=None, num_steps=1000):
         """
-        A convenient method to optimize parameters for GPLVM model using
-        :class:`~pyro.infer.svi.SVI`.
+        A convenient method to optimize parameters for a GP model.
 
-        :param ~optim.PyroOptim optimizer: A Pyro optimizer. By default,
-            we use :class:`~optim.Adam` with `lr=0.01`.
-        :param ~pyro.infer.elbo.ELBO loss: A Pyro loss instance.
+        :param ~torch.optim.Optimizer optimizer: A PyTorch optimizer instance.
+            By default, we use :class:`~torch.optim.Adam` with ``lr=0.01``.
+        :param callable loss_fn: A loss function which takes
+            inputs are ``self.model``, ``self.guide``.
         :param int num_steps: Number of steps to run SVI.
         :returns: a list of losses during the training procedure
         :rtype: list
         """
-        # TODO: remove this method or replace it with a pytorch optimizer
-        optimizer = optim.Adam({"lr": 0.01}) if optimizer is None else optimizer
-        loss = Trace_ELBO() if loss is None else loss
-        svi = SVI(self.model, self.guide, optimizer, loss=loss)
+        optimizer = (torch.optim.Adam(self.parameters(), lr=0.01)
+                     if optimizer is None else optimizer)
+        loss_fn = Trace_ELBO().differentiable_loss if loss_fn is None else loss_fn
+
+        def closure():
+            optimizer.zero_grad()
+            loss = loss_fn(self.model, self.guide)
+            if torch.is_tensor(loss):
+                loss.backward()
+            return loss
+
         losses = []
         for i in range(num_steps):
-            losses.append(svi.step())
+            losses.append(optimizer.step(closure).item())
         return losses

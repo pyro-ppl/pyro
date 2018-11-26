@@ -74,7 +74,6 @@ class VariationalGP(GPModel):
         self.set_constraint("f_scale_tril", constraints.lower_cholesky)
 
         self.whiten = whiten
-        self._Lff = None  # cache for Lff
 
     @autoname.scope(prefix="VGP")
     def model(self):
@@ -84,7 +83,6 @@ class VariationalGP(GPModel):
         Kff = self.kernel(self.X).contiguous()
         Kff.view(-1)[::N + 1] += self.jitter  # add jitter to the diagonal
         Lff = Kff.potrf(upper=False)
-        self._Lff = Lff
 
         zero_loc = self.X.new_zeros(self.f_loc.shape)
         if self.whiten:
@@ -136,6 +134,5 @@ class VariationalGP(GPModel):
         self.set_mode("guide")
 
         loc, cov = conditional(Xnew, self.X, self.kernel, self.f_loc, self.f_scale_tril,
-                               self._Lff, full_cov=full_cov, whiten=self.whiten,
-                               jitter=self.jitter)
+                               full_cov=full_cov, whiten=self.whiten, jitter=self.jitter)
         return loc + self.mean_function(Xnew), cov

@@ -95,7 +95,6 @@ class VariationalSparseGP(GPModel):
 
         self.num_data = num_data if num_data is not None else self.X.shape[0]
         self.whiten = whiten
-        self._Luu = None  # cache for Luu
 
     @autoname.scope(prefix="VSGP")
     def model(self):
@@ -105,7 +104,6 @@ class VariationalSparseGP(GPModel):
         Kuu = self.kernel(self.Xu).contiguous()
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.potrf(upper=False)
-        self._Luu = Luu
 
         zero_loc = self.Xu.new_zeros(self.u_loc.shape)
         if self.whiten:
@@ -156,6 +154,5 @@ class VariationalSparseGP(GPModel):
         self.set_mode("guide")
 
         loc, cov = conditional(Xnew, self.Xu, self.kernel, self.u_loc, self.u_scale_tril,
-                               self._Luu, full_cov=full_cov, whiten=self.whiten,
-                               jitter=self.jitter)
+                               full_cov=full_cov, whiten=self.whiten, jitter=self.jitter)
         return loc + self.mean_function(Xnew), cov

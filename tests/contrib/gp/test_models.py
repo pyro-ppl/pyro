@@ -298,10 +298,16 @@ def test_inference_deepGP():
     gp2 = VariationalSparseGP(Z, y2D, Matern32(input_dim=3), Z.clone(),
                               likelihood, name="GPR2")
 
-    def model():
-        Z, _ = gp1.model()
-        gp2.set_data(Z, y2D)
-        gp2.model()
+    class DeepGP(torch.nn.Module):
+        def __init__(self):
+            super(DeepGP, self).__init__()
+            self.gp1 = gp1
+            self.gp2 = gp2
+
+        def model():
+            Z, _ = gp1.model()
+            gp2.set_data(Z, y2D)
+            gp2.model()
 
     def guide():
         gp1.guide()

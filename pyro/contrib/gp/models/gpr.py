@@ -72,8 +72,6 @@ class GPRegression(GPModel):
         self.noise = Parameter(noise)
         self.set_constraint("noise", torchdist.constraints.greater_than(self.jitter))
 
-        self._Lff = None  # cache for Lff
-
     @autoname.scope(prefix="GPR")
     def model(self):
         self.set_mode("model")
@@ -123,7 +121,7 @@ class GPRegression(GPModel):
         self.set_mode("guide")
 
         y_residual = self.y - self.mean_function(self.X)
-        loc, cov = conditional(Xnew, self.X, self.kernel, y_residual, None, self._Lff,
+        loc, cov = conditional(Xnew, self.X, self.kernel, y_residual,
                                full_cov=full_cov, jitter=self.jitter)
 
         if full_cov and not noiseless:
