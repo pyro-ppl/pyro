@@ -14,6 +14,7 @@ import pyro.contrib.gp as gp
 from pyro.contrib.glmm import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov
 )
+from util import check_compatible_version
 
 from gp_bayes_opt import GPBayesOptimizer
 
@@ -114,6 +115,7 @@ def main(num_vi_steps, num_bo_steps):
 
 
 if __name__ == "__main__":
+    check_compatible_version()
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
     parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
     parser.add_argument('--num-bo-steps', nargs="?", default=5, type=int)

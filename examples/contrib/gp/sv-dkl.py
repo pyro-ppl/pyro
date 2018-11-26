@@ -28,7 +28,7 @@ import pyro.contrib.gp as gp
 import pyro.infer as infer
 import pyro.optim as optim
 from pyro.contrib.examples.util import get_data_loader
-
+from util import check_compatible_version
 
 class CNN(nn.Module):
     def __init__(self):
@@ -129,6 +129,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    check_compatible_version()
     parser = argparse.ArgumentParser(description='Pyro GP MNIST Example')
     parser.add_argument('--data-dir', type=str, default='../data', metavar='PATH',
                         help='default directory to cache MNIST data')

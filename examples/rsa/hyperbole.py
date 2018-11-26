@@ -12,6 +12,7 @@ import argparse
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from util import check_compatible_version
 
 from search_inference import factor, HashingMarginal, memoize, Search
 
@@ -140,6 +141,7 @@ def test_truth():
 
 
 def main(args):
+    check_compatible_version()
 
     # test_truth()
 

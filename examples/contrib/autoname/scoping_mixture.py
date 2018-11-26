@@ -11,6 +11,7 @@ import pyro.distributions as dist
 from pyro.infer import SVI, config_enumerate, TraceEnum_ELBO
 
 from pyro.contrib.autoname import scope
+from util import check_compatible_version
 
 
 def model(K, data):
@@ -66,6 +67,7 @@ def main(args):
 
 
 if __name__ == "__main__":
+    check_compatible_version()
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=200, type=int)
     args = parser.parse_args()

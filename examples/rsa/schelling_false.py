@@ -17,6 +17,7 @@ import torch
 import pyro
 import pyro.poutine as poutine
 from pyro.distributions import Bernoulli
+from util import check_compatible_version
 from search_inference import HashingMarginal, Search
 
 
@@ -89,6 +90,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    check_compatible_version()
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-samples', default=10, type=int)
     parser.add_argument('--depth', default=3, type=int)
