@@ -233,8 +233,14 @@ class TonesGenerator(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x, y):
+        # Check dimension of y so this can be used with and without enumeration.
         if y.dim() < 2:
             y = y.unsqueeze(0)
+
+        # Hidden units depend on two inputs: a one-hot encoded categorical variable x, and
+        # a bernoulli variable y. Whereas x will typically be enumerated, y will be observed.
+        # We apply x_to_hidden independently from y_to_hidden, then broadcast the non-enumerated
+        # y part up to the enumerated x part in the + operation.
         x_onehot = y.new_zeros(x.shape[:-1] + (self.args.hidden_dim,)).scatter_(-1, x, 1)
         y_conv = self.relu(self.conv(y.unsqueeze(-2))).reshape(y.shape[:-1] + (-1,))
         h = self.relu(self.x_to_hidden(x_onehot) + self.y_to_hidden(y_conv))
