@@ -416,6 +416,7 @@ class TraceEnum_ELBO(ELBO):
                     raise NotImplementedError("TraceEnum_ELBO.sample_posterior() is not "
                                               "compatible with guide enumeration.")
 
+        # TODO replace BackwardSample with torch_sample backend to ubersum
         with BackwardSampleMessenger(model_trace, guide_trace):
             return poutine.replay(model, trace=guide_trace)(*args, **kwargs)
 

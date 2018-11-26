@@ -242,6 +242,7 @@ class Dice(object):
             expected_cost = 0.
             for ordinal, cost_terms in costs.items():
                 factors = factors_table.get(ordinal, [])
+                # TODO use ubsersum with backend=pyro.ops.einsum.torch_marginal
                 for cost in cost_terms:
                     dims = ''.join(dim for dim in cost._pyro_dims
                                    if any(dim in getattr(f, '_pyro_dims', '') for f in factors))
