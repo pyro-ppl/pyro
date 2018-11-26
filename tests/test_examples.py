@@ -118,8 +118,7 @@ def test_cpu(example):
     logger.info('Running:\npython examples/{}'.format(example))
     example = example.split()
     filename, args = example[0], example[1:]
-    filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
+    check_call([sys.executable, filename] + args, cwd=EXAMPLES_DIR)
 
 
 @requires_cuda
@@ -128,8 +127,7 @@ def test_cuda(example):
     logger.info('Running:\npython examples/{}'.format(example))
     example = example.split()
     filename, args = example[0], example[1:]
-    filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
+    check_call([sys.executable, filename] + args, cwd=EXAMPLES_DIR)
 
 
 @pytest.mark.skipif('CI' in os.environ, reason='slow test')
@@ -139,5 +137,4 @@ def test_jit(example):
     logger.info('Running:\npython examples/{}'.format(example))
     example = example.split()
     filename, args = example[0], example[1:]
-    filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
+    check_call([sys.executable, filename] + args, cwd=EXAMPLES_DIR)

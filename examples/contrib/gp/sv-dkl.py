@@ -30,6 +30,7 @@ import pyro.optim as optim
 from pyro.contrib.examples.util import get_data_loader
 from util import check_compatible_version
 
+
 class CNN(nn.Module):
     def __init__(self):
         super(CNN, self).__init__()
