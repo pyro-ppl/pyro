@@ -28,7 +28,7 @@ except OSError:
 
 # Write version to _version.py
 if commit_sha:
-    version += '+{}'.format(commit_sha)
+    version += '-{}'.format(commit_sha)
 with open(os.path.join(PROJECT_PATH, 'pyro', '_version.py'), 'w') as f:
     f.write(VERSION.format(version))
 
