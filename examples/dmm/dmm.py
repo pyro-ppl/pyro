@@ -28,7 +28,8 @@ from pyro.distributions import InverseAutoregressiveFlow, TransformedDistributio
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.nn import AutoRegressiveNN
 from pyro.optim import ClippedAdam
-from util import get_logger
+from logger import get_logger
+from util import check_compatible_version
 
 
 class Emitter(nn.Module):
@@ -417,7 +418,7 @@ def main(args):
 
 # parse command-line arguments and execute the main method
 if __name__ == '__main__':
-
+    check_compatible_version()
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.0003)

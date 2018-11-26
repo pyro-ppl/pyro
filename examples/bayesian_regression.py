@@ -9,6 +9,7 @@ import pyro
 from pyro.distributions import Bernoulli, Normal  # noqa: F401
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
+from util import check_compatible_version
 
 
 """
@@ -136,6 +137,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    check_compatible_version()
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=1000, type=int)
     parser.add_argument('-b', '--batch-size', default=N, type=int)

@@ -12,6 +12,7 @@ from pyro.optim import Adam
 from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
 from utils.vae_plots import mnist_test_tsne, plot_llk, plot_vae_samples
+from util import check_compatible_version
 
 
 # define the PyTorch module that parameterizes the
@@ -198,6 +199,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    check_compatible_version()
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=101, type=int, help='number of training epochs')

@@ -20,6 +20,7 @@ import pyro.optim as optim
 import wget
 from pyro.distributions import Gamma, Poisson
 from pyro.infer import SVI, Trace_ELBO
+from util import check_compatible_version
 
 torch.set_default_tensor_type('torch.FloatTensor')
 pyro.enable_validation(True)
@@ -142,6 +143,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    check_compatible_version()
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=1001, type=int, help='number of training epochs')
