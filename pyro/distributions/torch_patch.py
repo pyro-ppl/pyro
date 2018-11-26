@@ -45,6 +45,20 @@ def _torch_dirichlet_grad(x, concentration, total):
     return unpatched_fn(x, concentration, total)
 
 
+# This can be removed when super(...).__init__() is added upstream
+@_patch('torch.distributions.transforms.Transform.__init__')
+def _Transform__init__(self, cache_size=0):
+    self._cache_size = cache_size
+    self._inv = None
+    if cache_size == 0:
+        pass  # default behavior
+    elif cache_size == 1:
+        self._cached_x_y = None, None
+    else:
+        raise ValueError('cache_size must be 0 or 1')
+    super(torch.distributions.transforms.Transform, self).__init__()
+
+
 @_patch('torch.linspace')
 def _torch_linspace(*args, **kwargs):
     unpatched_fn = _torch_linspace._pyro_unpatched

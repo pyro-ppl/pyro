@@ -339,8 +339,8 @@ def main(args):
 
     # We expect models with higher capacity to perform better,
     # but eventually overfit to the training set.
-    capacity = sum(len(pyro.param(name).reshape(-1))
-                   for name in pyro.get_param_store().get_all_param_names())
+    capacity = sum(value.reshape(-1).size(0)
+                   for value in pyro.get_param_store().values())
     logging.info('{} capacity = {} parameters'.format(model.__name__, capacity))
 
 
