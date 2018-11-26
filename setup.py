@@ -86,7 +86,7 @@ setup(
         'six>=1.10.0',
         # TODO: uncomment on release; using torch-nightly build
         # 'torch>=0.4.1',
-        'tqdm>=4.25',
+        'tqdm>=4.27',
     ],
     extras_require={
         'extras': EXTRAS_REQUIRE,

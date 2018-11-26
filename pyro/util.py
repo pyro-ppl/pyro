@@ -287,19 +287,19 @@ def check_traceenum_requirements(model_trace, guide_trace):
     enumerated_sites = set(name for name, site in guide_trace.nodes.items()
                            if site["type"] == "sample" and site["infer"].get("enumerate"))
     for role, trace in [('model', model_trace), ('guide', guide_trace)]:
-        irange_counters = {}
+        plate_counters = {}  # for sequential plates only
         enumerated_contexts = defaultdict(set)
         for name, site in trace.nodes.items():
             if site["type"] != "sample":
                 continue
-            irange_counter = {f.name: f.counter for f in site["cond_indep_stack"] if not f.vectorized}
+            plate_counter = {f.name: f.counter for f in site["cond_indep_stack"] if not f.vectorized}
             context = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
 
             # Check that sites outside each independence context precede enumerated sites inside that context.
             for enumerated_context, names in enumerated_contexts.items():
                 if not (context < enumerated_context):
                     continue
-                names = sorted(n for n in names if not _are_independent(irange_counter, irange_counters[n]))
+                names = sorted(n for n in names if not _are_independent(plate_counter, plate_counters[n]))
                 if not names:
                     continue
                 diff = sorted(f.name for f in enumerated_context - context)
@@ -309,7 +309,7 @@ def check_traceenum_requirements(model_trace, guide_trace):
                     'to avoid breaking independence of plates "{}"'.format('", "'.join(diff)),
                 ]), RuntimeWarning)
 
-            irange_counters[name] = irange_counter
+            plate_counters[name] = plate_counter
             if name in enumerated_sites:
                 enumerated_contexts[context].add(name)
 

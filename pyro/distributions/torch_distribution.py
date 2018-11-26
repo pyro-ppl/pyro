@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 from torch.distributions import biject_to, constraints, transform_to
+from torch.distributions.kl import kl_divergence, register_kl
 
 import pyro.distributions.torch
 from pyro.distributions.distribution import Distribution
@@ -280,3 +281,10 @@ class MaskedDistribution(TorchDistribution):
     @property
     def variance(self):
         return self.base_dist.variance
+
+
+@register_kl(MaskedDistribution, MaskedDistribution)
+def _kl_masked_masked(p, q):
+    mask = p._mask if p._mask is q._mask else p._mask & q._mask
+    kl = kl_divergence(p.base_dist, q.base_dist)
+    return scale_and_mask(kl, mask=mask)

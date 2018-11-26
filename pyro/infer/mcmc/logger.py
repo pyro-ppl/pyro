@@ -4,7 +4,7 @@ import os
 import sys
 from collections import OrderedDict
 
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 # Identifiers to distinguish between diagnostic messages for progress bars
 # vs. logging output. Useful when using QueueHandler in multiprocessing.

@@ -36,8 +36,8 @@ class CondIndepStackFrame(namedtuple("CondIndepStackFrame", ["name", "dim", "siz
 class IndepMessenger(Messenger):
     """
     This messenger keeps track of stack of independence information declared by
-    nested ``irange`` and ``plate`` contexts. This information is stored in
-    a ``cond_indep_stack`` at each sample/observe site for consumption by
+    nested ``plate`` contexts. This information is stored in a
+    ``cond_indep_stack`` at each sample/observe site for consumption by
     ``TraceMessenger``.
 
     Example::

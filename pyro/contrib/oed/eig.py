@@ -259,8 +259,8 @@ def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_hist
         agg_loss.backward()
         if return_history:
             history.append(loss)
-        params = [pyro.param(name).unconstrained()
-                  for name in pyro.get_param_store().get_all_param_names()]
+        params = [value.unconstrained()
+                  for value in pyro.get_param_store().values()]
         optim(params)
     _, loss = loss_fn(final_design, final_num_samples)
     if return_history:

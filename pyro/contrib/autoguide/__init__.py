@@ -114,7 +114,7 @@ class AutoGuide(object):
                 if frame.vectorized:
                     self._plates[frame.name] = frame
                 else:
-                    raise NotImplementedError("AutoGuideList does not support pyro.irange")
+                    raise NotImplementedError("AutoGuideList does not support sequential pyro.plate")
 
     def median(self, *args, **kwargs):
         """
@@ -590,7 +590,7 @@ class AutoIAFNormal(AutoContinuous):
         if self.hidden_dim is None:
             self.hidden_dim = self.latent_dim
         iaf = dist.InverseAutoregressiveFlow(AutoRegressiveNN(self.latent_dim, [self.hidden_dim]))
-        pyro.module("{}_iaf".format(self.prefix), iaf.module)
+        pyro.module("{}_iaf".format(self.prefix), iaf)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
         return iaf_dist.independent(1)
 
@@ -689,7 +689,7 @@ class AutoDiscreteParallel(AutoGuide):
                 if frame.vectorized:
                     self._plates[frame.name] = frame
                 else:
-                    raise NotImplementedError("AutoDiscreteParallel does not support pyro.irange")
+                    raise NotImplementedError("AutoDiscreteParallel does not support sequential pyro.plate")
 
     def __call__(self, *args, **kwargs):
         """

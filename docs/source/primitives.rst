@@ -6,10 +6,6 @@ Primitives
 .. autofunction:: pyro.module
 .. autofunction:: pyro.random_module
 
-.. autoclass:: pyro.irange
-    :members:
-    :undoc-members:
-
 .. autoclass:: pyro.plate
     :members:
     :undoc-members:

@@ -78,7 +78,7 @@ class SubsampleMessenger(IndepMessenger):
     @staticmethod
     def _subsample(name, size=None, subsample_size=None, subsample=None, use_cuda=None, device=None):
         """
-        Helper function for plate and irange. See their docstrings for details.
+        Helper function for plate. See its docstrings for details.
         """
         if size is None:
             assert subsample_size is None
