@@ -20,6 +20,7 @@ import pyro.optim as optim
 import wget
 from pyro.distributions import Gamma, Poisson
 from pyro.infer import SVI, Trace_ELBO
+from pyro.contrib.autoguide import AutoDiagonalNormal
 
 torch.set_default_tensor_type('torch.FloatTensor')
 pyro.enable_validation(True)
@@ -51,6 +52,7 @@ class SparseGammaDEF(object):
         # sample the global weights
         with pyro.plate("w_top_plate", self.top_width * self.mid_width):
             w_top = pyro.sample("w_top", Gamma(self.alpha_w, self.beta_w))
+            #print("w_top", w_top.shape)
         with pyro.plate("w_mid_plate", self.mid_width * self.bottom_width):
             w_mid = pyro.sample("w_mid", Gamma(self.alpha_w, self.beta_w))
         with pyro.plate("w_bottom_plate", self.bottom_width * self.image_size):
@@ -60,11 +62,13 @@ class SparseGammaDEF(object):
         # (the plate encodes the fact that the z's for different datapoints are conditionally independent)
         with pyro.plate("data", x_size):
             z_top = pyro.sample("z_top", Gamma(self.alpha_z, self.beta_z).expand([self.top_width]).independent(1))
-            mean_mid = torch.mm(z_top, w_top.reshape(self.top_width, self.mid_width))
+            #print("z_top", z_top.shape)
+            mean_mid = torch.matmul(z_top, w_top.reshape(-1, self.top_width, self.mid_width))
+            #print("mean_mid", mean_mid.shape)
             z_mid = pyro.sample("z_mid", Gamma(self.alpha_z, self.beta_z / mean_mid).independent(1))
-            mean_bottom = torch.mm(z_mid, w_mid.view(self.mid_width, self.bottom_width))
+            mean_bottom = torch.matmul(z_mid, w_mid.view(-1, self.mid_width, self.bottom_width))
             z_bottom = pyro.sample("z_bottom", Gamma(self.alpha_z, self.beta_z / mean_bottom).independent(1))
-            mean_obs = torch.mm(z_bottom, w_bottom.view(self.bottom_width, self.image_size))
+            mean_obs = torch.matmul(z_bottom, w_bottom.view(-1, self.bottom_width, self.image_size))
 
             # observe the data using a poisson likelihood
             pyro.sample('obs', Poisson(mean_obs).independent(1), obs=x)
@@ -127,23 +131,35 @@ def main(args):
     data = torch.tensor(np.loadtxt('faces_training.csv', delimiter=',')).float()
 
     sparse_gamma_def = SparseGammaDEF()
-    opt = optim.AdagradRMSProp({"eta": 4.5, "t": 0.1})
-    svi = SVI(sparse_gamma_def.model, sparse_gamma_def.guide, opt, loss=Trace_ELBO())
+    opt = optim.AdagradRMSProp({"eta": args.learning_rate, "t": 0.1})
+
+    if args.auto_guide:
+        auto_guide = AutoDiagonalNormal(sparse_gamma_def.model)
+        svi = SVI(sparse_gamma_def.model, auto_guide, opt, loss=Trace_ELBO())
+        svi_eval = SVI(sparse_gamma_def.model, auto_guide, opt, loss=Trace_ELBO(num_particles=args.eval_particles, vectorize_particles=True))
+    else:
+        svi = SVI(sparse_gamma_def.model, sparse_gamma_def.guide, opt, loss=Trace_ELBO())
+        svi_eval = SVI(sparse_gamma_def.model, sparse_gamma_def.guide, opt, loss=Trace_ELBO(num_particles=args.eval_particles, vectorize_particles=True))
 
     print('\nbeginning training...')
 
     # the training loop
     for k in range(args.num_epochs):
         loss = svi.step(data)
-        sparse_gamma_def.clip_params()  # we clip params after each gradient step
+        if not args.auto_guide:
+            sparse_gamma_def.clip_params()  # we clip params after each gradient step
 
         if k % 20 == 0 and k > 0:
+            loss = svi_eval.evaluate_loss(data)
             print("[epoch %04d] training elbo: %.4g" % (k, -loss))
 
 
 if __name__ == '__main__':
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=1001, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=2001, type=int, help='number of training epochs')
+    parser.add_argument('-ep', '--eval-particles', default=1, type=int, help='number of samples to use during evaluation')
+    parser.add_argument('-lr', '--learning-rate', default=4.5, type=float, help='learning rate')
+    parser.add_argument('--auto-guide', action='store_true')
     args = parser.parse_args()
     main(args)
