@@ -29,7 +29,8 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
-from pyro.optim import Adam
+from pyro.optim import Adam, ClippedAdam
+
 
 logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.INFO)
 
@@ -246,7 +247,7 @@ tones_generator = None
 
 
 # The neural HMM model now uses tones_generator at each time step.
-def model_5(sequences, lengths, args, batch_size=None, include_prior=True):
+def model_5(sequences, lengths, args, mb=None, include_prior=True):
     num_sequences, max_length, data_dim = sequences.shape
     assert lengths.shape == (num_sequences,)
     assert lengths.max() <= max_length
@@ -261,7 +262,7 @@ def model_5(sequences, lengths, args, batch_size=None, include_prior=True):
         probs_x = pyro.sample("probs_x",
                               dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
                                   .independent(1))
-    with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
+    with pyro.plate("sequences", len(sequences), subsample=mb, dim=-2) as batch:
         lengths = lengths[batch]
         x = 0
         y = torch.zeros(data_dim)
@@ -312,14 +313,31 @@ def main(args):
     # All of our models have two plates: "data" and "tones".
     Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
     elbo = Elbo(max_plate_nesting=2)
-    optim = Adam({'lr': args.learning_rate})
+    optim = ClippedAdam({'lr': args.learning_rate, 'betas': (0.8, 0.99), 'lrd': 0.995})
     svi = SVI(model, guide, optim, elbo)
 
+    import time
+    ts = [time.time()]
+
+    def get_mb_indices(N_data, mini_batch_size):
+        N_mb = int(N_data / mini_batch_size) + int(bool(N_data % mini_batch_size))
+        shuffled_indices = torch.randperm(N_data)
+        mb_indices = []
+        for k in range(N_mb):
+            mb_indices.append(shuffled_indices[k * mini_batch_size: min((k+1) * mini_batch_size, N_data)])
+        return mb_indices
+
     # We'll train on small minibatches.
-    logging.info('Step\tLoss')
-    for step in range(args.num_steps):
-        loss = svi.step(sequences, lengths, args, batch_size=args.batch_size)
-        logging.info('{: >5d}\t{}'.format(step, loss / num_observations))
+    logging.info('Step\tLoss\tEpoch Time')
+    for epoch in range(args.num_steps):
+        epoch_loss = 0.0
+        mb_indices = get_mb_indices(sequences.size(0), args.batch_size)
+
+        for mb in mb_indices:
+            epoch_loss += svi.step(sequences, lengths, args, mb=mb)
+
+        ts.append(time.time())
+        logging.info('{: >5d}\t{:.4f}\t{:.2f}'.format(epoch, epoch_loss / num_observations, (ts[-1] - ts[0])/(epoch+1)))
 
     # We evaluate on the entire training dataset,
     # excluding the prior term so our results are comparable across models.
@@ -348,8 +366,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
-    parser.add_argument("-n", "--num-steps", default=50, type=int)
-    parser.add_argument("-b", "--batch-size", default=8, type=int)
+    parser.add_argument("-n", "--num-steps", default=500, type=int)
+    parser.add_argument("-b", "--batch-size", default=20, type=int)
     parser.add_argument("-d", "--hidden-dim", default=16, type=int)
     parser.add_argument("-nn", "--nn-dim", default=48, type=int)
     parser.add_argument("-nc", "--nn-channels", default=2, type=int)
