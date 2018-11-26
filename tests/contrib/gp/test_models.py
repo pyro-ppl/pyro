@@ -5,10 +5,10 @@ from collections import defaultdict, namedtuple
 
 import pytest
 import torch
+import torch.optim as optim
 
 import pyro
 import pyro.distributions as dist
-import pyro.optim as optim
 from pyro.contrib.gp.kernels import Cosine, Matern32, RBF, WhiteNoise
 from pyro.contrib.gp.likelihoods import Gaussian
 from pyro.contrib.gp.models import (GPLVM, GPRegression, SparseGPRegression,
@@ -190,7 +190,7 @@ def test_inference_sgpr():
     Xu = torch.arange(0., 5.5, 0.5)
 
     sgpr = SparseGPRegression(X, y, kernel, Xu)
-    sgpr.optimize(optim.Adam({"lr": 0.01}), num_steps=1000)
+    sgpr.optimize()
 
     Xnew = torch.arange(0., 5.05, 0.05)
     loc, var = sgpr(Xnew, full_cov=False)
@@ -208,7 +208,7 @@ def test_inference_vsgp():
     Xu = torch.arange(0., 5.5, 0.5)
 
     vsgp = VariationalSparseGP(X, y, kernel, Xu, Gaussian())
-    vsgp.optimize(optim.Adam({"lr": 0.03}), num_steps=1000)
+    vsgp.optimize(optim_args={"lr": 0.03})
 
     Xnew = torch.arange(0., 5.05, 0.05)
     loc, var = vsgp(Xnew, full_cov=False)
@@ -226,7 +226,7 @@ def test_inference_whiten_vsgp():
     Xu = torch.arange(0., 5.5, 0.5)
 
     vsgp = VariationalSparseGP(X, y, kernel, Xu, Gaussian(), whiten=True)
-    vsgp.optimize(optim.Adam({"lr": 0.01}), num_steps=1000)
+    vsgp.optimize()
 
     Xnew = torch.arange(0., 5.05, 0.05)
     loc, var = vsgp(Xnew, full_cov=False)
@@ -276,15 +276,15 @@ def test_hmc(model_class, X, y, kernel, likelihood):
 
     post_trace = defaultdict(list)
     for trace, _ in mcmc_run._traces():
-        variance_name = param_with_module_name(kernel.name, "variance")
+        variance_name = [name for name in trace.nodes if "variance" in name][0]
         post_trace["variance"].append(trace.nodes[variance_name]["value"])
-        lengthscale_name = param_with_module_name(kernel.name, "lengthscale")
+        lengthscale_name = [name for name in trace.nodes if "lengthscale" in name][0]
         post_trace["lengthscale"].append(trace.nodes[lengthscale_name]["value"])
         if model_class is VariationalGP:
-            f_name = param_with_module_name(gp.name, "f")
+            f_name = "VGP/f"
             post_trace["f"].append(trace.nodes[f_name]["value"])
         if model_class is VariationalSparseGP:
-            u_name = param_with_module_name(gp.name, "u")
+            u_name = "VSGP/u"
             post_trace["u"].append(trace.nodes[u_name]["value"])
 
     for param in post_trace:
@@ -360,7 +360,7 @@ def _post_test_mean_function(model, Xnew, y_true):
 def test_mean_function_GPR():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
     model = GPRegression(X, y, kernel, mean_function=mean_fn)
-    model.optimize(optim.Adam({"lr": 0.01}))
+    model.optimize()
     _post_test_mean_function(model, Xnew, ynew)
 
 
@@ -368,7 +368,7 @@ def test_mean_function_SGPR():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
     Xu = X[::20].clone()
     model = SparseGPRegression(X, y, kernel, Xu, mean_function=mean_fn)
-    model.optimize(optim.Adam({"lr": 0.01}))
+    model.optimize()
     _post_test_mean_function(model, Xnew, ynew)
 
 
@@ -376,7 +376,7 @@ def test_mean_function_SGPR_DTC():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
     Xu = X[::20].clone()
     model = SparseGPRegression(X, y, kernel, Xu, mean_function=mean_fn, approx="DTC")
-    model.optimize(optim.Adam({"lr": 0.01}))
+    model.optimize()
     _post_test_mean_function(model, Xnew, ynew)
 
 
@@ -384,7 +384,7 @@ def test_mean_function_SGPR_FITC():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
     Xu = X[::20].clone()
     model = SparseGPRegression(X, y, kernel, Xu, mean_function=mean_fn, approx="FITC")
-    model.optimize(optim.Adam({"lr": 0.01}))
+    model.optimize()
     _post_test_mean_function(model, Xnew, ynew)
 
 
@@ -392,7 +392,7 @@ def test_mean_function_VGP():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
     likelihood = Gaussian()
     model = VariationalGP(X, y, kernel, likelihood, mean_function=mean_fn)
-    model.optimize(optim.Adam({"lr": 0.01}))
+    model.optimize()
     _post_test_mean_function(model, Xnew, ynew)
 
 
@@ -401,7 +401,7 @@ def test_mean_function_VGP_whiten():
     likelihood = Gaussian()
     model = VariationalGP(X, y, kernel, likelihood, mean_function=mean_fn,
                           whiten=True)
-    model.optimize(optim.Adam({"lr": 0.1}))
+    model.optimize(optim_args={"lr": 0.1})
     _post_test_mean_function(model, Xnew, ynew)
 
 

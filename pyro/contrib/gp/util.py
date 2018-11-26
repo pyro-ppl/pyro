@@ -78,6 +78,7 @@ class Parameterized(nn.Module):
             # move param to _buffers
             p = self._parameters.pop(name)
             self.register_buffer(name, p)
+            self.autoguide(name, dist.Delta)
         elif name not in self._buffers:
             raise ValueError("There is no parameter with name: {}".format(name))
 
@@ -103,16 +104,16 @@ class Parameterized(nn.Module):
         # constructors. For example, in LowRankMVN, we need argument `rank`.
         p = self._buffers[name]
         if dist_constructor is dist.Delta:
-            p_map = Parameter(biject_to(self._priors[name].support).inv(p))
+            p_map = Parameter(biject_to(self._priors[name].support).inv(p).detach())
             self.register_parameter("{}_map".format(name), p_map)
         elif dist_constructor is dist.Normal:
-            loc = Parameter(biject_to(self._priors[name].support).inv(p))
+            loc = Parameter(biject_to(self._priors[name].support).inv(p).detach())
             scale = Parameter(loc.new_ones(loc.shape))
             self.register_parameter("{}_loc".format(name), loc)
             self.register_parameter("{}_scale".format(name), scale)
             self.set_constraint("{}_scale".format(name), constraints.positive)
         elif dist_constructor is dist.MultivariateNormal:
-            loc = Parameter(biject_to(self._priors[name].support).inv(p))
+            loc = Parameter(biject_to(self._priors[name].support).inv(p).detach())
             n = loc.size(-1)
             identity = torch.eye(n, out=loc.new_empty(n, n))
             scale_tril = Parameter(identity.repeat(loc.shape[:-1] + (1, 1)))
@@ -192,8 +193,6 @@ class Parameterized(nn.Module):
                 if self.mode == "model":
                     p = pyro.sample(name, self._priors[name])
                 else:
-                    if name not in self._guides:
-                        self.autoguide(name, dist.Delta)
                     p = self._sample_from_guide(name)
         elif name in self._constraints:
             p_unconstrained = self._parameters["{}_unconstrained".format(name)]
