@@ -10,6 +10,7 @@
 from __future__ import absolute_import, division, print_function
 
 import argparse
+import errno
 import os
 
 import numpy as np
@@ -127,7 +128,12 @@ def main(args):
     dataset_directory = get_data_directory(__file__)
     dataset_path = os.path.join(dataset_directory, 'faces_training.csv')
     if not os.path.exists(dataset_path):
-        os.makedirs(dataset_directory, exist_ok=True)
+        try:
+            os.makedirs(dataset_directory)
+        except OSError as e:
+            if e.errno != errno.EXIST:
+                raise
+            pass
         wget.download('https://d2fefpcigoriu7.cloudfront.net/datasets/faces_training.csv', dataset_path)
     data = torch.tensor(np.loadtxt(dataset_path, delimiter=',')).float()
 
