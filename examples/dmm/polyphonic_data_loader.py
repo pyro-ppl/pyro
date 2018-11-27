@@ -60,7 +60,7 @@ def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
 # this logic will be initiated upon import
 base_path = get_data_directory(__file__)
 process_data(base_path, "jsb_processed.pkl")
-jsb_file_loc = "./data/jsb_processed.pkl"
+jsb_file_loc = os.path.join(base_path, "jsb_processed.pkl")
 
 
 # ingest training/validation/test data from disk
