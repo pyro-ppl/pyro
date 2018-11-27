@@ -57,12 +57,16 @@ def unpack(value, symbol_to_dim):
     return value
 
 
-def broadcast_all(*values):
+def broadcast_all(*values, **kwargs):
     """
     Packed broadcasting of multiple tensors.
     """
+    dims = kwargs.get('dims')
     sizes = {dim: size for value in values for dim, size in zip(value._pyro_dims, value.shape)}
-    dims = ''.join(sorted(sizes))
+    if dims is None:
+        dims = ''.join(sorted(sizes))
+    else:
+        assert set(dims) == set(sizes)
     shape = torch.Size(sizes[dim] for dim in dims)
     values = list(values)
     for i, x in enumerate(values):
@@ -196,3 +200,17 @@ def logsumproductexp(factors, output_dims='', device=None):
     result = torch.tensor(float(sum(numbers)), device=device)
     result._pyro_dims = ''
     return result
+
+
+def rename_equation(equation, *operands):
+    """
+    Renames symbols in an einsum/ubersum equation to match the
+    ``.pyro_dims`` attributes of packed ``operands``.
+    """
+    inputs, outputs = equation.split('->')
+    inputs = inputs.split(',')
+    assert len(inputs) == len(operands)
+    rename = {old: new
+              for input_, operand in zip(inputs, operands)
+              for old, new in zip(input_, operand._pyro_dims)}
+    return ''.join(rename.get(s, s) for s in equation)
