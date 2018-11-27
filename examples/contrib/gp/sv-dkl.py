@@ -115,15 +115,9 @@ def main(args):
         gpmodule.cuda()
 
     optimizer = torch.optim.Adam(gpmodule.parameters(), lr=args.lr)
-    loss_fn = infer.Trace_ELBO().differentiable_loss
-    if args.jit:
-        X, y = next(iter(train_loader))
-        X_sample = X[:args.batch_size]
-        y_sample = y[:args.batch_size]
-        if args.cuda:
-            X_sample, y_sample = X_sample.cuda(), y_sample.cuda()
-        gpmodule.set_data(X_sample, y_sample)
-        loss_fn = torch.jit.trace(loss_fn, (gpmodule.model, gpmodule.guide))
+    # TODO: implement a real jit version of differentiable_loss
+    elbo = infer.JitTrace_ELBO() if args.jit else infer.Trace_ELBO()
+    loss_fn = elbo.differentiable_loss
 
     for epoch in range(1, args.epochs + 1):
         start_time = time.time()
