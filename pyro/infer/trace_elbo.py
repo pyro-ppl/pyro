@@ -155,6 +155,29 @@ class JitTrace_ELBO(Trace_ELBO):
 
     .. warning:: Experimental. Interface subject to change.
     """
+    def differentiable_loss(self, model, guide, *args, **kwargs):
+        if getattr(self, '_differentiable_loss', None) is None:
+            # build a closure for differentiable_loss
+            weakself = weakref.ref(self)
+
+            @pyro.ops.jit.compile(nderivs=1)
+            def differentiable_loss(*args):
+                self = weakself()
+                loss = 0.
+                surrogate_loss = 0.
+                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+                    loss_particle, surrogate_loss_particle = \
+                        self._differentiable_loss_particle(model_trace, guide_trace)
+                    surrogate_loss += surrogate_loss_particle / self.num_particles
+                    loss += loss_particle / self.num_particles
+                return loss + (surrogate_loss - surrogate_loss.detach())
+
+            self._differentiable_loss = differentiable_loss
+
+        loss = self._differentiable_loss(*args)
+        warn_if_nan(loss, "loss")
+        return loss
+
     def loss_and_grads(self, model, guide, *args, **kwargs):
         if getattr(self, '_loss_and_surrogate_loss', None) is None:
             # build a closure for loss_and_surrogate_loss
