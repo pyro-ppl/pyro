@@ -18,6 +18,8 @@ import torch
 import pyro
 import pyro.optim as optim
 import wget
+
+from pyro.contrib.examples.util import get_data_directory
 from pyro.distributions import Gamma, Poisson
 from pyro.infer import SVI, Trace_ELBO
 
@@ -122,9 +124,12 @@ class SparseGammaDEF(object):
 def main(args):
     # load data
     print('loading training data...')
-    if not os.path.exists('faces_training.csv'):
-        wget.download('https://d2fefpcigoriu7.cloudfront.net/datasets/faces_training.csv', 'faces_training.csv')
-    data = torch.tensor(np.loadtxt('faces_training.csv', delimiter=',')).float()
+    dataset_directory = get_data_directory(__file__)
+    dataset_path = os.path.join(dataset_directory, 'faces_training.csv')
+    if not os.path.exists(dataset_path):
+        os.makedirs(dataset_directory, exist_ok=True)
+        wget.download('https://d2fefpcigoriu7.cloudfront.net/datasets/faces_training.csv', dataset_path)
+    data = torch.tensor(np.loadtxt(dataset_path, delimiter=',')).float()
 
     sparse_gamma_def = SparseGammaDEF()
     opt = optim.AdagradRMSProp({"eta": 4.5, "t": 0.1})
