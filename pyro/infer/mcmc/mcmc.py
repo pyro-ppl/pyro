@@ -11,14 +11,12 @@ import warnings
 from collections import OrderedDict
 
 import six
-from contextlib2 import ExitStack
 from six.moves import queue
 import torch
 import torch.multiprocessing as mp
 
 import pyro
-from pyro.distributions.empirical import accumulate_samples
-from pyro.infer import TracePosterior
+from pyro.infer import TracePosterior, EmpiricalMarginal
 from pyro.infer.mcmc.logger import initialize_logger, initialize_progbar, DIAGNOSTIC_MSG, TqdmHandler
 import pyro.ops.stats as stats
 from pyro.util import optional
@@ -285,15 +283,8 @@ class _Marginal(object):
         self._populate_traces(trace_posterior, validate_args)
 
     def _populate_traces(self, trace_posterior, validate):
-        with ExitStack() as stack:
-            self._marginals = {site: stack.enter_context(accumulate_samples(validate))
-                               for site in self.sites}
-            for tr, log_weight, chain_id in zip(trace_posterior.exec_traces,
-                                                trace_posterior.log_weights,
-                                                trace_posterior.chain_ids):
-                for site in self._marginals:
-                    value = tr.nodes[site]["value"]
-                    self._marginals[site].add(value, log_weight=log_weight, chain_id=chain_id)
+        self._marginals = {site: EmpiricalMarginal(trace_posterior, site, validate)
+                           for site in self.sites}
 
     def support(self, flatten=True):
         return OrderedDict([(site, value.enumerate_support(flatten=flatten))

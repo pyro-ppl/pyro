@@ -1,6 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
 from abc import ABCMeta, abstractmethod
+from collections import defaultdict
 
 import torch
 from six import add_metaclass
@@ -27,17 +29,71 @@ class EmpiricalMarginal(Empirical):
     def __init__(self, trace_posterior, sites=None, validate_args=None):
         assert isinstance(trace_posterior, TracePosterior), \
             "trace_dist must be trace posterior distribution object"
-        super(EmpiricalMarginal, self).__init__(validate_args=validate_args)
         if sites is None:
             sites = "_RETURN"
+        self._num_chains = 1
+        self._samples_buffer = defaultdict(list)
+        self._weights_buffer = defaultdict(list)
         self._populate_traces(trace_posterior, sites)
+        samples, weights = self._get_samples_and_weights()
+        super(EmpiricalMarginal, self).__init__(samples,
+                                                weights,
+                                                validate_args=validate_args)
+
+    def _get_samples_and_weights(self):
+        """
+        Appends values collected in the samples/weights buffers to their
+        corresponding tensors.
+        """
+        num_chains = len(self._samples_buffer)
+        samples_by_chain = []
+        weights_by_chain = []
+        for i in range(num_chains):
+            samples_by_chain.append(torch.stack(self._samples_buffer[i], dim=0))
+            weights_by_chain.append(torch.stack(self._weights_buffer[i], dim=0))
+        if len(samples_by_chain) == 1:
+            return samples_by_chain[0], weights_by_chain[0]
+        else:
+            return torch.stack(samples_by_chain, dim=0), torch.stack(weights_by_chain, dim=0)
+
+    def _add_sample(self, value, log_weight=None, chain_id=0):
+        """
+        Adds a new data point to the sample. The values in successive calls to
+        ``add`` must have the same tensor shape and size. Optionally, an
+        importance weight can be specified via ``log_weight`` or ``weight``
+        (default value of `1` is used if not specified).
+
+        :param torch.Tensor value: tensor to add to the sample.
+        :param torch.Tensor log_weight: log weight (optional) corresponding
+            to the sample.
+        :param int chain_id: chain id that generated the sample (optional).
+            Note that if this argument is provided, ``chain_id`` must lie
+            in ``[0, num_chains - 1]``, and there must be equal number
+            of samples per chain when ``_finalize`` is eventually called.
+        """
+        weight_type = value.new_empty(1).float().type() if value.dtype in (torch.int32, torch.int64) \
+            else value.type()
+        # Apply default weight of 1.0.
+        if log_weight is None:
+            log_weight = torch.tensor(0.0).type(weight_type)
+        if isinstance(log_weight, numbers.Number):
+            log_weight = torch.tensor(log_weight).type(weight_type)
+        if self._validate_args and log_weight.dim() > 0:
+            raise ValueError("``weight.dim() > 0``, but weight should be a scalar.")
+
+        # Append to the buffer list
+        self._samples_buffer[chain_id].append(value)
+        self._weights_buffer[chain_id].append(log_weight)
+        self._num_chains = max(self._num_chains, chain_id + 1)
 
     def _populate_traces(self, trace_posterior, sites):
         assert isinstance(sites, (list, str))
-        for tr, log_weight in zip(trace_posterior.exec_traces, trace_posterior.log_weights):
+        for tr, log_weight, chain_id in zip(trace_posterior.exec_traces,
+                                            trace_posterior.log_weights,
+                                            trace_posterior.chain_ids):
             value = tr.nodes[sites]["value"] if isinstance(sites, str) else \
                 torch.stack([tr.nodes[site]["value"] for site in sites], 0)
-            self.add(value, log_weight=log_weight)
+            self._add_sample(value, log_weight=log_weight)
 
 
 @add_metaclass(ABCMeta)

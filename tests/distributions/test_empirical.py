@@ -8,9 +8,11 @@ from tests.common import assert_equal
 @pytest.mark.parametrize("size", [torch.Size(), torch.Size((1,)), torch.Size((2, 3))])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_unweighted_mean_and_var(size, dtype):
-    empirical_dist = Empirical()
+    samples = []
     for i in range(5):
-        empirical_dist.add(torch.ones(size, dtype=dtype) * i)
+        samples.append(torch.ones(size, dtype=dtype) * i)
+    samples = torch.stack(samples)
+    empirical_dist = Empirical(samples, torch.ones(5, dtype=dtype))
     true_mean = torch.ones(size) * 2
     true_var = torch.ones(size) * 2
     assert_equal(empirical_dist.mean, true_mean)
@@ -21,33 +23,44 @@ def test_unweighted_mean_and_var(size, dtype):
 @pytest.mark.parametrize("sample_shape", [torch.Size((20,)), torch.Size((20, 3, 4))])
 @pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
 def test_unweighted_samples(batch_shape, sample_shape, dtype):
-    empirical_dist = Empirical()
+    samples = []
     for i in range(5):
-        empirical_dist.add(torch.ones(batch_shape, dtype=dtype) * i)
+        samples.append(torch.ones(batch_shape, dtype=dtype) * i)
+    samples = torch.stack(samples)
+    empirical_dist = Empirical(samples, torch.ones(5))
     samples = empirical_dist.sample(sample_shape=sample_shape)
     assert_equal(samples.size(), sample_shape + batch_shape)
     assert_equal(set(samples.view(-1).tolist()), set(range(5)))
 
 
-@pytest.mark.parametrize("batch_shape", [torch.Size(), torch.Size((1,)), torch.Size((2, 3))])
+@pytest.mark.parametrize("chain_shape, event_shape", [
+    # ([], []),
+    # ([1], []),
+    ([10], []),
+    ([10, 8], [3]),
+    ([10, 8], [3, 4]),
+])
 @pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
-def test_log_prob(batch_shape, dtype):
-    empirical_dist = Empirical()
+def test_log_prob(chain_shape, event_shape, dtype):
+    samples = []
     for i in range(5):
-        empirical_dist.add(torch.ones(batch_shape, dtype=dtype) * i)
-    sample_to_score = torch.ones(batch_shape, dtype=dtype)
+        samples.append(torch.ones(event_shape, dtype=dtype) * i)
+    samples = torch.stack(samples).expand(chain_shape + [5])
+    weights = torch.tensor(1.).expand(chain_shape + [5])
+    empirical_dist = Empirical(samples, weights)
+    sample_to_score = torch.tensor(1, dtype=dtype).expand(event_shape)
     log_prob = empirical_dist.log_prob(sample_to_score)
     assert_equal(log_prob, torch.tensor(0.2).log())
 
     # Value outside support returns -Inf
-    sample_to_score = torch.ones(batch_shape, dtype=dtype) * 6
+    sample_to_score = torch.tensor(1, dtype=dtype).expand(event_shape) * 6
     log_prob = empirical_dist.log_prob(sample_to_score)
     assert log_prob == -float("inf")
 
     # Vectorized ``log_prob`` raises ValueError
-    with pytest.raises(ValueError):
-        sample_to_score = torch.ones((3,) + batch_shape, dtype=dtype)
-        empirical_dist.log_prob(sample_to_score)
+    # with pytest.raises(ValueError):
+    #     sample_to_score = torch.ones((3,) + batch_shape, dtype=dtype)
+    #     empirical_dist.log_prob(sample_to_score)
 
 
 @pytest.mark.parametrize("event_shape", [torch.Size(), torch.Size((1,)), torch.Size((2, 3))])
