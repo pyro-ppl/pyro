@@ -3,10 +3,10 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 
-def _patch(target):
+def patch_dependency(target, root_module=torch):
     parts = target.split('.')
-    assert parts[0] == 'torch'
-    module = torch
+    assert parts[0] == root_module.__name__
+    module = root_module
     for part in parts[1:-1]:
         module = getattr(module, part)
     name = parts[-1]
@@ -22,7 +22,7 @@ def _patch(target):
     return decorator
 
 
-@_patch('torch._dirichlet_grad')
+@patch_dependency('torch._dirichlet_grad')
 def _torch_dirichlet_grad(x, concentration, total):
     unpatched_fn = _torch_dirichlet_grad._pyro_unpatched
     if x.is_cuda:
@@ -31,7 +31,7 @@ def _torch_dirichlet_grad(x, concentration, total):
 
 
 # This can be removed when super(...).__init__() is added upstream
-@_patch('torch.distributions.transforms.Transform.__init__')
+@patch_dependency('torch.distributions.transforms.Transform.__init__')
 def _Transform__init__(self, cache_size=0):
     self._cache_size = cache_size
     self._inv = None
@@ -44,7 +44,7 @@ def _Transform__init__(self, cache_size=0):
     super(torch.distributions.transforms.Transform, self).__init__()
 
 
-@_patch('torch.linspace')
+@patch_dependency('torch.linspace')
 def _torch_linspace(*args, **kwargs):
     unpatched_fn = _torch_linspace._pyro_unpatched
     template = torch.Tensor()
@@ -57,7 +57,7 @@ def _torch_linspace(*args, **kwargs):
     return ret
 
 
-@_patch('torch.einsum')
+@patch_dependency('torch.einsum')
 def _einsum(equation, operands):
     # work around torch.einsum performance issues
     # see https://github.com/pytorch/pytorch/issues/10661
