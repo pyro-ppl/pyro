@@ -10,6 +10,8 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 from pyro.contrib import autoname
+from pyro.infer import Trace_ELBO
+from pyro.infer.util import torch_backward, torch_item
 
 
 class Parameterized(nn.Module):
@@ -78,11 +80,11 @@ class Parameterized(nn.Module):
             # move param to _buffers
             p = self._parameters.pop(name)
             self.register_buffer(name, p)
-            self.autoguide(name, dist.Delta)
         elif name not in self._buffers:
             raise ValueError("There is no parameter with name: {}".format(name))
 
         self._priors[name] = prior
+        self.autoguide(name, dist.Delta)
 
     def autoguide(self, name, dist_constructor):
         """
@@ -198,6 +200,38 @@ class Parameterized(nn.Module):
             p_unconstrained = self._parameters["{}_unconstrained".format(name)]
             p = transform_to(self._constraints[name])(p_unconstrained)
         self.register_buffer(name, p)
+
+
+def train(gpmodule, optimizer=None, loss_fn=None, num_steps=1000):
+    """
+    A helper to optimize parameters for a GP module.
+
+    :param ~pyro.contrib.gp.models.GPModel gpmodule: A GP module.
+    :param ~torch.optim.Optimizer optimizer: A PyTorch optimizer instance.
+        By default, we use :class:`~torch.optim.Adam` with ``lr=0.01``.
+    :param callable loss_fn: A loss function which takes inputs are
+        ``gpmodule.model``, ``gpmodule.guide``, and returns ELBO loss.
+        By default, ``loss_fn=Trace_ELBO().differentiable_loss``.
+    :param int num_steps: Number of steps to run SVI.
+    :returns: a list of losses during the training procedure
+    :rtype: list
+    """
+    optimizer = (torch.optim.Adam(gpmodule.parameters(), lr=0.01)
+                 if optimizer is None else optimizer)
+    loss_fn = Trace_ELBO().differentiable_loss if loss_fn is None else loss_fn
+
+    def closure():
+        optimizer.zero_grad()
+        loss = loss_fn(gpmodule.model, gpmodule.guide)
+        torch_backward(loss)
+        return loss
+
+    losses = []
+    for i in range(num_steps):
+        loss = optimizer.step(closure)
+        losses.append(torch_item(loss))
+
+    return losses
 
 
 def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=False,

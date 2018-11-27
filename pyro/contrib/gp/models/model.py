@@ -1,9 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import torch
-
 from pyro.contrib.gp.util import Parameterized
-from pyro.infer import Trace_ELBO
 
 
 def _zero_mean_function(x):
@@ -56,14 +53,16 @@ class GPModel(Parameterized):
         >>> for trace, _ in mcmc_run._traces():
         ...     posterior_ls_trace.append(trace.nodes[ls_name]["value"])
 
-    + Using a variational inference (e.g. :class:`~pyro.infer.svi.SVI`) on the pair
-      :meth:`model`, :meth:`guide` as in `SVI tutorial
-      <http://pyro.ai/examples/svi_part_i.html>`_:
+    + Using a variational inference on the pair :meth:`model`, :meth:`guide`:
 
-        >>> optimizer = pyro.optim.Adam({"lr": 0.01})
-        >>> svi = SVI(gpr.model, gpr.guide, optimizer, loss=Trace_ELBO())
+        >>> optimizer = torch.optim.Adam(gpr.parameters(), lr=0.01)
+        >>> loss_fn = Trace_ELBO().differentiable_loss
+        >>>
         >>> for i in range(1000):
-        ...     svi.step()  # doctest: +SKIP
+        ...     optimizer.zero_grad()
+        ...     loss = loss_fn(gpr.model, gpr.guide)  # doctest: +SKIP
+        ...     loss.backward()  # doctest: +SKIP
+        ...     optimizer.step()
 
     To give a prediction on new dataset, simply use :meth:`forward` like any PyTorch
     :class:`torch.nn.Module`:
@@ -145,24 +144,27 @@ class GPModel(Parameterized):
             >>> kernel = gp.kernels.RBF(input_dim=3)
             >>> kernel.set_prior("variance", dist.Uniform(torch.tensor(0.5), torch.tensor(1.5)))
             >>> kernel.set_prior("lengthscale", dist.Uniform(torch.tensor(1.0), torch.tensor(3.0)))
-            >>> optimizer = pyro.optim.Adam({"lr": 0.01})
 
         + Batch training on a sparse variational model:
-
             >>> Xu = torch.tensor([[1., 0, 2]])  # inducing input
             >>> likelihood = gp.likelihoods.Gaussian()
             >>> vsgp = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood)
-            >>> svi = SVI(vsgp.model, vsgp.guide, optimizer, Trace_ELBO())
+            >>> optimizer = torch.optim.Adam(vsgp.parameters(), lr=0.01)
+            >>> loss_fn = Trace_ELBO().differentiable_loss
+            >>>
             >>> batched_X, batched_y = X.split(split_size=10), y.split(split_size=10)
             >>> for Xi, yi in zip(batched_X, batched_y):
+            ...     optimizer.zero_grad()
             ...     vsgp.set_data(Xi, yi)
-            ...     svi.step()  # doctest: +SKIP
+            ...     loss = loss_fn(vsgp.model, vsgp.guide)  # doctest: +SKIP
+            ...     loss.backward()  # doctest: +SKIP
+            ...     optimizer.step()
 
         + Making a two-layer Gaussian Process stochastic function:
 
-            >>> gpr1 = gp.models.GPRegression(X, None, kernel, name="GPR1")
+            >>> gpr1 = gp.models.GPRegression(X, None, kernel)
             >>> Z, _ = gpr1.model()
-            >>> gpr2 = gp.models.GPRegression(Z, y, kernel, name="GPR2")
+            >>> gpr2 = gp.models.GPRegression(Z, y, kernel)
             >>> def two_layer_model():
             ...     Z, _ = gpr1.model()
             ...     gpr2.set_data(Z, y)
@@ -187,34 +189,6 @@ class GPModel(Parameterized):
                              .format(X.shape[0], y.shape[-1]))
         self.X = X
         self.y = y
-
-    def optimize(self, optimizer=None, loss_fn=None, num_steps=1000):
-        """
-        A convenient method to optimize parameters for a GP model.
-
-        :param ~torch.optim.Optimizer optimizer: A PyTorch optimizer instance.
-            By default, we use :class:`~torch.optim.Adam` with ``lr=0.01``.
-        :param callable loss_fn: A loss function which takes
-            inputs are ``self.model``, ``self.guide``.
-        :param int num_steps: Number of steps to run SVI.
-        :returns: a list of losses during the training procedure
-        :rtype: list
-        """
-        optimizer = (torch.optim.Adam(self.parameters(), lr=0.01)
-                     if optimizer is None else optimizer)
-        loss_fn = Trace_ELBO().differentiable_loss if loss_fn is None else loss_fn
-
-        def closure():
-            optimizer.zero_grad()
-            loss = loss_fn(self.model, self.guide)
-            if torch.is_tensor(loss):
-                loss.backward()
-            return loss
-
-        losses = []
-        for i in range(num_steps):
-            losses.append(optimizer.step(closure).item())
-        return losses
 
     def _check_Xnew_shape(self, Xnew):
         """

@@ -117,19 +117,20 @@ def svgp_multiclass(num_steps, whiten):
     f = K.potrf(upper=False).matmul(torch.randn(100, 3))
     y = f.argmax(dim=-1)
 
-    kernel = gp.kernels.Matern32(1).add(
-        gp.kernels.WhiteNoise(1, variance=torch.tensor(0.01)))
+    kernel = gp.kernels.Sum(gp.kernels.Matern32(1),
+                            gp.kernels.WhiteNoise(1, variance=torch.tensor(0.01)))
     likelihood = gp.likelihoods.MultiClass(num_classes=3)
     Xu = X[::5].clone()
 
-    gpmodel = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood,
-                                            latent_shape=torch.Size([3]),
-                                            whiten=whiten)
+    gpmodule = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood,
+                                             latent_shape=torch.Size([3]),
+                                             whiten=whiten)
 
-    gpmodel.fix_param("Xu")
-    gpmodel.kernel.get_subkernel("WhiteNoise").fix_param("variance")
+    gpmodule.Xu.requires_grad_(False)
+    gpmodule.kernel.kern1.variance_unconstrained.requires_grad_(False)
 
-    gpmodel.optimize(optim.Adam({"lr": 0.0001}), num_steps=num_steps)
+    optimizer = torch.optim.Adam(gpmodule.parameters(), lr=0.0001)
+    gp.util.train(gpmodule, optimizer, num_steps=num_steps)
 
 
 @pytest.mark.parametrize('model, model_args, id', TEST_MODELS, ids=MODEL_IDS)
