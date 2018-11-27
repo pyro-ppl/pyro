@@ -22,21 +22,6 @@ def patch_dependency(target, root_module=torch):
     return decorator
 
 
-@patch_dependency('torch._standard_gamma')
-def _torch_standard_gamma(concentration):
-    unpatched_fn = _torch_standard_gamma._pyro_unpatched
-    if concentration.is_cuda:
-        return unpatched_fn(concentration.cpu()).cuda(concentration.get_device())
-    return unpatched_fn(concentration)
-
-
-@patch_dependency('torch.distributions.gamma._standard_gamma')
-def _standard_gamma(concentration):
-    if concentration.is_cuda:
-        return concentration.cpu()._standard_gamma().cuda(concentration.get_device())
-    return concentration._standard_gamma()
-
-
 @patch_dependency('torch._dirichlet_grad')
 def _torch_dirichlet_grad(x, concentration, total):
     unpatched_fn = _torch_dirichlet_grad._pyro_unpatched
@@ -85,10 +70,6 @@ def _einsum(equation, operands):
     elif equation == 'abc,ac->cb':
         y, x = operands
         return (x.unsqueeze(1) * y).sum(0).transpose(0, 1)
-
-    # this workaround can be deleted after this issue is fixed in release:
-    # https://github.com/pytorch/pytorch/issues/7763
-    operands = [t.clone() for t in operands]
 
     return _einsum._pyro_unpatched(equation, operands)
 

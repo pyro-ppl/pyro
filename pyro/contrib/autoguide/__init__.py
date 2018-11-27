@@ -639,7 +639,7 @@ class AutoLaplaceApproximation(AutoContinuous):
         loc = pyro.param("{}_loc".format(self.prefix))
         H = hessian(loss, loc.unconstrained())
         cov = H.inverse()
-        scale_tril = cov.potrf(upper=False)
+        scale_tril = cov.cholesky()
 
         # calculate scale_tril from self.guide()
         scale_tril_name = "{}_scale_tril".format(self.prefix)
