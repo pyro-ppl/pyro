@@ -205,7 +205,5 @@ def setup(app):
 
 # @jpchen's hack to get rtd builder to install latest pytorch
 if 'READTHEDOCS' in os.environ:
-    os.system('curl -o install.sh https://raw.githubusercontent.com/uber/pyro/dev/scripts/install_pytorch.sh')
-    os.system('curl https://raw.githubusercontent.com/uber/pyro/dev/README.md > README.md')
-    os.system('bash install.sh')
-    os.system('rm -f install.sh')
+    os.system("grep 'build_ver=.*' README.md | cut -f1 -d' ' | cut -f2 -d= | xargs -I {} pip install "
+              "torch_nightly=={} -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html")
