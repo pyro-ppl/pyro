@@ -77,13 +77,6 @@ GaussianScaleMixture
     :undoc-members:
     :show-inheritance:
 
-LowRankMultivariateNormal
--------------------------
-.. autoclass:: pyro.distributions.LowRankMultivariateNormal
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 MaskedMixture
 -------------
 .. autoclass:: pyro.distributions.MaskedMixture
