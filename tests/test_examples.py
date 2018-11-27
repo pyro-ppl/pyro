@@ -99,6 +99,7 @@ JIT_EXAMPLES = [
     xfail_jit('vae/ss_vae_M2.py --num-epochs=1 --jit'),
     xfail_jit('vae/vae.py --num-epochs=1 --jit'),
     xfail_jit('vae/vae_comparison.py --num-epochs=1 --jit'),
+    xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
 ]
 
 
