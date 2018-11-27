@@ -30,108 +30,6 @@ class CollapseEnumMessenger(poutine.enumerate_messenger.EnumerateMessenger):
             msg["is_observed"] = True
 
 
-def _is_collapsed(site):
-    # TODO fix behavior around replay
-    return site["type"] == "sample" and site["infer"].get("collapse")
-
-
-class CollapseSampleMessenger(pyro.poutine.messenger.Messenger):
-    """
-    Implements forward filtering / backward sampling for sampling
-    from the joint posterior distribution
-    """
-    def __init__(self, enum_trace):
-        self.enum_trace = enum_trace
-        self.enum_trace.compute_log_prob()
-        self.cache = None
-        self.enum_dims = set()
-
-        for name, site in self.enum_trace.nodes.items():
-            if _is_collapsed(site):
-                self.enum_dims.add(site["fn"].event_dim - site["value"].dim())
-
-        self.log_probs = {}
-        for name, site in self.enum_trace.nodes.items():
-            if site["type"] == "sample":
-                log_prob = site["log_prob"]
-                for dim in range(-log_prob.dim(), 0):
-                    if dim in self.enum_dims:
-                        log_prob = logsumexp(log_prob, dim, keepdim=True)
-                self.log_probs[name] = log_prob
-
-        self.log_prob_sum = sum(log_prob.sum() for log_prob in self.log_probs.values())
-
-    def __enter__(self):
-
-        self.log_factors = OrderedDict()
-        for site in self.enum_trace.nodes.values():
-            if site["type"] != "sample":
-                continue
-            ordinal = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
-            self.log_factors.setdefault(ordinal, []).append(site["log_prob"])
-
-        self.sum_dims = {x: set(i for i in range(-x.dim(), 0) if x.shape[i] > 1) & self.enum_dims
-                         for xs in self.log_factors.values() for x in xs}
-
-        self.cache = {}
-        return super(CollapseSampleMessenger, self).__enter__()
-
-    def __exit__(self, *args, **kwargs):
-        assert not any(self.sum_dims.values())
-        for i in itertools.count():
-            name = "_collapse_{}".format(i)
-            if name not in self.enum_trace:
-                break
-        # TODO put this into the right plate (the intersection of collapsed variable plates)
-        # used for e.g. vectorized num_particles
-        pyro.sample(name, dist.Bernoulli(logits=self.log_prob_sum), obs=torch.tensor(1.),
-                    infer={"is_auxiliary": True})
-        return super(CollapseSampleMessenger, self).__exit__(*args, **kwargs)
-
-    def _pyro_sample(self, msg):
-        name = msg["name"]
-        if name in self.log_probs:
-            msg["log_prob"] = self.log_probs[name]
-
-        if not _is_collapsed(msg):
-            return None
-
-        enum_dim = self.enum_trace.nodes[name]["infer"].get("_enumerate_dim")
-        assert enum_dim is not None
-
-        msg["infer"]["_enumerate_dim"] = enum_dim
-        assert enum_dim < 0, "{} {}".format(name, enum_dim)
-        for value in self.sum_dims.values():
-            value.discard(enum_dim)
-
-        # import pdb; pdb.set_trace()
-
-        with shared_intermediates(self.cache) as cache:
-            ordinal = frozenset(f for f in msg["cond_indep_stack"] if f.vectorized)
-            logits = contract_to_tensor(self.log_factors, self.sum_dims, ordinal, cache=cache)
-            logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
-            while logits.shape[0] == 1:
-                logits.squeeze_(0)
-
-        msg["fn"] = _make_dist(msg["fn"], logits)
-        msg["stop"] = True
-
-    def _postprocess_message(self, msg):
-        if not _is_collapsed(msg):
-            return super(CollapseSampleMessenger, self)._postprocess_message(msg)
-
-        enum_dim = msg["infer"].get("_enumerate_dim")
-        if enum_dim is not None:
-            for t, terms in self.log_factors.items():
-                for i, term in enumerate(terms):
-                    if term.dim() >= -enum_dim and term.shape[enum_dim] > 1:
-                        term_, value_ = broadcast_all(term, msg["value"])
-                        value_ = value_.index_select(enum_dim, value_.new_tensor([0], dtype=torch.long))
-                        sampled_term = term_.gather(enum_dim, value_.long())
-                        terms[i] = sampled_term
-                        self.sum_dims[sampled_term] = self.sum_dims.pop(term) - {enum_dim}
-
-
 def collapse(model, first_available_dim):
     """
     Use `ubersum` to collapse sample sites marked with `site["infer"]["collapse"] = True`
@@ -145,7 +43,69 @@ def collapse(model, first_available_dim):
                 CollapseEnumMessenger(first_available_dim)(model)
             ).get_trace(*args, **kwargs)
 
-        with CollapseSampleMessenger(enum_trace):
-            return model(*args, **kwargs)
+        prune_subsample_sites(enum_trace)
+        enum_trace.compute_log_prob()
+        enum_trace.pack_tensors()
+
+        log_probs = OrderedDict()
+        dim_to_frame = {}
+        frame_to_dim = {}
+        sum_dims = set()
+        queries = []
+        for node in enum_trace.values():
+            if node["type"] == "sample":
+
+                log_prob = node["packed"]["log_prob"]
+                ordinal = frozenset(log_prob._pyro_dims[f.dim] for f in node["cond_indep_stack"] if f.vectorized)
+                log_probs.setdefault(ordinal, []).append(log_prob)
+                sum_dims.update(set(log_prob._pyro_dims))
+
+                for frame in ordinal:
+                    frame_dim = log_prob._pyro_dims[frame.dim]
+                    dim_to_frame[frame_dim] = frame
+                    frame_to_dim[frame] = frame_dim
+                    sum_dims.remove(frame_dim)
+
+                # Note we mark all sites with require_backward to get correct ordinals and slice non-enumerated samples
+                if not node["is_observed"]:
+                    queries.append(log_prob)
+                    require_backward(log_prob)
+
+        ring = SampleRing()
+        contract_tensor_tree(log_probs, sum_dims, ring=ring)
+        query_ordinal = {} 
+        for ordinal, terms in log_probs.items():
+            for term in terms:
+                term._pyro_backward()
+            # Note: makes collapse quadratic in number of ordinals
+            for query in queries:
+                if query not in query_ordinal and query._pyro_backward_result is not None:
+                    query_ordinal[query] = ordinal
+
+        collapsed_trace = OrderedDict()
+        for node in enum_trace.values():
+            if node["type"] == "sample" and not node["is_observed"]:
+                new_node = {}
+                log_prob = node["packed"]["log_prob"]
+                ordinal = query_ordinal[log_prob]
+                new_node["cond_indep_stack"] = tuple(
+                    f for f in node["cond_indep_stack"]
+                    if not f.vectorized or frame_to_dim[f] in ordinal)
+
+                sample = log_prob._pyro_backward_result
+                sample_dim = log_prob._pyro_dims[-1]
+                new_node["infer"] = node["infer"].copy()
+                
+                new_value = node["value"]
+                # TODO move this into a custom SampleRing Leaf implementation
+                for index, dim in zip(sample, sample._pyro_sample_dims):
+                    if dim in new_value._pyro_dims:
+                        new_value = packed.gather(new_value, index, dim)
+                new_node["value"] = new_value
+                collapsed_trace[node["name"]] = new_node
+
+        # TODO add observe sites induced by marginalization (one per ordinal in log_probs)
+        # TODO replay model correctly against collapsed_trace (get correct cond_indep_stack)
+        return model(*args, **kwargs)
 
     return _collapsed_model
