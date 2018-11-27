@@ -31,6 +31,7 @@ Pyro Documentation
 
    contrib.autoguide
    contrib.autoname
+   contrib.bnn
    contrib.gp
    contrib.tracking
    contrib.oed
