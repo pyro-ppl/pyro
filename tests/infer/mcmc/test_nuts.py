@@ -39,8 +39,8 @@ TEST_CASES = [
         warmup_steps=200,
         expected_means=[0.25, 0.50, 0.75],
         expected_precs=[1.33, 1, 1.33],
-        mean_tol=0.08,
-        std_tol=0.08,
+        mean_tol=0.09,
+        std_tol=0.09,
     ),
     T(
         GaussianChain(dim=10, chain_len=4, num_obs=1),
@@ -96,8 +96,7 @@ def jit_idfn(param):
     'fixture, num_samples, warmup_steps, expected_means, expected_precs, mean_tol, std_tol',
     TEST_CASES,
     ids=TEST_IDS)
-@pytest.mark.skipif('CI' in os.environ or 'CUDA_TEST' in os.environ,
-                    reason='Slow test - skip on CI/CUDA')
+@pytest.mark.skip(reason='Slow test (https://github.com/pytorch/pytorch/issues/12190)')
 @pytest.mark.disable_validation()
 def test_nuts_conjugate_gaussian(fixture,
                                  num_samples,
