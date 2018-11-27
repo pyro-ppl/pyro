@@ -183,7 +183,9 @@ def test_inference(model_class, X, y, kernel, likelihood):
     target_y = generator(sample_shape=torch.Size([1000])).detach()
     gp.set_data(X, target_y)
 
-    train(gp)
+    # TODO: filtering non-grad Param is unnecessary for pytorch 1.0
+    optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, gp.parameters()), lr=0.01)
+    train(gp, optimizer)
 
     y_cov = gp.kernel(X)
     target_y_cov = kernel(X)

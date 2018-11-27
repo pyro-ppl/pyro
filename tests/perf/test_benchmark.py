@@ -128,8 +128,8 @@ def svgp_multiclass(num_steps, whiten):
 
     gpmodule.Xu.requires_grad_(False)
     gpmodule.kernel.kern1.variance_unconstrained.requires_grad_(False)
-
-    optimizer = torch.optim.Adam(gpmodule.parameters(), lr=0.0001)
+    optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, gpmodule.parameters()),
+                                 lr=0.0001)
     gp.util.train(gpmodule, optimizer, num_steps=num_steps)
 
 
