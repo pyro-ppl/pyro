@@ -25,12 +25,12 @@ def _compute_chain_variance_stats(input):
 def gelman_rubin(input, chain_dim=0, sample_dim=1):
     """
     Computes R-hat over chains of samples. It is required that
-    `input.size(sample_dim) >= 2` and `input.size(chain_dim) >= 2`.
+    ``input.size(sample_dim) >= 2`` and ``input.size(chain_dim) >= 2``.
 
     :param torch.Tensor input: the input tensor.
     :param int chain_dim: the chain dimension.
     :param int sample_dim: the sample dimension.
-    :returns torch.Tensor: R-hat of `input`.
+    :returns torch.Tensor: R-hat of ``input``.
     """
     assert input.dim() >= 2
     assert input.size(sample_dim) >= 2
@@ -51,12 +51,12 @@ def gelman_rubin(input, chain_dim=0, sample_dim=1):
 def split_gelman_rubin(input, chain_dim=0, sample_dim=1):
     """
     Computes R-hat over chains of samples. It is required that
-    `input.size(sample_dim) >= 4`.
+    ``input.size(sample_dim) >= 4``.
 
     :param torch.Tensor input: the input tensor.
     :param int chain_dim: the chain dimension.
     :param int sample_dim: the sample dimension.
-    :returns torch.Tensor: split R-hat of `input`.
+    :returns torch.Tensor: split R-hat of ``input``.
     """
     assert input.dim() >= 2
     assert input.size(sample_dim) >= 4
@@ -94,13 +94,13 @@ def _fft_next_good_size(N):
 
 def autocorrelation(input, dim=0):
     """
-    Computes the autocorrelation of samples at dimension `dim`.
+    Computes the autocorrelation of samples at dimension ``dim``.
 
     Reference: https://en.wikipedia.org/wiki/Autocorrelation#Efficient_computation
 
     :param torch.Tensor input: the input tensor.
     :param int dim: the dimension to calculate autocorrelation.
-    :returns torch.Tensor: autocorrelation of `input`.
+    :returns torch.Tensor: autocorrelation of ``input``.
     """
     if (not input.is_cuda) and (not torch.backends.mkl.is_available()):
         raise NotImplementedError("For CPU tensor, this method is only supported "
@@ -137,18 +137,18 @@ def autocorrelation(input, dim=0):
 
 def autocovariance(input, dim=0):
     """
-    Computes the autocovariance of samples at dimension `dim`.
+    Computes the autocovariance of samples at dimension ``dim``.
 
     :param torch.Tensor input: the input tensor.
     :param int dim: the dimension to calculate autocorrelation.
-    :returns torch.Tensor: autocorrelation of `input`.
+    :returns torch.Tensor: autocorrelation of ``input``.
     """
     return autocorrelation(input, dim) * input.var(dim, unbiased=False, keepdim=True)
 
 
 def _cummin(input):
     """
-    Computes cummulative minimum of input at dimension `dim=0`.
+    Computes cummulative minimum of input at dimension ``dim=0``.
 
     :param torch.Tensor input: the input tensor.
     :returns torch.Tensor: accumulate min of `input` at dimension `dim=0`.
@@ -175,7 +175,7 @@ def effective_sample_size(input, chain_dim=0, sample_dim=1):
     :param torch.Tensor input: the input tensor.
     :param int chain_dim: the chain dimension.
     :param int sample_dim: the sample dimension.
-    :returns torch.Tensor: effective sample size of `input`.
+    :returns torch.Tensor: effective sample size of ``input``.
     """
     assert input.dim() >= 2
     assert input.size(sample_dim) >= 2
@@ -222,12 +222,12 @@ def effective_sample_size(input, chain_dim=0, sample_dim=1):
 
 def resample(input, num_samples, dim=0, replacement=False):
     """
-    Draws `num_samples` samples from `input` at dimension `dim`.
+    Draws ``num_samples`` samples from ``input`` at dimension ``dim``.
 
     :param torch.Tensor input: the input tensor.
-    :param int num_samples: the number of samples to draw from `input`.
-    :param int dim: dimension to draw from `input`.
-    :returns torch.Tensor: samples drawn randomly from `input`.
+    :param int num_samples: the number of samples to draw from ``input``.
+    :param int dim: dimension to draw from ``input``.
+    :returns torch.Tensor: samples drawn randomly from ``input``.
     """
     weights = input.new_ones(input.size(dim))
     indices = torch.multinomial(weights, num_samples, replacement)
@@ -236,13 +236,13 @@ def resample(input, num_samples, dim=0, replacement=False):
 
 def quantile(input, probs, dim=0):
     """
-    Computes quantiles of `input` at `probs`. If `probs` is a scalar,
-    the output will be squeezed at `dim`.
+    Computes quantiles of ``input`` at ``probs``. If ``probs`` is a scalar,
+    the output will be squeezed at ``dim``.
 
     :param torch.Tensor input: the input tensor.
     :param list probs: quantile positions.
-    :param int dim: dimension to take quantiles from `input`.
-    :returns torch.Tensor: quantiles of `input` at `probs`.
+    :param int dim: dimension to take quantiles from ``input``.
+    :returns torch.Tensor: quantiles of ``input`` at ``probs``.
     """
     if isinstance(probs, (numbers.Number, list, tuple)):
         probs = input.new_tensor(probs)
@@ -270,8 +270,8 @@ def pi(input, prob, dim=0):
 
     :param torch.Tensor input: the input tensor.
     :param float prob: the probability mass of samples within the interval.
-    :param int dim: dimension to calculate percentile interval from `input`.
-    :returns torch.Tensor: quantiles of `input` at `probs`.
+    :param int dim: dimension to calculate percentile interval from ``input``.
+    :returns torch.Tensor: quantiles of ``input`` at ``probs``.
     """
     return quantile(input, [(1 - prob) / 2, (1 + prob) / 2], dim)
 
@@ -279,12 +279,12 @@ def pi(input, prob, dim=0):
 def hpdi(input, prob, dim=0):
     """
     Computes "highest posterior density interval" which is the narrowest
-    interval with probability mass `prob`.
+    interval with probability mass ``prob``.
 
     :param torch.Tensor input: the input tensor.
     :param float prob: the probability mass of samples within the interval.
-    :param int dim: dimension to calculate percentile interval from `input`.
-    :returns torch.Tensor: quantiles of `input` at `probs`.
+    :param int dim: dimension to calculate percentile interval from ``input``.
+    :returns torch.Tensor: quantiles of ``input`` at ``probs``.
     """
     sorted_input = input.sort(dim)[0]
     mass = input.size(dim)
@@ -310,7 +310,7 @@ def waic(input, pointwise=False, dim=0):
     Aki Vehtari, Andrew Gelman
 
     :param torch.Tensor input: the input tensor, which is log likelihood of a model.
-    :param int dim: the sample dimension of `input`.
+    :param int dim: the sample dimension of ``input``.
     :returns tuple: tuple of WAIC and effective number of parameters.
     """
     # computes log pointwise predictive density: formula (3) of [1]

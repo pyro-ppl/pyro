@@ -99,6 +99,11 @@ class TracePosterior(object):
 
         [1] `Practical Bayesian model evaluation using leave-one-out cross-validation and WAIC`,
         Aki Vehtari, Andrew Gelman, and Jonah Gabry
+
+        :param bool pointwise: a flag to decide if we want to get a vectorized WAIC or not. When
+            ``pointwise=False``, returns the sum.
+        :returns OrderedDict: a dictionary containing values of WAIC and its effective number of
+            parameters.
         """
         if not self.exec_traces:
             return {}
