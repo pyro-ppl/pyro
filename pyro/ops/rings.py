@@ -34,6 +34,10 @@ class Ring(object):
     def __init__(self, cache=None):
         self._cache = {} if cache is None else cache
 
+    @property
+    def cache(self):
+        return self._cache
+
     def _hash_by_id(self, tensor):
         """
         Returns the id of a tensor and saves the tensor so that this id can be
