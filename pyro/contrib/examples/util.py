@@ -8,11 +8,11 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import MNIST
 
-from pyro.util import patch_dependency
+from pyro.distributions.torch_patch import patch_dependency
 
 
 @patch_dependency('torchvision.datasets.MNIST', torchvision)
-class _MNIST(MNIST):
+class _MNIST(getattr(MNIST, '_pyro_unpatched', MNIST)):
     urls = [
         "https://d2fefpcigoriu7.cloudfront.net/datasets/mnist/train-images-idx3-ubyte.gz",
         "https://d2fefpcigoriu7.cloudfront.net/datasets/mnist/train-labels-idx1-ubyte.gz",
