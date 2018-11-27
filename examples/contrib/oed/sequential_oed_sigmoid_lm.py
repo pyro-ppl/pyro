@@ -14,7 +14,7 @@ from pyro.contrib.util import rmv
 from pyro.contrib.glmm import sigmoid_model, rf_group_assignments
 from pyro.contrib.glmm.guides import SigmoidGuide
 
-from util import check_compatible_version
+from util import check_pyro_version
 """
 Sequential optimal experiment design using a sigmoid-transformed linear model.
 
@@ -145,7 +145,7 @@ def main(num_experiments, num_runs, plot=True):
 
 
 if __name__ == "__main__":
-    check_compatible_version()
+    check_pyro_version()
     parser = argparse.ArgumentParser(description="Sigmoid iterated experiment design")
     parser.add_argument("--num-experiments", nargs="?", default=5, type=int)
     parser.add_argument("--num-runs", nargs="?", default=5, type=int)

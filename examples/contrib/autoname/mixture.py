@@ -10,7 +10,7 @@ import pyro.distributions as dist
 from pyro.contrib.autoname import named
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.optim import Adam
-from util import check_compatible_version
+from util import check_pyro_version
 
 # This is a simple gaussian mixture model.
 #
@@ -75,7 +75,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    check_compatible_version()
+    check_pyro_version()
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=200, type=int)
     parser.add_argument('--jit', action='store_true')

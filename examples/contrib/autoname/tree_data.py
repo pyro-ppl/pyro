@@ -10,7 +10,7 @@ import pyro.distributions as dist
 from pyro.contrib.autoname import named
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
-from util import check_compatible_version
+from util import check_pyro_version
 
 # This is a linear mixed-effects model over arbitrary json-like data.
 # Data can be a number, a list of data, or a dict with data values.
@@ -105,7 +105,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    check_compatible_version()
+    check_pyro_version()
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=100, type=int)
     args = parser.parse_args()

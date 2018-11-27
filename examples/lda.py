@@ -22,7 +22,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.optim import Adam
-from util import check_compatible_version
+from util import check_pyro_version
 
 logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.INFO)
 
@@ -124,7 +124,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    check_compatible_version()
+    check_pyro_version()
     parser = argparse.ArgumentParser(description="Amortized Latent Dirichlet Allocation")
     parser.add_argument("-t", "--num-topics", default=8, type=int)
     parser.add_argument("-w", "--num-words", default=1024, type=int)

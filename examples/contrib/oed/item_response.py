@@ -6,7 +6,7 @@ import torch
 import pyro
 from pyro.contrib.oed.eig import naive_rainforth_eig
 from pyro.contrib.glmm import lmer_model
-from util import check_compatible_version
+from util import check_pyro_version
 
 """
 Item response example.
@@ -70,7 +70,7 @@ def main(N, M):
 
 
 if __name__ == "__main__":
-    check_compatible_version()
+    check_pyro_version()
     parser = argparse.ArgumentParser(description="Item response experiment design using NMC")
     parser.add_argument("-N", nargs="?", default=5000, type=int)
     parser.add_argument("-M", nargs="?", default=5000, type=int)

@@ -11,7 +11,7 @@ import collections
 
 import pyro
 import pyro.distributions as dist
-from util import check_compatible_version
+from util import check_pyro_version
 
 from search_inference import HashingMarginal, BestFirstSearch, factor, memoize
 
@@ -338,7 +338,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    check_compatible_version()
+    check_pyro_version()
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-samples', default=10, type=int)
     args = parser.parse_args()

@@ -21,7 +21,7 @@ from observations import multi_mnist
 import pyro
 import pyro.optim as optim
 import pyro.poutine as poutine
-from util import check_compatible_version
+from util import check_pyro_version
 from air import AIR, latents_to_tensor
 from pyro.infer import SVI, JitTraceGraph_ELBO, TraceGraph_ELBO
 from viz import draw_many, tensor_to_objs
@@ -245,7 +245,7 @@ def main(**kwargs):
 
 
 if __name__ == '__main__':
-    check_compatible_version()
+    check_pyro_version()
     parser = argparse.ArgumentParser(description="Pyro AIR example", argument_default=argparse.SUPPRESS)
     parser.add_argument('-n', '--num-steps', type=int, default=int(1e8),
                         help='number of optimization steps to take')

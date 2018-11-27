@@ -15,7 +15,7 @@ from pyro.infer import EmpiricalMarginal
 from pyro.infer.abstract_infer import TracePredictive
 from pyro.infer.mcmc import MCMC, NUTS
 from pyro.ops.stats import effective_sample_size, split_gelman_rubin
-from util import check_compatible_version
+from util import check_pyro_version
 
 """
 Example has been adapted from [1]. It demonstrates how to do Bayesian inference using
@@ -329,7 +329,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    check_compatible_version()
+    check_pyro_version()
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
     parser.add_argument("-n", "--num-samples", nargs="?", default=200, type=int)
     parser.add_argument("--num-chains", nargs='?', default=4, type=int)

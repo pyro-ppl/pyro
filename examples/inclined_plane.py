@@ -8,7 +8,7 @@ import torch
 import pyro
 from pyro.distributions import Normal, Uniform
 from pyro.infer import EmpiricalMarginal, Importance
-from util import check_compatible_version
+from util import check_pyro_version
 
 """
 Samantha really likes physics---but she likes Pyro even more. Instead of using
@@ -122,7 +122,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    check_compatible_version()
+    check_pyro_version()
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-samples', default=500, type=int)
     args = parser.parse_args()

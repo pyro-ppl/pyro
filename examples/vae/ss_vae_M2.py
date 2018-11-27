@@ -12,7 +12,7 @@ from pyro.optim import Adam
 from utils.custom_mlp import MLP, Exp
 from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
 from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
-from util import check_compatible_version
+from util import check_pyro_version
 
 
 class SSVAE(nn.Module):
@@ -381,7 +381,7 @@ EXAMPLE_RUN = "example run: python ss_vae_M2.py --seed 0 --cuda -n 2 --aux-loss 
               "-sup 3000 -zd 50 -hl 500 -lr 0.00042 -b1 0.95 -bs 200 -log ./tmp.log"
 
 if __name__ == "__main__":
-    check_compatible_version()
+    check_pyro_version()
     parser = argparse.ArgumentParser(description="SS-VAE\n{}".format(EXAMPLE_RUN))
 
     parser.add_argument('--cuda', action='store_true',
