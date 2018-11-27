@@ -55,6 +55,9 @@ class Parameterized(nn.Module):
             constraint. See :mod:`torch.distributions.constraints` for a list of
             constraints.
         """
+        if constraint is constraints.real:
+            return
+
         if name in self._parameters:
             # move param to _buffers
             p = self._parameters.pop(name)
@@ -106,14 +109,16 @@ class Parameterized(nn.Module):
         # constructors. For example, in LowRankMVN, we need argument `rank`.
         p = self._buffers[name]
         if dist_constructor is dist.Delta:
-            p_map = Parameter(biject_to(self._priors[name].support).inv(p).detach())
+            p_map = Parameter(p.detach())
             self.register_parameter("{}_map".format(name), p_map)
+            self.set_constraint("{}_map".format(name), self._priors[name].support)
+            dist_args = set()
         elif dist_constructor is dist.Normal:
             loc = Parameter(biject_to(self._priors[name].support).inv(p).detach())
             scale = Parameter(loc.new_ones(loc.shape))
             self.register_parameter("{}_loc".format(name), loc)
             self.register_parameter("{}_scale".format(name), scale)
-            self.set_constraint("{}_scale".format(name), constraints.positive)
+            dist_args = {"loc", "scale"}
         elif dist_constructor is dist.MultivariateNormal:
             loc = Parameter(biject_to(self._priors[name].support).inv(p).detach())
             n = loc.size(-1)
@@ -121,11 +126,14 @@ class Parameterized(nn.Module):
             scale_tril = Parameter(identity.repeat(loc.shape[:-1] + (1, 1)))
             self.register_parameter("{}_loc".format(name), loc)
             self.register_parameter("{}_scale_tril".format(name), scale_tril)
-            self.set_constraint("{}_scale_tril".format(name), constraints.lower_cholesky)
+            dist_args = {"loc", "scale_tril"}
         else:
             raise ValueError("Currently, only support autoguide for Delta, Normal, "
                              "and MultivariateNormal distributions.")
-        self._guides[name] = dist_constructor
+
+        for arg in dist_args:
+            self.set_constraint("{}_{}".format(name, arg), dist_constructor.arg_constraints[arg])
+        self._guides[name] = (dist_constructor, dist_args)
 
     def set_mode(self, mode):
         """
@@ -160,27 +168,28 @@ class Parameterized(nn.Module):
             self._register_param(name)
 
     def _sample_from_guide(self, name):
-        if self._guides[name] is dist.Delta:
-            p_map = getattr(self, "{}_map".format(name))
-            guide = dist.Delta(p_map)
-        elif self._guides[name] is dist.Normal:
-            loc = getattr(self, "{}_loc".format(name))
-            scale = getattr(self, "{}_scale".format(name))
-            guide = dist.Normal(loc, scale)
-        elif self._guides[name] is dist.MultivariateNormal:
-            loc = getattr(self, "{}_loc".format(name))
-            scale_tril = getattr(self, "{}_scale_tril".format(name))
-            guide = dist.MultivariateNormal(loc, scale_tril=scale_tril)
+        dist_constructor, dist_args = self._guides[name]
 
+        if dist_constructor is dist.Delta:
+            p_map = getattr(self, "{}_map".format(name))
+            return pyro.sample(name, dist.Delta(p_map).independent())
+
+        # create guide
+        dist_args = {arg: getattr(self, "{}_{}".format(name, arg)) for arg in dist_args}
+        guide = dist_constructor(**dist_args)
+
+        # no need to do transforms when support is real
         if self._priors[name].support is constraints.real:
-            p = pyro.sample(name, guide.independent())
-        else:
-            unconstrained_value = pyro.sample("{}_latent".format(name), guide.independent(),
-                                              infer={"is_auxiliary": True})
-            transform = biject_to(self._priors[name].support)
-            value = transform(unconstrained_value)
-            log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
-            p = pyro.sample(name, dist.Delta(value, log_density.sum(), event_dim=value.dim()))
+            return pyro.sample(name, guide.independent())
+
+        # otherwise, we do inference in unconstrained space and transform the value
+        # back to original space
+        unconstrained_value = pyro.sample("{}_latent".format(name), guide.independent(),
+                                          infer={"is_auxiliary": True})
+        transform = biject_to(self._priors[name].support)
+        value = transform(unconstrained_value)
+        log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
+        p = pyro.sample(name, dist.Delta(value, log_density.sum(), event_dim=value.dim()))
         return p
 
     def _register_param(self, name):

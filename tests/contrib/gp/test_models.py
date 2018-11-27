@@ -23,50 +23,52 @@ T = namedtuple("TestGPModel", ["model_class", "X", "y", "kernel", "likelihood"])
 X = torch.tensor([[1., 5., 3.], [4., 3., 7.]])
 y1D = torch.tensor([2., 1.])
 y2D = torch.tensor([[1., 2.], [3., 3.], [1., 4.], [-1., 1.]])
-kernel = RBF(input_dim=3, variance=torch.tensor(3.), lengthscale=torch.tensor(2.))
-noise = torch.tensor(1e-6)
-likelihood = Gaussian(noise)
+kernel_generator = lambda: RBF(input_dim=3, variance=torch.tensor(3.),
+                               lengthscale=torch.tensor(2.))
+noise = torch.tensor(1.1e-6)
+likelihood_generator = lambda: Gaussian(torch.tensor(1.1e-6))
 
-TEST_CASES = [
+TEST_CASES_generator = lambda: [
     T(
         GPRegression,
-        X, y1D, kernel, noise
+        X, y1D, kernel_generator(), noise
     ),
     T(
         GPRegression,
-        X, y2D, kernel, noise
+        X, y2D, kernel_generator(), noise
     ),
     T(
         SparseGPRegression,
-        X, y1D, kernel, noise
+        X, y1D, kernel_generator(), noise
     ),
     T(
         SparseGPRegression,
-        X, y2D, kernel, noise
+        X, y2D, kernel_generator(), noise
     ),
     T(
         VariationalGP,
-        X, y1D, kernel, likelihood
+        X, y1D, kernel_generator(), likelihood_generator()
     ),
     T(
         VariationalGP,
-        X, y2D, kernel, likelihood
+        X, y2D, kernel_generator(), likelihood_generator()
     ),
     T(
         VariationalSparseGP,
-        X, y1D, kernel, likelihood
+        X, y1D, kernel_generator(), likelihood_generator()
     ),
     T(
         VariationalSparseGP,
-        X, y2D, kernel, likelihood
+        X, y2D, kernel_generator(), likelihood_generator()
     ),
 ]
 
 TEST_IDS = [t[0].__name__ + "_y{}D".format(str(t[2].dim()))
-            for t in TEST_CASES]
+            for t in TEST_CASES_generator()]
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES_generator(),
+                         ids=TEST_IDS)
 def test_model(model_class, X, y, kernel, likelihood):
     if model_class is SparseGPRegression or model_class is VariationalSparseGP:
         gp = model_class(X, None, kernel, X, likelihood)
@@ -82,7 +84,8 @@ def test_model(model_class, X, y, kernel, likelihood):
         assert_equal(var, kernel(X).diag())
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES_generator(),
+                         ids=TEST_IDS)
 def test_forward(model_class, X, y, kernel, likelihood):
     if model_class is SparseGPRegression or model_class is VariationalSparseGP:
         gp = model_class(X, y, kernel, X, likelihood)
@@ -129,7 +132,8 @@ def test_forward(model_class, X, y, kernel, likelihood):
     assert_equal(cov, torch.eye(cov.shape[-1]).expand(cov.shape) * 10)
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES_generator(),
+                         ids=TEST_IDS)
 def test_forward_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
     # regression models don't use latent_shape, no need for test
     if model_class is GPRegression or model_class is SparseGPRegression:
@@ -153,7 +157,8 @@ def test_forward_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
     assert_equal(cov0.diag(), var1)
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES_generator(),
+                         ids=TEST_IDS)
 @pytest.mark.init(rng_seed=0)
 def test_inference(model_class, X, y, kernel, likelihood):
     # skip variational GP models because variance/lengthscale highly
@@ -233,7 +238,8 @@ def test_inference_whiten_vsgp():
     assert_equal((loc - target).abs().mean().item(), 0, prec=0.07)
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES_generator(),
+                         ids=TEST_IDS)
 def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
     # regression models don't use latent_shape (default=torch.Size([]))
     if model_class is GPRegression or model_class is SparseGPRegression:
@@ -246,7 +252,8 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
     train(gp, num_steps=1)
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES_generator(),
+                         ids=TEST_IDS)
 def test_inference_with_whiten(model_class, X, y, kernel, likelihood):
     # regression models don't use whiten
     if model_class is GPRegression or model_class is SparseGPRegression:
@@ -259,7 +266,8 @@ def test_inference_with_whiten(model_class, X, y, kernel, likelihood):
     train(gp, num_steps=1)
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES_generator(),
+                         ids=TEST_IDS)
 def test_hmc(model_class, X, y, kernel, likelihood):
     if model_class is SparseGPRegression or model_class is VariationalSparseGP:
         gp = model_class(X, y, kernel, X, likelihood)
@@ -315,7 +323,8 @@ def test_inference_deepGP():
     train(deepgp, num_steps=1)
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES_generator(),
+                         ids=TEST_IDS)
 def test_gplvm(model_class, X, y, kernel, likelihood):
     if model_class is SparseGPRegression or model_class is VariationalSparseGP:
         gp = model_class(X, y, kernel, X, likelihood)

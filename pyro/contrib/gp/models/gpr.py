@@ -120,8 +120,13 @@ class GPRegression(GPModel):
         self._check_Xnew_shape(Xnew)
         self.set_mode("guide")
 
+        N = self.X.shape[0]
+        Kff = self.kernel(self.X).contiguous()
+        Kff.view(-1)[::N + 1] += self.noise  # add noise to the diagonal
+        Lff = Kff.potrf(upper=False)
+
         y_residual = self.y - self.mean_function(self.X)
-        loc, cov = conditional(Xnew, self.X, self.kernel, y_residual,
+        loc, cov = conditional(Xnew, self.X, self.kernel, y_residual, None, Lff,
                                full_cov=full_cov, jitter=self.jitter)
 
         if full_cov and not noiseless:
