@@ -47,16 +47,19 @@ class CNN(nn.Module):
         return x
 
 
-def train(args, train_loader, gpmodel, svi, epoch):
+def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
     for batch_idx, (data, target) in enumerate(train_loader):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
-        gpmodel.set_data(data, target)
-        loss = svi.step()
+        optimizer.zero_grad()
+        gpmodule.set_data(data, target)
+        loss = loss_fn(gpmodule.model, gpmodule.guide)
+        loss.backward()
+        optimizer.step()
         if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss))
+            print("Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}"
+                  .format(epoch, batch_idx * len(data), len(train_loader.dataset),
+                          100. * batch_idx / len(train_loader), loss))
 
 
 def test(args, test_loader, gpmodel):
@@ -71,16 +74,16 @@ def test(args, test_loader, gpmodel):
         # compare prediction and target to count accuaracy
         correct += pred.eq(target).long().cpu().sum()
 
-    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
-        correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
+    print("\nTest set: Accuracy: {}/{} ({:.0f}%)\n"
+          .format(correct, len(test_loader.dataset), 100. * correct / len(test_loader.dataset)))
 
 
 def main(args):
     train_loader = get_data_loader(dataset_name='MNIST',
                                    data_dir=args.data_dir,
                                    batch_size=args.batch_size,
-                                   dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
+                                   dataset_transforms=[transforms.Normalize((0.1307,),
+                                                                            (0.3081,))],
                                    is_training_set=True,
                                    shuffle=True)
     test_loader = get_data_loader(dataset_name='MNIST',
@@ -90,41 +93,43 @@ def main(args):
                                   is_training_set=False,
                                   shuffle=True)
 
-    cnn = CNN().cuda() if args.cuda else CNN()
-
-    # optimizer in SVI just works with params which are active inside its model/guide scope;
-    # so we need this helper to mark cnn's parameters active for each `svi.step()` call.
-    def cnn_fn(x):
-        return pyro.module("CNN", cnn)(x)
     # Create deep kernel by warping RBF with CNN.
     # CNN will transform a high dimension image into a low dimension 2D tensors for RBF kernel.
     # This kernel accepts inputs are inputs of CNN and gives outputs are covariance matrix of RBF
     # on outputs of CNN.
-    kernel = gp.kernels.RBF(input_dim=10, lengthscale=torch.ones(10)).warp(iwarping_fn=cnn_fn)
+    cnn = CNN()
+    rbf = gp.kernels.RBF(input_dim=10, lengthscale=torch.ones(10))
+    deep_kernel = gp.kernels.Warping(rbf, iwarping_fn=cnn)
 
     # init inducing points (taken randomly from dataset)
     Xu = next(iter(train_loader))[0][:args.num_inducing]
     # use MultiClass likelihood for 10-class classification problem
     likelihood = gp.likelihoods.MultiClass(num_classes=10)
-    # Because we use Categorical distribution in MultiClass likelihood, we need GP model returns a
-    # list of probabilities of each class. Hence it is required to use latent_shape = 10.
+    # Because we use Categorical distribution in MultiClass likelihood, we need GP module returns
+    # a list of probabilities of each class. Hence it is required to use latent_shape = 10.
     # Turns on "whiten" flag will help optimization for variational models.
-    gpmodel = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=kernel, Xu=Xu,
-                                            likelihood=likelihood, latent_shape=torch.Size([10]),
-                                            num_data=60000, whiten=True)
+    gpmodule = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=deep_kernel, Xu=Xu,
+                                             likelihood=likelihood, latent_shape=torch.Size([10]),
+                                             num_data=60000, whiten=True)
     if args.cuda:
-        gpmodel.cuda()
+        gpmodule.cuda()
 
-    optimizer = optim.Adam({"lr": args.lr})
-
-    elbo = infer.JitTrace_ELBO() if args.jit else infer.Trace_ELBO()
-    svi = infer.SVI(gpmodel.model, gpmodel.guide, optimizer, elbo)
+    optimizer = torch.optim.Adam(gpmodule.parameters(), lr=args.lr)
+    loss_fn = infer.Trace_ELBO().differentiable_loss
+    if args.jit:
+        X, y = next(iter(train_loader))
+        X_sample = X[:args.batch_size]
+        y_sample = y[:args.batch_size]
+        if args.cuda:
+            X_sample, y_sample = X_sample.cuda(), y_sample.cuda()
+        gpmodule.set_data(X_sample, y_sample)
+        loss_fn = torch.jit.trace(loss_fn, (gpmodule.model, gpmodule.guide))
 
     for epoch in range(1, args.epochs + 1):
         start_time = time.time()
-        train(args, train_loader, gpmodel, svi, epoch)
+        train(args, train_loader, gpmodule, optimizer, loss_fn, epoch)
         with torch.no_grad():
-            test(args, test_loader, gpmodel)
+            test(args, test_loader, gpmodule)
         print("Amount of time spent for epoch {}: {}s\n"
               .format(epoch, int(time.time() - start_time)))
 
