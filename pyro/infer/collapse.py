@@ -48,7 +48,6 @@ def collapse(model, first_available_dim):
         enum_trace.pack_tensors()
 
         log_probs = OrderedDict()
-        dim_to_frame = {}
         frame_to_dim = {}
         sum_dims = set()
         queries = []
@@ -62,7 +61,6 @@ def collapse(model, first_available_dim):
 
                 for frame in ordinal:
                     frame_dim = log_prob._pyro_dims[frame.dim]
-                    dim_to_frame[frame_dim] = frame
                     frame_to_dim[frame] = frame_dim
                     sum_dims.remove(frame_dim)
 
@@ -92,16 +90,18 @@ def collapse(model, first_available_dim):
                     f for f in node["cond_indep_stack"]
                     if not f.vectorized or frame_to_dim[f] in ordinal)
 
+                new_node["infer"] = node["infer"].copy()
+
+                # TODO move this into a custom SampleRing Leaf implementation
                 sample = log_prob._pyro_backward_result
                 sample_dim = log_prob._pyro_dims[-1]
-                new_node["infer"] = node["infer"].copy()
-                
                 new_value = node["value"]
-                # TODO move this into a custom SampleRing Leaf implementation
                 for index, dim in zip(sample, sample._pyro_sample_dims):
                     if dim in new_value._pyro_dims:
+                        index._pyro_dims = sample._pyro_dims[1:]
                         new_value = packed.gather(new_value, index, dim)
                 new_node["value"] = new_value
+
                 collapsed_trace[node["name"]] = new_node
 
         # TODO add observe sites induced by marginalization (one per ordinal in log_probs)
