@@ -49,14 +49,14 @@ class GPModel(Parameterized):
         >>> hmc_kernel = HMC(gpr.model)
         >>> mcmc_run = MCMC(hmc_kernel, num_samples=10)
         >>> posterior_ls_trace = []  # store lengthscale trace
-        >>> ls_name = param_with_module_name(gpr.kernel.name, "lengthscale")
+        >>> ls_name = "GPR/RBF/lengthscale"
         >>> for trace, _ in mcmc_run._traces():
         ...     posterior_ls_trace.append(trace.nodes[ls_name]["value"])
 
     + Using a variational inference on the pair :meth:`model`, :meth:`guide`:
 
         >>> optimizer = torch.optim.Adam(gpr.parameters(), lr=0.01)
-        >>> loss_fn = Trace_ELBO().differentiable_loss
+        >>> loss_fn = pyro.infer.Trace_ELBO().differentiable_loss
         >>>
         >>> for i in range(1000):
         ...     optimizer.zero_grad()
@@ -150,7 +150,7 @@ class GPModel(Parameterized):
             >>> likelihood = gp.likelihoods.Gaussian()
             >>> vsgp = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood)
             >>> optimizer = torch.optim.Adam(vsgp.parameters(), lr=0.01)
-            >>> loss_fn = Trace_ELBO().differentiable_loss
+            >>> loss_fn = pyro.infer.Trace_ELBO().differentiable_loss
             >>>
             >>> batched_X, batched_y = X.split(split_size=10), y.split(split_size=10)
             >>> for Xi, yi in zip(batched_X, batched_y):
