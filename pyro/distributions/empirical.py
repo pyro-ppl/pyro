@@ -1,11 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import math
-import numbers
-from collections import defaultdict
-
 import torch
-from contextlib2 import contextmanager
 from torch.distributions import constraints
 
 from pyro.distributions.torch import Categorical
@@ -36,9 +31,10 @@ class Empirical(TorchDistribution):
             raise ValueError("The shape of ``log_weights`` ({}) must match "
                              "the leftmost shape of ``samples`` ({})".format(weight_shape, sample_shape))
         self._aggregation_dim = log_weights.dim() - 1
-        self._event_shape = sample_shape[len(weight_shape):]
+        event_shape = sample_shape[len(weight_shape):]
         self._categorical = Categorical(logits=self._log_weights)
         super(TorchDistribution, self).__init__(batch_shape=weight_shape[:-1],
+                                                event_shape=event_shape,
                                                 validate_args=validate_args)
 
     @property
@@ -58,17 +54,22 @@ class Empirical(TorchDistribution):
         """
         Returns the log of the probability mass function evaluated at ``value``.
         Note that this currently only supports scoring values with empty
-        ``sample_shape``, i.e. an arbitrary batched sample is not allowed.
+        ``sample_shape``.
 
         :param torch.Tensor value: scalar or tensor value to be scored.
         """
         if self._validate_args:
             if value.shape != self.batch_shape + self.event_shape:
                 raise ValueError("``value.shape`` must be {}".format(self.batch_shape + self.event_shape))
-        selection_mask = self._samples.eq(value).reshape(self.batch_shape, -1)
-        if self.event_shape:
+        if self.batch_shape:
+            value = value.unsqueeze(self._aggregation_dim)
+        selection_mask = self._samples.eq(value)
+        # Get a mask for all entries in the ``weights`` tensor
+        # that correspond to ``value``.
+        for _ in range(len(self.event_shape)):
             selection_mask = selection_mask.min(dim=-1)[0]
-        return self._categorical.probs.masked_select(selection_mask).sum(dim=-1).log()
+        selection_mask = selection_mask.type(self._categorical.probs.type())
+        return (self._categorical.probs * selection_mask).sum(dim=-1).log()
 
     def _weighted_mean(self, value, keepdim=False):
         weights = self._log_weights.reshape(self.weights.size() +
@@ -108,6 +109,6 @@ class Empirical(TorchDistribution):
     def weights(self):
         return self._log_weights
 
-    def enumerate_support(self, expand=True, flatten=True):
+    def enumerate_support(self, expand=True):
         # Empirical does not support batching, so expanding is a no-op.
         return self._samples

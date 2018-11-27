@@ -93,7 +93,7 @@ class EmpiricalMarginal(Empirical):
                                             trace_posterior.chain_ids):
             value = tr.nodes[sites]["value"] if isinstance(sites, str) else \
                 torch.stack([tr.nodes[site]["value"] for site in sites], 0)
-            self._add_sample(value, log_weight=log_weight)
+            self._add_sample(value, log_weight=log_weight, chain_id=chain_id)
 
 
 @add_metaclass(ABCMeta)

@@ -280,15 +280,22 @@ class _Marginal(object):
         self.sites = sites
         self._marginals = OrderedDict()
         self._diagnostics = OrderedDict()
+        self._trace_posterior = trace_posterior
         self._populate_traces(trace_posterior, validate_args)
 
     def _populate_traces(self, trace_posterior, validate):
         self._marginals = {site: EmpiricalMarginal(trace_posterior, site, validate)
                            for site in self.sites}
 
-    def support(self, flatten=True):
-        return OrderedDict([(site, value.enumerate_support(flatten=flatten))
-                            for site, value in self._marginals.items()])
+    def support(self, flatten=False):
+        support = OrderedDict([(site, value.enumerate_support())
+                               for site, value in self._marginals.items()])
+        if self._trace_posterior.num_chains > 1 and flatten:
+            for site, samples in support.items():
+                shape = samples.size()
+                flattened_shape = torch.Size((shape[0] * shape[1],)) + shape[2:]
+                support[site] = samples.reshape(flattened_shape)
+        return support
 
     @property
     def empirical(self):
@@ -299,7 +306,7 @@ class _Marginal(object):
             return self._diagnostics
         for site in self.sites:
             self._diagnostics[site] = OrderedDict([
-                ("n_eff", stats.effective_sample_size(self.support(flatten=False)[site])),
-                ("r_hat", stats.split_gelman_rubin(self.support(flatten=False)[site]))
+                ("n_eff", stats.effective_sample_size(self.support()[site])),
+                ("r_hat", stats.split_gelman_rubin(self.support()[site]))
             ])
         return self._diagnostics
