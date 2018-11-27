@@ -23,45 +23,52 @@ T = namedtuple("TestGPModel", ["model_class", "X", "y", "kernel", "likelihood"])
 X = torch.tensor([[1., 5., 3.], [4., 3., 7.]])
 y1D = torch.tensor([2., 1.])
 y2D = torch.tensor([[1., 2.], [3., 3.], [1., 4.], [-1., 1.]])
-kernel_generator = lambda: RBF(input_dim=3, variance=torch.tensor(3.),
-                               lengthscale=torch.tensor(2.))
-noise = torch.tensor(1.1e-6)
-likelihood_generator = lambda: Gaussian(torch.tensor(1.1e-6))
+noise = torch.tensor(1.1e-6)  # noise should be greater than jitter=1e-6
 
-TEST_CASES_generator = lambda: [
-    T(
-        GPRegression,
-        X, y1D, kernel_generator(), noise
-    ),
-    T(
-        GPRegression,
-        X, y2D, kernel_generator(), noise
-    ),
-    T(
-        SparseGPRegression,
-        X, y1D, kernel_generator(), noise
-    ),
-    T(
-        SparseGPRegression,
-        X, y2D, kernel_generator(), noise
-    ),
-    T(
-        VariationalGP,
-        X, y1D, kernel_generator(), likelihood_generator()
-    ),
-    T(
-        VariationalGP,
-        X, y2D, kernel_generator(), likelihood_generator()
-    ),
-    T(
-        VariationalSparseGP,
-        X, y1D, kernel_generator(), likelihood_generator()
-    ),
-    T(
-        VariationalSparseGP,
-        X, y2D, kernel_generator(), likelihood_generator()
-    ),
-]
+
+# create generator to avoid reusing learned parameters in every tests
+def kernel_generator():
+    return RBF(input_dim=3, variance=torch.tensor(3.), lengthscale=torch.tensor(2.))
+
+
+def likelihood_generator():
+    return Gaussian(torch.tensor(1e-6))
+
+
+def TEST_CASES_generator():
+    return [T(
+                GPRegression,
+                X, y1D, kernel_generator(), noise
+            ),
+            T(
+                GPRegression,
+                X, y2D, kernel_generator(), noise
+            ),
+            T(
+                SparseGPRegression,
+                X, y1D, kernel_generator(), noise
+            ),
+            T(
+                SparseGPRegression,
+                X, y2D, kernel_generator(), noise
+            ),
+            T(
+                VariationalGP,
+                X, y1D, kernel_generator(), likelihood_generator()
+            ),
+            T(
+                VariationalGP,
+                X, y2D, kernel_generator(), likelihood_generator()
+            ),
+            T(
+                VariationalSparseGP,
+                X, y1D, kernel_generator(), likelihood_generator()
+            ),
+            T(
+                VariationalSparseGP,
+                X, y2D, kernel_generator(), likelihood_generator()
+            )]
+
 
 TEST_IDS = [t[0].__name__ + "_y{}D".format(str(t[2].dim()))
             for t in TEST_CASES_generator()]
@@ -247,7 +254,7 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
     elif model_class is VariationalGP:
         gp = model_class(X, y, kernel, likelihood, latent_shape=torch.Size([]))
     else:  # model_class is SparseVariationalGP
-        gp = model_class(X, y, kernel, X, likelihood, latent_shape=torch.Size([]))
+        gp = model_class(X, y, kernel, X.clone(), likelihood, latent_shape=torch.Size([]))
 
     train(gp, num_steps=1)
 
@@ -261,7 +268,7 @@ def test_inference_with_whiten(model_class, X, y, kernel, likelihood):
     elif model_class is VariationalGP:
         gp = model_class(X, y, kernel, likelihood, whiten=True)
     else:  # model_class is SparseVariationalGP
-        gp = model_class(X, y, kernel, X, likelihood, whiten=True)
+        gp = model_class(X, y, kernel, X.clone(), likelihood, whiten=True)
 
     train(gp, num_steps=1)
 
@@ -270,7 +277,7 @@ def test_inference_with_whiten(model_class, X, y, kernel, likelihood):
                          ids=TEST_IDS)
 def test_hmc(model_class, X, y, kernel, likelihood):
     if model_class is SparseGPRegression or model_class is VariationalSparseGP:
-        gp = model_class(X, y, kernel, X, likelihood)
+        gp = model_class(X, y, kernel, X.clone(), likelihood)
     else:
         gp = model_class(X, y, kernel, likelihood)
 
@@ -300,9 +307,11 @@ def test_hmc(model_class, X, y, kernel, likelihood):
 
 
 def test_inference_deepGP():
-    gp1 = GPRegression(X, None, kernel)
+    gp1 = GPRegression(X, None, RBF(input_dim=3, variance=torch.tensor(3.),
+                                    lengthscale=torch.tensor(2.)))
     Z, _ = gp1.model()
-    gp2 = VariationalSparseGP(Z, y2D, Matern32(input_dim=3), Z.clone(), likelihood)
+    gp2 = VariationalSparseGP(Z, y2D, Matern32(input_dim=3), Z.clone(),
+                              Gaussian(torch.tensor(1.1e-6)))
 
     class DeepGP(torch.nn.Module):
         def __init__(self, gp1, gp2):
@@ -327,7 +336,7 @@ def test_inference_deepGP():
                          ids=TEST_IDS)
 def test_gplvm(model_class, X, y, kernel, likelihood):
     if model_class is SparseGPRegression or model_class is VariationalSparseGP:
-        gp = model_class(X, y, kernel, X, likelihood)
+        gp = model_class(X, y, kernel, X.clone(), likelihood)
     else:
         gp = model_class(X, y, kernel, likelihood)
 
