@@ -130,7 +130,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Pyro GP MNIST Example')
-    parser.add_argument('--data-dir', type=str, default='../data', metavar='PATH',
+    parser.add_argument('--data-dir', type=str, default='./data', metavar='PATH',
                         help='default directory to cache MNIST data')
     parser.add_argument('--num-inducing', type=int, default=70, metavar='N',
                         help='number of inducing input (default: 70)')
