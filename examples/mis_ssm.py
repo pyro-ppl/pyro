@@ -91,7 +91,7 @@ def main(args):
     optim = Adam({'lr': args.learning_rate})
 
     if args.guide == 'collapsed':
-        collapsed_guide = collapse(guide, 1)
+        collapsed_guide = collapse(guide, -2)
         svi = SVI(model, collapsed_guide, optim, elbo)
     else:
         svi = SVI(model, vanilla_guide, optim, elbo)

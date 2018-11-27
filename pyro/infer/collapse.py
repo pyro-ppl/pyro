@@ -60,7 +60,7 @@ def collapse(model, first_available_dim):
         dim_to_frame = {}
         sum_dims = set()
         queries = []
-        for node in enum_trace.values():
+        for node in enum_trace.nodes.values():
             if node["type"] == "sample":
 
                 log_prob = node["packed"]["log_prob"]
@@ -85,14 +85,15 @@ def collapse(model, first_available_dim):
         query_ordinal = {}
         for ordinal, terms in log_probs.items():
             for term in terms:
-                term._pyro_backward()
+                if hasattr(term, "_pyro_backward"):
+                    term._pyro_backward()
             # Note: makes collapse quadratic in number of ordinals
             for query in queries:
                 if query not in query_ordinal and query._pyro_backward_result is not None:
                     query_ordinal[query] = ordinal
 
         collapsed_trace = poutine.Trace()
-        for node in enum_trace.values():
+        for node in enum_trace.nodes.values():
             if node["type"] == "sample" and not node["is_observed"]:
                 # TODO move this into a Leaf implementation somehow
                 new_node = {}
@@ -130,7 +131,7 @@ def collapse(model, first_available_dim):
                 i += 1
 
         # Replay model correctly against collapsed_trace (get correct cond_indep_stack)
-        collapsed_sites = set(node["name"] for node in enum_trace.values()
+        collapsed_sites = set(node["name"] for node in enum_trace.nodes.values()
                               if node["type"] == "sample" and node["infer"].get("collapse"))
 
         with poutine.block(hide_fn=lambda msg: msg["name"] in collapsed_sites):
