@@ -24,8 +24,8 @@ class CollapseEnumMessenger(poutine.enumerate_messenger.EnumerateMessenger):
 
         super(CollapseEnumMessenger, self)._pyro_sample(msg)
 
-        if collapse:
-            msg["is_observed"] = True
+        # if collapse:
+        #     msg["is_observed"] = True
 
 
 class CollapseReplayMessenger(poutine.replay_messenger.ReplayMessenger):
@@ -51,7 +51,7 @@ def collapse(model, first_available_dim):
                 CollapseEnumMessenger(first_available_dim)(model)
             ).get_trace(*args, **kwargs)
 
-        poutine.util.prune_subsample_sites(enum_trace)
+        enum_trace = poutine.util.prune_subsample_sites(enum_trace)
         enum_trace.compute_log_prob()
         enum_trace.pack_tensors()
 
@@ -85,8 +85,7 @@ def collapse(model, first_available_dim):
         query_ordinal = {}
         for ordinal, terms in log_probs.items():
             for term in terms:
-                if hasattr(term, "_pyro_backward"):
-                    term._pyro_backward()
+                term._pyro_backward()
             # Note: makes collapse quadratic in number of ordinals
             for query in queries:
                 if query not in query_ordinal and query._pyro_backward_result is not None:
