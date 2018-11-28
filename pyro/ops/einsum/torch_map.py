@@ -39,6 +39,8 @@ def einsum(equation, *operands):
         result, argmax = result.reshape(output_shape + (-1,)).max(-1)
         if any_requires_backward:
             argmax = unflatten(argmax, output, contract_dims, contract_shape)
+    elif result is operands[0]:
+        result = result[...]  # create a new object
     result._pyro_dims = output
     assert result.dim() == len(result._pyro_dims)
 
