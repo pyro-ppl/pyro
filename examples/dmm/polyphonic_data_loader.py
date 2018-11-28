@@ -21,6 +21,8 @@ import torch
 import torch.nn as nn
 from observations import jsb_chorales
 
+from pyro.contrib.examples.util import get_data_directory
+
 
 # this function processes the raw data; in particular it unsparsifies it
 def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
@@ -55,9 +57,9 @@ def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
 
 
 # this logic will be initiated upon import
-base_path = './data'
+base_path = get_data_directory(__file__)
 process_data(base_path, "jsb_processed.pkl")
-jsb_file_loc = "./data/jsb_processed.pkl"
+jsb_file_loc = os.path.join(base_path, "jsb_processed.pkl")
 
 
 # ingest training/validation/test data from disk

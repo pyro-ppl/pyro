@@ -28,14 +28,17 @@ class LiftMessenger(Messenger):
         """
         super(LiftMessenger, self).__init__()
         self.prior = prior
+        self._samples_cache = {}
 
     def __enter__(self):
+        self._samples_cache = {}
         if is_validation_enabled() and isinstance(self.prior, dict):
             self._param_hits = set()
             self._param_misses = set()
         return super(LiftMessenger, self).__enter__()
 
     def __exit__(self, *args, **kwargs):
+        self._samples_cache = {}
         if is_validation_enabled() and isinstance(self.prior, dict):
             extra = set(self.prior) - self._param_hits
             if extra:
@@ -89,5 +92,13 @@ class LiftMessenger(Messenger):
             # otherwise leave as is
             return None
         msg["type"] = "sample"
-        msg["is_observed"] = False
+        if name in self._samples_cache:
+            # Multiple pyro.param statements with the same
+            # name. Block the site and fix the value.
+            msg['value'] = self._samples_cache[name]['value']
+            msg["is_observed"] = True
+            msg["stop"] = True
+        else:
+            self._samples_cache[name] = msg
+            msg["is_observed"] = False
         return self._pyro_sample(msg)
