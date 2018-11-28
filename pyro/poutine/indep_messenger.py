@@ -5,6 +5,7 @@ from collections import namedtuple
 
 import torch
 
+from pyro.util import ignore_jit_warnings
 from .messenger import Messenger
 from .runtime import _DIM_ALLOCATOR
 
@@ -15,8 +16,9 @@ class CondIndepStackFrame(namedtuple("CondIndepStackFrame", ["name", "dim", "siz
         return self.dim is not None
 
     def _key(self):
-        size = self.size.item() if isinstance(self.size, torch.Tensor) else self.size
-        return self.name, self.dim, size, self.counter
+        with ignore_jit_warnings(["Converting a tensor to a Python number"]):
+            size = self.size.item() if isinstance(self.size, torch.Tensor) else self.size
+            return self.name, self.dim, size, self.counter
 
     def __eq__(self, other):
         return type(self) == type(other) and self._key() == other._key()
@@ -51,7 +53,7 @@ class IndepMessenger(Messenger):
 
     """
     def __init__(self, name=None, size=None, dim=None, device=None):
-        if size == 0:
+        if not torch._C._get_tracing_state() and size == 0:
             raise ZeroDivisionError("size cannot be zero")
 
         super(IndepMessenger, self).__init__()
@@ -94,11 +96,11 @@ class IndepMessenger(Messenger):
 
         self._vectorized = False
         self.dim = None
-
-        for i in self.indices:
-            self.next_context()
-            with self:
-                yield i if isinstance(i, numbers.Number) else i.item()
+        with ignore_jit_warnings([("Iterating over a tensor", RuntimeWarning)]):
+            for i in self.indices:
+                self.next_context()
+                with self:
+                    yield i if isinstance(i, numbers.Number) else i.item()
 
     def _reset(self):
         if self._vectorized:

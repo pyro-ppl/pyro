@@ -145,8 +145,6 @@ class LogRing(Ring):
         self._dim_to_size = {} if dim_to_size is None else dim_to_size
 
     def sumproduct(self, terms, dims):
-        if len(terms) == 1 and not dims:
-            return terms[0]
         inputs = [term._pyro_dims for term in terms]
         output = ''.join(sorted(set(''.join(inputs)) - set(dims)))
         equation = ','.join(inputs) + '->' + output

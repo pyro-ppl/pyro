@@ -20,6 +20,8 @@ def einsum(equation, *operands):
     equation = ''.join(rename.get(s, s) for s in equation)
 
     inputs, output = equation.split('->')
+    if inputs == output:
+        return operands[0][...]  # create a new object
     inputs = inputs.split(',')
 
     shifts = []
