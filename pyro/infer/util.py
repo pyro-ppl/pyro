@@ -223,19 +223,8 @@ class Dice(object):
             expected_cost = 0.
             for ordinal, cost_terms in costs.items():
                 log_factors = self._get_log_factors(ordinal)
-                # print('DEBUG cost shapes: {}'.format(set(''.join(sorted(x._pyro_dims))
-                #                                          for x in cost_terms)))
-                # print('DEBUG factor shapes: {}'.format(set(''.join(sorted(getattr(x, '_pyro_dims', '')))
-                #                                            for x in cost_terms)))
-
-                # Split log factors into scalars and tensors.
                 scale = math.exp(sum(x for x in log_factors if not isinstance(x, torch.Tensor)))
-                # print('DEBUG scale = {}'.format(scale))
                 log_factors = [x for x in log_factors if isinstance(x, torch.Tensor)]
-                if not log_factors:
-                    cost = sum(cost.sum() for cost in cost_terms)
-                    expected_cost = expected_cost + scale * cost
-                    continue
 
                 # Collect log_prob terms to query for marginal probability.
                 queries = {frozenset(cost._pyro_dims): None for cost in cost_terms}
@@ -255,7 +244,6 @@ class Dice(object):
                 # Perform sum-product contraction. Note that plates never need to be
                 # product-contracted due to our plate-based dependency ordering.
                 sum_dims = set().union(*(x._pyro_dims for x in log_factors)) - ordinal
-                # print('DEBUG sum_dims = {}'.format(sum_dims))
                 if len(log_factors) == 1 and not sum_dims:
                     # sumproduct is a no-op
                     probs = {key: query.exp() for key, query in queries.items()}
@@ -266,18 +254,15 @@ class Dice(object):
                     root = ring.sumproduct(log_factors, sum_dims)
                     root._pyro_backward()
                     probs = {key: query._pyro_backward_result.exp() for key, query in queries.items()}
-                # print('DEBUG probs = {}'.format(probs))
 
                 # Aggregate prob * cost terms.
                 for cost in cost_terms:
                     key = frozenset(cost._pyro_dims)
                     prob = probs[key]
                     prob._pyro_dims = queries[key]._pyro_dims
-                    print('DEBUG cost = {}'.format(cost))
-                    print('DEBUG prob = {}'.format(prob))
                     mask = prob > 0
-                    mask._pyro_dims = prob._pyro_dims
-                    if torch.is_tensor(mask) and not mask.all():
+                    if not mask.all():
+                        mask._pyro_dims = prob._pyro_dims
                         cost, prob, mask = packed.broadcast_all(cost, prob, mask)
                         prob = prob[mask]
                         cost = cost[mask]
