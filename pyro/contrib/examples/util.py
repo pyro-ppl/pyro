@@ -34,9 +34,9 @@ def get_data_loader(dataset_name,
     dataset = getattr(datasets, dataset_name)
     print("downloading data")
     dset = dataset(root=data_dir,
-                train=is_training_set,
-                transform=trans,
-                download=True)
+                   train=is_training_set,
+                   transform=trans,
+                   download=True)
     print("download complete.")
     return DataLoader(
         dset,
