@@ -21,11 +21,10 @@ import torch
 import torch.nn as nn
 from observations import jsb_chorales
 
-
-# this function processes the raw data; in particular it unsparsifies it
 from pyro.contrib.examples.util import get_data_directory
 
 
+# this function processes the raw data; in particular it unsparsifies it
 def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
     output = os.path.join(base_path, filename)
     if os.path.exists(output):
