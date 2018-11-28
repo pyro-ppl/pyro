@@ -6,7 +6,6 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.torch_distribution import ReshapedDistribution
 from pyro.distributions.util import broadcast_shape
 from tests.common import assert_equal, xfail_if_not_implemented
 
@@ -130,8 +129,7 @@ def test_distribution_validate_args(dist_class, args, validate_args):
 
 
 def check_sample_shapes(small, large):
-    dist_instance = small.base_dist if isinstance(small, ReshapedDistribution) \
-        else small
+    dist_instance = small
     if isinstance(dist_instance, (dist.LogNormal, dist.LowRankMultivariateNormal, dist.VonMises)):
         # Ignore broadcasting bug in LogNormal:
         # https://github.com/pytorch/pytorch/pull/7269
@@ -147,9 +145,10 @@ def check_sample_shapes(small, large):
 def test_expand_by(dist, sample_shape, shape_type):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
-        large = small.expand_by(shape_type(sample_shape))
-        assert large.batch_shape == sample_shape + small.batch_shape
-        check_sample_shapes(small, large)
+        with xfail_if_not_implemented():
+            large = small.expand_by(shape_type(sample_shape))
+            assert large.batch_shape == sample_shape + small.batch_shape
+            check_sample_shapes(small, large)
 
 
 @pytest.mark.parametrize('sample_shape', [(), (2,), (2, 3)])
@@ -157,9 +156,10 @@ def test_expand_by(dist, sample_shape, shape_type):
 def test_expand_new_dim(dist, sample_shape, shape_type):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
-        large = small.expand(shape_type(sample_shape + small.batch_shape))
-        assert large.batch_shape == sample_shape + small.batch_shape
-        check_sample_shapes(small, large)
+        with xfail_if_not_implemented():
+            large = small.expand(shape_type(sample_shape + small.batch_shape))
+            assert large.batch_shape == sample_shape + small.batch_shape
+            check_sample_shapes(small, large)
 
 
 @pytest.mark.parametrize('shape_type', [torch.Size, tuple, list])
@@ -174,8 +174,8 @@ def test_expand_existing_dim(dist, shape_type):
             batch_shape = torch.Size(batch_shape)
             with xfail_if_not_implemented():
                 large = small.expand(shape_type(batch_shape))
-            assert large.batch_shape == batch_shape
-            check_sample_shapes(small, large)
+                assert large.batch_shape == batch_shape
+                check_sample_shapes(small, large)
 
 
 @pytest.mark.parametrize("sample_shapes", [
@@ -203,10 +203,11 @@ def test_subsequent_expands_ok(dist, sample_shapes):
 def test_expand_error(dist, initial_shape, proposed_shape):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
-        large = small.expand(torch.Size(initial_shape) + small.batch_shape)
-        proposed_batch_shape = torch.Size(proposed_shape) + small.batch_shape
-        with pytest.raises(ValueError):
-            large.expand(proposed_batch_shape)
+        with xfail_if_not_implemented():
+            large = small.expand(torch.Size(initial_shape) + small.batch_shape)
+            proposed_batch_shape = torch.Size(proposed_shape) + small.batch_shape
+            with pytest.raises(RuntimeError):
+                large.expand(proposed_batch_shape)
 
 
 @pytest.mark.parametrize("extra_event_dims,expand_shape", [
@@ -228,19 +229,10 @@ def test_expand_reshaped_distribution(extra_event_dims, expand_shape):
     assert large.batch_shape == torch.Size(expand_shape)
     assert large.event_shape == torch.Size(event_shape)
 
-    # Change base_dist only if sample_shape cannot be adjusted.
-    if extra_event_dims >= 1:
-        assert large.base_dist == reshaped_dist.base_dist
-    else:
-        if expand_shape[-1] == 1:
-            assert large.base_dist == reshaped_dist.base_dist
-        else:
-            assert large.base_dist.batch_shape == torch.Size(expand_shape)
-
     # Throws error when batch shape cannot be broadcasted
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         reshaped_dist.expand(expand_shape + [3])
 
     # Throws error when trying to shrink existing batch shape
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         large.expand(expand_shape[1:])

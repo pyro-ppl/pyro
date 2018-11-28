@@ -151,7 +151,7 @@ def gmm_model(data, verbose=False):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         z = z.long()
         if verbose:
-            logger.debug("M{} z_{} = {}".format("  " * i, i, z.cpu().numpy()))
+            logger.debug("M{} z_{} = {}".format("  " * int(i), int(i), z.cpu().numpy()))
         pyro.sample("x_{}".format(i), dist.Normal(mus[z], scale), obs=data[i])
 
 
@@ -161,7 +161,7 @@ def gmm_guide(data, verbose=False):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         z = z.long()
         if verbose:
-            logger.debug("G{} z_{} = {}".format("  " * i, i, z.cpu().numpy()))
+            logger.debug("G{} z_{} = {}".format("  " * int(i), int(i), z.cpu().numpy()))
 
 
 @pytest.mark.parametrize("data_size", [1, 2, 3])

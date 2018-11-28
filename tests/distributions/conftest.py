@@ -153,10 +153,10 @@ continuous_dists = [
     Fixture(pyro_dist=dist.LowRankMultivariateNormal,
             scipy_dist=sp.multivariate_normal,
             examples=[
-                {'loc': [2.0, 1.0], 'D_term': [0.5, 0.5], 'W_term': [[1.0], [0.5]],
+                {'loc': [2.0, 1.0], 'cov_diag': [0.5, 0.5], 'cov_factor': [[1.0], [0.5]],
                  'test_data': [[2.0, 1.0], [9.0, 3.4]]},
             ],
-            scipy_arg_fn=lambda loc, D_term=None, W_term=None:
+            scipy_arg_fn=lambda loc, cov_diag=None, cov_factor=None:
                 ((), {"mean": np.array(loc), "cov": np.array([[1.5, 0.5], [0.5, 0.75]])}),
             prec=0.01,
             min_samples=500000),
