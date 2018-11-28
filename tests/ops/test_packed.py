@@ -69,7 +69,7 @@ def test_broadcast_all(shapes):
     packed_inputs = [packed.pack(x, dim_to_symbol) for x in inputs]
     packed_outputs = packed.broadcast_all(*packed_inputs)
     actual = tuple(packed.unpack(x, symbol_to_dim) for x in packed_outputs)
-    expected = broadcast_all(*inputs)
+    expected = broadcast_all(*inputs) if inputs else []
     assert len(actual) == len(expected)
     for a, e in zip(actual, expected):
         assert_equal(a, e)

@@ -68,6 +68,21 @@ class MixtureOfDiagNormalsSharedCovariance(TorchDistribution):
         self.probs = self.categorical.probs
         super(MixtureOfDiagNormalsSharedCovariance, self).__init__(batch_shape=batch_shape, event_shape=(self.dim,))
 
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(MixtureOfDiagNormalsSharedCovariance, _instance)
+        new.batch_mode = True
+        batch_shape = torch.Size(batch_shape)
+        new.dim = self.dim
+        new.locs = self.locs.expand(batch_shape + self.locs.shape[-2:])
+        coord_scale_shape = -1 if self.batch_mode else -2
+        new.coord_scale = self.coord_scale.expand(batch_shape + self.coord_scale.shape[coord_scale_shape:])
+        new.component_logits = self.component_logits.expand(batch_shape + self.component_logits.shape[-1:])
+        new.categorical = self.categorical.expand(batch_shape)
+        new.probs = self.probs.expand(batch_shape + self.probs.shape[-1:])
+        super(MixtureOfDiagNormalsSharedCovariance, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
+
     def log_prob(self, value):
         # TODO: use torch.logsumexp once it's in PyTorch release
         coord_scale = self.coord_scale.unsqueeze(-2) if self.batch_mode else self.coord_scale
