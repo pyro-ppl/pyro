@@ -8,7 +8,7 @@ env:
 
 install:
     - pip install -U pip
-    - pip install torch_nightly==1.0.0.dev20181127 -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
+    - pip install torch_nightly==1.0.0.dev20181128 -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
     - pip install torchvision --no-dependencies
     - pip install .[test]
     - pip freeze
