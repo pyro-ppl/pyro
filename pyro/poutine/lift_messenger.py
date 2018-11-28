@@ -28,6 +28,7 @@ class LiftMessenger(Messenger):
         """
         super(LiftMessenger, self).__init__()
         self.prior = prior
+        self._samples_cache = {}
 
     def __enter__(self):
         if is_validation_enabled() and isinstance(self.prior, dict):
@@ -89,5 +90,13 @@ class LiftMessenger(Messenger):
             # otherwise leave as is
             return None
         msg["type"] = "sample"
-        msg["is_observed"] = False
+        if name in self._samples_cache:
+            # Multiple pyro.param statements with the same
+            # name. Block the site and fix the value.
+            msg['value'] = self._samples_cache[name]['value']
+            msg["is_observed"] = True
+            msg["stop"] = True
+        else:
+            self._samples_cache[name] = msg
+            msg["is_observed"] = False
         return self._pyro_sample(msg)

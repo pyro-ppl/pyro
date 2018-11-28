@@ -330,8 +330,14 @@ class LiftHandlerTests(TestCase):
             latent2 = pyro.sample("latent2", Normal(loc2, scale2))
             return latent2
 
+        def dup_param_guide():
+            a = pyro.param("loc1")
+            b = pyro.param("loc1")
+            assert a == b
+
         self.model = Model()
         self.guide = guide
+        self.dup_param_guide = dup_param_guide
         self.prior = scale1_prior
         self.prior_dict = {"loc1": loc1_prior, "scale1": scale1_prior, "loc2": loc2_prior, "scale2": scale2_prior}
         self.partial_dict = {"loc1": loc1_prior, "scale1": scale1_prior}
@@ -347,6 +353,9 @@ class LiftHandlerTests(TestCase):
                 assert name not in lifted_tr
             else:
                 assert name in lifted_tr
+
+    def test_memoize(self):
+        poutine.trace(poutine.lift(self.dup_param_guide, prior=dist.Normal(0, 1)))()
 
     def test_prior_dict(self):
         tr = poutine.trace(self.guide).get_trace()
