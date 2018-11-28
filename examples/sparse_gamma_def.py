@@ -131,7 +131,7 @@ def main(args):
         try:
             os.makedirs(dataset_directory)
         except OSError as e:
-            if e.errno != errno.EXIST:
+            if e.errno != errno.EEXIST:
                 raise
             pass
         wget.download('https://d2fefpcigoriu7.cloudfront.net/datasets/faces_training.csv', dataset_path)
