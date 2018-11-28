@@ -55,10 +55,13 @@ class _TransposeBackward(Backward):
         self.axes = axes
 
     def process(self, message):
-        inv_axes = [None] * len(self.axes)
-        for i, j in enumerate(self.axes):
-            inv_axes[j] = i
-        yield self.a._pyro_backward, message.permute(inv_axes)
+        if message is None:
+            yield self.a._pyro_backward, None
+        else:
+            inv_axes = [None] * len(self.axes)
+            for i, j in enumerate(self.axes):
+                inv_axes[j] = i
+            yield self.a._pyro_backward, message.permute(inv_axes)
 
 
 # this requires https://github.com/dgasmith/opt_einsum/pull/74
