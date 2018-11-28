@@ -59,13 +59,11 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
                 return torch.tensor(float('inf'))
             x = transform_to(self.constraints)(unconstrained_x)
             y = differentiable(x)
-            print(x.detach(), y.detach())
             autograd.backward(unconstrained_x,
                               autograd.grad(y, unconstrained_x, retain_graph=True))
             return y
 
         minimizer.step(closure)
-        print("eend 1111")
         # after finding a candidate in the unconstrained domain,
         # convert it back to original domain.
         x = transform_to(self.constraints)(unconstrained_x)

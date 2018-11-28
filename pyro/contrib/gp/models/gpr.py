@@ -165,7 +165,6 @@ class GPRegression(GPModel):
         y = self.y.clone().detach()
         N = X.shape[0]
         Kff = self.kernel(X).contiguous()
-        print("noiisssse", noise, X, Kff.detach(), "\n--------------")
         Kff.view(-1)[::N + 1] += noise  # add noise to the diagonal
 
         outside_vars = {"X": X, "y": y, "N": N, "Kff": Kff}

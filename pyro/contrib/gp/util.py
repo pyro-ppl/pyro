@@ -59,9 +59,7 @@ class Parameterized(nn.Module):
             return
 
         if name in self._parameters:
-            # move param to _buffers
             p = self._parameters.pop(name)
-            self.register_buffer(name, p)
         elif name in self._buffers:
             p = self._buffers[name]
         else:
@@ -70,6 +68,7 @@ class Parameterized(nn.Module):
         p_unconstrained = Parameter(transform_to(constraint).inv(p).detach())
         self.register_parameter("{}_unconstrained".format(name), p_unconstrained)
         self._constraints[name] = constraint
+        self._register_param(name)
 
     def set_prior(self, name, prior):
         """
