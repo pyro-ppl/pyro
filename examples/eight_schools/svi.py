@@ -68,9 +68,9 @@ def main(args):
         if j % 100 == 0:
             logging.info("[epoch %04d] loss: %.4f" % (j + 1, loss))
 
-    for name in pyro.get_param_store().get_all_param_names():
+    for name, value in pyro.get_param_store().items():
         logging.info(name)
-        logging.info(pyro.param(name).data.numpy())
+        logging.info(value.detach().cpu().numpy())
 
 
 if __name__ == '__main__':

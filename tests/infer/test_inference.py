@@ -13,7 +13,7 @@ import pyro.optim as optim
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
-                        TraceGraph_ELBO, RenyiELBO)
+                        TraceGraph_ELBO, RenyiELBO, TraceMeanField_ELBO)
 from tests.common import assert_equal, xfail_param, xfail_if_not_implemented
 
 
@@ -48,6 +48,9 @@ class NormalNormalTests(TestCase):
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000, Trace_ELBO())
+
+    def test_elbo_analytic_kl(self):
+        self.do_elbo_test(True, 3000, TraceMeanField_ELBO())
 
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(False, 15000, Trace_ELBO())

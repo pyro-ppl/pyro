@@ -21,6 +21,7 @@ import argparse
 import logging
 
 import torch
+import torch.nn as nn
 
 import dmm.polyphonic_data_loader as poly
 import pyro
@@ -72,7 +73,7 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
     with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         x = 0
-        for t in range(lengths.max()):
+        for t in pyro.markov(range(lengths.max())):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 # On the next line, we'll overwrite the value of x with an updated
                 # value. If we wanted to record all x values, we could instead
@@ -80,7 +81,7 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
                                 infer={"enumerate": "parallel"})
                 with tones_plate:
-                    pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x]),
+                    pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x.squeeze(-1)]),
                                 obs=sequences[batch, t])
 
 
@@ -107,7 +108,7 @@ def model_2(sequences, lengths, args, batch_size=None, include_prior=True):
     with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         x, y = 0, 0
-        for t in range(lengths.max()):
+        for t in pyro.markov(range(lengths.max())):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
                                 infer={"enumerate": "parallel"})
@@ -152,7 +153,7 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
     with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         w, x = 0, 0
-        for t in range(lengths.max()):
+        for t in pyro.markov(range(lengths.max())):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
                                 infer={"enumerate": "parallel"})
@@ -200,7 +201,7 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
         # ensure that w and x are always tensors so we can unsqueeze them below,
         # thus ensuring that the x sample sites have correct distribution shape.
         w = x = torch.tensor(0, dtype=torch.long)
-        for t in range(lengths.max()):
+        for t in pyro.markov(range(lengths.max())):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
                                 infer={"enumerate": "parallel"})
@@ -210,6 +211,76 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
                 with tones_plate as tones:
                     pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[w, x, tones]),
                                 obs=sequences[batch, t])
+
+
+# Next let's consider a neural HMM model.
+#
+#     x[t-1] --> x[t] --> x[t+1]   } standard HMM +
+#        |        |         |
+#        V        V         V
+#     y[t-1] --> y[t] --> y[t+1]   } neural likelihood
+#
+# First let's define a neural net to generate y logits.
+class TonesGenerator(nn.Module):
+    def __init__(self, args, data_dim):
+        self.args = args
+        self.data_dim = data_dim
+        super(TonesGenerator, self).__init__()
+        self.x_to_hidden = nn.Linear(args.hidden_dim, args.nn_dim)
+        self.y_to_hidden = nn.Linear(args.nn_channels * data_dim, args.nn_dim)
+        self.conv = nn.Conv1d(1, args.nn_channels, 3, padding=1)
+        self.hidden_to_logits = nn.Linear(args.nn_dim, data_dim)
+        self.relu = nn.ReLU()
+
+    def forward(self, x, y):
+        # Check dimension of y so this can be used with and without enumeration.
+        if y.dim() < 2:
+            y = y.unsqueeze(0)
+
+        # Hidden units depend on two inputs: a one-hot encoded categorical variable x, and
+        # a bernoulli variable y. Whereas x will typically be enumerated, y will be observed.
+        # We apply x_to_hidden independently from y_to_hidden, then broadcast the non-enumerated
+        # y part up to the enumerated x part in the + operation.
+        x_onehot = y.new_zeros(x.shape[:-1] + (self.args.hidden_dim,)).scatter_(-1, x, 1)
+        y_conv = self.relu(self.conv(y.unsqueeze(-2))).reshape(y.shape[:-1] + (-1,))
+        h = self.relu(self.x_to_hidden(x_onehot) + self.y_to_hidden(y_conv))
+        return self.hidden_to_logits(h)
+
+
+# We will create a single global instance later.
+tones_generator = None
+
+
+# The neural HMM model now uses tones_generator at each time step.
+def model_5(sequences, lengths, args, batch_size=None, include_prior=True):
+    num_sequences, max_length, data_dim = sequences.shape
+    assert lengths.shape == (num_sequences,)
+    assert lengths.max() <= max_length
+
+    # Initialize a global module instance if needed.
+    global tones_generator
+    if tones_generator is None:
+        tones_generator = TonesGenerator(args, data_dim)
+    pyro.module("tones_generator", tones_generator)
+
+    with poutine.mask(mask=torch.tensor(include_prior)):
+        probs_x = pyro.sample("probs_x",
+                              dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
+                                  .independent(1))
+    with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
+        lengths = lengths[batch]
+        x = 0
+        y = torch.zeros(data_dim)
+        for t in pyro.markov(range(lengths.max())):
+            with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+                x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
+                                infer={"enumerate": "parallel"})
+                # Note that since each tone depends on all tones at a previous time step
+                # the tones at different time steps now need to live in separate plates.
+                with pyro.plate("tones_{}".format(t), data_dim, dim=-1):
+                    y = pyro.sample("y_{}".format(t),
+                                    dist.Bernoulli(logits=tones_generator(x, y)),
+                                    obs=sequences[batch, t])
 
 
 models = {name[len('model_'):]: model
@@ -274,8 +345,8 @@ def main(args):
 
     # We expect models with higher capacity to perform better,
     # but eventually overfit to the training set.
-    capacity = sum(len(pyro.param(name).reshape(-1))
-                   for name in pyro.get_param_store().get_all_param_names())
+    capacity = sum(value.reshape(-1).size(0)
+                   for value in pyro.get_param_store().values())
     logging.info('{} capacity = {} parameters'.format(model.__name__, capacity))
 
 
@@ -286,6 +357,8 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--num-steps", default=50, type=int)
     parser.add_argument("-b", "--batch-size", default=8, type=int)
     parser.add_argument("-d", "--hidden-dim", default=16, type=int)
+    parser.add_argument("-nn", "--nn-dim", default=48, type=int)
+    parser.add_argument("-nc", "--nn-channels", default=2, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
     parser.add_argument("-t", "--truncate", type=int)
     parser.add_argument('--cuda', action='store_true')
