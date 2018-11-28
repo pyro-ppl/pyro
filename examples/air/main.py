@@ -23,6 +23,7 @@ import pyro.optim as optim
 import pyro.poutine as poutine
 from air import AIR, latents_to_tensor
 
+from pyro.contrib.examples.util import get_data_directory
 from pyro.infer import SVI, JitTraceGraph_ELBO, TraceGraph_ELBO
 from viz import draw_many, tensor_to_objs
 
@@ -111,7 +112,7 @@ def exp_decay(initial, final, begin, duration, t):
 
 
 def load_data():
-    inpath = './data'
+    inpath = get_data_directory(__file__)
     (X_np, Y), _ = multi_mnist(inpath, max_digits=2, canvas_size=50, seed=42)
     X_np = X_np.astype(np.float32)
     X_np /= 255.0
