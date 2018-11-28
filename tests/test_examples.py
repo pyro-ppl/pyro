@@ -7,7 +7,7 @@ from subprocess import check_call
 
 import pytest
 
-from tests.common import EXAMPLES_DIR, requires_cuda, xfail_param
+from tests.common import EXAMPLES_DIR, requires_cuda, xfail_param, skipif_param
 
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
@@ -21,7 +21,8 @@ CPU_EXAMPLES = [
     'contrib/autoname/scoping_mixture.py --num-epochs=1',
     'contrib/autoname/mixture.py --num-epochs=1',
     'contrib/autoname/tree_data.py --num-epochs=1',
-    'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4',
+    skipif_param('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4',
+                 'CI' in os.environ, reason='https://github.com/uber/pyro/issues/1540'),
     'contrib/oed/ab_test.py --num-vi-steps=1000',
     'contrib/oed/item_response.py -N=1000 -M=1000',
     'contrib/oed/sequential_oed_sigmoid_lm.py --num-experiments=2 --num-runs=2 --no-plot',
