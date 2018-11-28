@@ -7,8 +7,6 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision.datasets import MNIST
 
-from pyro.contrib.examples.util import get_data_directory
-
 
 # This file contains utilities for caching, transforming and splitting MNIST data
 # efficiently. By default, a PyTorch DataLoader will apply the transform every epoch
@@ -194,7 +192,7 @@ class MNISTCached(MNIST):
         return img, target
 
 
-def setup_data_loaders(dataset, use_cuda, batch_size, sup_num=None, root=None, download=True, **kwargs):
+def setup_data_loaders(dataset, use_cuda, batch_size, sup_num=None, root='./data', download=True, **kwargs):
     """
         helper function for setting up pytorch data loaders for a semi-supervised dataset
     :param dataset: the data to use
@@ -207,8 +205,6 @@ def setup_data_loaders(dataset, use_cuda, batch_size, sup_num=None, root=None, d
                                   supervised data for testing)
     """
     # instantiate the dataset as training/testing sets
-    if root is None:
-        root = get_data_directory(__file__)
     if 'num_workers' not in kwargs:
         kwargs = {'num_workers': 0, 'pin_memory': False}
 

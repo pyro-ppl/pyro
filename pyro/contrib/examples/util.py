@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import os
 import sys
 
 import torchvision
@@ -52,10 +51,3 @@ def print_and_log(logger, msg):
     if logger is not None:
         logger.write("{}\n".format(msg))
         logger.flush()
-
-
-def get_data_directory(filepath=None):
-    if 'CI' in os.environ:
-        return os.path.expanduser('~/.data')
-    return os.path.abspath(os.path.join(os.path.dirname(filepath),
-                                        '.data'))

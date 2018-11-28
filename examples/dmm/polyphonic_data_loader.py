@@ -23,9 +23,6 @@ from observations import jsb_chorales
 
 
 # this function processes the raw data; in particular it unsparsifies it
-from pyro.contrib.examples.util import get_data_directory
-
-
 def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
     output = os.path.join(base_path, filename)
     if os.path.exists(output):
@@ -58,9 +55,9 @@ def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
 
 
 # this logic will be initiated upon import
-base_path = get_data_directory(__file__)
+base_path = './data'
 process_data(base_path, "jsb_processed.pkl")
-jsb_file_loc = os.path.join(base_path, "jsb_processed.pkl")
+jsb_file_loc = "./data/jsb_processed.pkl"
 
 
 # ingest training/validation/test data from disk
