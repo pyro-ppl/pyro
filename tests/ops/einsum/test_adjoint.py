@@ -10,6 +10,7 @@ from pyro.ops.einsum.adjoint import require_backward
 from tests.common import assert_equal
 
 EQUATIONS = [
+    '->',
     'w->',
     ',w->',
     'w,w->',
@@ -17,6 +18,7 @@ EQUATIONS = [
     'w,wx,x->',
     'w,wx,xy,yz->',
     'wx,xy,yz,zw->',
+    'i->i',
     'wi->i',
     'i,wi->i',
     'wi,wi->i',
@@ -24,6 +26,7 @@ EQUATIONS = [
     'wi,wxi,xi->i',
     'wi,wxi,xyi,yzi->i',
     'wxi,xyi,yzi,zwi->i',
+    'ij->ij',
     'iwj->ij',
     'ij,iwj->ij',
     'iwj,iwj->ij',
@@ -31,6 +34,14 @@ EQUATIONS = [
     'iwj,iwxj,ixj->ij',
     'iwj,iwxj,ixyj,iyzj->ij',
     'iwxj,ixyj,iyzj,izwj->ij',
+    'ij->ji',
+    'iwj->ji',
+    'ji,iwj->ji',
+    'iwj,iwj->ji',
+    'iwj,ixj->ji',
+    'iwj,iwxj,ixj->ji',
+    'iwj,iwxj,ixyj,iyzj->ji',
+    'iwxj,ixyj,iyzj,izwj->ji',
 ]
 
 
@@ -42,7 +53,6 @@ def test_shape(backend, equation):
     inputs = inputs.split(',')
     symbols = sorted(set(equation) - set(',->'))
     sizes = dict(zip(symbols, itertools.count(2)))
-    output_shape = torch.Size(sizes[dim] for dim in output)
     input_shapes = [torch.Size(sizes[dim] for dim in dims)
                     for dims in inputs]
     operands = [torch.randn(shape) for shape in input_shapes]
@@ -69,7 +79,8 @@ def test_shape(backend, equation):
         else:
             contract_dims = set(input_) - set(output)
             if contract_dims:
-                assert backward_result.shape == (len(contract_dims),) + output_shape
+                assert backward_result.size(0) == len(contract_dims)
+                assert set(backward_result._pyro_dims[1:]) == set(output)
                 for sample, dim in zip(backward_result, backward_result._pyro_sample_dims):
                     assert sample.min() >= 0
                     assert sample.max() < sizes[dim]
