@@ -62,27 +62,14 @@ Make sure that the models come from the same release version of the [Pyro source
 
 For recent features you can install Pyro from source.
 
-To install a compatible CPU version of PyTorch on OSX / Linux, you
-could use the PyTorch install helper script.
+To install a compatible version of PyTorch, use the PyTorch nightly
+[build](https://pytorch.org/). We recommend pinning to the specific
+nightly build below that has been well tested.
 
-```
-bash scripts/install_pytorch.sh
-```
-
-Alternatively, build PyTorch following instructions in the PyTorch
-[README](https://github.com/pytorch/pytorch/blob/master/README.md).
 ```sh
-git clone --recursive https://github.com/pytorch/pytorch
-cd pytorch
-git checkout 200fb22  # <---- a well-tested commit
-```
-On Linux:
-```sh
-python setup.py install
-```
-On OSX:
-```sh
-MACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py install
+build_ver=1.0.0.dev20181127  # <---- a well-tested PyTorch build
+pip install torch_nightly==${build_ver} -f \
+    https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
 ```
 
 Finally install Pyro using pip or from source as shown below.

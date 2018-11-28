@@ -9,7 +9,6 @@ from torchvision.datasets import MNIST
 
 from pyro.contrib.examples.util import get_data_directory
 
-
 # This file contains utilities for caching, transforming and splitting MNIST data
 # efficiently. By default, a PyTorch DataLoader will apply the transform every epoch
 # we avoid this by caching the data early on in MNISTCached class

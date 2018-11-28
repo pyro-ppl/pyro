@@ -9,6 +9,7 @@ import pyro.distributions as dist
 from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
+from pyro.distributions.util import eye_like
 
 
 class VariationalGP(GPModel):
@@ -69,7 +70,7 @@ class VariationalGP(GPModel):
         N = self.X.size(0)
         self.f_loc = Parameter(self.X.new_zeros(self.latent_shape + (N,)))
 
-        identity = torch.eye(N, out=self.X.new_empty(N, N))
+        identity = eye_like(self.X, N)
         self.f_scale_tril = Parameter(identity.repeat(self.latent_shape + (1, 1)))
         self.set_constraint("f_scale_tril", constraints.lower_cholesky)
 
@@ -82,11 +83,11 @@ class VariationalGP(GPModel):
         N = self.X.size(0)
         Kff = self.kernel(self.X).contiguous()
         Kff.view(-1)[::N + 1] += self.jitter  # add jitter to the diagonal
-        Lff = Kff.potrf(upper=False)
+        Lff = Kff.cholesky()
 
         zero_loc = self.X.new_zeros(self.f_loc.shape)
         if self.whiten:
-            identity = torch.eye(N, out=self.X.new_empty(N, N))
+            identity = eye_like(self.X, N)
             pyro.sample("f", dist.MultivariateNormal(zero_loc, scale_tril=identity)
                         .independent(zero_loc.dim() - 1))
             f_scale_tril = Lff.matmul(self.f_scale_tril)
