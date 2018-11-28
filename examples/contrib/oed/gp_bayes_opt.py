@@ -36,7 +36,8 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
         self.gpmodel.set_data(X, y)
         optimizer = torch.optim.Adam(self.gpmodel.parameters())
         gp.util.train(self.gpmodel, optimizer,
-                      loss_fn=TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss)
+                      loss_fn=TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
+                      retain_graph=True)
 
     def find_a_candidate(self, differentiable, x_init):
         """Given a starting point, `x_init`, takes one LBFGS step

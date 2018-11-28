@@ -210,7 +210,7 @@ class Parameterized(nn.Module):
         self.register_buffer(name, p)
 
 
-def train(gpmodule, optimizer=None, loss_fn=None, num_steps=1000):
+def train(gpmodule, optimizer=None, loss_fn=None, retain_graph=None, num_steps=1000):
     """
     A helper to optimize parameters for a GP module.
 
@@ -220,6 +220,7 @@ def train(gpmodule, optimizer=None, loss_fn=None, num_steps=1000):
     :param callable loss_fn: A loss function which takes inputs are
         ``gpmodule.model``, ``gpmodule.guide``, and returns ELBO loss.
         By default, ``loss_fn=Trace_ELBO().differentiable_loss``.
+    :param bool retain_graph: An optional flag of ``torch.autograd.backward``.
     :param int num_steps: Number of steps to run SVI.
     :returns: a list of losses during the training procedure
     :rtype: list
@@ -231,7 +232,7 @@ def train(gpmodule, optimizer=None, loss_fn=None, num_steps=1000):
     def closure():
         optimizer.zero_grad()
         loss = loss_fn(gpmodule.model, gpmodule.guide)
-        torch_backward(loss)
+        torch_backward(loss, retain_graph)
         return loss
 
     losses = []

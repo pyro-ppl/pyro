@@ -104,6 +104,7 @@ def main(num_vi_steps, num_bo_steps):
             noise=torch.tensor(noise), jitter=1e-6)
         gpbo = GPBayesOptimizer(constraints.interval(0, 100), gpmodel,
                                 num_acquisitions=num_acquisitions)
+        pyro.clear_param_store()
         for i in range(num_bo_steps):
             result = gpbo.get_step(f, None, verbose=True)
 
