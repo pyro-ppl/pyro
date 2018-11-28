@@ -12,7 +12,6 @@ import pyro
 import pyro.distributions as dist
 import pyro.ops.jit
 import pyro.poutine as poutine
-from pyro.distributions.torch_distribution import ReshapedDistribution
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
@@ -148,8 +147,6 @@ def _make_dist(dist_, logits):
     # Reshape for Bernoulli vs Categorical, OneHotCategorical, etc..
     if isinstance(dist_, dist.Bernoulli):
         logits = logits[..., 1] - logits[..., 0]
-    elif isinstance(dist_, ReshapedDistribution):
-        return _make_dist(dist_.base_dist, logits=logits)
     return type(dist_)(logits=logits)
 
 
@@ -437,12 +434,13 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
 
     .. warning:: Experimental. Interface subject to change.
     """
+
     def loss_and_grads(self, model, guide, *args, **kwargs):
         if getattr(self, '_differentiable_loss', None) is None:
 
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.compile(nderivs=1)
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings)
             def differentiable_loss(*args):
                 self = weakself()
                 elbo = 0.0

@@ -29,10 +29,6 @@ class RelaxedOneHotCategoricalStraightThrough(RelaxedOneHotCategorical):
     [2] Categorical Reparameterization with Gumbel-Softmax,
         Eric Jang, Shixiang Gu, Ben Poole
     """
-    def __init__(self, temperature, probs=None, logits=None, validate_args=None):
-        super(RelaxedOneHotCategoricalStraightThrough, self).__init__(temperature=temperature, probs=probs,
-                                                                      logits=logits, validate_args=validate_args)
-
     def rsample(self, sample_shape=torch.Size()):
         soft_sample = super(RelaxedOneHotCategoricalStraightThrough, self).rsample(sample_shape)
         soft_sample = clamp_probs(soft_sample)
@@ -81,10 +77,6 @@ class RelaxedBernoulliStraightThrough(RelaxedBernoulli):
     [2] Categorical Reparameterization with Gumbel-Softmax,
         Eric Jang, Shixiang Gu, Ben Poole
     """
-    def __init__(self, temperature, probs=None, logits=None, validate_args=None):
-        super(RelaxedBernoulliStraightThrough, self).__init__(temperature=temperature, probs=probs,
-                                                              logits=logits, validate_args=validate_args)
-
     def rsample(self, sample_shape=torch.Size()):
         soft_sample = super(RelaxedBernoulliStraightThrough, self).rsample(sample_shape)
         soft_sample = clamp_probs(soft_sample)
