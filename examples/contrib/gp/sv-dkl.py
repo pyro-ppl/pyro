@@ -26,7 +26,7 @@ from torchvision import transforms
 import pyro
 import pyro.contrib.gp as gp
 import pyro.infer as infer
-from pyro.contrib.examples.util import get_data_loader
+from pyro.contrib.examples.util import get_data_loader, get_data_directory
 
 
 class CNN(nn.Module):
@@ -78,15 +78,16 @@ def test(args, test_loader, gpmodel):
 
 
 def main(args):
+    data_dir = args.data_dir if args.data_dir is not None else get_data_directory(__file__)
     train_loader = get_data_loader(dataset_name='MNIST',
-                                   data_dir=args.data_dir,
+                                   data_dir=data_dir,
                                    batch_size=args.batch_size,
                                    dataset_transforms=[transforms.Normalize((0.1307,),
                                                                             (0.3081,))],
                                    is_training_set=True,
                                    shuffle=True)
     test_loader = get_data_loader(dataset_name='MNIST',
-                                  data_dir=args.data_dir,
+                                  data_dir=data_dir,
                                   batch_size=args.batch_size,
                                   dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
                                   is_training_set=False,
@@ -129,7 +130,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Pyro GP MNIST Example')
-    parser.add_argument('--data-dir', type=str, default='../data', metavar='PATH',
+    parser.add_argument('--data-dir', type=str, default=None, metavar='PATH',
                         help='default directory to cache MNIST data')
     parser.add_argument('--num-inducing', type=int, default=70, metavar='N',
                         help='number of inducing input (default: 70)')
