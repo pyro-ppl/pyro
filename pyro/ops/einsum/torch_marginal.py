@@ -30,8 +30,11 @@ class _EinsumBackward(Backward):
             if not operand._pyro_backward.is_leaf:
                 del inputs_i[i]
                 del operands_i[i]
-            equation = ','.join(inputs_i) + '->' + output_i
-            message_i = pyro.ops.einsum.torch_log.einsum(equation, *operands_i)
+            if operands_i:
+                equation = ','.join(inputs_i) + '->' + output_i
+                message_i = pyro.ops.einsum.torch_log.einsum(equation, *operands_i)
+            else:
+                message_i = None
             yield operand._pyro_backward, message_i
 
 
