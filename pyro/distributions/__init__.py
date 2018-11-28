@@ -15,6 +15,7 @@ from pyro.distributions.lowrank_mvn import LowRankMultivariateNormal
 from pyro.distributions.mixture import MaskedMixture
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
 from pyro.distributions.permute import PermuteTransform
+from pyro.distributions.planar import PlanarFlow
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.relaxed_straight_through import (RelaxedBernoulliStraightThrough,
                                                          RelaxedOneHotCategoricalStraightThrough)
@@ -46,6 +47,7 @@ __all__ = [
     "MixtureOfDiagNormals",
     "OMTMultivariateNormal",
     "PermuteTransform",
+    "PlanarFlow",
     "Rejector",
     "RelaxedBernoulliStraightThrough",
     "RelaxedOneHotCategoricalStraightThrough",

@@ -179,6 +179,13 @@ PermuteTransform
     :undoc-members:
     :show-inheritance:
 
+PlanarFlow
+----------------
+.. autoclass:: pyro.distributions.PlanarFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 TransformModule
 ----------------
 .. autoclass:: pyro.distributions.TransformModule
