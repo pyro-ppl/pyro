@@ -1,1 +1,0 @@
-../../examples/mini_pyro.py
