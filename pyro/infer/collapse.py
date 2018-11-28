@@ -15,6 +15,29 @@ from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import SampleRing
 
 
+class DebugRing(SampleRing):
+
+    def sumproduct(self, terms, dims):
+        v = super(DebugRing, self).sumproduct(terms, dims)
+        print("DEBUG sumproduct: dims {}, terms {}, result {}".format(dims, terms, v))
+        return v
+
+    def product(self, term, ordinal):
+        v = super(DebugRing, self).product(term, ordinal)
+        print("DEBUG product: ordinal {}, term {}, result {}".format(ordinal, term, v))
+        return v
+
+    def broadcast(self, term, ordinal):
+        v = super(DebugRing, self).broadcast(term, ordinal)
+        print("DEBUG broadcast: ordinal {}, term {}, result {}".format(ordinal, term, v))
+        return v
+
+    def inv(self, term):
+        v = super(DebugRing, self).inv(term)
+        print("DEBUG inv: term {}, result {}".format(term, v))
+        return v
+
+
 class CollapseEnumMessenger(poutine.enumerate_messenger.EnumerateMessenger):
 
     def _pyro_sample(self, msg):
@@ -80,7 +103,7 @@ def collapse(model, first_available_dim):
                     queries.append(log_prob)
                     require_backward(log_prob)
 
-        ring = SampleRing()
+        ring = DebugRing()
         contract_tensor_tree(log_probs, sum_dims, ring=ring)
         query_ordinal = {}
         for ordinal, terms in log_probs.items():
