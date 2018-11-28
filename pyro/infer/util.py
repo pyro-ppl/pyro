@@ -244,16 +244,11 @@ class Dice(object):
                 # Perform sum-product contraction. Note that plates never need to be
                 # product-contracted due to our plate-based dependency ordering.
                 sum_dims = set().union(*(x._pyro_dims for x in log_factors)) - ordinal
-                if len(log_factors) == 1 and not sum_dims:
-                    # sumproduct is a no-op
-                    probs = {key: query.exp() for key, query in queries.items()}
-                else:
-                    # Perform forward-backward message passing.
-                    for query in queries.values():
-                        require_backward(query)
-                    root = ring.sumproduct(log_factors, sum_dims)
-                    root._pyro_backward()
-                    probs = {key: query._pyro_backward_result.exp() for key, query in queries.items()}
+                for query in queries.values():
+                    require_backward(query)
+                root = ring.sumproduct(log_factors, sum_dims)
+                root._pyro_backward()
+                probs = {key: query._pyro_backward_result.exp() for key, query in queries.items()}
 
                 # Aggregate prob * cost terms.
                 for cost in cost_terms:
