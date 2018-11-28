@@ -1,14 +1,23 @@
+"""
+Mini Pyro
+---------
+
+This file contains a minimal implementation of the Pyro Probabilistic
+Programming Language, complete with an example. This file is independent of the
+rest of Pyro, with the exception of the :mod:`pyro.distributions` module.
+"""
 from __future__ import absolute_import, division, print_function
 
-import argparse
 from collections import OrderedDict
 
 import torch
 
-import pyro.distributions as dist
-
 PYRO_STACK = []
 PARAM_STORE = {}
+
+
+def get_param_store():
+    return PARAM_STORE
 
 
 class Messenger(object):
@@ -131,37 +140,3 @@ def elbo(model, guide, *args, **kwargs):
         if site["type"] == "sample":
             elbo = elbo - site["fn"].log_prob(site["value"]).sum()
     return -elbo
-
-
-def main(args):
-    torch.manual_seed(0)
-
-    def model(data):
-        loc = sample("loc", dist.Normal(0., 1.))
-        sample("obs", dist.Normal(loc, 1.), obs=data)
-
-    def guide(data):
-        loc_loc = param("loc_loc", torch.tensor(0.))
-        loc_scale = param("loc_scale_log", torch.tensor(0.)).exp()
-        sample("loc", dist.Normal(loc_loc, loc_scale))
-
-    data = torch.randn(100) + 3.0
-
-    svi = SVI(model, guide, Adam({"lr": args.learning_rate}), elbo)
-    for step in range(args.num_steps):
-        loss = svi.step(data)
-        if step % 100 == 0:
-            print("step {} loss = {}".format(step, loss))
-
-    for name, value in PARAM_STORE.items():
-        print("{} = {}".format(name, value.detach().cpu().numpy()))
-
-    assert (param("loc_loc") - 3.0).abs() < 0.1
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Mini Pyro demo")
-    parser.add_argument("-n", "--num-steps", default=1001, type=int)
-    parser.add_argument("-lr", "--learning-rate", default=0.02, type=float)
-    args = parser.parse_args()
-    main(args)
