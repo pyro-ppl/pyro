@@ -38,6 +38,7 @@ class _LeafBackward(Backward):
 
     def process(self, message):
         target = self.target()
+        assert message is not target, 'memory leak'
         target._pyro_backward_result = message
         return ()
 
