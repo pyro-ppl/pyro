@@ -31,12 +31,14 @@ class LiftMessenger(Messenger):
         self._samples_cache = {}
 
     def __enter__(self):
+        self._samples_cache = {}
         if is_validation_enabled() and isinstance(self.prior, dict):
             self._param_hits = set()
             self._param_misses = set()
         return super(LiftMessenger, self).__enter__()
 
     def __exit__(self, *args, **kwargs):
+        self._samples_cache = {}
         if is_validation_enabled() and isinstance(self.prior, dict):
             extra = set(self.prior) - self._param_hits
             if extra:

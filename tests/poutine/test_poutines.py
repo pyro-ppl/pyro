@@ -331,8 +331,8 @@ class LiftHandlerTests(TestCase):
             return latent2
 
         def dup_param_guide():
-            a = pyro.param("loc1")
-            b = pyro.param("loc1")
+            a = pyro.param("loc")
+            b = pyro.param("loc")
             assert a == b
 
         self.model = Model()
