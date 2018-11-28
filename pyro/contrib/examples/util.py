@@ -32,11 +32,14 @@ def get_data_loader(dataset_name,
         dataset_transforms = []
     trans = transforms.Compose([transforms.ToTensor()] + dataset_transforms)
     dataset = getattr(datasets, dataset_name)
-    return DataLoader(
-        dataset(root=data_dir,
+    print("downloading data")
+    dset = dataset(root=data_dir,
                 train=is_training_set,
                 transform=trans,
-                download=True),
+                download=True)
+    print("download complete.")
+    return DataLoader(
+        dset,
         batch_size=batch_size,
         shuffle=shuffle
     )
