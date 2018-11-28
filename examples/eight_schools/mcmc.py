@@ -34,7 +34,7 @@ def conditioned_model(model, sigma, y):
 
 
 def main(args):
-    nuts_kernel = NUTS(conditioned_model, adapt_step_size=True)
+    nuts_kernel = NUTS(conditioned_model, jit_compile=args.jit,)
     posterior = MCMC(nuts_kernel,
                      num_samples=args.num_samples,
                      warmup_steps=args.warmup_steps,
@@ -58,6 +58,7 @@ if __name__ == '__main__':
                         help='number of parallel MCMC chains (default: 1)')
     parser.add_argument('--warmup-steps', type=int, default=1000,
                         help='number of MCMC samples for warmup (default: 1000)')
+    parser.add_argument('--jit', action='store_true', default=False)
     args = parser.parse_args()
 
     main(args)

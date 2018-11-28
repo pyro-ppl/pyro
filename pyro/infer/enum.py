@@ -8,7 +8,7 @@ from pyro import poutine
 from pyro.infer.util import is_validation_enabled
 from pyro.poutine import Trace
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_model_guide_match, check_site_shape
+from pyro.util import check_model_guide_match, check_site_shape, ignore_jit_warnings
 
 
 def iter_discrete_escape(trace, msg):
@@ -20,10 +20,14 @@ def iter_discrete_escape(trace, msg):
 
 def iter_discrete_extend(trace, site, **ignored):
     values = site["fn"].enumerate_support(expand=site["infer"].get("expand", False))
+    enum_total = values.shape[0]
+    with ignore_jit_warnings(["Converting a tensor to a Python index",
+                              ("Iterating over a tensor", RuntimeWarning)]):
+        values = iter(values)
     for i, value in enumerate(values):
         extended_site = site.copy()
         extended_site["infer"] = site["infer"].copy()
-        extended_site["infer"]["_enum_total"] = len(values)
+        extended_site["infer"]["_enum_total"] = enum_total
         extended_site["value"] = value
         extended_trace = trace.copy()
         extended_trace.add_node(site["name"], **extended_site)

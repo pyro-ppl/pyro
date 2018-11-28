@@ -130,7 +130,7 @@ class SparseGPRegression(GPModel):
         M = Xu.shape[0]
         Kuu = self.kernel(Xu).contiguous()
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
-        Luu = Kuu.potrf(upper=False)
+        Luu = Kuu.cholesky()
         Kuf = self.kernel(Xu, self.X)
         W = Kuf.trtrs(Luu, upper=False)[0].t()
 
@@ -210,7 +210,7 @@ class SparseGPRegression(GPModel):
 
         Kuu = self.kernel(Xu).contiguous()
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
-        Luu = Kuu.potrf(upper=False)
+        Luu = Kuu.cholesky()
         Kus = self.kernel(Xu, Xnew)
         Kuf = self.kernel(Xu, self.X)
 
@@ -225,7 +225,7 @@ class SparseGPRegression(GPModel):
         W_Dinv = W / D
         K = W_Dinv.matmul(W.t()).contiguous()
         K.view(-1)[::M + 1] += 1  # add identity matrix to K
-        L = K.potrf(upper=False)
+        L = K.cholesky()
 
         # get y_residual and convert it into 2D tensor for packing
         y_residual = self.y - self.mean_function(self.X)

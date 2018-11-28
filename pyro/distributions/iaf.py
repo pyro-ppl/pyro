@@ -118,6 +118,8 @@ class InverseAutoregressiveFlow(TransformModule):
                 x[idx] = (y[..., idx] - mean) * inverse_scale
 
             x = torch.stack(x, dim=-1)
+            log_scale = clamp_preserve_gradients(log_scale, min=self.log_scale_min_clip, max=self.log_scale_max_clip)
+            self._add_intermediate_to_cache(log_scale, y, 'log_scale')
             return x
 
     def _add_intermediate_to_cache(self, intermediate, y, name):
@@ -132,11 +134,7 @@ class InverseAutoregressiveFlow(TransformModule):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        if (y, 'log_scale') in self._intermediates_cache:
-            log_scale = self._intermediates_cache.pop((y, 'log_scale'))
-        else:
-            _, log_scale = self.arn(x)
-            log_scale = clamp_preserve_gradients(log_scale, min=self.log_scale_min_clip, max=self.log_scale_max_clip)
+        log_scale = self._intermediates_cache.pop((y, 'log_scale'))
         return log_scale
 
 
