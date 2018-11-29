@@ -279,7 +279,7 @@ def test_beta_bernoulli_with_dual_averaging(jit):
     hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True, max_plate_nesting=2,
                      jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
+    posterior = mcmc_run.marginal(["p_latent"]).empirical["p_latent"]
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
@@ -299,7 +299,7 @@ def test_gamma_normal_with_dual_averaging(jit):
     hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True,
                      jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
+    posterior = mcmc_run.marginal(['p_latent']).empirical['p_latent']
     assert_equal(posterior.mean, true_std, prec=0.05)
 
 

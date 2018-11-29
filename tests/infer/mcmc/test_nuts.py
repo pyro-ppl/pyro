@@ -235,7 +235,7 @@ def test_beta_bernoulli_with_dual_averaging(jit):
     nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit,
                        ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites="p_latent")
+    posterior = mcmc_run.marginal(["p_latent"]).empirical["p_latent"]
     assert_equal(posterior.mean, true_probs, prec=0.03)
 
 
