@@ -71,9 +71,10 @@ class TorchDistributionMixin(Distribution):
         """
         Expands a distribution to a desired
         :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
-         Note that this is more general than :meth:`expand_by` because
+        Note that this is more general than :meth:`expand_by` because
         ``d.expand_by(sample_shape)`` can be reduced to
         ``d.expand(sample_shape + d.batch_shape)``.
+
         :param torch.Size batch_shape: The target ``batch_shape``. This must
             compatible with ``self.batch_shape`` similar to the requirements
             of :func:`torch.Tensor.expand`: the target ``batch_shape`` must
