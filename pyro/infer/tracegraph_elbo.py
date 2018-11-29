@@ -254,7 +254,7 @@ class TraceGraph_ELBO(ELBO):
 
 class JitTraceGraph_ELBO(TraceGraph_ELBO):
     """
-    Like :class:`TraceGraph_ELBO` but uses :func:`torch.jit.compile` to
+    Like :class:`TraceGraph_ELBO` but uses :func:`torch.jit.trace` to
     compile :meth:`loss_and_grads`.
 
     This works only for a limited set of models:
@@ -274,7 +274,7 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
             # build a closure for loss_and_surrogate_loss
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.compile(nderivs=1)
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings)
             def loss_and_surrogate_loss(*args):
                 self = weakself()
                 loss = 0.0
@@ -302,7 +302,7 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
             self._loss_and_surrogate_loss = loss_and_surrogate_loss
 
         loss, surrogate_loss = self._loss_and_surrogate_loss(*args)
-        surrogate_loss.backward()  # this line triggers jit compilation
+        surrogate_loss.backward()
         loss = loss.item()
 
         warn_if_nan(loss, "loss")

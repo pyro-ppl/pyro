@@ -7,7 +7,7 @@ from subprocess import check_call
 
 import pytest
 
-from tests.common import EXAMPLES_DIR, requires_cuda, xfail_param
+from tests.common import EXAMPLES_DIR, requires_cuda, xfail_param, skipif_param
 
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
@@ -21,7 +21,9 @@ CPU_EXAMPLES = [
     'contrib/autoname/scoping_mixture.py --num-epochs=1',
     'contrib/autoname/mixture.py --num-epochs=1',
     'contrib/autoname/tree_data.py --num-epochs=1',
-    'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4',
+    skipif_param('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4',
+                 condition='CI' in os.environ,
+                 reason='https://github.com/uber/pyro/issues/1540'),
     'contrib/oed/ab_test.py --num-vi-steps=1000',
     'contrib/oed/item_response.py -N=1000 -M=1000',
     'contrib/oed/sequential_oed_sigmoid_lm.py --num-experiments=2 --num-runs=2 --no-plot',
@@ -33,15 +35,18 @@ CPU_EXAMPLES = [
     'hmm.py --num-steps=1 --truncate=65 --model=2',
     'hmm.py --num-steps=1 --truncate=65 --model=3',
     'hmm.py --num-steps=1 --truncate=65 --model=4',
+    'hmm.py --num-steps=1 --truncate=65 --model=5',
     'inclined_plane.py --num-samples=1',
     'lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8',
-    'mini_pyro.py',
+    'minipyro.py',
+    'minipyro.py --full-pyro',
     'rsa/generics.py --num-samples=10',
     'rsa/hyperbole.py --price=10000',
     'rsa/schelling.py --num-samples=10',
     'rsa/schelling_false.py --num-samples=10',
     'rsa/semantic_parsing.py --num-samples=10',
-    'sparse_gamma_def.py --num-epochs=1',
+    'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1',
+    'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --auto-guide',
     'vae/ss_vae_M2.py --num-epochs=1',
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel',
@@ -62,6 +67,7 @@ CUDA_EXAMPLES = [
     'hmm.py --num-steps=1 --truncate=65 --model=2 --cuda',
     'hmm.py --num-steps=1 --truncate=65 --model=3 --cuda',
     'hmm.py --num-steps=1 --truncate=65 --model=4 --cuda',
+    'hmm.py --num-steps=1 --truncate=65 --model=5 --cuda',
     'vae/vae.py --num-epochs=1 --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss --cuda',
@@ -69,26 +75,36 @@ CUDA_EXAMPLES = [
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --cuda',
 ]
 
+
+def xfail_jit(*args):
+    return pytest.param(*args, marks=[pytest.mark.xfail(reason="not jittable"),
+                                      pytest.mark.skipif('CI' in os.environ, reason='slow test')])
+
+
 JIT_EXAMPLES = [
-    'air/main.py --num-steps=1 --jit',
-    'bayesian_regression.py --num-epochs=1 --jit',
-    'contrib/autoname/mixture.py --num-epochs=1 --jit',
-    'dmm/dmm.py --num-epochs=1 --jit',
-    'dmm/dmm.py --num-epochs=1 --num-iafs=1 --jit',
-    'eight_schools/svi.py --num-epochs=1 --jit',
-    'examples/contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit',
-    'hmm.py --num-steps=1 --truncate=65 --model=1 --jit',
-    'hmm.py --num-steps=1 --truncate=65 --model=2 --jit',
-    'hmm.py --num-steps=1 --truncate=65 --model=3 --jit',
-    'hmm.py --num-steps=1 --truncate=65 --model=4 --jit',
-    'lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8 --jit',
-    'vae/ss_vae_M2.py --num-epochs=1 --aux-loss --jit',
-    'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel --jit',
-    'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --jit',
-    'vae/ss_vae_M2.py --num-epochs=1 --jit',
-    'vae/vae.py --num-epochs=1 --jit',
-    'vae/vae_comparison.py --num-epochs=1 --jit',
-    'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit',
+    xfail_jit('air/main.py --num-steps=1 --jit'),
+    xfail_jit('baseball.py --num-samples=200 --warmup-steps=100 --jit'),
+    xfail_jit('bayesian_regression.py --num-epochs=1 --jit'),
+    xfail_jit('contrib/autoname/mixture.py --num-epochs=1 --jit'),
+    xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
+    xfail_jit('dmm/dmm.py --num-epochs=1 --jit'),
+    xfail_jit('dmm/dmm.py --num-epochs=1 --num-iafs=1 --jit'),
+    xfail_jit('eight_schools/mcmc.py --num-samples=500 --warmup-steps=100 --jit'),
+    xfail_jit('eight_schools/svi.py --num-epochs=1 --jit'),
+    xfail_jit('examples/contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
+    xfail_jit('hmm.py --num-steps=1 --truncate=65 --model=1 --jit'),
+    xfail_jit('hmm.py --num-steps=1 --truncate=65 --model=2 --jit'),
+    xfail_jit('hmm.py --num-steps=1 --truncate=65 --model=3 --jit'),
+    xfail_jit('hmm.py --num-steps=1 --truncate=65 --model=4 --jit'),
+    xfail_jit('hmm.py --num-steps=1 --truncate=65 --model=5 --jit'),
+    xfail_jit('lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8 --jit'),
+    xfail_jit('vae/ss_vae_M2.py --num-epochs=1 --aux-loss --jit'),
+    xfail_jit('vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel --jit'),
+    xfail_jit('vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --jit'),
+    xfail_jit('vae/ss_vae_M2.py --num-epochs=1 --jit'),
+    xfail_jit('vae/vae.py --num-epochs=1 --jit'),
+    xfail_jit('vae/vae_comparison.py --num-epochs=1 --jit'),
+    xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
 ]
 
 
@@ -132,8 +148,6 @@ def test_cuda(example):
     check_call([sys.executable, filename] + args)
 
 
-@pytest.mark.skipif('CI' in os.environ, reason='slow test')
-@pytest.mark.xfail(reason='not jittable')
 @pytest.mark.parametrize('example', JIT_EXAMPLES)
 def test_jit(example):
     logger.info('Running:\npython examples/{}'.format(example))

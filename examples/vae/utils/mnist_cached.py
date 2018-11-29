@@ -7,6 +7,8 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision.datasets import MNIST
 
+from pyro.contrib.examples.util import get_data_directory
+
 # This file contains utilities for caching, transforming and splitting MNIST data
 # efficiently. By default, a PyTorch DataLoader will apply the transform every epoch
 # we avoid this by caching the data early on in MNISTCached class
@@ -191,20 +193,21 @@ class MNISTCached(MNIST):
         return img, target
 
 
-def setup_data_loaders(dataset, use_cuda, batch_size, sup_num=None, root='./data', download=True, **kwargs):
+def setup_data_loaders(dataset, use_cuda, batch_size, sup_num=None, root=None, download=True, **kwargs):
     """
         helper function for setting up pytorch data loaders for a semi-supervised dataset
     :param dataset: the data to use
     :param use_cuda: use GPU(s) for training
     :param batch_size: size of a batch of data to output when iterating over the data loaders
     :param sup_num: number of supervised data examples
-    :param root: where on the filesystem should the dataset be
     :param download: download the dataset (if it doesn't exist already)
     :param kwargs: other params for the pytorch data loader
     :return: three data loaders: (supervised data for training, un-supervised data for training,
                                   supervised data for testing)
     """
     # instantiate the dataset as training/testing sets
+    if root is None:
+        root = get_data_directory(__file__)
     if 'num_workers' not in kwargs:
         kwargs = {'num_workers': 0, 'pin_memory': False}
 
