@@ -10,6 +10,8 @@ from opt_einsum.sharing import count_cached_ops
 
 from pyro.distributions.util import is_identically_zero
 from pyro.ops import packed
+from pyro.ops.einsum.adjoint import require_backward
+from pyro.ops.rings import MarginalRing
 from pyro.poutine.util import site_is_subsample
 
 _VALIDATION_ENABLED = False
@@ -190,19 +192,11 @@ class Dice(object):
 
         self.log_denom = log_denom
         self.log_probs = log_probs
-        self._log_factors_cache = {}
-        self._prob_cache = {}
 
     def _get_log_factors(self, target_ordinal):
         """
         Returns a list of DiCE factors at a given ordinal.
         """
-        # memoize
-        try:
-            return self._log_factors_cache[target_ordinal]
-        except KeyError:
-            pass
-
         log_denom = 0
         for ordinal, term in self.log_denom.items():
             if not ordinal <= target_ordinal:  # not downstream
@@ -213,7 +207,6 @@ class Dice(object):
             if ordinal <= target_ordinal:  # upstream
                 log_factors.extend(terms)  # terms = [log(dice weight of this ordinal)]
 
-        self._log_factors_cache[target_ordinal] = log_factors
         return log_factors
 
     def compute_expectation(self, costs):
@@ -224,37 +217,53 @@ class Dice(object):
         :returns: a scalar expected cost
         :rtype: torch.Tensor or float
         """
-        # precompute exponentials to be shared across calls to sumproduct
-        exp_table = {}
-        factors_table = defaultdict(list)
-        for ordinal in costs:
-            for log_factor in self._get_log_factors(ordinal):
-                key = id(log_factor)
-                if key in exp_table:
-                    factor = exp_table[key]
-                else:
-                    factor = packed.exp(log_factor)
-                    exp_table[key] = factor
-                factors_table[ordinal].append(factor)
-
-        # share computation across all cost terms
+        # Share computation across all cost terms.
         with shared_intermediates() as cache:
+            ring = MarginalRing(cache=cache)
             expected_cost = 0.
             for ordinal, cost_terms in costs.items():
-                factors = factors_table.get(ordinal, [])
-                # TODO use ubsersum with backend=pyro.ops.einsum.torch_marginal
+                log_factors = self._get_log_factors(ordinal)
+                scale = math.exp(sum(x for x in log_factors if not isinstance(x, torch.Tensor)))
+                log_factors = [x for x in log_factors if isinstance(x, torch.Tensor)]
+
+                # Collect log_prob terms to query for marginal probability.
+                queries = {frozenset(cost._pyro_dims): None for cost in cost_terms}
+                for log_factor in log_factors:
+                    key = frozenset(log_factor._pyro_dims)
+                    if queries.get(key, False) is None:
+                        queries[key] = log_factor
+                # Ensure a query exists for each cost term.
                 for cost in cost_terms:
-                    dims = ''.join(dim for dim in cost._pyro_dims
-                                   if any(dim in getattr(f, '_pyro_dims', '') for f in factors))
-                    prob = packed.sumproduct(factors, dims, device=cost.device)
+                    key = frozenset(cost._pyro_dims)
+                    if queries[key] is None:
+                        query = cost.new_zeros(cost.shape)
+                        query._pyro_dims = cost._pyro_dims
+                        log_factors.append(query)
+                        queries[key] = query
+
+                # Perform sum-product contraction. Note that plates never need to be
+                # product-contracted due to our plate-based dependency ordering.
+                sum_dims = set().union(*(x._pyro_dims for x in log_factors)) - ordinal
+                for query in queries.values():
+                    require_backward(query)
+                root = ring.sumproduct(log_factors, sum_dims)
+                root._pyro_backward()
+                probs = {key: query._pyro_backward_result.exp() for key, query in queries.items()}
+
+                # Aggregate prob * cost terms.
+                for cost in cost_terms:
+                    key = frozenset(cost._pyro_dims)
+                    prob = probs[key]
+                    prob._pyro_dims = queries[key]._pyro_dims
                     mask = prob > 0
-                    mask._pyro_dims = prob._pyro_dims
-                    if torch.is_tensor(mask) and not mask.all():
+                    if not mask.all():
+                        mask._pyro_dims = prob._pyro_dims
                         cost, prob, mask = packed.broadcast_all(cost, prob, mask)
                         prob = prob[mask]
                         cost = cost[mask]
-                        expected_cost = expected_cost + (prob * cost).sum()
+                        expected_cost = expected_cost + scale * (prob * cost).sum()
                     else:
-                        expected_cost = expected_cost + packed.sumproduct([prob, cost])
+                        expected_cost = expected_cost + scale * packed.sumproduct([prob, cost])
+
         LAST_CACHE_SIZE[0] = count_cached_ops(cache)
         return expected_cost
