@@ -72,8 +72,8 @@ class Empirical(TorchDistribution):
         return (self._categorical.probs * selection_mask).sum(dim=-1).log()
 
     def _weighted_mean(self, value, keepdim=False):
-        weights = self._log_weights.reshape(self.weights.size() +
-                                            torch.Size([1] * (value.dim() - self.weights.dim())))
+        weights = self._log_weights.reshape(self._log_weights.size() +
+                                            torch.Size([1] * (value.dim() - self._log_weights.dim())))
         dim = self._aggregation_dim
         max_weight = weights.max(dim=dim, keepdim=True)[0]
         relative_probs = (weights - max_weight).exp()
@@ -106,7 +106,7 @@ class Empirical(TorchDistribution):
         return self._weighted_mean(deviation_squared)
 
     @property
-    def weights(self):
+    def log_weights(self):
         return self._log_weights
 
     def enumerate_support(self, expand=True):
