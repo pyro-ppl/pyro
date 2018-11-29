@@ -95,7 +95,8 @@ def test_weighted_mean_var(event_shape, dtype, batch_shape):
     samples, weights = [], []
     for sample, weight in data:
         samples.append(sample * torch.ones(event_shape, dtype=dtype))
-        weights.append(torch.tensor(weight).log())
+        weight_dtype = dtype if dtype is not torch.long else None
+        weights.append(torch.tensor(weight, dtype=weight_dtype).log())
     samples = torch.stack(samples).expand(batch_shape + [4] + event_shape)
     weights = torch.stack(weights).expand(batch_shape + [4])
     empirical_dist = Empirical(samples, weights)
