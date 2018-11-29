@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import torch
 
+assert torch.__version__.startswith('1.')
+
 
 def patch_dependency(target, root_module=torch):
     parts = target.split('.')

@@ -160,6 +160,7 @@ def main(args):
 
 
 if __name__ == "__main__":
+    assert pyro.__version__.startswith('0.3.0')
     parser = argparse.ArgumentParser(description="Mini Pyro demo")
     parser.add_argument("-n", "--num-steps", default=1001, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.02, type=float)
