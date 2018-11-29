@@ -4,9 +4,9 @@ import math
 
 import torch
 from torch.distributions import constraints, kl_divergence, register_kl
-from torch.distributions.multivariate_normal import _batch_diag, _batch_mv
+from torch.distributions.multivariate_normal import _batch_mv
 from torch.distributions.lowrank_multivariate_normal import (_batch_lowrank_mahalanobis,
-                                                              _batch_lowrank_logdet)
+                                                             _batch_lowrank_logdet)
 from torch.distributions.utils import _standard_normal
 
 from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistributionMixin
