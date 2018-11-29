@@ -7,8 +7,84 @@ from pyro.distributions.torch_distribution import IndependentConstraint, TorchDi
 from pyro.distributions.util import sum_rightmost
 
 
-class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
-    support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
+class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Bernoulli, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class Beta(torch.distributions.Beta, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Beta, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Categorical, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class Cauchy(torch.distributions.Cauchy, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Cauchy, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class Chi2(torch.distributions.Chi2, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Chi2, self).expand_by(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Dirichlet, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class Exponential(torch.distributions.Exponential, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Exponential, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Gamma, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class Geometric(torch.distributions.Geometric, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Geometric, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class Gumbel(torch.distributions.Gumbel, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Gumbel, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
 
 
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
@@ -23,6 +99,85 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
     @_validate_args.setter
     def _validate_args(self, value):
         self.base_dist._validate_args = value
+
+
+class Laplace(torch.distributions.Laplace, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Laplace, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(LogNormal, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Multinomial, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
+    support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
+
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(MultivariateNormal, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class Normal(torch.distributions.Normal, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Normal, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(OneHotCategorical, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Poisson, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class StudentT(torch.distributions.StudentT, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(StudentT, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
+
+
+class TransformedDistribution(torch.distributions.TransformedDistribution, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        return super(TransformedDistribution, self).expand(batch_shape)
+
+
+class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
+    def expand(self, batch_shape, _instance=None):
+        try:
+            return super(Uniform, self).expand(batch_shape)
+        except NotImplementedError:
+            self.expand(batch_shape, _instance)
 
 
 @register_kl(Independent, Independent)
@@ -58,7 +213,6 @@ for _name, _Dist in torch.distributions.__dict__.items():
     '''.format(_Dist.__module__, _Dist.__name__)
 
     __all__.append(_name)
-
 
 # Create sphinx documentation.
 __doc__ = '\n\n'.join([
