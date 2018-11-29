@@ -78,6 +78,26 @@ class replay(Messenger):
             msg["value"] = self.guide_trace[msg["name"]]["value"]
 
 
+# This limited implementation of PlateMessenger only implements broadcasting.
+class PlateMessenger(Messenger):
+    def __init__(self, fn, size, dim):
+        assert dim < 0
+        self.size = size
+        self.dim = dim
+        super(PlateMessenger, self).__init__(fn)
+
+    def process_message(self, msg):
+        if msg["type"] == "sample":
+            batch_shape = msg["fn"].batch_shape
+            if len(batch_shape) < -self.dim or batch_shape[self.dim] != self.size:
+                batch_shape = [1] * (-self.dim - len(batch_shape)) + list(batch_shape)
+                batch_shape[self.dim] = self.size
+                msg["fn"] = msg["fn"].expand(torch.Size(batch_shape))
+
+    def __iter__(self):
+        return range(self.size)
+
+
 def sample(name, fn, obs=None):
     if not PYRO_STACK:
         return fn()
@@ -104,6 +124,10 @@ def param(name, init_value=None):
     for handler in PYRO_STACK:
         handler.postprocess_message(msg)
     return msg["value"]
+
+
+def plate(name, size, dim):
+    return PlateMessenger(fn=None, size=size, dim=dim)
 
 
 # This is a thin wrapper around the `torch.optim.Adam` class that
