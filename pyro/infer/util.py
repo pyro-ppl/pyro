@@ -261,9 +261,9 @@ class Dice(object):
                         cost, prob, mask = packed.broadcast_all(cost, prob, mask)
                         prob = prob[mask]
                         cost = cost[mask]
-                        expected_cost = expected_cost + scale * (prob * cost).sum()
                     else:
-                        expected_cost = expected_cost + scale * packed.sumproduct([prob, cost])
+                        cost, prob = packed.broadcast_all(cost, prob)
+                    expected_cost = expected_cost + scale * torch.tensordot(prob, cost, prob.dim())
 
         LAST_CACHE_SIZE[0] = count_cached_ops(cache)
         return expected_cost
