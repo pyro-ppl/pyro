@@ -69,7 +69,7 @@ class EmpiricalMarginal(Empirical):
         :param int chain_id: chain id that generated the sample (optional).
             Note that if this argument is provided, ``chain_id`` must lie
             in ``[0, num_chains - 1]``, and there must be equal number
-            of samples per chain when ``_finalize`` is eventually called.
+            of samples per chain.
         """
         weight_type = value.new_empty(1).float().type() if value.dtype in (torch.int32, torch.int64) \
             else value.type()
