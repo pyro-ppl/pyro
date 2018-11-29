@@ -14,7 +14,7 @@ import pyro.contrib.gp as gp
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
-from pyro.infer import SVI, EmpiricalMarginal, Trace_ELBO, TraceGraph_ELBO
+from pyro.infer import SVI, Trace_ELBO, TraceGraph_ELBO
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.nuts import NUTS
@@ -94,7 +94,7 @@ def bernoulli_beta_hmc(**kwargs):
     num_samples = kwargs.pop('num_samples')
     mcmc_kernel = kernel(model, **kwargs)
     mcmc_run = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100).run(data)
-    return EmpiricalMarginal(mcmc_run, sites='p_latent')
+    return mcmc_run.marginal('p_latent').empirical
 
 
 @register_model(num_steps=2000, whiten=False, id='SVGP::MultiClass_whiten=False')
