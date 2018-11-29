@@ -9,7 +9,6 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import EmpiricalMarginal
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
 from tests.common import assert_equal
@@ -139,7 +138,7 @@ def test_hmc_conjugate_gaussian(fixture,
     mcmc_run = MCMC(hmc_kernel, num_samples, warmup_steps).run(fixture.data)
     for i in range(1, fixture.chain_len + 1):
         param_name = 'loc_' + str(i)
-        marginal = EmpiricalMarginal(mcmc_run, sites=param_name)
+        marginal = mcmc_run.marginal(param_name).empirical[param_name]
         latent_loc = marginal.mean
         latent_std = marginal.variance.sqrt()
         expected_mean = torch.ones(fixture.dim) * expected_means[i - 1]
@@ -186,7 +185,7 @@ def test_logistic_regression(step_size, trajectory_length, num_steps,
     hmc_kernel = HMC(model, step_size, trajectory_length, num_steps,
                      adapt_step_size, adapt_mass_matrix, full_mass)
     mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
-    beta_posterior = EmpiricalMarginal(mcmc_run, sites='beta')
+    beta_posterior = mcmc_run.marginal(['beta']).empirical['beta']
     assert_equal(rmse(true_coefs, beta_posterior.mean).item(), 0.0, prec=0.1)
 
 
@@ -204,7 +203,7 @@ def test_beta_bernoulli(jit):
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     hmc_kernel = HMC(model, trajectory_length=1, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
+    posterior = mcmc_run.marginal('p_latent').empirical['p_latent']
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
@@ -223,7 +222,7 @@ def test_gamma_normal(jit):
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
     hmc_kernel = HMC(model, trajectory_length=1, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
+    posterior = mcmc_run.marginal('p_latent').empirical['p_latent']
     assert_equal(posterior.mean, true_std, prec=0.05)
 
 
@@ -241,7 +240,7 @@ def test_dirichlet_categorical(jit):
     data = dist.Categorical(true_probs).sample(sample_shape=(torch.Size((2000,))))
     hmc_kernel = HMC(model, trajectory_length=1, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
+    posterior = mcmc_run.marginal('p_latent').empirical['p_latent']
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
@@ -261,7 +260,7 @@ def test_logistic_regression_with_dual_averaging(jit):
     hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True,
                      jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='beta')
+    posterior = mcmc_run.marginal(["beta"]).empirical["beta"]
     assert_equal(rmse(posterior.mean, true_coefs).item(), 0.0, prec=0.1)
 
 
@@ -280,7 +279,7 @@ def test_beta_bernoulli_with_dual_averaging(jit):
     hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True, max_plate_nesting=2,
                      jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
+    posterior = mcmc_run.marginal(["p_latent"]).empirical["p_latent"]
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
@@ -300,7 +299,7 @@ def test_gamma_normal_with_dual_averaging(jit):
     hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True,
                      jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='p_latent')
+    posterior = mcmc_run.marginal(['p_latent']).empirical['p_latent']
     assert_equal(posterior.mean, true_std, prec=0.05)
 
 
@@ -325,9 +324,9 @@ def test_gaussian_mixture_model(jit):
     data = dist.Normal(true_cluster_means[cluster_assignments], 1.0).sample()
     hmc_kernel = HMC(gmm, trajectory_length=1, max_plate_nesting=1, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=300, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites=["phi", "cluster_means"]).mean.sort()[0]
-    assert_equal(posterior[0], true_mix_proportions, prec=0.05)
-    assert_equal(posterior[1], true_cluster_means, prec=0.2)
+    posterior = mcmc_run.marginal(["phi", "cluster_means"]).empirical
+    assert_equal(posterior["phi"].mean.sort()[0], true_mix_proportions, prec=0.05)
+    assert_equal(posterior["cluster_means"].mean.sort()[0], true_cluster_means, prec=0.2)
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
@@ -350,5 +349,5 @@ def test_bernoulli_latent_model(jit, use_einsum):
                      jit_compile=jit, ignore_jit_warnings=True,
                      experimental_use_einsum=use_einsum)
     mcmc_run = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites="y_prob").mean
+    posterior = mcmc_run.marginal("y_prob").empirical["y_prob"].mean
     assert_equal(posterior, y_prob, prec=0.05)
