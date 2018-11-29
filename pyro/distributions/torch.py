@@ -10,63 +10,63 @@ from pyro.distributions.util import sum_rightmost
 class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Bernoulli, self).expand(batch_shape)
+            return super(Bernoulli, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Bernoulli, self).expand(batch_shape, _instance)
 
 
 class Beta(torch.distributions.Beta, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Beta, self).expand(batch_shape)
+            return super(Beta, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Beta, self).expand(batch_shape, _instance)
 
 
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Categorical, self).expand(batch_shape)
+            return super(Categorical, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Categorical, self).expand(batch_shape, _instance)
 
 
 class Cauchy(torch.distributions.Cauchy, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Cauchy, self).expand(batch_shape)
+            return super(Cauchy, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Cauchy, self).expand(batch_shape, _instance)
 
 
 class Chi2(torch.distributions.Chi2, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Chi2, self).expand_by(batch_shape)
+            return super(Chi2, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Chi2, self).expand(batch_shape, _instance)
 
 
 class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Dirichlet, self).expand(batch_shape)
+            return super(Dirichlet, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Dirichlet, self).expand(batch_shape, _instance)
 
 
 class Exponential(torch.distributions.Exponential, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Exponential, self).expand(batch_shape)
+            return super(Exponential, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Exponential, self).expand(batch_shape, _instance)
 
 
 class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Gamma, self).expand(batch_shape)
+            return super(Gamma, self)._expand(batch_shape)
         except NotImplementedError:
             self.expand(batch_shape, _instance)
 
@@ -74,17 +74,17 @@ class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
 class Geometric(torch.distributions.Geometric, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Geometric, self).expand(batch_shape)
+            return super(Geometric, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Geometric, self).expand(batch_shape, _instance)
 
 
 class Gumbel(torch.distributions.Gumbel, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Gumbel, self).expand(batch_shape)
+            return super(Gumbel, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Gumbel, self).expand(batch_shape, _instance)
 
 
 class Independent(torch.distributions.Independent, TorchDistributionMixin):
@@ -104,25 +104,25 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
 class Laplace(torch.distributions.Laplace, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Laplace, self).expand(batch_shape)
+            return super(Laplace, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Laplace, self).expand(batch_shape, _instance)
 
 
 class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(LogNormal, self).expand(batch_shape)
+            return super(LogNormal, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(LogNormal, self).expand(batch_shape, _instance)
 
 
 class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Multinomial, self).expand(batch_shape)
+            return super(Multinomial, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Multinomial, self).expand(batch_shape, _instance)
 
 
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
@@ -130,54 +130,57 @@ class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributi
 
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(MultivariateNormal, self).expand(batch_shape)
+            return super(MultivariateNormal, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(MultivariateNormal, self).expand(batch_shape, _instance)
 
 
 class Normal(torch.distributions.Normal, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Normal, self).expand(batch_shape)
+            return super(Normal, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Normal, self).expand(batch_shape, _instance)
 
 
 class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(OneHotCategorical, self).expand(batch_shape)
+            return super(OneHotCategorical, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(OneHotCategorical, self).expand(batch_shape, _instance)
 
 
 class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Poisson, self).expand(batch_shape)
+            return super(Poisson, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Poisson, self).expand(batch_shape, _instance)
 
 
 class StudentT(torch.distributions.StudentT, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(StudentT, self).expand(batch_shape)
+            return super(StudentT, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(StudentT, self).expand(batch_shape, _instance)
 
 
 class TransformedDistribution(torch.distributions.TransformedDistribution, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
-        return super(TransformedDistribution, self).expand(batch_shape)
+        try:
+            return super(TransformedDistribution, self)._expand(batch_shape)
+        except NotImplementedError:
+            return super(TransformedDistribution, self).expand(batch_shape)
 
 
 class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
     def expand(self, batch_shape, _instance=None):
         try:
-            return super(Uniform, self).expand(batch_shape)
+            return super(Uniform, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Uniform, self).expand(batch_shape, _instance)
 
 
 @register_kl(Independent, Independent)

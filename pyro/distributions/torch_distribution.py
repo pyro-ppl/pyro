@@ -67,7 +67,7 @@ class TorchDistributionMixin(Distribution):
         """
         return sample_shape + self.batch_shape + self.event_shape
 
-    def expand(self, batch_shape, _instance=None):
+    def _expand(self, batch_shape, _instance=None):
         """
         Expands a distribution to a desired
         :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
@@ -108,7 +108,9 @@ class TorchDistributionMixin(Distribution):
         :return: An expanded version of this distribution.
         :rtype: :class:`ReshapedDistribution`
         """
-        return self.expand(torch.Size(sample_shape) + self.batch_shape)
+        if not sample_shape:
+            return self
+        return ReshapedDistribution(self, sample_shape=sample_shape)
 
     def reshape(self, sample_shape=None, extra_event_dims=None):
         raise Exception('''
