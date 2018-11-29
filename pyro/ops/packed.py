@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import math
-from collections import OrderedDict
 
 import torch
 
@@ -64,11 +63,9 @@ def broadcast_all(*values, **kwargs):
     Packed broadcasting of multiple tensors.
     """
     dims = kwargs.get('dims')
-    sizes = OrderedDict((dim, size)
-                        for value in values
-                        for dim, size in zip(value._pyro_dims, value.shape))
+    sizes = {dim: size for value in values for dim, size in zip(value._pyro_dims, value.shape)}
     if dims is None:
-        dims = ''.join(sizes)
+        dims = ''.join(sorted(sizes))
     else:
         assert set(dims) == set(sizes)
     shape = torch.Size(sizes[dim] for dim in dims)
