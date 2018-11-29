@@ -10,7 +10,7 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 from pyro.contrib import autoname
-from pyro.infer import Trace_ELBO
+from pyro.infer import TraceMeanField_ELBO
 from pyro.infer.util import torch_backward, torch_item
 
 
@@ -219,7 +219,7 @@ def train(gpmodule, optimizer=None, loss_fn=None, retain_graph=None, num_steps=1
         By default, we use :class:`~torch.optim.Adam` with ``lr=0.01``.
     :param callable loss_fn: A loss function which takes inputs are
         ``gpmodule.model``, ``gpmodule.guide``, and returns ELBO loss.
-        By default, ``loss_fn=Trace_ELBO().differentiable_loss``.
+        By default, ``loss_fn=TraceMeanField_ELBO().differentiable_loss``.
     :param bool retain_graph: An optional flag of ``torch.autograd.backward``.
     :param int num_steps: Number of steps to run SVI.
     :returns: a list of losses during the training procedure
@@ -227,7 +227,7 @@ def train(gpmodule, optimizer=None, loss_fn=None, retain_graph=None, num_steps=1
     """
     optimizer = (torch.optim.Adam(gpmodule.parameters(), lr=0.01)
                  if optimizer is None else optimizer)
-    loss_fn = Trace_ELBO().differentiable_loss if loss_fn is None else loss_fn
+    loss_fn = TraceMeanField_ELBO().differentiable_loss if loss_fn is None else loss_fn
 
     def closure():
         optimizer.zero_grad()

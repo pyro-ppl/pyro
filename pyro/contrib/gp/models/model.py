@@ -56,7 +56,7 @@ class GPModel(Parameterized):
     + Using a variational inference on the pair :meth:`model`, :meth:`guide`:
 
         >>> optimizer = torch.optim.Adam(gpr.parameters(), lr=0.01)
-        >>> loss_fn = pyro.infer.Trace_ELBO().differentiable_loss
+        >>> loss_fn = pyro.infer.TraceMeanField_ELBO().differentiable_loss
         >>>
         >>> for i in range(1000):
         ...     optimizer.zero_grad()
