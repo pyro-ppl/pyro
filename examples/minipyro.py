@@ -26,10 +26,11 @@ def main(args):
         from pyro.contrib.minipyro import SVI, Adam, elbo
 
     # Define a basic model with a single Normal latent random variable `loc`
-    # and a single Normally distributed observation.
+    # and a batch of Normally distributed observations.
     def model(data):
         loc = pyro.sample("loc", dist.Normal(0., 1.))
-        pyro.sample("obs", dist.Normal(loc, 1.), obs=data)
+        with pyro.plate("data", len(data), dim=-1):
+            pyro.sample("obs", dist.Normal(loc, 1.), obs=data)
 
     # Define a guide (i.e. variational distribution) with a Normal
     # distribution over the latent random variable `loc`.
@@ -38,8 +39,8 @@ def main(args):
         guide_scale = pyro.param("guide_scale_log", torch.tensor(0.)).exp()
         pyro.sample("loc", dist.Normal(guide_loc, guide_scale))
 
-    torch.manual_seed(0)
     # Generate some data.
+    torch.manual_seed(0)
     data = torch.randn(100) + 3.0
     pyro.get_param_store().clear()
 
