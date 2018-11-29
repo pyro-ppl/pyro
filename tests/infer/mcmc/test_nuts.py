@@ -217,7 +217,7 @@ def test_logistic_regression_with_dual_averaging(jit):
 
     nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
-    posterior = EmpiricalMarginal(mcmc_run, sites='beta')
+    posterior = mcmc_run.marginal('beta').empirical['beta']
     assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
 
 
