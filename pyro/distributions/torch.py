@@ -68,7 +68,7 @@ class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
         try:
             return super(Gamma, self)._expand(batch_shape)
         except NotImplementedError:
-            self.expand(batch_shape, _instance)
+            return super(Gamma, self).expand(batch_shape, _instance)
 
 
 class Geometric(torch.distributions.Geometric, TorchDistributionMixin):

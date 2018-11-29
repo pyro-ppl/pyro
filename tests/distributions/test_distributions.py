@@ -206,7 +206,7 @@ def test_expand_error(dist, initial_shape, proposed_shape):
         with xfail_if_not_implemented():
             large = small.expand(torch.Size(initial_shape) + small.batch_shape)
             proposed_batch_shape = torch.Size(proposed_shape) + small.batch_shape
-            with pytest.raises(RuntimeError):
+            with pytest.raises((ValueError, RuntimeError)):
                 large.expand(proposed_batch_shape)
 
 
@@ -230,9 +230,9 @@ def test_expand_reshaped_distribution(extra_event_dims, expand_shape):
     assert large.event_shape == torch.Size(event_shape)
 
     # Throws error when batch shape cannot be broadcasted
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ValueError):
         reshaped_dist.expand(expand_shape + [3])
 
     # Throws error when trying to shrink existing batch shape
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ValueError):
         large.expand(expand_shape[1:])
