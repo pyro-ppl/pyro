@@ -178,8 +178,7 @@ class TraceEinsumEvaluator(object):
                 self.ordering[name] = frozenset(model_trace.plate_to_symbol[f.name]
                                                 for f in site["cond_indep_stack"]
                                                 if f.vectorized)
-        self._enum_dims = set(model_trace.symbol_to_dim) - \
-                          set(model_trace.plate_to_symbol.values())
+        self._enum_dims = set(model_trace.symbol_to_dim) - set(model_trace.plate_to_symbol.values())
 
     def _get_log_factors(self, model_trace):
         """
