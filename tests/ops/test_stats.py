@@ -15,7 +15,7 @@ def test_resample(replacement):
     x[:, 0].normal_(3, 4)
     x[:, 1].normal_(5, 6)
 
-    num_samples = 20000 if replacement else 5000
+    num_samples = 5000
     y = resample(x, num_samples=num_samples, replacement=replacement)
     z = resample(x.t(), num_samples=num_samples, dim=1, replacement=replacement)
     if not replacement:
