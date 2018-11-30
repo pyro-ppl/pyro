@@ -262,9 +262,9 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
         for k in range(n_steps):
             svi.step(alpha0, beta0, alpha_n, beta_n)
 
-    assert_equal(pyro.param("alpha_q"), alpha_n, prec=0.15, msg='{} vs {}'.format(
+    assert_equal(pyro.param("alpha_q"), alpha_n, prec=0.2, msg='{} vs {}'.format(
         pyro.param("alpha_q").detach().cpu().numpy(), alpha_n.detach().cpu().numpy()))
-    assert_equal(pyro.param("beta_q"), beta_n, prec=0.15, msg='{} vs {}'.format(
+    assert_equal(pyro.param("beta_q"), beta_n, prec=0.2, msg='{} vs {}'.format(
         pyro.param("beta_q").detach().cpu().numpy(), beta_n.detach().cpu().numpy()))
 
 
