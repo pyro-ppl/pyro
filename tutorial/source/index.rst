@@ -17,6 +17,7 @@ Welcome to Pyro Examples and Tutorials!
    svi_part_iii
    tensor_shapes
    enumeration
+   custom_objectives
 
 .. toctree::
    :maxdepth: 2
