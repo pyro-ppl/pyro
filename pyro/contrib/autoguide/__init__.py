@@ -25,7 +25,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.util import hessian
-from pyro.distributions.util import sum_rightmost
+from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
 from pyro.poutine.util import prune_subsample_sites
@@ -114,7 +114,7 @@ class AutoGuide(object):
                 if frame.vectorized:
                     self._plates[frame.name] = frame
                 else:
-                    raise NotImplementedError("AutoGuideList does not support pyro.irange")
+                    raise NotImplementedError("AutoGuideList does not support sequential pyro.plate")
 
     def median(self, *args, **kwargs):
         """
@@ -352,14 +352,17 @@ class AutoContinuous(AutoGuide):
 
             (site, unconstrained_value)
         """
+        batch_shape = latent.shape[:-1]  # for plates outside of _setup_prototype, e.g. parallel particles
         pos = 0
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             unconstrained_shape = self._unconstrained_shapes[name]
             size = _product(unconstrained_shape)
-            unconstrained_value = latent[pos:pos + size].view(unconstrained_shape)
+            unconstrained_shape = broadcast_shape(unconstrained_shape,
+                                                  batch_shape + (1,) * site["fn"].event_dim)
+            unconstrained_value = latent[..., pos:pos + size].view(unconstrained_shape)
             yield site, unconstrained_value
             pos += size
-        assert pos == len(latent)
+        assert pos == latent.size(-1)
 
     def __call__(self, *args, **kwargs):
         """
@@ -590,7 +593,7 @@ class AutoIAFNormal(AutoContinuous):
         if self.hidden_dim is None:
             self.hidden_dim = self.latent_dim
         iaf = dist.InverseAutoregressiveFlow(AutoRegressiveNN(self.latent_dim, [self.hidden_dim]))
-        pyro.module("{}_iaf".format(self.prefix), iaf.module)
+        pyro.module("{}_iaf".format(self.prefix), iaf)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
         return iaf_dist.independent(1)
 
@@ -639,7 +642,7 @@ class AutoLaplaceApproximation(AutoContinuous):
         loc = pyro.param("{}_loc".format(self.prefix))
         H = hessian(loss, loc.unconstrained())
         cov = H.inverse()
-        scale_tril = cov.potrf(upper=False)
+        scale_tril = cov.cholesky()
 
         # calculate scale_tril from self.guide()
         scale_tril_name = "{}_scale_tril".format(self.prefix)
@@ -689,7 +692,7 @@ class AutoDiscreteParallel(AutoGuide):
                 if frame.vectorized:
                     self._plates[frame.name] = frame
                 else:
-                    raise NotImplementedError("AutoDiscreteParallel does not support pyro.irange")
+                    raise NotImplementedError("AutoDiscreteParallel does not support sequential pyro.plate")
 
     def __call__(self, *args, **kwargs):
         """

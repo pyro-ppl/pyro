@@ -14,7 +14,7 @@ import pyro.contrib.gp as gp
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
-from pyro.infer import SVI, EmpiricalMarginal, Trace_ELBO, TraceGraph_ELBO
+from pyro.infer import SVI, Trace_ELBO, TraceGraph_ELBO
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.nuts import NUTS
@@ -66,18 +66,8 @@ def poisson_gamma_model(reparameterized, Elbo):
         return lambda_latent
 
     def guide():
-        alpha_q_log = pyro.param(
-            "alpha_q_log",
-            torch.tensor(
-                log_alpha_n.data +
-                0.17,
-                requires_grad=True))
-        beta_q_log = pyro.param(
-            "beta_q_log",
-            torch.tensor(
-                log_beta_n.data -
-                0.143,
-                requires_grad=True))
+        alpha_q_log = pyro.param("alpha_q_log", log_alpha_n + 0.17)
+        beta_q_log = pyro.param("beta_q_log", log_beta_n - 0.143)
         alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
         pyro.sample("lambda_latent", Gamma(alpha_q, beta_q))
 
@@ -104,7 +94,7 @@ def bernoulli_beta_hmc(**kwargs):
     num_samples = kwargs.pop('num_samples')
     mcmc_kernel = kernel(model, **kwargs)
     mcmc_run = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100).run(data)
-    return EmpiricalMarginal(mcmc_run, sites='p_latent')
+    return mcmc_run.marginal('p_latent').empirical
 
 
 @register_model(num_steps=2000, whiten=False, id='SVGP::MultiClass_whiten=False')
@@ -114,7 +104,7 @@ def svgp_multiclass(num_steps, whiten):
     pyro.set_rng_seed(0)
     X = torch.rand(100, 1)
     K = (-0.5 * (X - X.t()).pow(2) / 0.01).exp() + torch.eye(100) * 1e-6
-    f = K.potrf(upper=False).matmul(torch.randn(100, 3))
+    f = K.cholesky().matmul(torch.randn(100, 3))
     y = f.argmax(dim=-1)
 
     kernel = gp.kernels.Matern32(1).add(

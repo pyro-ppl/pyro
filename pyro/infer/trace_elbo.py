@@ -155,12 +155,13 @@ class JitTrace_ELBO(Trace_ELBO):
 
     .. warning:: Experimental. Interface subject to change.
     """
+
     def loss_and_grads(self, model, guide, *args, **kwargs):
         if getattr(self, '_loss_and_surrogate_loss', None) is None:
             # build a closure for loss_and_surrogate_loss
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.compile(nderivs=1)
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings)
             def loss_and_surrogate_loss(*args):
                 self = weakself()
                 loss = 0.0
@@ -200,7 +201,7 @@ class JitTrace_ELBO(Trace_ELBO):
 
         # invoke _loss_and_surrogate_loss
         loss, surrogate_loss = self._loss_and_surrogate_loss(*args)
-        surrogate_loss.backward()  # this line triggers jit compilation
+        surrogate_loss.backward()
         loss = loss.item()
 
         warn_if_nan(loss, "loss")

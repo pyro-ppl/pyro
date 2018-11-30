@@ -17,7 +17,7 @@ from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.infer.mcmc.util import TraceEinsumEvaluator, TraceTreeEvaluator
 from pyro.ops.integrator import velocity_verlet
 from pyro.poutine.subsample_messenger import _Subsample
-from pyro.util import optional, torch_isinf, torch_isnan
+from pyro.util import optional, torch_isinf, torch_isnan, ignore_jit_warnings
 
 
 class HMC(TraceKernel):
@@ -55,6 +55,11 @@ class HMC(TraceKernel):
     :param int max_plate_nesting: Optional bound on max number of nested
         :func:`pyro.plate` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
+    :param bool jit_compile: Optional parameter denoting whether to use
+        the PyTorch JIT to trace the log density computation, and use this
+        optimized executable trace in the integrator.
+    :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
+        tracer when ``jit_compile=True``. Default is False.
     :param bool experimental_use_einsum: Whether to use an einsum operation
         to evaluate log pdf for the model trace. No-op unless the trace has
         discrete sample sites. This flag is experimental and will most likely
@@ -79,7 +84,7 @@ class HMC(TraceKernel):
         >>>
         >>> hmc_kernel = HMC(model, step_size=0.0855, num_steps=4)
         >>> mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
-        >>> posterior = EmpiricalMarginal(mcmc_run, 'beta')
+        >>> posterior = mcmc_run.marginal('beta').empirical['beta']
         >>> posterior.mean  # doctest: +SKIP
         tensor([ 0.9819,  1.9258,  2.9737])
     """
@@ -95,6 +100,8 @@ class HMC(TraceKernel):
                  transforms=None,
                  max_plate_nesting=None,
                  max_iarange_nesting=None,  # DEPRECATED
+                 jit_compile=False,
+                 ignore_jit_warnings=False,
                  experimental_use_einsum=False):
         self.model = model
         if max_iarange_nesting is not None:
@@ -109,6 +116,8 @@ class HMC(TraceKernel):
         else:
             self.trajectory_length = 2 * math.pi  # from Stan
         self.adapt_step_size = adapt_step_size
+        self._jit_compile = jit_compile
+        self._ignore_jit_warnings = ignore_jit_warnings
         self.full_mass = full_mass
         self.use_einsum = experimental_use_einsum
         self._target_accept_prob = 0.8  # from Stan
@@ -116,8 +125,8 @@ class HMC(TraceKernel):
         # In NUTS paper, this threshold is set to a fixed log(0.5).
         # After https://github.com/stan-dev/stan/pull/356, it is set to a fixed log(0.8).
         self._direction_threshold = math.log(0.8)  # from Stan
-        # number of tries to get a valid prototype trace
-        self._max_tries_prototype_trace = 100
+        # number of tries to get a valid initial trace
+        self._max_tries_initial_trace = 100
         self.transforms = {} if transforms is None else transforms
         self._automatic_transform_enabled = True if transforms is None else False
         self._reset()
@@ -128,7 +137,7 @@ class HMC(TraceKernel):
         super(HMC, self).__init__()
 
     def _get_trace(self, z):
-        z_trace = self._prototype_trace
+        z_trace = self.initial_trace
         for name, value in z.items():
             z_trace.nodes[name]["value"] = value
         trace_poutine = poutine.trace(poutine.replay(self.model, trace=z_trace))
@@ -154,6 +163,8 @@ class HMC(TraceKernel):
             return 0.5 * (self.inverse_mass_matrix * (r_flat ** 2)).sum()
 
     def _potential_energy(self, z):
+        if self._jit_compile:
+            return self._potential_energy_jit(z)
         # Since the model is specified in the constrained space, transform the
         # unconstrained R.V.s `z` to the constrained space.
         z_constrained = z.copy()
@@ -166,6 +177,32 @@ class HMC(TraceKernel):
             potential_energy += transform.log_abs_det_jacobian(z_constrained[name], z[name]).sum()
         return potential_energy
 
+    def _potential_energy_jit(self, z):
+        names, vals = zip(*sorted(z.items()))
+        if self._compiled_potential_fn:
+            return self._compiled_potential_fn(*vals)
+
+        def compiled(*zi):
+            z_constrained = list(zi)
+            # transform to constrained space.
+            for i, name in enumerate(names):
+                if name in self.transforms:
+                    transform = self.transforms[name]
+                    z_constrained[i] = transform.inv(z_constrained[i])
+            z_constrained = dict(zip(names, z_constrained))
+            trace = self._get_trace(z_constrained)
+            potential_energy = -self._compute_trace_log_prob(trace)
+            # adjust by the jacobian for this transformation.
+            for i, name in enumerate(names):
+                if name in self.transforms:
+                    transform = self.transforms[name]
+                    potential_energy += transform.log_abs_det_jacobian(z_constrained[name], zi[i]).sum()
+            return potential_energy
+
+        with pyro.validation_enabled(False), optional(ignore_jit_warnings(), self._ignore_jit_warnings):
+            self._compiled_potential_fn = torch.jit.trace(compiled, vals, check_trace=False)
+        return self._compiled_potential_fn(*vals)
+
     def _energy(self, z, r):
         return self._kinetic_energy(r) + self._potential_energy(z)
 
@@ -175,12 +212,14 @@ class HMC(TraceKernel):
         self._r_shapes = {}
         self._r_numels = {}
         self._args = None
+        self._compiled_potential_fn = None
         self._kwargs = None
-        self._prototype_trace = None
+        self._initial_trace = None
         self._has_enumerable_sites = False
         self._trace_prob_evaluator = None
         self._potential_energy_last = None
         self._z_grads_last = None
+        self._warmup_steps = None
 
     def _find_reasonable_step_size(self, z):
         step_size = self.step_size
@@ -214,15 +253,14 @@ class HMC(TraceKernel):
             direction_new = 1 if self._direction_threshold < -delta_energy else -1
         return step_size
 
-    def _guess_max_plate_nesting(self, model, *args, **kwargs):
+    def _guess_max_plate_nesting(self):
         """
         Guesses max_plate_nesting by running the model once
         without enumeration. This optimistically assumes static model
         structure.
         """
-        # Ignore validation to allow model-enumerated sites absent from the guide.
         with poutine.block():
-            model_trace = poutine.trace(model).get_trace(*args, **kwargs)
+            model_trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
         sites = [site
                  for site in model_trace.nodes.values()
                  if site["type"] == "sample"]
@@ -233,10 +271,10 @@ class HMC(TraceKernel):
                 if frame.vectorized]
         self.max_plate_nesting = -min(dims) if dims else 0
 
-    def _configure_adaptation(self, trace):
+    def _configure_adaptation(self):
         initial_step_size = None
         if self.adapt_step_size:
-            z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
+            z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(self.initial_trace)}
             for name, transform in self.transforms.items():
                 z[name] = transform(z[name])
             with pyro.validation_enabled(False):
@@ -257,19 +295,6 @@ class HMC(TraceKernel):
         assert pos == r_flat.size(0)
         return r, r_flat
 
-    def _set_valid_prototype_trace(self, trace):
-        trace_eval = TraceEinsumEvaluator if self.use_einsum else TraceTreeEvaluator
-        self._trace_prob_evaluator = trace_eval(trace,
-                                                self._has_enumerable_sites,
-                                                self.max_plate_nesting)
-        for i in range(self._max_tries_prototype_trace):
-            trace_log_prob_sum = self._compute_trace_log_prob(trace)
-            if not torch_isnan(trace_log_prob_sum) and not torch_isinf(trace_log_prob_sum):
-                self._prototype_trace = trace
-                return
-            trace = poutine.trace(self.model).get_trace(self._args, self._kwargs)
-        raise ValueError("Model specification seems incorrect - can not find a valid trace.")
-
     @property
     def inverse_mass_matrix(self):
         return self._adapter.inverse_mass_matrix
@@ -282,24 +307,38 @@ class HMC(TraceKernel):
     def num_steps(self):
         return max(1, int(self.trajectory_length / self.step_size))
 
+    @property
     def initial_trace(self):
-        return self._prototype_trace
+        """
+        Find a valid trace to initiate the MCMC sampler. This is also used as a
+        prototype trace to inter-convert between Pyro's trace object and dict
+        object used by the integrator.
+        """
+        if self._initial_trace:
+            return self._initial_trace
+        trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
+        for i in range(self._max_tries_initial_trace):
+            trace_log_prob_sum = self._compute_trace_log_prob(trace)
+            if not torch_isnan(trace_log_prob_sum) and not torch_isinf(trace_log_prob_sum):
+                self._initial_trace = trace
+                return trace
+            trace = poutine.trace(self.model).get_trace(self._args, self._kwargs)
+        raise ValueError("Model specification seems incorrect - cannot find a valid trace.")
 
-    def setup(self, warmup_steps, *args, **kwargs):
-        self._warmup_steps = warmup_steps
-        self._args = args
-        self._kwargs = kwargs
+    @initial_trace.setter
+    def initial_trace(self, trace):
+        self._initial_trace = trace
+
+    def _initialize_model_properties(self):
         if self.max_plate_nesting is None:
-            self._guess_max_plate_nesting(self.model, *args, **kwargs)
+            self._guess_max_plate_nesting()
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
         self.model = poutine.enum(config_enumerate(self.model, default="parallel"),
                                   first_available_dim=-1 - self.max_plate_nesting)
-        # set the trace prototype to inter-convert between trace object
-        # and dict object used by the integrator
-        trace = poutine.trace(self.model).get_trace(*args, **kwargs)
         if self._automatic_transform_enabled:
             self.transforms = {}
+        trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
         for name, node in trace.iter_stochastic_nodes():
             if isinstance(node["fn"], _Subsample):
                 continue
@@ -312,15 +351,23 @@ class HMC(TraceKernel):
                 site_value = self.transforms[name](node["value"])
             self._r_shapes[name] = site_value.shape
             self._r_numels[name] = site_value.numel()
-
+        trace_eval = TraceEinsumEvaluator if self.use_einsum else TraceTreeEvaluator
+        self._trace_prob_evaluator = trace_eval(trace,
+                                                self._has_enumerable_sites,
+                                                self.max_plate_nesting)
         mass_matrix_size = sum(self._r_numels.values())
         if self.full_mass:
             initial_mass_matrix = eye_like(site_value, mass_matrix_size)
         else:
             initial_mass_matrix = site_value.new_ones(mass_matrix_size)
         self._adapter.inverse_mass_matrix = initial_mass_matrix
-        self._set_valid_prototype_trace(trace)
-        self._configure_adaptation(trace)
+
+    def setup(self, warmup_steps, *args, **kwargs):
+        self._warmup_steps = warmup_steps
+        self._args = args
+        self._kwargs = kwargs
+        self._initialize_model_properties()
+        self._configure_adaptation()
 
     def cleanup(self):
         self._reset()

@@ -126,7 +126,7 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
         reexpanded_design = lexpand(design, M_prime, N)
         retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
         retrace.compute_log_prob()
-        conditional_lp = logsumexp(sum(retrace.nodes[l]["log_prob"] for l in observation_labels), 0) \
+        conditional_lp = sum(retrace.nodes[l]["log_prob"] for l in observation_labels).logsumexp(0) \
             - math.log(M_prime)
     else:
         # This assumes that y are independent conditional on theta
@@ -141,7 +141,7 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
     reexpanded_design = lexpand(design, M, 1)
     retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
     retrace.compute_log_prob()
-    marginal_lp = logsumexp(sum(retrace.nodes[l]["log_prob"] for l in observation_labels), 0) \
+    marginal_lp = sum(retrace.nodes[l]["log_prob"] for l in observation_labels).logsumexp(0) \
         - math.log(M)
 
     return (conditional_lp - marginal_lp).sum(0)/N
@@ -259,8 +259,8 @@ def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_hist
         agg_loss.backward()
         if return_history:
             history.append(loss)
-        params = [pyro.param(name).unconstrained()
-                  for name in pyro.get_param_store().get_all_param_names()]
+        params = [value.unconstrained()
+                  for value in pyro.get_param_store().values()]
         optim(params)
     _, loss = loss_fn(final_design, final_num_samples)
     if return_history:
@@ -332,30 +332,6 @@ def barber_agakov_loss(model, guide, observation_labels, target_labels):
         return agg_loss, loss
 
     return loss_fn
-
-
-def logsumexp(inputs, dim=None, keepdim=False):
-    """Numerically stable logsumexp.
-
-    Args:
-        inputs: A Variable with any shape.
-        dim: An integer.
-        keepdim: A boolean.
-
-    Returns:
-        Equivalent of `log(sum(exp(inputs), dim=dim, keepdim=keepdim))`.
-    """
-    # For a 1-D array x (any array along a single dimension),
-    # log sum exp(x) = s + log sum exp(x - s)
-    # with s = max(x) being a common choice.
-    if dim is None:
-        inputs = inputs.view(-1)
-        dim = 0
-    s, _ = torch.max(inputs, dim=dim, keepdim=True)
-    outputs = s + (inputs - s).exp().sum(dim=dim, keepdim=True).log()
-    if not keepdim:
-        outputs = outputs.squeeze(dim)
-    return outputs
 
 
 class EwmaLog(torch.autograd.Function):

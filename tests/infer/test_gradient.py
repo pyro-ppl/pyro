@@ -12,9 +12,9 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
-                        TraceGraph_ELBO, config_enumerate)
+                        TraceGraph_ELBO, TraceMeanField_ELBO, config_enumerate)
 from pyro.optim import Adam
-from tests.common import assert_equal, xfail_param
+from tests.common import assert_equal, xfail_param, xfail_if_not_implemented
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ def DiffTrace_ELBO(*args, **kwargs):
     (Trace_ELBO, False),
     (DiffTrace_ELBO, False),
     (TraceGraph_ELBO, False),
+    (TraceMeanField_ELBO, False),
     (TraceEnum_ELBO, False),
     (TraceEnum_ELBO, True),
 ])
@@ -68,11 +69,12 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, sca
                 vectorize_particles=True,
                 strict_enumeration_warning=False)
     inference = SVI(model, guide, optim, loss=elbo)
-    if subsample_size == 1:
-        inference.loss_and_grads(model, guide, subsample=torch.LongTensor([0]))
-        inference.loss_and_grads(model, guide, subsample=torch.LongTensor([1]))
-    else:
-        inference.loss_and_grads(model, guide, subsample=torch.LongTensor([0, 1]))
+    with xfail_if_not_implemented():
+        if subsample_size == 1:
+            inference.loss_and_grads(model, guide, subsample=torch.LongTensor([0]))
+            inference.loss_and_grads(model, guide, subsample=torch.LongTensor([1]))
+        else:
+            inference.loss_and_grads(model, guide, subsample=torch.LongTensor([0, 1]))
     params = dict(pyro.get_param_store().named_parameters())
     normalizer = 2 if subsample else 1
     actual_grads = {name: param.grad.detach().cpu().numpy() / normalizer for name, param in params.items()}
@@ -184,6 +186,7 @@ def test_plate_elbo_vectorized_particles(Elbo, reparameterized):
     Trace_ELBO,
     TraceGraph_ELBO,
     TraceEnum_ELBO,
+    TraceMeanField_ELBO,
     xfail_param(JitTrace_ELBO,
                 reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
     xfail_param(JitTraceGraph_ELBO,
@@ -215,8 +218,9 @@ def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
     elbo = Elbo(num_particles=10, strict_enumeration_warning=False)
     inference = SVI(model, guide, optim, elbo)
     iters = num_particles // 10
-    for _ in range(iters):
-        inference.loss_and_grads(model, guide)
+    with xfail_if_not_implemented():
+        for _ in range(iters):
+            inference.loss_and_grads(model, guide)
 
     params = dict(pyro.get_param_store().named_parameters())
     actual_grads = {name: param.grad.detach().cpu().numpy() / iters

@@ -1,14 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
-import numbers
-
 import torch
 from torch.distributions import biject_to, constraints, transform_to
+from torch.distributions.kl import kl_divergence, register_kl
 
 import pyro.distributions.torch
 from pyro.distributions.distribution import Distribution
-from pyro.distributions.score_parts import ScoreParts
-from pyro.distributions.util import broadcast_shape, scale_and_mask, sum_rightmost
+from pyro.distributions.util import broadcast_shape, scale_and_mask
 
 
 class TorchDistributionMixin(Distribution):
@@ -65,35 +63,6 @@ class TorchDistributionMixin(Distribution):
         """
         return sample_shape + self.batch_shape + self.event_shape
 
-    def expand(self, batch_shape):
-        """
-        Expands a distribution to a desired
-        :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
-
-        Note that this is more general than :meth:`expand_by` because
-        ``d.expand_by(sample_shape)`` can be reduced to
-        ``d.expand(sample_shape + d.batch_shape)``.
-
-        :param torch.Size batch_shape: The target ``batch_shape``. This must
-            compatible with ``self.batch_shape`` similar to the requirements
-            of :func:`torch.Tensor.expand`: the target ``batch_shape`` must
-            be at least as long as ``self.batch_shape``, and for each
-            non-singleton dim of ``self.batch_shape``, ``batch_shape`` must
-            either agree or be set to ``-1``.
-        :return: An expanded version of this distribution.
-        :rtype: :class:`ReshapedDistribution`
-        """
-        batch_shape = torch.Size(batch_shape)
-        cut = len(batch_shape) - len(self.batch_shape)
-        left, right = batch_shape[:cut], batch_shape[cut:]
-        if right == self.batch_shape:
-            return self.expand_by(left)
-        else:
-            raise NotImplementedError("`TorchDistributionMixin.expand()` cannot expand "
-                                      "distribution's existing batch shape. Consider "
-                                      "overriding the default implementation for the "
-                                      "distribution class.")
-
     def expand_by(self, sample_shape):
         """
         Expands a distribution by adding ``sample_shape`` to the left side of
@@ -107,9 +76,7 @@ class TorchDistributionMixin(Distribution):
         :return: An expanded version of this distribution.
         :rtype: :class:`ReshapedDistribution`
         """
-        if not sample_shape:
-            return self
-        return ReshapedDistribution(self, sample_shape=sample_shape)
+        return self.expand(torch.Size(sample_shape) + self.batch_shape)
 
     def reshape(self, sample_shape=None, extra_event_dims=None):
         raise Exception('''
@@ -254,133 +221,6 @@ biject_to.register(IndependentConstraint, lambda c: biject_to(c.base_constraint)
 transform_to.register(IndependentConstraint, lambda c: transform_to(c.base_constraint))
 
 
-class ReshapedDistribution(TorchDistribution):
-    """
-    Reshapes a distribution by adding ``sample_shape`` to its total shape
-    and adding ``reinterpreted_batch_ndims`` to its
-    :attr:`~torch.distributions.distribution.Distribution.event_shape`.
-
-    :param torch.Size sample_shape: The size of the iid batch to be drawn from
-        the distribution.
-    :param int reinterpreted_batch_ndims: The number of extra event dimensions that will
-        be considered dependent.
-    """
-    arg_constraints = {}
-
-    def __init__(self, base_dist, sample_shape=torch.Size(), reinterpreted_batch_ndims=0):
-        sample_shape = torch.Size(sample_shape)
-        if reinterpreted_batch_ndims > len(sample_shape + base_dist.batch_shape):
-            raise ValueError('Expected reinterpreted_batch_ndims <= len(sample_shape + base_dist.batch_shape), '
-                             'actual {} vs {}'.format(reinterpreted_batch_ndims,
-                                                      len(sample_shape + base_dist.batch_shape)))
-        self.base_dist = base_dist
-        self.sample_shape = sample_shape
-        self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
-        shape = sample_shape + base_dist.batch_shape + base_dist.event_shape
-        batch_dim = len(shape) - reinterpreted_batch_ndims - len(base_dist.event_shape)
-        batch_shape, event_shape = shape[:batch_dim], shape[batch_dim:]
-        super(ReshapedDistribution, self).__init__(batch_shape, event_shape)
-
-    def expand(self, batch_shape):
-        batch_shape = torch.Size(batch_shape)
-        # Raise error if existing batch shape is being shrunk.
-        # e.g. (2, 4) -> (2, 1)
-        proposed_shape = broadcast_shape(self.batch_shape, batch_shape)
-        if tuple(reversed(proposed_shape)) > tuple(reversed(batch_shape)):
-            raise ValueError("Existing batch shape {} cannot be expanded "
-                             "to the new batch shape {}."
-                             .format(self.batch_shape, batch_shape))
-        # Adjust existing sample shape if possible.
-        base_dist = self.base_dist
-        base_batch_shape = batch_shape + self.event_shape[:self.reinterpreted_batch_ndims]
-        cut = len(base_batch_shape) - len(base_dist.batch_shape)
-        left, right = base_batch_shape[:cut], base_batch_shape[cut:]
-        if right == base_dist.batch_shape:
-            sample_shape = left
-        # Modify the base distribution's batch shape,
-        # if existing sample shape cannot be adjusted.
-        else:
-            base_dist = self.base_dist.expand(base_batch_shape)
-            assert not isinstance(base_dist, ReshapedDistribution)
-            sample_shape = torch.Size(())
-        return ReshapedDistribution(base_dist, sample_shape, self.reinterpreted_batch_ndims)
-
-    def expand_by(self, sample_shape):
-        base_dist = self.base_dist
-        sample_shape = torch.Size(sample_shape) + self.sample_shape
-        reinterpreted_batch_ndims = self.reinterpreted_batch_ndims
-        return ReshapedDistribution(base_dist, sample_shape, reinterpreted_batch_ndims)
-
-    def independent(self, reinterpreted_batch_ndims=None):
-        if reinterpreted_batch_ndims is None:
-            reinterpreted_batch_ndims = len(self.batch_shape)
-        base_dist = self.base_dist
-        sample_shape = self.sample_shape
-        reinterpreted_batch_ndims = self.reinterpreted_batch_ndims + reinterpreted_batch_ndims
-        return ReshapedDistribution(base_dist, sample_shape, reinterpreted_batch_ndims)
-
-    @property
-    def has_rsample(self):
-        return self.base_dist.has_rsample
-
-    @property
-    def has_enumerate_support(self):
-        return self.base_dist.has_enumerate_support
-
-    @constraints.dependent_property
-    def support(self):
-        return IndependentConstraint(self.base_dist.support, self.reinterpreted_batch_ndims)
-
-    @property
-    def _validate_args(self):
-        return self.base_dist._validate_args
-
-    @_validate_args.setter
-    def _validate_args(self, value):
-        self.base_dist._validate_args = value
-
-    def sample(self, sample_shape=torch.Size()):
-        return self.base_dist.sample(sample_shape + self.sample_shape)
-
-    def rsample(self, sample_shape=torch.Size()):
-        return self.base_dist.rsample(sample_shape + self.sample_shape)
-
-    def log_prob(self, value):
-        shape = broadcast_shape(self.batch_shape, value.shape[:value.dim() - self.event_dim])
-        return sum_rightmost(self.base_dist.log_prob(value), self.reinterpreted_batch_ndims).expand(shape)
-
-    def score_parts(self, value):
-        shape = broadcast_shape(self.batch_shape, value.shape[:value.dim() - self.event_dim])
-        log_prob, score_function, entropy_term = self.base_dist.score_parts(value)
-        log_prob = sum_rightmost(log_prob, self.reinterpreted_batch_ndims).expand(shape)
-        if not isinstance(score_function, numbers.Number):
-            score_function = sum_rightmost(score_function, self.reinterpreted_batch_ndims).expand(shape)
-        if not isinstance(entropy_term, numbers.Number):
-            entropy_term = sum_rightmost(entropy_term, self.reinterpreted_batch_ndims).expand(shape)
-        return ScoreParts(log_prob, score_function, entropy_term)
-
-    def enumerate_support(self, expand=True):
-        if self.reinterpreted_batch_ndims:
-            raise NotImplementedError("Pyro does not enumerate over cartesian products")
-
-        samples = self.base_dist.enumerate_support(expand=False)
-        samples = samples.reshape(samples.shape[:1] + (1,) * len(self.batch_shape) + self.event_shape)
-        if expand:
-            samples = samples.expand(samples.shape[:1] + self.batch_shape + self.event_shape)
-        return samples
-
-    @property
-    def mean(self):
-        return self.base_dist.mean.expand(self.batch_shape + self.event_shape)
-
-    @property
-    def variance(self):
-        return self.base_dist.variance.expand(self.batch_shape + self.event_shape)
-
-    def entropy(self):
-        return sum_rightmost(self.base_dist.entropy(), self.reinterpreted_batch_ndims)
-
-
 class MaskedDistribution(TorchDistribution):
     """
     Masks a distribution by a zero-one tensor that is broadcastable to the
@@ -397,6 +237,15 @@ class MaskedDistribution(TorchDistribution):
         self.base_dist = base_dist
         self._mask = mask.byte()
         super(MaskedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(MaskedDistribution, _instance)
+        batch_shape = torch.Size(batch_shape)
+        new.base_dist = self.base_dist.expand(batch_shape)
+        new._mask = self._mask.expand(batch_shape)
+        super(MaskedDistribution, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
 
     @property
     def has_rsample(self):
@@ -432,3 +281,10 @@ class MaskedDistribution(TorchDistribution):
     @property
     def variance(self):
         return self.base_dist.variance
+
+
+@register_kl(MaskedDistribution, MaskedDistribution)
+def _kl_masked_masked(p, q):
+    mask = p._mask if p._mask is q._mask else p._mask & q._mask
+    kl = kl_divergence(p.base_dist, q.base_dist)
+    return scale_and_mask(kl, mask=mask)
