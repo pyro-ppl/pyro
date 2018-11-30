@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import os
+
 import torch
 
 if 'READTHEDOCS' not in os.environ:
