@@ -23,7 +23,7 @@ T = namedtuple("TestGPModel", ["model_class", "X", "y", "kernel", "likelihood"])
 X = torch.tensor([[1., 5., 3.], [4., 3., 7.]])
 y1D = torch.tensor([2., 1.])
 y2D = torch.tensor([[1., 2.], [3., 3.], [1., 4.], [-1., 1.]])
-noise = torch.tensor(1.1e-6)  # noise should be greater than jitter=1e-6
+noise = torch.tensor(1e-7)
 
 
 # create generator to avoid reusing learned parameters in every tests

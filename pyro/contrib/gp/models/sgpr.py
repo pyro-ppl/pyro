@@ -93,14 +93,13 @@ class SparseGPRegression(GPModel):
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, Xu, noise=None, mean_function=None, approx=None,
-                 jitter=1e-6):
+    def __init__(self, X, y, kernel, Xu, noise=None, mean_function=None, approx=None, jitter=1e-6):
         super(SparseGPRegression, self).__init__(X, y, kernel, mean_function, jitter)
         self.Xu = Parameter(Xu)
 
         noise = self.X.new_tensor(1.) if noise is None else noise
         self.noise = Parameter(noise)
-        self.set_constraint("noise", constraints.greater_than(self.jitter))
+        self.set_constraint("noise", constraints.positive)
 
         if approx is None:
             self.approx = "VFE"
