@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import pytest
 import torch
 
 import pyro
@@ -8,7 +7,7 @@ import pyro.distributions as dist
 import pyro.optim as optim
 import pyro.poutine as poutine
 from pyro.contrib.autoguide import AutoLaplaceApproximation
-from pyro.infer import TracePredictive, Trace_ELBO
+from pyro.infer import SVI, TracePredictive, Trace_ELBO
 from pyro.infer.mcmc import MCMC, NUTS
 from tests.common import assert_equal
 
@@ -49,7 +48,6 @@ def test_nesting():
     assert len(tp.trace.nodes) == 0
 
 
-@pytest.mark.init(rng_seed=3)
 def test_information_criterion():
     # milk dataset: https://github.com/rmcelreath/rethinking/blob/master/data/milk.csv
     kcal = torch.tensor([0.49, 0.47, 0.56, 0.89, 0.92, 0.8, 0.46, 0.71, 0.68,
@@ -65,12 +63,13 @@ def test_information_criterion():
 
     delta_guide = AutoLaplaceApproximation(model)
 
-    svi = SVI(model, delta_guide, optim.Adam({"lr": 0.05}), loss=Trace_ELBO(), num_samples=1000)
+    svi = SVI(model, delta_guide, optim.Adam({"lr": 0.05}), loss=Trace_ELBO(), num_samples=5000)
     for i in range(100):
         svi.step()
 
     svi.guide = delta_guide.laplace_approximation()
-    svi.run()
-    ic = svi.information_criterion()
+    posterior = svi.run()
+
+    ic = posterior.information_criterion()
     assert_equal(ic["waic"], torch.tensor(-8.3), prec=0.1)
     assert_equal(ic["p_waic"], torch.tensor(1.8), prec=0.1)

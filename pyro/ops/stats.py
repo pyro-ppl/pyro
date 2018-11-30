@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import math
 import numbers
 
 import torch
@@ -298,20 +297,17 @@ def hpdi(input, prob, dim=0):
 
 
 def _weighted_mean(input, log_weights, dim=0, keepdim=False):
-    N = input.dim(dim)
-    dim = N + dim if dim < 0 else dim
-    log_weights = log_weights.reshape([-1] + (N - dim - 1) * [1])
-    max_log_weight = log_weights.max(dim=dim)[0]
+    dim = input.dim() + dim if dim < 0 else dim
+    log_weights = log_weights.reshape([-1] + (input.dim() - dim - 1) * [1])
+    max_log_weight = log_weights.max(dim=0)[0]
     relative_probs = (log_weights - max_log_weight).exp()
-    return ((value * relative_probs).sum(dim=dim, keepdim=keepdim)
-            / relative_probs.sum(dim=dim, keepdim=keepdim))
+    return (input * relative_probs).sum(dim=dim, keepdim=keepdim) / relative_probs.sum()
 
 
 def _weighted_variance(input, log_weights, dim=0, keepdim=False, unbiased=True):
-    # Ref: https://en.wikipedia.org/wiki/Weighted_arithmetic_mean#Weighted_sample_variance
-    N = input.dim(dim)
-    deviation_squared = (samples - _weighted_mean(input, log_weights, dim, keepdim=True)).pow(2)
-    correction = N / (N - 1) if unbiased else biased
+    # Ref: https://en.wikipedia.org/wiki/Weighted_arithmetic_mean#Frequency_weights
+    deviation_squared = (input - _weighted_mean(input, log_weights, dim, keepdim=True)).pow(2)
+    correction = log_weights.size(0) / (log_weights.size(0) - 1.) if unbiased else 1.
     return _weighted_mean(deviation_squared, log_weights, dim, keepdim) * correction
 
 
@@ -330,13 +326,12 @@ def waic(input, log_weights=None, pointwise=False, dim=0):
     :param int dim: the sample dimension of ``input``.
     :returns tuple: tuple of WAIC and effective number of parameters.
     """
-    N = input.size(dim)
-    log_weights = input.new_zeros(N) if log_weights is not None else log_weights
+    log_weights = input.new_zeros(input.size(dim)) if log_weights is None else log_weights
 
     # computes log pointwise predictive density: formula (3) of [1]
-    dim = N + dim if dim < 0 else dim
-    weighted_input = input + log_weights.reshape([-1] + (N - dim - 1) * [1])
-    lpd = torch.logsumexp(weighted_input, dim=dim) - torch.logsumexp(log_weights)
+    dim = input.dim() + dim if dim < 0 else dim
+    weighted_input = input + log_weights.reshape([-1] + (input.dim() - dim - 1) * [1])
+    lpd = torch.logsumexp(weighted_input, dim=dim) - torch.logsumexp(log_weights, dim=0)
 
     # computes the effective number of parameters: formula (6) of [1]
     p_waic = _weighted_variance(input, log_weights, dim)

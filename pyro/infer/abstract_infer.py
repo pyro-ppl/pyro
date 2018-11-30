@@ -200,7 +200,7 @@ class TracePosterior(object):
                                    .log_prob(trace.nodes[obs_node]["value"]))
 
         ll = torch.stack(log_likelihoods, dim=0)
-        waic_value, p_waic = waic(ll, pointwise)
+        waic_value, p_waic = waic(ll, ll.new_tensor(self.log_weights), pointwise)
         return OrderedDict([("waic", waic_value), ("p_waic", p_waic)])
 
 

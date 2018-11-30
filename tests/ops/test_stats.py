@@ -22,10 +22,10 @@ def test_resample(replacement):
         assert_equal(torch.unique(z.reshape(-1)).numel(), z.numel())
     assert_equal(y.shape, torch.Size([num_samples, 2]))
     assert_equal(z.shape, torch.Size([2, num_samples]))
-    assert_equal(y.mean(dim=0), torch.tensor([3., 5.]), prec=0.1)
-    assert_equal(z.mean(dim=1), torch.tensor([3., 5.]), prec=0.12)
-    assert_equal(y.std(dim=0), torch.tensor([4., 6.]), prec=0.1)
-    assert_equal(z.std(dim=1), torch.tensor([4., 6.]), prec=0.1)
+    assert_equal(y.mean(dim=0), torch.tensor([3., 5.]), prec=0.2)
+    assert_equal(z.mean(dim=1), torch.tensor([3., 5.]), prec=0.2)
+    assert_equal(y.std(dim=0), torch.tensor([4., 6.]), prec=0.2)
+    assert_equal(z.std(dim=1), torch.tensor([4., 6.]), prec=0.2)
 
 
 @pytest.mark.init(rng_seed=3)
@@ -156,17 +156,12 @@ def test_split_gelman_rubin_agree_with_gelman_rubin():
     assert_equal(r_hat1, r_hat2)
 
 
-@pytest.mark.init(rng_seed=3)
 def test_effective_sample_size():
-    x = torch.empty(2, 1000)
-    x[0, 0].normal_(0, 1)
-    x[1, 0].normal_(0, 1)
-    for i in range(1, x.size(1)):
-        x[0, i].normal_(0.8 * x[0, i - 1], 1)
-        x[1, i].normal_(0.9 * x[1, i - 1], 1)
+    x = torch.arange(1000.).reshape(100, 10)
 
     with xfail_if_not_implemented():
-        assert_equal(effective_sample_size(x).item(), 134.5, prec=1)
+        # test against arviz
+        assert_equal(effective_sample_size(x).item(), 52.64, prec=0.01)
 
 
 @pytest.mark.parametrize('diagnostics', [gelman_rubin, split_gelman_rubin, effective_sample_size])
@@ -214,16 +209,29 @@ def test_waic():
 
 
 def test_weighted_waic():
-    a = torch.rand(10)
-    b = torch.rand(10)
-    c = torch.rand(10)
-    expanded_x = torch.stack([a, b, c, a, b, a, c, a, c])
-    x = torch.stack([a, b, c])
+    a = 1 + torch.rand(10)
+    b = 1 + torch.rand(10)
+    c = 1 + torch.rand(10)
+    expanded_x = torch.stack([a, b, c, a, b, a, c, a, c]).log()
+    x = torch.stack([a, b, c]).log()
     log_weights = torch.tensor([4., 2, 3]).log()
     # assume weights are unnormalized
     log_weights = log_weights - torch.randn(1)
 
-    assert_equal(waic(x, log_weights), waic(expanded_x))
+    w1, p1 = waic(x, log_weights)
+    w2, p2 = waic(expanded_x)
 
-    # test for dim=-1
-    assert_equal(waic(x, log_weights), waic(x.t(), log_weights, dim=-1))
+    # test lpd
+    lpd1 = -0.5 * w1 + p1
+    lpd2 = -0.5 * w2 + p2
+    assert_equal(lpd1, lpd2)
+
+    # test p_waic (also test for weighted_variance)
+    unbiased_p1 = p1 * 2 / 3
+    unbiased_p2 = p2 * 8 / 9
+    assert_equal(unbiased_p1, unbiased_p2)
+
+    # test correctness for dim=-1
+    w3, p3 = waic(x.t(), log_weights, dim=-1)
+    assert_equal(w1, w3)
+    assert_equal(p1, p3)
