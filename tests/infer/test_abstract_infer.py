@@ -63,7 +63,7 @@ def test_information_criterion():
 
     delta_guide = AutoLaplaceApproximation(model)
 
-    svi = SVI(model, delta_guide, optim.Adam({"lr": 0.05}), loss=Trace_ELBO(), num_samples=5000)
+    svi = SVI(model, delta_guide, optim.Adam({"lr": 0.05}), loss=Trace_ELBO(), num_samples=3000)
     for i in range(100):
         svi.step()
 
@@ -71,5 +71,5 @@ def test_information_criterion():
     posterior = svi.run()
 
     ic = posterior.information_criterion()
-    assert_equal(ic["waic"], torch.tensor(-8.3), prec=0.1)
-    assert_equal(ic["p_waic"], torch.tensor(1.8), prec=0.1)
+    assert_equal(ic["waic"], torch.tensor(-8.3), prec=0.2)
+    assert_equal(ic["p_waic"], torch.tensor(1.8), prec=0.2)
