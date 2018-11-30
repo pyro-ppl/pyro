@@ -1,8 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
+import os
+
 import torch
 
-assert torch.__version__.startswith('1.')
+if 'READTHEDOCS' not in os.environ:
+    # RTD is running 0.4.1 due to a memory issue with pytorch 1.0
+    assert torch.__version__.startswith('1.')
 
 
 def patch_dependency(target, root_module=torch):
