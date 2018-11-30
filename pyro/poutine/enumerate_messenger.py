@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from pyro.distributions.torch_distribution import TorchDistributionMixin
-from pyro.poutine.util import is_validation_enabled
 from pyro.util import ignore_jit_warnings
 
 from .messenger import Messenger
