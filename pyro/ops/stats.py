@@ -5,8 +5,6 @@ import numbers
 
 import torch
 
-from pyro.distributions.util import logsumexp
-
 
 def _compute_chain_variance_stats(input):
     # compute within-chain variance and variance estimator
@@ -299,7 +297,25 @@ def hpdi(input, prob, dim=0):
     return torch.gather(sorted_input, dim, indices)
 
 
-def waic(input, pointwise=False, dim=0):
+def _weighted_mean(input, log_weights, dim=0, keepdim=False):
+    N = input.dim(dim)
+    dim = N + dim if dim < 0 else dim
+    log_weights = log_weights.reshape([-1] + (N - dim - 1) * [1])
+    max_log_weight = log_weights.max(dim=dim)[0]
+    relative_probs = (log_weights - max_log_weight).exp()
+    return ((value * relative_probs).sum(dim=dim, keepdim=keepdim)
+            / relative_probs.sum(dim=dim, keepdim=keepdim))
+
+
+def _weighted_variance(input, log_weights, dim=0, keepdim=False, unbiased=True):
+    # Ref: https://en.wikipedia.org/wiki/Weighted_arithmetic_mean#Weighted_sample_variance
+    N = input.dim(dim)
+    deviation_squared = (samples - _weighted_mean(input, log_weights, dim, keepdim=True)).pow(2)
+    correction = N / (N - 1) if unbiased else biased
+    return _weighted_mean(deviation_squared, log_weights, dim, keepdim) * correction
+
+
+def waic(input, log_weights=None, pointwise=False, dim=0):
     """
     Computes "Widely Applicable/Watanabe-Akaike Information Criterion" (WAIC) and
     its corresponding effective number of parameters.
@@ -310,14 +326,20 @@ def waic(input, pointwise=False, dim=0):
     Aki Vehtari, Andrew Gelman
 
     :param torch.Tensor input: the input tensor, which is log likelihood of a model.
+    :param torch.Tensor log_weights: weights of samples along ``dim``.
     :param int dim: the sample dimension of ``input``.
     :returns tuple: tuple of WAIC and effective number of parameters.
     """
+    N = input.size(dim)
+    log_weights = input.new_zeros(N) if log_weights is not None else log_weights
+
     # computes log pointwise predictive density: formula (3) of [1]
-    lpd = logsumexp(input, dim=dim) - math.log(input.size(dim))
+    dim = N + dim if dim < 0 else dim
+    weighted_input = input + log_weights.reshape([-1] + (N - dim - 1) * [1])
+    lpd = torch.logsumexp(weighted_input, dim=dim) - torch.logsumexp(log_weights)
 
     # computes the effective number of parameters: formula (6) of [1]
-    p_waic = input.var(dim=dim)
+    p_waic = _weighted_variance(input, log_weights, dim)
 
     # computes expected log pointwise predictive density: formula (4) of [1]
     elpd = lpd - p_waic

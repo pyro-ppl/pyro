@@ -151,7 +151,7 @@ def gmm_model(data, verbose=False):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         z = z.long()
         if verbose:
-            logger.debug("M{} z_{} = {}".format("  " * i, i, z.cpu().numpy()))
+            logger.debug("M{} z_{} = {}".format("  " * int(i), int(i), z.cpu().numpy()))
         pyro.sample("x_{}".format(i), dist.Normal(mus[z], scale), obs=data[i])
 
 
@@ -161,7 +161,7 @@ def gmm_guide(data, verbose=False):
         z = pyro.sample("z_{}".format(i), dist.Bernoulli(p))
         z = z.long()
         if verbose:
-            logger.debug("G{} z_{} = {}".format("  " * i, i, z.cpu().numpy()))
+            logger.debug("G{} z_{} = {}".format("  " * int(i), int(i), z.cpu().numpy()))
 
 
 @pytest.mark.parametrize("data_size", [1, 2, 3])
@@ -2626,7 +2626,7 @@ def test_elbo_hmm_growth():
             probs = init_probs if x is None else transition_probs[x]
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs))
 
-    sizes = range(2, 1 + int(os.environ.get('GROWTH_SIZE', 15)))
+    sizes = range(3, 1 + int(os.environ.get('GROWTH_SIZE', 15)))
     costs = []
     times1 = []
     times2 = []
@@ -2654,11 +2654,6 @@ def test_elbo_hmm_growth():
         'times1 = {}'.format(repr(times1)),
         'times2 = {}'.format(repr(times2)),
     ]))
-
-    for key, cost in collated_costs.items():
-        dt = 3
-        assert cost[-1 - dt - dt] - 2 * cost[-1 - dt] + cost[-1] == 0, \
-            '{} cost is not linear'.format(key)
 
 
 @pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/uber/pyro/issues/1380")
@@ -2691,7 +2686,7 @@ def test_elbo_dbn_growth():
             x = pyro.sample("x_{}".format(i), dist.Categorical(probs_x[x]))
             y = pyro.sample("y_{}".format(i), dist.Categorical(probs_y[x, y]))
 
-    sizes = range(2, 1 + int(os.environ.get('GROWTH_SIZE', 15)))
+    sizes = range(3, 1 + int(os.environ.get('GROWTH_SIZE', 15)))
     costs = []
     times1 = []
     times2 = []
@@ -2719,11 +2714,6 @@ def test_elbo_dbn_growth():
         'times1 = {}'.format(repr(times1)),
         'times2 = {}'.format(repr(times2)),
     ]))
-
-    for key, cost in collated_costs.items():
-        dt = 3
-        assert cost[-1 - dt - dt] - 2 * cost[-1 - dt] + cost[-1] == 0, \
-            '{} cost is not linear'.format(key)
 
 
 @pytest.mark.parametrize("pi_a", [0.33])

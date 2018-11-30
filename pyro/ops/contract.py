@@ -1,23 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
 import itertools
-from abc import ABCMeta, abstractmethod
 from collections import OrderedDict, defaultdict
 
-import numpy as np
 import opt_einsum
 import torch
 from opt_einsum import shared_intermediates
-from six import add_metaclass
 from six.moves import map
 
-from pyro.ops.einsum import contract
-
-
-def _finfo(tensor):
-    # This can be replaced with torch.finfo once it is available
-    # https://github.com/pytorch/pytorch/issues/10742
-    return np.finfo(torch.empty(torch.Size(), dtype=tensor.dtype, device="cpu").numpy().dtype)
+from pyro.ops.rings import BACKEND_TO_RING, LogRing
 
 
 def _check_batch_dims_are_sensible(output_dims, nonoutput_ordinal):
@@ -35,166 +26,6 @@ def _check_tree_structure(parent, leaf):
             "Try converting one of the vectorized plates to a sequential plate (but beware "
             "exponential cost in the size of the sequence)"
             .format(', '.join(getattr(f, 'name', str(f)) for f in leaf)))
-
-
-@add_metaclass(ABCMeta)
-class Ring(object):
-    """
-    Abstract tensor ring class.
-
-    Each tensor ring class has a notion of ``dims`` that can be sum-contracted
-    out, and a notion of ``ordinal`` that represents a set of batch dimensions
-    that can be broadcasted-up or product-contracted out.
-    Implementations should cache intermediate results to be compatible with
-    :func:`~opt_einsum.shared_intermediates`.
-
-    :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`
-        cache.
-    """
-    def __init__(self, cache=None):
-        self._cache = {} if cache is None else cache
-
-    def _hash_by_id(self, tensor):
-        """
-        Returns the id of a tensor and saves the tensor so that this id can be
-        used as a key in the cache without risk of the id being recycled.
-        """
-        result = id(tensor)
-        assert self._cache.setdefault(('tensor', result), tensor) is tensor
-        return result
-
-    @abstractmethod
-    def sumproduct(self, terms, dims):
-        """
-        Multiply all ``terms`` together, then sum-contract out all ``dims``
-        from the result.
-
-        :param list terms: a list of tensors
-        :param dims: an iterable of sum dims to contract
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def product(self, term, ordinal):
-        """
-        Product-contract the given ``term`` along any batch dimensions
-        present in given ``ordinal``.
-
-        :param torch.Tensor term: the term to contract
-        :param frozenset ordinal: an ordinal specifying batch dims to contract
-        """
-        raise NotImplementedError
-
-    def broadcast(self, term, ordinal):
-        """
-        Broadcast the given ``term`` by expanding along any batch dimensions
-        present in ``ordinal`` but not ``term``.
-
-        :param torch.Tensor term: the term to expand
-        :param frozenset ordinal: an ordinal specifying batch context
-        """
-        dims = term._pyro_dims
-        missing_dims = ''.join(sorted(set(ordinal) - set(dims)))
-        if missing_dims:
-            key = 'broadcast', self._hash_by_id(term), missing_dims
-            if key in self._cache:
-                term = self._cache[key]
-            else:
-                missing_shape = tuple(self._dim_to_size[dim] for dim in missing_dims)
-                term = term.expand(missing_shape + term.shape)
-                dims = missing_dims + dims
-                self._cache[key] = term
-                term._pyro_dims = dims
-        return term
-
-    @abstractmethod
-    def inv(self, term):
-        """
-        Computes the reciprocal of a term, for use in inclusion-exclusion.
-
-        :param torch.Tensor term: the term to invert
-        """
-        raise NotImplementedError
-
-    def global_local(self, term, dims, ordinal):
-        r"""
-        Computes global and local terms for tensor message passing
-        using inclusion-exclusion::
-
-            term / sum(term, dims) * product(sum(term, dims), ordinal)
-            \____________________/   \_______________________________/
-                  local part                    global part
-
-        :param torch.Tensor term: the term to contract
-        :param dims: an iterable of sum dims to contract
-        :param frozenset ordinal: an ordinal specifying batch dims to contract
-        :return: a tuple ``(global_part, local_part)`` as defined above
-        :rtype: tuple
-        """
-        assert dims, 'dims was empty, use .product() instead'
-        key = 'global_local', self._hash_by_id(term), frozenset(dims), ordinal
-        if key in self._cache:
-            return self._cache[key]
-
-        term_sum = self.sumproduct([term], dims)
-        global_part = self.product(term_sum, ordinal)
-        local_part = self.sumproduct([term, self.inv(term_sum)], set())
-        assert local_part._pyro_dims == term._pyro_dims
-        result = global_part, local_part
-        self._cache[key] = result
-        return result
-
-
-class LogRing(Ring):
-    """
-    Ring of sum-product operations in log space.
-
-    Tensor values are in log units, so ``sum`` is implemented as ``logsumexp``,
-    and ``product`` is implemented as ``sum``.
-    Tensor dimensions are packed; to read the name of a tensor, read the
-    ``._pyro_dims`` attribute, which is a string of dimension names aligned
-    with the tensor's shape.
-
-    Dims are characters (string or unicode).
-    Ordinals are frozensets of characters.
-    """
-    def __init__(self, cache=None, dim_to_size=None):
-        super(LogRing, self).__init__(cache=cache)
-        self._dim_to_size = {} if dim_to_size is None else dim_to_size
-
-    def sumproduct(self, terms, dims):
-        inputs = [term._pyro_dims for term in terms]
-        output = ''.join(sorted(set(''.join(inputs)) - set(dims)))
-        equation = ','.join(inputs) + '->' + output
-        term = contract(equation, *terms, backend='pyro.ops.einsum.torch_log')
-        term._pyro_dims = output
-        return term
-
-    def product(self, term, ordinal):
-        dims = term._pyro_dims
-        for dim in sorted(ordinal, reverse=True):
-            pos = dims.find(dim)
-            if pos != -1:
-                key = 'product', self._hash_by_id(term), dim
-                if key in self._cache:
-                    term = self._cache[key]
-                else:
-                    term = term.sum(pos)
-                    dims = dims.replace(dim, '')
-                    self._cache[key] = term
-                    term._pyro_dims = dims
-        return term
-
-    def inv(self, term):
-        key = 'inv', self._hash_by_id(term)
-        if key in self._cache:
-            return self._cache[key]
-
-        result = -term
-        result.clamp_(max=_finfo(result).max)  # avoid nan due to inf - inf
-        result._pyro_dims = term._pyro_dims
-        self._cache[key] = result
-        return result
 
 
 def _partition_terms(ring, terms, dims):
@@ -245,7 +76,8 @@ def _contract_component(ring, tensor_tree, sum_dims, target_dims):
     This function should be deterministic.
     This function has side-effects: it modifies ``tensor_tree``.
 
-    :param Ring ring: an algebraic ring defining tensor operations.
+    :param pyro.ops.rings.Ring ring: an algebraic ring defining tensor
+        operations.
     :param OrderedDict tensor_tree: a dictionary mapping ordinals to lists of
         tensors. An ordinal is a frozenset of ``CondIndepStack`` frames.
     :param set sum_dims: the complete set of sum-contractions dimensions
@@ -355,7 +187,7 @@ def contract_tensor_tree(tensor_tree, sum_dims, cache=None):
 
 
 def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=None,
-                       cache=None, dim_to_size=None):
+                       cache=None, ring=None):
     """
     Contract out ``sum_dims`` in a tree of tensors, via message
     passing. This reduces all terms down to a single tensor in the plate
@@ -375,6 +207,8 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
         preserved in the result.
     :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`
         cache.
+    :param pyro.ops.rings.Ring ring: an optional algebraic ring defining tensor
+        operations.
     :returns: a single tensor
     :rtype: torch.Tensor
     """
@@ -386,8 +220,9 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
     assert isinstance(sum_dims, set)
     assert isinstance(target_ordinal, frozenset)
     assert isinstance(target_dims, set) and target_dims <= sum_dims
+    if ring is None:
+        ring = LogRing(cache)
 
-    ring = LogRing(cache, dim_to_size)
     ordinals = {term: t for t, terms in tensor_tree.items() for term in terms}
     all_terms = [term for terms in tensor_tree.values() for term in terms]
     contracted_terms = []
@@ -505,8 +340,12 @@ def ubersum(equation, *operands, **kwargs):
     batch_dims = kwargs.pop('batch_dims', '')
     backend = kwargs.pop('backend', 'pyro.ops.einsum.torch_log')
     modulo_total = kwargs.pop('modulo_total', False)
-    if backend != 'pyro.ops.einsum.torch_log':
-        raise NotImplementedError('Only the torch logsumexp backend is currently implemented.')
+    try:
+        Ring = BACKEND_TO_RING[backend]
+    except KeyError:
+        raise NotImplementedError('\n'.join(
+            ['Only the following pyro backends are currently implemented:'] +
+            list(BACKEND_TO_RING)))
 
     # Parse generalized einsum equation.
     if '.' in equation:
@@ -543,12 +382,13 @@ def ubersum(equation, *operands, **kwargs):
     # Compute outputs, sharing intermediate computations.
     results = []
     with shared_intermediates(cache) as cache:
+        ring = Ring(cache, dim_to_size=dim_to_size)
         for output in outputs:
             sum_dims = set(output).union(*inputs) - set(batch_dims)
             term = contract_to_tensor(tensor_tree, sum_dims,
                                       target_ordinal=batch_dims.intersection(output),
                                       target_dims=sum_dims.intersection(output),
-                                      cache=cache, dim_to_size=dim_to_size)
+                                      ring=ring)
             if term._pyro_dims != output:
                 term = term.permute(*map(term._pyro_dims.index, output))
                 term._pyro_dims = output

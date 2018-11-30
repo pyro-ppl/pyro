@@ -211,3 +211,19 @@ def test_waic():
 
     assert_equal(w, w1)
     assert_equal(p, p1)
+
+
+def test_weighted_waic():
+    a = torch.rand(10)
+    b = torch.rand(10)
+    c = torch.rand(10)
+    expanded_x = torch.stack([a, b, c, a, b, a, c, a, c])
+    x = torch.stack([a, b, c])
+    log_weights = torch.tensor([4., 2, 3]).log()
+    # assume weights are unnormalized
+    log_weights = log_weights - torch.randn(1)
+
+    assert_equal(waic(x, log_weights), waic(expanded_x))
+
+    # test for dim=-1
+    assert_equal(waic(x, log_weights), waic(x.t(), log_weights, dim=-1))

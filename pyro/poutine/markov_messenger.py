@@ -56,7 +56,7 @@ class MarkovMessenger(ReentrantMessenger):
         return super(MarkovMessenger, self).__exit__(*args, **kwargs)
 
     def _pyro_sample(self, msg):
-        if msg["done"]:
+        if msg["done"] or type(msg["fn"]).__name__ == "_Subsample":
             return
 
         # We use a Counter rather than a set here so that sites can correctly
