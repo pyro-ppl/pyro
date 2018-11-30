@@ -74,6 +74,7 @@ class GPRegression(GPModel):
         self.set_constraint("noise", torchdist.constraints.greater_than(self.jitter))
 
     def model(self):
+        assert dist.MultivariateNormal._pyro_patched
         self.set_mode("model")
 
         noise = self.get_param("noise")

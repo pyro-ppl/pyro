@@ -15,6 +15,7 @@ from pyro.distributions.util import sum_rightmost
 
 class LowRankMultivariateNormal(torch.distributions.LowRankMultivariateNormal,
                                 TorchDistributionMixin):
+    _pyro_patched = True
     # Resolve the issue https://github.com/uber/pyro/issues/1586
     def __init__(self, loc, cov_factor, cov_diag, validate_args=None):
         super(LowRankMultivariateNormal, self).__init__(loc, cov_factor, cov_diag, validate_args)
@@ -60,6 +61,7 @@ class LowRankMultivariateNormal(torch.distributions.LowRankMultivariateNormal,
 
 
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
+    _pyro_patched = True
     support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
 
     # Resolve the issue https://github.com/uber/pyro/issues/1586
@@ -120,6 +122,7 @@ for _name, _Dist in torch.distributions.__dict__.items():
     try:
         _PyroDist = locals()[_name]
     except KeyError:
+        print("missed", _name)
         _PyroDist = type(_name, (_Dist, TorchDistributionMixin), {})
         _PyroDist.__module__ = __name__
         locals()[_name] = _PyroDist

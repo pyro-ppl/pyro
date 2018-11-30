@@ -53,5 +53,6 @@ __all__ = [
 ]
 
 # Import all torch distributions from `pyro.distributions.torch_distribution`
+print(torch_dists)
 __all__.extend(torch_dists)
 del torch_dists

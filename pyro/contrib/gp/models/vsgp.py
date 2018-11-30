@@ -120,6 +120,7 @@ class VariationalSparseGP(GPModel):
 
         zero_loc = Xu.new_zeros(u_loc.shape)
         u_name = param_with_module_name(self.name, "u")
+        assert dist.MultivariateNormal._pyro_patched
         if self.whiten:
             Id = eye_like(Xu, M)
             pyro.sample(u_name,
