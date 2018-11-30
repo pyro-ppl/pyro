@@ -30,7 +30,7 @@ def test_trace():
     def model(data):
         loc = pyro.param('loc', torch.zeros(n, requires_grad=True))
         scale = pyro.param('log_scale', torch.zeros(n, requires_grad=True)).exp()
-        pyro.sample('obs', dist.Normal(loc, scale).independent(1), obs=data)
+        pyro.sample('obs', dist.Normal(loc, scale).to_event(1), obs=data)
 
     counts = []
     gc.collect()
@@ -94,7 +94,7 @@ def test_trace_copy():
     def model(data):
         loc = pyro.param('loc', torch.zeros(n, requires_grad=True))
         scale = pyro.param('log_scale', torch.zeros(n, requires_grad=True)).exp()
-        pyro.sample('obs', dist.Normal(loc, scale).independent(1), obs=data)
+        pyro.sample('obs', dist.Normal(loc, scale).to_event(1), obs=data)
 
     counts = []
     gc.collect()
@@ -119,7 +119,7 @@ def test_trace_replay():
     def model(data):
         loc = pyro.param('loc', torch.zeros(n, requires_grad=True))
         scale = pyro.param('log_scale', torch.zeros(n, requires_grad=True)).exp()
-        pyro.sample('obs', dist.Normal(loc, scale).independent(1), obs=data)
+        pyro.sample('obs', dist.Normal(loc, scale).to_event(1), obs=data)
 
     def guide(data):
         pass
@@ -142,7 +142,7 @@ def test_svi():
     def model(data):
         loc = pyro.param('loc', torch.zeros(n, requires_grad=True))
         scale = pyro.param('log_scale', torch.zeros(n, requires_grad=True)).exp()
-        pyro.sample('obs', dist.Normal(loc, scale).independent(1), obs=data)
+        pyro.sample('obs', dist.Normal(loc, scale).to_event(1), obs=data)
 
     def guide(data):
         pass

@@ -47,7 +47,7 @@ def test_masked_mixture_univariate(component0, component1, sample_shape, batch_s
 def test_masked_mixture_multivariate(sample_shape, batch_shape):
     event_shape = torch.Size((8,))
     component0 = dist.MultivariateNormal(torch.zeros(event_shape), torch.eye(event_shape[0]))
-    component1 = dist.Uniform(torch.zeros(event_shape), torch.ones(event_shape)).independent(1)
+    component1 = dist.Uniform(torch.zeros(event_shape), torch.ones(event_shape)).to_event(1)
     if batch_shape:
         component0 = component0.expand_by(batch_shape)
         component1 = component1.expand_by(batch_shape)
@@ -97,8 +97,8 @@ def test_expand(sample_shape, batch_shape, event_shape):
     ones_shape = torch.Size((1,) * len(batch_shape))
     mask = torch.ByteTensor(ones_shape).bernoulli_(0.5)
     zero = torch.zeros(ones_shape + event_shape)
-    d0 = dist.Uniform(zero - 2, zero + 1).independent(len(event_shape))
-    d1 = dist.Uniform(zero - 1, zero + 2).independent(len(event_shape))
+    d0 = dist.Uniform(zero - 2, zero + 1).to_event(len(event_shape))
+    d1 = dist.Uniform(zero - 1, zero + 2).to_event(len(event_shape))
     d = dist.MaskedMixture(mask, d0, d1)
 
     assert d.sample().shape == ones_shape + event_shape

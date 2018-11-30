@@ -111,7 +111,7 @@ def sigmoid_model(coef1_mean, coef1_sd, coef2_mean, coef2_sd, observation_sd,
         k_shape = batch_shape + (sigmoid_design.shape[-1],)
         k = pyro.sample(sigmoid_label,
                         dist.Gamma(sigmoid_alpha.expand(k_shape),
-                                   sigmoid_beta.expand(k_shape)).independent(1))
+                                   sigmoid_beta.expand(k_shape)).to_event(1))
         k_assigned = rmv(sigmoid_design, k)
 
         return bayesian_linear_model(
@@ -212,7 +212,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         for name, w_sqrtlambda in w_sqrtlambdas.items():
             w_mean = w_means[name]
             # Place a normal prior on the regression coefficient
-            w_prior = dist.Normal(w_mean, obs_sd / w_sqrtlambda).independent(1)
+            w_prior = dist.Normal(w_mean, obs_sd / w_sqrtlambda).to_event(1)
             w.append(pyro.sample(name, w_prior))
         # Process random effects
         for name, group_size in re_group_sizes.items():
@@ -220,11 +220,11 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
             alpha, beta = re_alphas[name], re_betas[name]
             group_p = alpha.shape[-1]
             G_prior = dist.Gamma(alpha.expand(tau_shape + (group_p,)),
-                                 beta.expand(tau_shape + (group_p,))).independent(1)
+                                 beta.expand(tau_shape + (group_p,))).to_event(1)
             G = 1./torch.sqrt(pyro.sample("G_" + name, G_prior))
             # Repeat `G` for each group
             repeat_shape = tuple(1 for _ in tau_shape) + (group_size,)
-            u_prior = dist.Normal(torch.tensor(0.), G.repeat(repeat_shape)).independent(1)
+            u_prior = dist.Normal(torch.tensor(0.), G.repeat(repeat_shape)).to_event(1)
             w.append(pyro.sample(name, u_prior))
         # Regression coefficient `w` is batch x p
         w = torch.cat(w, dim=-1)
@@ -232,12 +232,12 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         # Run the regressor forward conditioned on inputs
         prediction_mean = rmv(design, w)
         if response == "normal":
-            # y is an n-vector: hence use .independent(1)
-            return pyro.sample(response_label, dist.Normal(prediction_mean, obs_sd).independent(1))
+            # y is an n-vector: hence use .to_event(1)
+            return pyro.sample(response_label, dist.Normal(prediction_mean, obs_sd).to_event(1))
         elif response == "bernoulli":
-            return pyro.sample(response_label, dist.Bernoulli(logits=prediction_mean).independent(1))
+            return pyro.sample(response_label, dist.Bernoulli(logits=prediction_mean).to_event(1))
         elif response == "sigmoid":
-            base_dist = dist.Normal(prediction_mean, obs_sd).independent(1)
+            base_dist = dist.Normal(prediction_mean, obs_sd).to_event(1)
             # You can add loc via the linear model itself
             k = k.expand(prediction_mean.shape)
             transforms = [AffineTransform(loc=torch.tensor(0.), scale=k), SigmoidTransform()]

@@ -61,14 +61,14 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
         # state with 10% probability.
         probs_x = pyro.sample("probs_x",
                               dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
-                                  .independent(1))
+                                  .to_event(1))
         # We put a weak prior on the conditional probability of a tone sounding.
         # We know that on average about 4 of 88 tones are active, so we'll set a
         # rough weak prior of 10% of the notes being active at any one time.
         probs_y = pyro.sample("probs_y",
                               dist.Beta(0.1, 0.9)
                                   .expand([args.hidden_dim, data_dim])
-                                  .independent(2))
+                                  .to_event(2))
     tones_plate = pyro.plate("tones", data_dim, dim=-1)
     with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
@@ -99,11 +99,11 @@ def model_2(sequences, lengths, args, batch_size=None, include_prior=True):
     with poutine.mask(mask=torch.tensor(include_prior)):
         probs_x = pyro.sample("probs_x",
                               dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
-                                  .independent(1))
+                                  .to_event(1))
         probs_y = pyro.sample("probs_y",
                               dist.Beta(0.1, 0.9)
                                   .expand([args.hidden_dim, 2, data_dim])
-                                  .independent(3))
+                                  .to_event(3))
     tones_plate = pyro.plate("tones", data_dim, dim=-1)
     with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
@@ -141,14 +141,14 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
     with poutine.mask(mask=torch.tensor(include_prior)):
         probs_w = pyro.sample("probs_w",
                               dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
-                                  .independent(1))
+                                  .to_event(1))
         probs_x = pyro.sample("probs_x",
                               dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
-                                  .independent(1))
+                                  .to_event(1))
         probs_y = pyro.sample("probs_y",
                               dist.Beta(0.1, 0.9)
                                   .expand([hidden_dim, hidden_dim, data_dim])
-                                  .independent(3))
+                                  .to_event(3))
     tones_plate = pyro.plate("tones", data_dim, dim=-1)
     with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
@@ -185,15 +185,15 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
     with poutine.mask(mask=torch.tensor(include_prior)):
         probs_w = pyro.sample("probs_w",
                               dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
-                                  .independent(1))
+                                  .to_event(1))
         probs_x = pyro.sample("probs_x",
                               dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
                                   .expand_by([hidden_dim])
-                                  .independent(2))
+                                  .to_event(2))
         probs_y = pyro.sample("probs_y",
                               dist.Beta(0.1, 0.9)
                                   .expand([hidden_dim, hidden_dim, data_dim])
-                                  .independent(3))
+                                  .to_event(3))
     tones_plate = pyro.plate("tones", data_dim, dim=-1)
     with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
@@ -266,7 +266,7 @@ def model_5(sequences, lengths, args, batch_size=None, include_prior=True):
     with poutine.mask(mask=torch.tensor(include_prior)):
         probs_x = pyro.sample("probs_x",
                               dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
-                                  .independent(1))
+                                  .to_event(1))
     with pyro.plate("sequences", len(sequences), batch_size, dim=-2) as batch:
         lengths = lengths[batch]
         x = 0

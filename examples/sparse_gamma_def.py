@@ -65,25 +65,25 @@ class SparseGammaDEF(object):
         # sample the local latent random variables
         # (the plate encodes the fact that the z's for different datapoints are conditionally independent)
         with pyro.plate("data", x_size):
-            z_top = pyro.sample("z_top", Gamma(self.alpha_z, self.beta_z).expand([self.top_width]).independent(1))
+            z_top = pyro.sample("z_top", Gamma(self.alpha_z, self.beta_z).expand([self.top_width]).to_event(1))
             # note that we need to use matmul (batch matrix multiplication) as well as appropriate reshaping
             # to make sure our code is fully vectorized
             w_top = w_top.reshape(self.top_width, self.mid_width) if w_top.dim() == 1 else \
                 w_top.reshape(-1, self.top_width, self.mid_width)
             mean_mid = torch.matmul(z_top, w_top)
-            z_mid = pyro.sample("z_mid", Gamma(self.alpha_z, self.beta_z / mean_mid).independent(1))
+            z_mid = pyro.sample("z_mid", Gamma(self.alpha_z, self.beta_z / mean_mid).to_event(1))
 
             w_mid = w_mid.reshape(self.mid_width, self.bottom_width) if w_mid.dim() == 1 else \
                 w_mid.reshape(-1, self.mid_width, self.bottom_width)
             mean_bottom = torch.matmul(z_mid, w_mid)
-            z_bottom = pyro.sample("z_bottom", Gamma(self.alpha_z, self.beta_z / mean_bottom).independent(1))
+            z_bottom = pyro.sample("z_bottom", Gamma(self.alpha_z, self.beta_z / mean_bottom).to_event(1))
 
             w_bottom = w_bottom.reshape(self.bottom_width, self.image_size) if w_bottom.dim() == 1 else \
                 w_bottom.reshape(-1, self.bottom_width, self.image_size)
             mean_obs = torch.matmul(z_bottom, w_bottom)
 
             # observe the data using a poisson likelihood
-            pyro.sample('obs', Poisson(mean_obs).independent(1), obs=x)
+            pyro.sample('obs', Poisson(mean_obs).to_event(1), obs=x)
 
     # define our custom guide a.k.a. variational distribution.
     # (note the guide is mean field)
@@ -101,7 +101,7 @@ class SparseGammaDEF(object):
             mean_z_q = pyro.param("log_mean_z_q_%s" % name,
                                   lambda: rand_tensor((x_size, width), self.mean_init, self.sigma_init))
             alpha_z_q, mean_z_q = self.softplus(alpha_z_q), self.softplus(mean_z_q)
-            pyro.sample("z_%s" % name, Gamma(alpha_z_q, alpha_z_q / mean_z_q).independent(1))
+            pyro.sample("z_%s" % name, Gamma(alpha_z_q, alpha_z_q / mean_z_q).to_event(1))
 
         # define a helper function to sample w's for a single layer
         def sample_ws(name, width):

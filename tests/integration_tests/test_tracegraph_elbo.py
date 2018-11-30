@@ -357,11 +357,11 @@ class RaoBlackwellizationTests(TestCase):
         def model():
             loc_latent = pyro.sample("loc_latent",
                                      fakes.NonreparameterizedNormal(self.loc0, torch.pow(self.lam0, -0.5))
-                                          .independent(1))
+                                          .to_event(1))
             for i in pyro.plate("outer", self.n_outer):
                 for j in pyro.plate("inner_%d" % i, self.n_inner):
                     pyro.sample("obs_%d_%d" % (i, j),
-                                dist.Normal(loc_latent, torch.pow(self.lam, -0.5)).independent(1),
+                                dist.Normal(loc_latent, torch.pow(self.lam, -0.5)).to_event(1),
                                 obs=self.data[i][j])
 
         def guide():
@@ -369,7 +369,7 @@ class RaoBlackwellizationTests(TestCase):
             log_sig_q = pyro.param("log_sig_q",
                                    self.analytic_log_sig_n.expand(2) - 0.27)
             sig_q = torch.exp(log_sig_q)
-            pyro.sample("loc_latent", fakes.NonreparameterizedNormal(loc_q, sig_q).independent(1),
+            pyro.sample("loc_latent", fakes.NonreparameterizedNormal(loc_q, sig_q).to_event(1),
                         infer=dict(baseline=dict(use_decaying_avg_baseline=True)))
 
             for i in pyro.plate("outer", self.n_outer):
@@ -415,7 +415,7 @@ class RaoBlackwellizationTests(TestCase):
         def model():
             loc_latent = pyro.sample("loc_latent",
                                      fakes.NonreparameterizedNormal(self.loc0, torch.pow(self.lam0, -0.5))
-                                     .independent(1))
+                                     .to_event(1))
 
             for i in pyro.plate("outer", 3):
                 x_i = self.data_as_list[i]
@@ -425,7 +425,7 @@ class RaoBlackwellizationTests(TestCase):
                                             fakes.NonreparameterizedNormal(0, 1).expand_by([4 - i]))
                         assert z_i_k.shape == (4 - i,)
                     obs_i = pyro.sample("obs_%d" % i, dist.Normal(loc_latent, torch.pow(self.lam, -0.5))
-                                                          .independent(1), obs=x_i)
+                                                          .to_event(1), obs=x_i)
                     assert obs_i.shape == (4 - i, 2)
                     for k in range(n_superfluous_top, n_superfluous_top + n_superfluous_bottom):
                         z_i_k = pyro.sample("z_%d_%d" % (i, k),
@@ -446,7 +446,7 @@ class RaoBlackwellizationTests(TestCase):
             trivial_baseline = pyro.module("loc_baseline", pt_loc_baseline)
             baseline_value = trivial_baseline(torch.ones(1)).squeeze()
             loc_latent = pyro.sample("loc_latent",
-                                     fakes.NonreparameterizedNormal(loc_q, sig_q).independent(1),
+                                     fakes.NonreparameterizedNormal(loc_q, sig_q).to_event(1),
                                      infer=dict(baseline=dict(baseline_value=baseline_value)))
 
             for i in pyro.plate("outer", 3):
