@@ -2,8 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import opt_einsum
 
-from pyro.ops.einsum.paths import optimize
-
 _PATH_CACHE = {}
 
 
@@ -12,8 +10,6 @@ def contract_expression(equation, *shapes, **kwargs):
     Wrapper around :func:`opt_einsum.contract_expression` that optionally uses
     Pyro's cheap optimizer and optionally caches contraction paths.
 
-    :param str optimize: one of 'pyro' (cheaper), 'greedy' (more expensive, but
-        leads to better paths), or 'optimal' (very expensive, best paths).
     :param bool cache_path: whether to cache the contraction path.
         Defaults to True.
     """
@@ -24,15 +20,6 @@ def contract_expression(equation, *shapes, **kwargs):
         key = equation, shapes, kwargs_key
         if key in _PATH_CACHE:
             return _PATH_CACHE[key]
-
-    # use Pyro's cheap optimizer for contraction paths
-    if kwargs.get('optimize', 'pyro') == 'pyro':
-        inputs, output = equation.split('->')
-        inputs = inputs.split(',')
-        sizes = {dim: size for dims, shape in zip(inputs, shapes)
-                 for dim, size in zip(dims, shape)}
-        path = optimize(inputs, output, sizes)
-        kwargs['optimize'] = path
 
     expr = opt_einsum.contract_expression(equation, *shapes, **kwargs)
     if cache_path:
@@ -45,8 +32,6 @@ def contract(equation, *operands, **kwargs):
     Wrapper around :func:`opt_einsum.contract` that optionally uses Pyro's
     cheap optimizer and optionally caches contraction paths.
 
-    :param str optimize: one of 'pyro' (cheaper), 'greedy' (more expensive, but
-        leads to better paths), or 'optimal' (very expensive, best paths).
     :param bool cache_path: whether to cache the contraction path.
         Defaults to True.
     """
