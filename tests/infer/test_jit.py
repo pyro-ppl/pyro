@@ -16,7 +16,7 @@ from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELB
                         TraceGraph_ELBO)
 from pyro.optim import Adam
 from pyro.poutine.indep_messenger import CondIndepStackFrame
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_param
 
 
 def constant(*args, **kwargs):
@@ -350,7 +350,7 @@ def test_beta_bernoulli(Elbo, vectorized):
     TraceGraph_ELBO,
     JitTraceGraph_ELBO,
     TraceEnum_ELBO,
-    JitTraceEnum_ELBO,
+    xfail_param(JitTraceEnum_ELBO, reason="should be fixed by next release of opt_einsum"),
 ])
 def test_svi_irregular_batch_size(Elbo):
     pyro.clear_param_store()
