@@ -52,7 +52,7 @@ class FlowTests(TestCase):
         else:
             numeric_ldt = torch.log(torch.abs(jacobian.det()))
 
-        ldt_discrepancy = (analytic_ldt - numeric_ldt).abs
+        ldt_discrepancy = (analytic_ldt - numeric_ldt).abs()
         assert ldt_discrepancy < self.epsilon
 
         # Test that lower triangular with unit diagonal for autoregressive flows

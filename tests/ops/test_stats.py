@@ -1,3 +1,5 @@
+import os
+
 import pytest
 import torch
 
@@ -79,6 +81,8 @@ def test_split_gelman_rubin_agree_with_gelman_rubin():
 
 
 @pytest.mark.init(rng_seed=3)
+@pytest.mark.skipif("CUDA_TEST" in os.environ,
+                    reason="Inaccurate results on CUDA.")
 def test_effective_sample_size():
     x = torch.empty(2, 1000)
     x[0, 0].normal_(0, 1)
