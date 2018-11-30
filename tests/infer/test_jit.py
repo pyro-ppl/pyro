@@ -244,7 +244,7 @@ def test_one_hot_categorical_enumerate(shape, expand):
     TraceGraph_ELBO,
     JitTraceGraph_ELBO,
     TraceEnum_ELBO,
-    xfail_param(JitTraceEnum_ELBO, reason='einsum not supported in jit'),
+    xfail_param(JitTraceEnum_ELBO, reason="should be fixed by next release of opt_einsum"),
 ])
 def test_svi(Elbo, num_particles):
     pyro.clear_param_store()
@@ -350,7 +350,7 @@ def test_beta_bernoulli(Elbo, vectorized):
     TraceGraph_ELBO,
     JitTraceGraph_ELBO,
     TraceEnum_ELBO,
-    xfail_param(JitTraceEnum_ELBO, reason="https://github.com/uber/pyro/issues/1418"),
+    xfail_param(JitTraceEnum_ELBO, reason="should be fixed by next release of opt_einsum"),
 ])
 def test_svi_irregular_batch_size(Elbo):
     pyro.clear_param_store()
