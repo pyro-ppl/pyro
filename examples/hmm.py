@@ -297,8 +297,6 @@ def main(args):
 
     logging.info('-' * 40)
     model = models[args.model]
-    if args.jit:
-        model = pyro.util.ignore_jit_warnings()(model)
     logging.info('Training {} on {} sequences'.format(
         model.__name__, len(data['train']['sequences'])))
     sequences = torch.tensor(data['train']['sequences'], dtype=torch.float32)
