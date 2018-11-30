@@ -10,7 +10,6 @@ from tests.common import assert_equal, xfail_if_not_implemented
 
 
 @pytest.mark.parametrize('replacement', [True, False])
-@pytest.mark.init(rng_seed=3)
 def test_resample(replacement):
     x = torch.empty(10000, 2)
     x[:, 0].normal_(3, 4)
