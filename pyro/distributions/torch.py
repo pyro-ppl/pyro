@@ -16,6 +16,7 @@ from pyro.distributions.util import sum_rightmost
 class LowRankMultivariateNormal(torch.distributions.LowRankMultivariateNormal,
                                 TorchDistributionMixin):
     _pyro_patched = True
+
     # Resolve the issue https://github.com/uber/pyro/issues/1586
     def __init__(self, loc, cov_factor, cov_diag, validate_args=None):
         super(LowRankMultivariateNormal, self).__init__(loc, cov_factor, cov_diag, validate_args)
