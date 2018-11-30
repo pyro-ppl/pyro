@@ -19,7 +19,7 @@ from pyro.infer.util import Dice, is_validation_enabled
 from pyro.ops import packed
 from pyro.ops.contract import contract_tensor_tree, contract_to_tensor
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
-from pyro.util import check_traceenum_requirements, warn_if_nan
+from pyro.util import check_traceenum_requirements, ignore_jit_warnings, warn_if_nan
 
 
 def _get_common_scale(scales):
@@ -27,14 +27,15 @@ def _get_common_scale(scales):
     # Note that we use a cheap weak comparison by id rather than tensor value, because
     # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
     # only in value but at all derivatives.
-    scales_set = set()
-    for scale in scales:
-        if isinstance(scale, torch.Tensor) and scale.dim():
-            raise ValueError('enumeration only supports scalar poutine.scale')
-        scales_set.add(float(scale))
-    if len(scales_set) != 1:
-        raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
-                         "but found {} different scales.".format(len(scales_set)))
+    with ignore_jit_warnings():
+        scales_set = set()
+        for scale in scales:
+            if isinstance(scale, torch.Tensor) and scale.dim():
+                raise ValueError('enumeration only supports scalar poutine.scale')
+            scales_set.add(float(scale))
+        if len(scales_set) != 1:
+            raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
+                             "but found {} different scales.".format(len(scales_set)))
     return scales[0]
 
 

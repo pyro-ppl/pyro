@@ -256,7 +256,7 @@ class Dice(object):
                     prob = probs[key]
                     prob._pyro_dims = queries[key]._pyro_dims
                     mask = prob > 0
-                    if not mask.all():
+                    if torch._C._get_tracing_state() or not mask.all():
                         mask._pyro_dims = prob._pyro_dims
                         cost, prob, mask = packed.broadcast_all(cost, prob, mask)
                         prob = prob[mask]
