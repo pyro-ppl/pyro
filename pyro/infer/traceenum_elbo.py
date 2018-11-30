@@ -22,20 +22,20 @@ from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, ignore_jit_warnings, warn_if_nan
 
 
+@ignore_jit_warnings()
 def _get_common_scale(scales):
     # Check that all enumerated sites share a common subsampling scale.
     # Note that we use a cheap weak comparison by id rather than tensor value, because
     # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
     # only in value but at all derivatives.
-    with ignore_jit_warnings():
-        scales_set = set()
-        for scale in scales:
-            if isinstance(scale, torch.Tensor) and scale.dim():
-                raise ValueError('enumeration only supports scalar poutine.scale')
-            scales_set.add(float(scale))
-        if len(scales_set) != 1:
-            raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
-                             "but found {} different scales.".format(len(scales_set)))
+    scales_set = set()
+    for scale in scales:
+        if isinstance(scale, torch.Tensor) and scale.dim():
+            raise ValueError('enumeration only supports scalar poutine.scale')
+        scales_set.add(float(scale))
+    if len(scales_set) != 1:
+        raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
+                         "but found {} different scales.".format(len(scales_set)))
     return scales[0]
 
 
