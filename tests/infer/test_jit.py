@@ -27,7 +27,7 @@ def constant(*args, **kwargs):
 
 
 logger = logging.getLogger(__name__)
-pytestmark = pytest.mark.skipif('TEST_CUDA' in os.environ,
+pytestmark = pytest.mark.skipif('CUDA_TEST' in os.environ,
                                 reason='https://github.com/uber/pyro/issues/1419')
 
 
