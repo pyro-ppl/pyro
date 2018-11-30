@@ -16,7 +16,7 @@ def test_resample(replacement):
     x[:, 0].normal_(3, 4)
     x[:, 1].normal_(5, 6)
 
-    num_samples = 10000 if replacement else 5000
+    num_samples = 20000 if replacement else 5000
     y = resample(x, num_samples=num_samples, replacement=replacement)
     z = resample(x.t(), num_samples=num_samples, dim=1, replacement=replacement)
     if not replacement:
@@ -38,7 +38,7 @@ def test_quantile():
 
     assert_equal(quantile(x, probs=[0., 0.4, 0.5, 1.]), torch.tensor([0., 0.8, 1., 2.]))
     assert_equal(quantile(y, probs=0.2), torch.tensor(0.2), prec=0.02)
-    assert_equal(quantile(z, probs=0.8413), torch.tensor(1.), prec=0.001)
+    assert_equal(quantile(z, probs=0.8413), torch.tensor(1.), prec=0.02)
 
 
 def test_pi():
