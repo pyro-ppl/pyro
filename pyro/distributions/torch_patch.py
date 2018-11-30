@@ -1,8 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
+import os
+
 import torch
 
-assert torch.__version__.startswith('1.')
+if 'READTHEDOCS' not in os.environ:
+    # RTD is running 0.4.1 due to a memory issue with pytorch 1.0
+    assert torch.__version__.startswith('1.')
 
 
 def patch_dependency(target, root_module=torch):
@@ -60,7 +64,11 @@ def _torch_linspace(*args, **kwargs):
 
 
 @patch_dependency('torch.einsum')
-def _einsum(equation, operands):
+def _einsum(equation, *operands):
+    if len(operands) == 1 and isinstance(operands[0], (list, tuple)):
+        # the old interface of passing the operands as one list argument
+        operands = operands[0]
+
     # work around torch.einsum performance issues
     # see https://github.com/pytorch/pytorch/issues/10661
     if equation == 'ac,abc->bc':
@@ -73,7 +81,7 @@ def _einsum(equation, operands):
         y, x = operands
         return (x.unsqueeze(1) * y).sum(0).transpose(0, 1)
 
-    return _einsum._pyro_unpatched(equation, operands)
+    return _einsum._pyro_unpatched(equation, *operands)
 
 
 __all__ = []

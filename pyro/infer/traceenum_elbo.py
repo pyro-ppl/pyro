@@ -22,14 +22,20 @@ from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, warn_if_nan
 
 
-def _check_shared_scale(scales):
+def _get_common_scale(scales):
     # Check that all enumerated sites share a common subsampling scale.
     # Note that we use a cheap weak comparison by id rather than tensor value, because
     # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
     # only in value but at all derivatives.
-    if len(scales) != 1:
+    scales_set = set()
+    for scale in scales:
+        if isinstance(scale, torch.Tensor) and scale.dim():
+            raise ValueError('enumeration only supports scalar poutine.scale')
+        scales_set.add(float(scale))
+    if len(scales_set) != 1:
         raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
-                         "but found {} different scales.".format(len(scales)))
+                         "but found {} different scales.".format(len(scales_set)))
+    return scales[0]
 
 
 def _check_model_guide_enumeration_constraint(model_enum_sites, guide_trace):
@@ -85,7 +91,7 @@ def _compute_model_factors(model_trace, guide_trace):
 
     # Marginalize out all variables that have been enumerated in the model.
     marginal_costs = OrderedDict()
-    scales = set()
+    scales = []
     for t, sites_t in cost_sites.items():
         for site in sites_t:
             if enum_dims.isdisjoint(site["packed"]["log_prob"]._pyro_dims):
@@ -96,7 +102,7 @@ def _compute_model_factors(model_trace, guide_trace):
                 # the mask inside- and the scale outside- of the log expectation.
                 cost = packed.scale_and_mask(site["packed"]["unscaled_log_prob"], mask=site["packed"]["mask"])
                 log_factors.setdefault(t, []).append(cost)
-                scales.add(site["scale"])
+                scales.append(site["scale"])
     if log_factors:
         for t, sites_t in enum_sites.items():
             # TODO refine this coarse dependency ordering using time and tensor shapes.
@@ -104,11 +110,8 @@ def _compute_model_factors(model_trace, guide_trace):
                 for site in sites_t:
                     logprob = site["packed"]["unscaled_log_prob"]
                     log_factors.setdefault(t, []).append(logprob)
-                    scales.add(site["scale"])
-        _check_shared_scale(scales)
-        scale = scales.pop()
-        assert not (isinstance(scale, torch.Tensor) and scale.dim()), \
-            'enumeration only supports scalar poutine.scale'
+                    scales.append(site["scale"])
+        scale = _get_common_scale(scales)
     return marginal_costs, log_factors, ordering, enum_dims, scale
 
 

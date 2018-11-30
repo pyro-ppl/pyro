@@ -2,13 +2,14 @@ from __future__ import absolute_import, division, print_function
 
 import numbers
 from abc import ABCMeta, abstractmethod
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 
 import torch
 from six import add_metaclass
 
 import pyro.poutine as poutine
 from pyro.distributions import Categorical, Empirical
+from pyro.ops.stats import waic
 
 
 class EmpiricalMarginal(Empirical):
@@ -163,6 +164,44 @@ class TracePosterior(object):
                 self._idx_by_chain[chain_id].append(i)
         self._categorical = Categorical(logits=torch.tensor(self.log_weights))
         return self
+
+    def information_criterion(self, pointwise=False):
+        """
+        Computes information criterion of the model. Currently, returns only "Widely
+        Applicable/Watanabe-Akaike Information Criterion" (WAIC) and the corresponding
+        effective number of parameters.
+
+        Reference:
+
+        [1] `Practical Bayesian model evaluation using leave-one-out cross-validation and WAIC`,
+        Aki Vehtari, Andrew Gelman, and Jonah Gabry
+
+        :param bool pointwise: a flag to decide if we want to get a vectorized WAIC or not. When
+            ``pointwise=False``, returns the sum.
+        :returns OrderedDict: a dictionary containing values of WAIC and its effective number of
+            parameters.
+        """
+        if not self.exec_traces:
+            return {}
+        obs_node = None
+        log_likelihoods = []
+        for trace in self.exec_traces:
+            obs_nodes = trace.observation_nodes
+            if len(obs_nodes) > 1:
+                raise ValueError("Infomation criterion calculation only works for models "
+                                 "with one observation node.")
+            if obs_node is None:
+                obs_node = obs_nodes[0]
+            elif obs_node != obs_nodes[0]:
+                raise ValueError("Observation node has been changed, expected {} but got {}"
+                                 .format(obs_node, obs_nodes[0]))
+
+            log_likelihoods.append(trace.nodes[obs_node]["fn"]
+                                   .log_prob(trace.nodes[obs_node]["value"]))
+
+        ll = torch.stack(log_likelihoods, dim=0)
+        waic_value, p_waic = waic(ll, ll.new_tensor(self.log_weights), pointwise)
+        return OrderedDict([("waic", waic_value), ("p_waic", p_waic)])
 
 
 class TracePredictive(TracePosterior):
