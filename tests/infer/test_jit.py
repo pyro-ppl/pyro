@@ -244,7 +244,7 @@ def test_one_hot_categorical_enumerate(shape, expand):
     TraceGraph_ELBO,
     JitTraceGraph_ELBO,
     TraceEnum_ELBO,
-    JitTraceEnum_ELBO,
+    xfail_param(JitTraceEnum_ELBO, reason="should be fixed by next release of opt_einsum"),
 ])
 def test_svi(Elbo, num_particles):
     pyro.clear_param_store()
