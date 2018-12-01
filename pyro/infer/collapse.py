@@ -1,41 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import OrderedDict
-from contextlib2 import ExitStack
 
-import torch
-
-import pyro
-import pyro.distributions as dist
 import pyro.ops.packed as packed
 import pyro.poutine as poutine
 
 from pyro.ops.contract import contract_tensor_tree
 from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import SampleRing
-
-
-class DebugRing(SampleRing):
-
-    def sumproduct(self, terms, dims):
-        v = super(DebugRing, self).sumproduct(terms, dims)
-        print("DEBUG sumproduct: dims {}, terms {}, result {}".format(dims, terms, v))
-        return v
-
-    def product(self, term, ordinal):
-        v = super(DebugRing, self).product(term, ordinal)
-        print("DEBUG product: ordinal {}, term {}, result {}".format(ordinal, term, v))
-        return v
-
-    def broadcast(self, term, ordinal):
-        v = super(DebugRing, self).broadcast(term, ordinal)
-        print("DEBUG broadcast: ordinal {}, term {}, result {}".format(ordinal, term, v))
-        return v
-
-    def inv(self, term):
-        v = super(DebugRing, self).inv(term)
-        print("DEBUG inv: term {}, result {}".format(term, v))
-        return v
 
 
 class CollapseEnumMessenger(poutine.enumerate_messenger.EnumerateMessenger):
@@ -46,9 +18,6 @@ class CollapseEnumMessenger(poutine.enumerate_messenger.EnumerateMessenger):
             msg["infer"]["enumerate"] = "parallel"
 
         super(CollapseEnumMessenger, self)._pyro_sample(msg)
-
-        # if collapse:
-        #     msg["is_observed"] = True
 
 
 class CollapseReplayMessenger(poutine.replay_messenger.ReplayMessenger):
@@ -80,7 +49,6 @@ def collapse(model, first_available_dim):
 
         log_probs = OrderedDict()
         frame_to_dim = {}
-        dim_to_frame = {}
         sum_dims = set()
         queries = []
         for node in enum_trace.nodes.values():
@@ -95,7 +63,6 @@ def collapse(model, first_available_dim):
                     if frame.vectorized:
                         frame_dim = log_prob._pyro_dims[frame.dim]
                         frame_to_dim[frame] = frame_dim
-                        dim_to_frame[frame_dim] = frame
                         sum_dims.remove(frame_dim)
 
                 # Note we mark all sites with require_backward to get correct ordinals and slice non-enumerated samples
@@ -103,7 +70,7 @@ def collapse(model, first_available_dim):
                     queries.append(log_prob)
                     require_backward(log_prob)
 
-        ring = SampleRing()  # DebugRing()
+        ring = SampleRing()
         log_probs = contract_tensor_tree(log_probs, sum_dims, ring=ring)
         query_ordinal = {}
         for ordinal, terms in log_probs.items():
@@ -129,8 +96,6 @@ def collapse(model, first_available_dim):
 
                 # TODO move this into a custom SampleRing Leaf implementation
                 sample = log_prob._pyro_backward_result
-                # sample_dim = log_prob._pyro_dims[-1]
-                new_value = node["value"]
                 new_value = packed.pack(node["value"], node["infer"]["_dim_to_symbol"])
                 for index, dim in zip(sample, sample._pyro_sample_dims):
                     if dim in new_value._pyro_dims:
@@ -140,20 +105,6 @@ def collapse(model, first_available_dim):
                 new_node["value"] = packed.unpack(new_value, enum_trace.symbol_to_dim)
 
                 collapsed_trace.add_node(node["name"], **new_node)
-
-        # Add new observe sites induced by moralization
-        i = 0
-        for ordinal, terms in log_probs.items():
-            for term in terms:
-                with poutine.block(hide_fn=lambda msg: "aux" not in msg["name"]), ExitStack() as stack:
-                    for dim in ordinal:
-                        frame = dim_to_frame[dim]
-                        stack.enter_context(pyro.plate(frame.name, frame.size, dim=frame.dim))
-                    logits = packed.unpack(term, enum_trace.symbol_to_dim)
-                    pyro.sample("aux_{}".format(i),
-                                dist.Bernoulli(logits=logits),
-                                obs=torch.tensor(1.), infer={"is_auxiliary": True})
-                i += 1
 
         # Replay model correctly against collapsed_trace (get correct cond_indep_stack)
         collapsed_sites = set(node["name"] for node in enum_trace.nodes.values()

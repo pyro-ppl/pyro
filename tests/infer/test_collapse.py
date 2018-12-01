@@ -38,7 +38,7 @@ def test_collapse_guide_smoke():
             guide,
             lambda msg: {"enumerate": "parallel", "collapse": True} if msg["name"] == "e" else {})
 
-    collapsed_guide = collapse(guide, first_available_dim=0)
+    collapsed_guide = collapse(guide, first_available_dim=-1)
 
     uncollapsed_tr = poutine.trace(guide).get_trace()
     collapsed_tr = poutine.trace(collapsed_guide).get_trace()
@@ -63,7 +63,7 @@ def test_collapse_traceenumelbo_smoke():
         guide,
         lambda msg: {"enumerate": "parallel", "collapse": True} if msg["name"] == "e" else {})
 
-    collapsed_guide = collapse(guide, first_available_dim=0)
+    collapsed_guide = collapse(guide, first_available_dim=-1)
 
     elbo = pyro.infer.TraceEnum_ELBO(
         max_plate_nesting=0, strict_enumeration_warning=False)
@@ -98,7 +98,7 @@ def test_collapse_elbo_categorical():
         print("model z2 shape = {}".format(z2.shape))
         pyro.sample("x", dist.Normal(locs[z2], 1.), obs=torch.tensor(0.))
 
-    collapsed_guide = collapse(guide, first_available_dim=0)
+    collapsed_guide = collapse(guide, first_available_dim=-1)
 
     # actual test
     pyro.infer.enable_validation(False)
@@ -145,11 +145,11 @@ def test_collapse_enum_interaction_smoke():
         max_plate_nesting=2,  # XXX what should this be?
         strict_enumeration_warning=False)
 
-    collapsed_guide = collapse(guide, first_available_dim=0)
+    collapsed_guide = collapse(guide, first_available_dim=-1)
     # XXX not correct first_available_dim
     enum_collapsed_guide = poutine.enum(
         config_enumerate(collapsed_guide, default="parallel"),
-        first_available_dim=0)
+        first_available_dim=-1)
 
     # smoke tests
     print("\n-------- hand collapsed, no enum")
