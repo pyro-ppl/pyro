@@ -239,7 +239,7 @@ def test_svi(Elbo, num_particles):
     def model(data):
         loc = pyro.param("loc", constant(0.0))
         scale = pyro.param("scale", constant(1.0), constraint=constraints.positive)
-        pyro.sample("x", dist.Normal(loc, scale).expand_by(data.shape).independent(1), obs=data)
+        pyro.sample("x", dist.Normal(loc, scale).expand_by(data.shape).to_event(1), obs=data)
 
     def guide(data):
         pass
@@ -311,7 +311,7 @@ def test_beta_bernoulli(Elbo, vectorized):
         alpha0 = constant(10.0)
         beta0 = constant(10.0)
         f = pyro.sample("latent_fairness", dist.Beta(alpha0, beta0))
-        pyro.sample("obs", dist.Bernoulli(f).expand_by(data.shape).independent(1),
+        pyro.sample("obs", dist.Bernoulli(f).expand_by(data.shape).to_event(1),
                     obs=data)
 
     model = model2 if vectorized else model1
@@ -375,7 +375,7 @@ def test_dirichlet_bernoulli(Elbo, vectorized):
     def model2(data):
         concentration0 = constant([10.0, 10.0])
         f = pyro.sample("latent_fairness", dist.Dirichlet(concentration0))[1]
-        pyro.sample("obs", dist.Bernoulli(f).expand_by(data.shape).independent(1),
+        pyro.sample("obs", dist.Bernoulli(f).expand_by(data.shape).to_event(1),
                     obs=data)
 
     model = model2 if vectorized else model1

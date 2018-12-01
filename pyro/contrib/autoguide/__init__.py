@@ -501,7 +501,7 @@ class AutoDiagonalNormal(AutoContinuous):
         scale = pyro.param("{}_scale".format(self.prefix),
                            lambda: torch.ones(self.latent_dim),
                            constraint=constraints.positive)
-        return dist.Normal(loc, scale).independent(1)
+        return dist.Normal(loc, scale).to_event(1)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
@@ -595,7 +595,7 @@ class AutoIAFNormal(AutoContinuous):
         iaf = dist.InverseAutoregressiveFlow(AutoRegressiveNN(self.latent_dim, [self.hidden_dim]))
         pyro.module("{}_iaf".format(self.prefix), iaf)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
-        return iaf_dist.independent(1)
+        return iaf_dist.to_event(1)
 
 
 class AutoLaplaceApproximation(AutoContinuous):
@@ -627,7 +627,7 @@ class AutoLaplaceApproximation(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
-        return dist.Delta(loc).independent(1)
+        return dist.Delta(loc).to_event(1)
 
     def laplace_approximation(self, *args, **kwargs):
         """
