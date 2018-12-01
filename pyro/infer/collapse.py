@@ -103,7 +103,7 @@ def collapse(model, first_available_dim):
                     queries.append(log_prob)
                     require_backward(log_prob)
 
-        ring = DebugRing()
+        ring = SampleRing()  # DebugRing()
         log_probs = contract_tensor_tree(log_probs, sum_dims, ring=ring)
         query_ordinal = {}
         for ordinal, terms in log_probs.items():
@@ -118,7 +118,7 @@ def collapse(model, first_available_dim):
         for node in enum_trace.nodes.values():
             if node["type"] == "sample" and not node["is_observed"]:
                 # TODO move this into a Leaf implementation somehow
-                new_node = {}
+                new_node = {"type": "sample", "name": node["name"], "is_observed": False}
                 log_prob = node["packed"]["log_prob"]
                 ordinal = query_ordinal[log_prob]
                 new_node["cond_indep_stack"] = tuple(
@@ -130,13 +130,13 @@ def collapse(model, first_available_dim):
                 # TODO move this into a custom SampleRing Leaf implementation
                 sample = log_prob._pyro_backward_result
                 # sample_dim = log_prob._pyro_dims[-1]
+                new_value = node["value"]
                 new_value = packed.pack(node["value"], node["infer"]["_dim_to_symbol"])
                 for index, dim in zip(sample, sample._pyro_sample_dims):
                     if dim in new_value._pyro_dims:
                         index._pyro_dims = sample._pyro_dims[1:]
                         new_value = packed.gather(new_value, index, dim)
 
-                print(new_value.shape, new_value._pyro_dims)
                 new_node["value"] = packed.unpack(new_value, enum_trace.symbol_to_dim)
 
                 collapsed_trace.add_node(node["name"], **new_node)
@@ -145,13 +145,13 @@ def collapse(model, first_available_dim):
         i = 0
         for ordinal, terms in log_probs.items():
             for term in terms:
-                with ExitStack() as stack:
+                with poutine.block(hide_fn=lambda msg: "aux" not in msg["name"]), ExitStack() as stack:
                     for dim in ordinal:
                         frame = dim_to_frame[dim]
                         stack.enter_context(pyro.plate(frame.name, frame.size, dim=frame.dim))
                     pyro.sample("aux_{}".format(i),
-                                dist.Bernoulli(probs=torch.exp(-term / 2.)),
-                                obs=torch.tensor(1.))
+                                dist.Bernoulli(logits=term),
+                                obs=torch.tensor(1.), infer={"is_auxiliary": True})
                 i += 1
 
         # Replay model correctly against collapsed_trace (get correct cond_indep_stack)
