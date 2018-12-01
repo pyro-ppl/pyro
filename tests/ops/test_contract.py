@@ -357,7 +357,7 @@ def make_example(equation, fill=None, sizes=(2, 3)):
     operands = []
     for dims in inputs:
         shape = tuple(sizes[dim] for dim in dims)
-        operands.append(torch.randn(shape) if fill is None else torch.empty(shape).fill_(fill))
+        operands.append(torch.randn(shape) if fill is None else torch.full(shape, fill)
     return inputs, outputs, operands, sizes
 
 

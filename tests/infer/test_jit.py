@@ -190,7 +190,7 @@ def test_scatter_workaround():
 @pytest.mark.filterwarnings('ignore:Converting a tensor to a Python boolean')
 def test_bernoulli_enumerate(shape, expand):
     shape = torch.Size(shape)
-    probs = torch.empty(shape).fill_(0.25)
+    probs = torch.full(shape, 0.25)
 
     @pyro.ops.jit.trace
     def f(probs):
