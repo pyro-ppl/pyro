@@ -149,8 +149,9 @@ def collapse(model, first_available_dim):
                     for dim in ordinal:
                         frame = dim_to_frame[dim]
                         stack.enter_context(pyro.plate(frame.name, frame.size, dim=frame.dim))
+                    logits = packed.unpack(term, enum_trace.symbol_to_dim)
                     pyro.sample("aux_{}".format(i),
-                                dist.Bernoulli(logits=term),
+                                dist.Bernoulli(logits=logits),
                                 obs=torch.tensor(1.), infer={"is_auxiliary": True})
                 i += 1
 
