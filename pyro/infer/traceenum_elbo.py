@@ -449,7 +449,7 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
                 self = weakself()
                 elbo = 0.0
                 for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-                    elbo += _compute_dice_elbo(model_trace, guide_trace)
+                    elbo = elbo + _compute_dice_elbo(model_trace, guide_trace)
                 return elbo * (-1.0 / self.num_particles)
 
             self._differentiable_loss = differentiable_loss

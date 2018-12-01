@@ -40,7 +40,8 @@ def model(data=None, args=None, batch_size=None):
     # Locals.
     with pyro.plate("documents", args.num_docs) as ind:
         if data is not None:
-            assert data.shape == (args.num_words_per_doc, args.num_docs)
+            with pyro.util.ignore_jit_warnings():
+                assert data.shape == (args.num_words_per_doc, args.num_docs)
             data = data[:, ind]
         doc_topics = pyro.sample("doc_topics", dist.Dirichlet(topic_weights))
         with pyro.plate("words", args.num_words_per_doc):
@@ -92,8 +93,11 @@ def parametrized_guide(predictor, data, args, batch_size=None):
     with pyro.plate("documents", args.num_docs, batch_size) as ind:
         # The neural network will operate on histograms rather than word
         # index vectors, so we'll convert the raw data to a histogram.
-        counts = torch.zeros(args.num_words, len(ind))
-        counts.scatter_add_(0, data[:, ind], torch.tensor(1.).expand(counts.shape))
+        if torch._C._get_tracing_state():
+            counts = torch.eye(1024)[data[:, ind]].sum(0).t()
+        else:
+            counts = torch.zeros(args.num_words, batch_size)
+            counts.scatter_add_(0, data[:, ind], torch.tensor(1.).expand(counts.shape))
         doc_topics = predictor(counts.transpose(0, 1))
         pyro.sample("doc_topics", dist.Delta(doc_topics, event_dim=1))
 
@@ -128,7 +132,7 @@ if __name__ == '__main__':
     parser.add_argument("-t", "--num-topics", default=8, type=int)
     parser.add_argument("-w", "--num-words", default=1024, type=int)
     parser.add_argument("-d", "--num-docs", default=1000, type=int)
-    parser.add_argument("-wd", "--num-words-per-doc", default=32, type=int)
+    parser.add_argument("-wd", "--num-words-per-doc", default=64, type=int)
     parser.add_argument("-n", "--num-steps", default=1000, type=int)
     parser.add_argument("-l", "--layer-sizes", default="100-100")
     parser.add_argument("-lr", "--learning-rate", default=0.001, type=float)

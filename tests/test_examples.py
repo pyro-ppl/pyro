@@ -84,14 +84,15 @@ def xfail_jit(*args):
 
 JIT_EXAMPLES = [
     'air/main.py --num-steps=1 --jit',
-    xfail_jit('baseball.py --num-samples=200 --warmup-steps=100 --jit'),
+    'baseball.py --num-samples=200 --warmup-steps=100 --jit',
     'bayesian_regression.py --num-epochs=1 --jit',
     'contrib/autoname/mixture.py --num-epochs=1 --jit',
     xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
     xfail_jit('dmm/dmm.py --num-epochs=1 --jit'),
     xfail_jit('dmm/dmm.py --num-epochs=1 --num-iafs=1 --jit'),
-    xfail_jit('eight_schools/mcmc.py --num-samples=500 --warmup-steps=100 --jit'),
-    xfail_jit('eight_schools/svi.py --num-epochs=1 --jit'),
+    skipif_param('eight_schools/mcmc.py --num-samples=500 --warmup-steps=100 --jit',
+                 condition=True, reason='very slow test'),
+    'eight_schools/svi.py --num-epochs=1 --jit',
     'hmm.py --num-steps=1 --truncate=65 --model=1 --jit',
     'hmm.py --num-steps=1 --truncate=65 --model=2 --jit',
     'hmm.py --num-steps=1 --truncate=65 --model=3 --jit',
