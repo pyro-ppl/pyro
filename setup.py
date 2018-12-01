@@ -82,7 +82,7 @@ setup(
         'graphviz>=0.8',
         'networkx>=2.2',
         'numpy>=1.7',
-        'opt_einsum>=2.2.0',
+        'opt_einsum>=2.3.0',
         'six>=1.10.0',
         # TODO: uncomment on release; using torch-nightly build
         # 'torch>=0.4.1',
