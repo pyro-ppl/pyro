@@ -109,7 +109,7 @@ class MultiFrameTensor(dict):
         """
         for cond_indep_stack, value in items:
             frames = frozenset(f for f in cond_indep_stack if f.vectorized)
-            assert all(f.dim < 0 and -len(value.shape) <= f.dim for f in frames)
+            assert all(f.dim < 0 and -value.dim() <= f.dim for f in frames)
             if frames in self:
                 self[frames] = self[frames] + value
             else:

@@ -70,7 +70,7 @@ def compute_exists_logits(objects, args):
     p_exists = args.expected_num_objects / args.max_num_objects
     real_part = dist.Normal(0., 1.).log_prob(objects)
     real_part = real_part + math.log(p_exists)
-    spurious_part = torch.empty(real_part.shape).fill_(math.log(1 - p_exists))
+    spurious_part = torch.full(real_part.shape, math.log(1 - p_exists))
     return real_part - spurious_part
 
 
