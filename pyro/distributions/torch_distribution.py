@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
+
 import torch
 from torch.distributions import biject_to, constraints, transform_to
 from torch.distributions.kl import kl_divergence, register_kl
