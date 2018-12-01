@@ -96,7 +96,7 @@ class replay(Messenger):
 # Sites hidden by block will only have the handlers below block on the PYRO_STACK applied,
 # allowing inference or other effectful computations to be nested inside models.
 class block(Messenger):
-    def __init__(self, fn, hide_fn):
+    def __init__(self, fn=None, hide_fn=lambda msg: True):
         self.hide_fn = hide_fn
         super(block, self).__init__(fn)
 
@@ -144,6 +144,7 @@ def sample(name, fn, obs=None):
     return msg["value"]
 
 
+# param is an effectful version of PARAM_STORE.setdefault
 def param(name, init_value=None):
 
     def fn(init_value):
@@ -204,7 +205,7 @@ class SVI(object):
         # further tracing occurs inside of `loss`.
         with trace() as param_capture:
             # We use block here to allow tracing to record parameters only.
-            with block(fn=None, hide_fn=lambda msg: msg["type"] == "sample"):
+            with block(hide_fn=lambda msg: msg["type"] == "sample"):
                 loss = self.loss(self.model, self.guide, *args, **kwargs)
         # Differentiate the loss.
         loss.backward()
