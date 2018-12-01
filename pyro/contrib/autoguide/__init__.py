@@ -521,7 +521,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         guide = AutoLowRankMultivariateNormal(model, rank=10)
         svi = SVI(model, guide, ...)
 
-    By default the ``diagonal_term`` is initialized to 1/2 and the ``cov_factor`` is
+    By default the ``cov_diag`` is initialized to 1/2 and the ``cov_factor`` is
     intialized randomly such that ``cov_factor.matmul(cov_factor.t())`` is half the
     identity matrix. To change this default behavior the user
     should call :func:`pyro.param` before beginning inference, e.g.::
@@ -529,7 +529,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         latent_dim = 10
         pyro.param("auto_loc", torch.randn(latent_dim))
         pyro.param("auto_cov_factor", torch.randn(latent_dim, rank)))
-        pyro.param("auto_cov_diagonal", torch.randn(latent_dim).exp()),
+        pyro.param("auto_cov_diag", torch.randn(latent_dim).exp()),
                    constraint=constraints.positive)
 
     :param callable model: a generative model
@@ -550,7 +550,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
                          lambda: torch.zeros(self.latent_dim))
         factor = pyro.param("{}_cov_factor".format(self.prefix),
                             lambda: torch.randn(self.latent_dim, self.rank) * (0.5 / self.rank) ** 0.5)
-        diagonal = pyro.param("{}_cov_diagonal".format(self.prefix),
+        diagonal = pyro.param("{}_cov_diag".format(self.prefix),
                               lambda: torch.ones(self.latent_dim) * 0.5,
                               constraint=constraints.positive)
         return dist.LowRankMultivariateNormal(loc, factor, diagonal)
@@ -558,7 +558,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
         factor = pyro.param("{}_cov_factor".format(self.prefix))
-        diagonal = pyro.param("{}_cov_diagonal".format(self.prefix))
+        diagonal = pyro.param("{}_cov_diag".format(self.prefix))
         scale = (factor.pow(2).sum(-1) + diagonal).sqrt()
         return loc, scale
 
