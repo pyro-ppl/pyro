@@ -67,7 +67,22 @@ class MixtureOfDiagNormals(TorchDistribution):
         self.dim = locs.size(-1)
         self.categorical = Categorical(logits=component_logits)
         self.probs = self.categorical.probs
-        super(MixtureOfDiagNormals, self).__init__(batch_shape=batch_shape, event_shape=(self.dim,))
+        super(MixtureOfDiagNormals, self).__init__(batch_shape=torch.Size(batch_shape),
+                                                   event_shape=torch.Size((self.dim,)))
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(MixtureOfDiagNormals, _instance)
+        new.batch_mode = True
+        batch_shape = torch.Size(batch_shape)
+        new.dim = self.dim
+        new.locs = self.locs.expand(batch_shape + self.locs.shape[-2:])
+        new.coord_scale = self.coord_scale.expand(batch_shape + self.coord_scale.shape[-2:])
+        new.component_logits = self.component_logits.expand(batch_shape + self.component_logits.shape[-1:])
+        new.categorical = self.categorical.expand(batch_shape)
+        new.probs = self.probs.expand(batch_shape + self.probs.shape[-1:])
+        super(MixtureOfDiagNormals, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
 
     def log_prob(self, value):
         epsilon = (value.unsqueeze(-2) - self.locs) / self.coord_scale  # L B K D

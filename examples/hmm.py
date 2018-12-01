@@ -55,7 +55,7 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
     num_sequences, max_length, data_dim = sequences.shape
     assert lengths.shape == (num_sequences,)
     assert lengths.max() <= max_length
-    with poutine.mask(mask=torch.tensor(include_prior)):
+    with poutine.mask(mask=include_prior):
         # Our prior on transition probabilities will be:
         # stay in the same state with 90% probability; uniformly jump to another
         # state with 10% probability.
@@ -96,7 +96,7 @@ def model_2(sequences, lengths, args, batch_size=None, include_prior=True):
     num_sequences, max_length, data_dim = sequences.shape
     assert lengths.shape == (num_sequences,)
     assert lengths.max() <= max_length
-    with poutine.mask(mask=torch.tensor(include_prior)):
+    with poutine.mask(mask=include_prior):
         probs_x = pyro.sample("probs_x",
                               dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
                                   .independent(1))
@@ -138,7 +138,7 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
     assert lengths.shape == (num_sequences,)
     assert lengths.max() <= max_length
     hidden_dim = int(args.hidden_dim ** 0.5)  # split between w and x
-    with poutine.mask(mask=torch.tensor(include_prior)):
+    with poutine.mask(mask=include_prior):
         probs_w = pyro.sample("probs_w",
                               dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
                                   .independent(1))
@@ -182,7 +182,7 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
     assert lengths.max() <= max_length
     hidden_dim = int(args.hidden_dim ** 0.5)  # split between w and x
     hidden = torch.arange(hidden_dim, dtype=torch.long)
-    with poutine.mask(mask=torch.tensor(include_prior)):
+    with poutine.mask(mask=include_prior):
         probs_w = pyro.sample("probs_w",
                               dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
                                   .independent(1))
@@ -263,7 +263,7 @@ def model_5(sequences, lengths, args, batch_size=None, include_prior=True):
         tones_generator = TonesGenerator(args, data_dim)
     pyro.module("tones_generator", tones_generator)
 
-    with poutine.mask(mask=torch.tensor(include_prior)):
+    with poutine.mask(mask=include_prior):
         probs_x = pyro.sample("probs_x",
                               dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
                                   .independent(1))
@@ -324,7 +324,7 @@ def main(args):
     # We'll train on small minibatches.
     logging.info('Step\tLoss')
     for step in range(args.num_steps):
-        loss = svi.step(sequences, lengths, args, batch_size=args.batch_size)
+        loss = svi.step(sequences, lengths, args=args, batch_size=args.batch_size)
         logging.info('{: >5d}\t{}'.format(step, loss / num_observations))
 
     # We evaluate on the entire training dataset,
@@ -340,7 +340,7 @@ def main(args):
     if args.truncate:
         lengths.clamp_(max=args.truncate)
     num_observations = float(lengths.sum())
-    test_loss = elbo.loss(model, guide, sequences, lengths, args, include_prior=False)
+    test_loss = elbo.loss(model, guide, sequences, lengths, args=args, include_prior=False)
     logging.info('test loss = {}'.format(test_loss / num_observations))
 
     # We expect models with higher capacity to perform better,
@@ -351,6 +351,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    assert pyro.__version__.startswith('0.3.0')
     parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))

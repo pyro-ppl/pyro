@@ -40,6 +40,8 @@ class ELBO(object):
         misuse of enumeration, i.e. that
         :class:`pyro.infer.traceenum_elbo.TraceEnum_ELBO` is used iff there
         are enumerated sample sites.
+    :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
+        tracer, when . All :class:`torch.jit.TracerWarning` will be ignored.
     :param bool retain_graph: Whether to retain autograd graph during an SVI
         step. Defaults to None (False).
 
@@ -58,19 +60,20 @@ class ELBO(object):
                  max_iarange_nesting=None,  # DEPRECATED
                  vectorize_particles=False,
                  strict_enumeration_warning=True,
+                 ignore_jit_warnings=False,
                  retain_graph=None):
         if max_iarange_nesting is not None:
             warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
                           DeprecationWarning)
             max_plate_nesting = max_iarange_nesting
-
-        self.num_particles = num_particles
         self.max_plate_nesting = max_plate_nesting
+        self.num_particles = num_particles
         self.vectorize_particles = vectorize_particles
         self.retain_graph = retain_graph
         if self.vectorize_particles and self.num_particles > 1:
             self.max_plate_nesting += 1
         self.strict_enumeration_warning = strict_enumeration_warning
+        self.ignore_jit_warnings = ignore_jit_warnings
 
     def _guess_max_plate_nesting(self, model, guide, *args, **kwargs):
         """

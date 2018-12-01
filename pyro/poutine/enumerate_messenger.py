@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from pyro.distributions.torch_distribution import TorchDistributionMixin
+from pyro.util import ignore_jit_warnings
 
 from .messenger import Messenger
 from .runtime import _ENUM_ALLOCATOR
@@ -42,6 +43,7 @@ class EnumerateMessenger(Messenger):
         self._value_dims = {}  # site name -> (enum dim -> unique id)
         return super(EnumerateMessenger, self).__enter__()
 
+    @ignore_jit_warnings()
     def _pyro_sample(self, msg):
         """
         :param msg: current message at a trace site.
@@ -102,5 +104,6 @@ class EnumerateMessenger(Messenger):
         shape = value.shape[:value.dim() - msg["fn"].event_dim]
         dim_to_id = msg["infer"].setdefault("_dim_to_id", {})
         dim_to_id.update(self._param_dims.get(msg["name"], {}))
-        self._value_dims[msg["name"]] = {dim: id_ for dim, id_ in dim_to_id.items()
-                                         if len(shape) >= -dim and shape[dim] > 1}
+        with ignore_jit_warnings():
+            self._value_dims[msg["name"]] = {dim: id_ for dim, id_ in dim_to_id.items()
+                                             if len(shape) >= -dim and shape[dim] > 1}

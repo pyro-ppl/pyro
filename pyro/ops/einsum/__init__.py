@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import opt_einsum
 
+from pyro.util import ignore_jit_warnings
 from pyro.ops.einsum.paths import optimize
 
 _PATH_CACHE = {}
@@ -53,8 +54,9 @@ def contract(equation, *operands, **kwargs):
     backend = kwargs.pop('backend', 'numpy')
     out = kwargs.pop('out', None)
     shapes = [tuple(t.shape) for t in operands]
-    expr = contract_expression(equation, *shapes)
-    return expr(*operands, backend=backend, out=out)
+    with ignore_jit_warnings():
+        expr = contract_expression(equation, *shapes)
+        return expr(*operands, backend=backend, out=out)
 
 
 __all__ = ['contract', 'contract_expression']

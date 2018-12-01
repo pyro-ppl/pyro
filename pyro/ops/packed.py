@@ -1,13 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
 import math
-import operator
 
 import torch
-from six.moves import reduce
 
 from pyro.distributions.util import is_identically_one
-from pyro.ops.einsum import contract
+from pyro.util import ignore_jit_warnings
 
 
 def pack(value, dim_to_symbol):
@@ -22,7 +20,10 @@ def pack(value, dim_to_symbol):
         shape = value.shape
         shift = len(shape)
         try:
-            dims = ''.join(dim_to_symbol[dim - shift] for dim, size in enumerate(shape) if size > 1)
+            with ignore_jit_warnings():
+                dims = ''.join(dim_to_symbol[dim - shift]
+                               for dim, size in enumerate(shape)
+                               if size > 1)
         except KeyError:
             raise ValueError('\n  '.join([
                 'Invalid tensor shape.',
@@ -159,46 +160,6 @@ def exp(value):
         result._pyro_dims = value._pyro_dims
     else:
         result = math.exp(value)
-    return result
-
-
-def sumproduct(factors, output_dims='', device=None):
-    """
-    Packed sum-product contraction.
-    """
-    numbers = []
-    tensors = []
-    for x in factors:
-        (tensors if isinstance(x, torch.Tensor) else numbers).append(x)
-    if tensors:
-        equation = ','.join(x._pyro_dims for x in tensors) + '->' + output_dims
-        result = contract(equation, *tensors, backend='torch')
-        if numbers:
-            result = result * reduce(operator.mul, numbers, 1.)
-        result._pyro_dims = output_dims
-        return result
-    result = torch.tensor(reduce(operator.mul, numbers, 1.), device=device)
-    result._pyro_dims = ''
-    return result
-
-
-def logsumproductexp(factors, output_dims='', device=None):
-    """
-    Packed sum-product contraction in log space.
-    """
-    numbers = []
-    tensors = []
-    for x in factors:
-        (tensors if isinstance(x, torch.Tensor) else numbers).append(x)
-    if tensors:
-        equation = ','.join(x._pyro_dims for x in tensors) + '->' + output_dims
-        result = contract(equation, *tensors, backend='pyro.ops.einsum.torch_log')
-        if numbers:
-            result = result + float(sum(numbers))
-        result._pyro_dims = output_dims
-        return result
-    result = torch.tensor(float(sum(numbers)), device=device)
-    result._pyro_dims = ''
     return result
 
 

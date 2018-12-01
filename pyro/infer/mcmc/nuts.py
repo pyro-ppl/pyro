@@ -73,10 +73,9 @@ class NUTS(HMC):
     :param int max_plate_nesting: Optional bound on max number of nested
         :func:`pyro.plate` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
-    :param bool experimental_use_einsum: Whether to use an einsum operation
-        to evaluat log pdf for the model trace. No-op unless the trace has
-        discrete sample sites. This flag is experimental and will most likely
-        be removed in a future release.
+    :param bool jit_compile: Optional parameter denoting whether to use
+        the PyTorch JIT to trace the log density computation, and use this
+        optimized executable trace in the integrator.
 
     Example:
 
@@ -93,7 +92,7 @@ class NUTS(HMC):
         >>>
         >>> nuts_kernel = NUTS(model, adapt_step_size=True)
         >>> mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=300).run(data)
-        >>> posterior = EmpiricalMarginal(mcmc_run, 'beta')
+        >>> posterior = mcmc_run.marginal('beta').empirical['beta']
         >>> posterior.mean  # doctest: +SKIP
         tensor([ 0.9221,  1.9464,  2.9228])
     """
@@ -108,7 +107,8 @@ class NUTS(HMC):
                  transforms=None,
                  max_plate_nesting=None,
                  max_iarange_nesting=None,  # DEPRECATED
-                 experimental_use_einsum=False):
+                 jit_compile=False,
+                 ignore_jit_warnings=False):
         if max_iarange_nesting is not None:
             warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
                           DeprecationWarning)
@@ -121,9 +121,10 @@ class NUTS(HMC):
                                    full_mass=full_mass,
                                    transforms=transforms,
                                    max_plate_nesting=max_plate_nesting,
-                                   experimental_use_einsum=experimental_use_einsum)
+                                   max_iarange_nesting=max_iarange_nesting,
+                                   jit_compile=jit_compile,
+                                   ignore_jit_warnings=ignore_jit_warnings)
         self.use_multinomial_sampling = use_multinomial_sampling
-
         self._max_tree_depth = 10  # from Stan
         # There are three conditions to stop doubling process:
         #     + Tree is becoming too big.
