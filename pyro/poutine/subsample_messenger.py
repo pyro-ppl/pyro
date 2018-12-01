@@ -123,4 +123,8 @@ class SubsampleMessenger(IndepMessenger):
     def _process_message(self, msg):
         frame = CondIndepStackFrame(self.name, self.dim, self.subsample_size, self.counter)
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
-        msg["scale"] = (self.size / self.subsample_size) * msg["scale"]
+        if isinstance(self.size, torch.Tensor) or isinstance(self.subsample_size, torch.Tensor):
+            if not isinstance(msg["scale"], torch.Tensor):
+                with ignore_jit_warnings():
+                    msg["scale"] = torch.tensor(msg["scale"])
+        msg["scale"] = msg["scale"] * self.size / self.subsample_size
