@@ -130,12 +130,14 @@ def collapse(model, first_available_dim):
                 # TODO move this into a custom SampleRing Leaf implementation
                 sample = log_prob._pyro_backward_result
                 # sample_dim = log_prob._pyro_dims[-1]
-                new_value = node["value"]
+                new_value = packed.pack(node["value"], node["infer"]["_dim_to_symbol"])
                 for index, dim in zip(sample, sample._pyro_sample_dims):
                     if dim in new_value._pyro_dims:
                         index._pyro_dims = sample._pyro_dims[1:]
                         new_value = packed.gather(new_value, index, dim)
-                new_node["value"] = new_value
+
+                print(new_value.shape, new_value._pyro_dims)
+                new_node["value"] = packed.unpack(new_value, enum_trace.symbol_to_dim)
 
                 collapsed_trace.add_node(node["name"], **new_node)
 
