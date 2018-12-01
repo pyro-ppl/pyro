@@ -18,7 +18,7 @@ from collections import OrderedDict
 import torch
 
 # Pyro keeps track of two kinds of global state:
-# i)  The Poutine stack, which enables non-standard interpretations of
+# i)  The effect handler stack, which enables non-standard interpretations of
 #     Pyro primitives like sample();
 #     See http://docs.pyro.ai/en/0.3.0-release/poutine.html
 # ii) Trainable parameters in the Pyro ParamStore;
@@ -32,16 +32,19 @@ def get_param_store():
     return PARAM_STORE
 
 
+# The base effect handler class (called Messenger here for consistency with Pyro).
 class Messenger(object):
     def __init__(self, fn=None):
         self.fn = fn
 
+    # Effect handlers push themselves onto the PYRO_STACK.
+    # Handlers earlier in the PYRO_STACK are applied first.
     def __enter__(self):
-        PYRO_STACK.append(self)
+        PYRO_STACK.insert(0, self)
 
     def __exit__(self, *args, **kwargs):
-        assert PYRO_STACK[-1] is self
-        PYRO_STACK.pop()
+        assert PYRO_STACK[0] is self
+        PYRO_STACK.pop(0)
 
     def process_message(self, msg):
         pass
@@ -54,13 +57,19 @@ class Messenger(object):
             return self.fn(*args, **kwargs)
 
 
+# A first useful example of an effect handler.
+# trace records the inputs and outputs of any primitive site it encloses,
+# and returns a dictionary containing that data to the user.
 class trace(Messenger):
     def __enter__(self):
         super(trace, self).__enter__()
         self.trace = OrderedDict()
         return self.trace
 
+    # trace illustrates why we need postprocess_message in addition to process_message:
+    # We only want to record a value after all other effects have been applied
     def postprocess_message(self, msg):
+        assert msg["name"] not in self.trace, "all sites must have unique names"
         self.trace[msg["name"]] = msg.copy()
 
     def get_trace(self, *args, **kwargs):
@@ -68,6 +77,11 @@ class trace(Messenger):
         return self.trace
 
 
+# A second example of an effect handler for setting the value at a sample site.
+# This illustrates why effect handlers are a useful PPL implementation technique:
+# We can compose trace and replay to replace values but preserve distributions,
+# allowing us to compute the joint probability density of samples under a model.
+# See the definition of elbo(...) below for an example of this pattern.
 class replay(Messenger):
     def __init__(self, fn, guide_trace):
         self.guide_trace = guide_trace
@@ -76,6 +90,19 @@ class replay(Messenger):
     def process_message(self, msg):
         if msg["name"] in self.guide_trace:
             msg["value"] = self.guide_trace[msg["name"]]["value"]
+
+
+# block allows the selective application of effect handlers to different parts of a model.
+# Sites hidden by block will only have the handlers below block on the PYRO_STACK applied,
+# allowing inference or other effectful computations to be nested inside models.
+class block(Messenger):
+    def __init__(self, fn, hide_fn):
+        self.hide_fn = hide_fn
+        super(block, self).__init__(fn)
+
+    def process_message(self, msg):
+        if self.hide_fn(msg):
+            msg["stop"] = True
 
 
 # This limited implementation of PlateMessenger only implements broadcasting.
@@ -102,11 +129,13 @@ def sample(name, fn, obs=None):
     if not PYRO_STACK:
         return fn()
     msg = dict(type="sample", name=name, fn=fn, value=obs)
-    for handler in reversed(PYRO_STACK):
+    for pointer, handler in enumerate(PYRO_STACK):
         handler.process_message(msg)
+        if msg.get("stop"):
+            break
     if msg["value"] is None:
         msg["value"] = fn()
-    for handler in PYRO_STACK:
+    for handler in reversed(PYRO_STACK[0:pointer+1]):
         handler.postprocess_message(msg)
     return msg["value"]
 
@@ -117,11 +146,13 @@ def param(name, init_value=None):
     if not PYRO_STACK:
         return value
     msg = dict(type="param", name=name, value=None)
-    for handler in reversed(PYRO_STACK):
+    for pointer, handler in enumerate(PYRO_STACK):
         handler.process_message(msg)
+        if msg.get("stop"):
+            break
     if msg["value"] is None:
         msg["value"] = value
-    for handler in PYRO_STACK:
+    for handler in reversed(PYRO_STACK[0:pointer+1]):
         handler.postprocess_message(msg)
     return msg["value"]
 
@@ -172,13 +203,13 @@ class SVI(object):
         # we can record all the parameters that are encountered. Note that
         # further tracing occurs inside of `loss`.
         with trace() as param_capture:
-            loss = self.loss(self.model, self.guide, *args, **kwargs)
+            # We use block here to allow tracing to record parameters only.
+            with block(fn=None, hide_fn=lambda msg: msg["type"] == "sample"):
+                loss = self.loss(self.model, self.guide, *args, **kwargs)
         # Differentiate the loss.
         loss.backward()
         # Grab all the parameters from the trace.
-        params = [site["value"]
-                  for site in param_capture.values()
-                  if site["type"] == "param"]
+        params = [site["value"] for site in param_capture.values()]
         # Take a step w.r.t. each parameter in params.
         self.optim(params)
         # Zero out the gradients so that they don't accumulate.
