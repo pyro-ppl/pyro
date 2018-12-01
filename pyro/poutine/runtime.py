@@ -137,7 +137,7 @@ class NonlocalExit(Exception):
         Reset the state of the frames remaining in the stack.
         Necessary for multiple re-executions in poutine.queue.
         """
-        for frame in _PYRO_STACK:
+        for frame in reversed(_PYRO_STACK):
             frame._reset()
             if type(frame).__name__ == "BlockMessenger" and frame.hide_fn(self.site):
                 break
@@ -181,11 +181,11 @@ def apply_stack(initial_msg):
     # msg is used to pass information up and down the stack
     msg = initial_msg
 
-    counter = 0
+    pointer = 0
     # go until time to stop?
-    for frame in stack:
+    for frame in reversed(stack):
 
-        counter = counter + 1
+        pointer = pointer + 1
 
         frame._process_message(msg)
 
@@ -194,7 +194,7 @@ def apply_stack(initial_msg):
 
     default_process_message(msg)
 
-    for frame in reversed(stack[0:counter]):
+    for frame in stack[-pointer:]:  # reversed(stack[0:pointer])
         frame._postprocess_message(msg)
 
     cont = msg["continuation"]

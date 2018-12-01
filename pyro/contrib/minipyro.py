@@ -40,11 +40,11 @@ class Messenger(object):
     # Effect handlers push themselves onto the PYRO_STACK.
     # Handlers earlier in the PYRO_STACK are applied first.
     def __enter__(self):
-        PYRO_STACK.insert(0, self)
+        PYRO_STACK.append(self)
 
     def __exit__(self, *args, **kwargs):
-        assert PYRO_STACK[0] is self
-        PYRO_STACK.pop(0)
+        assert PYRO_STACK[-1] is self
+        PYRO_STACK.pop()
 
     def process_message(self, msg):
         pass
@@ -125,35 +125,35 @@ class PlateMessenger(Messenger):
         return range(self.size)
 
 
-def sample(name, fn, obs=None):
-    if not PYRO_STACK:
-        return fn()
-    msg = dict(type="sample", name=name, fn=fn, value=obs)
-    for pointer, handler in enumerate(PYRO_STACK):
+def apply_stack(msg):
+    for pointer, handler in enumerate(reversed(PYRO_STACK)):
         handler.process_message(msg)
         if msg.get("stop"):
             break
     if msg["value"] is None:
-        msg["value"] = fn()
-    for handler in reversed(PYRO_STACK[0:pointer+1]):
+        msg["value"] = msg["fn"](*msg["args"])
+    for handler in PYRO_STACK[-pointer-1:]:
         handler.postprocess_message(msg)
+    return msg
+
+
+def sample(name, fn, obs=None):
+    if not PYRO_STACK:
+        return fn()
+    msg = apply_stack(dict(type="sample", name=name, fn=fn, args=(), value=obs))
     return msg["value"]
 
 
 def param(name, init_value=None):
-    value = PARAM_STORE.setdefault(name, init_value)
-    value.requires_grad_()
-    if not PYRO_STACK:
+
+    def fn(init_value):
+        value = PARAM_STORE.setdefault(name, init_value)
+        value.requires_grad_()
         return value
-    msg = dict(type="param", name=name, value=None)
-    for pointer, handler in enumerate(PYRO_STACK):
-        handler.process_message(msg)
-        if msg.get("stop"):
-            break
-    if msg["value"] is None:
-        msg["value"] = value
-    for handler in reversed(PYRO_STACK[0:pointer+1]):
-        handler.postprocess_message(msg)
+
+    if not PYRO_STACK:
+        return fn(init_value)
+    msg = apply_stack(dict(type="param", name=name, fn=fn, args=(init_value,), value=None))
     return msg["value"]
 
 
