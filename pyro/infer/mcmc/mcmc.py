@@ -305,8 +305,11 @@ class _Marginal(object):
         if self._diagnostics:
             return self._diagnostics
         for site in self.sites:
-            self._diagnostics[site] = OrderedDict([
-                ("n_eff", stats.effective_sample_size(self.support()[site])),
-                ("r_hat", stats.split_gelman_rubin(self.support()[site]))
-            ])
+            site_stats = OrderedDict()
+            try:
+                site_stats["n_eff"] = stats.effective_sample_size(self.support()[site])
+            except NotImplementedError:
+                site_stats["n_eff"] = torch.tensor(float('nan'))
+            site_stats["r_hat"] = stats.split_gelman_rubin(self.support()[site])
+            self._diagnostics[site] = site_stats
         return self._diagnostics
