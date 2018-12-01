@@ -3,9 +3,9 @@ from __future__ import absolute_import, division, print_function
 import errno
 import json
 import logging
+import os
 import signal
 import socket
-import sys
 import threading
 import warnings
 from collections import OrderedDict
@@ -16,22 +16,25 @@ import torch
 import torch.multiprocessing as mp
 
 import pyro
+from pyro.contrib.viz.progress_bar import ProgressBar
 from pyro.infer import TracePosterior, EmpiricalMarginal
-from pyro.infer.mcmc.logger import initialize_logger, initialize_progbar, DIAGNOSTIC_MSG, TqdmHandler
+from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG
 import pyro.ops.stats as stats
 from pyro.util import optional
 
 
-def logger_thread(log_queue, warmup_steps, num_samples, num_chains):
+def logger_thread(log_queue, warmup_steps, num_samples, num_chains, diagnostics_update):
     """
     Logging thread that asynchronously consumes logging events from `log_queue`,
     and handles them appropriately.
     """
-    progress_bars = [initialize_progbar(warmup_steps, num_samples, pos=i)
-                     for i in range(num_chains)]
+    progress_bar = ProgressBar(warmup_steps + num_samples,
+                               num_bars=num_chains,
+                               update_type=diagnostics_update)
+    for i in range(num_chains):
+        progress_bar.set_description("Warmup [{}]".format(i+1), pos=i)
     logger = logging.getLogger(__name__)
     logger.propagate = False
-    logger.addHandler(TqdmHandler())
     num_samples = [0] * num_chains
     try:
         while True:
@@ -47,17 +50,14 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains):
                 pbar_pos = int(logger_id.split(":")[-1])
                 num_samples[pbar_pos] += 1
                 if num_samples[pbar_pos] == warmup_steps:
-                    progress_bars[pbar_pos].set_description("Sample [{}]".format(pbar_pos + 1))
+                    progress_bar.set_description("Sample [{}]".format(pbar_pos + 1))
                 diagnostics = json.loads(msg, object_pairs_hook=OrderedDict)
-                progress_bars[pbar_pos].set_postfix(diagnostics)
-                progress_bars[pbar_pos].update()
+                progress_bar.set_postfix(diagnostics, pbar_pos)
+                progress_bar.increment(update=True)
             else:
                 logger.handle(record)
     finally:
-        for pbar in progress_bars:
-            pbar.close()
-        # Required to not overwrite multiple progress bars on exit.
-        sys.stderr.write("\n" * num_chains)
+        progress_bar.close()
 
 
 class _Worker(object):
@@ -93,7 +93,7 @@ class _ParallelSampler(TracePosterior):
     `torch.multiprocessing` module (itself a light wrapper over the python
     `multiprocessing` module) to spin up parallel workers.
     """
-    def __init__(self, kernel, num_samples, warmup_steps, num_chains, mp_context):
+    def __init__(self, kernel, num_samples, warmup_steps, num_chains, mp_context, diagnostics_update):
         super(_ParallelSampler, self).__init__()
         self.kernel = kernel
         self.warmup_steps = warmup_steps
@@ -112,7 +112,8 @@ class _ParallelSampler(TracePosterior):
         self.num_samples = num_samples
         self.log_thread = threading.Thread(target=logger_thread,
                                            args=(self.log_queue, self.warmup_steps,
-                                                 self.num_samples, self.num_chains))
+                                                 self.num_samples, self.num_chains,
+                                                 diagnostics_update))
         self.log_thread.daemon = True
         self.log_thread.start()
 
@@ -171,11 +172,12 @@ class _SingleSampler(TracePosterior):
     """
     Single process runner class optimized for the case `num_chains=1`.
     """
-    def __init__(self, kernel, num_samples, warmup_steps):
+    def __init__(self, kernel, num_samples, warmup_steps, diagnostics_update=None):
         self.kernel = kernel
         self.warmup_steps = warmup_steps
         self.num_samples = num_samples
         self.logger = None
+        self.diagnostics_update = diagnostics_update
         super(_SingleSampler, self).__init__()
 
     def _gen_samples(self, num_samples, init_trace):
@@ -191,8 +193,11 @@ class _SingleSampler(TracePosterior):
         log_queue = kwargs.pop("log_queue", None)
         self.logger = logging.getLogger("pyro.infer.mcmc")
         is_multiprocessing = log_queue is not None
-        progress_bar = initialize_progbar(self.warmup_steps, self.num_samples) \
-            if not is_multiprocessing else None
+        progress_bar = None
+        if not is_multiprocessing:
+            progress_bar = ProgressBar(self.warmup_steps + self.num_samples,
+                                       description="Warmup",
+                                       update_type=self.diagnostics_update)
         self.logger = initialize_logger(self.logger, logger_id, progress_bar, log_queue)
         self.kernel.setup(self.warmup_steps, *args, **kwargs)
         trace = self.kernel.initial_trace
@@ -236,19 +241,21 @@ class MCMC(TracePosterior):
         CUDA.
     """
     def __init__(self, kernel, num_samples, warmup_steps=0,
-                 num_chains=1, mp_context=None):
+                 num_chains=1, mp_context=None, diagnostics_update="progress_bar"):
         super(MCMC, self).__init__(num_chains=num_chains)
         self.warmup_steps = warmup_steps if warmup_steps is not None else num_samples // 2  # Stan
         self.num_samples = num_samples
+        if "CI" in os.environ or "PYTEST_XDIST_WORKER" in os.environ:
+            diagnostics_update = None
         if num_chains > 1:
             cpu_count = mp.cpu_count()
             if num_chains > cpu_count:
                 warnings.warn("`num_chains` is more than CPU count - {}. "
                               "Resetting num_chains to CPU count.").format(cpu_count)
             self.sampler = _ParallelSampler(kernel, num_samples, warmup_steps,
-                                            num_chains, mp_context)
+                                            num_chains, mp_context, diagnostics_update)
         else:
-            self.sampler = _SingleSampler(kernel, num_samples, warmup_steps)
+            self.sampler = _SingleSampler(kernel, num_samples, warmup_steps, diagnostics_update)
 
     def _traces(self, *args, **kwargs):
         for sample in self.sampler._traces(*args, **kwargs):

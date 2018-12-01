@@ -1,13 +1,10 @@
 import json
 import logging
-import os
-import sys
 from collections import OrderedDict
-
-from tqdm.auto import tqdm
 
 # Identifiers to distinguish between diagnostic messages for progress bars
 # vs. logging output. Useful when using QueueHandler in multiprocessing.
+
 LOG_MSG = "LOG"
 DIAGNOSTIC_MSG = "DIAGNOSTICS"
 
@@ -89,22 +86,6 @@ class QueueHandler(logging.Handler):
             self.handleError(record)
 
 
-class TqdmHandler(logging.StreamHandler):
-    """
-    Handler that synchronizes the log output with the
-    :class:`~tqdm.tqdm` progress bar.
-    """
-    def emit(self, record):
-        try:
-            msg = self.format(record)
-            self.flush()
-            tqdm.write(msg, file=sys.stderr)
-        except (KeyboardInterrupt, SystemExit) as e:
-            raise e
-        except Exception:
-            self.handleError(record)
-
-
 class MCMCLoggingHandler(logging.Handler):
     """
     Main logging handler used by :class:`~pyro.infer.mcmc`,
@@ -127,7 +108,7 @@ class MCMCLoggingHandler(logging.Handler):
                 diagnostics = json.loads(record.getMessage(),
                                          object_pairs_hook=OrderedDict)
                 self.progress_bar.set_postfix(diagnostics)
-                self.progress_bar.update()
+                self.progress_bar.increment(update=True)
             else:
                 self.log_handler.handle(record)
         except (KeyboardInterrupt, SystemExit) as e:
@@ -152,31 +133,6 @@ class MetadataFilter(logging.Filter):
         return True
 
 
-def initialize_progbar(warmup_steps, num_samples, min_width=80, max_width=120, pos=None):
-    """
-    Initialize progress bar using :class:`~tqdm.tqdm`.
-
-    :param int warmup_steps: Number of warmup steps.
-    :param int num_samples: Number of MCMC samples.
-    :param int min_width: Minimum column width of the bar.
-    :param int max_width: Maximum column width of the bar.
-    :param int pos: Position of the bar (e.g. in the case of
-        multiple parallel samplers).
-    """
-    description = "Warmup" if pos is None else "Warmup [{}]".format(pos + 1)
-    total_steps = warmup_steps + num_samples
-    # Disable progress bar in "CI"
-    # (see https://github.com/travis-ci/travis-ci/issues/1337).
-    disable = "CI" in os.environ or "PYTEST_XDIST_WORKER" in os.environ
-    progress_bar = tqdm(total=total_steps, desc=description,
-                        position=pos, file=sys.stderr, disable=disable)
-
-    if getattr(progress_bar, "ncols", None) is not None:
-        progress_bar.ncols = max(min_width, progress_bar.ncols)
-        progress_bar.ncols = min(max_width, progress_bar.ncols)
-    return progress_bar
-
-
 def initialize_logger(logger, logger_id, progress_bar=None, log_queue=None):
     """
     Initialize logger for the :class:`pyro.infer.mcmc` module.
@@ -184,7 +140,7 @@ def initialize_logger(logger, logger_id, progress_bar=None, log_queue=None):
     :param logger: logger instance.
     :param str logger_id: identifier for the log record,
         e.g. chain id in case of multiple samplers.
-    :param progress_bar: a :class:`tqdm.tqdm` instance.
+    :param progress_bar: a :class:`~pyro.contrib.viz.ProgressBar` instance.
     """
     # Reset handler with new `progress_bar`.
     logger.handlers = []
@@ -195,7 +151,7 @@ def initialize_logger(logger, logger_id, progress_bar=None, log_queue=None):
         progress_bar = None
     elif progress_bar:
         format = "%(levelname).1s \t %(message)s"
-        handler = TqdmHandler()
+        handler = logging.StreamHandler()
     else:
         raise ValueError("Logger cannot be initialized without a "
                          "valid handler.")
