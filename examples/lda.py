@@ -96,7 +96,7 @@ def parametrized_guide(predictor, data, args, batch_size=None):
         if torch._C._get_tracing_state():
             counts = torch.eye(1024)[data[:, ind]].sum(0).t()
         else:
-            counts = torch.zeros(args.num_words, batch_size)
+            counts = torch.zeros(args.num_words, ind.size(0))
             counts.scatter_add_(0, data[:, ind], torch.tensor(1.).expand(counts.shape))
         doc_topics = predictor(counts.transpose(0, 1))
         pyro.sample("doc_topics", dist.Delta(doc_topics, event_dim=1))

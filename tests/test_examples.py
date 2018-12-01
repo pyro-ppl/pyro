@@ -84,7 +84,7 @@ def xfail_jit(*args):
 
 JIT_EXAMPLES = [
     'air/main.py --num-steps=1 --jit',
-    'baseball.py --num-samples=200 --warmup-steps=100 --jit',
+    xfail_jit('baseball.py --num-samples=200 --warmup-steps=100 --jit'),
     'bayesian_regression.py --num-epochs=1 --jit',
     'contrib/autoname/mixture.py --num-epochs=1 --jit',
     xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
