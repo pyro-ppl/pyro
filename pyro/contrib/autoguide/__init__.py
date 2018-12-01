@@ -521,15 +521,15 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         guide = AutoLowRankMultivariateNormal(model, rank=10)
         svi = SVI(model, guide, ...)
 
-    By default the ``D_term`` is initialized to 1/2 and the ``W_term`` is
-    intialized randomly such that ``W_term.matmul(W_term.t())`` is half the
+    By default the ``diagonal_term`` is initialized to 1/2 and the ``cov_factor`` is
+    intialized randomly such that ``cov_factor.matmul(cov_factor.t())`` is half the
     identity matrix. To change this default behavior the user
     should call :func:`pyro.param` before beginning inference, e.g.::
 
         latent_dim = 10
         pyro.param("auto_loc", torch.randn(latent_dim))
-        pyro.param("auto_W_term", torch.randn(latent_dim, rank)))
-        pyro.param("auto_D_term", torch.randn(latent_dim).exp()),
+        pyro.param("auto_cov_factor", torch.randn(latent_dim, rank)))
+        pyro.param("auto_cov_diagonal", torch.randn(latent_dim).exp()),
                    constraint=constraints.positive)
 
     :param callable model: a generative model
@@ -548,18 +548,18 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
-        W_term = pyro.param("{}_W_term".format(self.prefix),
+        factor = pyro.param("{}_cov_factor".format(self.prefix),
                             lambda: torch.randn(self.latent_dim, self.rank) * (0.5 / self.rank) ** 0.5)
-        D_term = pyro.param("{}_D_term".format(self.prefix),
-                            lambda: torch.ones(self.latent_dim) * 0.5,
-                            constraint=constraints.positive)
-        return dist.LowRankMultivariateNormal(loc, W_term, D_term)
+        diagonal = pyro.param("{}_cov_diagonal".format(self.prefix),
+                              lambda: torch.ones(self.latent_dim) * 0.5,
+                              constraint=constraints.positive)
+        return dist.LowRankMultivariateNormal(loc, factor, diagonal)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
-        W_term = pyro.param("{}_W_term".format(self.prefix))
-        D_term = pyro.param("{}_D_term".format(self.prefix))
-        scale = (W_term.pow(2).sum(-1) + D_term).sqrt()
+        factor = pyro.param("{}_cov_factor".format(self.prefix))
+        diagonal = pyro.param("{}_cov_diagonal".format(self.prefix))
+        scale = (factor.pow(2).sum(-1) + diagonal).sqrt()
         return loc, scale
 
 
