@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
+
 import torch
 from torch.distributions import biject_to, constraints, transform_to
 from torch.distributions.kl import kl_divergence, register_kl
@@ -81,9 +83,9 @@ class TorchDistributionMixin(Distribution):
     def reshape(self, sample_shape=None, extra_event_dims=None):
         raise Exception('''
             .reshape(sample_shape=s, extra_event_dims=n) was renamed and split into
-            .expand_by(sample_shape=s).independent(reinterpreted_batch_ndims=n).''')
+            .expand_by(sample_shape=s).to_event(reinterpreted_batch_ndims=n).''')
 
-    def independent(self, reinterpreted_batch_ndims=None):
+    def to_event(self, reinterpreted_batch_ndims=None):
         """
         Reinterprets the ``n`` rightmost dimensions of this distributions
         :attr:`~torch.distributions.distribution.Distribution.batch_shape`
@@ -98,14 +100,14 @@ class TorchDistributionMixin(Distribution):
                >>> d0 = dist.Normal(torch.zeros(2, 3, 4, 5), torch.ones(2, 3, 4, 5))
                >>> [d0.batch_shape, d0.event_shape]
                [torch.Size([2, 3, 4, 5]), torch.Size([])]
-               >>> d1 = d0.independent(2)
+               >>> d1 = d0.to_event(2)
 
             >>> [d1.batch_shape, d1.event_shape]
             [torch.Size([2, 3]), torch.Size([4, 5])]
-            >>> d2 = d1.independent(1)
+            >>> d2 = d1.to_event(1)
             >>> [d2.batch_shape, d2.event_shape]
             [torch.Size([2]), torch.Size([3, 4, 5])]
-            >>> d3 = d1.independent(2)
+            >>> d3 = d1.to_event(2)
             >>> [d3.batch_shape, d3.event_shape]
             [torch.Size([]), torch.Size([2, 3, 4, 5])]
 
@@ -117,6 +119,10 @@ class TorchDistributionMixin(Distribution):
         if reinterpreted_batch_ndims is None:
             reinterpreted_batch_ndims = len(self.batch_shape)
         return pyro.distributions.torch.Independent(self, reinterpreted_batch_ndims)
+
+    def independent(self, reinterpreted_batch_ndims=None):
+        warnings.warn("independent is deprecated; use to_event instead", DeprecationWarning)
+        return self.to_event(reinterpreted_batch_ndims=reinterpreted_batch_ndims)
 
     def mask(self, mask):
         """

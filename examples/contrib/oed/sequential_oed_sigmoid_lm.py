@@ -61,7 +61,7 @@ def true_model(design):
     k = torch.tensor(.1)
     response_mean = rmv(design, w)
 
-    base_dist = dist.Normal(response_mean, torch.tensor(1.)).independent(1)
+    base_dist = dist.Normal(response_mean, torch.tensor(1.)).to_event(1)
     k = k.expand(response_mean.shape)
     transforms = [AffineTransform(loc=0., scale=k), SigmoidTransform()]
     response_dist = dist.TransformedDistribution(base_dist, transforms)

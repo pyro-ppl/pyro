@@ -100,12 +100,12 @@ class VariationalGP(GPModel):
             Id = eye_like(self.X, N)
             pyro.sample(f_name,
                         dist.MultivariateNormal(zero_loc, scale_tril=Id)
-                            .independent(zero_loc.dim() - 1))
+                            .to_event(zero_loc.dim() - 1))
             f_scale_tril = Lff.matmul(f_scale_tril)
         else:
             pyro.sample(f_name,
                         dist.MultivariateNormal(zero_loc, scale_tril=Lff)
-                            .independent(zero_loc.dim() - 1))
+                            .to_event(zero_loc.dim() - 1))
 
         f_var = f_scale_tril.pow(2).sum(dim=-1)
 
@@ -127,7 +127,7 @@ class VariationalGP(GPModel):
             f_name = param_with_module_name(self.name, "f")
             pyro.sample(f_name,
                         dist.MultivariateNormal(f_loc, scale_tril=f_scale_tril)
-                            .independent(f_loc.dim()-1))
+                            .to_event(f_loc.dim()-1))
         return f_loc, f_scale_tril
 
     def forward(self, Xnew, full_cov=False):
