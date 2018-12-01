@@ -104,7 +104,7 @@ def collapse(model, first_available_dim):
                     require_backward(log_prob)
 
         ring = DebugRing()
-        contract_tensor_tree(log_probs, sum_dims, ring=ring)
+        log_probs = contract_tensor_tree(log_probs, sum_dims, ring=ring)
         query_ordinal = {}
         for ordinal, terms in log_probs.items():
             for term in terms:
