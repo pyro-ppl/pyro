@@ -256,14 +256,14 @@ class Dice(object):
                     prob = probs[key]
                     prob._pyro_dims = queries[key]._pyro_dims
                     mask = prob > 0
-                    if not mask.all():
+                    if torch._C._get_tracing_state() or not mask.all():
                         mask._pyro_dims = prob._pyro_dims
                         cost, prob, mask = packed.broadcast_all(cost, prob, mask)
                         prob = prob[mask]
                         cost = cost[mask]
-                        expected_cost = expected_cost + scale * (prob * cost).sum()
                     else:
-                        expected_cost = expected_cost + scale * packed.sumproduct([prob, cost])
+                        cost, prob = packed.broadcast_all(cost, prob)
+                    expected_cost = expected_cost + scale * torch.tensordot(prob, cost, prob.dim())
 
         LAST_CACHE_SIZE[0] = count_cached_ops(cache)
         return expected_cost

@@ -56,7 +56,7 @@ def _get_candidate(output, sizes, remaining, footprints, dim_ref_counts, k1, k2)
     two = k1 & k2
     one = either - two
     k12 = (either & output) | (two & dim_ref_counts[3]) | (one & dim_ref_counts[2])
-    cost = 2 * _footprint(k12, sizes) - footprints[k1] - footprints[k2]
+    cost = _footprint(k12, sizes) - footprints[k1] - footprints[k2]
     id1 = remaining[k1]
     id2 = remaining[k2]
     if id1 > id2:
