@@ -205,8 +205,8 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
     #         = K** - Q** + W @ S @ S.T @ W.T
     #         = K** - Q** + K
 
-    N = X.shape[0]
-    M = Xnew.shape[0]
+    N = X.size(0)
+    M = Xnew.size(0)
     latent_shape = f_loc.shape[:-1]
 
     if Lff is None:
@@ -237,10 +237,10 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
 
         Lffinv_pack = pack.trtrs(Lff, upper=False)[0]
         # unpack
-        v_2D = Lffinv_pack[:, :f_loc_2D.shape[1]]
-        W = Lffinv_pack[:, f_loc_2D.shape[1]:f_loc_2D.shape[1] + M].t()
+        v_2D = Lffinv_pack[:, :f_loc_2D.size(1)]
+        W = Lffinv_pack[:, f_loc_2D.size(1):f_loc_2D.size(1) + M].t()
         if f_scale_tril is not None:
-            S_2D = Lffinv_pack[:, -f_scale_tril_2D.shape[1]:]
+            S_2D = Lffinv_pack[:, -f_scale_tril_2D.size(1):]
 
     loc_shape = latent_shape + (M,)
     loc = W.matmul(v_2D).t().reshape(loc_shape)
@@ -255,7 +255,7 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
         var = Kssdiag - Qssdiag
 
     if f_scale_tril is not None:
-        W_S_shape = (Xnew.shape[0],) + f_scale_tril.shape[1:]
+        W_S_shape = (Xnew.size(0),) + f_scale_tril.shape[1:]
         W_S = W.matmul(S_2D).reshape(W_S_shape)
         # convert W_S_shape from M x N x latent_shape to latent_shape x M x N
         W_S = W_S.permute(list(range(2, W_S.dim())) + [0, 1])

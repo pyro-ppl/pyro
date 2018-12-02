@@ -16,7 +16,7 @@ class DotProduct(Kernel):
         super(DotProduct, self).__init__(input_dim, active_dims, name)
 
         if variance is None:
-            variance = torch.tensor(1.)
+            variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
@@ -31,7 +31,7 @@ class DotProduct(Kernel):
             return (X ** 2).sum(-1)
 
         Z = self._slice_input(Z)
-        if X.shape[1] != Z.shape[1]:
+        if X.size(1) != Z.size(1):
             raise ValueError("Inputs must have the same number of features.")
 
         return X.matmul(Z.t())

@@ -85,7 +85,7 @@ class VariationalSparseGP(GPModel):
                                                   name)
         self.likelihood = likelihood
 
-        self.num_data = num_data if num_data is not None else self.X.shape[0]
+        self.num_data = num_data if num_data is not None else self.X.size(0)
         self.whiten = whiten
 
         self.Xu = Parameter(Xu)
@@ -93,7 +93,7 @@ class VariationalSparseGP(GPModel):
         y_batch_shape = self.y.shape[:-1] if self.y is not None else torch.Size([])
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
 
-        M = self.Xu.shape[0]
+        M = self.Xu.size(0)
         u_loc_shape = self.latent_shape + (M,)
         u_loc = self.Xu.new_zeros(u_loc_shape)
         self.u_loc = Parameter(u_loc)
@@ -113,7 +113,7 @@ class VariationalSparseGP(GPModel):
         u_loc = self.get_param("u_loc")
         u_scale_tril = self.get_param("u_scale_tril")
 
-        M = Xu.shape[0]
+        M = Xu.size(0)
         Kuu = self.kernel(Xu).contiguous()
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.cholesky()
