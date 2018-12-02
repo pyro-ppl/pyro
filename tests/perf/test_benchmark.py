@@ -112,14 +112,15 @@ def svgp_multiclass(num_steps, whiten):
     likelihood = gp.likelihoods.MultiClass(num_classes=3)
     Xu = X[::5].clone()
 
-    gpmodel = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood,
-                                            latent_shape=torch.Size([3]),
-                                            whiten=whiten)
+    gpmodule = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood,
+                                             latent_shape=torch.Size([3]),
+                                             whiten=whiten)
 
-    gpmodel.fix_param("Xu")
-    gpmodel.kernel.get_subkernel("WhiteNoise").fix_param("variance")
+    gpmodule.fix_param("Xu")
+    gpmodule.kernel.get_subkernel("WhiteNoise").fix_param("variance")
 
-    gpmodel.optimize(optim.Adam({"lr": 0.0001}), num_steps=num_steps)
+    optimizer = optim.Adam({"lr": 0.0001})
+    gp.util.train(gpmodule, optimizer, num_steps=num_steps)
 
 
 @pytest.mark.parametrize('model, model_args, id', TEST_MODELS, ids=MODEL_IDS)
