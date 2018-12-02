@@ -62,24 +62,22 @@ class VariationalGP(GPModel):
     def __init__(self, X, y, kernel, likelihood, mean_function=None,
                  latent_shape=None, whiten=False, jitter=1e-6, name="VGP"):
         super(VariationalGP, self).__init__(X, y, kernel, mean_function, jitter, name)
-        self.likelihood = likelihood
 
-        self.whiten = whiten
+        self.likelihood = likelihood
 
         y_batch_shape = self.y.shape[:-1] if self.y is not None else torch.Size([])
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
 
         N = self.X.size(0)
-        f_loc_shape = self.latent_shape + (N,)
-        f_loc = self.X.new_zeros(f_loc_shape)
+        f_loc = self.X.new_zeros(self.latent_shape + (N,))
         self.f_loc = Parameter(f_loc)
 
-        f_scale_tril_shape = self.latent_shape + (N, N)
-        Id = eye_like(self.X, N)
-        f_scale_tril = Id.expand(f_scale_tril_shape)
+        identity = eye_like(self.X, N)
+        f_scale_tril = identity.repeat(self.latent_shape + (1, 1))
         self.f_scale_tril = Parameter(f_scale_tril)
         self.set_constraint("f_scale_tril", constraints.lower_cholesky)
 
+        self.whiten = whiten
         self._sample_latent = True
 
     def model(self):
@@ -97,21 +95,19 @@ class VariationalGP(GPModel):
         f_name = param_with_module_name(self.name, "f")
 
         if self.whiten:
-            Id = eye_like(self.X, N)
+            identity = eye_like(self.X, N)
             pyro.sample(f_name,
-                        dist.MultivariateNormal(zero_loc, scale_tril=Id)
+                        dist.MultivariateNormal(zero_loc, scale_tril=identity)
                             .to_event(zero_loc.dim() - 1))
             f_scale_tril = Lff.matmul(f_scale_tril)
+            f_loc = Lff.matmul(f_loc.unsqueeze(-1)).squeeze(-1)
         else:
             pyro.sample(f_name,
                         dist.MultivariateNormal(zero_loc, scale_tril=Lff)
                             .to_event(zero_loc.dim() - 1))
 
-        f_var = f_scale_tril.pow(2).sum(dim=-1)
-
-        if self.whiten:
-            f_loc = Lff.matmul(f_loc.unsqueeze(-1)).squeeze(-1)
         f_loc = f_loc + self.mean_function(self.X)
+        f_var = f_scale_tril.pow(2).sum(dim=-1)
         if self.y is None:
             return f_loc, f_var
         else:
@@ -156,6 +152,5 @@ class VariationalGP(GPModel):
         self._sample_latent = True
 
         loc, cov = conditional(Xnew, self.X, self.kernel, f_loc, f_scale_tril,
-                               full_cov=full_cov, whiten=self.whiten,
-                               jitter=self.jitter)
+                               full_cov=full_cov, whiten=self.whiten, jitter=self.jitter)
         return loc + self.mean_function(Xnew), cov

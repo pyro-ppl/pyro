@@ -47,33 +47,32 @@ class CNN(nn.Module):
         return x
 
 
-def train(args, train_loader, gpmodel, svi, epoch):
+def train(args, train_loader, gpmodule, svi, epoch):
     for batch_idx, (data, target) in enumerate(train_loader):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
-        gpmodel.set_data(data, target)
+        gpmodule.set_data(data, target)
         loss = svi.step()
         if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss))
+            print("Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}"
+                  .format(epoch, batch_idx * len(data), len(train_loader.dataset),
+                          100. * batch_idx / len(train_loader), loss))
 
 
-def test(args, test_loader, gpmodel):
+def test(args, test_loader, gpmodule):
     correct = 0
     for data, target in test_loader:
         if args.cuda:
             data, target = data.cuda(), target.cuda()
         # get prediction of GP model on new data
-        f_loc, f_var = gpmodel(data)
+        f_loc, f_var = gpmodule(data)
         # use its likelihood to give prediction class
-        pred = gpmodel.likelihood(f_loc, f_var)
+        pred = gpmodule.likelihood(f_loc, f_var)
         # compare prediction and target to count accuaracy
         correct += pred.eq(target).long().cpu().sum()
 
-    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
-        correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
+    print("\nTest set: Accuracy: {}/{} ({:.0f}%)\n"
+          .format(correct, len(test_loader.dataset), 100. * correct / len(test_loader.dataset)))
 
 
 def main(args):
@@ -97,10 +96,11 @@ def main(args):
     # so we need this helper to mark cnn's parameters active for each `svi.step()` call.
     def cnn_fn(x):
         return pyro.module("CNN", cnn)(x)
+
     # Create deep kernel by warping RBF with CNN.
     # CNN will transform a high dimension image into a low dimension 2D tensors for RBF kernel.
-    # This kernel accepts inputs are inputs of CNN and gives outputs are covariance matrix of RBF on
-    # outputs of CNN.
+    # This kernel accepts inputs are inputs of CNN and gives outputs are covariance matrix of RBF
+    # on outputs of CNN.
     kernel = gp.kernels.Warping(gp.kernels.RBF(input_dim=10, lengthscale=torch.ones(10)),
                                 iwarping_fn=cnn_fn)
 
@@ -108,26 +108,27 @@ def main(args):
     Xu = next(iter(train_loader))[0][:args.num_inducing]
     # use MultiClass likelihood for 10-class classification problem
     likelihood = gp.likelihoods.MultiClass(num_classes=10)
-    # Because we use Categorical distribution in MultiClass likelihood, we need GP model returns a list
-    # of probabilities of each class. Hence it is required to use latent_shape = 10.
+    # Because we use Categorical distribution in MultiClass likelihood, we need GP model returns
+    # a list of probabilities of each class. Hence it is required to use latent_shape = 10.
     # Turns on "whiten" flag will help optimization for variational models.
-    gpmodel = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=kernel, Xu=Xu,
-                                            likelihood=likelihood, latent_shape=torch.Size([10]),
-                                            num_data=60000, whiten=True)
+    gpmodule = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=kernel, Xu=Xu,
+                                             likelihood=likelihood, latent_shape=torch.Size([10]),
+                                             num_data=60000, whiten=True)
     if args.cuda:
-        gpmodel.cuda()
+        gpmodule.cuda()
 
     optimizer = optim.Adam({"lr": args.lr})
 
     elbo = infer.JitTrace_ELBO() if args.jit else infer.Trace_ELBO()
-    svi = infer.SVI(gpmodel.model, gpmodel.guide, optimizer, elbo)
+    svi = infer.SVI(gpmodule.model, gpmodule.guide, optimizer, elbo)
 
     for epoch in range(1, args.epochs + 1):
         start_time = time.time()
-        train(args, train_loader, gpmodel, svi, epoch)
+        train(args, train_loader, gpmodule, svi, epoch)
         with torch.no_grad():
-            test(args, test_loader, gpmodel)
-        print("Amount of time spent for epoch {}: {}s\n".format(epoch, int(time.time() - start_time)))
+            test(args, test_loader, gpmodule)
+        print("Amount of time spent for epoch {}: {}s\n"
+              .format(epoch, int(time.time() - start_time)))
 
 
 if __name__ == '__main__':

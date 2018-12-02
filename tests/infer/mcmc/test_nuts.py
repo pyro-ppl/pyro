@@ -79,10 +79,10 @@ TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
 def mark_jit(*args, **kwargs):
     jit_markers = kwargs.pop("marks", [])
     jit_markers += [
-        pytest.mark.skipif(torch.__version__ <= "0.4.1",
-                           reason="https://github.com/pytorch/pytorch/issues/10041#issuecomment-409057228"),
         pytest.mark.skipif('CI' in os.environ,
-                           reason='slow test')
+                           reason='slow test'),
+        pytest.mark.skipif('CUDA_TEST' in os.environ,
+                           reason='https://github.com/uber/pyro/issues/1419')
     ]
     kwargs["marks"] = jit_markers
     return pytest.param(*args, **kwargs)
