@@ -202,43 +202,6 @@ def test_gamma_normal(jit, use_multinomial_sampling):
     assert_equal(posterior.mean, true_std, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-def test_logistic_regression_with_dual_averaging(jit):
-    dim = 3
-    data = torch.randn(2000, dim)
-    true_coefs = torch.arange(1., dim + 1.)
-    labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
-
-    def model(data):
-        coefs_mean = torch.zeros(dim)
-        coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(dim)))
-        y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
-        return y
-
-    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit, ignore_jit_warnings=True)
-    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
-    posterior = mcmc_run.marginal('beta').empirical['beta']
-    assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
-
-
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-def test_beta_bernoulli_with_dual_averaging(jit):
-    def model(data):
-        alpha = torch.tensor([1.1, 1.1])
-        beta = torch.tensor([1.1, 1.1])
-        p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
-        pyro.sample("obs", dist.Bernoulli(p_latent), obs=data)
-        return p_latent
-
-    true_probs = torch.tensor([0.9, 0.1])
-    data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit,
-                       ignore_jit_warnings=True)
-    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
-    posterior = mcmc_run.marginal(["p_latent"]).empirical["p_latent"]
-    assert_equal(posterior.mean, true_probs, prec=0.03)
-
-
 @pytest.mark.parametrize("jit", [False,
                                  mark_jit(True, marks=[pytest.mark.xfail(
                                      reason="https://github.com/uber/pyro/issues/1418")])
