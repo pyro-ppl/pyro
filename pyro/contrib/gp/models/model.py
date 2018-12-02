@@ -181,10 +181,10 @@ class GPModel(Parameterized):
         :param torch.Tensor y: An output data for training. Its last dimension is the
             number of data points.
         """
-        if y is not None and X.shape[0] != y.shape[-1]:
+        if y is not None and X.size(0) != y.size(-1):
             raise ValueError("Expected the number of input data points equal to the "
                              "number of output data points, but got {} and {}."
-                             .format(X.shape[0], y.shape[-1]))
+                             .format(X.size(0), y.size(-1)))
         self.X = X
         self.y = y
 

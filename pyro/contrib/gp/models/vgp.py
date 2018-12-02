@@ -69,7 +69,7 @@ class VariationalGP(GPModel):
         y_batch_shape = self.y.shape[:-1] if self.y is not None else torch.Size([])
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
 
-        N = self.X.shape[0]
+        N = self.X.size(0)
         f_loc_shape = self.latent_shape + (N,)
         f_loc = self.X.new_zeros(f_loc_shape)
         self.f_loc = Parameter(f_loc)
@@ -88,7 +88,7 @@ class VariationalGP(GPModel):
         f_loc = self.get_param("f_loc")
         f_scale_tril = self.get_param("f_scale_tril")
 
-        N = self.X.shape[0]
+        N = self.X.size(0)
         Kff = self.kernel(self.X).contiguous()
         Kff.view(-1)[::N + 1] += self.jitter  # add jitter to the diagonal
         Lff = Kff.cholesky()

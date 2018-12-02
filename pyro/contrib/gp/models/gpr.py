@@ -78,12 +78,12 @@ class GPRegression(GPModel):
 
         noise = self.get_param("noise")
 
-        N = self.X.shape[0]
+        N = self.X.size(0)
         Kff = self.kernel(self.X)
         Kff.view(-1)[::N + 1] += self.jitter + noise  # add noise to diagonal
         Lff = Kff.cholesky()
 
-        zero_loc = self.X.new_zeros(self.X.shape[0])
+        zero_loc = self.X.new_zeros(self.X.size(0))
         f_loc = zero_loc + self.mean_function(self.X)
         if self.y is None:
             f_var = Lff.pow(2).sum(dim=-1)
@@ -126,7 +126,7 @@ class GPRegression(GPModel):
         self._check_Xnew_shape(Xnew)
         noise = self.guide()
 
-        N = self.X.shape[0]
+        N = self.X.size(0)
         Kff = self.kernel(self.X).contiguous()
         Kff.view(-1)[::N + 1] += self.jitter + noise  # add noise to the diagonal
         Lff = Kff.cholesky()
@@ -136,7 +136,7 @@ class GPRegression(GPModel):
                                full_cov, jitter=self.jitter)
 
         if full_cov and not noiseless:
-            M = Xnew.shape[0]
+            M = Xnew.size(0)
             cov = cov.contiguous()
             cov.view(-1, M * M)[:, ::M + 1] += noise  # add noise to the diagonal
         if not full_cov and not noiseless:
@@ -169,7 +169,7 @@ class GPRegression(GPModel):
         noise = self.guide().detach()
         X = self.X.clone().detach()
         y = self.y.clone().detach()
-        N = X.shape[0]
+        N = X.size(0)
         Kff = self.kernel(X).contiguous()
         Kff.view(-1)[::N + 1] += noise  # add noise to the diagonal
 

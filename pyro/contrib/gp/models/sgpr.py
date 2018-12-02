@@ -127,14 +127,15 @@ class SparseGPRegression(GPModel):
         # y_cov = W @ W.T + D
         # trace_term is added into log_prob
 
-        M = Xu.shape[0]
+        N = self.X.size(0)
+        M = Xu.size(0)
         Kuu = self.kernel(Xu).contiguous()
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.cholesky()
         Kuf = self.kernel(Xu, self.X)
         W = Kuf.trtrs(Luu, upper=False)[0].t()
 
-        D = noise.expand(W.shape[0])
+        D = noise.expand(N)
         if self.approx == "FITC" or self.approx == "VFE":
             Kffdiag = self.kernel(self.X, diag=True)
             Qffdiag = W.pow(2).sum(dim=-1)
@@ -143,7 +144,7 @@ class SparseGPRegression(GPModel):
             else:  # approx = "VFE"
                 trace_term = (Kffdiag - Qffdiag).sum() / noise
 
-        zero_loc = self.X.new_zeros(self.X.shape[0])
+        zero_loc = self.X.new_zeros(N)
         f_loc = zero_loc + self.mean_function(self.X)
         if self.y is None:
             f_var = D + W.pow(2).sum(dim=-1)
@@ -205,17 +206,18 @@ class SparseGPRegression(GPModel):
         # cov = Kss - Ksu @ inv(Kuu) @ Kus + Ksu @ S @ Kus
         #     = kss - Ksu @ inv(Kuu) @ Kus + Ws.T @ inv(L).T @ inv(L) @ Ws
 
-        N = self.X.shape[0]
-        M = Xu.shape[0]
+        N = self.X.size(0)
+        M = Xu.size(0)
+
+        # TODO: cache these calculations to get faster inference
 
         Kuu = self.kernel(Xu).contiguous()
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.cholesky()
-        Kus = self.kernel(Xu, Xnew)
+
         Kuf = self.kernel(Xu, self.X)
 
         W = Kuf.trtrs(Luu, upper=False)[0]
-        Ws = Kus.trtrs(Luu, upper=False)[0]
         D = noise.expand(N)
         if self.approx == "FITC":
             Kffdiag = self.kernel(self.X, diag=True)
@@ -231,13 +233,19 @@ class SparseGPRegression(GPModel):
         y_residual = self.y - self.mean_function(self.X)
         y_2D = y_residual.reshape(-1, N).t()
         W_Dinv_y = W_Dinv.matmul(y_2D)
+
+        # End caching ----------
+
+        Kus = self.kernel(Xu, Xnew)
+        Ws = Kus.trtrs(Luu, upper=False)[0]
         pack = torch.cat((W_Dinv_y, Ws), dim=1)
         Linv_pack = pack.trtrs(L, upper=False)[0]
         # unpack
         Linv_W_Dinv_y = Linv_pack[:, :W_Dinv_y.shape[1]]
         Linv_Ws = Linv_pack[:, W_Dinv_y.shape[1]:]
 
-        loc_shape = self.y.shape[:-1] + (Xnew.shape[0],)
+        C = Xnew.size(0)
+        loc_shape = self.y.shape[:-1] + (C,)
         loc = Linv_W_Dinv_y.t().matmul(Linv_Ws).reshape(loc_shape)
 
         if full_cov:
@@ -253,7 +261,7 @@ class SparseGPRegression(GPModel):
             Qssdiag = Ws.pow(2).sum(dim=0)
             cov = Kssdiag - Qssdiag + Linv_Ws.pow(2).sum(dim=0)
 
-        cov_shape = self.y.shape[:-1] + (Xnew.shape[0], Xnew.shape[0])
+        cov_shape = self.y.shape[:-1] + (C, C)
         cov = cov.expand(cov_shape)
 
         return loc + self.mean_function(Xnew), cov

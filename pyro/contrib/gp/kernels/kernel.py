@@ -73,89 +73,6 @@ class Kernel(Parameterized):
         else:
             raise ValueError("Input X must be either 1 or 2 dimensional.")
 
-    def add(self, other, name=None):
-        """
-        Creates a new kernel from a sum/direct sum of this kernel object and ``other``.
-
-        :param other: A kernel to be combined with this kernel object.
-        :type other: Kernel or numbers.Number
-        :param str name: An optional name for the derived kernel.
-        :returns: a Sum kernel
-        :rtype: Sum
-        """
-        return Sum(self, other, name)
-
-    def mul(self, other, name=None):
-        """
-        Creates a new kernel from a product/tensor product of this kernel object and
-        ``other``.
-
-        :param Kernel other: A kernel to be combined with this kernel object.
-        :type other: Kernel or numbers.Number
-        :param str name: An optional name for the derived kernel.
-        :returns: a Product kernel
-        :rtype: Product
-        """
-        return Product(self, other, name)
-
-    def exp(self, name=None):
-        r"""
-        Creates a new kernel according to
-
-            :math:`k_{new}(x, z) = \exp(k(x, z)).`
-
-        :param str name: An optional name for the derived kernel.
-        :returns: an Exponent kernel
-        :rtype: Exponent
-        """
-        return Exponent(self, name)
-
-    def vertical_scale(self, vscaling_fn, name=None):
-        """
-        Creates a new kernel according to
-
-            :math:`k_{new}(x, z) = f(x)k(x, z)f(z),`
-
-        where :math:`f` is a function.
-
-        :param callable vscaling_fn: A vertical scaling function :math:`f`.
-        :param str name: An optional name for the derived kernel.
-        :returns: a vertical scaled kernel
-        :rtype: VerticalScaling
-        """
-        return VerticalScaling(self, vscaling_fn, name)
-
-    def warp(self, iwarping_fn=None, owarping_coef=None, name=None):
-        """
-        Creates a new kernel according to
-
-            :math:`k_{new}(x, z) = q(k(f(x), f(z))),`
-
-        where :math:`f` is an function and :math:`q` is a polynomial with non-negative
-        coefficients ``owarping_coef``.
-
-        :param callable iwarping_fn: An input warping function :math:`f`.
-        :param list owarping_coef: A list of coefficients of the output warping
-            polynomial. These coefficients must be non-negative.
-        :param str name: An optional name for the derived kernel.
-        :returns: a warped kernel
-        :rtype: Warping
-        """
-        return Warping(self, iwarping_fn, owarping_coef, name)
-
-    def get_subkernel(self, name):
-        """
-        Returns the subkernel corresponding to ``name``.
-
-        :param str name: Name of the subkernel.
-        :returns: A subkernel.
-        :rtype: Kernel
-        """
-        if name in self._subkernels:
-            return self._subkernels[name]
-        else:
-            raise KeyError("There is no subkernel with the name '{}'.".format(name))
-
 
 class Combination(Kernel):
     """
@@ -182,26 +99,6 @@ class Combination(Kernel):
 
         self.kern0 = kern0
         self.kern1 = kern1
-
-        if kern0._subkernels:
-            self._subkernels.update(kern0._subkernels)
-        else:
-            self._subkernels[kern0.name] = kern0
-
-        if isinstance(kern1, Kernel):
-            if kern1._subkernels:
-                subkernels1 = kern1._subkernels
-            else:
-                subkernels1 = OrderedDict({kern1.name: kern1})
-            for name, kernel in subkernels1.items():
-                if name in self._subkernels:
-                    if self._subkernels[name] is not kernel:
-                        raise KeyError("Detect two different subkernels with the same "
-                                       "name '{}'. Consider to change the default "
-                                       "name of these subkernels to distinguish them."
-                                       .format(name))
-                else:
-                    self._subkernels[name] = kernel
 
 
 class Sum(Combination):
@@ -239,11 +136,6 @@ class Transforming(Kernel):
         super(Transforming, self).__init__(kern.input_dim, kern.active_dims, name)
 
         self.kern = kern
-
-        if kern._subkernels:
-            self._subkernels.update(kern._subkernels)
-        else:
-            self._subkernels[kern.name] = kern
 
 
 class Exponent(Transforming):
