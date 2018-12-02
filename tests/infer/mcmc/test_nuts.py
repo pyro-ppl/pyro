@@ -44,7 +44,7 @@ TEST_CASES = [
     ),
     T(
         GaussianChain(dim=10, chain_len=4, num_obs=1),
-        num_samples=1600,
+        num_samples=800,
         warmup_steps=200,
         expected_means=[0.20, 0.40, 0.60, 0.80],
         expected_precs=[1.25, 0.83, 0.83, 1.25],
@@ -53,8 +53,8 @@ TEST_CASES = [
     ),
     T(
         GaussianChain(dim=5, chain_len=2, num_obs=10000),
-        num_samples=800,
-        warmup_steps=200,
+        num_samples=400,
+        warmup_steps=20,
         expected_means=[0.5, 1.0],
         expected_precs=[2.0, 10000],
         mean_tol=0.05,
@@ -62,11 +62,11 @@ TEST_CASES = [
     ),
     T(
         GaussianChain(dim=5, chain_len=9, num_obs=1),
-        num_samples=1400,
-        warmup_steps=200,
+        num_samples=400,
+        warmup_steps=60,
         expected_means=[0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90],
         expected_precs=[1.11, 0.63, 0.48, 0.42, 0.4, 0.42, 0.48, 0.63, 1.11],
-        mean_tol=0.08,
+        mean_tol=0.12,
         std_tol=0.08,
     )
 ]
@@ -96,7 +96,6 @@ def jit_idfn(param):
     'fixture, num_samples, warmup_steps, expected_means, expected_precs, mean_tol, std_tol',
     TEST_CASES,
     ids=TEST_IDS)
-@pytest.mark.skip(reason='Slow test (https://github.com/pytorch/pytorch/issues/12190)')
 @pytest.mark.disable_validation()
 def test_nuts_conjugate_gaussian(fixture,
                                  num_samples,
@@ -121,14 +120,14 @@ def test_nuts_conjugate_gaussian(fixture,
         logger.debug(latent_loc)
         logger.debug('Posterior mean (expected) - {}'.format(param_name))
         logger.debug(expected_mean)
-        assert_equal(rmse(latent_loc, expected_mean).item(), 0.0, prec=mean_tol)
+        assert_equal((latent_loc - expected_mean).abs().mean().item(), 0.0, prec=mean_tol)
 
         # Actual vs expected posterior precisions for the latents
         logger.debug('Posterior std (actual) - {}'.format(param_name))
         logger.debug(latent_std)
         logger.debug('Posterior std (expected) - {}'.format(param_name))
         logger.debug(expected_std)
-        assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
+        assert_equal((latent_std - expected_std).abs().mean().item(), 0.0, prec=std_tol)
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
@@ -180,7 +179,9 @@ def test_beta_bernoulli(step_size, adapt_step_size, adapt_mass_matrix, full_mass
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True, marks=[pytest.mark.skip("Doesn't finish")])],
+@pytest.mark.parametrize("jit", [False,
+                                 mark_jit(True, marks=[pytest.mark.skip(
+                                     reason="https://github.com/uber/pyro/issues/1487")])],
                          ids=jit_idfn)
 @pytest.mark.parametrize("use_multinomial_sampling", [True, False])
 def test_gamma_normal(jit, use_multinomial_sampling):
@@ -239,10 +240,7 @@ def test_beta_bernoulli_with_dual_averaging(jit):
     assert_equal(posterior.mean, true_probs, prec=0.03)
 
 
-@pytest.mark.parametrize("jit", [False,
-                                 mark_jit(True, marks=[pytest.mark.xfail(
-                                     reason="https://github.com/uber/pyro/issues/1418")])
-                                 ], ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_dirichlet_categorical(jit):
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
@@ -252,6 +250,7 @@ def test_dirichlet_categorical(jit):
 
     true_probs = torch.tensor([0.1, 0.6, 0.3])
     data = dist.Categorical(true_probs).sample(sample_shape=(torch.Size((2000,))))
+    print(data.dtype)
     nuts_kernel = NUTS(model, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = mcmc_run.marginal('p_latent').empirical['p_latent']
@@ -271,12 +270,13 @@ def test_gamma_beta(jit):
     nuts_kernel = NUTS(model, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal(['alpha', 'beta']).empirical
-    assert_equal(posterior['alpha'].mean, true_alpha, prec=0.05)
+    assert_equal(posterior['alpha'].mean, true_alpha, prec=0.06)
     assert_equal(posterior['beta'].mean, true_beta, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True,
-                                                 marks=[pytest.mark.skip("FIXME: Slow on JIT.")])],
+@pytest.mark.parametrize("jit", [False,
+                                 mark_jit(True, marks=[pytest.mark.skip(
+                                     "https://github.com/uber/pyro/issues/1487")])],
                          ids=jit_idfn)
 def test_gaussian_mixture_model(jit):
     K, N = 3, 1000
