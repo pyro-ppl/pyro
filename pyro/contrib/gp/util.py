@@ -5,6 +5,8 @@ import torch.nn as nn
 
 import pyro
 import pyro.distributions as dist
+import pyro.optim as optim
+from pyro.infer import SVI, TraceMeanField_ELBO
 from pyro.params import param_with_module_name
 
 
@@ -274,3 +276,27 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
             var = var.expand(latent_shape + (M,))
 
     return (loc, cov) if full_cov else (loc, var)
+
+
+def train(gpmodule, optimizer=None, loss=None, num_steps=1000):
+    """
+    A helper to optimize parameters for a GP module.
+
+    :param ~pyro.contrib.gp.models.GPModel gpmodule: A GP module.
+    :param ~pyro.optim.PyroOptim optimizer: A Pyro optimizer.
+        By default, we use Adam with ``lr=0.01``.
+    :param ~pyro.infer.ELBO loss: A Pyro loss instance.
+        By default, ``loss=TraceMeanField_ELBO()``.
+    :param int num_steps: Number of steps to run SVI.
+    :returns: a list of losses during the training procedure
+    :rtype: list
+    """
+    optimizer = optim.Adam({"lr": 0.01}) if optimizer is None else optimizer
+    loss = TraceMeanField_ELBO() if loss is None else loss
+    svi = SVI(gpmodule.model, gpmodule.guide, optimizer, loss)
+
+    losses = []
+    for i in range(num_steps):
+        loss = svi.step()
+        losses.append(loss)
+    return losses
