@@ -257,8 +257,7 @@ def test_gaussian_mixture_model(jit):
     true_mix_proportions = torch.tensor([0.1, 0.3, 0.6])
     cluster_assignments = dist.Categorical(true_mix_proportions).sample(torch.Size((N,)))
     data = dist.Normal(true_cluster_means[cluster_assignments], 1.0).sample()
-    nuts_kernel = NUTS(gmm, adapt_step_size=True, max_plate_nesting=1,
-                       jit_compile=jit, ignore_jit_warnings=True)
+    nuts_kernel = NUTS(gmm, max_plate_nesting=1, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=300, warmup_steps=100).run(data)
     posterior = mcmc_run.marginal(["phi", "cluster_means"]).empirical
     assert_equal(posterior["phi"].mean.sort()[0], true_mix_proportions, prec=0.05)
@@ -280,8 +279,7 @@ def test_bernoulli_latent_model(jit):
     y = dist.Bernoulli(y_prob).sample(torch.Size((N,)))
     z = dist.Bernoulli(0.65 * y + 0.1).sample()
     data = dist.Normal(2. * z, 1.0).sample()
-    nuts_kernel = NUTS(model, adapt_step_size=True, max_plate_nesting=1,
-                       jit_compile=jit, ignore_jit_warnings=True)
+    nuts_kernel = NUTS(model, max_plate_nesting=1, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=600, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal("y_prob").empirical["y_prob"]
     assert_equal(posterior.mean, y_prob, prec=0.05)
@@ -325,8 +323,7 @@ def test_gaussian_hmm(jit, num_steps):
         return torch.stack(obs)
 
     data = _generate_data()
-    nuts_kernel = NUTS(model, adapt_step_size=True, max_plate_nesting=1,
-                       jit_compile=jit, ignore_jit_warnings=True)
+    nuts_kernel = NUTS(model, max_plate_nesting=1, jit_compile=jit, ignore_jit_warnings=True)
     if num_steps == 30:
         nuts_kernel.initial_trace = _get_initial_trace()
     MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)

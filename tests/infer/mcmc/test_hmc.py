@@ -221,7 +221,7 @@ def test_beta_bernoulli(jit):
 
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True, max_plate_nesting=2,
+    hmc_kernel = HMC(model, trajectory_length=1, max_plate_nesting=2,
                      jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
     posterior = mcmc_run.marginal(["p_latent"]).empirical["p_latent"]
@@ -242,8 +242,7 @@ def test_gamma_normal(jit):
 
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
-    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True,
-                     jit_compile=jit, ignore_jit_warnings=True)
+    hmc_kernel = HMC(model, trajectory_length=1, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal(['p_latent']).empirical['p_latent']
     assert_equal(posterior.mean, true_std, prec=0.05)
