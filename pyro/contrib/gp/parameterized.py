@@ -48,7 +48,7 @@ class Parameterized(nn.Module):
         >>> assert "b_scale_unconstrained" in dict(linear.named_parameters())
         >>> assert "a" in dict(linear.named_buffers())
         >>> assert "b" in dict(linear.named_buffers())
-        >>> assert "b_scale_tril" in dict(linear.named_buffers())
+        >>> assert "b_scale" in dict(linear.named_buffers())
 
     Note that by default, data of a parameter is a float :class:`torch.Tensor`
     (unless we use :func:`torch.set_default_tensor_type` to change default
