@@ -158,7 +158,7 @@ class SparseGPRegression(GPModel):
             return pyro.sample(y_name,
                                dist.LowRankMultivariateNormal(f_loc, W, D)
                                    .expand_by(self.y.shape[:-1])
-                                   .independent(self.y.dim() - 1),
+                                   .to_event(self.y.dim() - 1),
                                obs=self.y)
 
     def guide(self):

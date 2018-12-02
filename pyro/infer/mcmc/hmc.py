@@ -14,7 +14,7 @@ from pyro.distributions.util import eye_like
 from pyro.infer import config_enumerate
 from pyro.infer.mcmc.adaptation import WarmupAdapter
 from pyro.infer.mcmc.trace_kernel import TraceKernel
-from pyro.infer.mcmc.util import TraceEinsumEvaluator, TraceTreeEvaluator
+from pyro.infer.mcmc.util import TraceEinsumEvaluator
 from pyro.ops.integrator import velocity_verlet
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.util import optional, torch_isinf, torch_isnan, ignore_jit_warnings
@@ -60,10 +60,6 @@ class HMC(TraceKernel):
         optimized executable trace in the integrator.
     :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
         tracer when ``jit_compile=True``. Default is False.
-    :param bool experimental_use_einsum: Whether to use an einsum operation
-        to evaluate log pdf for the model trace. No-op unless the trace has
-        discrete sample sites. This flag is experimental and will most likely
-        be removed in a future release.
 
     .. note:: Internally, the mass matrix will be ordered according to the order
         of the names of latent variables, not the order of their appearance in
@@ -101,8 +97,7 @@ class HMC(TraceKernel):
                  max_plate_nesting=None,
                  max_iarange_nesting=None,  # DEPRECATED
                  jit_compile=False,
-                 ignore_jit_warnings=False,
-                 experimental_use_einsum=False):
+                 ignore_jit_warnings=False):
         self.model = model
         if max_iarange_nesting is not None:
             warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
@@ -119,7 +114,6 @@ class HMC(TraceKernel):
         self._jit_compile = jit_compile
         self._ignore_jit_warnings = ignore_jit_warnings
         self.full_mass = full_mass
-        self.use_einsum = experimental_use_einsum
         self._target_accept_prob = 0.8  # from Stan
         # The following parameter is used in find_reasonable_step_size method.
         # In NUTS paper, this threshold is set to a fixed log(0.5).
@@ -351,10 +345,9 @@ class HMC(TraceKernel):
                 site_value = self.transforms[name](node["value"])
             self._r_shapes[name] = site_value.shape
             self._r_numels[name] = site_value.numel()
-        trace_eval = TraceEinsumEvaluator if self.use_einsum else TraceTreeEvaluator
-        self._trace_prob_evaluator = trace_eval(trace,
-                                                self._has_enumerable_sites,
-                                                self.max_plate_nesting)
+        self._trace_prob_evaluator = TraceEinsumEvaluator(trace,
+                                                          self._has_enumerable_sites,
+                                                          self.max_plate_nesting)
         mass_matrix_size = sum(self._r_numels.values())
         if self.full_mass:
             initial_mass_matrix = eye_like(site_value, mass_matrix_size)

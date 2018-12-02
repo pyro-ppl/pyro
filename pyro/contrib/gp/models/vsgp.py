@@ -124,11 +124,11 @@ class VariationalSparseGP(GPModel):
             Id = eye_like(Xu, M)
             pyro.sample(u_name,
                         dist.MultivariateNormal(zero_loc, scale_tril=Id)
-                            .independent(zero_loc.dim() - 1))
+                            .to_event(zero_loc.dim() - 1))
         else:
             pyro.sample(u_name,
                         dist.MultivariateNormal(zero_loc, scale_tril=Luu)
-                            .independent(zero_loc.dim() - 1))
+                            .to_event(zero_loc.dim() - 1))
 
         f_loc, f_var = conditional(self.X, Xu, self.kernel, u_loc, u_scale_tril,
                                    Luu, full_cov=False, whiten=self.whiten,
@@ -152,7 +152,7 @@ class VariationalSparseGP(GPModel):
             u_name = param_with_module_name(self.name, "u")
             pyro.sample(u_name,
                         dist.MultivariateNormal(u_loc, scale_tril=u_scale_tril)
-                            .independent(u_loc.dim()-1))
+                            .to_event(u_loc.dim()-1))
         return Xu, u_loc, u_scale_tril
 
     def forward(self, Xnew, full_cov=False):

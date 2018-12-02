@@ -258,7 +258,7 @@ def check_site_shape(site, max_plate_nesting):
                 'Expected {}, actual {}'.format(expected_shape, actual_shape),
                 'Try one of the following fixes:',
                 '- enclose the batched tensor in a with plate(...): context',
-                '- .independent(...) the distribution being sampled',
+                '- .to_event(...) the distribution being sampled',
                 '- .permute() data dimensions']))
 
     # TODO Check parallel dimensions on the left of max_plate_nesting.

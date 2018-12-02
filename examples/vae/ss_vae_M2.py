@@ -107,7 +107,7 @@ class SSVAE(nn.Module):
             # sample the handwriting style from the constant prior distribution
             prior_loc = xs.new_zeros([batch_size, self.z_dim])
             prior_scale = xs.new_ones([batch_size, self.z_dim])
-            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).independent(1))
+            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).to_event(1))
 
             # if the label y (which digit to write) is supervised, sample from the
             # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
@@ -119,7 +119,7 @@ class SSVAE(nn.Module):
             # parametrized distribution p(x|y,z) = bernoulli(decoder(y,z))
             # where `decoder` is a neural network
             loc = self.decoder.forward([zs, ys])
-            pyro.sample("x", dist.Bernoulli(loc).independent(1), obs=xs)
+            pyro.sample("x", dist.Bernoulli(loc).to_event(1), obs=xs)
             # return the loc so we can visualize it later
             return loc
 
@@ -149,7 +149,7 @@ class SSVAE(nn.Module):
             # sample (and score) the latent handwriting-style with the variational
             # distribution q(z|x,y) = normal(loc(x,y),scale(x,y))
             loc, scale = self.encoder_z.forward([xs, ys])
-            pyro.sample("z", dist.Normal(loc, scale).independent(1))
+            pyro.sample("z", dist.Normal(loc, scale).to_event(1))
 
     def classifier(self, xs):
         """

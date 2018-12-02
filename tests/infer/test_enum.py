@@ -2919,7 +2919,7 @@ def test_mixture_of_diag_normals(mixture, scale):
                                 infer={"enumerate": "parallel"})
             with pyro.plate("components", len(component_logits), dim=-1) as component_ind:
                 with poutine.mask(mask=(which == component_ind)):
-                    pyro.sample("obs", dist.Normal(locs, coord_scale).independent(1),
+                    pyro.sample("obs", dist.Normal(locs, coord_scale).to_event(1),
                                 obs=data.unsqueeze(-2))
 
     def guide():

@@ -90,7 +90,7 @@ class GPLVM(Parameterized):
         Id = eye_like(self.X_loc, C)
         X_name = param_with_module_name(self.name, "X")
         X = pyro.sample(X_name, dist.MultivariateNormal(zero_loc, scale_tril=Id)
-                                    .independent(zero_loc.dim()-1))
+                                    .to_event(zero_loc.dim()-1))
 
         self.base_model.set_data(X, self.y)
         self.base_model.model()
@@ -104,7 +104,7 @@ class GPLVM(Parameterized):
         X_name = param_with_module_name(self.name, "X")
         X = pyro.sample(X_name,
                         dist.MultivariateNormal(X_loc, scale_tril=X_scale_tril)
-                            .independent(X_loc.dim()-1))
+                            .to_event(X_loc.dim()-1))
 
         self.base_model.set_data(X, self.y)
         if self._call_base_model_guide:

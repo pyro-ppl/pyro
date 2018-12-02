@@ -325,13 +325,8 @@ def test_bernoulli_latent_model(jit):
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-@pytest.mark.parametrize("num_steps,use_einsum", [
-    (2, False),
-    (3, False),
-    (3, True),
-    (30, True),  # This will crash without the einsum backend
-])
-def test_gaussian_hmm(jit, num_steps, use_einsum):
+@pytest.mark.parametrize("num_steps", [2, 3, 30])
+def test_gaussian_hmm(jit, num_steps):
     dim = 4
 
     def model(data):
@@ -368,8 +363,7 @@ def test_gaussian_hmm(jit, num_steps, use_einsum):
 
     data = _generate_data()
     nuts_kernel = NUTS(model, adapt_step_size=True, max_plate_nesting=1,
-                       jit_compile=jit, ignore_jit_warnings=True,
-                       experimental_use_einsum=use_einsum)
-    if use_einsum:
+                       jit_compile=jit, ignore_jit_warnings=True)
+    if num_steps == 30:
         nuts_kernel.initial_trace = _get_initial_trace()
     MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)

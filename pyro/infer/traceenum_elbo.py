@@ -19,9 +19,10 @@ from pyro.infer.util import Dice, is_validation_enabled
 from pyro.ops import packed
 from pyro.ops.contract import contract_tensor_tree, contract_to_tensor
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
-from pyro.util import check_traceenum_requirements, warn_if_nan
+from pyro.util import check_traceenum_requirements, ignore_jit_warnings, warn_if_nan
 
 
+@ignore_jit_warnings()
 def _get_common_scale(scales):
     # Check that all enumerated sites share a common subsampling scale.
     # Note that we use a cheap weak comparison by id rather than tensor value, because
@@ -448,7 +449,7 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
                 self = weakself()
                 elbo = 0.0
                 for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-                    elbo += _compute_dice_elbo(model_trace, guide_trace)
+                    elbo = elbo + _compute_dice_elbo(model_trace, guide_trace)
                 return elbo * (-1.0 / self.num_particles)
 
             self._differentiable_loss = differentiable_loss

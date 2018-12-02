@@ -41,8 +41,7 @@ def print_debug_info(model_trace):
     (HMC, {"adapt_step_size": True, "num_steps": 3}),
     (NUTS, {"adapt_step_size": True}),
 ])
-@pytest.mark.parametrize("use_einsum", [False, True])
-def test_model_error_stray_batch_dims(kernel, kwargs, use_einsum):
+def test_model_error_stray_batch_dims(kernel, kwargs):
 
     def gmm():
         data = torch.tensor([0., 0., 3., 3., 3., 5., 5.])
@@ -53,11 +52,11 @@ def test_model_error_stray_batch_dims(kernel, kwargs, use_einsum):
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)
         return cluster_means
 
-    mcmc_kernel = kernel(gmm, experimental_use_einsum=use_einsum, **kwargs)
+    mcmc_kernel = kernel(gmm, **kwargs)
     # Error due to non finite value for `max_plate_nesting`.
     assert_error(mcmc_kernel)
     # Error due to batch dims not inside plate.
-    mcmc_kernel = kernel(gmm, max_plate_nesting=1, experimental_use_einsum=use_einsum, **kwargs)
+    mcmc_kernel = kernel(gmm, max_plate_nesting=1, **kwargs)
     assert_error(mcmc_kernel)
 
 
@@ -65,8 +64,7 @@ def test_model_error_stray_batch_dims(kernel, kwargs, use_einsum):
     (HMC, {"adapt_step_size": True, "num_steps": 3}),
     (NUTS, {"adapt_step_size": True}),
 ])
-@pytest.mark.parametrize("use_einsum", [False, True])
-def test_model_error_enum_dim_clash(kernel, kwargs, use_einsum):
+def test_model_error_enum_dim_clash(kernel, kwargs):
 
     def gmm():
         data = torch.tensor([0., 0., 3., 3., 3., 5., 5.])
@@ -78,8 +76,7 @@ def test_model_error_enum_dim_clash(kernel, kwargs, use_einsum):
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)
         return cluster_means
 
-    mcmc_kernel = kernel(gmm, max_plate_nesting=0,
-                         experimental_use_einsum=use_einsum, **kwargs)
+    mcmc_kernel = kernel(gmm, max_plate_nesting=0, **kwargs)
     assert_error(mcmc_kernel)
 
 

@@ -109,7 +109,7 @@ class MultiFrameTensor(dict):
         """
         for cond_indep_stack, value in items:
             frames = frozenset(f for f in cond_indep_stack if f.vectorized)
-            assert all(f.dim < 0 and -len(value.shape) <= f.dim for f in frames)
+            assert all(f.dim < 0 and -value.dim() <= f.dim for f in frames)
             if frames in self:
                 self[frames] = self[frames] + value
             else:
@@ -256,7 +256,7 @@ class Dice(object):
                     prob = probs[key]
                     prob._pyro_dims = queries[key]._pyro_dims
                     mask = prob > 0
-                    if not mask.all():
+                    if torch._C._get_tracing_state() or not mask.all():
                         mask._pyro_dims = prob._pyro_dims
                         cost, prob, mask = packed.broadcast_all(cost, prob, mask)
                         prob = prob[mask]
