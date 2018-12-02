@@ -107,7 +107,7 @@ def svgp_multiclass(num_steps, whiten):
     f = K.cholesky().matmul(torch.randn(100, 3))
     y = f.argmax(dim=-1)
 
-    kernel = gp.kernels.Sum(gp.kernels.Matern32(1.),
+    kernel = gp.kernels.Sum(gp.kernels.Matern32(1),
                             gp.kernels.WhiteNoise(1, variance=torch.tensor(0.01)))
     likelihood = gp.likelihoods.MultiClass(num_classes=3)
     Xu = X[::5].clone()
