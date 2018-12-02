@@ -7,9 +7,9 @@ from pyro.contrib.gp.likelihoods.multi_class import MultiClass
 from pyro.contrib.gp.likelihoods.poisson import Poisson
 
 __all__ = [
+    "Likelihood",
     "Binary",
     "Gaussian",
-    "Likelihood",
     "MultiClass",
     "Poisson",
 ]
@@ -28,5 +28,5 @@ __doc__ = '\n\n'.join([
         :show-inheritance:
         :member-order: bysource
     '''.format(_name)
-    for _name in sorted(__all__)
+    for _name in __all__
 ])

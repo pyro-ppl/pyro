@@ -52,18 +52,15 @@ class Periodic(Kernel):
                  active_dims=None, name="Periodic"):
         super(Periodic, self).__init__(input_dim, active_dims, name)
 
-        if variance is None:
-            variance = torch.tensor(1.)
+        variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
-        if lengthscale is None:
-            lengthscale = torch.tensor(1.)
+        lengthscale = torch.tensor(1.) if lengthscale is None else lengthscale
         self.lengthscale = Parameter(lengthscale)
         self.set_constraint("lengthscale", constraints.positive)
 
-        if period is None:
-            period = torch.tensor(1.)
+        period = torch.tensor(1.) if period is None else period
         self.period = Parameter(period)
         self.set_constraint("period", constraints.positive)
 
