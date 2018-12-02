@@ -59,8 +59,7 @@ class Coregionalize(Kernel):
 
         # Add a diagonal component initialized to torch.eye(input_dim, input_dim) / 2,
         # such that the total kernel has expected value the identity matrix.
-        if diagonal is None:
-            diagonal = components.new_ones(input_dim) * 0.5
+        diagonal = components.new_ones(input_dim) * 0.5 if diagonal is None else diagonal
         if diagonal.shape != (input_dim,):
             raise ValueError("Expected diagonal.shape == ({},), actual {}"
                              .format(input_dim, diagonal.shape))
