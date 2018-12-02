@@ -5,3 +5,11 @@ AutoRegressiveNN
     :members:
     :undoc-members:
     :show-inheritance:
+
+Parameterized
+-------------
+
+.. automodule:: pyro.nn.parameterized
+    :members:
+    :undoc-members:
+    :show-inheritance:
