@@ -135,7 +135,7 @@ class SparseGPRegression(GPModel):
         Kuf = self.kernel(Xu, self.X)
         W = Kuf.trtrs(Luu, upper=False)[0].t()
 
-        D = noise.expand(M)
+        D = noise.expand(N)
         if self.approx == "FITC" or self.approx == "VFE":
             Kffdiag = self.kernel(self.X, diag=True)
             Qffdiag = W.pow(2).sum(dim=-1)
