@@ -100,7 +100,7 @@ class SparseGPRegression(GPModel):
 
         self.Xu = Parameter(Xu)
 
-        noise = self.X.new_ones(()) if noise is None else noise
+        noise = self.X.new_tensor(1.) if noise is None else noise
         self.noise = Parameter(noise)
         self.set_constraint("noise", constraints.greater_than(self.jitter))
 

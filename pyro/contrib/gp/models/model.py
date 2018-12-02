@@ -58,7 +58,7 @@ class GPModel(Parameterized):
       <http://pyro.ai/examples/svi_part_i.html>`_:
 
         >>> optimizer = pyro.optim.Adam({"lr": 0.01})
-        >>> svi = pyro.infer.SVI(gpr.model, gpr.guide, optimizer, loss=pyro.infer.Trace_ELBO())
+        >>> svi = SVI(gpr.model, gpr.guide, optimizer, loss=Trace_ELBO())
         >>> for i in range(1000):
         ...     svi.step()  # doctest: +SKIP
 
@@ -149,7 +149,7 @@ class GPModel(Parameterized):
             >>> Xu = torch.tensor([[1., 0, 2]])  # inducing input
             >>> likelihood = gp.likelihoods.Gaussian()
             >>> vsgp = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood)
-            >>> svi = pyro.infer.SVI(vsgp.model, vsgp.guide, optimizer, pyro.infer.Trace_ELBO())
+            >>> svi = SVI(vsgp.model, vsgp.guide, optimizer, Trace_ELBO())
             >>> batched_X, batched_y = X.split(split_size=10), y.split(split_size=10)
             >>> for Xi, yi in zip(batched_X, batched_y):
             ...     vsgp.set_data(Xi, yi)
