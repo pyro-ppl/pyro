@@ -20,7 +20,9 @@ def mark_jit(*args, **kwargs):
     jit_markers = kwargs.pop("marks", [])
     jit_markers += [
         pytest.mark.skipif('CI' in os.environ,
-                           reason='slow test')
+                           reason='slow test'),
+        pytest.mark.skipif('CUDA_TEST' in os.environ,
+                           reason='https://github.com/uber/pyro/issues/1419')
     ]
     kwargs["marks"] = jit_markers
     return pytest.param(*args, **kwargs)
