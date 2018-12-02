@@ -101,7 +101,8 @@ def main(args):
     # CNN will transform a high dimension image into a low dimension 2D tensors for RBF kernel.
     # This kernel accepts inputs are inputs of CNN and gives outputs are covariance matrix of RBF on
     # outputs of CNN.
-    kernel = gp.kernels.RBF(input_dim=10, lengthscale=torch.ones(10)).warp(iwarping_fn=cnn_fn)
+    kernel = gp.kernels.Warp(gp.kernels.RBF(input_dim=10, lengthscale=torch.ones(10)),
+                             iwarping_fn=cnn_fn)
 
     # init inducing points (taken randomly from dataset)
     Xu = next(iter(train_loader))[0][:args.num_inducing]
