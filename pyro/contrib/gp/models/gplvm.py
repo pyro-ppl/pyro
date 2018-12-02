@@ -42,13 +42,13 @@ class GPLVM(Parameterized):
             ...                  dist.Exponential(0.5).sample((150,))])
 
         >>> # First, define the initial values for X_loc parameter:
-        >>> X_loc = torch.zeros(150, 2)
-        >>> # Then, define a Gaussian Process model with input X_loc and output y:
+        >>> X_init = torch.zeros(150, 2)
+        >>> # Then, define a Gaussian Process model with input X_init and output y:
         >>> kernel = gp.kernels.RBF(input_dim=2, lengthscale=torch.ones(2))
         >>> Xu = torch.zeros(20, 2)  # initial inducing inputs of sparse model
-        >>> gpmodel = gp.models.SparseGPRegression(X_loc, y, kernel, Xu)
-        >>> # Finally, wrap gpmodel by GPLVM, optimize, and get the "learned" mean of X:
-        >>> gplvm = gp.models.GPLVM(gpmodel)
+        >>> gpmodule = gp.models.SparseGPRegression(X_init, y, kernel, Xu)
+        >>> # Finally, wrap gpmodule by GPLVM, optimize, and get the "learned" mean of X:
+        >>> gplvm = gp.models.GPLVM(gpmodule)
         >>> gplvm.optimize()  # doctest: +SKIP
         >>> X = gplvm.get_param("X_loc")
 
