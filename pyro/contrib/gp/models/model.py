@@ -58,7 +58,7 @@ class GPModel(Parameterized):
       <http://pyro.ai/examples/svi_part_i.html>`_:
 
         >>> optimizer = pyro.optim.Adam({"lr": 0.01})
-        >>> svi = SVI(gpr.model, gpr.guide, optimizer, loss=Trace_ELBO())
+        >>> svi = infer.SVI(gpr.model, gpr.guide, optimizer, loss=Trace_ELBO())
         >>> for i in range(1000):
         ...     svi.step()  # doctest: +SKIP
 
