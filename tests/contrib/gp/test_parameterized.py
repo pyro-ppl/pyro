@@ -6,7 +6,7 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.nn import Parameterized
+from pyro.contrib.gp.parameterized import Parameterized
 from tests.common import assert_equal
 
 

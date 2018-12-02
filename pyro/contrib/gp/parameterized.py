@@ -14,8 +14,8 @@ from pyro.distributions.util import eye_like
 
 class Parameterized(nn.Module):
     """
-    A wrapper of :class:`nn.Module` whose parameters can be set constraints, set
-    priors.
+    A wrapper of :class:`torch.nn.Module` whose parameters can be set
+    constraints, set priors.
 
     Under the hood, we move parameters to a buffer store and create "root"
     parameters which are used to generate that parameter's value. For example,
@@ -30,24 +30,25 @@ class Parameterized(nn.Module):
 
     Example::
 
-    >>> class Linear(Parameterized):
-    ...     def __init__(self, a, b):
-    ...         super(Linear, self).__init__()
-    ...         self.a = Parameter(a)
-    ...         self.b = Parameter(b)
-    ...
-    ...     def forward(self, x):
-    ...         return self.a * x + self.b
-    ...
-    >>> linear = Linear(torch.tensor(1.), torch.tensor(0.))
-    >>> linear.set_constraint("a", constraints.positive)
-    >>> linear.set_prior("b", dist.Normal(0, 1))
-    >>> linear.autoguide("b", dist.Normal)
-    >>> assert "a_unconstrained" in dict(linear.named_parameters())
-    >>> assert "b_loc" in dict(linear.named_parameters())
-    >>> assert "b_scale" in dict(linear.named_parameters())
-    >>> assert "a" in dict(linear.named_buffers())
-    >>> assert "b" in dict(linear.named_buffers())
+        >>> class Linear(Parameterized):
+        ...     def __init__(self, a, b):
+        ...         super(Linear, self).__init__()
+        ...         self.a = Parameter(a)
+        ...         self.b = Parameter(b)
+        ...
+        ...     def forward(self, x):
+        ...         return self.a * x + self.b
+        ...
+        >>> linear = Linear(torch.tensor(1.), torch.tensor(0.))
+        >>> linear.set_constraint("a", constraints.positive)
+        >>> linear.set_prior("b", dist.Normal(0, 1))
+        >>> linear.autoguide("b", dist.Normal)
+        >>> assert "a_unconstrained" in dict(linear.named_parameters())
+        >>> assert "b_loc" in dict(linear.named_parameters())
+        >>> assert "b_scale_unconstrained" in dict(linear.named_parameters())
+        >>> assert "a" in dict(linear.named_buffers())
+        >>> assert "b" in dict(linear.named_buffers())
+        >>> assert "b_scale_tril" in dict(linear.named_buffers())
 
     Note that by default, data of a parameter is a float :class:`torch.Tensor`
     (unless we use :func:`torch.set_default_tensor_type` to change default
