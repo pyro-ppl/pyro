@@ -220,7 +220,7 @@ def test_gamma_normal(jit):
 
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
-    hmc_kernel = HMC(model, trajectory_length=1, jit_compile=jit, ignore_jit_warnings=True)
+    hmc_kernel = HMC(model, trajectory_length=1, step_size=0.3, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
     posterior = mcmc_run.marginal('p_latent').empirical['p_latent']
     assert_equal(posterior.mean, true_std, prec=0.05)
@@ -296,37 +296,11 @@ def test_gamma_normal_with_dual_averaging(jit):
 
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
-    hmc_kernel = HMC(model, trajectory_length=1, adapt_step_size=True,
+    hmc_kernel = HMC(model, trajectory_length=1, step_size=0.3,
                      jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100).run(data)
     posterior = mcmc_run.marginal(['p_latent']).empirical['p_latent']
     assert_equal(posterior.mean, true_std, prec=0.05)
-
-
-@pytest.mark.parametrize("jit", [False, mark_jit(True,
-                                                 marks=[pytest.mark.skip("FIXME: Slow on JIT.")])],
-                         ids=jit_idfn)
-def test_gaussian_mixture_model(jit):
-    K, N = 3, 1000
-
-    def gmm(data):
-        mix_proportions = pyro.sample("phi", dist.Dirichlet(torch.ones(K)))
-        with pyro.plate("num_clusters", K):
-            cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(float(K)), 1.))
-        with pyro.plate("data", data.shape[0]):
-            assignments = pyro.sample("assignments", dist.Categorical(mix_proportions))
-            pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)
-        return cluster_means
-
-    true_cluster_means = torch.tensor([1., 5., 10.])
-    true_mix_proportions = torch.tensor([0.1, 0.3, 0.6])
-    cluster_assignments = dist.Categorical(true_mix_proportions).sample(torch.Size((N,)))
-    data = dist.Normal(true_cluster_means[cluster_assignments], 1.0).sample()
-    hmc_kernel = HMC(gmm, trajectory_length=1, max_plate_nesting=1, jit_compile=jit, ignore_jit_warnings=True)
-    mcmc_run = MCMC(hmc_kernel, num_samples=300, warmup_steps=100).run(data)
-    posterior = mcmc_run.marginal(["phi", "cluster_means"]).empirical
-    assert_equal(posterior["phi"].mean.sort()[0], true_mix_proportions, prec=0.05)
-    assert_equal(posterior["cluster_means"].mean.sort()[0], true_cluster_means, prec=0.2)
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
