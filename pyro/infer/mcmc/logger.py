@@ -4,6 +4,7 @@ from collections import OrderedDict
 
 # Identifiers to distinguish between diagnostic messages for progress bars
 # vs. logging output. Useful when using QueueHandler in multiprocessing.
+from pyro.contrib.viz.progress_bar import ProgressBar
 
 LOG_MSG = "LOG"
 DIAGNOSTIC_MSG = "DIAGNOSTICS"
@@ -86,6 +87,22 @@ class QueueHandler(logging.Handler):
             self.handleError(record)
 
 
+class MCMCStreamHandler(logging.StreamHandler):
+    """
+    Handler that synchronizes the log output with the
+    :class:`~tqdm.tqdm` progress bar.
+    """
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self.flush()
+            ProgressBar.write(msg)
+        except (KeyboardInterrupt, SystemExit) as e:
+            raise e
+        except Exception:
+            self.handleError(record)
+
+
 class MCMCLoggingHandler(logging.Handler):
     """
     Main logging handler used by :class:`~pyro.infer.mcmc`,
@@ -151,7 +168,7 @@ def initialize_logger(logger, logger_id, progress_bar=None, log_queue=None):
         progress_bar = None
     elif progress_bar:
         format = "%(levelname).1s \t %(message)s"
-        handler = logging.StreamHandler()
+        handler = MCMCStreamHandler()
     else:
         raise ValueError("Logger cannot be initialized without a "
                          "valid handler.")

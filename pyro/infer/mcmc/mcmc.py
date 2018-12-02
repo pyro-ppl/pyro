@@ -50,10 +50,10 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, diagnostics_
                 pbar_pos = int(logger_id.split(":")[-1])
                 num_samples[pbar_pos] += 1
                 if num_samples[pbar_pos] == warmup_steps:
-                    progress_bar.set_description("Sample [{}]".format(pbar_pos + 1))
+                    progress_bar.set_description("Sample [{}]".format(pbar_pos + 1), pos=pbar_pos)
                 diagnostics = json.loads(msg, object_pairs_hook=OrderedDict)
-                progress_bar.set_postfix(diagnostics, pbar_pos)
-                progress_bar.increment(update=True)
+                progress_bar.set_postfix(diagnostics, pos=pbar_pos)
+                progress_bar.increment(update=True, pos=pbar_pos)
             else:
                 logger.handle(record)
     finally:

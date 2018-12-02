@@ -13,6 +13,7 @@ from pyro.distributions import Beta, Binomial, HalfCauchy, Normal, Pareto, Unifo
 from pyro.distributions.util import logsumexp
 from pyro.infer.abstract_infer import TracePredictive
 from pyro.infer.mcmc import MCMC, NUTS
+from pyro.infer.mcmc.logger import MCMCStreamHandler
 
 """
 Example has been adapted from [1]. It demonstrates how to do Bayesian inference using
@@ -50,10 +51,16 @@ hyper-parameters) of running HMC on different problems.
     path lengths in Hamiltonian Monte Carlo", (https://arxiv.org/abs/1111.4246)
 """
 
+logger = logging.getLogger(__name__)
+mcmc_handler = MCMCStreamHandler()
+mcmc_handler.setFormatter(logging.Formatter('%(message)s'))
+logger.addHandler(mcmc_handler)
+logger.setLevel(logging.INFO)
+logger.propagate = False
+
 # work around with the error "RuntimeError: received 0 items of ancdata"
 # see https://discuss.pytorch.org/t/received-0-items-of-ancdata-pytorch-0-4-0/19823
 torch.multiprocessing.set_sharing_strategy('file_system')
-logging.basicConfig(format='%(message)s', level=logging.INFO)
 # Enable validation checks
 pyro.enable_validation(True)
 DATA_URL = "https://d2fefpcigoriu7.cloudfront.net/datasets/EfronMorrisBB.txt"
@@ -194,23 +201,22 @@ def sample_posterior_predictive(posterior_predictive, baseball_dataset):
     train, test, player_names = train_test_split(baseball_dataset)
     at_bats = train[:, 0]
     at_bats_season = test[:, 0]
-    logging.Formatter("%(message)s")
-    logging.info("\nPosterior Predictive:")
-    logging.info("Hit Rate - Initial 45 At Bats")
-    logging.info("-----------------------------")
+    logger.info("\nPosterior Predictive:")
+    logger.info("Hit Rate - Initial 45 At Bats")
+    logger.info("-----------------------------")
     # set hits=None to convert it from observation node to sample node
     train_predict = posterior_predictive.run(at_bats, None)
     train_summary = summary(train_predict, sites=["obs"],
                             player_names=player_names, diagnostics=False)["obs"]
     train_summary = train_summary.assign(ActualHits=baseball_dataset[["Hits"]].values)
-    logging.info(train_summary)
-    logging.info("\nHit Rate - Season Predictions")
-    logging.info("-----------------------------")
+    # logger.info(train_summary)
+    # logger.info("\nHit Rate - Season Predictions")
+    # logger.info("-----------------------------")
     test_predict = posterior_predictive.run(at_bats_season, None)
     test_summary = summary(test_predict, sites=["obs"],
                            player_names=player_names, diagnostics=False)["obs"]
     test_summary = test_summary.assign(ActualHits=baseball_dataset[["SeasonHits"]].values)
-    logging.info(test_summary)
+    # logger.info(test_summary)
 
 
 def evaluate_log_predictive_density(posterior_predictive, baseball_dataset):
@@ -227,9 +233,9 @@ def evaluate_log_predictive_density(posterior_predictive, baseball_dataset):
     # Use LogSumExp trick to evaluate $log(1/num_samples \sum_i p(new_data | \theta^{i})) $,
     # where $\theta^{i}$ are parameter samples from the model's posterior.
     posterior_pred_density = logsumexp(torch.stack(trace_log_pdf), dim=-1) - math.log(len(trace_log_pdf))
-    logging.info("\nLog posterior predictive density")
-    logging.info("--------------------------------")
-    logging.info("{:.4f}\n".format(posterior_pred_density))
+    # logger.info("\nLog posterior predictive density")
+    # logger.info("--------------------------------")
+    # logger.info("{:.4f}\n".format(posterior_pred_density))
 
 
 def main(args):
@@ -237,8 +243,8 @@ def main(args):
     baseball_dataset = pd.read_csv(DATA_URL, "\t")
     train, _, player_names = train_test_split(baseball_dataset)
     at_bats, hits = train[:, 0], train[:, 1]
-    logging.info("Original Dataset:")
-    logging.info(baseball_dataset)
+    # logger.info("Original Dataset:")
+    # logger.info(baseball_dataset)
     num_predictive_samples = args.num_samples * args.num_chains
 
     # (1) Full Pooling Model
@@ -247,10 +253,10 @@ def main(args):
                                   num_samples=args.num_samples,
                                   warmup_steps=args.warmup_steps,
                                   num_chains=args.num_chains).run(at_bats, hits)
-    logging.info("\nModel: Fully Pooled")
-    logging.info("===================")
-    logging.info("\nphi:")
-    logging.info(summary(posterior_fully_pooled, sites=["phi"], player_names=player_names)["phi"])
+    # logger.info("\nModel: Fully Pooled")
+    # logger.info("===================")
+    # logger.info("\nphi:")
+    # logger.info(summary(posterior_fully_pooled, sites=["phi"], player_names=player_names)["phi"])
     posterior_predictive = TracePredictive(fully_pooled,
                                            posterior_fully_pooled,
                                            num_samples=num_predictive_samples)
@@ -263,10 +269,10 @@ def main(args):
                                 num_samples=args.num_samples,
                                 warmup_steps=args.warmup_steps,
                                 num_chains=args.num_chains).run(at_bats, hits)
-    logging.info("\nModel: Not Pooled")
-    logging.info("=================")
-    logging.info("\nphi:")
-    logging.info(summary(posterior_not_pooled, sites=["phi"], player_names=player_names)["phi"])
+    # logger.info("\nModel: Not Pooled")
+    # logger.info("=================")
+    # logger.info("\nphi:")
+    # logger.info(summary(posterior_not_pooled, sites=["phi"], player_names=player_names)["phi"])
     posterior_predictive = TracePredictive(not_pooled,
                                            posterior_not_pooled,
                                            num_samples=num_predictive_samples)
@@ -281,11 +287,11 @@ def main(args):
                                           num_samples=args.num_samples,
                                           warmup_steps=args.warmup_steps,
                                           num_chains=args.num_chains).run(at_bats, hits)
-        logging.info("\nModel: Partially Pooled")
-        logging.info("=======================")
-        logging.info("\nphi:")
-        logging.info(summary(posterior_partially_pooled, sites=["phi"],
-                             player_names=player_names)["phi"])
+        # logger.info("\nModel: Partially Pooled")
+        # logger.info("=======================")
+        # logger.info("\nphi:")
+        # logger.info(summary(posterior_partially_pooled, sites=["phi"],
+        #                      player_names=player_names)["phi"])
         posterior_predictive = TracePredictive(partially_pooled,
                                                posterior_partially_pooled,
                                                num_samples=num_predictive_samples)
@@ -298,13 +304,13 @@ def main(args):
                                                  num_samples=args.num_samples,
                                                  warmup_steps=args.warmup_steps,
                                                  num_chains=args.num_chains).run(at_bats, hits)
-    logging.info("\nModel: Partially Pooled with Logit")
-    logging.info("==================================")
-    logging.info("\nSigmoid(alpha):")
-    logging.info(summary(posterior_partially_pooled_with_logit,
-                         sites=["alpha"],
-                         player_names=player_names,
-                         transforms={"alpha": lambda x: 1. / (1 + (-x).exp())})["alpha"])
+    # logger.info("\nModel: Partially Pooled with Logit")
+    # logger.info("==================================")
+    # logger.info("\nSigmoid(alpha):")
+    # logger.info(summary(posterior_partially_pooled_with_logit,
+    #                      sites=["alpha"],
+    #                      player_names=player_names,
+    #                      transforms={"alpha": lambda x: 1. / (1 + (-x).exp())})["alpha"])
     posterior_predictive = TracePredictive(partially_pooled_with_logit,
                                            posterior_partially_pooled_with_logit,
                                            num_samples=num_predictive_samples)
