@@ -35,9 +35,9 @@ class GPLVM(Parameterized):
 
             >>> # Simulating iris data.
             >>> y = torch.stack([dist.Normal(4.8, 0.1).sample((150,)),
-            ...                 dist.Normal(3.2, 0.3).sample((150,)),
-            ...                 dist.Normal(1.5, 0.4).sample((150,)),
-            ...                 dist.Exponential(0.5).sample((150,))])
+            ...                  dist.Normal(3.2, 0.3).sample((150,)),
+            ...                  dist.Normal(1.5, 0.4).sample((150,)),
+            ...                  dist.Exponential(0.5).sample((150,))])
 
         >>> # First, define the initial values for X_loc parameter:
         >>> X_loc = torch.zeros(150, 2)
@@ -70,7 +70,7 @@ class GPLVM(Parameterized):
 
         self.X_loc = Parameter(self.base_model.X)
 
-        C = self.X_loc.shape[1]
+        C = self.X_loc.size(1)
         X_scale_tril_shape = self.X_loc.shape + (C,)
         Id = eye_like(self.X_loc, C)
         X_scale_tril = Id.expand(X_scale_tril_shape)
@@ -84,7 +84,7 @@ class GPLVM(Parameterized):
 
         # sample X from unit multivariate normal distribution
         zero_loc = self.X_loc.new_zeros(self.X_loc.shape)
-        C = self.X_loc.shape[1]
+        C = self.X_loc.size(1)
         Id = eye_like(self.X_loc, C)
         X_name = param_with_module_name(self.name, "X")
         X = pyro.sample(X_name, dist.MultivariateNormal(zero_loc, scale_tril=Id)
