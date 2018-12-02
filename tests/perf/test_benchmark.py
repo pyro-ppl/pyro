@@ -97,8 +97,8 @@ def bernoulli_beta_hmc(**kwargs):
     return mcmc_run.marginal('p_latent').empirical
 
 
-@register_model(num_steps=2000, whiten=False, id='SVGP::MultiClass_whiten=False')
-@register_model(num_steps=2000, whiten=True, id='SVGP::MultiClass_whiten=True')
+@register_model(num_steps=2000, whiten=False, id='VSGP::MultiClass_whiten=False')
+@register_model(num_steps=2000, whiten=True, id='VSGP::MultiClass_whiten=True')
 def svgp_multiclass(num_steps, whiten):
     # adapted from http://gpflow.readthedocs.io/en/latest/notebooks/multiclass.html
     pyro.set_rng_seed(0)
@@ -117,7 +117,7 @@ def svgp_multiclass(num_steps, whiten):
                                             whiten=whiten)
 
     gpmodel.fix_param("Xu")
-    gpmodel.kernel.get_subkernel("WhiteNoise").fix_param("variance")
+    gpmodel.kernel.kern1.fix_param("variance")
 
     gpmodel.optimize(optim.Adam({"lr": 0.0001}), num_steps=num_steps)
 
