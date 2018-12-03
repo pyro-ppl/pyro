@@ -8,7 +8,7 @@ import socket
 import sys
 import threading
 import warnings
-from collections import OrderedDict, deque
+from collections import OrderedDict
 
 import six
 from six.moves import queue
@@ -16,8 +16,9 @@ import torch
 import torch.multiprocessing as mp
 
 import pyro
-from pyro.infer import TracePosterior
+from pyro.infer import TracePosterior, EmpiricalMarginal
 from pyro.infer.mcmc.logger import initialize_logger, initialize_progbar, DIAGNOSTIC_MSG, TqdmHandler
+import pyro.ops.stats as stats
 from pyro.util import optional
 
 
@@ -26,12 +27,12 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains):
     Logging thread that asynchronously consumes logging events from `log_queue`,
     and handles them appropriately.
     """
-    progress_bars = [initialize_progbar(warmup_steps, s, pos=i)
-                     for i, s in enumerate(num_samples)]
+    progress_bars = [initialize_progbar(warmup_steps, num_samples, pos=i)
+                     for i in range(num_chains)]
     logger = logging.getLogger(__name__)
     logger.propagate = False
     logger.addHandler(TqdmHandler())
-    num_samples = [0] * len(num_samples)
+    num_samples = [0] * num_chains
     try:
         while True:
             try:
@@ -43,7 +44,7 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains):
             metadata, msg = record.getMessage().split("]", 1)
             _, msg_type, logger_id = metadata[1:].split()
             if msg_type == DIAGNOSTIC_MSG:
-                pbar_pos = int(logger_id.split(":")[-1]) - 1
+                pbar_pos = int(logger_id.split(":")[-1])
                 num_samples[pbar_pos] += 1
                 if num_samples[pbar_pos] == warmup_steps:
                     progress_bars[pbar_pos].set_description("Sample [{}]".format(pbar_pos + 1))
@@ -108,11 +109,7 @@ class _ParallelSampler(TracePosterior):
         self.log_queue = self.ctx.Manager().Queue()
         self.logger = initialize_logger(logging.getLogger("pyro.infer.mcmc"),
                                         "MAIN", log_queue=self.log_queue)
-        # initialize number of samples per chain
-        samples_per_chain = num_samples // num_chains
-        self.num_samples = [samples_per_chain] * num_chains
-        for i in range(num_samples % num_chains):
-            self.num_samples[i] += 1
+        self.num_samples = num_samples
         self.log_thread = threading.Thread(target=logger_thread,
                                            args=(self.log_queue, self.warmup_steps,
                                                  self.num_samples, self.num_chains))
@@ -122,8 +119,8 @@ class _ParallelSampler(TracePosterior):
     def init_workers(self, *args, **kwargs):
         self.workers = []
         for i in range(self.num_chains):
-            worker = _Worker(i + 1, self.result_queue, self.log_queue, self.kernel,
-                             self.num_samples[i], self.warmup_steps)
+            worker = _Worker(i, self.result_queue, self.log_queue, self.kernel,
+                             self.num_samples, self.warmup_steps)
             worker.daemon = True
             self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
                                                  args=args, kwargs=kwargs))
@@ -144,11 +141,6 @@ class _ParallelSampler(TracePosterior):
         # restore original handler
         signal.signal(signal.SIGINT, sigint_handler)
         active_workers = self.num_chains
-        # To yield a deterministic ordering, we hold intermediate traces
-        # from each of the workers in its own queue in `results_buffer`
-        # and yield these in a round robin fashion.
-        buffer_idx = 0
-        results_buffer = [deque() for _ in range(self.num_chains)]
         try:
             for w in self.workers:
                 w.start()
@@ -167,22 +159,10 @@ class _ParallelSampler(TracePosterior):
                 if isinstance(val, Exception):
                     # Exception trace is already logged by worker.
                     raise val
-                if val is None:
+                if val is not None:
+                    yield val[0], val[1], chain_id
+                else:
                     active_workers -= 1
-                else:
-                    results_buffer[chain_id - 1].append(val)
-                while results_buffer[buffer_idx]:
-                    yield results_buffer[buffer_idx].popleft()
-                    buffer_idx = (buffer_idx + 1) % self.num_chains
-            # empty out the results buffer
-            non_empty_buffers = set(range(self.num_chains))
-            while non_empty_buffers:
-                if results_buffer[buffer_idx]:
-                    yield results_buffer[buffer_idx].popleft()
-                else:
-                    if buffer_idx in non_empty_buffers:
-                        non_empty_buffers.remove(buffer_idx)
-                buffer_idx = (buffer_idx + 1) % self.num_chains
         finally:
             self.terminate()
 
@@ -215,7 +195,7 @@ class _SingleSampler(TracePosterior):
             if not is_multiprocessing else None
         self.logger = initialize_logger(self.logger, logger_id, progress_bar, log_queue)
         self.kernel.setup(self.warmup_steps, *args, **kwargs)
-        trace = self.kernel.initial_trace()
+        trace = self.kernel.initial_trace
         with optional(progress_bar, not is_multiprocessing):
             for trace in self._gen_samples(self.warmup_steps, trace):
                 continue
@@ -257,6 +237,7 @@ class MCMC(TracePosterior):
     """
     def __init__(self, kernel, num_samples, warmup_steps=0,
                  num_chains=1, mp_context=None):
+        super(MCMC, self).__init__(num_chains=num_chains)
         self.warmup_steps = warmup_steps if warmup_steps is not None else num_samples // 2  # Stan
         self.num_samples = num_samples
         if num_chains > 1:
@@ -268,8 +249,67 @@ class MCMC(TracePosterior):
                                             num_chains, mp_context)
         else:
             self.sampler = _SingleSampler(kernel, num_samples, warmup_steps)
-        super(MCMC, self).__init__()
 
     def _traces(self, *args, **kwargs):
         for sample in self.sampler._traces(*args, **kwargs):
             yield sample
+
+    def marginal(self, sites=None):
+        return _Marginal(self, sites)
+
+
+class _Marginal(object):
+    """
+    Marginal distribution for MCMC that provides a a marginal over one or more
+    latent sites as well as the return values of the TracePosterior's model.
+
+    :param TracePosterior trace_posterior: a TracePosterior instance representing
+        a Monte Carlo posterior.
+    :param list sites: optional list of sites for which we need to generate
+        the marginal distribution.
+    """
+    def __init__(self, trace_posterior, sites=None, validate_args=None):
+        assert isinstance(trace_posterior, TracePosterior), \
+            "trace_dist must be trace posterior distribution object"
+        if sites is None:
+            sites = ["_RETURN"]
+        elif isinstance(sites, str):
+            sites = [sites]
+        else:
+            assert isinstance(sites, list)
+        self.sites = sites
+        self._marginals = OrderedDict()
+        self._diagnostics = OrderedDict()
+        self._trace_posterior = trace_posterior
+        self._populate_traces(trace_posterior, validate_args)
+
+    def _populate_traces(self, trace_posterior, validate):
+        self._marginals = {site: EmpiricalMarginal(trace_posterior, site, validate)
+                           for site in self.sites}
+
+    def support(self, flatten=False):
+        support = OrderedDict([(site, value.enumerate_support())
+                               for site, value in self._marginals.items()])
+        if self._trace_posterior.num_chains > 1 and flatten:
+            for site, samples in support.items():
+                shape = samples.size()
+                flattened_shape = torch.Size((shape[0] * shape[1],)) + shape[2:]
+                support[site] = samples.reshape(flattened_shape)
+        return support
+
+    @property
+    def empirical(self):
+        return self._marginals
+
+    def diagnostics(self):
+        if self._diagnostics:
+            return self._diagnostics
+        for site in self.sites:
+            site_stats = OrderedDict()
+            try:
+                site_stats["n_eff"] = stats.effective_sample_size(self.support()[site])
+            except NotImplementedError:
+                site_stats["n_eff"] = torch.tensor(float('nan'))
+            site_stats["r_hat"] = stats.split_gelman_rubin(self.support()[site])
+            self._diagnostics[site] = site_stats
+        return self._diagnostics

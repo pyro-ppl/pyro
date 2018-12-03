@@ -5,6 +5,8 @@ import torch.nn as nn
 
 import pyro
 import pyro.distributions as dist
+import pyro.optim as optim
+from pyro.infer import SVI, TraceMeanField_ELBO
 from pyro.params import param_with_module_name
 
 
@@ -205,14 +207,14 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
     #         = K** - Q** + W @ S @ S.T @ W.T
     #         = K** - Q** + K
 
-    N = X.shape[0]
-    M = Xnew.shape[0]
+    N = X.size(0)
+    M = Xnew.size(0)
     latent_shape = f_loc.shape[:-1]
 
     if Lff is None:
         Kff = kernel(X).contiguous()
         Kff.view(-1)[::N + 1] += jitter  # add jitter to diagonal
-        Lff = Kff.potrf(upper=False)
+        Lff = Kff.cholesky()
     Kfs = kernel(X, Xnew)
 
     # convert f_loc_shape from latent_shape x N to N x latent_shape
@@ -237,10 +239,10 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
 
         Lffinv_pack = pack.trtrs(Lff, upper=False)[0]
         # unpack
-        v_2D = Lffinv_pack[:, :f_loc_2D.shape[1]]
-        W = Lffinv_pack[:, f_loc_2D.shape[1]:f_loc_2D.shape[1] + M].t()
+        v_2D = Lffinv_pack[:, :f_loc_2D.size(1)]
+        W = Lffinv_pack[:, f_loc_2D.size(1):f_loc_2D.size(1) + M].t()
         if f_scale_tril is not None:
-            S_2D = Lffinv_pack[:, -f_scale_tril_2D.shape[1]:]
+            S_2D = Lffinv_pack[:, -f_scale_tril_2D.size(1):]
 
     loc_shape = latent_shape + (M,)
     loc = W.matmul(v_2D).t().reshape(loc_shape)
@@ -255,7 +257,7 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
         var = Kssdiag - Qssdiag
 
     if f_scale_tril is not None:
-        W_S_shape = (Xnew.shape[0],) + f_scale_tril.shape[1:]
+        W_S_shape = (Xnew.size(0),) + f_scale_tril.shape[1:]
         W_S = W.matmul(S_2D).reshape(W_S_shape)
         # convert W_S_shape from M x N x latent_shape to latent_shape x M x N
         W_S = W_S.permute(list(range(2, W_S.dim())) + [0, 1])
@@ -274,3 +276,27 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
             var = var.expand(latent_shape + (M,))
 
     return (loc, cov) if full_cov else (loc, var)
+
+
+def train(gpmodule, optimizer=None, loss=None, num_steps=1000):
+    """
+    A helper to optimize parameters for a GP module.
+
+    :param ~pyro.contrib.gp.models.GPModel gpmodule: A GP module.
+    :param ~pyro.optim.PyroOptim optimizer: A Pyro optimizer.
+        By default, we use Adam with ``lr=0.01``.
+    :param ~pyro.infer.ELBO loss: A Pyro loss instance.
+        By default, ``loss=TraceMeanField_ELBO()``.
+    :param int num_steps: Number of steps to run SVI.
+    :returns: a list of losses during the training procedure
+    :rtype: list
+    """
+    optimizer = optim.Adam({"lr": 0.01}) if optimizer is None else optimizer
+    loss = TraceMeanField_ELBO() if loss is None else loss
+    svi = SVI(gpmodule.model, gpmodule.guide, optimizer, loss)
+
+    losses = []
+    for i in range(num_steps):
+        loss = svi.step()
+        losses.append(loss)
+    return losses

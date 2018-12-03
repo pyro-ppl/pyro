@@ -13,17 +13,17 @@ from tests.common import requires_cuda
 logger = logging.getLogger(__name__)
 
 
-def test_nested_irange():
+def test_nested_iplate():
     means = [torch.randn(2) for i in range(8)]
     mean_batch_size = 2
     stds = [torch.abs(torch.randn(2)) for i in range(6)]
     std_batch_size = 3
 
     def model(means, stds):
-        a_irange = pyro.irange("a", len(means), mean_batch_size)
-        b_irange = pyro.irange("b", len(stds), std_batch_size)
+        a_plate = pyro.plate("a", len(means), mean_batch_size)
+        b_plate = pyro.plate("b", len(stds), std_batch_size)
         return [[pyro.sample("x_{}{}".format(i, j), dist.Normal(means[i], stds[j]))
-                 for j in b_irange] for i in a_irange]
+                 for j in b_plate] for i in a_plate]
 
     xs = model(means, stds)
     assert len(xs) == mean_batch_size
@@ -44,32 +44,32 @@ def plate_model(subsample_size):
     return result
 
 
-def irange_model(subsample_size):
+def iplate_model(subsample_size):
     loc = torch.zeros(20)
     scale = torch.ones(20)
     result = []
-    for i in pyro.irange('irange', 20, subsample_size):
+    for i in pyro.plate('plate', 20, subsample_size):
         pyro.sample("x_{}".format(i), dist.Normal(loc[i], scale[i]))
         result.append(i)
     return result
 
 
-def nested_irange_model(subsample_size):
+def nested_iplate_model(subsample_size):
     loc = torch.zeros(20)
     scale = torch.ones(20)
     result = []
-    inner_irange = pyro.irange("inner", 20, 5)
-    for i in pyro.irange("outer", 20, subsample_size):
+    inner_iplate = pyro.plate("inner", 20, 5)
+    for i in pyro.plate("outer", 20, subsample_size):
         result.append([])
-        for j in inner_irange:
+        for j in inner_iplate:
             pyro.sample("x_{}_{}".format(i, j), dist.Normal(loc[i] + loc[j], scale[i] + scale[j]))
             result[-1].append(j)
     return result
 
 
 @pytest.mark.parametrize('subsample_size', [5, 20])
-@pytest.mark.parametrize('model', [plate_model, irange_model, nested_irange_model],
-                         ids=['plate', 'irange', 'nested_irange'])
+@pytest.mark.parametrize('model', [plate_model, iplate_model, nested_iplate_model],
+                         ids=['plate', 'iplate', 'nested_iplate'])
 def test_cond_indep_stack(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
     for name, node in tr.nodes.items():
@@ -78,8 +78,8 @@ def test_cond_indep_stack(model, subsample_size):
 
 
 @pytest.mark.parametrize('subsample_size', [5, 20])
-@pytest.mark.parametrize('model', [plate_model, irange_model, nested_irange_model],
-                         ids=['plate', 'irange', 'nested_irange'])
+@pytest.mark.parametrize('model', [plate_model, iplate_model, nested_iplate_model],
+                         ids=['plate', 'iplate', 'nested_iplate'])
 def test_replay(model, subsample_size):
     pyro.set_rng_seed(0)
 
@@ -100,15 +100,15 @@ def plate_custom_model(subsample):
     return result
 
 
-def irange_custom_model(subsample):
+def iplate_custom_model(subsample):
     result = []
-    for i in pyro.irange('irange', 20, subsample=subsample):
+    for i in pyro.plate('plate', 20, subsample=subsample):
         result.append(i)
     return result
 
 
-@pytest.mark.parametrize('model', [plate_custom_model, irange_custom_model],
-                         ids=['plate', 'irange'])
+@pytest.mark.parametrize('model', [plate_custom_model, iplate_custom_model],
+                         ids=['plate', 'iplate'])
 def test_custom_subsample(model):
     pyro.set_rng_seed(0)
 
@@ -124,22 +124,22 @@ def plate_cuda_model(subsample_size):
         pyro.sample("x", dist.Normal(loc[batch], scale[batch]))
 
 
-def irange_cuda_model(subsample_size):
+def iplate_cuda_model(subsample_size):
     loc = torch.zeros(20).cuda()
     scale = torch.ones(20).cuda()
-    for i in pyro.irange("data", 20, subsample_size, device=loc.device):
+    for i in pyro.plate("data", 20, subsample_size, device=loc.device):
         pyro.sample("x_{}".format(i), dist.Normal(loc[i], scale[i]))
 
 
 @requires_cuda
 @pytest.mark.parametrize('subsample_size', [5, 20])
-@pytest.mark.parametrize('model', [plate_cuda_model, irange_cuda_model], ids=["plate", "irange"])
+@pytest.mark.parametrize('model', [plate_cuda_model, iplate_cuda_model], ids=["plate", "iplate"])
 def test_cuda(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
     assert tr.log_prob_sum().is_cuda
 
 
-@pytest.mark.parametrize('model', [plate_model, irange_model], ids=['plate', 'irange'])
+@pytest.mark.parametrize('model', [plate_model, iplate_model], ids=['plate', 'iplate'])
 @pytest.mark.parametrize("behavior,model_size,guide_size", [
     ("error", 20, 5),
     ("error", 5, 20),

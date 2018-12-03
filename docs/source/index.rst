@@ -31,10 +31,12 @@ Pyro Documentation
 
    contrib.autoguide
    contrib.autoname
-   contrib.gp
-   contrib.tracking
-   contrib.oed
+   contrib.bnn
    contrib.glmm
+   contrib.gp
+   contrib.minipyro
+   contrib.oed
+   contrib.tracking
 
 
 Indices and tables

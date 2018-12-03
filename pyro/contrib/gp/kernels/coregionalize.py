@@ -51,17 +51,18 @@ class Coregionalize(Kernel):
             rank = input_dim if rank is None else rank
             components = torch.randn(input_dim, rank) * (0.5 / rank) ** 0.5
         else:
-            rank = components.shape[-1]
+            rank = components.size(-1)
         if components.shape != (input_dim, rank):
-            raise ValueError("Expected components.shape == ({},rank), actual {}".format(input_dim, components.shape))
+            raise ValueError("Expected components.shape == ({},rank), actual {}"
+                             .format(input_dim, components.shape))
         self.components = Parameter(components)
 
         # Add a diagonal component initialized to torch.eye(input_dim, input_dim) / 2,
         # such that the total kernel has expected value the identity matrix.
-        if diagonal is None:
-            diagonal = components.new_ones(input_dim) * 0.5
+        diagonal = components.new_ones(input_dim) * 0.5 if diagonal is None else diagonal
         if diagonal.shape != (input_dim,):
-            raise ValueError("Expected diagonal.shape == ({},), actual {}".format(input_dim, diagonal.shape))
+            raise ValueError("Expected diagonal.shape == ({},), actual {}"
+                             .format(input_dim, diagonal.shape))
         self.diagonal = Parameter(diagonal)
         self.set_constraint("diagonal", constraints.positive)
 

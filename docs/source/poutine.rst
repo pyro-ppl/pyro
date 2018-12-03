@@ -26,6 +26,8 @@ Handlers
 
 .. autofunction:: pyro.poutine.lift
 
+.. autofunction:: pyro.poutine.markov
+
 .. autofunction:: pyro.poutine.mask
 
 .. autofunction:: pyro.poutine.queue

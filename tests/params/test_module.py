@@ -56,7 +56,7 @@ def test_module_nn(nn_module):
     nn_module = nn_module()
     assert pyro.get_param_store()._params == {}
     pyro.module("module", nn_module)
-    for name in pyro.get_param_store().get_all_param_names():
+    for name in pyro.get_param_store():
         assert pyro.params.user_param_name(name) in nn_module.state_dict().keys()
 
 
@@ -65,7 +65,7 @@ def test_module_sequential(nn_module):
     pyro.clear_param_store()
     assert pyro.get_param_store()._params == {}
     pyro.module("module", nn_module)
-    for name in pyro.get_param_store().get_all_param_names():
+    for name in pyro.get_param_store():
         assert pyro.params.user_param_name(name) in nn_module.state_dict().keys()
 
 

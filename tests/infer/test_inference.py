@@ -13,7 +13,7 @@ import pyro.optim as optim
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
-                        TraceGraph_ELBO, RenyiELBO)
+                        TraceGraph_ELBO, RenyiELBO, TraceMeanField_ELBO)
 from tests.common import assert_equal, xfail_param, xfail_if_not_implemented
 
 
@@ -49,6 +49,9 @@ class NormalNormalTests(TestCase):
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000, Trace_ELBO())
 
+    def test_elbo_analytic_kl(self):
+        self.do_elbo_test(True, 3000, TraceMeanField_ELBO())
+
     def test_elbo_nonreparameterized(self):
         self.do_elbo_test(False, 15000, Trace_ELBO())
 
@@ -64,10 +67,10 @@ class NormalNormalTests(TestCase):
         def model():
             loc_latent = pyro.sample("loc_latent",
                                      dist.Normal(self.loc0, torch.pow(self.lam0, -0.5))
-                                     .independent(1))
+                                     .to_event(1))
             with pyro.plate('data', self.batch_size):
                 pyro.sample("obs",
-                            dist.Normal(loc_latent, torch.pow(self.lam, -0.5)).independent(1),
+                            dist.Normal(loc_latent, torch.pow(self.lam, -0.5)).to_event(1),
                             obs=self.data)
             return loc_latent
 
@@ -76,7 +79,7 @@ class NormalNormalTests(TestCase):
             log_sig_q = pyro.param("log_sig_q", self.analytic_log_sig_n.data.detach() - 0.14)
             sig_q = torch.exp(log_sig_q)
             Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
-            pyro.sample("loc_latent", Normal(loc_q, sig_q).independent(1))
+            pyro.sample("loc_latent", Normal(loc_q, sig_q).to_event(1))
 
         adam = optim.Adam({"lr": .001})
         svi = SVI(model, guide, adam, loss=loss)
@@ -236,6 +239,7 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
     data = torch.tensor([3.0, 2.0])  # two observations
     alpha_n = alpha0 + torch.tensor(float(n_data))  # posterior alpha
     beta_n = beta0 + torch.sum(data)  # posterior beta
+    prec = 0.2 if gamma_dist.has_rsample else 0.25
 
     def model(alpha0, beta0, alpha_n, beta_n):
         lambda_latent = pyro.sample("lambda_latent", gamma_dist(alpha0, beta0))
@@ -259,9 +263,9 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
         for k in range(n_steps):
             svi.step(alpha0, beta0, alpha_n, beta_n)
 
-    assert_equal(pyro.param("alpha_q"), alpha_n, prec=0.15, msg='{} vs {}'.format(
+    assert_equal(pyro.param("alpha_q"), alpha_n, prec=prec, msg='{} vs {}'.format(
         pyro.param("alpha_q").detach().cpu().numpy(), alpha_n.detach().cpu().numpy()))
-    assert_equal(pyro.param("beta_q"), beta_n, prec=0.15, msg='{} vs {}'.format(
+    assert_equal(pyro.param("beta_q"), beta_n, prec=prec, msg='{} vs {}'.format(
         pyro.param("beta_q").detach().cpu().numpy(), beta_n.detach().cpu().numpy()))
 
 

@@ -16,19 +16,18 @@ class Constant(Kernel):
     def __init__(self, input_dim, variance=None, active_dims=None, name="Constant"):
         super(Constant, self).__init__(input_dim, active_dims, name)
 
-        if variance is None:
-            variance = torch.tensor(1.)
+        variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
     def forward(self, X, Z=None, diag=False):
         variance = self.get_param("variance")
         if diag:
-            return variance.expand(X.shape[0])
+            return variance.expand(X.size(0))
 
         if Z is None:
             Z = X
-        return variance.expand(X.shape[0], Z.shape[0])
+        return variance.expand(X.size(0), Z.size(0))
 
 
 class WhiteNoise(Kernel):
@@ -42,17 +41,16 @@ class WhiteNoise(Kernel):
     def __init__(self, input_dim, variance=None, active_dims=None, name="WhiteNoise"):
         super(WhiteNoise, self).__init__(input_dim, active_dims, name)
 
-        if variance is None:
-            variance = torch.tensor(1.)
+        variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
     def forward(self, X, Z=None, diag=False):
         variance = self.get_param("variance")
         if diag:
-            return variance.expand(X.shape[0])
+            return variance.expand(X.size(0))
 
         if Z is None:
-            return variance.expand(X.shape[0]).diag()
+            return variance.expand(X.size(0)).diag()
         else:
-            return X.data.new_zeros(X.shape[0], Z.shape[0])
+            return X.data.new_zeros(X.size(0), Z.size(0))

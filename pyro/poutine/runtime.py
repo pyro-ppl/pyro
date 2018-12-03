@@ -56,8 +56,65 @@ class _DimAllocator(object):
             self._stack.pop()
 
 
-# Handles placement of enumeration and independence dimensions
+# Handles placement of plate dimensions
 _DIM_ALLOCATOR = _DimAllocator()
+
+
+class _EnumAllocator(object):
+    """
+    Dimension allocator for internal use by :func:`~pyro.poutine.markov`.
+    There is a single global instance.
+
+    Note that dimensions are indexed from the right, e.g. -1, -2.
+    Note that ids are simply nonnegative integers here.
+    """
+    def set_first_available_dim(self, first_available_dim):
+        """
+        Set the first available dim, which should be to the left of all
+        :class:`plate` dimensions, e.g. ``-1 - max_plate_nesting``. This should
+        be called once per program. In SVI this should be called only once per
+        (guide,model) pair.
+        """
+        assert first_available_dim < 0, first_available_dim
+        self.next_available_dim = first_available_dim
+        self.next_available_id = 0
+        self.dim_to_id = {}  # only the global ids
+
+    def allocate(self, scope_dims=None):
+        """
+        Allocate a new recyclable dim and a unique id.
+
+        If ``scope_dims`` is None, this allocates a global enumeration dim
+        that will never be recycled. If ``scope_dims`` is specified, this
+        allocates a local enumeration dim that can be reused by at any other
+        local site whose scope excludes this site.
+
+        :param set scope_dims: An optional set of (negative integer)
+            local enumeration dims to avoid when allocating this dim.
+        :return: A pair ``(dim, id)``, where ``dim`` is a negative integer
+            and ``id`` is a nonnegative integer.
+        :rtype: tuple
+        """
+        id_ = self.next_available_id
+        self.next_available_id += 1
+
+        dim = self.next_available_dim
+        if dim == -float('inf'):
+            raise ValueError("max_plate_nesting must be set to a finite value for parallel enumeration")
+        if scope_dims is None:
+            # allocate a new global dimension
+            self.next_available_dim -= 1
+            self.dim_to_id[dim] = id_
+        else:
+            # allocate a new local dimension
+            while dim in scope_dims:
+                dim -= 1
+
+        return dim, id_
+
+
+# Handles placement of enumeration dimensions
+_ENUM_ALLOCATOR = _EnumAllocator()
 
 
 class NonlocalExit(Exception):
@@ -80,7 +137,7 @@ class NonlocalExit(Exception):
         Reset the state of the frames remaining in the stack.
         Necessary for multiple re-executions in poutine.queue.
         """
-        for frame in _PYRO_STACK:
+        for frame in reversed(_PYRO_STACK):
             frame._reset()
             if type(frame).__name__ == "BlockMessenger" and frame.hide_fn(self.site):
                 break
@@ -124,11 +181,11 @@ def apply_stack(initial_msg):
     # msg is used to pass information up and down the stack
     msg = initial_msg
 
-    counter = 0
+    pointer = 0
     # go until time to stop?
-    for frame in stack:
+    for frame in reversed(stack):
 
-        counter = counter + 1
+        pointer = pointer + 1
 
         frame._process_message(msg)
 
@@ -137,7 +194,7 @@ def apply_stack(initial_msg):
 
     default_process_message(msg)
 
-    for frame in reversed(stack[0:counter]):
+    for frame in stack[-pointer:]:  # reversed(stack[0:pointer])
         frame._postprocess_message(msg)
 
     cont = msg["continuation"]

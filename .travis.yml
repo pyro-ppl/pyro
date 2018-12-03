@@ -6,13 +6,14 @@ env:
     global:
         - PYTHONPATH=$PWD:$PYTHONPATH
 
+cache:
+    directories:
+        - $HOME/.data
+
 install:
     - pip install -U pip
-    - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then
-          pip install http://download.pytorch.org/whl/cpu/torch-0.4.0-cp27-cp27mu-linux_x86_64.whl;
-      else
-          pip install http://download.pytorch.org/whl/cpu/torch-0.4.0-cp36-cp36m-linux_x86_64.whl;
-      fi
+    - pip install torch_nightly==1.0.0.dev20181201 -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
+    - pip install torchvision --no-dependencies
     - pip install .[test]
     - pip freeze
 
@@ -45,12 +46,6 @@ jobs:
           script:
               - pip install -e .[profile]
               - pytest -vs --benchmark-disable tests/perf/test_benchmark.py
-        - python: 3.6
-          if: type = cron
-          env: STAGE=perf
-          script:
-              - pip install -e .[profile]
-              - make perf-test
         - stage: profiler
           python: 2.7
           env: STAGE=profiler
@@ -64,7 +59,7 @@ jobs:
         - python: 2.7
           env: STAGE=examples
           script:
-              - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples
+              - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10
               - grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
                   | CI=1 xargs pytest -vx --nbval-lax --current-env
         - python: 3.6
@@ -72,7 +67,10 @@ jobs:
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
         - python: 3.6
           env: STAGE=examples
-          script: pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples
+          script:
+              - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10
+              - grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
+                  | CI=1 xargs pytest -vx --nbval-lax --current-env
         - stage: integration test
           python: 2.7
           env: STAGE=integration_batch_1

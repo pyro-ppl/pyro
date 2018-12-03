@@ -46,7 +46,7 @@ def test_independent(base_dist, sample_shape, batch_shape, reinterpreted_batch_n
 def test_expand(sample_shape, batch_shape, event_shape):
     ones_shape = torch.Size((1,) * len(batch_shape))
     zero = torch.zeros(ones_shape + event_shape)
-    d0 = dist.Uniform(zero - 2, zero + 1).independent(len(event_shape))
+    d0 = dist.Uniform(zero - 2, zero + 1).to_event(len(event_shape))
 
     assert d0.sample().shape == ones_shape + event_shape
     assert d0.mean.shape == ones_shape + event_shape
@@ -62,9 +62,9 @@ def test_expand(sample_shape, batch_shape, event_shape):
                                         torch.eye(2).expand(*(event_shape + (2, 2))))
     if len(event_shape) > len(base_dist.batch_shape):
         with pytest.raises(ValueError):
-            base_dist.independent(len(event_shape)).expand(batch_shape)
+            base_dist.to_event(len(event_shape)).expand(batch_shape)
     else:
-            expanded = base_dist.independent(len(event_shape)).expand(batch_shape)
+            expanded = base_dist.to_event(len(event_shape)).expand(batch_shape)
             assert expanded.batch_shape == batch_shape
             assert expanded.event_shape == (base_dist.batch_shape[len(base_dist.batch_shape) -
                                                                   expanded.reinterpreted_batch_ndims:] +
