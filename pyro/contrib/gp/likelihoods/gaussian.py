@@ -40,10 +40,9 @@ class Gaussian(Likelihood):
         :returns: a tensor sampled from likelihood
         :rtype: torch.Tensor
         """
-        variance = self.get_param("variance")
-        y_var = f_var + variance
+        y_var = f_var + self.variance
 
         y_dist = dist.Normal(f_loc, y_var)
         if y is not None:
             y_dist = y_dist.expand_by(y.shape[:-f_loc.dim()]).to_event(y.dim())
-        return pyro.sample(self.y_name, y_dist, obs=y)
+        return pyro.sample("y", y_dist, obs=y)

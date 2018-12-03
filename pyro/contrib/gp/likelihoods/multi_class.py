@@ -25,8 +25,8 @@ class MultiClass(Likelihood):
     :param callable response_function: A mapping to correct domain for MultiClass
         likelihood.
     """
-    def __init__(self, num_classes, response_function=None, name="MultiClass"):
-        super(MultiClass, self).__init__(name)
+    def __init__(self, num_classes, response_function=None):
+        super(MultiClass, self).__init__()
         self.num_classes = num_classes
         self.response_function = _softmax if response_function is None else response_function
 
@@ -64,4 +64,4 @@ class MultiClass(Likelihood):
         y_dist = dist.Categorical(f_res)
         if y is not None:
             y_dist = y_dist.expand_by(y.shape[:-f_res.dim() + 1]).to_event(y.dim())
-        return pyro.sample(self.y_name, y_dist, obs=y)
+        return pyro.sample("y", y_dist, obs=y)

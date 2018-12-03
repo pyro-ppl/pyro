@@ -93,10 +93,8 @@ class SparseGPRegression(GPModel):
         a covariance matrix to help stablize its Cholesky decomposition.
     :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, Xu, noise=None, mean_function=None, approx=None,
-                 jitter=1e-6, name="SGPR"):
-        super(SparseGPRegression, self).__init__(X, y, kernel, mean_function, jitter,
-                                                 name)
+    def __init__(self, X, y, kernel, Xu, noise=None, mean_function=None, approx=None, jitter=1e-6):
+        super(SparseGPRegression, self).__init__(X, y, kernel, mean_function, jitter)
 
         self.Xu = Parameter(Xu)
 
@@ -115,9 +113,6 @@ class SparseGPRegression(GPModel):
     def model(self):
         self.set_mode("model")
 
-        Xu = self.get_param("Xu")
-        noise = self.get_param("noise")
-
         # W = (inv(Luu) @ Kuf).T
         # Qff = Kfu @ inv(Kuu) @ Kuf = W @ W.T
         # Fomulas for each approximation method are
@@ -128,21 +123,21 @@ class SparseGPRegression(GPModel):
         # trace_term is added into log_prob
 
         N = self.X.size(0)
-        M = Xu.size(0)
-        Kuu = self.kernel(Xu).contiguous()
+        M = self.Xu.size(0)
+        Kuu = self.kernel(self.Xu).contiguous()
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.cholesky()
-        Kuf = self.kernel(Xu, self.X)
+        Kuf = self.kernel(self.Xu, self.X)
         W = Kuf.trtrs(Luu, upper=False)[0].t()
 
-        D = noise.expand(N)
+        D = self.noise.expand(N)
         if self.approx == "FITC" or self.approx == "VFE":
             Kffdiag = self.kernel(self.X, diag=True)
             Qffdiag = W.pow(2).sum(dim=-1)
             if self.approx == "FITC":
                 D = D + Kffdiag - Qffdiag
             else:  # approx = "VFE"
-                trace_term = (Kffdiag - Qffdiag).sum() / noise
+                trace_term = (Kffdiag - Qffdiag).sum() / self.noise
 
         zero_loc = self.X.new_zeros(N)
         f_loc = zero_loc + self.mean_function(self.X)
@@ -151,12 +146,10 @@ class SparseGPRegression(GPModel):
             return f_loc, f_var
         else:
             if self.approx == "VFE":
-                trace_term_name = param_with_module_name(self.name, "trace_term")
-                pyro.sample(trace_term_name, dist.Bernoulli(probs=torch.exp(-trace_term / 2.)),
-                            obs=torch.tensor(1., dtype=trace_term.dtype, device=trace_term.device))
+                pyro.sample("trace_term", dist.Bernoulli(probs=torch.exp(-trace_term / 2.)),
+                            obs=trace_term.new_tensor(1.))
 
-            y_name = param_with_module_name(self.name, "y")
-            return pyro.sample(y_name,
+            return pyro.sample("y",
                                dist.LowRankMultivariateNormal(f_loc, W, D)
                                    .expand_by(self.y.shape[:-1])
                                    .to_event(self.y.dim() - 1),
@@ -164,11 +157,6 @@ class SparseGPRegression(GPModel):
 
     def guide(self):
         self.set_mode("guide")
-
-        Xu = self.get_param("Xu")
-        noise = self.get_param("noise")
-
-        return Xu, noise
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
@@ -191,7 +179,7 @@ class SparseGPRegression(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        Xu, noise = self.guide()
+        self.set_mode("guide")
 
         # W = inv(Luu) @ Kuf
         # Ws = inv(Luu) @ Kus
@@ -207,18 +195,18 @@ class SparseGPRegression(GPModel):
         #     = kss - Ksu @ inv(Kuu) @ Kus + Ws.T @ inv(L).T @ inv(L) @ Ws
 
         N = self.X.size(0)
-        M = Xu.size(0)
+        M = self.Xu.size(0)
 
         # TODO: cache these calculations to get faster inference
 
-        Kuu = self.kernel(Xu).contiguous()
+        Kuu = self.kernel(self.Xu).contiguous()
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.cholesky()
 
-        Kuf = self.kernel(Xu, self.X)
+        Kuf = self.kernel(self.Xu, self.X)
 
         W = Kuf.trtrs(Luu, upper=False)[0]
-        D = noise.expand(N)
+        D = self.noise.expand(N)
         if self.approx == "FITC":
             Kffdiag = self.kernel(self.X, diag=True)
             Qffdiag = W.pow(2).sum(dim=0)
@@ -236,7 +224,7 @@ class SparseGPRegression(GPModel):
 
         # End caching ----------
 
-        Kus = self.kernel(Xu, Xnew)
+        Kus = self.kernel(self.Xu, Xnew)
         Ws = Kus.trtrs(Luu, upper=False)[0]
         pack = torch.cat((W_Dinv_y, Ws), dim=1)
         Linv_pack = pack.trtrs(L, upper=False)[0]
@@ -251,7 +239,7 @@ class SparseGPRegression(GPModel):
         if full_cov:
             Kss = self.kernel(Xnew).contiguous()
             if not noiseless:
-                Kss.view(-1)[::Xnew.shape[0] + 1] += noise  # add noise to the diagonal
+                Kss.view(-1)[::C + 1] += self.noise  # add noise to the diagonal
             Qss = Ws.t().matmul(Ws)
             cov = Kss - Qss + Linv_Ws.t().matmul(Linv_Ws)
         else:
