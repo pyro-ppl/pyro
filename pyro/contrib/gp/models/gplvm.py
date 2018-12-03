@@ -44,7 +44,7 @@ class GPLVM(Parameterized):
         >>> # Then, define a Gaussian Process model with input X_init and output y:
         >>> kernel = gp.kernels.RBF(input_dim=2, lengthscale=torch.ones(2))
         >>> Xu = torch.zeros(20, 2)  # initial inducing inputs of sparse model
-        >>> gpmodule = gp.models.SparseGPRegression(X_loc, y, kernel, Xu)
+        >>> gpmodule = gp.models.SparseGPRegression(X_init, y, kernel, Xu)
         >>> # Finally, wrap gpmodule by GPLVM, optimize, and get the "learned" mean of X:
         >>> gplvm = gp.models.GPLVM(gpmodule)
         >>> gp.util.train(gplvm)  # doctest: +SKIP
