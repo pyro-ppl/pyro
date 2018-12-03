@@ -21,8 +21,8 @@ class Gaussian(Likelihood):
     """
     def __init__(self, variance=None, name="Gaussian"):
         super(Gaussian, self).__init__(name)
-        if variance is None:
-            variance = torch.tensor(1.)
+
+        variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 

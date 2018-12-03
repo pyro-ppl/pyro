@@ -34,8 +34,7 @@ class Kernel(Parameterized):
         if active_dims is None:
             active_dims = list(range(input_dim))
         elif input_dim != len(active_dims):
-            raise ValueError("Input size and the length of active dimensionals should "
-                             "be equal.")
+            raise ValueError("Input size and the length of active dimensionals should be equal.")
         self.input_dim = input_dim
         self.active_dims = active_dims
 

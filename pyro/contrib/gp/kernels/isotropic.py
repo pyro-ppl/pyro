@@ -31,13 +31,11 @@ class Isotropy(Kernel):
                  name=None):
         super(Isotropy, self).__init__(input_dim, active_dims, name)
 
-        if variance is None:
-            variance = torch.tensor(1.)
+        variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
-        if lengthscale is None:
-            lengthscale = torch.tensor(1.)
+        lengthscale = torch.tensor(1.) if lengthscale is None else lengthscale
         self.lengthscale = Parameter(lengthscale)
         self.set_constraint("lengthscale", constraints.positive)
 

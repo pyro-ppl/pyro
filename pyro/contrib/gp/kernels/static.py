@@ -16,8 +16,7 @@ class Constant(Kernel):
     def __init__(self, input_dim, variance=None, active_dims=None, name="Constant"):
         super(Constant, self).__init__(input_dim, active_dims, name)
 
-        if variance is None:
-            variance = torch.tensor(1.)
+        variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
@@ -42,8 +41,7 @@ class WhiteNoise(Kernel):
     def __init__(self, input_dim, variance=None, active_dims=None, name="WhiteNoise"):
         super(WhiteNoise, self).__init__(input_dim, active_dims, name)
 
-        if variance is None:
-            variance = torch.tensor(1.)
+        variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 

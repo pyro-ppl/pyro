@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 from unittest import TestCase
 
-import numpy as np
 import pytest
 import torch
 
@@ -53,7 +52,7 @@ class FlowTests(TestCase):
         else:
             numeric_ldt = torch.log(torch.abs(jacobian.det()))
 
-        ldt_discrepancy = np.fabs(analytic_ldt - numeric_ldt)
+        ldt_discrepancy = (analytic_ldt - numeric_ldt).abs()
         assert ldt_discrepancy < self.epsilon
 
         # Test that lower triangular with unit diagonal for autoregressive flows
