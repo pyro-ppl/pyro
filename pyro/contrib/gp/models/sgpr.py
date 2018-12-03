@@ -102,7 +102,7 @@ class SparseGPRegression(GPModel):
 
         noise = self.X.new_tensor(1.) if noise is None else noise
         self.noise = Parameter(noise)
-        self.set_constraint("noise", constraints.greater_than(self.jitter))
+        self.set_constraint("noise", constraints.positive)
 
         if approx is None:
             self.approx = "VFE"

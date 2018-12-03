@@ -71,7 +71,7 @@ class GPRegression(GPModel):
 
         noise = self.X.new_tensor(1.) if noise is None else noise
         self.noise = Parameter(noise)
-        self.set_constraint("noise", torchdist.constraints.greater_than(self.jitter))
+        self.set_constraint("noise", torchdist.constraints.positive)
 
     def model(self):
         self.set_mode("model")
@@ -80,7 +80,7 @@ class GPRegression(GPModel):
 
         N = self.X.size(0)
         Kff = self.kernel(self.X)
-        Kff.view(-1)[::N + 1] += noise  # add noise to diagonal
+        Kff.view(-1)[::N + 1] += self.jitter + noise  # add noise to diagonal
         Lff = Kff.cholesky()
 
         zero_loc = self.X.new_zeros(self.X.size(0))
@@ -128,7 +128,7 @@ class GPRegression(GPModel):
 
         N = self.X.size(0)
         Kff = self.kernel(self.X).contiguous()
-        Kff.view(-1)[::N + 1] += noise  # add noise to the diagonal
+        Kff.view(-1)[::N + 1] += self.jitter + noise  # add noise to the diagonal
         Lff = Kff.cholesky()
 
         y_residual = self.y - self.mean_function(self.X)
