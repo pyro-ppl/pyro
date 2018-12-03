@@ -202,10 +202,7 @@ def test_gamma_normal(jit, use_multinomial_sampling):
     assert_equal(posterior.mean, true_std, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False,
-                                 mark_jit(True, marks=[pytest.mark.xfail(
-                                     reason="https://github.com/uber/pyro/issues/1418")])
-                                 ], ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_dirichlet_categorical(jit):
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
@@ -234,12 +231,13 @@ def test_gamma_beta(jit):
     nuts_kernel = NUTS(model, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal(['alpha', 'beta']).empirical
-    assert_equal(posterior['alpha'].mean, true_alpha, prec=0.05)
+    assert_equal(posterior['alpha'].mean, true_alpha, prec=0.06)
     assert_equal(posterior['beta'].mean, true_beta, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True,
-                                                 marks=[pytest.mark.skip("FIXME: Slow on JIT.")])],
+@pytest.mark.parametrize("jit", [False,
+                                 mark_jit(True, marks=[pytest.mark.skip(
+                                     "https://github.com/uber/pyro/issues/1487")])],
                          ids=jit_idfn)
 def test_gaussian_mixture_model(jit):
     K, N = 3, 1000
