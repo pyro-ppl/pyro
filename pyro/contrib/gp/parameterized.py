@@ -159,7 +159,12 @@ class Parameterized(nn.Module):
         # TODO: create a new argument `autoguide_args` to store other args for other
         # constructors. For example, in LowRankMVN, we need argument `rank`.
         p = self._buffers[name]
-        if dist_constructor is dist.Normal:
+        if dist_constructor is dist.Delta:
+            p_map = Parameter(p.detach())
+            self.register_parameter("{}_map".format(name), p_map)
+            self.set_constraint("{}_map".format(name), self._priors[name].support)
+            dist_args = {"map"}
+        elif dist_constructor is dist.Normal:
             loc = Parameter(biject_to(self._priors[name].support).inv(p).detach())
             scale = Parameter(loc.new_ones(loc.shape))
             self.register_parameter("{}_loc".format(name), loc)
@@ -172,11 +177,8 @@ class Parameterized(nn.Module):
             self.register_parameter("{}_loc".format(name), loc)
             self.register_parameter("{}_scale_tril".format(name), scale_tril)
             dist_args = {"loc", "scale_tril"}
-        else:  # dist_constructor is dist.Delta
-            p_map = Parameter(p.detach())
-            self.register_parameter("{}_map".format(name), p_map)
-            self.set_constraint("{}_map".format(name), self._priors[name].support)
-            dist_args = {"map"}
+        else:
+            raise NotImplementedError
 
         if dist_constructor is not dist.Delta:
             # each arg has a constraint, so we set constraints for them
