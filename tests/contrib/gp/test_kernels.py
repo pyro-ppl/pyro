@@ -5,8 +5,9 @@ from collections import namedtuple
 import pytest
 import torch
 
-from pyro.contrib.gp.kernels import (RBF, Brownian, Constant, Coregionalize, Cosine, Exponent, Exponential, Linear,
-                                     Matern32, Matern52, Periodic, Polynomial, Product, RationalQuadratic, Sum,
+from pyro.contrib.gp.kernels import (RBF, Brownian, Constant, Coregionalize, Cosine, Exponent,
+                                     Exponential, Linear, Matern32, Matern52, Periodic,
+                                     Polynomial, Product, RationalQuadratic, Sum,
                                      VerticalScaling, Warping, WhiteNoise)
 from tests.common import assert_equal
 
@@ -134,9 +135,6 @@ def test_combination():
 
     assert_equal(K.data, k(X, Z).data)
 
-    # test get_subkernel
-    assert k.get_subkernel(k5.name) is k5
-
 
 def test_active_dims_overlap_ok():
     k1 = Matern52(2, variance, lengthscale[0], active_dims=[0, 1])
@@ -170,7 +168,3 @@ def test_transforming():
     assert_equal(K_owarp.data, Warping(k, owarping_coef=owarping_coef)(X, Z).data)
     assert_equal(K_vscale.data, VerticalScaling(k, vscaling_fn=vscaling_fn)(X, Z).data)
     assert_equal(K.exp().data, Exponent(k)(X, Z).data)
-
-    # test get_subkernel
-    k1 = Sum(Warping(k, iwarping_fn=iwarping_fn), TEST_CASES[7][0])
-    assert k1.get_subkernel(k.name) is k

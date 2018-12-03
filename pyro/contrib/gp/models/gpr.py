@@ -69,21 +69,21 @@ class GPRegression(GPModel):
                  name="GPR"):
         super(GPRegression, self).__init__(X, y, kernel, mean_function, jitter, name)
 
-        noise = self.X.new_ones(()) if noise is None else noise
+        noise = self.X.new_tensor(1.) if noise is None else noise
         self.noise = Parameter(noise)
-        self.set_constraint("noise", torchdist.constraints.greater_than(self.jitter))
+        self.set_constraint("noise", torchdist.constraints.positive)
 
     def model(self):
         self.set_mode("model")
 
         noise = self.get_param("noise")
 
-        N = self.X.shape[0]
+        N = self.X.size(0)
         Kff = self.kernel(self.X)
-        Kff.view(-1)[::N + 1] += noise  # add noise to diagonal
+        Kff.view(-1)[::N + 1] += self.jitter + noise  # add noise to diagonal
         Lff = Kff.cholesky()
 
-        zero_loc = self.X.new_zeros(self.X.shape[0])
+        zero_loc = self.X.new_zeros(self.X.size(0))
         f_loc = zero_loc + self.mean_function(self.X)
         if self.y is None:
             f_var = Lff.pow(2).sum(dim=-1)
@@ -126,9 +126,9 @@ class GPRegression(GPModel):
         self._check_Xnew_shape(Xnew)
         noise = self.guide()
 
-        N = self.X.shape[0]
+        N = self.X.size(0)
         Kff = self.kernel(self.X).contiguous()
-        Kff.view(-1)[::N + 1] += noise  # add noise to the diagonal
+        Kff.view(-1)[::N + 1] += self.jitter + noise  # add noise to the diagonal
         Lff = Kff.cholesky()
 
         y_residual = self.y - self.mean_function(self.X)
@@ -136,7 +136,7 @@ class GPRegression(GPModel):
                                full_cov, jitter=self.jitter)
 
         if full_cov and not noiseless:
-            M = Xnew.shape[0]
+            M = Xnew.size(0)
             cov = cov.contiguous()
             cov.view(-1, M * M)[:, ::M + 1] += noise  # add noise to the diagonal
         if not full_cov and not noiseless:
@@ -169,7 +169,7 @@ class GPRegression(GPModel):
         noise = self.guide().detach()
         X = self.X.clone().detach()
         y = self.y.clone().detach()
-        N = X.shape[0]
+        N = X.size(0)
         Kff = self.kernel(X).contiguous()
         Kff.view(-1)[::N + 1] += noise  # add noise to the diagonal
 

@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import os
 import warnings
 import logging
 
@@ -26,6 +27,8 @@ def constant(*args, **kwargs):
 
 
 logger = logging.getLogger(__name__)
+pytestmark = pytest.mark.skipif('CUDA_TEST' in os.environ,
+                                reason='https://github.com/uber/pyro/issues/1419')
 
 
 def test_simple():
