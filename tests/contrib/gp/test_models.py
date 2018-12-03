@@ -13,7 +13,7 @@ from pyro.contrib.gp.kernels import Cosine, Matern32, RBF, WhiteNoise
 from pyro.contrib.gp.likelihoods import Gaussian
 from pyro.contrib.gp.models import (GPLVM, GPRegression, SparseGPRegression,
                                     VariationalGP, VariationalSparseGP)
-from pyro.infer import SVI, Trace_ELBO
+from pyro.contrib.gp.util import train
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.params import param_with_module_name
@@ -174,7 +174,7 @@ def test_inference(model_class, X, y, kernel, likelihood):
     target_y = generator(sample_shape=torch.Size([1000])).detach()
     gp.set_data(X, target_y)
 
-    gp.optimize(optim.Adam({"lr": 0.01}), num_steps=1000)
+    train(gp)
 
     y_cov = gp.kernel(X)
     target_y_cov = kernel(X)
@@ -190,7 +190,7 @@ def test_inference_sgpr():
     Xu = torch.arange(0., 5.5, 0.5)
 
     sgpr = SparseGPRegression(X, y, kernel, Xu)
-    sgpr.optimize(optim.Adam({"lr": 0.01}), num_steps=1000)
+    train(sgpr)
 
     Xnew = torch.arange(0., 5.05, 0.05)
     loc, var = sgpr(Xnew, full_cov=False)
@@ -208,7 +208,8 @@ def test_inference_vsgp():
     Xu = torch.arange(0., 5.5, 0.5)
 
     vsgp = VariationalSparseGP(X, y, kernel, Xu, Gaussian())
-    vsgp.optimize(optim.Adam({"lr": 0.03}), num_steps=1000)
+    optimizer = optim.Adam({"lr": 0.03})
+    train(vsgp, optimizer)
 
     Xnew = torch.arange(0., 5.05, 0.05)
     loc, var = vsgp(Xnew, full_cov=False)
@@ -226,7 +227,7 @@ def test_inference_whiten_vsgp():
     Xu = torch.arange(0., 5.5, 0.5)
 
     vsgp = VariationalSparseGP(X, y, kernel, Xu, Gaussian(), whiten=True)
-    vsgp.optimize(optim.Adam({"lr": 0.01}), num_steps=1000)
+    train(vsgp)
 
     Xnew = torch.arange(0., 5.05, 0.05)
     loc, var = vsgp(Xnew, full_cov=False)
@@ -243,9 +244,9 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
     elif model_class is VariationalGP:
         gp = model_class(X, y, kernel, likelihood, latent_shape=torch.Size([]))
     else:  # model_class is SparseVariationalGP
-        gp = model_class(X, y, kernel, X, likelihood, latent_shape=torch.Size([]))
+        gp = model_class(X, y, kernel, X.clone(), likelihood, latent_shape=torch.Size([]))
 
-    gp.optimize(num_steps=1)
+    train(gp, num_steps=1)
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
@@ -256,15 +257,15 @@ def test_inference_with_whiten(model_class, X, y, kernel, likelihood):
     elif model_class is VariationalGP:
         gp = model_class(X, y, kernel, likelihood, whiten=True)
     else:  # model_class is SparseVariationalGP
-        gp = model_class(X, y, kernel, X, likelihood, whiten=True)
+        gp = model_class(X, y, kernel, X.clone(), likelihood, whiten=True)
 
-    gp.optimize(num_steps=1)
+    train(gp, num_steps=1)
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_hmc(model_class, X, y, kernel, likelihood):
     if model_class is SparseGPRegression or model_class is VariationalSparseGP:
-        gp = model_class(X, y, kernel, X, likelihood)
+        gp = model_class(X, y, kernel, X.clone(), likelihood)
     else:
         gp = model_class(X, y, kernel, likelihood)
 
@@ -294,34 +295,41 @@ def test_hmc(model_class, X, y, kernel, likelihood):
 
 
 def test_inference_deepGP():
-    gp1 = GPRegression(X, None, kernel, name="GPR1")
+    gp1 = GPRegression(X, None, RBF(input_dim=3, variance=torch.tensor(3.),
+                                    lengthscale=torch.tensor(2.)), name="GPR1")
     Z, _ = gp1.model()
     gp2 = VariationalSparseGP(Z, y2D, Matern32(input_dim=3), Z.clone(),
-                              likelihood, name="GPR2")
+                              Gaussian(torch.tensor(1e-6)), name="GPR2")
 
-    def model():
-        Z, _ = gp1.model()
-        gp2.set_data(Z, y2D)
-        gp2.model()
+    class DeepGP(torch.nn.Module):
+        def __init__(self, gp1, gp2):
+            super(DeepGP, self).__init__()
+            self.gp1 = gp1
+            self.gp2 = gp2
 
-    def guide():
-        gp1.guide()
-        gp2.guide()
+        def model(self):
+            Z, _ = self.gp1.model()
+            self.gp2.set_data(Z, y2D)
+            self.gp2.model()
 
-    svi = SVI(model, guide, optim.Adam({}), Trace_ELBO())
-    svi.step()
+        def guide(self):
+            self.gp1.guide()
+            self.gp2.guide()
+
+    deepgp = DeepGP(gp1, gp2)
+    train(deepgp, num_steps=1)
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_gplvm(model_class, X, y, kernel, likelihood):
     if model_class is SparseGPRegression or model_class is VariationalSparseGP:
-        gp = model_class(X, y, kernel, X, likelihood)
+        gp = model_class(X, y, kernel, X.clone(), likelihood)
     else:
         gp = model_class(X, y, kernel, likelihood)
 
     gplvm = GPLVM(gp)
     # test inference
-    gplvm.optimize(num_steps=1)
+    train(gplvm, num_steps=1)
     # test forward
     gplvm(Xnew=X)
 
@@ -349,76 +357,79 @@ def _mape(y_true, y_pred):
     return ((y_pred - y_true) / y_true).abs().mean()
 
 
-def _post_test_mean_function(model, Xnew, y_true):
+def _post_test_mean_function(gpmodule, Xnew, y_true):
     assert_equal(pyro.param("a").item(), 2, prec=0.02)
     assert_equal(pyro.param("b").item(), 3, prec=0.02)
 
-    y_pred, _ = model(Xnew)
+    y_pred, _ = gpmodule(Xnew)
     assert_equal(_mape(y_true, y_pred).item(), 0, prec=0.02)
 
 
 def test_mean_function_GPR():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
-    model = GPRegression(X, y, kernel, mean_function=mean_fn)
-    model.optimize(optim.Adam({"lr": 0.01}))
-    _post_test_mean_function(model, Xnew, ynew)
+    gpmodule = GPRegression(X, y, kernel, mean_function=mean_fn)
+    train(gpmodule)
+    _post_test_mean_function(gpmodule, Xnew, ynew)
 
 
 def test_mean_function_SGPR():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
     Xu = X[::20].clone()
-    model = SparseGPRegression(X, y, kernel, Xu, mean_function=mean_fn)
-    model.optimize(optim.Adam({"lr": 0.01}))
-    _post_test_mean_function(model, Xnew, ynew)
+    gpmodule = SparseGPRegression(X, y, kernel, Xu, mean_function=mean_fn)
+    train(gpmodule)
+    _post_test_mean_function(gpmodule, Xnew, ynew)
 
 
 def test_mean_function_SGPR_DTC():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
     Xu = X[::20].clone()
-    model = SparseGPRegression(X, y, kernel, Xu, mean_function=mean_fn, approx="DTC")
-    model.optimize(optim.Adam({"lr": 0.01}))
-    _post_test_mean_function(model, Xnew, ynew)
+    gpmodule = SparseGPRegression(X, y, kernel, Xu, mean_function=mean_fn, approx="DTC")
+    train(gpmodule)
+    _post_test_mean_function(gpmodule, Xnew, ynew)
 
 
 def test_mean_function_SGPR_FITC():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
     Xu = X[::20].clone()
-    model = SparseGPRegression(X, y, kernel, Xu, mean_function=mean_fn, approx="FITC")
-    model.optimize(optim.Adam({"lr": 0.01}))
-    _post_test_mean_function(model, Xnew, ynew)
+    gpmodule = SparseGPRegression(X, y, kernel, Xu, mean_function=mean_fn, approx="FITC")
+    train(gpmodule)
+    _post_test_mean_function(gpmodule, Xnew, ynew)
 
 
 def test_mean_function_VGP():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
     likelihood = Gaussian()
-    model = VariationalGP(X, y, kernel, likelihood, mean_function=mean_fn)
-    model.optimize(optim.Adam({"lr": 0.01}))
-    _post_test_mean_function(model, Xnew, ynew)
+    gpmodule = VariationalGP(X, y, kernel, likelihood, mean_function=mean_fn)
+    train(gpmodule)
+    _post_test_mean_function(gpmodule, Xnew, ynew)
 
 
 def test_mean_function_VGP_whiten():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
     likelihood = Gaussian()
-    model = VariationalGP(X, y, kernel, likelihood, mean_function=mean_fn,
-                          whiten=True)
-    model.optimize(optim.Adam({"lr": 0.1}))
-    _post_test_mean_function(model, Xnew, ynew)
+    gpmodule = VariationalGP(X, y, kernel, likelihood, mean_function=mean_fn,
+                             whiten=True)
+    optimizer = optim.Adam({"lr": 0.1})
+    train(gpmodule, optimizer)
+    _post_test_mean_function(gpmodule, Xnew, ynew)
 
 
 def test_mean_function_VSGP():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
     Xu = X[::20].clone()
     likelihood = Gaussian()
-    model = VariationalSparseGP(X, y, kernel, Xu, likelihood, mean_function=mean_fn)
-    model.optimize(optim.Adam({"lr": 0.02}))
-    _post_test_mean_function(model, Xnew, ynew)
+    gpmodule = VariationalSparseGP(X, y, kernel, Xu, likelihood, mean_function=mean_fn)
+    optimizer = optim.Adam({"lr": 0.02})
+    train(gpmodule, optimizer)
+    _post_test_mean_function(gpmodule, Xnew, ynew)
 
 
 def test_mean_function_VSGP_whiten():
     X, y, Xnew, ynew, kernel, mean_fn = _pre_test_mean_function()
     Xu = X[::20].clone()
     likelihood = Gaussian()
-    model = VariationalSparseGP(X, y, kernel, Xu, likelihood, mean_function=mean_fn,
-                                whiten=True)
-    model.optimize(optim.Adam({"lr": 0.1}))
-    _post_test_mean_function(model, Xnew, ynew)
+    gpmodule = VariationalSparseGP(X, y, kernel, Xu, likelihood, mean_function=mean_fn,
+                                   whiten=True)
+    optimizer = optim.Adam({"lr": 0.1})
+    train(gpmodule, optimizer)
+    _post_test_mean_function(gpmodule, Xnew, ynew)

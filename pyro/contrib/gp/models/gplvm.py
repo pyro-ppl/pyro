@@ -5,8 +5,6 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-import pyro.infer as infer
-import pyro.optim as optim
 from pyro.contrib.gp.util import Parameterized
 from pyro.distributions.util import eye_like
 from pyro.params import param_with_module_name
@@ -49,7 +47,7 @@ class GPLVM(Parameterized):
         >>> gpmodule = gp.models.SparseGPRegression(X_init, y, kernel, Xu)
         >>> # Finally, wrap gpmodule by GPLVM, optimize, and get the "learned" mean of X:
         >>> gplvm = gp.models.GPLVM(gpmodule)
-        >>> gplvm.optimize()  # doctest: +SKIP
+        >>> gp.util.train(gplvm)  # doctest: +SKIP
         >>> X = gplvm.get_param("X_loc")
 
     Reference:
@@ -120,22 +118,3 @@ class GPLVM(Parameterized):
         self.guide()
         self._call_base_model_guide = True
         return self.base_model(**kwargs)
-
-    def optimize(self, optimizer=optim.Adam({}), num_steps=1000):
-        """
-        A convenient method to optimize parameters for GPLVM model using
-        :class:`~pyro.infer.svi.SVI`.
-
-        :param ~optim.PyroOptim optimizer: A Pyro optimizer.
-        :param int num_steps: Number of steps to run SVI.
-        :returns: a list of losses during the training procedure
-        :rtype: list
-        """
-        if not isinstance(optimizer, optim.PyroOptim):
-            raise ValueError("Optimizer should be an instance of "
-                             "pyro.optim.PyroOptim class.")
-        svi = infer.SVI(self.model, self.guide, optimizer, loss=infer.Trace_ELBO())
-        losses = []
-        for i in range(num_steps):
-            losses.append(svi.step())
-        return losses
