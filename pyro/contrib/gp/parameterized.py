@@ -66,7 +66,7 @@ class Parameterized(nn.Module):
 
     def set_constraint(self, name, constraint):
         """
-        Sets a constraint to a parameter.
+        Sets the constraint of an existing parameter.
 
         :param str name: Name of the parameter.
         :param ~constraints.Constraint constraint: A PyTorch constraint. See
@@ -105,7 +105,7 @@ class Parameterized(nn.Module):
 
     def set_prior(self, name, prior):
         """
-        Sets a prior to a parameter.
+        Sets the constraint of an existing parameter.
 
         :param str name: Name of the parameter.
         :param ~pyro.distributions.distribution.Distribution prior: A Pyro prior
@@ -126,8 +126,8 @@ class Parameterized(nn.Module):
 
     def autoguide(self, name, dist_constructor):
         """
-        Sets an autoguide for a parameter with name ``name`` (mimic the behavior
-        of module :mod:`pyro.contrib.autoguide`).
+        Sets an autoguide for an existing parameter with name ``name`` (mimic
+        the behavior of module :mod:`pyro.contrib.autoguide`).
 
         ..note:: `dist_constructor` should be one of
             :class:`~pyro.distributions.Delta`,
@@ -143,8 +143,8 @@ class Parameterized(nn.Module):
             raise ValueError("There is no prior for parameter: {}".format(name))
 
         if dist_constructor not in [dist.Delta, dist.Normal, dist.MultivariateNormal]:
-            raise ValueError("Currently, only support autoguide for Delta, Normal, "
-                             "and MultivariateNormal distributions.")
+            raise NotImplementedError("Unsupported distribution type: {}"
+                                      .format(dist_constructor))
 
         if name in self._guides:
             # delete previous guide's parameters
@@ -177,6 +177,8 @@ class Parameterized(nn.Module):
             self.register_parameter("{}_loc".format(name), loc)
             self.register_parameter("{}_scale_tril".format(name), scale_tril)
             dist_args = {"loc", "scale_tril"}
+        else:
+            raise NotImplementedError
 
         if dist_constructor is not dist.Delta:
             # each arg has a constraint, so we set constraints for them
