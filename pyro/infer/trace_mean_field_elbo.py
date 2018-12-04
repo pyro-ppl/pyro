@@ -86,8 +86,8 @@ class TraceMeanField_ELBO(Trace_ELBO):
         """
         loss = 0.0
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            loss_particle = self._differentiable_loss_particle(model_trace, guide_trace)
-            loss += loss_particle / self.num_particles
+            loss_particle, _ = self._differentiable_loss_particle(model_trace, guide_trace)
+            loss = loss + loss_particle / self.num_particles
 
         warn_if_nan(loss, "loss")
         return loss

@@ -1,14 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-import logging
-import warnings
-
 import torch
 
 import pyro.ops.jit
 from tests.common import assert_equal
-
-logger = logging.getLogger(__name__)
 
 
 def test_varying_len_args():
@@ -46,9 +41,4 @@ def test_varying_unhashable_kwargs():
     x = torch.tensor(1.)
     for scale in [-1., 0., 1., 10.]:
         config = {'scale': scale}
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            assert_equal(jit_fn(x, config=config), fn(x, config=config))
-            assert len(w), 'No warnings were raised'
-            for warning in w:
-                logger.info(warning)
+        assert_equal(jit_fn(x, config=config), fn(x, config=config))
