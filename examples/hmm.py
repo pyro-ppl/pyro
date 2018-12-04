@@ -292,7 +292,7 @@ def main(args):
     device = 'cpu'
     if args.cuda:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
-        device='cuda'
+        device = 'cuda'
 
     logging.info('Loading data')
     data = poly.load_data()
