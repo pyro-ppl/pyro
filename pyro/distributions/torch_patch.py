@@ -63,11 +63,29 @@ def _torch_linspace(*args, **kwargs):
     return ret
 
 
+import atexit
+from collections import Counter
+import six.moves.cPickle as pickle
+from pyro.util import ignore_jit_warnings
+
+EINSUM_COUNTS = Counter()
+
+
+@atexit.register
+def save_einsum_counts():
+    with open('/tmp/pyro.einsum.{}'.format(os.getpid()), 'wb') as f:
+        pickle.dump(EINSUM_COUNTS, f, pickle.HIGHEST_PROTOCOL)
+
+
 @patch_dependency('torch.einsum')
 def _einsum(equation, *operands):
     if len(operands) == 1 and isinstance(operands[0], (list, tuple)):
         # the old interface of passing the operands as one list argument
         operands = operands[0]
+
+    with ignore_jit_warnings():
+        key = (equation,) + tuple(tuple(x.shape) for x in operands)
+        EINSUM_COUNTS[key] += 1
 
     # work around torch.einsum performance issues
     # see https://github.com/pytorch/pytorch/issues/10661
