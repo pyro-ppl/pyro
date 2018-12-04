@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import argparse
 import time
+import os
 
 import torch
 import torch.nn as nn
@@ -24,10 +25,14 @@ models = {name[len('model'):]: model
 
 
 def main(args):
-    log_tag = 'hmm.model{}.num_steps_{}.bs_{}.hd_{}.seed_{}.b1_{:.3f}.lrd_{:.5f}.lr_{:.3f}'.format(args.model,
-        args.num_steps, args.batch_size,
-        args.hidden_dim, args.seed, args.beta1, args.learning_rate_decay, args.learning_rate)
-    log = get_logger('logs/', log_tag + '.log')
+    log_tag = 'hmm.model{}.num_steps_{}.bs_{}.hd_{}.seed_{}.b1_{:.3f}'
+    log_tag += '.lrd_{:.5f}.lr_{:.3f}.cn_{:.1f}'
+    log_tag = log_tag.format(args.model, args.num_steps, args.batch_size,
+                             args.hidden_dim, args.seed, args.beta1, args.learning_rate_decay,
+                             args.learning_rate, args.clip_norm)
+    if not os.path.exists('hmm_logs'):
+        os.makedirs('hmm_logs')
+    log = get_logger('hmm_logs/', log_tag + '.log')
     log(args)
 
     data_dim = 88
@@ -52,11 +57,13 @@ def main(args):
     pyro.set_rng_seed(args.seed)
     pyro.clear_param_store()
 
-    guide = AutoDelta(poutine.block(model.model, expose_fn=lambda msg: msg["name"].startswith("probs_")))
+    guide = AutoDelta(poutine.block(model.model,
+                      expose_fn=lambda msg: msg["name"].startswith("probs_")))
 
     Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
     elbo = Elbo(max_plate_nesting=2)
-    optim = ClippedAdam({'lr': args.learning_rate, 'betas': (args.beta1, 0.99), 'lrd': args.learning_rate_decay})
+    optim = ClippedAdam({'lr': args.learning_rate, 'betas': (args.beta1, 0.999),
+                         'lrd': args.learning_rate_decay, 'clip_norm': args.clip_norm})
     svi = SVI(model.model, guide, optim, elbo)
 
     ts = [time.time()]
@@ -95,11 +102,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="HMM variants")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
-    parser.add_argument("-n", "--num-steps", default=400, type=int)
+    parser.add_argument("-n", "--num-steps", default=300, type=int)
     parser.add_argument("-b", "--batch-size", default=20, type=int)
     parser.add_argument("-d", "--hidden-dim", default=16, type=int)
     parser.add_argument("-s", "--seed", default=0, type=int)
     parser.add_argument("-b1", "--beta1", default=0.8, type=float)
+    parser.add_argument("-cn", "--clip-norm", default=20.0, type=float)
     parser.add_argument("-lrd", "--learning_rate_decay", default=0.999, type=float)
     parser.add_argument("-nn", "--nn-dim", default=48, type=int)
     parser.add_argument("-nc", "--nn-channels", default=2, type=int)
