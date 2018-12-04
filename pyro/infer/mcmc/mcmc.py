@@ -242,8 +242,9 @@ class MCMC(TracePosterior):
         if num_chains > 1:
             cpu_count = mp.cpu_count()
             if num_chains > cpu_count:
-                warnings.warn("`num_chains` is more than CPU count - {}. "
-                              "Resetting num_chains to CPU count.".format(cpu_count))
+                warnings.warn("num_chains={} is more than cpu_count={}. "
+                              "Resetting number of chains to CPU count."
+                              .format(num_chains, cpu_count))
                 num_chains = cpu_count
         if num_chains > 1:
             self.sampler = _ParallelSampler(kernel, num_samples, warmup_steps,
