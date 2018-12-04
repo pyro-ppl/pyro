@@ -7,7 +7,6 @@ import pyro
 import pyro.distributions as dist
 from pyro.contrib.gp.parameterized import Parameterized
 from pyro.distributions.util import eye_like
-from pyro.params import param_with_module_name
 
 
 class GPLVM(Parameterized):
@@ -67,7 +66,7 @@ class GPLVM(Parameterized):
         self.base_model = base_model
 
         self.X = Parameter(self.base_model.X)
-        self.set_prior("X", dist.Normal(0, 1).expand(self.X.shape).independent(self.X.dim()))
+        self.set_prior("X", dist.Normal(0, 1).expand(self.X.shape).to_event(self.X.dim()))
         self.autoguide("X", dist.Normal)
 
     def model(self):

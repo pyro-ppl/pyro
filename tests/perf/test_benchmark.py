@@ -116,8 +116,8 @@ def vsgp_multiclass(num_steps, whiten):
                                              latent_shape=torch.Size([3]),
                                              whiten=whiten)
 
-    gpmodule.fix_param("Xu")
-    gpmodule.kernel.kern1.fix_param("variance")
+    gpmodule.Xu.requires_grad_(False)
+    gpmodule.kernel.kern1.variance_unconstrained.requires_grad_(False)
 
     optimizer = optim.Adam({"lr": 0.0001})
     gp.util.train(gpmodule, optimizer, num_steps=num_steps)

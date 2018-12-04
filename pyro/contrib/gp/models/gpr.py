@@ -86,7 +86,7 @@ class GPRegression(GPModel):
             f_var = Lff.pow(2).sum(dim=-1)
             return f_loc, f_var
         else:
-            return pyro.sample(y_name,
+            return pyro.sample("y",
                                dist.MultivariateNormal(f_loc, scale_tril=Lff)
                                    .expand_by(self.y.shape[:-1])
                                    .to_event(self.y.dim() - 1),
@@ -95,10 +95,6 @@ class GPRegression(GPModel):
     @autoname.scope(prefix="GPR")
     def guide(self):
         self.set_mode("guide")
-
-        noise = self.get_param("noise")
-
-        return noise
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""

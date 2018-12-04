@@ -59,8 +59,8 @@ class VariationalGP(GPModel):
         a covariance matrix to help stablize its Cholesky decomposition.
     """
     def __init__(self, X, y, kernel, likelihood, mean_function=None,
-                 latent_shape=None, whiten=False, jitter=1e-6, name="VGP"):
-        super(VariationalGP, self).__init__(X, y, kernel, mean_function, jitter, name)
+                 latent_shape=None, whiten=False, jitter=1e-6):
+        super(VariationalGP, self).__init__(X, y, kernel, mean_function, jitter)
 
         self.likelihood = likelihood
 
@@ -116,7 +116,7 @@ class VariationalGP(GPModel):
 
         pyro.sample("f",
                     dist.MultivariateNormal(self.f_loc, scale_tril=self.f_scale_tril)
-                        .to_event(f_loc.dim()-1))
+                        .to_event(self.f_loc.dim()-1))
 
     def forward(self, Xnew, full_cov=False):
         r"""

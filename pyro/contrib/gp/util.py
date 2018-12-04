@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 from pyro.infer import TraceMeanField_ELBO
+from pyro.infer.util import torch_backward, torch_item
 
 
 def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=False,
@@ -163,7 +164,7 @@ def train(gpmodule, optimizer=None, loss_fn=None, retain_graph=None, num_steps=1
     optimizer = (torch.optim.Adam(gpmodule.parameters(), lr=0.01)
                  if optimizer is None else optimizer)
     # TODO: add support for JIT loss
-    loss_fn = TraceMeanField_ELBO().differentiable_loss if loss is None else loss
+    loss_fn = TraceMeanField_ELBO().differentiable_loss if loss_fn is None else loss_fn
 
     def closure():
         optimizer.zero_grad()

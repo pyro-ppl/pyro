@@ -109,9 +109,9 @@ class VariationalSparseGP(GPModel):
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.cholesky()
 
-        zero_loc = self.Xu.new_zeros(u_loc.shape)
+        zero_loc = self.Xu.new_zeros(self.u_loc.shape)
         if self.whiten:
-            identity = eye_like(Xu, M)
+            identity = eye_like(self.Xu, M)
             pyro.sample("u",
                         dist.MultivariateNormal(zero_loc, scale_tril=identity)
                             .to_event(zero_loc.dim() - 1))
@@ -120,7 +120,7 @@ class VariationalSparseGP(GPModel):
                         dist.MultivariateNormal(zero_loc, scale_tril=Luu)
                             .to_event(zero_loc.dim() - 1))
 
-        f_loc, f_var = conditional(self.X, Xu, self.kernel, u_loc, u_scale_tril,
+        f_loc, f_var = conditional(self.X, self.Xu, self.kernel, self.u_loc, self.u_scale_tril,
                                    Luu, full_cov=False, whiten=self.whiten, jitter=self.jitter)
 
         f_loc = f_loc + self.mean_function(self.X)
@@ -135,8 +135,8 @@ class VariationalSparseGP(GPModel):
         self.set_mode("guide")
 
         pyro.sample("u",
-                    dist.MultivariateNormal(u_loc, scale_tril=u_scale_tril)
-                        .to_event(u_loc.dim()-1))
+                    dist.MultivariateNormal(self.u_loc, scale_tril=self.u_scale_tril)
+                        .to_event(self.u_loc.dim()-1))
 
     def forward(self, Xnew, full_cov=False):
         r"""
@@ -160,6 +160,6 @@ class VariationalSparseGP(GPModel):
         self._check_Xnew_shape(Xnew)
         self.set_mode("guide")
 
-        loc, cov = conditional(Xnew, Xu, self.kernel, self.u_loc, self.u_scale_tril,
+        loc, cov = conditional(Xnew, self.Xu, self.kernel, self.u_loc, self.u_scale_tril,
                                full_cov=full_cov, whiten=self.whiten, jitter=self.jitter)
         return loc + self.mean_function(Xnew), cov
