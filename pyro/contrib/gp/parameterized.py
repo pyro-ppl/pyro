@@ -12,6 +12,14 @@ from pyro.contrib import autoname
 from pyro.distributions.util import eye_like
 
 
+def _get_independent_support(dist_instance):
+    # XXX Should we treat the case dist_instance is Independent(Independent(Normal))?
+    if isinstance(dist_instance, dist.Independent):
+        return dist_instance.base_dist.support
+    else:
+        return dist_instance.support
+
+
 class Parameterized(nn.Module):
     """
     A wrapper of :class:`torch.nn.Module` whose parameters can be set
@@ -80,8 +88,8 @@ class Parameterized(nn.Module):
                 if name not in self._priors:
                     # no prior -> no guide
                     # so we can move param back from buffer
-                    p = self._buffers.pop(name)
-                    self.register_parameter(name, p.detach())
+                    p = Parameter(self._buffers.pop(name).detach())
+                    self.register_parameter(name, p)
             return
 
         if name in self._priors:
@@ -118,10 +126,10 @@ class Parameterized(nn.Module):
         elif name not in self._buffers:
             raise ValueError("There is no parameter with name: {}".format(name))
 
+        self._priors[name] = prior
         # remove the constraint and its unconstrained parameter
         self.set_constraint(name, constraints.real)
 
-        self._priors[name] = prior
         self.autoguide(name, dist.Delta)
 
     def autoguide(self, name, dist_constructor):
@@ -162,7 +170,7 @@ class Parameterized(nn.Module):
         if dist_constructor is dist.Delta:
             p_map = Parameter(p.detach())
             self.register_parameter("{}_map".format(name), p_map)
-            self.set_constraint("{}_map".format(name), self._priors[name].support)
+            self.set_constraint("{}_map".format(name), _get_independent_support(self._priors[name]))
             dist_args = {"map"}
         elif dist_constructor is dist.Normal:
             loc = Parameter(biject_to(self._priors[name].support).inv(p).detach())
@@ -230,8 +238,8 @@ class Parameterized(nn.Module):
         dist_args = {arg: getattr(self, "{}_{}".format(name, arg)) for arg in dist_args}
         guide = dist_constructor(**dist_args)
 
-        # no need to do transforms when support is real
-        if self._priors[name].support is constraints.real:
+        # no need to do transforms when support is real (for mean field ELBO)
+        if _get_independent_support(self._priors[name]) is constraints.real:
             return pyro.sample(name, guide.to_event())
 
         # otherwise, we do inference in unconstrained space and transform the value

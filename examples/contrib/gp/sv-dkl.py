@@ -26,7 +26,6 @@ from torchvision import transforms
 import pyro
 import pyro.contrib.gp as gp
 import pyro.infer as infer
-import pyro.optim as optim
 from pyro.contrib.examples.util import get_data_loader, get_data_directory
 
 
@@ -47,12 +46,15 @@ class CNN(nn.Module):
         return x
 
 
-def train(args, train_loader, gpmodule, svi, epoch):
+def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
     for batch_idx, (data, target) in enumerate(train_loader):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
         gpmodule.set_data(data, target)
-        loss = svi.step()
+        optimizer.zero_grad()
+        loss = loss_fn(gpmodule.model, gpmodule.guide)
+        loss.backward()
+        optimizer.step()
         if batch_idx % args.log_interval == 0:
             print("Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}"
                   .format(epoch, batch_idx * len(data), len(train_loader.dataset),
@@ -90,19 +92,14 @@ def main(args):
                                   is_training_set=False,
                                   shuffle=True)
 
-    cnn = CNN().cuda() if args.cuda else CNN()
-
-    # optimizer in SVI just works with params which are active inside its model/guide scope;
-    # so we need this helper to mark cnn's parameters active for each `svi.step()` call.
-    def cnn_fn(x):
-        return pyro.module("CNN", cnn)(x)
+    cnn = CNN()
 
     # Create deep kernel by warping RBF with CNN.
     # CNN will transform a high dimension image into a low dimension 2D tensors for RBF kernel.
     # This kernel accepts inputs are inputs of CNN and gives outputs are covariance matrix of RBF
     # on outputs of CNN.
-    kernel = gp.kernels.Warping(gp.kernels.RBF(input_dim=10, lengthscale=torch.ones(10)),
-                                iwarping_fn=cnn_fn)
+    rbf = gp.kernels.RBF(input_dim=10, lengthscale=torch.ones(10))
+    deep_kernel = gp.kernels.Warping(rbf, iwarping_fn=cnn)
 
     # init inducing points (taken randomly from dataset)
     Xu = next(iter(train_loader))[0][:args.num_inducing]
@@ -111,20 +108,20 @@ def main(args):
     # Because we use Categorical distribution in MultiClass likelihood, we need GP model returns
     # a list of probabilities of each class. Hence it is required to use latent_shape = 10.
     # Turns on "whiten" flag will help optimization for variational models.
-    gpmodule = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=kernel, Xu=Xu,
+    gpmodule = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=deep_kernel, Xu=Xu,
                                              likelihood=likelihood, latent_shape=torch.Size([10]),
                                              num_data=60000, whiten=True)
     if args.cuda:
         gpmodule.cuda()
 
-    optimizer = optim.Adam({"lr": args.lr})
+    optimizer = torch.optim.Adam(gpmodule.parameters(), lr=args.lr)
 
     elbo = infer.JitTrace_ELBO() if args.jit else infer.Trace_ELBO()
-    svi = infer.SVI(gpmodule.model, gpmodule.guide, optimizer, elbo)
+    loss_fn = elbo.differentiable_loss
 
     for epoch in range(1, args.epochs + 1):
         start_time = time.time()
-        train(args, train_loader, gpmodule, svi, epoch)
+        train(args, train_loader, gpmodule, optimizer, loss_fn, epoch)
         with torch.no_grad():
             test(args, test_loader, gpmodule)
         print("Amount of time spent for epoch {}: {}s\n"

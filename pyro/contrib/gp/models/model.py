@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from pyro.contrib.gp.util import Parameterized
+from pyro.contrib.gp.parameterized import Parameterized
 
 
 def _zero_mean_function(x):
@@ -49,18 +49,21 @@ class GPModel(Parameterized):
         >>> hmc_kernel = HMC(gpr.model)
         >>> mcmc_run = MCMC(hmc_kernel, num_samples=10)
         >>> posterior_ls_trace = []  # store lengthscale trace
-        >>> ls_name = param_with_module_name(gpr.kernel.name, "lengthscale")
+        >>> ls_name = "GPR/RBF/lengthscale"
         >>> for trace, _ in mcmc_run._traces():
         ...     posterior_ls_trace.append(trace.nodes[ls_name]["value"])
 
-    + Using a variational inference (e.g. :class:`~pyro.infer.svi.SVI`) on the pair
-      :meth:`model`, :meth:`guide` as in `SVI tutorial
-      <http://pyro.ai/examples/svi_part_i.html>`_:
+    + Using a variational inference on the pair :meth:`model`, :meth:`guide`:
 
-        >>> optimizer = pyro.optim.Adam({"lr": 0.01})
-        >>> svi = pyro.infer.SVI(gpr.model, gpr.guide, optimizer, loss=pyro.infer.Trace_ELBO())
+        >>> optimizer = torch.optim.Adam(gpr.parameters(), lr=0.01)
+        >>> loss_fn = pyro.infer.TraceMeanField_ELBO().differentiable_loss
+        >>>
         >>> for i in range(1000):
         ...     svi.step()  # doctest: +SKIP
+        ...     optimizer.zero_grad()
+        ...     loss = loss_fn(gpr.model, gpr.guide)  # doctest: +SKIP
+        ...     loss.backward()  # doctest: +SKIP
+        ...     optimizer.step()
 
     To give a prediction on new dataset, simply use :meth:`forward` like any PyTorch
     :class:`torch.nn.Module`:
@@ -83,10 +86,9 @@ class GPModel(Parameterized):
         process. By default, we use zero mean.
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
-    :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6, name=None):
-        super(GPModel, self).__init__(name)
+    def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6):
+        super(GPModel, self).__init__()
         self.set_data(X, y)
         self.kernel = kernel
         self.mean_function = (mean_function if mean_function is not None else
@@ -142,25 +144,28 @@ class GPModel(Parameterized):
             >>> kernel = gp.kernels.RBF(input_dim=3)
             >>> kernel.set_prior("variance", dist.Uniform(torch.tensor(0.5), torch.tensor(1.5)))
             >>> kernel.set_prior("lengthscale", dist.Uniform(torch.tensor(1.0), torch.tensor(3.0)))
-            >>> optimizer = pyro.optim.Adam({"lr": 0.01})
 
         + Batch training on a sparse variational model:
 
             >>> Xu = torch.tensor([[1., 0, 2]])  # inducing input
             >>> likelihood = gp.likelihoods.Gaussian()
             >>> vsgp = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood)
-            >>> svi = pyro.infer.SVI(vsgp.model, vsgp.guide, optimizer, pyro.infer.Trace_ELBO())
+            >>> optimizer = torch.optim.Adam(vsgp.parameters(), lr=0.01)
+            >>> loss_fn = pyro.infer.Trace_ELBO().differentiable_loss
             >>> batched_X, batched_y = X.split(split_size=10), y.split(split_size=10)
             >>> for Xi, yi in zip(batched_X, batched_y):
+            ...     optimizer.zero_grad()
             ...     vsgp.set_data(Xi, yi)
             ...     svi.step()  # doctest: +SKIP
+            ...     loss = loss_fn(vsgp.model, vsgp.guide)  # doctest: +SKIP
+            ...     loss.backward()  # doctest: +SKIP
+            ...     optimizer.step()
 
         + Making a two-layer Gaussian Process stochastic function:
 
-
-            >>> gpr1 = gp.models.GPRegression(X, None, kernel, name="GPR1")
+            >>> gpr1 = gp.models.GPRegression(X, None, kernel)
             >>> Z, _ = gpr1.model()
-            >>> gpr2 = gp.models.GPRegression(Z, y, kernel, name="GPR2")
+            >>> gpr2 = gp.models.GPRegression(Z, y, kernel)
             >>> def two_layer_model():
             ...     Z, _ = gpr1.model()
             ...     gpr2.set_data(Z, y)
