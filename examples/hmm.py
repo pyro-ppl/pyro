@@ -200,7 +200,7 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
         # Note the broadcasting tricks here: we declare a hidden torch.arange and
         # ensure that w and x are always tensors so we can unsqueeze them below,
         # thus ensuring that the x sample sites have correct distribution shape.
-        w = x = sequences.new_tensor(0, dtype=torch.long)
+        w = x = torch.tensor(0, dtype=torch.long)
         for t in pyro.markov(range(lengths.max())):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
