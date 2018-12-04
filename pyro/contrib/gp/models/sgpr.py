@@ -6,6 +6,7 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
+from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.params import param_with_module_name
 
@@ -110,6 +111,7 @@ class SparseGPRegression(GPModel):
             raise ValueError("The sparse approximation method should be one of "
                              "'DTC', 'FITC', 'VFE'.")
 
+    @autoname.scope(prefix="SGPR")
     def model(self):
         self.set_mode("model")
 
@@ -155,6 +157,7 @@ class SparseGPRegression(GPModel):
                                    .to_event(self.y.dim() - 1),
                                obs=self.y)
 
+    @autoname.scope(prefix="SGPR")
     def guide(self):
         self.set_mode("guide")
 

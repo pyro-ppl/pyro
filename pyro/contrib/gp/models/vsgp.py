@@ -100,7 +100,7 @@ class VariationalSparseGP(GPModel):
         self.whiten = whiten
         self._sample_latent = True
 
-    @autoname.scope(prefix="VGP")
+    @autoname.scope(prefix="VSGP")
     def model(self):
         self.set_mode("model")
 
@@ -130,7 +130,7 @@ class VariationalSparseGP(GPModel):
             with poutine.scale(scale=self.num_data / self.X.size(0)):
                 return self.likelihood(f_loc, f_var, self.y)
 
-    @autoname.scope(prefix="VGP")
+    @autoname.scope(prefix="VSGP")
     def guide(self):
         self.set_mode("guide")
 

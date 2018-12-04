@@ -66,7 +66,7 @@ class GPLVM(Parameterized):
         self.base_model = base_model
 
         self.X = Parameter(self.base_model.X)
-        self.set_prior("X", dist.Normal(0, 1).expand(self.X.shape).to_event(self.X.dim()))
+        self.set_prior("X", dist.Normal(self.X.new_zeros(self.X.shape), 1.).to_event())
         self.autoguide("X", dist.Normal)
 
     def model(self):
