@@ -86,7 +86,6 @@ setup(
         'six>=1.10.0',
         # TODO: uncomment on release; using torch-nightly build
         # 'torch>=0.4.1',
-        'typing>=3.6.4',  # required by torch wheel
         'tqdm>=4.27',
     ],
     extras_require={
