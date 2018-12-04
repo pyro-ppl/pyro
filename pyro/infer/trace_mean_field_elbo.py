@@ -173,7 +173,7 @@ class JitTraceMeanField_ELBO(TraceMeanField_ELBO):
         loss, surrogate_loss = self.loss_and_surrogate_loss(model, guide, *args, **kwargs)
 
         warn_if_nan(loss, "loss")
-        return loss + (surrogate_loss - surrogate_loss.detach())
+        return surrogate_loss
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
         loss, surrogate_loss = self.loss_and_surrogate_loss(model, guide, *args, **kwargs)
