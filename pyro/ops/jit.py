@@ -21,7 +21,7 @@ def _hash(value, allow_id):
         elif isinstance(value, dict):
             return tuple(sorted((_hash(x, allow_id), _hash(y, allow_id)) for x, y in value.items()))
         elif isinstance(value, set):
-            return frozenset(_hash(x) for x in value)
+            return frozenset(_hash(x, allow_id) for x in value)
         elif isinstance(value, argparse.Namespace):
             return str(value)
         elif allow_id:
