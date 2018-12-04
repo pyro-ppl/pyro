@@ -1,10 +1,12 @@
+import pytest
 import torch
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.mcmc.mcmc import MCMC
+from pyro.infer.mcmc.mcmc import MCMC, _SingleSampler, _ParallelSampler
 from pyro.infer.mcmc.trace_kernel import TraceKernel
+from pyro.util import optional
 from tests.common import assert_equal
 
 
@@ -47,3 +49,20 @@ def test_mcmc_interface():
     sample_std = marginal.variance.sqrt()
     assert_equal(sample_mean, torch.tensor([0.0]), prec=0.08)
     assert_equal(sample_std, torch.tensor([1.0]), prec=0.08)
+
+
+@pytest.mark.parametrize("num_chains, cpu_count", [
+    (1, 2),
+    (2, 1),
+    (2, 2),
+])
+def test_num_chains(num_chains, cpu_count, monkeypatch):
+    monkeypatch.setattr(torch.multiprocessing, 'cpu_count', lambda:  cpu_count)
+    kernel = PriorKernel(normal_normal_model)
+    with optional(pytest.warns(UserWarning), cpu_count < num_chains):
+        mcmc = MCMC(kernel, num_samples=10, num_chains=num_chains)
+    assert mcmc.num_chains == min(num_chains, cpu_count)
+    if mcmc.num_chains == 1:
+        assert isinstance(mcmc.sampler, _SingleSampler)
+    else:
+        assert isinstance(mcmc.sampler, _ParallelSampler)
