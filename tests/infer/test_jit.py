@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
 import os
 import warnings
-import logging
 
 import pytest
 import torch
@@ -13,8 +13,8 @@ import pyro
 import pyro.distributions as dist
 import pyro.ops.jit
 import pyro.poutine as poutine
-from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
-                        TraceGraph_ELBO)
+from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, JitTraceMeanField_ELBO, Trace_ELBO,
+                        TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO)
 from pyro.optim import Adam
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from tests.common import assert_equal
@@ -234,6 +234,8 @@ def test_one_hot_categorical_enumerate(shape, expand):
     JitTraceGraph_ELBO,
     TraceEnum_ELBO,
     JitTraceEnum_ELBO,
+    TraceMeanField_ELBO,
+    JitTraceMeanField_ELBO,
 ])
 def test_svi(Elbo, num_particles):
     pyro.clear_param_store()
@@ -340,6 +342,8 @@ def test_beta_bernoulli(Elbo, vectorized):
     JitTraceGraph_ELBO,
     TraceEnum_ELBO,
     JitTraceEnum_ELBO,
+    TraceMeanField_ELBO,
+    JitTraceMeanField_ELBO,
 ])
 def test_svi_irregular_batch_size(Elbo):
     pyro.clear_param_store()

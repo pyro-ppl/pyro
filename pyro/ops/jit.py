@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import argparse
+import warnings
 import weakref
 
 import torch
@@ -7,6 +9,35 @@ import torch
 import pyro
 import pyro.poutine as poutine
 from pyro.util import ignore_jit_warnings, optional
+
+
+def _hash(value, allow_id):
+    try:
+        hash(value)
+        return value
+    except TypeError as e:
+        if isinstance(value, list):
+            return tuple(_hash(x, allow_id) for x in value)
+        elif isinstance(value, dict):
+            return tuple(sorted((_hash(x, allow_id), _hash(y, allow_id)) for x, y in value.items()))
+        elif isinstance(value, set):
+            return frozenset(_hash(x, allow_id) for x in value)
+        elif isinstance(value, argparse.Namespace):
+            return str(value)
+        elif allow_id:
+            return id(value)
+        raise e
+
+
+def _hashable_args_kwargs(args, kwargs):
+    items = sorted(kwargs.items())
+    hashable_kwargs = tuple((key, _hash(value, False)) for key, value in items)
+    try:
+        hash(hashable_kwargs)
+    except TypeError:
+        warnings.warn("Failed to hash kwargs; attempting to hash by id.")
+        hashable_kwargs = tuple((key, _hash(value, True)) for key, value in items)
+    return len(args), hashable_kwargs
 
 
 class CompiledFunction(object):
@@ -26,10 +57,10 @@ class CompiledFunction(object):
         self._param_names = None
 
     def __call__(self, *args, **kwargs):
-        argc = len(args)
+        key = _hashable_args_kwargs(args, kwargs)
 
         # if first time
-        if argc not in self.compiled:
+        if key not in self.compiled:
             # param capture
             with poutine.block():
                 with poutine.trace(param_only=True) as first_param_capture:
@@ -53,7 +84,7 @@ class CompiledFunction(object):
                 return poutine.replay(self.fn, params=constrained_params)(*args, **kwargs)
 
             with pyro.validation_enabled(False), optional(ignore_jit_warnings(), self.ignore_warnings):
-                self.compiled[argc] = torch.jit.trace(compiled, params_and_args, check_trace=False)
+                self.compiled[key] = torch.jit.trace(compiled, params_and_args, check_trace=False)
         else:
             unconstrained_params = [pyro.param(name).unconstrained()
                                     for name in self._param_names]
@@ -61,7 +92,7 @@ class CompiledFunction(object):
 
         with poutine.block(hide=self._param_names):
             with poutine.trace(param_only=True) as param_capture:
-                ret = self.compiled[argc](*params_and_args)
+                ret = self.compiled[key](*params_and_args)
 
         for name in param_capture.trace.nodes.keys():
             if name not in self._param_names:
