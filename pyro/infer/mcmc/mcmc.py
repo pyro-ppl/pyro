@@ -244,7 +244,7 @@ class MCMC(TracePosterior):
             available_cpu = max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
             if num_chains > available_cpu:
                 warnings.warn("num_chains={} is more than available_cpu={}. "
-                              "Resetting number of chains to CPU count."
+                              "Resetting number of chains to available CPU count."
                               .format(num_chains, available_cpu))
                 num_chains = available_cpu
         if num_chains > 1:
