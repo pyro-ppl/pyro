@@ -26,7 +26,7 @@ class Constant(Kernel):
 
         if Z is None:
             Z = X
-        return variance.expand(X.size(0), Z.size(0))
+        return self.variance.expand(X.size(0), Z.size(0))
 
 
 class WhiteNoise(Kernel):

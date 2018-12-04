@@ -26,7 +26,6 @@ from torchvision import transforms
 import pyro
 import pyro.contrib.gp as gp
 import pyro.infer as infer
-import pyro.optim as optim
 from pyro.contrib.examples.util import get_data_loader, get_data_directory
 
 
@@ -47,7 +46,7 @@ class CNN(nn.Module):
         return x
 
 
-def train(args, train_loader, gpmodule, svi, epoch):
+def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
     for batch_idx, (data, target) in enumerate(train_loader):
         if args.cuda:
             data, target = data.cuda(), target.cuda()

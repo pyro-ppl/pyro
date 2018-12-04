@@ -156,7 +156,7 @@ def train(gpmodule, optimizer=None, loss_fn=None, retain_graph=None, num_steps=1
     :param callable loss_fn: A loss function which takes inputs are
         ``gpmodule.model``, ``gpmodule.guide``, and returns ELBO loss.
         By default, ``loss_fn=TraceMeanField_ELBO().differentiable_loss``.
-    :param bool retain_graph: An optional flag of ``torch.autograd.backward``. 
+    :param bool retain_graph: An optional flag of ``torch.autograd.backward``.
     :param int num_steps: Number of steps to run SVI.
     :returns: a list of losses during the training procedure
     :rtype: list

@@ -6,9 +6,7 @@ from collections import defaultdict, namedtuple
 import pytest
 import torch
 
-import pyro
 import pyro.distributions as dist
-import pyro.optim as optim
 from pyro.contrib.gp.kernels import Cosine, Matern32, RBF, WhiteNoise
 from pyro.contrib.gp.likelihoods import Gaussian
 from pyro.contrib.gp.models import (GPLVM, GPRegression, SparseGPRegression,
@@ -73,6 +71,7 @@ def _TEST_CASES():
     ]
 
     return TEST_CASES
+
 
 TEST_IDS = [t[0].__name__ + "_y{}D".format(str(t[2].dim()))
             for t in _TEST_CASES()]

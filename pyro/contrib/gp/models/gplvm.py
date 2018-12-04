@@ -1,12 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-from torch.distributions import constraints
 from torch.nn import Parameter
 
-import pyro
 import pyro.distributions as dist
 from pyro.contrib.gp.parameterized import Parameterized
-from pyro.distributions.util import eye_like
 
 
 class GPLVM(Parameterized):

@@ -8,7 +8,6 @@ import pyro
 import pyro.distributions as dist
 from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
-from pyro.params import param_with_module_name
 
 
 class SparseGPRegression(GPModel):
@@ -248,7 +247,7 @@ class SparseGPRegression(GPModel):
         else:
             Kssdiag = self.kernel(Xnew, diag=True)
             if not noiseless:
-                Kssdiag = Kssdiag + noise
+                Kssdiag = Kssdiag + self.noise
             Qssdiag = Ws.pow(2).sum(dim=0)
             cov = Kssdiag - Qssdiag + Linv_Ws.pow(2).sum(dim=0)
 

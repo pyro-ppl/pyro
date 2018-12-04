@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from pyro.contrib.gp.parameterized import Parameterized
-from pyro.params import param_with_module_name
 
 
 class Likelihood(Parameterized):
