@@ -8,6 +8,8 @@ import torch
 from pyro.contrib.gp.kernels import RBF
 from pyro.contrib.gp.likelihoods import Binary, MultiClass, Poisson
 from pyro.contrib.gp.models import VariationalGP, VariationalSparseGP
+from pyro.contrib.gp.util import train
+
 
 T = namedtuple("TestGPLikelihood", ["model_class", "X", "y", "kernel", "likelihood"])
 
@@ -91,7 +93,7 @@ def test_inference(model_class, X, y, kernel, likelihood):
     else:
         gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
 
-    gp.optimize(num_steps=1)
+    train(gp, num_steps=1)
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
@@ -105,7 +107,7 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
     else:
         gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
 
-    gp.optimize(num_steps=1)
+    train(gp, num_steps=1)
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)

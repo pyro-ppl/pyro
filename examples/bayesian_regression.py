@@ -57,8 +57,8 @@ def model(data):
     scale = 2 * data.new_ones(torch.Size((1, p)))
     bias_loc = data.new_zeros(torch.Size((1,)))
     bias_scale = 2 * data.new_ones(torch.Size((1,)))
-    w_prior = Normal(loc, scale).independent(1)
-    b_prior = Normal(bias_loc, bias_scale).independent(1)
+    w_prior = Normal(loc, scale).to_event(1)
+    b_prior = Normal(bias_loc, bias_scale).to_event(1)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
     # lift module parameters to random variables sampled from the priors
     lifted_module = pyro.random_module("module", regression_model, priors)
@@ -85,8 +85,8 @@ def guide(data):
     mb_param = pyro.param("guide_mean_bias", b_loc)
     sb_param = softplus(pyro.param("guide_log_scale_bias", b_log_sig))
     # gaussian guide distributions for w and b
-    w_dist = Normal(mw_param, sw_param).independent(1)
-    b_dist = Normal(mb_param, sb_param).independent(1)
+    w_dist = Normal(mw_param, sw_param).to_event(1)
+    b_dist = Normal(mb_param, sb_param).to_event(1)
     dists = {'linear.weight': w_dist, 'linear.bias': b_dist}
     # overloading the parameters in the module with random samples from the guide distributions
     lifted_module = pyro.random_module("module", regression_model, dists)
@@ -136,6 +136,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    assert pyro.__version__.startswith('0.3.0')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=1000, type=int)
     parser.add_argument('-b', '--batch-size', default=N, type=int)

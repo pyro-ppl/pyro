@@ -11,10 +11,8 @@ import torch
 import pyro
 from pyro.distributions import Beta, Binomial, HalfCauchy, Normal, Pareto, Uniform
 from pyro.distributions.util import logsumexp
-from pyro.infer import EmpiricalMarginal
 from pyro.infer.abstract_infer import TracePredictive
 from pyro.infer.mcmc import MCMC, NUTS
-from pyro.ops.stats import effective_sample_size, split_gelman_rubin
 
 """
 Example has been adapted from [1]. It demonstrates how to do Bayesian inference using
@@ -90,10 +88,10 @@ def not_pooled(at_bats, hits):
     :return: Number of hits predicted by the model.
     """
     num_players = at_bats.shape[0]
-    # TODO: use pyro.plate when pytorch 1.0 is released
-    phi_prior = Uniform(at_bats.new_tensor(0), at_bats.new_tensor(1)).expand_by([num_players]).independent(1)
-    phi = pyro.sample("phi", phi_prior)
-    return pyro.sample("obs", Binomial(at_bats, phi), obs=hits)
+    with pyro.plate("num_players", num_players):
+        phi_prior = Uniform(at_bats.new_tensor(0), at_bats.new_tensor(1))
+        phi = pyro.sample("phi", phi_prior)
+        return pyro.sample("obs", Binomial(at_bats, phi), obs=hits)
 
 
 def partially_pooled(at_bats, hits):
@@ -111,9 +109,10 @@ def partially_pooled(at_bats, hits):
     num_players = at_bats.shape[0]
     m = pyro.sample("m", Uniform(at_bats.new_tensor(0), at_bats.new_tensor(1)))
     kappa = pyro.sample("kappa", Pareto(at_bats.new_tensor(1), at_bats.new_tensor(1.5)))
-    phi_prior = Beta(m * kappa, (1 - m) * kappa).expand_by([num_players]).independent(1)
-    phi = pyro.sample("phi", phi_prior)
-    return pyro.sample("obs", Binomial(at_bats, phi), obs=hits)
+    with pyro.plate("num_players", num_players):
+        phi_prior = Beta(m * kappa, (1 - m) * kappa)
+        phi = pyro.sample("phi", phi_prior)
+        return pyro.sample("obs", Binomial(at_bats, phi), obs=hits)
 
 
 def partially_pooled_with_logit(at_bats, hits):
@@ -129,8 +128,9 @@ def partially_pooled_with_logit(at_bats, hits):
     num_players = at_bats.shape[0]
     loc = pyro.sample("loc", Normal(at_bats.new_tensor(-1), at_bats.new_tensor(1)))
     scale = pyro.sample("scale", HalfCauchy(scale=at_bats.new_tensor(1)))
-    alpha = pyro.sample("alpha", Normal(loc, scale).expand_by([num_players]).independent(1))
-    return pyro.sample("obs", Binomial(at_bats, logits=alpha), obs=hits)
+    with pyro.plate("num_players", num_players):
+        alpha = pyro.sample("alpha", Normal(loc, scale))
+        return pyro.sample("obs", Binomial(at_bats, logits=alpha), obs=hits)
 
 
 # ===================================
@@ -156,32 +156,19 @@ def summary(trace_posterior, sites, player_names, transforms={}, diagnostics=Tru
     Return summarized statistics for each of the ``sites`` in the
     traces corresponding to the approximate posterior.
     """
-    marginal = EmpiricalMarginal(trace_posterior, sites).get_samples_and_weights()[0]
-
-    if diagnostics and trace_posterior.num_chains > 1:
-        chain_indices = trace_posterior.sampler.chain_indices
-        n_eff, r_hat = chain_diagnostics(marginal, chain_indices)
-
+    marginal = trace_posterior.marginal(sites)
     site_stats = {}
-    for i in range(marginal.shape[1]):
-        site_name = sites[i]
-        marginal_site = marginal[:, i]
+    for site_name in sites:
+        marginal_site = marginal.support(flatten=True)[site_name]
         if site_name in transforms:
             marginal_site = transforms[site_name](marginal_site)
+
         site_stats[site_name] = get_site_stats(marginal_site.numpy(), player_names)
         if diagnostics and trace_posterior.num_chains > 1:
-            site_stats[site_name] = site_stats[site_name].assign(n_eff=n_eff[i].numpy(),
-                                                                 r_hat=r_hat[i].numpy())
+            diag = marginal.diagnostics()[site_name]
+            site_stats[site_name] = site_stats[site_name].assign(n_eff=diag["n_eff"].numpy(),
+                                                                 r_hat=diag["r_hat"].numpy())
     return site_stats
-
-
-def chain_diagnostics(samples, chain_indices):
-    assert samples.size(0) == chain_indices.numel()
-    chain_samples = samples[chain_indices.reshape(-1)].reshape(
-        chain_indices.shape + samples.shape[1:])
-    n_eff = effective_sample_size(chain_samples)
-    r_hat = split_gelman_rubin(chain_samples)
-    return n_eff, r_hat
 
 
 def train_test_split(pd_dataframe):
@@ -328,10 +315,13 @@ def main(args):
 
 
 if __name__ == "__main__":
+    assert pyro.__version__.startswith('0.3.0')
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
     parser.add_argument("-n", "--num-samples", nargs="?", default=200, type=int)
     parser.add_argument("--num-chains", nargs='?', default=4, type=int)
     parser.add_argument("--warmup-steps", nargs='?', default=100, type=int)
     parser.add_argument("--rng_seed", nargs='?', default=0, type=int)
+    parser.add_argument('--jit', action='store_true', default=False,
+                        help='use PyTorch jit')
     args = parser.parse_args()
     main(args)

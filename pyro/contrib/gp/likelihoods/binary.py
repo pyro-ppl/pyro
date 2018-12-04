@@ -22,8 +22,7 @@ class Binary(Likelihood):
     """
     def __init__(self, response_function=None, name="Binary"):
         super(Binary, self).__init__(name)
-        self.response_function = (response_function if response_function is not None
-                                  else torch.sigmoid)
+        self.response_function = torch.sigmoid if response_function is None else response_function
 
     def forward(self, f_loc, f_var, y=None):
         r"""
@@ -47,5 +46,5 @@ class Binary(Likelihood):
 
         y_dist = dist.Bernoulli(f_res)
         if y is not None:
-            y_dist = y_dist.expand_by(y.shape[:-f_res.dim()]).independent(y.dim())
+            y_dist = y_dist.expand_by(y.shape[:-f_res.dim()]).to_event(y.dim())
         return pyro.sample(self.y_name, y_dist, obs=y)

@@ -15,8 +15,7 @@ class DotProduct(Kernel):
     def __init__(self, input_dim, variance=None, active_dims=None, name=None):
         super(DotProduct, self).__init__(input_dim, active_dims, name)
 
-        if variance is None:
-            variance = torch.tensor(1.)
+        variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
@@ -31,7 +30,7 @@ class DotProduct(Kernel):
             return (X ** 2).sum(-1)
 
         Z = self._slice_input(Z)
-        if X.shape[1] != Z.shape[1]:
+        if X.size(1) != Z.size(1):
             raise ValueError("Inputs must have the same number of features.")
 
         return X.matmul(Z.t())
@@ -73,14 +72,12 @@ class Polynomial(DotProduct):
                  name="Polynomial"):
         super(Polynomial, self).__init__(input_dim, variance, active_dims, name)
 
-        if bias is None:
-            bias = torch.tensor(1.)
+        bias = torch.tensor(1.) if bias is None else bias
         self.bias = Parameter(bias)
         self.set_constraint("bias", constraints.positive)
 
         if not isinstance(degree, int) or degree < 1:
-            raise ValueError("Degree for Polynomial kernel should be a positive "
-                             "integer.")
+            raise ValueError("Degree for Polynomial kernel should be a positive integer.")
         self.degree = degree
 
     def forward(self, X, Z=None, diag=False):

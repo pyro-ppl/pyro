@@ -1,12 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
 import itertools
-import operator
 import random
 
 import pytest
 import torch
-from six.moves import reduce
 from torch.distributions.utils import broadcast_all
 
 from pyro.ops import packed
@@ -69,35 +67,7 @@ def test_broadcast_all(shapes):
     packed_inputs = [packed.pack(x, dim_to_symbol) for x in inputs]
     packed_outputs = packed.broadcast_all(*packed_inputs)
     actual = tuple(packed.unpack(x, symbol_to_dim) for x in packed_outputs)
-    expected = broadcast_all(*inputs)
+    expected = broadcast_all(*inputs) if inputs else []
     assert len(actual) == len(expected)
     for a, e in zip(actual, expected):
         assert_equal(a, e)
-
-
-@pytest.mark.parametrize('shapes', EXAMPLE_SHAPES)
-@pytest.mark.parametrize('num_numbers', [0, 1, 2])
-def test_sumproduct(shapes, num_numbers):
-    inputs, dim_to_symbol, symbol_to_dim = make_inputs(shapes, num_numbers)
-    packed_inputs = [packed.pack(x, dim_to_symbol) for x in inputs]
-    packed_output = packed.sumproduct(packed_inputs)
-    actual = packed.unpack(packed_output, symbol_to_dim)
-    expected = reduce(operator.mul, inputs, 1.)
-    if not isinstance(expected, torch.Tensor):
-        expected = torch.tensor(expected)
-    expected = expected.sum()
-    assert_equal(actual, expected)
-
-
-@pytest.mark.parametrize('shapes', EXAMPLE_SHAPES)
-@pytest.mark.parametrize('num_numbers', [0, 1, 2])
-def test_logsumproductexp(shapes, num_numbers):
-    inputs, dim_to_symbol, symbol_to_dim = make_inputs(shapes, num_numbers)
-    packed_inputs = [packed.pack(x, dim_to_symbol) for x in inputs]
-    packed_output = packed.logsumproductexp(packed_inputs)
-    actual = packed.unpack(packed_output, symbol_to_dim)
-    expected = reduce(operator.add, inputs, 0.)
-    if not isinstance(expected, torch.Tensor):
-        expected = torch.tensor(expected)
-    expected = expected.exp().sum().log()
-    assert_equal(actual, expected)

@@ -1,14 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
-import torch
 from torch.distributions import constraints
 from torch.nn import Parameter
 
 import pyro
-from pyro.contrib.gp.util import Parameterized
 import pyro.distributions as dist
-import pyro.infer as infer
-import pyro.optim as optim
+from pyro.contrib.gp.util import Parameterized
+from pyro.distributions.util import eye_like
 from pyro.params import param_with_module_name
 
 
@@ -37,19 +35,19 @@ class GPLVM(Parameterized):
 
             >>> # Simulating iris data.
             >>> y = torch.stack([dist.Normal(4.8, 0.1).sample((150,)),
-            ...                 dist.Normal(3.2, 0.3).sample((150,)),
-            ...                 dist.Normal(1.5, 0.4).sample((150,)),
-            ...                 dist.Exponential(0.5).sample((150,))])
+            ...                  dist.Normal(3.2, 0.3).sample((150,)),
+            ...                  dist.Normal(1.5, 0.4).sample((150,)),
+            ...                  dist.Exponential(0.5).sample((150,))])
 
         >>> # First, define the initial values for X_loc parameter:
-        >>> X_loc = torch.zeros(150, 2)
-        >>> # Then, define a Gaussian Process model with input X_loc and output y:
+        >>> X_init = torch.zeros(150, 2)
+        >>> # Then, define a Gaussian Process model with input X_init and output y:
         >>> kernel = gp.kernels.RBF(input_dim=2, lengthscale=torch.ones(2))
         >>> Xu = torch.zeros(20, 2)  # initial inducing inputs of sparse model
-        >>> gpmodel = gp.models.SparseGPRegression(X_loc, y, kernel, Xu)
-        >>> # Finally, wrap gpmodel by GPLVM, optimize, and get the "learned" mean of X:
-        >>> gplvm = gp.models.GPLVM(gpmodel)
-        >>> gplvm.optimize()  # doctest: +SKIP
+        >>> gpmodule = gp.models.SparseGPRegression(X_init, y, kernel, Xu)
+        >>> # Finally, wrap gpmodule by GPLVM, optimize, and get the "learned" mean of X:
+        >>> gplvm = gp.models.GPLVM(gpmodule)
+        >>> gp.util.train(gplvm)  # doctest: +SKIP
         >>> X = gplvm.get_param("X_loc")
 
     Reference:
@@ -72,9 +70,9 @@ class GPLVM(Parameterized):
 
         self.X_loc = Parameter(self.base_model.X)
 
-        C = self.X_loc.shape[1]
+        C = self.X_loc.size(1)
         X_scale_tril_shape = self.X_loc.shape + (C,)
-        Id = torch.eye(C, out=self.X_loc.new_empty(C, C))
+        Id = eye_like(self.X_loc, C)
         X_scale_tril = Id.expand(X_scale_tril_shape)
         self.X_scale_tril = Parameter(X_scale_tril)
         self.set_constraint("X_scale_tril", constraints.lower_cholesky)
@@ -86,11 +84,11 @@ class GPLVM(Parameterized):
 
         # sample X from unit multivariate normal distribution
         zero_loc = self.X_loc.new_zeros(self.X_loc.shape)
-        C = self.X_loc.shape[1]
-        Id = torch.eye(C, out=self.X_loc.new_empty(C, C))
+        C = self.X_loc.size(1)
+        Id = eye_like(self.X_loc, C)
         X_name = param_with_module_name(self.name, "X")
         X = pyro.sample(X_name, dist.MultivariateNormal(zero_loc, scale_tril=Id)
-                                    .independent(zero_loc.dim()-1))
+                                    .to_event(zero_loc.dim()-1))
 
         self.base_model.set_data(X, self.y)
         self.base_model.model()
@@ -104,7 +102,7 @@ class GPLVM(Parameterized):
         X_name = param_with_module_name(self.name, "X")
         X = pyro.sample(X_name,
                         dist.MultivariateNormal(X_loc, scale_tril=X_scale_tril)
-                            .independent(X_loc.dim()-1))
+                            .to_event(X_loc.dim()-1))
 
         self.base_model.set_data(X, self.y)
         if self._call_base_model_guide:
@@ -120,22 +118,3 @@ class GPLVM(Parameterized):
         self.guide()
         self._call_base_model_guide = True
         return self.base_model(**kwargs)
-
-    def optimize(self, optimizer=optim.Adam({}), num_steps=1000):
-        """
-        A convenient method to optimize parameters for GPLVM model using
-        :class:`~pyro.infer.svi.SVI`.
-
-        :param ~optim.PyroOptim optimizer: A Pyro optimizer.
-        :param int num_steps: Number of steps to run SVI.
-        :returns: a list of losses during the training procedure
-        :rtype: list
-        """
-        if not isinstance(optimizer, optim.PyroOptim):
-            raise ValueError("Optimizer should be an instance of "
-                             "pyro.optim.PyroOptim class.")
-        svi = infer.SVI(self.model, self.guide, optimizer, loss=infer.Trace_ELBO())
-        losses = []
-        for i in range(num_steps):
-            losses.append(svi.step())
-        return losses

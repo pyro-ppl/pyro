@@ -124,7 +124,7 @@ TEST_CASES = [
         [20, 800, bernoulli_ba_guide, optim.Adam({"lr": 0.01}),
          False, None, 1000],
         False,
-        1e-2
+        1.5e-2
     ),
     T(
         basic_2p_linear_model_sds_10_2pt5,

@@ -46,6 +46,9 @@ class SVI(TracePosterior):
         self.num_samples = num_samples
         super(SVI, self).__init__(**kwargs)
 
+        if not isinstance(optim, pyro.optim.PyroOptim):
+            raise ValueError("Optimizer should be an instance of pyro.optim.PyroOptim class.")
+
         if isinstance(loss, ELBO):
             self.loss = loss.loss
             self.loss_and_grads = loss.loss_and_grads
