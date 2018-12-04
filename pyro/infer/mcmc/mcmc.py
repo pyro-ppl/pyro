@@ -36,7 +36,7 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains):
     try:
         while True:
             try:
-                record = log_queue.get_nowait()
+                record = log_queue.get(timeout=1)
             except queue.Empty:
                 continue
             if record is None:
@@ -105,8 +105,8 @@ class _ParallelSampler(TracePosterior):
                 raise ValueError("multiprocessing.get_context() is "
                                  "not supported in Python 2.")
             self.ctx = mp.get_context(mp_context)
-        self.result_queue = self.ctx.Manager().Queue()
-        self.log_queue = self.ctx.Manager().Queue()
+        self.result_queue = self.ctx.Queue()
+        self.log_queue = self.ctx.Queue()
         self.logger = initialize_logger(logging.getLogger("pyro.infer.mcmc"),
                                         "MAIN", log_queue=self.log_queue)
         self.num_samples = num_samples
@@ -146,7 +146,7 @@ class _ParallelSampler(TracePosterior):
                 w.start()
             while active_workers:
                 try:
-                    chain_id, val = self.result_queue.get_nowait()
+                    chain_id, val = self.result_queue.get(timeout=5)
                 # This can happen when the worker process has terminated.
                 # See https://github.com/pytorch/pytorch/pull/5380 for motivation.
                 except socket.error as e:
@@ -237,18 +237,22 @@ class MCMC(TracePosterior):
     """
     def __init__(self, kernel, num_samples, warmup_steps=0,
                  num_chains=1, mp_context=None):
-        super(MCMC, self).__init__(num_chains=num_chains)
         self.warmup_steps = warmup_steps if warmup_steps is not None else num_samples // 2  # Stan
         self.num_samples = num_samples
         if num_chains > 1:
-            cpu_count = mp.cpu_count()
-            if num_chains > cpu_count:
-                warnings.warn("`num_chains` is more than CPU count - {}. "
-                              "Resetting num_chains to CPU count.".format(cpu_count))
+            # verify num_chains is compatible with available CPU.
+            available_cpu = max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
+            if num_chains > available_cpu:
+                warnings.warn("num_chains={} is more than available_cpu={}. "
+                              "Resetting number of chains to available CPU count."
+                              .format(num_chains, available_cpu))
+                num_chains = available_cpu
+        if num_chains > 1:
             self.sampler = _ParallelSampler(kernel, num_samples, warmup_steps,
                                             num_chains, mp_context)
         else:
             self.sampler = _SingleSampler(kernel, num_samples, warmup_steps)
+        super(MCMC, self).__init__(num_chains=num_chains)
 
     def _traces(self, *args, **kwargs):
         for sample in self.sampler._traces(*args, **kwargs):
