@@ -436,7 +436,7 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
         ``**kwargs``, and compilation will be triggered once per unique
         ``**kwargs``.
     """
-    def loss_and_grads(self, model, guide, *args, **kwargs):
+    def differentiable_loss(self, model, guide, *args, **kwargs):
         kwargs['_model_id'] = id(model)
         kwargs['_guide_id'] = id(guide)
         if getattr(self, '_differentiable_loss', None) is None:
@@ -455,7 +455,10 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
 
             self._differentiable_loss = differentiable_loss
 
-        differentiable_loss = self._differentiable_loss(*args, **kwargs)
+        return self._differentiable_loss(*args, **kwargs)
+
+    def loss_and_grads(self, model, guide, *args, **kwargs):
+        differentiable_loss = self.differentiable_loss(model, guide, *args, **kwargs)
         differentiable_loss.backward()  # this line triggers jit compilation
         loss = differentiable_loss.item()
 

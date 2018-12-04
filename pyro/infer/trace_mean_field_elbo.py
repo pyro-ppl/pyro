@@ -1,9 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 import warnings
+import weakref
 
+import torch
 from torch.distributions import kl_divergence
 
+import pyro.ops.jit
 from pyro.distributions.util import is_identically_zero, scale_and_mask
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.util import is_validation_enabled, torch_item
@@ -81,12 +84,11 @@ class TraceMeanField_ELBO(Trace_ELBO):
 
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
-        elbo = 0.0
+        loss = 0.0
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            elbo_particle, _ = self._differentiable_loss_particle(model_trace, guide_trace)
-            elbo += elbo_particle / self.num_particles
+            loss_particle = self._differentiable_loss_particle(model_trace, guide_trace)
+            loss += loss_particle / self.num_particles
 
-        loss = -elbo
         warn_if_nan(loss, "loss")
         return loss
 
@@ -121,4 +123,62 @@ class TraceMeanField_ELBO(Trace_ELBO):
                 entropy_term = guide_site["score_parts"].entropy_term
                 elbo_particle = elbo_particle - entropy_term.sum()
 
-        return -torch_item(elbo_particle), -elbo_particle
+        loss = -(elbo_particle.detach() if torch._C._get_tracing_state() else torch_item(elbo_particle))
+        surrogate_loss = -elbo_particle
+        return loss, surrogate_loss
+
+
+class JitTraceMeanField_ELBO(TraceMeanField_ELBO):
+    """
+    Like :class:`TraceMeanField_ELBO` but uses :func:`pyro.ops.jit.trace` to
+    compile :meth:`loss_and_grads`.
+
+    This works only for a limited set of models:
+
+    -   Models must have static structure.
+    -   Models must not depend on any global data (except the param store).
+    -   All model inputs that are tensors must be passed in via ``*args``.
+    -   All model inputs that are *not* tensors must be passed in via
+        ``**kwargs``, and compilation will be triggered once per unique
+        ``**kwargs``.
+    """
+    def loss_and_surrogate_loss(self, model, guide, *args, **kwargs):
+        kwargs['_pyro_model_id'] = id(model)
+        kwargs['_pyro_guide_id'] = id(guide)
+        if getattr(self, '_loss_and_surrogate_loss', None) is None:
+            # build a closure for loss_and_surrogate_loss
+            weakself = weakref.ref(self)
+
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings)
+            def loss_and_surrogate_loss(*args, **kwargs):
+                kwargs.pop('_pyro_model_id')
+                kwargs.pop('_pyro_guide_id')
+                self = weakself()
+                loss = 0.0
+                surrogate_loss = 0.0
+                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+                    loss_particle, surrogate_loss_particle = self._differentiable_loss_particle(
+                        model_trace, guide_trace)
+
+                    loss = loss + loss_particle / self.num_particles
+                    surrogate_loss = surrogate_loss + surrogate_loss_particle / self.num_particles
+
+                return loss, surrogate_loss
+
+            self._loss_and_surrogate_loss = loss_and_surrogate_loss
+
+        return self._loss_and_surrogate_loss(*args, **kwargs)
+
+    def differentiable_loss(self, model, guide, *args, **kwargs):
+        loss, surrogate_loss = self.loss_and_surrogate_loss(model, guide, *args, **kwargs)
+
+        warn_if_nan(loss, "loss")
+        return loss + (surrogate_loss - surrogate_loss.detach())
+
+    def loss_and_grads(self, model, guide, *args, **kwargs):
+        loss, surrogate_loss = self.loss_and_surrogate_loss(model, guide, *args, **kwargs)
+        surrogate_loss.backward()
+        loss = loss.item()
+
+        warn_if_nan(loss, "loss")
+        return loss

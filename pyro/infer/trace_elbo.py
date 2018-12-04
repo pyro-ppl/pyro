@@ -153,8 +153,7 @@ class JitTrace_ELBO(Trace_ELBO):
         ``**kwargs``, and compilation will be triggered once per unique
         ``**kwargs``.
     """
-
-    def loss_and_grads(self, model, guide, *args, **kwargs):
+    def loss_and_surrogate_loss(self, model, guide, *args, **kwargs):
         kwargs['_pyro_model_id'] = id(model)
         kwargs['_pyro_guide_id'] = id(guide)
         if getattr(self, '_loss_and_surrogate_loss', None) is None:
@@ -201,8 +200,16 @@ class JitTrace_ELBO(Trace_ELBO):
 
             self._loss_and_surrogate_loss = loss_and_surrogate_loss
 
-        # invoke _loss_and_surrogate_loss
-        loss, surrogate_loss = self._loss_and_surrogate_loss(*args, **kwargs)
+        return self._loss_and_surrogate_loss(*args, **kwargs)
+
+    def differentiable_loss(self, model, guide, *args, **kwargs):
+        loss, surrogate_loss = self.loss_and_surrogate_loss(model, guide, *args, **kwargs)
+
+        warn_if_nan(loss, "loss")
+        return loss + (surrogate_loss - surrogate_loss.detach())
+
+    def loss_and_grads(self, model, guide, *args, **kwargs):
+        loss, surrogate_loss = self.loss_and_surrogate_loss(model, guide, *args, **kwargs)
         surrogate_loss.backward()
         loss = loss.item()
 
