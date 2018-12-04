@@ -55,13 +55,15 @@ def test_mcmc_interface():
     (1, 2),
     (2, 1),
     (2, 2),
+    (2, 3),
 ])
 def test_num_chains(num_chains, cpu_count, monkeypatch):
     monkeypatch.setattr(torch.multiprocessing, 'cpu_count', lambda:  cpu_count)
     kernel = PriorKernel(normal_normal_model)
-    with optional(pytest.warns(UserWarning), cpu_count < num_chains):
+    available_cpu = max(1, cpu_count-1)
+    with optional(pytest.warns(UserWarning), available_cpu < num_chains):
         mcmc = MCMC(kernel, num_samples=10, num_chains=num_chains)
-    assert mcmc.num_chains == min(num_chains, cpu_count)
+    assert mcmc.num_chains == min(num_chains, available_cpu)
     if mcmc.num_chains == 1:
         assert isinstance(mcmc.sampler, _SingleSampler)
     else:

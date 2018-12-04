@@ -240,12 +240,13 @@ class MCMC(TracePosterior):
         self.warmup_steps = warmup_steps if warmup_steps is not None else num_samples // 2  # Stan
         self.num_samples = num_samples
         if num_chains > 1:
-            cpu_count = mp.cpu_count()
-            if num_chains > cpu_count:
-                warnings.warn("num_chains={} is more than cpu_count={}. "
+            # verify num_chains is compatible with available CPU.
+            available_cpu = max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
+            if num_chains > available_cpu:
+                warnings.warn("num_chains={} is more than available_cpu={}. "
                               "Resetting number of chains to CPU count."
-                              .format(num_chains, cpu_count))
-                num_chains = cpu_count
+                              .format(num_chains, available_cpu))
+                num_chains = available_cpu
         if num_chains > 1:
             self.sampler = _ParallelSampler(kernel, num_samples, warmup_steps,
                                             num_chains, mp_context)
