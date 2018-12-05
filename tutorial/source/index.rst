@@ -18,6 +18,7 @@ Welcome to Pyro Examples and Tutorials!
    tensor_shapes
    enumeration
    custom_objectives
+   jit
 
 .. toctree::
    :maxdepth: 2

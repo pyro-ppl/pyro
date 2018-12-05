@@ -14,6 +14,7 @@ then
     if [ ${cuda} = 1 ]; then conda install -y cuda90 -c pytorch; fi
 else
     conda install -y numpy pyyaml mkl mkl-include setuptools cmake cffi typing
+    conda install -c mingfeima mkldnn
     if [ ${cuda} = 1 ]; then conda install -y cuda90 -c pytorch; fi
     git clone --recursive https://github.com/pytorch/pytorch.git
     pushd pytorch && git checkout ${pytorch_branch}
