@@ -56,8 +56,9 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains):
     finally:
         for pbar in progress_bars:
             pbar.close()
-        # Required to not overwrite multiple progress bars on exit.
-        sys.stderr.write("\n" * num_chains)
+            # Required to not overwrite multiple progress bars on exit.
+            if not pbar._ipython_env:
+                sys.stderr.write("\n")
 
 
 class _Worker(object):
