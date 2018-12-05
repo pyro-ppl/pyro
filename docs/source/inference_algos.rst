@@ -60,3 +60,7 @@ Inference Utilities
     :members:
     :undoc-members:
     :show-inheritance:
+
+.. automodule:: pyro.infer.collapse
+    :members:
+    :show-inheritance:
