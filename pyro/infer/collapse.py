@@ -83,7 +83,6 @@ def sample_posterior(model, first_available_dim, temperature=1):
         except KeyError:
             raise ValueError("temperature must be 0 (map) or 1 (sample) for now")
 
-        import pdb; pdb.set_trace()
         log_probs = contract_tensor_tree(log_probs, sum_dims, ring=ring)
         query_ordinal = {}
         for ordinal, terms in log_probs.items():
