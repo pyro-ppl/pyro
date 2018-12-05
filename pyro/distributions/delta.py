@@ -35,7 +35,7 @@ class Delta(TorchDistribution):
         event_shape = v.shape[batch_dim:]
         if isinstance(log_density, numbers.Number):
             log_density = v.new_empty(batch_shape).fill_(log_density)
-        elif log_density.shape != batch_shape:
+        elif validate_args and log_density.shape != batch_shape:
             raise ValueError('Expected log_density.shape = {}, actual {}'.format(
                 log_density.shape, batch_shape))
         self.v = v
