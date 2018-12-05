@@ -6,6 +6,12 @@ from collections import OrderedDict
 
 from tqdm.auto import tqdm
 
+try:
+    get_ipython
+    ipython_env = True
+except NameError:
+    ipython_env = False
+
 # Identifiers to distinguish between diagnostic messages for progress bars
 # vs. logging output. Useful when using QueueHandler in multiprocessing.
 LOG_MSG = "LOG"
@@ -168,8 +174,12 @@ def initialize_progbar(warmup_steps, num_samples, min_width=80, max_width=120, p
     # Disable progress bar in "CI"
     # (see https://github.com/travis-ci/travis-ci/issues/1337).
     disable = "CI" in os.environ or "PYTEST_XDIST_WORKER" in os.environ
-    progress_bar = tqdm(total=total_steps, desc=description,
+    bar_format = None
+    if not ipython_env:
+        bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]"
+    progress_bar = tqdm(total=total_steps, desc=description, bar_format=bar_format,
                         position=pos, file=sys.stderr, disable=disable)
+    progress_bar._ipython_env = ipython_env
 
     if getattr(progress_bar, "ncols", None) is not None:
         progress_bar.ncols = max(min_width, progress_bar.ncols)
