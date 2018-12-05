@@ -6,9 +6,9 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
+from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
-from pyro.params import param_with_module_name
 from pyro.util import warn_if_nan
 
 
@@ -63,45 +63,38 @@ class GPRegression(GPModel):
         process. By default, we use zero mean.
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
-    :param str name: Name of this model.
     """
-    def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6,
-                 name="GPR"):
-        super(GPRegression, self).__init__(X, y, kernel, mean_function, jitter, name)
+    def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6):
+        super(GPRegression, self).__init__(X, y, kernel, mean_function, jitter)
 
-        noise = self.X.new_ones(()) if noise is None else noise
+        noise = self.X.new_tensor(1.) if noise is None else noise
         self.noise = Parameter(noise)
-        self.set_constraint("noise", torchdist.constraints.greater_than(self.jitter))
+        self.set_constraint("noise", torchdist.constraints.positive)
 
+    @autoname.scope(prefix="GPR")
     def model(self):
         self.set_mode("model")
 
-        noise = self.get_param("noise")
-
-        N = self.X.shape[0]
+        N = self.X.size(0)
         Kff = self.kernel(self.X)
-        Kff.view(-1)[::N + 1] += noise  # add noise to diagonal
+        Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to diagonal
         Lff = Kff.cholesky()
 
-        zero_loc = self.X.new_zeros(self.X.shape[0])
+        zero_loc = self.X.new_zeros(self.X.size(0))
         f_loc = zero_loc + self.mean_function(self.X)
         if self.y is None:
             f_var = Lff.pow(2).sum(dim=-1)
             return f_loc, f_var
         else:
-            y_name = param_with_module_name(self.name, "y")
-            return pyro.sample(y_name,
+            return pyro.sample("y",
                                dist.MultivariateNormal(f_loc, scale_tril=Lff)
                                    .expand_by(self.y.shape[:-1])
-                                   .independent(self.y.dim() - 1),
+                                   .to_event(self.y.dim() - 1),
                                obs=self.y)
 
+    @autoname.scope(prefix="GPR")
     def guide(self):
         self.set_mode("guide")
-
-        noise = self.get_param("noise")
-
-        return noise
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
@@ -124,11 +117,11 @@ class GPRegression(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        noise = self.guide()
+        self.set_mode("guide")
 
-        N = self.X.shape[0]
+        N = self.X.size(0)
         Kff = self.kernel(self.X).contiguous()
-        Kff.view(-1)[::N + 1] += noise  # add noise to the diagonal
+        Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to the diagonal
         Lff = Kff.cholesky()
 
         y_residual = self.y - self.mean_function(self.X)
@@ -136,11 +129,11 @@ class GPRegression(GPModel):
                                full_cov, jitter=self.jitter)
 
         if full_cov and not noiseless:
-            M = Xnew.shape[0]
+            M = Xnew.size(0)
             cov = cov.contiguous()
-            cov.view(-1, M * M)[:, ::M + 1] += noise  # add noise to the diagonal
+            cov.view(-1, M * M)[:, ::M + 1] += self.noise  # add noise to the diagonal
         if not full_cov and not noiseless:
-            cov = cov + noise
+            cov = cov + self.noise
 
         return loc + self.mean_function(Xnew), cov
 
@@ -166,10 +159,10 @@ class GPRegression(GPModel):
         :returns: sampler
         :rtype: function
         """
-        noise = self.guide().detach()
+        noise = self.noise.detach()
         X = self.X.clone().detach()
         y = self.y.clone().detach()
-        N = X.shape[0]
+        N = X.size(0)
         Kff = self.kernel(X).contiguous()
         Kff.view(-1)[::N + 1] += noise  # add noise to the diagonal
 

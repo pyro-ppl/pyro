@@ -55,7 +55,7 @@ def test_shapes(auto_class, Elbo):
 
     def model():
         pyro.sample("z1", dist.Normal(0.0, 1.0))
-        pyro.sample("z2", dist.Normal(torch.zeros(2), torch.ones(2)).independent(1))
+        pyro.sample("z2", dist.Normal(torch.zeros(2), torch.ones(2)).to_event(1))
         with pyro.plate("plate", 3):
             pyro.sample("z3", dist.Normal(torch.zeros(3), torch.ones(3)))
 
@@ -82,10 +82,10 @@ def test_iplate_smoke(auto_class, Elbo):
         assert x.shape == ()
 
         for i in pyro.plate("plate", 3):
-            y = pyro.sample("y_{}".format(i), dist.Normal(0, 1).expand_by([2, 1 + i, 2]).independent(3))
+            y = pyro.sample("y_{}".format(i), dist.Normal(0, 1).expand_by([2, 1 + i, 2]).to_event(3))
             assert y.shape == (2, 1 + i, 2)
 
-        z = pyro.sample("z", dist.Normal(0, 1).expand_by([2]).independent(1))
+        z = pyro.sample("z", dist.Normal(0, 1).expand_by([2]).to_event(1))
         assert z.shape == (2,)
 
         pyro.sample("obs", dist.Bernoulli(0.1), obs=torch.tensor(0))
@@ -209,7 +209,7 @@ def test_discrete_parallel(continuous_class):
 
     def model(data):
         weights = pyro.sample('weights', dist.Dirichlet(0.5 * torch.ones(K)))
-        locs = pyro.sample('locs', dist.Normal(0, 10).expand_by([K]).independent(1))
+        locs = pyro.sample('locs', dist.Normal(0, 10).expand_by([K]).to_event(1))
         scale = pyro.sample('scale', dist.LogNormal(0, 1))
 
         with pyro.plate('data', len(data)):

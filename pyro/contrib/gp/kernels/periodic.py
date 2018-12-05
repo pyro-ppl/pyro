@@ -18,18 +18,15 @@ class Cosine(Isotropy):
 
     :param torch.Tensor lengthscale: Length-scale parameter of this kernel.
     """
-    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None,
-                 name="Cosine"):
-        super(Cosine, self).__init__(input_dim, variance, lengthscale, active_dims,
-                                     name)
+    def __init__(self, input_dim, variance=None, lengthscale=None, active_dims=None):
+        super(Cosine, self).__init__(input_dim, variance, lengthscale, active_dims)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
             return self._diag(X)
 
-        variance = self.get_param("variance")
         r = self._scaled_dist(X, Z)
-        return variance * torch.cos(r)
+        return self.variance * torch.cos(r)
 
 
 class Periodic(Kernel):
@@ -48,41 +45,32 @@ class Periodic(Kernel):
     :param torch.Tensor lengthscale: Length scale parameter of this kernel.
     :param torch.Tensor period: Period parameter of this kernel.
     """
-    def __init__(self, input_dim, variance=None, lengthscale=None, period=None,
-                 active_dims=None, name="Periodic"):
-        super(Periodic, self).__init__(input_dim, active_dims, name)
+    def __init__(self, input_dim, variance=None, lengthscale=None, period=None, active_dims=None):
+        super(Periodic, self).__init__(input_dim, active_dims)
 
-        if variance is None:
-            variance = torch.tensor(1.)
+        variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
-        if lengthscale is None:
-            lengthscale = torch.tensor(1.)
+        lengthscale = torch.tensor(1.) if lengthscale is None else lengthscale
         self.lengthscale = Parameter(lengthscale)
         self.set_constraint("lengthscale", constraints.positive)
 
-        if period is None:
-            period = torch.tensor(1.)
+        period = torch.tensor(1.) if period is None else period
         self.period = Parameter(period)
         self.set_constraint("period", constraints.positive)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
-            variance = self.get_param("variance")
-            return variance.expand(X.shape[0])
+            return self.variance.expand(X.size(0))
 
         if Z is None:
             Z = X
         X = self._slice_input(X)
         Z = self._slice_input(Z)
-        if X.shape[1] != Z.shape[1]:
+        if X.size(1) != Z.size(1):
             raise ValueError("Inputs must have the same number of features.")
 
-        variance = self.get_param("variance")
-        lengthscale = self.get_param("lengthscale")
-        period = self.get_param("period")
-
         d = X.unsqueeze(1) - Z.unsqueeze(0)
-        scaled_sin = torch.sin(math.pi * d / period) / lengthscale
-        return variance * torch.exp(-2 * (scaled_sin ** 2).sum(-1))
+        scaled_sin = torch.sin(math.pi * d / self.period) / self.lengthscale
+        return self.variance * torch.exp(-2 * (scaled_sin ** 2).sum(-1))

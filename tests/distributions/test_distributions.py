@@ -219,7 +219,7 @@ def test_expand_error(dist, initial_shape, proposed_shape):
 def test_expand_reshaped_distribution(extra_event_dims, expand_shape):
     probs = torch.ones(1, 6) / 6
     d = dist.OneHotCategorical(probs)
-    reshaped_dist = d.expand_by([4, 1, 1]).independent(extra_event_dims)
+    reshaped_dist = d.expand_by([4, 1, 1]).to_event(extra_event_dims)
     full_shape = torch.Size([4, 1, 1, 1, 6])
     cut = 4 - extra_event_dims
     batch_shape, event_shape = full_shape[:cut], full_shape[cut:]

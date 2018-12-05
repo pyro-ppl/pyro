@@ -433,28 +433,32 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
     -   Models must not depend on any global data (except the param store).
     -   All model inputs that are tensors must be passed in via ``*args``.
     -   All model inputs that are *not* tensors must be passed in via
-        ``*kwargs``, and these will be fixed to their values on the first
-        call to :meth:`jit_loss_and_grads`.
-
-    .. warning:: Experimental. Interface subject to change.
+        ``**kwargs``, and compilation will be triggered once per unique
+        ``**kwargs``.
     """
-
-    def loss_and_grads(self, model, guide, *args, **kwargs):
+    def differentiable_loss(self, model, guide, *args, **kwargs):
+        kwargs['_model_id'] = id(model)
+        kwargs['_guide_id'] = id(guide)
         if getattr(self, '_differentiable_loss', None) is None:
-
+            # build a closure for differentiable_loss
             weakself = weakref.ref(self)
 
             @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings)
-            def differentiable_loss(*args):
+            def differentiable_loss(*args, **kwargs):
+                kwargs.pop('_model_id')
+                kwargs.pop('_guide_id')
                 self = weakself()
                 elbo = 0.0
                 for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-                    elbo += _compute_dice_elbo(model_trace, guide_trace)
+                    elbo = elbo + _compute_dice_elbo(model_trace, guide_trace)
                 return elbo * (-1.0 / self.num_particles)
 
             self._differentiable_loss = differentiable_loss
 
-        differentiable_loss = self._differentiable_loss(*args)
+        return self._differentiable_loss(*args, **kwargs)
+
+    def loss_and_grads(self, model, guide, *args, **kwargs):
+        differentiable_loss = self.differentiable_loss(model, guide, *args, **kwargs)
         differentiable_loss.backward()  # this line triggers jit compilation
         loss = differentiable_loss.item()
 

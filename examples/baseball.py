@@ -88,10 +88,10 @@ def not_pooled(at_bats, hits):
     :return: Number of hits predicted by the model.
     """
     num_players = at_bats.shape[0]
-    # TODO: use pyro.plate when pytorch 1.0 is released
-    phi_prior = Uniform(at_bats.new_tensor(0), at_bats.new_tensor(1)).expand_by([num_players]).independent(1)
-    phi = pyro.sample("phi", phi_prior)
-    return pyro.sample("obs", Binomial(at_bats, phi), obs=hits)
+    with pyro.plate("num_players", num_players):
+        phi_prior = Uniform(at_bats.new_tensor(0), at_bats.new_tensor(1))
+        phi = pyro.sample("phi", phi_prior)
+        return pyro.sample("obs", Binomial(at_bats, phi), obs=hits)
 
 
 def partially_pooled(at_bats, hits):
@@ -109,9 +109,10 @@ def partially_pooled(at_bats, hits):
     num_players = at_bats.shape[0]
     m = pyro.sample("m", Uniform(at_bats.new_tensor(0), at_bats.new_tensor(1)))
     kappa = pyro.sample("kappa", Pareto(at_bats.new_tensor(1), at_bats.new_tensor(1.5)))
-    phi_prior = Beta(m * kappa, (1 - m) * kappa).expand_by([num_players]).independent(1)
-    phi = pyro.sample("phi", phi_prior)
-    return pyro.sample("obs", Binomial(at_bats, phi), obs=hits)
+    with pyro.plate("num_players", num_players):
+        phi_prior = Beta(m * kappa, (1 - m) * kappa)
+        phi = pyro.sample("phi", phi_prior)
+        return pyro.sample("obs", Binomial(at_bats, phi), obs=hits)
 
 
 def partially_pooled_with_logit(at_bats, hits):
@@ -127,8 +128,9 @@ def partially_pooled_with_logit(at_bats, hits):
     num_players = at_bats.shape[0]
     loc = pyro.sample("loc", Normal(at_bats.new_tensor(-1), at_bats.new_tensor(1)))
     scale = pyro.sample("scale", HalfCauchy(scale=at_bats.new_tensor(1)))
-    alpha = pyro.sample("alpha", Normal(loc, scale).expand_by([num_players]).independent(1))
-    return pyro.sample("obs", Binomial(at_bats, logits=alpha), obs=hits)
+    with pyro.plate("num_players", num_players):
+        alpha = pyro.sample("alpha", Normal(loc, scale))
+        return pyro.sample("obs", Binomial(at_bats, logits=alpha), obs=hits)
 
 
 # ===================================

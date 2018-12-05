@@ -6,10 +6,10 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
+from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
 from pyro.distributions.util import eye_like
-from pyro.params import param_with_module_name
 
 
 class VariationalGP(GPModel):
@@ -57,78 +57,66 @@ class VariationalGP(GPModel):
         will help optimization.
     :param float jitter: A small positive term which is added into the diagonal part of
         a covariance matrix to help stablize its Cholesky decomposition.
-    :param str name: Name of this model.
     """
     def __init__(self, X, y, kernel, likelihood, mean_function=None,
-                 latent_shape=None, whiten=False, jitter=1e-6, name="VGP"):
-        super(VariationalGP, self).__init__(X, y, kernel, mean_function, jitter, name)
-        self.likelihood = likelihood
+                 latent_shape=None, whiten=False, jitter=1e-6):
+        super(VariationalGP, self).__init__(X, y, kernel, mean_function, jitter)
 
-        self.whiten = whiten
+        self.likelihood = likelihood
 
         y_batch_shape = self.y.shape[:-1] if self.y is not None else torch.Size([])
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
 
-        N = self.X.shape[0]
-        f_loc_shape = self.latent_shape + (N,)
-        f_loc = self.X.new_zeros(f_loc_shape)
+        N = self.X.size(0)
+        f_loc = self.X.new_zeros(self.latent_shape + (N,))
         self.f_loc = Parameter(f_loc)
 
-        f_scale_tril_shape = self.latent_shape + (N, N)
-        Id = eye_like(self.X, N)
-        f_scale_tril = Id.expand(f_scale_tril_shape)
+        identity = eye_like(self.X, N)
+        f_scale_tril = identity.repeat(self.latent_shape + (1, 1))
         self.f_scale_tril = Parameter(f_scale_tril)
         self.set_constraint("f_scale_tril", constraints.lower_cholesky)
 
+        self.whiten = whiten
         self._sample_latent = True
 
+    @autoname.scope(prefix="VGP")
     def model(self):
         self.set_mode("model")
 
-        f_loc = self.get_param("f_loc")
-        f_scale_tril = self.get_param("f_scale_tril")
-
-        N = self.X.shape[0]
+        N = self.X.size(0)
         Kff = self.kernel(self.X).contiguous()
         Kff.view(-1)[::N + 1] += self.jitter  # add jitter to the diagonal
         Lff = Kff.cholesky()
 
-        zero_loc = self.X.new_zeros(f_loc.shape)
-        f_name = param_with_module_name(self.name, "f")
-
+        zero_loc = self.X.new_zeros(self.f_loc.shape)
         if self.whiten:
-            Id = eye_like(self.X, N)
-            pyro.sample(f_name,
-                        dist.MultivariateNormal(zero_loc, scale_tril=Id)
-                            .independent(zero_loc.dim() - 1))
-            f_scale_tril = Lff.matmul(f_scale_tril)
+            identity = eye_like(self.X, N)
+            pyro.sample("f",
+                        dist.MultivariateNormal(zero_loc, scale_tril=identity)
+                            .to_event(zero_loc.dim() - 1))
+            f_scale_tril = Lff.matmul(self.f_scale_tril)
+            f_loc = Lff.matmul(self.f_loc.unsqueeze(-1)).squeeze(-1)
         else:
-            pyro.sample(f_name,
+            pyro.sample("f",
                         dist.MultivariateNormal(zero_loc, scale_tril=Lff)
-                            .independent(zero_loc.dim() - 1))
+                            .to_event(zero_loc.dim() - 1))
+            f_scale_tril = self.f_scale_tril
+            f_loc = self.f_loc
 
-        f_var = f_scale_tril.pow(2).sum(dim=-1)
-
-        if self.whiten:
-            f_loc = Lff.matmul(f_loc.unsqueeze(-1)).squeeze(-1)
         f_loc = f_loc + self.mean_function(self.X)
+        f_var = f_scale_tril.pow(2).sum(dim=-1)
         if self.y is None:
             return f_loc, f_var
         else:
             return self.likelihood(f_loc, f_var, self.y)
 
+    @autoname.scope(prefix="VGP")
     def guide(self):
         self.set_mode("guide")
 
-        f_loc = self.get_param("f_loc")
-        f_scale_tril = self.get_param("f_scale_tril")
-
-        if self._sample_latent:
-            f_name = param_with_module_name(self.name, "f")
-            pyro.sample(f_name,
-                        dist.MultivariateNormal(f_loc, scale_tril=f_scale_tril)
-                            .independent(f_loc.dim()-1))
-        return f_loc, f_scale_tril
+        pyro.sample("f",
+                    dist.MultivariateNormal(self.f_loc, scale_tril=self.f_scale_tril)
+                        .to_event(self.f_loc.dim()-1))
 
     def forward(self, Xnew, full_cov=False):
         r"""
@@ -150,12 +138,8 @@ class VariationalGP(GPModel):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-        # avoid sampling the unnecessary latent f
-        self._sample_latent = False
-        f_loc, f_scale_tril = self.guide()
-        self._sample_latent = True
+        self.set_mode("guide")
 
-        loc, cov = conditional(Xnew, self.X, self.kernel, f_loc, f_scale_tril,
-                               full_cov=full_cov, whiten=self.whiten,
-                               jitter=self.jitter)
+        loc, cov = conditional(Xnew, self.X, self.kernel, self.f_loc, self.f_scale_tril,
+                               full_cov=full_cov, whiten=self.whiten, jitter=self.jitter)
         return loc + self.mean_function(Xnew), cov

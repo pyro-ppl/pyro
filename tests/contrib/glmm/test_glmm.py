@@ -16,28 +16,28 @@ from tests.common import assert_equal
 
 def lm_2p_10_10_1(design):
     w = pyro.sample("w", dist.Normal(torch.tensor(0.),
-                                     torch.tensor([10., 10.])).independent(1))
+                                     torch.tensor([10., 10.])).to_event(1))
     mean = torch.matmul(design, w.unsqueeze(-1)).squeeze(-1)
-    y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.)).independent(1))
+    y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.)).to_event(1))
     return y
 
 
 def lm_2p_10_10_1_w12(design):
     w1 = pyro.sample("w1", dist.Normal(torch.tensor([0.]),
-                                       torch.tensor(10.)).independent(1))
+                                       torch.tensor(10.)).to_event(1))
     w2 = pyro.sample("w2", dist.Normal(torch.tensor([0.]),
-                                       torch.tensor(10.)).independent(1))
+                                       torch.tensor(10.)).to_event(1))
     w = torch.cat([w1, w2], dim=-1)
     mean = torch.matmul(design, w.unsqueeze(-1)).squeeze(-1)
-    y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.)).independent(1))
+    y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.)).to_event(1))
     return y
 
 
 def nz_lm_2p_10_10_1(design):
     w = pyro.sample("w", dist.Normal(torch.tensor([1., -1.]),
-                                     torch.tensor([10., 10.])).independent(1))
+                                     torch.tensor([10., 10.])).to_event(1))
     mean = torch.matmul(design, w.unsqueeze(-1)).squeeze(-1)
-    y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.)).independent(1))
+    y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.)).to_event(1))
     return y
 
 
@@ -45,17 +45,17 @@ def normal_inv_gamma_2_2_10_10(design):
     tau = pyro.sample("tau", dist.Gamma(torch.tensor(2.), torch.tensor(2.)))
     obs_sd = 1./torch.sqrt(tau)
     w = pyro.sample("w", dist.Normal(torch.tensor([1., -1.]),
-                                     obs_sd*torch.tensor([10., 10.])).independent(1))
+                                     obs_sd*torch.tensor([10., 10.])).to_event(1))
     mean = torch.matmul(design, w.unsqueeze(-1)).squeeze(-1)
-    y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.)).independent(1))
+    y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.)).to_event(1))
     return y
 
 
 def lr_10_10(design):
     w = pyro.sample("w", dist.Normal(torch.tensor([1., -1.]),
-                                     torch.tensor([10., 10.])).independent(1))
+                                     torch.tensor([10., 10.])).to_event(1))
     mean = torch.matmul(design, w.unsqueeze(-1)).squeeze(-1)
-    y = pyro.sample("y", dist.Bernoulli(logits=mean).independent(1))
+    y = pyro.sample("y", dist.Bernoulli(logits=mean).to_event(1))
     return y
 
 
@@ -64,11 +64,11 @@ def sigmoid_example(design):
     random_effect_k = pyro.sample("k", dist.Gamma(2.*torch.ones(n), torch.tensor(2.)))
     random_effect_offset = pyro.sample("w2", dist.Normal(torch.tensor(0.), torch.ones(n)))
     w1 = pyro.sample("w1", dist.Normal(torch.tensor([1., -1.]),
-                                       torch.tensor([10., 10.])).independent(1))
+                                       torch.tensor([10., 10.])).to_event(1))
     mean = torch.matmul(design[..., :-2], w1.unsqueeze(-1)).squeeze(-1)
     offset_mean = mean + random_effect_offset
 
-    base_dist = dist.Normal(offset_mean, torch.tensor(1.)).independent(1)
+    base_dist = dist.Normal(offset_mean, torch.tensor(1.)).to_event(1)
     transforms = [
         AffineTransform(loc=torch.tensor(0.), scale=random_effect_k),
         SigmoidTransform()
