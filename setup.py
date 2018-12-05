@@ -60,6 +60,7 @@ EXTRAS_REQUIRE = [
     # 'torchvision',
     'visdom>=0.1.4',
     'pandas',
+    'seaborn',
     'wget',
 ]
 
