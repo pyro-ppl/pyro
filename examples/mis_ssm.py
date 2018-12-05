@@ -37,10 +37,11 @@ def model(sequences, args, batch_size=None):
 
 def guide(sequences, args, batch_size=None):
     px_shape = torch.Size((args.length, args.num_sequences, args.hidden_dim,))
-    probs_x = pyro.param("probs_x", 0.5 * torch.ones(px_shape) + 0.1 * torch.rand(px_shape), constraint=constraints.simplex)
-    #probs_x = pyro.param("probs_x", torch.ones(px_shape), constraint=constraints.simplex)
-    #probs_x = 0.5 * torch.ones(px_shape)
-    #print("probs_x", probs_x.mean().item(), probs_x.min().item(), probs_x.max().item())
+    probs_x = pyro.param("probs_x", 0.5 * torch.ones(px_shape) + 0.1 * torch.rand(px_shape),
+                         constraint=constraints.simplex)
+    # probs_x = pyro.param("probs_x", torch.ones(px_shape), constraint=constraints.simplex)
+    # probs_x = 0.5 * torch.ones(px_shape)
+    # print("probs_x", probs_x.mean().item(), probs_x.min().item(), probs_x.max().item())
 
     # let's actually share our params across the auxiliary dimension so that we should
     # exactly reproduce the mean field vanilla guide
@@ -59,8 +60,8 @@ def guide(sequences, args, batch_size=None):
             scale_expand = scale_y.expand((args.length, args.hidden_dim, args.num_sequences))
             y = pyro.sample("y_{}".format(t),
                 dist.Normal(loc_expand[t][x, batch], scale_expand[t][x, batch]))
-                #dist.Normal(loc_y[t][x, batch], scale_y[t][x, batch]))
-                # infer={"num_samples": args.num_samples})
+                # dist.Normal(loc_y[t][x, batch], scale_y[t][x, batch]))
+                #             infer={"num_samples": args.num_samples})
             # print('y', y.shape)
 
 

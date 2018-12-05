@@ -18,38 +18,6 @@ from tests.common import assert_equal
 logger = logging.getLogger(__name__)
 
 
-def test_collapse_exact_inference():
-    data = torch.tensor([1., 2., 3.])
-    num_particles = 10000
-
-    @config_enumerate(default="parallel")
-    def model():
-        p1 = pyro.param("p1", torch.tensor(0.25))
-        with pyro.plate("num_particles", num_particles, dim=-2):
-            z = pyro.sample("z", dist.Bernoulli(p1), infer={"collapse": True})
-            with pyro.plate("data", 3):
-                pyro.sample("x", dist.Normal(z, 1.), obs=data)
-
-    def hand_model():
-        p1 = pyro.param("p1", torch.tensor(0.25))
-        with pyro.plate("data", 3):
-            with poutine.scale(scale=1.-p1):
-                pyro.sample("x0", dist.Normal(0., 1.), obs=data)
-            with poutine.scale(scale=p1):
-                pyro.sample("x1", dist.Normal(1., 1.), obs=data)
-
-    expected_logprob = poutine.trace(hand_model).get_trace().log_prob_sum()
-    actual_logprob = poutine.trace(collapse(model, -3)).get_trace().log_prob_sum() / num_particles
-
-    assert_equal(expected_logprob, actual_logprob, prec=1e-3)
-
-    p1 = pyro.param("p1")
-    expected_grad = grad(expected_logprob, [p1,])[0]
-    actual_grad = grad(actual_logprob, [p1,])[0]
-
-    assert_equal(expected_grad, actual_grad, prec=1e-3)
-
-
 def test_collapse_guide_smoke():
     pyro.clear_param_store()
 
@@ -77,6 +45,36 @@ def test_collapse_guide_smoke():
     collapsed_tr = poutine.trace(collapsed_guide).get_trace()
 
     assert set(collapsed_tr.nodes.keys()) == set(uncollapsed_tr.nodes.keys()) - {"e"}
+
+
+def test_collapse_grad():
+    data = torch.tensor([1., 2., 3.])
+    num_particles = 10000
+
+    @config_enumerate(default="parallel")
+    def model():
+        p1 = pyro.param("p1", torch.tensor(0.25))
+        with pyro.plate("num_particles", num_particles, dim=-2):
+            z = pyro.sample("z", dist.Bernoulli(p1), infer={"collapse": True})
+            with pyro.plate("data", 3):
+                pyro.sample("x", dist.Normal(z, 1.), obs=data)
+
+    def hand_model():
+        p1 = pyro.param("p1", torch.tensor(0.25))
+        with pyro.plate("data", 3):
+            with poutine.scale(scale=1.-p1):
+                pyro.sample("x0", dist.Normal(0., 1.), obs=data)
+            with poutine.scale(scale=p1):
+                pyro.sample("x1", dist.Normal(1., 1.), obs=data)
+
+    expected_logprob = poutine.trace(hand_model).get_trace().log_prob_sum()
+    actual_logprob = poutine.trace(collapse(model, -3)).get_trace().log_prob_sum() / num_particles
+    assert_equal(expected_logprob, actual_logprob, prec=1e-3)
+
+    p1 = pyro.param("p1")
+    expected_grad = grad(expected_logprob, [p1])[0]
+    actual_grad = grad(actual_logprob, [p1])[0]
+    assert_equal(expected_grad, actual_grad, prec=1e-3)
 
 
 def test_collapse_traceenumelbo_smoke():
@@ -118,7 +116,7 @@ def test_collapse_elbo_categorical():
             print("uncollapsed guide z2 shape = {}".format(z2.shape))
         else:
             z1 = pyro.sample("z1", dist.Categorical(p1),
-                infer={"collapse": True, "enumerate": "parallel"})
+                             infer={"collapse": True, "enumerate": "parallel"})
             print("collapsed guide z1 shape = {}".format(z1.shape))
             z2 = pyro.sample("z2", dist.Categorical(p2[z1]))
             print("collapsed guide z2 shape = {}".format(z2.shape))
@@ -160,7 +158,7 @@ def test_collapse_enum_interaction_smoke():
             print("uncollapsed guide z2 shape = {}".format(z2.shape))
         else:
             z1 = pyro.sample("z1", dist.Categorical(p1),
-                infer={"collapse": True, "enumerate": "parallel"})
+                             infer={"collapse": True, "enumerate": "parallel"})
             print("collapsed guide z1 shape = {}".format(z1.shape))
             z2 = pyro.sample("z2", dist.Categorical(p2[z1]))
             print("collapsed guide z2 shape = {}".format(z2.shape))
@@ -202,3 +200,4 @@ def test_collapse_enum_interaction_smoke():
     print("\n-------- collapsed, backwardsample")
     tr4 = poutine.trace(elbo.sample_posterior).get_trace(
         model, collapsed_guide, False)
+    assert "z2" not in tr4.nodes

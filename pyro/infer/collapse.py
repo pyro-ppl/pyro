@@ -10,10 +10,14 @@ from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import MapRing, SampleRing
 
 
-_RINGS = {
-    0: MapRing,
-    1: SampleRing,
-}
+_RINGS = {0: MapRing, 1: SampleRing}
+
+
+def _make_ring(temperature):
+    try:
+        return _RINGS[temperature]()
+    except KeyError:
+        raise ValueError("temperature must be 0 (map) or 1 (sample) for now")
 
 
 class CollapseEnumMessenger(poutine.enumerate_messenger.EnumerateMessenger):
@@ -58,10 +62,8 @@ def sample_posterior(model, first_available_dim, temperature=1):
         queries = []
         for node in enum_trace.nodes.values():
             if node["type"] == "sample":
-
-
-                ordinal = frozenset(enum_trace.plate_to_symbol[f.name] for f in node["cond_indep_stack"] if f.vectorized)
-
+                ordinal = frozenset(enum_trace.plate_to_symbol[f.name]
+                                    for f in node["cond_indep_stack"] if f.vectorized)
                 log_prob = node["packed"]["log_prob"]
                 log_probs.setdefault(ordinal, []).append(log_prob)
                 sum_dims.update(set(log_prob._pyro_dims))
@@ -72,24 +74,21 @@ def sample_posterior(model, first_available_dim, temperature=1):
                         frame_to_dim[frame] = frame_dim
                         sum_dims.remove(frame_dim)
 
-                # Note we mark all sites with require_backward to get correct ordinals and slice non-enumerated samples
+                # Note we mark all sites with require_backward to get correct
+                # ordinals and slice non-enumerated samples.
                 if not node["is_observed"]:
                     queries.append(log_prob)
                     require_backward(log_prob)
                     log_prob._pyro_backward_result = False
 
-        try:
-            ring = _RINGS[temperature]()
-        except KeyError:
-            raise ValueError("temperature must be 0 (map) or 1 (sample) for now")
-
+        ring = _make_ring(temperature)
         log_probs = contract_tensor_tree(log_probs, sum_dims, ring=ring)
         query_ordinal = {}
         for ordinal, terms in log_probs.items():
             for term in terms:
                 if hasattr(term, "_pyro_backward"):
                     term._pyro_backward()
-            # Note: makes collapse quadratic in number of ordinals
+            # Note: this is quadratic in number of ordinals
             for query in queries:
                 if query not in query_ordinal and query._pyro_backward_result is not False:
                     query_ordinal[query] = ordinal
@@ -107,7 +106,6 @@ def sample_posterior(model, first_available_dim, temperature=1):
                     new_node["cond_indep_stack"] = tuple(
                         f for f in node["cond_indep_stack"]
                         if not f.vectorized or frame_to_dim[f] in ordinal)
-
 
                     # TODO move this into a custom SampleRing Leaf implementation
                     sample = log_prob._pyro_backward_result
