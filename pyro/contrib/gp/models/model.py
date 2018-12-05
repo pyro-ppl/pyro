@@ -151,7 +151,7 @@ class GPModel(Parameterized):
             >>> likelihood = gp.likelihoods.Gaussian()
             >>> vsgp = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood)
             >>> optimizer = torch.optim.Adam(vsgp.parameters(), lr=0.01)
-            >>> loss_fn = pyro.infer.Trace_ELBO().differentiable_loss
+            >>> loss_fn = pyro.infer.TraceMeanField_ELBO().differentiable_loss
             >>> batched_X, batched_y = X.split(split_size=10), y.split(split_size=10)
             >>> for Xi, yi in zip(batched_X, batched_y):
             ...     optimizer.zero_grad()
