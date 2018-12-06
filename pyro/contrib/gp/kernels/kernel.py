@@ -1,9 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
-from collections import OrderedDict
 
-from pyro.contrib.gp.util import Parameterized
+from pyro.contrib.gp.parameterized import Parameterized
 
 
 class Kernel(Parameterized):
@@ -25,11 +24,10 @@ class Kernel(Parameterized):
     :param torch.Tensor variance: Variance parameter of this kernel.
     :param list active_dims: List of feature dimensions of the input which the kernel
         acts on.
-    :param str name: Name of the kernel.
     """
 
-    def __init__(self, input_dim, active_dims=None, name=None):
-        super(Kernel, self).__init__(name)
+    def __init__(self, input_dim, active_dims=None):
+        super(Kernel, self).__init__()
 
         if active_dims is None:
             active_dims = list(range(input_dim))
@@ -37,9 +35,6 @@ class Kernel(Parameterized):
             raise ValueError("Input size and the length of active dimensionals should be equal.")
         self.input_dim = input_dim
         self.active_dims = active_dims
-
-        # convenient OrderedDict to make access to subkernels faster
-        self._subkernels = OrderedDict()
 
     def forward(self, X, Z=None, diag=False):
         r"""
@@ -81,7 +76,7 @@ class Combination(Kernel):
     :param kern1: Second kernel to combine.
     :type kern1: Kernel or numbers.Number
     """
-    def __init__(self, kern0, kern1, name=None):
+    def __init__(self, kern0, kern1):
         if not isinstance(kern0, Kernel):
             raise TypeError("The first component of a combined kernel must be a "
                             "Kernel instance.")
@@ -94,7 +89,7 @@ class Combination(Kernel):
             active_dims |= set(kern1.active_dims)
         active_dims = sorted(active_dims)
         input_dim = len(active_dims)
-        super(Combination, self).__init__(input_dim, active_dims, name)
+        super(Combination, self).__init__(input_dim, active_dims)
 
         self.kern0 = kern0
         self.kern1 = kern1
@@ -107,9 +102,9 @@ class Sum(Combination):
     """
     def forward(self, X, Z=None, diag=False):
         if isinstance(self.kern1, Kernel):
-            return self.kern0(X, Z, diag) + self.kern1(X, Z, diag)
+            return self.kern0(X, Z, diag=diag) + self.kern1(X, Z, diag=diag)
         else:  # constant
-            return self.kern0(X, Z, diag) + self.kern1
+            return self.kern0(X, Z, diag=diag) + self.kern1
 
 
 class Product(Combination):
@@ -119,9 +114,9 @@ class Product(Combination):
     """
     def forward(self, X, Z=None, diag=False):
         if isinstance(self.kern1, Kernel):
-            return self.kern0(X, Z, diag) * self.kern1(X, Z, diag)
+            return self.kern0(X, Z, diag=diag) * self.kern1(X, Z, diag=diag)
         else:  # constant
-            return self.kern0(X, Z, diag) * self.kern1
+            return self.kern0(X, Z, diag=diag) * self.kern1
 
 
 class Transforming(Kernel):
@@ -131,8 +126,8 @@ class Transforming(Kernel):
 
     :param Kernel kern: The original kernel.
     """
-    def __init__(self, kern, name=None):
-        super(Transforming, self).__init__(kern.input_dim, kern.active_dims, name)
+    def __init__(self, kern):
+        super(Transforming, self).__init__(kern.input_dim, kern.active_dims)
 
         self.kern = kern
 
@@ -144,7 +139,7 @@ class Exponent(Transforming):
         :math:`k_{new}(x, z) = \exp(k(x, z)).`
     """
     def forward(self, X, Z=None, diag=False):
-        return self.kern(X, Z, diag).exp()
+        return self.kern(X, Z, diag=diag).exp()
 
 
 class VerticalScaling(Transforming):
@@ -157,19 +152,19 @@ class VerticalScaling(Transforming):
 
     :param callable vscaling_fn: A vertical scaling function :math:`f`.
     """
-    def __init__(self, kern, vscaling_fn, name=None):
-        super(VerticalScaling, self).__init__(kern, name)
+    def __init__(self, kern, vscaling_fn):
+        super(VerticalScaling, self).__init__(kern)
 
         self.vscaling_fn = vscaling_fn
 
     def forward(self, X, Z=None, diag=False):
         if diag:
-            return self.vscaling_fn(X) * self.kern(X, Z, diag) * self.vscaling_fn(X)
+            return self.vscaling_fn(X) * self.kern(X, Z, diag=diag) * self.vscaling_fn(X)
         elif Z is None:
             vscaled_X = self.vscaling_fn(X).unsqueeze(1)
-            return vscaled_X * self.kern(X, Z, diag) * vscaled_X.t()
+            return vscaled_X * self.kern(X, Z, diag=diag) * vscaled_X.t()
         else:
-            return (self.vscaling_fn(X).unsqueeze(1) * self.kern(X, Z, diag) *
+            return (self.vscaling_fn(X).unsqueeze(1) * self.kern(X, Z, diag=diag) *
                     self.vscaling_fn(Z).unsqueeze(0))
 
 
@@ -213,8 +208,8 @@ class Warping(Transforming):
     :param list owarping_coef: A list of coefficients of the output warping polynomial.
         These coefficients must be non-negative.
     """
-    def __init__(self, kern, iwarping_fn=None, owarping_coef=None, name=None):
-        super(Warping, self).__init__(kern, name)
+    def __init__(self, kern, iwarping_fn=None, owarping_coef=None):
+        super(Warping, self).__init__(kern)
 
         self.iwarping_fn = iwarping_fn
 
@@ -230,11 +225,11 @@ class Warping(Transforming):
 
     def forward(self, X, Z=None, diag=False):
         if self.iwarping_fn is None:
-            K_iwarp = self.kern(X, Z, diag)
+            K_iwarp = self.kern(X, Z, diag=diag)
         elif Z is None:
-            K_iwarp = self.kern(self.iwarping_fn(X), None, diag)
+            K_iwarp = self.kern(self.iwarping_fn(X), None, diag=diag)
         else:
-            K_iwarp = self.kern(self.iwarping_fn(X), self.iwarping_fn(Z), diag)
+            K_iwarp = self.kern(self.iwarping_fn(X), self.iwarping_fn(Z), diag=diag)
 
         if self.owarping_coef is None:
             return K_iwarp

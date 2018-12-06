@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
 from collections import namedtuple
 
 import torch
@@ -106,14 +105,8 @@ class NUTS(HMC):
                  use_multinomial_sampling=True,
                  transforms=None,
                  max_plate_nesting=None,
-                 max_iarange_nesting=None,  # DEPRECATED
                  jit_compile=False,
                  ignore_jit_warnings=False):
-        if max_iarange_nesting is not None:
-            warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
-                          DeprecationWarning)
-            max_plate_nesting = max_iarange_nesting
-
         super(NUTS, self).__init__(model,
                                    step_size,
                                    adapt_step_size=adapt_step_size,
@@ -121,7 +114,6 @@ class NUTS(HMC):
                                    full_mass=full_mass,
                                    transforms=transforms,
                                    max_plate_nesting=max_plate_nesting,
-                                   max_iarange_nesting=max_iarange_nesting,
                                    jit_compile=jit_compile,
                                    ignore_jit_warnings=ignore_jit_warnings)
         self.use_multinomial_sampling = use_multinomial_sampling

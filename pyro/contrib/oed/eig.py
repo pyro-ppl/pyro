@@ -5,10 +5,11 @@ import torch
 
 import pyro
 from pyro import poutine
-from pyro.contrib.oed.search import Search
-from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.contrib.autoguide import mean_field_guide_entropy
+from pyro.contrib.oed.search import Search
 from pyro.contrib.util import lexpand
+from pyro.infer import EmpiricalMarginal, Importance, SVI
+from pyro.util import torch_isnan, torch_isinf
 
 
 def vi_ape(model, design, observation_labels, target_labels,
@@ -334,7 +335,22 @@ def barber_agakov_loss(model, guide, observation_labels, target_labels):
     return loss_fn
 
 
-class EwmaLog(torch.autograd.Function):
+class _EwmaLogFn(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, ewma):
+        ctx.save_for_backward(ewma)
+        return input.log()
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        ewma, = ctx.saved_tensors
+        return grad_output / ewma, None
+
+
+_ewma_log_fn = _EwmaLogFn.apply
+
+
+class EwmaLog(object):
     """Logarithm function with exponentially weighted moving average
     for gradients.
 
@@ -352,26 +368,20 @@ class EwmaLog(torch.autograd.Function):
 
     def __init__(self, alpha):
         self.alpha = alpha
-        self.ewma = torch.tensor(0.)
+        self.ewma = 0.
         self.n = 0
         self.s = 0.
 
-    def forward(self, inputs, s, dim=0, keepdim=False):
+    def __call__(self, inputs, s, dim=0, keepdim=False):
         """Updates the moving average, and returns :code:`inputs.log()`.
         """
         self.n += 1
-        if torch.isnan(self.ewma).any() or (self.ewma == float('inf')).any():
-            self.ewma = inputs
-            self.s = s
+        if torch_isnan(self.ewma) or torch_isinf(self.ewma):
+            ewma = inputs
         else:
-            self.ewma = inputs*(1. - self.alpha)/(1 - self.alpha**self.n) \
-                        + torch.exp(self.s - s)*self.ewma \
-                        * (self.alpha - self.alpha**self.n)/(1 - self.alpha**self.n)
-            self.s = s
-        return inputs.log()
-
-    def backward(self, grad_output):
-        """Returns the gradient from exponentially weighted moving
-        average of historical input values.
-        """
-        return grad_output/self.ewma, None, None, None
+            ewma = inputs * (1. - self.alpha) / (1 - self.alpha**self.n) \
+                    + torch.exp(self.s - s) * self.ewma \
+                    * (self.alpha - self.alpha**self.n) / (1 - self.alpha**self.n)
+        self.ewma = ewma.detach()
+        self.s = s.detach()
+        return _ewma_log_fn(inputs, ewma)

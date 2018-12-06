@@ -149,7 +149,7 @@ def default_process_message(msg):
     :param msg: a message to be processed
     :returns: None
     """
-    if msg["done"] or msg["is_observed"]:
+    if msg["done"] or msg["is_observed"] or msg["value"] is not None:
         msg["done"] = True
         return msg
 

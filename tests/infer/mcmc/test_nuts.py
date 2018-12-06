@@ -203,46 +203,6 @@ def test_gamma_normal(jit, use_multinomial_sampling):
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-def test_logistic_regression_with_dual_averaging(jit):
-    dim = 3
-    data = torch.randn(2000, dim)
-    true_coefs = torch.arange(1., dim + 1.)
-    labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
-
-    def model(data):
-        coefs_mean = torch.zeros(dim)
-        coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(dim)))
-        y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
-        return y
-
-    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit, ignore_jit_warnings=True)
-    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
-    posterior = mcmc_run.marginal('beta').empirical['beta']
-    assert_equal(rmse(true_coefs, posterior.mean).item(), 0.0, prec=0.1)
-
-
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-def test_beta_bernoulli_with_dual_averaging(jit):
-    def model(data):
-        alpha = torch.tensor([1.1, 1.1])
-        beta = torch.tensor([1.1, 1.1])
-        p_latent = pyro.sample("p_latent", dist.Beta(alpha, beta))
-        pyro.sample("obs", dist.Bernoulli(p_latent), obs=data)
-        return p_latent
-
-    true_probs = torch.tensor([0.9, 0.1])
-    data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=jit,
-                       ignore_jit_warnings=True)
-    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
-    posterior = mcmc_run.marginal(["p_latent"]).empirical["p_latent"]
-    assert_equal(posterior.mean, true_probs, prec=0.03)
-
-
-@pytest.mark.parametrize("jit", [False,
-                                 mark_jit(True, marks=[pytest.mark.xfail(
-                                     reason="https://github.com/uber/pyro/issues/1418")])
-                                 ], ids=jit_idfn)
 def test_dirichlet_categorical(jit):
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
@@ -271,12 +231,13 @@ def test_gamma_beta(jit):
     nuts_kernel = NUTS(model, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal(['alpha', 'beta']).empirical
-    assert_equal(posterior['alpha'].mean, true_alpha, prec=0.05)
+    assert_equal(posterior['alpha'].mean, true_alpha, prec=0.06)
     assert_equal(posterior['beta'].mean, true_beta, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True,
-                                                 marks=[pytest.mark.skip("FIXME: Slow on JIT.")])],
+@pytest.mark.parametrize("jit", [False,
+                                 mark_jit(True, marks=[pytest.mark.skip(
+                                     "https://github.com/uber/pyro/issues/1487")])],
                          ids=jit_idfn)
 def test_gaussian_mixture_model(jit):
     K, N = 3, 1000
@@ -294,8 +255,7 @@ def test_gaussian_mixture_model(jit):
     true_mix_proportions = torch.tensor([0.1, 0.3, 0.6])
     cluster_assignments = dist.Categorical(true_mix_proportions).sample(torch.Size((N,)))
     data = dist.Normal(true_cluster_means[cluster_assignments], 1.0).sample()
-    nuts_kernel = NUTS(gmm, adapt_step_size=True, max_plate_nesting=1,
-                       jit_compile=jit, ignore_jit_warnings=True)
+    nuts_kernel = NUTS(gmm, max_plate_nesting=1, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=300, warmup_steps=100).run(data)
     posterior = mcmc_run.marginal(["phi", "cluster_means"]).empirical
     assert_equal(posterior["phi"].mean.sort()[0], true_mix_proportions, prec=0.05)
@@ -317,8 +277,7 @@ def test_bernoulli_latent_model(jit):
     y = dist.Bernoulli(y_prob).sample(torch.Size((N,)))
     z = dist.Bernoulli(0.65 * y + 0.1).sample()
     data = dist.Normal(2. * z, 1.0).sample()
-    nuts_kernel = NUTS(model, adapt_step_size=True, max_plate_nesting=1,
-                       jit_compile=jit, ignore_jit_warnings=True)
+    nuts_kernel = NUTS(model, max_plate_nesting=1, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=600, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal("y_prob").empirical["y_prob"]
     assert_equal(posterior.mean, y_prob, prec=0.05)
@@ -362,8 +321,7 @@ def test_gaussian_hmm(jit, num_steps):
         return torch.stack(obs)
 
     data = _generate_data()
-    nuts_kernel = NUTS(model, adapt_step_size=True, max_plate_nesting=1,
-                       jit_compile=jit, ignore_jit_warnings=True)
+    nuts_kernel = NUTS(model, max_plate_nesting=1, jit_compile=jit, ignore_jit_warnings=True)
     if num_steps == 30:
         nuts_kernel.initial_trace = _get_initial_trace()
     MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)
