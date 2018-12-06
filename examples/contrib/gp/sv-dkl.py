@@ -116,7 +116,7 @@ def main(args):
 
     optimizer = torch.optim.Adam(gpmodule.parameters(), lr=args.lr)
 
-    elbo = infer.JitTrace_ELBO() if args.jit else infer.Trace_ELBO()
+    elbo = infer.JitTraceMeanField_ELBO() if args.jit else infer.TraceMeanField_ELBO()
     loss_fn = elbo.differentiable_loss
 
     for epoch in range(1, args.epochs + 1):

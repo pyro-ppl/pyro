@@ -47,7 +47,7 @@ class MultiClass(Likelihood):
         :rtype: torch.Tensor
         """
         # calculates Monte Carlo estimate for E_q(f) [logp(y | f)]
-        f = dist.Normal(f_loc, f_var)()
+        f = dist.Normal(f_loc, f_var.sqrt())()
         if f.dim() < 2:
             raise ValueError("Latent function output should have at least 2 "
                              "dimensions: one for number of classes and one for "
