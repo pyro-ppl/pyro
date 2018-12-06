@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
-def test_sample_posterior_1(temperature):
+def test_infer_discrete_1(temperature):
     #      +-------+
     #  z --|--> x  |
     #      +-------+
@@ -49,7 +49,7 @@ def test_sample_posterior_1(temperature):
 
 
 @pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
-def test_sample_posterior_2(temperature):
+def test_infer_discrete_2(temperature):
     #       +--------+
     #  z1 --|--> x1  |
     #   |   |        |
@@ -97,7 +97,7 @@ def test_sample_posterior_2(temperature):
 
 
 @pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
-def test_sample_posterior_3(temperature):
+def test_infer_discrete_3(temperature):
     #       +---------+  +---------------+
     #  z1 --|--> x1   |  |  z2 ---> x2   |
     #       |       3 |  |             2 |
@@ -140,3 +140,33 @@ def test_sample_posterior_3(temperature):
         expected_probs[:] = 0
         expected_probs.reshape(-1)[argmax] = 1
     assert_equal(expected_probs.reshape(-1), actual_probs.reshape(-1), prec=1e-2)
+
+
+@pytest.mark.parametrize('length', [1, 2, 10, 100])
+@pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
+def test_hmm_smoke(temperature, length):
+
+    # This should match the example in the infer_discrete docstring.
+    def hmm(data, hidden_dim=10):
+        transition = 0.3 / hidden_dim + 0.7 * torch.eye(hidden_dim)
+        means = torch.arange(float(hidden_dim))
+        states = [0]
+        for t in pyro.markov(range(len(data))):
+            states.append(pyro.sample("states_{}".format(t),
+                                      dist.Categorical(transition[states[-1]])))
+            data[t] = pyro.sample("obs_{}".format(t),
+                                  dist.Normal(means[states[-1]], 1.),
+                                  obs=data[t])
+        return states, data
+
+    true_states, data = hmm([None] * length)
+    assert len(data) == length
+    assert len(true_states) == 1 + len(data)
+
+    decoder = infer_discrete(config_enumerate(hmm, default="parallel"),
+                             first_available_dim=-1, temperature=temperature)
+    inferred_states, _ = decoder(data)
+    assert len(inferred_states) == len(true_states)
+
+    logger.info("true states: {}".format(list(map(int, true_states))))
+    logger.info("inferred states: {}".format(list(map(int, inferred_states))))

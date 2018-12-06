@@ -126,13 +126,14 @@ def infer_discrete(fn=None, first_available_dim=None, temperature=1):
     Example::
 
         @infer_discrete(first_available_dim=-1, temperature=0)
+        @config_enumerate(hmm, default="parallel")
         def viterbi_decoder(data, hidden_dim=10):
-            transition = 0.1 / hidden_dim + 0.9 * torch.eye(hidden_dim)
+            transition = 0.3 / hidden_dim + 0.7 * torch.eye(hidden_dim)
             means = torch.arange(float(hidden_dim))
             states = [0]
-            for t in pyro.markov(range(data.size(0))):
+            for t in pyro.markov(range(len(data))):
                 states.append(pyro.sample("states_{}".format(t),
-                                          dist.Categorical(transition[state])))
+                                          dist.Categorical(transition[states[-1]])))
                 pyro.sample("obs_{}".format(t),
                             dist.Normal(means[states[-1]], 1.),
                             obs=data[t])
