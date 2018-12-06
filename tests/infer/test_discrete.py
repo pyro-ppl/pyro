@@ -8,6 +8,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
+from pyro.infer.discrete import infer_discrete
 from pyro.infer.enum import config_enumerate
 from tests.common import assert_equal
 
@@ -32,7 +33,7 @@ def test_sample_posterior_1(temperature):
                 pyro.sample("x", dist.Normal(z, 1.), obs=data)
 
     first_available_dim = -3
-    sampled_model = poutine.posterior(model, first_available_dim, temperature)
+    sampled_model = infer_discrete(model, first_available_dim, temperature)
     sampled_trace = poutine.trace(sampled_model).get_trace(num_particles)
     conditioned_traces = {z: poutine.trace(model).get_trace(z=torch.tensor(z)) for z in [0., 1.]}
 
@@ -72,7 +73,7 @@ def test_sample_posterior_2(temperature):
                 pyro.sample("x2", dist.Normal(loc[z2], 1.), obs=data[1])
 
     first_available_dim = -3
-    sampled_model = poutine.posterior(model, first_available_dim, temperature)
+    sampled_model = infer_discrete(model, first_available_dim, temperature)
     sampled_trace = poutine.trace(
         sampled_model).get_trace(num_particles)
     conditioned_traces = {(z1, z2): poutine.trace(model).get_trace(z1=torch.tensor(z1),
@@ -117,7 +118,7 @@ def test_sample_posterior_3(temperature):
                 pyro.sample("x2", dist.Normal(loc[z2], 1.), obs=data[1])
 
     first_available_dim = -3
-    sampled_model = poutine.posterior(model, first_available_dim, temperature)
+    sampled_model = infer_discrete(model, first_available_dim, temperature)
     sampled_trace = poutine.trace(
         sampled_model).get_trace(num_particles)
     conditioned_traces = {(z1, z20, z21): poutine.trace(model).get_trace(z1=torch.tensor(z1),

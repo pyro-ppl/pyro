@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 from .handlers import (block, broadcast, condition, do, enum, escape, infer_config, lift, markov, mask, queue, replay,
                        scale, trace, uncondition)
-from .posterior import posterior
 from .runtime import NonlocalExit
 from .trace_struct import Trace
 from .util import enable_validation, is_validation_enabled
@@ -21,7 +20,6 @@ __all__ = [
     "markov",
     "mask",
     "NonlocalExit",
-    "posterior",
     "replay",
     "queue",
     "scale",

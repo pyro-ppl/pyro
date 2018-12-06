@@ -4,13 +4,12 @@ import functools
 from collections import OrderedDict
 
 import pyro.ops.packed as packed
+from pyro import poutine
 from pyro.ops.contract import contract_tensor_tree
 from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import MapRing, SampleRing
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
-from pyro.poutine.handlers import block, trace
 from pyro.poutine.replay_messenger import ReplayMessenger
-from pyro.poutine.trace_struct import Trace
 from pyro.poutine.util import prune_subsample_sites
 
 _RINGS = {0: MapRing, 1: SampleRing}
@@ -34,11 +33,11 @@ class SamplePosteriorMessenger(ReplayMessenger):
 
 
 def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
-    # For internal use by poutine.posterior.
+    # For internal use by infer_discrete.
 
     # Create an enumerated trace.
-    with block(), EnumerateMessenger(first_available_dim):
-        enum_trace = trace(model).get_trace(*args, **kwargs)
+    with poutine.block(), EnumerateMessenger(first_available_dim):
+        enum_trace = poutine.trace(model).get_trace(*args, **kwargs)
     enum_trace = prune_subsample_sites(enum_trace)
     enum_trace.compute_log_prob()
     enum_trace.pack_tensors()
@@ -81,7 +80,7 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
                 query_to_ordinal[query] = ordinal
 
     # Construct a collapsed trace by gathering and adjusting cond_indep_stack.
-    collapsed_trace = Trace()
+    collapsed_trace = poutine.Trace()
     for node in enum_trace.nodes.values():
         if node["type"] == "sample" and not node["is_observed"]:
             # TODO move this into a Leaf implementation somehow
@@ -118,11 +117,26 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
         return model(*args, **kwargs)
 
 
-def posterior(fn=None, first_available_dim=None, temperature=1):
+def infer_discrete(fn=None, first_available_dim=None, temperature=1):
     """
-    A handler that samples discrete sites marked with
+    A poutine that samples discrete sites marked with
     ``site["infer"]["enumerate"] = "parallel"`` from the posterior,
     conditioned on observations.
+
+    Example::
+
+        @infer_discrete(first_available_dim=-1, temperature=0)
+        def viterbi_decoder(data, hidden_dim=10):
+            transition = 0.1 / hidden_dim + 0.9 * torch.eye(hidden_dim)
+            means = torch.arange(float(hidden_dim))
+            states = [0]
+            for t in pyro.markov(range(data.size(0))):
+                states.append(pyro.sample("states_{}".format(t),
+                                          dist.Categorical(transition[state])))
+                pyro.sample("obs_{}".format(t),
+                            dist.Normal(means[states[-1]], 1.),
+                            obs=data[t])
+            return states  # returns maximum likelihood states
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param int first_available_dim: The first tensor dimension (counting
@@ -134,7 +148,7 @@ def posterior(fn=None, first_available_dim=None, temperature=1):
     """
     assert first_available_dim < 0, first_available_dim
     if fn is None:  # support use as a decorator
-        return functools.partial(posterior,
+        return functools.partial(infer_discrete,
                                  first_available_dim=first_available_dim,
                                  temperature=temperature)
     return functools.partial(_sample_posterior, fn, first_available_dim, temperature)
