@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import math
-import warnings
 from collections import OrderedDict
 
 import torch
@@ -95,14 +94,9 @@ class HMC(TraceKernel):
                  full_mass=False,
                  transforms=None,
                  max_plate_nesting=None,
-                 max_iarange_nesting=None,  # DEPRECATED
                  jit_compile=False,
                  ignore_jit_warnings=False):
         self.model = model
-        if max_iarange_nesting is not None:
-            warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
-                          DeprecationWarning)
-            max_plate_nesting = max_iarange_nesting
         self.max_plate_nesting = max_plate_nesting
         if trajectory_length is not None:
             self.trajectory_length = trajectory_length
@@ -417,6 +411,6 @@ class HMC(TraceKernel):
 
     def diagnostics(self):
         return OrderedDict([
-            ("Step size", self.step_size),
-            ("Acceptance rate", self._accept_cnt / self._t)
+            ("step size", "{:.2e}".format(self.step_size)),
+            ("acc. rate", "{:.3f}".format(self._accept_cnt / self._t))
         ])

@@ -99,7 +99,7 @@ def bernoulli_beta_hmc(**kwargs):
 
 @register_model(num_steps=2000, whiten=False, id='VSGP::MultiClass_whiten=False')
 @register_model(num_steps=2000, whiten=True, id='VSGP::MultiClass_whiten=True')
-def svgp_multiclass(num_steps, whiten):
+def vsgp_multiclass(num_steps, whiten):
     # adapted from http://gpflow.readthedocs.io/en/latest/notebooks/multiclass.html
     pyro.set_rng_seed(0)
     X = torch.rand(100, 1)
@@ -112,14 +112,15 @@ def svgp_multiclass(num_steps, whiten):
     likelihood = gp.likelihoods.MultiClass(num_classes=3)
     Xu = X[::5].clone()
 
-    gpmodel = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood,
-                                            latent_shape=torch.Size([3]),
-                                            whiten=whiten)
+    gpmodule = gp.models.VariationalSparseGP(X, y, kernel, Xu, likelihood,
+                                             latent_shape=torch.Size([3]),
+                                             whiten=whiten)
 
-    gpmodel.fix_param("Xu")
-    gpmodel.kernel.kern1.fix_param("variance")
+    gpmodule.Xu.requires_grad_(False)
+    gpmodule.kernel.kern1.variance_unconstrained.requires_grad_(False)
 
-    gpmodel.optimize(optim.Adam({"lr": 0.0001}), num_steps=num_steps)
+    optimizer = torch.optim.Adam(gpmodule.parameters(), lr=0.0001)
+    gp.util.train(gpmodule, optimizer, num_steps=num_steps)
 
 
 @pytest.mark.parametrize('model, model_args, id', TEST_MODELS, ids=MODEL_IDS)

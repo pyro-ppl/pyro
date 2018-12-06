@@ -362,7 +362,8 @@ class AutoContinuous(AutoGuide):
             unconstrained_value = latent[..., pos:pos + size].view(unconstrained_shape)
             yield site, unconstrained_value
             pos += size
-        assert pos == latent.size(-1)
+        if not torch._C._get_tracing_state():
+            assert pos == latent.size(-1)
 
     def __call__(self, *args, **kwargs):
         """

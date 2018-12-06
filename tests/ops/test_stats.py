@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import pytest
 import torch
 
@@ -8,7 +10,6 @@ from tests.common import assert_equal, xfail_if_not_implemented
 
 
 @pytest.mark.parametrize('replacement', [True, False])
-@pytest.mark.init(rng_seed=3)
 def test_resample(replacement):
     x = torch.empty(10000, 2)
     x[:, 0].normal_(3, 4)
@@ -35,8 +36,8 @@ def test_quantile():
     z = torch.randn(2000)
 
     assert_equal(quantile(x, probs=[0., 0.4, 0.5, 1.]), torch.tensor([0., 0.8, 1., 2.]))
-    assert_equal(quantile(y, probs=0.2), torch.tensor(0.2), prec=0.01)
-    assert_equal(quantile(z, probs=0.8413), torch.tensor(1.), prec=0.001)
+    assert_equal(quantile(y, probs=0.2), torch.tensor(0.2), prec=0.02)
+    assert_equal(quantile(z, probs=0.8413), torch.tensor(1.), prec=0.02)
 
 
 def test_pi():
