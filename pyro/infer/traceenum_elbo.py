@@ -12,7 +12,6 @@ import pyro
 import pyro.distributions as dist
 import pyro.ops.jit
 import pyro.poutine as poutine
-from pyro.distributions.torch_distribution import ReshapedDistribution
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_discrete_extend
@@ -20,17 +19,24 @@ from pyro.infer.util import Dice, is_validation_enabled
 from pyro.ops import packed
 from pyro.ops.contract import contract_tensor_tree, contract_to_tensor
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
-from pyro.util import check_traceenum_requirements, warn_if_nan
+from pyro.util import check_traceenum_requirements, ignore_jit_warnings, warn_if_nan
 
 
-def _check_shared_scale(scales):
+@ignore_jit_warnings()
+def _get_common_scale(scales):
     # Check that all enumerated sites share a common subsampling scale.
     # Note that we use a cheap weak comparison by id rather than tensor value, because
     # (1) it is expensive to compare tensors by value, and (2) tensors must agree not
     # only in value but at all derivatives.
-    if len(scales) != 1:
+    scales_set = set()
+    for scale in scales:
+        if isinstance(scale, torch.Tensor) and scale.dim():
+            raise ValueError('enumeration only supports scalar poutine.scale')
+        scales_set.add(float(scale))
+    if len(scales_set) != 1:
         raise ValueError("Expected all enumerated sample sites to share a common poutine.scale, "
-                         "but found {} different scales.".format(len(scales)))
+                         "but found {} different scales.".format(len(scales_set)))
+    return scales[0]
 
 
 def _check_model_guide_enumeration_constraint(model_enum_sites, guide_trace):
@@ -86,7 +92,7 @@ def _compute_model_factors(model_trace, guide_trace):
 
     # Marginalize out all variables that have been enumerated in the model.
     marginal_costs = OrderedDict()
-    scales = set()
+    scales = []
     for t, sites_t in cost_sites.items():
         for site in sites_t:
             if enum_dims.isdisjoint(site["packed"]["log_prob"]._pyro_dims):
@@ -97,7 +103,7 @@ def _compute_model_factors(model_trace, guide_trace):
                 # the mask inside- and the scale outside- of the log expectation.
                 cost = packed.scale_and_mask(site["packed"]["unscaled_log_prob"], mask=site["packed"]["mask"])
                 log_factors.setdefault(t, []).append(cost)
-                scales.add(site["scale"])
+                scales.append(site["scale"])
     if log_factors:
         for t, sites_t in enum_sites.items():
             # TODO refine this coarse dependency ordering using time and tensor shapes.
@@ -105,11 +111,8 @@ def _compute_model_factors(model_trace, guide_trace):
                 for site in sites_t:
                     logprob = site["packed"]["unscaled_log_prob"]
                     log_factors.setdefault(t, []).append(logprob)
-                    scales.add(site["scale"])
-        _check_shared_scale(scales)
-        scale = scales.pop()
-        assert not (isinstance(scale, torch.Tensor) and scale.dim()), \
-            'enumeration only supports scalar poutine.scale'
+                    scales.append(site["scale"])
+        scale = _get_common_scale(scales)
     return marginal_costs, log_factors, ordering, enum_dims, scale
 
 
@@ -148,8 +151,6 @@ def _make_dist(dist_, logits):
     # Reshape for Bernoulli vs Categorical, OneHotCategorical, etc..
     if isinstance(dist_, dist.Bernoulli):
         logits = logits[..., 1] - logits[..., 0]
-    elif isinstance(dist_, ReshapedDistribution):
-        return _make_dist(dist_.base_dist, logits=logits)
     return type(dist_)(logits=logits)
 
 
@@ -416,6 +417,7 @@ class TraceEnum_ELBO(ELBO):
                     raise NotImplementedError("TraceEnum_ELBO.sample_posterior() is not "
                                               "compatible with guide enumeration.")
 
+        # TODO replace BackwardSample with torch_sample backend to ubersum
         with BackwardSampleMessenger(model_trace, guide_trace):
             return poutine.replay(model, trace=guide_trace)(*args, **kwargs)
 
@@ -431,27 +433,32 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
     -   Models must not depend on any global data (except the param store).
     -   All model inputs that are tensors must be passed in via ``*args``.
     -   All model inputs that are *not* tensors must be passed in via
-        ``*kwargs``, and these will be fixed to their values on the first
-        call to :meth:`jit_loss_and_grads`.
-
-    .. warning:: Experimental. Interface subject to change.
+        ``**kwargs``, and compilation will be triggered once per unique
+        ``**kwargs``.
     """
-    def loss_and_grads(self, model, guide, *args, **kwargs):
+    def differentiable_loss(self, model, guide, *args, **kwargs):
+        kwargs['_model_id'] = id(model)
+        kwargs['_guide_id'] = id(guide)
         if getattr(self, '_differentiable_loss', None) is None:
-
+            # build a closure for differentiable_loss
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.compile(nderivs=1)
-            def differentiable_loss(*args):
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings)
+            def differentiable_loss(*args, **kwargs):
+                kwargs.pop('_model_id')
+                kwargs.pop('_guide_id')
                 self = weakself()
                 elbo = 0.0
                 for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-                    elbo += _compute_dice_elbo(model_trace, guide_trace)
+                    elbo = elbo + _compute_dice_elbo(model_trace, guide_trace)
                 return elbo * (-1.0 / self.num_particles)
 
             self._differentiable_loss = differentiable_loss
 
-        differentiable_loss = self._differentiable_loss(*args)
+        return self._differentiable_loss(*args, **kwargs)
+
+    def loss_and_grads(self, model, guide, *args, **kwargs):
+        differentiable_loss = self.differentiable_loss(model, guide, *args, **kwargs)
         differentiable_loss.backward()  # this line triggers jit compilation
         loss = differentiable_loss.item()
 

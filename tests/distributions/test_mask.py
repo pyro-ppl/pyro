@@ -25,7 +25,7 @@ def test_mask(batch_dim, event_dim, mask_dim):
     shape = torch.Size([2, 3, 4, 5, 6][:batch_dim + event_dim])
     batch_shape = shape[:batch_dim]
     mask_shape = batch_shape[batch_dim - mask_dim:]
-    base_dist = Bernoulli(0.1).expand_by(shape).independent(event_dim)
+    base_dist = Bernoulli(0.1).expand_by(shape).to_event(event_dim)
 
     # Construct masked distribution.
     mask = checker_mask(mask_shape)
@@ -70,9 +70,9 @@ def test_kl_divergence():
     mask = torch.tensor([[0, 1], [1, 1]]).byte()
     p = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())
     q = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())
-    expected = kl_divergence(p.independent(2), q.independent(2))
-    actual = (kl_divergence(p.mask(mask).independent(2),
-                            q.mask(mask).independent(2)) +
-              kl_divergence(p.mask(~mask).independent(2),
-                            q.mask(~mask).independent(2)))
+    expected = kl_divergence(p.to_event(2), q.to_event(2))
+    actual = (kl_divergence(p.mask(mask).to_event(2),
+                            q.mask(mask).to_event(2)) +
+              kl_divergence(p.mask(~mask).to_event(2),
+                            q.mask(~mask).to_event(2)))
     assert_equal(actual, expected)

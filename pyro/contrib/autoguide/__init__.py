@@ -25,7 +25,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.util import hessian
-from pyro.distributions.util import sum_rightmost
+from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
 from pyro.poutine.util import prune_subsample_sites
@@ -352,14 +352,18 @@ class AutoContinuous(AutoGuide):
 
             (site, unconstrained_value)
         """
+        batch_shape = latent.shape[:-1]  # for plates outside of _setup_prototype, e.g. parallel particles
         pos = 0
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             unconstrained_shape = self._unconstrained_shapes[name]
             size = _product(unconstrained_shape)
-            unconstrained_value = latent[pos:pos + size].view(unconstrained_shape)
+            unconstrained_shape = broadcast_shape(unconstrained_shape,
+                                                  batch_shape + (1,) * site["fn"].event_dim)
+            unconstrained_value = latent[..., pos:pos + size].view(unconstrained_shape)
             yield site, unconstrained_value
             pos += size
-        assert pos == len(latent)
+        if not torch._C._get_tracing_state():
+            assert pos == latent.size(-1)
 
     def __call__(self, *args, **kwargs):
         """
@@ -498,7 +502,7 @@ class AutoDiagonalNormal(AutoContinuous):
         scale = pyro.param("{}_scale".format(self.prefix),
                            lambda: torch.ones(self.latent_dim),
                            constraint=constraints.positive)
-        return dist.Normal(loc, scale).independent(1)
+        return dist.Normal(loc, scale).to_event(1)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
@@ -518,15 +522,15 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         guide = AutoLowRankMultivariateNormal(model, rank=10)
         svi = SVI(model, guide, ...)
 
-    By default the ``D_term`` is initialized to 1/2 and the ``W_term`` is
-    intialized randomly such that ``W_term.matmul(W_term.t())`` is half the
+    By default the ``cov_diag`` is initialized to 1/2 and the ``cov_factor`` is
+    intialized randomly such that ``cov_factor.matmul(cov_factor.t())`` is half the
     identity matrix. To change this default behavior the user
     should call :func:`pyro.param` before beginning inference, e.g.::
 
         latent_dim = 10
         pyro.param("auto_loc", torch.randn(latent_dim))
-        pyro.param("auto_W_term", torch.randn(latent_dim, rank)))
-        pyro.param("auto_D_term", torch.randn(latent_dim).exp()),
+        pyro.param("auto_cov_factor", torch.randn(latent_dim, rank)))
+        pyro.param("auto_cov_diag", torch.randn(latent_dim).exp()),
                    constraint=constraints.positive)
 
     :param callable model: a generative model
@@ -545,18 +549,18 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
-        W_term = pyro.param("{}_W_term".format(self.prefix),
+        factor = pyro.param("{}_cov_factor".format(self.prefix),
                             lambda: torch.randn(self.latent_dim, self.rank) * (0.5 / self.rank) ** 0.5)
-        D_term = pyro.param("{}_D_term".format(self.prefix),
-                            lambda: torch.ones(self.latent_dim) * 0.5,
-                            constraint=constraints.positive)
-        return dist.LowRankMultivariateNormal(loc, W_term, D_term)
+        diagonal = pyro.param("{}_cov_diag".format(self.prefix),
+                              lambda: torch.ones(self.latent_dim) * 0.5,
+                              constraint=constraints.positive)
+        return dist.LowRankMultivariateNormal(loc, factor, diagonal)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
-        W_term = pyro.param("{}_W_term".format(self.prefix))
-        D_term = pyro.param("{}_D_term".format(self.prefix))
-        scale = (W_term.pow(2).sum(-1) + D_term).sqrt()
+        factor = pyro.param("{}_cov_factor".format(self.prefix))
+        diagonal = pyro.param("{}_cov_diag".format(self.prefix))
+        scale = (factor.pow(2).sum(-1) + diagonal).sqrt()
         return loc, scale
 
 
@@ -592,7 +596,7 @@ class AutoIAFNormal(AutoContinuous):
         iaf = dist.InverseAutoregressiveFlow(AutoRegressiveNN(self.latent_dim, [self.hidden_dim]))
         pyro.module("{}_iaf".format(self.prefix), iaf)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
-        return iaf_dist.independent(1)
+        return iaf_dist.to_event(1)
 
 
 class AutoLaplaceApproximation(AutoContinuous):
@@ -624,7 +628,7 @@ class AutoLaplaceApproximation(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
-        return dist.Delta(loc).independent(1)
+        return dist.Delta(loc).to_event(1)
 
     def laplace_approximation(self, *args, **kwargs):
         """
@@ -639,7 +643,7 @@ class AutoLaplaceApproximation(AutoContinuous):
         loc = pyro.param("{}_loc".format(self.prefix))
         H = hessian(loss, loc.unconstrained())
         cov = H.inverse()
-        scale_tril = cov.potrf(upper=False)
+        scale_tril = cov.cholesky()
 
         # calculate scale_tril from self.guide()
         scale_tril_name = "{}_scale_tril".format(self.prefix)

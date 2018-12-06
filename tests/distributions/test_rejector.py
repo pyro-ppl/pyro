@@ -61,8 +61,8 @@ def test_rejector(rate, factor):
 @pytest.mark.parametrize('factor', [0.25, 0.5, 1.0])
 def test_exponential_elbo(rate, factor):
     num_samples = 100000
-    rates = torch.empty(num_samples, 1).fill_(rate).requires_grad_()
-    factors = torch.empty(num_samples, 1).fill_(factor).requires_grad_()
+    rates = torch.full((num_samples, 1), rate).requires_grad_()
+    factors = torch.full((num_samples, 1), factor).requires_grad_()
     model = Exponential(torch.ones(num_samples, 1))
     guide1 = Exponential(rates)
     guide2 = RejectionExponential(rates, factors)  # implemented using Rejector
@@ -80,7 +80,7 @@ def test_exponential_elbo(rate, factor):
 @pytest.mark.parametrize('alpha', [1.0, 2.0, 5.0])
 def test_standard_gamma_elbo(alpha):
     num_samples = 100000
-    alphas = torch.empty(num_samples, 1).fill_(alpha).requires_grad_()
+    alphas = torch.full((num_samples, 1), alpha).requires_grad_()
     betas = torch.ones(num_samples, 1)
 
     model = Gamma(torch.ones(num_samples, 1), betas)
@@ -98,8 +98,8 @@ def test_standard_gamma_elbo(alpha):
 @pytest.mark.parametrize('beta', [0.2, 0.5, 1.0, 2.0, 5.0])
 def test_gamma_elbo(alpha, beta):
     num_samples = 100000
-    alphas = torch.empty(num_samples, 1).fill_(alpha).requires_grad_()
-    betas = torch.empty(num_samples, 1).fill_(beta).requires_grad_()
+    alphas = torch.full((num_samples, 1), alpha).requires_grad_()
+    betas = torch.full((num_samples, 1), beta).requires_grad_()
 
     model = Gamma(torch.ones(num_samples, 1), torch.ones(num_samples, 1))
     guide1 = Gamma(alphas, betas)
@@ -120,8 +120,8 @@ def test_gamma_elbo(alpha, beta):
 @pytest.mark.parametrize('beta', [0.2, 0.5, 1.0, 2.0, 5.0])
 def test_shape_augmented_gamma_elbo(alpha, beta):
     num_samples = 100000
-    alphas = torch.empty(num_samples, 1).fill_(alpha).requires_grad_()
-    betas = torch.empty(num_samples, 1).fill_(beta).requires_grad_()
+    alphas = torch.full((num_samples, 1), alpha).requires_grad_()
+    betas = torch.full((num_samples, 1), beta).requires_grad_()
 
     model = Gamma(torch.ones(num_samples, 1), torch.ones(num_samples, 1))
     guide1 = Gamma(alphas, betas)
@@ -142,8 +142,8 @@ def test_shape_augmented_gamma_elbo(alpha, beta):
 @pytest.mark.parametrize('beta', [0.5, 1.0, 4.0])
 def test_shape_augmented_beta(alpha, beta):
     num_samples = 10000
-    alphas = torch.empty(num_samples, 1).fill_(alpha).requires_grad_()
-    betas = torch.empty(num_samples, 1).fill_(beta).requires_grad_()
+    alphas = torch.full((num_samples, 1), alpha).requires_grad_()
+    betas = torch.full((num_samples, 1), beta).requires_grad_()
     dist = ShapeAugmentedBeta(alphas, betas)  # implemented using Rejector
     z = dist.rsample()
     cost = z.sum()

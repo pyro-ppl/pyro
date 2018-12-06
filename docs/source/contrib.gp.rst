@@ -52,6 +52,8 @@ VariationalSparseGP
     :show-inheritance:
     :member-order: bysource
 
+GPLVM
+-----
 .. automodule:: pyro.contrib.gp.models.gplvm
     :members:
     :undoc-members:
@@ -67,6 +69,15 @@ Likelihoods
 ~~~~~~~~~~~
 
 .. automodule:: pyro.contrib.gp.likelihoods
+
+Parameterized
+~~~~~~~~~~~~~
+
+.. automodule:: pyro.contrib.gp.parameterized
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
 
 Util
 ~~~~

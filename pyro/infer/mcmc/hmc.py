@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import math
-import warnings
 from collections import OrderedDict
 
 import torch
@@ -14,10 +13,10 @@ from pyro.distributions.util import eye_like
 from pyro.infer import config_enumerate
 from pyro.infer.mcmc.adaptation import WarmupAdapter
 from pyro.infer.mcmc.trace_kernel import TraceKernel
-from pyro.infer.mcmc.util import TraceEinsumEvaluator, TraceTreeEvaluator
+from pyro.infer.mcmc.util import TraceEinsumEvaluator
 from pyro.ops.integrator import velocity_verlet
 from pyro.poutine.subsample_messenger import _Subsample
-from pyro.util import optional, torch_isinf, torch_isnan
+from pyro.util import optional, torch_isinf, torch_isnan, ignore_jit_warnings
 
 
 class HMC(TraceKernel):
@@ -55,10 +54,11 @@ class HMC(TraceKernel):
     :param int max_plate_nesting: Optional bound on max number of nested
         :func:`pyro.plate` contexts. This is required if model contains
         discrete sample sites that can be enumerated over in parallel.
-    :param bool experimental_use_einsum: Whether to use an einsum operation
-        to evaluate log pdf for the model trace. No-op unless the trace has
-        discrete sample sites. This flag is experimental and will most likely
-        be removed in a future release.
+    :param bool jit_compile: Optional parameter denoting whether to use
+        the PyTorch JIT to trace the log density computation, and use this
+        optimized executable trace in the integrator.
+    :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
+        tracer when ``jit_compile=True``. Default is False.
 
     .. note:: Internally, the mass matrix will be ordered according to the order
         of the names of latent variables, not the order of their appearance in
@@ -79,7 +79,7 @@ class HMC(TraceKernel):
         >>>
         >>> hmc_kernel = HMC(model, step_size=0.0855, num_steps=4)
         >>> mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
-        >>> posterior = EmpiricalMarginal(mcmc_run, 'beta')
+        >>> posterior = mcmc_run.marginal('beta').empirical['beta']
         >>> posterior.mean  # doctest: +SKIP
         tensor([ 0.9819,  1.9258,  2.9737])
     """
@@ -94,13 +94,9 @@ class HMC(TraceKernel):
                  full_mass=False,
                  transforms=None,
                  max_plate_nesting=None,
-                 max_iarange_nesting=None,  # DEPRECATED
-                 experimental_use_einsum=False):
+                 jit_compile=False,
+                 ignore_jit_warnings=False):
         self.model = model
-        if max_iarange_nesting is not None:
-            warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
-                          DeprecationWarning)
-            max_plate_nesting = max_iarange_nesting
         self.max_plate_nesting = max_plate_nesting
         if trajectory_length is not None:
             self.trajectory_length = trajectory_length
@@ -109,8 +105,9 @@ class HMC(TraceKernel):
         else:
             self.trajectory_length = 2 * math.pi  # from Stan
         self.adapt_step_size = adapt_step_size
+        self._jit_compile = jit_compile
+        self._ignore_jit_warnings = ignore_jit_warnings
         self.full_mass = full_mass
-        self.use_einsum = experimental_use_einsum
         self._target_accept_prob = 0.8  # from Stan
         # The following parameter is used in find_reasonable_step_size method.
         # In NUTS paper, this threshold is set to a fixed log(0.5).
@@ -154,6 +151,8 @@ class HMC(TraceKernel):
             return 0.5 * (self.inverse_mass_matrix * (r_flat ** 2)).sum()
 
     def _potential_energy(self, z):
+        if self._jit_compile:
+            return self._potential_energy_jit(z)
         # Since the model is specified in the constrained space, transform the
         # unconstrained R.V.s `z` to the constrained space.
         z_constrained = z.copy()
@@ -166,6 +165,32 @@ class HMC(TraceKernel):
             potential_energy += transform.log_abs_det_jacobian(z_constrained[name], z[name]).sum()
         return potential_energy
 
+    def _potential_energy_jit(self, z):
+        names, vals = zip(*sorted(z.items()))
+        if self._compiled_potential_fn:
+            return self._compiled_potential_fn(*vals)
+
+        def compiled(*zi):
+            z_constrained = list(zi)
+            # transform to constrained space.
+            for i, name in enumerate(names):
+                if name in self.transforms:
+                    transform = self.transforms[name]
+                    z_constrained[i] = transform.inv(z_constrained[i])
+            z_constrained = dict(zip(names, z_constrained))
+            trace = self._get_trace(z_constrained)
+            potential_energy = -self._compute_trace_log_prob(trace)
+            # adjust by the jacobian for this transformation.
+            for i, name in enumerate(names):
+                if name in self.transforms:
+                    transform = self.transforms[name]
+                    potential_energy += transform.log_abs_det_jacobian(z_constrained[name], zi[i]).sum()
+            return potential_energy
+
+        with pyro.validation_enabled(False), optional(ignore_jit_warnings(), self._ignore_jit_warnings):
+            self._compiled_potential_fn = torch.jit.trace(compiled, vals, check_trace=False)
+        return self._compiled_potential_fn(*vals)
+
     def _energy(self, z, r):
         return self._kinetic_energy(r) + self._potential_energy(z)
 
@@ -175,6 +200,7 @@ class HMC(TraceKernel):
         self._r_shapes = {}
         self._r_numels = {}
         self._args = None
+        self._compiled_potential_fn = None
         self._kwargs = None
         self._initial_trace = None
         self._has_enumerable_sites = False
@@ -313,10 +339,9 @@ class HMC(TraceKernel):
                 site_value = self.transforms[name](node["value"])
             self._r_shapes[name] = site_value.shape
             self._r_numels[name] = site_value.numel()
-        trace_eval = TraceEinsumEvaluator if self.use_einsum else TraceTreeEvaluator
-        self._trace_prob_evaluator = trace_eval(trace,
-                                                self._has_enumerable_sites,
-                                                self.max_plate_nesting)
+        self._trace_prob_evaluator = TraceEinsumEvaluator(trace,
+                                                          self._has_enumerable_sites,
+                                                          self.max_plate_nesting)
         mass_matrix_size = sum(self._r_numels.values())
         if self.full_mass:
             initial_mass_matrix = eye_like(site_value, mass_matrix_size)
@@ -386,6 +411,6 @@ class HMC(TraceKernel):
 
     def diagnostics(self):
         return OrderedDict([
-            ("Step size", self.step_size),
-            ("Acceptance rate", self._accept_cnt / self._t)
+            ("step size", "{:.2e}".format(self.step_size)),
+            ("acc. rate", "{:.3f}".format(self._accept_cnt / self._t))
         ])

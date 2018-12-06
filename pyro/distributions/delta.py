@@ -35,19 +35,21 @@ class Delta(TorchDistribution):
         event_shape = v.shape[batch_dim:]
         if isinstance(log_density, numbers.Number):
             log_density = v.new_empty(batch_shape).fill_(log_density)
-        elif log_density.shape != batch_shape:
+        elif validate_args and log_density.shape != batch_shape:
             raise ValueError('Expected log_density.shape = {}, actual {}'.format(
                 log_density.shape, batch_shape))
         self.v = v
         self.log_density = log_density
         super(Delta, self).__init__(batch_shape, event_shape, validate_args=validate_args)
 
-    def expand(self, batch_shape):
-        validate_args = self.__dict__.get('_validate_args')
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(Delta, _instance)
         batch_shape = torch.Size(batch_shape)
-        v = self.v.expand(batch_shape + self.event_shape)
-        log_density = self.log_density.expand(batch_shape)
-        return Delta(v, log_density, self.event_dim, validate_args=validate_args)
+        new.v = self.v.expand(batch_shape + self.event_shape)
+        new.log_density = self.log_density.expand(batch_shape)
+        super(Delta, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
 
     def rsample(self, sample_shape=torch.Size()):
         shape = sample_shape + self.v.shape

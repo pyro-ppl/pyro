@@ -102,7 +102,6 @@ def main(num_vi_steps, num_bo_steps):
         gpmodel = gp.models.GPRegression(
             X, y, gp.kernels.Matern52(input_dim=1, lengthscale=torch.tensor(10.)),
             noise=torch.tensor(noise), jitter=1e-6)
-        gpmodel.optimize(loss=TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss)
         gpbo = GPBayesOptimizer(constraints.interval(0, 100), gpmodel,
                                 num_acquisitions=num_acquisitions)
         pyro.clear_param_store()
@@ -114,6 +113,7 @@ def main(num_vi_steps, num_bo_steps):
 
 
 if __name__ == "__main__":
+    assert pyro.__version__.startswith('0.3.0')
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
     parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
     parser.add_argument('--num-bo-steps', nargs="?", default=5, type=int)

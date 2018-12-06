@@ -298,7 +298,7 @@ def test_persistent_independent_subproblems(num_objects, num_frames, num_detecti
 
     # solve a unioned assignment problem
     exists_logits = torch.cat([exists_logits_1, exists_logits_2])
-    assign_logits = torch.empty(num_frames, num_detections * 2, num_objects * 2).fill_(-INF)
+    assign_logits = torch.full((num_frames, num_detections * 2, num_objects * 2), -INF)
     assign_logits[:, :num_detections, :num_objects] = assign_logits_1
     assign_logits[:, num_detections:, num_objects:] = assign_logits_2
     assignment = MarginalAssignmentPersistent(exists_logits, assign_logits, bp_iters)

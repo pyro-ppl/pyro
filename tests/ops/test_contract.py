@@ -10,8 +10,9 @@ import six
 import torch
 
 from pyro.distributions.util import logsumexp
-from pyro.ops.contract import (LogRing, _partition_terms, contract_tensor_tree, contract_to_tensor, naive_ubersum,
-                               ubersum)
+from pyro.ops.contract import _partition_terms, contract_tensor_tree, contract_to_tensor, naive_ubersum, ubersum
+from pyro.ops.einsum.adjoint import require_backward
+from pyro.ops.rings import LogRing
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import optional
 from tests.common import assert_equal
@@ -356,7 +357,7 @@ def make_example(equation, fill=None, sizes=(2, 3)):
     operands = []
     for dims in inputs:
         shape = tuple(sizes[dim] for dim in dims)
-        operands.append(torch.randn(shape) if fill is None else torch.empty(shape).fill_(fill))
+        operands.append(torch.randn(shape) if fill is None else torch.full(shape, fill))
     return inputs, outputs, operands, sizes
 
 
@@ -663,3 +664,71 @@ def test_ubersum_batch_error(impl, equation, batch_dims):
                 for input_ in inputs.split(',')]
     with pytest.raises(ValueError, match='It is nonsensical to preserve a batched dim'):
         impl(equation, *operands, batch_dims=batch_dims, modulo_total=True)
+
+
+ADJOINT_EXAMPLES = [
+    ('a->', ''),
+    ('a,a->', ''),
+    ('ab,bc->', ''),
+    ('a,abi->', 'i'),
+    ('a,abi,bcij->', 'ij'),
+    ('a,abi,bcij,bdik->', 'ijk'),
+    ('ai,ai->i', 'i'),
+    ('ai,abij->i', 'ij'),
+    ('ai,abij,acik->i', 'ijk'),
+]
+
+
+@pytest.mark.parametrize('equation,batch_dims', ADJOINT_EXAMPLES)
+@pytest.mark.parametrize('backend', ['map', 'sample', 'marginal'])
+def test_adjoint_shape(backend, equation, batch_dims):
+    backend = 'pyro.ops.einsum.torch_{}'.format(backend)
+    inputs, output = equation.split('->')
+    inputs = inputs.split(',')
+    operands = [torch.randn(torch.Size((2,) * len(input_)))
+                for input_ in inputs]
+    for input_, x in zip(inputs, operands):
+        x._pyro_dims = input_
+
+    # run forward-backward algorithm
+    for x in operands:
+        require_backward(x)
+    result, = ubersum(equation, *operands, batch_dims=batch_dims,
+                      modulo_total=True, backend=backend)
+    result._pyro_backward()
+
+    for input_, x in zip(inputs, operands):
+        backward_result = x._pyro_backward_result
+        contract_dims = set(input_) - set(output) - set(batch_dims)
+        if contract_dims:
+            assert backward_result is not None
+        else:
+            assert backward_result is None
+
+
+@pytest.mark.parametrize('equation,batch_dims', ADJOINT_EXAMPLES)
+def test_adjoint_marginal(equation, batch_dims):
+    inputs, output = equation.split('->')
+    inputs = inputs.split(',')
+    operands = [torch.randn(torch.Size((2,) * len(input_)))
+                for input_ in inputs]
+    for input_, x in zip(inputs, operands):
+        x._pyro_dims = input_
+
+    # check forward pass
+    for x in operands:
+        require_backward(x)
+    actual, = ubersum(equation, *operands, batch_dims=batch_dims, modulo_total=True,
+                      backend='pyro.ops.einsum.torch_marginal')
+    expected, = ubersum(equation, *operands, batch_dims=batch_dims, modulo_total=True,
+                        backend='pyro.ops.einsum.torch_log')
+    assert_equal(expected, actual)
+
+    # check backward pass
+    actual._pyro_backward()
+    for input_, operand in zip(inputs, operands):
+        marginal_equation = ','.join(inputs) + '->' + input_
+        expected, = ubersum(marginal_equation, *operands, batch_dims=batch_dims, modulo_total=True,
+                            backend='pyro.ops.einsum.torch_log')
+        actual = operand._pyro_backward_result
+        assert_equal(expected, actual)

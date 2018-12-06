@@ -59,7 +59,7 @@ def test_nonempty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
     def model():
         loc = torch.tensor([0.0, 0.0])
         scale = torch.tensor([1.0, 1.0])
-        pyro.sample("x", dist.Normal(loc, scale).independent(1), obs=loc)
+        pyro.sample("x", dist.Normal(loc, scale).to_event(1), obs=loc)
 
     def guide():
         pass
@@ -109,12 +109,12 @@ def test_model_guide_dim_mismatch_error(Elbo):
     def model():
         loc = torch.zeros(2)
         scale = torch.ones(2)
-        pyro.sample("x", dist.Normal(loc, scale).independent(1))
+        pyro.sample("x", dist.Normal(loc, scale).to_event(1))
 
     def guide():
         loc = pyro.param("loc", torch.zeros(2, 1, requires_grad=True))
         scale = pyro.param("scale", torch.ones(2, 1, requires_grad=True))
-        pyro.sample("x", dist.Normal(loc, scale).independent(2))
+        pyro.sample("x", dist.Normal(loc, scale).to_event(2))
 
     assert_error(model, guide, Elbo(strict_enumeration_warning=False),
                  match='invalid log_prob shape|Model and guide event_dims disagree')
@@ -126,12 +126,12 @@ def test_model_guide_shape_mismatch_error(Elbo):
     def model():
         loc = torch.zeros(1, 2)
         scale = torch.ones(1, 2)
-        pyro.sample("x", dist.Normal(loc, scale).independent(2))
+        pyro.sample("x", dist.Normal(loc, scale).to_event(2))
 
     def guide():
         loc = pyro.param("loc", torch.zeros(2, 1, requires_grad=True))
         scale = pyro.param("scale", torch.ones(2, 1, requires_grad=True))
-        pyro.sample("x", dist.Normal(loc, scale).independent(2))
+        pyro.sample("x", dist.Normal(loc, scale).to_event(2))
 
     assert_error(model, guide, Elbo(strict_enumeration_warning=False),
                  match='Model and guide shapes disagree')
