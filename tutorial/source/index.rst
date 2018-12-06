@@ -19,6 +19,7 @@ Welcome to Pyro Examples and Tutorials!
    enumeration
    custom_objectives
    jit
+   minipyro
    effect_handlers
 
 .. toctree::
