@@ -31,6 +31,25 @@ DIAGNOSTIC_MSG = "DIAGNOSTICS"
 # IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+
+# TODO: Remove once https://github.com/tqdm/tqdm/issues/650 is resolved.
+class ProgressBar(tqdm):
+    def __init__(self, *args, **kwargs):
+        super(ProgressBar, self).__init__(*args, **kwargs)
+
+    def set_description(self, *args, **kwargs):
+        if not self.disable:
+            super(ProgressBar, self).set_description(*args, **kwargs)
+
+    def set_postfix(self, *args, **kwargs):
+        if not self.disable:
+            super(ProgressBar, self).set_postfix(*args, **kwargs)
+
+    def update(self, *args, **kwargs):
+        if not self.disable:
+            super(ProgressBar, self).update(*args, **kwargs)
+
+
 class QueueHandler(logging.Handler):
     """
     This handler sends events to a queue. Typically, it would be used together
@@ -168,8 +187,8 @@ def initialize_progbar(warmup_steps, num_samples, min_width=80, max_width=120, p
     # Disable progress bar in "CI"
     # (see https://github.com/travis-ci/travis-ci/issues/1337).
     disable = "CI" in os.environ or "PYTEST_XDIST_WORKER" in os.environ
-    progress_bar = tqdm(total=total_steps, desc=description,
-                        position=pos, file=sys.stderr, disable=disable)
+    progress_bar = ProgressBar(total=total_steps, desc=description,
+                               position=pos, file=sys.stderr, disable=disable)
 
     if getattr(progress_bar, "ncols", None) is not None:
         progress_bar.ncols = max(min_width, progress_bar.ncols)
