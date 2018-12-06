@@ -1,13 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
 import logging
+import math
 
 import pytest
 import torch
+from torch.autograd import grad
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
+from pyro.infer import TraceEnum_ELBO
 from pyro.infer.discrete import infer_discrete
 from pyro.infer.enum import config_enumerate
 from tests.common import assert_equal
@@ -15,8 +18,24 @@ from tests.common import assert_equal
 logger = logging.getLogger(__name__)
 
 
+def log_mean_prob(trace, particle_dim):
+    """
+    Marginalizes out particle_dim from a trace.
+    """
+    assert particle_dim < 0
+    trace.compute_log_prob()
+    total = 0.
+    for node in trace.nodes.values():
+        if node["type"] == "sample" and type(node["fn"]).__name__ != "_Subsample":
+            log_prob = node["log_prob"]
+            assert log_prob.dim() == -particle_dim
+            num_particles = log_prob.size(0)
+            total = total + log_prob.reshape(num_particles, -1).sum(-1)
+    return total.logsumexp(0) - math.log(num_particles)
+
+
 @pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
-def test_infer_discrete_1(temperature):
+def test_distribution_1(temperature):
     #      +-------+
     #  z --|--> x  |
     #      +-------+
@@ -49,7 +68,7 @@ def test_infer_discrete_1(temperature):
 
 
 @pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
-def test_infer_discrete_2(temperature):
+def test_distribution_2(temperature):
     #       +--------+
     #  z1 --|--> x1  |
     #   |   |        |
@@ -97,7 +116,7 @@ def test_infer_discrete_2(temperature):
 
 
 @pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
-def test_infer_discrete_3(temperature):
+def test_distribution_3(temperature):
     #       +---------+  +---------------+
     #  z1 --|--> x1   |  |  z2 ---> x2   |
     #       |       3 |  |             2 |
@@ -170,3 +189,40 @@ def test_hmm_smoke(temperature, length):
 
     logger.info("true states: {}".format(list(map(int, true_states))))
     logger.info("inferred states: {}".format(list(map(int, inferred_states))))
+
+
+@pytest.mark.xfail(reason='infer_discrete log_prob is incorrect')
+@pytest.mark.parametrize('nderivs', [0, 1], ids=['value', 'grad'])
+def test_prob(nderivs):
+    #      +-------+
+    #  z --|--> x  |
+    #      +-------+
+    num_particles = 10000
+    data = torch.tensor([0.5, 1., 1.5])
+    p = pyro.param("p", torch.tensor(0.25))
+
+    @config_enumerate(default="parallel")
+    def model(num_particles):
+        p = pyro.param("p")
+        with pyro.plate("num_particles", num_particles, dim=-2):
+            z = pyro.sample("z", dist.Bernoulli(p))
+            with pyro.plate("data", 3):
+                pyro.sample("x", dist.Normal(z, 1.), obs=data)
+
+    def guide(num_particles):
+        pass
+
+    elbo = TraceEnum_ELBO(max_plate_nesting=2)
+    expected_logprob = -elbo.differentiable_loss(model, guide, num_particles=1)
+
+    posterior_model = infer_discrete(config_enumerate(model, "parallel"),
+                                     first_available_dim=-3)
+    posterior_trace = poutine.trace(posterior_model).get_trace(num_particles=num_particles)
+    actual_logprob = log_mean_prob(posterior_trace, particle_dim=-2)
+
+    if nderivs == 0:
+        assert_equal(expected_logprob, actual_logprob, prec=1e-3)
+    elif nderivs == 1:
+        expected_grad = grad(expected_logprob, [p])[0]
+        actual_grad = grad(actual_logprob, [p])[0]
+        assert_equal(expected_grad, actual_grad, prec=1e-3)

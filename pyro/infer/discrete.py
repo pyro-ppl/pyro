@@ -139,6 +139,9 @@ def infer_discrete(fn=None, first_available_dim=None, temperature=1):
                             obs=data[t])
             return states  # returns maximum likelihood states
 
+    .. warning: The ``log_prob``s of the inferred model's trace are not
+        meaningful, and may be changed future release.
+
     :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param int first_available_dim: The first tensor dimension (counting
         from the right) that is available for parallel enumeration. This
