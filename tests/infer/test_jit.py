@@ -14,9 +14,10 @@ import pyro.distributions as dist
 import pyro.ops.jit
 import pyro.poutine as poutine
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, JitTraceMeanField_ELBO, Trace_ELBO,
-                        TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO)
+                        TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, infer_discrete)
 from pyro.optim import Adam
 from pyro.poutine.indep_messenger import CondIndepStackFrame
+from pyro.util import ignore_jit_warnings
 from tests.common import assert_equal
 
 
@@ -397,6 +398,39 @@ def test_dirichlet_bernoulli(Elbo, vectorized):
     svi = SVI(model, guide, optim, elbo)
     for step in range(40):
         svi.step(data)
+
+
+@pytest.mark.parametrize('length', [1, 2, 10])
+@pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
+def test_discrete(temperature, length):
+
+    @ignore_jit_warnings()
+    def hmm(transition, means, data):
+        states = [torch.tensor(0)]
+        for t in pyro.markov(range(len(data))):
+            states.append(pyro.sample("states_{}".format(t),
+                                      dist.Categorical(transition[states[-1]]),
+                                      infer={"enumerate": "parallel"}))
+            pyro.sample("obs_{}".format(t),
+                        dist.Normal(means[states[-1]], 1.),
+                        obs=data[t])
+        return tuple(states)
+
+    hidden_dim = 10
+    transition = 0.3 / hidden_dim + 0.7 * torch.eye(hidden_dim)
+    means = torch.arange(float(hidden_dim))
+    data = 1 + 2 * torch.randn(length)
+
+    decoder = infer_discrete(hmm, first_available_dim=-1, temperature=temperature)
+    jit_decoder = pyro.ops.jit.trace(decoder)
+
+    states = decoder(transition, means, data)
+    jit_states = jit_decoder(transition, means, data)
+    assert len(states) == len(jit_states)
+    for state, jit_state in zip(states, jit_states):
+        assert state.shape == jit_state.shape
+        if temperature == 0:
+            assert_equal(state, jit_state)
 
 
 @pytest.mark.parametrize("x,y", [

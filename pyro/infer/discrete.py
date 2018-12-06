@@ -11,6 +11,7 @@ from pyro.ops.rings import MapRing, SampleRing
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.poutine.replay_messenger import ReplayMessenger
 from pyro.poutine.util import prune_subsample_sites
+from pyro.util import jit_iter
 
 _RINGS = {0: MapRing, 1: SampleRing}
 
@@ -104,7 +105,7 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
                 sample = log_prob._pyro_backward_result
                 if sample is not None:
                     new_value = packed.pack(node["value"], node["infer"]["_dim_to_symbol"])
-                    for index, dim in zip(sample, sample._pyro_sample_dims):
+                    for index, dim in zip(jit_iter(sample), sample._pyro_sample_dims):
                         if dim in new_value._pyro_dims:
                             index._pyro_dims = sample._pyro_dims[1:]
                             new_value = packed.gather(new_value, index, dim)

@@ -7,6 +7,7 @@ import torch
 from six import add_metaclass
 
 from pyro.ops import packed
+from pyro.util import jit_iter
 
 SAMPLE_SYMBOL = " "  # must be unique and precede alphanumeric characters
 
@@ -89,7 +90,7 @@ def einsum_backward_sample(operands, sample1, sample2):
         # Slice sample1 down based on choices in sample2.
         assert set(sample1._pyro_sample_dims).isdisjoint(sample2._pyro_sample_dims)
         sample_dims = sample1._pyro_sample_dims + sample2._pyro_sample_dims
-        for dim, index in zip(sample2._pyro_sample_dims, sample2):
+        for dim, index in zip(sample2._pyro_sample_dims, jit_iter(sample2)):
             if dim in sample1._pyro_dims:
                 index._pyro_dims = sample2._pyro_dims[1:]
                 sample1 = packed.gather(sample1, index, dim)
