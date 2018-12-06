@@ -40,6 +40,8 @@ Handlers
 
 .. autofunction:: pyro.infer.enum.config_enumerate
 
+.. autofunction:: pyro.poutine.posterior.posterior
+
 Trace
 ------
 
