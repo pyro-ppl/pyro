@@ -41,7 +41,7 @@ class Binary(Likelihood):
         :rtype: torch.Tensor
         """
         # calculates Monte Carlo estimate for E_q(f) [logp(y | f)]
-        f = dist.Normal(f_loc, f_var)()
+        f = dist.Normal(f_loc, f_var.sqrt())()
         f_res = self.response_function(f)
 
         y_dist = dist.Bernoulli(f_res)
