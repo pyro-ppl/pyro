@@ -29,7 +29,7 @@ class FlowTests(TestCase):
 
         x = torch.randn(1, input_dim)
         flow_x = flow(x)
-        analytic_ldt = flow.log_abs_det_jacobian(x, flow_x).data.sum()
+        analytic_ldt = flow.log_abs_det_jacobian(x, flow_x).data
 
         for j in range(input_dim):
             for k in range(input_dim):

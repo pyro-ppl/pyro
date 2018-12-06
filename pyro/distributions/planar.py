@@ -49,7 +49,10 @@ class PlanarFlow(TransformModule):
 
     """
 
+    domain = constraints.real
     codomain = constraints.real
+    bijective = True
+    event_dim = 1
 
     def __init__(self, input_dim):
         super(PlanarFlow, self).__init__()
@@ -121,6 +124,5 @@ class PlanarFlow(TransformModule):
         """
         psi_z = (1 - torch.tanh(self.lin(x)).pow(2)) * self.lin.weight
 
-        # TODO: Simplify following line once using multivariate base distributions for multivariate flows
-        return torch.log(torch.abs(1 + torch.matmul(psi_z, self.u_hat())).unsqueeze(-1)) * \
-            torch.ones_like(x) / x.size(-1)
+        return (torch.log(torch.abs(1 + torch.matmul(psi_z, self.u_hat())).unsqueeze(-1)) *
+                torch.ones_like(x) / x.size(-1)).sum(-1)
