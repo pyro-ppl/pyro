@@ -40,10 +40,8 @@ class SamplePosteriorMessenger(poutine.replay_messenger.ReplayMessenger):
 
 def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
     # Create an enumerated trace.
-    with poutine.block():
-        enum_trace = poutine.trace(
-            CollapseEnumMessenger(first_available_dim)(model)
-        ).get_trace(*args, **kwargs)
+    with poutine.block(), CollapseEnumMessenger(first_available_dim):
+        enum_trace = poutine.trace(model).get_trace(*args, **kwargs)
     enum_trace = poutine.util.prune_subsample_sites(enum_trace)
     enum_trace.compute_log_prob()
     enum_trace.pack_tensors()
@@ -63,16 +61,15 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
             for frame in node["cond_indep_stack"]:
                 if frame.vectorized:
                     sum_dims.remove(plate_to_symbol[frame.name])
-
-            # Note we mark all sites with require_backward to get correct
-            # ordinals and slice non-enumerated samples.
+            # Note we mark all sample sites with require_backward to gather
+            # enumerated sites and adjust cond_indep_stack of all sample sites.
             if not node["is_observed"]:
                 queries.append(log_prob)
                 require_backward(log_prob)
 
     # Run forward-backward algorithm, collecting the ordinal of each connected component.
     ring = _make_ring(temperature)
-    log_probs = contract_tensor_tree(log_probs, sum_dims, ring=ring)
+    log_probs = contract_tensor_tree(log_probs, sum_dims, ring=ring)  # run forward algorithm
     query_to_ordinal = {}
     pending = object()  # a constant value for pending queries
     for query in queries:
@@ -80,42 +77,42 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
     for ordinal, terms in log_probs.items():
         for term in terms:
             if hasattr(term, "_pyro_backward"):
-                term._pyro_backward()
+                term._pyro_backward()  # run backward algorithm
         # Note: this is quadratic in number of ordinals
         for query in queries:
             if query not in query_to_ordinal and query._pyro_backward_result is not pending:
                 query_to_ordinal[query] = ordinal
 
-    # Construct a collapsed trace by slicing and adjusting cond_indep_stack.
+    # Construct a collapsed trace by gathering and adjusting cond_indep_stack.
     collapsed_trace = poutine.Trace()
     for node in enum_trace.nodes.values():
         if node["type"] == "sample" and not node["is_observed"]:
             # TODO move this into a Leaf implementation somehow
-            new_node = {"type": "sample", "name": node["name"], "is_observed": False}
+            new_node = {
+                "type": "sample",
+                "name": node["name"],
+                "is_observed": False,
+                "infer": node["infer"].copy(),
+                "cond_indep_stack": node["cond_indep_stack"],
+                "value": node["value"],
+            }
             log_prob = node["packed"]["log_prob"]
-            new_node["infer"] = node["infer"].copy()
-
-            if hasattr(log_prob, "_pyro_backward"):
+            if hasattr(log_prob, "_pyro_backward_result"):
+                # Adjust the cond_indep_stack.
                 ordinal = query_to_ordinal[log_prob]
                 new_node["cond_indep_stack"] = tuple(
                     f for f in node["cond_indep_stack"]
                     if not f.vectorized or plate_to_symbol[f.name] in ordinal)
 
-                # TODO move this into a custom SampleRing Leaf implementation
+                # Gather if node depended on an enumerated value.
                 sample = log_prob._pyro_backward_result
-                if sample is None:
-                    # node did not depend on an enumerated variable, so no sampling necessary
-                    new_node["value"] = node["value"]
-                else:
+                if sample is not None:
                     new_value = packed.pack(node["value"], node["infer"]["_dim_to_symbol"])
                     for index, dim in zip(sample, sample._pyro_sample_dims):
                         if dim in new_value._pyro_dims:
                             index._pyro_dims = sample._pyro_dims[1:]
                             new_value = packed.gather(new_value, index, dim)
                     new_node["value"] = packed.unpack(new_value, enum_trace.symbol_to_dim)
-            else:
-                new_node["cond_indep_stack"] = node["cond_indep_stack"]
-                new_node["value"] = node["value"]
 
             collapsed_trace.add_node(node["name"], **new_node)
 

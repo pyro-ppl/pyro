@@ -1,21 +1,43 @@
 from __future__ import absolute_import, division, print_function
 
 import logging
-import pytest
+import math
 
+import pytest
 import torch
-from torch.distributions import constraints
 from torch.autograd import grad
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-
+from pyro.infer import TraceEnum_ELBO
+from pyro.infer.collapse import collapse, sample_posterior
 from pyro.infer.enum import config_enumerate
-from pyro.infer.collapse import collapse
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
+
+
+def logsumexp(iterable):
+    return sum(x.exp() for x in iterable).log()
+
+
+def log_mean_prob(trace, particle_dim):
+    """
+    Marginalizes out particle dim from a trace.
+    """
+    assert particle_dim < 0
+    trace.compute_log_prob()
+    total = 0.
+    num_particles = None
+    for node in trace.nodes.values():
+        if node["type"] == "sample" and type(node["fn"]).__name__ != "_Subsample":
+            log_prob = node["log_prob"]
+            assert log_prob.dim() == -particle_dim
+            num_particles = log_prob.size(0)
+            total = total + log_prob.reshape(num_particles, -1).sum(-1)
+    return total.reshape(-1).logsumexp(0) - math.log(num_particles)
 
 
 def test_collapse_guide_smoke():
@@ -47,34 +69,140 @@ def test_collapse_guide_smoke():
     assert set(collapsed_tr.nodes.keys()) == set(uncollapsed_tr.nodes.keys()) - {"e"}
 
 
-def test_collapse_grad():
-    data = torch.tensor([1., 2., 3.])
+def test_sample_posterior_1():
+    #      +-------+
+    #  z --|--> x  |
+    #      +-------+
     num_particles = 10000
+    data = torch.tensor([1., 2., 3.])
 
-    @config_enumerate(default="parallel")
-    def model():
-        p1 = pyro.param("p1", torch.tensor(0.25))
+    def model(num_particles=1, z=None):
+        p = pyro.param("p", torch.tensor(0.25))
         with pyro.plate("num_particles", num_particles, dim=-2):
-            z = pyro.sample("z", dist.Bernoulli(p1), infer={"collapse": True})
+            z = pyro.sample("z", dist.Bernoulli(p), obs=z, infer={"collapse": True})
+            logger.info("z.shape = {}".format(z.shape))
             with pyro.plate("data", 3):
                 pyro.sample("x", dist.Normal(z, 1.), obs=data)
 
-    def hand_model():
-        p1 = pyro.param("p1", torch.tensor(0.25))
-        with pyro.plate("data", 3):
-            with poutine.scale(scale=1.-p1):
-                pyro.sample("x0", dist.Normal(0., 1.), obs=data)
-            with poutine.scale(scale=p1):
-                pyro.sample("x1", dist.Normal(1., 1.), obs=data)
+    sampled_trace = poutine.trace(sample_posterior(model, first_available_dim=-3)).get_trace(num_particles)
+    conditioned_traces = {z: poutine.trace(model).get_trace(z=torch.tensor(z)) for z in [0., 1.]}
 
-    expected_logprob = poutine.trace(hand_model).get_trace().log_prob_sum()
-    actual_logprob = poutine.trace(collapse(model, -3)).get_trace().log_prob_sum() / num_particles
+    actual_z_mean = sampled_trace.nodes["z"]["value"].mean()
+    expected_z_mean = 1 / (1 + (conditioned_traces[0].log_prob_sum() -
+                                conditioned_traces[1].log_prob_sum()).exp())
+    assert_equal(actual_z_mean, expected_z_mean, prec=1e-2)
+
+
+def test_sample_posterior_2():
+    #       +--------+
+    #  z1 --|--> x1  |
+    #   |   |        |
+    #   V   |        |
+    #  z2 --|--> x2  |
+    #       +--------+
+    num_particles = 10000
+    data = torch.tensor([[-1., -1., 0.], [-1., 1., 1.]])
+
+    def model(num_particles=1, z1=None, z2=None):
+        p = pyro.param("p", torch.tensor([[0.25, 0.75], [0.1, 0.9]]))
+        loc = pyro.param("loc", torch.tensor([-1., 1.]))
+        with pyro.plate("num_particles", num_particles, dim=-2):
+            z1 = pyro.sample("z1", dist.Categorical(p[0]), obs=z1, infer={"collapse": True})
+            z2 = pyro.sample("z2", dist.Categorical(p[z1]), obs=z2, infer={"collapse": True})
+            logger.info("z1.shape = {}".format(z1.shape))
+            logger.info("z2.shape = {}".format(z2.shape))
+            with pyro.plate("data", 3):
+                pyro.sample("x1", dist.Normal(loc[z1], 1.), obs=data[0])
+                pyro.sample("x2", dist.Normal(loc[z2], 1.), obs=data[1])
+
+    sampled_trace = poutine.trace(
+        sample_posterior(model, first_available_dim=-3)).get_trace(num_particles)
+    conditioned_traces = {(z1, z2): poutine.trace(model).get_trace(z1=torch.tensor(z1),
+                                                                   z2=torch.tensor(z2))
+                          for z1 in [0, 1] for z2 in [0, 1]}
+
+    actual_probs = torch.empty(2, 2)
+    expected_probs = torch.empty(2, 2)
+    for (z1, z2), tr in conditioned_traces.items():
+        actual_probs[z1, z2] = ((sampled_trace.nodes["z1"]["value"] == z1) &
+                                (sampled_trace.nodes["z2"]["value"] == z2)).float().mean()
+        expected_probs[z1, z2] = tr.log_prob_sum().exp()
+    expected_probs = expected_probs / expected_probs.sum()
+    assert_equal(expected_probs, actual_probs, prec=1e-2)
+
+
+@pytest.mark.xfail(reason="misunderstanding of collapse behavior")
+def test_collapse_grad_1():
+    #      +-------+
+    #  z --|--> x  |
+    #      +-------+
+    num_particles = 10000
+    data = torch.tensor([1., 2., 3.])
+    p = pyro.param("p", torch.tensor(0.25))
+
+    def model(num_particles=1, z=None):
+        p = pyro.param("p")
+        with pyro.plate("num_particles", num_particles, dim=-2):
+            z = pyro.sample("z", dist.Bernoulli(p), obs=z, infer={"collapse": True})
+            logger.info("z.shape = {}".format(z.shape))
+            with pyro.plate("data", 3):
+                pyro.sample("x", dist.Normal(z, 1.), obs=data)
+
+    collapsed_trace = poutine.trace(collapse(model, first_available_dim=-3)).get_trace(num_particles)
+    conditioned_traces = {z: poutine.trace(model).get_trace(z=torch.tensor(z)) for z in [0, 1]}
+
+    actual_logprob = log_mean_prob(collapsed_trace, particle_dim=-2)
+    expected_logprob = logsumexp(tr.log_prob_sum() for tr in conditioned_traces.values())
     assert_equal(expected_logprob, actual_logprob, prec=1e-3)
 
-    p1 = pyro.param("p1")
-    expected_grad = grad(expected_logprob, [p1])[0]
-    actual_grad = grad(actual_logprob, [p1])[0]
+    expected_grad = grad(expected_logprob, [p], create_graph=True)[0]
+    actual_grad = grad(actual_logprob, [p], create_graph=True)[0]
     assert_equal(expected_grad, actual_grad, prec=1e-3)
+
+
+@pytest.mark.xfail(reason="misunderstanding of collapse behavior")
+def test_collapse_grad_2():
+    #       +--------+
+    #  z1 --|--> x1  |
+    #   |   |        |
+    #   V   |        |
+    #  z2 --|--> x2  |
+    #       +--------+
+    num_particles = 10000
+    data = torch.tensor([[-1., -1., 0.], [-1., 1., 1.]])
+    p = pyro.param("p", torch.tensor([[0.25, 0.75], [0.1, 0.9]]))
+    loc = pyro.param("loc", torch.tensor([-1., 1.]))
+
+    def model():
+        p = pyro.param("p")
+        loc = pyro.param("loc")
+        with pyro.plate("num_particles", num_particles, dim=-2):
+            z1 = pyro.sample("z1", dist.Categorical(p[0]), infer={"collapse": True})
+            z2 = pyro.sample("z2", dist.Categorical(p[z1]), infer={"collapse": True})
+            logger.info("z1.shape = {}".format(z1.shape))
+            logger.info("z2.shape = {}".format(z2.shape))
+            with pyro.plate("data", 3):
+                pyro.sample("x1", dist.Normal(loc[z1], 1.), obs=data[0])
+                pyro.sample("x2", dist.Normal(loc[z2], 1.), obs=data[1])
+
+    def hand_model():
+        p = pyro.param("p")
+        loc = pyro.param("loc")
+        with pyro.plate("data", 3):
+            for z1 in [0, 1]:
+                for z2 in [0, 1]:
+                    with poutine.scale(scale=p[0][z1] * p[z1][z2]):
+                        pyro.sample("x1_{}_{}".format(z1, z2), dist.Normal(loc[z1], 1.), obs=data[0])
+                        pyro.sample("x2_{}_{}".format(z1, z2), dist.Normal(loc[z2], 1.), obs=data[1])
+
+    actual_logprob = poutine.trace(collapse(model, -3)).get_trace().log_prob_sum() / num_particles
+    expected_logprob = poutine.trace(hand_model).get_trace().log_prob_sum()
+    assert_equal(expected_logprob, actual_logprob, prec=1e-3)
+
+    actual_grads = grad(actual_logprob, [p, loc], create_graph=True)
+    expected_grads = grad(expected_logprob, [p, loc], create_graph=True)
+    for a, e, name in zip(actual_grads, expected_grads, ["p", "loc"]):
+        assert_equal(e, a, prec=1e-3, msg="bad grad for {}".format(name))
 
 
 def test_collapse_traceenumelbo_smoke():
@@ -92,12 +220,11 @@ def test_collapse_traceenumelbo_smoke():
 
     guide = poutine.infer_config(
         guide,
-        lambda msg: {"enumerate": "parallel", "collapse": True} if msg["name"] == "e" else {})
+        lambda msg: {"collapse": True} if msg["name"] == "e" else {})
 
     collapsed_guide = collapse(guide, first_available_dim=-1)
 
-    elbo = pyro.infer.TraceEnum_ELBO(
-        max_plate_nesting=0, strict_enumeration_warning=False)
+    elbo = TraceEnum_ELBO(max_plate_nesting=0, strict_enumeration_warning=False)
     elbo.differentiable_loss(model, collapsed_guide)
 
 
@@ -134,9 +261,8 @@ def test_collapse_elbo_categorical():
     # actual test
     pyro.infer.enable_validation(False)
 
-    elbo = pyro.infer.TraceEnum_ELBO(
-        max_plate_nesting=1,  # XXX what should this be?
-        strict_enumeration_warning=False)
+    elbo = TraceEnum_ELBO(max_plate_nesting=1,  # XXX what should this be?
+                          strict_enumeration_warning=False)
 
     expected = elbo.differentiable_loss(model, guide, True)
     actual = elbo.differentiable_loss(model, collapsed_guide, False)
@@ -144,6 +270,7 @@ def test_collapse_elbo_categorical():
     assert_equal(expected, actual)
 
 
+@pytest.mark.xfail(reason="misunderstanding of collapse behavior")
 def test_collapse_enum_interaction_smoke():
 
     # @config_enumerate(default="parallel")
@@ -171,9 +298,8 @@ def test_collapse_enum_interaction_smoke():
         print("model z2 shape = {}".format(z2.shape))
         pyro.sample("x", dist.Normal(locs[z2], 1.), obs=torch.tensor(0.))
 
-    elbo = pyro.infer.TraceEnum_ELBO(
-        max_plate_nesting=2,  # XXX what should this be?
-        strict_enumeration_warning=False)
+    elbo = TraceEnum_ELBO(max_plate_nesting=2,  # XXX what should this be?
+                          strict_enumeration_warning=False)
 
     collapsed_guide = collapse(guide, first_available_dim=-1)
     # XXX not correct first_available_dim
