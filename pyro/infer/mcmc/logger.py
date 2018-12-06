@@ -37,6 +37,25 @@ DIAGNOSTIC_MSG = "DIAGNOSTICS"
 # IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+
+# TODO: Remove once https://github.com/tqdm/tqdm/issues/650 is resolved.
+class ProgressBar(tqdm):
+    def __init__(self, *args, **kwargs):
+        super(ProgressBar, self).__init__(*args, **kwargs)
+
+    def set_description(self, *args, **kwargs):
+        if not self.disable:
+            super(ProgressBar, self).set_description(*args, **kwargs)
+
+    def set_postfix(self, *args, **kwargs):
+        if not self.disable:
+            super(ProgressBar, self).set_postfix(*args, **kwargs)
+
+    def update(self, *args, **kwargs):
+        if not self.disable:
+            super(ProgressBar, self).update(*args, **kwargs)
+
+
 class QueueHandler(logging.Handler):
     """
     This handler sends events to a queue. Typically, it would be used together
@@ -177,8 +196,8 @@ def initialize_progbar(warmup_steps, num_samples, min_width=80, max_width=120, p
     bar_format = None
     if not ipython_env:
         bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]"
-    progress_bar = tqdm(total=total_steps, desc=description, bar_format=bar_format,
-                        position=pos, file=sys.stderr, disable=disable)
+    progress_bar = ProgressBar(total=total_steps, desc=description, bar_format=bar_format,
+                               position=pos, file=sys.stderr, disable=disable)
     progress_bar._ipython_env = ipython_env
 
     if getattr(progress_bar, "ncols", None) is not None:
