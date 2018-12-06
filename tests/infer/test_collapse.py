@@ -69,7 +69,8 @@ def test_collapse_guide_smoke():
     assert set(collapsed_tr.nodes.keys()) == set(uncollapsed_tr.nodes.keys()) - {"e"}
 
 
-def test_sample_posterior_1():
+@pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
+def test_sample_posterior_1(temperature):
     #      +-------+
     #  z --|--> x  |
     #      +-------+
@@ -84,16 +85,24 @@ def test_sample_posterior_1():
             with pyro.plate("data", 3):
                 pyro.sample("x", dist.Normal(z, 1.), obs=data)
 
-    sampled_trace = poutine.trace(sample_posterior(model, first_available_dim=-3)).get_trace(num_particles)
+    first_available_dim = -3
+    sampled_model = sample_posterior(model, first_available_dim, temperature)
+    sampled_trace = poutine.trace(sampled_model).get_trace(num_particles)
     conditioned_traces = {z: poutine.trace(model).get_trace(z=torch.tensor(z)) for z in [0., 1.]}
 
+    # Check  posterior over z.
     actual_z_mean = sampled_trace.nodes["z"]["value"].mean()
-    expected_z_mean = 1 / (1 + (conditioned_traces[0].log_prob_sum() -
-                                conditioned_traces[1].log_prob_sum()).exp())
+    if temperature:
+        expected_z_mean = 1 / (1 + (conditioned_traces[0].log_prob_sum() -
+                                    conditioned_traces[1].log_prob_sum()).exp())
+    else:
+        expected_z_mean = (conditioned_traces[1].log_prob_sum() >
+                           conditioned_traces[0].log_prob_sum()).float()
     assert_equal(actual_z_mean, expected_z_mean, prec=1e-2)
 
 
-def test_sample_posterior_2():
+@pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
+def test_sample_posterior_2(temperature):
     #       +--------+
     #  z1 --|--> x1  |
     #   |   |        |
@@ -115,19 +124,27 @@ def test_sample_posterior_2():
                 pyro.sample("x1", dist.Normal(loc[z1], 1.), obs=data[0])
                 pyro.sample("x2", dist.Normal(loc[z2], 1.), obs=data[1])
 
+    first_available_dim = -3
+    sampled_model = sample_posterior(model, first_available_dim, temperature)
     sampled_trace = poutine.trace(
-        sample_posterior(model, first_available_dim=-3)).get_trace(num_particles)
+        sampled_model).get_trace(num_particles)
     conditioned_traces = {(z1, z2): poutine.trace(model).get_trace(z1=torch.tensor(z1),
                                                                    z2=torch.tensor(z2))
                           for z1 in [0, 1] for z2 in [0, 1]}
 
+    # Check joint posterior over (z1, z2).
     actual_probs = torch.empty(2, 2)
     expected_probs = torch.empty(2, 2)
     for (z1, z2), tr in conditioned_traces.items():
         actual_probs[z1, z2] = ((sampled_trace.nodes["z1"]["value"] == z1) &
                                 (sampled_trace.nodes["z2"]["value"] == z2)).float().mean()
         expected_probs[z1, z2] = tr.log_prob_sum().exp()
-    expected_probs = expected_probs / expected_probs.sum()
+    if temperature:
+        expected_probs = expected_probs / expected_probs.sum()
+    else:
+        argmax = expected_probs.reshape(-1).max(0)[1]
+        expected_probs[:] = 0
+        expected_probs.reshape(-1)[argmax] = 1
     assert_equal(expected_probs, actual_probs, prec=1e-2)
 
 
