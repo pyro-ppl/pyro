@@ -60,7 +60,7 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, sca
 
     num_particles = 50000
     if local_samples:
-        guide = config_enumerate(guide, default="parallel", num_samples=num_particles)
+        guide = config_enumerate(guide, num_samples=num_particles)
         num_particles = 1
 
     optim = Adam({"lr": 0.1})

@@ -42,7 +42,7 @@ def test_distribution_1(temperature):
     num_particles = 10000
     data = torch.tensor([1., 2., 3.])
 
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model(num_particles=1, z=None):
         p = pyro.param("p", torch.tensor(0.25))
         with pyro.plate("num_particles", num_particles, dim=-2):
@@ -78,7 +78,7 @@ def test_distribution_2(temperature):
     num_particles = 10000
     data = torch.tensor([[-1., -1., 0.], [-1., 1., 1.]])
 
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model(num_particles=1, z1=None, z2=None):
         p = pyro.param("p", torch.tensor([[0.25, 0.75], [0.1, 0.9]]))
         loc = pyro.param("loc", torch.tensor([-1., 1.]))
@@ -124,7 +124,7 @@ def test_distribution_3(temperature):
     num_particles = 10000
     data = [torch.tensor([-1., -1., 0.]), torch.tensor([-1., 1.])]
 
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model(num_particles=1, z1=None, z2=None):
         p = pyro.param("p", torch.tensor([0.25, 0.75]))
         loc = pyro.param("loc", torch.tensor([-1., 1.]))
@@ -182,7 +182,7 @@ def test_hmm_smoke(temperature, length):
     assert len(data) == length
     assert len(true_states) == 1 + len(data)
 
-    decoder = infer_discrete(config_enumerate(hmm, default="parallel"),
+    decoder = infer_discrete(config_enumerate(hmm),
                              first_available_dim=-1, temperature=temperature)
     inferred_states, _ = decoder(data)
     assert len(inferred_states) == len(true_states)
@@ -201,7 +201,7 @@ def test_prob(nderivs):
     data = torch.tensor([0.5, 1., 1.5])
     p = pyro.param("p", torch.tensor(0.25))
 
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model(num_particles):
         p = pyro.param("p")
         with pyro.plate("num_particles", num_particles, dim=-2):
