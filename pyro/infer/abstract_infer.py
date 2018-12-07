@@ -14,15 +14,14 @@ from pyro.ops.stats import waic
 
 class EmpiricalMarginal(Empirical):
     """
-    Marginal distribution, that wraps over a TracePosterior object to provide a
-    a marginal over one or more latent sites or the return values of the
-    TracePosterior's model.
+    Marginal distribution, that wraps over a ``TracePosterior`` object to provide a
+    a marginal over one or more sites from the ``TracePosterior``'s model.
 
     ..note:: If multiple sites are specified, they must have the same tensor shape.
     To hold the marginal distribution of sites having different shapes, use
     :class:`~pyro.infer.abstract_infer.Marginals` instead.
 
-    :param TracePosterior trace_posterior: a TracePosterior instance representing
+    :param TracePosterior trace_posterior: a ``TracePosterior`` instance representing
         a Monte Carlo posterior.
     :param list sites: optional list of sites for which we need to generate
         the marginal distribution. Note that for multiple sites, the shape
@@ -102,8 +101,9 @@ class EmpiricalMarginal(Empirical):
 
 class Marginals(object):
     """
-    Holds the marginal distribution over one or more latent sites as well
-    as the return values of the TracePosterior's model.
+    Holds the marginal distribution over one or more sites from the ``TracePosterior``'s
+    model. This is a convenience container class, which can be extended by ``TracePosterior``
+    subclasses. e.g. for implementing diagnostics.
 
     :param TracePosterior trace_posterior: a TracePosterior instance representing
         a Monte Carlo posterior.
