@@ -22,12 +22,12 @@ import pyro.ops.stats as stats
 from pyro.util import optional
 
 
-def logger_thread(log_queue, warmup_steps, num_samples, num_chains):
+def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_progbar=False):
     """
     Logging thread that asynchronously consumes logging events from `log_queue`,
     and handles them appropriately.
     """
-    progress_bars = [initialize_progbar(warmup_steps, num_samples, pos=i)
+    progress_bars = [initialize_progbar(warmup_steps, num_samples, pos=i, disable=disable_progbar)
                      for i in range(num_chains)]
     logger = logging.getLogger(__name__)
     logger.propagate = False
@@ -94,7 +94,7 @@ class _ParallelSampler(TracePosterior):
     `torch.multiprocessing` module (itself a light wrapper over the python
     `multiprocessing` module) to spin up parallel workers.
     """
-    def __init__(self, kernel, num_samples, warmup_steps, num_chains, mp_context):
+    def __init__(self, kernel, num_samples, warmup_steps, num_chains, mp_context, disable_progbar):
         super(_ParallelSampler, self).__init__()
         self.kernel = kernel
         self.warmup_steps = warmup_steps
@@ -112,8 +112,8 @@ class _ParallelSampler(TracePosterior):
                                         "MAIN", log_queue=self.log_queue)
         self.num_samples = num_samples
         self.log_thread = threading.Thread(target=logger_thread,
-                                           args=(self.log_queue, self.warmup_steps,
-                                                 self.num_samples, self.num_chains))
+                                           args=(self.log_queue, self.warmup_steps, self.num_samples,
+                                                 self.num_chains, disable_progbar))
         self.log_thread.daemon = True
         self.log_thread.start()
 
@@ -172,11 +172,12 @@ class _SingleSampler(TracePosterior):
     """
     Single process runner class optimized for the case `num_chains=1`.
     """
-    def __init__(self, kernel, num_samples, warmup_steps):
+    def __init__(self, kernel, num_samples, warmup_steps, disable_progbar):
         self.kernel = kernel
         self.warmup_steps = warmup_steps
         self.num_samples = num_samples
         self.logger = None
+        self.disable_progbar = disable_progbar
         super(_SingleSampler, self).__init__()
 
     def _gen_samples(self, num_samples, init_trace):
@@ -192,8 +193,9 @@ class _SingleSampler(TracePosterior):
         log_queue = kwargs.pop("log_queue", None)
         self.logger = logging.getLogger("pyro.infer.mcmc")
         is_multiprocessing = log_queue is not None
-        progress_bar = initialize_progbar(self.warmup_steps, self.num_samples) \
-            if not is_multiprocessing else None
+        progress_bar = None
+        if not is_multiprocessing:
+            progress_bar = initialize_progbar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
         self.logger = initialize_logger(self.logger, logger_id, progress_bar, log_queue)
         self.kernel.setup(self.warmup_steps, *args, **kwargs)
         trace = self.kernel.initial_trace
@@ -235,9 +237,10 @@ class MCMC(TracePosterior):
     :param str mp_context: Multiprocessing context to use when `num_chains > 1`.
         Only applicable for Python 3.5 and above. Use `mp_context="spawn"` for
         CUDA.
+    :param bool disable_progbar: Disable progress bar and diagnostics update.
     """
     def __init__(self, kernel, num_samples, warmup_steps=0,
-                 num_chains=1, mp_context=None):
+                 num_chains=1, mp_context=None, disable_progbar=False):
         self.warmup_steps = warmup_steps if warmup_steps is not None else num_samples // 2  # Stan
         self.num_samples = num_samples
         if num_chains > 1:
@@ -250,9 +253,9 @@ class MCMC(TracePosterior):
                 num_chains = available_cpu
         if num_chains > 1:
             self.sampler = _ParallelSampler(kernel, num_samples, warmup_steps,
-                                            num_chains, mp_context)
+                                            num_chains, mp_context, disable_progbar)
         else:
-            self.sampler = _SingleSampler(kernel, num_samples, warmup_steps)
+            self.sampler = _SingleSampler(kernel, num_samples, warmup_steps, disable_progbar)
         super(MCMC, self).__init__(num_chains=num_chains)
 
     def _traces(self, *args, **kwargs):
