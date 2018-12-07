@@ -39,6 +39,7 @@ Welcome to Pyro Examples and Tutorials!
 
    gmm
    gp
+   gplvm
    bo
    tracking_1d
    csis
