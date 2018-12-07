@@ -42,7 +42,7 @@ def _skip_cuda(*args):
 @pytest.mark.parametrize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_order(depth, graph_type):
 
-    @config_enumerate(deafult="sequential")
+    @config_enumerate(default="sequential")
     def model(depth):
         for i in range(depth):
             pyro.sample("x{}".format(i), dist.Bernoulli(0.5))
@@ -59,7 +59,7 @@ def test_iter_discrete_traces_order(depth, graph_type):
 def test_iter_discrete_traces_scalar(graph_type):
     pyro.clear_param_store()
 
-    @config_enumerate(deafult="sequential")
+    @config_enumerate(default="sequential")
     def model():
         p = pyro.param("p", torch.tensor(0.05))
         probs = pyro.param("probs", torch.tensor([0.1, 0.2, 0.3, 0.4]))
@@ -78,7 +78,7 @@ def test_iter_discrete_traces_scalar(graph_type):
 def test_iter_discrete_traces_vector(expand, graph_type):
     pyro.clear_param_store()
 
-    @config_enumerate(expand=expand)
+    @config_enumerate(default="sequential", expand=expand)
     def model():
         p = pyro.param("p", torch.tensor([0.05, 0.15]))
         probs = pyro.param("probs", torch.tensor([[0.1, 0.2, 0.3, 0.4],
@@ -170,7 +170,7 @@ def gmm_guide(data, verbose=False):
 def test_gmm_iter_discrete_traces(data_size, graph_type, model):
     pyro.clear_param_store()
     data = torch.arange(0., float(data_size))
-    model = config_enumerate(model)
+    model = config_enumerate(model, "sequential")
     traces = list(iter_discrete_traces(graph_type, model, data=data, verbose=True))
     # This non-vectorized version is exponential in data_size:
     assert len(traces) == 2**data_size
