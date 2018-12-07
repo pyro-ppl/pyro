@@ -177,7 +177,8 @@ class MetadataFilter(logging.Filter):
         return True
 
 
-def initialize_progbar(warmup_steps, num_samples, min_width=80, max_width=120, pos=None):
+def initialize_progbar(warmup_steps, num_samples, min_width=80, max_width=120, pos=None,
+                       disable=False):
     """
     Initialize progress bar using :class:`~tqdm.tqdm`.
 
@@ -187,12 +188,13 @@ def initialize_progbar(warmup_steps, num_samples, min_width=80, max_width=120, p
     :param int max_width: Maximum column width of the bar.
     :param int pos: Position of the bar (e.g. in the case of
         multiple parallel samplers).
+    :param bool disable: Disable progress bar.
     """
     description = "Warmup" if pos is None else "Warmup [{}]".format(pos + 1)
     total_steps = warmup_steps + num_samples
     # Disable progress bar in "CI"
     # (see https://github.com/travis-ci/travis-ci/issues/1337).
-    disable = "CI" in os.environ or "PYTEST_XDIST_WORKER" in os.environ
+    disable = disable or "CI" in os.environ or "PYTEST_XDIST_WORKER" in os.environ
     bar_format = None
     if not ipython_env:
         bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]"

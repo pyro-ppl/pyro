@@ -19,6 +19,7 @@ Welcome to Pyro Examples and Tutorials!
    enumeration
    custom_objectives
    jit
+   minipyro
    effect_handlers
 
 .. toctree::
@@ -27,6 +28,7 @@ Welcome to Pyro Examples and Tutorials!
 
    vae
    bayesian_regression
+   bayesian_regression_ii
    dmm
    air
    ss-vae

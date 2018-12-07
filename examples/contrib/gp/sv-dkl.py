@@ -61,7 +61,9 @@ def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
                           100. * batch_idx / len(train_loader), loss))
 
             import os
+
             print(os.popen("free -t -m").readlines()[1])
+
 
 def test(args, test_loader, gpmodule):
     correct = 0
@@ -118,7 +120,7 @@ def main(args):
 
     optimizer = torch.optim.Adam(gpmodule.parameters(), lr=args.lr)
 
-    elbo = infer.JitTrace_ELBO() if args.jit else infer.Trace_ELBO()
+    elbo = infer.JitTraceMeanField_ELBO() if args.jit else infer.TraceMeanField_ELBO()
     loss_fn = elbo.differentiable_loss
 
     for epoch in range(1, args.epochs + 1):

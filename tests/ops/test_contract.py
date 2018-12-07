@@ -9,6 +9,7 @@ import pytest
 import six
 import torch
 
+import pyro.ops.jit
 from pyro.distributions.util import logsumexp
 from pyro.ops.contract import _partition_terms, contract_tensor_tree, contract_to_tensor, naive_ubersum, ubersum
 from pyro.ops.einsum.adjoint import require_backward
@@ -399,6 +400,28 @@ def test_ubersum(equation, batch_dims):
         assert_equal(expected_part, actual_part,
                      msg=u"For output '{}':\nExpected:\n{}\nActual:\n{}".format(
                          output, expected_part.detach().cpu(), actual_part.detach().cpu()))
+
+
+@pytest.mark.parametrize('equation,batch_dims', UBERSUM_EXAMPLES)
+def test_ubersum_jit(equation, batch_dims):
+    inputs, outputs, operands, sizes = make_example(equation)
+
+    try:
+        expected = ubersum(equation, *operands, batch_dims=batch_dims, modulo_total=True)
+    except NotImplementedError:
+        pytest.skip()
+
+    @pyro.ops.jit.trace
+    def jit_ubersum(*operands):
+        return ubersum(equation, *operands, batch_dims=batch_dims, modulo_total=True)
+
+    actual = jit_ubersum(*operands)
+
+    if not isinstance(actual, tuple):
+        pytest.xfail(reason="https://github.com/pytorch/pytorch/issues/14875")
+    assert len(expected) == len(actual)
+    for e, a in zip(expected, actual):
+        assert_equal(e, a)
 
 
 @pytest.mark.parametrize('equation,batch_dims', [

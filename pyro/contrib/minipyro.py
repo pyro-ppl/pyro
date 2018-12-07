@@ -125,26 +125,50 @@ class PlateMessenger(Messenger):
         return range(self.size)
 
 
+# apply_stack is called by pyro.sample and pyro.param.
+# It is responsible for applying each Messenger to each effectful operation.
 def apply_stack(msg):
     for pointer, handler in enumerate(reversed(PYRO_STACK)):
         handler.process_message(msg)
+        # When a Messenger sets the "stop" field of a message,
+        # it prevents any Messengers above it on the stack from being applied.
         if msg.get("stop"):
             break
     if msg["value"] is None:
         msg["value"] = msg["fn"](*msg["args"])
+
+    # A Messenger that sets msg["stop"] == True also prevents application
+    # of postprocess_message by Messengers above it on the stack
+    # via the pointer variable from the process_message loop
     for handler in PYRO_STACK[-pointer-1:]:
         handler.postprocess_message(msg)
     return msg
 
 
+# sample is an effectful version of Distribution.sample(...)
+# When any effect handlers are active, it constructs an initial message and calls apply_stack.
 def sample(name, fn, obs=None):
+
+    # if there are no active Messengers, we just draw a sample and return it as expected:
     if not PYRO_STACK:
         return fn()
-    msg = apply_stack(dict(type="sample", name=name, fn=fn, args=(), value=obs))
+
+    # Otherwise, we initialize a message...
+    initial_msg = {
+        "type": "sample",
+        "name": name,
+        "fn": fn,
+        "args": (),
+        "value": obs,
+    }
+
+    # ...and use apply_stack to send it to the Messengers
+    msg = apply_stack(initial_msg)
     return msg["value"]
 
 
 # param is an effectful version of PARAM_STORE.setdefault
+# When any effect handlers are active, it constructs an initial message and calls apply_stack.
 def param(name, init_value=None):
 
     def fn(init_value):
@@ -152,12 +176,25 @@ def param(name, init_value=None):
         value.requires_grad_()
         return value
 
+    # if there are no active Messengers, we just draw a sample and return it as expected:
     if not PYRO_STACK:
         return fn(init_value)
-    msg = apply_stack(dict(type="param", name=name, fn=fn, args=(init_value,), value=None))
+
+    # Otherwise, we initialize a message...
+    initial_msg = {
+        "type": "param",
+        "name": name,
+        "fn": fn,
+        "args": (init_value,),
+        "value": None,
+    }
+
+    # ...and use apply_stack to send it to the Messengers
+    msg = apply_stack(initial_msg)
     return msg["value"]
 
 
+# boilerplate to match the syntax of actual pyro.plate:
 def plate(name, size, dim):
     return PlateMessenger(fn=None, size=size, dim=dim)
 
