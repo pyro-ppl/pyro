@@ -205,7 +205,7 @@ def gmm_batch_guide(data):
 def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     pyro.clear_param_store()
     data = torch.arange(0., float(data_size))
-    model = config_enumerate(model)
+    model = config_enumerate(model, "sequential")
     traces = list(iter_discrete_traces(graph_type, model, data=data))
     # This vectorized version is independent of data_size:
     assert len(traces) == 2
