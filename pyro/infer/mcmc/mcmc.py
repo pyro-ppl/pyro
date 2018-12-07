@@ -66,7 +66,8 @@ class _Worker(object):
                  kernel, num_samples, warmup_steps=0,
                  args=None, kwargs=None):
         self.chain_id = chain_id
-        self.trace_gen = _SingleSampler(kernel, num_samples=num_samples, warmup_steps=warmup_steps)
+        self.trace_gen = _SingleSampler(kernel, num_samples=num_samples, warmup_steps=warmup_steps,
+                                        disable_progbar=True)
         self.args = args if args is not None else []
         self.kwargs = kwargs if kwargs is not None else {}
         self.rng_seed = torch.initial_seed()
