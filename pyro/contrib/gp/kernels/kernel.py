@@ -102,9 +102,9 @@ class Sum(Combination):
     """
     def forward(self, X, Z=None, diag=False):
         if isinstance(self.kern1, Kernel):
-            return self.kern0(X, Z, diag) + self.kern1(X, Z, diag)
+            return self.kern0(X, Z, diag=diag) + self.kern1(X, Z, diag=diag)
         else:  # constant
-            return self.kern0(X, Z, diag) + self.kern1
+            return self.kern0(X, Z, diag=diag) + self.kern1
 
 
 class Product(Combination):
@@ -114,9 +114,9 @@ class Product(Combination):
     """
     def forward(self, X, Z=None, diag=False):
         if isinstance(self.kern1, Kernel):
-            return self.kern0(X, Z, diag) * self.kern1(X, Z, diag)
+            return self.kern0(X, Z, diag=diag) * self.kern1(X, Z, diag=diag)
         else:  # constant
-            return self.kern0(X, Z, diag) * self.kern1
+            return self.kern0(X, Z, diag=diag) * self.kern1
 
 
 class Transforming(Kernel):
@@ -139,7 +139,7 @@ class Exponent(Transforming):
         :math:`k_{new}(x, z) = \exp(k(x, z)).`
     """
     def forward(self, X, Z=None, diag=False):
-        return self.kern(X, Z, diag).exp()
+        return self.kern(X, Z, diag=diag).exp()
 
 
 class VerticalScaling(Transforming):
@@ -159,12 +159,12 @@ class VerticalScaling(Transforming):
 
     def forward(self, X, Z=None, diag=False):
         if diag:
-            return self.vscaling_fn(X) * self.kern(X, Z, diag) * self.vscaling_fn(X)
+            return self.vscaling_fn(X) * self.kern(X, Z, diag=diag) * self.vscaling_fn(X)
         elif Z is None:
             vscaled_X = self.vscaling_fn(X).unsqueeze(1)
-            return vscaled_X * self.kern(X, Z, diag) * vscaled_X.t()
+            return vscaled_X * self.kern(X, Z, diag=diag) * vscaled_X.t()
         else:
-            return (self.vscaling_fn(X).unsqueeze(1) * self.kern(X, Z, diag) *
+            return (self.vscaling_fn(X).unsqueeze(1) * self.kern(X, Z, diag=diag) *
                     self.vscaling_fn(Z).unsqueeze(0))
 
 
@@ -225,11 +225,11 @@ class Warping(Transforming):
 
     def forward(self, X, Z=None, diag=False):
         if self.iwarping_fn is None:
-            K_iwarp = self.kern(X, Z, diag)
+            K_iwarp = self.kern(X, Z, diag=diag)
         elif Z is None:
-            K_iwarp = self.kern(self.iwarping_fn(X), None, diag)
+            K_iwarp = self.kern(self.iwarping_fn(X), None, diag=diag)
         else:
-            K_iwarp = self.kern(self.iwarping_fn(X), self.iwarping_fn(Z), diag)
+            K_iwarp = self.kern(self.iwarping_fn(X), self.iwarping_fn(Z), diag=diag)
 
         if self.owarping_coef is None:
             return K_iwarp

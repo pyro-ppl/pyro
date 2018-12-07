@@ -138,7 +138,8 @@ class SparseGPRegression(GPModel):
             if self.approx == "FITC":
                 D = D + Kffdiag - Qffdiag
             else:  # approx = "VFE"
-                trace_term = (Kffdiag - Qffdiag).sum().clamp(min=0) / self.noise
+                trace_term = (Kffdiag - Qffdiag).sum() / self.noise
+                trace_term = trace_term.clamp(min=0)
 
         zero_loc = self.X.new_zeros(N)
         f_loc = zero_loc + self.mean_function(self.X)

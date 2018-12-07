@@ -18,6 +18,9 @@ Welcome to Pyro Examples and Tutorials!
    tensor_shapes
    enumeration
    custom_objectives
+   jit
+   minipyro
+   effect_handlers
 
 .. toctree::
    :maxdepth: 2
@@ -25,6 +28,7 @@ Welcome to Pyro Examples and Tutorials!
 
    vae
    bayesian_regression
+   bayesian_regression_ii
    dmm
    air
    ss-vae

@@ -35,8 +35,8 @@ USER ${USER_NAME}
 RUN curl -o ~/miniconda.sh -O \
     https://repo.continuum.io/miniconda/Miniconda${python_version%%.*}-latest-Linux-x86_64.sh && \
     bash ~/miniconda.sh -f -b -p ${CONDA_DIR} && \
-    rm ~/miniconda.sh
-ENV CMAKE_PREFIX_PATH="$(dirname $(which conda))/../"
+    rm ~/miniconda.sh && \
+    conda install python=${python_version}
 
 # Move to home directory; and copy the install script
 WORKDIR ${WORK_DIR}

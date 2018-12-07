@@ -89,6 +89,8 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
             x_init = self.gpmodel.X.new_empty(1).uniform_(
                 self.constraints.lower_bound, self.constraints.upper_bound)
             x, y = self.find_a_candidate(differentiable, x_init)
+            if torch.isnan(y):
+                continue
             candidates.append(x)
             values.append(y)
 

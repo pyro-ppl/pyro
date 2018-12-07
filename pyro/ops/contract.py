@@ -9,6 +9,7 @@ from opt_einsum import shared_intermediates
 from six.moves import map
 
 from pyro.ops.rings import BACKEND_TO_RING, LogRing
+from pyro.util import ignore_jit_warnings
 
 
 def _check_batch_dims_are_sensible(output_dims, nonoutput_ordinal):
@@ -148,7 +149,7 @@ def _contract_component(ring, tensor_tree, sum_dims, target_dims):
     return ordinal, term
 
 
-def contract_tensor_tree(tensor_tree, sum_dims, cache=None):
+def contract_tensor_tree(tensor_tree, sum_dims, cache=None, ring=None):
     """
     Contract out ``sum_dims`` in a tree of tensors via message passing.
     This partially contracts out plate dimensions.
@@ -162,13 +163,17 @@ def contract_tensor_tree(tensor_tree, sum_dims, cache=None):
         dimensions from product-contraction dimensions.
     :param dict cache: an optional :func:`~opt_einsum.shared_intermediates`
         cache.
+    :param pyro.ops.rings.Ring ring: an optional algebraic ring defining tensor
+        operations.
     :returns: A contracted version of ``tensor_tree``
     :rtype: OrderedDict
     """
     assert isinstance(tensor_tree, OrderedDict)
     assert isinstance(sum_dims, set)
 
-    ring = LogRing(cache)
+    if ring is None:
+        ring = LogRing(cache)
+
     ordinals = {term: t for t, terms in tensor_tree.items() for term in terms}
     all_terms = [term for terms in tensor_tree.values() for term in terms]
     contracted_tree = OrderedDict()
@@ -362,13 +367,14 @@ def ubersum(equation, *operands, **kwargs):
         operands = [x[...] for x in operands]  # ensure tensors are unique
 
     # Check sizes.
-    dim_to_size = {}
-    for dims, term in zip(inputs, operands):
-        for dim, size in zip(dims, term.shape):
-            old = dim_to_size.setdefault(dim, size)
-            if old != size:
-                raise ValueError(u"Dimension size mismatch at dim '{}': {} vs {}"
-                                 .format(dim, size, old))
+    with ignore_jit_warnings():
+        dim_to_size = {}
+        for dims, term in zip(inputs, operands):
+            for dim, size in zip(dims, map(int, term.shape)):
+                old = dim_to_size.setdefault(dim, size)
+                if old != size:
+                    raise ValueError(u"Dimension size mismatch at dim '{}': {} vs {}"
+                                     .format(dim, size, old))
 
     # Construct a tensor tree shared by all outputs.
     tensor_tree = OrderedDict()
