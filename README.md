@@ -28,8 +28,6 @@ For more information, check out our [blog post](http://eng.uber.com/pyro).
 
 ### Installing a stable Pyro release
 
-First install [PyTorch](http://pytorch.org/).
-
 Install via pip:
 
 **Python 2.7.\*:**
@@ -61,18 +59,6 @@ Make sure that the models come from the same release version of the [Pyro source
 ### Installing Pyro dev branch
 
 For recent features you can install Pyro from source.
-
-To install a compatible version of PyTorch, use the PyTorch nightly
-[build](https://pytorch.org/). We recommend pinning to the specific
-nightly build below that has been well tested.
-
-```sh
-build_ver=1.0.0.dev20181127  # <---- a well-tested PyTorch build
-pip install torch_nightly==${build_ver} -f \
-    https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
-```
-
-Finally install Pyro using pip or from source as shown below.
 
 **Install using pip:**
 

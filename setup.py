@@ -85,8 +85,7 @@ setup(
         'numpy>=1.7',
         'opt_einsum>=2.3.0',
         'six>=1.10.0',
-        # TODO: uncomment on release; using torch-nightly build
-        # 'torch>=0.4.1',
+        'torch>=1.0.0',
         'tqdm>=4.28',
     ],
     extras_require={
