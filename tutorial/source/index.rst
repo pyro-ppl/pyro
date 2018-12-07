@@ -51,6 +51,15 @@ Welcome to Pyro Examples and Tutorials!
    RSA-hyperbole
    ekf
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Code Examples:
+
+   hmm
+   lda
+   mcmc
+   sparse_gamma
+
 
 Indices and tables
 ==================
