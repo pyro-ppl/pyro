@@ -28,16 +28,10 @@ For more information, check out our [blog post](http://eng.uber.com/pyro).
 
 ### Installing a stable Pyro release
 
-Install via pip:
+**Install using pip:**
 
-**Python 2.7.\*:**
 ```sh
 pip install pyro-ppl
-```
-
-**Python 3.5:**
-```sh
-pip3 install pyro-ppl
 ```
 
 **Install from source:**

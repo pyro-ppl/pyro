@@ -56,8 +56,7 @@ EXTRAS_REQUIRE = [
     'matplotlib>=1.3',
     'observations>=0.1.4',
     'pillow',
-    # TODO: uncomment on release; using torch-nightly build
-    # 'torchvision',
+    'torchvision',
     'visdom>=0.1.4',
     'pandas',
     'seaborn',
