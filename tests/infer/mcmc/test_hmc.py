@@ -186,7 +186,7 @@ def test_logistic_regression(step_size, trajectory_length, num_steps,
 
     hmc_kernel = HMC(model, step_size, trajectory_length, num_steps,
                      adapt_step_size, adapt_mass_matrix, full_mass)
-    mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
+    mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100, disable_progbar=True).run(data)
     beta_posterior = mcmc_run.marginal(['beta']).empirical['beta']
     assert_equal(rmse(true_coefs, beta_posterior.mean).item(), 0.0, prec=0.1)
 
