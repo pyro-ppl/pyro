@@ -101,7 +101,8 @@ def einsum_backward_sample(operands, sample1, sample2):
         sample._pyro_dims = parts[0]._pyro_dims
         sample._pyro_sample_dims = sample_dims
         assert sample.dim() == len(sample._pyro_dims)
-        assert sample.size(0) == len(sample._pyro_sample_dims)
+        if not torch._C._get_tracing_state():
+            assert sample.size(0) == len(sample._pyro_sample_dims)
 
     # Select sample dimensions to pass on to downstream sites.
     for x in operands:
@@ -123,7 +124,8 @@ def einsum_backward_sample(operands, sample1, sample2):
         x_sample._pyro_dims = sample._pyro_dims
         x_sample._pyro_sample_dims = x_sample_dims
         assert x_sample.dim() == len(x_sample._pyro_dims)
-        assert x_sample.size(0) == len(x_sample._pyro_sample_dims)
+        if not torch._C._get_tracing_state():
+            assert x_sample.size(0) == len(x_sample._pyro_sample_dims)
         yield x._pyro_backward, x_sample
 
 
@@ -143,5 +145,6 @@ def unflatten(flat_sample, output_dims, contract_dims, contract_shape):
     sample._pyro_dims = SAMPLE_SYMBOL + output_dims
     sample._pyro_sample_dims = contract_dims
     assert sample.dim() == len(sample._pyro_dims)
-    assert sample.size(0) == len(sample._pyro_sample_dims)
+    if not torch._C._get_tracing_state():
+        assert sample.size(0) == len(sample._pyro_sample_dims)
     return sample
