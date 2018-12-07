@@ -9,6 +9,7 @@ from opt_einsum import shared_intermediates
 from six.moves import map
 
 from pyro.ops.rings import BACKEND_TO_RING, LogRing
+from pyro.util import ignore_jit_warnings
 
 
 def _check_batch_dims_are_sensible(output_dims, nonoutput_ordinal):
@@ -366,13 +367,14 @@ def ubersum(equation, *operands, **kwargs):
         operands = [x[...] for x in operands]  # ensure tensors are unique
 
     # Check sizes.
-    dim_to_size = {}
-    for dims, term in zip(inputs, operands):
-        for dim, size in zip(dims, term.shape):
-            old = dim_to_size.setdefault(dim, size)
-            if old != size:
-                raise ValueError(u"Dimension size mismatch at dim '{}': {} vs {}"
-                                 .format(dim, size, old))
+    with ignore_jit_warnings():
+        dim_to_size = {}
+        for dims, term in zip(inputs, operands):
+            for dim, size in zip(dims, map(int, term.shape)):
+                old = dim_to_size.setdefault(dim, size)
+                if old != size:
+                    raise ValueError(u"Dimension size mismatch at dim '{}': {} vs {}"
+                                     .format(dim, size, old))
 
     # Construct a tensor tree shared by all outputs.
     tensor_tree = OrderedDict()

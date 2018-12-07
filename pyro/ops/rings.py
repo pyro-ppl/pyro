@@ -9,6 +9,7 @@ from six import add_metaclass
 
 from pyro.ops.einsum import contract
 from pyro.ops.einsum.adjoint import SAMPLE_SYMBOL, Backward
+from pyro.util import ignore_jit_warnings
 
 
 def _finfo(tensor):
@@ -118,7 +119,8 @@ class Ring(object):
 
         term_sum = self.sumproduct([term], dims)
         global_part = self.product(term_sum, ordinal)
-        local_part = self.sumproduct([term, self.inv(term_sum)], set())
+        with ignore_jit_warnings():
+            local_part = self.sumproduct([term, self.inv(term_sum)], set())
         assert sorted(local_part._pyro_dims) == sorted(term._pyro_dims)
         result = global_part, local_part
         self._cache[key] = result

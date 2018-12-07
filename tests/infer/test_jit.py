@@ -401,8 +401,44 @@ def test_dirichlet_bernoulli(Elbo, vectorized):
 
 
 @pytest.mark.parametrize('length', [1, 2, 10])
+def test_traceenum_elbo(length):
+    hidden_dim = 10
+    transition = pyro.param("transition",
+                            0.3 / hidden_dim + 0.7 * torch.eye(hidden_dim),
+                            constraint=constraints.positive)
+    means = pyro.param("means", torch.arange(float(hidden_dim)))
+    data = 1 + 2 * torch.randn(length)
+
+    @ignore_jit_warnings()
+    def model(data):
+        transition = pyro.param("transition")
+        means = pyro.param("means")
+        states = [torch.tensor(0)]
+        for t in pyro.markov(range(len(data))):
+            states.append(pyro.sample("states_{}".format(t),
+                                      dist.Categorical(transition[states[-1]]),
+                                      infer={"enumerate": "parallel"}))
+            pyro.sample("obs_{}".format(t),
+                        dist.Normal(means[states[-1]], 1.),
+                        obs=data[t])
+        return tuple(states)
+
+    def guide(data):
+        pass
+
+    expected_loss = TraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(model, guide, data)
+    actual_loss = JitTraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(model, guide, data)
+    assert_equal(expected_loss, actual_loss)
+
+    expected_grads = grad(expected_loss, [transition, means], allow_unused=True)
+    actual_grads = grad(actual_loss, [transition, means], allow_unused=True)
+    for e, a, name in zip(expected_grads, actual_grads, ["transition", "means"]):
+        assert_equal(e, a, msg="bad gradient for {}".format(name))
+
+
+@pytest.mark.parametrize('length', [1, 2, 10])
 @pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
-def test_discrete(temperature, length):
+def test_infer_discrete(temperature, length):
 
     @ignore_jit_warnings()
     def hmm(transition, means, data):
