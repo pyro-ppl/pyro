@@ -348,6 +348,18 @@ def ignore_jit_warnings(filter=None):
         yield
 
 
+def jit_iter(tensor):
+    """
+    Iterate over a tensor, ignoring jit warnings.
+    """
+    # The "Iterating over a tensor" warning is erroneously a RuntimeWarning
+    # so we use a custom filter here.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", "Iterating over a tensor")
+        warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+        return list(tensor)
+
+
 @contextmanager
 def optional(context_manager, condition):
     """

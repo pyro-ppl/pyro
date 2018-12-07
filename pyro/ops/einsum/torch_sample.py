@@ -9,6 +9,7 @@ import pyro.ops.einsum.torch_log
 from pyro.ops import packed
 from pyro.ops.einsum.adjoint import Backward, einsum_backward_sample, transpose, unflatten
 from pyro.ops.einsum.util import Tensordot
+from pyro.util import jit_iter
 
 
 class _EinsumBackward(Backward):
@@ -25,7 +26,7 @@ class _EinsumBackward(Backward):
         # Slice down operands before combining terms.
         sample2 = message
         if sample2 is not None:
-            for dim, index in zip(sample2._pyro_sample_dims, sample2):
+            for dim, index in zip(sample2._pyro_sample_dims, jit_iter(sample2)):
                 batch_dims = batch_dims.replace(dim, '')
                 for i, x in enumerate(operands):
                     if dim in x._pyro_dims:
