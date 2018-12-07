@@ -643,7 +643,7 @@ def test_plate_enum_discrete_no_discrete_vars_warning(strict_enumeration_warning
         with pyro.plate("plate", 10, 5) as ind:
             pyro.sample("x", dist.Normal(loc, scale).expand_by([len(ind)]))
 
-    @config_enumerate(deafult="sequential")
+    @config_enumerate(default="sequential")
     def guide():
         loc = pyro.param("loc", torch.tensor(1.0, requires_grad=True))
         scale = pyro.param("scale", torch.tensor(2.0, requires_grad=True))
@@ -980,7 +980,7 @@ def test_dim_allocation_ok(Elbo, expand):
             assert z.shape == (5, 7, 6)
             assert q.shape == (8, 5, 7, 6)
 
-    guide = config_enumerate(model, expand=expand) if enumerate_ else model
+    guide = config_enumerate(model, "sequential", expand=expand) if enumerate_ else model
     assert_ok(model, guide, Elbo(max_plate_nesting=4))
 
 
