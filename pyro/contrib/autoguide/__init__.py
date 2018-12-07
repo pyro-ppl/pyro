@@ -664,7 +664,7 @@ class AutoDiscreteParallel(AutoGuide):
     """
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = config_enumerate(self.model, default="parallel")
+        model = config_enumerate(self.model)
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
         if self.master is not None:
