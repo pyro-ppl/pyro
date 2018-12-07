@@ -16,8 +16,11 @@ class EmpiricalMarginal(Empirical):
     """
     Marginal distribution, that wraps over a TracePosterior object to provide a
     a marginal over one or more latent sites or the return values of the
-    TracePosterior's model. If multiple sites are specified, they must have the
-    same tensor shape.
+    TracePosterior's model.
+
+    ..note:: If multiple sites are specified, they must have the same tensor shape.
+    To hold the marginal distribution of sites having different shapes, use
+    :class:`~pyro.infer.abstract_infer.Marginals` instead.
 
     :param TracePosterior trace_posterior: a TracePosterior instance representing
         a Monte Carlo posterior.
@@ -97,6 +100,50 @@ class EmpiricalMarginal(Empirical):
             self._add_sample(value, log_weight=log_weight, chain_id=chain_id)
 
 
+class Marginals(object):
+    """
+    Holds the marginal distribution over one or more latent sites as well
+    as the return values of the TracePosterior's model.
+
+    :param TracePosterior trace_posterior: a TracePosterior instance representing
+        a Monte Carlo posterior.
+    :param list sites: optional list of sites for which we need to generate
+        the marginal distribution.
+    """
+    def __init__(self, trace_posterior, sites=None, validate_args=None):
+        assert isinstance(trace_posterior, TracePosterior), \
+            "trace_dist must be trace posterior distribution object"
+        if sites is None:
+            sites = ["_RETURN"]
+        elif isinstance(sites, str):
+            sites = [sites]
+        else:
+            assert isinstance(sites, list)
+        self.sites = sites
+        self._marginals = OrderedDict()
+        self._diagnostics = OrderedDict()
+        self._trace_posterior = trace_posterior
+        self._populate_traces(trace_posterior, validate_args)
+
+    def _populate_traces(self, trace_posterior, validate):
+        self._marginals = {site: EmpiricalMarginal(trace_posterior, site, validate)
+                           for site in self.sites}
+
+    def support(self, flatten=False):
+        support = OrderedDict([(site, value.enumerate_support())
+                               for site, value in self._marginals.items()])
+        if self._trace_posterior.num_chains > 1 and flatten:
+            for site, samples in support.items():
+                shape = samples.size()
+                flattened_shape = torch.Size((shape[0] * shape[1],)) + shape[2:]
+                support[site] = samples.reshape(flattened_shape)
+        return support
+
+    @property
+    def empirical(self):
+        return self._marginals
+
+
 @add_metaclass(ABCMeta)
 class TracePosterior(object):
     """
@@ -117,7 +164,7 @@ class TracePosterior(object):
         self._categorical = None
 
     def marginal(self, sites=None):
-        return EmpiricalMarginal(self, sites)
+        return Marginals(self, sites)
 
     @abstractmethod
     def _traces(self, *args, **kwargs):
