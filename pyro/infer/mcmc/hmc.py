@@ -322,7 +322,7 @@ class HMC(TraceKernel):
             self._guess_max_plate_nesting()
         # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
         # No-op if model does not have any discrete latents.
-        self.model = poutine.enum(config_enumerate(self.model, default="parallel"),
+        self.model = poutine.enum(config_enumerate(self.model),
                                   first_available_dim=-1 - self.max_plate_nesting)
         if self._automatic_transform_enabled:
             self.transforms = {}

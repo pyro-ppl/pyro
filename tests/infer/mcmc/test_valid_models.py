@@ -82,7 +82,7 @@ def test_model_error_enum_dim_clash(kernel, kwargs):
 
 def test_log_prob_eval_iterates_in_correct_order():
     @poutine.enum(first_available_dim=-5)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model():
         outer = pyro.plate("outer", 3, dim=-1)
@@ -124,7 +124,7 @@ def test_all_discrete_sites_log_prob(Eval):
     p = 0.3
 
     @poutine.enum(first_available_dim=-4)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model():
         d = dist.Bernoulli(p)
         context1 = pyro.plate("outer", 2, dim=-1)
@@ -149,7 +149,7 @@ def test_all_discrete_sites_log_prob(Eval):
                                   xfail_param(TraceEinsumEvaluator, reason="TODO: Debug this failure case.")])
 def test_enumeration_in_tree(Eval):
     @poutine.enum(first_available_dim=-5)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"sample1": torch.tensor(0.),
                              "sample2": torch.tensor(1.),
                              "sample3": torch.tensor(2.)})
@@ -187,7 +187,7 @@ def test_enumeration_in_dag(Eval):
     p = 0.3
 
     @poutine.enum(first_available_dim=-3)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"b": torch.tensor(0.4), "c": torch.tensor(0.4)})
     def model():
         d = dist.Bernoulli(p)
@@ -218,7 +218,7 @@ def test_enumeration_in_dag(Eval):
 def test_enum_log_prob_continuous_observed(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-2)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model(data):
         p = pyro.sample("p", dist.Uniform(0., 1.))
@@ -247,7 +247,7 @@ def test_enum_log_prob_continuous_observed(data, expected_log_prob, Eval):
 def test_enum_log_prob_continuous_sampled(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-2)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"p": torch.tensor(0.4),
                              "n": torch.tensor([[1.], [-1.]])})
     def model(data):
@@ -275,7 +275,7 @@ def test_enum_log_prob_continuous_sampled(data, expected_log_prob, Eval):
 def test_enum_log_prob_discrete_observed(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-2)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model(data):
         p = pyro.sample("p", dist.Uniform(0., 1.))
@@ -301,7 +301,7 @@ def test_enum_log_prob_discrete_observed(data, expected_log_prob, Eval):
 def test_enum_log_prob_multiple_plate(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-2)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model(data):
         p = pyro.sample("p", dist.Beta(1.1, 1.1))
@@ -330,7 +330,7 @@ def test_enum_log_prob_multiple_plate(data, expected_log_prob, Eval):
 def test_enum_log_prob_nested_plate(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-3)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model(data):
         p = pyro.sample("p", dist.Uniform(0., 1.))

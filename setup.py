@@ -56,8 +56,7 @@ EXTRAS_REQUIRE = [
     'matplotlib>=1.3',
     'observations>=0.1.4',
     'pillow',
-    # TODO: uncomment on release; using torch-nightly build
-    # 'torchvision',
+    'torchvision',
     'visdom>=0.1.4',
     'pandas',
     'seaborn',
@@ -85,8 +84,7 @@ setup(
         'numpy>=1.7',
         'opt_einsum>=2.3.0',
         'six>=1.10.0',
-        # TODO: uncomment on release; using torch-nightly build
-        # 'torch>=0.4.1',
+        'torch>=1.0.0',
         'tqdm>=4.28',
     ],
     extras_require={
@@ -96,7 +94,6 @@ setup(
             'pytest==3.7',
             'pytest-cov',
             'scipy>=0.19.0',
-            'ipython<=6.5.0',  # https://github.com/jupyter/jupyter_console/issues/158
         ],
         'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
         'dev': EXTRAS_REQUIRE + [
@@ -109,7 +106,6 @@ setup(
             'pypandoc',
             'pytest==3.7',
             'pytest-xdist',
-            'ipython<=6.5.0',  # https://github.com/jupyter/jupyter_console/issues/158
             'scipy>=0.19.0',
             'sphinx',
             'sphinx_rtd_theme',

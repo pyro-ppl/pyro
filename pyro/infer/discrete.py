@@ -127,7 +127,7 @@ def infer_discrete(fn=None, first_available_dim=None, temperature=1):
     Example::
 
         @infer_discrete(first_available_dim=-1, temperature=0)
-        @config_enumerate(hmm, default="parallel")
+        @config_enumerate
         def viterbi_decoder(data, hidden_dim=10):
             transition = 0.3 / hidden_dim + 0.7 * torch.eye(hidden_dim)
             means = torch.arange(float(hidden_dim))

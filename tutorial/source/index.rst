@@ -16,6 +16,11 @@ Welcome to Pyro Examples and Tutorials!
    svi_part_ii
    svi_part_iii
    tensor_shapes
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Advanced:
+
    enumeration
    custom_objectives
    jit
@@ -45,6 +50,15 @@ Welcome to Pyro Examples and Tutorials!
    RSA-implicature
    RSA-hyperbole
    ekf
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Code Examples:
+
+   hmm
+   lda
+   mcmc
+   sparse_gamma
 
 
 Indices and tables
