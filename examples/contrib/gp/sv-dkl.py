@@ -106,7 +106,7 @@ def main(args):
     deep_kernel = gp.kernels.Warping(rbf, iwarping_fn=cnn)
 
     # init inducing points (taken randomly from dataset)
-    Xu = next(iter(train_loader))[0][:args.num_inducing]
+    Xu = next(iter(train_loader))[0][:args.num_inducing].clone()
     # use MultiClass likelihood for 10-class classification problem
     likelihood = gp.likelihoods.MultiClass(num_classes=10)
     # Because we use Categorical distribution in MultiClass likelihood, we need GP model returns
