@@ -52,17 +52,18 @@ def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
             data, target = data.cuda(), target.cuda()
         gpmodule.set_data(data, target)
         optimizer.zero_grad()
-        loss = loss_fn(gpmodule.model, gpmodule.guide)
-        loss.backward()
+        loss = 0
+        #loss = loss_fn(gpmodule.model, gpmodule.guide)
+        #loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
             print("Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}"
                   .format(epoch, batch_idx * len(data), len(train_loader.dataset),
                           100. * batch_idx / len(train_loader), loss))
 
-            import os
+            #import os
 
-            print(os.popen("free -t -m").readlines()[1])
+            #print(os.popen("free -t -m").readlines()[1])
 
 
 def test(args, test_loader, gpmodule):
