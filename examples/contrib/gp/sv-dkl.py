@@ -61,9 +61,9 @@ def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
                   .format(epoch, batch_idx * len(data), len(train_loader.dataset),
                           100. * batch_idx / len(train_loader), loss))
 
-            #import os
+            import os
 
-            #print(os.popen("free -t -m").readlines()[1])
+            print(os.popen("free -t -m").readlines()[1])
 
 
 def test(args, test_loader, gpmodule):
