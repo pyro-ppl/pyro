@@ -15,19 +15,21 @@ class BatchNormTransform(TransformModule):
     A type of batch normalization that can be used to stabilize training in normalizing flows. The inverse operation
     is defined as
 
-        :math:`y = (x - \\hat{\\mu}) \\oslash \\sqrt{\\hat{\\sigma^2}} \\otimes \\gamma + \\beta`
+        :math:`x = (y - \\hat{\\mu}) \\oslash \\sqrt{\\hat{\\sigma^2}} \\otimes \\gamma + \\beta`
 
-    where :math:`x` is the input, :math:`y` is the output, :math:`\\gamma,\\beta` are learnable parameters, and
-    :math:`\\hat{\\mu}`/:math:`\\hat{\\sigma^2}` are smoothed running averages of the sample mean and variance,
-    respectively. The constraint :math:`\\gamma>0` is enforced to ease calculation of the log-det-Jacobian term.
+    that is, the standard batch norm equation, where :math:`x` is the input, :math:`y` is the output,
+    :math:`\\gamma,\\beta` are learnable parameters, and :math:`\\hat{\\mu}`/:math:`\\hat{\\sigma^2}` are smoothed
+    running averages of the sample mean and variance, respectively. The constraint :math:`\\gamma>0` is enforced to 
+    ease calculation of the log-det-Jacobian term.
 
-    This is an element-wise transform, and when applied to a vector, learns a parameter for each dimension of the input.
+    This is an element-wise transform, and when applied to a vector, learns two parameters (:math:`\\gamma,\\beta`)
+    for each dimension of the input.
 
     When the module is set to training mode, the moving averages of the sample mean and variance are updated every time
     the inverse operator is called, e.g., when a normalizing flow scores a minibatch with the `log_prob` method.
 
     Also, when module is set to training mode, the sample mean and variance on the current minibatch are used in place
-    of the smoothed averages, :math:`\\hat{\\mu}` and :math:`\\hat{\\sigma^2}`, in the formula given above. For this
+    of the smoothed averages, :math:`\\hat{\\mu}` and :math:`\\hat{\\sigma^2}`, for the inverse operator. For this
     reason it is not the case that :math:`x=g(g^{-1}(x))` during training, i.e., that the inverse operation is the
     inverse of the forward one.
 
