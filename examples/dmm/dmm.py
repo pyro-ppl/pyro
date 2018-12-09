@@ -137,15 +137,17 @@ class DMM(nn.Module):
     variational distribution (the guide) for the Deep Markov Model
     """
     def __init__(self, input_dim=88, z_dim=100, emission_dim=100,
-                 transition_dim=200, rnn_dim=600, rnn_dropout_rate=0.0,
+                 transition_dim=200, rnn_dim=600, num_layers=1, rnn_dropout_rate=0.0,
                  num_iafs=0, iaf_dim=50, use_cuda=False):
         super(DMM, self).__init__()
         # instantiate PyTorch modules used in the model and guide below
         self.emitter = Emitter(input_dim, z_dim, emission_dim)
         self.trans = GatedTransition(z_dim, transition_dim)
         self.combiner = Combiner(z_dim, rnn_dim)
+        # dropout just takes effect on inner layers of rnn
+        rnn_dropout_rate = 0. if num_layers == 1 else rnn_dropout_rate
         self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
-                          batch_first=True, bidirectional=False, num_layers=1,
+                          batch_first=True, bidirectional=False, num_layers=num_layers,
                           dropout=rnn_dropout_rate)
 
         # if we're using normalizing flows, instantiate those too
