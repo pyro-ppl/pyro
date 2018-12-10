@@ -90,8 +90,6 @@ def main(args):
                                   batch_size=args.batch_size,
                                   is_training_set=False,
                                   shuffle=True)
-    train_loader.num_workers = 1
-    test_loader.num_workers = 1
 
     cnn = CNN()
 
