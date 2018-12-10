@@ -50,6 +50,7 @@ def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
     for batch_idx, (data, target) in enumerate(train_loader):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
+        data = (data - 0.1307) / 0.3081  # normalize the data
         gpmodule.set_data(data, target)
         optimizer.zero_grad()
         loss = loss_fn(gpmodule.model, gpmodule.guide)
@@ -66,6 +67,7 @@ def test(args, test_loader, gpmodule):
     for data, target in test_loader:
         if args.cuda:
             data, target = data.cuda(), target.cuda()
+        data = (data - 0.1307) / 0.3081  # normalize the data
         # get prediction of GP model on new data
         f_loc, f_var = gpmodule(data)
         # use its likelihood to give prediction class
@@ -82,14 +84,12 @@ def main(args):
     train_loader = get_data_loader(dataset_name='MNIST',
                                    data_dir=data_dir,
                                    batch_size=args.batch_size,
-                                   dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
                                    is_training_set=True,
                                    shuffle=True,
                                    num_workers=1)
     test_loader = get_data_loader(dataset_name='MNIST',
                                   data_dir=data_dir,
                                   batch_size=args.batch_size,
-                                  dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
                                   is_training_set=False,
                                   shuffle=True,
                                   num_workers=1)
@@ -106,8 +106,8 @@ def main(args):
     # init inducing points (taken randomly from dataset)
     idx = torch.multinomial(torch.ones(60000), args.num_inducing)
     Xu_raw = train_loader.dataset.train_data[idx].clone()
-    transform = transforms.Normalize((0.1307,), (0.3081,))
-    Xu = torch.stack([transform(image.unsqueeze(0).float() / 255) for image in Xu_raw])
+    Xu = Xu_raw.unsqueeze(1).float() / 255  # mimic torchvision.transforms.ToTensor()
+    Xu = (Xu - 0.1307) / 0.3081  # normalize the data
 
     # use MultiClass likelihood for 10-class classification problem
     likelihood = gp.likelihoods.MultiClass(num_classes=10)

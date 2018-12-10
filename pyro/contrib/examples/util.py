@@ -43,7 +43,7 @@ def get_data_loader(dataset_name,
         dset,
         batch_size=batch_size,
         shuffle=shuffle,
-        num_workers=num_workers,
+        num_workers=num_workers
     )
 
 
