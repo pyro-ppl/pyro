@@ -84,13 +84,15 @@ def main(args):
                                    batch_size=args.batch_size,
                                    dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
                                    is_training_set=True,
-                                   shuffle=True)
+                                   shuffle=True,
+                                   num_workers=1)
     test_loader = get_data_loader(dataset_name='MNIST',
                                   data_dir=data_dir,
                                   batch_size=args.batch_size,
                                   dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
                                   is_training_set=False,
-                                  shuffle=True)
+                                  shuffle=True,
+                                  num_workers=1)
 
     cnn = CNN()
 
@@ -102,11 +104,10 @@ def main(args):
     deep_kernel = gp.kernels.Warping(rbf, iwarping_fn=cnn)
 
     # init inducing points (taken randomly from dataset)
-    # work around the issue: https://github.com/uber/pyro/issues/1540
     idx = torch.multinomial(torch.ones(60000), args.num_inducing)
     Xu_raw = train_loader.dataset.train_data[idx].clone()
     transform = transforms.Normalize((0.1307,), (0.3081,))
-    Xu = torch.stack([transform(image.unsqueeze(0).float()) for image in Xu_raw])
+    Xu = torch.stack([transform(image.unsqueeze(0).float() / 255) for image in Xu_raw])
 
     # use MultiClass likelihood for 10-class classification problem
     likelihood = gp.likelihoods.MultiClass(num_classes=10)

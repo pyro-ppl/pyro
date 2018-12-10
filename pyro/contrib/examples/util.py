@@ -27,7 +27,8 @@ def get_data_loader(dataset_name,
                     batch_size=1,
                     dataset_transforms=None,
                     is_training_set=True,
-                    shuffle=True):
+                    shuffle=True,
+                    num_workers=0):
     if not dataset_transforms:
         dataset_transforms = []
     trans = transforms.Compose([transforms.ToTensor()] + dataset_transforms)
@@ -41,7 +42,8 @@ def get_data_loader(dataset_name,
     return DataLoader(
         dset,
         batch_size=batch_size,
-        shuffle=shuffle
+        shuffle=shuffle,
+        num_workers=num_workers,
     )
 
 
