@@ -103,10 +103,10 @@ def main(args):
 
     # init inducing points (taken randomly from dataset)
     # work around the issue: https://github.com/uber/pyro/issues/1540
-    loader = get_data_loader(dataset_name='MNIST', data_dir=data_dir, batch_size=args.num_inducing,
-                             dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
-                             is_training_set=True, shuffle=True)
-    Xu = next(iter(loader))[0]
+    idx = torch.multinomial(torch.ones(60000), args.num_inducing)
+    Xu_raw = train_loader.dataset.train_data[idx].clone()
+    transform = transforms.Normalize((0.1307,), (0.3081,))
+    Xu = torch.stack([transform(image.unsqueeze(0).float()) for image in Xu_raw])
 
     # use MultiClass likelihood for 10-class classification problem
     likelihood = gp.likelihoods.MultiClass(num_classes=10)
