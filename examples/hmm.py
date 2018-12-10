@@ -422,6 +422,12 @@ def main(args):
         model.__name__, len(data['train']['sequences'])))
     sequences = torch.tensor(data['train']['sequences'], dtype=torch.float32)
     lengths = torch.tensor(data['train']['sequence_lengths'], dtype=torch.long)
+
+    # find all the notes that are present at least once in the training set
+    present_notes = ((sequences == 1).sum(0).sum(0) > 0)
+    # remove notes that are never played (we remove 37/88 notes)
+    sequences = sequences[..., present_notes]
+
     if args.truncate:
         lengths.clamp_(max=args.truncate)
         sequences = sequences[:, :args.truncate]
@@ -469,7 +475,7 @@ def main(args):
     # Finally we evaluate on the test dataset.
     logging.info('-' * 40)
     logging.info('Evaluating on {} test sequences'.format(len(data['test']['sequences'])))
-    sequences = torch.tensor(data['test']['sequences'], dtype=torch.float32)
+    sequences = torch.tensor(data['test']['sequences'], dtype=torch.float32)[..., present_notes]
     lengths = torch.tensor(data['test']['sequence_lengths'], dtype=torch.long)
     if args.truncate:
         lengths.clamp_(max=args.truncate)
