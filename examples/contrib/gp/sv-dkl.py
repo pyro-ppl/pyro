@@ -52,9 +52,9 @@ def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
             data, target = data.cuda(), target.cuda()
         gpmodule.set_data(data, target)
         optimizer.zero_grad()
-        loss = gpmodule.kernel(data).sum()
-        # loss = loss_fn(gpmodule.model, gpmodule.guide)
-        # loss.backward()
+        loss = gpmodule.kernel.iwarping_fn(data).sum()
+        loss = loss_fn(gpmodule.model, gpmodule.guide)
+        loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
             print("Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}"
@@ -103,7 +103,12 @@ def main(args):
     deep_kernel = gp.kernels.Warping(rbf, iwarping_fn=cnn)
 
     # init inducing points (taken randomly from dataset)
-    Xu = next(iter(train_loader))[0][:args.num_inducing].clone()
+    # work around the issue: https://github.com/uber/pyro/issues/1540
+    loader = get_data_loader(dataset_name='MNIST', data_dir=data_dir, batch_size=args.num_inducing,
+                             dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
+                             is_training_set=True, shuffle=True)
+    Xu = next(iter(loader))[0]
+
     # use MultiClass likelihood for 10-class classification problem
     likelihood = gp.likelihoods.MultiClass(num_classes=10)
     # Because we use Categorical distribution in MultiClass likelihood, we need GP model returns
