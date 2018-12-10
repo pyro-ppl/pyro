@@ -52,7 +52,8 @@ def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
             data, target = data.cuda(), target.cuda()
         gpmodule.set_data(data, target)
         optimizer.zero_grad()
-        loss = loss_fn(gpmodule.model, gpmodule.guide)
+        loss = gpmodule.kernel(data).sum()
+        # loss = loss_fn(gpmodule.model, gpmodule.guide)
         # loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
