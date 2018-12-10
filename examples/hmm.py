@@ -50,6 +50,10 @@ def main(args):
                  args.model, len(data['train']['sequences'])))
     sequences = torch.tensor(data['train']['sequences'], dtype=torch.float32)
     lengths = torch.tensor(data['train']['sequence_lengths'], dtype=torch.long)
+
+    present_notes = ((sequences == 1).sum(0).sum(0) > 0)
+    sequences = sequences[..., present_notes]
+
     if args.truncate:
         lengths.clamp_(max=args.truncate)
     num_observations = float(lengths.sum())
@@ -85,7 +89,7 @@ def main(args):
 
     log('-' * 40)
     log('Evaluating on {} test sequences'.format(len(data['test']['sequences'])))
-    sequences = torch.tensor(data['test']['sequences'], dtype=torch.float32)
+    sequences = torch.tensor(data['test']['sequences'], dtype=torch.float32)[..., present_notes]
     lengths = torch.tensor(data['test']['sequence_lengths'], dtype=torch.long)
     if args.truncate:
         lengths.clamp_(max=args.truncate)
