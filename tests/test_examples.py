@@ -14,7 +14,6 @@ pytestmark = pytest.mark.stage('test_examples')
 
 
 CPU_EXAMPLES = [
-    'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4',
     'air/main.py --num-steps=1',
     'air/main.py --num-steps=1 --no-baseline',
     'baseball.py --num-samples=200 --warmup-steps=100 --num-chains=2',
@@ -22,9 +21,7 @@ CPU_EXAMPLES = [
     'contrib/autoname/scoping_mixture.py --num-epochs=1',
     'contrib/autoname/mixture.py --num-epochs=1',
     'contrib/autoname/tree_data.py --num-epochs=1',
-    skipif_param('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4',
-                 condition='CI' in os.environ,
-                 reason='https://github.com/uber/pyro/issues/1540'),
+    'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4',
     'contrib/oed/ab_test.py --num-vi-steps=10 --num-bo-steps=2',
     'contrib/oed/item_response.py -N=1000 -M=1000',
     'contrib/oed/sequential_oed_sigmoid_lm.py --num-experiments=2 --num-runs=2 --no-plot',

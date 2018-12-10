@@ -84,14 +84,14 @@ def main(args):
                                    data_dir=data_dir,
                                    batch_size=args.batch_size,
                                    is_training_set=True,
-                                   shuffle=True,
-                                   num_workers=1)
+                                   shuffle=True)
     test_loader = get_data_loader(dataset_name='MNIST',
                                   data_dir=data_dir,
                                   batch_size=args.batch_size,
                                   is_training_set=False,
-                                  shuffle=True,
-                                  num_workers=1)
+                                  shuffle=True)
+    train_loader.num_workers = 1
+    test_loader.num_workers = 1
 
     cnn = CNN()
 
