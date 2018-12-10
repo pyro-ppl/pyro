@@ -480,6 +480,10 @@ def main(args):
     if args.truncate:
         lengths.clamp_(max=args.truncate)
     num_observations = float(lengths.sum())
+
+    # note that since we removed unseen notes above (to make the problem a bit easier and for
+    # numerical stability) this test loss may not be directly comparable to numbers
+    # reported on this dataset elsewhere.
     test_loss = elbo.loss(model, guide, sequences, lengths, args=args, include_prior=False)
     logging.info('test loss = {}'.format(test_loss / num_observations))
 
