@@ -125,13 +125,17 @@ class ProceduralVine():
         self.last_f = None
 
     def _flip(self, name, p):
-        return pyro.sample(name, dist.bernoulli, p).data[0]
+        return pyro.sample(name, dist.Bernoulli, p).sample()#data[0]
 
     def _discrete3(self, name, ps, vs=None):
-        return pyro.sample(name, dist.categorical, ps, vs=vs, one_hot=False)
+        ix = pyro.sample(name, dist.Categorical, ps).sample()
+        if vs is None:
+            return ix
+        else:
+            return vs[ix]
 
     def _gaussian(self, name, mu, sigma):
-        return pyro.sample(name, dist.normal, mu, sigma)
+        return pyro.sample(name, dist.Normal, mu, sigma).sample()
 
     def add_pyro_factor(self, site_name, val):
         # TODO: Check validity -- this is approximating the factor statement in
@@ -146,8 +150,8 @@ class ProceduralVine():
 
         # factor definitely happened this will add an obs to the graph and
         # bernoulli likelihood == f^whatever*(1-f)^0 == f*log_p
-        pyro.observe(site_name, dist.bernoulli,
-                     logits=logit_input, obs=VT([1]))
+        pyro.sample(site_name, dist.Bernoulli,
+                    logits=logit_input, obs=VT([1]))
 
     # generically add the type to our state that will in turn be rendered and
     # then measured against the target image we'll add that factor to any
