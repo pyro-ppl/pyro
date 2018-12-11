@@ -137,7 +137,7 @@ class Parameterized(nn.Module):
         Sets an autoguide for an existing parameter with name ``name`` (mimic
         the behavior of module :mod:`pyro.contrib.autoguide`).
 
-        ..note:: `dist_constructor` should be one of
+        .. note:: `dist_constructor` should be one of
             :class:`~pyro.distributions.Delta`,
             :class:`~pyro.distributions.Normal`, and
             :class:`~pyro.distributions.MultivariateNormal`. More distribution
@@ -202,7 +202,7 @@ class Parameterized(nn.Module):
         value from its prior. If ``mode="guide"``, the value will be drawn from
         its guide.
 
-        ..note:: This method automatically sets ``mode`` for submodules which
+        .. note:: This method automatically sets ``mode`` for submodules which
             belong to :class:`Parameterized` class.
 
         :param str mode: Either "model" or "guide".
