@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import time
-
 import torch
 
 from pyro.infer import TraceMeanField_ELBO
@@ -80,13 +78,13 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
     N = X.size(0)
     M = Xnew.size(0)
     latent_shape = f_loc.shape[:-1]
-    start = time.time()
+
     if Lff is None:
         Kff = kernel(X).contiguous()
         Kff.view(-1)[::N + 1] += jitter  # add jitter to diagonal
         Lff = Kff.cholesky()
     Kfs = kernel(X, Xnew)
-    print("time1", time.time() - start, Xnew.shape)
+
     # convert f_loc_shape from latent_shape x N to N x latent_shape
     f_loc = f_loc.permute(-1, *range(len(latent_shape)))
     # convert f_loc to 2D tensor for packing
@@ -96,7 +94,7 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
         f_scale_tril = f_scale_tril.permute(-2, -1, *range(len(latent_shape)))
         # convert f_scale_tril to 2D tensor for packing
         f_scale_tril_2D = f_scale_tril.reshape(N, -1)
-    print("time2", time.time() - start)
+
     if whiten:
         v_2D = f_loc_2D
         W = Kfs.trtrs(Lff, upper=False)[0].t()
@@ -113,7 +111,7 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
         W = Lffinv_pack[:, f_loc_2D.size(1):f_loc_2D.size(1) + M].t()
         if f_scale_tril is not None:
             S_2D = Lffinv_pack[:, -f_scale_tril_2D.size(1):]
-    print("time3", time.time() - start)
+
     loc_shape = latent_shape + (M,)
     loc = W.matmul(v_2D).t().reshape(loc_shape)
 
@@ -144,7 +142,7 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
             cov = cov.expand(latent_shape + (M, M))
         else:
             var = var.expand(latent_shape + (M,))
-    print("time4", time.time() - start)
+
     return (loc, cov) if full_cov else (loc, var)
 
 

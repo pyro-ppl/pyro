@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import time
-
 import torch
 from torch.distributions import constraints
 from torch.nn import Parameter
@@ -109,9 +107,7 @@ class VariationalSparseGP(GPModel):
         M = self.Xu.size(0)
         Kuu = self.kernel(self.Xu).contiguous()
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
-        start = time.time()
         Luu = Kuu.cholesky()
-        print("time", time.time() - start)
 
         zero_loc = self.Xu.new_zeros(self.u_loc.shape)
         if self.whiten:
@@ -124,10 +120,8 @@ class VariationalSparseGP(GPModel):
                         dist.MultivariateNormal(zero_loc, scale_tril=Luu)
                             .to_event(zero_loc.dim() - 1))
 
-        start = time.time()
         f_loc, f_var = conditional(self.X, self.Xu, self.kernel, self.u_loc, self.u_scale_tril,
                                    Luu, full_cov=False, whiten=self.whiten, jitter=self.jitter)
-        print("time", time.time() - start)
 
         f_loc = f_loc + self.mean_function(self.X)
         if self.y is None:
