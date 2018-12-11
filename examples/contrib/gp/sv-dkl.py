@@ -38,17 +38,18 @@ class CNN(nn.Module):
 
     def forward(self, x):
         start = time.time()
-        print("x shape", x.shape)
-        x = F.relu(F.max_pool2d(self.conv1(x), 2))
-        print("cnn time1", time.time() - start)
+        print("x shape", x.shape, x.dtype)
+        x = self.conv1(x)
+        print("cnn conv1", time.time() - start)
+        x = F.max_pool2d(x, 2)
+        print("cnn max_pool2d", time.time() - start)
+        x = F.relu(x)
+        print("cnn relu", time.time() - start)
+        # x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2(x), 2))
-        print("cnn time2", time.time() - start)
         x = x.view(-1, 320)
-        print("cnn time3", time.time() - start)
         x = F.relu(self.fc1(x))
-        print("cnn time3", time.time() - start)
         x = self.fc2(x)
-        print("cnn time4", time.time() - start)
         return x
 
 
