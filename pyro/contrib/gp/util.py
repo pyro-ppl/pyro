@@ -86,7 +86,7 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
         Kff.view(-1)[::N + 1] += jitter  # add jitter to diagonal
         Lff = Kff.cholesky()
     Kfs = kernel(X, Xnew)
-    print("time1", time.time() - start, X.shape)
+    print("time1", time.time() - start, Xnew.shape)
     # convert f_loc_shape from latent_shape x N to N x latent_shape
     f_loc = f_loc.permute(-1, *range(len(latent_shape)))
     # convert f_loc to 2D tensor for packing

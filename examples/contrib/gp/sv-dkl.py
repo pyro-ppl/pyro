@@ -59,13 +59,13 @@ def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
             print("Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}"
                   .format(epoch, batch_idx * len(data), len(train_loader.dataset),
                           100. * batch_idx / len(train_loader), loss))
-            break
+        break
 
 
 def test(args, test_loader, gpmodule):
     correct = 0
     for data, target in test_loader:
-        pass
+        break
         if args.cuda:
             data, target = data.cuda(), target.cuda()
         data = (data - 0.1307) / 0.3081  # normalize the data
