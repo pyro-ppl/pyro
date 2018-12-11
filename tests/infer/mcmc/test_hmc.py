@@ -191,9 +191,7 @@ def test_logistic_regression(step_size, trajectory_length, num_steps,
     assert_equal(rmse(true_coefs, beta_posterior.mean).item(), 0.0, prec=0.1)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True, marks=[
-    pytest.mark.skip(reason="https://github.com/uber/pyro/issues/1487")])],
-                         ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_dirichlet_categorical(jit):
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
@@ -228,9 +226,7 @@ def test_beta_bernoulli(jit):
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True, marks=[
-    pytest.mark.skip(reason="https://github.com/uber/pyro/issues/1487")])],
-                         ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_gamma_normal(jit):
     def model(data):
         rate = torch.tensor([1.0, 1.0])
