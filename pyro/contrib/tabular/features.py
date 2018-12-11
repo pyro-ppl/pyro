@@ -31,9 +31,9 @@ class Feature(object):
         # Feature objects adapt the component id to a given feature type.
         f = MyFeature("foo")
         shared = f.sample_shared()
-        with pyro.iarange("components", num_components), broadcast():
+        with pyro.plate("components", num_components):
             group = f.sample_group(shared)  # broadcasts to each component
-        with pyro.iarange("data", len(data)), broadcast():
+        with pyro.plate("data", len(data)):
             component = pyro.sample("component", membership_dist)
             pyro.sample("obs", f.value_dist(group, component), obs=data)
 
@@ -61,9 +61,9 @@ class Feature(object):
     def sample_group(self, shared):
         """
         Samples per-component parameters of this feature model. This should be
-        called inside a broadcasting :class:`~pyro.iarange` over the desired
+        called inside a vectorized :class:`~pyro.plate` over the desired
         number of components. This is intended to be executed inside an
-        :class:`~pyro.iarange` over the number of components.
+        :class:`~pyro.plate` over the number of components.
 
         :returns: an opaque result to be passed to :meth:`value_dist`.
         """
