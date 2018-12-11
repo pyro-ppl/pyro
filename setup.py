@@ -59,6 +59,7 @@ EXTRAS_REQUIRE = [
     'torchvision',
     'visdom>=0.1.4',
     'pandas',
+    'seaborn',
     'wget',
 ]
 
@@ -79,12 +80,12 @@ setup(
         # add them to `docs/requirements.txt`
         'contextlib2',
         'graphviz>=0.8',
-        'networkx>=2.0.0',
+        'networkx>=2.2',
         'numpy>=1.7',
-        'opt_einsum>=2.2.0',
+        'opt_einsum>=2.3.2',
         'six>=1.10.0',
-        'torch==0.4.0',
-        'tqdm>=4.25',
+        'torch>=1.0.0',
+        'tqdm>=4.28',
     ],
     extras_require={
         'extras': EXTRAS_REQUIRE,
@@ -121,7 +122,7 @@ setup(
         'Operating System :: POSIX :: Linux',
         'Operating System :: MacOS :: MacOS X',
         'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.6',
     ],
     # yapf
 )

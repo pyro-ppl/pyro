@@ -1,6 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 import functools
+import logging
+import warnings
 from unittest import TestCase
 
 import pytest
@@ -14,7 +16,9 @@ import pyro.poutine as poutine
 from pyro.distributions import Bernoulli, Categorical, Normal
 from pyro.poutine.runtime import _DIM_ALLOCATOR, NonlocalExit
 from pyro.poutine.util import all_escape, discrete_escape
-from tests.common import assert_equal
+from tests.common import assert_equal, assert_not_equal
+
+logger = logging.getLogger(__name__)
 
 
 def eq(x, y, prec=1e-10):
@@ -326,8 +330,14 @@ class LiftHandlerTests(TestCase):
             latent2 = pyro.sample("latent2", Normal(loc2, scale2))
             return latent2
 
+        def dup_param_guide():
+            a = pyro.param("loc")
+            b = pyro.param("loc")
+            assert a == b
+
         self.model = Model()
         self.guide = guide
+        self.dup_param_guide = dup_param_guide
         self.prior = scale1_prior
         self.prior_dict = {"loc1": loc1_prior, "scale1": scale1_prior, "loc2": loc2_prior, "scale2": scale2_prior}
         self.partial_dict = {"loc1": loc1_prior, "scale1": scale1_prior}
@@ -343,6 +353,9 @@ class LiftHandlerTests(TestCase):
                 assert name not in lifted_tr
             else:
                 assert name in lifted_tr
+
+    def test_memoize(self):
+        poutine.trace(poutine.lift(self.dup_param_guide, prior=dist.Normal(0, 1)))()
 
     def test_prior_dict(self):
         tr = poutine.trace(self.guide).get_trace()
@@ -369,11 +382,23 @@ class LiftHandlerTests(TestCase):
 
     def test_random_module(self):
         pyro.clear_param_store()
-        lifted_tr = poutine.trace(pyro.random_module("name", self.model, prior=self.prior)).get_trace()
+        with pyro.validation_enabled():
+            lifted_tr = poutine.trace(pyro.random_module("name", self.model, prior=self.prior)).get_trace()
         for name in lifted_tr.nodes.keys():
             if lifted_tr.nodes[name]["type"] == "param":
                 assert lifted_tr.nodes[name]["type"] == "sample"
                 assert not lifted_tr.nodes[name]["is_observed"]
+
+    def test_random_module_warn(self):
+        pyro.clear_param_store()
+        bad_prior = {'foo': None}
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            with pyro.validation_enabled():
+                poutine.trace(pyro.random_module("name", self.model, prior=bad_prior)).get_trace()
+            assert len(w), 'No warnings were raised'
+            for warning in w:
+                logger.info(warning)
 
     def test_random_module_prior_dict(self):
         pyro.clear_param_store()
@@ -445,8 +470,8 @@ class IndirectLambdaHandlerTests(TestCase):
         def model(batch_size_outer=2, batch_size_inner=2):
             data = [[torch.ones(1)] * 2] * 2
             loc_latent = pyro.sample("loc_latent", dist.Normal(torch.zeros(1), torch.ones(1)))
-            for i in pyro.irange("irange_outer", 2, batch_size_outer):
-                for j in pyro.irange("irange_inner_%d" % i, 2, batch_size_inner):
+            for i in pyro.plate("plate_outer", 2, batch_size_outer):
+                for j in pyro.plate("plate_inner_%d" % i, 2, batch_size_inner):
                     pyro.sample("z_%d_%d" % (i, j), dist.Normal(loc_latent + data[i][j], torch.ones(1)))
 
         self.model = model
@@ -459,10 +484,10 @@ class IndirectLambdaHandlerTests(TestCase):
 
     def test_graph_structure(self):
         tracegraph = poutine.trace(self.model, graph_type="dense").get_trace()
-        # Ignore structure on irange_* nodes.
-        actual_nodes = set(n for n in tracegraph.nodes() if not n.startswith("irange_"))
+        # Ignore structure on plate_* nodes.
+        actual_nodes = set(n for n in tracegraph.nodes() if not n.startswith("plate_"))
         actual_edges = set((n1, n2) for n1, n2 in tracegraph.edges
-                           if not n1.startswith("irange_") if not n2.startswith("irange_"))
+                           if not n1.startswith("plate_") if not n2.startswith("plate_"))
         assert actual_nodes == self.expected_nodes
         assert actual_edges == self.expected_edges
 
@@ -543,6 +568,22 @@ class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
 
         assert eq(sample_from_model, torch.ones(1))
         assert eq(sample_from_do_model, torch.zeros(1))
+
+
+class UnconditionHandlerTests(NormalNormalNormalHandlerTestCase):
+
+    def test_uncondition(self):
+        unconditioned_model = poutine.uncondition(self.model)
+        unconditioned_trace = poutine.trace(unconditioned_model).get_trace()
+        conditioned_trace = poutine.trace(self.model).get_trace()
+        assert_equal(conditioned_trace.nodes["obs"]["value"], torch.ones(2))
+        assert_not_equal(unconditioned_trace.nodes["obs"]["value"], torch.ones(2))
+
+    def test_undo_uncondition(self):
+        unconditioned_model = poutine.uncondition(self.model)
+        reconditioned_model = pyro.condition(unconditioned_model, {"obs": torch.ones(2)})
+        reconditioned_trace = poutine.trace(reconditioned_model).get_trace()
+        assert_equal(reconditioned_trace.nodes["obs"]["value"], torch.ones(2))
 
 
 class EscapeHandlerTests(TestCase):
@@ -629,7 +670,7 @@ class InferConfigHandlerTests(TestCase):
         assert tr.nodes["p"]["infer"] == {}
 
 
-@pytest.mark.parametrize('first_available_dim', [0, 1, 2])
+@pytest.mark.parametrize('first_available_dim', [-1, -2, -3])
 @pytest.mark.parametrize('depth', [0, 1, 2])
 def test_enumerate_poutine(depth, first_available_dim):
     num_particles = 2
@@ -649,11 +690,11 @@ def test_enumerate_poutine(depth, first_available_dim):
         actual_shape = log_prob.shape
         expected_shape = (2,) * depth
         if depth:
-            expected_shape = expected_shape + (1,) * first_available_dim
+            expected_shape = expected_shape + (1,) * (-1 - first_available_dim)
         assert actual_shape == expected_shape, 'error on iteration {}'.format(i)
 
 
-@pytest.mark.parametrize('first_available_dim', [0, 1, 2])
+@pytest.mark.parametrize('first_available_dim', [-1, -2, -3])
 @pytest.mark.parametrize('depth', [0, 1, 2])
 def test_replay_enumerate_poutine(depth, first_available_dim):
     num_particles = 2
@@ -662,7 +703,7 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
     def guide():
         pyro.sample("y", y_dist, infer={"enumerate": "parallel"})
 
-    guide = poutine.enum(guide, first_available_dim=depth + first_available_dim)
+    guide = poutine.enum(guide, first_available_dim=first_available_dim - depth)
     guide = poutine.trace(guide)
     guide_trace = guide.get_trace()
 
@@ -684,13 +725,13 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
         tr.compute_log_prob()
         log_prob = sum(site["log_prob"] for name, site in tr.iter_stochastic_nodes())
         actual_shape = log_prob.shape
-        expected_shape = (2,) * depth + (3,) + (2,) * depth + (1,) * first_available_dim
+        expected_shape = (2,) * depth + (3,) + (2,) * depth + (1,) * (-1 - first_available_dim)
         assert actual_shape == expected_shape, 'error on iteration {}'.format(i)
 
 
-def test_iarange_error_on_enter():
+def test_plate_error_on_enter():
     def model():
-        with pyro.iarange('foo', 0):
+        with pyro.plate('foo', 0):
             pass
 
     assert len(_DIM_ALLOCATOR._stack) == 0
@@ -791,3 +832,36 @@ def test_method_decorator_interface_condition():
     assert isinstance(tr, poutine.Trace)
     assert tr.graph_type == "flat"
     assert tr.nodes["b"]["is_observed"] and tr.nodes["b"]["value"].item() == 1.
+
+
+def test_trace_log_prob_err_msg():
+    def model(v):
+        pyro.sample("test_site", dist.Beta(1., 1.), obs=v)
+
+    tr = poutine.trace(model).get_trace(torch.tensor(2.))
+    exp_msg = r"Error while computing log_prob at site 'test_site':\s*" \
+              r"The value argument must be within the support"
+    with pytest.raises(ValueError, match=exp_msg):
+        tr.compute_log_prob()
+
+
+def test_trace_log_prob_sum_err_msg():
+    def model(v):
+        pyro.sample("test_site", dist.Beta(1., 1.), obs=v)
+
+    tr = poutine.trace(model).get_trace(torch.tensor(2.))
+    exp_msg = r"Error while computing log_prob_sum at site 'test_site':\s*" \
+              r"The value argument must be within the support"
+    with pytest.raises(ValueError, match=exp_msg):
+        tr.log_prob_sum()
+
+
+def test_trace_score_parts_err_msg():
+    def guide(v):
+        pyro.sample("test_site", dist.Beta(1., 1.), obs=v)
+
+    tr = poutine.trace(guide).get_trace(torch.tensor(2.))
+    exp_msg = r"Error while computing score_parts at site 'test_site':\s*" \
+              r"The value argument must be within the support"
+    with pytest.raises(ValueError, match=exp_msg):
+        tr.compute_score_parts()

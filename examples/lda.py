@@ -20,7 +20,6 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro import poutine
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.optim import Adam
 
@@ -31,21 +30,21 @@ logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.IN
 # data is a [num_words_per_doc, num_documents] shaped array of word ids
 # (specifically it is not a histogram). We assume in this simple example
 # that all documents have the same number of words.
-@poutine.broadcast
 def model(data=None, args=None, batch_size=None):
     # Globals.
-    with pyro.iarange("topics", args.num_topics):
+    with pyro.plate("topics", args.num_topics):
         topic_weights = pyro.sample("topic_weights", dist.Gamma(1. / args.num_topics, 1.))
         topic_words = pyro.sample("topic_words",
                                   dist.Dirichlet(torch.ones(args.num_words) / args.num_words))
 
     # Locals.
-    with pyro.iarange("documents", args.num_docs) as ind:
+    with pyro.plate("documents", args.num_docs) as ind:
         if data is not None:
-            assert data.shape == (args.num_words_per_doc, args.num_docs)
+            with pyro.util.ignore_jit_warnings():
+                assert data.shape == (args.num_words_per_doc, args.num_docs)
             data = data[:, ind]
         doc_topics = pyro.sample("doc_topics", dist.Dirichlet(topic_weights))
-        with pyro.iarange("words", args.num_words_per_doc):
+        with pyro.plate("words", args.num_words_per_doc):
             # The word_topics variable is marginalized out during inference,
             # achieved by specifying infer={"enumerate": "parallel"} and using
             # TraceEnum_ELBO for inference. Thus we can ignore this variable in
@@ -75,7 +74,6 @@ def make_predictor(args):
     return nn.Sequential(*layers)
 
 
-@poutine.broadcast
 def parametrized_guide(predictor, data, args, batch_size=None):
     # Use a conjugate guide for global variables.
     topic_weights_posterior = pyro.param(
@@ -86,17 +84,20 @@ def parametrized_guide(predictor, data, args, batch_size=None):
             "topic_words_posterior",
             lambda: torch.ones(args.num_topics, args.num_words) / args.num_words,
             constraint=constraints.positive)
-    with pyro.iarange("topics", args.num_topics):
+    with pyro.plate("topics", args.num_topics):
         pyro.sample("topic_weights", dist.Gamma(topic_weights_posterior, 1.))
         pyro.sample("topic_words", dist.Dirichlet(topic_words_posterior))
 
     # Use an amortized guide for local variables.
     pyro.module("predictor", predictor)
-    with pyro.iarange("documents", args.num_docs, batch_size) as ind:
+    with pyro.plate("documents", args.num_docs, batch_size) as ind:
         # The neural network will operate on histograms rather than word
         # index vectors, so we'll convert the raw data to a histogram.
-        counts = torch.zeros(args.num_words, len(ind))
-        counts.scatter_add_(0, data[:, ind], torch.tensor(1.).expand(counts.shape))
+        if torch._C._get_tracing_state():
+            counts = torch.eye(1024)[data[:, ind]].sum(0).t()
+        else:
+            counts = torch.zeros(args.num_words, ind.size(0))
+            counts.scatter_add_(0, data[:, ind], torch.tensor(1.).expand(counts.shape))
         doc_topics = predictor(counts.transpose(0, 1))
         pyro.sample("doc_topics", dist.Delta(doc_topics, event_dim=1))
 
@@ -113,7 +114,7 @@ def main(args):
     predictor = make_predictor(args)
     guide = functools.partial(parametrized_guide, predictor)
     Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
-    elbo = Elbo(max_iarange_nesting=2)
+    elbo = Elbo(max_plate_nesting=2)
     optim = Adam({'lr': args.learning_rate})
     svi = SVI(model, guide, optim, elbo)
     logging.info('Step\tLoss')
@@ -126,11 +127,12 @@ def main(args):
 
 
 if __name__ == '__main__':
+    assert pyro.__version__.startswith('0.3.0')
     parser = argparse.ArgumentParser(description="Amortized Latent Dirichlet Allocation")
     parser.add_argument("-t", "--num-topics", default=8, type=int)
     parser.add_argument("-w", "--num-words", default=1024, type=int)
     parser.add_argument("-d", "--num-docs", default=1000, type=int)
-    parser.add_argument("-wd", "--num-words-per-doc", default=32, type=int)
+    parser.add_argument("-wd", "--num-words-per-doc", default=64, type=int)
     parser.add_argument("-n", "--num-steps", default=1000, type=int)
     parser.add_argument("-l", "--layer-sizes", default="100-100")
     parser.add_argument("-lr", "--learning-rate", default=0.001, type=float)

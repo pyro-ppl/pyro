@@ -55,8 +55,8 @@ def test_shapes(auto_class, Elbo):
 
     def model():
         pyro.sample("z1", dist.Normal(0.0, 1.0))
-        pyro.sample("z2", dist.Normal(torch.zeros(2), torch.ones(2)).independent(1))
-        with pyro.iarange("iarange", 3):
+        pyro.sample("z2", dist.Normal(torch.zeros(2), torch.ones(2)).to_event(1))
+        with pyro.plate("plate", 3):
             pyro.sample("z3", dist.Normal(torch.zeros(3), torch.ones(3)))
 
     guide = auto_class(model)
@@ -65,7 +65,7 @@ def test_shapes(auto_class, Elbo):
     assert np.isfinite(loss), loss
 
 
-@pytest.mark.xfail(reason="irange is not yet supported")
+@pytest.mark.xfail(reason="sequential plate is not yet supported")
 @pytest.mark.parametrize('auto_class', [
     AutoDelta,
     AutoDiagonalNormal,
@@ -75,17 +75,17 @@ def test_shapes(auto_class, Elbo):
     AutoLaplaceApproximation,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
-def test_irange_smoke(auto_class, Elbo):
+def test_iplate_smoke(auto_class, Elbo):
 
     def model():
         x = pyro.sample("x", dist.Normal(0, 1))
         assert x.shape == ()
 
-        for i in pyro.irange("irange", 3):
-            y = pyro.sample("y_{}".format(i), dist.Normal(0, 1).expand_by([2, 1 + i, 2]).independent(3))
+        for i in pyro.plate("plate", 3):
+            y = pyro.sample("y_{}".format(i), dist.Normal(0, 1).expand_by([2, 1 + i, 2]).to_event(3))
             assert y.shape == (2, 1 + i, 2)
 
-        z = pyro.sample("z", dist.Normal(0, 1).expand_by([2]).independent(1))
+        z = pyro.sample("z", dist.Normal(0, 1).expand_by([2]).to_event(1))
         assert z.shape == (2,)
 
         pyro.sample("obs", dist.Bernoulli(0.1), obs=torch.tensor(0))
@@ -209,10 +209,10 @@ def test_discrete_parallel(continuous_class):
 
     def model(data):
         weights = pyro.sample('weights', dist.Dirichlet(0.5 * torch.ones(K)))
-        locs = pyro.sample('locs', dist.Normal(0, 10).expand_by([K]).independent(1))
+        locs = pyro.sample('locs', dist.Normal(0, 10).expand_by([K]).to_event(1))
         scale = pyro.sample('scale', dist.LogNormal(0, 1))
 
-        with pyro.iarange('data', len(data)):
+        with pyro.plate('data', len(data)):
             weights = weights.expand(torch.Size((len(data),)) + weights.shape)
             assignment = pyro.sample('assignment', dist.Categorical(weights))
             pyro.sample('obs', dist.Normal(locs[assignment], scale), obs=data)
@@ -221,7 +221,7 @@ def test_discrete_parallel(continuous_class):
     guide.add(continuous_class(poutine.block(model, hide=["assignment"])))
     guide.add(AutoDiscreteParallel(poutine.block(model, expose=["assignment"])))
 
-    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    elbo = TraceEnum_ELBO(max_plate_nesting=1)
     loss = elbo.loss_and_grads(model, guide, data)
     assert np.isfinite(loss), loss
 

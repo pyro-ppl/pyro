@@ -1,7 +1,12 @@
+import logging
+
 import pyro
 import pyro.poutine as poutine
 import pyro.distributions as dist
 import pyro.poutine.runtime
+
+
+logger = logging.getLogger(__name__)
 
 
 def test_nested_reset():
@@ -20,6 +25,6 @@ def test_nested_reset():
                     nested_model()
                 except poutine.NonlocalExit as site_container:
                     site_container.reset_stack()
-                    print(pyro.poutine.runtime._PYRO_STACK)
+                    logger.debug(pyro.poutine.runtime._PYRO_STACK)
                     assert "internal1" not in t1.trace
                     assert "internal1" in t2.trace

@@ -2,17 +2,16 @@ from __future__ import absolute_import, division, print_function
 
 import math
 import numbers
-import operator
 from collections import Counter, defaultdict
 
 import torch
 from opt_einsum import shared_intermediates
 from opt_einsum.sharing import count_cached_ops
-from six.moves import reduce
-from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.util import is_identically_zero
-from pyro.ops.sumproduct import sumproduct
+from pyro.ops import packed
+from pyro.ops.einsum.adjoint import require_backward
+from pyro.ops.rings import MarginalRing
 from pyro.poutine.util import site_is_subsample
 
 _VALIDATION_ENABLED = False
@@ -35,13 +34,13 @@ def torch_item(x):
     return x if isinstance(x, numbers.Number) else x.item()
 
 
-def torch_backward(x):
+def torch_backward(x, retain_graph=None):
     """
     Like ``x.backward()`` for a :class:`~torch.Tensor`, but also accepts
     numbers (a no-op if given a number).
     """
     if torch.is_tensor(x):
-        x.backward()
+        x.backward(retain_graph=retain_graph)
 
 
 def torch_exp(x):
@@ -71,11 +70,11 @@ def zero_grads(tensors):
             p.grad = p.grad.new_zeros(p.shape)
 
 
-def get_iarange_stacks(trace):
+def get_plate_stacks(trace):
     """
-    This builds a dict mapping site name to a set of iarange stacks.  Each
-    iarange stack is a list of :class:`CondIndepStackFrame`s corresponding to
-    an :class:`iarange`.  This information is used by :class:`Trace_ELBO` and
+    This builds a dict mapping site name to a set of plate stacks.  Each
+    plate stack is a list of :class:`CondIndepStackFrame`s corresponding to
+    an :class:`plate`.  This information is used by :class:`Trace_ELBO` and
     :class:`TraceGraph_ELBO`.
     """
     return {name: [f for f in node["cond_indep_stack"] if f.vectorized]
@@ -85,7 +84,7 @@ def get_iarange_stacks(trace):
 
 class MultiFrameTensor(dict):
     """
-    A container for sums of Tensors among different :class:`iarange` contexts.
+    A container for sums of Tensors among different :class:`plate` contexts.
 
     Used in :class:`~pyro.infer.tracegraph_elbo.TraceGraph_ELBO` to simplify
     downstream cost computation logic.
@@ -110,7 +109,7 @@ class MultiFrameTensor(dict):
         """
         for cond_indep_stack, value in items:
             frames = frozenset(f for f in cond_indep_stack if f.vectorized)
-            assert all(f.dim < 0 and -len(value.shape) <= f.dim for f in frames)
+            assert all(f.dim < 0 and -value.dim() <= f.dim for f in frames)
             if frames in self:
                 self[frames] = self[frames] + value
             else:
@@ -132,26 +131,19 @@ class MultiFrameTensor(dict):
             '({}, ...)'.format(frames) for frames in self]))
 
 
-def deduplicate_by_shape(tensors, combine=operator.add):
-    grouped = defaultdict(list)
-    for tensor in tensors:
-        grouped[getattr(tensor, 'shape', None)].append(tensor)
-    return [reduce(combine, parts) for parts in grouped.values()]
-
-
 class Dice(object):
     """
     An implementation of the DiCE operator compatible with Pyro features.
 
     This implementation correctly handles:
     - scaled log-probability due to subsampling
-    - independence in different ordinals due to iarange
+    - independence in different ordinals due to plate
     - weights due to parallel and sequential enumeration
     - weights due to local multiple sampling
 
     This assumes restricted dependency structure on the model and guide:
-    variables outside of an :class:`~pyro.iarange` can never depend on
-    variables inside that :class:`~pyro.iarange`.
+    variables outside of an :class:`~pyro.plate` can never depend on
+    variables inside that :class:`~pyro.plate`.
 
     References:
     [1] Jakob Foerster, Greg Farquhar, Maruan Al-Shedivat, Tim Rocktaeschel,
@@ -175,7 +167,8 @@ class Dice(object):
             if site["type"] != "sample":
                 continue
 
-            log_prob = site['score_parts'].score_function  # not scaled by subsampling
+            log_prob = site["packed"]["score_parts"].score_function  # not scaled by subsampling
+            dims = getattr(log_prob, "_pyro_dims", "")
             ordinal = ordering[name]
             if site["infer"].get("enumerate"):
                 num_samples = site["infer"].get("num_samples")
@@ -184,44 +177,36 @@ class Dice(object):
                         log_prob = log_prob - log_prob.detach()
                     log_prob = log_prob - math.log(num_samples)
                     if not isinstance(log_prob, torch.Tensor):
-                        value = site["value"]
-                        ones_shape = len(value.shape[1:]) - len(site["fn"].event_shape)
-                        shape = value.shape[:1] + (1,) * ones_shape
-                        log_prob = value.new_tensor(log_prob).expand(shape)
+                        log_prob = site["value"].new_tensor(log_prob)
+                    log_prob._pyro_dims = dims
+                    # I don't know why the following broadcast is needed, but it makes tests pass:
+                    log_prob, _ = packed.broadcast_all(log_prob, site["packed"]["log_prob"])
                 elif site["infer"]["enumerate"] == "sequential":
                     log_denom[ordinal] += math.log(site["infer"]["_enum_total"])
             else:  # site was monte carlo sampled
                 if is_identically_zero(log_prob):
                     continue
                 log_prob = log_prob - log_prob.detach()
+                log_prob._pyro_dims = dims
             log_probs[ordinal].append(log_prob)
 
         self.log_denom = log_denom
         self.log_probs = log_probs
-        self._log_factors_cache = {}
-        self._prob_cache = {}
 
     def _get_log_factors(self, target_ordinal):
         """
         Returns a list of DiCE factors at a given ordinal.
         """
-        # memoize
-        try:
-            return self._log_factors_cache[target_ordinal]
-        except KeyError:
-            pass
-
         log_denom = 0
         for ordinal, term in self.log_denom.items():
             if not ordinal <= target_ordinal:  # not downstream
                 log_denom += term  # term = log(# times this ordinal is counted)
 
         log_factors = [] if is_identically_zero(log_denom) else [-log_denom]
-        for ordinal, term in self.log_probs.items():
+        for ordinal, terms in self.log_probs.items():
             if ordinal <= target_ordinal:  # upstream
-                log_factors += term  # term = [log(dice weight of this ordinal)]
+                log_factors.extend(terms)  # terms = [log(dice weight of this ordinal)]
 
-        self._log_factors_cache[target_ordinal] = log_factors
         return log_factors
 
     def compute_expectation(self, costs):
@@ -232,37 +217,53 @@ class Dice(object):
         :returns: a scalar expected cost
         :rtype: torch.Tensor or float
         """
-        # precompute exponentials to be shared across calls to sumproduct
-        exp_table = {}
-        factors_table = defaultdict(list)
-        for ordinal in costs:
-            for log_factor in self._get_log_factors(ordinal):
-                key = id(log_factor)
-                if key in exp_table:
-                    factor = exp_table[key]
-                else:
-                    factor = torch_exp(log_factor)
-                    exp_table[key] = factor
-                factors_table[ordinal].append(factor)
-
-        # deduplicate by shape to increase sharing
-        costs = [(ordinal, deduplicate_by_shape(group))
-                 for ordinal, group in costs.items()]
-        factors_table = {ordinal: deduplicate_by_shape(group, combine=operator.mul)
-                         for ordinal, group in factors_table.items()}
-
-        # share computation across all cost terms
+        # Share computation across all cost terms.
         with shared_intermediates() as cache:
+            ring = MarginalRing(cache=cache)
             expected_cost = 0.
-            for ordinal, cost_terms in costs:
-                factors = factors_table.get(ordinal, [])
+            for ordinal, cost_terms in costs.items():
+                log_factors = self._get_log_factors(ordinal)
+                scale = math.exp(sum(x for x in log_factors if not isinstance(x, torch.Tensor)))
+                log_factors = [x for x in log_factors if isinstance(x, torch.Tensor)]
+
+                # Collect log_prob terms to query for marginal probability.
+                queries = {frozenset(cost._pyro_dims): None for cost in cost_terms}
+                for log_factor in log_factors:
+                    key = frozenset(log_factor._pyro_dims)
+                    if queries.get(key, False) is None:
+                        queries[key] = log_factor
+                # Ensure a query exists for each cost term.
                 for cost in cost_terms:
-                    prob = sumproduct(factors, cost.shape, device=cost.device)
+                    key = frozenset(cost._pyro_dims)
+                    if queries[key] is None:
+                        query = cost.new_zeros(cost.shape)
+                        query._pyro_dims = cost._pyro_dims
+                        log_factors.append(query)
+                        queries[key] = query
+
+                # Perform sum-product contraction. Note that plates never need to be
+                # product-contracted due to our plate-based dependency ordering.
+                sum_dims = set().union(*(x._pyro_dims for x in log_factors)) - ordinal
+                for query in queries.values():
+                    require_backward(query)
+                root = ring.sumproduct(log_factors, sum_dims)
+                root._pyro_backward()
+                probs = {key: query._pyro_backward_result.exp() for key, query in queries.items()}
+
+                # Aggregate prob * cost terms.
+                for cost in cost_terms:
+                    key = frozenset(cost._pyro_dims)
+                    prob = probs[key]
+                    prob._pyro_dims = queries[key]._pyro_dims
                     mask = prob > 0
-                    if torch.is_tensor(mask) and not mask.all():
-                        cost, prob, mask = broadcast_all(cost, prob, mask)
+                    if torch._C._get_tracing_state() or not mask.all():
+                        mask._pyro_dims = prob._pyro_dims
+                        cost, prob, mask = packed.broadcast_all(cost, prob, mask)
                         prob = prob[mask]
                         cost = cost[mask]
-                    expected_cost = expected_cost + (prob * cost).sum()
+                    else:
+                        cost, prob = packed.broadcast_all(cost, prob)
+                    expected_cost = expected_cost + scale * torch.tensordot(prob, cost, prob.dim())
+
         LAST_CACHE_SIZE[0] = count_cached_ops(cache)
         return expected_cost

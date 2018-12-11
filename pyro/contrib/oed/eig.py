@@ -1,14 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 import torch
-import numpy as np
 
 import pyro
 from pyro import poutine
-from pyro.contrib.oed.search import Search
-from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.contrib.autoguide import mean_field_guide_entropy
+from pyro.contrib.oed.search import Search
 from pyro.contrib.util import lexpand
+from pyro.infer import EmpiricalMarginal, Importance, SVI
+from pyro.util import torch_isnan, torch_isinf
 
 
 def vi_ape(model, design, observation_labels, target_labels,
@@ -126,8 +127,8 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
         reexpanded_design = lexpand(design, M_prime, N)
         retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
         retrace.compute_log_prob()
-        conditional_lp = logsumexp(sum(retrace.nodes[l]["log_prob"] for l in observation_labels), 0) \
-            - np.log(M_prime)
+        conditional_lp = sum(retrace.nodes[l]["log_prob"] for l in observation_labels).logsumexp(0) \
+            - math.log(M_prime)
     else:
         # This assumes that y are independent conditional on theta
         # Furthermore assume that there are no other variables besides theta
@@ -141,8 +142,8 @@ def naive_rainforth_eig(model, design, observation_labels, target_labels=None,
     reexpanded_design = lexpand(design, M, 1)
     retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
     retrace.compute_log_prob()
-    marginal_lp = logsumexp(sum(retrace.nodes[l]["log_prob"] for l in observation_labels), 0) \
-        - np.log(M)
+    marginal_lp = sum(retrace.nodes[l]["log_prob"] for l in observation_labels).logsumexp(0) \
+        - math.log(M)
 
     return (conditional_lp - marginal_lp).sum(0)/N
 
@@ -259,8 +260,8 @@ def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_hist
         agg_loss.backward()
         if return_history:
             history.append(loss)
-        params = [pyro.param(name).unconstrained()
-                  for name in pyro.get_param_store().get_all_param_names()]
+        params = [value.unconstrained()
+                  for value in pyro.get_param_store().values()]
         optim(params)
     _, loss = loss_fn(final_design, final_num_samples)
     if return_history:
@@ -298,7 +299,7 @@ def donsker_varadhan_loss(model, T, observation_labels, target_labels):
 
         joint_expectation = T_joint.sum(0)/num_particles
 
-        A = T_independent - np.log(num_particles)
+        A = T_independent - math.log(num_particles)
         s, _ = torch.max(A, dim=0)
         independent_expectation = s + ewma_log((A - s).exp().sum(dim=0), s)
 
@@ -334,31 +335,22 @@ def barber_agakov_loss(model, guide, observation_labels, target_labels):
     return loss_fn
 
 
-def logsumexp(inputs, dim=None, keepdim=False):
-    """Numerically stable logsumexp.
+class _EwmaLogFn(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, ewma):
+        ctx.save_for_backward(ewma)
+        return input.log()
 
-    Args:
-        inputs: A Variable with any shape.
-        dim: An integer.
-        keepdim: A boolean.
-
-    Returns:
-        Equivalent of `log(sum(exp(inputs), dim=dim, keepdim=keepdim))`.
-    """
-    # For a 1-D array x (any array along a single dimension),
-    # log sum exp(x) = s + log sum exp(x - s)
-    # with s = max(x) being a common choice.
-    if dim is None:
-        inputs = inputs.view(-1)
-        dim = 0
-    s, _ = torch.max(inputs, dim=dim, keepdim=True)
-    outputs = s + (inputs - s).exp().sum(dim=dim, keepdim=True).log()
-    if not keepdim:
-        outputs = outputs.squeeze(dim)
-    return outputs
+    @staticmethod
+    def backward(ctx, grad_output):
+        ewma, = ctx.saved_tensors
+        return grad_output / ewma, None
 
 
-class EwmaLog(torch.autograd.Function):
+_ewma_log_fn = _EwmaLogFn.apply
+
+
+class EwmaLog(object):
     """Logarithm function with exponentially weighted moving average
     for gradients.
 
@@ -376,26 +368,20 @@ class EwmaLog(torch.autograd.Function):
 
     def __init__(self, alpha):
         self.alpha = alpha
-        self.ewma = torch.tensor(0.)
+        self.ewma = 0.
         self.n = 0
         self.s = 0.
 
-    def forward(self, inputs, s, dim=0, keepdim=False):
+    def __call__(self, inputs, s, dim=0, keepdim=False):
         """Updates the moving average, and returns :code:`inputs.log()`.
         """
         self.n += 1
-        if torch.isnan(self.ewma).any() or (self.ewma == float('inf')).any():
-            self.ewma = inputs
-            self.s = s
+        if torch_isnan(self.ewma) or torch_isinf(self.ewma):
+            ewma = inputs
         else:
-            self.ewma = inputs*(1. - self.alpha)/(1 - self.alpha**self.n) \
-                        + torch.exp(self.s - s)*self.ewma \
-                        * (self.alpha - self.alpha**self.n)/(1 - self.alpha**self.n)
-            self.s = s
-        return inputs.log()
-
-    def backward(self, grad_output):
-        """Returns the gradient from exponentially weighted moving
-        average of historical input values.
-        """
-        return grad_output/self.ewma, None, None, None
+            ewma = inputs * (1. - self.alpha) / (1 - self.alpha**self.n) \
+                    + torch.exp(self.s - s) * self.ewma \
+                    * (self.alpha - self.alpha**self.n) / (1 - self.alpha**self.n)
+        self.ewma = ewma.detach()
+        self.s = s.detach()
+        return _ewma_log_fn(inputs, ewma)

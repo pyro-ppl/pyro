@@ -8,11 +8,12 @@ from six import add_metaclass
 @add_metaclass(ABCMeta)
 class TraceKernel(object):
 
-    def setup(self, *args, **kwargs):
-        """
+    def setup(self, warmup_steps, *args, **kwargs):
+        r"""
         Optional method to set up any state required at the start of the
         simulation run.
 
+        :param int warmup_steps: Number of warmup iterations.
         :param \*args: Algorithm specific positional arguments.
         :param \*\*kwargs: Algorithm specific keyword arguments.
         """
@@ -40,14 +41,21 @@ class TraceKernel(object):
         """
         pass
 
-    @abstractmethod
+    @property
     def initial_trace(self):
         """
-        Returns an initial trace from the prior to initiate the MCMC run.
+        Returns an initial trace (by default, from the prior) to initiate the MCMC run.
 
         :return: Trace instance.
         """
-        return NotImplementedError
+        raise NotImplementedError
+
+    @initial_trace.setter
+    def initial_trace(self, trace):
+        """
+        Sets the trace to initiate the MCMC run.
+        """
+        raise NotImplementedError
 
     @abstractmethod
     def sample(self, trace):

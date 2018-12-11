@@ -19,7 +19,7 @@ def model(K, data):
     locs = pyro.param('locs', 10 * torch.randn(K))
     scale = pyro.param('scale', torch.tensor(0.5), constraint=constraints.positive)
 
-    with pyro.iarange('data'):
+    with pyro.plate('data'):
         return local_model(weights, locs, scale, data)
 
 
@@ -33,7 +33,7 @@ def local_model(weights, locs, scale, data):
 def guide(K, data):
     assignment_probs = pyro.param('assignment_probs', torch.ones(len(data), K) / K,
                                   constraint=constraints.unit_interval)
-    with pyro.iarange('data'):
+    with pyro.plate('data'):
         return local_guide(assignment_probs)
 
 
@@ -49,8 +49,8 @@ def main(args):
 
     data = torch.tensor([0.0, 1.0, 2.0, 20.0, 30.0, 40.0])
     optim = pyro.optim.Adam({'lr': 0.1})
-    inference = SVI(model, config_enumerate(guide, 'parallel'), optim,
-                    loss=TraceEnum_ELBO(max_iarange_nesting=1))
+    inference = SVI(model, config_enumerate(guide), optim,
+                    loss=TraceEnum_ELBO(max_plate_nesting=1))
 
     print('Step\tLoss')
     loss = 0.0
@@ -61,11 +61,12 @@ def main(args):
         loss += inference.step(K, data)
 
     print('Parameters:')
-    for name in sorted(pyro.get_param_store().get_all_param_names()):
-        print('{} = {}'.format(name, pyro.param(name).detach().cpu().numpy()))
+    for name, value in sorted(pyro.get_param_store().items()):
+        print('{} = {}'.format(name, value.detach().cpu().numpy()))
 
 
 if __name__ == "__main__":
+    assert pyro.__version__.startswith('0.3.0')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=200, type=int)
     args = parser.parse_args()

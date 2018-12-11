@@ -12,6 +12,9 @@ for _name, _Optim in torch.optim.__dict__.items():
         continue
     if _Optim is torch.optim.Optimizer:
         continue
+    if _Optim is torch.optim.LBFGS:
+        # XXX LBFGS is not supported for SVI yet
+        continue
 
     _PyroOptim = (lambda _Optim: lambda optim_args: PyroOptim(_Optim, optim_args))(_Optim)
     _PyroOptim.__name__ = _name

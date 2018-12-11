@@ -57,15 +57,15 @@ def model(data):
     scale = 2 * data.new_ones(torch.Size((1, p)))
     bias_loc = data.new_zeros(torch.Size((1,)))
     bias_scale = 2 * data.new_ones(torch.Size((1,)))
-    w_prior = Normal(loc, scale).independent(1)
-    b_prior = Normal(bias_loc, bias_scale).independent(1)
+    w_prior = Normal(loc, scale).to_event(1)
+    b_prior = Normal(bias_loc, bias_scale).to_event(1)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
     # lift module parameters to random variables sampled from the priors
     lifted_module = pyro.random_module("module", regression_model, priors)
     # sample a regressor (which also samples w and b)
     lifted_reg_model = lifted_module()
 
-    with pyro.iarange("map", N, subsample=data):
+    with pyro.plate("map", N, subsample=data):
         x_data = data[:, :-1]
         y_data = data[:, -1]
         # run the regressor forward conditioned on inputs
@@ -75,18 +75,18 @@ def model(data):
 
 
 def guide(data):
-    w_loc = data.new_tensor(torch.randn(1, p))
-    w_log_sig = data.new_tensor(-3.0 * torch.ones(1, p) + 0.05 * torch.randn(1, p))
-    b_loc = data.new_tensor(torch.randn(1))
-    b_log_sig = data.new_tensor(-3.0 * torch.ones(1) + 0.05 * torch.randn(1))
+    w_loc = torch.randn(1, p, dtype=data.dtype, device=data.device)
+    w_log_sig = -3 + 0.05 * torch.randn(1, p, dtype=data.dtype, device=data.device)
+    b_loc = torch.randn(1, dtype=data.dtype, device=data.device)
+    b_log_sig = -3 + 0.05 * torch.randn(1, dtype=data.dtype, device=data.device)
     # register learnable params in the param store
     mw_param = pyro.param("guide_mean_weight", w_loc)
     sw_param = softplus(pyro.param("guide_log_scale_weight", w_log_sig))
     mb_param = pyro.param("guide_mean_bias", b_loc)
     sb_param = softplus(pyro.param("guide_log_scale_bias", b_log_sig))
     # gaussian guide distributions for w and b
-    w_dist = Normal(mw_param, sw_param).independent(1)
-    b_dist = Normal(mb_param, sb_param).independent(1)
+    w_dist = Normal(mw_param, sw_param).to_event(1)
+    b_dist = Normal(mb_param, sb_param).to_event(1)
     dists = {'linear.weight': w_dist, 'linear.bias': b_dist}
     # overloading the parameters in the module with random samples from the guide distributions
     lifted_module = pyro.random_module("module", regression_model, dists)
@@ -136,6 +136,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    assert pyro.__version__.startswith('0.3.0')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=1000, type=int)
     parser.add_argument('-b', '--batch-size', default=N, type=int)

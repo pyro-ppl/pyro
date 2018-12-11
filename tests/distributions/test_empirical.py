@@ -5,59 +5,76 @@ from pyro.distributions.empirical import Empirical
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize("size", [torch.Size(), torch.Size((1,)), torch.Size((2, 3))])
+@pytest.mark.parametrize("size", [[], [1], [2, 3]])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_unweighted_mean_and_var(size, dtype):
-    empirical_dist = Empirical()
+    samples = []
     for i in range(5):
-        empirical_dist.add(torch.ones(size, dtype=dtype) * i)
+        samples.append(torch.ones(size, dtype=dtype) * i)
+    samples = torch.stack(samples)
+    empirical_dist = Empirical(samples, torch.ones(5, dtype=dtype))
     true_mean = torch.ones(size) * 2
     true_var = torch.ones(size) * 2
     assert_equal(empirical_dist.mean, true_mean)
     assert_equal(empirical_dist.variance, true_var)
 
 
-@pytest.mark.parametrize("batch_shape", [torch.Size(), torch.Size((1,)), torch.Size((2, 3))])
-@pytest.mark.parametrize("sample_shape", [torch.Size((20,)), torch.Size((20, 3, 4))])
+@pytest.mark.parametrize("batch_shape", [[], [1], [2, 3]])
+@pytest.mark.parametrize("sample_shape", [[20], [20, 3, 4]])
 @pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
 def test_unweighted_samples(batch_shape, sample_shape, dtype):
-    empirical_dist = Empirical()
+    samples = []
     for i in range(5):
-        empirical_dist.add(torch.ones(batch_shape, dtype=dtype) * i)
-    samples = empirical_dist.sample(sample_shape=sample_shape)
-    assert_equal(samples.size(), sample_shape + batch_shape)
+        samples.append(torch.ones(batch_shape, dtype=dtype) * i)
+    samples = torch.stack(samples)
+    empirical_dist = Empirical(samples, torch.ones(5))
+    samples = empirical_dist.sample(sample_shape=torch.Size(sample_shape))
+    assert_equal(samples.size(), torch.Size(sample_shape + batch_shape))
     assert_equal(set(samples.view(-1).tolist()), set(range(5)))
 
 
-@pytest.mark.parametrize("batch_shape", [torch.Size(), torch.Size((1,)), torch.Size((2, 3))])
+@pytest.mark.parametrize("batch_shape, event_shape", [
+    ([], []),
+    ([1], []),
+    ([10], []),
+    ([10, 8], [3]),
+    ([10, 8], [3, 4]),
+])
 @pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
-def test_log_prob(batch_shape, dtype):
-    empirical_dist = Empirical()
+def test_log_prob(batch_shape, event_shape, dtype):
+    samples = []
     for i in range(5):
-        empirical_dist.add(torch.ones(batch_shape, dtype=dtype) * i)
-    sample_to_score = torch.ones(batch_shape, dtype=dtype)
+        samples.append(torch.ones(event_shape, dtype=dtype) * i)
+    samples = torch.stack(samples).expand(batch_shape + [5] + event_shape)
+    weights = torch.tensor(1.).expand(batch_shape + [5])
+    empirical_dist = Empirical(samples, weights)
+    sample_to_score = torch.tensor(1, dtype=dtype).expand(batch_shape + event_shape)
     log_prob = empirical_dist.log_prob(sample_to_score)
-    assert_equal(log_prob, torch.tensor(0.2).log())
+    assert_equal(log_prob, (weights.new_ones(batch_shape + [1]) * 0.2).sum(-1).log())
 
     # Value outside support returns -Inf
-    sample_to_score = torch.ones(batch_shape, dtype=dtype) * 6
+    sample_to_score = torch.tensor(1, dtype=dtype).expand(batch_shape + event_shape) * 6
     log_prob = empirical_dist.log_prob(sample_to_score)
-    assert log_prob == -float("inf")
+    assert log_prob.shape == torch.Size(batch_shape)
+    assert torch.isinf(log_prob).all()
 
     # Vectorized ``log_prob`` raises ValueError
     with pytest.raises(ValueError):
-        sample_to_score = torch.ones((3,) + batch_shape, dtype=dtype)
+        sample_to_score = torch.ones([3] + batch_shape + event_shape, dtype=dtype)
         empirical_dist.log_prob(sample_to_score)
 
 
-@pytest.mark.parametrize("event_shape", [torch.Size(), torch.Size((1,)), torch.Size((2, 3))])
+@pytest.mark.parametrize("event_shape", [[], [1], [2, 3]])
 @pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
 def test_weighted_sample_coherence(event_shape, dtype):
-    samples = [(1.0, 0.5), (0.0, 1.5), (1.0, 0.5), (0.0, 1.5)]
-    empirical_dist = Empirical()
-    for sample, weight in samples:
-        empirical_dist.add(sample * torch.ones(event_shape, dtype=dtype), weight=weight)
-    assert_equal(empirical_dist.event_shape, event_shape)
+    data = [(1.0, 0.5), (0.0, 1.5), (1.0, 0.5), (0.0, 1.5)]
+    samples, weights = [], []
+    for sample, weight in data:
+        samples.append(sample * torch.ones(event_shape, dtype=dtype))
+        weights.append(torch.tensor(weight).log())
+    samples, weights = torch.stack(samples), torch.stack(weights)
+    empirical_dist = Empirical(samples, weights)
+    assert_equal(empirical_dist.event_shape, torch.Size(event_shape))
     assert_equal(empirical_dist.sample_size, 4)
     sample_to_score = torch.ones(event_shape, dtype=dtype) * 1.0
     assert_equal(empirical_dist.log_prob(sample_to_score), torch.tensor(0.25).log())
@@ -70,19 +87,37 @@ def test_weighted_sample_coherence(event_shape, dtype):
     assert_equal(num_ones.item() / 1000, 0.25, prec=0.02)
 
 
-@pytest.mark.parametrize("event_shape", [torch.Size(), torch.Size((1,)), torch.Size((2, 3))])
+@pytest.mark.parametrize("event_shape", [[], [1], [2, 3]])
 @pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
-def test_weighted_mean_var(event_shape, dtype):
-    samples = [(1.0, 0.5), (0.0, 1.5), (1.0, 0.5), (0.0, 1.5)]
-    empirical_dist = Empirical()
-    for sample, weight in samples:
-        empirical_dist.add(sample * torch.ones(event_shape, dtype=dtype), weight=weight)
+@pytest.mark.parametrize("batch_shape", [[1], [2], [2, 3]])
+def test_weighted_mean_var(event_shape, dtype, batch_shape):
+    data = [(1.0, 0.5), (0.0, 1.5), (1.0, 0.5), (0.0, 1.5)]
+    samples, weights = [], []
+    for sample, weight in data:
+        samples.append(sample * torch.ones(event_shape, dtype=dtype))
+        weight_dtype = dtype if dtype is not torch.long else None
+        weights.append(torch.tensor(weight, dtype=weight_dtype).log())
+    samples = torch.stack(samples).expand(batch_shape + [4] + event_shape)
+    weights = torch.stack(weights).expand(batch_shape + [4])
+    empirical_dist = Empirical(samples, weights)
     if dtype in (torch.float32, torch.float64):
-        true_mean = torch.ones(event_shape, dtype=dtype) * 0.25
-        true_var = torch.ones(event_shape, dtype=dtype) * 0.1875
+        true_mean = torch.ones(batch_shape + event_shape, dtype=dtype) * 0.25
+        true_var = torch.ones(batch_shape + event_shape, dtype=dtype) * 0.1875
         assert_equal(empirical_dist.mean, true_mean)
         assert_equal(empirical_dist.variance, true_var)
     else:
         with pytest.raises(ValueError):
             empirical_dist.mean
             empirical_dist.variance
+
+
+def test_mean_var_non_nan():
+    true_mean = torch.randn([1, 2, 3])
+    samples, weights = [], []
+    for i in range(10):
+        samples.append(true_mean)
+        weights.append(torch.tensor(-1000.))
+    samples, weights = torch.stack(samples), torch.stack(weights)
+    empirical_dist = Empirical(samples, weights)
+    assert_equal(empirical_dist.mean, true_mean)
+    assert_equal(empirical_dist.variance, torch.zeros_like(true_mean))

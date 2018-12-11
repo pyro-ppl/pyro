@@ -7,13 +7,13 @@ import pyro.ops.jit
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace
-from pyro.infer.util import MultiFrameTensor, get_iarange_stacks, is_validation_enabled, torch_item
+from pyro.infer.util import MultiFrameTensor, get_plate_stacks, is_validation_enabled, torch_item
 from pyro.util import check_if_enumerated, warn_if_nan
 
 
 def _compute_log_r(model_trace, guide_trace):
     log_r = MultiFrameTensor()
-    stacks = get_iarange_stacks(model_trace)
+    stacks = get_plate_stacks(model_trace)
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
             log_r_term = model_site["log_prob"]
@@ -31,7 +31,7 @@ class Trace_ELBO(ELBO):
     partial Rao-Blackwellization for reducing the variance of the estimator when
     non-reparameterizable random variables are present. The Rao-Blackwellization is
     partial in that it only uses conditional independence information that is marked
-    by :class:`~pyro.iarange` contexts. For more fine-grained Rao-Blackwellization,
+    by :class:`~pyro.plate` contexts. For more fine-grained Rao-Blackwellization,
     see :class:`~pyro.infer.tracegraph_elbo.TraceGraph_ELBO`.
 
     References
@@ -49,7 +49,7 @@ class Trace_ELBO(ELBO):
         against it.
         """
         model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_iarange_nesting, model, guide, *args, **kwargs)
+            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
@@ -133,7 +133,7 @@ class Trace_ELBO(ELBO):
 
             if trainable_params and getattr(surrogate_loss_particle, 'requires_grad', False):
                 surrogate_loss_particle = surrogate_loss_particle / self.num_particles
-                surrogate_loss_particle.backward()
+                surrogate_loss_particle.backward(retain_graph=self.retain_graph)
 
         warn_if_nan(loss, "loss")
         return loss
@@ -150,18 +150,20 @@ class JitTrace_ELBO(Trace_ELBO):
     -   Models must not depend on any global data (except the param store).
     -   All model inputs that are tensors must be passed in via ``*args``.
     -   All model inputs that are *not* tensors must be passed in via
-        ``*kwargs``, and these will be fixed to their values on the first
-        call to :meth:`jit_loss_and_grads`.
-
-    .. warning:: Experimental. Interface subject to change.
+        ``**kwargs``, and compilation will be triggered once per unique
+        ``**kwargs``.
     """
-    def loss_and_grads(self, model, guide, *args, **kwargs):
+    def loss_and_surrogate_loss(self, model, guide, *args, **kwargs):
+        kwargs['_pyro_model_id'] = id(model)
+        kwargs['_pyro_guide_id'] = id(guide)
         if getattr(self, '_loss_and_surrogate_loss', None) is None:
             # build a closure for loss_and_surrogate_loss
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.compile(nderivs=1)
-            def loss_and_surrogate_loss(*args):
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings)
+            def loss_and_surrogate_loss(*args, **kwargs):
+                kwargs.pop('_pyro_model_id')
+                kwargs.pop('_pyro_guide_id')
                 self = weakself()
                 loss = 0.0
                 surrogate_loss = 0.0
@@ -198,9 +200,17 @@ class JitTrace_ELBO(Trace_ELBO):
 
             self._loss_and_surrogate_loss = loss_and_surrogate_loss
 
-        # invoke _loss_and_surrogate_loss
-        loss, surrogate_loss = self._loss_and_surrogate_loss(*args)
-        surrogate_loss.backward()  # this line triggers jit compilation
+        return self._loss_and_surrogate_loss(*args, **kwargs)
+
+    def differentiable_loss(self, model, guide, *args, **kwargs):
+        loss, surrogate_loss = self.loss_and_surrogate_loss(model, guide, *args, **kwargs)
+
+        warn_if_nan(loss, "loss")
+        return loss + (surrogate_loss - surrogate_loss.detach())
+
+    def loss_and_grads(self, model, guide, *args, **kwargs):
+        loss, surrogate_loss = self.loss_and_surrogate_loss(model, guide, *args, **kwargs)
+        surrogate_loss.backward()
         loss = loss.item()
 
         warn_if_nan(loss, "loss")

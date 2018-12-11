@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 import torch
-import numpy as np
 
 import pyro
 from pyro.contrib.util import get_indices, lexpand
@@ -20,9 +20,11 @@ def linear_model_ground_truth(model, design, observation_labels, target_labels, 
     target_posterior_covs = [S[target_indices, :][:, target_indices] for S in posterior_covs]
     if eig:
         prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
-        return prior_entropy - torch.tensor([0.5*torch.logdet(2*np.pi*np.e*C) for C in target_posterior_covs])
+        return prior_entropy - torch.tensor([0.5 * torch.logdet(2 * math.pi * math.e * C)
+                                             for C in target_posterior_covs])
     else:
-        return torch.tensor([0.5*torch.logdet(2*np.pi*np.e*C) for C in target_posterior_covs])
+        return torch.tensor([0.5 * torch.logdet(2 * math.pi * math.e * C)
+                             for C in target_posterior_covs])
 
 
 def lm_H_prior(model, design, observation_labels, target_labels):
@@ -33,7 +35,7 @@ def lm_H_prior(model, design, observation_labels, target_labels):
     prior_cov = torch.diag(w_sd**2)
     target_indices = get_indices(target_labels, tensors=model.w_sds)
     target_prior_covs = prior_cov[target_indices, :][:, target_indices]
-    return 0.5*torch.logdet(2*np.pi*np.e*target_prior_covs)
+    return 0.5*torch.logdet(2 * math.pi * math.e * target_prior_covs)
 
 
 def mc_H_prior(model, design, observation_labels, target_labels, num_samples=1000):

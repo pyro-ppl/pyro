@@ -11,7 +11,7 @@ import pyro.ops.jit
 from pyro.distributions.util import is_identically_zero
 from pyro.infer import ELBO
 from pyro.infer.enum import get_importance_trace
-from pyro.infer.util import (MultiFrameTensor, detach_iterable, get_iarange_stacks,
+from pyro.infer.util import (MultiFrameTensor, detach_iterable, get_plate_stacks,
                              is_validation_enabled, torch_backward, torch_item)
 from pyro.util import check_if_enumerated, warn_if_nan
 
@@ -46,7 +46,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
 
     downstream_guide_cost_nodes = {}
     downstream_costs = {}
-    stacks = get_iarange_stacks(model_trace)
+    stacks = get_plate_stacks(model_trace)
 
     for node in topo_sort_guide_nodes:
         downstream_costs[node] = MultiFrameTensor((stacks[node],
@@ -172,8 +172,7 @@ class TraceGraph_ELBO(ELBO):
     In particular three kinds of conditional dependency information are
     used to reduce variance:
     - the sequential order of samples (z is sampled after y => y does not depend on z)
-    - :class:`~pyro.iarange` generators
-    - :class:`~pyro.irange` generators
+    - :class:`~pyro.plate` generators
 
     References
 
@@ -190,7 +189,7 @@ class TraceGraph_ELBO(ELBO):
         against it.
         """
         model_trace, guide_trace = get_importance_trace(
-            "dense", self.max_iarange_nesting, model, guide, *args, **kwargs)
+            "dense", self.max_plate_nesting, model, guide, *args, **kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
@@ -246,7 +245,7 @@ class TraceGraph_ELBO(ELBO):
 
         if trainable_params:
             surrogate_loss = -surrogate_elbo
-            torch_backward(weight * (surrogate_loss + baseline_loss))
+            torch_backward(weight * (surrogate_loss + baseline_loss), retain_graph=self.retain_graph)
 
         loss = -torch_item(elbo)
         warn_if_nan(loss, "loss")
@@ -255,7 +254,7 @@ class TraceGraph_ELBO(ELBO):
 
 class JitTraceGraph_ELBO(TraceGraph_ELBO):
     """
-    Like :class:`TraceGraph_ELBO` but uses :func:`torch.jit.compile` to
+    Like :class:`TraceGraph_ELBO` but uses :func:`torch.jit.trace` to
     compile :meth:`loss_and_grads`.
 
     This works only for a limited set of models:
@@ -264,19 +263,21 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
     -   Models must not depend on any global data (except the param store).
     -   All model inputs that are tensors must be passed in via ``*args``.
     -   All model inputs that are *not* tensors must be passed in via
-        ``*kwargs``, and these will be fixed to their values on the first
-        call to :meth:`loss_and_grads`.
-
-    .. warning:: Experimental. Interface subject to change.
+        ``**kwargs``, and compilation will be triggered once per unique
+        ``**kwargs``.
     """
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
+        kwargs['_pyro_model_id'] = id(model)
+        kwargs['_pyro_guide_id'] = id(guide)
         if getattr(self, '_loss_and_surrogate_loss', None) is None:
             # build a closure for loss_and_surrogate_loss
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.compile(nderivs=1)
-            def loss_and_surrogate_loss(*args):
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings)
+            def loss_and_surrogate_loss(*args, **kwargs):
+                kwargs.pop('_pyro_model_id')
+                kwargs.pop('_pyro_guide_id')
                 self = weakself()
                 loss = 0.0
                 surrogate_loss = 0.0
@@ -302,8 +303,8 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
 
             self._loss_and_surrogate_loss = loss_and_surrogate_loss
 
-        loss, surrogate_loss = self._loss_and_surrogate_loss(*args)
-        surrogate_loss.backward()  # this line triggers jit compilation
+        loss, surrogate_loss = self._loss_and_surrogate_loss(*args, **kwargs)
+        surrogate_loss.backward()
         loss = loss.item()
 
         warn_if_nan(loss, "loss")

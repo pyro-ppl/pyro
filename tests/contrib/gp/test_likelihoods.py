@@ -8,6 +8,8 @@ import torch
 from pyro.contrib.gp.kernels import RBF
 from pyro.contrib.gp.likelihoods import Binary, MultiClass, Poisson
 from pyro.contrib.gp.models import VariationalGP, VariationalSparseGP
+from pyro.contrib.gp.util import train
+
 
 T = namedtuple("TestGPLikelihood", ["model_class", "X", "y", "kernel", "likelihood"])
 
@@ -91,7 +93,7 @@ def test_inference(model_class, X, y, kernel, likelihood):
     else:
         gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
 
-    gp.optimize(num_steps=1)
+    train(gp, num_steps=1)
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
@@ -105,7 +107,7 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
     else:
         gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
 
-    gp.optimize(num_steps=1)
+    train(gp, num_steps=1)
 
 
 @pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
@@ -120,7 +122,7 @@ def test_forward(model_class, X, y, kernel, likelihood):
         gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
 
     Xnew_shape = (X.shape[0] * 2,) + X.shape[1:]
-    Xnew = X.new_tensor(torch.rand(Xnew_shape))
+    Xnew = torch.rand(Xnew_shape, dtype=X.dtype, device=X.device)
     f_loc, f_var = gp(Xnew)
     ynew = gp.likelihood(f_loc, f_var)
 
@@ -139,7 +141,7 @@ def test_forward_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
         gp = model_class(X, y, kernel, likelihood, latent_shape=latent_shape)
 
     Xnew_shape = (X.shape[0] * 2,) + X.shape[1:]
-    Xnew = X.new_tensor(torch.rand(Xnew_shape))
+    Xnew = torch.rand(Xnew_shape, dtype=X.dtype, device=X.device)
     f_loc, f_var = gp(Xnew)
     ynew = gp.likelihood(f_loc, f_var)
 

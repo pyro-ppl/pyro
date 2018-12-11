@@ -4,12 +4,15 @@ import pytest
 import torch
 from torch.autograd import grad
 
+import logging
+
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.tracking.assignment import MarginalAssignment, MarginalAssignmentPersistent, MarginalAssignmentSparse
 from tests.common import assert_equal
 
 INF = float('inf')
+logger = logging.getLogger(__name__)
 
 
 def assert_finite(tensor, name):
@@ -270,5 +273,42 @@ def test_persistent_exact_5_4_3(e1, e2, e3, bp_iters, bp_momentum):
     actual = MarginalAssignmentPersistent(exists_logits, assign_logits, bp_iters, bp_momentum)
     assert_equal(expected.exists_dist.probs, actual.exists_dist.probs)
     assert_equal(expected.assign_dist.probs, actual.assign_dist.probs)
-    print(actual.exists_dist.probs)
-    print(actual.assign_dist.probs)
+    logger.debug(actual.exists_dist.probs)
+    logger.debug(actual.assign_dist.probs)
+
+
+@pytest.mark.parametrize('num_detections', [1, 2, 3])
+@pytest.mark.parametrize('num_frames', [1, 2, 3])
+@pytest.mark.parametrize('num_objects', [1, 2])
+@pytest.mark.parametrize('bp_iters', [None, 30], ids=['enum', 'bp'])
+def test_persistent_independent_subproblems(num_objects, num_frames, num_detections, bp_iters):
+    # solve a random assignment problem
+    exists_logits_1 = -2 * torch.rand(num_objects)
+    assign_logits_1 = 2 * torch.rand(num_frames, num_detections, num_objects) - 1
+    assignment_1 = MarginalAssignmentPersistent(exists_logits_1, assign_logits_1, bp_iters)
+    exists_probs_1 = assignment_1.exists_dist.probs
+    assign_probs_1 = assignment_1.assign_dist.probs
+
+    # solve another random assignment problem
+    exists_logits_2 = -2 * torch.rand(num_objects)
+    assign_logits_2 = 2 * torch.rand(num_frames, num_detections, num_objects) - 1
+    assignment_2 = MarginalAssignmentPersistent(exists_logits_2, assign_logits_2, bp_iters)
+    exists_probs_2 = assignment_2.exists_dist.probs
+    assign_probs_2 = assignment_2.assign_dist.probs
+
+    # solve a unioned assignment problem
+    exists_logits = torch.cat([exists_logits_1, exists_logits_2])
+    assign_logits = torch.full((num_frames, num_detections * 2, num_objects * 2), -INF)
+    assign_logits[:, :num_detections, :num_objects] = assign_logits_1
+    assign_logits[:, num_detections:, num_objects:] = assign_logits_2
+    assignment = MarginalAssignmentPersistent(exists_logits, assign_logits, bp_iters)
+    exists_probs = assignment.exists_dist.probs
+    assign_probs = assignment.assign_dist.probs
+
+    # check agreement
+    assert_equal(exists_probs_1, exists_probs[:num_objects])
+    assert_equal(exists_probs_2, exists_probs[num_objects:])
+    assert_equal(assign_probs_1[:, :, :-1], assign_probs[:, :num_detections, :num_objects])
+    assert_equal(assign_probs_1[:, :, -1], assign_probs[:, :num_detections, -1])
+    assert_equal(assign_probs_2[:, :, :-1], assign_probs[:, num_detections:, num_objects:-1])
+    assert_equal(assign_probs_2[:, :, -1], assign_probs[:, num_detections:, -1])

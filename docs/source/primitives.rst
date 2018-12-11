@@ -6,11 +6,7 @@ Primitives
 .. autofunction:: pyro.module
 .. autofunction:: pyro.random_module
 
-.. autoclass:: pyro.irange
-    :members:
-    :undoc-members:
-
-.. autoclass:: pyro.iarange
+.. autoclass:: pyro.plate
     :members:
     :undoc-members:
 
@@ -20,4 +16,4 @@ Primitives
 .. autofunction:: pyro.validation_enabled
 .. autofunction:: pyro.enable_validation
 
-.. autofunction:: pyro.ops.jit.compile
+.. autofunction:: pyro.ops.jit.trace

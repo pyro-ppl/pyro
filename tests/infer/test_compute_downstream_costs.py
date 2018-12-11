@@ -10,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.tracegraph_elbo import _compute_downstream_costs
-from pyro.infer.util import MultiFrameTensor, get_iarange_stacks
+from pyro.infer.util import MultiFrameTensor, get_plate_stacks
 from pyro.poutine.util import prune_subsample_sites
 from tests.common import assert_equal
 
@@ -20,7 +20,7 @@ def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
 
     guide_nodes = [x for x in guide_trace.nodes if guide_trace.nodes[x]["type"] == "sample"]
     downstream_costs, downstream_guide_cost_nodes = {}, {}
-    stacks = get_iarange_stacks(model_trace)
+    stacks = get_plate_stacks(model_trace)
 
     for node in guide_nodes:
         downstream_costs[node] = MultiFrameTensor((stacks[node],
@@ -28,7 +28,7 @@ def _brute_force_compute_downstream_costs(model_trace, guide_trace,  #
                                                    guide_trace.nodes[node]['log_prob']))
         downstream_guide_cost_nodes[node] = set([node])
 
-        descendants = networkx.descendants(guide_trace._graph, node)
+        descendants = networkx.descendants(guide_trace, node)
 
         for desc in descendants:
             desc_mft = MultiFrameTensor((stacks[desc],
@@ -61,23 +61,23 @@ def big_model_guide(include_obs=True, include_single=False, include_inner_1=Fals
     p1 = torch.tensor(math.exp(-0.33), requires_grad=True)
     p2 = torch.tensor(math.exp(-0.70), requires_grad=True)
     if include_triple:
-        with pyro.iarange("iarange_triple1", 6) as ind_triple1:
-            with pyro.iarange("iarange_triple2", 7) as ind_triple2:
+        with pyro.plate("plate_triple1", 6) as ind_triple1:
+            with pyro.plate("plate_triple2", 7) as ind_triple2:
                 if include_z1:
                     pyro.sample("z1", dist.Bernoulli(p2).expand_by([len(ind_triple2), len(ind_triple1)]))
-                with pyro.iarange("iarange_triple3", 9) as ind_triple3:
+                with pyro.plate("plate_triple3", 9) as ind_triple3:
                     pyro.sample("z0",
                                 dist.Bernoulli(p2).expand_by(
                                     [len(ind_triple3), len(ind_triple2), len(ind_triple1)]))
     pyro.sample("a1", dist.Bernoulli(p0))
     if include_single:
-        with pyro.iarange("iarange_single", 5) as ind_single:
+        with pyro.plate("plate_single", 5) as ind_single:
             b0 = pyro.sample("b0", dist.Bernoulli(p0).expand_by([len(ind_single)]))
             assert b0.shape == (5,)
-    with pyro.iarange("iarange_outer", 2) as ind_outer:
+    with pyro.plate("plate_outer", 2) as ind_outer:
         pyro.sample("b1", dist.Bernoulli(p0).expand_by([len(ind_outer)]))
         if include_inner_1:
-            with pyro.iarange("iarange_inner_1", 3) as ind_inner:
+            with pyro.plate("plate_inner_1", 3) as ind_inner:
                 pyro.sample("c1", dist.Bernoulli(p1).expand_by([len(ind_inner), len(ind_outer)]))
                 if flip_c23 and not include_obs:
                     pyro.sample("c3", dist.Bernoulli(p0).expand_by([len(ind_inner), len(ind_outer)]))
@@ -85,7 +85,7 @@ def big_model_guide(include_obs=True, include_single=False, include_inner_1=Fals
                 else:
                     pyro.sample("c2", dist.Bernoulli(p0).expand_by([len(ind_inner), len(ind_outer)]))
                     pyro.sample("c3", dist.Bernoulli(p2).expand_by([len(ind_inner), len(ind_outer)]))
-        with pyro.iarange("iarange_inner_2", 4) as ind_inner:
+        with pyro.plate("plate_inner_2", 4) as ind_inner:
             pyro.sample("d1", dist.Bernoulli(p0).expand_by([len(ind_inner), len(ind_outer)]))
             d2 = pyro.sample("d2", dist.Bernoulli(p2).expand_by([len(ind_inner), len(ind_outer)]))
             assert d2.shape == (4, 2)
@@ -207,7 +207,7 @@ def diamond_model(dim):
     p1 = torch.tensor(math.exp(-0.33), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
     pyro.sample("c1", dist.Bernoulli(p1))
-    for i in pyro.irange("irange", 2):
+    for i in pyro.plate("plate", 2):
         b_i = pyro.sample("b{}".format(i), dist.Bernoulli(p0 * p1))
         assert b_i.shape == ()
     pyro.sample("obs", dist.Bernoulli(p0), obs=torch.tensor(1.0))
@@ -217,7 +217,7 @@ def diamond_guide(dim):
     p0 = torch.tensor(math.exp(-0.70), requires_grad=True)
     p1 = torch.tensor(math.exp(-0.43), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0))
-    for i in pyro.irange("irange", dim):
+    for i in pyro.plate("plate", dim):
         pyro.sample("b{}".format(i), dist.Bernoulli(p1))
     pyro.sample("c1", dist.Bernoulli(p0))
 
@@ -274,9 +274,9 @@ def nested_model_guide(include_obs=True, dim1=11, dim2=7):
     p0 = torch.tensor(math.exp(-0.40 - include_obs * 0.2), requires_grad=True)
     p1 = torch.tensor(math.exp(-0.33 - include_obs * 0.1), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0 * p1))
-    for i in pyro.irange("irange", dim1):
+    for i in pyro.plate("plate", dim1):
         pyro.sample("b{}".format(i), dist.Bernoulli(p0))
-        with pyro.iarange("iarange_{}".format(i), dim2 + i) as ind:
+        with pyro.plate("plate_{}".format(i), dim2 + i) as ind:
             c_i = pyro.sample("c{}".format(i), dist.Bernoulli(p1).expand_by([len(ind)]))
             assert c_i.shape == (dim2 + i,)
             if include_obs:
@@ -285,7 +285,7 @@ def nested_model_guide(include_obs=True, dim1=11, dim2=7):
 
 
 @pytest.mark.parametrize("dim1", [2, 5, 9])
-def test_compute_downstream_costs_iarange_in_irange(dim1):
+def test_compute_downstream_costs_plate_in_iplate(dim1):
     guide_trace = poutine.trace(nested_model_guide,
                                 graph_type="dense").get_trace(include_obs=False, dim1=dim1)
     model_trace = poutine.trace(poutine.replay(nested_model_guide, trace=guide_trace),
@@ -333,10 +333,10 @@ def nested_model_guide2(include_obs=True, dim1=3, dim2=2):
     p0 = torch.tensor(math.exp(-0.40 - include_obs * 0.2), requires_grad=True)
     p1 = torch.tensor(math.exp(-0.33 - include_obs * 0.1), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0 * p1))
-    with pyro.iarange("iarange", dim1) as ind:
+    with pyro.plate("plate1", dim1) as ind:
         c = pyro.sample("c", dist.Bernoulli(p1).expand_by([len(ind)]))
         assert c.shape == (dim1,)
-        for i in pyro.irange("irange", dim2):
+        for i in pyro.plate("plate2", dim2):
             b_i = pyro.sample("b{}".format(i), dist.Bernoulli(p0).expand_by([len(ind)]))
             assert b_i.shape == (dim1,)
             if include_obs:
@@ -346,7 +346,7 @@ def nested_model_guide2(include_obs=True, dim1=3, dim2=2):
 
 @pytest.mark.parametrize("dim1", [2, 5])
 @pytest.mark.parametrize("dim2", [3, 4])
-def test_compute_downstream_costs_irange_in_iarange(dim1, dim2):
+def test_compute_downstream_costs_iplate_in_plate(dim1, dim2):
     guide_trace = poutine.trace(nested_model_guide2,
                                 graph_type="dense").get_trace(include_obs=False, dim1=dim1, dim2=dim2)
     model_trace = poutine.trace(poutine.replay(nested_model_guide2, trace=guide_trace),
@@ -383,18 +383,18 @@ def test_compute_downstream_costs_irange_in_iarange(dim1, dim2):
     assert_equal(expected_a1, dc['a1'])
 
 
-def iarange_reuse_model_guide(include_obs=True, dim1=3, dim2=2):
+def plate_reuse_model_guide(include_obs=True, dim1=3, dim2=2):
     p0 = torch.tensor(math.exp(-0.40 - include_obs * 0.2), requires_grad=True)
     p1 = torch.tensor(math.exp(-0.33 - include_obs * 0.1), requires_grad=True)
     pyro.sample("a1", dist.Bernoulli(p0 * p1))
-    my_iarange1 = pyro.iarange("iarange1", dim1)
-    my_iarange2 = pyro.iarange("iarange2", dim2)
-    with my_iarange1 as ind1:
-        with my_iarange2 as ind2:
+    my_plate1 = pyro.plate("plate1", dim1)
+    my_plate2 = pyro.plate("plate2", dim2)
+    with my_plate1 as ind1:
+        with my_plate2 as ind2:
             pyro.sample("c1", dist.Bernoulli(p1).expand_by([len(ind2), len(ind1)]))
     pyro.sample("b1", dist.Bernoulli(p0 * p1))
-    with my_iarange2 as ind2:
-        with my_iarange1 as ind1:
+    with my_plate2 as ind2:
+        with my_plate1 as ind1:
             c2 = pyro.sample("c2", dist.Bernoulli(p1).expand_by([len(ind2), len(ind1)]))
             if include_obs:
                 pyro.sample("obs", dist.Bernoulli(c2), obs=torch.ones(c2.size()))
@@ -402,10 +402,10 @@ def iarange_reuse_model_guide(include_obs=True, dim1=3, dim2=2):
 
 @pytest.mark.parametrize("dim1", [2, 5])
 @pytest.mark.parametrize("dim2", [3, 4])
-def test_compute_downstream_costs_iarange_reuse(dim1, dim2):
-    guide_trace = poutine.trace(iarange_reuse_model_guide,
+def test_compute_downstream_costs_plate_reuse(dim1, dim2):
+    guide_trace = poutine.trace(plate_reuse_model_guide,
                                 graph_type="dense").get_trace(include_obs=False, dim1=dim1, dim2=dim2)
-    model_trace = poutine.trace(poutine.replay(iarange_reuse_model_guide, trace=guide_trace),
+    model_trace = poutine.trace(poutine.replay(plate_reuse_model_guide, trace=guide_trace),
                                 graph_type="dense").get_trace(include_obs=True, dim1=dim1, dim2=dim2)
 
     guide_trace = prune_subsample_sites(guide_trace)

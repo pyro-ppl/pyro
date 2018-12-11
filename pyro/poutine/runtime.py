@@ -1,3 +1,5 @@
+import functools
+
 from pyro.params.param_store import _MODULE_NAMESPACE_DIVIDER, ParamStoreDict  # noqa: F401
 
 # the global pyro stack
@@ -9,7 +11,7 @@ _PYRO_PARAM_STORE = ParamStoreDict()
 
 class _DimAllocator(object):
     """
-    Dimension allocator for internal use by :class:`iarange`.
+    Dimension allocator for internal use by :class:`plate`.
     There is a single global instance.
 
     Note that dimensions are indexed from the right, e.g. -1, -2.
@@ -19,12 +21,12 @@ class _DimAllocator(object):
 
     def allocate(self, name, dim):
         """
-        Allocate a dimension to an :class:`iarange` with given name.
+        Allocate a dimension to an :class:`plate` with given name.
         Dim should be either None for automatic allocation or a negative
         integer for manual allocation.
         """
         if name in self._stack:
-            raise ValueError('duplicate iarange "{}"'.format(name))
+            raise ValueError('duplicate plate "{}"'.format(name))
         if dim is None:
             # Automatically designate the rightmost available dim for allocation.
             dim = -1
@@ -38,8 +40,8 @@ class _DimAllocator(object):
             self._stack.append(None)
         if self._stack[-1 - dim] is not None:
             raise ValueError('\n'.join([
-                'at iaranges "{}" and "{}", collide at dim={}'.format(name, self._stack[-1 - dim], dim),
-                '\nTry moving the dim of one iarange to the left, e.g. dim={}'.format(dim - 1)]))
+                'at plates "{}" and "{}", collide at dim={}'.format(name, self._stack[-1 - dim], dim),
+                '\nTry moving the dim of one plate to the left, e.g. dim={}'.format(dim - 1)]))
         self._stack[-1 - dim] = name
         return dim
 
@@ -54,8 +56,65 @@ class _DimAllocator(object):
             self._stack.pop()
 
 
-# Handles placement of enumeration and independence dimensions
+# Handles placement of plate dimensions
 _DIM_ALLOCATOR = _DimAllocator()
+
+
+class _EnumAllocator(object):
+    """
+    Dimension allocator for internal use by :func:`~pyro.poutine.markov`.
+    There is a single global instance.
+
+    Note that dimensions are indexed from the right, e.g. -1, -2.
+    Note that ids are simply nonnegative integers here.
+    """
+    def set_first_available_dim(self, first_available_dim):
+        """
+        Set the first available dim, which should be to the left of all
+        :class:`plate` dimensions, e.g. ``-1 - max_plate_nesting``. This should
+        be called once per program. In SVI this should be called only once per
+        (guide,model) pair.
+        """
+        assert first_available_dim < 0, first_available_dim
+        self.next_available_dim = first_available_dim
+        self.next_available_id = 0
+        self.dim_to_id = {}  # only the global ids
+
+    def allocate(self, scope_dims=None):
+        """
+        Allocate a new recyclable dim and a unique id.
+
+        If ``scope_dims`` is None, this allocates a global enumeration dim
+        that will never be recycled. If ``scope_dims`` is specified, this
+        allocates a local enumeration dim that can be reused by at any other
+        local site whose scope excludes this site.
+
+        :param set scope_dims: An optional set of (negative integer)
+            local enumeration dims to avoid when allocating this dim.
+        :return: A pair ``(dim, id)``, where ``dim`` is a negative integer
+            and ``id`` is a nonnegative integer.
+        :rtype: tuple
+        """
+        id_ = self.next_available_id
+        self.next_available_id += 1
+
+        dim = self.next_available_dim
+        if dim == -float('inf'):
+            raise ValueError("max_plate_nesting must be set to a finite value for parallel enumeration")
+        if scope_dims is None:
+            # allocate a new global dimension
+            self.next_available_dim -= 1
+            self.dim_to_id[dim] = id_
+        else:
+            # allocate a new local dimension
+            while dim in scope_dims:
+                dim -= 1
+
+        return dim, id_
+
+
+# Handles placement of enumeration dimensions
+_ENUM_ALLOCATOR = _EnumAllocator()
 
 
 class NonlocalExit(Exception):
@@ -78,19 +137,10 @@ class NonlocalExit(Exception):
         Reset the state of the frames remaining in the stack.
         Necessary for multiple re-executions in poutine.queue.
         """
-        for frame in _PYRO_STACK:
+        for frame in reversed(_PYRO_STACK):
             frame._reset()
             if type(frame).__name__ == "BlockMessenger" and frame.hide_fn(self.site):
                 break
-
-
-def validate_message(msg):
-    """
-    Asserts that the message has a valid format.
-    :returns: None
-    """
-    assert msg["type"] in ("sample", "param"), \
-        "{} is an invalid site type, how did that get there?".format(msg["type"])
 
 
 def default_process_message(msg):
@@ -99,49 +149,14 @@ def default_process_message(msg):
     :param msg: a message to be processed
     :returns: None
     """
-    validate_message(msg)
-    if msg["type"] == "sample":
-        fn, args, kwargs = \
-            msg["fn"], msg["args"], msg["kwargs"]
-
-        # msg["done"] enforces the guarantee in the poutine execution model
-        # that a site's non-effectful primary computation should only be executed once:
-        # if the site already has a stored return value,
-        # don't reexecute the function at the site,
-        # and do any side effects using the stored return value.
-        if msg["done"]:
-            return msg
-
-        if msg["is_observed"]:
-            assert msg["value"] is not None
-            val = msg["value"]
-        else:
-            val = fn(*args, **kwargs)
-
-        # after fn has been called, update msg to prevent it from being called again.
+    if msg["done"] or msg["is_observed"] or msg["value"] is not None:
         msg["done"] = True
-        msg["value"] = val
-    elif msg["type"] == "param":
-        name, args, kwargs = \
-            msg["name"], msg["args"], msg["kwargs"]
+        return msg
 
-        # msg["done"] enforces the guarantee in the poutine execution model
-        # that a site's non-effectful primary computation should only be executed once:
-        # if the site already has a stored return value,
-        # don't reexecute the function at the site,
-        # and do any side effects using the stored return value.
-        if msg["done"]:
-            return msg
+    msg["value"] = msg["fn"](*msg["args"], **msg["kwargs"])
 
-        ret = _PYRO_PARAM_STORE.get_param(name, *args, **kwargs)
-
-        # after the param store has been queried, update msg["done"]
-        # to prevent it from being queried again.
-        msg["done"] = True
-        msg["value"] = ret
-    else:
-        assert False
-    return None
+    # after fn has been called, update msg to prevent it from being called again.
+    msg["done"] = True
 
 
 def apply_stack(initial_msg):
@@ -166,12 +181,11 @@ def apply_stack(initial_msg):
     # msg is used to pass information up and down the stack
     msg = initial_msg
 
-    counter = 0
+    pointer = 0
     # go until time to stop?
-    for frame in stack:
-        validate_message(msg)
+    for frame in reversed(stack):
 
-        counter = counter + 1
+        pointer = pointer + 1
 
         frame._process_message(msg)
 
@@ -180,7 +194,7 @@ def apply_stack(initial_msg):
 
     default_process_message(msg)
 
-    for frame in reversed(stack[0:counter]):
+    for frame in stack[-pointer:]:  # reversed(stack[0:pointer])
         frame._postprocess_message(msg)
 
     cont = msg["continuation"]
@@ -196,3 +210,53 @@ def am_i_wrapped():
     :returns: bool
     """
     return len(_PYRO_STACK) > 0
+
+
+def effectful(fn=None, type=None):
+    """
+    :param fn: function or callable that performs an effectful computation
+    :param str type: the type label of the operation, e.g. `"sample"`
+
+    Wrapper for calling :func:~`pyro.poutine.runtime.apply_stack` to apply any active effects.
+    """
+    if fn is None:
+        return functools.partial(effectful, type=type)
+
+    if getattr(fn, "_is_effectful", None):
+        return fn
+
+    assert type is not None, "must provide a type label for operation {}".format(fn)
+    assert type != "message", "cannot use 'message' as keyword"
+
+    def _fn(*args, **kwargs):
+
+        name = kwargs.pop("name", None)
+        infer = kwargs.pop("infer", {})
+
+        value = kwargs.pop("obs", None)
+        is_observed = value is not None
+
+        if not am_i_wrapped():
+            return fn(*args, **kwargs)
+        else:
+            msg = {
+                "type": type,
+                "name": name,
+                "fn": fn,
+                "is_observed": is_observed,
+                "args": args,
+                "kwargs": kwargs,
+                "value": value,
+                "scale": 1.0,
+                "mask": None,
+                "cond_indep_stack": (),
+                "done": False,
+                "stop": False,
+                "continuation": None,
+                "infer": infer,
+            }
+            # apply the stack and return its return value
+            apply_stack(msg)
+            return msg["value"]
+    _fn._is_effectful = True
+    return _fn

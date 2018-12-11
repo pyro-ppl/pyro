@@ -56,14 +56,6 @@ AVFMultivariateNormal
     :undoc-members:
     :show-inheritance:
 
-Binomial
---------
-
-.. autoclass:: pyro.distributions.Binomial
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 Delta
 -----
 .. autoclass:: pyro.distributions.Delta
@@ -81,20 +73,6 @@ EmpiricalDistribution
 GaussianScaleMixture
 ------------------------------------
 .. autoclass:: pyro.distributions.GaussianScaleMixture
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-HalfCauchy
-----------
-.. autoclass:: pyro.distributions.HalfCauchy
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-LowRankMultivariateNormal
--------------------------
-.. autoclass:: pyro.distributions.LowRankMultivariateNormal
     :members:
     :undoc-members:
     :show-inheritance:
@@ -161,6 +139,34 @@ Transformed Distributions
 InverseAutoRegressiveFlow
 -------------------------
 .. autoclass:: pyro.distributions.InverseAutoregressiveFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+InverseAutoRegressiveFlowStable
+-------------------------------
+.. autoclass:: pyro.distributions.InverseAutoregressiveFlowStable
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+PermuteTransform
+----------------
+.. autoclass:: pyro.distributions.PermuteTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+PlanarFlow
+----------------
+.. autoclass:: pyro.distributions.PlanarFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+TransformModule
+----------------
+.. autoclass:: pyro.distributions.TransformModule
     :members:
     :undoc-members:
     :show-inheritance:

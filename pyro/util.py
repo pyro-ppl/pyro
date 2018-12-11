@@ -5,7 +5,7 @@ import numbers
 import random
 import warnings
 from collections import defaultdict
-from contextlib import contextmanager
+from contextlib2 import contextmanager
 
 import graphviz
 import torch
@@ -143,7 +143,7 @@ def check_traces_match(trace1, trace2):
                 raise ValueError("Site dims disagree at site '{}': {} vs {}".format(name, shape1, shape2))
 
 
-def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float('inf')):
+def check_model_guide_match(model_trace, guide_trace, max_plate_nesting=float('inf')):
     """
     :param pyro.poutine.Trace model_trace: Trace object of the model
     :param pyro.poutine.Trace guide_trace: Trace object of the guide
@@ -154,7 +154,7 @@ def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float(
         marked auxiliary.
     2. Each sample site in the guide either appears in the model or is marked,
         auxiliary via ``infer={'is_auxiliary': True}``.
-    3. Each :class:``~pyro.iarange`` statement in the guide also appears in the
+    3. Each :class:``~pyro.plate`` statement in the guide also appears in the
         model.
     4. At each sample site that appears in both the model and guide, the model
         and guide agree on sample shape.
@@ -199,11 +199,11 @@ def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float(
             if model_shape == guide_shape:
                 continue
 
-            # Allow broadcasting outside of max_iarange_nesting.
-            if len(model_shape) > max_iarange_nesting:
-                model_shape = model_shape[len(model_shape) - max_iarange_nesting:]
-            if len(guide_shape) > max_iarange_nesting:
-                guide_shape = guide_shape[len(guide_shape) - max_iarange_nesting:]
+            # Allow broadcasting outside of max_plate_nesting.
+            if len(model_shape) > max_plate_nesting:
+                model_shape = model_shape[len(model_shape) - max_plate_nesting - model_site["fn"].event_dim:]
+            if len(guide_shape) > max_plate_nesting:
+                guide_shape = guide_shape[len(guide_shape) - max_plate_nesting - guide_site["fn"].event_dim:]
             if model_shape == guide_shape:
                 continue
             for model_size, guide_size in zip_longest(reversed(model_shape), reversed(guide_shape), fillvalue=1):
@@ -211,7 +211,7 @@ def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float(
                     raise ValueError("Model and guide shapes disagree at site '{}': {} vs {}".format(
                         name, model_shape, guide_shape))
 
-    # Check subsample sites introduced by iarange.
+    # Check subsample sites introduced by plate.
     model_vars = set(name for name, site in model_trace.nodes.items()
                      if site["type"] == "sample" and not site["is_observed"]
                      if type(site["fn"]).__name__ == "_Subsample")
@@ -219,49 +219,49 @@ def check_model_guide_match(model_trace, guide_trace, max_iarange_nesting=float(
                      if site["type"] == "sample"
                      if type(site["fn"]).__name__ == "_Subsample")
     if not (guide_vars <= model_vars):
-        warnings.warn("Found iarange statements in guide but not model: {}".format(guide_vars - model_vars))
+        warnings.warn("Found plate statements in guide but not model: {}".format(guide_vars - model_vars))
 
 
-def check_site_shape(site, max_iarange_nesting):
+def check_site_shape(site, max_plate_nesting):
     actual_shape = list(site["log_prob"].shape)
 
     # Compute expected shape.
     expected_shape = []
     for f in site["cond_indep_stack"]:
         if f.dim is not None:
-            # Use the specified iarange dimension, which counts from the right.
+            # Use the specified plate dimension, which counts from the right.
             assert f.dim < 0
             if len(expected_shape) < -f.dim:
                 expected_shape = [None] * (-f.dim - len(expected_shape)) + expected_shape
             if expected_shape[f.dim] is not None:
                 raise ValueError('\n  '.join([
-                    'at site "{}" within iarange("", dim={}), dim collision'.format(site["name"], f.name, f.dim),
-                    'Try setting dim arg in other iaranges.']))
+                    'at site "{}" within plate("", dim={}), dim collision'.format(site["name"], f.name, f.dim),
+                    'Try setting dim arg in other plates.']))
             expected_shape[f.dim] = f.size
     expected_shape = [-1 if e is None else e for e in expected_shape]
 
-    # Check for iarange stack overflow.
-    if len(expected_shape) > max_iarange_nesting:
+    # Check for plate stack overflow.
+    if len(expected_shape) > max_plate_nesting:
         raise ValueError('\n  '.join([
-            'at site "{}", iarange stack overflow'.format(site["name"]),
-            'Try increasing max_iarange_nesting to at least {}'.format(len(expected_shape))]))
+            'at site "{}", plate stack overflow'.format(site["name"]),
+            'Try increasing max_plate_nesting to at least {}'.format(len(expected_shape))]))
 
-    # Ignore dimensions left of max_iarange_nesting.
-    if max_iarange_nesting < len(actual_shape):
-        actual_shape = actual_shape[len(actual_shape) - max_iarange_nesting:]
+    # Ignore dimensions left of max_plate_nesting.
+    if max_plate_nesting < len(actual_shape):
+        actual_shape = actual_shape[len(actual_shape) - max_plate_nesting:]
 
-    # Check for incorrect iarange placement on the right of max_iarange_nesting.
+    # Check for incorrect plate placement on the right of max_plate_nesting.
     for actual_size, expected_size in zip_longest(reversed(actual_shape), reversed(expected_shape), fillvalue=1):
         if expected_size != -1 and expected_size != actual_size:
             raise ValueError('\n  '.join([
                 'at site "{}", invalid log_prob shape'.format(site["name"]),
                 'Expected {}, actual {}'.format(expected_shape, actual_shape),
                 'Try one of the following fixes:',
-                '- enclose the batched tensor in a with iarange(...): context',
-                '- .independent(...) the distribution being sampled',
+                '- enclose the batched tensor in a with plate(...): context',
+                '- .to_event(...) the distribution being sampled',
                 '- .permute() data dimensions']))
 
-    # TODO Check parallel dimensions on the left of max_iarange_nesting.
+    # TODO Check parallel dimensions on the left of max_plate_nesting.
 
 
 def _are_independent(counters1, counters2):
@@ -279,37 +279,37 @@ def check_traceenum_requirements(model_trace, guide_trace):
 
     :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO` enumerates over
     synchronized products rather than full cartesian products. Therefore models
-    must ensure that no variable outside of an iarange depends on an enumerated
-    variable inside that iarange. Since full dependency checking is impossible,
+    must ensure that no variable outside of an plate depends on an enumerated
+    variable inside that plate. Since full dependency checking is impossible,
     this function aims to warn only in cases where models can be easily
     rewitten to be obviously correct.
     """
     enumerated_sites = set(name for name, site in guide_trace.nodes.items()
                            if site["type"] == "sample" and site["infer"].get("enumerate"))
     for role, trace in [('model', model_trace), ('guide', guide_trace)]:
-        irange_counters = {}
+        plate_counters = {}  # for sequential plates only
         enumerated_contexts = defaultdict(set)
         for name, site in trace.nodes.items():
             if site["type"] != "sample":
                 continue
-            irange_counter = {f.name: f.counter for f in site["cond_indep_stack"] if not f.vectorized}
+            plate_counter = {f.name: f.counter for f in site["cond_indep_stack"] if not f.vectorized}
             context = frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
 
             # Check that sites outside each independence context precede enumerated sites inside that context.
             for enumerated_context, names in enumerated_contexts.items():
                 if not (context < enumerated_context):
                     continue
-                names = sorted(n for n in names if not _are_independent(irange_counter, irange_counters[n]))
+                names = sorted(n for n in names if not _are_independent(plate_counter, plate_counters[n]))
                 if not names:
                     continue
                 diff = sorted(f.name for f in enumerated_context - context)
                 warnings.warn('\n  '.join([
                     'at {} site "{}", possibly invalid dependency.'.format(role, name),
                     'Expected site "{}" to precede sites "{}"'.format(name, '", "'.join(sorted(names))),
-                    'to avoid breaking independence of iaranges "{}"'.format('", "'.join(diff)),
+                    'to avoid breaking independence of plates "{}"'.format('", "'.join(diff)),
                 ]), RuntimeWarning)
 
-            irange_counters[name] = irange_counter
+            plate_counters[name] = plate_counter
             if name in enumerated_sites:
                 enumerated_contexts[context].add(name)
 
@@ -322,6 +322,42 @@ def check_if_enumerated(guide_trace):
             'Found sample sites configured for enumeration:'
             ', '.join(enumerated_sites),
             'If you want to enumerate sites, you need to use TraceEnum_ELBO instead.']))
+
+
+@contextmanager
+def ignore_jit_warnings(filter=None):
+    """
+    Ignore JIT tracer warnings with messages that match `filter`. If
+    `filter` is not specified all tracer warnings are ignored.
+
+    :param filter: A list containing either warning message (str),
+        or tuple consisting of (warning message (str), Warning class).
+    """
+    with warnings.catch_warnings():
+        if filter is None:
+            warnings.filterwarnings("ignore",
+                                    category=torch.jit.TracerWarning)
+        else:
+            for msg in filter:
+                category = torch.jit.TracerWarning
+                if isinstance(msg, tuple):
+                    msg, category = msg
+                warnings.filterwarnings("ignore",
+                                        category=category,
+                                        message=msg)
+        yield
+
+
+def jit_iter(tensor):
+    """
+    Iterate over a tensor, ignoring jit warnings.
+    """
+    # The "Iterating over a tensor" warning is erroneously a RuntimeWarning
+    # so we use a custom filter here.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", "Iterating over a tensor")
+        warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+        return list(tensor)
 
 
 @contextmanager
@@ -342,3 +378,13 @@ def deep_getattr(obj, name):
     Throws an AttributeError if bad attribute
     """
     return functools.reduce(getattr, name.split("."), obj)
+
+
+# work around https://github.com/pytorch/pytorch/issues/11829
+def jit_compatible_arange(end, dtype=None, device=None):
+    dtype = torch.long if dtype is None else dtype
+    return torch.cumsum(torch.ones(end, dtype=dtype, device=device), dim=0) - 1
+
+
+def torch_float(x):
+    return x.float() if isinstance(x, torch.Tensor) else float(x)

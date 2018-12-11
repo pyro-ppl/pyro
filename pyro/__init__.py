@@ -1,13 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
-from pyro.logger import log
 import pyro.poutine as poutine
-from pyro.poutine import condition, do
+from pyro.logger import log
+from pyro.poutine import condition, do, markov
 from pyro.primitives import (clear_param_store, enable_validation, get_param_store, iarange, irange, module, param,
-                             random_module, sample, validation_enabled)
+                             plate, random_module, sample, validation_enabled)
 from pyro.util import set_rng_seed
 
-version_prefix = '0.2.1'
+version_prefix = '0.3.0'
 
 # Get the __version__ string from the auto-generated _version.py file, if exists.
 try:
@@ -25,8 +25,11 @@ __all__ = [
     "iarange",
     "irange",
     "log",
+    "markov",
     "module",
     "param",
+    "plate",
+    "plate",
     "poutine",
     "random_module",
     "sample",

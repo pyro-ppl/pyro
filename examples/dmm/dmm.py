@@ -137,20 +137,22 @@ class DMM(nn.Module):
     variational distribution (the guide) for the Deep Markov Model
     """
     def __init__(self, input_dim=88, z_dim=100, emission_dim=100,
-                 transition_dim=200, rnn_dim=600, rnn_dropout_rate=0.0,
+                 transition_dim=200, rnn_dim=600, num_layers=1, rnn_dropout_rate=0.0,
                  num_iafs=0, iaf_dim=50, use_cuda=False):
         super(DMM, self).__init__()
         # instantiate PyTorch modules used in the model and guide below
         self.emitter = Emitter(input_dim, z_dim, emission_dim)
         self.trans = GatedTransition(z_dim, transition_dim)
         self.combiner = Combiner(z_dim, rnn_dim)
+        # dropout just takes effect on inner layers of rnn
+        rnn_dropout_rate = 0. if num_layers == 1 else rnn_dropout_rate
         self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
-                          batch_first=True, bidirectional=False, num_layers=1,
+                          batch_first=True, bidirectional=False, num_layers=num_layers,
                           dropout=rnn_dropout_rate)
 
         # if we're using normalizing flows, instantiate those too
         self.iafs = [InverseAutoregressiveFlow(AutoRegressiveNN(z_dim, [iaf_dim])) for _ in range(num_iafs)]
-        self.iafs_modules = nn.ModuleList([iaf.module for iaf in self.iafs])
+        self.iafs_modules = nn.ModuleList(self.iafs)
 
         # define a (trainable) parameters z_0 and z_q_0 that help define the probability
         # distributions p(z_1) and q(z_1)
@@ -179,9 +181,9 @@ class DMM(nn.Module):
         # set z_prev = z_0 to setup the recursive conditioning in p(z_t | z_{t-1})
         z_prev = self.z_0.expand(mini_batch.size(0), self.z_0.size(0))
 
-        # we enclose all the sample statements in the model in a iarange.
+        # we enclose all the sample statements in the model in a plate.
         # this marks that each datapoint is conditionally independent of the others
-        with pyro.iarange("z_minibatch", len(mini_batch)):
+        with pyro.plate("z_minibatch", len(mini_batch)):
             # sample the latents z and observed x's one time step at a time
             for t in range(1, T_max + 1):
                 # the next chunk of code samples z_t ~ p(z_t | z_{t-1})
@@ -200,7 +202,7 @@ class DMM(nn.Module):
                     z_t = pyro.sample("z_%d" % t,
                                       dist.Normal(z_loc, z_scale)
                                           .mask(mini_batch_mask[:, t - 1:t])
-                                          .independent(1))
+                                          .to_event(1))
 
                 # compute the probabilities that parameterize the bernoulli likelihood
                 emission_probs_t = self.emitter(z_t)
@@ -209,7 +211,7 @@ class DMM(nn.Module):
                 pyro.sample("obs_x_%d" % t,
                             dist.Bernoulli(emission_probs_t)
                                 .mask(mini_batch_mask[:, t - 1:t])
-                                .independent(1),
+                                .to_event(1),
                             obs=mini_batch[:, t - 1, :])
                 # the latent sampled at this time step will be conditioned upon
                 # in the next time step so keep track of it
@@ -235,9 +237,9 @@ class DMM(nn.Module):
         # set z_prev = z_q_0 to setup the recursive conditioning in q(z_t |...)
         z_prev = self.z_q_0.expand(mini_batch.size(0), self.z_q_0.size(0))
 
-        # we enclose all the sample statements in the guide in a iarange.
+        # we enclose all the sample statements in the guide in a plate.
         # this marks that each datapoint is conditionally independent of the others.
-        with pyro.iarange("z_minibatch", len(mini_batch)):
+        with pyro.plate("z_minibatch", len(mini_batch)):
             # sample the latents z one time step at a time
             for t in range(1, T_max + 1):
                 # the next two lines assemble the distribution q(z_t | z_{t-1}, x_{t:T})
@@ -257,7 +259,7 @@ class DMM(nn.Module):
                 with pyro.poutine.scale(scale=annealing_factor):
                     z_t = pyro.sample("z_%d" % t,
                                       z_dist.mask(mini_batch_mask[:, t - 1:t])
-                                            .independent(1))
+                                            .to_event(1))
                 # the latent sampled at this time step will be conditioned upon in the next time step
                 # so keep track of it
                 z_prev = z_t
@@ -417,6 +419,7 @@ def main(args):
 
 # parse command-line arguments and execute the main method
 if __name__ == '__main__':
+    assert pyro.__version__.startswith('0.3.0')
 
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)

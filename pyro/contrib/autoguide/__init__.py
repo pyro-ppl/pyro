@@ -24,7 +24,8 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.distributions.util import sum_rightmost
+from pyro.contrib.util import hessian
+from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
 from pyro.poutine.util import prune_subsample_sites
@@ -76,7 +77,7 @@ class AutoGuide(object):
         self.model = model
         self.prefix = prefix
         self.prototype_trace = None
-        self._iaranges = {}
+        self._plates = {}
 
     def __call__(self, *args, **kwargs):
         """
@@ -94,11 +95,11 @@ class AutoGuide(object):
         """
         pass
 
-    def _create_iaranges(self):
+    def _create_plates(self):
         if self.master is not None:
-            return self.master().iaranges
-        return {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
-                for frame in sorted(self._iaranges.values())}
+            return self.master().plates
+        return {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
+                for frame in sorted(self._plates.values())}
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
@@ -107,13 +108,13 @@ class AutoGuide(object):
         if self.master is not None:
             self.master()._check_prototype(self.prototype_trace)
 
-        self._iaranges = {}
+        self._plates = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             for frame in site["cond_indep_stack"]:
                 if frame.vectorized:
-                    self._iaranges[frame.name] = frame
+                    self._plates[frame.name] = frame
                 else:
-                    raise NotImplementedError("AutoGuideList does not support pyro.irange")
+                    raise NotImplementedError("AutoGuideList does not support sequential pyro.plate")
 
     def median(self, *args, **kwargs):
         """
@@ -142,7 +143,7 @@ class AutoGuideList(AutoGuide):
     def __init__(self, model, prefix="auto"):
         super(AutoGuideList, self).__init__(model, prefix)
         self.parts = []
-        self.iaranges = {}
+        self.plates = {}
 
     def _check_prototype(self, part_trace):
         for name, part_site in part_trace.nodes.items():
@@ -179,9 +180,9 @@ class AutoGuideList(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        # create all iaranges
-        self.iaranges = {frame.name: pyro.iarange(frame.name, frame.size, dim=frame.dim)
-                         for frame in sorted(self._iaranges.values())}
+        # create all plates
+        self.plates = {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
+                       for frame in sorted(self._plates.values())}
 
         # run slave guides
         result = {}
@@ -223,7 +224,7 @@ class AutoCallable(AutoGuide):
 
         guide.add(AutoCallable(model, my_local_guide, my_local_median))
 
-    For more complex guides that need e.g. access to iaranges, users should
+    For more complex guides that need e.g. access to plates, users should
     instead subclass ``AutoGuide``.
 
     :param callable model: a Pyro model
@@ -239,17 +240,6 @@ class AutoCallable(AutoGuide):
     def __call__(self, *args, **kwargs):
         result = self._guide(*args, **kwargs)
         return {} if result is None else result
-
-
-def _hessian(y, xs):
-    dys = torch.autograd.grad(y, xs, create_graph=True)
-    flat_dy = torch.cat([dy.reshape(-1) for dy in dys])
-    H = []
-    for dyi in flat_dy:
-        Hi = torch.cat([Hij.reshape(-1) for Hij in torch.autograd.grad(dyi, xs, retain_graph=True)])
-        H.append(Hi)
-    H = torch.stack(H)
-    return H
 
 
 class AutoDelta(AutoGuide):
@@ -286,13 +276,13 @@ class AutoDelta(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        iaranges = self._create_iaranges()
+        plates = self._create_plates()
         result = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             with ExitStack() as stack:
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
-                        stack.enter_context(iaranges[frame.name])
+                        stack.enter_context(plates[frame.name])
                 value = pyro.param("{}_{}".format(self.prefix, name), site["value"].detach(),
                                    constraint=site["fn"].support)
                 result[name] = pyro.sample(name, dist.Delta(value, event_dim=site["fn"].event_dim))
@@ -306,24 +296,6 @@ class AutoDelta(AutoGuide):
         :rtype: dict
         """
         return self(*args, **kwargs)
-
-    def covariance(self, *args, **kwargs):
-        """
-        Returns covariance of the packed latent variable under Laplace (quadratic) approximation.
-        The packed latent variable is packed from the flat versions of latent variables, which are
-        arranged according to their appearance in the base ``model``.
-        """
-        guide_trace = poutine.trace(self).get_trace(*args, **kwargs)
-        model_trace = poutine.trace(
-            poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
-        loss = -model_trace.log_prob_sum()
-
-        latents = []
-        for _, site in guide_trace.iter_stochastic_nodes():
-            latents.append(site["value"])
-
-        H = _hessian(loss, latents)
-        return torch.inverse(H)
 
 
 class AutoContinuous(AutoGuide):
@@ -380,14 +352,18 @@ class AutoContinuous(AutoGuide):
 
             (site, unconstrained_value)
         """
+        batch_shape = latent.shape[:-1]  # for plates outside of _setup_prototype, e.g. parallel particles
         pos = 0
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             unconstrained_shape = self._unconstrained_shapes[name]
             size = _product(unconstrained_shape)
-            unconstrained_value = latent[pos:pos + size].view(unconstrained_shape)
+            unconstrained_shape = broadcast_shape(unconstrained_shape,
+                                                  batch_shape + (1,) * site["fn"].event_dim)
+            unconstrained_value = latent[..., pos:pos + size].view(unconstrained_shape)
             yield site, unconstrained_value
             pos += size
-        assert pos == len(latent)
+        if not torch._C._get_tracing_state():
+            assert pos == latent.size(-1)
 
     def __call__(self, *args, **kwargs):
         """
@@ -401,7 +377,7 @@ class AutoContinuous(AutoGuide):
             self._setup_prototype(*args, **kwargs)
 
         latent = self.sample_latent(*args, **kwargs)
-        iaranges = self._create_iaranges()
+        plates = self._create_plates()
 
         # unpack continuous latent samples
         result = {}
@@ -415,7 +391,7 @@ class AutoContinuous(AutoGuide):
 
             with ExitStack() as stack:
                 for frame in self._cond_indep_stacks[name]:
-                    stack.enter_context(iaranges[frame.name])
+                    stack.enter_context(plates[frame.name])
                 result[name] = pyro.sample(name, delta_dist)
 
         return result
@@ -526,7 +502,7 @@ class AutoDiagonalNormal(AutoContinuous):
         scale = pyro.param("{}_scale".format(self.prefix),
                            lambda: torch.ones(self.latent_dim),
                            constraint=constraints.positive)
-        return dist.Normal(loc, scale).independent(1)
+        return dist.Normal(loc, scale).to_event(1)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
@@ -546,15 +522,15 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         guide = AutoLowRankMultivariateNormal(model, rank=10)
         svi = SVI(model, guide, ...)
 
-    By default the ``D_term`` is initialized to 1/2 and the ``W_term`` is
-    intialized randomly such that ``W_term.matmul(W_term.t())`` is half the
+    By default the ``cov_diag`` is initialized to 1/2 and the ``cov_factor`` is
+    intialized randomly such that ``cov_factor.matmul(cov_factor.t())`` is half the
     identity matrix. To change this default behavior the user
     should call :func:`pyro.param` before beginning inference, e.g.::
 
         latent_dim = 10
         pyro.param("auto_loc", torch.randn(latent_dim))
-        pyro.param("auto_W_term", torch.randn(latent_dim, rank)))
-        pyro.param("auto_D_term", torch.randn(latent_dim).exp()),
+        pyro.param("auto_cov_factor", torch.randn(latent_dim, rank)))
+        pyro.param("auto_cov_diag", torch.randn(latent_dim).exp()),
                    constraint=constraints.positive)
 
     :param callable model: a generative model
@@ -573,18 +549,18 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
-        W_term = pyro.param("{}_W_term".format(self.prefix),
+        factor = pyro.param("{}_cov_factor".format(self.prefix),
                             lambda: torch.randn(self.latent_dim, self.rank) * (0.5 / self.rank) ** 0.5)
-        D_term = pyro.param("{}_D_term".format(self.prefix),
-                            lambda: torch.ones(self.latent_dim) * 0.5,
-                            constraint=constraints.positive)
-        return dist.LowRankMultivariateNormal(loc, W_term, D_term)
+        diagonal = pyro.param("{}_cov_diag".format(self.prefix),
+                              lambda: torch.ones(self.latent_dim) * 0.5,
+                              constraint=constraints.positive)
+        return dist.LowRankMultivariateNormal(loc, factor, diagonal)
 
     def _loc_scale(self, *args, **kwargs):
         loc = pyro.param("{}_loc".format(self.prefix))
-        W_term = pyro.param("{}_W_term".format(self.prefix))
-        D_term = pyro.param("{}_D_term".format(self.prefix))
-        scale = (W_term.pow(2).sum(-1) + D_term).sqrt()
+        factor = pyro.param("{}_cov_factor".format(self.prefix))
+        diagonal = pyro.param("{}_cov_diag".format(self.prefix))
+        scale = (factor.pow(2).sum(-1) + diagonal).sqrt()
         return loc, scale
 
 
@@ -602,11 +578,9 @@ class AutoIAFNormal(AutoContinuous):
 
     :param callable model: a generative model
     :param int hidden_dim: number of hidden dimensions in the IAF
-    :param float sigmoid_bias: sigmoid bias in the IAF. Defaults to ``2.0``
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
-    def __init__(self, model, hidden_dim=None, sigmoid_bias=2.0, prefix="auto"):
-        self.sigmoid_bias = sigmoid_bias
+    def __init__(self, model, hidden_dim=None, prefix="auto"):
         self.hidden_dim = hidden_dim
         super(AutoIAFNormal, self).__init__(model, prefix)
 
@@ -619,15 +593,14 @@ class AutoIAFNormal(AutoContinuous):
             raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
         if self.hidden_dim is None:
             self.hidden_dim = self.latent_dim
-        iaf = dist.InverseAutoregressiveFlow(AutoRegressiveNN(self.latent_dim, [self.hidden_dim]),
-                                             sigmoid_bias=self.sigmoid_bias)
-        pyro.module("{}_iaf".format(self.prefix), iaf.module)
+        iaf = dist.InverseAutoregressiveFlow(AutoRegressiveNN(self.latent_dim, [self.hidden_dim]))
+        pyro.module("{}_iaf".format(self.prefix), iaf)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
-        return iaf_dist.independent(1)
+        return iaf_dist.to_event(1)
 
 
 class AutoLaplaceApproximation(AutoContinuous):
-    """
+    r"""
     Laplace approximation (quadratic approximation) approximates the posterior
     math:`log p(z | x)` by a multivariate normal distribution in the
     unconstrained space. Under the hood, it uses Delta distributions to
@@ -655,7 +628,7 @@ class AutoLaplaceApproximation(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix),
                          lambda: torch.zeros(self.latent_dim))
-        return dist.Delta(loc).independent(1)
+        return dist.Delta(loc).to_event(1)
 
     def laplace_approximation(self, *args, **kwargs):
         """
@@ -668,9 +641,9 @@ class AutoLaplaceApproximation(AutoContinuous):
         loss = guide_trace.log_prob_sum() - model_trace.log_prob_sum()
 
         loc = pyro.param("{}_loc".format(self.prefix))
-        H = _hessian(loss, loc.unconstrained())
+        H = hessian(loss, loc.unconstrained())
         cov = H.inverse()
-        scale_tril = cov.potrf(upper=False)
+        scale_tril = cov.cholesky()
 
         # calculate scale_tril from self.guide()
         scale_tril_name = "{}_scale_tril".format(self.prefix)
@@ -691,7 +664,7 @@ class AutoDiscreteParallel(AutoGuide):
     """
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = config_enumerate(self.model, default="parallel")
+        model = config_enumerate(self.model)
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
         if self.master is not None:
@@ -699,7 +672,7 @@ class AutoDiscreteParallel(AutoGuide):
 
         self._discrete_sites = []
         self._cond_indep_stacks = {}
-        self._iaranges = {}
+        self._plates = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             if site["infer"].get("enumerate") != "parallel":
                 raise NotImplementedError('Expected sample site "{}" to be discrete and '
@@ -718,9 +691,9 @@ class AutoDiscreteParallel(AutoGuide):
             self._cond_indep_stacks[name] = site["cond_indep_stack"]
             for frame in site["cond_indep_stack"]:
                 if frame.vectorized:
-                    self._iaranges[frame.name] = frame
+                    self._plates[frame.name] = frame
                 else:
-                    raise NotImplementedError("AutoDiscreteParallel does not support pyro.irange")
+                    raise NotImplementedError("AutoDiscreteParallel does not support sequential pyro.plate")
 
     def __call__(self, *args, **kwargs):
         """
@@ -733,7 +706,7 @@ class AutoDiscreteParallel(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        iaranges = self._create_iaranges()
+        plates = self._create_plates()
 
         # enumerate discrete latent samples
         result = {}
@@ -748,7 +721,7 @@ class AutoDiscreteParallel(AutoGuide):
 
             with ExitStack() as stack:
                 for frame in self._cond_indep_stacks[name]:
-                    stack.enter_context(iaranges[frame.name])
+                    stack.enter_context(plates[frame.name])
                 result[name] = pyro.sample(name, discrete_dist, infer={"enumerate": "parallel"})
 
         return result

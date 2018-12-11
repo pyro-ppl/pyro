@@ -8,20 +8,19 @@ from .kernel import Kernel
 
 
 class DotProduct(Kernel):
-    """
+    r"""
     Base class for kernels which are functions of :math:`x \cdot z`.
     """
 
-    def __init__(self, input_dim, variance=None, active_dims=None, name=None):
-        super(DotProduct, self).__init__(input_dim, active_dims, name)
+    def __init__(self, input_dim, variance=None, active_dims=None):
+        super(DotProduct, self).__init__(input_dim, active_dims)
 
-        if variance is None:
-            variance = torch.tensor(1.)
+        variance = torch.tensor(1.) if variance is None else variance
         self.variance = Parameter(variance)
         self.set_constraint("variance", constraints.positive)
 
     def _dot_product(self, X, Z=None, diag=False):
-        """
+        r"""
         Returns :math:`X \cdot Z`.
         """
         if Z is None:
@@ -31,14 +30,14 @@ class DotProduct(Kernel):
             return (X ** 2).sum(-1)
 
         Z = self._slice_input(Z)
-        if X.shape[1] != Z.shape[1]:
+        if X.size(1) != Z.size(1):
             raise ValueError("Inputs must have the same number of features.")
 
         return X.matmul(Z.t())
 
 
 class Linear(DotProduct):
-    """
+    r"""
     Implementation of Linear kernel:
 
         :math:`k(x, z) = \sigma^2 x \cdot z.`
@@ -51,12 +50,11 @@ class Linear(DotProduct):
         a :class:`.Sum` with a :class:`.Bias` kernel.
     """
 
-    def __init__(self, input_dim, variance=None, active_dims=None, name="Linear"):
-        super(Linear, self).__init__(input_dim, variance, active_dims, name)
+    def __init__(self, input_dim, variance=None, active_dims=None):
+        super(Linear, self).__init__(input_dim, variance, active_dims)
 
     def forward(self, X, Z=None, diag=False):
-        variance = self.get_param("variance")
-        return variance * self._dot_product(X, Z, diag)
+        return self.variance * self._dot_product(X, Z, diag)
 
 
 class Polynomial(DotProduct):
@@ -69,21 +67,16 @@ class Polynomial(DotProduct):
     :param int degree: Degree :math:`d` of the polynomial.
     """
 
-    def __init__(self, input_dim, variance=None, bias=None, degree=1, active_dims=None,
-                 name="Polynomial"):
-        super(Polynomial, self).__init__(input_dim, variance, active_dims, name)
+    def __init__(self, input_dim, variance=None, bias=None, degree=1, active_dims=None):
+        super(Polynomial, self).__init__(input_dim, variance, active_dims)
 
-        if bias is None:
-            bias = torch.tensor(1.)
+        bias = torch.tensor(1.) if bias is None else bias
         self.bias = Parameter(bias)
         self.set_constraint("bias", constraints.positive)
 
         if not isinstance(degree, int) or degree < 1:
-            raise ValueError("Degree for Polynomial kernel should be a positive "
-                             "integer.")
+            raise ValueError("Degree for Polynomial kernel should be a positive integer.")
         self.degree = degree
 
     def forward(self, X, Z=None, diag=False):
-        variance = self.get_param("variance")
-        bias = self.get_param("bias")
-        return variance * ((bias + self._dot_product(X, Z, diag)) ** self.degree)
+        return self.variance * ((self.bias + self._dot_product(X, Z, diag)) ** self.degree)

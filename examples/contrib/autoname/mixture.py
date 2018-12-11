@@ -69,11 +69,12 @@ def main(args):
         loss += inference.step(data, k=k)
 
     print('Parameters:')
-    for name in sorted(pyro.get_param_store().get_all_param_names()):
-        print('{} = {}'.format(name, pyro.param(name).detach().cpu().numpy()))
+    for name, value in sorted(pyro.get_param_store().items()):
+        print('{} = {}'.format(name, value.detach().cpu().numpy()))
 
 
 if __name__ == '__main__':
+    assert pyro.__version__.startswith('0.3.0')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=200, type=int)
     parser.add_argument('--jit', action='store_true')
