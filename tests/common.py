@@ -3,6 +3,8 @@ from __future__ import absolute_import, division, print_function
 import contextlib
 import numbers
 import os
+import shutil
+import tempfile
 import warnings
 from itertools import product
 
@@ -12,8 +14,6 @@ import torch
 import torch.cuda
 from numpy.testing import assert_allclose
 from pytest import approx
-
-torch.set_default_tensor_type(os.environ.get('PYRO_TENSOR_TYPE', 'torch.DoubleTensor'))
 
 """
 Contains test utilities for assertions, approximate comparison (of tensors and other objects).
@@ -31,6 +31,10 @@ def xfail_param(*args, **kwargs):
     return pytest.param(*args, marks=[pytest.mark.xfail(**kwargs)])
 
 
+def skipif_param(*args, **kwargs):
+    return pytest.param(*args, marks=[pytest.mark.skipif(**kwargs)])
+
+
 def suppress_warnings(fn):
     def wrapper(*args, **kwargs):
         with warnings.catch_warnings():
@@ -38,6 +42,17 @@ def suppress_warnings(fn):
             fn(*args, **kwargs)
 
     return wrapper
+
+
+# backport of Python 3's context manager
+@contextlib.contextmanager
+def TemporaryDirectory():
+    try:
+        path = tempfile.mkdtemp()
+        yield path
+    finally:
+        if os.path.exists(path):
+            shutil.rmtree(path)
 
 
 requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(),
@@ -57,13 +72,12 @@ def get_gpu_type(t):
 @contextlib.contextmanager
 def tensors_default_to(host):
     """
-    Context manager to temporarily use Cpu or Cuda tensors in Pytorch.
+    Context manager to temporarily use Cpu or Cuda tensors in PyTorch.
 
     :param str host: Either "cuda" or "cpu".
     """
     assert host in ('cpu', 'cuda'), host
-    old_module = torch.Tensor.__module__
-    name = torch.Tensor.__name__
+    old_module, name = torch.Tensor().type().rsplit('.', 1)
     new_module = 'torch.cuda' if host == 'cuda' else 'torch'
     torch.set_default_tensor_type('{}.{}'.format(new_module, name))
     try:
@@ -118,6 +132,7 @@ def assert_tensors_equal(a, b, prec=1e-5, msg=''):
         nan_mask = a != a
         assert torch.equal(nan_mask, b != b), msg
         diff = a - b
+        diff[a == b] = 0  # handle inf
         diff[nan_mask] = 0
         if diff.is_signed():
             diff = diff.abs()
@@ -137,16 +152,16 @@ def _safe_coalesce(t):
 
     new_indices = sorted(list(value_map.keys()))
     new_values = [value_map[idx] for idx in new_indices]
-    if t._values().ndimension() < 2:
-        new_values = t._values().new(new_values)
+    if t._values().dim() < 2:
+        new_values = t._values().new_tensor(new_values)
     else:
         new_values = torch.stack(new_values)
 
-    new_indices = t._indices().new(new_indices).t()
+    new_indices = t._indices().new_tensor(new_indices).t()
     tg = t.new(new_indices, new_values, t.size())
 
-    assert tc._indices() == tg._indices()
-    assert tc._values() == tg._values()
+    assert (tc._indices() == tg._indices()).all()
+    assert (tc._values() == tg._values()).all()
     return tg
 
 
@@ -199,5 +214,5 @@ def assert_not_equal(x, y, prec=1e-5, msg=''):
     try:
         assert_equal(x, y, prec)
     except AssertionError:
-        pass
+        return
     raise AssertionError("{} \nValues are equal: x={}, y={}, prec={}".format(msg, x, y, prec))

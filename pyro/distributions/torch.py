@@ -1,93 +1,41 @@
 from __future__ import absolute_import, division, print_function
 
-import numbers
-
 import torch
+from torch.distributions import constraints, kl_divergence, register_kl
 
-from pyro.distributions.torch_distribution import TorchDistributionMixin
-
-# These distributions require custom wrapping.
-# TODO rename parameters so these can be imported automatically.
-
-
-class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
-    def __init__(self, ps=None, logits=None):
-        super(Bernoulli, self).__init__(probs=ps, logits=logits)
+from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistributionMixin
+from pyro.distributions.util import sum_rightmost
 
 
-class Beta(torch.distributions.Beta, TorchDistributionMixin):
-    def __init__(self, alpha, beta):
-        super(Beta, self).__init__(alpha, beta)
+class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
+    support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
 
 
-class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
-    def __init__(self, n, ps):
-        super(Binomial, self).__init__(n, ps)
+class Independent(torch.distributions.Independent, TorchDistributionMixin):
+    @constraints.dependent_property
+    def support(self):
+        return IndependentConstraint(self.base_dist.support, self.reinterpreted_batch_ndims)
+
+    @property
+    def _validate_args(self):
+        return self.base_dist._validate_args
+
+    @_validate_args.setter
+    def _validate_args(self, value):
+        self.base_dist._validate_args = value
 
 
-class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
-    def __init__(self, ps=None, logits=None):
-        super(Categorical, self).__init__(probs=ps, logits=logits)
+@register_kl(Independent, Independent)
+def _kl_independent_independent(p, q):
+    if p.reinterpreted_batch_ndims != q.reinterpreted_batch_ndims:
+        raise NotImplementedError
+    kl = kl_divergence(p.base_dist, q.base_dist)
+    if p.reinterpreted_batch_ndims:
+        kl = sum_rightmost(kl, p.reinterpreted_batch_ndims)
+    return kl
 
 
-class Cauchy(torch.distributions.Cauchy, TorchDistributionMixin):
-    def __init__(self, mu, gamma):
-        super(Cauchy, self).__init__(mu, gamma)
-
-
-class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
-    def __init__(self, alpha):
-        super(Dirichlet, self).__init__(alpha)
-
-
-class Exponential(torch.distributions.Exponential, TorchDistributionMixin):
-    def __init__(self, lam):
-        super(Exponential, self).__init__(lam)
-
-
-class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
-    def __init__(self, alpha, beta):
-        super(Gamma, self).__init__(alpha, beta)
-
-
-class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
-    def __init__(self, mu, sigma):
-        self.mu = mu
-        self.sigma = sigma
-        super(LogNormal, self).__init__(mu, sigma)
-
-
-class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
-    def __init__(self, ps, n=1):
-        if not isinstance(n, numbers.Number):
-            if n.max() != n.min():
-                raise NotImplementedError('inhomogeneous n is not supported')
-            n = n.data.view(-1)[0]
-        n = int(n)
-        super(Multinomial, self).__init__(n, probs=ps)
-
-
-class Normal(torch.distributions.Normal, TorchDistributionMixin):
-    def __init__(self, mu, sigma):
-        super(Normal, self).__init__(mu, sigma)
-
-
-class OneHotCategorical(torch.distributions.OneHotCategorical, TorchDistributionMixin):
-    def __init__(self, ps=None, logits=None):
-        super(OneHotCategorical, self).__init__(probs=ps, logits=logits)
-
-
-class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
-    def __init__(self, lam):
-        super(Poisson, self).__init__(lam)
-
-
-class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
-    def __init__(self, a, b):
-        super(Uniform, self).__init__(a, b)
-
-
-# Programmatically load all remaining distributions.
+# Programmatically load all distributions from PyTorch.
 __all__ = []
 for _name, _Dist in torch.distributions.__dict__.items():
     if not isinstance(_Dist, type):
@@ -100,11 +48,8 @@ for _name, _Dist in torch.distributions.__dict__.items():
     try:
         _PyroDist = locals()[_name]
     except KeyError:
-
-        class _PyroDist(_Dist, TorchDistributionMixin):
-            pass
-
-        _PyroDist.__name__ = _name
+        _PyroDist = type(_name, (_Dist, TorchDistributionMixin), {})
+        _PyroDist.__module__ = __name__
         locals()[_name] = _PyroDist
 
     _PyroDist.__doc__ = '''
@@ -121,7 +66,7 @@ __doc__ = '\n\n'.join([
     '''
     {0}
     ----------------------------------------------------------------
-    .. autoclass:: {0}
+    .. autoclass:: pyro.distributions.{0}
     '''.format(_name)
     for _name in sorted(__all__)
 ])

@@ -6,6 +6,8 @@ import torch
 
 from pyro.distributions.util import broadcast_shape, sum_leftmost, sum_rightmost
 
+INF = float('inf')
+
 
 @pytest.mark.parametrize('shapes', [
     ([],),
@@ -82,7 +84,7 @@ def test_sum_rightmost():
     assert sum_rightmost(x, 2).shape == (2,)
     assert sum_rightmost(x, -1).shape == (2,)
     assert sum_rightmost(x, -2).shape == (2, 3)
-    assert sum_rightmost(x, float('inf')).shape == ()
+    assert sum_rightmost(x, INF).shape == ()
 
 
 def test_sum_leftmost():
@@ -92,4 +94,4 @@ def test_sum_leftmost():
     assert sum_leftmost(x, 2).shape == (4,)
     assert sum_leftmost(x, -1).shape == (4,)
     assert sum_leftmost(x, -2).shape == (3, 4)
-    assert sum_leftmost(x, float('inf')).shape == ()
+    assert sum_leftmost(x, INF).shape == ()

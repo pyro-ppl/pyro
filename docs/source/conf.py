@@ -1,7 +1,8 @@
-import sphinx_rtd_theme
-import re
 import os
 import sys
+
+import sphinx_rtd_theme
+
 
 # import pkg_resources
 
@@ -42,7 +43,14 @@ extensions = [
     'sphinx.ext.viewcode',  #
     'sphinx.ext.githubpages',  #
     'sphinx.ext.autodoc',
+    'sphinx.ext.doctest',
 ]
+
+# Disable documentation inheritance so as to avoid inheriting
+# docstrings in a different format, e.g. when the parent class
+# is a PyTorch class.
+
+autodoc_inherit_docstrings = False
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -64,11 +72,13 @@ author = u'Uber AI Labs'
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
-#
-# get the latest git tag with  the latest commit
-# eg pyro-0.1.2-g4c52460
-# this only matters if you host manually
-version = re.sub('^v', '', os.popen('git describe --tags').read().strip())
+
+version = ''
+
+if 'READTHEDOCS' not in os.environ:
+    # if developing locally, use pyro.__version__ as version
+    from pyro import __version__  # noqaE402
+    version = __version__
 
 # release version
 release = version
@@ -175,6 +185,8 @@ texinfo_documents = [
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
     'torch': ('http://pytorch.org/docs/master/', None),
+    'networkx': ('https://networkx.github.io/documentation/stable/', None),
+    'opt_einsum': ('https://optimized-einsum.readthedocs.io/en/stable/', None)
 }
 
 # document class constructors (__init__ methods):
@@ -183,16 +195,18 @@ def skip(app, what, name, obj, skip, options):
     if name == "__init__":
         return False
     return skip
+"""
 
 
 def setup(app):
-    app.connect("autodoc-skip-member", skip)
-"""
+    app.add_stylesheet('css/pyro.css')
+#     app.connect("autodoc-skip-member", skip)
 
-# @jpchen's hack to get rtd builder to install pytorch
+
+# @jpchen's hack to get rtd builder to install latest pytorch
 if 'READTHEDOCS' in os.environ:
-    os.system('pip install awscli')
-    os.system('aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";')
-    os.system('pip install tmp/*')
-    os.system('rm -r tmp')
-    os.system('pip install -e .')
+    os.system('pip install http://download.pytorch.org/whl/cpu/torch-0.4.1-cp27-cp27mu-linux_x86_64.whl')
+    # for pytorch 1.0 (currently fails with OOM
+    # https://readthedocs.org/projects/pyro-ppl/builds/8159615/
+#     os.system('pip install torch_nightly==1.0.0.dev20181127 -f '
+#               'https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html')

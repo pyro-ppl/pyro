@@ -2,10 +2,45 @@ from __future__ import absolute_import, division, print_function
 
 import math
 import numbers
+from collections import Counter, defaultdict
 
 import torch
+from opt_einsum import shared_intermediates
+from opt_einsum.sharing import count_cached_ops
 
+from pyro.distributions.util import is_identically_zero
+from pyro.ops import packed
+from pyro.ops.einsum.adjoint import require_backward
+from pyro.ops.rings import MarginalRing
 from pyro.poutine.util import site_is_subsample
+
+_VALIDATION_ENABLED = False
+LAST_CACHE_SIZE = [Counter()]  # for profiling
+
+
+def enable_validation(is_validate):
+    global _VALIDATION_ENABLED
+    _VALIDATION_ENABLED = is_validate
+
+
+def is_validation_enabled():
+    return _VALIDATION_ENABLED
+
+
+def torch_item(x):
+    """
+    Like ``x.item()`` for a :class:`~torch.Tensor`, but also works with numbers.
+    """
+    return x if isinstance(x, numbers.Number) else x.item()
+
+
+def torch_backward(x, retain_graph=None):
+    """
+    Like ``x.backward()`` for a :class:`~torch.Tensor`, but also accepts
+    numbers (a no-op if given a number).
+    """
+    if torch.is_tensor(x):
+        x.backward(retain_graph=retain_graph)
 
 
 def torch_exp(x):
@@ -13,61 +48,33 @@ def torch_exp(x):
     Like ``x.exp()`` for a :class:`~torch.Tensor`, but also accepts
     numbers.
     """
-    if isinstance(x, numbers.Number):
-        return math.exp(x)
-    return x.exp()
-
-
-def torch_data_sum(x):
-    """
-    Like ``x.sum().item()`` for a :class:`~torch.Tensor`, but also works
-    with numbers.
-    """
-    if isinstance(x, numbers.Number):
-        return x
-    return x.sum().item()
-
-
-def torch_backward(x):
-    """
-    Like ``x.backward()`` for a :class:`~torch.Tensor`, but also accepts
-    numbers (a no-op if given a number).
-    """
     if torch.is_tensor(x):
-        x.backward()
+        return torch.exp(x)
+    else:
+        return math.exp(x)
 
 
-def reduce_to_target(source, target):
+def detach_iterable(iterable):
+    if torch.is_tensor(iterable):
+        return iterable.detach()
+    else:
+        return [var.detach() for var in iterable]
+
+
+def zero_grads(tensors):
     """
-    Sums out any dimensions in source that are of size > 1 in source but of
-    size 1 in target.
+    Sets gradients of list of Tensors to zero in place
     """
-    while source.dim() > target.dim():
-        source = source.sum(0)
-    for k in range(1, 1 + source.dim()):
-        if source.size(-k) > target.size(-k):
-            source = source.sum(-k, keepdim=True)
-    return source
+    for p in tensors:
+        if p.grad is not None:
+            p.grad = p.grad.new_zeros(p.shape)
 
 
-def reduce_to_shape(source, shape):
+def get_plate_stacks(trace):
     """
-    Sums out any dimensions in source that are of size > 1 in source but of
-    size 1 in target.
-    """
-    while source.dim() > len(shape):
-        source = source.sum(0)
-    for k in range(1, 1 + source.dim()):
-        if source.size(-k) > shape[-k]:
-            source = source.sum(-k, keepdim=True)
-    return source
-
-
-def get_iarange_stacks(trace):
-    """
-    This builds a dict mapping site name to a set of iarange stacks.  Each
-    iarange stack is a list of :class:`CondIndepStackFrame`s corresponding to
-    an :class:`iarange`.  This information is used by :class:`Trace_ELBO` and
+    This builds a dict mapping site name to a set of plate stacks.  Each
+    plate stack is a list of :class:`CondIndepStackFrame`s corresponding to
+    an :class:`plate`.  This information is used by :class:`Trace_ELBO` and
     :class:`TraceGraph_ELBO`.
     """
     return {name: [f for f in node["cond_indep_stack"] if f.vectorized]
@@ -77,7 +84,7 @@ def get_iarange_stacks(trace):
 
 class MultiFrameTensor(dict):
     """
-    A container for sums of Tensors among different :class:`iarange` contexts.
+    A container for sums of Tensors among different :class:`plate` contexts.
 
     Used in :class:`~pyro.infer.tracegraph_elbo.TraceGraph_ELBO` to simplify
     downstream cost computation logic.
@@ -86,7 +93,7 @@ class MultiFrameTensor(dict):
 
         downstream_cost = MultiFrameTensor()
         for site in downstream_nodes:
-            downstream_cost.add((site["cond_indep_stack"], site["batch_log_pdf"]))
+            downstream_cost.add((site["cond_indep_stack"], site["log_prob"]))
         downstream_cost.add(*other_costs.items())  # add in bulk
         summed = downstream_cost.sum_to(target_site["cond_indep_stack"])
     """
@@ -102,7 +109,7 @@ class MultiFrameTensor(dict):
         """
         for cond_indep_stack, value in items:
             frames = frozenset(f for f in cond_indep_stack if f.vectorized)
-            assert all(f.dim < 0 and -len(value.shape) <= f.dim for f in frames)
+            assert all(f.dim < 0 and -value.dim() <= f.dim for f in frames)
             if frames in self:
                 self[frames] = self[frames] + value
             else:
@@ -124,68 +131,139 @@ class MultiFrameTensor(dict):
             '({}, ...)'.format(frames) for frames in self]))
 
 
-class TreeSum(object):
+class Dice(object):
     """
-    Data structure to compute cumulative costs along paths in a tree.
-    Typically keys are ``cond_indep_stack``s.
+    An implementation of the DiCE operator compatible with Pyro features.
+
+    This implementation correctly handles:
+    - scaled log-probability due to subsampling
+    - independence in different ordinals due to plate
+    - weights due to parallel and sequential enumeration
+    - weights due to local multiple sampling
+
+    This assumes restricted dependency structure on the model and guide:
+    variables outside of an :class:`~pyro.plate` can never depend on
+    variables inside that :class:`~pyro.plate`.
+
+    References:
+    [1] Jakob Foerster, Greg Farquhar, Maruan Al-Shedivat, Tim Rocktaeschel,
+        Eric P. Xing, Shimon Whiteson (2018)
+        "DiCE: The Infinitely Differentiable Monte-Carlo Estimator"
+        https://arxiv.org/abs/1802.05098
+    [2] Laurence Aitchison (2018)
+        "Tensor Monte Carlo: particle methods for the GPU era"
+        https://arxiv.org/abs/1806.08593
+
+    :param pyro.poutine.trace.Trace guide_trace: A guide trace.
+    :param ordering: A dictionary mapping model site names to ordinal values.
+        Ordinal values may be any type that is (1) ``<=`` comparable and (2)
+        hashable; the canonical ordinal is a ``frozenset`` of site names.
     """
-    def __init__(self):
-        self._terms = {}
-        self._upstream = {}
-        self._frozen = False
+    def __init__(self, guide_trace, ordering):
+        log_denom = defaultdict(float)  # avoids double-counting when sequentially enumerating
+        log_probs = defaultdict(list)  # accounts for upstream probabilties
 
-    def copy(self):
-        result = TreeSum()
-        result._terms = self._terms.copy()
-        result._upstream = self._upstream.copy()
-        result._frozen = self._frozen
-        return result
+        for name, site in guide_trace.nodes.items():
+            if site["type"] != "sample":
+                continue
 
-    def add(self, key, value):
+            log_prob = site["packed"]["score_parts"].score_function  # not scaled by subsampling
+            dims = getattr(log_prob, "_pyro_dims", "")
+            ordinal = ordering[name]
+            if site["infer"].get("enumerate"):
+                num_samples = site["infer"].get("num_samples")
+                if num_samples is not None:  # site was multiply sampled
+                    if not is_identically_zero(log_prob):
+                        log_prob = log_prob - log_prob.detach()
+                    log_prob = log_prob - math.log(num_samples)
+                    if not isinstance(log_prob, torch.Tensor):
+                        log_prob = site["value"].new_tensor(log_prob)
+                    log_prob._pyro_dims = dims
+                    # I don't know why the following broadcast is needed, but it makes tests pass:
+                    log_prob, _ = packed.broadcast_all(log_prob, site["packed"]["log_prob"])
+                elif site["infer"]["enumerate"] == "sequential":
+                    log_denom[ordinal] += math.log(site["infer"]["_enum_total"])
+            else:  # site was monte carlo sampled
+                if is_identically_zero(log_prob):
+                    continue
+                log_prob = log_prob - log_prob.detach()
+                log_prob._pyro_dims = dims
+            log_probs[ordinal].append(log_prob)
+
+        self.log_denom = log_denom
+        self.log_probs = log_probs
+
+    def _get_log_factors(self, target_ordinal):
         """
-        Adds a term at one node.
+        Returns a list of DiCE factors at a given ordinal.
         """
-        assert not self._frozen, 'Cannot call TreeSum.add() after .get_upstream()'
-        if key in self._terms:
-            self._terms[key] = self._terms[key] + value
-        else:
-            self._terms[key] = value
+        log_denom = 0
+        for ordinal, term in self.log_denom.items():
+            if not ordinal <= target_ordinal:  # not downstream
+                log_denom += term  # term = log(# times this ordinal is counted)
 
-    def get_upstream(self, key):
+        log_factors = [] if is_identically_zero(log_denom) else [-log_denom]
+        for ordinal, terms in self.log_probs.items():
+            if ordinal <= target_ordinal:  # upstream
+                log_factors.extend(terms)  # terms = [log(dice weight of this ordinal)]
+
+        return log_factors
+
+    def compute_expectation(self, costs):
         """
-        Returns upstream sum or None. None denotes zero.
+        Returns a differentiable expected cost, summing over costs at given ordinals.
+
+        :param dict costs: A dict mapping ordinals to lists of cost tensors
+        :returns: a scalar expected cost
+        :rtype: torch.Tensor or float
         """
-        try:
-            return self._upstream[key]
-        except KeyError:
-            result = self._terms.get(key)
-            if key:
-                upstream = self.get_upstream(key[:-1])
-                if upstream is not None:
-                    result = upstream if result is None else upstream + result
-            self._upstream[key] = result
-            self._frozen = True
-            return result
+        # Share computation across all cost terms.
+        with shared_intermediates() as cache:
+            ring = MarginalRing(cache=cache)
+            expected_cost = 0.
+            for ordinal, cost_terms in costs.items():
+                log_factors = self._get_log_factors(ordinal)
+                scale = math.exp(sum(x for x in log_factors if not isinstance(x, torch.Tensor)))
+                log_factors = [x for x in log_factors if isinstance(x, torch.Tensor)]
 
-    def _freeze(self):
-        for key in self._terms:
-            self.get_upstream(key)
-        self._frozen = True
+                # Collect log_prob terms to query for marginal probability.
+                queries = {frozenset(cost._pyro_dims): None for cost in cost_terms}
+                for log_factor in log_factors:
+                    key = frozenset(log_factor._pyro_dims)
+                    if queries.get(key, False) is None:
+                        queries[key] = log_factor
+                # Ensure a query exists for each cost term.
+                for cost in cost_terms:
+                    key = frozenset(cost._pyro_dims)
+                    if queries[key] is None:
+                        query = cost.new_zeros(cost.shape)
+                        query._pyro_dims = cost._pyro_dims
+                        log_factors.append(query)
+                        queries[key] = query
 
-    def items(self):
-        self._freeze()
-        return self._upstream.items()
+                # Perform sum-product contraction. Note that plates never need to be
+                # product-contracted due to our plate-based dependency ordering.
+                sum_dims = set().union(*(x._pyro_dims for x in log_factors)) - ordinal
+                for query in queries.values():
+                    require_backward(query)
+                root = ring.sumproduct(log_factors, sum_dims)
+                root._pyro_backward()
+                probs = {key: query._pyro_backward_result.exp() for key, query in queries.items()}
 
-    def exp(self):
-        self._freeze()
-        # Exponentiate _only_ the supporting terms of self._upstream.
-        # This restriction is required for .prune() to work correctly.
-        result = TreeSum()
-        result._upstream = {key: torch_exp(self._upstream[key]) for key in self._terms}
-        result._frozen = True
-        return result
+                # Aggregate prob * cost terms.
+                for cost in cost_terms:
+                    key = frozenset(cost._pyro_dims)
+                    prob = probs[key]
+                    prob._pyro_dims = queries[key]._pyro_dims
+                    mask = prob > 0
+                    if torch._C._get_tracing_state() or not mask.all():
+                        mask._pyro_dims = prob._pyro_dims
+                        cost, prob, mask = packed.broadcast_all(cost, prob, mask)
+                        prob = prob[mask]
+                        cost = cost[mask]
+                    else:
+                        cost, prob = packed.broadcast_all(cost, prob)
+                    expected_cost = expected_cost + scale * torch.tensordot(prob, cost, prob.dim())
 
-    def prune(self, key):
-        assert self._frozen, 'Cannot call TreeSum.prune() before freezing'
-        self._upstream.pop(key, None)
-        self._terms.pop(key, None)
+        LAST_CACHE_SIZE[0] = count_cached_ops(cache)
+        return expected_cost

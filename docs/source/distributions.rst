@@ -17,59 +17,118 @@ For differences between the Pyro and PyTorch interfaces, see
 
 .. automodule:: pyro.distributions.torch
 
-Primitive Distributions
-~~~~~~~~~~~~~~~~~~~~~~~
+Pyro Distributions
+~~~~~~~~~~~~~~~~~~
 
 Abstract Distribution
 ---------------------
 
-.. automodule:: pyro.distributions.distribution
+.. autoclass:: pyro.distributions.Distribution
     :members:
     :undoc-members:
     :special-members: __call__
     :show-inheritance:
 
-TorchDistribution
------------------
+TorchDistributionMixin
+----------------------
 
-.. automodule:: pyro.distributions.torch_distribution
+.. autoclass:: pyro.distributions.torch_distribution.TorchDistributionMixin
     :members:
     :undoc-members:
     :special-members: __call__
     :show-inheritance:
     :member-order: bysource
 
+TorchDistribution
+-----------------
+
+.. autoclass:: pyro.distributions.TorchDistribution
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+    :member-order: bysource
+
+AVFMultivariateNormal
+---------------------
+.. autoclass:: pyro.distributions.AVFMultivariateNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Delta
 -----
-.. automodule:: pyro.distributions.delta
+.. autoclass:: pyro.distributions.Delta
     :members:
     :undoc-members:
     :show-inheritance:
 
-HalfCauchy
-----------
-.. automodule:: pyro.distributions.half_cauchy
+EmpiricalDistribution
+----------------------
+.. autoclass:: pyro.distributions.Empirical
     :members:
     :undoc-members:
     :show-inheritance:
 
-MultivariateNormal
-------------------
-.. automodule:: pyro.distributions.multivariate_normal
+GaussianScaleMixture
+------------------------------------
+.. autoclass:: pyro.distributions.GaussianScaleMixture
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+MaskedMixture
+-------------
+.. autoclass:: pyro.distributions.MaskedMixture
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+MixtureOfDiagNormalsSharedCovariance
+------------------------------------
+.. autoclass:: pyro.distributions.MixtureOfDiagNormalsSharedCovariance
     :members:
     :undoc-members:
     :show-inheritance:
 
 OMTMultivariateNormal
 ---------------------
-.. automodule:: pyro.distributions.omt_mvn
+.. autoclass:: pyro.distributions.OMTMultivariateNormal
     :members:
     :undoc-members:
     :show-inheritance:
 
-SparseMultivariateNormal
-------------------------
-.. automodule:: pyro.distributions.sparse_multivariate_normal
+RelaxedBernoulliStraightThrough
+-------------------------------
+.. autoclass:: pyro.distributions.RelaxedBernoulliStraightThrough
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+RelaxedOneHotCategoricalStraightThrough
+---------------------------------------
+.. autoclass:: pyro.distributions.RelaxedOneHotCategoricalStraightThrough
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Rejector
+--------
+.. autoclass:: pyro.distributions.Rejector
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+VonMises
+--------
+.. autoclass:: pyro.distributions.VonMises
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+VonMises3D
+----------
+.. autoclass:: pyro.distributions.VonMises3D
     :members:
     :undoc-members:
     :show-inheritance:
@@ -79,7 +138,35 @@ Transformed Distributions
 
 InverseAutoRegressiveFlow
 -------------------------
-.. autoclass:: pyro.distributions.iaf.InverseAutoregressiveFlow
+.. autoclass:: pyro.distributions.InverseAutoregressiveFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+InverseAutoRegressiveFlowStable
+-------------------------------
+.. autoclass:: pyro.distributions.InverseAutoregressiveFlowStable
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+PermuteTransform
+----------------
+.. autoclass:: pyro.distributions.PermuteTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+PlanarFlow
+----------------
+.. autoclass:: pyro.distributions.PlanarFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+TransformModule
+----------------
+.. autoclass:: pyro.distributions.TransformModule
     :members:
     :undoc-members:
     :show-inheritance:

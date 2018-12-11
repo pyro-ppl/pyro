@@ -7,24 +7,24 @@ Processing Systems. 2016.
 """
 from __future__ import division
 
+import argparse
 import math
 import os
 import time
-import argparse
 from functools import partial
-from observations import multi_mnist
-import numpy as np
 
+import numpy as np
 import torch
+import visdom
+from observations import multi_mnist
 
 import pyro
 import pyro.optim as optim
 import pyro.poutine as poutine
-from pyro.infer import SVI
-
-import visdom
-
 from air import AIR, latents_to_tensor
+
+from pyro.contrib.examples.util import get_data_directory
+from pyro.infer import SVI, JitTraceGraph_ELBO, TraceGraph_ELBO
 from viz import draw_many, tensor_to_objs
 
 
@@ -53,7 +53,7 @@ def count_accuracy(X, true_counts, air, batch_size):
         error_latents.append(latents_to_tensor((z_where, z_pres)).index_select(0, error_ix))
         error_indicators.append(error_ind)
 
-    acc = counts.diag().sum() / X.size(0)
+    acc = counts.diag().sum().float() / X.size(0)
     error_indices = torch.cat(error_indicators).nonzero().squeeze()
     if X.is_cuda:
         error_indices = error_indices.cuda()
@@ -112,7 +112,7 @@ def exp_decay(initial, final, begin, duration, t):
 
 
 def load_data():
-    inpath = './data'
+    inpath = get_data_directory(__file__)
     (X_np, Y), _ = multi_mnist(inpath, max_digits=2, canvas_size=50, seed=42)
     X_np = X_np.astype(np.float32)
     X_np /= 255.0
@@ -190,20 +190,22 @@ def main(**kwargs):
         print('Loading parameters...')
         air.load_state_dict(torch.load(args.load))
 
-    vis = visdom.Visdom(env=args.visdom_env)
     # Viz sample from prior.
     if args.viz:
+        vis = visdom.Visdom(env=args.visdom_env)
         z, x = air.prior(5, z_pres_prior_p=partial(z_pres_prior_p, 0))
         vis.images(draw_many(x, tensor_to_objs(latents_to_tensor(z))))
 
-    def per_param_optim_args(module_name, param_name, tags):
-        lr = args.baseline_learning_rate if 'baseline' in tags else args.learning_rate
+    def isBaselineParam(module_name, param_name):
+        return 'bl_' in module_name or 'bl_' in param_name
+
+    def per_param_optim_args(module_name, param_name):
+        lr = args.baseline_learning_rate if isBaselineParam(module_name, param_name) else args.learning_rate
         return {'lr': lr}
 
-    svi = SVI(air.model, air.guide,
-              optim.Adam(per_param_optim_args),
-              loss='ELBO',
-              trace_graph=True)
+    adam = optim.Adam(per_param_optim_args)
+    elbo = JitTraceGraph_ELBO() if args.jit else TraceGraph_ELBO()
+    svi = SVI(air.model, air.guide, adam, loss=elbo)
 
     # Do inference.
     t0 = time.time()
@@ -211,7 +213,7 @@ def main(**kwargs):
 
     for i in range(1, args.num_steps + 1):
 
-        loss = svi.step(X, args.batch_size, z_pres_prior_p=partial(z_pres_prior_p, i))
+        loss = svi.step(X, batch_size=args.batch_size, z_pres_prior_p=partial(z_pres_prior_p, i))
 
         if args.progress_every > 0 and i % args.progress_every == 0:
             print('i={}, epochs={:.2f}, elapsed={:.2f}, elbo={:.2f}'.format(
@@ -222,7 +224,7 @@ def main(**kwargs):
 
         if args.viz and i % args.viz_every == 0:
             trace = poutine.trace(air.guide).get_trace(examples_to_viz, None)
-            z, recons = poutine.replay(air.prior, trace)(examples_to_viz.size(0))
+            z, recons = poutine.replay(air.prior, trace=trace)(examples_to_viz.size(0))
             z_wheres = tensor_to_objs(latents_to_tensor(z))
 
             # Show data with inferred objection positions.
@@ -244,6 +246,7 @@ def main(**kwargs):
 
 
 if __name__ == '__main__':
+    assert pyro.__version__.startswith('0.3.0')
     parser = argparse.ArgumentParser(description="Pyro AIR example", argument_default=argparse.SUPPRESS)
     parser.add_argument('-n', '--num-steps', type=int, default=int(1e8),
                         help='number of optimization steps to take')
@@ -287,6 +290,8 @@ if __name__ == '__main__':
                         help='number of steps between parameter saves')
     parser.add_argument('--cuda', action='store_true', default=False,
                         help='use cuda')
+    parser.add_argument('--jit', action='store_true', default=False,
+                        help='use PyTorch jit')
     parser.add_argument('-t', '--model-steps', type=int, default=3,
                         help='number of time steps')
     parser.add_argument('--rnn-hidden-size', type=int, default=256,

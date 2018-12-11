@@ -1,56 +1,64 @@
 from __future__ import absolute_import, division, print_function
 
-import functools
+import numbers
 
 from six.moves.queue import LifoQueue
 
 from pyro import poutine
-from pyro.infer.util import TreeSum
-from pyro.poutine.trace import Trace
+from pyro.infer.util import is_validation_enabled
+from pyro.poutine import Trace
+from pyro.poutine.util import prune_subsample_sites
+from pyro.util import check_model_guide_match, check_site_shape, ignore_jit_warnings
 
 
-def _iter_discrete_filter(msg):
-    return ((msg["type"] == "sample") and
-            (not msg["is_observed"]) and
-            msg["infer"].get("enumerate"))  # sequential or parallel
-
-
-def _iter_discrete_escape(trace, msg):
+def iter_discrete_escape(trace, msg):
     return ((msg["type"] == "sample") and
             (not msg["is_observed"]) and
             (msg["infer"].get("enumerate") == "sequential") and  # only sequential
             (msg["name"] not in trace))
 
 
-def _iter_discrete_extend(trace, site, enum_tree):
-    values = site["fn"].enumerate_support()
-    log_probs = site["fn"].log_prob(values).detach()
-    for i, (value, log_prob) in enumerate(zip(values, log_probs)):
+def iter_discrete_extend(trace, site, **ignored):
+    values = site["fn"].enumerate_support(expand=site["infer"].get("expand", False))
+    enum_total = values.shape[0]
+    with ignore_jit_warnings(["Converting a tensor to a Python index",
+                              ("Iterating over a tensor", RuntimeWarning)]):
+        values = iter(values)
+    for i, value in enumerate(values):
         extended_site = site.copy()
+        extended_site["infer"] = site["infer"].copy()
+        extended_site["infer"]["_enum_total"] = enum_total
         extended_site["value"] = value
         extended_trace = trace.copy()
         extended_trace.add_node(site["name"], **extended_site)
-        extended_enum_tree = enum_tree.copy()
-        extended_enum_tree.add(site["cond_indep_stack"], (i,))
-        yield extended_trace, extended_enum_tree
+        yield extended_trace
 
 
-def _iter_discrete_queue(graph_type, fn, *args, **kwargs):
-    queue = LifoQueue()
-    partial_trace = Trace()
-    enum_tree = TreeSum()
-    queue.put((partial_trace, enum_tree))
-    while not queue.empty():
-        partial_trace, enum_tree = queue.get()
-        traced_fn = poutine.trace(poutine.escape(poutine.replay(fn, partial_trace),
-                                                 functools.partial(_iter_discrete_escape, partial_trace)),
-                                  graph_type=graph_type)
-        try:
-            yield traced_fn.get_trace(*args, **kwargs), enum_tree
-        except poutine.util.NonlocalExit as e:
-            e.reset_stack()
-            for item in _iter_discrete_extend(traced_fn.trace, e.site, enum_tree):
-                queue.put(item)
+def get_importance_trace(graph_type, max_plate_nesting, model, guide, *args, **kwargs):
+    """
+    Returns a single trace from the guide, and the model that is run
+    against it.
+    """
+    guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
+    model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
+                                graph_type=graph_type).get_trace(*args, **kwargs)
+    if is_validation_enabled():
+        check_model_guide_match(model_trace, guide_trace, max_plate_nesting)
+
+    guide_trace = prune_subsample_sites(guide_trace)
+    model_trace = prune_subsample_sites(model_trace)
+
+    model_trace.compute_log_prob()
+    guide_trace.compute_score_parts()
+    if is_validation_enabled():
+        for site in model_trace.nodes.values():
+            if site["type"] == "sample":
+                check_site_shape(site, max_plate_nesting)
+        for site in guide_trace.nodes.values():
+            if site["type"] == "sample":
+                check_site_shape(site, max_plate_nesting)
+
+    return model_trace, guide_trace
 
 
 def iter_discrete_traces(graph_type, fn, *args, **kwargs):
@@ -65,52 +73,48 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
 
     :param str graph_type: The type of the graph, e.g. "flat" or "dense".
     :param callable fn: A stochastic function.
-    :returns: An iterator over (weights, trace) pairs, where weights is a
-        :class:`~pyro.infer.util.TreeSum` object.
+    :returns: An iterator over traces pairs.
     """
-    already_counted = set()  # to avoid double counting
-    for trace, enum_tree in _iter_discrete_queue(graph_type, fn, *args, **kwargs):
-        # Collect log_probs for each iarange stack.
-        log_probs = TreeSum()
-        if not already_counted:
-            log_probs.add((), 0)  # ensures globals are counted exactly once
-        for name, site in trace.nodes.items():
-            if _iter_discrete_filter(site):
-                cond_indep_stack = site["cond_indep_stack"]
-                log_prob = site["fn"].log_prob(site["value"]).detach()
-                log_probs.add(cond_indep_stack, log_prob)
-
-        # Avoid double-counting across traces.
-        weights = log_probs.exp()
-        for context in enum_tree.items():
-            if context in already_counted:
-                cond_indep_stack, _ = context
-                weights.prune(cond_indep_stack)
-            else:
-                already_counted.add(context)
-
-        yield weights, trace
+    queue = LifoQueue()
+    queue.put(Trace())
+    traced_fn = poutine.trace(
+        poutine.queue(fn, queue, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend),
+        graph_type=graph_type)
+    while not queue.empty():
+        yield traced_fn.get_trace(*args, **kwargs)
 
 
-def _config_enumerate(default):
+def _config_enumerate(default, expand, num_samples):
 
     def config_fn(site):
         if site["type"] != "sample" or site["is_observed"]:
             return {}
-        if not getattr(site["fn"], "enumerable", False):
+        if type(site["fn"]).__name__ == "_Subsample":
             return {}
-        if "enumerate" in site["infer"]:
-            return {}  # do not overwrite existing config
-        return {"enumerate": default}
+        if num_samples is not None:
+            return {"enumerate": site["infer"].get("enumerate", default),
+                    "num_samples": site["infer"].get("num_samples", num_samples)}
+        if getattr(site["fn"], "has_enumerate_support", False):
+            return {"enumerate": site["infer"].get("enumerate", default),
+                    "expand": site["infer"].get("expand", expand)}
+        return {}
 
     return config_fn
 
 
-def config_enumerate(guide=None, default="sequential"):
+def config_enumerate(guide=None, default="parallel", expand=False, num_samples=None):
     """
-    Configures each enumerable site a guide to enumerate with given method,
-    ``site["infer"]["enumerate"] = default``. This can be used as either a
-    function::
+    Configures enumeration for all relevant sites in a guide. This is mainly
+    used in conjunction with :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO`.
+
+    When configuring for exhaustive enumeration of discrete variables, this
+    configures all sample sites whose distribution satisfies
+    ``.has_enumerate_support == True``.
+    When configuring for local parallel Monte Carlo sampling via
+    ``default="parallel", num_samples=n``, this configures all sample sites.
+    This does not overwrite existing annotations ``infer={"enumerate": ...}``.
+
+    This can be used as either a function::
 
         guide = config_enumerate(guide)
 
@@ -120,23 +124,41 @@ def config_enumerate(guide=None, default="sequential"):
         def guide1(*args, **kwargs):
             ...
 
-        @config_enumerate(default="parallel")
+        @config_enumerate(default="sequential", expand=True)
         def guide2(*args, **kwargs):
             ...
 
-    This does not overwrite existing annotations ``infer={"enumerate": ...}``.
-
     :param callable guide: a pyro model that will be used as a guide in
         :class:`~pyro.infer.svi.SVI`.
-    :param str default: one of "sequential", "parallel", or None.
+    :param str default: Which enumerate strategy to use, one of
+        "sequential", "parallel", or None. Defaults to "parallel".
+    :param bool expand: Whether to expand enumerated sample values. See
+        :meth:`~pyro.distributions.Distribution.enumerate_support` for details.
+        This only applies to exhaustive enumeration, where ``num_samples=None``.
+        If ``num_samples`` is not ``None``, then this samples will always be
+        expanded.
+    :param num_samples: if not ``None``, use local Monte Carlo sampling rather
+        than exhaustive enumeration. This makes sense for both continuous and
+        discrete distributions.
+    :type num_samples: int or None
     :return: an annotated guide
     :rtype: callable
     """
     if default not in ["sequential", "parallel", None]:
         raise ValueError("Invalid default value. Expected 'sequential', 'parallel', or None, but got {}".format(
             repr(default)))
+    if expand not in [True, False]:
+        raise ValueError("Invalid expand value. Expected True or False, but got {}".format(repr(expand)))
+    if num_samples is not None:
+        if not (isinstance(num_samples, numbers.Number) and num_samples > 0):
+            raise ValueError("Invalid num_samples, expected None or positive integer, but got {}".format(
+                repr(num_samples)))
+        if default == "sequential":
+            raise ValueError('Local sampling does not support "sequential" sampling; '
+                             'use "parallel" sampling instead.')
+
     # Support usage as a decorator:
     if guide is None:
-        return lambda guide: config_enumerate(guide, default=default)
+        return lambda guide: config_enumerate(guide, default=default, expand=expand, num_samples=num_samples)
 
-    return poutine.infer_config(guide, _config_enumerate(default))
+    return poutine.infer_config(guide, config_fn=_config_enumerate(default, expand, num_samples))

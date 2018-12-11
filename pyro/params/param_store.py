@@ -1,8 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import defaultdict
+import re
+import warnings
+import weakref
 
 import torch
+from torch.distributions import constraints, transform_to
 
 
 class ParamStoreDict(object):
@@ -25,22 +28,19 @@ class ParamStoreDict(object):
       Pyro is prepended with the Pyro name of the module. so nothing prevents the user from having
       two different modules each of which contains a parameter named `weight`. by contrast, a user
       can only have one top-level parameter named `weight` (outside of any module).
-    - parameters can be 'tagged' with (string) tags. by default each parameter is tagged with the
-      'default' tag. this mechanism allows the user to group parameters together and e.g. customize
-      learning rates for different tags. for an example where this is useful see the tutorial
-      `SVI Part III <http://pyro.ai/examples/svi_part_iii.html>`_.
     - parameters can be saved and loaded from disk using `save` and `load`.
     """
+
+    # -------------------------------------------------------------------------------
+    # New dict-like interface
 
     def __init__(self):
         """
         initialize ParamStore data structures
         """
         self._params = {}  # dictionary from param name to param
-        self._param_to_name = {}  # dictionary from param to param name
-        self._active_params = set()  # set of all currently active params
-        self._param_tags = defaultdict(lambda: set())  # dictionary from tag to param names
-        self._tag_params = defaultdict(lambda: set())  # dictionary from param name to tags
+        self._param_to_name = {}  # dictionary from unconstrained param to param name
+        self._constraints = {}  # dictionary from param name to constraint object
 
     def clear(self):
         """
@@ -48,160 +48,142 @@ class ParamStoreDict(object):
         """
         self._params = {}
         self._param_to_name = {}
-        self._active_params = set()
-        self._param_tags = defaultdict(lambda: set())
-        self._tag_params = defaultdict(lambda: set())
+        self._constraints = {}
+
+    def items(self):
+        """
+        Iterate over ``(name, constrained_param)`` pairs.
+        """
+        for name in self._params:
+            yield name, self[name]
+
+    def keys(self):
+        """
+        Iterate over param names.
+        """
+        return self._params.keys()
+
+    def values(self):
+        """
+        Iterate over constrained parameter values.
+        """
+        for name, constrained_param in self.items():
+            yield constrained_param
+
+    def __bool__(self):
+        return bool(self._params)
+
+    def __len__(self):
+        return len(self._params)
+
+    def __contains__(self, name):
+        return name in self._params
+
+    def __iter__(self):
+        """
+        Iterate over param names.
+        """
+        return iter(self.keys())
+
+    def __delitem__(self, name):
+        """
+        Remove a parameter from the param store.
+        """
+        constrained_value = self._params.pop(name)
+        unconstrained_value = constrained_value.unconstrained()
+        self._param_to_name.pop(unconstrained_value)
+        self._constraints.pop(name)
+
+    def __getitem__(self, name):
+        """
+        Get the constrained value of a named parameter.
+        """
+        unconstrained_value = self._params[name]
+
+        # compute the constrained value
+        constraint = self._constraints[name]
+        constrained_value = transform_to(constraint)(unconstrained_value)
+        constrained_value.unconstrained = weakref.ref(unconstrained_value)
+
+        return constrained_value
+
+    def __setitem__(self, name, new_constrained_value):
+        """
+        Set the constrained value of an existing parameter, or the value of a
+        new unconstrained parameter. To declare a new parameter with
+        constraint, use :meth:`setdefault`.
+        """
+        # store constraint, defaulting to unconstrained
+        constraint = self._constraints.setdefault(name, constraints.real)
+
+        # compute the unconstrained value
+        with torch.no_grad():
+            # FIXME should we .detach() the new_constrained_value?
+            unconstrained_value = transform_to(constraint).inv(new_constrained_value)
+            unconstrained_value = unconstrained_value.contiguous()
+        unconstrained_value.requires_grad_(True)
+
+        # store a bidirectional mapping between name and unconstrained tensor
+        self._params[name] = unconstrained_value
+        self._param_to_name[unconstrained_value] = name
+
+    def setdefault(self, name, init_constrained_value, constraint=constraints.real):
+        """
+        Retrieve a constrained parameter value from the if it exists, otherwise
+        set the initial value. Note that this is a little fancier than
+        :meth:`dict.setdefault`.
+
+        If the parameter already exists, ``init_constrained_tensor`` will be ignored. To avoid
+        expensive creation of ``init_constrained_tensor`` you can wrap it in a ``lambda`` that
+        will only be evaluated if the parameter does not already exist::
+
+            param_store.get("foo", lambda: (0.001 * torch.randn(1000, 1000)).exp(),
+                            constraint=constraints.positive)
+
+        :param str name: parameter name
+        :param init_constrained_value: initial constrained value
+        :type init_constrained_value: torch.Tensor or callable returning a torch.Tensor
+        :param constraint: torch constraint object
+        :type constraint: torch.distributions.constraints.Constraint
+        :returns: constrained parameter value
+        :rtype: torch.Tensor
+        """
+        if name not in self._params:
+            # set the constraint
+            self._constraints[name] = constraint
+
+            # evaluate the lazy value
+            if callable(init_constrained_value):
+                init_constrained_value = init_constrained_value()
+
+            # set the initial value
+            self[name] = init_constrained_value
+
+        # get the param, which is guaranteed to exist
+        return self[name]
+
+    # -------------------------------------------------------------------------------
+    # Old non-dict interface
 
     def named_parameters(self):
         """
-        Returns an iterator over tuples of the form (name, parameter) for each parameter in the ParamStore
+        Returns an iterator over ``(name, unconstrained_value)`` tuples for
+        each parameter in the ParamStore.
         """
         return self._params.items()
 
     def get_all_param_names(self):
-        """
-        Get all parameter names in the ParamStore
-        """
-        return self._params.keys()
-
-    def get_active_params(self, tags=None):
-        """
-        :param tag: optional argument specifying that only active params carrying a particular
-            tag or any of several tags should be returned
-        :type tags: string or iterable over strings
-        :returns: all active params in the ParamStore, possibly filtered to a particular tag or tags
-        :rtype: set
-        """
-        if tags is None:  # return all active params
-            return self._active_params
-        elif isinstance(tags, str) and tags not in self._param_tags:
-            # return empty set, since tag doesn't exist; XXX raise warning?
-            return set()
-        elif isinstance(tags, str):  # only return active params in the tag
-            return self._active_params.intersection(self._param_tags[tags])
-        elif isinstance(tags, list) or isinstance(tags, tuple):
-            params_to_return = set()
-            for tag in tags:
-                assert isinstance(tag, str)
-                if tag in self._param_tags:
-                    params_to_return.update(self._param_tags[tag])
-            return params_to_return.intersection(self._active_params)
-        else:
-            raise TypeError
-
-    def mark_params_active(self, params):
-        """
-        :param params: iterable of params the user wishes to mark as active in the ParamStore.
-            this information is used to determine which parameters are being optimized,
-            e.g. in the context of pyro.infer.SVI
-        """
-        assert(all([p in self._param_to_name for p in params])), \
-            "some of these parameters are not in the ParamStore"
-        self._active_params.update(set(params))
-
-    def mark_params_inactive(self, params):
-        """
-        :param params: iterable of params the user wishes to mark as inactive in the ParamStore.
-            this information is used to determine which parameters are being optimized,
-            e.g. in the context of pyro.infer.SVI
-        """
-        assert(all([p in self._param_to_name for p in params])), \
-            "some of these parameters are not in the ParamStore"
-        self._active_params.difference_update(set(params))
-
-    def delete_tag(self, tag):
-        """
-        Removes the tag; any parameters with that tag are unaffected but are no longer
-        associated with that tag.
-
-        :param tag: tag to remove
-        :type tag: str
-        """
-        assert(tag in self._param_tags), "this tag does not exist"
-        self._param_tags.pop(tag)
-        for p, tags in self._tag_params.items():
-            if tag in tags:
-                tags.remove(tag)
-
-    def get_param_tags(self, param_name):
-        """
-        Return the tags associated with the parameter
-
-        :param param_name: a (single) parameter name
-        :type param_name: str
-        :rtype: set
-        """
-        if param_name in self._tag_params:
-            return self._tag_params[param_name]
-        return set()
-
-    def tag_params(self, param_names, tags):
-        """
-        Tags the parameter(s) specified by param_names with the tag(s) specified by tags.
-
-        :param param_name: either a single parameter name or an iterable of parameter names
-        :param tags: either a single string or an iterable of strings
-        """
-        def tag_single_param(name, tags):
-            assert name in self._params, "<%s> is not a parameter in the ParamStore" % name
-            if isinstance(tags, str):
-                self._param_tags[tags].add(self._params[name])
-                self._tag_params[name].add(tags)
-            else:
-                for tag in tags:
-                    assert isinstance(tag, str), "tags must be a string or an iterable of strings"
-                    self._param_tags[tag].add(self._params[name])
-                    self._tag_params[name].add(tag)
-
-        if isinstance(param_names, str):
-            tag_single_param(param_names, tags)
-        else:
-            for p in param_names:
-                assert isinstance(p, str), "param_names must be a string or an iterable of strings"
-                tag_single_param(p, tags)
-
-    def untag_params(self, param_names, tags):
-        """
-        Disassociates the parameter(s) specified by param_names with the tag(s) specified by tags.
-
-        :param param_name: either a single parameter name or an iterable of parameter names
-        :param tags: either a single string or an iterable of strings
-        """
-        def untag_single_param(name, tags):
-            assert name in self._params, "<%s> is not a parameter in the ParamStore" % name
-            if isinstance(tags, str):
-                self._param_tags[tags].discard(self._params[name])
-                self._tag_params[name].discard(tags)
-            else:
-                for tag in tags:
-                    assert isinstance(tag, str), "tags must be a string or an iterable of strings"
-                    self._param_tags[tag].discard(self._params[name])
-                    self._tag_params[name].discard(tag)
-
-        if isinstance(param_names, str):
-            untag_single_param(param_names, tags)
-        else:
-            for p in param_names:
-                assert isinstance(p, str), "param_names must be a string or an iterable of strings"
-                untag_single_param(p, tags)
+        warnings.warn("ParamStore.get_all_param_names() is deprecated; use .keys() instead.",
+                      DeprecationWarning)
+        return self.keys()
 
     def replace_param(self, param_name, new_param, old_param):
-        """
-        Replace the param param_name with current value old_param with the new value new_param
+        warnings.warn("ParamStore.replace_param() is deprecated; use .__setitem__() instead.",
+                      DeprecationWarning)
+        assert self._params[param_name] is old_param.unconstrained()
+        self[param_name] = new_param
 
-        :param param_name: parameter name
-        :type param_name: str
-        :param new_param: the paramater to be put into the ParamStore
-        :type new_param: torch.Tensor
-        :param old_param: the paramater to be removed from the ParamStore
-        :type new_param: torch.Tensor
-        """
-        assert id(self._params[param_name]) == id(old_param)
-        self._params[param_name] = new_param
-        self._param_to_name[new_param] = param_name
-        self._param_to_name.pop(old_param)
-
-    def get_param(self, name, init_tensor=None, tags="default"):
+    def get_param(self, name, init_tensor=None, constraint=constraints.real):
         """
         Get parameter from its name. If it does not yet exist in the
         ParamStore, it will be created and stored.
@@ -211,31 +193,26 @@ class ParamStoreDict(object):
         :type name: str
         :param init_tensor: initial tensor
         :type init_tensor: torch.Tensor
-        :param tags: the tag(s) to assign to the parameter
-        :type tags: a string or iterable of strings
+        :param constraint: torch constraint
+        :type constraint: torch.distributions.constraints.Constraint
         :returns: parameter
         :rtype: torch.Tensor
         """
-        if name not in self._params:
-            # if not create the init tensor through
-            assert init_tensor is not None,\
-                "cannot initialize a parameter with None. Did you get the param name right?"
+        if init_tensor is None:
+            return self[name]
+        else:
+            return self.setdefault(name, init_tensor, constraint)
 
-            # a function
-            if callable(init_tensor):
-                self._params[name] = init_tensor()
-            else:
-                # from the memory passed in
-                self._params[name] = init_tensor
+    def match(self, name):
+        """
+        Get all parameters that match regex. The parameter must exist.
 
-            # keep track of each tensor and it's name
-            self._param_to_name[self._params[name]] = name
-
-            # keep track of param tags
-            self.tag_params(name, tags)
-
-        # send back the guaranteed to exist param
-        return self._params[name]
+        :param name: regular expression
+        :type name: str
+        :returns: dict with key param name and value torch Tensor
+        """
+        pattern = re.compile(name)
+        return {name: self[name] for name in self if pattern.match(name)}
 
     def param_name(self, p):
         """
@@ -244,51 +221,81 @@ class ParamStoreDict(object):
         :param p: parameter
         :returns: parameter name
         """
-        if p not in self._param_to_name:
-            return None
-
-        return self._param_to_name[p]
+        return self._param_to_name.get(p)
 
     def get_state(self):
         """
         Get the ParamStore state.
         """
-        param_tags = {k: list(tags) for k, tags in self._param_tags.items()}
-        state = (self._params, param_tags)
+        state = {
+            'params': self._params,
+            'constraints': self._constraints,
+        }
         return state
 
     def set_state(self, state):
         """
         Set the ParamStore state using state from a previous get_state() call
         """
-        assert isinstance(state, tuple) and len(state) == 2, "malformed ParamStore state"
-        loaded_params, loaded_param_tags = state
+        assert isinstance(state, dict), "malformed ParamStore state"
+        assert set(state.keys()) == set(['params', 'constraints']), \
+            "malformed ParamStore keys {}".format(state.keys())
 
-        for param_name, param in loaded_params.items():
+        for param_name, param in state['params'].items():
             self._params[param_name] = param
             self._param_to_name[param] = param_name
 
-        for param_name, tags in loaded_param_tags.items():
-            for tag in tags:
-                self._param_tags[param_name].add(tag)
+        for param_name, constraint in state['constraints'].items():
+            if isinstance(constraint, type(constraints.real)):
+                # Work around lack of hash & equality comparison on constraints.
+                constraint = constraints.real
+            self._constraints[param_name] = constraint
 
     def save(self, filename):
         """
         Save parameters to disk
 
         :param filename: file name to save to
-        :type name: str
+        :type filename: str
         """
         with open(filename, "wb") as output_file:
             torch.save(self.get_state(), output_file)
 
-    def load(self, filename):
+    def load(self, filename, map_location=None):
         """
         Loads parameters from disk
 
+        .. note::
+
+           If using :meth:`pyro.module` on parameters loaded from
+           disk, be sure to set the ``update_module_params`` flag::
+
+               pyro.get_param_store().load('saved_params.save')
+               pyro.module('module', nn, update_module_params=True)
+
         :param filename: file name to load from
-        :type name: str
+        :type filename: str
+        :param map_location: specifies how to remap storage locations
+        :type map_location: function, torch.device, string or a dict
         """
         with open(filename, "rb") as input_file:
-            state = torch.load(input_file)
+            state = torch.load(input_file, map_location)
         self.set_state(state)
+
+
+# used to create fully-formed param names, e.g. mymodule$$$mysubmodule.weight
+_MODULE_NAMESPACE_DIVIDER = "$$$"
+
+
+def param_with_module_name(pyro_name, param_name):
+    return _MODULE_NAMESPACE_DIVIDER.join([pyro_name, param_name])
+
+
+def module_from_param_with_module_name(param_name):
+    return param_name.split(_MODULE_NAMESPACE_DIVIDER)[0]
+
+
+def user_param_name(param_name):
+    if _MODULE_NAMESPACE_DIVIDER in param_name:
+        return param_name.split(_MODULE_NAMESPACE_DIVIDER)[1]
+    return param_name

@@ -8,20 +8,57 @@ Welcome to Pyro Examples and Tutorials!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Introduction:
 
    intro_part_i
    intro_part_ii
    svi_part_i
    svi_part_ii
    svi_part_iii
+   tensor_shapes
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Advanced:
+
+   enumeration
+   custom_objectives
+   jit
+   minipyro
+   effect_handlers
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Examples:
+
    vae
    bayesian_regression
+   bayesian_regression_ii
    dmm
    air
    ss-vae
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contributed:
+
    gmm
    gp
+   bo
+   tracking_1d
+   csis
+   RSA-implicature
+   RSA-hyperbole
+   ekf
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Code Examples:
+
+   hmm
+   lda
+   mcmc
+   sparse_gamma
 
 
 Indices and tables

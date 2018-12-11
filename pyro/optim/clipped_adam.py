@@ -56,9 +56,9 @@ class ClippedAdam(Optimizer):
                 if len(state) == 0:
                     state['step'] = 0
                     # Exponential moving average of gradient values
-                    state['exp_avg'] = grad.new().resize_as_(grad).zero_()
+                    state['exp_avg'] = grad.new_zeros(grad.shape)
                     # Exponential moving average of squared gradient values
-                    state['exp_avg_sq'] = grad.new().resize_as_(grad).zero_()
+                    state['exp_avg_sq'] = grad.new_zeros(grad.shape)
 
                 exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
                 beta1, beta2 = group['betas']

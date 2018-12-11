@@ -13,20 +13,28 @@ however, the original source of the data seems to be the Institut fuer Algorithm
 und Kognitive Systeme at Universitaet Karlsruhe.
 """
 
+import os
+
+import numpy as np
+import six.moves.cPickle as pickle
 import torch
 import torch.nn as nn
-import numpy as np
 from observations import jsb_chorales
-from os.path import join, exists
-import six.moves.cPickle as pickle
-from pyro.util import ng_zeros
+
+from pyro.contrib.examples.util import get_data_directory
 
 
 # this function processes the raw data; in particular it unsparsifies it
 def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
-    output = join(base_path, filename)
-    if exists(output):
-        return
+    output = os.path.join(base_path, filename)
+    if os.path.exists(output):
+        try:
+            with open(output, "rb") as f:
+                return pickle.load(f)
+        except (ValueError, UnicodeDecodeError):
+            # Assume python env has changed.
+            # Recreate pickle file in this env's format.
+            os.remove(output)
 
     print("processing raw polyphonic music data...")
     data = jsb_chorales(base_path)
@@ -44,13 +52,20 @@ def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
                 slice_length = len(note_slice)
                 if slice_length > 0:
                     processed_dataset[split]['sequences'][seq, t, note_slice] = np.ones((slice_length))
-    pickle.dump(processed_dataset, open(output, "wb"))
+    pickle.dump(processed_dataset, open(output, "wb"), pickle.HIGHEST_PROTOCOL)
     print("dumped processed data to %s" % output)
 
 
 # this logic will be initiated upon import
-base_path = './data'
+base_path = get_data_directory(__file__)
 process_data(base_path, "jsb_processed.pkl")
+jsb_file_loc = os.path.join(base_path, "jsb_processed.pkl")
+
+
+# ingest training/validation/test data from disk
+def load_data():
+    with open(jsb_file_loc, "rb") as f:
+        return pickle.load(f)
 
 
 # this function takes a numpy mini-batch and reverses each sequence
@@ -68,7 +83,7 @@ def reverse_sequences_numpy(mini_batch, seq_lengths):
 # in contrast to `reverse_sequences_numpy`, this function plays
 # nice with torch autograd
 def reverse_sequences_torch(mini_batch, seq_lengths):
-    reversed_mini_batch = ng_zeros(mini_batch.size(), type_as=mini_batch.data)
+    reversed_mini_batch = mini_batch.new_zeros(mini_batch.size())
     for b in range(mini_batch.size(0)):
         T = seq_lengths[b]
         time_slice = np.arange(T - 1, -1, -1)
@@ -96,9 +111,9 @@ def get_mini_batch_mask(mini_batch, seq_lengths):
     return mask
 
 
-# this function prepares a mini-batch for training or evaluation
+# this function prepares a mini-batch for training or evaluation.
 # it returns a mini-batch in forward temporal order (`mini_batch`) as
-# as a mini-batch in reverse temporal order (`mini_batch_reversed`).
+# well as a mini-batch in reverse temporal order (`mini_batch_reversed`).
 # it also deals with the fact that packed sequences (which are what what we
 # feed to the PyTorch rnn) need to be sorted by sequence length.
 def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
@@ -118,10 +133,10 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
     # get mask for mini-batch
     mini_batch_mask = get_mini_batch_mask(mini_batch, sorted_seq_lengths)
 
-    # wrap in PyTorch Tensors
-    mini_batch = torch.tensor(mini_batch)
-    mini_batch_reversed = torch.tensor(mini_batch_reversed)
-    mini_batch_mask = torch.tensor(mini_batch_mask)
+    # wrap in PyTorch Tensors, using default tensor type
+    mini_batch = torch.tensor(mini_batch).type(torch.Tensor)
+    mini_batch_reversed = torch.tensor(mini_batch_reversed).type(torch.Tensor)
+    mini_batch_mask = torch.tensor(mini_batch_mask).type(torch.Tensor)
 
     # cuda() here because need to cuda() before packing
     if cuda:

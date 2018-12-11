@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import gc
+import warnings
 
 import networkx as nx
 import pytest
@@ -9,16 +10,17 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.infer.svi import SVI
+from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
-from pyro.poutine.trace import Trace
-
+from pyro.poutine import Trace
 
 pytestmark = pytest.mark.stage('unit')
 
 
 def count_objects_of_type(type_):
-    return sum(1 for obj in gc.get_objects() if isinstance(obj, type_))
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        return sum(1 for obj in gc.get_objects() if isinstance(obj, type_))
 
 
 def test_trace():
@@ -28,7 +30,7 @@ def test_trace():
     def model(data):
         loc = pyro.param('loc', torch.zeros(n, requires_grad=True))
         scale = pyro.param('log_scale', torch.zeros(n, requires_grad=True)).exp()
-        pyro.sample('obs', dist.Normal(loc, scale).reshape(extra_event_dims=1), obs=data)
+        pyro.sample('obs', dist.Normal(loc, scale).to_event(1), obs=data)
 
     counts = []
     gc.collect()
@@ -64,7 +66,7 @@ def test_networkx_copy():
     g = nx.DiGraph()
     expected = count_objects_of_type(nx.DiGraph)
     for _ in range(10):
-        h = g.fresh_copy()
+        h = g.__class__()
         h.__dict__.clear()
         del h
         counts.append(count_objects_of_type(nx.DiGraph))
@@ -92,7 +94,7 @@ def test_trace_copy():
     def model(data):
         loc = pyro.param('loc', torch.zeros(n, requires_grad=True))
         scale = pyro.param('log_scale', torch.zeros(n, requires_grad=True)).exp()
-        pyro.sample('obs', dist.Normal(loc, scale).reshape(extra_event_dims=1), obs=data)
+        pyro.sample('obs', dist.Normal(loc, scale).to_event(1), obs=data)
 
     counts = []
     gc.collect()
@@ -107,7 +109,7 @@ def test_trace_copy():
 
 def trace_replay(model, guide, *args):
     guide_trace = poutine.trace(guide).get_trace(*args)
-    poutine.trace(poutine.replay(model, guide_trace)).get_trace(*args)
+    poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(*args)
 
 
 def test_trace_replay():
@@ -117,7 +119,7 @@ def test_trace_replay():
     def model(data):
         loc = pyro.param('loc', torch.zeros(n, requires_grad=True))
         scale = pyro.param('log_scale', torch.zeros(n, requires_grad=True)).exp()
-        pyro.sample('obs', dist.Normal(loc, scale).reshape(extra_event_dims=1), obs=data)
+        pyro.sample('obs', dist.Normal(loc, scale).to_event(1), obs=data)
 
     def guide(data):
         pass
@@ -140,13 +142,13 @@ def test_svi():
     def model(data):
         loc = pyro.param('loc', torch.zeros(n, requires_grad=True))
         scale = pyro.param('log_scale', torch.zeros(n, requires_grad=True)).exp()
-        pyro.sample('obs', dist.Normal(loc, scale).reshape(extra_event_dims=1), obs=data)
+        pyro.sample('obs', dist.Normal(loc, scale).to_event(1), obs=data)
 
     def guide(data):
         pass
 
     optim = Adam({'lr': 1e-3})
-    inference = SVI(model, guide, optim, 'ELBO')
+    inference = SVI(model, guide, optim, Trace_ELBO())
 
     counts = []
     gc.collect()

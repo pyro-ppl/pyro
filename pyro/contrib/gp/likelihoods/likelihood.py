@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from pyro.contrib.gp.util import Parameterized
+from pyro.contrib.gp.parameterized import Parameterized
 
 
 class Likelihood(Parameterized):
@@ -10,17 +10,17 @@ class Likelihood(Parameterized):
     Every inherited class should implement a forward pass which
     takes an input :math:`f` and returns a sample :math:`y`.
     """
-
     def __init__(self):
-        super(Likelihood, self).__init__(name="likelihood")
+        super(Likelihood, self).__init__()
 
-    def forward(self, f, obs=None):
+    def forward(self, f_loc, f_var, y=None):
         """
-        Samples :math:`y` (``obs``) given :math:`f`.
+        Samples :math:`y` given :math:`f_{loc}`, :math:`f_{var}`.
 
-        :param torch.Tensor f: A 1D tensor of size :math:`N`.
-        :param torch.Tensor obs: A 1D tensor of size :math:`N`.
-        :return: A 1D tensor of size :math:`N`.
+        :param torch.Tensor f_loc: Mean of latent function output.
+        :param torch.Tensor f_var: Variance of latent function output.
+        :param torch.Tensor y: Training output tensor.
+        :returns: a tensor sampled from likelihood
         :rtype: torch.Tensor
         """
         raise NotImplementedError

@@ -1,7 +1,19 @@
 Primitives
 ==========
 
-.. automodule:: pyro.__init__
+.. autofunction:: pyro.sample
+.. autofunction:: pyro.param
+.. autofunction:: pyro.module
+.. autofunction:: pyro.random_module
+
+.. autoclass:: pyro.plate
     :members:
     :undoc-members:
-    :show-inheritance:
+
+.. autofunction:: pyro.get_param_store
+.. autofunction:: pyro.clear_param_store
+
+.. autofunction:: pyro.validation_enabled
+.. autofunction:: pyro.enable_validation
+
+.. autofunction:: pyro.ops.jit.trace

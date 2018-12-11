@@ -6,18 +6,18 @@ env:
     global:
         - PYTHONPATH=$PWD:$PYTHONPATH
 
+cache:
+    directories:
+        - $HOME/.data
+
 install:
-    # download and install PyTorch wheel
-    - pip install --upgrade awscli
-    - mkdir -p tmp
-    - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-        aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp27-*";
+    - pip install -U pip
+    - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then
+          pip install http://download.pytorch.org/whl/cpu/torch-1.0.0-cp27-cp27mu-linux_x86_64.whl;
       else
-        aws s3 --no-sign-request sync s3://pyro-ppl/ci tmp --exclude "*" --include "*-cp35-*";
+          pip install http://download.pytorch.org/whl/cpu/torch-1.0.0-cp36-cp36m-linux_x86_64.whl;
       fi
-    - pip install tmp/*
-    - rm -r tmp
-    - pip install -e .[test]
+    - pip install .[test]
     - pip freeze
 
 branches:
@@ -37,24 +37,18 @@ jobs:
               #- make scrub;
               #  git diff-index --quiet HEAD
         - stage: auxiliary modules
-          python: 2.7
+          python: 3.6
           env: STAGE=docs
           script:
               - pip install -r docs/requirements.txt
               - make docs
+              - make doctest
         - stage: perf
-          if: type = cron
           python: 2.7
           env: STAGE=perf
           script:
               - pip install -e .[profile]
-              - make perf-test
-        - python: 3.5
-          if: type = cron
-          env: STAGE=perf
-          script:
-              - pip install -e .[profile]
-              - make perf-test
+              - pytest -vs --benchmark-disable tests/perf/test_benchmark.py
         - stage: profiler
           python: 2.7
           env: STAGE=profiler
@@ -64,28 +58,35 @@ jobs:
         - stage: unit test
           python: 2.7
           env: STAGE=unit
-          script: pytest -vs --cov=pyro --stage unit --durations 20
+          script: pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
         - python: 2.7
           env: STAGE=examples
           script:
-              - pytest -vs --cov=pyro --stage test_examples
-              - grep -l smoke_test tutorial/source/*.ipynb | xargs pytest -v --nbval-lax
-        - python: 3.5
+              - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10
+              - grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
+                  | CI=1 xargs pytest -vx --nbval-lax --current-env
+        - python: 3.6
           env: STAGE=unit
-          script: pytest -vs --cov=pyro --stage unit --durations 20
-        - python: 3.5
+          script: pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
+        - python: 3.6
           env: STAGE=examples
-          script: pytest -vs --cov=pyro --stage test_examples
+          script:
+              - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10
+              - grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
+                  | CI=1 xargs pytest -vx --nbval-lax --current-env
         - stage: integration test
           python: 2.7
           env: STAGE=integration_batch_1
-          script: pytest -vs --cov=pyro --stage integration_batch_1 --durations 10
+          script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
         - python: 2.7
           env: STAGE=integration_batch_2
-          script: pytest -vs --cov=pyro --stage integration_batch_2 --durations 10
-        - python: 3.5
+          script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
+        - python: 3.6
           env: STAGE=integration_batch_1
-          script: pytest -vs --cov=pyro --stage integration_batch_1 --durations 10
-        - python: 3.5
+          script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
+        - python: 3.6
           env: STAGE=integration_batch_2
-          script: pytest -vs --cov=pyro --stage integration_batch_2 --durations 10
+          script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
+
+after_success:
+          - bash <(curl -s https://codecov.io/bash)
