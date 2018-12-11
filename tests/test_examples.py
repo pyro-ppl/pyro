@@ -80,7 +80,7 @@ CUDA_EXAMPLES = [
 
 def xfail_jit(*args):
     return pytest.param(*args, marks=[pytest.mark.xfail(reason="not jittable"),
-                                      pytest.mark.skipif('CI' in os.eniron, reason='slow test')])
+                                      pytest.mark.skipif('CI' in os.environ, reason='slow test')])
 
 
 JIT_EXAMPLES = [
