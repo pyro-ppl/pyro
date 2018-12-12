@@ -425,7 +425,7 @@ if __name__ == "__main__":
                         help='target to match')
 
     parser.add_argument('-iw', "--initial_width", type=float,
-                        help='width of lines to draw')
+                        help='width of lines to draw', default=0.35)
 
     args = parser.parse_args()
 

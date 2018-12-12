@@ -24,17 +24,17 @@ def VTA(x): return V(TA(x))
 class Vector2():
     def __init__(self, x=0, y=0):
         if is_tensor(x) or isinstance(x, V):
-            x, y = x.data[0], y.data[0]
+            x, y = x.item(), y.item()
 
         self.pt_val = VT([x, y])
 
     @property
     def x(self):
-        return self.pt_val.data[0]
+        return self.pt_val[0].item()
 
     @property
     def y(self):
-        return self.pt_val.data[1]
+        return self.pt_val[1].item()
 
     def __repr__(self):
         return "{:0.5},{:0.5}".format(self.x, self.y)
@@ -44,7 +44,7 @@ class Vector2():
         return self
 
     def clone(self):
-        return Vector2(*self.pt_val.data)
+        return Vector2(*self.pt_val)
 
     # linear interpolate between two points us and them
     def lerp(self, other, zero_one):
