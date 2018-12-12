@@ -37,7 +37,7 @@ class TreeCat(object):
         self._guide = AutoDelta(poutine.block(
             self.model, hide_fn=lambda msg: msg["name"].startswith("treecat_")))
 
-    def model(self, data, impute=False):
+    def model(self, data, num_rows=None, batch_size=None, impute=False):
         """
         :param list data: batch of heterogeneous column-oriented data.  Each
             column should be either a torch.Tensor (if oberved) or None (if
@@ -50,10 +50,11 @@ class TreeCat(object):
         """
         assert len(data) == len(self.features)
         assert any(column is not None for column in data)
-        for column in data:
-            if column is not None:
-                batch_size = len(column)
-                break
+        if num_rows is None:
+            for column in data:
+                if column is not None:
+                    num_rows = column.size(0)
+                    break
         V = len(self.features)
         E = len(self.edges)
         M = self.capacity
@@ -87,7 +88,7 @@ class TreeCat(object):
                                      dist.Dirichlet(0.5 / M * torch.ones(M * M)))
 
         # Sample data-local variables.
-        with pyro.plate("data", batch_size) as row_ids:
+        with pyro.plate("data", num_rows, batch_size) as row_ids:
 
             # Sample discrete latent state from an undirected tree structure.
             z = [None] * V
@@ -116,10 +117,10 @@ class TreeCat(object):
 
         return x
 
-    def guide(self, data, impute=False):
+    def guide(self, data, num_rows=None, batch_size=None, impute=False):
         """
         A :class:`~pyro.contrib.autoguide.AutoDelta` guide for MAP inference of
-        continuous parameters plus exact inference of discrete latent
-        variables.
+        continuous parameters.
         """
+        pyro.plate("data", num_rows, batch_size, dim=-1)
         return self._guide(data, impute=impute)
