@@ -81,7 +81,7 @@ setup(
         'contextlib2',
         'graphviz>=0.8',
         'networkx>=2.2',
-        'numpy>=1.7',
+        'numpy>=1.14',
         'opt_einsum>=2.3.2',
         'six>=1.10.0',
         'torch>=1.0.0',
