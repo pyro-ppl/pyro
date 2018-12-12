@@ -1,21 +1,22 @@
 """
-An example to use Gaussian Process (GP) module to classify MNIST. Follow the idea
-from reference [1], we will combine a convolutional neural network with a RBF kernel
-to create a "deep" kernel. Then we train a SparseVariationalGP model using SVI. The
-model is trained end-to-end in mini-batch, so time complexity scales linearly to
-the number of data points.
+An example to use Pyro Gaussian Process module to classify MNIST and binary MNIST.
 
-Note that the implementation here is different from [1]. In [1], the authors 
+Follow the idea from reference [1], we will combine a convolutional neural network
+(CNN) with a RBF kernel to create a "deep" kernel:
+
+    >>> deep_kernel = gp.kernels.Warping(rbf, iwarping_fn=cnn)
+
+SparseVariationalGP model allows us train the data in mini-batch (time complexity
+scales linearly to the number of data points).
+
+Note that the implementation here is different from [1]. There the authors 
 use CNN as a feature extraction layer, then add a Gaussian Process layer on the
 top of CNN. Hence, their inducing points lie in the space of extracted features.
 Here we join CNN module and RBF kernel together to make it a deep kernel.
-Hence, our inducing points lie in the space of original numbers.
-Note that to achieve that, we just need 1 line of code:
+Hence, our inducing points lie in the space of original images.
 
-   >>> deep_kernel = gp.kernels.Warping(rbf, iwarping_fn=cnn)
-
-Without tuning arguments, the accuracy for full classification is 98.59% after 18 epochs.
-The . , which is a little bit better than the result in [1].
+Without tuning arguments, the accuracy for full classification is 98.59% after
+18 epochs. The . , which is a little bit better than the result in [1].
 
 Reference:
 
@@ -64,7 +65,7 @@ def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
         if args.binary:
-            target = (target % 2).float()  # convert numbers 0-9 to 0 or 1
+            target = (target % 2).float()  # convert numbers 0->9 to 0 or 1
 
         gpmodule.set_data(data, target)
         optimizer.zero_grad()
@@ -83,7 +84,7 @@ def test(args, test_loader, gpmodule):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
         if args.binary:
-            target = (target % 2).float()  # convert numbers 0-9 to 0 or 1
+            target = (target % 2).float()  # convert numbers 0->9 to 0 or 1
 
         # get prediction of GP model on new data
         f_loc, f_var = gpmodule(data)
@@ -126,9 +127,8 @@ def main(args):
     # init inducing points (taken randomly from dataset)
     idx = torch.multinomial(torch.ones(60000), args.num_inducing)
     Xu_raw = train_loader.dataset.train_data[idx].clone()
-    # we repeat the transform steps from torchvision to normalize data
+    # we repeat the transform steps from torchvision here
     Xu = Xu_raw.unsqueeze(1).float() / 255  # scale into the interval [0, 1]
-    save_image(Xu[:64], "initial_inducing_inputs.jpg")
     Xu = (Xu - 0.1307) / 0.3081  # normalize with a known mean and standard derivation
 
     if args.binary:
