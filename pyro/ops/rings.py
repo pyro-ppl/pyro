@@ -3,19 +3,12 @@ from __future__ import absolute_import, division, print_function
 import weakref
 from abc import ABCMeta, abstractmethod
 
-import numpy as np
 import torch
 from six import add_metaclass
 
 from pyro.ops.einsum import contract
 from pyro.ops.einsum.adjoint import SAMPLE_SYMBOL, Backward
 from pyro.util import ignore_jit_warnings
-
-
-def _finfo(tensor):
-    # This can be replaced with torch.finfo once it is available
-    # https://github.com/pytorch/pytorch/issues/10742
-    return np.finfo(torch.empty(torch.Size(), dtype=tensor.dtype, device="cpu").numpy().dtype)
 
 
 @add_metaclass(ABCMeta)
@@ -175,7 +168,7 @@ class LogRing(Ring):
             return self._cache[key]
 
         result = -term
-        result.clamp_(max=_finfo(result).max)  # avoid nan due to inf - inf
+        result.clamp_(max=torch.finfo(result.dtype).max)  # avoid nan due to inf - inf
         result._pyro_dims = term._pyro_dims
         self._cache[key] = result
         return result
