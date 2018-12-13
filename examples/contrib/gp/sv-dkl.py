@@ -91,7 +91,7 @@ def test(args, test_loader, gpmodule):
         # compare prediction and target to count accuaracy
         correct += pred.eq(target).long().cpu().sum()
 
-    print("\nTest set: Accuracy: {}/{} ({:.0f}%)\n"
+    print("\nTest set: Accuracy: {}/{} ({:.2f}%)\n"
           .format(correct, len(test_loader.dataset), 100. * correct / len(test_loader.dataset)))
 
 
