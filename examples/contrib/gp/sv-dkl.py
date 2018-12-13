@@ -15,8 +15,8 @@ top of CNN. Hence, their inducing points lie in the space of extracted features.
 Here we join CNN module and RBF kernel together to make it a deep kernel.
 Hence, our inducing points lie in the space of original images.
 
-After 20 epochs with default hyperparameters, the accuaracy of 10-class MNIST
-is 98.89% and the accuaracy of binary MNIST is 99.46%.
+After 16 epochs with default hyperparameters, the accuaracy of 10-class MNIST
+is 98.45% and the accuaracy of binary MNIST is 99.41%.
 
 Reference:
 
@@ -190,5 +190,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     pyro.set_rng_seed(args.seed)
+    if args.cuda:
+        torch.backends.cudnn.deterministic = True
 
     main(args)
