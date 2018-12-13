@@ -15,8 +15,8 @@ top of CNN. Hence, their inducing points lie in the space of extracted features.
 Here we join CNN module and RBF kernel together to make it a deep kernel.
 Hence, our inducing points lie in the space of original images.
 
-Without tuning arguments, the accuracy for full classification is 98.59% after
-18 epochs. The . , which is a little bit better than the result in [1].
+After 20 epochs with default hyperparameters, the accuaracy of 10-class MNIST
+is 98.89% and the accuaracy of binary MNIST is 99.46%.
 
 Reference:
 
@@ -28,14 +28,12 @@ Reference:
 from __future__ import absolute_import, division, print_function
 
 import argparse
-import os
 import time
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
-from torchvision.utils import save_image
 
 import pyro
 import pyro.contrib.gp as gp
@@ -125,11 +123,12 @@ def main(args):
     deep_kernel = gp.kernels.Warping(rbf, iwarping_fn=cnn)
 
     # init inducing points (taken randomly from dataset)
-    idx = torch.multinomial(torch.ones(60000), args.num_inducing)
-    Xu_raw = train_loader.dataset.train_data[idx].clone()
-    # we repeat the transform steps from torchvision here
-    Xu = Xu_raw.unsqueeze(1).float() / 255  # scale into the interval [0, 1]
-    Xu = (Xu - 0.1307) / 0.3081  # normalize with a known mean and standard derivation
+    batches = []
+    for i, (data, _) in enumerate(train_loader):
+        batches.append(data)
+        if i >= ((args.num_inducing - 1) // args.batch_size):
+            break
+    Xu = torch.cat(batches)[:args.num_inducing].clone()
 
     if args.binary:
         likelihood = gp.likelihoods.Binary()
@@ -161,9 +160,6 @@ def main(args):
             test(args, test_loader, gpmodule)
         print("Amount of time spent for epoch {}: {}s\n"
               .format(epoch, int(time.time() - start_time)))
-
-    Xu = gpmodule.Xu * 0.3081 + 0.1307
-    save_image(Xu[:64], "trained_inducing_inputs.jpg")
 
 
 if __name__ == '__main__':
