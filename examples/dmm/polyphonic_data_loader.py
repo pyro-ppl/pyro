@@ -16,7 +16,7 @@ und Kognitive Systeme at Universitaet Karlsruhe.
 import os
 import urllib
 from collections import namedtuple
-from urllib.request import urlopen
+from six.moves.urllib.request import urlopen
 
 import numpy as np
 import six.moves.cPickle as pickle
