@@ -9,7 +9,7 @@ Follow the idea from reference [1], we will combine a convolutional neural netwo
 SparseVariationalGP model allows us train the data in mini-batch (time complexity
 scales linearly to the number of data points).
 
-Note that the implementation here is different from [1]. There the authors 
+Note that the implementation here is different from [1]. There the authors
 use CNN as a feature extraction layer, then add a Gaussian Process layer on the
 top of CNN. Hence, their inducing points lie in the space of extracted features.
 Here we join CNN module and RBF kernel together to make it a deep kernel.
