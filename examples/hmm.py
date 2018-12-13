@@ -414,7 +414,7 @@ def main(args):
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     logging.info('Loading data')
-    data = poly.load_data()
+    data = poly.load_data(poly.JSB_CHORALES)
 
     logging.info('-' * 40)
     model = models[args.model]

@@ -271,7 +271,7 @@ def main(args):
     log = get_logger(args.log)
     log(args)
 
-    data = poly.load_data()
+    data = poly.load_data(poly.JSB_CHORALES)
     training_seq_lengths = data['train']['sequence_lengths']
     training_data_sequences = data['train']['sequences']
     test_seq_lengths = data['test']['sequence_lengths']

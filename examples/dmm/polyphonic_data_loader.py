@@ -14,19 +14,46 @@ und Kognitive Systeme at Universitaet Karlsruhe.
 """
 
 import os
+import urllib
+from collections import namedtuple
+from urllib.request import urlopen
 
 import numpy as np
 import six.moves.cPickle as pickle
 import torch
 import torch.nn as nn
-from observations import jsb_chorales
 
 from pyro.contrib.examples.util import get_data_directory
 
 
+dset = namedtuple("dset", ["name", "url", "filename", "t_max"])
+
+JSB_CHORALES = dset("jsb_chorales",
+                    "https://d2fefpcigoriu7.cloudfront.net/datasets/polyphonic/jsb_chorales.pickle",
+                    "jsb_chorales.pkl",
+                    160)
+
+PIANO_MIDI = dset("piano_midi",
+                  "https://d2fefpcigoriu7.cloudfront.net/datasets/polyphonic/piano_midi.pickle",
+                  "piano_midi.pkl",
+                  3857)
+
+# FIXME: t_max is too large for pickle.dump
+MUSE_DATA = dset("muse_data",
+                 "https://d2fefpcigoriu7.cloudfront.net/datasets/polyphonic/muse_data.pickle",
+                 "muse_data.pkl",
+                 4273)
+
+NOTTINGHAM = dset("nottingham",
+                  "https://d2fefpcigoriu7.cloudfront.net/datasets/polyphonic/nottingham.pickle",
+                  "nottingham.pkl",
+                  1793)
+
+
 # this function processes the raw data; in particular it unsparsifies it
-def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
-    output = os.path.join(base_path, filename)
+def process_data(base_path, dataset, min_note=21, note_range=88):
+    t_max = dataset.t_max
+    output = os.path.join(base_path, dataset.filename)
     if os.path.exists(output):
         try:
             with open(output, "rb") as f:
@@ -36,14 +63,17 @@ def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
             # Recreate pickle file in this env's format.
             os.remove(output)
 
-    print("processing raw polyphonic music data...")
-    data = jsb_chorales(base_path)
+    print("processing raw data - {} ...".format(dataset.name))
+    try:
+        data = pickle.load(urlopen(dataset.url))
+    except urllib.HTTPError as e:
+        print(e.fp.read())
     processed_dataset = {}
-    for split, data_split in zip(['train', 'test', 'valid'], data):
+    for split, data_split in data.items():
         processed_dataset[split] = {}
         n_seqs = len(data_split)
         processed_dataset[split]['sequence_lengths'] = np.zeros((n_seqs), dtype=np.int32)
-        processed_dataset[split]['sequences'] = np.zeros((n_seqs, T_max, note_range))
+        processed_dataset[split]['sequences'] = np.zeros((n_seqs, t_max, note_range))
         for seq in range(n_seqs):
             seq_length = len(data_split[seq])
             processed_dataset[split]['sequence_lengths'][seq] = seq_length
@@ -58,13 +88,16 @@ def process_data(base_path, filename, T_max=160, min_note=21, note_range=88):
 
 # this logic will be initiated upon import
 base_path = get_data_directory(__file__)
-process_data(base_path, "jsb_processed.pkl")
-jsb_file_loc = os.path.join(base_path, "jsb_processed.pkl")
+if not os.path.exists(base_path):
+    os.mkdir(base_path)
+for dset in (JSB_CHORALES, PIANO_MIDI, NOTTINGHAM):
+    process_data(base_path, dset)
 
 
 # ingest training/validation/test data from disk
-def load_data():
-    with open(jsb_file_loc, "rb") as f:
+def load_data(dataset):
+    file_loc = os.path.join(base_path, dataset.filename)
+    with open(file_loc, "rb") as f:
         return pickle.load(f)
 
 
