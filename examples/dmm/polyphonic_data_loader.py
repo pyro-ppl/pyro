@@ -102,10 +102,8 @@ def load_data(dataset):
 
 
 # this function takes a torch mini-batch and reverses each sequence
-# (w.r.t. the temporal axis, i.e. axis=1)
-# in contrast to `reverse_sequences_numpy`, this function plays
-# nice with torch autograd
-def reverse_sequences_torch(mini_batch, seq_lengths):
+# (w.r.t. the temporal axis, i.e. axis=1).
+def reverse_sequences(mini_batch, seq_lengths):
     reversed_mini_batch = mini_batch.new_zeros(mini_batch.size())
     for b in range(mini_batch.size(0)):
         T = seq_lengths[b]
@@ -119,7 +117,7 @@ def reverse_sequences_torch(mini_batch, seq_lengths):
 # unpacks it it; it also reverses each sequence temporally
 def pad_and_reverse(rnn_output, seq_lengths):
     rnn_output, _ = nn.utils.rnn.pad_packed_sequence(rnn_output, batch_first=True)
-    reversed_output = reverse_sequences_torch(rnn_output, seq_lengths)
+    reversed_output = reverse_sequences(rnn_output, seq_lengths)
     return reversed_output
 
 
