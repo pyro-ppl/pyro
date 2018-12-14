@@ -149,7 +149,7 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
     # this is the sorted mini-batch
     mini_batch = sequences[sorted_mini_batch_indices, 0:T_max, :]
     # this is the sorted mini-batch in reverse temporal order
-    mini_batch_reversed = reverse_sequences_torch(mini_batch, sorted_seq_lengths)
+    mini_batch_reversed = reverse_sequences(mini_batch, sorted_seq_lengths)
     # get mask for mini-batch
     mini_batch_mask = get_mini_batch_mask(mini_batch, sorted_seq_lengths)
 
