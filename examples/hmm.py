@@ -48,15 +48,24 @@ def main(args):
 
     log('Training model{} on {} sequences'.format(
                  args.model, len(data['train']['sequences'])))
-    sequences = torch.tensor(data['train']['sequences'], dtype=torch.float32)
-    lengths = torch.tensor(data['train']['sequence_lengths'], dtype=torch.long)
+    train_sequences = torch.tensor(data['train']['sequences'], dtype=torch.float32)
+    train_lengths = torch.tensor(data['train']['sequence_lengths'], dtype=torch.long)
 
-    present_notes = ((sequences == 1).sum(0).sum(0) > 0)
-    sequences = sequences[..., present_notes]
+    if args.strip:
+        present_notes = ((train_sequences == 1).sum(0).sum(0) > 0)
+    else:
+        present_notes = torch.arange(data_dim)
+
+    train_sequences = train_sequences[..., present_notes]
+    test_sequences = torch.tensor(data['test']['sequences'], dtype=torch.float32)[..., present_notes]
+    test_lengths = torch.tensor(data['test']['sequence_lengths'], dtype=torch.long)
 
     if args.truncate:
-        lengths.clamp_(max=args.truncate)
-    num_observations = float(lengths.sum())
+        train_lengths.clamp_(max=args.truncate)
+        test_lengths.clamp_(max=args.truncate)
+
+    N_train_obs = float(train_lengths.sum())
+    N_test_obs = float(test_lengths.sum())
 
     pyro.set_rng_seed(args.seed)
     pyro.clear_param_store()
@@ -75,27 +84,29 @@ def main(args):
 
     for epoch in range(args.num_steps):
         epoch_loss = 0.0
-        mb_indices = get_mb_indices(sequences.size(0), args.batch_size)
+        mb_indices = get_mb_indices(train_sequences.size(0), args.batch_size)
 
         for mb in mb_indices:
-            epoch_loss += svi.step(sequences, lengths, args, mb=mb)
+            epoch_loss += svi.step(train_sequences, train_lengths, args, mb=mb, include_prior=False)
+            store = pyro.get_param_store()
+            #store["auto_probs_x"] = store["auto_probs_x"].clamp(1.0e-12)
+            #if 'auto_probs_y' in store:
+            #    store["auto_probs_y"] = store["auto_probs_y"].clamp(1.0e-12)
 
         ts.append(time.time())
-        log('{: >5d}\t{:.4f}\t{:.2f}'.format(epoch, epoch_loss / num_observations,
+        log('{: >5d}\t{:.4f}\t{:.2f}'.format(epoch, epoch_loss / N_train_obs,
                                                       (ts[-1] - ts[0])/(epoch+1)))
 
-    train_loss = elbo.loss(model.model, guide, sequences, lengths, args, include_prior=False)
-    log('training loss = {}'.format(train_loss / num_observations))
+        if epoch > 0 and (epoch % 5 == 0 or epoch == args.num_steps - 1):
+            train_loss = elbo.loss(model.model, guide, train_sequences, train_lengths,
+                                   args, include_prior=False)
+            test_loss = elbo.loss(model.model, guide, test_sequences, test_lengths,
+                                  args, include_prior=False)
+
+            log('{: >5d}\ttraining loss = {:.5f}  (no MAP term)'.format(epoch, train_loss / N_train_obs))
+            log('{: >5d}\ttest loss = {:.5f}  (no MAP term)'.format(epoch, test_loss / N_test_obs))
 
     log('-' * 40)
-    log('Evaluating on {} test sequences'.format(len(data['test']['sequences'])))
-    sequences = torch.tensor(data['test']['sequences'], dtype=torch.float32)[..., present_notes]
-    lengths = torch.tensor(data['test']['sequence_lengths'], dtype=torch.long)
-    if args.truncate:
-        lengths.clamp_(max=args.truncate)
-    num_observations = float(lengths.sum())
-    test_loss = elbo.loss(model.model, guide, sequences, lengths, args, include_prior=False)
-    log('test loss = {}'.format(test_loss / num_observations))
 
     capacity = sum(len(pyro.param(name).reshape(-1))
                    for name in pyro.get_param_store().get_all_param_names())
@@ -118,6 +129,7 @@ if __name__ == '__main__':
     parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
     parser.add_argument("-t", "--truncate", type=int)
     parser.add_argument('--cuda', action='store_true')
+    parser.add_argument('--strip', action='store_true')
     parser.add_argument('--jit', action='store_true')
     args = parser.parse_args()
     main(args)
