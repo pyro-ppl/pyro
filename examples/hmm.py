@@ -414,14 +414,14 @@ def main(args):
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     logging.info('Loading data')
-    data = poly.load_data()
+    data = poly.load_data(poly.JSB_CHORALES)
 
     logging.info('-' * 40)
     model = models[args.model]
     logging.info('Training {} on {} sequences'.format(
         model.__name__, len(data['train']['sequences'])))
-    sequences = torch.tensor(data['train']['sequences'], dtype=torch.float32)
-    lengths = torch.tensor(data['train']['sequence_lengths'], dtype=torch.long)
+    sequences = data['train']['sequences']
+    lengths = data['train']['sequence_lengths']
 
     # find all the notes that are present at least once in the training set
     present_notes = ((sequences == 1).sum(0).sum(0) > 0)
@@ -475,8 +475,8 @@ def main(args):
     # Finally we evaluate on the test dataset.
     logging.info('-' * 40)
     logging.info('Evaluating on {} test sequences'.format(len(data['test']['sequences'])))
-    sequences = torch.tensor(data['test']['sequences'], dtype=torch.float32)[..., present_notes]
-    lengths = torch.tensor(data['test']['sequence_lengths'], dtype=torch.long)
+    sequences = data['test']['sequences'][..., present_notes]
+    lengths = data['test']['sequence_lengths']
     if args.truncate:
         lengths.clamp_(max=args.truncate)
     num_observations = float(lengths.sum())
