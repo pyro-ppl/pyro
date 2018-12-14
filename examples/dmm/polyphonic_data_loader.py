@@ -14,7 +14,6 @@ und Kognitive Systeme at Universitaet Karlsruhe.
 """
 
 import os
-import urllib
 from collections import namedtuple
 from six.moves.urllib.request import urlopen
 
@@ -58,10 +57,7 @@ def process_data(base_path, dataset, min_note=21, note_range=88):
             os.remove(output)
 
     print("processing raw data - {} ...".format(dataset.name))
-    try:
-        data = pickle.load(urlopen(dataset.url))
-    except urllib.HTTPError as e:
-        print(e.fp.read())
+    data = pickle.load(urlopen(dataset.url))
     processed_dataset = {}
     for split, data_split in data.items():
         processed_dataset[split] = {}
@@ -86,12 +82,12 @@ def process_data(base_path, dataset, min_note=21, note_range=88):
 base_path = get_data_directory(__file__)
 if not os.path.exists(base_path):
     os.mkdir(base_path)
-for dset in (JSB_CHORALES, MUSE_DATA, PIANO_MIDI, NOTTINGHAM):
-    process_data(base_path, dset)
 
 
 # ingest training/validation/test data from disk
 def load_data(dataset):
+    # download and process dataset if it does not exist
+    process_data(base_path, dataset)
     file_loc = os.path.join(base_path, dataset.filename)
     with open(file_loc, "rb") as f:
         dset = pickle.load(f)
