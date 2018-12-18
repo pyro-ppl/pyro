@@ -310,7 +310,7 @@ class HMC(TraceKernel):
             if not torch_isnan(trace_log_prob_sum) and not torch_isinf(trace_log_prob_sum):
                 self._initial_trace = trace
                 return trace
-            trace = poutine.trace(self.model).get_trace(self._args, self._kwargs)
+            trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
         raise ValueError("Model specification seems incorrect - cannot find a valid trace.")
 
     @initial_trace.setter

@@ -264,3 +264,27 @@ def test_bernoulli_latent_model(jit):
     mcmc_run = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal("y_prob").empirical["y_prob"].mean
     assert_equal(posterior, y_prob, prec=0.05)
+
+
+def test_initial_trace(monkeypatch):
+    dim = 3
+    data = torch.randn(2000, dim)
+    true_coefs = torch.arange(1., dim + 1.)
+    labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
+    # mock values to replay - from right to left
+    trace_log_prob_replay = [-5, float('NaN'), float('Inf')]
+
+    def model(data):
+        coefs_mean = torch.zeros(dim)
+        coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(dim)))
+        y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
+        return y
+
+    def tr_log_prob(trace, values=trace_log_prob_replay):
+        return values.pop()
+
+    hmc_kernel = HMC(model, adapt_step_size=False)
+    monkeypatch.setattr(hmc_kernel, '_compute_trace_log_prob', tr_log_prob)
+    hmc_kernel.setup(0, data)
+    init_trace = hmc_kernel.initial_trace
+    assert len(trace_log_prob_replay) == 0

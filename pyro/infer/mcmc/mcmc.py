@@ -23,6 +23,9 @@ import pyro.ops.stats as stats
 from pyro.util import optional
 
 
+MAX_SEED = 2**32 - 1
+
+
 def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_progbar=False):
     """
     Logging thread that asynchronously consumes logging events from `log_queue`,
@@ -77,7 +80,7 @@ class _Worker(object):
         self.default_tensor_type = torch.Tensor().type()
 
     def run(self, *args, **kwargs):
-        pyro.set_rng_seed(self.chain_id + self.rng_seed)
+        pyro.set_rng_seed((self.chain_id + self.rng_seed) % MAX_SEED)
         torch.set_default_tensor_type(self.default_tensor_type)
         kwargs["logger_id"] = "CHAIN:{}".format(self.chain_id)
         kwargs["log_queue"] = self.log_queue
