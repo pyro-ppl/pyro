@@ -286,5 +286,5 @@ def test_initial_trace(monkeypatch):
     hmc_kernel = HMC(model, adapt_step_size=False)
     monkeypatch.setattr(hmc_kernel, '_compute_trace_log_prob', tr_log_prob)
     hmc_kernel.setup(0, data)
-    init_trace = hmc_kernel.initial_trace
+    hmc_kernel.initial_trace
     assert len(trace_log_prob_replay) == 0
