@@ -256,6 +256,7 @@ class NUTS(HMC):
                          sum_accept_probs, num_proposals)
 
     def sample(self, trace):
+        print(self.step_size)
         z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
         potential_energy, z_grads = self._fetch_from_cache()
         # automatically transform `z` to unconstrained space, if needed.
@@ -304,7 +305,8 @@ class NUTS(HMC):
         # NaNs are expected during step size adaptation.
         with optional(pyro.validation_enabled(False), self._t < self._warmup_steps):
             # doubling process, stop when turning or diverging
-            for tree_depth in range(self._max_tree_depth + 1):
+            tree_depth = 0
+            while tree_depth < self._max_tree_depth:
                 direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
                                         dist.Bernoulli(probs=torch.ones(1) * 0.5))
                 direction = int(direction.item())
@@ -324,6 +326,8 @@ class NUTS(HMC):
 
                 if new_tree.turning or new_tree.diverging:  # stop doubling
                     break
+
+                tree_depth += 1
 
                 if self.use_multinomial_sampling:
                     new_tree_prob = (new_tree.weight - tree_weight).exp()
@@ -349,6 +353,10 @@ class NUTS(HMC):
         if self._t < self._warmup_steps:
             accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
             self._adapter.step(self._t, z, accept_prob)
+            print("accept_prob", accept_prob.item())
+        print("tree_depth", tree_depth)
+        print("-----------------------")
+        print(self.inverse_mass_matrix)
 
         if accepted:
             self._accept_cnt += 1

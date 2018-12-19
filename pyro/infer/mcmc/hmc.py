@@ -148,7 +148,9 @@ class HMC(TraceKernel):
         if self.full_mass:
             return 0.5 * (r_flat * (self.inverse_mass_matrix.matmul(r_flat))).sum()
         else:
-            return 0.5 * (self.inverse_mass_matrix * (r_flat ** 2)).sum()
+            k = 0.5 * (self.inverse_mass_matrix * (r_flat ** 2)).sum()
+            #print("kinetic energy", k)
+            return k
 
     def _potential_energy(self, z):
         if self._jit_compile:
@@ -192,7 +194,10 @@ class HMC(TraceKernel):
         return self._compiled_potential_fn(*vals)
 
     def _energy(self, z, r):
-        return self._kinetic_energy(r) + self._potential_energy(z)
+        k = self._kinetic_energy(r)
+        p = self._potential_energy(z)
+        #print("energy", k, p, k+p)
+        return k + p
 
     def _reset(self):
         self._t = 0
@@ -215,7 +220,7 @@ class HMC(TraceKernel):
         # We are going to find a step_size which make accept_prob (Metropolis correction)
         # near the target_accept_prob. If accept_prob:=exp(-delta_energy) is small,
         # then we have to decrease step_size; otherwise, increase step_size.
-        r, _ = self._sample_r(name="r_presample")
+        r, _ = self._sample_r(name="r_presample_0")
         energy_current = self._energy(z, r)
         z_new, r_new, z_grads, potential_energy = velocity_verlet(
             z, r, self._potential_energy, self.inverse_mass_matrix, step_size)
@@ -226,18 +231,25 @@ class HMC(TraceKernel):
         # case for a diverging trajectory (e.g. in the case of evaluating log prob
         # of a value simulated using a large step size for a constrained sample site).
         direction = 1 if self._direction_threshold < -delta_energy else -1
-
+        #print("aa", energy_current)
         # define scale for step_size: 2 for increasing, 1/2 for decreasing
         step_size_scale = 2 ** direction
         direction_new = direction
         # keep scale step_size until accept_prob crosses its target
         # TODO: make thresholds for too small step_size or too large step_size
+        t = 0
         while direction_new == direction:
+            t += 1
             step_size = step_size_scale * step_size
+            r, _ = self._sample_r(name="r_presample_{}".format(t))
+            #print("presample", t, r)
+            energy_current = self._energy(z, r)
             z_new, r_new, z_grads, potential_energy = velocity_verlet(
                 z, r, self._potential_energy, self.inverse_mass_matrix, step_size)
             energy_new = potential_energy + self._kinetic_energy(r_new)
             delta_energy = energy_new - energy_current
+            #print("delta_energy", delta_energy, energy_current)
+            #print("=" * 20)
             direction_new = 1 if self._direction_threshold < -delta_energy else -1
         return step_size
 
@@ -263,13 +275,15 @@ class HMC(TraceKernel):
         initial_step_size = None
         if self.adapt_step_size:
             z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(self.initial_trace)}
+            #print("in configure", z)
             for name, transform in self.transforms.items():
                 z[name] = transform(z[name])
             with pyro.validation_enabled(False):
                 initial_step_size = self._find_reasonable_step_size(z)
 
         self._adapter.configure(self._warmup_steps,
-                                initial_step_size)
+                                initial_step_size,
+                                find_reasonable_step_size_fn=self._find_reasonable_step_size)
 
     def _sample_r(self, name):
         r_dist = self._adapter.r_dist
@@ -307,10 +321,13 @@ class HMC(TraceKernel):
         trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
         for i in range(self._max_tries_initial_trace):
             trace_log_prob_sum = self._compute_trace_log_prob(trace)
+            z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
+            #print("in configure", z)
+            #print(trace_log_prob_sum)
             if not torch_isnan(trace_log_prob_sum) and not torch_isinf(trace_log_prob_sum):
                 self._initial_trace = trace
                 return trace
-            trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
+            trace = poutine.trace(self.model).get_trace(self._args, self._kwargs)
         raise ValueError("Model specification seems incorrect - cannot find a valid trace.")
 
     @initial_trace.setter
@@ -398,6 +415,7 @@ class HMC(TraceKernel):
         if rand < accept_prob:
             self._accept_cnt += 1
             z = z_new
+            self._cache(potential_energy_new, z_grads_new)
 
         if self._t < self._warmup_steps:
             self._adapter.step(self._t, z, accept_prob)

@@ -27,10 +27,11 @@ class WarmupAdapter(object):
         self.adapt_mass_matrix = adapt_mass_matrix
         self.target_accept_prob = target_accept_prob
         self.is_diag_mass = is_diag_mass
-        self._step_size = step_size if step_size is not None else 1
+        self.step_size = step_size if step_size is not None else 1
         self._adaptation_disabled = not (adapt_step_size or adapt_mass_matrix)
         if adapt_step_size:
             self._step_size_adapt_scheme = DualAveraging()
+            self._reset_step_size_adaptation()
         if adapt_mass_matrix:
             self._mass_matrix_adapt_scheme = WelfordCovariance(diagonal=is_diag_mass)
 
@@ -85,8 +86,8 @@ class WarmupAdapter(object):
                                                 self._warmup_steps - 1))
         return adaptation_schedule
 
-    def _reset_step_size_adaptation(self, step_size):
-        self._step_size_adapt_scheme.prox_center = math.log(10 * step_size)
+    def _reset_step_size_adaptation(self):
+        self._step_size_adapt_scheme.prox_center = math.log(10 * self.step_size)
         self._step_size_adapt_scheme.reset()
 
     def _update_step_size(self, accept_prob):
@@ -94,7 +95,7 @@ class WarmupAdapter(object):
         H = self.target_accept_prob - accept_prob
         self._step_size_adapt_scheme.step(H)
         log_step_size, _ = self._step_size_adapt_scheme.get_state()
-        self._step_size = math.exp(log_step_size)
+        self.step_size = math.exp(log_step_size)
 
     def _update_r_dist(self):
         loc = self._inverse_mass_matrix.new_zeros(self._inverse_mass_matrix.size(0))
@@ -107,18 +108,19 @@ class WarmupAdapter(object):
     def _end_adaptation(self):
         if self.adapt_step_size:
             _, log_step_size_avg = self._step_size_adapt_scheme.get_state()
-            self._step_size = math.exp(log_step_size_avg)
+            self.step_size = math.exp(log_step_size_avg)
 
-    def configure(self, warmup_steps, initial_step_size=None, inv_mass_matrix=None):
+    def configure(self, warmup_steps, initial_step_size=None, inv_mass_matrix=None,
+                  find_reasonable_step_size_fn=None):
         r"""
         Model specific properties that are specified when the HMC kernel is setup.
 
         :param warmup_steps: Number of warmup steps that the sampler is initialized with.
-        :param inv_mass_matrix: Initial value of the inverse mass matrix.
         :param initial_step_size: Step size to use to initialize the Dual Averaging scheme.
+        :param inv_mass_matrix: Initial value of the inverse mass matrix.
         """
         self._warmup_steps = warmup_steps
-        if initial_step_size is not None and self.adapt_step_size:
+        if initial_step_size is not None:
             self.step_size = initial_step_size
         if inv_mass_matrix is not None:
             self.inverse_mass_matrix = inv_mass_matrix
@@ -127,6 +129,8 @@ class WarmupAdapter(object):
                              "need to be initialized.")
         if not self._adaptation_disabled:
             self._adaptation_schedule = self._build_adaptation_schedule()
+        if find_reasonable_step_size_fn is not None:
+            self._find_reasonable_step_size_fn = find_reasonable_step_size_fn
 
     def step(self, t, z, accept_prob):
         r"""
@@ -144,7 +148,7 @@ class WarmupAdapter(object):
         mass_matrix_adaptation_phase = self.adapt_mass_matrix and \
             (0 < self._current_window < num_windows - 1)
         if self.adapt_step_size:
-            self._update_step_size(accept_prob)
+            self._update_step_size(accept_prob.item())
         if mass_matrix_adaptation_phase:
             z_flat = torch.cat([z[name].reshape(-1) for name in sorted(z)])
             self._mass_matrix_adapt_scheme.update(z_flat.detach())
@@ -158,27 +162,19 @@ class WarmupAdapter(object):
                 self._current_window += 1
                 return
 
-            if self.adapt_step_size:
-                self._reset_step_size_adaptation(self._step_size)
-
             if mass_matrix_adaptation_phase:
                 self.inverse_mass_matrix = self._mass_matrix_adapt_scheme.get_covariance()
+                if self.adapt_step_size:
+                    self.step_size = self._find_reasonable_step_size_fn(z)
+
+            if self.adapt_step_size:
+                self._reset_step_size_adaptation()
 
             self._current_window += 1
 
     @property
     def adaptation_schedule(self):
         return self._adaptation_schedule
-
-    @property
-    def step_size(self):
-        return self._step_size
-
-    @step_size.setter
-    def step_size(self, value):
-        self._step_size = value
-        if self.adapt_step_size:
-            self._reset_step_size_adaptation(value)
 
     @property
     def inverse_mass_matrix(self):
