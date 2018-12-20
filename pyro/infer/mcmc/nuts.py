@@ -350,10 +350,14 @@ class NUTS(HMC):
                     else:
                         tree_weight = tree_weight + new_tree.weight
 
+        accept_prob = sum_accept_probs / num_proposals
         if self._t < self._warmup_steps:
-            accept_prob = sum_accept_probs / num_proposals
             self._adapter.step(self._t, z, accept_prob)
-
+        print("\n")
+        print(self.step_size, tree_depth, accept_prob.detach(),
+              self._potential_energy_last.detach())
+        print(self.inverse_mass_matrix)
+        print("------------------------")
         if accepted:
             self._accept_cnt += 1
 
