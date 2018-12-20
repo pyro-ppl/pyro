@@ -104,10 +104,8 @@ class HMC(TraceKernel):
             self.trajectory_length = step_size * num_steps
         else:
             self.trajectory_length = 2 * math.pi  # from Stan
-        self.adapt_step_size = adapt_step_size
         self._jit_compile = jit_compile
         self._ignore_jit_warnings = ignore_jit_warnings
-        self.full_mass = full_mass
         self._target_accept_prob = 0.8  # from Stan
         # The following parameter is used in find_reasonable_step_size method.
         # In NUTS paper, this threshold is set to a fixed log(0.5).
@@ -142,15 +140,11 @@ class HMC(TraceKernel):
         return self._trace_prob_evaluator.log_prob(model_trace)
 
     def _kinetic_energy(self, r):
-        # TODO: revert to `torch.dot` in pytorch==1.0
-        # See: https://github.com/uber/pyro/issues/1458
         r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)])
-        if self.full_mass:
-            return 0.5 * (r_flat * (self.inverse_mass_matrix.matmul(r_flat))).sum()
+        if self.inverse_mass_matrix.dim() == 2:
+            return 0.5 * self.inverse_mass_matrix.matmul(r_flat).dot(r_flat)
         else:
-            k = 0.5 * (self.inverse_mass_matrix * (r_flat ** 2)).sum()
-            #print("kinetic energy", k)
-            return k
+            return 0.5 * self.inverse_mass_matrix.dot(r_flat ** 2)
 
     def _potential_energy(self, z):
         if self._jit_compile:
@@ -194,10 +188,7 @@ class HMC(TraceKernel):
         return self._compiled_potential_fn(*vals)
 
     def _energy(self, z, r):
-        k = self._kinetic_energy(r)
-        p = self._potential_energy(z)
-        #print("energy", k, p, k+p)
-        return k + p
+        return self._kinetic_energy(r) + self._potential_energy(z)
 
     def _reset(self):
         self._t = 0
@@ -210,21 +201,23 @@ class HMC(TraceKernel):
         self._initial_trace = None
         self._has_enumerable_sites = False
         self._trace_prob_evaluator = None
+        self._z_last = None
         self._potential_energy_last = None
         self._z_grads_last = None
         self._warmup_steps = None
 
-    def _find_reasonable_step_size(self, z):
+    def _find_reasonable_step_size(self):
         step_size = self.step_size
 
         # We are going to find a step_size which make accept_prob (Metropolis correction)
         # near the target_accept_prob. If accept_prob:=exp(-delta_energy) is small,
         # then we have to decrease step_size; otherwise, increase step_size.
+        z, potential_energy, z_grads = self._fetch_from_cache()
         r, _ = self._sample_r(name="r_presample_0")
-        energy_current = self._energy(z, r)
-        z_new, r_new, z_grads, potential_energy = velocity_verlet(
-            z, r, self._potential_energy, self.inverse_mass_matrix, step_size)
-        energy_new = potential_energy + self._kinetic_energy(r_new)
+        energy_current = self._kinetic_energy(r) + potential_energy
+        z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
+            z, r, self._potential_energy, self.inverse_mass_matrix, step_size, z_grads=z_grads)
+        energy_new = self._kinetic_energy(r_new) + potential_energy_new
         delta_energy = energy_new - energy_current
         # direction=1 means keep increasing step_size, otherwise decreasing step_size.
         # Note that the direction is -1 if delta_energy is `NaN` which may be the
@@ -242,14 +235,11 @@ class HMC(TraceKernel):
             t += 1
             step_size = step_size_scale * step_size
             r, _ = self._sample_r(name="r_presample_{}".format(t))
-            #print("presample", t, r)
-            energy_current = self._energy(z, r)
-            z_new, r_new, z_grads, potential_energy = velocity_verlet(
-                z, r, self._potential_energy, self.inverse_mass_matrix, step_size)
-            energy_new = potential_energy + self._kinetic_energy(r_new)
+            energy_current = self._kinetic_energy(r) + potential_energy
+            z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
+                z, r, self._potential_energy, self.inverse_mass_matrix, step_size, z_grads=z_grads)
+            energy_new = self._kinetic_energy(r_new) + potential_energy_new
             delta_energy = energy_new - energy_current
-            #print("delta_energy", delta_energy, energy_current)
-            #print("=" * 20)
             direction_new = 1 if self._direction_threshold < -delta_energy else -1
         return step_size
 
@@ -270,20 +260,6 @@ class HMC(TraceKernel):
                 for frame in site["cond_indep_stack"]
                 if frame.vectorized]
         self.max_plate_nesting = -min(dims) if dims else 0
-
-    def _configure_adaptation(self):
-        initial_step_size = None
-        if self.adapt_step_size:
-            z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(self.initial_trace)}
-            #print("in configure", z)
-            for name, transform in self.transforms.items():
-                z[name] = transform(z[name])
-            with pyro.validation_enabled(False):
-                initial_step_size = self._find_reasonable_step_size(z)
-
-        self._adapter.configure(self._warmup_steps,
-                                initial_step_size,
-                                find_reasonable_step_size_fn=self._find_reasonable_step_size)
 
     def _sample_r(self, name):
         r_dist = self._adapter.r_dist
@@ -321,13 +297,10 @@ class HMC(TraceKernel):
         trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
         for i in range(self._max_tries_initial_trace):
             trace_log_prob_sum = self._compute_trace_log_prob(trace)
-            z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
-            #print("in configure", z)
-            #print(trace_log_prob_sum)
             if not torch_isnan(trace_log_prob_sum) and not torch_isinf(trace_log_prob_sum):
                 self._initial_trace = trace
                 return trace
-            trace = poutine.trace(self.model).get_trace(self._args, self._kwargs)
+            trace = poutine.trace(self.model).get_trace(*self._args, *self._kwargs)
         raise ValueError("Model specification seems incorrect - cannot find a valid trace.")
 
     @initial_trace.setter
@@ -360,38 +333,50 @@ class HMC(TraceKernel):
                                                           self._has_enumerable_sites,
                                                           self.max_plate_nesting)
         mass_matrix_size = sum(self._r_numels.values())
-        if self.full_mass:
-            initial_mass_matrix = eye_like(site_value, mass_matrix_size)
-        else:
+        if self._adapter.is_diag_mass:
             initial_mass_matrix = site_value.new_ones(mass_matrix_size)
-        self._adapter.inverse_mass_matrix = initial_mass_matrix
+        else:
+            initial_mass_matrix = eye_like(site_value, mass_matrix_size)
+        self._adapter.configure(self._warmup_steps,
+                                inv_mass_matrix=initial_mass_matrix,
+                                find_reasonable_step_size_fn=self._find_reasonable_step_size)
+
+    def _initialize_sampling(self, trace):
+        z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
+        # automatically transform `z` to unconstrained space, if needed.
+        for name, transform in self.transforms.items():
+            z[name] = transform(z[name])
+        potential_energy = self._potential_energy(z)
+        self._cache(z, potential_energy, None)
+        if self._adapter.adapt_step_size:
+            self._adapter.reset_step_size_adaptation()
 
     def setup(self, warmup_steps, *args, **kwargs):
         self._warmup_steps = warmup_steps
         self._args = args
         self._kwargs = kwargs
         self._initialize_model_properties()
-        self._configure_adaptation()
 
     def cleanup(self):
         self._reset()
 
-    def _cache(self, potential_energy, z_grads):
+    def _cache(self, z, potential_energy, z_grads):
+        self._z_last = z
         self._potential_energy_last = potential_energy
         self._z_grads_last = z_grads
 
     def _fetch_from_cache(self):
-        return self._potential_energy_last, self._z_grads_last
+        return self._z_last, self._potential_energy_last, self._z_grads_last
 
     def sample(self, trace):
-        z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
-        # automatically transform `z` to unconstrained space, if needed.
-        for name, transform in self.transforms.items():
-            z[name] = transform(z[name])
+        if self._t == 0:
+            # cache for initial trace and reset step size adaptation
+            self._initialize_sampling(trace)
 
+        z, potential_energy, z_grads = self._fetch_from_cache()
         r, _ = self._sample_r(name="r_t={}".format(self._t))
+        energy_current = self._kinetic_energy(r) + potential_energy
 
-        potential_energy, z_grads = self._fetch_from_cache()
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation
         with optional(pyro.validation_enabled(False), self._t < self._warmup_steps):
@@ -402,8 +387,7 @@ class HMC(TraceKernel):
                                                                               z_grads=z_grads)
             # apply Metropolis correction.
             energy_proposal = self._kinetic_energy(r_new) + potential_energy_new
-            energy_current = self._kinetic_energy(r) + potential_energy if potential_energy is not None \
-                else self._energy(z, r)
+
         delta_energy = energy_proposal - energy_current
         # Set accept prob to 0.0 if delta_energy is `NaN` which may be
         # the case for a diverging trajectory when using a large step size.
@@ -415,7 +399,7 @@ class HMC(TraceKernel):
         if rand < accept_prob:
             self._accept_cnt += 1
             z = z_new
-            self._cache(potential_energy_new, z_grads_new)
+            self._cache(z, potential_energy_new, z_grads_new)
 
         if self._t < self._warmup_steps:
             self._adapter.step(self._t, z, accept_prob)

@@ -2,6 +2,7 @@ import math
 import torch
 from collections import namedtuple
 
+import pyro
 import pyro.distributions as dist
 from pyro.ops.dual_averaging import DualAveraging
 from pyro.ops.welford import WelfordCovariance
@@ -31,7 +32,6 @@ class WarmupAdapter(object):
         self._adaptation_disabled = not (adapt_step_size or adapt_mass_matrix)
         if adapt_step_size:
             self._step_size_adapt_scheme = DualAveraging()
-            self._reset_step_size_adaptation()
         if adapt_mass_matrix:
             self._mass_matrix_adapt_scheme = WelfordCovariance(diagonal=is_diag_mass)
 
@@ -86,7 +86,12 @@ class WarmupAdapter(object):
                                                 self._warmup_steps - 1))
         return adaptation_schedule
 
-    def _reset_step_size_adaptation(self):
+    def reset_step_size_adaptation(self):
+        r"""
+        Finds a reasonable step size and resets step size adaptation scheme.
+        """
+        with pyro.validation_enabled(False):
+            self.step_size = self._find_reasonable_step_size()
         self._step_size_adapt_scheme.prox_center = math.log(10 * self.step_size)
         self._step_size_adapt_scheme.reset()
 
@@ -122,6 +127,8 @@ class WarmupAdapter(object):
         self._warmup_steps = warmup_steps
         if initial_step_size is not None:
             self.step_size = initial_step_size
+        if find_reasonable_step_size_fn is not None:
+            self._find_reasonable_step_size = find_reasonable_step_size_fn
         if inv_mass_matrix is not None:
             self.inverse_mass_matrix = inv_mass_matrix
         if self.inverse_mass_matrix is None or self.step_size is None:
@@ -129,8 +136,6 @@ class WarmupAdapter(object):
                              "need to be initialized.")
         if not self._adaptation_disabled:
             self._adaptation_schedule = self._build_adaptation_schedule()
-        if find_reasonable_step_size_fn is not None:
-            self._find_reasonable_step_size_fn = find_reasonable_step_size_fn
 
     def step(self, t, z, accept_prob):
         r"""
@@ -165,10 +170,7 @@ class WarmupAdapter(object):
             if mass_matrix_adaptation_phase:
                 self.inverse_mass_matrix = self._mass_matrix_adapt_scheme.get_covariance()
                 if self.adapt_step_size:
-                    self.step_size = self._find_reasonable_step_size_fn(z)
-
-            if self.adapt_step_size:
-                self._reset_step_size_adaptation()
+                    self.reset_step_size_adaptation()
 
             self._current_window += 1
 

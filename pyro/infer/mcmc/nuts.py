@@ -134,16 +134,13 @@ class NUTS(HMC):
         # We follow the strategy in Section A.4.2 of [2] for this implementation.
         r_left_flat = torch.cat([r_left[site_name].reshape(-1) for site_name in sorted(r_left)])
         r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in sorted(r_right)])
-        # TODO: change to torch.dot for pytorch 1.0
-        if self.full_mass:
-            if (((r_sum - r_left_flat) * (self.inverse_mass_matrix.matmul(r_left_flat)))
-                    .sum() > 0 and
-                    ((r_sum - r_right_flat) * (self.inverse_mass_matrix.matmul(r_right_flat)))
-                    .sum() > 0):
+        if self.inverse_mass_matrix.dim() == 2:
+            if (self.inverse_mass_matrix.matmul(r_left_flat).dot(r_sum - r_left_flat) and
+                    self.inverse_mass_matrix.matmul(r_right_flat).dot(r_sum - r_right_flat)):
                 return False
         else:
-            if ((self.inverse_mass_matrix * (r_sum - r_left_flat) * r_left_flat).sum() > 0 and
-                    (self.inverse_mass_matrix * (r_sum - r_right_flat) * r_right_flat).sum() > 0):
+            if (self.inverse_mass_matrix.mul(r_left_flat).dot(r_sum - r_left_flat) > 0 and
+                    self.inverse_mass_matrix.mul(r_right_flat).dot(r_sum - r_right_flat) > 0):
                 return False
         return True
 
@@ -159,6 +156,7 @@ class NUTS(HMC):
         diverging = (sliced_energy > self._max_sliced_energy)
         delta_energy = energy_new - energy_current
         accept_prob = (-delta_energy).exp().clamp(max=1.0)
+        print("base", accept_prob.detach(), energy_new.detach(), energy_current.detach())
 
         if self.use_multinomial_sampling:
             tree_weight = -sliced_energy
@@ -176,7 +174,6 @@ class NUTS(HMC):
     def _build_tree(self, z, r, z_grads, log_slice, direction, tree_depth, energy_current):
         if tree_depth == 0:
             return self._build_basetree(z, r, z_grads, log_slice, direction, energy_current)
-
         # build the first half of tree
         half_tree = self._build_tree(z, r, z_grads, log_slice,
                                      direction, tree_depth-1, energy_current)
@@ -256,15 +253,16 @@ class NUTS(HMC):
                          sum_accept_probs, num_proposals)
 
     def sample(self, trace):
+        print(self._t + 1)
         print(self.step_size)
-        z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
-        potential_energy, z_grads = self._fetch_from_cache()
-        # automatically transform `z` to unconstrained space, if needed.
-        for name, transform in self.transforms.items():
-            z[name] = transform(z[name])
+        print(self.inverse_mass_matrix)
+        if self._t == 0:
+            # cache for initial trace and reset step size adaptation
+            self._initialize_sampling(trace)
+
+        z, potential_energy, z_grads = self._fetch_from_cache()
         r, r_flat = self._sample_r(name="r_t={}".format(self._t))
-        energy_current = self._kinetic_energy(r) + potential_energy if potential_energy is not None \
-            else self._energy(z, r)
+        energy_current = self._kinetic_energy(r) + potential_energy
 
         # Ideally, following a symplectic integrator trajectory, the energy is constant.
         # In that case, we can sample the proposal uniformly, and there is no need to use "slice".
@@ -296,6 +294,8 @@ class NUTS(HMC):
         z_left_grads = z_right_grads = z_grads
         accepted = False
         r_sum = r_flat
+        sum_accept_probs = 0.
+        num_proposals = 0.
         if self.use_multinomial_sampling:
             tree_weight = energy_current.new_zeros(())
         else:
@@ -324,6 +324,9 @@ class NUTS(HMC):
                     r_left = new_tree.r_left
                     z_left_grads = new_tree.z_left_grads
 
+                sum_accept_probs = sum_accept_probs + new_tree.sum_accept_probs
+                num_proposals = num_proposals + new_tree.num_proposals
+
                 if new_tree.turning or new_tree.diverging:  # stop doubling
                     break
 
@@ -339,7 +342,7 @@ class NUTS(HMC):
                 if rand < new_tree_prob:
                     accepted = True
                     z = new_tree.z_proposal
-                    self._cache(new_tree.z_proposal_pe, new_tree.z_proposal_grads)
+                    self._cache(z, new_tree.z_proposal_pe, new_tree.z_proposal_grads)
 
                 r_sum = r_sum + new_tree.r_sum
                 if self._is_turning(r_left, r_right, r_sum):  # stop doubling
@@ -351,12 +354,11 @@ class NUTS(HMC):
                         tree_weight = tree_weight + new_tree.weight
 
         if self._t < self._warmup_steps:
-            accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
+            accept_prob = sum_accept_probs / num_proposals
             self._adapter.step(self._t, z, accept_prob)
             print("accept_prob", accept_prob.item())
         print("tree_depth", tree_depth)
         print("-----------------------")
-        print(self.inverse_mass_matrix)
 
         if accepted:
             self._accept_cnt += 1
