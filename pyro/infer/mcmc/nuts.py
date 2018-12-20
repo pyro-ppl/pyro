@@ -156,7 +156,6 @@ class NUTS(HMC):
         diverging = (sliced_energy > self._max_sliced_energy)
         delta_energy = energy_new - energy_current
         accept_prob = (-delta_energy).exp().clamp(max=1.0)
-        print("base", accept_prob.detach(), energy_new.detach(), energy_current.detach())
 
         if self.use_multinomial_sampling:
             tree_weight = -sliced_energy
@@ -366,6 +365,7 @@ class NUTS(HMC):
 
         self._t += 1
         # get trace with the constrained values for `z`.
+        z = z.copy()
         for name, transform in self.transforms.items():
             z[name] = transform.inv(z[name])
         return self._get_trace(z)

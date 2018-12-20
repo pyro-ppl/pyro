@@ -387,7 +387,6 @@ class HMC(TraceKernel):
                                                                               z_grads=z_grads)
             # apply Metropolis correction.
             energy_proposal = self._kinetic_energy(r_new) + potential_energy_new
-
         delta_energy = energy_proposal - energy_current
         # Set accept prob to 0.0 if delta_energy is `NaN` which may be
         # the case for a diverging trajectory when using a large step size.
@@ -407,6 +406,7 @@ class HMC(TraceKernel):
         self._t += 1
 
         # get trace with the constrained values for `z`.
+        z = z.copy()
         for name, transform in self.transforms.items():
             z[name] = transform.inv(z[name])
         return self._get_trace(z)
