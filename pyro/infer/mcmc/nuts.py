@@ -135,8 +135,8 @@ class NUTS(HMC):
         r_left_flat = torch.cat([r_left[site_name].reshape(-1) for site_name in sorted(r_left)])
         r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in sorted(r_right)])
         if self.inverse_mass_matrix.dim() == 2:
-            if (self.inverse_mass_matrix.matmul(r_left_flat).dot(r_sum - r_left_flat) and
-                    self.inverse_mass_matrix.matmul(r_right_flat).dot(r_sum - r_right_flat)):
+            if (self.inverse_mass_matrix.matmul(r_left_flat).dot(r_sum - r_left_flat) > 0 and
+                    self.inverse_mass_matrix.matmul(r_right_flat).dot(r_sum - r_right_flat) > 0):
                 return False
         else:
             if (self.inverse_mass_matrix.mul(r_left_flat).dot(r_sum - r_left_flat) > 0 and
@@ -253,9 +253,6 @@ class NUTS(HMC):
                          sum_accept_probs, num_proposals)
 
     def sample(self, trace):
-        print(self._t + 1)
-        print(self.step_size)
-        print(self.inverse_mass_matrix)
         if self._t == 0:
             # cache for initial trace and reset step size adaptation
             self._initialize_sampling(trace)
@@ -356,9 +353,6 @@ class NUTS(HMC):
         if self._t < self._warmup_steps:
             accept_prob = sum_accept_probs / num_proposals
             self._adapter.step(self._t, z, accept_prob)
-            print("accept_prob", accept_prob.item())
-        print("tree_depth", tree_depth)
-        print("-----------------------")
 
         if accepted:
             self._accept_cnt += 1
