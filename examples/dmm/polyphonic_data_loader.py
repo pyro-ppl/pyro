@@ -94,6 +94,7 @@ def load_data(dataset):
         for k, v in dset.items():
             sequences = v["sequences"]
             dset[k]["sequences"] = pad_sequence(sequences, batch_first=True).type(torch.Tensor)
+            dset[k]["sequence_lengths"] = v["sequence_lengths"].to(device=torch.Tensor().device)
     return dset
 
 

@@ -7,7 +7,7 @@ from subprocess import check_call
 
 import pytest
 
-from tests.common import EXAMPLES_DIR, requires_cuda, xfail_param, skipif_param
+from tests.common import EXAMPLES_DIR, requires_cuda, skipif_param
 
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
@@ -61,8 +61,6 @@ CPU_EXAMPLES = [
 
 CUDA_EXAMPLES = [
     'air/main.py --num-steps=1 --cuda',
-    xfail_param('baseball.py --num-samples=200 --warmup-steps=100 --num-chains=2 --cuda',
-                reason="https://github.com/pytorch/pytorch/issues/10375"),
     'bayesian_regression.py --num-epochs=1 --cuda',
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --cuda',
     'dmm/dmm.py --num-epochs=1 --cuda',
