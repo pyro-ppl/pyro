@@ -253,10 +253,6 @@ class NUTS(HMC):
                          sum_accept_probs, num_proposals)
 
     def sample(self, trace):
-        if self._t == 0:
-            # cache for initial trace and reset step size adaptation
-            self._initialize_sampling(trace)
-
         z, potential_energy, z_grads = self._fetch_from_cache()
         r, r_flat = self._sample_r(name="r_t={}".format(self._t))
         energy_current = self._kinetic_energy(r) + potential_energy
@@ -292,7 +288,7 @@ class NUTS(HMC):
         accepted = False
         r_sum = r_flat
         sum_accept_probs = 0.
-        num_proposals = 0.
+        num_proposals = 0
         if self.use_multinomial_sampling:
             tree_weight = energy_current.new_zeros(())
         else:
@@ -350,14 +346,10 @@ class NUTS(HMC):
                     else:
                         tree_weight = tree_weight + new_tree.weight
 
-        accept_prob = sum_accept_probs / num_proposals
         if self._t < self._warmup_steps:
+            accept_prob = sum_accept_probs / num_proposals
             self._adapter.step(self._t, z, accept_prob)
-        print("\n")
-        print(self.step_size, tree_depth, accept_prob.detach(),
-              self._potential_energy_last.detach())
-        print(self.inverse_mass_matrix)
-        print("------------------------")
+
         if accepted:
             self._accept_cnt += 1
 
