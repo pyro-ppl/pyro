@@ -224,7 +224,7 @@ class HMC(TraceKernel):
         # case for a diverging trajectory (e.g. in the case of evaluating log prob
         # of a value simulated using a large step size for a constrained sample site).
         direction = 1 if self._direction_threshold < -delta_energy else -1
-        #print("aa", energy_current)
+
         # define scale for step_size: 2 for increasing, 1/2 for decreasing
         step_size_scale = 2 ** direction
         direction_new = direction
@@ -300,7 +300,7 @@ class HMC(TraceKernel):
             if not torch_isnan(trace_log_prob_sum) and not torch_isinf(trace_log_prob_sum):
                 self._initial_trace = trace
                 return trace
-            trace = poutine.trace(self.model).get_trace(*self._args, *self._kwargs)
+            trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
         raise ValueError("Model specification seems incorrect - cannot find a valid trace.")
 
     @initial_trace.setter

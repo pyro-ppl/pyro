@@ -90,8 +90,9 @@ class WarmupAdapter(object):
         r"""
         Finds a reasonable step size and resets step size adaptation scheme.
         """
-        with pyro.validation_enabled(False):
-            self.step_size = self._find_reasonable_step_size()
+        if self._find_reasonable_step_size is not None:
+            with pyro.validation_enabled(False):
+                self.step_size = self._find_reasonable_step_size()
         self._step_size_adapt_scheme.prox_center = math.log(10 * self.step_size)
         self._step_size_adapt_scheme.reset()
 
@@ -123,6 +124,8 @@ class WarmupAdapter(object):
         :param warmup_steps: Number of warmup steps that the sampler is initialized with.
         :param initial_step_size: Step size to use to initialize the Dual Averaging scheme.
         :param inv_mass_matrix: Initial value of the inverse mass matrix.
+        :param find_reasonable_step_size_fn: A callable to find reasonable step size when
+            mass matrix is changed.
         """
         self._warmup_steps = warmup_steps
         if initial_step_size is not None:

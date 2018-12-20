@@ -174,6 +174,7 @@ class NUTS(HMC):
     def _build_tree(self, z, r, z_grads, log_slice, direction, tree_depth, energy_current):
         if tree_depth == 0:
             return self._build_basetree(z, r, z_grads, log_slice, direction, energy_current)
+
         # build the first half of tree
         half_tree = self._build_tree(z, r, z_grads, log_slice,
                                      direction, tree_depth-1, energy_current)

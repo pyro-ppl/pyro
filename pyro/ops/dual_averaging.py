@@ -67,7 +67,6 @@ class DualAveraging(object):
         # weight for the new x_t
         weight_t = self._t ** (-self.kappa)
         self._x_avg = (1 - weight_t) * self._x_avg + weight_t * self._x_t
-        print("step", g, self._g_avg, self._x_t, self._x_avg)
 
     def get_state(self):
         r"""
