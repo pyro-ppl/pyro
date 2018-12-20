@@ -61,8 +61,6 @@ CPU_EXAMPLES = [
 
 CUDA_EXAMPLES = [
     'air/main.py --num-steps=1 --cuda',
-    xfail_param('baseball.py --num-samples=200 --warmup-steps=100 --num-chains=2 --cuda',
-                reason="https://github.com/pytorch/pytorch/issues/10375"),
     'bayesian_regression.py --num-epochs=1 --cuda',
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --cuda',
     'dmm/dmm.py --num-epochs=1 --cuda',
