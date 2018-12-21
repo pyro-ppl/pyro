@@ -299,7 +299,6 @@ class HMC(TraceKernel):
             trace_log_prob_sum = self._compute_trace_log_prob(trace)
             if not torch_isnan(trace_log_prob_sum) and not torch_isinf(trace_log_prob_sum):
                 self._initial_trace = trace
-                self._initialize_step_size()  # this method also caches z and its potential energy
                 return trace
             trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
         raise ValueError("Model specification seems incorrect - cannot find a valid trace.")
@@ -307,7 +306,6 @@ class HMC(TraceKernel):
     @initial_trace.setter
     def initial_trace(self, trace):
         self._initial_trace = trace
-        self._initialize_step_size()
 
     def _initialize_model_properties(self):
         if self.max_plate_nesting is None:
@@ -342,10 +340,11 @@ class HMC(TraceKernel):
         self._adapter.configure(self._warmup_steps,
                                 inv_mass_matrix=initial_mass_matrix,
                                 find_reasonable_step_size_fn=self._find_reasonable_step_size)
+        self._initialize_step_size()  # this method also caches z and its potential energy
 
     def _initialize_step_size(self):
         z = {name: node["value"].detach()
-             for name, node in self._iter_latent_nodes(self._initial_trace)}
+             for name, node in self._iter_latent_nodes(self.initial_trace)}
         # automatically transform `z` to unconstrained space, if needed.
         for name, transform in self.transforms.items():
             z[name] = transform(z[name])
