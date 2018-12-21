@@ -306,6 +306,8 @@ class HMC(TraceKernel):
     @initial_trace.setter
     def initial_trace(self, trace):
         self._initial_trace = trace
+        if self._warmup_steps is not None:  # if setup is already called
+            self._initialize_step_size()
 
     def _initialize_model_properties(self):
         if self.max_plate_nesting is None:
