@@ -89,7 +89,7 @@ def main(args):
         for mb in mb_indices:
             epoch_loss += svi.step(train_sequences, train_lengths, args, mb=mb, include_prior=False)
             store = pyro.get_param_store()
-            #store["auto_probs_x"] = store["auto_probs_x"].clamp(1.0e-12)
+            store["auto_probs_x"] = store["auto_probs_x"].clamp(1.0e-12)
             #if 'auto_probs_y' in store:
             #    store["auto_probs_y"] = store["auto_probs_y"].clamp(1.0e-12)
 
@@ -123,7 +123,7 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--seed", default=0, type=int)
     parser.add_argument("-b1", "--beta1", default=0.8, type=float)
     parser.add_argument("-cn", "--clip-norm", default=20.0, type=float)
-    parser.add_argument("-lrd", "--learning_rate_decay", default=0.999, type=float)
+    parser.add_argument("-lrd", "--learning-rate-decay", default=0.999, type=float)
     parser.add_argument("-nn", "--nn-dim", default=48, type=int)
     parser.add_argument("-nc", "--nn-channels", default=2, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
