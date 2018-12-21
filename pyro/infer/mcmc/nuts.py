@@ -134,16 +134,13 @@ class NUTS(HMC):
         # We follow the strategy in Section A.4.2 of [2] for this implementation.
         r_left_flat = torch.cat([r_left[site_name].reshape(-1) for site_name in sorted(r_left)])
         r_right_flat = torch.cat([r_right[site_name].reshape(-1) for site_name in sorted(r_right)])
-        # TODO: change to torch.dot for pytorch 1.0
-        if self.full_mass:
-            if (((r_sum - r_left_flat) * (self.inverse_mass_matrix.matmul(r_left_flat)))
-                    .sum() > 0 and
-                    ((r_sum - r_right_flat) * (self.inverse_mass_matrix.matmul(r_right_flat)))
-                    .sum() > 0):
+        if self.inverse_mass_matrix.dim() == 2:
+            if (self.inverse_mass_matrix.matmul(r_left_flat).dot(r_sum - r_left_flat) > 0 and
+                    self.inverse_mass_matrix.matmul(r_right_flat).dot(r_sum - r_right_flat) > 0):
                 return False
         else:
-            if ((self.inverse_mass_matrix * (r_sum - r_left_flat) * r_left_flat).sum() > 0 and
-                    (self.inverse_mass_matrix * (r_sum - r_right_flat) * r_right_flat).sum() > 0):
+            if (self.inverse_mass_matrix.mul(r_left_flat).dot(r_sum - r_left_flat) > 0 and
+                    self.inverse_mass_matrix.mul(r_right_flat).dot(r_sum - r_right_flat) > 0):
                 return False
         return True
 
@@ -256,14 +253,9 @@ class NUTS(HMC):
                          sum_accept_probs, num_proposals)
 
     def sample(self, trace):
-        z = {name: node["value"].detach() for name, node in self._iter_latent_nodes(trace)}
-        potential_energy, z_grads = self._fetch_from_cache()
-        # automatically transform `z` to unconstrained space, if needed.
-        for name, transform in self.transforms.items():
-            z[name] = transform(z[name])
+        z, potential_energy, z_grads = self._fetch_from_cache()
         r, r_flat = self._sample_r(name="r_t={}".format(self._t))
-        energy_current = self._kinetic_energy(r) + potential_energy if potential_energy is not None \
-            else self._energy(z, r)
+        energy_current = self._kinetic_energy(r) + potential_energy
 
         # Ideally, following a symplectic integrator trajectory, the energy is constant.
         # In that case, we can sample the proposal uniformly, and there is no need to use "slice".
@@ -295,6 +287,8 @@ class NUTS(HMC):
         z_left_grads = z_right_grads = z_grads
         accepted = False
         r_sum = r_flat
+        sum_accept_probs = 0.
+        num_proposals = 0
         if self.use_multinomial_sampling:
             tree_weight = energy_current.new_zeros(())
         else:
@@ -304,7 +298,8 @@ class NUTS(HMC):
         # NaNs are expected during step size adaptation.
         with optional(pyro.validation_enabled(False), self._t < self._warmup_steps):
             # doubling process, stop when turning or diverging
-            for tree_depth in range(self._max_tree_depth + 1):
+            tree_depth = 0
+            while tree_depth < self._max_tree_depth:
                 direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
                                         dist.Bernoulli(probs=torch.ones(1) * 0.5))
                 direction = int(direction.item())
@@ -322,8 +317,13 @@ class NUTS(HMC):
                     r_left = new_tree.r_left
                     z_left_grads = new_tree.z_left_grads
 
+                sum_accept_probs = sum_accept_probs + new_tree.sum_accept_probs
+                num_proposals = num_proposals + new_tree.num_proposals
+
                 if new_tree.turning or new_tree.diverging:  # stop doubling
                     break
+
+                tree_depth += 1
 
                 if self.use_multinomial_sampling:
                     new_tree_prob = (new_tree.weight - tree_weight).exp()
@@ -335,7 +335,7 @@ class NUTS(HMC):
                 if rand < new_tree_prob:
                     accepted = True
                     z = new_tree.z_proposal
-                    self._cache(new_tree.z_proposal_pe, new_tree.z_proposal_grads)
+                    self._cache(z, new_tree.z_proposal_pe, new_tree.z_proposal_grads)
 
                 r_sum = r_sum + new_tree.r_sum
                 if self._is_turning(r_left, r_right, r_sum):  # stop doubling
@@ -347,7 +347,7 @@ class NUTS(HMC):
                         tree_weight = tree_weight + new_tree.weight
 
         if self._t < self._warmup_steps:
-            accept_prob = new_tree.sum_accept_probs / new_tree.num_proposals
+            accept_prob = sum_accept_probs / num_proposals
             self._adapter.step(self._t, z, accept_prob)
 
         if accepted:
@@ -355,6 +355,7 @@ class NUTS(HMC):
 
         self._t += 1
         # get trace with the constrained values for `z`.
+        z = z.copy()
         for name, transform in self.transforms.items():
             z[name] = transform.inv(z[name])
         return self._get_trace(z)

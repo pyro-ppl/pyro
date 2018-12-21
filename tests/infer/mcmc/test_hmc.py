@@ -272,7 +272,7 @@ def test_initial_trace(monkeypatch):
     true_coefs = torch.arange(1., dim + 1.)
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
     # mock values to replay - from right to left
-    trace_log_prob_replay = [-5, float('NaN'), float('Inf')]
+    trace_log_prob_replay = [-5, -5, float('NaN'), float('Inf')]
 
     def model(data):
         coefs_mean = torch.zeros(dim)
