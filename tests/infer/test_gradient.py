@@ -11,10 +11,10 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
-from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
-                        TraceGraph_ELBO, TraceMeanField_ELBO, config_enumerate)
+from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, JitTraceMeanField_ELBO, Trace_ELBO,
+                        TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, config_enumerate)
 from pyro.optim import Adam
-from tests.common import assert_equal, xfail_param, xfail_if_not_implemented
+from tests.common import assert_equal, xfail_if_not_implemented, xfail_param
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, sca
 
     num_particles = 50000
     if local_samples:
-        guide = config_enumerate(guide, default="parallel", num_samples=num_particles)
+        guide = config_enumerate(guide, num_samples=num_particles)
         num_particles = 1
 
     optim = Adam({"lr": 0.1})
@@ -192,6 +192,8 @@ def test_plate_elbo_vectorized_particles(Elbo, reparameterized):
     xfail_param(JitTraceGraph_ELBO,
                 reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
     xfail_param(JitTraceEnum_ELBO,
+                reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
+    xfail_param(JitTraceMeanField_ELBO,
                 reason="in broadcast_all: RuntimeError: expected int at position 0, but got: Tensor"),
 ])
 def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):

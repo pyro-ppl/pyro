@@ -21,25 +21,17 @@ Pyro is a flexible, scalable deep probabilistic programming library built on PyT
 - **Minimal**: Pyro is agile and maintainable. It is implemented with a small core of powerful, composable abstractions.
 - **Flexible**: Pyro aims for automation when you want it, control when you need it. This is accomplished through high-level abstractions to express generative and inference models, while allowing experts easy-access to customize inference.
 
-Pyro is in an alpha release.  It is developed and used by [Uber AI Labs](http://uber.ai).
+Pyro is in a beta release.  It is developed and maintained by [Uber AI Labs](http://uber.ai) and community contributors.
 For more information, check out our [blog post](http://eng.uber.com/pyro).
 
 ## Installing
 
 ### Installing a stable Pyro release
 
-First install [PyTorch](http://pytorch.org/).
+**Install using pip:**
 
-Install via pip:
-
-**Python 2.7.\*:**
 ```sh
 pip install pyro-ppl
-```
-
-**Python 3.5:**
-```sh
-pip3 install pyro-ppl
 ```
 
 **Install from source:**
@@ -62,31 +54,6 @@ Make sure that the models come from the same release version of the [Pyro source
 
 For recent features you can install Pyro from source.
 
-To install a compatible CPU version of PyTorch on OSX / Linux, you
-could use the PyTorch install helper script.
-
-```
-bash scripts/install_pytorch.sh
-```
-
-Alternatively, build PyTorch following instructions in the PyTorch
-[README](https://github.com/pytorch/pytorch/blob/master/README.md).
-```sh
-git clone --recursive https://github.com/pytorch/pytorch
-cd pytorch
-git checkout 200fb22  # <---- a well-tested commit
-```
-On Linux:
-```sh
-python setup.py install
-```
-On OSX:
-```sh
-MACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py install
-```
-
-Finally install Pyro using pip or from source as shown below.
-
 **Install using pip:**
 
 ```sh
@@ -106,37 +73,6 @@ cd pyro
 pip install .  # pip install .[extras] for running models in examples/tutorials
 ```
 
-
-### Installing Pyro's branch tracking PyTorch 1.0 release
-
-To use Pyro features that are under active development and only available
-with the PyTorch's forthcoming 1.0 release e.g. JIT compilation, you will
-need to use the `pytorch-1.0` branch of Pyro.
-
-First install the PyTorch release candidate using the Preview tab from
-the [PyTorch](https://pytorch.org/) website. Alternatively, you could
-build PyTorch following instructions in the PyTorch
-[README](https://github.com/pytorch/pytorch/blob/master/README.md).
-
-Then, install Pyro using the `pytorch-1.0` branch.
-
-**Install using pip:**
-
-```sh
-pip install git+https://github.com/uber/pyro.git@pytorch-1.0
-```
-
-or, with the `extras` dependency as shown above.
-
-**Install from source:**
-
-```sh
-git clone https://github.com/uber/pyro
-cd pyro
-git checkout pytorch-1.0  # branch compatible with PyTorch 1.0 release candidate
-pip install .  # pip install .[extras] for running models in examples/tutorials
-```
-
 ## Running Pyro from a Docker Container
 
 Refer to the instructions [here](docker/README.md).
@@ -145,7 +81,9 @@ Refer to the instructions [here](docker/README.md).
 If you use Pyro, please consider citing:
 ```
 @article{bingham2018pyro,
-  author = {Bingham, Eli and Chen, Jonathan P. and Jankowiak, Martin and Obermeyer, Fritz and Pradhan, Neeraj and Karaletsos, Theofanis and Singh, Rohit and Szerlip, Paul and Horsfall, Paul and Goodman, Noah D.},
+  author = {Bingham, Eli and Chen, Jonathan P. and Jankowiak, Martin and Obermeyer, Fritz and
+            Pradhan, Neeraj and Karaletsos, Theofanis and Singh, Rohit and Szerlip, Paul and
+            Horsfall, Paul and Goodman, Noah D.},
   title = {{Pyro: Deep Universal Probabilistic Programming}},
   journal = {arXiv preprint arXiv:1810.09538},
   year = {2018}

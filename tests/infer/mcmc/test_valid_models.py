@@ -41,8 +41,7 @@ def print_debug_info(model_trace):
     (HMC, {"adapt_step_size": True, "num_steps": 3}),
     (NUTS, {"adapt_step_size": True}),
 ])
-@pytest.mark.parametrize("use_einsum", [False, True])
-def test_model_error_stray_batch_dims(kernel, kwargs, use_einsum):
+def test_model_error_stray_batch_dims(kernel, kwargs):
 
     def gmm():
         data = torch.tensor([0., 0., 3., 3., 3., 5., 5.])
@@ -53,11 +52,11 @@ def test_model_error_stray_batch_dims(kernel, kwargs, use_einsum):
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)
         return cluster_means
 
-    mcmc_kernel = kernel(gmm, experimental_use_einsum=use_einsum, **kwargs)
+    mcmc_kernel = kernel(gmm, **kwargs)
     # Error due to non finite value for `max_plate_nesting`.
     assert_error(mcmc_kernel)
     # Error due to batch dims not inside plate.
-    mcmc_kernel = kernel(gmm, max_plate_nesting=1, experimental_use_einsum=use_einsum, **kwargs)
+    mcmc_kernel = kernel(gmm, max_plate_nesting=1, **kwargs)
     assert_error(mcmc_kernel)
 
 
@@ -65,8 +64,7 @@ def test_model_error_stray_batch_dims(kernel, kwargs, use_einsum):
     (HMC, {"adapt_step_size": True, "num_steps": 3}),
     (NUTS, {"adapt_step_size": True}),
 ])
-@pytest.mark.parametrize("use_einsum", [False, True])
-def test_model_error_enum_dim_clash(kernel, kwargs, use_einsum):
+def test_model_error_enum_dim_clash(kernel, kwargs):
 
     def gmm():
         data = torch.tensor([0., 0., 3., 3., 3., 5., 5.])
@@ -78,14 +76,13 @@ def test_model_error_enum_dim_clash(kernel, kwargs, use_einsum):
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.), obs=data)
         return cluster_means
 
-    mcmc_kernel = kernel(gmm, max_plate_nesting=0,
-                         experimental_use_einsum=use_einsum, **kwargs)
+    mcmc_kernel = kernel(gmm, max_plate_nesting=0, **kwargs)
     assert_error(mcmc_kernel)
 
 
 def test_log_prob_eval_iterates_in_correct_order():
     @poutine.enum(first_available_dim=-5)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model():
         outer = pyro.plate("outer", 3, dim=-1)
@@ -127,7 +124,7 @@ def test_all_discrete_sites_log_prob(Eval):
     p = 0.3
 
     @poutine.enum(first_available_dim=-4)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model():
         d = dist.Bernoulli(p)
         context1 = pyro.plate("outer", 2, dim=-1)
@@ -152,7 +149,7 @@ def test_all_discrete_sites_log_prob(Eval):
                                   xfail_param(TraceEinsumEvaluator, reason="TODO: Debug this failure case.")])
 def test_enumeration_in_tree(Eval):
     @poutine.enum(first_available_dim=-5)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"sample1": torch.tensor(0.),
                              "sample2": torch.tensor(1.),
                              "sample3": torch.tensor(2.)})
@@ -190,7 +187,7 @@ def test_enumeration_in_dag(Eval):
     p = 0.3
 
     @poutine.enum(first_available_dim=-3)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"b": torch.tensor(0.4), "c": torch.tensor(0.4)})
     def model():
         d = dist.Bernoulli(p)
@@ -221,7 +218,7 @@ def test_enumeration_in_dag(Eval):
 def test_enum_log_prob_continuous_observed(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-2)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model(data):
         p = pyro.sample("p", dist.Uniform(0., 1.))
@@ -250,7 +247,7 @@ def test_enum_log_prob_continuous_observed(data, expected_log_prob, Eval):
 def test_enum_log_prob_continuous_sampled(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-2)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"p": torch.tensor(0.4),
                              "n": torch.tensor([[1.], [-1.]])})
     def model(data):
@@ -278,7 +275,7 @@ def test_enum_log_prob_continuous_sampled(data, expected_log_prob, Eval):
 def test_enum_log_prob_discrete_observed(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-2)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model(data):
         p = pyro.sample("p", dist.Uniform(0., 1.))
@@ -304,7 +301,7 @@ def test_enum_log_prob_discrete_observed(data, expected_log_prob, Eval):
 def test_enum_log_prob_multiple_plate(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-2)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model(data):
         p = pyro.sample("p", dist.Beta(1.1, 1.1))
@@ -333,7 +330,7 @@ def test_enum_log_prob_multiple_plate(data, expected_log_prob, Eval):
 def test_enum_log_prob_nested_plate(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-3)
-    @config_enumerate(default="parallel")
+    @config_enumerate
     @poutine.condition(data={"p": torch.tensor(0.4)})
     def model(data):
         p = pyro.sample("p", dist.Uniform(0., 1.))

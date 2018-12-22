@@ -46,14 +46,14 @@ class model1(nn.Module):
             # stay in the same state with 90% probability; uniformly jump to another
             # state with 10% probability.
             probs_x = pyro.sample("probs_x",
-                                  dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
+                                  dist.Dirichlet(0.9 * torch.eye(args['hidden_dim']) + 0.1)
                                       .independent(1))
             # We put a weak prior on the conditional probability of a tone sounding.
             # We know that on average about 4 of 88 tones are active, so we'll set a
             # rough weak prior of 10% of the notes being active at any one time.
             probs_y = pyro.sample("probs_y",
                                   dist.Beta(0.1, 0.9)
-                                      .expand([args.hidden_dim, data_dim])
+                                      .expand([args['hidden_dim'], data_dim])
                                       .independent(2))
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
         with pyro.plate("sequences", len(sequences), subsample=mb, dim=-2) as batch:
@@ -88,11 +88,11 @@ class model2(nn.Module):
         assert lengths.max() <= max_length
         with poutine.mask(mask=torch.tensor(include_prior)):
             probs_x = pyro.sample("probs_x",
-                                  dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
+                                  dist.Dirichlet(0.9 * torch.eye(args['hidden_dim']) + 0.1)
                                       .independent(1))
             probs_y = pyro.sample("probs_y",
                                   dist.Beta(0.1, 0.9)
-                                      .expand([args.hidden_dim, 2, data_dim])
+                                      .expand([args['hidden_dim'], 2, data_dim])
                                       .independent(3))
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
         with pyro.plate("sequences", len(sequences), subsample=mb, dim=-2) as batch:
@@ -131,7 +131,7 @@ class model3(nn.Module):
         num_sequences, max_length, data_dim = sequences.shape
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
-        hidden_dim = int(args.hidden_dim ** 0.5)  # split between w and x
+        hidden_dim = int(args['hidden_dim'] ** 0.5)  # split between w and x
         with poutine.mask(mask=torch.tensor(include_prior)):
             probs_w = pyro.sample("probs_w",
                                   dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
@@ -178,7 +178,7 @@ class model4(nn.Module):
         num_sequences, max_length, data_dim = sequences.shape
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
-        hidden_dim = int(args.hidden_dim ** 0.5)  # split between w and x
+        hidden_dim = int(args['hidden_dim'] ** 0.5)  # split between w and x
         hidden = torch.arange(hidden_dim, dtype=torch.long)
         with poutine.mask(mask=torch.tensor(include_prior)):
             probs_w = pyro.sample("probs_w",
@@ -224,16 +224,16 @@ class TonesGenerator(nn.Module):
         self.args = args
         self.data_dim = data_dim
         super(TonesGenerator, self).__init__()
-        self.x_to_hidden = nn.Linear(args.hidden_dim, args.nn_dim)
-        self.y_to_hidden = nn.Linear(args.nn_channels * data_dim, args.nn_dim)
-        self.conv = nn.Conv1d(1, args.nn_channels, 3, padding=1)
-        self.hidden_to_logits = nn.Linear(args.nn_dim, data_dim)
+        self.x_to_hidden = nn.Linear(args['hidden_dim'], args['nn_dim'])
+        self.y_to_hidden = nn.Linear(args['nn_channels'] * data_dim, args['nn_dim'])
+        self.conv = nn.Conv1d(1, args['nn_channels'], 3, padding=1)
+        self.hidden_to_logits = nn.Linear(args['nn_dim'], data_dim)
         self.relu = nn.ReLU()
 
     def forward(self, x, y):
         if y.dim() < 2:
             y = y.unsqueeze(0)
-        x_onehot = y.new_zeros(x.shape[:-1] + (self.args.hidden_dim,)).scatter_(-1, x, 1)
+        x_onehot = y.new_zeros(x.shape[:-1] + (self.args['hidden_dim'],)).scatter_(-1, x, 1)
         y_conv = self.relu(self.conv(y.unsqueeze(-2))).reshape(y.shape[:-1] + (-1,))
         h = self.relu(self.x_to_hidden(x_onehot) + self.y_to_hidden(y_conv))
         return self.hidden_to_logits(h)
@@ -254,7 +254,7 @@ class model5(nn.Module):
 
         with poutine.mask(mask=torch.tensor(include_prior)):
             probs_x = pyro.sample("probs_x",
-                                  dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
+                                  dist.Dirichlet(0.9 * torch.eye(args['hidden_dim']) + 0.1)
                                       .independent(1))
         with pyro.plate("sequences", len(sequences), subsample=mb, dim=-2) as batch:
             lengths = lengths[batch]

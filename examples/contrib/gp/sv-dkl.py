@@ -1,10 +1,22 @@
 """
-An example to use Gaussian Process (GP) module to classify MNIST. Follow the idea
-from reference [1], we will combine a convolutional neural network with a RBF kernel
-to create a "deep" kernel. Then we train a SparseVariationalGP model using SVI. Note
-that the model is trained end-to-end in mini-batch.
+An example to use Pyro Gaussian Process module to classify MNIST and binary MNIST.
 
-With default arguments (trained on CPU), the accuracy is 98.59%.
+Follow the idea from reference [1], we will combine a convolutional neural network
+(CNN) with a RBF kernel to create a "deep" kernel:
+
+    >>> deep_kernel = gp.kernels.Warping(rbf, iwarping_fn=cnn)
+
+SparseVariationalGP model allows us train the data in mini-batch (time complexity
+scales linearly to the number of data points).
+
+Note that the implementation here is different from [1]. There the authors
+use CNN as a feature extraction layer, then add a Gaussian Process layer on the
+top of CNN. Hence, their inducing points lie in the space of extracted features.
+Here we join CNN module and RBF kernel together to make it a deep kernel.
+Hence, our inducing points lie in the space of original images.
+
+After 16 epochs with default hyperparameters, the accuaracy of 10-class MNIST
+is 98.45% and the accuaracy of binary MNIST is 99.41%.
 
 Reference:
 
@@ -26,8 +38,7 @@ from torchvision import transforms
 import pyro
 import pyro.contrib.gp as gp
 import pyro.infer as infer
-import pyro.optim as optim
-from pyro.contrib.examples.util import get_data_loader
+from pyro.contrib.examples.util import get_data_loader, get_data_directory
 
 
 class CNN(nn.Module):
@@ -47,93 +58,119 @@ class CNN(nn.Module):
         return x
 
 
-def train(args, train_loader, gpmodel, svi, epoch):
+def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
     for batch_idx, (data, target) in enumerate(train_loader):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
-        gpmodel.set_data(data, target)
-        loss = svi.step()
+        if args.binary:
+            target = (target % 2).float()  # convert numbers 0->9 to 0 or 1
+
+        gpmodule.set_data(data, target)
+        optimizer.zero_grad()
+        loss = loss_fn(gpmodule.model, gpmodule.guide)
+        loss.backward()
+        optimizer.step()
         if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss))
+            print("Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}"
+                  .format(epoch, batch_idx * len(data), len(train_loader.dataset),
+                          100. * batch_idx / len(train_loader), loss))
 
 
-def test(args, test_loader, gpmodel):
+def test(args, test_loader, gpmodule):
     correct = 0
     for data, target in test_loader:
         if args.cuda:
             data, target = data.cuda(), target.cuda()
+        if args.binary:
+            target = (target % 2).float()  # convert numbers 0->9 to 0 or 1
+
         # get prediction of GP model on new data
-        f_loc, f_var = gpmodel(data)
+        f_loc, f_var = gpmodule(data)
         # use its likelihood to give prediction class
-        pred = gpmodel.likelihood(f_loc, f_var)
+        pred = gpmodule.likelihood(f_loc, f_var)
         # compare prediction and target to count accuaracy
         correct += pred.eq(target).long().cpu().sum()
 
-    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
-        correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
+    print("\nTest set: Accuracy: {}/{} ({:.2f}%)\n"
+          .format(correct, len(test_loader.dataset), 100. * correct / len(test_loader.dataset)))
 
 
 def main(args):
+    data_dir = args.data_dir if args.data_dir is not None else get_data_directory(__file__)
     train_loader = get_data_loader(dataset_name='MNIST',
-                                   data_dir=args.data_dir,
+                                   data_dir=data_dir,
                                    batch_size=args.batch_size,
                                    dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
                                    is_training_set=True,
                                    shuffle=True)
     test_loader = get_data_loader(dataset_name='MNIST',
-                                  data_dir=args.data_dir,
-                                  batch_size=args.batch_size,
+                                  data_dir=data_dir,
+                                  batch_size=args.test_batch_size,
                                   dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
                                   is_training_set=False,
-                                  shuffle=True)
+                                  shuffle=False)
+    if args.cuda:
+        train_loader.num_workers = 1
+        test_loader.num_workers = 1
 
-    cnn = CNN().cuda() if args.cuda else CNN()
+    cnn = CNN()
 
-    # optimizer in SVI just works with params which are active inside its model/guide scope;
-    # so we need this helper to mark cnn's parameters active for each `svi.step()` call.
-    def cnn_fn(x):
-        return pyro.module("CNN", cnn)(x)
     # Create deep kernel by warping RBF with CNN.
     # CNN will transform a high dimension image into a low dimension 2D tensors for RBF kernel.
-    # This kernel accepts inputs are inputs of CNN and gives outputs are covariance matrix of RBF on
-    # outputs of CNN.
-    kernel = gp.kernels.RBF(input_dim=10, lengthscale=torch.ones(10)).warp(iwarping_fn=cnn_fn)
+    # This kernel accepts inputs are inputs of CNN and gives outputs are covariance matrix of RBF
+    # on outputs of CNN.
+    rbf = gp.kernels.RBF(input_dim=10, lengthscale=torch.ones(10))
+    deep_kernel = gp.kernels.Warping(rbf, iwarping_fn=cnn)
 
     # init inducing points (taken randomly from dataset)
-    Xu = next(iter(train_loader))[0][:args.num_inducing]
-    # use MultiClass likelihood for 10-class classification problem
-    likelihood = gp.likelihoods.MultiClass(num_classes=10)
-    # Because we use Categorical distribution in MultiClass likelihood, we need GP model returns a list
-    # of probabilities of each class. Hence it is required to use latent_shape = 10.
+    batches = []
+    for i, (data, _) in enumerate(train_loader):
+        batches.append(data)
+        if i >= ((args.num_inducing - 1) // args.batch_size):
+            break
+    Xu = torch.cat(batches)[:args.num_inducing].clone()
+
+    if args.binary:
+        likelihood = gp.likelihoods.Binary()
+        latent_shape = torch.Size([])
+    else:
+        # use MultiClass likelihood for 10-class classification problem
+        likelihood = gp.likelihoods.MultiClass(num_classes=10)
+        # Because we use Categorical distribution in MultiClass likelihood, we need GP model
+        # returns a list of probabilities of each class. Hence it is required to use
+        # latent_shape = 10.
+        latent_shape = torch.Size([10])
+
     # Turns on "whiten" flag will help optimization for variational models.
-    gpmodel = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=kernel, Xu=Xu,
-                                            likelihood=likelihood, latent_shape=torch.Size([10]),
-                                            num_data=60000, whiten=True)
+    gpmodule = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=deep_kernel, Xu=Xu,
+                                             likelihood=likelihood, latent_shape=latent_shape,
+                                             num_data=60000, whiten=True)
     if args.cuda:
-        gpmodel.cuda()
+        gpmodule.cuda()
 
-    optimizer = optim.Adam({"lr": args.lr})
+    optimizer = torch.optim.Adam(gpmodule.parameters(), lr=args.lr)
 
-    elbo = infer.JitTrace_ELBO() if args.jit else infer.Trace_ELBO()
-    svi = infer.SVI(gpmodel.model, gpmodel.guide, optimizer, elbo)
+    elbo = infer.JitTraceMeanField_ELBO() if args.jit else infer.TraceMeanField_ELBO()
+    loss_fn = elbo.differentiable_loss
 
     for epoch in range(1, args.epochs + 1):
         start_time = time.time()
-        train(args, train_loader, gpmodel, svi, epoch)
+        train(args, train_loader, gpmodule, optimizer, loss_fn, epoch)
         with torch.no_grad():
-            test(args, test_loader, gpmodel)
-        print("Amount of time spent for epoch {}: {}s\n".format(epoch, int(time.time() - start_time)))
+            test(args, test_loader, gpmodule)
+        print("Amount of time spent for epoch {}: {}s\n"
+              .format(epoch, int(time.time() - start_time)))
 
 
 if __name__ == '__main__':
+    assert pyro.__version__.startswith('0.3.0')
     parser = argparse.ArgumentParser(description='Pyro GP MNIST Example')
-    parser.add_argument('--data-dir', type=str, default='../data', metavar='PATH',
+    parser.add_argument('--data-dir', type=str, default=None, metavar='PATH',
                         help='default directory to cache MNIST data')
     parser.add_argument('--num-inducing', type=int, default=70, metavar='N',
                         help='number of inducing input (default: 70)')
+    parser.add_argument('--binary', action='store_true', default=False,
+                        help='do binary classification')
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
@@ -153,5 +190,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     pyro.set_rng_seed(args.seed)
+    if args.cuda:
+        torch.backends.cudnn.deterministic = True
 
     main(args)

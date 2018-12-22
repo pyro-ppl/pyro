@@ -25,11 +25,10 @@ class MultiClass(Likelihood):
     :param callable response_function: A mapping to correct domain for MultiClass
         likelihood.
     """
-    def __init__(self, num_classes, response_function=None, name="MultiClass"):
-        super(MultiClass, self).__init__(name)
+    def __init__(self, num_classes, response_function=None):
+        super(MultiClass, self).__init__()
         self.num_classes = num_classes
-        self.response_function = (response_function if response_function is not None
-                                  else _softmax)
+        self.response_function = _softmax if response_function is None else response_function
 
     def forward(self, f_loc, f_var, y=None):
         r"""
@@ -48,7 +47,7 @@ class MultiClass(Likelihood):
         :rtype: torch.Tensor
         """
         # calculates Monte Carlo estimate for E_q(f) [logp(y | f)]
-        f = dist.Normal(f_loc, f_var)()
+        f = dist.Normal(f_loc, f_var.sqrt())()
         if f.dim() < 2:
             raise ValueError("Latent function output should have at least 2 "
                              "dimensions: one for number of classes and one for "
@@ -56,13 +55,13 @@ class MultiClass(Likelihood):
 
         # swap class dimension and data dimension
         f_swap = f.transpose(-2, -1)  # -> num_data x num_classes
-        if f_swap.shape[-1] != self.num_classes:
+        if f_swap.size(-1) != self.num_classes:
             raise ValueError("Number of Gaussian processes should be equal to the "
                              "number of classes. Expected {} but got {}."
-                             .format(self.num_classes, f_swap.shape[-1]))
+                             .format(self.num_classes, f_swap.size(-1)))
         f_res = self.response_function(f_swap)
 
         y_dist = dist.Categorical(f_res)
         if y is not None:
-            y_dist = y_dist.expand_by(y.shape[:-f_res.dim() + 1]).independent(y.dim())
-        return pyro.sample(self.y_name, y_dist, obs=y)
+            y_dist = y_dist.expand_by(y.shape[:-f_res.dim() + 1]).to_event(y.dim())
+        return pyro.sample("y", y_dist, obs=y)

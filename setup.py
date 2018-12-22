@@ -59,6 +59,7 @@ EXTRAS_REQUIRE = [
     'torchvision',
     'visdom>=0.1.4',
     'pandas',
+    'seaborn',
     'wget',
 ]
 
@@ -81,10 +82,10 @@ setup(
         'graphviz>=0.8',
         'networkx>=2.2',
         'numpy>=1.7',
-        'opt_einsum>=2.2.0',
+        'opt_einsum>=2.3.2',
         'six>=1.10.0',
-        'torch==0.4.0',
-        'tqdm>=4.27',
+        'torch>=1.0.0',
+        'tqdm>=4.28',
     ],
     extras_require={
         'extras': EXTRAS_REQUIRE,
@@ -93,7 +94,6 @@ setup(
             'pytest==3.7',
             'pytest-cov',
             'scipy>=0.19.0',
-            'ipython<=6.5.0',  # https://github.com/jupyter/jupyter_console/issues/158
         ],
         'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
         'dev': EXTRAS_REQUIRE + [
@@ -106,7 +106,6 @@ setup(
             'pypandoc',
             'pytest==3.7',
             'pytest-xdist',
-            'ipython<=6.5.0',  # https://github.com/jupyter/jupyter_console/issues/158
             'scipy>=0.19.0',
             'sphinx',
             'sphinx_rtd_theme',
