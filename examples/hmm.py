@@ -69,13 +69,12 @@ def main(**args):
     log('-' * 40)
     model = models[args['model']](args, data_dim)
 
-    log('Training model{} on {} sequences'.format(
-                 args['model'], len(data['train']['sequences'])))
+    log('Training model{} on {} sequences ({} test sequences)'.format(
+                 args['model'], len(data['train']['sequences']), len(data['test']['sequences'])))
     train_sequences = data['train']['sequences'].float()
     train_lengths = data['train']['sequence_lengths'].long()
     test_sequences = data['test']['sequences'].float()
     test_lengths = data['test']['sequence_lengths'].long()
-
     log("Average sequence lengths: %d (train), %d (test)" % (train_lengths.float().mean(), test_lengths.float().mean()))
 
     N_train_obs = float(train_lengths.sum())
@@ -84,8 +83,10 @@ def main(**args):
     pyro.set_rng_seed(args['seed'])
     pyro.clear_param_store()
 
-    guide = AutoDelta(poutine.block(model.model,
-                      expose_fn=lambda msg: msg["name"].startswith("probs_")))
+    #guide = AutoDelta(poutine.block(model.model,
+    #                  expose_fn=lambda msg: msg["name"].startswith("probs_")))
+    def guide(*args, **kwargs):
+        pass
 
     Elbo = JitTraceEnum_ELBO if args['jit'] else TraceEnum_ELBO
     elbo = Elbo(max_plate_nesting=2)
@@ -101,7 +102,7 @@ def main(**args):
         loss = 0.0
 
         for mb in mb_indices:
-            loss += svi.loss(model.model, guide, sequences, lengths, args, mb=mb, include_prior=False)
+            loss += svi.evaluate_loss(sequences, lengths, args, mb=mb)
 
         return loss
 
@@ -111,15 +112,14 @@ def main(**args):
     for epoch in range(args['num_steps']):
         epoch_loss = 0.0
         mb_indices = get_mb_indices(train_sequences.size(0), args['batch_size'])
-
         for mb in mb_indices:
-            epoch_loss += svi.step(train_sequences, train_lengths, args, mb=mb, include_prior=False)
+            epoch_loss += svi.step(train_sequences, train_lengths, args, mb=mb)
             store = pyro.get_param_store()
-            store["auto_probs_x"] = store["auto_probs_x"].clamp(args['clamp_prob'])
-            if 'auto_probs_y' in store:
-                store["auto_probs_y"] = store["auto_probs_y"].clamp(args['clamp_prob'])
-            if 'auto_probs_w' in store:
-                store["auto_probs_w"] = store["auto_probs_w"].clamp(args['clamp_prob'])
+            store["probs_x"] = store["probs_x"].clamp(args['clamp_prob'])
+            if 'probs_y' in store:
+                store["probs_y"] = store["probs_y"].clamp(args['clamp_prob'])
+            if 'probs_w' in store:
+                store["probs_w"] = store["probs_w"].clamp(args['clamp_prob'])
 
         ts.append(time.time())
         log('{: >5d}\t{:.4f}\t{:.2f}'.format(epoch, epoch_loss / N_train_obs,
@@ -158,7 +158,7 @@ if __name__ == '__main__':
     parser.add_argument("-lrd", "--learning_rate_decay", default=0.999, type=float)
     parser.add_argument("-nn", "--nn-dim", default=48, type=int)
     parser.add_argument("-nc", "--nn-channels", default=2, type=int)
-    parser.add_argument("-ef", "--eval-frequency", default=2, type=int)
+    parser.add_argument("-ef", "--eval-frequency", default=1, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
