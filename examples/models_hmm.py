@@ -20,7 +20,7 @@ class model1(nn.Module):
     def __init__(self, args, data_dim):
         super(model1, self).__init__()
 
-    def model(self, sequences, lengths, args, mb=None):
+    def model(self, sequences, lengths, args, mb=None, scale=1.0):
         num_sequences, max_length, data_dim = sequences.shape
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
@@ -32,21 +32,22 @@ class model1(nn.Module):
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
         with pyro.plate("sequences", mb.size(0), subsample=mb, dim=-2) as batch:
             lengths = lengths[batch]
-            x = 0
-            for t in pyro.markov(range(lengths.max())):
-                with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
-                    x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
-                                    infer={"enumerate": "parallel"})
-                    with tones_plate:
-                        pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x.squeeze(-1)]),
-                                    obs=sequences[batch, t])
+            with pyro.poutine.scale(scale=scale):
+                x = 0
+                for t in pyro.markov(range(lengths.max())):
+                    with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+                        x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
+                                        infer={"enumerate": "parallel"})
+                        with tones_plate:
+                            pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x.squeeze(-1)]),
+                                        obs=sequences[batch, t])
 
 
 class model2(nn.Module):
     def __init__(self, args, data_dim):
         super(model2, self).__init__()
 
-    def model(self, sequences, lengths, args, mb=None):
+    def model(self, sequences, lengths, args, mb=None, scale=1.0):
         num_sequences, max_length, data_dim = sequences.shape
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
@@ -58,25 +59,27 @@ class model2(nn.Module):
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
         with pyro.plate("sequences", mb.size(0), subsample=mb, dim=-2) as batch:
             lengths = lengths[batch]
-            x, y = 0, 0
-            for t in pyro.markov(range(lengths.max())):
-                with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
-                    x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
-                                    infer={"enumerate": "parallel"})
-                    with tones_plate as tones:
-                        y = pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x, y, tones]),
-                                        obs=sequences[batch, t]).long()
+            with pyro.poutine.scale(scale=scale):
+                x, y = 0, 0
+                for t in pyro.markov(range(lengths.max())):
+                    with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+                        x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
+                                        infer={"enumerate": "parallel"})
+                        with tones_plate as tones:
+                            y = pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[x, y, tones]),
+                                            obs=sequences[batch, t]).long()
 
 
 class model3(nn.Module):
     def __init__(self, args, data_dim):
         super(model3, self).__init__()
 
-    def model(self, sequences, lengths, args, mb=None):
+    def model(self, sequences, lengths, args, mb=None, scale=1.0):
         num_sequences, max_length, data_dim = sequences.shape
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
-        hidden_dim = int(args['hidden_dim'] ** 0.5)  # split between w and x
+        hidden_dim = int(args['hidden_dim'] / 2)
+        #hidden_dim = int(args['hidden_dim'] ** 0.5)  # split between w and x
         probs_w = pyro.param("probs_w", lambda: 0.9 * torch.eye(hidden_dim) + \
                                                 0.1 * torch.ones(hidden_dim, hidden_dim),
                              constraint=constraints.simplex)
@@ -88,27 +91,29 @@ class model3(nn.Module):
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
         with pyro.plate("sequences", mb.size(0), subsample=mb, dim=-2) as batch:
             lengths = lengths[batch]
-            w, x = 0, 0
-            for t in pyro.markov(range(lengths.max())):
-                with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
-                    w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
-                                    infer={"enumerate": "parallel"})
-                    x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
-                                    infer={"enumerate": "parallel"})
-                    with tones_plate as tones:
-                        pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[w, x, tones]),
-                                    obs=sequences[batch, t])
+            with pyro.poutine.scale(scale=scale):
+                w, x = 0, 0
+                for t in pyro.markov(range(lengths.max())):
+                    with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+                        w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
+                                        infer={"enumerate": "parallel"})
+                        x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
+                                        infer={"enumerate": "parallel"})
+                        with tones_plate as tones:
+                            pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[w, x, tones]),
+                                        obs=sequences[batch, t])
 
 
 class model4(nn.Module):
     def __init__(self, args, data_dim):
         super(model4, self).__init__()
 
-    def model(self, sequences, lengths, args, mb=None):
+    def model(self, sequences, lengths, args, mb=None, scale=1.0):
         num_sequences, max_length, data_dim = sequences.shape
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
-        hidden_dim = int(args['hidden_dim'] ** 0.5)  # split between w and x
+        hidden_dim = int(args['hidden_dim'] / 2)
+        #hidden_dim = int(args['hidden_dim'] ** 0.5)  # split between w and x
         hidden = torch.arange(hidden_dim, dtype=torch.long)
         probs_w = pyro.param("probs_w", lambda: 0.9 * torch.eye(hidden_dim) + \
                                                 0.1 * torch.ones(hidden_dim, hidden_dim),
@@ -122,17 +127,18 @@ class model4(nn.Module):
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
         with pyro.plate("sequences", mb.size(0), subsample=mb, dim=-2) as batch:
             lengths = lengths[batch]
-            w = x = torch.tensor(0, dtype=torch.long)
-            for t in pyro.markov(range(lengths.max())):
-                with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
-                    w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
-                                    infer={"enumerate": "parallel"})
-                    x = pyro.sample("x_{}".format(t),
-                                    dist.Categorical(probs_x[w.unsqueeze(-1), x.unsqueeze(-1), hidden]),
-                                    infer={"enumerate": "parallel"})
-                    with tones_plate as tones:
-                        pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[w, x, tones]),
-                                    obs=sequences[batch, t])
+            with pyro.poutine.scale(scale=scale):
+                w = x = torch.tensor(0, dtype=torch.long)
+                for t in pyro.markov(range(lengths.max())):
+                    with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+                        w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
+                                        infer={"enumerate": "parallel"})
+                        x = pyro.sample("x_{}".format(t),
+                                        dist.Categorical(probs_x[w.unsqueeze(-1), x.unsqueeze(-1), hidden]),
+                                        infer={"enumerate": "parallel"})
+                        with tones_plate as tones:
+                            pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[w, x, tones]),
+                                        obs=sequences[batch, t])
 
 
 class TonesGenerator(nn.Module):
@@ -162,7 +168,7 @@ class model5(nn.Module):
         super(model5, self).__init__()
         self.tones_generator = TonesGenerator(args, data_dim)
 
-    def model(self, sequences, lengths, args, mb=None):
+    def model(self, sequences, lengths, args, mb=None, scale=1.0):
         num_sequences, max_length, data_dim = sequences.shape
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
@@ -172,13 +178,14 @@ class model5(nn.Module):
                              constraint=constraints.simplex)
         with pyro.plate("sequences", mb.size(0), subsample=mb, dim=-2) as batch:
             lengths = lengths[batch]
-            x = 0
-            y = torch.zeros(data_dim)
-            for t in pyro.markov(range(lengths.max())):
-                with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
-                    x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
-                                    infer={"enumerate": "parallel"})
-                    with pyro.plate("tones_{}".format(t), data_dim, dim=-1):
-                        y = pyro.sample("y_{}".format(t),
-                                        dist.Bernoulli(logits=self.tones_generator(x, y)),
-                                        obs=sequences[batch, t])
+            with pyro.poutine.scale(scale=scale):
+                x = 0
+                y = torch.zeros(data_dim)
+                for t in pyro.markov(range(lengths.max())):
+                    with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+                        x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
+                                        infer={"enumerate": "parallel"})
+                        with pyro.plate("tones_{}".format(t), data_dim, dim=-1):
+                            y = pyro.sample("y_{}".format(t),
+                                            dist.Bernoulli(logits=self.tones_generator(x, y)),
+                                            obs=sequences[batch, t])
