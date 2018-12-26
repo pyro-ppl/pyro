@@ -15,6 +15,7 @@ import pyro.distributions as dist
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.optim import Adam, ClippedAdam
 from models_hmm import model1, model2, model3, model4, model5
+from models_hmm import model6, model7, model8, model9
 from utils_hmm import get_mb_indices, get_logger
 
 pyro.distributions.enable_validation(False)
@@ -157,8 +158,8 @@ if __name__ == '__main__':
     parser.add_argument("-cp", "--clamp-prob", default=1.0e-12, type=float)
     parser.add_argument("-cn", "--clip-norm", default=20.0, type=float)
     parser.add_argument("-lrd", "--learning_rate_decay", default=0.999, type=float)
-    parser.add_argument("-nn", "--nn-dim", default=48, type=int)
-    parser.add_argument("-nc", "--nn-channels", default=2, type=int)
+    parser.add_argument("-nn", "--nn-dim", default=33, type=int)
+    parser.add_argument("-nc", "--nn-channels", default=3, type=int)
     parser.add_argument("-ef", "--eval-frequency", default=2, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.5, type=float)
     parser.add_argument('--cuda', action='store_true')
