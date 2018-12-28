@@ -123,7 +123,7 @@ class HMC(TraceKernel):
         super(HMC, self).__init__()
 
     def _get_trace(self, z):
-        z_trace = self.initial_trace
+        z_trace = self._prototype_trace
         for name, value in z.items():
             z_trace.nodes[name]["value"] = value
         trace_poutine = poutine.trace(poutine.replay(self.model, trace=z_trace))
@@ -198,6 +198,7 @@ class HMC(TraceKernel):
         self._args = None
         self._compiled_potential_fn = None
         self._kwargs = None
+        self._prototype_trace = None
         self._initial_trace = None
         self._has_enumerable_sites = False
         self._trace_prob_evaluator = None
@@ -294,10 +295,15 @@ class HMC(TraceKernel):
         """
         if self._initial_trace:
             return self._initial_trace
-        trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
+        trace = self._prototype_trace
         for i in range(self._max_tries_initial_trace):
-            trace_log_prob_sum = self._compute_trace_log_prob(trace)
-            if not torch_isnan(trace_log_prob_sum) and not torch_isinf(trace_log_prob_sum):
+            z = {name: node["value"].detach()
+                 for name, node in self._iter_latent_nodes(trace)}
+            # automatically transform `z` to unconstrained space, if needed.
+            for name, transform in self.transforms.items():
+                z[name] = transform(z[name])
+            potential_energy = self._potential_energy(z)
+            if not torch_isnan(potential_energy) and not torch_isinf(potential_energy):
                 self._initial_trace = trace
                 return trace
             trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
@@ -319,6 +325,7 @@ class HMC(TraceKernel):
         if self._automatic_transform_enabled:
             self.transforms = {}
         trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
+        self._prototype_trace = trace
         for name, node in trace.iter_stochastic_nodes():
             if isinstance(node["fn"], _Subsample):
                 continue
