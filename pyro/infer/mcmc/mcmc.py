@@ -246,7 +246,7 @@ class MCMC(TracePosterior):
     """
     def __init__(self, kernel, num_samples, warmup_steps=None,
                  num_chains=1, mp_context=None, disable_progbar=False):
-        self.warmup_steps = warmup_steps if warmup_steps is not None else num_samples // 2  # Stan
+        self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
         if num_chains > 1:
             # verify num_chains is compatible with available CPU.
@@ -275,15 +275,15 @@ class MCMCMarginals(Marginals):
     def diagnostics(self):
         if self._diagnostics:
             return self._diagnostics
+        support = self.support()
         for site in self.sites:
-            support = self.support()[site]
             if self._trace_posterior.num_chains == 1:
-                support = support.unsqueeze(0)
+                site_support = support[site].unsqueeze(0)
             site_stats = OrderedDict()
             try:
-                site_stats["n_eff"] = stats.effective_sample_size(support)
+                site_stats["n_eff"] = stats.effective_sample_size(site_support)
             except NotImplementedError:
                 site_stats["n_eff"] = torch.tensor(float('nan'))
-            site_stats["r_hat"] = stats.split_gelman_rubin(support)
+            site_stats["r_hat"] = stats.split_gelman_rubin(site_support)
             self._diagnostics[site] = site_stats
         return self._diagnostics
