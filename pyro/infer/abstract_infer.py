@@ -129,6 +129,15 @@ class Marginals(object):
                            for site in self.sites}
 
     def support(self, flatten=False):
+        """
+        Gets support of this marginal distribution.
+
+        :param bool flatten: A flag to decide if we want to flatten `batch_shape`
+            when the marginal distribution is collected from the posterior with
+            ``num_chains > 1``.
+        :returns: a dict with keys are sites' names and values are sites' supports.
+        :rtype: :class:`OrderedDict`
+        """
         support = OrderedDict([(site, value.enumerate_support())
                                for site, value in self._marginals.items()])
         if self._trace_posterior.num_chains > 1 and flatten:
@@ -140,6 +149,12 @@ class Marginals(object):
 
     @property
     def empirical(self):
+        """
+        A dictionary of sites' names and theirs corresponding :class:`EmpiricalMarginal`
+        distribution.
+
+        :type: :class:`OrderedDict`
+        """
         return self._marginals
 
 
@@ -163,6 +178,14 @@ class TracePosterior(object):
         self._categorical = None
 
     def marginal(self, sites=None):
+        """
+        Generates the marginal distribution of this posterior.
+
+        :param list sites: optional list of sites for which we need to generate
+            the marginal distribution.
+        :returns: A :class:`Marginals` class instance.
+        :rtype: :class:`Marginals`
+        """
         return Marginals(self, sites)
 
     @abstractmethod
@@ -224,8 +247,9 @@ class TracePosterior(object):
 
         :param bool pointwise: a flag to decide if we want to get a vectorized WAIC or not. When
             ``pointwise=False``, returns the sum.
-        :returns OrderedDict: a dictionary containing values of WAIC and its effective number of
+        :returns: a dictionary containing values of WAIC and its effective number of
             parameters.
+        :rtype: :class:`OrderedDict`
         """
         if not self.exec_traces:
             return {}
@@ -278,4 +302,7 @@ class TracePredictive(TracePosterior):
             yield (replayed_trace, 0., 0)
 
     def marginal(self, sites=None):
+        """
+        Gets marginal distribution from posterior.
+        """
         return self.posterior.marginal(sites)
