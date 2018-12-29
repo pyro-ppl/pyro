@@ -44,11 +44,11 @@ def main(**args):
         args['learning_rate_decay'] = math.exp(math.log(args['learning_rate_decay']) / NN)
 
     log_tag = 'hmm.{}.model{}.num_steps_{}.bs_{}.hd_{}.seed_{}.b1_{:.3f}'
-    log_tag += '.lrd_{:.5f}.lr_{:.3f}.cn_{:.1f}.nn_{}_{}.scale_{}'
+    log_tag += '.lrd_{:.5f}.lr_{:.3f}.cn_{:.1f}.nn_{}_{}.scale_{}.init_{}'
     log_tag = log_tag.format(args['dataset'], args['model'], args['num_steps'], args['batch_size'],
                              args['hidden_dim'], args['seed'], args['beta1'], args['learning_rate_decay'],
                              args['learning_rate'], args['clip_norm'], args['nn_dim'], args['nn_channels'],
-                             args['scale_loss'])
+                             args['scale_loss'], args['init_method'])
 
     uid = str(uuid.uuid4())[0:4]
     log = get_logger(args['log_dir'], log_tag + '.' + uid + '.log')
