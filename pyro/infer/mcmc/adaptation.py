@@ -26,7 +26,7 @@ class WarmupAdapter(object):
                  is_diag_mass=True):
         self.adapt_step_size = adapt_step_size
         self.adapt_mass_matrix = adapt_mass_matrix
-        self.target_accept_prob = 0.8 if target_accept_prob is None else target_accept_prob
+        self.target_accept_prob = target_accept_prob
         self.is_diag_mass = is_diag_mass
         self.step_size = 1 if step_size is None else step_size
         self._adaptation_disabled = not (adapt_step_size or adapt_mass_matrix)

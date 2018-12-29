@@ -112,8 +112,8 @@ class NUTS(HMC):
                  max_plate_nesting=None,
                  jit_compile=False,
                  ignore_jit_warnings=False,
-                 target_accept_prob=None,
-                 max_tree_depth=None):
+                 target_accept_prob=0.8,
+                 max_tree_depth=10):
         super(NUTS, self).__init__(model,
                                    step_size,
                                    adapt_step_size=adapt_step_size,
@@ -125,7 +125,7 @@ class NUTS(HMC):
                                    ignore_jit_warnings=ignore_jit_warnings,
                                    target_accept_prob=target_accept_prob)
         self.use_multinomial_sampling = use_multinomial_sampling
-        self._max_tree_depth = 10 if max_tree_depth is None else max_tree_depth  # from Stan
+        self._max_tree_depth = max_tree_depth
         # There are three conditions to stop doubling process:
         #     + Tree is becoming too big.
         #     + The trajectory is making a U-turn.

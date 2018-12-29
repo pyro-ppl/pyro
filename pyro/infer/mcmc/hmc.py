@@ -98,7 +98,7 @@ class HMC(TraceKernel):
                  max_plate_nesting=None,
                  jit_compile=False,
                  ignore_jit_warnings=False,
-                 target_accept_prob=None):
+                 target_accept_prob=0.8):
         self.model = model
         self.max_plate_nesting = max_plate_nesting
         if trajectory_length is not None:
