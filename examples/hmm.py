@@ -18,7 +18,7 @@ from models_hmm import model1, model2, model3, model4, model5
 from models_hmm import model6, model7, model8, model9
 from utils_hmm import get_mb_indices, get_logger
 
-pyro.distributions.enable_validation(False)
+pyro.distributions.enable_validation(True)
 
 models = {name[len('model'):]: model
               for name, model in globals().items()
@@ -44,10 +44,11 @@ def main(**args):
         args['learning_rate_decay'] = math.exp(math.log(args['learning_rate_decay']) / NN)
 
     log_tag = 'hmm.{}.model{}.num_steps_{}.bs_{}.hd_{}.seed_{}.b1_{:.3f}'
-    log_tag += '.lrd_{:.5f}.lr_{:.3f}.cn_{:.1f}.nn_{}_{}'
+    log_tag += '.lrd_{:.5f}.lr_{:.3f}.cn_{:.1f}.nn_{}_{}.scale_{}'
     log_tag = log_tag.format(args['dataset'], args['model'], args['num_steps'], args['batch_size'],
                              args['hidden_dim'], args['seed'], args['beta1'], args['learning_rate_decay'],
-                             args['learning_rate'], args['clip_norm'], args['nn_dim'], args['nn_channels'])
+                             args['learning_rate'], args['clip_norm'], args['nn_dim'], args['nn_channels'],
+                             args['scale_loss'])
 
     uid = str(uuid.uuid4())[0:4]
     log = get_logger(args['log_dir'], log_tag + '.' + uid + '.log')
@@ -98,7 +99,7 @@ def main(**args):
 
     ts = [time.time()]
 
-    def evaluate(sequences, lengths, evaluate_batch_size=80):
+    def evaluate(sequences, lengths, evaluate_batch_size=50):
         mb_indices = get_mb_indices(sequences.size(0), evaluate_batch_size)
         loss = 0.0
 
@@ -115,7 +116,8 @@ def main(**args):
         mb_indices = get_mb_indices(train_sequences.size(0), args['batch_size'])
 
         for mb in mb_indices:
-            epoch_loss += svi.step(train_sequences, train_lengths, args, mb=mb, scale=1.0/N_obs_mb)
+            scale = 1.0 / N_obs_mb if args['scale_loss'] else 1.0
+            epoch_loss += svi.step(train_sequences, train_lengths, args, mb=mb, scale=scale)
             store = pyro.get_param_store()
             store["probs_x"] = store["probs_x"].clamp(args['clamp_prob'])
             if 'probs_y' in store:
@@ -148,6 +150,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="HMM variants")
     parser.add_argument("-ld", "--log-dir", default="hmm_logs/", type=str)
     parser.add_argument("-d", "--dataset", default="jsb", type=str)
+    parser.add_argument("-im", "--init-method", default="uniform", type=str)
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
     parser.add_argument("-n", "--num-steps", default=300, type=int)
@@ -164,6 +167,7 @@ if __name__ == '__main__':
     parser.add_argument("-lr", "--learning-rate", default=0.5, type=float)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
+    parser.add_argument('--scale-loss', action='store_true')
 
     args = parser.parse_args()
     main(**vars(args))

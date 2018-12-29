@@ -16,6 +16,19 @@ from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.optim import Adam, ClippedAdam
 
 
+def init_simplex(hidden_dim, method="eye"):
+    if method=="eye":
+        return 0.9 * torch.eye(hidden_dim) + 0.1 * torch.ones(hidden_dim, hidden_dim)
+    elif method=="uniform":
+        return torch.rand(hidden_dim, hidden_dim)
+
+def init_simplices(hidden_dim, method="eye"):
+    if method=="eye":
+        return (0.9 * torch.eye(hidden_dim) + \
+                0.1 * torch.ones(hidden_dim, hidden_dim)).unsqueeze(0).expand(hidden_dim, hidden_dim, hidden_dim)
+    elif method=="uniform":
+        return torch.rand(hidden_dim, hidden_dim, hidden_dim)
+
 # HMM
 class model1(nn.Module):
     def __init__(self, args, data_dim):
@@ -26,8 +39,7 @@ class model1(nn.Module):
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
         hidden_dim = args['hidden_dim']
-        probs_x = pyro.param("probs_x", lambda: 0.9 * torch.eye(hidden_dim) + \
-                                                0.1 * torch.ones(hidden_dim, hidden_dim),
+        probs_x = pyro.param("probs_x", init_simplex(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
         probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, data_dim),
                              constraint=constraints.unit_interval)
@@ -55,11 +67,9 @@ class model2(nn.Module):
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
         hidden_dim = args['hidden_dim']
-        probs_w = pyro.param("probs_w", lambda: 0.9 * torch.eye(hidden_dim) + \
-                                                0.1 * torch.ones(hidden_dim, hidden_dim),
+        probs_w = pyro.param("probs_w", init_simplex(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
-        probs_x = pyro.param("probs_x", lambda: 0.9 * torch.eye(hidden_dim) + \
-                                                0.1 * torch.ones(hidden_dim, hidden_dim),
+        probs_x = pyro.param("probs_x", init_simplex(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
         probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, hidden_dim, data_dim),
                              constraint=constraints.unit_interval)
@@ -91,12 +101,9 @@ class model3(nn.Module):
         assert lengths.max() <= max_length
         hidden_dim = args['hidden_dim']
         hidden = torch.arange(hidden_dim, dtype=torch.long)
-        probs_w = pyro.param("probs_w", lambda: 0.9 * torch.eye(hidden_dim) + \
-                                                0.1 * torch.ones(hidden_dim, hidden_dim),
+        probs_w = pyro.param("probs_w", init_simplex(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
-        probs_x = pyro.param("probs_x", lambda: (0.9 * torch.eye(hidden_dim) + \
-                                                 0.1 * torch.ones(hidden_dim, hidden_dim)).
-                                                 unsqueeze(-1).expand(hidden_dim, hidden_dim, hidden_dim),
+        probs_x = pyro.param("probs_x", init_simplices(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
         probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, hidden_dim, data_dim),
                              constraint=constraints.unit_interval)
@@ -128,10 +135,9 @@ class model4(nn.Module):
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
         hidden_dim = args['hidden_dim']
-        probs_x = pyro.param("probs_x", lambda: 0.9 * torch.eye(hidden_dim) + \
-                                                0.1 * torch.ones(hidden_dim, hidden_dim),
+        probs_x = pyro.param("probs_x", init_simplex(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
-        probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, 2, data_dim),
+        probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, data_dim),
                              constraint=constraints.unit_interval)
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
         with pyro.plate("sequences", mb.size(0), subsample=mb, dim=-2) as batch:
@@ -157,13 +163,11 @@ class model5(nn.Module):
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
         hidden_dim = args['hidden_dim']
-        probs_w = pyro.param("probs_w", lambda: 0.9 * torch.eye(hidden_dim) + \
-                                                0.1 * torch.ones(hidden_dim, hidden_dim),
+        probs_w = pyro.param("probs_w", init_simplex(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
-        probs_x = pyro.param("probs_x", lambda: 0.9 * torch.eye(hidden_dim) + \
-                                                0.1 * torch.ones(hidden_dim, hidden_dim),
+        probs_x = pyro.param("probs_x", init_simplex(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
-        probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, hidden_dim, 2, data_dim),
+        probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, hidden_dim, data_dim),
                              constraint=constraints.unit_interval)
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
         with pyro.plate("sequences", mb.size(0), subsample=mb, dim=-2) as batch:
@@ -192,12 +196,9 @@ class model6(nn.Module):
         assert lengths.max() <= max_length
         hidden_dim = args['hidden_dim']
         hidden = torch.arange(hidden_dim, dtype=torch.long)
-        probs_w = pyro.param("probs_w", lambda: 0.9 * torch.eye(hidden_dim) + \
-                                                0.1 * torch.ones(hidden_dim, hidden_dim),
+        probs_w = pyro.param("probs_w", init_simplex(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
-        probs_x = pyro.param("probs_x", lambda: (0.9 * torch.eye(hidden_dim) + \
-                                                 0.1 * torch.ones(hidden_dim, hidden_dim)).
-                                                 unsqueeze(-1).expand(hidden_dim, hidden_dim, hidden_dim),
+        probs_x = pyro.param("probs_x", init_simplices(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
         probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, hidden_dim, 2, data_dim),
                              constraint=constraints.unit_interval)
@@ -256,8 +257,10 @@ class TonesGenerator2(nn.Module):
             y = y.unsqueeze(0)
         w_onehot = y.new_zeros(w.shape[:-1] + (self.args['hidden_dim'],)).scatter_(-1, w, 1)
         x_onehot = y.new_zeros(x.shape[:-1] + (self.args['hidden_dim'],)).scatter_(-1, x, 1)
+        print("w,x_hot", w_onehot.shape, x_onehot.shape)
         y_conv = self.relu(self.conv(y.unsqueeze(-2))).reshape(y.shape[:-1] + (-1,))
         h = self.relu(self.x_to_hidden(x_onehot) + self.w_to_hidden(w_onehot) + self.y_to_hidden(y_conv))
+        print("y,h", y_conv.shape, h.shape)
         return self.hidden_to_logits(h)
 
 
@@ -274,8 +277,7 @@ class model7(nn.Module):
         assert lengths.max() <= max_length
         hidden_dim = args['hidden_dim']
         pyro.module("tones_generator", self.tones_generator)
-        probs_x = pyro.param("probs_x", lambda: 0.9 * torch.eye(hidden_dim) + \
-                                                0.1 * torch.ones(hidden_dim, hidden_dim),
+        probs_x = pyro.param("probs_x", init_simplex(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
         with pyro.plate("sequences", mb.size(0), subsample=mb, dim=-2) as batch:
             lengths = lengths[batch]
@@ -304,11 +306,9 @@ class model8(nn.Module):
         assert lengths.max() <= max_length
         hidden_dim = args['hidden_dim']
         pyro.module("tones_generator", self.tones_generator)
-        probs_w = pyro.param("probs_w", lambda: 0.9 * torch.eye(hidden_dim) + \
-                                                0.1 * torch.ones(hidden_dim, hidden_dim),
+        probs_w = pyro.param("probs_w", init_simplex(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
-        probs_x = pyro.param("probs_x", lambda: 0.9 * torch.eye(hidden_dim) + \
-                                                0.1 * torch.ones(hidden_dim, hidden_dim),
+        probs_x = pyro.param("probs_x", init_simplex(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
         with pyro.plate("sequences", mb.size(0), subsample=mb, dim=-2) as batch:
             lengths = lengths[batch]
@@ -340,12 +340,9 @@ class model9(nn.Module):
         hidden_dim = args['hidden_dim']
         pyro.module("tones_generator", self.tones_generator)
         hidden = torch.arange(hidden_dim, dtype=torch.long)
-        probs_w = pyro.param("probs_w", lambda: 0.9 * torch.eye(hidden_dim) + \
-                                                0.1 * torch.ones(hidden_dim, hidden_dim),
+        probs_w = pyro.param("probs_w", init_simplex(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
-        probs_x = pyro.param("probs_x", lambda: (0.9 * torch.eye(hidden_dim) + \
-                                                 0.1 * torch.ones(hidden_dim, hidden_dim)).
-                                                 unsqueeze(-1).expand(hidden_dim, hidden_dim, hidden_dim),
+        probs_x = pyro.param("probs_x", init_simplices(hidden_dim, method=args['init_method']),
                              constraint=constraints.simplex)
         probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, hidden_dim, 2, data_dim),
                              constraint=constraints.unit_interval)
