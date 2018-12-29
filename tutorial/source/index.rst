@@ -60,6 +60,7 @@ Welcome to Pyro Examples and Tutorials!
    lda
    mcmc
    sparse_gamma
+   dkl
 
 
 Indices and tables
