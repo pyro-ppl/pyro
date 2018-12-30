@@ -244,9 +244,9 @@ class MCMC(TracePosterior):
         CUDA.
     :param bool disable_progbar: Disable progress bar and diagnostics update.
     """
-    def __init__(self, kernel, num_samples, warmup_steps=0,
+    def __init__(self, kernel, num_samples, warmup_steps=None,
                  num_chains=1, mp_context=None, disable_progbar=False):
-        self.warmup_steps = warmup_steps if warmup_steps is not None else num_samples // 2  # Stan
+        self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
         if num_chains > 1:
             # verify num_chains is compatible with available CPU.
@@ -257,10 +257,10 @@ class MCMC(TracePosterior):
                               .format(num_chains, available_cpu))
                 num_chains = available_cpu
         if num_chains > 1:
-            self.sampler = _ParallelSampler(kernel, num_samples, warmup_steps,
+            self.sampler = _ParallelSampler(kernel, num_samples, self.warmup_steps,
                                             num_chains, mp_context, disable_progbar)
         else:
-            self.sampler = _SingleSampler(kernel, num_samples, warmup_steps, disable_progbar)
+            self.sampler = _SingleSampler(kernel, num_samples, self.warmup_steps, disable_progbar)
         super(MCMC, self).__init__(num_chains=num_chains)
 
     def _traces(self, *args, **kwargs):
@@ -275,12 +275,15 @@ class MCMCMarginals(Marginals):
     def diagnostics(self):
         if self._diagnostics:
             return self._diagnostics
+        support = self.support()
         for site in self.sites:
+            if self._trace_posterior.num_chains == 1:
+                site_support = support[site].unsqueeze(0)
             site_stats = OrderedDict()
             try:
-                site_stats["n_eff"] = stats.effective_sample_size(self.support()[site])
+                site_stats["n_eff"] = stats.effective_sample_size(site_support)
             except NotImplementedError:
                 site_stats["n_eff"] = torch.tensor(float('nan'))
-            site_stats["r_hat"] = stats.split_gelman_rubin(self.support()[site])
+            site_stats["r_hat"] = stats.split_gelman_rubin(site_support)
             self._diagnostics[site] = site_stats
         return self._diagnostics

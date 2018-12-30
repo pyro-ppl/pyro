@@ -59,6 +59,8 @@ class HMC(TraceKernel):
         optimized executable trace in the integrator.
     :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
         tracer when ``jit_compile=True``. Default is False.
+    :param float target_accept_prob: Increasing this value will lead to a smaller
+        step size, hence the sampling will be slower and more robust. Default to 0.8.
 
     .. note:: Internally, the mass matrix will be ordered according to the order
         of the names of latent variables, not the order of their appearance in
@@ -95,7 +97,8 @@ class HMC(TraceKernel):
                  transforms=None,
                  max_plate_nesting=None,
                  jit_compile=False,
-                 ignore_jit_warnings=False):
+                 ignore_jit_warnings=False,
+                 target_accept_prob=0.8):
         self.model = model
         self.max_plate_nesting = max_plate_nesting
         if trajectory_length is not None:
@@ -106,7 +109,6 @@ class HMC(TraceKernel):
             self.trajectory_length = 2 * math.pi  # from Stan
         self._jit_compile = jit_compile
         self._ignore_jit_warnings = ignore_jit_warnings
-        self._target_accept_prob = 0.8  # from Stan
         # The following parameter is used in find_reasonable_step_size method.
         # In NUTS paper, this threshold is set to a fixed log(0.5).
         # After https://github.com/stan-dev/stan/pull/356, it is set to a fixed log(0.8).
@@ -119,6 +121,7 @@ class HMC(TraceKernel):
         self._adapter = WarmupAdapter(step_size,
                                       adapt_step_size=adapt_step_size,
                                       adapt_mass_matrix=adapt_mass_matrix,
+                                      target_accept_prob=target_accept_prob,
                                       is_diag_mass=not full_mass)
         super(HMC, self).__init__()
 
