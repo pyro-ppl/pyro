@@ -146,7 +146,7 @@ class Trace(networkx.DiGraph):
                     if is_validation_enabled():
                         warn_if_nan(log_p, "log_prob_sum at site '{}'".format(name))
                         warn_if_inf(log_p, "log_prob_sum at site '{}'".format(name), allow_neginf=True)
-                result += log_p
+                result = result + log_p
         return result
 
     def compute_log_prob(self, site_filter=lambda name, site: True):
