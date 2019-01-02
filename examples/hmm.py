@@ -29,12 +29,12 @@ def main(**args):
     N_train = {'jsb': 229, 'piano': 87, 'nottingham': 694, 'muse': 524}
     if args['dataset'] == 'jsb':
         args['batch_size'] = 20
-        args['num_steps'] = 400
+        args['num_steps'] = 300 # 400
         NN = args['num_steps'] * N_train[args['dataset']] / args['batch_size']
         args['learning_rate_decay'] = math.exp(math.log(args['learning_rate_decay']) / NN)
     elif args['dataset'] == 'piano':
         args['batch_size'] = 15
-        args['num_steps'] = 400
+        args['num_steps'] = 300 # 400
         NN = args['num_steps'] * N_train[args['dataset']] / args['batch_size']
         args['learning_rate_decay'] = math.exp(math.log(args['learning_rate_decay']) / NN)
     elif args['dataset'] in ['muse', 'nottingham']:
@@ -92,10 +92,6 @@ def main(**args):
     optim = ClippedAdam({'lr': args['learning_rate'], 'betas': (args['beta1'], 0.999),
                          'lrd': args['learning_rate_decay'], 'clip_norm': args['clip_norm']})
     svi = SVI(model.model, guide, optim, elbo)
-
-    #model.model(train_sequences, train_lengths, args, mb=torch.LongTensor([0,1]))
-    #optim = torch.optim.Adam(pyro.get_param_store()._params.values(),
-    #                         lr=args['learning_rate'], betas=(args['beta1'], 0.999))
 
     ts = [time.time()]
 

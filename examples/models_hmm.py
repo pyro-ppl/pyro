@@ -238,7 +238,9 @@ class TonesGenerator(nn.Module):
         if y.dim() < 2:
             y = y.unsqueeze(0)
         x_onehot = y.new_zeros(x.shape[:-1] + (self.args['hidden_dim'],)).scatter_(-1, x, 1)
+        y_conv2 = self.relu(self.conv(y.unsqueeze(-2)))
         y_conv = self.relu(self.conv(y.unsqueeze(-2))).reshape(y.shape[:-1] + (-1,))
+        print("yconvs", y_conv2.shape, y_conv.shape)
         h = self.relu(self.x_to_hidden(x_onehot) + self.y_to_hidden(y_conv))
         return self.hidden_to_logits(h)
 
@@ -249,8 +251,9 @@ class TonesGenerator2(nn.Module):
         self.args = args
         self.data_dim = data_dim
         super(TonesGenerator2, self).__init__()
-        self.x_to_hidden = nn.Linear(args['hidden_dim'], args['nn_dim'])
-        self.w_to_hidden = nn.Linear(args['hidden_dim'], args['nn_dim'])
+        self.hidden_dim = int(args['hidden_dim'] ** 0.5)
+        self.x_to_hidden = nn.Linear(self.hidden_dim, args['nn_dim'])
+        self.w_to_hidden = nn.Linear(self.hidden_dim, args['nn_dim'])
         self.y_to_hidden = nn.Linear(args['nn_channels'] * data_dim, args['nn_dim'])
         self.conv = nn.Conv1d(1, args['nn_channels'], 3, padding=1)
         self.hidden_to_logits = nn.Linear(args['nn_dim'], data_dim)
@@ -259,8 +262,8 @@ class TonesGenerator2(nn.Module):
     def forward(self, w, x, y):
         if y.dim() < 2:
             y = y.unsqueeze(0)
-        w_onehot = y.new_zeros(w.shape[:-1] + (self.args['hidden_dim'],)).scatter_(-1, w, 1)
-        x_onehot = y.new_zeros(x.shape[:-1] + (self.args['hidden_dim'],)).scatter_(-1, x, 1)
+        w_onehot = y.new_zeros(w.shape[:-1] + (self.hidden_dim,)).scatter_(-1, w, 1)
+        x_onehot = y.new_zeros(x.shape[:-1] + (self.hidden_dim,)).scatter_(-1, x, 1)
         y_conv = self.relu(self.conv(y.unsqueeze(-2))).reshape(y.shape[:-1] + (-1,))
         h = self.relu(self.x_to_hidden(x_onehot) + self.w_to_hidden(w_onehot) + self.y_to_hidden(y_conv))
         return self.hidden_to_logits(h)
