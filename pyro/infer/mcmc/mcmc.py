@@ -282,7 +282,7 @@ class MCMC(TracePosterior):
 class MCMCMarginals(Marginals):
     def diagnostics(self):
         """
-        Gets some diagnostics statistics such as effective number size and
+        Gets some diagnostics statistics such as effective sample size and
         split Gelman-Rubin from the sampler.
         """
         if self._diagnostics:

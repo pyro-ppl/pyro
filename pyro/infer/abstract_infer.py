@@ -134,7 +134,7 @@ class Marginals(object):
 
         :param bool flatten: A flag to decide if we want to flatten `batch_shape`
             when the marginal distribution is collected from the posterior with
-            ``num_chains > 1``.
+            ``num_chains > 1``. Defaults to False.
         :returns: a dict with keys are sites' names and values are sites' supports.
         :rtype: :class:`OrderedDict`
         """
@@ -150,7 +150,7 @@ class Marginals(object):
     @property
     def empirical(self):
         """
-        A dictionary of sites' names and theirs corresponding :class:`EmpiricalMarginal`
+        A dictionary of sites' names and their corresponding :class:`EmpiricalMarginal`
         distribution.
 
         :type: :class:`OrderedDict`
