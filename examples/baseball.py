@@ -247,7 +247,7 @@ def main(args):
     nuts_kernel = NUTS(fully_pooled)
     posterior_fully_pooled = MCMC(nuts_kernel,
                                   num_samples=args.num_samples,
-                                  warmup_steps=args.warmup_steps,
+                                  warmup_steps=args.warmup_steps, mp_context="spawn",
                                   num_chains=args.num_chains).run(at_bats, hits)
     logging.info("\nModel: Fully Pooled")
     logging.info("===================")
@@ -324,4 +324,5 @@ if __name__ == "__main__":
     parser.add_argument('--jit', action='store_true', default=False,
                         help='use PyTorch jit')
     args = parser.parse_args()
+    torch.set_default_tensor_type(torch.cuda.FloatTensor)
     main(args)
