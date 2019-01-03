@@ -277,8 +277,9 @@ class MCMCMarginals(Marginals):
             return self._diagnostics
         support = self.support()
         for site in self.sites:
+            site_support = support[site]
             if self._trace_posterior.num_chains == 1:
-                site_support = support[site].unsqueeze(0)
+                site_support = site_support.unsqueeze(0)
             site_stats = OrderedDict()
             try:
                 site_stats["n_eff"] = stats.effective_sample_size(site_support)

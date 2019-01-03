@@ -34,7 +34,7 @@ class PriorKernel(TraceKernel):
 
 def normal_normal_model(data):
     x = pyro.param('loc', torch.tensor([0.0]))
-    y = pyro.sample('x', dist.Normal(x, torch.tensor([1.0])))
+    y = pyro.sample('y', dist.Normal(x, torch.tensor([1.0])))
     pyro.sample('obs', dist.Normal(y, torch.tensor([1.0])), obs=data)
     return y
 
@@ -49,6 +49,16 @@ def test_mcmc_interface():
     sample_std = marginal.variance.sqrt()
     assert_equal(sample_mean, torch.tensor([0.0]), prec=0.08)
     assert_equal(sample_std, torch.tensor([1.0]), prec=0.08)
+
+
+@pytest.mark.parametrize("num_chains", [1, 2])
+def test_mcmc_diagnostics(num_chains):
+    data = torch.tensor([1.0])
+    kernel = PriorKernel(normal_normal_model)
+    mcmc = MCMC(kernel=kernel, num_samples=10, num_chains=1).run(data)
+    diagnostics = mcmc.marginal(["y"]).diagnostics()
+    assert diagnostics["y"]["n_eff"].shape == torch.Size([1])
+    assert diagnostics["y"]["r_hat"].shape == torch.Size([1])
 
 
 @pytest.mark.parametrize("num_chains, cpu_count", [
