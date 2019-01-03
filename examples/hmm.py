@@ -1,22 +1,23 @@
 from __future__ import absolute_import, division, print_function
 
-import uuid
+import sys
 import argparse
-import time
-import os
-
 import math
+import os
+import time
+import traceback
+import uuid
+
 import torch
 import torch.nn as nn
 
 import dmm.polyphonic_data_loader as poly
 import pyro
 import pyro.distributions as dist
+from models_hmm import model1, model2, model3, model4, model5, model6, model7, model8, model9
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.optim import Adam, ClippedAdam
-from models_hmm import model1, model2, model3, model4, model5
-from models_hmm import model6, model7, model8, model9
-from utils_hmm import get_mb_indices, get_logger
+from utils_hmm import get_logger, get_mb_indices
 
 pyro.distributions.enable_validation(True)
 
@@ -111,28 +112,35 @@ def main(**args):
         epoch_loss = 0.0
         mb_indices = get_mb_indices(train_sequences.size(0), args['batch_size'])
 
-        for mb in mb_indices:
-            scale = 1.0 / N_obs_mb if args['scale_loss'] else 1.0
-            epoch_loss += svi.step(train_sequences, train_lengths, args, mb=mb, scale=scale)
-            store = pyro.get_param_store()
-            store["probs_x"] = store["probs_x"].clamp(args['clamp_prob'])
-            if 'probs_y' in store:
-                store["probs_y"] = store["probs_y"].clamp(args['clamp_prob'])
-            if 'probs_w' in store:
-                store["probs_w"] = store["probs_w"].clamp(args['clamp_prob'])
+        try:
 
-        ts.append(time.time())
-        log('[epoch %03d]  running train loss: %.4f\t\t (epoch dt: %.2f)' % (epoch, epoch_loss,
-                                                      (ts[-1] - ts[0])/(epoch+1)))
+            for mb in mb_indices:
+                scale = 1.0 / N_obs_mb if args['scale_loss'] else 1.0
+                epoch_loss += svi.step(train_sequences, train_lengths, args, mb=mb, scale=scale)
+                store = pyro.get_param_store()
+                store["probs_x"] = store["probs_x"].clamp(args['clamp_prob'])
+                if 'probs_y' in store:
+                    store["probs_y"] = store["probs_y"].clamp(args['clamp_prob'])
+                if 'probs_w' in store:
+                    store["probs_w"] = store["probs_w"].clamp(args['clamp_prob'])
 
-        if epoch > 0 and (epoch % args['eval_frequency'] == 0 or epoch == args['num_steps'] - 1):
-            train_loss = evaluate(train_sequences, train_lengths) / N_train_obs
-            test_loss = evaluate(test_sequences, test_lengths) / N_test_obs
-            if train_loss < best_train_loss:
-                best_train_loss = train_loss
-                best_test_loss = test_loss
-            log('[epoch %03d]  train loss: %.4f' % (epoch, train_loss))
-            log('[epoch %03d]   test loss: %.4f' % (epoch, test_loss))
+            ts.append(time.time())
+            log('[epoch %03d]  running train loss: %.4f\t\t (epoch dt: %.2f)' % (epoch, epoch_loss,
+                                                          (ts[-1] - ts[0])/(epoch+1)))
+
+            if epoch > 0 and (epoch % args['eval_frequency'] == 0 or epoch == args['num_steps'] - 1):
+                train_loss = evaluate(train_sequences, train_lengths) / N_train_obs
+                test_loss = evaluate(test_sequences, test_lengths) / N_test_obs
+                if train_loss < best_train_loss:
+                    best_train_loss = train_loss
+                    best_test_loss = test_loss
+                log('[epoch %03d]  train loss: %.4f' % (epoch, train_loss))
+                log('[epoch %03d]   test loss: %.4f' % (epoch, test_loss))
+
+        except Exception as e:
+            log(e)
+            log(traceback.format_exc())
+            sys.exit(1)
 
     log('-' * 40)
 

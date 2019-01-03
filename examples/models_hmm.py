@@ -14,6 +14,7 @@ from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.optim import Adam, ClippedAdam
+from pyro.distributions.util import broadcast_shape
 
 
 def init_simplex(hidden_dim, method="eye", seed=0):
@@ -237,12 +238,13 @@ class TonesGenerator(nn.Module):
     def forward(self, x, y):
         if y.dim() < 2:
             y = y.unsqueeze(0)
+        assert x.size(-1) == 1
         x_onehot = y.new_zeros(x.shape[:-1] + (self.args['hidden_dim'],)).scatter_(-1, x, 1)
-        y_conv2 = self.relu(self.conv(y.unsqueeze(-2)))
         y_conv = self.relu(self.conv(y.unsqueeze(-2))).reshape(y.shape[:-1] + (-1,))
-        print("yconvs", y_conv2.shape, y_conv.shape)
         h = self.relu(self.x_to_hidden(x_onehot) + self.y_to_hidden(y_conv))
-        return self.hidden_to_logits(h)
+        result = self.hidden_to_logits(h)
+        assert result.shape[:-2] == x.shape[:-2]
+        return result
 
 
 # takes w, x and y as input
@@ -262,11 +264,15 @@ class TonesGenerator2(nn.Module):
     def forward(self, w, x, y):
         if y.dim() < 2:
             y = y.unsqueeze(0)
+        assert x.size(-1) == 1
         w_onehot = y.new_zeros(w.shape[:-1] + (self.hidden_dim,)).scatter_(-1, w, 1)
         x_onehot = y.new_zeros(x.shape[:-1] + (self.hidden_dim,)).scatter_(-1, x, 1)
         y_conv = self.relu(self.conv(y.unsqueeze(-2))).reshape(y.shape[:-1] + (-1,))
         h = self.relu(self.x_to_hidden(x_onehot) + self.w_to_hidden(w_onehot) + self.y_to_hidden(y_conv))
-        return self.hidden_to_logits(h)
+        result = self.hidden_to_logits(h)
+        xw_shape = broadcast_shape(x.shape, w.shape)
+        assert result.shape[:-2] == xw_shape[:-2]
+        return result
 
 
 # nnHMM
@@ -349,8 +355,6 @@ class model9(nn.Module):
                              constraint=constraints.simplex)
         probs_x = pyro.param("probs_x", lambda: init_simplices(hidden_dim, method=args['init_method'], seed=args['seed']),
                              constraint=constraints.simplex)
-        probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, hidden_dim, 2, data_dim),
-                             constraint=constraints.unit_interval)
         tones_plate = pyro.plate("tones", data_dim, dim=-1)
         with pyro.plate("sequences", mb.size(0), subsample=mb, dim=-2) as batch:
             lengths = lengths[batch]
