@@ -156,7 +156,7 @@ def test_logistic_regression(jit, use_multinomial_sampling):
     "step_size, adapt_step_size, adapt_mass_matrix, full_mass",
     [
         (0.1, False, False, False),
-        (0.1, False, True, False),
+        (0.5, False, True, False),
         (None, True, False, False),
         (None, True, True, False),
         (None, True, True, True),
@@ -173,7 +173,7 @@ def test_beta_bernoulli(step_size, adapt_step_size, adapt_mass_matrix, full_mass
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     nuts_kernel = NUTS(model, step_size, adapt_step_size, adapt_mass_matrix, full_mass)
-    mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=100).run(data)
+    mcmc_run = MCMC(nuts_kernel, num_samples=400, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal(sites='p_latent').empirical['p_latent']
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
