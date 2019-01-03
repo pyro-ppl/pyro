@@ -41,7 +41,8 @@ class ELBO(object):
         :class:`pyro.infer.traceenum_elbo.TraceEnum_ELBO` is used iff there
         are enumerated sample sites.
     :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
-        tracer, when . All :class:`torch.jit.TracerWarning` will be ignored.
+        tracer. When this is True, all :class:`torch.jit.TracerWarning` will
+        be ignored. Defaults to False.
     :param bool retain_graph: Whether to retain autograd graph during an SVI
         step. Defaults to None (False).
 

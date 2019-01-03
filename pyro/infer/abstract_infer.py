@@ -17,7 +17,7 @@ class EmpiricalMarginal(Empirical):
     Marginal distribution over a single site (or multiple, provided they have the same
     shape) from the ``TracePosterior``'s model.
 
-    ..note:: If multiple sites are specified, they must have the same tensor shape.
+    .. note:: If multiple sites are specified, they must have the same tensor shape.
         Samples from each site will be stacked and stored within a single tensor. See
         :class:`~pyro.distributions.Empirical`. To hold the marginal distribution of sites
         having different shapes, use :class:`~pyro.infer.abstract_infer.Marginals` instead.
