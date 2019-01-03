@@ -58,7 +58,7 @@ def test_mcmc_interface():
     (2, 3),
 ])
 def test_num_chains(num_chains, cpu_count, monkeypatch):
-    monkeypatch.setattr(torch.multiprocessing, 'cpu_count', lambda:  cpu_count)
+    monkeypatch.setattr(torch.multiprocessing, 'cpu_count', lambda: cpu_count)
     kernel = PriorKernel(normal_normal_model)
     available_cpu = max(1, cpu_count-1)
     with optional(pytest.warns(UserWarning), available_cpu < num_chains):
