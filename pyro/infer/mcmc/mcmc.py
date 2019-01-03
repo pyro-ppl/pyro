@@ -268,11 +268,23 @@ class MCMC(TracePosterior):
             yield sample
 
     def marginal(self, sites=None):
+        """
+        Marginalizes latent sites from the sampler.
+
+        :param list sites: optional list of sites for which we need to generate
+            the marginal distribution.
+        :returns: A :class:`MCMCMarginals` class instance.
+        :rtype: :class:`MCMCMarginals`.
+        """
         return MCMCMarginals(self, sites)
 
 
 class MCMCMarginals(Marginals):
     def diagnostics(self):
+        """
+        Gets some diagnostics statistics such as effective sample size and
+        split Gelman-Rubin from the sampler.
+        """
         if self._diagnostics:
             return self._diagnostics
         support = self.support()

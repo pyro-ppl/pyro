@@ -1,6 +1,12 @@
 MCMC
 ----
+
 .. autoclass:: pyro.infer.mcmc.MCMC
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. autoclass:: pyro.infer.mcmc.MCMCMarginals
     :members:
     :undoc-members:
     :show-inheritance:
