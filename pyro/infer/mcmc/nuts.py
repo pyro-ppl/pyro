@@ -75,6 +75,8 @@ class NUTS(HMC):
     :param bool jit_compile: Optional parameter denoting whether to use
         the PyTorch JIT to trace the log density computation, and use this
         optimized executable trace in the integrator.
+    :param bool jit_optimize: Optional parameter denoting whether to enable
+        ``optimize`` flag for PyTorch JIT. Defaults to True.
     :param float target_accept_prob: Target acceptance probability of step size
         adaptation scheme. Increasing this value will lead to a smaller step size,
         so the sampling will be slower but more robust. Default to 0.8.
@@ -112,6 +114,7 @@ class NUTS(HMC):
                  max_plate_nesting=None,
                  jit_compile=False,
                  ignore_jit_warnings=False,
+                 jit_optimize=True,
                  target_accept_prob=0.8,
                  max_tree_depth=10):
         super(NUTS, self).__init__(model,
@@ -123,6 +126,7 @@ class NUTS(HMC):
                                    max_plate_nesting=max_plate_nesting,
                                    jit_compile=jit_compile,
                                    ignore_jit_warnings=ignore_jit_warnings,
+                                   jit_optimize=jit_optimize,
                                    target_accept_prob=target_accept_prob)
         self.use_multinomial_sampling = use_multinomial_sampling
         self._max_tree_depth = max_tree_depth
