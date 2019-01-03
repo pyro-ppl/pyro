@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import logging
+import os
 from collections import namedtuple
 
 import pytest
@@ -13,6 +14,16 @@ from pyro.infer.mcmc.mcmc import MCMC
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
+
+
+def mark_jit(*args, **kwargs):
+    jit_markers = kwargs.pop("marks", [])
+    jit_markers += [
+        pytest.mark.skipif('CI' in os.environ,
+                           reason='to reduce running time on CI')
+    ]
+    kwargs["marks"] = jit_markers
+    return pytest.param(*args, **kwargs)
 
 
 def jit_idfn(param):
@@ -178,7 +189,7 @@ def test_logistic_regression(step_size, trajectory_length, num_steps,
     assert_equal(rmse(true_coefs, beta_posterior.mean).item(), 0.0, prec=0.1)
 
 
-@pytest.mark.parametrize("jit", [False, True], ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_dirichlet_categorical(jit):
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
@@ -194,7 +205,7 @@ def test_dirichlet_categorical(jit):
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
-@pytest.mark.parametrize("jit", [False, True], ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_beta_bernoulli(jit):
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
@@ -213,7 +224,7 @@ def test_beta_bernoulli(jit):
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, True], ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_gamma_normal(jit):
     def model(data):
         rate = torch.tensor([1.0, 1.0])
@@ -231,7 +242,7 @@ def test_gamma_normal(jit):
     assert_equal(posterior.mean, true_std, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, True], ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_bernoulli_latent_model(jit):
     def model(data):
         y_prob = pyro.sample("y_prob", dist.Beta(1.0, 1.0))
@@ -250,7 +261,7 @@ def test_bernoulli_latent_model(jit):
                      jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal("y_prob").empirical["y_prob"].mean
-    assert_equal(posterior, y_prob, prec=0.05)
+    assert_equal(posterior, y_prob, prec=0.06)
 
 
 def test_initial_trace(monkeypatch):
