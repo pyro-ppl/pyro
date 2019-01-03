@@ -215,11 +215,7 @@ def test_dirichlet_categorical(jit):
     assert_equal(posterior.mean, true_probs, prec=0.02)
 
 
-@pytest.mark.parametrize("jit", [False,
-                                 mark_jit(True, marks=[pytest.mark.xfail(
-                                     'CUDA_TEST' in os.environ,
-                                     reason='https://github.com/uber/pyro/issues/1696')])],
-                         ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_gamma_beta(jit):
     def model(data):
         alpha_prior = pyro.sample('alpha', dist.Gamma(concentration=1., rate=1.))
@@ -232,7 +228,7 @@ def test_gamma_beta(jit):
     nuts_kernel = NUTS(model, jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal(['alpha', 'beta']).empirical
-    assert_equal(posterior['alpha'].mean, true_alpha, prec=0.06)
+    assert_equal(posterior['alpha'].mean, true_alpha, prec=0.08)
     assert_equal(posterior['beta'].mean, true_beta, prec=0.05)
 
 
@@ -260,11 +256,7 @@ def test_gaussian_mixture_model(jit):
     assert_equal(posterior["cluster_means"].mean.sort()[0], true_cluster_means, prec=0.2)
 
 
-@pytest.mark.parametrize("jit", [False,
-                                 mark_jit(True, marks=[pytest.mark.xfail(
-                                     'CUDA_TEST' in os.environ,
-                                     reason='https://github.com/uber/pyro/issues/1696')])],
-                         ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_bernoulli_latent_model(jit):
     @poutine.broadcast
     def model(data):

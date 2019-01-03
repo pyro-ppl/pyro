@@ -224,7 +224,7 @@ def test_beta_bernoulli(jit):
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parametrize("jit", [True], ids=jit_idfn)
 def test_gamma_normal(jit):
     def model(data):
         rate = torch.tensor([1.0, 1.0])
