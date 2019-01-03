@@ -157,7 +157,7 @@ class _ParallelSampler(TracePosterior):
             while active_workers:
                 try:
                     chain_id, val = self.result_queue.get(timeout=5)
-                    self.events[i].set()
+                    self.events[chain_id].set()
                 # This can happen when the worker process has terminated.
                 # See https://github.com/pytorch/pytorch/pull/5380 for motivation.
                 except socket.error as e:
