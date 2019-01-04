@@ -55,7 +55,7 @@ def test_mcmc_interface():
 def test_mcmc_diagnostics(num_chains):
     data = torch.tensor([1.0])
     kernel = PriorKernel(normal_normal_model)
-    mcmc = MCMC(kernel=kernel, num_samples=10, num_chains=1).run(data)
+    mcmc = MCMC(kernel=kernel, num_samples=10, num_chains=num_chains).run(data)
     diagnostics = mcmc.marginal(["y"]).diagnostics()
     assert diagnostics["y"]["n_eff"].shape == torch.Size([1])
     assert diagnostics["y"]["r_hat"].shape == torch.Size([1])
