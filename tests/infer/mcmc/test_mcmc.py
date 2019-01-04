@@ -1,3 +1,7 @@
+from __future__ import absolute_import, division, print_function
+
+import os
+
 import pytest
 import torch
 
@@ -51,7 +55,11 @@ def test_mcmc_interface():
     assert_equal(sample_std, torch.tensor([1.0]), prec=0.08)
 
 
-@pytest.mark.parametrize("num_chains", [1, 2])
+@pytest.mark.parametrize("num_chains", [
+    1,
+    pytest.param(2, marks=[pytest.mark.skipif("CI" in os.environ, reason="CI only provides 1 CPU"),
+                           pytest.mark.skip(reason="https://github.com/uber/pyro/issues/1699")])
+])
 def test_mcmc_diagnostics(num_chains):
     data = torch.tensor([1.0])
     kernel = PriorKernel(normal_normal_model)
