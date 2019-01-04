@@ -20,9 +20,7 @@ def mark_jit(*args, **kwargs):
     jit_markers = kwargs.pop("marks", [])
     jit_markers += [
         pytest.mark.skipif('CI' in os.environ,
-                           reason='slow test'),
-        pytest.mark.skipif('CUDA_TEST' in os.environ,
-                           reason='https://github.com/uber/pyro/issues/1419')
+                           reason='to reduce running time on CI')
     ]
     kwargs["marks"] = jit_markers
     return pytest.param(*args, **kwargs)
@@ -226,8 +224,7 @@ def test_beta_bernoulli(jit):
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-def test_gamma_normal(jit):
+def test_gamma_normal():
     def model(data):
         rate = torch.tensor([1.0, 1.0])
         concentration = torch.tensor([1.0, 1.0])
@@ -238,7 +235,7 @@ def test_gamma_normal(jit):
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
     hmc_kernel = HMC(model, trajectory_length=1, step_size=0.03, adapt_step_size=False,
-                     jit_compile=jit, ignore_jit_warnings=True)
+                     jit_compile=True, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal(['p_latent']).empirical['p_latent']
     assert_equal(posterior.mean, true_std, prec=0.05)
@@ -263,7 +260,7 @@ def test_bernoulli_latent_model(jit):
                      jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal("y_prob").empirical["y_prob"].mean
-    assert_equal(posterior, y_prob, prec=0.05)
+    assert_equal(posterior, y_prob, prec=0.06)
 
 
 def test_initial_trace(monkeypatch):

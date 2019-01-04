@@ -19,6 +19,12 @@ Utilities for HMC
     :show-inheritance:
     :member-order: bysource
 
+.. automodule:: pyro.ops.welford
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 Newton Optimizers
 -----------------
 
@@ -38,3 +44,12 @@ Tensor Contraction
     :member-order: bysource
 
 .. autofunction:: pyro.ops.contract.ubersum
+
+Statistical Utilities
+---------------------
+
+.. automodule:: pyro.ops.stats
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource

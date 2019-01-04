@@ -125,9 +125,8 @@ class NonlocalExit(Exception):
     """
     def __init__(self, site, *args, **kwargs):
         """
-        :param site: message at a pyro site
-
-        constructor.  Just stores the input site.
+        :param site: message at a pyro site constructor.
+            Just stores the input site.
         """
         super(NonlocalExit, self).__init__(*args, **kwargs)
         self.site = site
@@ -146,6 +145,7 @@ class NonlocalExit(Exception):
 def default_process_message(msg):
     """
     Default method for processing messages in inference.
+
     :param msg: a message to be processed
     :returns: None
     """
@@ -217,7 +217,7 @@ def effectful(fn=None, type=None):
     :param fn: function or callable that performs an effectful computation
     :param str type: the type label of the operation, e.g. `"sample"`
 
-    Wrapper for calling :func:~`pyro.poutine.runtime.apply_stack` to apply any active effects.
+    Wrapper for calling :func:`~pyro.poutine.runtime.apply_stack` to apply any active effects.
     """
     if fn is None:
         return functools.partial(effectful, type=type)

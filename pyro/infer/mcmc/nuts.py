@@ -45,9 +45,11 @@ class NUTS(HMC):
     **References**
 
     [1] `The No-U-turn sampler: adaptively setting path lengths in Hamiltonian Monte Carlo`,
-    Matthew D. Hoffman, and Andrew Gelman.
-    [2] `A Conceptual Introduction to Hamiltonian Monte Carlo`, Michael Betancourt
-    [3] `Slice Sampling`, Radford M. Neal
+        Matthew D. Hoffman, and Andrew Gelman.
+    [2] `A Conceptual Introduction to Hamiltonian Monte Carlo`,
+        Michael Betancourt
+    [3] `Slice Sampling`,
+        Radford M. Neal
 
     :param model: Python callable containing Pyro primitives.
     :param float step_size: Determines the size of a single step taken by the
