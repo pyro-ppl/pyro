@@ -57,10 +57,10 @@ class HMC(TraceKernel):
     :param bool jit_compile: Optional parameter denoting whether to use
         the PyTorch JIT to trace the log density computation, and use this
         optimized executable trace in the integrator.
+    :param dict jit_options: A dictionary contains optional arguments for
+        :func:`torch.jit.trace` function.
     :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
         tracer when ``jit_compile=True``. Default is False.
-    :param bool jit_optimize: Optional parameter denoting whether to enable
-        ``optimize`` flag for PyTorch JIT. Defaults to True.
     :param float target_accept_prob: Increasing this value will lead to a smaller
         step size, hence the sampling will be slower and more robust. Default to 0.8.
 
@@ -99,8 +99,8 @@ class HMC(TraceKernel):
                  transforms=None,
                  max_plate_nesting=None,
                  jit_compile=False,
+                 jit_options=None,
                  ignore_jit_warnings=False,
-                 jit_optimize=True,
                  target_accept_prob=0.8):
         self.model = model
         self.max_plate_nesting = max_plate_nesting
@@ -111,8 +111,8 @@ class HMC(TraceKernel):
         else:
             self.trajectory_length = 2 * math.pi  # from Stan
         self._jit_compile = jit_compile
+        self._jit_options = {"check_trace": False} if jit_options is None else jit_options
         self._ignore_jit_warnings = ignore_jit_warnings
-        self._jit_optimize = jit_optimize
         # The following parameter is used in find_reasonable_step_size method.
         # In NUTS paper, this threshold is set to a fixed log(0.5).
         # After https://github.com/stan-dev/stan/pull/356, it is set to a fixed log(0.8).
@@ -191,8 +191,7 @@ class HMC(TraceKernel):
             return potential_energy
 
         with pyro.validation_enabled(False), optional(ignore_jit_warnings(), self._ignore_jit_warnings):
-            self._compiled_potential_fn = torch.jit.trace(compiled, vals, check_trace=False,
-                                                          optimize=self._jit_optimize)
+            self._compiled_potential_fn = torch.jit.trace(compiled, vals, **self._jit_options)
         return self._compiled_potential_fn(*vals)
 
     def _energy(self, z, r):
