@@ -277,9 +277,8 @@ def test_bernoulli_latent_model(jit):
     assert_equal(posterior.mean, y_prob, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [True], ids=jit_idfn)
 @pytest.mark.parametrize("num_steps", [2, 3, 30])
-def test_gaussian_hmm(jit, num_steps):
+def test_gaussian_hmm(num_steps):
     dim = 4
 
     def model(data):
@@ -315,7 +314,7 @@ def test_gaussian_hmm(jit, num_steps):
         return torch.stack(obs)
 
     data = _generate_data()
-    nuts_kernel = NUTS(model, max_plate_nesting=1, jit_compile=jit, ignore_jit_warnings=True)
+    nuts_kernel = NUTS(model, max_plate_nesting=1, jit_compile=True, ignore_jit_warnings=True)
     if num_steps == 30:
         nuts_kernel.initial_trace = _get_initial_trace()
     MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)
