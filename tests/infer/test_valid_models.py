@@ -1575,7 +1575,8 @@ def test_markov_history(history):
         pass
 
     if history < 2:
-        assert_error(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
+        assert_error(model, guide, TraceEnum_ELBO(max_plate_nesting=0),
+                     match="Enumeration dim conflict")
     else:
         assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
 
