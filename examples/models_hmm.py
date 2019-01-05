@@ -372,3 +372,136 @@ class model9(nn.Module):
                             y = pyro.sample("y_{}".format(t),
                                             dist.Bernoulli(logits=self.tones_generator(w, x, y)),
                                             obs=sequences[batch, t])
+
+
+##################################################################
+####################### second order hmms ########################
+##################################################################
+
+# 2HMM
+class model20(nn.Module):
+    def __init__(self, args, data_dim):
+        super(model20, self).__init__()
+
+    def model(self, sequences, lengths, args, mb=None, scale=1.0):
+        num_sequences, max_length, data_dim = sequences.shape
+        assert lengths.shape == (num_sequences,)
+        assert lengths.max() <= max_length
+        hidden_dim = args['hidden_dim']
+        hidden = torch.arange(hidden_dim, dtype=torch.long)
+        raftery = True
+        if not raftery:
+            probs_x = pyro.param("probs_x", lambda: init_simplices(hidden_dim, method=args['init_method'], seed=args['seed']),
+                                 constraint=constraints.simplex)
+        else:
+            probs_x1 = pyro.param("probs_x1", lambda: init_simplex(hidden_dim, method=args['init_method'], seed=args['seed']),
+                                 constraint=constraints.simplex)
+            probs_x2 = pyro.param("probs_x2", lambda: init_simplex(hidden_dim, method=args['init_method'], seed=args['seed'] + 1),
+                                 constraint=constraints.simplex)
+            tlambda = pyro.param("tlambda", torch.tensor(0.5), constraint=constraints.unit_interval)
+            probs_x = tlambda * probs_x1 + (1.0 - tlambda) * probs_x2.unsqueeze(-2)
+        probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, data_dim),
+                             constraint=constraints.unit_interval)
+        tones_plate = pyro.plate("tones", data_dim, dim=-1)
+        with pyro.plate("sequences", mb.size(0), subsample=mb, dim=-2) as batch:
+            lengths = lengths[batch]
+            with pyro.poutine.scale(scale=scale):
+                x_curr, x_prev = torch.tensor(0), torch.tensor(0)
+                for t in pyro.markov(range(lengths.max()), history=2):
+                    with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+                        probs = probs_x[x_prev.unsqueeze(-1), x_curr.unsqueeze(-1), hidden]
+                        assert probs.shape == broadcast_shape(x_prev.unsqueeze(-1).shape, x_curr.unsqueeze(-1).shape, (hidden_dim,))
+                        x_prev, x_curr = x_curr, pyro.sample("x_{}".format(t), dist.Categorical(probs),
+                                                             infer={"enumerate": "parallel"})
+                        with tones_plate:
+                            probs = probs_y[x_curr.squeeze(-1)]
+                            assert probs.shape == broadcast_shape(x_curr.shape, (data_dim,))
+                            pyro.sample("y_{}".format(t), dist.Bernoulli(probs),
+                                        obs=sequences[batch, t])
+
+
+
+# ar2HMM
+class model21(nn.Module):
+    def __init__(self, args, data_dim):
+        super(model21, self).__init__()
+
+    def model(self, sequences, lengths, args, mb=None, scale=1.0):
+        num_sequences, max_length, data_dim = sequences.shape
+        assert lengths.shape == (num_sequences,)
+        assert lengths.max() <= max_length
+        hidden_dim = args['hidden_dim']
+        hidden = torch.arange(hidden_dim, dtype=torch.long)
+        raftery = True
+        if not raftery:
+            probs_x = pyro.param("probs_x", lambda: init_simplices(hidden_dim, method=args['init_method'], seed=args['seed']),
+                                 constraint=constraints.simplex)
+        else:
+            probs_x1 = pyro.param("probs_x1", lambda: init_simplex(hidden_dim, method=args['init_method'], seed=args['seed']),
+                                 constraint=constraints.simplex)
+            probs_x2 = pyro.param("probs_x2", lambda: init_simplex(hidden_dim, method=args['init_method'], seed=args['seed'] + 1),
+                                 constraint=constraints.simplex)
+            tlambda = pyro.param("tlambda", torch.tensor(0.5), constraint=constraints.unit_interval)
+            probs_x = tlambda * probs_x1 + (1.0 - tlambda) * probs_x2.unsqueeze(-2)
+        probs_y = pyro.param("probs_y", lambda: torch.rand(hidden_dim, 2, data_dim),
+                             constraint=constraints.unit_interval)
+        tones_plate = pyro.plate("tones", data_dim, dim=-1)
+        with pyro.plate("sequences", mb.size(0), subsample=mb, dim=-2) as batch:
+            lengths = lengths[batch]
+            with pyro.poutine.scale(scale=scale):
+                x_curr, x_prev, y = torch.tensor(0), torch.tensor(0), torch.tensor(0).long()
+                for t in pyro.markov(range(lengths.max()), history=2):
+                    with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+                        probs = probs_x[x_prev.unsqueeze(-1), x_curr.unsqueeze(-1), hidden]
+                        assert probs.shape == broadcast_shape(x_prev.unsqueeze(-1).shape, x_curr.unsqueeze(-1).shape, (hidden_dim,))
+                        x_prev, x_curr = x_curr, pyro.sample("x_{}".format(t), dist.Categorical(probs),
+                                                             infer={"enumerate": "parallel"})
+                        with tones_plate as tones:
+                            probs = probs_y[x_curr, y, tones]
+                            batch_dim = 1 if t==0 else batch.size(-1)
+                            assert probs.shape == broadcast_shape(x_curr.shape, (batch_dim, data_dim,))
+                            y = pyro.sample("y_{}".format(t), dist.Bernoulli(probs),
+                                            obs=sequences[batch, t]).long()
+
+
+# nn2HMM
+class model22(nn.Module):
+    def __init__(self, args, data_dim):
+        super(model22, self).__init__()
+        self.tones_generator = TonesGenerator(args, data_dim)
+
+    def model(self, sequences, lengths, args, mb=None, scale=1.0):
+        num_sequences, max_length, data_dim = sequences.shape
+        assert lengths.shape == (num_sequences,)
+        assert lengths.max() <= max_length
+        hidden_dim = args['hidden_dim']
+        hidden = torch.arange(hidden_dim, dtype=torch.long)
+        pyro.module("tones_generator", self.tones_generator)
+        raftery = True
+        if not raftery:
+            probs_x = pyro.param("probs_x", lambda: init_simplices(hidden_dim, method=args['init_method'], seed=args['seed']),
+                                 constraint=constraints.simplex)
+        else:
+            probs_x1 = pyro.param("probs_x1", lambda: init_simplex(hidden_dim, method=args['init_method'], seed=args['seed']),
+                                 constraint=constraints.simplex)
+            probs_x2 = pyro.param("probs_x2", lambda: init_simplex(hidden_dim, method=args['init_method'], seed=args['seed'] + 1),
+                                 constraint=constraints.simplex)
+            tlambda = pyro.param("tlambda", torch.tensor(0.5), constraint=constraints.unit_interval)
+            probs_x = tlambda * probs_x1 + (1.0 - tlambda) * probs_x2.unsqueeze(-2)
+        tones_plate = pyro.plate("tones", data_dim, dim=-1)
+        with pyro.plate("sequences", mb.size(0), subsample=mb, dim=-2) as batch:
+            lengths = lengths[batch]
+            with pyro.poutine.scale(scale=scale):
+                x_curr, x_prev, y = torch.tensor(0), torch.tensor(0), torch.zeros(data_dim)
+                for t in pyro.markov(range(lengths.max()), history=2):
+                    with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+                        probs = probs_x[x_prev.unsqueeze(-1), x_curr.unsqueeze(-1), hidden]
+                        assert probs.shape == broadcast_shape(x_prev.unsqueeze(-1).shape, x_curr.unsqueeze(-1).shape, (hidden_dim,))
+                        x_prev, x_curr = x_curr, pyro.sample("x_{}".format(t), dist.Categorical(probs),
+                                                             infer={"enumerate": "parallel"})
+                        with tones_plate as tones:
+                            logits = self.tones_generator(x_curr, y)
+                            batch_dim = 1 if t==0 else batch.size(-1)
+                            assert logits.shape == broadcast_shape(x_curr.shape, (batch_dim, data_dim,))
+                            y = pyro.sample("y_{}".format(t),
+                                            dist.Bernoulli(logits=logits), obs=sequences[batch, t])
