@@ -289,13 +289,14 @@ class MCMCMarginals(Marginals):
             return self._diagnostics
         support = self.support()
         for site in self.sites:
+            site_support = support[site]
             if self._trace_posterior.num_chains == 1:
-                site_support = support[site].unsqueeze(0)
+                site_support = site_support.unsqueeze(0)
             site_stats = OrderedDict()
             try:
                 site_stats["n_eff"] = stats.effective_sample_size(site_support)
             except NotImplementedError:
-                site_stats["n_eff"] = torch.tensor(float('nan'))
+                site_stats["n_eff"] = site_support.new_full(site_support.shape[2:], float("nan"))
             site_stats["r_hat"] = stats.split_gelman_rubin(site_support)
             self._diagnostics[site] = site_stats
         return self._diagnostics

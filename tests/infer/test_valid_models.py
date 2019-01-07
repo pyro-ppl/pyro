@@ -1556,6 +1556,31 @@ def test_enum_recycling_plate():
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=2))
 
 
+@pytest.mark.parametrize('history', [0, 1, 2, 3])
+def test_markov_history(history):
+
+    @config_enumerate
+    def model():
+        p = pyro.param("p", 0.25 * torch.ones(2, 2))
+        q = pyro.param("q", 0.25 * torch.ones(2))
+        x_prev = torch.tensor(0)
+        x_curr = torch.tensor(0)
+        for t in pyro.markov(range(10), history=history):
+            probs = p[x_prev, x_curr]
+            x_prev, x_curr = x_curr, pyro.sample("x_{}".format(t), dist.Bernoulli(probs)).long()
+            pyro.sample("y_{}".format(t), dist.Bernoulli(q[x_curr]),
+                        obs=torch.tensor(0.))
+
+    def guide():
+        pass
+
+    if history < 2:
+        assert_error(model, guide, TraceEnum_ELBO(max_plate_nesting=0),
+                     match="Enumeration dim conflict")
+    else:
+        assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
+
+
 def test_mean_field_ok():
 
     def model():
