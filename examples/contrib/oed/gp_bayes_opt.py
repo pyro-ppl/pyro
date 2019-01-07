@@ -3,9 +3,9 @@ import torch.autograd as autograd
 import torch.optim as optim
 from torch.distributions import transform_to
 
-import pyro
 import pyro.contrib.gp as gp
 from pyro.infer import TraceEnum_ELBO
+import pyro.optim
 
 
 class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
