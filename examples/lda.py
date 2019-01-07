@@ -71,6 +71,7 @@ def make_predictor(args):
         layer.bias.data.normal_(0, 0.001)
         layers.append(layer)
         layers.append(nn.Sigmoid())
+    layers.append(nn.Softmax(dim=-1))
     return nn.Sequential(*layers)
 
 
@@ -78,12 +79,12 @@ def parametrized_guide(predictor, data, args, batch_size=None):
     # Use a conjugate guide for global variables.
     topic_weights_posterior = pyro.param(
             "topic_weights_posterior",
-            lambda: torch.ones(args.num_topics) / args.num_topics,
+            lambda: torch.ones(args.num_topics),
             constraint=constraints.positive)
     topic_words_posterior = pyro.param(
             "topic_words_posterior",
-            lambda: torch.ones(args.num_topics, args.num_words) / args.num_words,
-            constraint=constraints.positive)
+            lambda: torch.ones(args.num_topics, args.num_words),
+            constraint=constraints.greater_than(0.5))
     with pyro.plate("topics", args.num_topics):
         pyro.sample("topic_weights", dist.Gamma(topic_weights_posterior, 1.))
         pyro.sample("topic_words", dist.Dirichlet(topic_words_posterior))
@@ -105,6 +106,9 @@ def parametrized_guide(predictor, data, args, batch_size=None):
 def main(args):
     logging.info('Generating data')
     pyro.set_rng_seed(0)
+    pyro.clear_param_store()
+    pyro.enable_validation(True)
+
     # We can generate synthetic data directly by calling the model.
     true_topic_weights, true_topic_words, data = model(args=args)
 
