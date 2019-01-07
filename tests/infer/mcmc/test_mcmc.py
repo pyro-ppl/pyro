@@ -37,7 +37,7 @@ class PriorKernel(TraceKernel):
 
 
 def normal_normal_model(data):
-    x = pyro.param('loc', torch.tensor([0.0]))
+    x = torch.tensor([0.0])
     y = pyro.sample('y', dist.Normal(x, torch.tensor([1.0])))
     pyro.sample('obs', dist.Normal(y, torch.tensor([1.0])), obs=data)
     return y
@@ -57,8 +57,7 @@ def test_mcmc_interface():
 
 @pytest.mark.parametrize("num_chains", [
     1,
-    pytest.param(2, marks=[pytest.mark.skipif("CI" in os.environ, reason="CI only provides 1 CPU"),
-                           pytest.mark.skip(reason="https://github.com/uber/pyro/issues/1699")])
+    pytest.param(2, marks=[pytest.mark.skipif("CI" in os.environ, reason="CI only provides 1 CPU")])
 ])
 def test_mcmc_diagnostics(num_chains):
     data = torch.tensor([1.0])

@@ -247,8 +247,9 @@ def main(args):
     nuts_kernel = NUTS(fully_pooled)
     posterior_fully_pooled = MCMC(nuts_kernel,
                                   num_samples=args.num_samples,
-                                  warmup_steps=args.warmup_steps, mp_context="spawn",
-                                  num_chains=args.num_chains).run(at_bats, hits)
+                                  warmup_steps=args.warmup_steps,
+                                  num_chains=args.num_chains,
+                                  mp_context=args.mp_context).run(at_bats, hits)
     logging.info("\nModel: Fully Pooled")
     logging.info("===================")
     logging.info("\nphi:")
@@ -264,7 +265,8 @@ def main(args):
     posterior_not_pooled = MCMC(nuts_kernel,
                                 num_samples=args.num_samples,
                                 warmup_steps=args.warmup_steps,
-                                num_chains=args.num_chains).run(at_bats, hits)
+                                num_chains=args.num_chains,
+                                mp_context=args.mp_context).run(at_bats, hits)
     logging.info("\nModel: Not Pooled")
     logging.info("=================")
     logging.info("\nphi:")
@@ -282,7 +284,8 @@ def main(args):
         posterior_partially_pooled = MCMC(nuts_kernel,
                                           num_samples=args.num_samples,
                                           warmup_steps=args.warmup_steps,
-                                          num_chains=args.num_chains).run(at_bats, hits)
+                                          num_chains=args.num_chains,
+                                          mp_context=args.mp_context).run(at_bats, hits)
         logging.info("\nModel: Partially Pooled")
         logging.info("=======================")
         logging.info("\nphi:")
@@ -299,7 +302,8 @@ def main(args):
     posterior_partially_pooled_with_logit = MCMC(nuts_kernel,
                                                  num_samples=args.num_samples,
                                                  warmup_steps=args.warmup_steps,
-                                                 num_chains=args.num_chains).run(at_bats, hits)
+                                                 num_chains=args.num_chains,
+                                                 mp_context=args.mp_context).run(at_bats, hits)
     logging.info("\nModel: Partially Pooled with Logit")
     logging.info("==================================")
     logging.info("\nSigmoid(alpha):")
@@ -321,8 +325,14 @@ if __name__ == "__main__":
     parser.add_argument("--num-chains", nargs='?', default=4, type=int)
     parser.add_argument("--warmup-steps", nargs='?', default=100, type=int)
     parser.add_argument("--rng_seed", nargs='?', default=0, type=int)
-    parser.add_argument('--jit', action='store_true', default=False,
-                        help='use PyTorch jit')
+    parser.add_argument("--jit", action="store_true", default=False,
+                        help="use PyTorch jit")
+    parser.add_argument("--cuda", action="store_true", default=False,
+                        help="run this example in GPU")
     args = parser.parse_args()
-    torch.set_default_tensor_type(torch.cuda.FloatTensor)
+
+    args.mp_context = None  # use default multiprocessing context
+    if args.cuda:
+        torch.set_default_tensor_type(torch.cuda.FloatTensor)
+        args.mp_context = "spawn"
     main(args)
