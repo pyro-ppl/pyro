@@ -1,10 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-import errno
 import json
 import logging
 import signal
-import socket
 import sys
 import threading
 import warnings
