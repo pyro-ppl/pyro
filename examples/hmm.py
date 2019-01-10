@@ -1,9 +1,13 @@
 """
 This example shows how to marginalize out discrete model variables in Pyro.
 
-This combines Stochastic Variational Inference (SVI) with an
-Expectation-Maximization (EM) algorithm, where we use enumeration to exactly
-marginalize out some variables from the ELBO computation.
+This combines Stochastic Variational Inference (SVI) with a
+variable elimination algorithm, where we use enumeration to exactly
+marginalize out some variables from the ELBO computation. We might
+call the resulting algorithm collapsed SVI or collapsed SGVB (i.e
+collapsed Stochastic Gradient Variational Bayes). In the case where
+we exactly sum out all the latent variables, this algorithm reduces
+to a form of gradient-based Maximum Likelihood Estimation.
 
 To marginalize out discrete variables ``x`` in Pyro's SVI:
 1. Verify that the variable dependency structure in your model
