@@ -10,6 +10,7 @@ we exactly sum out all the latent variables, this algorithm reduces
 to a form of gradient-based Maximum Likelihood Estimation.
 
 To marginalize out discrete variables ``x`` in Pyro's SVI:
+
 1. Verify that the variable dependency structure in your model
     admits tractable inference, i.e. the dependency graph among
     enumerated variables should have narrow treewidth.
