@@ -40,6 +40,8 @@ CPU_EXAMPLES = [
     'hmm.py --num-steps=1 --truncate=10 --model=3',
     'hmm.py --num-steps=1 --truncate=10 --model=4',
     'hmm.py --num-steps=1 --truncate=10 --model=5',
+    'hmm.py --num-steps=1 --truncate=10 --model=6',
+    'hmm.py --num-steps=1 --truncate=10 --model=6 --raftery-parameterization',
     'inclined_plane.py --num-samples=1',
     'lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8',
     'minipyro.py',
