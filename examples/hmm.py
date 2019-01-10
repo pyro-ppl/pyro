@@ -573,6 +573,6 @@ if __name__ == '__main__':
     parser.add_argument("-p", "--print-shapes", action="store_true")
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
-    parser.add_argument('--raftery-parameterization', action='store_true')
+    parser.add_argument('-rp', '--raftery-parameterization', action='store_true')
     args = parser.parse_args()
     main(args)

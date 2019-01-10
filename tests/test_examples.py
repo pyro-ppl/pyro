@@ -73,6 +73,8 @@ CUDA_EXAMPLES = [
     'hmm.py --num-steps=1 --truncate=10 --model=3 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=4 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=5 --cuda',
+    'hmm.py --num-steps=1 --truncate=10 --model=6 --cuda',
+    'hmm.py --num-steps=1 --truncate=10 --model=6 --cuda --raftery-parameterization',
     'vae/vae.py --num-epochs=1 --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss --cuda',
