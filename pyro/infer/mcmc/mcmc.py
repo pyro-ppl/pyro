@@ -71,20 +71,22 @@ class _Worker(object):
         self.trace_gen = _SingleSampler(kernel, num_samples=num_samples, warmup_steps=warmup_steps,
                                         disable_progbar=True)
         self.args = args if args is not None else []
-        self.kwargs = kwargs if kwargs is not None else {}
-        self.rng_seed = torch.initial_seed()
+        self.kwargs = kwargs.copy() if kwargs is not None else {}
+        self.kwargs["logger_id"] = "CHAIN:{}".format(chain_id)
+        self.kwargs["log_queue"] = log_queue
+        self.rng_seed = (torch.initial_seed() + chain_id) % MAX_SEED
         self.log_queue = log_queue
         self.result_queue = result_queue
         self.default_tensor_type = torch.Tensor().type()
         self.event = event
 
-    def run(self, *args, **kwargs):
-        pyro.set_rng_seed((self.chain_id + self.rng_seed) % MAX_SEED)
+    def run(self):
+        pyro.set_rng_seed(self.rng_seed)
         torch.set_default_tensor_type(self.default_tensor_type)
-        kwargs["logger_id"] = "CHAIN:{}".format(self.chain_id)
-        kwargs["log_queue"] = self.log_queue
+        # TODO: find a better strategy than cloning input data
+        args = [arg.clone().detach() if torch.is_tensor(arg) else arg for arg in self.args]
         try:
-            for sample in self.trace_gen._traces(*args, **kwargs):
+            for sample in self.trace_gen._traces(*args, **self.kwargs):
                 self.result_queue.put_nowait((self.chain_id, sample))
                 self.event.wait()
                 self.event.clear()
@@ -128,10 +130,9 @@ class _ParallelSampler(TracePosterior):
         self.workers = []
         for i in range(self.num_chains):
             worker = _Worker(i, self.result_queue, self.log_queue, self.events[i], self.kernel,
-                             self.num_samples, self.warmup_steps)
+                             self.num_samples, self.warmup_steps, args, kwargs)
             worker.daemon = True
-            self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
-                                                 args=args, kwargs=kwargs))
+            self.workers.append(self.ctx.Process(name=str(i), target=worker.run))
 
     def terminate(self):
         if self.log_thread.is_alive():

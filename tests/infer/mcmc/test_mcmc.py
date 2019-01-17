@@ -38,7 +38,7 @@ class PriorKernel(TraceKernel):
 
 def normal_normal_model(data):
     x = torch.tensor([0.0])
-    y = pyro.sample('y', dist.Normal(x, torch.tensor([1.0])))
+    y = pyro.sample('y', dist.Normal(x, torch.ones(data.shape)))
     pyro.sample('obs', dist.Normal(y, torch.tensor([1.0])), obs=data)
     return y
 
@@ -60,12 +60,13 @@ def test_mcmc_interface():
     pytest.param(2, marks=[pytest.mark.skipif("CI" in os.environ, reason="CI only provides 1 CPU")])
 ])
 def test_mcmc_diagnostics(num_chains):
-    data = torch.tensor([1.0])
+    data = torch.tensor([2.0]).repeat(3)
     kernel = PriorKernel(normal_normal_model)
-    mcmc = MCMC(kernel=kernel, num_samples=10, num_chains=num_chains).run(data)
+    mp_context = "spawn" if data.is_cuda else None
+    mcmc = MCMC(kernel=kernel, num_samples=5, num_chains=num_chains, mp_context=mp_context).run(data)
     diagnostics = mcmc.marginal(["y"]).diagnostics()
-    assert diagnostics["y"]["n_eff"].shape == torch.Size([1])
-    assert diagnostics["y"]["r_hat"].shape == torch.Size([1])
+    assert diagnostics["y"]["n_eff"].shape == data.shape
+    assert diagnostics["y"]["r_hat"].shape == data.shape
 
 
 @pytest.mark.parametrize("num_chains, cpu_count", [
