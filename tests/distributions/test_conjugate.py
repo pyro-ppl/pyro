@@ -1,6 +1,11 @@
+from __future__ import absolute_import, division, print_function
+
+import math
+
 import pytest
 import torch
 
+import pyro.distributions as dist
 from pyro.distributions import BetaBinomial
 from tests.common import assert_equal
 
@@ -35,3 +40,19 @@ def test_log_prob_support(dist, values):
         values = dist.enumerate_support()
     log_probs = dist.log_prob(values)
     assert_equal(log_probs.logsumexp(0), torch.tensor(0.), prec=0.01)
+
+
+@pytest.mark.parametrize("total_count", [1, 2, 3, 10])
+@pytest.mark.parametrize("shape", [(1,), (3, 1), (2, 3, 1)])
+def test_beta_binomial_log_prob(total_count, shape):
+    concentration0 = torch.randn(shape).exp()
+    concentration1 = torch.randn(shape).exp()
+    value = torch.arange(1. + total_count)
+
+    num_samples = 100000
+    probs = dist.Beta(concentration1, concentration0).sample((num_samples,))
+    log_probs = dist.Binomial(total_count, probs).log_prob(value)
+    expected = log_probs.logsumexp(0) - math.log(num_samples)
+
+    actual = BetaBinomial(concentration1, concentration0, total_count).log_prob(value)
+    assert_equal(actual, expected, prec=0.05)
