@@ -4,7 +4,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
-from pyro.distributions.torch import Beta, Binomial
+from pyro.distributions.torch import Beta, Binomial, Gamma, Poisson
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
@@ -62,3 +62,48 @@ class BetaBinomial(TorchDistribution):
     @property
     def variance(self):
         return self._beta.variance * self.total_count * (self.concetration0 + self.concentration1 + self.total_count)
+
+
+class GammaPoisson(TorchDistribution):
+    arg_constraints = {'concentration': constraints.positive, 'rate': constraints.positive}
+    support = Poisson.support
+
+    def __init__(self, concentration, rate, validate_args=None):
+        concentration, rate = broadcast_all(concentration, rate)
+        self._gamma = Gamma(concentration, rate)
+        super(GammaPoisson, self).__init__(self._gamma._batch_shape, validate_args=validate_args)
+
+    @property
+    def concentration(self):
+        return self._gamma.concentration
+
+    @property
+    def rate(self):
+        return self._gamma.rate
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(GammaPoisson, _instance)
+        batch_shape = torch.Size(batch_shape)
+        new._beta = self._gamma.expand(batch_shape)
+        super(GammaPoisson, new).__init__(batch_shape, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
+
+    def sample(self, sample_shape=()):
+        rate = self.Gamma.sample(sample_shape)
+        return Poisson(rate).sample()
+
+    def log_prob(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+        return torch.lgamma(self.rate + value) + value * self.concentration.log() \
+            - torch.lgamma(self.rate) - (self.rate + value) * (1 + self.concentration).log() \
+            - torch.lgamma(value + 1)
+
+    @property
+    def mean(self):
+        return self.concentration * self.rate
+
+    @property
+    def variance(self):
+        return self.concentration * self.rate * (1 + self.concentration)
