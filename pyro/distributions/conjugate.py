@@ -13,8 +13,21 @@ def _log_beta(x, y):
 
 
 class BetaBinomial(TorchDistribution):
+    r"""
+    Compound distribution comprising of a beta-binomial pair. The probability of
+    success (``probs`` for the :class:`~pyro.distributions.Binomial` distribution)
+    is unknown and randomly drawn from a :class:`~pyro.distributions.Beta` distribution
+    prior to a certain number of Bernoulli trials given by ``total_count``.
+
+    :param float or torch.Tensor concentration1: 1st concentration parameter (alpha) for the
+        Beta distribution.
+    :param float or torch.Tensor concentration0: 2nd concentration parameter (beta) for the
+        Beta distribution.
+    :param int or torch.Tensor total_count: number of Bernoulli trials.
+    """
     arg_constraints = {'concentration1': constraints.positive, 'concentration0': constraints.positive,
                        'total_count': constraints.nonnegative_integer}
+    has_enumerate_support = True
     support = Binomial.support
 
     def __init__(self, concentration1, concentration0, total_count=1, validate_args=None):
@@ -42,8 +55,8 @@ class BetaBinomial(TorchDistribution):
         return new
 
     def sample(self, sample_shape=()):
-        probs = self.Beta.sample(sample_shape)
-        return Binomial(probs).sample()
+        probs = self._beta.sample(sample_shape)
+        return Binomial(self.total_count, probs).sample()
 
     def log_prob(self, value):
         if self._validate_args:
@@ -61,7 +74,17 @@ class BetaBinomial(TorchDistribution):
 
     @property
     def variance(self):
-        return self._beta.variance * self.total_count * (self.concetration0 + self.concentration1 + self.total_count)
+        return self._beta.variance * self.total_count * (self.concentration0 + self.concentration1 + self.total_count)
+
+    def enumerate_support(self, expand=True):
+        total_count = int(self.total_count.max())
+        if not self.total_count.min() == total_count:
+            raise NotImplementedError("Inhomogeneous total count not supported by `enumerate_support`.")
+        values = torch.arange(1 + total_count, dtype=self.concentration1.dtype, device=self.concentration1.device)
+        values = values.view((-1,) + (1,) * len(self._batch_shape))
+        if expand:
+            values = values.expand((-1,) + self._batch_shape)
+        return values
 
 
 class GammaPoisson(TorchDistribution):
