@@ -6,13 +6,15 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-from pyro.distributions import BetaBinomial
+from pyro.distributions import BetaBinomial, GammaPoisson
 from tests.common import assert_equal
 
 
 @pytest.mark.parametrize("dist", [
     BetaBinomial(2., 5., 10.),
     BetaBinomial(torch.tensor([2., 4.]), torch.tensor([5., 8.]), torch.tensor([10., 12.])),
+    GammaPoisson(2., 2.),
+    GammaPoisson(torch.tensor([1., 2]), torch.tensor([2., 8.])),
 ])
 def test_mean(dist):
     analytic_mean = dist.mean
@@ -24,6 +26,8 @@ def test_mean(dist):
 @pytest.mark.parametrize("dist", [
     BetaBinomial(2., 5., 10.),
     BetaBinomial(torch.tensor([2., 4.]), torch.tensor([5., 8.]), torch.tensor([10., 12.])),
+    GammaPoisson(2., 2.),
+    GammaPoisson(torch.tensor([1., 2]), torch.tensor([2., 8.])),
 ])
 def test_variance(dist):
     analytic_var = dist.variance
@@ -33,6 +37,7 @@ def test_variance(dist):
 
 
 @pytest.mark.parametrize("dist, values", [
+    (BetaBinomial(2., 5., 10.), None),
     (BetaBinomial(2., 5., 10.), None),
 ])
 def test_log_prob_support(dist, values):

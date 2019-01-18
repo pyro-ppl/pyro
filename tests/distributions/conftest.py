@@ -327,6 +327,21 @@ discrete_dists = [
             prec=0.05,
             min_samples=10000,
             is_discrete=True),
+    Fixture(pyro_dist=dist.GammaPoisson,
+            examples=[
+                {'concentration': [1.], 'rate': [2.],
+                 'test_data': [0.]},
+                {'concentration': [1.], 'rate': [2.],
+                 'test_data': [1.]},
+                {'concentration': [1.], 'rate': [2.],
+                 'test_data': [4.]},
+                {'concentration': [1., 1., 1.], 'rate': [2., 2., 3.],
+                 'test_data': [[0., 1., 4.], [0., 1., 4.]]},
+                {'concentration': [[1.0], [1.0], [1.0]], 'rate': [[2.0], [2.0], [3.0]],
+                 'test_data': [[0.], [1.], [4.]]}
+            ],
+            prec=0.08,
+            is_discrete=True),
     Fixture(pyro_dist=dist.OneHotCategorical,
             scipy_dist=sp.multinomial,
             examples=[

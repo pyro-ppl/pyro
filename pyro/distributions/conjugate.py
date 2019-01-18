@@ -88,6 +88,17 @@ class BetaBinomial(TorchDistribution):
 
 
 class GammaPoisson(TorchDistribution):
+    r"""
+    Compound distribution comprising of a gamma-poisson pair. The ``rate`` parameter
+    for the :class:`~pyro.distributions.Poisson` distribution is unknown and randomly
+    drawn from a :class:`~pyro.distributions.Gamma` distribution.
+
+    :param float or torch.Tensor concentration: shape parameter (alpha) of the Gamma
+        distribution.
+    :param float or torch.Tensor rate: rate parameter (beta) for the Gamma
+        distribution.
+    """
+
     arg_constraints = {'concentration': constraints.positive, 'rate': constraints.positive}
     support = Poisson.support
 
@@ -107,26 +118,26 @@ class GammaPoisson(TorchDistribution):
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(GammaPoisson, _instance)
         batch_shape = torch.Size(batch_shape)
-        new._beta = self._gamma.expand(batch_shape)
+        new._gamma = self._gamma.expand(batch_shape)
         super(GammaPoisson, new).__init__(batch_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
 
     def sample(self, sample_shape=()):
-        rate = self.Gamma.sample(sample_shape)
+        rate = self._gamma.sample(sample_shape)
         return Poisson(rate).sample()
 
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
-        return torch.lgamma(self.rate + value) + value * self.concentration.log() \
-            - torch.lgamma(self.rate) - (self.rate + value) * (1 + self.concentration).log() \
+        return torch.lgamma(self.concentration + value) + self.concentration * self.rate.log() \
+            - torch.lgamma(self.concentration) - (self.concentration + value) * (1 + self.rate).log() \
             - torch.lgamma(value + 1)
 
     @property
     def mean(self):
-        return self.concentration * self.rate
+        return self.concentration / self.rate
 
     @property
     def variance(self):
-        return self.concentration * self.rate * (1 + self.concentration)
+        return self.concentration / self.rate.pow(2) * (1 + self.rate)
