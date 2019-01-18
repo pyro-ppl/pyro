@@ -13,6 +13,18 @@ def _log_beta(x, y):
 
 
 class BetaBinomial(TorchDistribution):
+    r"""
+    Compound distribution comprising of a beta-binomial pair. The probability of
+    success (``probs`` for the :class:`~pyro.distributions.Binomial` distribution)
+    is unknown and randomly drawn from a :class:`~pyro.distributions.Beta` distribution
+    prior to a certain number of Bernoulli trials given by ``total_count``.
+
+    :param float or torch.Tensor concentration1: 1st concentration parameter (alpha) for the
+        Beta distribution.
+    :param float or torch.Tensor concentration0: 2nd concentration parameter (beta) for the
+        Beta distribution.
+    :param int or torch.Tensor total_count: number of Bernoulli trials.
+    """
     arg_constraints = {'concentration1': constraints.positive, 'concentration0': constraints.positive,
                        'total_count': constraints.nonnegative_integer}
     has_enumerate_support = True
