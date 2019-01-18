@@ -1,11 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
+from operator import mul
+
+from six.moves import reduce
 import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.torch import Beta, Binomial, Gamma, Poisson
 from pyro.distributions.torch_distribution import TorchDistribution
+from pyro.distributions.util import sum_leftmost
 
 
 def _log_beta(x, y):
@@ -34,6 +38,11 @@ class BetaBinomial(TorchDistribution):
         concentration1, concentration0, total_count = broadcast_all(
             concentration1, concentration0, total_count)
         self._beta = Beta(concentration1, concentration0)
+        self._unexpanded_params = {
+            'concentration1': concentration1,
+            'concentration0': concentration0,
+            'total_count': total_count,
+        }
         self.total_count = total_count
         super(BetaBinomial, self).__init__(self._beta._batch_shape, validate_args=validate_args)
 
@@ -49,6 +58,7 @@ class BetaBinomial(TorchDistribution):
         new = self._get_checked_instance(BetaBinomial, _instance)
         batch_shape = torch.Size(batch_shape)
         new._beta = self._beta.expand(batch_shape)
+        new._unexpanded_params = self._unexpanded_params
         new.total_count = self.total_count.expand_as(new._beta.concentration0)
         super(BetaBinomial, new).__init__(batch_shape, validate_args=False)
         new._validate_args = self._validate_args
@@ -57,6 +67,20 @@ class BetaBinomial(TorchDistribution):
     def sample(self, sample_shape=()):
         probs = self._beta.sample(sample_shape)
         return Binomial(self.total_count, probs).sample()
+
+    def _posterior_latent_dist(self, obs):
+        concentration1 = self._unexpanded_params["concentration1"]
+        concentration0 = self._unexpanded_params["concentration0"]
+        total_count = self._unexpanded_params["total_count"]
+        num_dims = len(concentration1.shape)
+        num_obs = reduce(mul, obs.size()[:len(obs.size()) - num_dims])
+        summed_obs = sum_leftmost(obs, -num_dims)
+        return Beta(concentration1 + summed_obs,
+                    num_obs * total_count + concentration0 - summed_obs,
+                    validate_args=self._validate_args)
+
+    def _compounded_dist(self, probs):
+        return Binomial(total_count=self.total_count, probs=probs, validate_args=self._validate_args)
 
     def log_prob(self, value):
         if self._validate_args:
@@ -110,6 +134,10 @@ class GammaPoisson(TorchDistribution):
     def __init__(self, concentration, rate, validate_args=None):
         concentration, rate = broadcast_all(concentration, rate)
         self._gamma = Gamma(concentration, rate)
+        self._unexpanded_params = {
+            "concentration": concentration,
+            "rate": rate,
+        }
         super(GammaPoisson, self).__init__(self._gamma._batch_shape, validate_args=validate_args)
 
     @property
@@ -124,9 +152,21 @@ class GammaPoisson(TorchDistribution):
         new = self._get_checked_instance(GammaPoisson, _instance)
         batch_shape = torch.Size(batch_shape)
         new._gamma = self._gamma.expand(batch_shape)
+        new._unexpanded_params = self._unexpanded_params
         super(GammaPoisson, new).__init__(batch_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
+
+    def _posterior_latent_dist(self, obs):
+        concentration = self._unexpanded_params["concentration"]
+        rate = self._unexpanded_params["rate"]
+        num_dims = len(concentration.shape)
+        num_obs = reduce(mul, obs.size()[:num_dims])
+        summed_obs = sum_leftmost(obs, -num_dims)
+        return Gamma(concentration + summed_obs, rate + num_obs)
+
+    def _compounded_dist(self, rate):
+        return Poisson(rate=rate, validate_args=self._validate_args)
 
     def sample(self, sample_shape=()):
         rate = self._gamma.sample(sample_shape)

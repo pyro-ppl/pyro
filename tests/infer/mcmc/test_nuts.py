@@ -11,6 +11,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.contrib.autoguide import AutoDelta
 from pyro.infer import TraceEnum_ELBO, SVI
+from pyro.infer.conjugate import infer_conjugate
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.nuts import NUTS
 import pyro.optim as optim
@@ -318,3 +319,39 @@ def test_gaussian_hmm(num_steps):
     if num_steps == 30:
         nuts_kernel.initial_trace = _get_initial_trace()
     MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)
+
+
+@pytest.mark.parametrize("hyperpriors", [False, True])
+def test_beta_binomial(hyperpriors):
+    def model(data):
+        with pyro.plate("latent_dim", data.shape[1]):
+            alpha = pyro.sample("alpha", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
+            beta = pyro.sample("beta", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
+            with pyro.plate("data", data.shape[0]):
+                pyro.sample("betabinom", dist.BetaBinomial(alpha, beta, total_count=1000), obs=data)
+
+    true_probs = torch.tensor([0.7, 0.4])
+    data = dist.Binomial(total_count=1000, probs=true_probs).sample(sample_shape=(torch.Size((10,))))
+    hmc_kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True)
+    mcmc_run = MCMC(hmc_kernel, num_samples=80, warmup_steps=50).run(data)
+    mcmc_run.exec_traces = [poutine.trace(infer_conjugate(model, tr)).get_trace(data) for tr in mcmc_run.exec_traces]
+    posterior = mcmc_run.marginal(["betabinom.latent"]).support()["betabinom.latent"].reshape(-1, data.shape[1])
+    assert_equal(posterior.mean(0), true_probs, prec=0.05)
+
+
+@pytest.mark.parametrize("hyperpriors", [False, True])
+def test_gamma_poisson(hyperpriors):
+    def model(data):
+        with pyro.plate("latent_dim", data.shape[1]):
+            alpha = pyro.sample("alpha", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
+            beta = pyro.sample("beta", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
+            with pyro.plate("data", data.shape[0]):
+                pyro.sample("gamma_poisson", dist.GammaPoisson(alpha, beta), obs=data)
+
+    true_rate = torch.tensor([3., 10.])
+    data = dist.Poisson(rate=true_rate).sample(sample_shape=(torch.Size((100,))))
+    hmc_kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True)
+    mcmc_run = MCMC(hmc_kernel, num_samples=100, warmup_steps=50).run(data)
+    mcmc_run.exec_traces = [poutine.trace(infer_conjugate(model, tr)).get_trace(data) for tr in mcmc_run.exec_traces]
+    posterior = mcmc_run.marginal(["gamma_poisson.latent"]).support()["gamma_poisson.latent"].reshape(-1, data.shape[1])
+    assert_equal(posterior.mean(0), true_rate, prec=0.2)
