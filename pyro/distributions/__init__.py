@@ -31,6 +31,7 @@ __all__ = [
     "is_validation_enabled",
     "validation_enabled",
     "AVFMultivariateNormal",
+    "BetaBinomial",
     "Delta",
     "Distribution",
     "Empirical",
