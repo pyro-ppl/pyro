@@ -39,14 +39,14 @@ def test_variance(dist):
 @pytest.mark.parametrize("dist, values", [
     (BetaBinomial(2., 5., 10), None),
     (BetaBinomial(2., 5., 10), None),
-    (GammaPoisson(2., 2.), torch.arange(10)),
-    (GammaPoisson(torch.tensor([6., 2]), torch.tensor([2., 8.])), torch.arange(20).expand(2, 20)),
+    (GammaPoisson(2., 2.), torch.arange(10.)),
+    (GammaPoisson(6., 2.), torch.arange(20.)),
 ])
 def test_log_prob_support(dist, values):
     if values is None:
         values = dist.enumerate_support()
     log_probs = dist.log_prob(values)
-    assert_equal(log_probs.logsumexp(0), torch.tensor(0.), prec=0.01)
+    assert_equal(log_probs.logsumexp(0), torch.zeros(log_probs.shape[1:]), prec=0.01)
 
 
 @pytest.mark.parametrize("total_count", [1, 2, 3, 10])
@@ -63,3 +63,18 @@ def test_beta_binomial_log_prob(total_count, shape):
 
     actual = BetaBinomial(concentration1, concentration0, total_count).log_prob(value)
     assert_equal(actual, expected, prec=0.05)
+
+
+@pytest.mark.parametrize("shape", [(1,), (3, 1), (2, 3, 1)])
+def test_gamma_poisson_log_prob(shape):
+    gamma_conc = torch.randn(shape).exp()
+    gamma_rate = torch.randn(shape).exp()
+    value = torch.arange(20.)
+
+    num_samples = 200000
+    poisson_rate = dist.Gamma(gamma_conc, gamma_rate).sample((num_samples,))
+    log_probs = dist.Poisson(poisson_rate).log_prob(value)
+    expected = log_probs.logsumexp(0) - math.log(num_samples)
+    actual = GammaPoisson(gamma_conc, gamma_rate).log_prob(value)
+    err = (expected - actual) / expected
+    assert_equal(err, torch.zeros(expected.shape), prec=0.05)
