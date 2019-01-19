@@ -14,7 +14,7 @@ from tests.common import assert_equal
     BetaBinomial(2., 5., 10.),
     BetaBinomial(torch.tensor([2., 4.]), torch.tensor([5., 8.]), torch.tensor([10., 12.])),
     GammaPoisson(2., 2.),
-    GammaPoisson(torch.tensor([1., 2]), torch.tensor([2., 8.])),
+    GammaPoisson(torch.tensor([6., 2]), torch.tensor([2., 8.])),
 ])
 def test_mean(dist):
     analytic_mean = dist.mean
@@ -27,7 +27,7 @@ def test_mean(dist):
     BetaBinomial(2., 5., 10.),
     BetaBinomial(torch.tensor([2., 4.]), torch.tensor([5., 8.]), torch.tensor([10., 12.])),
     GammaPoisson(2., 2.),
-    GammaPoisson(torch.tensor([1., 2]), torch.tensor([2., 8.])),
+    GammaPoisson(torch.tensor([6., 2]), torch.tensor([2., 8.])),
 ])
 def test_variance(dist):
     analytic_var = dist.variance
@@ -37,8 +37,10 @@ def test_variance(dist):
 
 
 @pytest.mark.parametrize("dist, values", [
-    (BetaBinomial(2., 5., 10.), None),
-    (BetaBinomial(2., 5., 10.), None),
+    (BetaBinomial(2., 5., 10), None),
+    (BetaBinomial(2., 5., 10), None),
+    (GammaPoisson(2., 2.), torch.arange(10)),
+    (GammaPoisson(torch.tensor([6., 2]), torch.tensor([2., 8.])), torch.arange(20).expand(2, 20)),
 ])
 def test_log_prob_support(dist, values):
     if values is None:
