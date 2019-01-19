@@ -7,34 +7,59 @@ import torch
 
 from pyro.ops.contract import ubersum
 
-# from pyro.util import ignore_jit_warnings
-
 _CACHE = {}
 
 
 def jit_ubersum(equation, *operands, **kwargs):
 
-    key = equation, kwargs['batch_dims']
+    key = 'ubersum', equation, kwargs['batch_dims']
     if key not in _CACHE:
 
         def _ubersum(*operands):
             return ubersum(equation, *operands, **kwargs)
 
-        # with ignore_jit_warnings():
         fn = torch.jit.trace(_ubersum, operands, check_trace=False)
         _CACHE[key] = fn
 
     return _CACHE[key](*operands)
 
 
-def time_ubersum(equation, *operands, **kwargs):
+def jit_train(equation, *operands, **kwargs):
+
+    key = 'train', equation, kwargs['batch_dims']
+    if key not in _CACHE:
+
+        def _ubersum(*operands):
+            return ubersum(equation, *operands, **kwargs)
+
+        fn = torch.jit.trace(_ubersum, operands, check_trace=False)
+        _CACHE[key] = fn
+
+    return _CACHE[key](*operands)
+
+
+def jit_serve(equation, *operands, **kwargs):
+
+    key = 'serve', equation, kwargs['batch_dims']
+    if key not in _CACHE:
+
+        def _ubersum(*operands):
+            return ubersum(equation, *operands, **kwargs)
+
+        fn = torch.jit.trace(_ubersum, operands, check_trace=False)
+        _CACHE[key] = fn
+
+    return _CACHE[key](*operands)
+
+
+def time_fn(fn, equation, *operands, **kwargs):
     iters = kwargs.pop('iters')
-    jit_ubersum(equation, *operands, **kwargs)
+    fn(equation, *operands, **kwargs)
     time = -timeit.default_timer()
     for i in range(iters):
-        jit_ubersum(equation, *operands, **kwargs)
+        fn(equation, *operands, **kwargs)
     time += timeit.default_timer()
-    return time
+    return time / iters
 
 
 def main(args):
@@ -57,10 +82,8 @@ def main(args):
                                 for d in dims])
             operands.append(torch.randn(shape))
 
-        time = time_ubersum(equation, *operands, batch_dims=batch_dims, iters=args.iters)
+        time = time_fn(jit_ubersum, equation, *operands, batch_dims=batch_dims, iters=args.iters)
         times[plate_size] = time
-
-    for plate_size, time in sorted(times.items()):
         print('{}\t{}'.format(plate_size, time))
 
 
