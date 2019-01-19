@@ -77,6 +77,13 @@ EmpiricalDistribution
     :undoc-members:
     :show-inheritance:
 
+GammaPoisson
+------------
+.. autoclass:: pyro.distributions.GammaPoisson
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 GaussianScaleMixture
 ------------------------------------
 .. autoclass:: pyro.distributions.GaussianScaleMixture
