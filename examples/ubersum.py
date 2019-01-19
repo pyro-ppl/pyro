@@ -52,7 +52,8 @@ def jit_serve(equation, *operands, **kwargs):
     """
     Runs ubersum in forward-filter backward-sample mode, to simulate serving a model.
     """
-    key = 'serve', equation, tuple(x.shape for x in operands), kwargs['batch_dims']
+    backend = kwargs.pop('backend', 'pyro.ops.einsum.torch_sample')
+    key = backend, equation, tuple(x.shape for x in operands), kwargs['batch_dims']
     if key not in _CACHE:
 
         @ignore_jit_warnings()
@@ -61,7 +62,7 @@ def jit_serve(equation, *operands, **kwargs):
                 require_backward(operand)
 
             # Run forward pass.
-            results = ubersum(equation, *operands, backend='pyro.ops.einsum.torch_sample', **kwargs)
+            results = ubersum(equation, *operands, backend=backend, **kwargs)
 
             # Run backward pass.
             for result in results:
@@ -75,6 +76,17 @@ def jit_serve(equation, *operands, **kwargs):
 
     return _CACHE[key](*operands)
 
+
+def jit_map(equation, *operands, **kwargs):
+    jit_serve(equation, *operands, backend='pyro.ops.einsum.torch_map', **kwargs)
+
+
+def jit_sample(equation, *operands, **kwargs):
+    jit_serve(equation, *operands, backend='pyro.ops.einsum.torch_sample', **kwargs)
+
+
+def jit_marginal(equation, *operands, **kwargs):
+    jit_serve(equation, *operands, backend='pyro.ops.einsum.torch_marginal', **kwargs)
 
 
 def time_fn(fn, equation, *operands, **kwargs):
@@ -123,6 +135,6 @@ if __name__ == '__main__':
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
     parser.add_argument("-m", "--method", default="ubersum",
-                        help="one of: ubersum, train, serve")
+                        help="one of: ubersum, train, marginal, map, sample")
     args = parser.parse_args()
     main(args)
