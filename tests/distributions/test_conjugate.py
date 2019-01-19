@@ -46,7 +46,7 @@ def test_log_prob_support(dist, values):
     if values is None:
         values = dist.enumerate_support()
     log_probs = dist.log_prob(values)
-    assert_equal(log_probs.logsumexp(0), torch.zeros(log_probs.shape[1:]), prec=0.01)
+    assert_equal(log_probs.logsumexp(0), torch.tensor(0.), prec=0.01)
 
 
 @pytest.mark.parametrize("total_count", [1, 2, 3, 10])
