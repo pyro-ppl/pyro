@@ -6,12 +6,16 @@ import timeit
 import torch
 
 from pyro.ops.contract import ubersum
+from pyro.ops.einsum.adjoint import require_backward
+from pyro.util import ignore_jit_warnings
 
 _CACHE = {}
 
 
 def jit_ubersum(equation, *operands, **kwargs):
-
+    """
+    Runs ubersum to compute the partition function, to simulate evaluating a model.
+    """
     key = 'ubersum', equation, kwargs['batch_dims']
     if key not in _CACHE:
 
@@ -25,7 +29,9 @@ def jit_ubersum(equation, *operands, **kwargs):
 
 
 def jit_train(equation, *operands, **kwargs):
-
+    """
+    Runs ubersum and calls backward on the partition function, to simulate training a model.
+    """
     key = 'train', equation, kwargs['batch_dims']
     if key not in _CACHE:
 
@@ -35,21 +41,40 @@ def jit_train(equation, *operands, **kwargs):
         fn = torch.jit.trace(_ubersum, operands, check_trace=False)
         _CACHE[key] = fn
 
-    return _CACHE[key](*operands)
+    # Run forward pass.
+    loss = _CACHE[key](*operands)
+
+    # Run backward pass.
+    loss.backward()  # Note loss must be differentiable.
 
 
 def jit_serve(equation, *operands, **kwargs):
-
-    key = 'serve', equation, kwargs['batch_dims']
+    """
+    Runs ubersum in forward-filter backward-sample mode, to simulate serving a model.
+    """
+    key = 'serve', equation, tuple(x.shape for x in operands), kwargs['batch_dims']
     if key not in _CACHE:
 
-        def _ubersum(*operands):
-            return ubersum(equation, *operands, **kwargs)
+        @ignore_jit_warnings()
+        def _sample(*operands):
+            for operand in operands:
+                require_backward(operand)
 
-        fn = torch.jit.trace(_ubersum, operands, check_trace=False)
+            # Run forward pass.
+            results = ubersum(equation, *operands, backend='pyro.ops.einsum.torch_sample', **kwargs)
+
+            # Run backward pass.
+            for result in results:
+                result._pyro_backward()
+
+            # Retrieve results.
+            return tuple([x._pyro_backward_result for x in operands])
+
+        fn = torch.jit.trace(_sample, operands, check_trace=False)
         _CACHE[key] = fn
 
     return _CACHE[key](*operands)
+
 
 
 def time_fn(fn, equation, *operands, **kwargs):
@@ -63,6 +88,7 @@ def time_fn(fn, equation, *operands, **kwargs):
 
 
 def main(args):
+    fn = globals()['jit_{}'.format(args.method)]
     if args.cuda:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     else:
@@ -80,9 +106,9 @@ def main(args):
         for dims in inputs:
             shape = torch.Size([plate_size if d in batch_dims else dim_size
                                 for d in dims])
-            operands.append(torch.randn(shape))
+            operands.append(torch.randn(shape, requires_grad=True))
 
-        time = time_fn(jit_ubersum, equation, *operands, batch_dims=batch_dims, iters=args.iters)
+        time = time_fn(fn, equation, *operands, batch_dims=batch_dims, iters=args.iters)
         times[plate_size] = time
         print('{}\t{}'.format(plate_size, time))
 
@@ -96,5 +122,7 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--iters", default=100, type=int)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
+    parser.add_argument("-m", "--method", default="ubersum",
+                        help="one of: ubersum, train, serve")
     args = parser.parse_args()
     main(args)
