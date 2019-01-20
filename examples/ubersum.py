@@ -98,11 +98,13 @@ def jit_marginal(equation, *operands, **kwargs):
 def time_fn(fn, equation, *operands, **kwargs):
     iters = kwargs.pop('iters')
     fn(equation, *operands, **kwargs)
-    time = -timeit.default_timer()
+    times = []
     for i in range(iters):
+        time_start = timeit.default_timer()
         fn(equation, *operands, **kwargs)
-    time += timeit.default_timer()
-    return time / iters
+        time_end = timeit.default_timer()
+        times.append(time_start - time_end)
+    return times[iters // 2]
 
 
 def main(args):
@@ -124,6 +126,7 @@ def main(args):
         writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
         writer.writerow(["plate_size", "time"])
         for plate_size in range(8, 1 + args.max_plate_size, 8):
+            _CACHE.clear()
             operands = []
             for dims in inputs:
                 shape = torch.Size([plate_size if d in batch_dims else dim_size
@@ -142,7 +145,7 @@ if __name__ == '__main__':
     parser.add_argument("-b", "--batch-dims", default="ij")
     parser.add_argument("-d", "--dim-size", default=32, type=int)
     parser.add_argument("-p", "--max-plate-size", default=32, type=int)
-    parser.add_argument("-n", "--iters", default=10000, type=int)
+    parser.add_argument("-n", "--iters", default=1000, type=int)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true', default=True)
     parser.add_argument('--outdir', type=str)
