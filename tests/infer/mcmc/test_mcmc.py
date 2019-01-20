@@ -63,7 +63,7 @@ def test_mcmc_diagnostics(num_chains):
     data = torch.tensor([2.0]).repeat(3)
     kernel = PriorKernel(normal_normal_model)
     mp_context = "spawn" if data.is_cuda else None
-    mcmc = MCMC(kernel=kernel, num_samples=5, num_chains=num_chains, mp_context=mp_context).run(data)
+    mcmc = MCMC(kernel=kernel, num_samples=10, num_chains=num_chains, mp_context=mp_context).run(data)
     diagnostics = mcmc.marginal(["y"]).diagnostics()
     assert diagnostics["y"]["n_eff"].shape == data.shape
     assert diagnostics["y"]["r_hat"].shape == data.shape

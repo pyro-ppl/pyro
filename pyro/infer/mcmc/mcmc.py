@@ -71,9 +71,7 @@ class _Worker(object):
         self.trace_gen = _SingleSampler(kernel, num_samples=num_samples, warmup_steps=warmup_steps,
                                         disable_progbar=True)
         self.args = args if args is not None else []
-        self.kwargs = kwargs.copy() if kwargs is not None else {}
-        self.kwargs["logger_id"] = "CHAIN:{}".format(chain_id)
-        self.kwargs["log_queue"] = log_queue
+        self.kwargs = kwargs if kwargs is not None else {}
         self.rng_seed = (torch.initial_seed() + chain_id) % MAX_SEED
         self.log_queue = log_queue
         self.result_queue = result_queue
@@ -83,10 +81,14 @@ class _Worker(object):
     def run(self):
         pyro.set_rng_seed(self.rng_seed)
         torch.set_default_tensor_type(self.default_tensor_type)
-        # TODO: find a better strategy than cloning input data
-        args = [arg.clone().detach() if torch.is_tensor(arg) else arg for arg in self.args]
+        # XXX we clone CUDA tensor args to resolve the issue "Invalid device pointer"
+        # at https://github.com/pytorch/pytorch/issues/10375
+        args = [arg.clone().detach() if (torch.is_tensor(arg) and arg.is_cuda) else arg for arg in self.args]
+        kwargs = self.kwargs
+        kwargs["logger_id"] = "CHAIN:{}".format(self.chain_id)
+        kwargs["log_queue"] = self.log_queue
         try:
-            for sample in self.trace_gen._traces(*args, **self.kwargs):
+            for sample in self.trace_gen._traces(*args, **kwargs):
                 self.result_queue.put_nowait((self.chain_id, sample))
                 self.event.wait()
                 self.event.clear()

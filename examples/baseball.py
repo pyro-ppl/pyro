@@ -49,12 +49,7 @@ hyper-parameters) of running HMC on different problems.
     path lengths in Hamiltonian Monte Carlo", (https://arxiv.org/abs/1111.4246)
 """
 
-# work around with the error "RuntimeError: received 0 items of ancdata"
-# see https://discuss.pytorch.org/t/received-0-items-of-ancdata-pytorch-0-4-0/19823
-torch.multiprocessing.set_sharing_strategy('file_system')
 logging.basicConfig(format='%(message)s', level=logging.INFO)
-# Enable validation checks
-pyro.enable_validation(True)
 DATA_URL = "https://d2fefpcigoriu7.cloudfront.net/datasets/EfronMorrisBB.txt"
 
 
@@ -235,7 +230,6 @@ def evaluate_log_predictive_density(posterior_predictive, baseball_dataset):
 
 
 def main(args):
-    pyro.set_rng_seed(args.rng_seed)
     baseball_dataset = pd.read_csv(DATA_URL, "\t")
     train, _, player_names = train_test_split(baseball_dataset)
     at_bats, hits = train[:, 0], train[:, 1]
@@ -248,8 +242,7 @@ def main(args):
     posterior_fully_pooled = MCMC(nuts_kernel,
                                   num_samples=args.num_samples,
                                   warmup_steps=args.warmup_steps,
-                                  num_chains=args.num_chains,
-                                  mp_context=args.mp_context).run(at_bats, hits)
+                                  num_chains=args.num_chains).run(at_bats, hits)
     logging.info("\nModel: Fully Pooled")
     logging.info("===================")
     logging.info("\nphi:")
@@ -265,8 +258,7 @@ def main(args):
     posterior_not_pooled = MCMC(nuts_kernel,
                                 num_samples=args.num_samples,
                                 warmup_steps=args.warmup_steps,
-                                num_chains=args.num_chains,
-                                mp_context=args.mp_context).run(at_bats, hits)
+                                num_chains=args.num_chains).run(at_bats, hits)
     logging.info("\nModel: Not Pooled")
     logging.info("=================")
     logging.info("\nphi:")
@@ -282,8 +274,7 @@ def main(args):
     posterior_partially_pooled = MCMC(nuts_kernel,
                                       num_samples=args.num_samples,
                                       warmup_steps=args.warmup_steps,
-                                      num_chains=args.num_chains,
-                                      mp_context=args.mp_context).run(at_bats, hits)
+                                      num_chains=args.num_chains).run(at_bats, hits)
     logging.info("\nModel: Partially Pooled")
     logging.info("=======================")
     logging.info("\nphi:")
@@ -300,8 +291,7 @@ def main(args):
     posterior_partially_pooled_with_logit = MCMC(nuts_kernel,
                                                  num_samples=args.num_samples,
                                                  warmup_steps=args.warmup_steps,
-                                                 num_chains=args.num_chains,
-                                                 mp_context=args.mp_context).run(at_bats, hits)
+                                                 num_chains=args.num_chains).run(at_bats, hits)
     logging.info("\nModel: Partially Pooled with Logit")
     logging.info("==================================")
     logging.info("\nSigmoid(alpha):")
@@ -329,8 +319,16 @@ if __name__ == "__main__":
                         help="run this example in GPU")
     args = parser.parse_args()
 
-    args.mp_context = None  # use default multiprocessing context
+    pyro.set_rng_seed(args.rng_seed)
+    # Enable validation checks
+    pyro.enable_validation(True)
+
+    # work around with the error "RuntimeError: received 0 items of ancdata"
+    # see https://discuss.pytorch.org/t/received-0-items-of-ancdata-pytorch-0-4-0/19823
+    torch.multiprocessing.set_sharing_strategy('file_system')
+
     if args.cuda:
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
-        args.mp_context = "spawn"
+        torch.multiprocessing.set_start_method("spawn")
+
     main(args)
