@@ -325,10 +325,10 @@ if __name__ == "__main__":
 
     # work around with the error "RuntimeError: received 0 items of ancdata"
     # see https://discuss.pytorch.org/t/received-0-items-of-ancdata-pytorch-0-4-0/19823
-    torch.multiprocessing.set_sharing_strategy('file_system')
+    torch.multiprocessing.set_sharing_strategy("file_system")
 
     if args.cuda:
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
-        torch.multiprocessing.set_start_method("spawn")
+        torch.multiprocessing.set_start_method("spawn", force=True)
 
     main(args)
