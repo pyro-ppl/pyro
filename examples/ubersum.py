@@ -5,6 +5,7 @@ import csv
 import os
 import timeit
 
+from scipy.stats import trim_mean
 import torch
 
 from pyro.ops.contract import ubersum
@@ -103,8 +104,8 @@ def time_fn(fn, equation, *operands, **kwargs):
         time_start = timeit.default_timer()
         fn(equation, *operands, **kwargs)
         time_end = timeit.default_timer()
-        times.append(time_start - time_end)
-    return times[iters // 2]
+        times.append(time_end - time_start)
+    return trim_mean(times, 0.1)
 
 
 def main(args):
@@ -145,7 +146,7 @@ if __name__ == '__main__':
     parser.add_argument("-b", "--batch-dims", default="ij")
     parser.add_argument("-d", "--dim-size", default=32, type=int)
     parser.add_argument("-p", "--max-plate-size", default=32, type=int)
-    parser.add_argument("-n", "--iters", default=1000, type=int)
+    parser.add_argument("-n", "--iters", default=10000, type=int)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true', default=True)
     parser.add_argument('--outdir', type=str)
