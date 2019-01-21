@@ -13,9 +13,9 @@ from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.optim import Adam
 from pyro.util import ignore_jit_warnings
 
-from .model import model_generic, guide_generic
-from .seal_data import prepare_seal
-from .shark_data import prepare_shark
+from model import model_generic, guide_generic
+from seal_data import prepare_seal
+from shark_data import prepare_shark
 
 
 def aic_num_parameters(config):
@@ -99,4 +99,4 @@ if __name__ == "__main__":
     random_effects = {"group": args.group, "individual": args.individual}
 
     with pyro.util.ignore_jit_warnings():
-        run_expt(dataset, random_effects, seed)
+        run_expt(DATA_DIR, dataset, random_effects, seed)
