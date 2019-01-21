@@ -89,9 +89,14 @@ class BetaBinomial(TorchDistribution):
 
 class GammaPoisson(TorchDistribution):
     r"""
-    Compound distribution comprising of a gamma-poisson pair. The ``rate`` parameter
-    for the :class:`~pyro.distributions.Poisson` distribution is unknown and randomly
+    Compound distribution comprising of a gamma-poisson pair, also referred to as
+    a gamma-poisson mixture. The ``rate`` parameter for the
+    :class:`~pyro.distributions.Poisson` distribution is unknown and randomly
     drawn from a :class:`~pyro.distributions.Gamma` distribution.
+
+    .. note:: This can be treated as an alternate parametrization of the
+        :class:`~pyro.distributions.NegativeBinomial` (``total_count``, ``probs``)
+        distribution, with `concentration = total_count` and `rate = (1 - probs) / probs`.
 
     :param float or torch.Tensor concentration: shape parameter (alpha) of the Gamma
         distribution.
@@ -130,9 +135,8 @@ class GammaPoisson(TorchDistribution):
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
-        return torch.lgamma(self.concentration + value) + self.concentration * self.rate.log() \
-            - torch.lgamma(self.concentration) - (self.concentration + value) * (1 + self.rate).log() \
-            - torch.lgamma(value + 1)
+        return -_log_beta(self.concentration, value + 1) - (self.concentration + value).log() + \
+            self.concentration * self.rate.log() - (self.concentration + value) * (1 + self.rate).log()
 
     @property
     def mean(self):
