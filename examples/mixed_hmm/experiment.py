@@ -29,7 +29,7 @@ def aic_num_parameters(config):
 
     num_params = 0
 
-    for level in ["group", "individual",]:  #  "timestep"]:
+    for level in ["group", "individual", "timestep"]:
         # count random effect parameters
         if config[level]["random"] == "discrete":
             num_params += _size(pyro.param("probs_e_{}".format(level)))
