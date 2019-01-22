@@ -66,10 +66,10 @@ def _encode_shark_df(tracks_df, summary_df):
 
         xy = np.stack([x, y], axis=-1) / 1000.  # km
         step = xy[1:] - xy[:-1]
-        step_length = np.einsum("ab,ab->a", step, step)
+        step_length = np.sqrt(np.einsum("ab,ab->a", step, step))
         dstep = step[1:] - step[:-1]
         step_angle = np.arccos(
-            np.einsum("ab,ab->a", step[1:], dstep) / (step_length[1:] * np.einsum("ab,ab->a", dstep, dstep)))
+            np.einsum("ab,ab->a", step[1:], dstep) / (step_length[1:] * np.sqrt(np.einsum("ab,ab->a", dstep, dstep))))
 
         step_length[np.isnan(step_length)] = 0.
         step_angle[np.isnan(step_angle)] = 0.
@@ -78,7 +78,9 @@ def _encode_shark_df(tracks_df, summary_df):
             shark_df["step"][shark_df.ID == trackname] = np.concatenate([np.zeros((1,), dtype=np.float32), step_length])
             shark_df["angle"][shark_df.ID == trackname] = np.concatenate([np.zeros((2,), dtype=np.float32), step_angle])
 
-            assert shark_df["step"][shark_df.ID == trackname].values.sum() != 0.
+            # sanity checks
+            assert (shark_df["step"][shark_df.ID == trackname].values != 0.).any()
+            assert (shark_df["angle"][shark_df.ID == trackname].values != 0.).any()
 
     return shark_df
 
