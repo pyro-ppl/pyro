@@ -89,14 +89,15 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--dataset", default="seal", type=str)
     parser.add_argument("-g", "--group", default=None, type=str)
     parser.add_argument("-i", "--individual", default=None, type=str)
+    parser.add_argument("-f", "--folder", default="/home/eli/wsl/momentuHMM/vignettes/", type=str)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
     args = parser.parse_args()
 
+    data_dir = parser.folder
     dataset = args.dataset
     seed = args.seed
-    DATA_DIR = "/home/eli/wsl/momentuHMM/vignettes/"
     random_effects = {"group": args.group, "individual": args.individual}
 
     with pyro.util.ignore_jit_warnings():
-        run_expt(DATA_DIR, dataset, random_effects, seed)
+        run_expt(data_dir, dataset, random_effects, seed)
