@@ -50,25 +50,35 @@ def _encode_shark_df(tracks_df, summary_df):
     shark_df["sin_time"] = shark_df["time_num"].apply(lambda t: np.sin(t * np.pi * 2. / 288.))
     shark_df["cos_time"] = shark_df["time_num"].apply(lambda t: np.cos(t * np.pi * 2. / 288.))
 
-    # TODO add back conversion of lat/lon to step/angle
-    # 1. convert to x/y projection
+    # add back conversion of lat/lon to step/angle
+    # 1. convert to x/y projection with utm
     # 2. compute length of each difference
     # 3. compute angle between differences
-    x, y = np.zeros((len(shark_df["Latitude"]),)), np.zeros((len(shark_df["Latitude"]),))
-    for i, (lat, lon) in enumerate(zip(list(shark_df["Latitude"].values), list(shark_df["Longitude"].values))):
-        x[i], y[i], _, _, = utm.from_latlon(lat, lon)
-    xy = np.stack([x, y], axis=-1)
-    step = xy[1:] - xy[:-1]
-    step_length = np.einsum("ab,ab->a", step, step)
-    dstep = step[1:] - step[:-1]
-    step_angle = np.arccos(
-        np.einsum("ab,ab->a", step[1:], dstep) / (step_length[1:] * np.einsum("ab,ab->a", dstep, dstep)))
+    shark_df["step"] = pd.Series(np.zeros((len(shark_df),), dtype=np.float32),
+                                 index=shark_df.index)
+    shark_df["angle"] = pd.Series(np.zeros((len(shark_df),), dtype=np.float32),
+                                  index=shark_df.index)
+    for trackname, track_df in shark_df.groupby("ID"):
+        track_lat, track_lon = track_df["Latitude"], track_df["Longitude"]
+        x, y = np.zeros((len(track_lat),)), np.zeros((len(track_lon),))
+        for i, (lat, lon) in enumerate(zip(list(track_lat.values), list(track_lon.values))):
+            x[i], y[i], _, _, = utm.from_latlon(lat, lon)
 
-    step_length[np.isnan(step_length)] = 0.
-    step_angle[np.isnan(step_angle)] = 0.
+        xy = np.stack([x, y], axis=-1) / 1000.  # km
+        step = xy[1:] - xy[:-1]
+        step_length = np.einsum("ab,ab->a", step, step)
+        dstep = step[1:] - step[:-1]
+        step_angle = np.arccos(
+            np.einsum("ab,ab->a", step[1:], dstep) / (step_length[1:] * np.einsum("ab,ab->a", dstep, dstep)))
 
-    shark_df["step"] = pd.Series(np.concatenate([np.zeros((1,), dtype=np.float32), step_length]), index=shark_df.index)
-    shark_df["angle"] = pd.Series(np.concatenate([np.zeros((2,), dtype=np.float32), step_angle]), index=shark_df.index)
+        step_length[np.isnan(step_length)] = 0.
+        step_angle[np.isnan(step_angle)] = 0.
+
+        if len(track_df) > 2:  # cover a weird edge case "WSF6 T4 (T5)"
+            shark_df["step"][shark_df.ID == trackname] = np.concatenate([np.zeros((1,), dtype=np.float32), step_length])
+            shark_df["angle"][shark_df.ID == trackname] = np.concatenate([np.zeros((2,), dtype=np.float32), step_angle])
+
+            assert shark_df["step"][shark_df.ID == trackname].values.sum() != 0.
 
     return shark_df
 
