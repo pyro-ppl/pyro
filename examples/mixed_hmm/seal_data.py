@@ -43,7 +43,7 @@ def prepare_seal(filename, random_effects):
     config = {
         "sizes": {
             "state": 3,
-            "random": 10,
+            "random": 4,
             "group": observations.shape[1],
             "individual": observations.shape[0],
             "timesteps": observations.shape[2],

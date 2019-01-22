@@ -93,7 +93,7 @@ def model_generic(config):
 
     # initialize group-level random effect parameterss
     if config["group"]["random"] == "discrete":
-        probs_e_g = pyro.param("probs_e_group", torch.ones((N_v,)), constraint=constraints.simplex)
+        probs_e_g = pyro.param("probs_e_group", lambda: torch.randn((N_v,)).abs(), constraint=constraints.simplex)
         theta_g = pyro.param("theta_group", lambda: torch.randn((N_v, N_state ** 2)))
     elif config["group"]["random"] == "continuous":
         loc_g = torch.zeros((N_state ** 2,))
@@ -105,7 +105,7 @@ def model_generic(config):
     N_c = config["sizes"]["group"]
     if config["individual"]["random"] == "discrete":
         probs_e_i = pyro.param("probs_e_individual",
-                               lambda: torch.ones((N_c, N_v,)),
+                               lambda: torch.randn((N_c, N_v,)).abs(),
                                constraint=constraints.simplex)
         theta_i = pyro.param("theta_individual",
                              lambda: torch.randn((N_c, N_v, N_state ** 2)))
@@ -125,7 +125,7 @@ def model_generic(config):
                        constraint=arg_constraint)
 
     # initialize gamma to uniform
-    gamma = torch.ones((N_state ** 2,))
+    gamma = torch.zeros((N_state ** 2,))
 
     N_c = config["sizes"]["group"]
     with pyro.plate("group", N_c, dim=-1) as c:

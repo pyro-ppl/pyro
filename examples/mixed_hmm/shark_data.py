@@ -91,8 +91,7 @@ def prepare_shark(filename, random_effects):
     summary_df = pd.read_excel(filename, sheet_name=1)
 
     shark_df = _encode_shark_df(tracks_df, summary_df)
-    # obs_keys = ["Latitude", "Longitude"]
-    obs_keys = ["step", "angle"]  # TODO
+    obs_keys = ["step", "angle"]
 
     # data format for z1, z2:
     # single tensor with shape (individual, group, time, coords)
@@ -135,7 +134,7 @@ def prepare_shark(filename, random_effects):
 
     config = {
         "sizes": {
-            "state": 3,
+            "state": 2,
             "random": 3,
             "group": observations.shape[1],
             "individual": observations.shape[0],
@@ -147,9 +146,6 @@ def prepare_shark(filename, random_effects):
         "observations": {
             "step": {"dist": dist.Gamma, "zi": True, "values": observations[..., 0]},
             "angle": {"dist": dist.VonMises, "zi": False, "values": observations[..., 1]},
-            # XXX these need to be updated once the step/angle transformation is back
-            # "Latitude": {"dist": dist.Normal, "zi": False, "values": observations[..., 0]},
-            # "Longitude": {"dist": dist.Normal, "zi": False, "values": observations[..., 1]},
         },
     }
 
