@@ -77,9 +77,22 @@ def run_expt(data_dir, dataset, random_effects, seed, optim):
 
     # SGD
     if optim == "sgd":
-        svi = pyro.infer.SVI(model, guide, loss=TraceEnum_ELBO(max_plate_nesting=2), optim=pyro.optim.Adam({"lr": 0.05}))
+        loss_fn = TraceEnum_ELBO(max_plate_nesting=2).differentiable_loss
+        with pyro.poutine.trace(param_only=True) as param_capture:
+            loss_fn(model, guide)
+        params = [site["value"].unconstrained() for site in param_capture.trace.nodes.values()]
+        optimizer = torch.optim.Adam(params, lr=0.05)
+
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
+
         for t in range(1000):
-            loss = svi.step()
+
+            optimizer.zero_grad()
+            loss = loss_fn(model, guide)
+            loss.backward()
+            optimizer.step()
+            scheduler.step(loss.item())
+
             print("Loss: {}, AIC[{}]: ".format(loss, t), 
                   2. * loss * 2. + aic_num_parameters(config))
 
@@ -89,14 +102,18 @@ def run_expt(data_dir, dataset, random_effects, seed, optim):
         with pyro.poutine.trace(param_only=True) as param_capture:
             loss_fn(model, guide)
         params = [site["value"].unconstrained() for site in param_capture.trace.nodes.values()]
-        optimizer = torch.optim.LBFGS(params)
-        for t in range(1000):
+        optimizer = torch.optim.LBFGS(params, lr=0.05)
+
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
+
+        for t in range(100):
             def closure():
                 optimizer.zero_grad()
                 loss = loss_fn(model, guide)
                 loss.backward()
                 return loss
             loss = optimizer.step(closure)
+            scheduler.step(loss.item())
             print("Loss: {}, AIC[{}]: ".format(loss, t), 
                   2. * loss * 2. + aic_num_parameters(config))
 
