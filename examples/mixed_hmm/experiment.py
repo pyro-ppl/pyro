@@ -94,7 +94,7 @@ if __name__ == "__main__":
     parser.add_argument('--jit', action='store_true')
     args = parser.parse_args()
 
-    data_dir = parser.folder
+    data_dir = args.folder
     dataset = args.dataset
     seed = args.seed
     random_effects = {"group": args.group, "individual": args.individual}
