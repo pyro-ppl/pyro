@@ -113,10 +113,10 @@ def prepare_shark(filename, random_effects):
         "individual": {"random": random_effects["individual"], "fixed": individual_cov, "mask": mask_i},
         "timestep": {"random": None, "fixed": timestep_cov, "mask": mask_t},
         "observations": {
+            # XXX these need to be updated once the step/angle transformation is back
             "Latitude": {"dist": dist.Normal, "zi": False, "values": observations[..., 0]},
             "Longitude": {"dist": dist.Normal, "zi": False, "values": observations[..., 1]},
         },
     }
 
     return config
-
