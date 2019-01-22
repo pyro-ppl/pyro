@@ -75,7 +75,7 @@ def run_expt(data_dir, dataset, random_effects, seed):
     model = lambda: model_generic(config)  # for JITing
     guide = lambda: guide_generic(config)
     svi = pyro.infer.SVI(model, guide, loss=TraceEnum_ELBO(max_plate_nesting=2), optim=pyro.optim.Adam({"lr": 0.05}))
-    for _ in range(2):
+    for _ in range(1000):
         print(svi.step())
     print("AIC: {}".format(aic(model, guide, config)))
 
