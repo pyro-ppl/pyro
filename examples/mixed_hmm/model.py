@@ -148,8 +148,9 @@ def model_generic(config):
         if config["group"]["fixed"] is not None:
             covariates_g = config["individual"]["fixed"]
             beta_g = pyro.param("beta_group")
-            gamma = gamma + torch.einsum("...f,fs->...s",
-                                         [covariates_g, beta_g])
+            fixed_g = torch.einsum("...f,fs->...s",
+                                   [covariates_g, beta_g])
+            gamma = gamma + fixed_g
 
         N_s = config["sizes"]["individual"]
         with pyro.plate("individual", N_s, dim=-2) as s, poutine.mask(mask=config["individual"]["mask"]):
@@ -174,8 +175,9 @@ def model_generic(config):
             if config["individual"]["fixed"] is not None:
                 covariates_i = config["individual"]["fixed"]
                 beta_i = pyro.param("beta_individual")
-                gamma = gamma + torch.einsum("...f,fs->...s",
-                                             [covariates_i, beta_i])
+                fixed_i =  torch.einsum("...f,fs->...s",
+                                        [covariates_i, beta_i])
+                gamma = gamma + fixed_i
 
             # TODO initialize y from stationary distribution?
             y = torch.tensor(0).long()
@@ -188,8 +190,9 @@ def model_generic(config):
                     if config["timestep"]["fixed"] is not None:
                         covariates_t = config["timestep"]["fixed"][..., t, :]
                         beta_t = pyro.param("beta_timestep")
-                        gamma_t = gamma_t + torch.einsum("...f,fs->...s",
-                                                         [covariates_t, beta_t])
+                        fixed_t = torch.einsum("...f,fs->...s",
+                                               [covariates_t, beta_t])
+                        gamma_t = gamma_t + fixed_t
 
                     # finally, reshape gamma as batch of transition matrices
                     gamma_t = gamma_t.reshape(tuple(gamma_t.shape[:-1]) + (N_state, N_state))

@@ -39,7 +39,7 @@ def aic_num_parameters(config):
             num_params += _size(pyro.param("scale_{}".format(level)))
 
         # count fixed effect parameters
-        if config[level]["fixed"]:
+        if config[level]["fixed"] is not None:
             num_params += _size(pyro.param("beta_{}".format(level)))
 
     # count likelihood parameters
@@ -61,7 +61,7 @@ def aic(model, guide, config):
     return 2. * neg_log_likelihood + 2. * num_params
 
 
-def run_expt(data_dir, dataset, random_effects, seed):
+def run_expt(data_dir, dataset, random_effects, seed, optim):
 
     pyro.set_rng_seed(seed)  # reproducible random effect parameter init
 
@@ -74,15 +74,41 @@ def run_expt(data_dir, dataset, random_effects, seed):
 
     model = lambda: model_generic(config)  # for JITing
     guide = lambda: guide_generic(config)
-    svi = pyro.infer.SVI(model, guide, loss=TraceEnum_ELBO(max_plate_nesting=2), optim=pyro.optim.Adam({"lr": 0.05}))
-    for _ in range(1000):
-        print(svi.step())
-    print("AIC: {}".format(aic(model, guide, config)))
+
+    # SGD
+    if optim == "sgd":
+        svi = pyro.infer.SVI(model, guide, loss=TraceEnum_ELBO(max_plate_nesting=2), optim=pyro.optim.Adam({"lr": 0.05}))
+        for t in range(1000):
+            loss = svi.step()
+            print("Loss: {}, AIC[{}]: ".format(loss, t), 
+                  2. * loss * 2. + aic_num_parameters(config))
+
+    # LBFGS
+    elif optim == "lbfgs":
+        loss_fn = TraceEnum_ELBO(max_plate_nesting=2).differentiable_loss
+        with pyro.poutine.trace(param_only=True) as param_capture:
+            loss_fn(model, guide)
+        params = [site["value"].unconstrained() for site in param_capture.trace.nodes.values()]
+        optimizer = torch.optim.LBFGS(params)
+        for t in range(1000):
+            def closure():
+                optimizer.zero_grad()
+                loss = loss_fn(model, guide)
+                loss.backward()
+                return loss
+            loss = optimizer.step(closure)
+            print("Loss: {}, AIC[{}]: ".format(loss, t), 
+                  2. * loss * 2. + aic_num_parameters(config))
+
+    else:
+        raise ValueError("{} not supported optimizer".format(optim))
+
+    aic_final = aic(model, guide, config)
+    print("AIC final: {}".format(aic_final))
+    return aic_final
 
 
 if __name__ == "__main__":
-
-    pyro.enable_validation(False)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--seed", default=101, type=int)
@@ -90,14 +116,18 @@ if __name__ == "__main__":
     parser.add_argument("-g", "--group", default=None, type=str)
     parser.add_argument("-i", "--individual", default=None, type=str)
     parser.add_argument("-f", "--folder", default="/home/eli/wsl/momentuHMM/vignettes/", type=str)
+    parser.add_argument("-o", "--optim", default="sgd", type=str)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
+    parser.add_argument('--validation', action='store_true')
     args = parser.parse_args()
+
+    pyro.enable_validation(args.validation)
 
     data_dir = args.folder
     dataset = args.dataset
     seed = args.seed
+    optim = args.optim
     random_effects = {"group": args.group, "individual": args.individual}
 
-    with pyro.util.ignore_jit_warnings():
-        run_expt(data_dir, dataset, random_effects, seed)
+    run_expt(data_dir, dataset, random_effects, seed, optim)

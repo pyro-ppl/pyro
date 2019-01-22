@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import pyreadr
 
+import utm
+
 import torch
 
 import pyro
@@ -52,6 +54,21 @@ def _encode_shark_df(tracks_df, summary_df):
     # 1. convert to x/y projection
     # 2. compute length of each difference
     # 3. compute angle between differences
+    x, y = np.zeros((len(shark_df["Latitude"]),)), np.zeros((len(shark_df["Latitude"]),))
+    for i, (lat, lon) in enumerate(zip(list(shark_df["Latitude"].values), list(shark_df["Longitude"].values))):
+        x[i], y[i], _, _, = utm.from_latlon(lat, lon)
+    xy = np.stack([x, y], axis=-1)
+    step = xy[1:] - xy[:-1]
+    step_length = np.einsum("ab,ab->a", step, step)
+    dstep = step[1:] - step[:-1]
+    step_angle = np.arccos(
+        np.einsum("ab,ab->a", step[1:], dstep) / (step_length[1:] * np.einsum("ab,ab->a", dstep, dstep)))
+
+    step_length[np.isnan(step_length)] = 0.
+    step_angle[np.isnan(step_angle)] = 0.
+
+    shark_df["step"] = pd.Series(np.concatenate([np.zeros((1,), dtype=np.float32), step_length]), index=shark_df.index)
+    shark_df["angle"] = pd.Series(np.concatenate([np.zeros((2,), dtype=np.float32), step_angle]), index=shark_df.index)
 
     return shark_df
 
@@ -62,8 +79,8 @@ def prepare_shark(filename, random_effects):
     summary_df = pd.read_excel(filename, sheet_name=1)
 
     shark_df = _encode_shark_df(tracks_df, summary_df)
-    obs_keys = ["Latitude", "Longitude"]
-    # obs_keys = ["step", "angle"]  # TODO
+    # obs_keys = ["Latitude", "Longitude"]
+    obs_keys = ["step", "angle"]  # TODO
 
     # data format for z1, z2:
     # single tensor with shape (individual, group, time, coords)
@@ -99,12 +116,15 @@ def prepare_shark(filename, random_effects):
     observations[(observations == 0.) | (observations == float("-inf"))] = 1e-4
     assert not torch.isnan(observations).any()
 
+    timestep_cov[(timestep_cov == 0.) | (timestep_cov == float("-inf"))] = 1e-4
+    individual_cov[(individual_cov == 0.) | (individual_cov == float("-inf"))] = 1e-4
+
     # observations = observations[..., 5:11, :]  # truncate for testing
 
     config = {
         "sizes": {
             "state": 3,
-            "random": 10,
+            "random": 3,
             "group": observations.shape[1],
             "individual": observations.shape[0],
             "timesteps": observations.shape[2],
@@ -113,9 +133,11 @@ def prepare_shark(filename, random_effects):
         "individual": {"random": random_effects["individual"], "fixed": individual_cov, "mask": mask_i},
         "timestep": {"random": None, "fixed": timestep_cov, "mask": mask_t},
         "observations": {
+            "step": {"dist": dist.Gamma, "zi": True, "values": observations[..., 0]},
+            "angle": {"dist": dist.VonMises, "zi": False, "values": observations[..., 1]},
             # XXX these need to be updated once the step/angle transformation is back
-            "Latitude": {"dist": dist.Normal, "zi": False, "values": observations[..., 0]},
-            "Longitude": {"dist": dist.Normal, "zi": False, "values": observations[..., 1]},
+            # "Latitude": {"dist": dist.Normal, "zi": False, "values": observations[..., 0]},
+            # "Longitude": {"dist": dist.Normal, "zi": False, "values": observations[..., 1]},
         },
     }
 
