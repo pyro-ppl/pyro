@@ -94,7 +94,7 @@ def run_expt(data_dir, dataset, random_effects, seed, optim, lr):
             scheduler.step(loss.item())
 
             print("Loss: {}, AIC[{}]: ".format(loss, t), 
-                  2. * loss * 2. + aic_num_parameters(config))
+                  2. * loss + 2. * aic_num_parameters(config))
 
     # LBFGS
     elif optim == "lbfgs":
@@ -106,7 +106,7 @@ def run_expt(data_dir, dataset, random_effects, seed, optim, lr):
 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
 
-        for t in range(100):
+        for t in range(1000):
             def closure():
                 optimizer.zero_grad()
                 loss = loss_fn(model, guide)
@@ -115,7 +115,7 @@ def run_expt(data_dir, dataset, random_effects, seed, optim, lr):
             loss = optimizer.step(closure)
             scheduler.step(loss.item())
             print("Loss: {}, AIC[{}]: ".format(loss, t), 
-                  2. * loss * 2. + aic_num_parameters(config))
+                  2. * loss + 2. * aic_num_parameters(config))
 
     else:
         raise ValueError("{} not supported optimizer".format(optim))
