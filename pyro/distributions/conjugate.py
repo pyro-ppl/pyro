@@ -135,8 +135,9 @@ class GammaPoisson(TorchDistribution):
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
-        return -_log_beta(self.concentration, value + 1) - (self.concentration + value).log() + \
-            self.concentration * self.rate.log() - (self.concentration + value) * (1 + self.rate).log()
+        post_value = self.concentration + value
+        return -_log_beta(self.concentration, value + 1) - post_value.log() + \
+            self.concentration * self.rate.log() - post_value * (1 + self.rate).log()
 
     @property
     def mean(self):
