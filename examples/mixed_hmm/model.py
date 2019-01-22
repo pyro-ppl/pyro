@@ -14,19 +14,28 @@ from pyro.contrib.autoguide import AutoDelta
 from pyro.infer import config_enumerate
 
 
-def _index_gamma(gamma, y, t):
+def _index_param(param, ind, dim=-2):
     """helper for advanced indexing black magic"""
-    if y.shape[0] > 1:
-        gamma_y = gamma[..., y.squeeze(), :]
-        while len(gamma_y.shape) < len(y.shape) + 2:
-            gamma_y = gamma_y.unsqueeze(0)
-        gamma_y = gamma_y.transpose(0, -2)
-        gamma_y = gamma_y.squeeze(-2)
-    else:
-        gamma_y = gamma[..., y, :]
-        gamma_y = gamma_y.squeeze(-2)
-
-    return gamma_y
+    # assume: dim < 0
+    # assume: param.shape[dim:] == event_shape
+    # assume: index.shape == batch_shape
+    # assume: param.shape == batch_shape + event_shape
+    # goal: slice into an event_dim with index
+    # step 1: unsqueeze event dims in index
+    for d in range(len(param.shape[dim:])):
+        ind = ind.unsqueeze(-1)
+    # step 2: generate dummy indices for all other dimensions of param
+    inds = [None] * len(param.shape)
+    for d, sd in enumerate(reversed(param.shape)):
+        if dim == -d-1:
+            inds[-d-1] = ind
+        else:
+            inds[-d-1] = torch.arange(sd).reshape((sd,) + (1,) * d)
+    # step 3: use the index and dummy indices to select
+    res = param[tuple(inds)]
+    # XXX is this necessary?
+    # step 4: squeeze out the empty event_dim
+    return res.squeeze(dim)
 
 
 def guide_generic(config):
@@ -87,7 +96,6 @@ def model_generic(config):
         probs_e_g = pyro.param("probs_e_group", torch.ones((N_v,)), constraint=constraints.simplex)
         theta_g = pyro.param("theta_group", lambda: torch.randn((N_v, N_state ** 2)))
     elif config["group"]["random"] == "continuous":
-        # maximum-likelihood
         loc_g = torch.zeros((N_state ** 2,))
         scale_g = torch.ones((N_state ** 2,))
     else:  # none
@@ -99,9 +107,9 @@ def model_generic(config):
         probs_e_i = pyro.param("probs_e_individual",
                                lambda: torch.ones((N_c, N_v,)),
                                constraint=constraints.simplex)
-        theta_i = pyro.param("theta_individual", lambda: torch.randn((N_v, N_c, N_state ** 2)))
+        theta_i = pyro.param("theta_individual",
+                             lambda: torch.randn((N_c, N_v, N_state ** 2)))
     elif config["individual"]["random"] == "continuous":
-        # maximum-likelihood
         loc_i = torch.zeros((N_c, N_state ** 2,))
         scale_i = torch.ones((N_c, N_state ** 2,))
     else:  # none
@@ -120,13 +128,13 @@ def model_generic(config):
     gamma = torch.ones((N_state ** 2,))
 
     N_c = config["sizes"]["group"]
-    with pyro.plate("group", N_c) as c:
+    with pyro.plate("group", N_c, dim=-1) as c:
 
         # group-level random effects
         if config["group"]["random"] == "discrete":
             # group-level discrete effect
             e_g = pyro.sample("e_g", dist.Categorical(probs_e_g))
-            eps_g = theta_g[e_g, :]
+            eps_g = _index_param(theta_g, e_g, dim=-2)
         elif config["group"]["random"] == "continuous":
             eps_g = pyro.sample("eps_g", dist.Normal(loc_g, scale_g).to_event(1),
                                 )  # infer={"num_samples": 10})
@@ -144,13 +152,14 @@ def model_generic(config):
                                          [covariates_g, beta_g])
 
         N_s = config["sizes"]["individual"]
-        with pyro.plate("individual", N_s) as s, poutine.mask(mask=config["individual"]["mask"]):
+        with pyro.plate("individual", N_s, dim=-2) as s, poutine.mask(mask=config["individual"]["mask"]):
 
             # individual-level random effects
             if config["individual"]["random"] == "discrete":
                 # individual-level discrete effect
                 e_i = pyro.sample("e_i", dist.Categorical(probs_e_i))
-                eps_i = theta_i[e_i, :]
+                eps_i = _index_param(theta_i, e_i, dim=-2)
+                assert eps_i.shape == (N_v, 1, N_c, N_state ** 2)
             elif config["individual"]["random"] == "continuous":
                 eps_i = pyro.sample("eps_i", dist.Normal(loc_i, scale_i).to_event(1),
                                     )  # infer={"num_samples": 10})
@@ -159,6 +168,7 @@ def model_generic(config):
 
             # add individual-level random effect to gamma
             gamma = gamma + eps_i
+            assert gamma.shape == eps_i.shape
 
             # individual-level fixed effects
             if config["individual"]["fixed"] is not None:
@@ -168,7 +178,7 @@ def model_generic(config):
                                              [covariates_i, beta_i])
 
             # TODO initialize y from stationary distribution?
-            y = torch.tensor([0]).long()
+            y = torch.tensor(0).long()
 
             N_t = config["sizes"]["timesteps"]
             for t in pyro.markov(range(N_t)):
@@ -185,13 +195,14 @@ def model_generic(config):
                     gamma_t = gamma_t.reshape(tuple(gamma_t.shape[:-1]) + (N_state, N_state))
 
                     # we've accounted for all effects, now actually compute gamma_y
-                    gamma_y = _index_gamma(gamma_t, y, t)
+                    # gamma_y = _index_gamma(gamma_t, y, t)
+                    gamma_y = _index_param(gamma_t, y, dim=-2)
                     y = pyro.sample("y_{}".format(t), dist.Categorical(logits=gamma_y))
 
                     # multivariate observations with different distributions
                     for coord, coord_config in config["observations"].items():
                         coord_params = [
-                            pyro.param("{}_param_{}".format(coord, arg_name))[y]
+                            _index_param(pyro.param("{}_param_{}".format(coord, arg_name)), y, dim=-1)
                             for arg_name in coord_config["dist"].arg_constraints.keys()
                         ]
                         coord_dist = coord_config["dist"](*coord_params)
@@ -202,7 +213,7 @@ def model_generic(config):
                                         obs=coord_config["values"][..., t])
                         elif coord_config["zi"]:
                             # zero-inflation with MaskedMixture
-                            coord_zi = pyro.param("{}_zi_param".format(coord))[y]
+                            coord_zi = _index_param(pyro.param("{}_zi_param".format(coord)), y, dim=-2)
                             # coord_zi_mask = coord_config["values"][..., t] == 1e-4
                             # coord_zi_scale = dist.Categorical(logits=coord_zi).log_prob(coord_zi_mask).exp()
                             coord_zi_mask = pyro.sample("{}_zi_{}".format(coord, t),

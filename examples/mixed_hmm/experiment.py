@@ -82,7 +82,7 @@ def run_expt(data_dir, dataset, random_effects, seed):
 
 if __name__ == "__main__":
 
-    pyro.enable_validation(False)
+    pyro.enable_validation(True)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--seed", default=101, type=int)
