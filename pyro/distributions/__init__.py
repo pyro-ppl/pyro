@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import pyro.distributions.torch_patch  # noqa F403
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
-from pyro.distributions.conjugate import BetaBinomial
+from pyro.distributions.conjugate import BetaBinomial, GammaPoisson
 from pyro.distributions.delta import Delta
 from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNormalsSharedCovariance
 from pyro.distributions.diag_normal_mixture import MixtureOfDiagNormals
@@ -35,6 +35,7 @@ __all__ = [
     "Delta",
     "Distribution",
     "Empirical",
+    "GammaPoisson",
     "GaussianScaleMixture",
     "InverseAutoregressiveFlow",
     "InverseAutoregressiveFlowStable",

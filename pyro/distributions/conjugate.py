@@ -4,7 +4,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
-from pyro.distributions.torch import Beta, Binomial
+from pyro.distributions.torch import Beta, Binomial, Gamma, Poisson
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
@@ -85,3 +85,64 @@ class BetaBinomial(TorchDistribution):
         if expand:
             values = values.expand((-1,) + self._batch_shape)
         return values
+
+
+class GammaPoisson(TorchDistribution):
+    r"""
+    Compound distribution comprising of a gamma-poisson pair, also referred to as
+    a gamma-poisson mixture. The ``rate`` parameter for the
+    :class:`~pyro.distributions.Poisson` distribution is unknown and randomly
+    drawn from a :class:`~pyro.distributions.Gamma` distribution.
+
+    .. note:: This can be treated as an alternate parametrization of the
+        :class:`~pyro.distributions.NegativeBinomial` (``total_count``, ``probs``)
+        distribution, with `concentration = total_count` and `rate = (1 - probs) / probs`.
+
+    :param float or torch.Tensor concentration: shape parameter (alpha) of the Gamma
+        distribution.
+    :param float or torch.Tensor rate: rate parameter (beta) for the Gamma
+        distribution.
+    """
+
+    arg_constraints = {'concentration': constraints.positive, 'rate': constraints.positive}
+    support = Poisson.support
+
+    def __init__(self, concentration, rate, validate_args=None):
+        concentration, rate = broadcast_all(concentration, rate)
+        self._gamma = Gamma(concentration, rate)
+        super(GammaPoisson, self).__init__(self._gamma._batch_shape, validate_args=validate_args)
+
+    @property
+    def concentration(self):
+        return self._gamma.concentration
+
+    @property
+    def rate(self):
+        return self._gamma.rate
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(GammaPoisson, _instance)
+        batch_shape = torch.Size(batch_shape)
+        new._gamma = self._gamma.expand(batch_shape)
+        super(GammaPoisson, new).__init__(batch_shape, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
+
+    def sample(self, sample_shape=()):
+        rate = self._gamma.sample(sample_shape)
+        return Poisson(rate).sample()
+
+    def log_prob(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+        post_value = self.concentration + value
+        return -_log_beta(self.concentration, value + 1) - post_value.log() + \
+            self.concentration * self.rate.log() - post_value * (1 + self.rate).log()
+
+    @property
+    def mean(self):
+        return self.concentration / self.rate
+
+    @property
+    def variance(self):
+        return self.concentration / self.rate.pow(2) * (1 + self.rate)
