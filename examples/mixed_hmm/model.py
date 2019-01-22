@@ -44,15 +44,15 @@ def guide_generic(config):
     N_state = config["sizes"]["state"]
 
     if config["group"]["random"] == "continuous":
-        loc_g = pyro.param("loc_g", lambda: torch.zeros((N_state ** 2,)))
-        scale_g = pyro.param("scale_g", lambda: torch.ones((N_state ** 2,)),
+        loc_g = pyro.param("loc_group", lambda: torch.zeros((N_state ** 2,)))
+        scale_g = pyro.param("scale_group", lambda: torch.ones((N_state ** 2,)),
                              constraint=constraints.positive)
 
     # initialize individual-level random effect parameters
     N_c = config["sizes"]["group"]
     if config["individual"]["random"] == "continuous":
-        loc_i = pyro.param("loc_i", lambda: torch.zeros((N_c, N_state ** 2,)))
-        scale_i = pyro.param("scale_i", lambda: torch.ones((N_c, N_state ** 2,)),
+        loc_i = pyro.param("loc_individual", lambda: torch.zeros((N_c, N_state ** 2,)))
+        scale_i = pyro.param("scale_individual", lambda: torch.ones((N_c, N_state ** 2,)),
                              constraint=constraints.positive)
 
     N_c = config["sizes"]["group"]
