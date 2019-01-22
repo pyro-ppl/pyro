@@ -61,7 +61,7 @@ def aic(model, guide, config):
     return 2. * neg_log_likelihood + 2. * num_params
 
 
-def run_expt(data_dir, dataset, random_effects, seed, optim):
+def run_expt(data_dir, dataset, random_effects, seed, optim, lr):
 
     pyro.set_rng_seed(seed)  # reproducible random effect parameter init
 
@@ -81,7 +81,7 @@ def run_expt(data_dir, dataset, random_effects, seed, optim):
         with pyro.poutine.trace(param_only=True) as param_capture:
             loss_fn(model, guide)
         params = [site["value"].unconstrained() for site in param_capture.trace.nodes.values()]
-        optimizer = torch.optim.Adam(params, lr=0.05)
+        optimizer = torch.optim.Adam(params, lr=lr)
 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
 
@@ -102,7 +102,7 @@ def run_expt(data_dir, dataset, random_effects, seed, optim):
         with pyro.poutine.trace(param_only=True) as param_capture:
             loss_fn(model, guide)
         params = [site["value"].unconstrained() for site in param_capture.trace.nodes.values()]
-        optimizer = torch.optim.LBFGS(params, lr=0.05)
+        optimizer = torch.optim.LBFGS(params, lr=lr)
 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
 
@@ -134,6 +134,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--individual", default=None, type=str)
     parser.add_argument("-f", "--folder", default="/home/eli/wsl/momentuHMM/vignettes/", type=str)
     parser.add_argument("-o", "--optim", default="sgd", type=str)
+    parser.add_argument("-lr", "--learnrate", default=0.05, type=float)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
     parser.add_argument('--validation', action='store_true')
@@ -145,6 +146,7 @@ if __name__ == "__main__":
     dataset = args.dataset
     seed = args.seed
     optim = args.optim
+    lr = args.learnrate
     random_effects = {"group": args.group, "individual": args.individual}
 
-    run_expt(data_dir, dataset, random_effects, seed, optim)
+    run_expt(data_dir, dataset, random_effects, seed, optim, lr)
