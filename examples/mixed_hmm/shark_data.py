@@ -48,17 +48,16 @@ def _encode_shark_df(tracks_df, summary_df):
     shark_df["sin_time"] = shark_df["time_num"].apply(lambda t: np.sin(t * np.pi * 2. / 288.))
     shark_df["cos_time"] = shark_df["time_num"].apply(lambda t: np.cos(t * np.pi * 2. / 288.))
 
-    # convert lat/lon to step/angle
+    # TODO add back conversion of lat/lon to step/angle
     # 1. convert to x/y projection
     # 2. compute length of each difference
     # 3. compute angle between differences
-    shark_df["step"] = compute_step()
-    shark_df["angle"] = compute_angle()
 
     return shark_df
 
 
 def prepare_shark(filename, random_effects):
+
     tracks_df = pd.read_excel(filename, sheet_name=0)
     summary_df = pd.read_excel(filename, sheet_name=1)
 
@@ -74,12 +73,17 @@ def prepare_shark(filename, random_effects):
             for o, obs_key in enumerate(obs_keys):
                 observations[i, g, 0:len(ind_df), o] = torch.tensor(ind_df[obs_key].values)
 
-    # make covariates
-    observations = torch.zeros((100, 2, 270, len(obs_keys))).fill_(float("-inf"))
+    # make covariates: chum (timestep), time sin/cos (timestep), size (individual)
+    individual_cov = torch.zeros((100, 2, 1)).fill_(float("-inf"))
+    timestep_cov = torch.zeros((100, 2, 270, 4)).fill_(float("-inf"))
     for g, (group, group_df) in enumerate(shark_df.groupby("sex")):
         for i, (ind, ind_df) in enumerate(group_df.groupby("ID")):
-            for o, obs_key in enumerate(obs_keys):
-                observations[i, g, 0:len(ind_df), o] = torch.tensor(ind_df[obs_key].values)
+            individual_cov[i, g, 0:1] = torch.tensor(ind_df["TL"].values[0:1])
+            timestep_cov[i, g, 0:len(ind_df), 0] = torch.tensor(ind_df["sin_time"].values)
+            timestep_cov[i, g, 0:len(ind_df), 1] = torch.tensor(ind_df["cos_time"].values)
+            # chum is an indicator so we expand as one-hot
+            timestep_cov[i, g, 0:len(ind_df), 2] = torch.tensor(ind_df["chum"].values)
+            timestep_cov[i, g, 0:len(ind_df), 3] = torch.tensor(1. - ind_df["chum"].values)
 
     observations[torch.isnan(observations)] = float("-inf")
 
@@ -106,8 +110,8 @@ def prepare_shark(filename, random_effects):
             "timesteps": observations.shape[2],
         },
         "group": {"random": random_effects["group"], "fixed": None},
-        "individual": {"random": random_effects["individual"], "fixed": None, "mask": mask_i},
-        "timestep": {"random": None, "fixed": None, "mask": mask_t},
+        "individual": {"random": random_effects["individual"], "fixed": individual_cov, "mask": mask_i},
+        "timestep": {"random": None, "fixed": timestep_cov, "mask": mask_t},
         "observations": {
             "Latitude": {"dist": dist.Normal, "zi": False, "values": observations[..., 0]},
             "Longitude": {"dist": dist.Normal, "zi": False, "values": observations[..., 1]},
