@@ -160,7 +160,7 @@ def model_generic(config):
                 # individual-level discrete effect
                 e_i = pyro.sample("e_i", dist.Categorical(probs_e_i))
                 eps_i = _index_param(theta_i, e_i, dim=-2)
-                assert eps_i.shape[-3:] == (1, N_c, N_state ** 2) and eps_i.shape[0] == N_v
+                # assert eps_i.shape[-3:] == (1, N_c, N_state ** 2) and eps_i.shape[0] == N_v
             elif config["individual"]["random"] == "continuous":
                 eps_i = pyro.sample("eps_i", dist.Normal(loc_i, scale_i).to_event(1),
                                     )  # infer={"num_samples": 10})
@@ -169,7 +169,6 @@ def model_generic(config):
 
             # add individual-level random effect to gamma
             gamma = gamma + eps_i
-            assert gamma.shape == (eps_g + eps_i).shape
 
             # individual-level fixed effects
             if config["individual"]["fixed"] is not None:
