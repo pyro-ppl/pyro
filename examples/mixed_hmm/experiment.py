@@ -3,12 +3,13 @@ from __future__ import absolute_import, division, print_function
 import argparse
 import logging
 import os
+import json
+import uuid
 
 import numpy as np
 import torch
 
 import pyro
-from pyro.contrib.autoguide import AutoDelta
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.optim import Adam
 from pyro.util import ignore_jit_warnings
@@ -61,8 +62,18 @@ def aic(model, guide, config):
     return 2. * neg_log_likelihood + 2. * num_params
 
 
-def run_expt(data_dir, dataset, random_effects, seed, optim, lr):
+def run_expt(args):
 
+    data_dir = args["folder"]
+    dataset = args["dataset"]
+    seed = args["seed"]
+    optim = args["optim"]
+    lr = args["learnrate"]
+    timesteps = args["timesteps"]
+    schedule = [] if not args["schedule"] else [int(i) for i in args["schedule"].split(",")]
+    random_effects = {"group": args["group"], "individual": args["individual"]}
+
+    pyro.enable_validation(args["validation"])
     pyro.set_rng_seed(seed)  # reproducible random effect parameter init
 
     if dataset == "seal":
@@ -75,6 +86,7 @@ def run_expt(data_dir, dataset, random_effects, seed, optim, lr):
     model = lambda: model_generic(config)  # for JITing
     guide = lambda: guide_generic(config)
 
+    losses = []
     # SGD
     if optim == "sgd":
         loss_fn = TraceEnum_ELBO(max_plate_nesting=2).differentiable_loss
@@ -83,17 +95,23 @@ def run_expt(data_dir, dataset, random_effects, seed, optim, lr):
         params = [site["value"].unconstrained() for site in param_capture.trace.nodes.values()]
         optimizer = torch.optim.Adam(params, lr=lr)
 
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
+        if schedule:
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=schedule, gamma=0.5)
+            schedule_step_loss = False
+        else:
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
+            schedule_step_loss = True
 
-        for t in range(1000):
+        for t in range(timesteps):
 
             optimizer.zero_grad()
             loss = loss_fn(model, guide)
             loss.backward()
             optimizer.step()
-            scheduler.step(loss.item())
+            scheduler.step(loss.item() if schedule_step_loss else t)
+            losses.append(loss.item())
 
-            print("Loss: {}, AIC[{}]: ".format(loss, t), 
+            print("Loss: {}, AIC[{}]: ".format(loss.item(), t), 
                   2. * loss + 2. * aic_num_parameters(config))
 
     # LBFGS
@@ -104,17 +122,23 @@ def run_expt(data_dir, dataset, random_effects, seed, optim, lr):
         params = [site["value"].unconstrained() for site in param_capture.trace.nodes.values()]
         optimizer = torch.optim.LBFGS(params, lr=lr)
 
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
+        if schedule:
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=schedule, gamma=0.5)
+            schedule_step_loss = False
+        else:
+            schedule_step_loss = True
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
 
-        for t in range(1000):
+        for t in range(timesteps):
             def closure():
                 optimizer.zero_grad()
                 loss = loss_fn(model, guide)
                 loss.backward()
                 return loss
             loss = optimizer.step(closure)
-            scheduler.step(loss.item())
-            print("Loss: {}, AIC[{}]: ".format(loss, t), 
+            scheduler.step(loss.item() if schedule_step_loss else t)
+            losses.append(loss.item())
+            print("Loss: {}, AIC[{}]: ".format(loss.item(), t), 
                   2. * loss + 2. * aic_num_parameters(config))
 
     else:
@@ -122,31 +146,46 @@ def run_expt(data_dir, dataset, random_effects, seed, optim, lr):
 
     aic_final = aic(model, guide, config)
     print("AIC final: {}".format(aic_final))
-    return aic_final
+
+    results = {}
+    results["args"] = args
+    results["sizes"] = config["sizes"]
+    results["likelihoods"] = losses
+    results["likelihood_final"] = losses[-1]
+    results["aic_final"] = aic_final.item()
+    results["aic_num_parameters"] = aic_num_parameters(config)
+
+    if args["resultsdir"] is not None:
+        re_str = "g" + ("n" if args["group"] is None else "d" if args["group"] == "discrete" else "c")
+        re_str += "i" + ("n" if args["individual"] is None else "d" if args["individual"] == "discrete" else "c")
+        results_filename = "expt_{}_{}_{}.json".format(args["dataset"], re_str, str(uuid.uuid4().hex)[0:5])
+        with open(os.path.join(args["resultsdir"], results_filename), "w") as f:
+            json.dump(results, f)
+
+    return results
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-s", "--seed", default=101, type=int)
     parser.add_argument("-d", "--dataset", default="seal", type=str)
-    parser.add_argument("-g", "--group", default=None, type=str)
-    parser.add_argument("-i", "--individual", default=None, type=str)
-    parser.add_argument("-f", "--folder", default="/home/eli/wsl/momentuHMM/vignettes/", type=str)
+    parser.add_argument("-g", "--group", default="none", type=str)
+    parser.add_argument("-i", "--individual", default="none", type=str)
+    parser.add_argument("-f", "--folder", default="./", type=str)
     parser.add_argument("-o", "--optim", default="sgd", type=str)
     parser.add_argument("-lr", "--learnrate", default=0.05, type=float)
+    parser.add_argument("-t", "--timesteps", default=1000, type=int)
+    parser.add_argument("-r", "--resultsdir", default="./results", type=str)
+    parser.add_argument("-s", "--seed", default=101, type=int)
+    parser.add_argument("--schedule", default="", type=str)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
     parser.add_argument('--validation', action='store_true')
     args = parser.parse_args()
 
-    pyro.enable_validation(args.validation)
+    if args.group == "none":
+        args.group = None
+    if args.individual == "none":
+        args.individual = None
 
-    data_dir = args.folder
-    dataset = args.dataset
-    seed = args.seed
-    optim = args.optim
-    lr = args.learnrate
-    random_effects = {"group": args.group, "individual": args.individual}
-
-    run_expt(data_dir, dataset, random_effects, seed, optim, lr)
+    run_expt(vars(args))
