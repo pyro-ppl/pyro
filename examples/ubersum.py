@@ -8,11 +8,19 @@ import timeit
 from scipy.stats import trim_mean
 import torch
 
-from pyro.ops.contract import ubersum
+import pyro.ops.contract
 from pyro.ops.einsum.adjoint import require_backward
 from pyro.util import ignore_jit_warnings
 
 _CACHE = {}
+
+
+def ubersum(equation, *operands, **kwargs):
+    if kwargs.pop('naive', False):
+        impl = pyro.ops.contract.naive_ubersum
+    else:
+        impl = pyro.ops.contract.ubersum
+    return impl(equation, *operands, **kwargs)
 
 
 def jit_ubersum(equation, *operands, **kwargs):
@@ -134,7 +142,7 @@ def main(args):
                                     for d in dims])
                 operands.append(torch.randn(shape, requires_grad=True))
 
-            time = time_fn(fn, equation, *operands, batch_dims=batch_dims, iters=args.iters)
+            time = time_fn(fn, equation, *operands, batch_dims=batch_dims, iters=args.iters, naive=args.naive)
             times[plate_size] = time
             print('{}\t{}'.format(plate_size, time))
             writer.writerow([plate_size, time])
@@ -147,6 +155,7 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--dim-size", default=32, type=int)
     parser.add_argument("-p", "--max-plate-size", default=32, type=int)
     parser.add_argument("-n", "--iters", default=10000, type=int)
+    parser.add_argument('--naive', action='store_true')
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true', default=True)
     parser.add_argument('--outdir', type=str)

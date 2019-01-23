@@ -447,6 +447,9 @@ def naive_ubersum(equation, *operands, **kwargs):
     This implementation should agree with :func:`ubersum` whenver
     :func:`ubersum` does not raise ``NotImplementedError``.
     """
+    contract = kwargs.pop('contract', opt_einsum.contract)
+    backend = kwargs.pop('backend', 'pyro.ops.einsum.torch_log')
+
     # Parse equation, without loss of generality assuming a single output.
     inputs, outputs = equation.split('->')
     outputs = outputs.split(',')
@@ -459,7 +462,7 @@ def naive_ubersum(equation, *operands, **kwargs):
     # Split dims into batch dims, contraction dims, and dims to keep.
     batch_dims = set(kwargs.pop('batch_dims', ''))
     if not batch_dims:
-        result = opt_einsum.contract(equation, *operands, backend='pyro.ops.einsum.torch_log')
+        result = contract(equation, *operands, backend=backend)
         return (result,)
     output_dims = set(output)
 
@@ -502,7 +505,9 @@ def naive_ubersum(equation, *operands, **kwargs):
         flat_output = ''.join(flatten_dim(d, dict(zip(local_dims, index)))
                               for d in output if d not in batch_dims)
         flat_equation = ','.join(flat_inputs) + '->' + flat_output
-        flat_result = opt_einsum.contract(flat_equation, *flat_operands,
-                                          backend='pyro.ops.einsum.torch_log')
-        _select(result, offsets, index).copy_(flat_result)
+        flat_result = contract(flat_equation, *flat_operands, backend=backend)
+        if local_dims:
+            _select(result, offsets, index).copy_(flat_result)
+        else:
+            result = flat_result
     return (result,)
