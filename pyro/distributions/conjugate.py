@@ -68,18 +68,18 @@ class BetaBinomial(TorchDistribution):
         probs = self._beta.sample(sample_shape)
         return Binomial(self.total_count, probs).sample()
 
-    def _posterior_latent_dist(self, obs):
+    def _posterior_latent(self, obs):
         concentration1 = self._unexpanded_params["concentration1"]
         concentration0 = self._unexpanded_params["concentration0"]
         total_count = self._unexpanded_params["total_count"]
-        num_dims = len(concentration1.shape)
-        num_obs = reduce(mul, obs.size()[:len(obs.size()) - num_dims])
-        summed_obs = sum_leftmost(obs, -num_dims)
+        reduce_dims = len(obs.size()) - len(concentration1.size())
+        num_obs = reduce(mul, obs.size()[:reduce_dims], 1)
+        summed_obs = sum_leftmost(obs, reduce_dims)
         return Beta(concentration1 + summed_obs,
                     num_obs * total_count + concentration0 - summed_obs,
                     validate_args=self._validate_args)
 
-    def _compounded_dist(self, probs):
+    def _posterior_predictive(self, probs):
         return Binomial(total_count=self.total_count, probs=probs, validate_args=self._validate_args)
 
     def log_prob(self, value):
@@ -157,15 +157,15 @@ class GammaPoisson(TorchDistribution):
         new._validate_args = self._validate_args
         return new
 
-    def _posterior_latent_dist(self, obs):
+    def _posterior_latent(self, obs):
         concentration = self._unexpanded_params["concentration"]
         rate = self._unexpanded_params["rate"]
-        num_dims = len(concentration.shape)
-        num_obs = reduce(mul, obs.size()[:num_dims])
-        summed_obs = sum_leftmost(obs, -num_dims)
+        reduce_dims = len(obs.size()) - len(rate.size())
+        num_obs = reduce(mul, obs.size()[:reduce_dims], 1)
+        summed_obs = sum_leftmost(obs, reduce_dims)
         return Gamma(concentration + summed_obs, rate + num_obs)
 
-    def _compounded_dist(self, rate):
+    def _posterior_predictive(self, rate):
         return Poisson(rate=rate, validate_args=self._validate_args)
 
     def sample(self, sample_shape=()):
