@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import itertools
+import warnings
 from collections import OrderedDict, defaultdict
 
 import opt_einsum
@@ -12,7 +13,7 @@ from pyro.ops.rings import BACKEND_TO_RING, LogRing
 from pyro.util import ignore_jit_warnings
 
 
-def _check_batch_dims_are_sensible(output_dims, nonoutput_ordinal):
+def _check_plates_are_sensible(output_dims, nonoutput_ordinal):
     if output_dims and nonoutput_ordinal:
         raise ValueError(u"It is nonsensical to preserve a batched dim without preserving "
                          u"all of that dim's batch dims, but found '{}' without '{}'"
@@ -243,8 +244,8 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
 
         # Contract this connected component down to a single tensor.
         ordinal, term = _contract_component(ring, component, dims, target_dims & dims)
-        _check_batch_dims_are_sensible(target_dims.intersection(term._pyro_dims),
-                                       ordinal - target_ordinal)
+        _check_plates_are_sensible(target_dims.intersection(term._pyro_dims),
+                                   ordinal - target_ordinal)
 
         # Eliminate extra plate dims via product contractions.
         contract_frames = ordinal - target_ordinal
@@ -267,8 +268,8 @@ def ubersum(equation, *operands, **kwargs):
     This generalizes :func:`~pyro.ops.einsum.contract` in two ways:
 
     1.  Multiple outputs are allowed, and intermediate results can be shared.
-    2.  Inputs and outputs can be batched along symbols given in ``batch_dims``;
-        reductions along ``batch_dims`` are product reductions.
+    2.  Inputs and outputs can be batched along symbols given in ``plates``;
+        reductions along ``plates`` are product reductions.
 
     The best way to understand this function is to try the examples below,
     which show how :func:`ubersum` calls can be implemented as multiple calls
@@ -286,7 +287,7 @@ def ubersum(equation, *operands, **kwargs):
     To illustrate batched inputs, note that the following are equivalent::
 
         assert len(x) == 3 and len(y) == 3
-        z = ubersum('ab,ai,bi->b', w, x, y, batch_dims='i')
+        z = ubersum('ab,ai,bi->b', w, x, y, plates='i')
 
         z = contract('ab,a,a,a,b,b,b->b', w, *x, *y, backend=backend)
 
@@ -295,7 +296,7 @@ def ubersum(equation, *operands, **kwargs):
     the following are equivalent::
 
         assert len(x) == 3 and len(y) == 3
-        z = ubersum('ai,ai->', x, y, batch_dims='i')
+        z = ubersum('ai,ai->', x, y, plates='i')
 
         z = contract('a,b,c,a,b,c->', *x, *y, backend=backend)
 
@@ -304,7 +305,7 @@ def ubersum(equation, *operands, **kwargs):
     equivalent::
 
         assert len(x) == 3 and len(y) == 3
-        z = ubersum('abi,abi->bi', x, y, batch_dims='i')
+        z = ubersum('abi,abi->bi', x, y, plates='i')
 
         z0 = contract('ab,ac,ad,ab,ac,ad->b', *x, *y, backend=backend)
         z1 = contract('ab,ac,ad,ab,ac,ad->c', *x, *y, backend=backend)
@@ -313,9 +314,9 @@ def ubersum(equation, *operands, **kwargs):
 
     Note that each batch slice through the output is multilinear in all batch
     slices through all inptus, thus e.g. batch matrix multiply would be
-    implemented *without* ``batch_dims``, so the following are all equivalent::
+    implemented *without* ``plates``, so the following are all equivalent::
 
-        xy = ubersum('abc,acd->abd', x, y, batch_dims='')
+        xy = ubersum('abc,acd->abd', x, y, plates='')
         xy = torch.stack([xa.mm(ya) for xa, ya in zip(x, y)])
         xy = torch.bmm(x, y)
 
@@ -326,7 +327,9 @@ def ubersum(equation, *operands, **kwargs):
 
     :param str equation: An einsum equation, optionally with multiple outputs.
     :param torch.Tensor operands: A collection of tensors.
-    :param str batch_dims: An optional string of batch dims.
+    :param str plates: An optional string of plate symbols.
+    :param str backend: An optional einsum backend, defaults to
+        'pyro.ops.einsum.torch_log'
     :param dict cache: An optional :func:`~opt_einsum.shared_intermediates`
         cache.
     :param bool modulo_total: Optionally allow ubersum to arbitrarily scale
@@ -342,7 +345,11 @@ def ubersum(equation, *operands, **kwargs):
     """
     # Extract kwargs.
     cache = kwargs.pop('cache', None)
-    batch_dims = kwargs.pop('batch_dims', '')
+    plates = kwargs.pop('plates', '')
+    if 'batch_dims' in kwargs:
+        warnings.warn("'batch_dims' is deprecated, use 'plates' instead",
+                      DeprecationWarning)
+        plates = kwargs.pop('batch_dims')
     backend = kwargs.pop('backend', 'pyro.ops.einsum.torch_log')
     modulo_total = kwargs.pop('modulo_total', False)
     try:
@@ -378,11 +385,11 @@ def ubersum(equation, *operands, **kwargs):
 
     # Construct a tensor tree shared by all outputs.
     tensor_tree = OrderedDict()
-    batch_dims = frozenset(batch_dims)
+    plates = frozenset(plates)
     for dims, term in zip(inputs, operands):
         assert len(dims) == term.dim()
         term._pyro_dims = dims
-        ordinal = batch_dims.intersection(dims)
+        ordinal = plates.intersection(dims)
         tensor_tree.setdefault(ordinal, []).append(term)
 
     # Compute outputs, sharing intermediate computations.
@@ -390,9 +397,9 @@ def ubersum(equation, *operands, **kwargs):
     with shared_intermediates(cache) as cache:
         ring = Ring(cache, dim_to_size=dim_to_size)
         for output in outputs:
-            sum_dims = set(output).union(*inputs) - set(batch_dims)
+            sum_dims = set(output).union(*inputs) - set(plates)
             term = contract_to_tensor(tensor_tree, sum_dims,
-                                      target_ordinal=batch_dims.intersection(output),
+                                      target_ordinal=plates.intersection(output),
                                       target_dims=sum_dims.intersection(output),
                                       ring=ring)
             if term._pyro_dims != output:
@@ -457,8 +464,8 @@ def naive_ubersum(equation, *operands, **kwargs):
     inputs = inputs.split(',')
 
     # Split dims into batch dims, contraction dims, and dims to keep.
-    batch_dims = set(kwargs.pop('batch_dims', ''))
-    if not batch_dims:
+    plates = set(kwargs.pop('plates', ''))
+    if not plates:
         result = opt_einsum.contract(equation, *operands, backend='pyro.ops.einsum.torch_log')
         return (result,)
     output_dims = set(output)
@@ -476,31 +483,31 @@ def naive_ubersum(equation, *operands, **kwargs):
     # intersection over all batch contexts of tensors in which the dim appears.
     dim_to_ordinal = {}
     for dims in map(set, inputs):
-        ordinal = dims & batch_dims
-        for dim in dims - batch_dims:
+        ordinal = dims & plates
+        for dim in dims - plates:
             dim_to_ordinal[dim] = dim_to_ordinal.get(dim, ordinal) & ordinal
-    for dim in output_dims - batch_dims:
-        _check_batch_dims_are_sensible({dim}, dim_to_ordinal[dim] - output_dims)
+    for dim in output_dims - plates:
+        _check_plates_are_sensible({dim}, dim_to_ordinal[dim] - output_dims)
 
     # Flatten by replicating along batch dimensions.
     flatten_dim = _DimFlattener(dim_to_ordinal)
     flat_inputs = []
     flat_operands = []
     for input_, operand in zip(inputs, operands):
-        local_dims = [d for d in input_ if d in batch_dims]
+        local_dims = [d for d in input_ if d in plates]
         offsets = [input_.index(d) - len(input_) for d in local_dims]
         for index in itertools.product(*(range(sizes[d]) for d in local_dims)):
             flat_inputs.append(''.join(flatten_dim(d, dict(zip(local_dims, index)))
-                                       for d in input_ if d not in batch_dims))
+                                       for d in input_ if d not in plates))
             flat_operands.append(_select(operand, offsets, index))
 
     # Defer to unbatched einsum.
     result = operands[0].new_empty(torch.Size(sizes[d] for d in output))
-    local_dims = [d for d in output if d in batch_dims]
+    local_dims = [d for d in output if d in plates]
     offsets = [output.index(d) - len(output) for d in local_dims]
     for index in itertools.product(*(range(sizes[d]) for d in local_dims)):
         flat_output = ''.join(flatten_dim(d, dict(zip(local_dims, index)))
-                              for d in output if d not in batch_dims)
+                              for d in output if d not in plates)
         flat_equation = ','.join(flat_inputs) + '->' + flat_output
         flat_result = opt_einsum.contract(flat_equation, *flat_operands,
                                           backend='pyro.ops.einsum.torch_log')

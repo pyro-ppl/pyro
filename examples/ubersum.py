@@ -15,7 +15,7 @@ All profiling is done on jit-compiled functions. We exclude jit compilation
 time from profiling results, assuming this can be done once.
 
 You can measure complexity of different ubersum problems by specifying
-``--equation`` and ``--batch-dims``.
+``--equation`` and ``--plates``.
 """
 
 from __future__ import absolute_import, division, print_function
@@ -40,7 +40,7 @@ def jit_logprob(equation, *operands, **kwargs):
 
     This simulates evaluating an undirected graphical model.
     """
-    key = 'logprob', equation, kwargs['batch_dims']
+    key = 'logprob', equation, kwargs['plates']
     if key not in _CACHE:
 
         # This simply wraps ubersum for jit compilation.
@@ -58,7 +58,7 @@ def jit_gradient(equation, *operands, **kwargs):
 
     This is simulates training an undirected graphical model.
     """
-    key = 'gradient', equation, kwargs['batch_dims']
+    key = 'gradient', equation, kwargs['plates']
     if key not in _CACHE:
 
         # This wraps ubersum for jit compilation, but we will call backward on the result.
@@ -88,7 +88,7 @@ def _jit_adjoint(equation, *operands, **kwargs):
     This simulates serving predictions from an undirected graphical model.
     """
     backend = kwargs.pop('backend', 'pyro.ops.einsum.torch_sample')
-    key = backend, equation, tuple(x.shape for x in operands), kwargs['batch_dims']
+    key = backend, equation, tuple(x.shape for x in operands), kwargs['plates']
     if key not in _CACHE:
 
         # This wraps a complete adjoint algorithm call.
@@ -161,7 +161,7 @@ def main(args):
     print('Plate size  Time per iteration of {} (ms)'.format(args.method))
     fn = globals()['jit_{}'.format(args.method)]
     equation = args.equation
-    batch_dims = args.batch_dims
+    plates = args.plates
     inputs, outputs = equation.split('->')
     inputs = inputs.split(',')
 
@@ -169,21 +169,21 @@ def main(args):
     for plate_size in range(8, 1 + args.max_plate_size, 8):
         operands = []
         for dims in inputs:
-            shape = torch.Size([plate_size if d in batch_dims else args.dim_size
+            shape = torch.Size([plate_size if d in plates else args.dim_size
                                 for d in dims])
             operands.append(torch.randn(shape, requires_grad=True))
 
-        time = time_fn(fn, equation, *operands, batch_dims=batch_dims, modulo_total=True,
+        time = time_fn(fn, equation, *operands, plates=plates, modulo_total=True,
                        iters=args.iters)
-        print('{: <11s} {:0.4g}'.format('{} ** {}'.format(plate_size, len(args.batch_dims)), time * 1e3))
+        print('{: <11s} {:0.4g}'.format('{} ** {}'.format(plate_size, len(args.plates)), time * 1e3))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='ubersum profiler')
     parser.add_argument('-e', '--equation', default='a,abi,bcij,adj,deij->')
-    parser.add_argument('-b', '--batch-dims', default='ij')
+    parser.add_argument('-p', '--plates', default='ij')
     parser.add_argument('-d', '--dim-size', default=32, type=int)
-    parser.add_argument('-p', '--max-plate-size', default=32, type=int)
+    parser.add_argument('-s', '--max-plate-size', default=32, type=int)
     parser.add_argument('-n', '--iters', default=10, type=int)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('-m', '--method', default='all',
