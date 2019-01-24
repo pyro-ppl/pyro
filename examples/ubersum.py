@@ -2,6 +2,13 @@
 This example demonstrates how to use ``ubersum`` with different backends to
 compute logprob, gradients, MAP estimates, posterior samples, and marginals.
 
+The interface for adjoint algorithms requires four steps:
+
+1. Call ``require_backward()`` on all inputs.
+2. Call ``x, = ubersum(..., backend=...)`` with a nonstandard backend.
+3. Call ``x._pyro_backward()` on the ubersum output.
+4. Retrieve results from ``._pyro_backward_result`` attributes of the inputs.
+
 The results of these computations are returned, but this script does not
 make use of them; instead we simply time the operations for profiling.
 All profiling is done on jit-compiled functions. We exclude jit compilation
