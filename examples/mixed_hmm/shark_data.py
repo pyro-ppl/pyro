@@ -67,9 +67,9 @@ def _encode_shark_df(tracks_df, summary_df):
         xy = np.stack([x, y], axis=-1) / 1000.  # km
         step = xy[1:] - xy[:-1]
         step_length = np.sqrt(np.einsum("ab,ab->a", step, step))
-        dstep = step[1:] - step[:-1]
+        # dstep = step[1:] - step[:-1]
         step_angle = np.arccos(
-            np.einsum("ab,ab->a", step[1:], dstep) / (step_length[1:] * np.sqrt(np.einsum("ab,ab->a", dstep, dstep))))
+                np.einsum("ab,ab->a", step[1:], step[:-1]) / (step_length[1:] * step_length[:-1]))
 
         step_length[np.isnan(step_length)] = 0.
         step_angle[np.isnan(step_angle)] = 0.
