@@ -12,7 +12,8 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import TraceEnum_ELBO
-from pyro.infer.collapse import collapse, sample_posterior
+from pyro.infer.collapse import collapse
+from pyro.infer.discrete import infer_discrete
 from pyro.infer.enum import config_enumerate
 from tests.common import assert_equal
 
@@ -59,7 +60,7 @@ def test_collapse_guide_smoke():
 
     guide = poutine.infer_config(
             guide,
-            lambda msg: {"enumerate": "parallel", "collapse": True} if msg["name"] == "e" else {})
+            lambda msg: {"enumerate": "parallel"} if msg["name"] == "e" else {})
 
     collapsed_guide = collapse(guide, first_available_dim=-1)
 
@@ -70,23 +71,24 @@ def test_collapse_guide_smoke():
 
 
 @pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
-def test_sample_posterior_1(temperature):
+def test_infer_discrete_1(temperature):
     #      +-------+
     #  z --|--> x  |
     #      +-------+
     num_particles = 10000
     data = torch.tensor([1., 2., 3.])
 
+    @config_enumerate
     def model(num_particles=1, z=None):
         p = pyro.param("p", torch.tensor(0.25))
         with pyro.plate("num_particles", num_particles, dim=-2):
-            z = pyro.sample("z", dist.Bernoulli(p), obs=z, infer={"collapse": True})
+            z = pyro.sample("z", dist.Bernoulli(p), obs=z)
             logger.info("z.shape = {}".format(z.shape))
             with pyro.plate("data", 3):
                 pyro.sample("x", dist.Normal(z, 1.), obs=data)
 
     first_available_dim = -3
-    sampled_model = sample_posterior(model, first_available_dim, temperature)
+    sampled_model = infer_discrete(model, first_available_dim, temperature)
     sampled_trace = poutine.trace(sampled_model).get_trace(num_particles)
     conditioned_traces = {z: poutine.trace(model).get_trace(z=torch.tensor(z)) for z in [0., 1.]}
 
@@ -102,7 +104,7 @@ def test_sample_posterior_1(temperature):
 
 
 @pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
-def test_sample_posterior_2(temperature):
+def test_infer_discrete_2(temperature):
     #       +--------+
     #  z1 --|--> x1  |
     #   |   |        |
@@ -112,12 +114,13 @@ def test_sample_posterior_2(temperature):
     num_particles = 10000
     data = torch.tensor([[-1., -1., 0.], [-1., 1., 1.]])
 
+    @config_enumerate
     def model(num_particles=1, z1=None, z2=None):
         p = pyro.param("p", torch.tensor([[0.25, 0.75], [0.1, 0.9]]))
         loc = pyro.param("loc", torch.tensor([-1., 1.]))
         with pyro.plate("num_particles", num_particles, dim=-2):
-            z1 = pyro.sample("z1", dist.Categorical(p[0]), obs=z1, infer={"collapse": True})
-            z2 = pyro.sample("z2", dist.Categorical(p[z1]), obs=z2, infer={"collapse": True})
+            z1 = pyro.sample("z1", dist.Categorical(p[0]), obs=z1)
+            z2 = pyro.sample("z2", dist.Categorical(p[z1]), obs=z2)
             logger.info("z1.shape = {}".format(z1.shape))
             logger.info("z2.shape = {}".format(z2.shape))
             with pyro.plate("data", 3):
@@ -125,7 +128,7 @@ def test_sample_posterior_2(temperature):
                 pyro.sample("x2", dist.Normal(loc[z2], 1.), obs=data[1])
 
     first_available_dim = -3
-    sampled_model = sample_posterior(model, first_available_dim, temperature)
+    sampled_model = infer_discrete(model, first_available_dim, temperature)
     sampled_trace = poutine.trace(
         sampled_model).get_trace(num_particles)
     conditioned_traces = {(z1, z2): poutine.trace(model).get_trace(z1=torch.tensor(z1),
@@ -149,7 +152,7 @@ def test_sample_posterior_2(temperature):
 
 
 @pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
-def test_sample_posterior_3(temperature):
+def test_infer_discrete_3(temperature):
     #       +---------+  +---------------+
     #  z1 --|--> x1   |  |  z2 ---> x2   |
     #       |       3 |  |             2 |
@@ -157,19 +160,20 @@ def test_sample_posterior_3(temperature):
     num_particles = 10000
     data = [torch.tensor([-1., -1., 0.]), torch.tensor([-1., 1.])]
 
+    @config_enumerate
     def model(num_particles=1, z1=None, z2=None):
         p = pyro.param("p", torch.tensor([0.25, 0.75]))
         loc = pyro.param("loc", torch.tensor([-1., 1.]))
         with pyro.plate("num_particles", num_particles, dim=-2):
-            z1 = pyro.sample("z1", dist.Categorical(p), obs=z1, infer={"collapse": True})
+            z1 = pyro.sample("z1", dist.Categorical(p), obs=z1)
             with pyro.plate("data[0]", 3):
                 pyro.sample("x1", dist.Normal(loc[z1], 1.), obs=data[0])
             with pyro.plate("data[1]", 2):
-                z2 = pyro.sample("z2", dist.Categorical(p), obs=z2, infer={"collapse": True})
+                z2 = pyro.sample("z2", dist.Categorical(p), obs=z2)
                 pyro.sample("x2", dist.Normal(loc[z2], 1.), obs=data[1])
 
     first_available_dim = -3
-    sampled_model = sample_posterior(model, first_available_dim, temperature)
+    sampled_model = infer_discrete(model, first_available_dim, temperature)
     sampled_trace = poutine.trace(
         sampled_model).get_trace(num_particles)
     conditioned_traces = {(z1, z20, z21): poutine.trace(model).get_trace(z1=torch.tensor(z1),
@@ -202,10 +206,11 @@ def test_collapse_grad_1():
     data = torch.tensor([1., 2., 3.])
     p = pyro.param("p", torch.tensor(0.25))
 
+    @config_enumerate
     def model(num_particles=1, z=None):
         p = pyro.param("p")
         with pyro.plate("num_particles", num_particles, dim=-2):
-            z = pyro.sample("z", dist.Bernoulli(p), obs=z, infer={"collapse": True})
+            z = pyro.sample("z", dist.Bernoulli(p), obs=z)
             logger.info("z.shape = {}".format(z.shape))
             with pyro.plate("data", 3):
                 pyro.sample("x", dist.Normal(z, 1.), obs=data)
@@ -235,12 +240,13 @@ def test_collapse_grad_2():
     p = pyro.param("p", torch.tensor([[0.25, 0.75], [0.1, 0.9]]))
     loc = pyro.param("loc", torch.tensor([-1., 1.]))
 
+    @config_enumerate
     def model():
         p = pyro.param("p")
         loc = pyro.param("loc")
         with pyro.plate("num_particles", num_particles, dim=-2):
-            z1 = pyro.sample("z1", dist.Categorical(p[0]), infer={"collapse": True})
-            z2 = pyro.sample("z2", dist.Categorical(p[z1]), infer={"collapse": True})
+            z1 = pyro.sample("z1", dist.Categorical(p[0]))
+            z2 = pyro.sample("z2", dist.Categorical(p[z1]))
             logger.info("z1.shape = {}".format(z1.shape))
             logger.info("z2.shape = {}".format(z2.shape))
             with pyro.plate("data", 3):
@@ -282,7 +288,7 @@ def test_collapse_traceenumelbo_smoke():
 
     guide = poutine.infer_config(
         guide,
-        lambda msg: {"collapse": True} if msg["name"] == "e" else {})
+        lambda msg: {"enumerate": "parallel"} if msg["name"] == "e" else {})
 
     collapsed_guide = collapse(guide, first_available_dim=-1)
 
@@ -305,7 +311,7 @@ def test_collapse_elbo_categorical():
             print("uncollapsed guide z2 shape = {}".format(z2.shape))
         else:
             z1 = pyro.sample("z1", dist.Categorical(p1),
-                             infer={"collapse": True, "enumerate": "parallel"})
+                             infer={"enumerate": "parallel"})
             print("collapsed guide z1 shape = {}".format(z1.shape))
             z2 = pyro.sample("z2", dist.Categorical(p2[z1]))
             print("collapsed guide z2 shape = {}".format(z2.shape))
@@ -347,7 +353,7 @@ def test_collapse_enum_interaction_smoke():
             print("uncollapsed guide z2 shape = {}".format(z2.shape))
         else:
             z1 = pyro.sample("z1", dist.Categorical(p1),
-                             infer={"collapse": True, "enumerate": "parallel"})
+                             infer={"enumerate": "parallel"})
             print("collapsed guide z1 shape = {}".format(z1.shape))
             z2 = pyro.sample("z2", dist.Categorical(p2[z1]))
             print("collapsed guide z2 shape = {}".format(z2.shape))
