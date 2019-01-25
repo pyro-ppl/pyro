@@ -34,9 +34,27 @@ from pyro.util import ignore_jit_warnings
 _CACHE = {}
 
 
-def jit_logprob(equation, *operands, **kwargs):
+def jit_prob(equation, *operands, **kwargs):
     """
     Runs einsum to compute the partition function.
+
+    This is cheap but less numerically stable than using the torch_log backend.
+    """
+    key = 'prob', equation, kwargs['plates']
+    if key not in _CACHE:
+
+        # This simply wraps einsum for jit compilation.
+        def _einsum(*operands):
+            return einsum(equation, *operands, **kwargs)
+
+        _CACHE[key] = torch.jit.trace(_einsum, operands, check_trace=False)
+
+    return _CACHE[key](*operands)
+
+
+def jit_logprob(equation, *operands, **kwargs):
+    """
+    Runs einsum to compute the log partition function.
 
     This simulates evaluating an undirected graphical model.
     """
@@ -95,7 +113,7 @@ def _jit_adjoint(equation, *operands, **kwargs):
         @ignore_jit_warnings()
         def _forward_backward(*operands):
             # First we request backward results on each input operand.
-            # This is the pyro.ops.adjoint equivalent of torch's .require_grad_().
+            # This is the pyro.ops.adjoint equivalent of torch's .requires_grad_().
             for operand in operands:
                 require_backward(operand)
 
@@ -153,7 +171,7 @@ def main(args):
         torch.set_default_tensor_type('torch.FloatTensor')
 
     if args.method == 'all':
-        for method in ['logprob', 'gradient', 'marginal', 'map', 'sample']:
+        for method in ['prob', 'logprob', 'gradient', 'marginal', 'map', 'sample']:
             args.method = method
             main(args)
         return
@@ -171,7 +189,7 @@ def main(args):
         for dims in inputs:
             shape = torch.Size([plate_size if d in plates else args.dim_size
                                 for d in dims])
-            operands.append(torch.randn(shape, requires_grad=True))
+            operands.append((torch.empty(shape).uniform_() + 0.5).requires_grad_())
 
         time = time_fn(fn, equation, *operands, plates=plates, modulo_total=True,
                        iters=args.iters)
@@ -187,6 +205,6 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--iters', default=10, type=int)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('-m', '--method', default='all',
-                        help='one of: logprob, gradient, marginal, map, sample')
+                        help='one of: prob, logprob, gradient, marginal, map, sample')
     args = parser.parse_args()
     main(args)
