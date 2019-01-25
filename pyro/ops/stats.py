@@ -164,8 +164,10 @@ def effective_sample_size(input, chain_dim=0, sample_dim=1):
     Computes effective sample size of input.
 
     Reference:
+
     [1] `Introduction to Markov Chain Monte Carlo`,
         Charles J. Geyer
+
     [2] `Stan Reference Manual version 2.18`,
         Stan Development Team
 

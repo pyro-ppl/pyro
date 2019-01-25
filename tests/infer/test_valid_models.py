@@ -643,7 +643,7 @@ def test_plate_enum_discrete_no_discrete_vars_warning(strict_enumeration_warning
         with pyro.plate("plate", 10, 5) as ind:
             pyro.sample("x", dist.Normal(loc, scale).expand_by([len(ind)]))
 
-    @config_enumerate
+    @config_enumerate(default="sequential")
     def guide():
         loc = pyro.param("loc", torch.tensor(1.0, requires_grad=True))
         scale = pyro.param("scale", torch.tensor(2.0, requires_grad=True))
@@ -980,7 +980,7 @@ def test_dim_allocation_ok(Elbo, expand):
             assert z.shape == (5, 7, 6)
             assert q.shape == (8, 5, 7, 6)
 
-    guide = config_enumerate(model, expand=expand) if enumerate_ else model
+    guide = config_enumerate(model, "sequential", expand=expand) if enumerate_ else model
     assert_ok(model, guide, Elbo(max_plate_nesting=4))
 
 
@@ -1109,7 +1109,7 @@ def test_enum_sequential_in_model_error():
 
 def test_enum_in_model_plate_reuse_ok():
 
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model():
         p = pyro.param("p", torch.tensor([0.2, 0.8]))
         a = pyro.sample("a", dist.Bernoulli(0.3)).long()
@@ -1127,7 +1127,7 @@ def test_enum_in_model_plate_reuse_ok():
 
 def test_enum_in_model_multi_scale_error():
 
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model():
         p = pyro.param("p", torch.tensor([0.2, 0.8]))
         x = pyro.sample("x", dist.Bernoulli(0.3)).long()
@@ -1144,7 +1144,7 @@ def test_enum_in_model_multi_scale_error():
 def test_enum_in_model_diamond_error():
     data = torch.tensor([[0, 1], [0, 0]])
 
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model():
         pyro.param("probs_a", torch.tensor([0.45, 0.55]))
         pyro.param("probs_b", torch.tensor([[0.6, 0.4], [0.4, 0.6]]))
@@ -1284,7 +1284,7 @@ def test_enum_discrete_vectorized_num_particles(enumerate_, expand, num_samples,
 
 def test_enum_recycling_chain():
 
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model():
         p = pyro.param("p", torch.tensor([[0.2, 0.8], [0.1, 0.9]]))
 
@@ -1306,7 +1306,7 @@ def test_enum_recycling_dbn(markov):
     #  \ |   \ |   \ |
     #    z     z     z  obs
 
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model():
         p = pyro.param("p", torch.ones(3, 3))
         q = pyro.param("q", torch.ones(2))
@@ -1355,7 +1355,7 @@ def test_enum_recycling_nested():
     # z21: x y1 y2 z20
     # z22: x y1 y2 z21
 
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model():
         p = pyro.param("p", torch.ones(3, 3))
         x = pyro.sample("x", dist.Categorical(p[0]))
@@ -1381,7 +1381,7 @@ def test_enum_recycling_grid():
     #  |   |   |   |
     #  x---x--(x)--x <-- what can this depend on?
 
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model():
         p = pyro.param("p_leaf", torch.ones(2, 2, 2))
         ind = torch.arange(2, dtype=torch.long)
@@ -1511,7 +1511,7 @@ def test_enum_recycling_interleave():
 
 def test_enum_recycling_plate():
 
-    @config_enumerate(default="parallel")
+    @config_enumerate
     def model():
         p = pyro.param("p", torch.ones(3, 3))
         q = pyro.param("q", torch.tensor([0.5, 0.5]))
@@ -1554,6 +1554,31 @@ def test_enum_recycling_plate():
         pass
 
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=2))
+
+
+@pytest.mark.parametrize('history', [0, 1, 2, 3])
+def test_markov_history(history):
+
+    @config_enumerate
+    def model():
+        p = pyro.param("p", 0.25 * torch.ones(2, 2))
+        q = pyro.param("q", 0.25 * torch.ones(2))
+        x_prev = torch.tensor(0)
+        x_curr = torch.tensor(0)
+        for t in pyro.markov(range(10), history=history):
+            probs = p[x_prev, x_curr]
+            x_prev, x_curr = x_curr, pyro.sample("x_{}".format(t), dist.Bernoulli(probs)).long()
+            pyro.sample("y_{}".format(t), dist.Bernoulli(q[x_curr]),
+                        obs=torch.tensor(0.))
+
+    def guide():
+        pass
+
+    if history < 2:
+        assert_error(model, guide, TraceEnum_ELBO(max_plate_nesting=0),
+                     match="Enumeration dim conflict")
+    else:
+        assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
 
 
 def test_mean_field_ok():

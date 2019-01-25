@@ -7,7 +7,7 @@ from subprocess import check_call
 
 import pytest
 
-from tests.common import EXAMPLES_DIR, requires_cuda, xfail_param, skipif_param
+from tests.common import EXAMPLES_DIR, requires_cuda, skipif_param
 
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
@@ -21,23 +21,28 @@ CPU_EXAMPLES = [
     'contrib/autoname/scoping_mixture.py --num-epochs=1',
     'contrib/autoname/mixture.py --num-epochs=1',
     'contrib/autoname/tree_data.py --num-epochs=1',
-    skipif_param('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4',
+    skipif_param('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --batch-size=1000',
                  condition='CI' in os.environ,
                  reason='https://github.com/uber/pyro/issues/1540'),
-    xfail_param('contrib/oed/ab_test.py --num-vi-steps=10 --num-bo-steps=2',
-                reason='https://github.com/uber/pyro/issues/1581'),
+    skipif_param('contrib/gp/sv-dkl.py --binary --epochs=1 --num-inducing=4 --batch-size=1000',
+                 condition='CI' in os.environ,
+                 reason='https://github.com/uber/pyro/issues/1540'),
+    'contrib/oed/ab_test.py --num-vi-steps=10 --num-bo-steps=2',
     'contrib/oed/item_response.py -N=1000 -M=1000',
     'contrib/oed/sequential_oed_sigmoid_lm.py --num-experiments=2 --num-runs=2 --no-plot',
     'dmm/dmm.py --num-epochs=1',
     'dmm/dmm.py --num-epochs=1 --num-iafs=1',
     'eight_schools/mcmc.py --num-samples=500 --warmup-steps=100',
     'eight_schools/svi.py --num-epochs=1',
+    'einsum.py',
     'hmm.py --num-steps=1 --truncate=10 --model=0',
     'hmm.py --num-steps=1 --truncate=10 --model=1',
     'hmm.py --num-steps=1 --truncate=10 --model=2',
     'hmm.py --num-steps=1 --truncate=10 --model=3',
     'hmm.py --num-steps=1 --truncate=10 --model=4',
     'hmm.py --num-steps=1 --truncate=10 --model=5',
+    'hmm.py --num-steps=1 --truncate=10 --model=6',
+    'hmm.py --num-steps=1 --truncate=10 --model=6 --raftery-parameterization',
     'inclined_plane.py --num-samples=1',
     'lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8',
     'minipyro.py',
@@ -59,18 +64,20 @@ CPU_EXAMPLES = [
 
 CUDA_EXAMPLES = [
     'air/main.py --num-steps=1 --cuda',
-    xfail_param('baseball.py --num-samples=200 --warmup-steps=100 --num-chains=2 --cuda',
-                reason="https://github.com/pytorch/pytorch/issues/10375"),
     'bayesian_regression.py --num-epochs=1 --cuda',
+    'baseball.py --num-samples=200 --warmup-steps=100 --num-chains=2 --cuda',
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --cuda',
     'dmm/dmm.py --num-epochs=1 --cuda',
     'dmm/dmm.py --num-epochs=1 --num-iafs=1 --cuda',
+    'einsum.py --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=0 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=1 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=2 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=3 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=4 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=5 --cuda',
+    'hmm.py --num-steps=1 --truncate=10 --model=6 --cuda',
+    'hmm.py --num-steps=1 --truncate=10 --model=6 --cuda --raftery-parameterization',
     'vae/vae.py --num-epochs=1 --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss --cuda',
@@ -92,8 +99,7 @@ JIT_EXAMPLES = [
     xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
     xfail_jit('dmm/dmm.py --num-epochs=1 --jit'),
     xfail_jit('dmm/dmm.py --num-epochs=1 --num-iafs=1 --jit'),
-    skipif_param('eight_schools/mcmc.py --num-samples=500 --warmup-steps=100 --jit',
-                 condition=True, reason='very slow test'),
+    'eight_schools/mcmc.py --num-samples=500 --warmup-steps=100 --jit',
     'eight_schools/svi.py --num-epochs=1 --jit',
     'hmm.py --num-steps=1 --truncate=10 --model=1 --jit',
     'hmm.py --num-steps=1 --truncate=10 --model=2 --jit',

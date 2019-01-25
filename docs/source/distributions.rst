@@ -56,6 +56,13 @@ AVFMultivariateNormal
     :undoc-members:
     :show-inheritance:
 
+BetaBinomial
+------------
+.. autoclass:: pyro.distributions.BetaBinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Delta
 -----
 .. autoclass:: pyro.distributions.Delta
@@ -66,6 +73,13 @@ Delta
 EmpiricalDistribution
 ----------------------
 .. autoclass:: pyro.distributions.Empirical
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+GammaPoisson
+------------
+.. autoclass:: pyro.distributions.GammaPoisson
     :members:
     :undoc-members:
     :show-inheritance:

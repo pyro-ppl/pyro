@@ -16,9 +16,16 @@ Welcome to Pyro Examples and Tutorials!
    svi_part_ii
    svi_part_iii
    tensor_shapes
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Advanced:
+
    enumeration
    custom_objectives
    jit
+   minipyro
+   effect_handlers
 
 .. toctree::
    :maxdepth: 2
@@ -26,6 +33,7 @@ Welcome to Pyro Examples and Tutorials!
 
    vae
    bayesian_regression
+   bayesian_regression_ii
    dmm
    air
    ss-vae
@@ -36,12 +44,24 @@ Welcome to Pyro Examples and Tutorials!
 
    gmm
    gp
+   gplvm
    bo
    tracking_1d
    csis
    RSA-implicature
    RSA-hyperbole
    ekf
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Code Examples:
+
+   hmm
+   lda
+   mcmc
+   sparse_gamma
+   dkl
+   einsum
 
 
 Indices and tables

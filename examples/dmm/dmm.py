@@ -137,15 +137,17 @@ class DMM(nn.Module):
     variational distribution (the guide) for the Deep Markov Model
     """
     def __init__(self, input_dim=88, z_dim=100, emission_dim=100,
-                 transition_dim=200, rnn_dim=600, rnn_dropout_rate=0.0,
+                 transition_dim=200, rnn_dim=600, num_layers=1, rnn_dropout_rate=0.0,
                  num_iafs=0, iaf_dim=50, use_cuda=False):
         super(DMM, self).__init__()
         # instantiate PyTorch modules used in the model and guide below
         self.emitter = Emitter(input_dim, z_dim, emission_dim)
         self.trans = GatedTransition(z_dim, transition_dim)
         self.combiner = Combiner(z_dim, rnn_dim)
+        # dropout just takes effect on inner layers of rnn
+        rnn_dropout_rate = 0. if num_layers == 1 else rnn_dropout_rate
         self.rnn = nn.RNN(input_size=input_dim, hidden_size=rnn_dim, nonlinearity='relu',
-                          batch_first=True, bidirectional=False, num_layers=1,
+                          batch_first=True, bidirectional=False, num_layers=num_layers,
                           dropout=rnn_dropout_rate)
 
         # if we're using normalizing flows, instantiate those too
@@ -269,7 +271,7 @@ def main(args):
     log = get_logger(args.log)
     log(args)
 
-    data = poly.load_data()
+    data = poly.load_data(poly.JSB_CHORALES)
     training_seq_lengths = data['train']['sequence_lengths']
     training_data_sequences = data['train']['sequences']
     test_seq_lengths = data['test']['sequence_lengths']
@@ -277,12 +279,12 @@ def main(args):
     val_seq_lengths = data['valid']['sequence_lengths']
     val_data_sequences = data['valid']['sequences']
     N_train_data = len(training_seq_lengths)
-    N_train_time_slices = float(np.sum(training_seq_lengths))
+    N_train_time_slices = float(torch.sum(training_seq_lengths))
     N_mini_batches = int(N_train_data / args.mini_batch_size +
                          int(N_train_data % args.mini_batch_size > 0))
 
     log("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
-        (N_train_data, np.mean(training_seq_lengths), N_mini_batches))
+        (N_train_data, training_seq_lengths.float().mean(), N_mini_batches))
 
     # how often we do validation/test evaluation during training
     val_test_frequency = 50
@@ -292,17 +294,19 @@ def main(args):
     # package repeated copies of val/test data for faster evaluation
     # (i.e. set us up for vectorization)
     def rep(x):
-        y = np.repeat(x, n_eval_samples, axis=0)
-        return y
+        rep_shape = torch.Size([x.size(0) * n_eval_samples]) + x.size()[1:]
+        repeat_dims = [1] * len(x.size())
+        repeat_dims[0] = n_eval_samples
+        return x.repeat(repeat_dims).reshape(n_eval_samples, -1).transpose(1, 0).reshape(rep_shape)
 
     # get the validation/test data ready for the dmm: pack into sequences, etc.
     val_seq_lengths = rep(val_seq_lengths)
     test_seq_lengths = rep(test_seq_lengths)
     val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(
-        np.arange(n_eval_samples * val_data_sequences.shape[0]), rep(val_data_sequences),
+        torch.arange(n_eval_samples * val_data_sequences.shape[0]), rep(val_data_sequences),
         val_seq_lengths, cuda=args.cuda)
     test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(
-        np.arange(n_eval_samples * test_data_sequences.shape[0]), rep(test_data_sequences),
+        torch.arange(n_eval_samples * test_data_sequences.shape[0]), rep(test_data_sequences),
         test_seq_lengths, cuda=args.cuda)
 
     # instantiate the dmm
@@ -372,9 +376,9 @@ def main(args):
 
         # compute the validation and test loss n_samples many times
         val_nll = svi.evaluate_loss(val_batch, val_batch_reversed, val_batch_mask,
-                                    val_seq_lengths) / np.sum(val_seq_lengths)
+                                    val_seq_lengths) / torch.sum(val_seq_lengths)
         test_nll = svi.evaluate_loss(test_batch, test_batch_reversed, test_batch_mask,
-                                     test_seq_lengths) / np.sum(test_seq_lengths)
+                                     test_seq_lengths) / torch.sum(test_seq_lengths)
 
         # put the RNN back into training mode (i.e. turn on drop-out if applicable)
         dmm.rnn.train()
@@ -396,8 +400,7 @@ def main(args):
         # accumulator for our estimate of the negative log likelihood (or rather -elbo) for this epoch
         epoch_nll = 0.0
         # prepare mini-batch subsampling indices for this epoch
-        shuffled_indices = np.arange(N_train_data)
-        np.random.shuffle(shuffled_indices)
+        shuffled_indices = torch.randperm(N_train_data)
 
         # process each mini-batch; this is where we take gradient steps
         for which_mini_batch in range(N_mini_batches):

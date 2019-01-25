@@ -26,20 +26,7 @@ def rinverse(M, sym=False):
     elif M.shape[-1] == 3:
         return inv3d(M, sym=sym)
     else:
-        # Use blockwise inversion
-        d = M.shape[-1]//2
-        A, B, C, D = M[..., :d, :d], M[..., :d, d:], M[..., d:, :d], M[..., d:, d:]
-        Ainv = rinverse(A, sym=sym)
-        schur = rinverse(D - C.matmul(Ainv).matmul(B), sym=sym)
-        inv = M.new_empty(M.shape)
-        inv[..., :d, :d] = Ainv + Ainv.matmul(B).matmul(schur).matmul(C).matmul(Ainv)
-        inv[..., :d, d:] = -Ainv.matmul(B).matmul(schur)
-        if sym:
-            inv[..., d:, :d] = inv[..., :d, d:].transpose(-1, -2)
-        else:
-            inv[..., d:, :d] = -schur.matmul(C).matmul(Ainv)
-        inv[..., d:, d:] = schur
-        return inv
+        return torch.inverse(M)
 
 
 def determinant_3d(H):

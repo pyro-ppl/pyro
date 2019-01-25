@@ -12,8 +12,11 @@ cache:
 
 install:
     - pip install -U pip
-    - pip install torch_nightly==1.0.0.dev20181203 -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
-    - pip install torchvision --no-dependencies
+    - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then
+          pip install http://download.pytorch.org/whl/cpu/torch-1.0.0-cp27-cp27mu-linux_x86_64.whl;
+      else
+          pip install http://download.pytorch.org/whl/cpu/torch-1.0.0-cp36-cp36m-linux_x86_64.whl;
+      fi
     - pip install .[test]
     - pip freeze
 
