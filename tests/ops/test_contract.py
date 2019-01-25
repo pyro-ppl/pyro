@@ -11,7 +11,7 @@ import torch
 
 import pyro.ops.jit
 from pyro.distributions.util import logsumexp
-from pyro.ops.contract import _partition_terms, contract_tensor_tree, contract_to_tensor, naive_ubersum, ubersum
+from pyro.ops.contract import _partition_terms, contract_tensor_tree, contract_to_tensor, einsum, naive_ubersum, ubersum
 from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import LogRing
 from pyro.poutine.indep_messenger import CondIndepStackFrame
@@ -398,6 +398,27 @@ def test_ubersum(equation, plates):
         actual_part = _normalize(actual_part, output, plates)
         expected_part = _normalize(expected_part, output, plates)
         assert_equal(expected_part, actual_part,
+                     msg=u"For output '{}':\nExpected:\n{}\nActual:\n{}".format(
+                         output, expected_part.detach().cpu(), actual_part.detach().cpu()))
+
+
+@pytest.mark.parametrize('equation,plates', UBERSUM_EXAMPLES)
+def test_einsum_linear(equation, plates):
+    inputs, outputs, log_operands, sizes = make_example(equation)
+    operands = [x.exp() for x in log_operands]
+
+    try:
+        log_expected = ubersum(equation, *log_operands, plates=plates, modulo_total=True)
+        expected = [x.exp() for x in log_expected]
+    except NotImplementedError:
+        pytest.skip()
+
+    # einsum() is in linear space whereas ubersum() is in log space.
+    actual = einsum(equation, *operands, plates=plates, modulo_total=True)
+    assert isinstance(actual, tuple)
+    assert len(actual) == len(outputs)
+    for output, expected_part, actual_part in zip(outputs, expected, actual):
+        assert_equal(expected_part.log(), actual_part.log(),
                      msg=u"For output '{}':\nExpected:\n{}\nActual:\n{}".format(
                          output, expected_part.detach().cpu(), actual_part.detach().cpu()))
 

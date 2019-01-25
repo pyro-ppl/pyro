@@ -1,12 +1,12 @@
 """
-This example demonstrates how to use ``ubersum`` with different backends to
-compute logprob, gradients, MAP estimates, posterior samples, and marginals.
+This example demonstrates how to use plated ``einsum`` with different backends
+to compute logprob, gradients, MAP estimates, posterior samples, and marginals.
 
 The interface for adjoint algorithms requires four steps:
 
 1. Call ``require_backward()`` on all inputs.
-2. Call ``x, = ubersum(..., backend=...)`` with a nonstandard backend.
-3. Call ``x._pyro_backward()` on the ubersum output.
+2. Call ``x, = einsum(..., backend=...)`` with a nonstandard backend.
+3. Call ``x._pyro_backward()` on the einsum output.
 4. Retrieve results from ``._pyro_backward_result`` attributes of the inputs.
 
 The results of these computations are returned, but this script does not
@@ -14,7 +14,7 @@ make use of them; instead we simply time the operations for profiling.
 All profiling is done on jit-compiled functions. We exclude jit compilation
 time from profiling results, assuming this can be done once.
 
-You can measure complexity of different ubersum problems by specifying
+You can measure complexity of different einsum problems by specifying
 ``--equation`` and ``--plates``.
 """
 
@@ -26,7 +26,7 @@ import timeit
 import torch
 from torch.autograd import grad
 
-from pyro.ops.contract import ubersum
+from pyro.ops.contract import einsum
 from pyro.ops.einsum.adjoint import require_backward
 from pyro.util import ignore_jit_warnings
 
@@ -36,36 +36,36 @@ _CACHE = {}
 
 def jit_logprob(equation, *operands, **kwargs):
     """
-    Runs ubersum to compute the partition function.
+    Runs einsum to compute the partition function.
 
     This simulates evaluating an undirected graphical model.
     """
     key = 'logprob', equation, kwargs['plates']
     if key not in _CACHE:
 
-        # This simply wraps ubersum for jit compilation.
-        def _ubersum(*operands):
-            return ubersum(equation, *operands, **kwargs)
+        # This simply wraps einsum for jit compilation.
+        def _einsum(*operands):
+            return einsum(equation, *operands, backend='pyro.ops.einsum.torch_log', **kwargs)
 
-        _CACHE[key] = torch.jit.trace(_ubersum, operands, check_trace=False)
+        _CACHE[key] = torch.jit.trace(_einsum, operands, check_trace=False)
 
     return _CACHE[key](*operands)
 
 
 def jit_gradient(equation, *operands, **kwargs):
     """
-    Runs ubersum and calls backward on the partition function.
+    Runs einsum and calls backward on the partition function.
 
     This is simulates training an undirected graphical model.
     """
     key = 'gradient', equation, kwargs['plates']
     if key not in _CACHE:
 
-        # This wraps ubersum for jit compilation, but we will call backward on the result.
-        def _ubersum(*operands):
-            return ubersum(equation, *operands, **kwargs)
+        # This wraps einsum for jit compilation, but we will call backward on the result.
+        def _einsum(*operands):
+            return einsum(equation, *operands, backend='pyro.ops.einsum.torch_log', **kwargs)
 
-        _CACHE[key] = torch.jit.trace(_ubersum, operands, check_trace=False)
+        _CACHE[key] = torch.jit.trace(_einsum, operands, check_trace=False)
 
     # Run forward pass.
     losses = _CACHE[key](*operands)
@@ -83,7 +83,7 @@ def jit_gradient(equation, *operands, **kwargs):
 
 def _jit_adjoint(equation, *operands, **kwargs):
     """
-    Runs ubersum in forward-backward mode using ``pyro.ops.adjoint``.
+    Runs einsum in forward-backward mode using ``pyro.ops.adjoint``.
 
     This simulates serving predictions from an undirected graphical model.
     """
@@ -100,7 +100,7 @@ def _jit_adjoint(equation, *operands, **kwargs):
                 require_backward(operand)
 
             # Next we run the forward pass.
-            results = ubersum(equation, *operands, backend=backend, **kwargs)
+            results = einsum(equation, *operands, backend=backend, **kwargs)
 
             # The we run a backward pass.
             for result in results:
@@ -179,7 +179,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='ubersum profiler')
+    parser = argparse.ArgumentParser(description='plated einsum profiler')
     parser.add_argument('-e', '--equation', default='a,abi,bcij,adj,deij->')
     parser.add_argument('-p', '--plates', default='ij')
     parser.add_argument('-d', '--dim-size', default=32, type=int)
