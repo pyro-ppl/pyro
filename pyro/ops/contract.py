@@ -261,7 +261,7 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
     return ring.broadcast(term, target_ordinal)
 
 
-def ubersum(equation, *operands, **kwargs):
+def einsum(equation, *operands, **kwargs):
     """
     Generalized plated sum-product algorithm via tensor variable elimination.
 
@@ -272,51 +272,50 @@ def ubersum(equation, *operands, **kwargs):
         reductions along ``plates`` are product reductions.
 
     The best way to understand this function is to try the examples below,
-    which show how :func:`ubersum` calls can be implemented as multiple calls
+    which show how :func:`einsum` calls can be implemented as multiple calls
     to :func:`~pyro.ops.einsum.contract` (which is generally more expensive).
 
     To illustrate multiple outputs, note that the following are equivalent::
 
-        z1, z2, z3 = ubersum('ab,bc->a,b,c', x, y)  # multiple outputs
+        z1, z2, z3 = einsum('ab,bc->a,b,c', x, y)  # multiple outputs
 
-        backend = 'pyro.ops.einsum.torch_log'
-        z1 = contract('ab,bc->a', x, y, backend=backend)
-        z2 = contract('ab,bc->b', x, y, backend=backend)
-        z3 = contract('ab,bc->c', x, y, backend=backend)
+        z1 = contract('ab,bc->a', x, y)
+        z2 = contract('ab,bc->b', x, y)
+        z3 = contract('ab,bc->c', x, y)
 
     To illustrate plated inputs, note that the following are equivalent::
 
         assert len(x) == 3 and len(y) == 3
-        z = ubersum('ab,ai,bi->b', w, x, y, plates='i')
+        z = einsum('ab,ai,bi->b', w, x, y, plates='i')
 
-        z = contract('ab,a,a,a,b,b,b->b', w, *x, *y, backend=backend)
+        z = contract('ab,a,a,a,b,b,b->b', w, *x, *y)
 
     When a sum dimension `a` always appears with a plate dimension `i`,
     then `a` corresponds to a distinct symbol for each slice of `a`. Thus
     the following are equivalent::
 
         assert len(x) == 3 and len(y) == 3
-        z = ubersum('ai,ai->', x, y, plates='i')
+        z = einsum('ai,ai->', x, y, plates='i')
 
-        z = contract('a,b,c,a,b,c->', *x, *y, backend=backend)
+        z = contract('a,b,c,a,b,c->', *x, *y)
 
     When such a sum dimension appears in the output, it must be
     accompanied by all of its plate dimensions, e.g. the following are
     equivalent::
 
         assert len(x) == 3 and len(y) == 3
-        z = ubersum('abi,abi->bi', x, y, plates='i')
+        z = einsum('abi,abi->bi', x, y, plates='i')
 
-        z0 = contract('ab,ac,ad,ab,ac,ad->b', *x, *y, backend=backend)
-        z1 = contract('ab,ac,ad,ab,ac,ad->c', *x, *y, backend=backend)
-        z2 = contract('ab,ac,ad,ab,ac,ad->d', *x, *y, backend=backend)
+        z0 = contract('ab,ac,ad,ab,ac,ad->b', *x, *y)
+        z1 = contract('ab,ac,ad,ab,ac,ad->c', *x, *y)
+        z2 = contract('ab,ac,ad,ab,ac,ad->d', *x, *y)
         z = torch.stack([z0, z1, z2])
 
     Note that each plate slice through the output is multilinear in all plate
     slices through all inptus, thus e.g. batch matrix multiply would be
     implemented *without* ``plates``, so the following are all equivalent::
 
-        xy = ubersum('abc,acd->abd', x, y, plates='')
+        xy = einsum('abc,acd->abd', x, y, plates='')
         xy = torch.stack([xa.mm(ya) for xa, ya in zip(x, y)])
         xy = torch.bmm(x, y)
 
@@ -328,11 +327,10 @@ def ubersum(equation, *operands, **kwargs):
     :param str equation: An einsum equation, optionally with multiple outputs.
     :param torch.Tensor operands: A collection of tensors.
     :param str plates: An optional string of plate symbols.
-    :param str backend: An optional einsum backend, defaults to
-        'pyro.ops.einsum.torch_log'
+    :param str backend: An optional einsum backend, defaults to 'torch'.
     :param dict cache: An optional :func:`~opt_einsum.shared_intermediates`
         cache.
-    :param bool modulo_total: Optionally allow ubersum to arbitrarily scale
+    :param bool modulo_total: Optionally allow einsum to arbitrarily scale
         each result plate, which can significantly reduce computation. This is
         safe to set whenever each result plate denotes a nonnormalized
         probability distribution whose total is not of interest.
@@ -346,11 +344,7 @@ def ubersum(equation, *operands, **kwargs):
     # Extract kwargs.
     cache = kwargs.pop('cache', None)
     plates = kwargs.pop('plates', '')
-    if 'batch_dims' in kwargs:
-        warnings.warn("'batch_dims' is deprecated, use 'plates' instead",
-                      DeprecationWarning)
-        plates = kwargs.pop('batch_dims')
-    backend = kwargs.pop('backend', 'pyro.ops.einsum.torch_log')
+    backend = kwargs.pop('backend', 'torch')
     modulo_total = kwargs.pop('modulo_total', False)
     try:
         Ring = BACKEND_TO_RING[backend]
@@ -409,6 +403,20 @@ def ubersum(equation, *operands, **kwargs):
     return tuple(results)
 
 
+def ubersum(equation, *operands, **kwargs):
+    """
+    Deprecated, use :func:`einsum` instead.
+    """
+    warnings.warn("'ubersum' is deprecated, use 'pyro.ops.contract.einsum' instead",
+                  DeprecationWarning)
+    if 'batch_dims' in kwargs:
+        warnings.warn("'batch_dims' is deprecated, use 'plates' instead",
+                      DeprecationWarning)
+        kwargs['plates'] = kwargs.pop('batch_dims')
+    kwargs.setdefault('backend', 'pyro.ops.einsum.torch_log')
+    return einsum(equation, *operands, **kwargs)
+
+
 def _select(tensor, dims, indices):
     for dim, index in zip(dims, indices):
         tensor = tensor.select(dim, index)
@@ -462,11 +470,12 @@ def naive_ubersum(equation, *operands, **kwargs):
                      for output in outputs)
     output, = outputs
     inputs = inputs.split(',')
+    backend = kwargs.pop('backend', 'pyro.ops.einsum.torch_log')
 
     # Split dims into plate dims, contraction dims, and dims to keep.
     plates = set(kwargs.pop('plates', ''))
     if not plates:
-        result = opt_einsum.contract(equation, *operands, backend='pyro.ops.einsum.torch_log')
+        result = opt_einsum.contract(equation, *operands, backend=backend)
         return (result,)
     output_dims = set(output)
 
@@ -509,7 +518,9 @@ def naive_ubersum(equation, *operands, **kwargs):
         flat_output = ''.join(unroll_dim(d, dict(zip(local_dims, index)))
                               for d in output if d not in plates)
         flat_equation = ','.join(flat_inputs) + '->' + flat_output
-        flat_result = opt_einsum.contract(flat_equation, *flat_operands,
-                                          backend='pyro.ops.einsum.torch_log')
+        flat_result = opt_einsum.contract(flat_equation, *flat_operands, backend=backend)
+        if not local_dims:
+            result = flat_result
+            break
         _select(result, offsets, index).copy_(flat_result)
     return (result,)
