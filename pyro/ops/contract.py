@@ -15,8 +15,8 @@ from pyro.util import ignore_jit_warnings
 
 def _check_plates_are_sensible(output_dims, nonoutput_ordinal):
     if output_dims and nonoutput_ordinal:
-        raise ValueError(u"It is nonsensical to preserve a batched dim without preserving "
-                         u"all of that dim's batch dims, but found '{}' without '{}'"
+        raise ValueError(u"It is nonsensical to preserve a plated dim without preserving "
+                         u"all of that dim's plates, but found '{}' without '{}'"
                          .format(output_dims, ','.join(nonoutput_ordinal)))
 
 
@@ -263,12 +263,12 @@ def contract_to_tensor(tensor_tree, sum_dims, target_ordinal=None, target_dims=N
 
 def ubersum(equation, *operands, **kwargs):
     """
-    Generalized batched sum-product algorithm via tensor message passing.
+    Generalized plated sum-product algorithm via tensor variable elimination.
 
     This generalizes :func:`~pyro.ops.einsum.contract` in two ways:
 
     1.  Multiple outputs are allowed, and intermediate results can be shared.
-    2.  Inputs and outputs can be batched along symbols given in ``plates``;
+    2.  Inputs and outputs can be plated along symbols given in ``plates``;
         reductions along ``plates`` are product reductions.
 
     The best way to understand this function is to try the examples below,
@@ -284,14 +284,14 @@ def ubersum(equation, *operands, **kwargs):
         z2 = contract('ab,bc->b', x, y, backend=backend)
         z3 = contract('ab,bc->c', x, y, backend=backend)
 
-    To illustrate batched inputs, note that the following are equivalent::
+    To illustrate plated inputs, note that the following are equivalent::
 
         assert len(x) == 3 and len(y) == 3
         z = ubersum('ab,ai,bi->b', w, x, y, plates='i')
 
         z = contract('ab,a,a,a,b,b,b->b', w, *x, *y, backend=backend)
 
-    When a sum dimension `a` always appears with a batch dimension `i`,
+    When a sum dimension `a` always appears with a plate dimension `i`,
     then `a` corresponds to a distinct symbol for each slice of `a`. Thus
     the following are equivalent::
 
@@ -301,7 +301,7 @@ def ubersum(equation, *operands, **kwargs):
         z = contract('a,b,c,a,b,c->', *x, *y, backend=backend)
 
     When such a sum dimension appears in the output, it must be
-    accompanied by all of its batch dimensions, e.g. the following are
+    accompanied by all of its plate dimensions, e.g. the following are
     equivalent::
 
         assert len(x) == 3 and len(y) == 3
@@ -312,7 +312,7 @@ def ubersum(equation, *operands, **kwargs):
         z2 = contract('ab,ac,ad,ab,ac,ad->d', *x, *y, backend=backend)
         z = torch.stack([z0, z1, z2])
 
-    Note that each batch slice through the output is multilinear in all batch
+    Note that each plate slice through the output is multilinear in all plate
     slices through all inptus, thus e.g. batch matrix multiply would be
     implemented *without* ``plates``, so the following are all equivalent::
 
@@ -333,13 +333,13 @@ def ubersum(equation, *operands, **kwargs):
     :param dict cache: An optional :func:`~opt_einsum.shared_intermediates`
         cache.
     :param bool modulo_total: Optionally allow ubersum to arbitrarily scale
-        each result batch, which can significantly reduce computation. This is
-        safe to set whenever each result batch denotes a nonnormalized
+        each result plate, which can significantly reduce computation. This is
+        safe to set whenever each result plate denotes a nonnormalized
         probability distribution whose total is not of interest.
     :return: a tuple of tensors of requested shape, one entry per output.
     :rtype: tuple
     :raises ValueError: if tensor sizes mismatch or an output requests a
-        batched dim without that dim's batch dims.
+        plated dim without that dim's plates.
     :raises NotImplementedError: if contraction would have cost exponential in
         the size of any input tensor.
     """
@@ -369,7 +369,7 @@ def ubersum(equation, *operands, **kwargs):
     assert all(isinstance(x, torch.Tensor) for x in operands)
     if not modulo_total and any(outputs):
         raise NotImplementedError('Try setting modulo_total=True and ensuring that your use case '
-                                  'allows an arbitrary scale factor on each result batch.')
+                                  'allows an arbitrary scale factor on each result plate.')
     if len(operands) != len(set(operands)):
         operands = [x[...] for x in operands]  # ensure tensors are unique
 
@@ -415,12 +415,12 @@ def _select(tensor, dims, indices):
     return tensor
 
 
-class _DimFlattener(object):
+class _DimUnroller(object):
     """
-    Object to map batched dims to batches of flat dims.
+    Object to map plated dims to collections of unrolled dims.
 
     :param dict dim_to_ordinal: a mapping from contraction dim to the set of
-        batch dims over which the contraction dim is batched.
+        plates over which the contraction dim is plated.
     """
     def __init__(self, dim_to_ordinal):
         self._plates = {d: tuple(sorted(ordinal)) for d, ordinal in dim_to_ordinal.items()}
@@ -429,11 +429,11 @@ class _DimFlattener(object):
 
     def __call__(self, dim, indices):
         """
-        Converts a batched dim + batch indices to a flattened dim.
+        Converts a plate dim + plate indices to a unrolled dim.
 
-        :param str dim: a batched dimension to flatten
-        :param dict indices: a mapping from batch dimension to int
-        :return: a flattened dim
+        :param str dim: a plate dimension to unroll
+        :param dict indices: a mapping from plate dimension to int
+        :return: a unrolled dim
         :rtype: str
         """
         plate = self._plates.get(dim, ())
@@ -448,7 +448,7 @@ class _DimFlattener(object):
 
 def naive_ubersum(equation, *operands, **kwargs):
     """
-    Naive reference implementation of :func:`ubersum`.
+    Naive reference implementation of :func:`ubersum` via unrolling.
 
     This implementation should never raise ``NotImplementedError``.
     This implementation should agree with :func:`ubersum` whenver
@@ -463,7 +463,7 @@ def naive_ubersum(equation, *operands, **kwargs):
     output, = outputs
     inputs = inputs.split(',')
 
-    # Split dims into batch dims, contraction dims, and dims to keep.
+    # Split dims into plate dims, contraction dims, and dims to keep.
     plates = set(kwargs.pop('plates', ''))
     if not plates:
         result = opt_einsum.contract(equation, *operands, backend='pyro.ops.einsum.torch_log')
@@ -479,8 +479,8 @@ def naive_ubersum(equation, *operands, **kwargs):
                 raise ValueError(u"Dimension size mismatch at dim '{}': {} vs {}"
                                  .format(dim, size, old))
 
-    # Compute batch context for each non-batch dim, by convention the
-    # intersection over all batch contexts of tensors in which the dim appears.
+    # Compute plate context for each non-plate dim, by convention the
+    # intersection over all plate contexts of tensors in which the dim appears.
     dim_to_ordinal = {}
     for dims in map(set, inputs):
         ordinal = dims & plates
@@ -489,24 +489,24 @@ def naive_ubersum(equation, *operands, **kwargs):
     for dim in output_dims - plates:
         _check_plates_are_sensible({dim}, dim_to_ordinal[dim] - output_dims)
 
-    # Flatten by replicating along batch dimensions.
-    flatten_dim = _DimFlattener(dim_to_ordinal)
+    # Unroll by replicating along plate dimensions.
+    unroll_dim = _DimUnroller(dim_to_ordinal)
     flat_inputs = []
     flat_operands = []
     for input_, operand in zip(inputs, operands):
         local_dims = [d for d in input_ if d in plates]
         offsets = [input_.index(d) - len(input_) for d in local_dims]
         for index in itertools.product(*(range(sizes[d]) for d in local_dims)):
-            flat_inputs.append(''.join(flatten_dim(d, dict(zip(local_dims, index)))
+            flat_inputs.append(''.join(unroll_dim(d, dict(zip(local_dims, index)))
                                        for d in input_ if d not in plates))
             flat_operands.append(_select(operand, offsets, index))
 
-    # Defer to unbatched einsum.
+    # Defer to unplated einsum.
     result = operands[0].new_empty(torch.Size(sizes[d] for d in output))
     local_dims = [d for d in output if d in plates]
     offsets = [output.index(d) - len(output) for d in local_dims]
     for index in itertools.product(*(range(sizes[d]) for d in local_dims)):
-        flat_output = ''.join(flatten_dim(d, dict(zip(local_dims, index)))
+        flat_output = ''.join(unroll_dim(d, dict(zip(local_dims, index)))
                               for d in output if d not in plates)
         flat_equation = ','.join(flat_inputs) + '->' + flat_output
         flat_result = opt_einsum.contract(flat_equation, *flat_operands,
