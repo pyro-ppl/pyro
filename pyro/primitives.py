@@ -273,9 +273,9 @@ def module(name, nn_module, update_module_params=False):
 
 
 def random_module(name, nn_module, prior, *args, **kwargs):
-    """
+    r"""
     Places a prior over the parameters of the module `nn_module`.
-    Returns a distribution (callable) over `nn.Module`s, which
+    Returns a distribution (callable) over `nn.Module`\s, which
     upon calling returns a sampled `nn.Module`.
 
     See the `Bayesian Regression tutorial <http://pyro.ai/examples/bayesian_regression.html>`_

@@ -1,4 +1,4 @@
-Sprase Gamma Deep Exponential Family
+Sparse Gamma Deep Exponential Family
 ====================================
 
 `View sparse_gamma_def.py on github`__

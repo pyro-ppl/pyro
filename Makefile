@@ -22,7 +22,7 @@ scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python tutorial/source/cleannb.py
 
 doctest: FORCE
-	pytest -p tests.doctest_fixtures --doctest-modules -o filterwarnings=ignore pyro
+	python -m pytest -p tests.doctest_fixtures --doctest-modules -o filterwarnings=ignore pyro
 
 format: FORCE
 	isort --recursive *.py pyro/ examples/ tests/ profiler/*.py docs/source/conf.py

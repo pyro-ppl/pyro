@@ -20,9 +20,7 @@ def mark_jit(*args, **kwargs):
     jit_markers = kwargs.pop("marks", [])
     jit_markers += [
         pytest.mark.skipif('CI' in os.environ,
-                           reason='slow test'),
-        pytest.mark.skipif('CUDA_TEST' in os.environ,
-                           reason='https://github.com/uber/pyro/issues/1419')
+                           reason='to reduce running time on CI')
     ]
     kwargs["marks"] = jit_markers
     return pytest.param(*args, **kwargs)
@@ -191,9 +189,7 @@ def test_logistic_regression(step_size, trajectory_length, num_steps,
     assert_equal(rmse(true_coefs, beta_posterior.mean).item(), 0.0, prec=0.1)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True, marks=[
-    pytest.mark.skip(reason="https://github.com/uber/pyro/issues/1487")])],
-                         ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_dirichlet_categorical(jit):
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
@@ -228,10 +224,7 @@ def test_beta_bernoulli(jit):
     assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True, marks=[
-    pytest.mark.skip(reason="https://github.com/uber/pyro/issues/1487")])],
-                         ids=jit_idfn)
-def test_gamma_normal(jit):
+def test_gamma_normal():
     def model(data):
         rate = torch.tensor([1.0, 1.0])
         concentration = torch.tensor([1.0, 1.0])
@@ -242,7 +235,7 @@ def test_gamma_normal(jit):
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
     hmc_kernel = HMC(model, trajectory_length=1, step_size=0.03, adapt_step_size=False,
-                     jit_compile=jit, ignore_jit_warnings=True)
+                     jit_compile=True, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal(['p_latent']).empirical['p_latent']
     assert_equal(posterior.mean, true_std, prec=0.05)
@@ -267,4 +260,28 @@ def test_bernoulli_latent_model(jit):
                      jit_compile=jit, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal("y_prob").empirical["y_prob"].mean
-    assert_equal(posterior, y_prob, prec=0.05)
+    assert_equal(posterior, y_prob, prec=0.06)
+
+
+def test_initial_trace(monkeypatch):
+    dim = 3
+    data = torch.randn(2000, dim)
+    true_coefs = torch.arange(1., dim + 1.)
+    labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
+    # mock values to replay - from right to left
+    trace_log_prob_replay = [-5, -5, float('NaN'), float('Inf')]
+
+    def model(data):
+        coefs_mean = torch.zeros(dim)
+        coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(dim)))
+        y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
+        return y
+
+    def tr_log_prob(trace, values=trace_log_prob_replay):
+        return values.pop()
+
+    hmc_kernel = HMC(model, adapt_step_size=False)
+    monkeypatch.setattr(hmc_kernel, '_compute_trace_log_prob', tr_log_prob)
+    hmc_kernel.setup(0, data)
+    hmc_kernel.initial_trace
+    assert len(trace_log_prob_replay) == 0

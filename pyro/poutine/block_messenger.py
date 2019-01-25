@@ -104,12 +104,12 @@ class BlockMessenger(Messenger):
 
     See the constructor for details.
 
-    :param: hide_fn: function that takes a site and returns True to hide the site
-      or False/None to expose it.  If specified, all other parameters are ignored.
-      Only specify one of hide_fn or expose_fn, not both.
-    :param: expose_fn: function that takes a site and returns True to expose the site
-      or False/None to hide it.  If specified, all other parameters are ignored.
-      Only specify one of hide_fn or expose_fn, not both.
+    :param hide_fn: function that takes a site and returns True to hide the site
+        or False/None to expose it.  If specified, all other parameters are ignored.
+        Only specify one of hide_fn or expose_fn, not both.
+    :param expose_fn: function that takes a site and returns True to expose the site
+        or False/None to hide it.  If specified, all other parameters are ignored.
+        Only specify one of hide_fn or expose_fn, not both.
     :param bool hide_all: hide all sites
     :param bool expose_all: expose all sites normally
     :param list hide: list of site names to hide, rest will be exposed normally

@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 import torch
 import warnings
 
-from pyro.distributions.util import logsumexp
 import pyro.poutine as poutine
 
 from .abstract_infer import TracePosterior
@@ -54,7 +53,7 @@ class Importance(TracePosterior):
         if self.log_weights:
             log_w = torch.tensor(self.log_weights)
             log_num_samples = torch.log(torch.tensor(self.num_samples * 1.))
-            return logsumexp(log_w - log_num_samples, 0)
+            return torch.logsumexp(log_w - log_num_samples, 0)
         else:
             warnings.warn("The log_weights list is empty, can not compute normalizing constant estimate.")
 
@@ -64,7 +63,7 @@ class Importance(TracePosterior):
         """
         if self.log_weights:
             log_w = torch.tensor(self.log_weights)
-            log_w_norm = log_w - logsumexp(log_w, 0)
+            log_w_norm = log_w - torch.logsumexp(log_w, 0)
             return log_w_norm if log_scale else torch.exp(log_w_norm)
         else:
             warnings.warn("The log_weights list is empty. There is nothing to normalize.")
@@ -75,7 +74,7 @@ class Importance(TracePosterior):
         """
         if self.log_weights:
             log_w_norm = self.get_normalized_weights(log_scale=True)
-            ess = torch.exp(-logsumexp(2*log_w_norm, 0))
+            ess = torch.exp(-torch.logsumexp(2*log_w_norm, 0))
         else:
             warnings.warn("The log_weights list is empty, effective sample size is zero.")
             ess = 0

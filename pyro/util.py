@@ -261,7 +261,13 @@ def check_site_shape(site, max_plate_nesting):
                 '- .to_event(...) the distribution being sampled',
                 '- .permute() data dimensions']))
 
-    # TODO Check parallel dimensions on the left of max_plate_nesting.
+    # Check parallel dimensions on the left of max_plate_nesting.
+    enum_dim = site["infer"].get("_enumerate_dim")
+    if enum_dim is not None:
+        if len(site["fn"].batch_shape) >= -enum_dim and site["fn"].batch_shape[enum_dim] != 1:
+            raise ValueError('\n  '.join([
+                'Enumeration dim conflict at site "{}"'.format(site["name"]),
+                'Try increasing pyro.markov history size']))
 
 
 def _are_independent(counters1, counters2):
