@@ -277,7 +277,7 @@ def test_contract_tensor_tree(example):
                 assert term.shape[frame.dim] == frame.size
 
 
-# Let abcde be enum dims and ijk be batch dims.
+# Let abcde be enum dims and ijk be plates.
 UBERSUM_EXAMPLES = [
     ('->', ''),
     ('a->,a', ''),
@@ -681,11 +681,11 @@ UBERSUM_BATCH_ERRORS = [
 
 @pytest.mark.parametrize('equation,plates', UBERSUM_BATCH_ERRORS)
 @pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
-def test_ubersum_batch_error(impl, equation, plates):
+def test_ubersum_plate_error(impl, equation, plates):
     inputs, outputs = equation.split('->')
     operands = [torch.randn(torch.Size((2,) * len(input_)))
                 for input_ in inputs.split(',')]
-    with pytest.raises(ValueError, match='It is nonsensical to preserve a batched dim'):
+    with pytest.raises(ValueError, match='It is nonsensical to preserve a plated dim'):
         impl(equation, *operands, plates=plates, modulo_total=True)
 
 
