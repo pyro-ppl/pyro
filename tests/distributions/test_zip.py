@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from pyro.distributions import ZeroInflatedPoisson, Poisson, Delta
-from tests.common import assert_tensors_equal
+from tests.common import assert_close
 
 
 @pytest.mark.parametrize('rate', [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
@@ -15,7 +15,7 @@ def test_zip_0_gate(rate):
     s = pois.sample((20,))
     zip_prob = zip_.log_prob(s)
     pois_prob = pois.log_prob(s)
-    assert_tensors_equal(zip_prob, pois_prob)
+    assert_close(zip_prob, pois_prob)
 
 
 @pytest.mark.parametrize('rate', [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
@@ -26,7 +26,7 @@ def test_zip_1_gate(rate):
     s = torch.tensor([0., 1.])
     zip_prob = zip_.log_prob(s)
     delta_prob = delta.log_prob(s)
-    assert_tensors_equal(zip_prob, delta_prob)
+    assert_close(zip_prob, delta_prob)
 
 
 @pytest.mark.parametrize('gate', [0.0, 0.25, 0.5, 0.75, 1.0])
@@ -39,5 +39,5 @@ def test_zip_mean_variance(gate, rate):
     estimated_mean = s.mean()
     expected_std = zip_.stddev
     estimated_std = s.std()
-    assert_tensors_equal(expected_mean, estimated_mean, prec=1e-02)
-    assert_tensors_equal(expected_std, estimated_std, prec=1e-02)
+    assert_close(expected_mean, estimated_mean, atol=1e-02)
+    assert_close(expected_std, estimated_std, atol=1e-02)

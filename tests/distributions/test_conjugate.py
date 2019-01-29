@@ -7,7 +7,7 @@ import torch
 
 import pyro.distributions as dist
 from pyro.distributions import BetaBinomial, GammaPoisson
-from tests.common import assert_equal
+from tests.common import assert_close
 
 
 @pytest.mark.parametrize("dist", [
@@ -20,7 +20,7 @@ def test_mean(dist):
     analytic_mean = dist.mean
     num_samples = 500000
     sample_mean = dist.sample((num_samples,)).mean(0)
-    assert_equal(sample_mean, analytic_mean, prec=0.01)
+    assert_close(sample_mean, analytic_mean, atol=0.01)
 
 
 @pytest.mark.parametrize("dist", [
@@ -33,7 +33,7 @@ def test_variance(dist):
     analytic_var = dist.variance
     num_samples = 500000
     sample_var = dist.sample((num_samples,)).var(0)
-    assert_equal(sample_var, analytic_var, prec=0.01)
+    assert_close(sample_var, analytic_var, atol=0.01)
 
 
 @pytest.mark.parametrize("dist, values", [
@@ -46,7 +46,7 @@ def test_log_prob_support(dist, values):
     if values is None:
         values = dist.enumerate_support()
     log_probs = dist.log_prob(values)
-    assert_equal(log_probs.logsumexp(0), torch.tensor(0.), prec=0.01)
+    assert_close(log_probs.logsumexp(0), torch.tensor(0.), atol=0.01)
 
 
 @pytest.mark.parametrize("total_count", [1, 2, 3, 10])
@@ -62,7 +62,7 @@ def test_beta_binomial_log_prob(total_count, shape):
     expected = log_probs.logsumexp(0) - math.log(num_samples)
 
     actual = BetaBinomial(concentration1, concentration0, total_count).log_prob(value)
-    assert_equal(actual, expected, prec=0.05)
+    assert_close(actual, expected, atol=0.05)
 
 
 @pytest.mark.parametrize("shape", [(1,), (3, 1), (2, 3, 1)])
@@ -76,5 +76,4 @@ def test_gamma_poisson_log_prob(shape):
     log_probs = dist.Poisson(poisson_rate).log_prob(value)
     expected = log_probs.logsumexp(0) - math.log(num_samples)
     actual = GammaPoisson(gamma_conc, gamma_rate).log_prob(value)
-    err = (expected - actual) / expected
-    assert_equal(err, torch.zeros(expected.shape), prec=0.05)
+    assert_close(actual, expected, rtol=0.05)
