@@ -11,7 +11,7 @@ import pyro.distributions as dist
 @add_metaclass(ABCMeta)
 class Feature(object):
     """
-    A hierchical mixture model for a single observed feature type.
+    A hierarchical mixture model for a single observed feature type.
 
     Feature models are intended as an adapter between latent categorical
     variables and observed variables of various other datatypes.  Feature
