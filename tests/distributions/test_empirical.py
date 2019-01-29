@@ -36,7 +36,7 @@ def test_unweighted_samples(batch_shape, event_shape, sample_shape, dtype):
     emp_samples = torch.arange(agg_dim_size, dtype=dtype)\
         .expand(batch_shape + event_shape + [agg_dim_size])\
         .permute(dim_ordering)
-    # initial wight assignment
+    # initial weight assignment
     weights = torch.ones(batch_shape + [agg_dim_size])
     empirical_dist = Empirical(emp_samples, weights)
     samples = empirical_dist.sample(sample_shape=torch.Size(sample_shape))
