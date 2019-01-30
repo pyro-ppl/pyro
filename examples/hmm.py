@@ -425,48 +425,48 @@ def model_5(sequences, lengths, args, batch_size=None, include_prior=True):
 #  the transition and emission probabilities as parameters (so they have no prior).
 
 def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
-        num_sequences, max_length, data_dim = sequences.shape
-        assert lengths.shape == (num_sequences,)
-        assert lengths.max() <= max_length
-        hidden_dim = args.hidden_dim
-        hidden = torch.arange(hidden_dim, dtype=torch.long)
+    num_sequences, max_length, data_dim = sequences.shape
+    assert lengths.shape == (num_sequences,)
+    assert lengths.max() <= max_length
+    hidden_dim = args.hidden_dim
+    hidden = torch.arange(hidden_dim, dtype=torch.long)
 
-        if not args.raftery_parameterization:
-            # Explicitly parameterize the full tensor of transition probabilities, which
-            # has hidden_dim cubed entries.
-            probs_x = pyro.param("probs_x", torch.rand(hidden_dim, hidden_dim, hidden_dim),
-                                 constraint=constraints.simplex)
-        else:
-            # Use the more parsimonious "Raftery" parameterization of
-            # the tensor of transition probabilities. See reference:
-            # Raftery, A. E. A model for high-order markov chains.
-            # Journal of the Royal Statistical Society. 1985.
-            probs_x1 = pyro.param("probs_x1", torch.rand(hidden_dim, hidden_dim),
-                                  constraint=constraints.simplex)
-            probs_x2 = pyro.param("probs_x2", torch.rand(hidden_dim, hidden_dim),
-                                  constraint=constraints.simplex)
-            mix_lambda = pyro.param("mix_lambda", torch.tensor(0.5), constraint=constraints.unit_interval)
-            # we use broadcasting to combine two tensors of shape (hidden_dim, hidden_dim) and
-            # (hidden_dim, 1, hidden_dim) to obtain a tensor of shape (hidden_dim, hidden_dim, hidden_dim)
-            probs_x = mix_lambda * probs_x1 + (1.0 - mix_lambda) * probs_x2.unsqueeze(-2)
+    if not args.raftery_parameterization:
+        # Explicitly parameterize the full tensor of transition probabilities, which
+        # has hidden_dim cubed entries.
+        probs_x = pyro.param("probs_x", torch.rand(hidden_dim, hidden_dim, hidden_dim),
+                             constraint=constraints.simplex)
+    else:
+        # Use the more parsimonious "Raftery" parameterization of
+        # the tensor of transition probabilities. See reference:
+        # Raftery, A. E. A model for high-order markov chains.
+        # Journal of the Royal Statistical Society. 1985.
+        probs_x1 = pyro.param("probs_x1", torch.rand(hidden_dim, hidden_dim),
+                              constraint=constraints.simplex)
+        probs_x2 = pyro.param("probs_x2", torch.rand(hidden_dim, hidden_dim),
+                              constraint=constraints.simplex)
+        mix_lambda = pyro.param("mix_lambda", torch.tensor(0.5), constraint=constraints.unit_interval)
+        # we use broadcasting to combine two tensors of shape (hidden_dim, hidden_dim) and
+        # (hidden_dim, 1, hidden_dim) to obtain a tensor of shape (hidden_dim, hidden_dim, hidden_dim)
+        probs_x = mix_lambda * probs_x1 + (1.0 - mix_lambda) * probs_x2.unsqueeze(-2)
 
-        probs_y = pyro.param("probs_y", torch.rand(hidden_dim, data_dim),
-                             constraint=constraints.unit_interval)
-        tones_plate = pyro.plate("tones", data_dim, dim=-1)
-        with pyro.plate("sequences", num_sequences, batch_size, dim=-2) as batch:
-            lengths = lengths[batch]
-            x_curr, x_prev = torch.tensor(0), torch.tensor(0)
-            # we need to pass the argument `history=2' to `pyro.markov()`
-            # since our model is now 2-markov
-            for t in pyro.markov(range(lengths.max()), history=2):
-                with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
-                    probs_x_t = probs_x[x_prev.unsqueeze(-1), x_curr.unsqueeze(-1), hidden]
-                    x_prev, x_curr = x_curr, pyro.sample("x_{}".format(t), dist.Categorical(probs_x_t),
-                                                         infer={"enumerate": "parallel"})
-                    with tones_plate:
-                        probs_y_t = probs_y[x_curr.squeeze(-1)]
-                        pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y_t),
-                                    obs=sequences[batch, t])
+    probs_y = pyro.param("probs_y", torch.rand(hidden_dim, data_dim),
+                         constraint=constraints.unit_interval)
+    tones_plate = pyro.plate("tones", data_dim, dim=-1)
+    with pyro.plate("sequences", num_sequences, batch_size, dim=-2) as batch:
+        lengths = lengths[batch]
+        x_curr, x_prev = torch.tensor(0), torch.tensor(0)
+        # we need to pass the argument `history=2' to `pyro.markov()`
+        # since our model is now 2-markov
+        for t in pyro.markov(range(lengths.max()), history=2):
+            with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
+                probs_x_t = probs_x[x_prev.unsqueeze(-1), x_curr.unsqueeze(-1), hidden]
+                x_prev, x_curr = x_curr, pyro.sample("x_{}".format(t), dist.Categorical(probs_x_t),
+                                                     infer={"enumerate": "parallel"})
+                with tones_plate:
+                    probs_y_t = probs_y[x_curr.squeeze(-1)]
+                    pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y_t),
+                                obs=sequences[batch, t])
 
 
 models = {name[len('model_'):]: model
