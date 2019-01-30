@@ -37,7 +37,7 @@ class Empirical(TorchDistribution):
     >>> with pyro.validation_enabled():
     ...     emp_dist.log_prob(batch_sample).shape
     Traceback (most recent call last):
-     ...
+    ...
     ValueError: ``value.shape`` must be torch.Size([2, 10])
 
     :param torch.Tensor samples: samples from the empirical distribution.
