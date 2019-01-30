@@ -198,7 +198,9 @@ def assert_close(x, y, atol=1e-7, rtol=0, msg=''):
             assert_close(x_val, y[key], atol=atol, rtol=rtol,
                          msg='At key{}: {} vs {}'.format(key, x_val, y[key]))
     elif is_iterable(x) and is_iterable(y):
-        assert list(x) == approx(list(y), abs=atol, rel=rtol), msg
+        assert len(x) == len(y), msg
+        for xi, yi in zip(x, y):
+            assert_close(xi, yi, atol=atol, rtol=rtol, msg='{} vs {}'.format(xi, yi))
     else:
         assert x == y, msg
 
@@ -229,11 +231,11 @@ def assert_equal(x, y, prec=1e-5, msg=''):
     elif isinstance(x, dict):
         assert set(x.keys()) == set(y.keys())
         for key, x_val in x.items():
-            assert_equal(x_val, y[key], prec=prec, msg='At key{}: {} vs {}'.format(key, x_val, y[key]))
+            assert_equal(x_val, y[key], prec=0., msg='At key{}: {} vs {}'.format(key, x_val, y[key]))
+    elif isinstance(x, str):
+        assert x == y, msg
     elif is_iterable(x) and is_iterable(y):
-        assert len(x) == len(y), msg
-        for xi, yi in zip(x, y):
-            assert_equal(xi, yi, prec=prec, msg=msg)
+        assert list(x) == list(y), msg
     else:
         assert x == y, msg
 
