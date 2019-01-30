@@ -235,7 +235,9 @@ def assert_equal(x, y, prec=1e-5, msg=''):
     elif isinstance(x, str):
         assert x == y, msg
     elif is_iterable(x) and is_iterable(y):
-        assert list(x) == list(y), msg
+        assert len(x) == len(y), msg
+        for xi, yi in zip(x, y):
+            assert_equal(xi, yi, prec=0., msg='{} vs {}'.format(xi, yi))
     else:
         assert x == y, msg
 
