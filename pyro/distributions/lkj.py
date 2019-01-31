@@ -123,7 +123,7 @@ class LKJCholeskyFactor(TorchDistribution):
         if any(eta <= 0):
             raise ValueException("eta must be > 0")
         vector_size = (d * (d - 1)) // 2
-        alpha = eta + 0.5 * (d  - 1.0)
+        alpha = eta.add(0.5 * (d  - 1.0))
 
         concentrations = eta.new().expand(vector_size)
         i = 0
@@ -134,9 +134,36 @@ class LKJCholeskyFactor(TorchDistribution):
                 i += 1
         self._generating_distribution = Beta(concentrations, concentrations)
         self._transformation = LowerCholeskyCorrTransform()
+        self._eta = eta
+        self._d = d
+        self._lkj_constant = None
 
     def sample(self):
-        return self._transformation(self._generating_distribution.sample().mul(2) - 1.0)
+        return self._transformation(self._generating_distribution.sample().mul(2).add(- 1.0))
+
+    def lkj_constant(self, eta, K):
+        if self._lkj_constant is not None:
+            return self._lkj_constant
+
+        Km1 = K - 1
+
+        constant = torch.lgamma(eta.add(0.5 * Km1)).mul(Km1)
+
+        k = torch.linspace(start=1, end=Km1, steps=Km1, device=eta.device)
+        constant -= (k.mul(math.log(math.pi) * 0.5) + torch.lgamma(eta.add( 0.5 * (Km1 - k)))).sum()
+
+        self._lkj_constant = constant 
+        return constant
 
     def log_prob(self, x):
-        return ???
+        eta = self._eta
+
+        lp = lkj_constant(eta, x.shape[1])
+
+        Km1 = x.shape[1] - 1
+        log_diagonals = x.diag().tail(Km1).log()
+        values = torch.linspace(start=Km1 - 1, end=0, steps=km1, device=x.device) * log_diagonals
+
+        values += log_diagonals.mul(eta.mul(2).add(-2.0))
+
+        return values.sum() + lp
