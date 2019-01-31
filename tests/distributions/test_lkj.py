@@ -25,7 +25,7 @@ def test_tanh_transform(x_shape):
     y = transform(x)
 
     # test codomain
-    assert transform.codomain.check(y).all()
+    assert_tensors_equal(transform.codomain.check(y), torch.ones(x_shape))
 
     # test inv
     z = transform.inv(y)
@@ -33,7 +33,7 @@ def test_tanh_transform(x_shape):
 
     # test log_abs_det_jacobian
     log_det = transform.log_abs_det_jacobian(x, y)
-    assert log_det.shape == x.shape
+    assert log_det.shape == x_shape
     if x_shape == ():
         assert_tensors_equal(torch.autograd.grad(y, (x,), retain_graph=True)[0].abs().log(),
                              log_det, prec=0.0002)
