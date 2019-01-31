@@ -1,16 +1,34 @@
-from torch.distributions import Transform
-from torch.distributions import constraints
-from pyro.distributions import TorchDistribution
-from pyro.distributions import Beta
+from __future__ import absolute_import, division, print_function
+
 import math
 
-class _LowerCholeskyCorr(Constraint):
+from torch.distributions import constraints
+from torch.distributions.constraints import Constraint
+from torch.distributions.transforms import Transform
+
+from pyro.distributions import Beta, TorchDistribution
+
+
+class _CorrCholesky(Constraint):
+    """
+    Constrain to lower-triangular square matrices with positive diagonals and Euclidean
+    norm of each row is 1.
+    """
     def check(self, value):
-        # check if `value` diagonal is positive, and squared norm of each row is 1
+        value_tril = value.tril()
+        lower_triangular = (value_tril == value).view(value.shape[:-2] + (-1,)).min(-1)[0]
 
-lower_cholesky_corr = _LowerCholeskyCorr()
+        positive_diagonal = (value.diagonal(dim1=-2, dim2=-1) > 0).min(-1)[0]
 
-class LowerCholeskyCorrTransform(Transform):
+        unit_norm_row = ((value.pow(2).sum(-1) - 1).abs() < 1e-6).min(-1)[0]
+        return lower_triangular & positive_diagonal & unit_norm_row
+
+
+# TODO rename this to corr_cholesky if move upstream to pytorch
+corr_cholesky_constraint = _CorrCholesky()
+
+
+class CorrCholeskyTransform(Transform):
     """
     Transforms a vector of canonical partial correlations into the cholesky factor of
     a covariance matrix.
@@ -19,12 +37,12 @@ class LowerCholeskyCorrTransform(Transform):
     [-1, 1].
     """
     domain = constraints.interval(-1, 1)
-    codomain = constraints.lower_cholesky_corr
+    codomain = corr_cholesky_constraint
     bijective = True
     sign = +1
 
     def __eq__(self, other):
-        return isinstance(other, LowerCholeskyCorrTransform)
+        return isinstance(other, CorrCholeskyTransform)
 
     def _call(self, z):
         D = (1.0 + math.sqrt(1.0 + 8.0 * z.shape[0]))/2.0
@@ -75,7 +93,8 @@ class LowerCholeskyCorrTransform(Transform):
     def log_abs_det_jacobian(self, x, z):
         return (1 - x.tril(-1).pow(2).sum(1)).log().sum() * .5
 
-class UnconstrainedLowerCholeskyCorrTransform(LowerCholeskyCorrTransform):
+
+class UnconstrainedLowerCholeskyCorrTransform(CorrCholeskyTransform):
     """
     Transforms a vector of reals into the cholesky factor of
     a covariance matrix.
@@ -84,7 +103,7 @@ class UnconstrainedLowerCholeskyCorrTransform(LowerCholeskyCorrTransform):
     [-1, 1].
     """
     domain = constraints.real
-    codomain = constraints.lower_cholesky_corr
+    codomain = corr_cholesky_constraint
     bijective = True
     sign = +1
 
@@ -104,6 +123,7 @@ class UnconstrainedLowerCholeskyCorrTransform(LowerCholeskyCorrTransform):
         log_abs_det = transformation_part + tanh_jacobian
         return log_abs_det
 
+
 class LKJCholeskyFactor(TorchDistribution):
     """
     Generates cholesky factors of correlation matrices using an LKJ prior.
@@ -118,7 +138,7 @@ class LKJCholeskyFactor(TorchDistribution):
     :param torch.Tensor eta: A single positive number parameterizing the distribution.
     """
     def __init__(self, d, eta):
-        if ! is.tensor(eta):
+        if not torch.is_tensor(eta):
             eta = torch.FloatTensor([eta])
         if any(eta <= 0):
             raise ValueException("eta must be > 0")
@@ -133,7 +153,7 @@ class LKJCholeskyFactor(TorchDistribution):
                 concentrations[i] = alpha
                 i += 1
         self._generating_distribution = Beta(concentrations, concentrations)
-        self._transformation = LowerCholeskyCorrTransform()
+        self._transformation = CorrCholeskyTransform()
         self._eta = eta
         self._d = d
         self._lkj_constant = None
