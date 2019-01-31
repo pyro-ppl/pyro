@@ -2,17 +2,23 @@ from __future__ import absolute_import, division, print_function
 
 import math
 
-from torch.distributions import constraints
+import torch
+from torch.distributions import biject_to, constraints, transform_to
 from torch.distributions.constraints import Constraint
-from torch.distributions.transforms import Transform
+from torch.distributions.transforms import Transform, ComposeTransform
 
 from pyro.distributions import Beta, TorchDistribution
 
 
+########################################
+# Define constraint
+########################################
+
+
 class _CorrCholesky(Constraint):
     """
-    Constrain to lower-triangular square matrices with positive diagonals and Euclidean
-    norm of each row is 1.
+    Constrains to lower-triangular square matrices with positive diagonals and
+    Euclidean norm of each row is 1.
     """
     def check(self, value):
         value_tril = value.tril()
@@ -24,17 +30,43 @@ class _CorrCholesky(Constraint):
         return lower_triangular & positive_diagonal & unit_norm_row
 
 
-# TODO rename this to corr_cholesky if move upstream to pytorch
+# TODO rename this public interface to corr_cholesky if move upstream to pytorch
 corr_cholesky_constraint = _CorrCholesky()
 
 
-class CorrCholeskyTransform(Transform):
-    """
-    Transforms a vector of canonical partial correlations into the cholesky factor of
-    a covariance matrix.
+########################################
+# Define transforms
+########################################
 
-    Note that this transformation assumes that the vector of cpc's is already on the interval
-    [-1, 1].
+
+class _TanhTransform(Transform):
+    domain = constraints.real
+    codomain = constraints.interval(-1, 1)
+    bijective = True
+    sign = +1
+
+    def __eq__(self, other):
+        return isinstance(other, _TanhTransform)
+
+    def _call(self, x):
+        return x.tanh()
+
+    def _inverse(self, y):
+        return torch.log((1 + y) / (1 - y)) / 2
+
+    def log_abs_det_jacobian(self, x, y):
+        return (-2) * y.cosh().log()
+
+
+class _PartialCorrToCorrCholeskyTransform(Transform):
+    """
+    Transforms a vector of partial correlations into the cholesky factor of a
+    correlation matrix.
+
+    Reference:
+
+    [1] `Generating random correlation matrices based on vines and extended onion method`,
+    Daniel Lewandowski, Dorota Kurowicka, Harry Joe
     """
     domain = constraints.interval(-1, 1)
     codomain = corr_cholesky_constraint
@@ -42,7 +74,7 @@ class CorrCholeskyTransform(Transform):
     sign = +1
 
     def __eq__(self, other):
-        return isinstance(other, CorrCholeskyTransform)
+        return isinstance(other, _PartialCorrToCorrCholeskyTransform)
 
     def _call(self, z):
         D = (1.0 + math.sqrt(1.0 + 8.0 * z.shape[0]))/2.0
@@ -94,34 +126,25 @@ class CorrCholeskyTransform(Transform):
         return (1 - x.tril(-1).pow(2).sum(1)).log().sum() * .5
 
 
-class UnconstrainedLowerCholeskyCorrTransform(CorrCholeskyTransform):
+class CorrCholeskyTransform(ComposeTransform):
     """
-    Transforms a vector of reals into the cholesky factor of
-    a covariance matrix.
-
-    Note that this transformation does not assume that the vector of cpc's is already on the interval
-    [-1, 1].
+    Transforms a real vector into the cholesky factor of a correlation matrix.
     """
-    domain = constraints.real
-    codomain = corr_cholesky_constraint
-    bijective = True
-    sign = +1
+    def __init__(self):
+        parts = [_TanhTransform(), _PartialCorrToCorrCholeskyTransform()]
+        super(CorrCholeskyTransform, self).__init__(parts)
 
-    def __eq__(self, other):
-        return isinstance(other, UnconstrainedLowerCholeskyCorrTransform)
 
-    def _call(self, y):
-        return super(UnconstrainedLowerCholeskyCorrTransform, self)(y.tanh())
+# register transform to global store
+@biject_to.register(corr_cholesky_constraint)
+@transform_to.register(corr_cholesky_constraint)
+def _transform_to_corr_cholesky(constraint):
+    return CorrCholeskyTransform()
 
-    def _inverse(self, x):
-        z = super(UnconstrainedLowerCholeskyCorrTransform, self)(x)
-        return torch.log((z + 1) / (1 - z))/2
 
-    def log_abs_det_jacobian(self, x, y):
-        transformation_part = super(UnconstrainedLowerCholeskyCorrTransform, self)(x, y.tanh())
-        tanh_jacobian = y.cosh().log().sum() * -2
-        log_abs_det = transformation_part + tanh_jacobian
-        return log_abs_det
+########################################
+# Define distribution
+########################################
 
 
 class LKJCholeskyFactor(TorchDistribution):
@@ -137,6 +160,10 @@ class LKJCholeskyFactor(TorchDistribution):
     :param int d: Dimensionality of the matrix
     :param torch.Tensor eta: A single positive number parameterizing the distribution.
     """
+    arg_constraints = {"eta": constraints.positive}
+    support = corr_cholesky_constraint
+    has_rsample = True
+
     def __init__(self, d, eta):
         if not torch.is_tensor(eta):
             eta = torch.FloatTensor([eta])
@@ -158,7 +185,7 @@ class LKJCholeskyFactor(TorchDistribution):
         self._d = d
         self._lkj_constant = None
 
-    def sample(self):
+    def rsample(self):
         return self._transformation(self._generating_distribution.sample().mul(2).add(- 1.0))
 
     def lkj_constant(self, eta, K):
