@@ -98,6 +98,13 @@ MaskedMixture
     :undoc-members:
     :show-inheritance:
 
+MixtureOfDiagNormals
+------------------------------------
+.. autoclass:: pyro.distributions.MixtureOfDiagNormals
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 MixtureOfDiagNormalsSharedCovariance
 ------------------------------------
 .. autoclass:: pyro.distributions.MixtureOfDiagNormalsSharedCovariance
