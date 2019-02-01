@@ -64,12 +64,39 @@ class VonMises(TorchDistribution):
         self.loc, self.concentration = broadcast_all(loc, concentration)
         batch_shape = self.loc.shape
         event_shape = torch.Size()
+
+        # Parameters for sampling
+        tau = 1 + (1 + 4 * self.concentration ** 2).sqrt() 
+        rho = (tau - (2 * tau).sqrt()) / (2 * self.concentration)
+        self._proposal_r = (1 + rho ** 2) / (2 * rho)
+
         super(VonMises, self).__init__(batch_shape, event_shape, validate_args)
 
     def log_prob(self, value):
         log_prob = self.concentration * torch.cos(value - self.loc)
         log_prob = log_prob - math.log(2 * math.pi) - _log_modified_bessel_fn_0(self.concentration)
         return log_prob
+
+    def sample(self, sample_shape=torch.Size()):
+        # Based on:
+        # Best, D. J., and Nicholas I. Fisher.
+        # "Efficient simulation of the von Mises distribution." Applied Statistics (1979): 152-157.
+        shape = self._extended_shape(sample_shape)
+        x = torch.empty(shape, dtype=self.loc.dtype, device=self.loc.device)
+        done = torch.zeros(shape, dtype=self.loc.dtype, device=self.loc.device).byte()
+        while not done.all():
+            u1 = torch.empty(shape, dtype=self.loc.dtype, device=self.loc.device).uniform_()
+            u2 = torch.empty(shape, dtype=self.loc.dtype, device=self.loc.device).uniform_()
+            u3 = torch.empty(shape, dtype=self.loc.dtype, device=self.loc.device).uniform_()
+            z = torch.cos(math.pi * u1)
+            f = (1 + self._proposal_r * z) / (self._proposal_r + z)
+            c = self.concentration * (self._proposal_r - f)
+            accept = (c / u2).log() + 1 - c >= 0
+            if accept.any():
+                x[accept] = torch.sign(u3[accept] - 0.5) * torch.acos(f[accept])
+                done |= accept
+        return (x + math.pi + self.loc) % (2 * math.pi) - math.pi
+
 
     def expand(self, batch_shape):
         try:
