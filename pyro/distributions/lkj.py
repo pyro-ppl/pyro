@@ -4,7 +4,7 @@ import math
 
 import torch
 from torch.distributions import biject_to, constraints, transform_to
-from torch.distributions.constraints import Constraint
+from torch.distributions.constraints import Constraint, lower_cholesky
 from torch.distributions.transforms import Transform, ComposeTransform
 
 from pyro.distributions import Beta, TorchDistribution
@@ -21,13 +21,10 @@ class _CorrCholesky(Constraint):
     Euclidean norm of each row is 1.
     """
     def check(self, value):
-        value_tril = value.tril()
-        lower_triangular = (value_tril == value).view(value.shape[:-2] + (-1,)).min(-1)[0]
-
-        positive_diagonal = (value.diagonal(dim1=-2, dim2=-1) > 0).min(-1)[0]
+        if not lower_cholesky().check(value): return False
 
         unit_norm_row = ((value.pow(2).sum(-1) - 1).abs() < 1e-6).min(-1)[0]
-        return lower_triangular & positive_diagonal & unit_norm_row
+        return unit_norm_row
 
 
 # TODO rename this public interface to corr_cholesky if move upstream to pytorch
@@ -199,7 +196,7 @@ class LKJCholeskyFactor(TorchDistribution):
         k = torch.linspace(start=1, end=Km1, steps=Km1, device=eta.device)
         constant -= (k.mul(math.log(math.pi) * 0.5) + torch.lgamma(eta.add( 0.5 * (Km1 - k)))).sum()
 
-        self._lkj_constant = constant 
+        self._lkj_constant = constant
         return constant
 
     def log_prob(self, x):
