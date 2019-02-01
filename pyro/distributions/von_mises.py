@@ -66,7 +66,7 @@ class VonMises(TorchDistribution):
         event_shape = torch.Size()
 
         # Parameters for sampling
-        tau = 1 + (1 + 4 * self.concentration ** 2).sqrt() 
+        tau = 1 + (1 + 4 * self.concentration ** 2).sqrt()
         rho = (tau - (2 * tau).sqrt()) / (2 * self.concentration)
         self._proposal_r = (1 + rho ** 2) / (2 * rho)
 
@@ -96,7 +96,6 @@ class VonMises(TorchDistribution):
                 x[accept] = torch.sign(u3[accept] - 0.5) * torch.acos(f[accept])
                 done |= accept
         return (x + math.pi + self.loc) % (2 * math.pi) - math.pi
-
 
     def expand(self, batch_shape):
         try:
