@@ -70,7 +70,7 @@ def _fit_params_from_samples(samples, n_iter=50):
 
     def bfgs_closure():
         bfgs.zero_grad()
-        obj = (_log_modified_bessel_fn(kappa, order=1) 
+        obj = (_log_modified_bessel_fn(kappa, order=1)
                - _log_modified_bessel_fn(kappa, order=0)).exp()
         obj = (obj - samples_r).abs()
         obj.backward()
