@@ -17,22 +17,31 @@ def _eval_poly(y, coef):
     return result
 
 
-_COEF_SMALL = [1.0, 3.5156229, 3.0899424, 1.2067492, 0.2659732, 0.360768e-1, 0.45813e-2]
-_COEF_LARGE = [0.39894228, 0.1328592e-1, 0.225319e-2, -0.157565e-2, 0.916281e-2,
-               -0.2057706e-1, 0.2635537e-1, -0.1647633e-1,  0.392377e-2]
+_I0_COEF_SMALL = [1.0, 3.5156229, 3.0899424, 1.2067492, 0.2659732, 0.360768e-1, 0.45813e-2]
+_I0_COEF_LARGE = [0.39894228, 0.1328592e-1, 0.225319e-2, -0.157565e-2, 0.916281e-2,
+                  -0.2057706e-1, 0.2635537e-1, -0.1647633e-1,  0.392377e-2]
+_I1_COEF_SMALL = [0.5, 0.87890594, 0.51498869, 0.15084934, 0.2658733e-1, 0.301532e-2, 0.32411e-3]
+_I1_COEF_LARGE = [0.39894228, -0.3988024e-1, -0.362018e-2, 0.163801e-2, -0.1031555e-1,
+                  0.2282967e-1, -0.2895312e-1, 0.1787654e-1, -0.420059e-2]
 
 
-def _log_modified_bessel_fn_0(x):
+def _log_modified_bessel_fn(x, order=0):
     """
-    Returns ``log(I0(x))`` for ``x > 0``.
+    Returns ``log(I_order(x))`` for ``x > 0``,
+    where `order` is either 0 or 1.
     """
+    assert order == 0 or order == 1
+
+    small_coeff = [_I0_COEF_SMALL, _I1_COEF_SMALL]
+    large_coeff = [_I0_COEF_LARGE, _I1_COEF_LARGE]
+
     # compute small solution
     y = (x / 3.75).pow(2)
-    small = _eval_poly(y, _COEF_SMALL).log()
+    small = _eval_poly(y, small_coeff[order]).log()
 
     # compute large solution
     y = 3.75 / x
-    large = x - 0.5 * x.log() + _eval_poly(y, _COEF_LARGE).log()
+    large = x - 0.5 * x.log() + _eval_poly(y, large_coeff[order]).log()
 
     mask = (x < 3.75)
     result = large
@@ -65,6 +74,10 @@ class VonMises(TorchDistribution):
         batch_shape = self.loc.shape
         event_shape = torch.Size()
 
+        # Moments
+        self._variance = 1 - (_log_modified_bessel_fn(self.concentration, order=1) -
+                              _log_modified_bessel_fn(self.concentration, order=0)).exp()
+
         # Parameters for sampling
         tau = 1 + (1 + 4 * self.concentration ** 2).sqrt()
         rho = (tau - (2 * tau).sqrt()) / (2 * self.concentration)
@@ -74,7 +87,7 @@ class VonMises(TorchDistribution):
 
     def log_prob(self, value):
         log_prob = self.concentration * torch.cos(value - self.loc)
-        log_prob = log_prob - math.log(2 * math.pi) - _log_modified_bessel_fn_0(self.concentration)
+        log_prob = log_prob - math.log(2 * math.pi) - _log_modified_bessel_fn(self.concentration, order=0)
         return log_prob
 
     def sample(self, sample_shape=torch.Size()):
@@ -105,3 +118,11 @@ class VonMises(TorchDistribution):
             loc = self.loc.expand(batch_shape)
             concentration = self.concentration.expand(batch_shape)
             return type(self)(loc, concentration, validate_args=validate_args)
+
+    @property
+    def mean(self):
+        return self.loc
+
+    @property
+    def variance(self):
+        return self._variance
