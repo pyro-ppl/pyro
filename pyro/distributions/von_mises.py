@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import math
 
 import torch
-from torch import optim
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
@@ -38,7 +37,10 @@ def _log_modified_bessel_fn(x, order=0):
 
     # compute small solution
     y = (x / 3.75).pow(2)
-    small = _eval_poly(y, _COEF_SMALL[order]).log()
+    small = _eval_poly(y, _COEF_SMALL[order])
+    if order == 1:
+        small = x.abs() * small
+    small = small.log()
 
     # compute large solution
     y = 3.75 / x
@@ -49,36 +51,6 @@ def _log_modified_bessel_fn(x, order=0):
     if mask.any():
         result[mask] = small[mask]
     return result
-
-
-def _fit_params_from_samples(samples, n_iter=50):
-    assert samples.dim() == 1
-    samples_count = samples.size(0)
-    samples_cs = samples.cos().sum()
-    samples_ss = samples.sin().sum()
-    mu = torch.atan2(samples_ss / samples_count, samples_cs / samples_count)
-    samples_r = (samples_cs ** 2 + samples_ss ** 2).sqrt() / samples_count
-    # From Banerjee, Arindam, et al.
-    # "Clustering on the unit hypersphere using von Mises-Fisher distributions."
-    # Journal of Machine Learning Research 6.Sep (2005): 1345-1382.
-    # By mic (https://stats.stackexchange.com/users/67168/mic),
-    # Estimating kappa of von Mises distribution, URL (version: 2015-06-12):
-    # https://stats.stackexchange.com/q/156692
-    kappa = (samples_r * 2 - samples_r ** 3) / (1 - samples_r ** 2)
-    kappa.requires_grad = True
-    bfgs = optim.LBFGS([kappa])
-
-    def bfgs_closure():
-        bfgs.zero_grad()
-        obj = (_log_modified_bessel_fn(kappa, order=1)
-               - _log_modified_bessel_fn(kappa, order=0)).exp()
-        obj = (obj - samples_r).abs()
-        obj.backward()
-        return obj
-
-    for i in range(n_iter):
-        bfgs.step(bfgs_closure)
-    return mu, kappa.detach()
 
 
 class VonMises(TorchDistribution):
@@ -92,13 +64,12 @@ class VonMises(TorchDistribution):
     See :class:`~pyro.distributions.VonMises3D` for a 3D cartesian coordinate
     cousin of this distribution.
 
-    Currently only :meth:`log_prob` is implemented.
-
     :param torch.Tensor loc: an angle in radians.
     :param torch.Tensor concentration: concentration parameter
     """
     arg_constraints = {'loc': constraints.real, 'concentration': constraints.positive}
     support = constraints.real
+    has_rsample = True
 
     def __init__(self, loc, concentration, validate_args=None):
         self.loc, self.concentration = broadcast_all(loc, concentration)
@@ -121,7 +92,7 @@ class VonMises(TorchDistribution):
         log_prob = log_prob - math.log(2 * math.pi) - _log_modified_bessel_fn(self.concentration, order=0)
         return log_prob
 
-    def sample(self, sample_shape=torch.Size()):
+    def rsample(self, sample_shape=torch.Size()):
         # Based on:
         # Best, D. J., and Nicholas I. Fisher.
         # "Efficient simulation of the von Mises distribution." Applied Statistics (1979): 152-157.
@@ -129,13 +100,13 @@ class VonMises(TorchDistribution):
         x = torch.empty(shape, dtype=self.loc.dtype, device=self.loc.device)
         done = torch.zeros(shape, dtype=self.loc.dtype, device=self.loc.device).byte()
         while not done.all():
-            u1 = torch.empty(shape, dtype=self.loc.dtype, device=self.loc.device).uniform_()
-            u2 = torch.empty(shape, dtype=self.loc.dtype, device=self.loc.device).uniform_()
-            u3 = torch.empty(shape, dtype=self.loc.dtype, device=self.loc.device).uniform_()
+            u1 = torch.rand(shape, dtype=self.loc.dtype, device=self.loc.device)
+            u2 = torch.rand(shape, dtype=self.loc.dtype, device=self.loc.device)
+            u3 = torch.rand(shape, dtype=self.loc.dtype, device=self.loc.device)
             z = torch.cos(math.pi * u1)
             f = (1 + self._proposal_r * z) / (self._proposal_r + z)
             c = self.concentration * (self._proposal_r - f)
-            accept = (c / u2).log() + 1 - c >= 0
+            accept = ((c * (2 - c) - u2) > 0) | ((c / u2).log() + 1 - c >= 0)
             if accept.any():
                 x[accept] = torch.sign(u3[accept] - 0.5) * torch.acos(f[accept])
                 done |= accept
