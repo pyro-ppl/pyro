@@ -94,9 +94,11 @@ class VonMises(TorchDistribution):
 
     @torch.no_grad()
     def sample(self, sample_shape=torch.Size()):
-        # Based on:
-        # Best, D. J., and Nicholas I. Fisher.
-        # "Efficient simulation of the von Mises distribution." Applied Statistics (1979): 152-157.
+        """
+        The sampling algorithm for the von Mises distribution is based on the following paper:
+        Best, D. J., and Nicholas I. Fisher.
+        "Efficient simulation of the von Mises distribution." Applied Statistics (1979): 152-157.
+        """
         shape = self._extended_shape(sample_shape)
         x = torch.empty(shape, dtype=self.loc.dtype, device=self.loc.device)
         done = torch.zeros(shape, dtype=self.loc.dtype, device=self.loc.device).byte()
