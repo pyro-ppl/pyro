@@ -327,6 +327,8 @@ def test_beta_binomial(hyperpriors):
         with pyro.plate("latent_dim", data.shape[1]):
             alpha = pyro.sample("alpha", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
             beta = pyro.sample("beta", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
+            with poutine.block():
+                print(poutine.trace(lambda: pyro.sample("mark", dist.Normal(0., 1.))).get_trace().nodes)
             with pyro.plate("data", data.shape[0]):
                 pyro.sample("betabinom", dist.BetaBinomial(alpha, beta, total_count=1000), obs=data)
 
