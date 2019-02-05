@@ -10,13 +10,10 @@ import numpy as np
 import torch
 
 import pyro
-from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
-from pyro.optim import Adam
-from pyro.util import ignore_jit_warnings
+from pyro.infer import SVI, TraceEnum_ELBO
 
 from model import model_generic, guide_generic
 from seal_data import prepare_seal
-from shark_data import prepare_shark
 
 
 def aic_num_parameters(config):
@@ -65,7 +62,7 @@ def aic(model, guide, config):
 def run_expt(args):
 
     data_dir = args["folder"]
-    dataset = args["dataset"]
+    dataset = "seal"  # args["dataset"]
     seed = args["seed"]
     optim = args["optim"]
     lr = args["learnrate"]
@@ -76,12 +73,8 @@ def run_expt(args):
     pyro.enable_validation(args["validation"])
     pyro.set_rng_seed(seed)  # reproducible random effect parameter init
 
-    if dataset == "seal":
-        filename = os.path.join(data_dir, "prep_seal_data.RData")
-        config = prepare_seal(filename, random_effects)
-    elif dataset == "shark":
-        filename = os.path.join(data_dir, "gws_full.xlsx")
-        config = prepare_shark(filename, random_effects)
+    filename = os.path.join(data_dir, "prep_seal_data.RData")
+    config = prepare_seal(filename, random_effects)
 
     model = lambda: model_generic(config)  # for JITing
     guide = lambda: guide_generic(config)
@@ -158,7 +151,7 @@ def run_expt(args):
     if args["resultsdir"] is not None:
         re_str = "g" + ("n" if args["group"] is None else "d" if args["group"] == "discrete" else "c")
         re_str += "i" + ("n" if args["individual"] is None else "d" if args["individual"] == "discrete" else "c")
-        results_filename = "expt_{}_{}_{}.json".format(args["dataset"], re_str, str(uuid.uuid4().hex)[0:5])
+        results_filename = "expt_{}_{}_{}.json".format(dataset, re_str, str(uuid.uuid4().hex)[0:5])
         with open(os.path.join(args["resultsdir"], results_filename), "w") as f:
             json.dump(results, f)
 
@@ -168,7 +161,6 @@ def run_expt(args):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--dataset", default="seal", type=str)
     parser.add_argument("-g", "--group", default="none", type=str)
     parser.add_argument("-i", "--individual", default="none", type=str)
     parser.add_argument("-f", "--folder", default="./", type=str)
@@ -179,7 +171,6 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--seed", default=101, type=int)
     parser.add_argument("--schedule", default="", type=str)
     parser.add_argument('--cuda', action='store_true')
-    parser.add_argument('--jit', action='store_true')
     parser.add_argument('--validation', action='store_true')
     args = parser.parse_args()
 
