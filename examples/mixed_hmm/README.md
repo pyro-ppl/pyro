@@ -2,6 +2,8 @@
 
 Note: This is a cleaned-up version of the seal experiments in [Bingham et al 2019] that is a simplified variant of some of the analysis in the [momentuHMM harbour seal example](https://github.com/bmcclintock/momentuHMM/blob/master/vignettes/harbourSealExample.R) [McClintock et al 2018].
 
+Recent advances in sensor technology have made it possible to capture the movements of multiple wild animals within a single population at high spatiotemporal resolution over long periods of time [McClintock et al 2013, Towner et al 2016]. Discrete state-space models, where the latent state is thought of as corresponding to a behavior state such as "foraging" or "resting", have become popular computational tools for analyzing these new datasets thanks to their interpretability and tractability.
+
 This example applies several different hierarchical discrete state-space models to location data recorded from a colony of harbour seals on foraging excursions in the North Sea [McClintock et al 2013].
 The raw data are irregularly sampled time series (roughly 5-15 minutes between samples) of GPS coordinates and diving activity for each individual in the colony (10 male and 7 female) over the course of a single day recorded by lightweight tracking devices physically attached to each animal by researchers. They have been preprocessed using the momentuHMM example code into smoothed, temporally regular series of step sizes, turn angles, and diving activity for each individual.
 
