@@ -10,13 +10,17 @@ import numpy as np
 import torch
 
 import pyro
+import pyro.poutine as poutine
 from pyro.infer import SVI, TraceEnum_ELBO
 
 from model import model_generic, guide_generic
 from seal_data import prepare_seal
 
 
-def aic_num_parameters(config):
+def aic_num_parameters(model, guide=None):
+    """
+    hacky AIC param count that includes all parameters in the model and guide
+    """
 
     def _size(tensor):
         """product of shape"""
@@ -25,37 +29,17 @@ def aic_num_parameters(config):
             s = s * d
         return s
 
-    num_params = 0
+    with poutine.block(), poutine.trace(param_only=True) as param_capture:
+        model()
+        if guide is not None:
+            guide()
 
-    for level in ["group", "individual", "timestep"]:
-        # count random effect parameters
-        if config[level]["random"] == "discrete":
-            num_params += _size(pyro.param("probs_e_{}".format(level)))
-            num_params += _size(pyro.param("theta_{}".format(level)))
-        elif config[level]["random"] == "continuous":
-            num_params += _size(pyro.param("loc_{}".format(level)))
-            num_params += _size(pyro.param("scale_{}".format(level)))
-
-        # count fixed effect parameters
-        if config[level]["fixed"] is not None:
-            num_params += _size(pyro.param("beta_{}".format(level)))
-
-    # count likelihood parameters
-    for coord, coord_config in config["observations"].items():
-        num_params += sum([
-            _size(pyro.param("{}_param_{}".format(coord, arg_name)))
-            for arg_name in coord_config["dist"].arg_constraints.keys()
-        ])
-        # count zero-inflation parameters
-        if coord_config["zi"]:
-            num_params += _size(pyro.param("{}_zi_param".format(coord)))
-
-    return num_params
+    return sum(_size(node["value"]) for node in param_capture.nodes.values())
 
 
-def aic(model, guide, config):
+def aic(model, guide):
     neg_log_likelihood = TraceEnum_ELBO(max_plate_nesting=2).differentiable_loss(model, guide)
-    num_params = aic_num_parameters(config)
+    num_params = aic_num_parameters(model, guide)
     return 2. * neg_log_likelihood + 2. * num_params
 
 
@@ -105,7 +89,7 @@ def run_expt(args):
             losses.append(loss.item())
 
             print("Loss: {}, AIC[{}]: ".format(loss.item(), t), 
-                  2. * loss + 2. * aic_num_parameters(config))
+                  2. * loss + 2. * aic_num_parameters(model, guide))
 
     # LBFGS
     elif optim == "lbfgs":
@@ -132,12 +116,12 @@ def run_expt(args):
             scheduler.step(loss.item() if schedule_step_loss else t)
             losses.append(loss.item())
             print("Loss: {}, AIC[{}]: ".format(loss.item(), t), 
-                  2. * loss + 2. * aic_num_parameters(config))
+                  2. * loss + 2. * aic_num_parameters(model, guide))
 
     else:
         raise ValueError("{} not supported optimizer".format(optim))
 
-    aic_final = aic(model, guide, config)
+    aic_final = aic(model, guide)
     print("AIC final: {}".format(aic_final))
 
     results = {}
@@ -146,7 +130,7 @@ def run_expt(args):
     results["likelihoods"] = losses
     results["likelihood_final"] = losses[-1]
     results["aic_final"] = aic_final.item()
-    results["aic_num_parameters"] = aic_num_parameters(config)
+    results["aic_num_parameters"] = aic_num_parameters(model, guide)
 
     if args["resultsdir"] is not None:
         re_str = "g" + ("n" if args["group"] is None else "d" if args["group"] == "discrete" else "c")
