@@ -4,7 +4,7 @@ import math
 
 import torch
 from torch.distributions import biject_to, constraints, transform_to
-from torch.distributions.constraints import Constraint, lower_cholesky
+from torch.distributions.constraints import Constraint
 from torch.distributions.transforms import Transform, ComposeTransform
 
 from pyro.distributions import Beta, TorchDistribution
@@ -21,10 +21,8 @@ class _CorrCholesky(Constraint):
     Euclidean norm of each row is 1.
     """
     def check(self, value):
-        if not lower_cholesky().check(value): return False
-
         unit_norm_row = ((value.pow(2).sum(-1) - 1).abs() < 1e-6).min(-1)[0]
-        return unit_norm_row
+        return constraints.lower_cholesky.check(value) & unit_norm_row
 
 
 # TODO rename this public interface to corr_cholesky if move upstream to pytorch
@@ -49,10 +47,10 @@ class _TanhTransform(Transform):
         return x.tanh()
 
     def _inverse(self, y):
-        return torch.log((1 + y) / (1 - y)) / 2
+        return ((1 + y) / (1 - y)).log() / 2
 
     def log_abs_det_jacobian(self, x, y):
-        return (-2) * y.cosh().log()
+        return (1 - y ** 2).log()
 
 
 class _PartialCorrToCorrCholeskyTransform(Transform):
@@ -62,65 +60,55 @@ class _PartialCorrToCorrCholeskyTransform(Transform):
 
     Reference:
 
-    [1] `Generating random correlation matrices based on vines and extended onion method`,
-    Daniel Lewandowski, Dorota Kurowicka, Harry Joe
+    [1] `Cholesky Factors of Correlation Matrices`,
+    Stan Reference Manual v2.18, Section 10.12
     """
     domain = constraints.interval(-1, 1)
     codomain = corr_cholesky_constraint
     bijective = True
     sign = +1
+    event_dim = 1
 
     def __eq__(self, other):
         return isinstance(other, _PartialCorrToCorrCholeskyTransform)
 
-    def _call(self, z):
-        D = (1.0 + math.sqrt(1.0 + 8.0 * z.shape[0]))/2.0
+    def _call(self, x):
+        D = (1.0 + math.sqrt(1.0 + 8.0 * x.size(-1))) / 2.0
         if D % 1 != 0:
-            raise ValueError("Correlation matrix transformation requires d choose 2 inputs")
+            raise ValueError("PartialCorrToCorrCholesky transformation requires d choose 2 inputs.")
         D = int(D)
 
-        x = torch.zeros((D,D), device=z.device)
+        y = x.new_zeros(x.shape[:-1] + (D, D))
+        y[..., 0, 0] = 1
+        y[..., 1:, 0] = x[..., :(D - 1)]
 
-        x[0,0] = 1
-        x[1:,0] = current_x = z[:(D-1)]
-        i = D - 1
-        last_squared_x = None
+        pos_x = D - 1
+        past_y_squared_sum = x.new_zeros(x.shape[:-1] + (D,))
+        # FIX ME: find a vectorized way to compute y instead of loop
         for j in range(1, D):
-            distance_to_copy = D - 1 - j
-            new_z = z[i:(i + distance_to_copy)]
-            if last_squared_x is None:
-                last_squared_x = current_x**2
-            else:
-                last_squared_x = last_squared_x[1:] + current_x**2
-            x[j, j] = (1 - last_squared_x[0]).sqrt()
-            current_x = new_z * (1 - last_squared_x[1:]).sqrt()
-            x[(j+1):, j] = current_x
-            i += distance_to_copy
+            # XXX we need `.clone()` operator here to avoid the in-place operator error
+            # in the backward pass
+            past_y_squared_sum = past_y_squared_sum[..., 1:] + y[..., j:, (j - 1)].clone() ** 2
+            y[..., j, j] = (1 - past_y_squared_sum[..., 0]).sqrt()
+            new_pos_x = pos_x + D - 1 - j
+            y[..., (j + 1):, j] = x[..., pos_x:new_pos_x] * (1 - past_y_squared_sum[..., 1:]).sqrt()
+            pos_x = new_pos_x
+        return y
 
-        return x
+    def _inverse(self, y):
+        x = y.new_ones(y.shape)
+        triu_index = x.triu(diagonal=1) > 0.5
+        x[..., :, 0] = y[..., :, 0]
+        x[..., :, 1:] = y[..., :, 1:] / (1 - y.pow(2).cumsum(-1)[..., :, :-1]).sqrt()
+        # we transpose and take upper triangular indices to arrange the result vector
+        # by (x21, x31, x41,..., x32, x42,...) instead of (x21, x31, x32, x41, x42,...)
+        return x.transpose(-1, -2)[triu_index].reshape(x.shape[:-2] + (-1,))
 
-    def _inverse(self, x):
-        if (x.shape[0] != x.shape[1]):
-            raise ValueError("A matrix that isn't square can't be a Cholesky factor of a correlation matrix")
-        D = x.shape[0]
-
-        z_stack = [
-            x[1:, 0]
-        ]
-        current_x = z_stack[0]
-        last_squared_x = None
-        for j in range(1, D):
-            if last_squared_x is None:
-                last_squared_x = current_x**2
-            else:
-                last_squared_x += current_x[1:]**2
-        current_x = x[j:, j]
-        z_stack.append(current_x / (1 - last_squared_x).sqrt())
-        z = torch.cat(z_stack)
-        return z
-
-    def log_abs_det_jacobian(self, x, z):
-        return (1 - x.tril(-1).pow(2).sum(1)).log().sum() * .5
+    def log_abs_det_jacobian(self, x, y):
+        triu_index = y.new_ones(y.shape).triu(diagonal=1) > 0.5
+        y_tril_vector = y.transpose(-1, -2)[triu_index].reshape(y.shape[:-2] + (-1,))
+        # FIX ME: if necessary, handle the case x = 0 (which does not happen almost surely)
+        return (y_tril_vector / x).log().sum(-1)
 
 
 class CorrCholeskyTransform(ComposeTransform):
@@ -153,6 +141,11 @@ class LKJCholeskyFactor(TorchDistribution):
 
     E.g., if \theta is a (positive) vector of covariances with the same dimensionality
     as this distribution, and \Omega is sampled from this distribution, scale_tril=diag(sqrt(\theta))*\Omega
+
+    Reference:
+
+    [1] `Generating random correlation matrices based on vines and extended onion method`,
+    Daniel Lewandowski, Dorota Kurowicka, Harry Joe
 
     :param int d: Dimensionality of the matrix
     :param torch.Tensor eta: A single positive number parameterizing the distribution.
