@@ -29,7 +29,7 @@ def aic_num_parameters(model, guide=None):
         return s
 
     with poutine.block(), poutine.trace(param_only=True) as param_capture:
-        loss = TraceEnum_ELBO(max_plate_nesting=2).differentiable_loss(model, guide)
+        TraceEnum_ELBO(max_plate_nesting=2).differentiable_loss(model, guide)
 
     return sum(_size(node["value"]) for node in param_capture.nodes.values())
 
