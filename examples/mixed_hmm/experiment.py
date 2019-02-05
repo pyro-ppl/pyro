@@ -1,17 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
 import argparse
-import logging
 import os
 import json
 import uuid
+import functools
 
-import numpy as np
 import torch
 
 import pyro
 import pyro.poutine as poutine
-from pyro.infer import SVI, TraceEnum_ELBO
+from pyro.infer import TraceEnum_ELBO
 
 from model import model_generic, guide_generic
 from seal_data import prepare_seal
@@ -60,8 +59,8 @@ def run_expt(args):
     filename = os.path.join(data_dir, "prep_seal_data.csv")
     config = prepare_seal(filename, random_effects)
 
-    model = lambda: model_generic(config)  # for JITing
-    guide = lambda: guide_generic(config)
+    model = functools.partial(model_generic, config)  # for JITing
+    guide = functools.partial(guide_generic, config)
 
     losses = []
     # SGD
@@ -88,7 +87,7 @@ def run_expt(args):
             scheduler.step(loss.item() if schedule_step_loss else t)
             losses.append(loss.item())
 
-            print("Loss: {}, AIC[{}]: ".format(loss.item(), t), 
+            print("Loss: {}, AIC[{}]: ".format(loss.item(), t),
                   2. * loss + 2. * aic_num_parameters(model, guide))
 
     # LBFGS
@@ -115,7 +114,7 @@ def run_expt(args):
             loss = optimizer.step(closure)
             scheduler.step(loss.item() if schedule_step_loss else t)
             losses.append(loss.item())
-            print("Loss: {}, AIC[{}]: ".format(loss.item(), t), 
+            print("Loss: {}, AIC[{}]: ".format(loss.item(), t),
                   2. * loss + 2. * aic_num_parameters(model, guide))
 
     else:
