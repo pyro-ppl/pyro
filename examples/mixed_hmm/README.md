@@ -7,27 +7,28 @@ The raw data are irregularly sampled time series (roughly 5-15 minutes between s
 
 The models are special cases of a time-inhomogeneous discrete state space model
 whose state transition distribution is specified by a hierarchical generalized linear mixed model (GLMM).
-At each timestep $t$, for each individual trajectory $b$ in each group $a$, we have
+At each timestep `t`, for each individual trajectory `b` in each group `a`, we have
 
-$$
-\text{logit}(p(z^{(t)}_{ab} = \text{state } i \mid z^{(t-1)}_{ab} = \text{state } j)) = \\
-\big( \epsilon_{1,a} + \epsilon_{2,ab} + X^\intercal_{1,ab} \beta_{1} + X^\intercal_{2,a} \beta_{2} + X^\intercal_{3,abt} \beta_{3} \big)_{ij}
-$$
+```
+logit(p(z[t,a,b] = state i | z[t-1,a,b] = state j)) =
+(epsilon1[a] + epsilon2[a,b] + X1[a,b].T @ beta1 + X2[a].T @ beta2 + X3[t,a,b].T @ beta3)[i,j]
+```
 
-where $a,b$ correspond to plate indices, $\epsilon$s are independent random variables, $X$s are covariates, and $\beta$s are parameter vectors.
+where `a,b` correspond to plate indices, `epsilon`s are independent random variables, `X`s are covariates, and `beta`s are parameter vectors.
 
 The random variables `epsilon` may be either discrete or continuous.
 If continuous, they are normally distributed.
 If discrete, they are sampled from a set of three possible values shared across the innermost plate of a particular variable.
-That is, for each individual trajectory $b$ in each group $a$, we sample single random effect values for an entire trajectory:
-$$
-\iota_{1,a} &\sim \text{Categorical}(\pi_1) \\
-\epsilon_{1,a} &= \theta_{1}[\iota_{1,a}] \\
-\iota_{2,ab} &\sim \text{Categorical}(\pi_{2,a}) \\
-\epsilon_{2,ab} &= \theta_{2,a}[\iota_{2,ab}]
-$$
+That is, for each individual trajectory `b` in each group `a`, we sample single random effect values for an entire trajectory:
 
-Observations $y^{(t)}$ are represented as sequences of real-valued step lengths and turn angles, modelled by zero-inflated Gamma and von Mises likelihoods respectively.
+```
+iota1[a] ~ Categorical(pi1)
+epsilon1[a] = Theta1[iota1[a]]
+iota2[a,b] ~ Categorical(pi2[a])
+epsilon2[a,b] ~ Theta2[a][iota2[a,b]]
+```
+
+Observations `y[t,a,b]` are represented as sequences of real-valued step lengths and turn angles, modelled by zero-inflated Gamma and von Mises likelihoods respectively.
 The seal models also include a third observed variable indicating the amount of diving activity between successive locations, which we model with a zero-inflated Beta distribution following [McClintock et al 2018].
 
 We grouped animals by sex and implemented versions of this model with (i) no random effects (as a baseline), and with random effects present at the (ii) group, (iii) individual, or (iv) group+individual levels. Random effects can be either discrete as above or continuous and normally distributed.
