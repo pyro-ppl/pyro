@@ -69,7 +69,7 @@ class VonMises(TorchDistribution):
     """
     arg_constraints = {'loc': constraints.real, 'concentration': constraints.positive}
     support = constraints.real
-    has_rsample = True
+    has_rsample = False
 
     def __init__(self, loc, concentration, validate_args=None):
         self.loc, self.concentration = broadcast_all(loc, concentration)
@@ -92,7 +92,8 @@ class VonMises(TorchDistribution):
         log_prob = log_prob - math.log(2 * math.pi) - _log_modified_bessel_fn(self.concentration, order=0)
         return log_prob
 
-    def rsample(self, sample_shape=torch.Size()):
+    @torch.no_grad()
+    def sample(self, sample_shape=torch.Size()):
         # Based on:
         # Best, D. J., and Nicholas I. Fisher.
         # "Efficient simulation of the von Mises distribution." Applied Statistics (1979): 152-157.
@@ -100,9 +101,8 @@ class VonMises(TorchDistribution):
         x = torch.empty(shape, dtype=self.loc.dtype, device=self.loc.device)
         done = torch.zeros(shape, dtype=self.loc.dtype, device=self.loc.device).byte()
         while not done.all():
-            u1 = torch.rand(shape, dtype=self.loc.dtype, device=self.loc.device)
-            u2 = torch.rand(shape, dtype=self.loc.dtype, device=self.loc.device)
-            u3 = torch.rand(shape, dtype=self.loc.dtype, device=self.loc.device)
+            u = torch.rand((3,) + shape, dtype=self.loc.dtype, device=self.loc.device)
+            u1, u2, u3 = u.unbind()
             z = torch.cos(math.pi * u1)
             f = (1 + self._proposal_r * z) / (self._proposal_r + z)
             c = self.concentration * (self._proposal_r - f)
@@ -123,8 +123,14 @@ class VonMises(TorchDistribution):
 
     @property
     def mean(self):
+        """
+        The provided mean is the :attr:`circular` one.
+        """
         return self.loc
 
     @property
     def variance(self):
+        """
+        The provided variance is the :attr:`circular` one.
+        """
         return self._variance
