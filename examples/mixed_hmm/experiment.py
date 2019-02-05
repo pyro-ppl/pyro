@@ -29,17 +29,9 @@ def aic_num_parameters(model, guide=None):
         return s
 
     with poutine.block(), poutine.trace(param_only=True) as param_capture:
-        model()
-        if guide is not None:
-            guide()
+        loss = TraceEnum_ELBO(max_plate_nesting=2).differentiable_loss(model, guide)
 
     return sum(_size(node["value"]) for node in param_capture.nodes.values())
-
-
-def aic(model, guide):
-    neg_log_likelihood = TraceEnum_ELBO(max_plate_nesting=2).differentiable_loss(model, guide)
-    num_params = aic_num_parameters(model, guide)
-    return 2. * neg_log_likelihood + 2. * num_params
 
 
 def run_expt(args):
@@ -61,6 +53,9 @@ def run_expt(args):
 
     model = functools.partial(model_generic, config)  # for JITing
     guide = functools.partial(guide_generic, config)
+
+    # count the number of parameters once
+    num_parameters = aic_num_parameters(model, guide)
 
     losses = []
     # SGD
@@ -88,7 +83,7 @@ def run_expt(args):
             losses.append(loss.item())
 
             print("Loss: {}, AIC[{}]: ".format(loss.item(), t),
-                  2. * loss + 2. * aic_num_parameters(model, guide))
+                  2. * loss + 2. * num_parameters)
 
     # LBFGS
     elif optim == "lbfgs":
@@ -115,12 +110,12 @@ def run_expt(args):
             scheduler.step(loss.item() if schedule_step_loss else t)
             losses.append(loss.item())
             print("Loss: {}, AIC[{}]: ".format(loss.item(), t),
-                  2. * loss + 2. * aic_num_parameters(model, guide))
+                  2. * loss + 2. * num_parameters)
 
     else:
         raise ValueError("{} not supported optimizer".format(optim))
 
-    aic_final = aic(model, guide)
+    aic_final = 2. * losses[-1] + 2. * num_parameters
     print("AIC final: {}".format(aic_final))
 
     results = {}
@@ -128,8 +123,8 @@ def run_expt(args):
     results["sizes"] = config["sizes"]
     results["likelihoods"] = losses
     results["likelihood_final"] = losses[-1]
-    results["aic_final"] = aic_final.item()
-    results["aic_num_parameters"] = aic_num_parameters(model, guide)
+    results["aic_final"] = aic_final
+    results["aic_num_parameters"] = num_parameters
 
     if args["resultsdir"] is not None:
         re_str = "g" + ("n" if args["group"] is None else "d" if args["group"] == "discrete" else "c")
