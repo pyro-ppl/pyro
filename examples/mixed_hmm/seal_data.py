@@ -36,6 +36,7 @@ def prepare_seal(filename, random_effects):
     # observations = observations[..., 5:11, :]  # truncate for testing
 
     config = {
+        "MISSING": MISSING,
         "sizes": {
             "state": 3,
             "random": 4,

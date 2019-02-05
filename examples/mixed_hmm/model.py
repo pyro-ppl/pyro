@@ -8,8 +8,6 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer import config_enumerate
 
-from .seal_data import MISSING
-
 
 def _index_param(param, ind, dim=-2):
     """helper for advanced indexing black magic"""
@@ -70,6 +68,7 @@ def guide_generic(config):
 def model_generic(config):
     """Hierarchical mixed-effects hidden markov model"""
 
+    MISSING = config["MISSING"]
     N_v = config["sizes"]["random"]
     N_state = config["sizes"]["state"]
 
