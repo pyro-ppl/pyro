@@ -73,7 +73,7 @@ def run_expt(args):
     pyro.enable_validation(args["validation"])
     pyro.set_rng_seed(seed)  # reproducible random effect parameter init
 
-    filename = os.path.join(data_dir, "prep_seal_data.RData")
+    filename = os.path.join(data_dir, "prep_seal_data.csv")
     config = prepare_seal(filename, random_effects)
 
     model = lambda: model_generic(config)  # for JITing

@@ -5,7 +5,6 @@ import os
 
 import numpy as np
 import pandas as pd
-import pyreadr
 
 import torch
 
@@ -14,7 +13,7 @@ MISSING = 1e-6
 
 
 def prepare_seal(filename, random_effects):
-    seal_df = pyreadr.read_r(filename)['hsData']
+    seal_df = pd.read_csv(filename)
     obs_keys = ["step", "angle", "omega"]
     # data format for z1, z2:
     # single tensor with shape (individual, group, time, coords)
