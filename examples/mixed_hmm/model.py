@@ -14,6 +14,9 @@ from pyro.contrib.autoguide import AutoDelta
 from pyro.infer import config_enumerate
 
 
+MISSING = 1e-4
+
+
 def _index_param(param, ind, dim=-2):
     """helper for advanced indexing black magic"""
     # assume: dim < 0
@@ -33,7 +36,6 @@ def _index_param(param, ind, dim=-2):
             inds[-d-1] = torch.arange(sd).reshape((sd,) + (1,) * d)
     # step 3: use the index and dummy indices to select
     res = param[tuple(inds)]
-    # XXX is this necessary?
     # step 4: squeeze out the empty event_dim
     return res.squeeze(dim)
 
@@ -73,23 +75,10 @@ def guide_generic(config):
 
 @config_enumerate
 def model_generic(config):
-    """generic hierarchical mixed-effects hidden markov model"""
+    """Hierarchical mixed-effects hidden markov model"""
 
     N_v = config["sizes"]["random"]
     N_state = config["sizes"]["state"]
-
-    # initialize fixed effect parameters - all the same size
-    if config["group"]["fixed"] is not None:
-        N_fg = config["group"]["fixed"].shape[-1]
-        beta_g = pyro.param("beta_group", lambda: torch.ones((N_fg, N_state ** 2)))
-
-    if config["individual"]["fixed"] is not None:
-        N_fi = config["individual"]["fixed"].shape[-1]
-        beta_i = pyro.param("beta_individual", lambda: torch.ones((N_fi, N_state ** 2)))
-
-    if config["timestep"]["fixed"] is not None:
-        N_ft = config["timestep"]["fixed"].shape[-1]
-        beta_t = pyro.param("beta_timestep", lambda: torch.ones((N_ft, N_state ** 2)))
 
     # initialize group-level random effect parameterss
     if config["group"]["random"] == "discrete":
@@ -98,8 +87,6 @@ def model_generic(config):
     elif config["group"]["random"] == "continuous":
         loc_g = torch.zeros((N_state ** 2,))
         scale_g = torch.ones((N_state ** 2,))
-    else:  # none
-        pass
 
     # initialize individual-level random effect parameters
     N_c = config["sizes"]["group"]
@@ -112,17 +99,31 @@ def model_generic(config):
     elif config["individual"]["random"] == "continuous":
         loc_i = torch.zeros((N_c, N_state ** 2,))
         scale_i = torch.ones((N_c, N_state ** 2,))
-    else:  # none
-        pass
 
     # initialize likelihood parameters
-    for coord, coord_config in config["observations"].items():
-        if coord_config["zi"]:
-            pyro.param("{}_zi_param".format(coord), lambda: torch.ones((N_state,2)))
-        for arg_name, arg_constraint in coord_config["dist"].arg_constraints.items():
-            pyro.param("{}_param_{}".format(coord, arg_name),
-                       lambda: torch.randn((N_state,)).abs(),
-                       constraint=arg_constraint)
+    # observation 1: step size (step ~ Gamma)
+    step_zi_param = pyro.param("step_zi_param", lambda: torch.ones((N_state,2)))
+    step_concentration = pyro.param("step_param_concentration",
+       lambda: torch.randn((N_state,)).abs(),
+       constraint=constraints.positive)
+    step_rate = pyro.param("step_param_rate",
+       lambda: torch.randn((N_state,)).abs(),
+       constraint=constraints.positive)
+
+    # observation 2: step angle (angle ~ VonMises)
+    angle_concentration = pyro.param("angle_param_concentration",
+       lambda: torch.randn((N_state,)).abs(),
+       constraint=constraints.positive)
+    angle_loc = pyro.param("angle_param_loc", lambda: torch.randn((N_state,)).abs())
+
+    # observation 3: dive activity (omega ~ Beta)
+    omega_zi_param = pyro.param("omega_zi_param", lambda: torch.ones((N_state,2)))
+    omega_concentration0 = pyro.param("omega_param_concentration0",
+       lambda: torch.randn((N_state,)).abs(),
+       constraint=constraints.positive)
+    omega_concentration1 = pyro.param("omega_param_concentration1",
+       lambda: torch.randn((N_state,)).abs(),
+       constraint=constraints.positive)
 
     # initialize gamma to uniform
     gamma = torch.zeros((N_state ** 2,))
@@ -144,14 +145,6 @@ def model_generic(config):
         # add group-level random effect to gamma
         gamma = gamma + eps_g
 
-        # group-level fixed effects
-        if config["group"]["fixed"] is not None:
-            covariates_g = config["individual"]["fixed"]
-            beta_g = pyro.param("beta_group")
-            fixed_g = torch.einsum("...f,fs->...s",
-                                   [covariates_g, beta_g])
-            gamma = gamma + fixed_g
-
         N_s = config["sizes"]["individual"]
         with pyro.plate("individual", N_s, dim=-2) as s, poutine.mask(mask=config["individual"]["mask"]):
 
@@ -170,28 +163,12 @@ def model_generic(config):
             # add individual-level random effect to gamma
             gamma = gamma + eps_i
 
-            # individual-level fixed effects
-            if config["individual"]["fixed"] is not None:
-                covariates_i = config["individual"]["fixed"]
-                beta_i = pyro.param("beta_individual")
-                fixed_i =  torch.einsum("...f,fs->...s",
-                                        [covariates_i, beta_i])
-                gamma = gamma + fixed_i
-
-            # TODO initialize y from stationary distribution?
             y = torch.tensor(0).long()
 
             N_t = config["sizes"]["timesteps"]
             for t in pyro.markov(range(N_t)):
                 with poutine.mask(mask=config["timestep"]["mask"][..., t]):
-                    # per-timestep fixed effects
                     gamma_t = gamma  # per-timestep variable
-                    if config["timestep"]["fixed"] is not None:
-                        covariates_t = config["timestep"]["fixed"][..., t, :]
-                        beta_t = pyro.param("beta_timestep")
-                        fixed_t = torch.einsum("...f,fs->...s",
-                                               [covariates_t, beta_t])
-                        gamma_t = gamma_t + fixed_t
 
                     # finally, reshape gamma as batch of transition matrices
                     gamma_t = gamma_t.reshape(tuple(gamma_t.shape[:-1]) + (N_state, N_state))
@@ -201,38 +178,48 @@ def model_generic(config):
                     gamma_y = _index_param(gamma_t, y, dim=-2)
                     y = pyro.sample("y_{}".format(t), dist.Categorical(logits=gamma_y))
 
-                    # multivariate observations with different distributions
-                    for coord, coord_config in config["observations"].items():
-                        coord_params = [
-                            _index_param(pyro.param("{}_param_{}".format(coord, arg_name)), y, dim=-1)
-                            for arg_name in coord_config["dist"].arg_constraints.keys()
-                        ]
-                        coord_dist = coord_config["dist"](*coord_params)
+                    # observation 1: step size
+                    step_dist = dist.Gamma(
+                        concentration=_index_param(step_concentration, y, dim=-1),
+                        rate=_index_param(step_rate, y, dim=-1),
+                    )
 
-                        if not coord_config["zi"]:
-                            pyro.sample("{}_{}".format(coord, t), 
-                                        coord_dist,
-                                        obs=coord_config["values"][..., t])
-                        elif coord_config["zi"]:
-                            # zero-inflation with MaskedMixture
-                            coord_zi = _index_param(pyro.param("{}_zi_param".format(coord)), y, dim=-2)
-                            # coord_zi_mask = coord_config["values"][..., t] == 1e-4
-                            # coord_zi_scale = dist.Categorical(logits=coord_zi).log_prob(coord_zi_mask).exp()
-                            coord_zi_mask = pyro.sample("{}_zi_{}".format(coord, t),
-                                                        dist.Categorical(logits=coord_zi), 
-                                                        obs=(coord_config["values"][..., t] == 1e-4))
-                            coord_zi_zero_dist = dist.Delta(v=torch.tensor(1e-4))
-                            coord_zi_dist = dist.MaskedMixture(coord_zi_mask, coord_dist, coord_zi_zero_dist)
+                    # zero-inflation with MaskedMixture
+                    step_zi = _index_param(step_zi_param, y, dim=-2)
+                    step_zi_mask = pyro.sample("step_zi_{}".format(t),
+                                               dist.Categorical(logits=step_zi), 
+                                               obs=(config["observations"]["step"][..., t] == MISSING))
+                    step_zi_zero_dist = dist.Delta(v=torch.tensor(MISSING))
+                    step_zi_dist = dist.MaskedMixture(step_zi_mask, step_dist, step_zi_zero_dist)
 
-                            # do a bit of gross nan error checking...
-                            # if t > 5 and t < 10:
-                            #     nan_check_mask = config["timestep"]["mask"][..., t] & config["individual"]["mask"]
-                            #     assert not torch.isnan(coord_zi_dist.log_prob(coord_config["values"][..., t]).sum(dim=0).squeeze()[nan_check_mask]).any(), \
-                            #         "nan zi at {}_{}".format(coord, t)
+                    pyro.sample("step_{}".format(t), 
+                                step_zi_dist,
+                                obs=config["observations"]["step"][..., t])
 
-                            #     assert not (coord_zi_dist.log_prob(coord_config["values"][..., t]).sum(dim=0).squeeze()[nan_check_mask] == 0.).all(), \
-                            #         "zero zi at {}_{}".format(coord, t)
+                    # observation 2: step angle
+                    angle_dist = dist.VonMises(
+                        concentration=_index_param(angle_loc, y, dim=-1),
+                        loc=_index_param(angle_loc, y, dim=-1),
+                    )
+                    pyro.sample("angle_{}".format(t), 
+                                angle_dist,
+                                obs=config["observations"]["angle"][..., t])
 
-                            pyro.sample("{}_{}".format(coord, t), 
-                                        coord_zi_dist,
-                                        obs=coord_config["values"][..., t])
+
+                    # observation 3: dive activity
+                    omega_dist = dist.Beta(
+                        concentration0=_index_param(omega_concentration0, y, dim=-1),
+                        concentration1=_index_param(omega_concentration1, y, dim=-1),
+                    )
+
+                    # zero-inflation with MaskedMixture
+                    omega_zi = _index_param(omega_zi_param, y, dim=-2)
+                    omega_zi_mask = pyro.sample("omega_zi_{}".format(t),
+                                               dist.Categorical(logits=omega_zi), 
+                                               obs=(config["observations"]["omega"][..., t] == MISSING))
+                    omega_zi_zero_dist = dist.Delta(v=torch.tensor(MISSING))
+                    omega_zi_dist = dist.MaskedMixture(omega_zi_mask, omega_dist, omega_zi_zero_dist)
+
+                    pyro.sample("omega_{}".format(t), 
+                                omega_zi_dist,
+                                obs=config["observations"]["omega"][..., t])

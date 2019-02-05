@@ -52,13 +52,10 @@ def prepare_seal(filename, random_effects):
         "individual": {"random": random_effects["individual"], "fixed": None, "mask": mask_i},
         "timestep": {"random": None, "fixed": None, "mask": mask_t},
         "observations": {
-            "step": {"dist": dist.Gamma, "zi": True, "values": observations[..., 0]},
-            "angle": {"dist": dist.VonMises, "zi": False, "values": observations[..., 1]},
-            "omega": {"dist": dist.Beta, "zi": True, "values": observations[..., 2]},
+            "step": observations[..., 0],
+            "angle": observations[..., 1],
+            "omega": observations[..., 2],
         },
     }
 
     return config
-
-
-
