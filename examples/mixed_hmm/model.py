@@ -1,20 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
-import logging
-
-import numpy as np
-
 import torch
 from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.contrib.autoguide import AutoDelta
 from pyro.infer import config_enumerate
 
-
-MISSING = 1e-4
+from .seal_data import MISSING
 
 
 def _index_param(param, ind, dim=-2):

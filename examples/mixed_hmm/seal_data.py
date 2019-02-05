@@ -9,8 +9,8 @@ import pyreadr
 
 import torch
 
-import pyro
-import pyro.distributions as dist
+
+MISSING = 1e-6
 
 
 def prepare_seal(filename, random_effects):
@@ -34,8 +34,8 @@ def prepare_seal(filename, random_effects):
     mask_t = (observations > float("-inf")).all(dim=-1)   # include non-inf
 
     # temporary hack to avoid zero-inflation issues
-    # observations[observations == 0.] = 1e-4
-    observations[(observations == 0.) | (observations == float("-inf"))] = 1e-4
+    # observations[observations == 0.] = MISSING
+    observations[(observations == 0.) | (observations == float("-inf"))] = MISSING
     assert not torch.isnan(observations).any()
 
     # observations = observations[..., 5:11, :]  # truncate for testing
