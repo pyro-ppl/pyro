@@ -148,7 +148,6 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--resultsdir", default="./results", type=str)
     parser.add_argument("-s", "--seed", default=101, type=int)
     parser.add_argument("--schedule", default="", type=str)
-    parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--validation', action='store_true')
     args = parser.parse_args()
 
