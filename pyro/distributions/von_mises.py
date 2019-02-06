@@ -126,13 +126,13 @@ class VonMises(TorchDistribution):
     @property
     def mean(self):
         """
-        The provided mean is the :attr:`circular` one.
+        The provided mean is the circular one.
         """
         return self.loc
 
     @property
     def variance(self):
         """
-        The provided variance is the :attr:`circular` one.
+        The provided variance is the circular one.
         """
         return self._variance

@@ -10,7 +10,7 @@ from pyro.distributions import VonMises, VonMises3D
 from pyro.distributions.von_mises import _log_modified_bessel_fn
 
 
-def _fit_params_from_samples(samples, n_iter=50):
+def _fit_params_from_samples(samples, n_iter):
     assert samples.dim() == 1
     samples_count = samples.size(0)
     samples_cs = samples.cos().sum()
@@ -31,8 +31,8 @@ def _fit_params_from_samples(samples, n_iter=50):
     def bfgs_closure():
         bfgs.zero_grad()
         obj = (_log_modified_bessel_fn(kappa, order=1)
-               - _log_modified_bessel_fn(kappa, order=0)).exp()
-        obj = (obj - samples_r).abs()
+               - _log_modified_bessel_fn(kappa, order=0))
+        obj = (obj - samples_r.log()).abs()
         obj.backward()
         return obj
 
@@ -46,9 +46,9 @@ def _fit_params_from_samples(samples, n_iter=50):
 def test_sample(loc, concentration, n_samples=int(1e6), n_iter=100):
     prob = VonMises(loc, concentration)
     samples = prob.sample((n_samples,))
-    mu, kappa = _fit_params_from_samples(samples)
+    mu, kappa = _fit_params_from_samples(samples, n_iter=n_iter)
     assert abs(loc - mu) < 0.1
-    assert abs(concentration - kappa) < concentration / 5.0
+    assert abs(concentration - kappa) < concentration * 0.1
 
 
 @pytest.mark.parametrize('concentration', [0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0])
