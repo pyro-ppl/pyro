@@ -4,7 +4,7 @@ import math
 
 import torch
 from torch.distributions import biject_to, constraints, transform_to
-from torch.distributions.constraints import Constraint, lower_cholesky
+from torch.distributions.constraints import Constraint
 from torch.distributions.transforms import Transform, ComposeTransform
 
 from pyro.distributions import Beta, TorchDistribution
@@ -21,10 +21,8 @@ class _CorrCholesky(Constraint):
     Euclidean norm of each row is 1.
     """
     def check(self, value):
-        if not lower_cholesky().check(value): return False
-
-        unit_norm_row = ((value.pow(2).sum(-1) - 1).abs() < 1e-6).min(-1)[0]
-        return unit_norm_row
+        unit_norm_row = (value.norm(dim=-1).sub(1) < 1e-6).min(-1)[0]
+        return constraints.lower_cholesky.check(value) & unit_norm_row
 
 
 # TODO rename this public interface to corr_cholesky if move upstream to pytorch
@@ -36,114 +34,99 @@ corr_cholesky_constraint = _CorrCholesky()
 ########################################
 
 
-class _TanhTransform(Transform):
-    domain = constraints.real
-    codomain = constraints.interval(-1, 1)
-    bijective = True
-    sign = +1
-
-    def __eq__(self, other):
-        return isinstance(other, _TanhTransform)
-
-    def _call(self, x):
-        return x.tanh()
-
-    def _inverse(self, y):
-        return torch.log((1 + y) / (1 - y)) / 2
-
-    def log_abs_det_jacobian(self, x, y):
-        return (-2) * y.cosh().log()
-
-
-class _PartialCorrToCorrCholeskyTransform(Transform):
+class _PartialCorrToLCorrCholeskyTransform(Transform):
     """
     Transforms a vector of partial correlations into the cholesky factor of a
     correlation matrix.
 
+    The input should have shape `[batch_shape] + [d * (d-1)/2]`. The output will have
+    shape `[batch_shape + sample_shape] + [d, d]`.
+
     Reference:
 
-    [1] `Generating random correlation matrices based on vines and extended onion method`,
-    Daniel Lewandowski, Dorota Kurowicka, Harry Joe
+    [1] `Cholesky Factors of Correlation Matrices`, Stan Reference Manual v2.18, Section 10.12
     """
     domain = constraints.interval(-1, 1)
     codomain = corr_cholesky_constraint
     bijective = True
     sign = +1
+    event_shape = 1
 
     def __eq__(self, other):
-        return isinstance(other, _PartialCorrToCorrCholeskyTransform)
+        return isinstance(other, _PartialCorrToLCorrCholeskyTransform)
 
     def _call(self, z):
-        D = (1.0 + math.sqrt(1.0 + 8.0 * z.shape[0]))/2.0
+        D = (1.0 + math.sqrt(1.0 + 8.0 * z.shape[-1]))/2.0
         if D % 1 != 0:
             raise ValueError("Correlation matrix transformation requires d choose 2 inputs")
         D = int(D)
 
-        x = torch.zeros((D,D), device=z.device)
+        x = torch.zeros(list(z.shape[:-1]) + [D,D], device=z.device)
 
-        x[0,0] = 1
-        x[1:,0] = current_x = z[:(D-1)]
+        x[..., 0,0] = 1
+        x[..., 1:,0] = z[..., :(D-1)]
         i = D - 1
-        last_squared_x = None
+        last_squared_x = torch.zeros(list(z.shape[:-1]) + [D], device=z.device)
         for j in range(1, D):
             distance_to_copy = D - 1 - j
-            new_z = z[i:(i + distance_to_copy)]
-            if last_squared_x is None:
-                last_squared_x = current_x**2
-            else:
-                last_squared_x = last_squared_x[1:] + current_x**2
-            x[j, j] = (1 - last_squared_x[0]).sqrt()
-            current_x = new_z * (1 - last_squared_x[1:]).sqrt()
-            x[(j+1):, j] = current_x
+            last_squared_x = last_squared_x[..., 1:] + x[...,j:,(j-1)].clone()**2
+            x[..., j, j] = (1 - last_squared_x[..., 0]).sqrt()
+            x[..., (j+1):, j] = z[..., i:(i + distance_to_copy)] * (1 - last_squared_x[..., 1:]).sqrt()
             i += distance_to_copy
-
         return x
 
     def _inverse(self, x):
-        if (x.shape[0] != x.shape[1]):
+        if (x.shape[-2] != x.shape[-1]):
             raise ValueError("A matrix that isn't square can't be a Cholesky factor of a correlation matrix")
-        D = x.shape[0]
+        D = x.shape[-1]
 
         z_stack = [
-            x[1:, 0]
+            x[..., 1, 0].unsqueeze(-1)
         ]
-        current_x = z_stack[0]
-        last_squared_x = None
-        for j in range(1, D):
-            if last_squared_x is None:
-                last_squared_x = current_x**2
-            else:
-                last_squared_x += current_x[1:]**2
-        current_x = x[j:, j]
-        z_stack.append(current_x / (1 - last_squared_x).sqrt())
-        z = torch.cat(z_stack)
-        return z
+        for j in range(2, D):
+            z_stack.append(x[..., j, 0].unsqueeze(-1))
+            newval = x[..., j, 1:j] / (1-x[...,j,0:(j-1)].pow(2).cumsum(-1)).sqrt()
+            z_stack.append(newval)
+        return torch.cat(z_stack, -1)
 
-    def log_abs_det_jacobian(self, x, z):
-        return (1 - x.tril(-1).pow(2).sum(1)).log().sum() * .5
+    def log_abs_det_jacobian(self, z, x):
+        return (1 - x.tril(-1).pow(2).sum(-1)).log().sum(-1).mul(.5)
 
+class UnconstrainedToCorrLCholeskyTransform(Transform):
+    domain = constraints.real
+    codomain = corr_cholesky_constraint
+    bijective = True
+    sign = +1
+    event_shape = 1
+    _inner_transformation = _PartialCorrToLCorrCholeskyTransform()
 
-class CorrCholeskyTransform(ComposeTransform):
-    """
-    Transforms a real vector into the cholesky factor of a correlation matrix.
-    """
-    def __init__(self):
-        parts = [_TanhTransform(), _PartialCorrToCorrCholeskyTransform()]
-        super(CorrCholeskyTransform, self).__init__(parts)
+    def __eq__(self, other):
+        return isinstance(other, UnconstrainedToCorrLCholeskyTransform)
+
+    def _call(self, y):
+        z = y.tanh()
+        return self._inner_transformation(z)
+
+    def _inverse(self, x):
+        z = self._inner_transformation._inverse(x)
+        return torch.log((1 + z) / (1 - z)) / 2
+
+    def log_abs_det_jacobian(self, y, x):
+        return y.cosh().log().sum(-1).mul(-2) + self._inner_transformation.log_abs_det_jacobian(x)
 
 
 # register transform to global store
 @biject_to.register(corr_cholesky_constraint)
 @transform_to.register(corr_cholesky_constraint)
 def _transform_to_corr_cholesky(constraint):
-    return CorrCholeskyTransform()
+    return UnconstrainedToCorrLCholeskyTransform()
 
 
 ########################################
 # Define distribution
 ########################################
 
-
+# TODO: Modify class to support more than one eta value at a time?
 class LKJCholeskyFactor(TorchDistribution):
     """
     Generates cholesky factors of correlation matrices using an LKJ prior.
@@ -153,6 +136,8 @@ class LKJCholeskyFactor(TorchDistribution):
 
     E.g., if \theta is a (positive) vector of covariances with the same dimensionality
     as this distribution, and \Omega is sampled from this distribution, scale_tril=diag(sqrt(\theta))*\Omega
+
+    Note that the `event_shape` of this distribution is `[d, d]`
 
     :param int d: Dimensionality of the matrix
     :param torch.Tensor eta: A single positive number parameterizing the distribution.
@@ -169,7 +154,7 @@ class LKJCholeskyFactor(TorchDistribution):
         vector_size = (d * (d - 1)) // 2
         alpha = eta.add(0.5 * (d  - 1.0))
 
-        concentrations = eta.new().expand(vector_size)
+        concentrations = eta.new().resize_(vector_size)
         i = 0
         for k in range(d-1):
             alpha -= .5
@@ -177,13 +162,18 @@ class LKJCholeskyFactor(TorchDistribution):
                 concentrations[i] = alpha
                 i += 1
         self._generating_distribution = Beta(concentrations, concentrations)
-        self._transformation = CorrCholeskyTransform()
+        self._transformation = _PartialCorrToLCorrCholeskyTransform()
         self._eta = eta
         self._d = d
         self._lkj_constant = None
+        self._event_shape = torch.Size((d, d))
 
     def rsample(self):
         return self._transformation(self._generating_distribution.sample().mul(2).add(- 1.0))
+
+    def sample(self, batch_shape=None):
+        batch_shape = batch_shape or torch.Size((1,))
+        return self._transformation(self._generating_distribution.sample(batch_shape).mul(2).add(-1.0))
 
     def lkj_constant(self, eta, K):
         if self._lkj_constant is not None:
@@ -202,12 +192,12 @@ class LKJCholeskyFactor(TorchDistribution):
     def log_prob(self, x):
         eta = self._eta
 
-        lp = lkj_constant(eta, x.shape[1])
+        lp = self.lkj_constant(eta, self._d)
 
-        Km1 = x.shape[1] - 1
-        log_diagonals = x.diag().tail(Km1).log()
-        values = torch.linspace(start=Km1 - 1, end=0, steps=km1, device=x.device) * log_diagonals
+        Km1 = x.shape[-1] - 1
+        log_diagonals = x.diagonal(offset=0, dim1=-1, dim2=-2)[..., :-1].log()
+        #TODO: Confirm that this should be a 0-indexed rather than 1-indexed vector
+        values = log_diagonals * torch.linspace(start=Km1 - 1, end=0, steps=Km1, device=x.device).expand_as(log_diagonals)
 
         values += log_diagonals.mul(eta.mul(2).add(-2.0))
-
-        return values.sum() + lp
+        return values.sum(-1) + lp
