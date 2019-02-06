@@ -33,7 +33,7 @@ epsilon2[a,b] ~ Theta2[a][iota2[a,b]]
 Observations `y[t,a,b]` are represented as sequences of real-valued step lengths and turn angles, modelled by zero-inflated Gamma and von Mises likelihoods respectively.
 The seal models also include a third observed variable indicating the amount of diving activity between successive locations, which we model with a zero-inflated Beta distribution following [McClintock et al 2018].
 
-We grouped animals by sex and implemented versions of this model with (i) no random effects (as a baseline), and with random effects present at the (ii) group, (iii) individual, or (iv) group+individual levels. Random effects can be either discrete as above or continuous and normally distributed.
+We grouped animals by sex and implemented versions of this model with (i) no random effects (as a baseline), and with random effects present at the (ii) group, (iii) individual, or (iv) group+individual levels. Unlike the models in [Towner et al 2016], we do not consider fixed effects on any of the parameters.
 
 # References
 * [Bingham et al 2019] Tensor Variable Elimination for Plated Factor Graphs, 2019

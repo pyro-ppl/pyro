@@ -31,7 +31,7 @@ def aic_num_parameters(model, guide=None):
     with poutine.block(), poutine.trace(param_only=True) as param_capture:
         TraceEnum_ELBO(max_plate_nesting=2).differentiable_loss(model, guide)
 
-    return sum(_size(node["value"]) for node in param_capture.nodes.values())
+    return sum(_size(node["value"]) for node in param_capture.trace.nodes.values())
 
 
 def run_expt(args):
@@ -126,7 +126,7 @@ def run_expt(args):
     results["aic_final"] = aic_final
     results["aic_num_parameters"] = num_parameters
 
-    if args["resultsdir"] is not None:
+    if args["resultsdir"] is not None and os.path.exists(args["resultsdir"]):
         re_str = "g" + ("n" if args["group"] is None else "d" if args["group"] == "discrete" else "c")
         re_str += "i" + ("n" if args["individual"] is None else "d" if args["individual"] == "discrete" else "c")
         results_filename = "expt_{}_{}_{}.json".format(dataset, re_str, str(uuid.uuid4().hex)[0:5])
