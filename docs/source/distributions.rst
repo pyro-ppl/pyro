@@ -58,7 +58,7 @@ AVFMultivariateNormal
 
 BetaBinomial
 ------------
-.. autoclass:: pyro.distributions.BetaBinomial
+.. autoclass:: pyro.contrib.conjugate.distributions.BetaBinomial
     :members:
     :undoc-members:
     :show-inheritance:
@@ -79,7 +79,7 @@ EmpiricalDistribution
 
 GammaPoisson
 ------------
-.. autoclass:: pyro.distributions.GammaPoisson
+.. autoclass:: pyro.contrib.conjugate.distributions.GammaPoisson
     :members:
     :undoc-members:
     :show-inheritance:

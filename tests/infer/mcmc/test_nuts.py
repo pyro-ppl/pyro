@@ -8,10 +8,11 @@ import pytest
 import torch
 
 import pyro
+from pyro.contrib.conjugate.distributions import BetaBinomial, GammaPoisson
 import pyro.distributions as dist
 from pyro.contrib.autoguide import AutoDelta
 from pyro.infer import TraceEnum_ELBO, SVI
-from pyro.infer.conjugate import infer_conjugate
+from pyro.contrib.conjugate.infer import infer_conjugate, collapse_conjugate
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.nuts import NUTS
 import pyro.optim as optim
@@ -264,7 +265,7 @@ def test_bernoulli_latent_model(jit):
         y_prob = pyro.sample("y_prob", dist.Beta(1., 1.))
         with pyro.plate("data", data.shape[0]):
             y = pyro.sample("y", dist.Bernoulli(y_prob))
-            z = pyro.sample("z", dist.Bernoulli(0.65 * y + 0.1))
+            z = pyro.sample("y", dist.Bernoulli(0.65 * y + 0.1))
             pyro.sample("obs", dist.Normal(2. * z, 1.), obs=data)
 
     N = 2000
@@ -324,21 +325,22 @@ def test_gaussian_hmm(num_steps):
 @pytest.mark.parametrize("hyperpriors", [False, True])
 def test_beta_binomial(hyperpriors):
     def model(data):
-        with pyro.plate("latent_dim", data.shape[1]):
+        with pyro.plate("plate_0", data.shape[-1]):
             alpha = pyro.sample("alpha", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
             beta = pyro.sample("beta", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
-            with poutine.block():
-                print(poutine.trace(lambda: pyro.sample("mark", dist.Normal(0., 1.))).get_trace().nodes)
-            with pyro.plate("data", data.shape[0]):
-                pyro.sample("betabinom", dist.BetaBinomial(alpha, beta, total_count=1000), obs=data)
+            beta_binomial = BetaBinomial("betabinom", alpha, beta, total_count=1000)
+            with pyro.plate("plate_1", data.shape[-2]):
+                beta_binomial.pin_latent()
+                with pyro.plate("data", data.shape[0]):
+                    beta_binomial.observe(data)
 
-    true_probs = torch.tensor([0.7, 0.4])
+    true_probs = torch.tensor([[0.7, 0.4], [0.6, 0.4]])
     data = dist.Binomial(total_count=1000, probs=true_probs).sample(sample_shape=(torch.Size((10,))))
-    hmc_kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True)
+    hmc_kernel = NUTS(collapse_conjugate(model), jit_compile=True, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=80, warmup_steps=50).run(data)
     mcmc_run.exec_traces = [poutine.trace(infer_conjugate(model, tr)).get_trace(data) for tr in mcmc_run.exec_traces]
-    posterior = mcmc_run.marginal(["betabinom.latent"]).support()["betabinom.latent"].reshape(-1, data.shape[1])
-    assert_equal(posterior.mean(0), true_probs, prec=0.05)
+    posterior = mcmc_run.marginal(["betabinom.latent"]).empirical["betabinom.latent"]
+    assert_equal(posterior.mean, true_probs, prec=0.05)
 
 
 @pytest.mark.parametrize("hyperpriors", [False, True])
@@ -347,13 +349,15 @@ def test_gamma_poisson(hyperpriors):
         with pyro.plate("latent_dim", data.shape[1]):
             alpha = pyro.sample("alpha", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
             beta = pyro.sample("beta", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
+            gamma_poisson = GammaPoisson("gamma_poisson", alpha, beta)
+            gamma_poisson.pin_latent()
             with pyro.plate("data", data.shape[0]):
-                pyro.sample("gamma_poisson", dist.GammaPoisson(alpha, beta), obs=data)
+                gamma_poisson.observe(data)
 
     true_rate = torch.tensor([3., 10.])
     data = dist.Poisson(rate=true_rate).sample(sample_shape=(torch.Size((100,))))
-    hmc_kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True)
+    hmc_kernel = NUTS(collapse_conjugate(model), jit_compile=True, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=100, warmup_steps=50).run(data)
     mcmc_run.exec_traces = [poutine.trace(infer_conjugate(model, tr)).get_trace(data) for tr in mcmc_run.exec_traces]
-    posterior = mcmc_run.marginal(["gamma_poisson.latent"]).support()["gamma_poisson.latent"].reshape(-1, data.shape[1])
-    assert_equal(posterior.mean(0), true_rate, prec=0.2)
+    posterior = mcmc_run.marginal(["gamma_poisson.latent"]).empirical["gamma_poisson.latent"]
+    assert_equal(posterior.mean, true_rate, prec=0.2)
