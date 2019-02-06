@@ -144,7 +144,7 @@ class LKJCholeskyFactor(TorchDistribution):
     """
     arg_constraints = {"eta": constraints.positive}
     support = corr_cholesky_constraint
-    has_rsample = True
+    has_rsample = False
 
     def __init__(self, d, eta):
         if not torch.is_tensor(eta):
@@ -167,9 +167,6 @@ class LKJCholeskyFactor(TorchDistribution):
         self._d = d
         self._lkj_constant = None
         self._event_shape = torch.Size((d, d))
-
-    def rsample(self):
-        return self._transformation(self._generating_distribution.sample().mul(2).add(- 1.0))
 
     def sample(self, batch_shape=None):
         batch_shape = batch_shape or torch.Size((1,))
