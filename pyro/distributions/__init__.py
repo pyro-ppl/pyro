@@ -25,6 +25,7 @@ from pyro.distributions.util import enable_validation, is_validation_enabled, va
 from pyro.distributions.von_mises import VonMises
 from pyro.distributions.von_mises_3d import VonMises3D
 from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
+from pyro.distributions.lkj import (UnconstrainedToCorrLCholeskyTransform, LKJCholeskyFactor)
 
 __all__ = [
     "AVFMultivariateNormal",
@@ -37,6 +38,8 @@ __all__ = [
     "GaussianScaleMixture",
     "InverseAutoregressiveFlow",
     "InverseAutoregressiveFlowStable",
+    "UnconstrainedToCorrLCholeskyTransform",
+    "LKJCholeskyFactor",
     "MaskedMixture",
     "MixtureOfDiagNormals",
     "MixtureOfDiagNormalsSharedCovariance",
