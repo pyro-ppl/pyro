@@ -90,7 +90,13 @@ class _PartialCorrToLCorrCholeskyTransform(Transform):
         return torch.cat(z_stack, -1)
 
     def log_abs_det_jacobian(self, z, x):
-        return (1 - x.tril(-1).pow(2).sum(-1)).log().sum(-1).mul(.5)
+        # This can probably be replaced with tril when support for
+        # batched tril appears in pytorch 1.1
+        # return (1 - x.tril(-1).pow(2).sum(-1)).log().sum(-1).mul(.5)
+        mask = torch.eye(x.shape[-1], device=x.device).ne(1.0).float().expand_as(x)
+        x_l = x * mask
+
+        return (1 - x.pow(2).sum(-1)).log().sum(-1).mul(0.5)
 
 class UnconstrainedToCorrLCholeskyTransform(Transform):
     domain = constraints.real
@@ -112,7 +118,7 @@ class UnconstrainedToCorrLCholeskyTransform(Transform):
         return torch.log((1 + z) / (1 - z)) / 2
 
     def log_abs_det_jacobian(self, y, x):
-        return y.cosh().log().sum(-1).mul(-2) + self._inner_transformation.log_abs_det_jacobian(x)
+        return y.cosh().log().sum(-1).mul(-2) + self._inner_transformation.log_abs_det_jacobian(None, x)
 
 
 # register transform to global store
