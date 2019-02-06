@@ -61,6 +61,7 @@ Welcome to Pyro Examples and Tutorials!
    mcmc
    sparse_gamma
    dkl
+   einsum
 
 
 Indices and tables
