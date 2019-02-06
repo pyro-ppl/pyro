@@ -40,7 +40,21 @@ class SigmaPointDirichlet(SigmaPointMixin, Independent):
         base_dist = Gamma(concentration, 1.0)
         super(SigmaPointDirichlet, self).__init__(base_dist, 1)
 
+    @property
+    def concentration(self):
+        return self.base_dist.concentration
+
+    def expand(self, batch_shape, _instance=None):
+        concentration = self.concentration.expand(torch.Size(batch_shape) + self.concentration.shape[-1:])
+        new = self._get_checked_instance(SigmaPointDirichlet, _instance)
+        base_dist = Gamma(concentration, 1.0)
+        super(SigmaPointDirichlet, new).__init__(base_dist, 1, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
+
     def enumerate_support(self, expand=True):
         if expand:
-            return self.base_dist.alpha.unsqueeze(0)
+            # We really only need one sigma point, but enumeration requires size > 1.
+            alpha = self.base_dist.alpha
+            return alpha.unsqueeze(0).expand((2,) + alpha.shape)
         raise NotImplementedError
