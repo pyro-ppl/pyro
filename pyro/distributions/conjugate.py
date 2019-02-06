@@ -116,7 +116,8 @@ class DirichletMultinomial(TorchDistribution):
         total_count = total_count_1.squeeze(-1)
         self._dirichlet = Dirichlet(concentration)
         self.total_count = total_count
-        super(DirichletMultinomial, self).__init__(self._dirichlet._batch_shape, validate_args=validate_args)
+        super(DirichletMultinomial, self).__init__(
+            self._dirichlet._batch_shape, self._dirichlet.event_shape, validate_args=validate_args)
 
     @property
     def concentration(self):
@@ -127,13 +128,17 @@ class DirichletMultinomial(TorchDistribution):
         batch_shape = torch.Size(batch_shape)
         new._dirichlet = self._dirichlet.expand(batch_shape)
         new.total_count = self.total_count.expand(batch_shape)
-        super(DirichletMultinomial, new).__init__(batch_shape, validate_args=False)
+        super(DirichletMultinomial, new).__init__(
+            new._dirichlet.batch_shape, new._dirichlet.event_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
 
     def sample(self, sample_shape=()):
         probs = self._dirichlet.sample(sample_shape)
-        return Binomial(self.total_count, probs).sample()
+        total_count = int(self.total_count.max())
+        if not self.total_count.min() == total_count:
+            raise NotImplementedError("Inhomogeneous total count not supported by `enumerate_support`.")
+        return Multinomial(total_count, probs).sample()
 
     def log_prob(self, value):
         if self._validate_args:
