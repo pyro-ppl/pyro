@@ -1,15 +1,21 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
+
 import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
-from pyro.distributions.torch import Beta, Binomial, Gamma, Poisson
+from pyro.distributions.torch import Beta, Binomial, Dirichlet, Gamma, Multinomial, Poisson
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
 def _log_beta(x, y):
     return torch.lgamma(x) + torch.lgamma(y) - torch.lgamma(x + y)
+
+
+def _log_factorial(x):
+    return torch.lgamma(1 + x)
 
 
 class BetaBinomial(TorchDistribution):
@@ -85,6 +91,70 @@ class BetaBinomial(TorchDistribution):
         if expand:
             values = values.expand((-1,) + self._batch_shape)
         return values
+
+
+class DirichletMultinomial(TorchDistribution):
+    r"""
+    Compound distribution comprising of a dirichlet-multinomial pair. The probability of
+    classes (``probs`` for the :class:`~pyro.distributions.Multinomial` distribution)
+    is unknown and randomly drawn from a :class:`~pyro.distributions.Dirichlet`
+    distribution prior to a certain number of Categorical trials given by
+    ``total_count``.
+
+    :param float or torch.Tensor concentration: concentration parameter (alpha) for the
+        Dirichlet distribution.
+    :param int or torch.Tensor total_count: number of Categorical trials.
+    """
+    arg_constraints = {'concentration': constraints.positive, 'total_count': constraints.nonnegative_integer}
+    support = Multinomial.support
+
+    def __init__(self, concentration, total_count=1, validate_args=None):
+        if isinstance(total_count, numbers.Number):
+            total_count = concentration.new_tensor(total_count)
+        total_count_1 = total_count.unsqueeze(-1)
+        concentration, total_count = torch.broadcast_tensors(concentration, total_count_1)
+        total_count = total_count_1.squeeze(-1)
+        self._dirichlet = Dirichlet(concentration)
+        self.total_count = total_count
+        super(DirichletMultinomial, self).__init__(self._dirichlet._batch_shape, validate_args=validate_args)
+
+    @property
+    def concentration(self):
+        return self._dirichlet.concentration
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(DirichletMultinomial, _instance)
+        batch_shape = torch.Size(batch_shape)
+        new._dirichlet = self._dirichlet.expand(batch_shape)
+        new.total_count = self.total_count.expand(batch_shape)
+        super(DirichletMultinomial, new).__init__(batch_shape, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
+
+    def sample(self, sample_shape=()):
+        probs = self._dirichlet.sample(sample_shape)
+        return Binomial(self.total_count, probs).sample()
+
+    def log_prob(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+        n = self.total_count
+        alpha = self.concentration
+        alpha_sum = self.concentration.sum(-1)
+        return (_log_factorial(n) + torch.lgamma(alpha_sum) - torch.lgamma(n + alpha_sum) +
+                (torch.lgamma(value + alpha) - _log_factorial(value) - torch.lgamma(alpha)).sum(-1))
+
+    @property
+    def mean(self):
+        return self._dirichlet.mean * self.total_count.unsqueeze(-1)
+
+    @property
+    def variance(self):
+        n = self.total_count.unsqueeze(-1)
+        alpha = self.concentration
+        alpha_sum = self.concentration.sum(-1, keepdim=True)
+        alpha_ratio = alpha / alpha_sum
+        return n * alpha_ratio * (1 - alpha_ratio) * (n + alpha_sum) / (1 + alpha_sum)
 
 
 class GammaPoisson(TorchDistribution):

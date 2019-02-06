@@ -70,6 +70,13 @@ Delta
     :undoc-members:
     :show-inheritance:
 
+DirichletMultinomial
+--------------------
+.. autoclass:: pyro.distributions.DirichletMultinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 EmpiricalDistribution
 ----------------------
 .. autoclass:: pyro.distributions.Empirical
