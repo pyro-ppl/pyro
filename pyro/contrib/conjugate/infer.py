@@ -57,6 +57,8 @@ class CollapseConjugateMessenger(Messenger):
 
 def collapse_conjugate(fn=None):
     r"""
+    This simply collapses (removes from the trace) and sample sites that have
+    `collapse=True` set in their `infer` config.
     """
     msngr = CollapseConjugateMessenger()
     return msngr(fn) if fn is not None else msngr
