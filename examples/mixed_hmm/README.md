@@ -13,7 +13,7 @@ At each timestep `t`, for each individual trajectory `b` in each group `a`, we h
 
 ```
 logit(p(x[t,a,b] = state i | x[t-1,a,b] = state j)) =
-(epsilon_G[a] + epsilon_I[a,b] + Z_I[a,b].T @ beta1 + Z_G[a].T @ beta2 + Z_T[t,a,b].T @ beta3)[i,j]
+    (epsilon_G[a] + epsilon_I[a,b] + Z_I[a,b].T @ beta1 + Z_G[a].T @ beta2 + Z_T[t,a,b].T @ beta3)[i,j]
 ```
 
 where `a,b` correspond to plate indices, `epsilon_G` and `epsilon_I` are independent random variables for each group and individual within each group respectively, `Z`s are covariates, and `beta`s are parameter vectors.
@@ -29,6 +29,8 @@ epsilon_G[a] = Theta_G[iota_G[a]]
 iota_I[a,b] ~ Categorical(pi_I[a])
 epsilon_I[a,b] = Theta_I[a][iota_I[a,b]]
 ```
+
+Here `pi_G`, `Theta_G`, `pi_I`, and `Theta_I` are all learnable real-valued parameter vectors and `epsilon` values are batches of vectors the size of state transition matrices.
 
 Observations `y[t,a,b]` are represented as sequences of real-valued step lengths and turn angles, modelled by zero-inflated Gamma and von Mises likelihoods respectively.
 The seal models also include a third observed variable indicating the amount of diving activity between successive locations, which we model with a zero-inflated Beta distribution following [McClintock et al 2018].
