@@ -80,7 +80,6 @@ setup(
         # add them to `docs/requirements.txt`
         'contextlib2',
         'graphviz>=0.8',
-        'networkx>=2.2',
         'numpy>=1.7',
         'opt_einsum>=2.3.2',
         'six>=1.10.0',
