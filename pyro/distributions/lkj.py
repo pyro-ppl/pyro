@@ -34,7 +34,7 @@ corr_cholesky_constraint = _CorrCholesky()
 ########################################
 
 
-class _PartialCorrToLCorrCholeskyTransform(Transform):
+class _PartialCorrToCorrLCholeskyTransform(Transform):
     """
     Transforms a vector of partial correlations into the cholesky factor of a
     correlation matrix.
@@ -53,7 +53,7 @@ class _PartialCorrToLCorrCholeskyTransform(Transform):
     event_shape = 1
 
     def __eq__(self, other):
-        return isinstance(other, _PartialCorrToLCorrCholeskyTransform)
+        return isinstance(other, _PartialCorrToCorrLCholeskyTransform)
 
     def _call(self, z):
         D = (1.0 + math.sqrt(1.0 + 8.0 * z.shape[-1]))/2.0
@@ -104,7 +104,7 @@ class UnconstrainedToCorrLCholeskyTransform(Transform):
     bijective = True
     sign = +1
     event_shape = 1
-    _inner_transformation = _PartialCorrToLCorrCholeskyTransform()
+    _inner_transformation = _PartialCorrToCorrLCholeskyTransform()
 
     def __eq__(self, other):
         return isinstance(other, UnconstrainedToCorrLCholeskyTransform)
@@ -133,7 +133,7 @@ def _transform_to_corr_cholesky(constraint):
 ########################################
 
 # TODO: Modify class to support more than one eta value at a time?
-class LKJCholeskyFactor(TorchDistribution):
+class CorrLCholeskyLKJPrior(TorchDistribution):
     """
     Generates cholesky factors of correlation matrices using an LKJ prior.
 
@@ -168,7 +168,7 @@ class LKJCholeskyFactor(TorchDistribution):
                 concentrations[i] = alpha
                 i += 1
         self._generating_distribution = Beta(concentrations, concentrations)
-        self._transformation = _PartialCorrToLCorrCholeskyTransform()
+        self._transformation = _PartialCorrToCorrLCholeskyTransform()
         self._eta = eta
         self._d = d
         self._lkj_constant = None
