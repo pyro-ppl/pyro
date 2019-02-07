@@ -145,7 +145,7 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
     to the scale_tril parameter of a multivariate distribution such as MultivariateNormal.
 
     E.g., if \theta is a (positive) vector of covariances with the same dimensionality
-    as this distribution, and \Omega is sampled from this distribution, scale_tril=diag(sqrt(\theta))*\Omega
+    as this distribution, and \Omega is sampled from this distribution, scale_tril=torch.mm(torch.diag(sqrt(\theta)), \Omega)
 
     Note that the `event_shape` of this distribution is `[d, d]`
 
@@ -164,12 +164,12 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
         vector_size = (d * (d - 1)) // 2
         alpha = eta.add(0.5 * (d  - 1.0))
 
-        concentrations = eta.new().resize_(vector_size)
+        concentrations = eta.new().resize_(vector_size,)
         i = 0
         for k in range(d-1):
             alpha -= .5
             for j in range(k+1, d):
-                concentrations[i] = alpha
+                concentrations[..., i] = alpha
                 i += 1
         self._generating_distribution = Beta(concentrations, concentrations)
         self._transformation = _PartialCorrToCorrLCholeskyTransform()
