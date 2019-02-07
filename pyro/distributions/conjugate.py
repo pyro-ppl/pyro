@@ -137,7 +137,7 @@ class DirichletMultinomial(TorchDistribution):
         probs = self._dirichlet.sample(sample_shape)
         total_count = int(self.total_count.max())
         if not self.total_count.min() == total_count:
-            raise NotImplementedError("Inhomogeneous total count not supported by `enumerate_support`.")
+            raise NotImplementedError("Inhomogeneous total count not supported by `sample`.")
         return Multinomial(total_count, probs).sample()
 
     def log_prob(self, value):
