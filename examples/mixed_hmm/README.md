@@ -12,11 +12,11 @@ whose state transition distribution is specified by a hierarchical generalized l
 At each timestep `t`, for each individual trajectory `b` in each group `a`, we have
 
 ```
-logit(p(z[t,a,b] = state i | z[t-1,a,b] = state j)) =
-(epsilon1[a] + epsilon2[a,b] + X1[a,b].T @ beta1 + X2[a].T @ beta2 + X3[t,a,b].T @ beta3)[i,j]
+logit(p(x[t,a,b] = state i | x[t-1,a,b] = state j)) =
+(epsilon_G[a] + epsilon_I[a,b] + Z_I[a,b].T @ beta1 + Z_G[a].T @ beta2 + Z_T[t,a,b].T @ beta3)[i,j]
 ```
 
-where `a,b` correspond to plate indices, `epsilon`s are independent random variables, `X`s are covariates, and `beta`s are parameter vectors.
+where `a,b` correspond to plate indices, `epsilon_G` and `epsilon_I` are independent random variables for each group and individual within each group respectively, `Z`s are covariates, and `beta`s are parameter vectors.
 
 The random variables `epsilon` may be either discrete or continuous.
 If continuous, they are normally distributed.
@@ -24,10 +24,10 @@ If discrete, they are sampled from a set of three possible values shared across 
 That is, for each individual trajectory `b` in each group `a`, we sample single random effect values for an entire trajectory:
 
 ```
-iota1[a] ~ Categorical(pi1)
-epsilon1[a] = Theta1[iota1[a]]
-iota2[a,b] ~ Categorical(pi2[a])
-epsilon2[a,b] ~ Theta2[a][iota2[a,b]]
+iota_G[a] ~ Categorical(pi_G)
+epsilon_G[a] = Theta_G[iota_G[a]]
+iota_I[a,b] ~ Categorical(pi_I[a])
+epsilon_I[a,b] = Theta_I[a][iota_I[a,b]]
 ```
 
 Observations `y[t,a,b]` are represented as sequences of real-valued step lengths and turn angles, modelled by zero-inflated Gamma and von Mises likelihoods respectively.
@@ -36,7 +36,7 @@ The seal models also include a third observed variable indicating the amount of 
 We grouped animals by sex and implemented versions of this model with (i) no random effects (as a baseline), and with random effects present at the (ii) group, (iii) individual, or (iv) group+individual levels. Unlike the models in [Towner et al 2016], we do not consider fixed effects on any of the parameters.
 
 # References
-* [Bingham et al 2019] Tensor Variable Elimination for Plated Factor Graphs, 2019
+* [Obermeyer et al 2019] Obermeyer, F.\*, Bingham, E.\*, Jankowiak, M.\*, Chiu, J., Pradhan, N., Rush, A., and Goodman, N.  Tensor Variable Elimination for Plated Factor Graphs, 2019
 * [McClintock et al 2013] McClintock, B. T., Russell, D. J., Matthiopoulos, J., and King, R.  Combining individual animal movement and ancillary biotelemetry data to investigate population-level activity budgets. Ecology, 94(4):838–849, 2013
 * [McClintock et al 2018] McClintock, B. T. and Michelot,T. momentuhmm: R package for generalized hidden markov models of animal movement. Methods in Ecology and  Evolution,  9(6): 1518–1530, 2018. doi: 10.1111/2041-210X.12995
 * [Towner et al 2016] Towner, A. V., Leos-Barajas, V., Langrock, R., Schick, R. S., Smale, M. J., Kaschke, T., Jewell, O. J., and Papastamatiou, Y. P.  Sex-specific and individual preferences for hunting strategies in white sharks. Functional Ecology, 30(8):1397–1407, 2016.
