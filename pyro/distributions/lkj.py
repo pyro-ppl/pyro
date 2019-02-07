@@ -79,21 +79,25 @@ class _PartialCorrToCorrLCholeskyTransform(Transform):
         if (x.shape[-2] != x.shape[-1]):
             raise ValueError("A matrix that isn't square can't be a Cholesky factor of a correlation matrix")
         D = x.shape[-1]
+        outlen = int(D * (D - 1) / 2)
 
+        z_tri = torch.zeros(x.shape[:-2] + (D - 2, D - 2))
         z_stack = [
-            x[..., 1, 0].unsqueeze(-1)
+            x[..., 1:, 0]
         ]
-        for j in range(2, D):
-            z_stack.append(x[..., j, 0].unsqueeze(-1))
-            newval = x[..., j, 1:j] / (1-x[...,j,0:(j-1)].pow(2).cumsum(-1)).sqrt()
-            z_stack.append(newval)
+
+        for i in range(2, D):
+            z_tri[..., i - 2, 0:(i-1)] = x[..., i, 1:i] / (1-x[...,i,0:(i-1)].pow(2).cumsum(-1)).sqrt()
+        for j in range(D - 2):
+            z_stack.append(z_tri[..., j:, j])
+
         return torch.cat(z_stack, -1)
 
     def log_abs_det_jacobian(self, z, x):
         # This can probably be replaced with tril when support for
         # batched tril appears in pytorch 1.1
         # return (1 - x.tril(-1).pow(2).sum(-1)).log().sum(-1).mul(.5)
-        mask = torch.eye(x.shape[-1], device=x.device).ne(1.0).float().expand_as(x)
+        mask = torch.eye(x.shape[-1], device=x.device).ne(1.0).to(dtype=x.dtype).expand_as(x)
         x_l = x * mask
 
         return (1 - x.pow(2).sum(-1)).log().sum(-1).mul(0.5)
