@@ -178,9 +178,8 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
         self._lkj_constant = None
         self._event_shape = torch.Size((d, d))
 
-    def sample(self, batch_shape=None):
-        batch_shape = batch_shape or torch.Size((1,))
-        return self._transformation(self._generating_distribution.sample(batch_shape).mul(2).add(-1.0))
+    def sample(self, *args, **kwargs):
+        return self._transformation(self._generating_distribution.sample(*args, **kwargs).detach().mul(2).add(-1.0))
 
     def lkj_constant(self, eta, K):
         if self._lkj_constant is not None:
