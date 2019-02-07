@@ -82,6 +82,9 @@ class Trace(object):
         for node in self.nodes:
             yield node
 
+    def __len__(self):
+        return len(self.nodes)
+
     @property
     def edges(self):
         for site, adj_nodes in self._succ.items():
@@ -145,14 +148,20 @@ class Trace(object):
 
     def _dfs(self, site, visited):
         if site in visited:
-            raise StopIteration
+            return
         for s in self._succ[site]:
             for node in self._dfs(s, visited):
                 yield node
         visited.add(site)
         yield site
 
-    def topsort(self, reverse=False):
+    def topological_sort(self, reverse=False):
+        """
+        Return a list of nodes (site names) in topologically sorted order.
+
+        :param bool reverse: Return the list in reverse order.
+        :return: list of topologically sorted nodes (site names).
+        """
         visited = set()
         top_sorted = []
         for s in self._succ:

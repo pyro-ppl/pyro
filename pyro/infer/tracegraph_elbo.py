@@ -38,7 +38,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     # 1. downstream costs used for rao-blackwellization
     # 2. model observe sites (as well as terms that arise from the model and guide having different
     # dependency structures) are taken care of via 'children_in_model' below
-    topo_sort_guide_nodes = guide_trace.topsort(reverse=True)
+    topo_sort_guide_nodes = guide_trace.topological_sort(reverse=True)
     topo_sort_guide_nodes = [x for x in topo_sort_guide_nodes
                              if guide_trace.nodes[x]["type"] == "sample"]
     ordered_guide_nodes_dict = {n: i for i, n in enumerate(topo_sort_guide_nodes)}

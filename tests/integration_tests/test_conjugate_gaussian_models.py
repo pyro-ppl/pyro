@@ -207,7 +207,7 @@ class GaussianPyramidTests(TestCase):
         self.N_data = torch.tensor([float(self.N_data)])
         self.q_dag = self.construct_q_dag()
         # compute the order in which guide samples are generated
-        self.q_topo_sort = self.q_dag.topsort()
+        self.q_topo_sort = self.q_dag.topological_sort()
         self.which_nodes_reparam = self.setup_reparam_mask(len(self.q_topo_sort))
         self.calculate_variational_targets()
         self.set_model_permutations()
