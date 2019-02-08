@@ -3,8 +3,7 @@ from __future__ import absolute_import, division, print_function
 import pytest
 import torch
 from torch.distributions import biject_to, transform_to
-from pyro.distributions.lkj import (corr_cholesky_constraint, UnconstrainedToCorrLCholeskyTransform,
-                                    _PartialCorrToCorrLCholeskyTransform)
+from pyro.distributions.lkj import (corr_cholesky_constraint, CorrLCholeskyTransform)
 from tests.common import assert_tensors_equal
 
 
@@ -24,29 +23,9 @@ def _autograd_log_det(ys, x):
                         for y in ys]).det().abs().log()
 
 
-@pytest.mark.parametrize("z_shape", [(1,), (3, 1), (6,), (1, 6), (5, 6)])
-def test_partial_corr_to_corr_cholesky_transform(z_shape):
-    transform = _PartialCorrToCorrLCholeskyTransform()
-    z = torch.empty(z_shape).uniform_(-1, 1).requires_grad_()
-    x = transform(z)
-
-    # test codomain
-    assert_tensors_equal(transform.codomain.check(x), torch.ones(z.shape[:-1]))
-
-    # test inv
-    z_prime = transform.inv(x)
-    assert_tensors_equal(z, z_prime)
-
-    # test domain
-    assert_tensors_equal(transform.domain.check(z_prime), torch.ones(z_shape))
-
-    # test log_abs_det_jacobian
-    log_det = transform.log_abs_det_jacobian(z, x)
-    assert log_det.shape == z_shape[:-1]
-
 @pytest.mark.parametrize("y_shape", [(1,), (3, 1), (6,), (1, 6), (2, 6)])
 def test_unconstrained_to_corr_cholesky_transform(y_shape):
-    transform = UnconstrainedToCorrLCholeskyTransform()
+    transform = CorrLCholeskyTransform()
     y = torch.empty(y_shape).normal_(0, 10).requires_grad_()
     x = transform(y)
 
