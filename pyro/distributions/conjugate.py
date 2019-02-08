@@ -104,11 +104,13 @@ class DirichletMultinomial(TorchDistribution):
     :param float or torch.Tensor concentration: concentration parameter (alpha) for the
         Dirichlet distribution.
     :param int or torch.Tensor total_count: number of Categorical trials.
+    :param bool is_sparse: Whether to assume value is mostly zero when computing
+        :meth:`log_prob`, which can speed up computation when data is sparse.
     """
     arg_constraints = {'concentration': constraints.positive, 'total_count': constraints.nonnegative_integer}
     support = Multinomial.support
 
-    def __init__(self, concentration, total_count=1, validate_args=None):
+    def __init__(self, concentration, total_count=1, is_sparse=False, validate_args=None):
         if isinstance(total_count, numbers.Number):
             total_count = concentration.new_tensor(total_count)
         total_count_1 = total_count.unsqueeze(-1)
@@ -116,6 +118,7 @@ class DirichletMultinomial(TorchDistribution):
         total_count = total_count_1.squeeze(-1)
         self._dirichlet = Dirichlet(concentration)
         self.total_count = total_count
+        self.is_sparse = is_sparse
         super(DirichletMultinomial, self).__init__(
             self._dirichlet._batch_shape, self._dirichlet.event_shape, validate_args=validate_args)
 
@@ -128,6 +131,7 @@ class DirichletMultinomial(TorchDistribution):
         batch_shape = torch.Size(batch_shape)
         new._dirichlet = self._dirichlet.expand(batch_shape)
         new.total_count = self.total_count.expand(batch_shape)
+        new.is_sparse = self.is_sparse
         super(DirichletMultinomial, new).__init__(
             new._dirichlet.batch_shape, new._dirichlet.event_shape, validate_args=False)
         new._validate_args = self._validate_args
@@ -146,8 +150,16 @@ class DirichletMultinomial(TorchDistribution):
         n = self.total_count
         alpha = self.concentration
         alpha_sum = self.concentration.sum(-1)
-        return (_log_factorial(n) + torch.lgamma(alpha_sum) - torch.lgamma(n + alpha_sum) +
-                (torch.lgamma(value + alpha) - _log_factorial(value) - torch.lgamma(alpha)).sum(-1))
+        if self.is_sparse:
+            value, alpha = torch.broadcast_tensors(value, alpha)
+            elementwise = torch.zeros_like(value)
+            mask = (value != 0)
+            value = value[mask]
+            alpha = alpha[mask]
+            elementwise[mask] = torch.lgamma(value + alpha) - _log_factorial(value) - torch.lgamma(alpha)
+        else:
+            elementwise = torch.lgamma(value + alpha) - _log_factorial(value) - torch.lgamma(alpha)
+        return _log_factorial(n) + torch.lgamma(alpha_sum) - torch.lgamma(n + alpha_sum) + elementwise.sum(-1)
 
     @property
     def mean(self):

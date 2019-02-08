@@ -71,7 +71,8 @@ def test_beta_binomial_log_prob(total_count, shape):
 
 @pytest.mark.parametrize("total_count", [1, 2, 3, 10])
 @pytest.mark.parametrize("batch_shape", [(1,), (3, 1), (2, 3, 1)])
-def test_dirichlet_multinomial_log_prob(total_count, batch_shape):
+@pytest.mark.parametrize("is_sparse", [False, True], ids=["dense", "sparse"])
+def test_dirichlet_multinomial_log_prob(total_count, batch_shape, is_sparse):
     event_shape = (3,)
     concentration = torch.rand(batch_shape + event_shape).exp()
     # test on one-hots
@@ -83,7 +84,7 @@ def test_dirichlet_multinomial_log_prob(total_count, batch_shape):
     assert log_probs.shape == (num_samples,) + event_shape + batch_shape
     expected = log_probs.logsumexp(0) - math.log(num_samples)
 
-    actual = DirichletMultinomial(concentration, total_count).log_prob(value)
+    actual = DirichletMultinomial(concentration, total_count, is_sparse).log_prob(value)
     assert_close(actual, expected, atol=0.05)
 
 
