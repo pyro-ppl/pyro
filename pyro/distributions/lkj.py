@@ -33,11 +33,28 @@ corr_cholesky_constraint = _CorrCholesky()
 # Define transforms
 ########################################
 
+def _vector_to_l_cholesky(z):
+    D = (1.0 + math.sqrt(1.0 + 8.0 * z.shape[-1]))/2.0
+    if D % 1 != 0:
+        raise ValueError("Correlation matrix transformation requires d choose 2 inputs")
+    D = int(D)
+    x = torch.zeros(list(z.shape[:-1]) + [D,D], device=z.device)
 
-class _PartialCorrToCorrLCholeskyTransform(Transform):
+    x[..., 0,0] = 1
+    x[..., 1:,0] = z[..., :(D-1)]
+    i = D - 1
+    last_squared_x = torch.zeros(list(z.shape[:-1]) + [D], device=z.device)
+    for j in range(1, D):
+        distance_to_copy = D - 1 - j
+        last_squared_x = last_squared_x[..., 1:] + x[...,j:,(j-1)].clone()**2
+        x[..., j, j] = (1 - last_squared_x[..., 0]).sqrt()
+        x[..., (j+1):, j] = z[..., i:(i + distance_to_copy)] * (1 - last_squared_x[..., 1:]).sqrt()
+        i += distance_to_copy
+    return x
+
+class CorrLCholeskyTransform(Transform):
     """
-    Transforms a vector of partial correlations into the cholesky factor of a
-    correlation matrix.
+    Transforms a vector into the cholesky factor of a correlation matrix.
 
     The input should have shape `[batch_shape] + [d * (d-1)/2]`. The output will have
     shape `[batch_shape + sample_shape] + [d, d]`.
@@ -46,34 +63,18 @@ class _PartialCorrToCorrLCholeskyTransform(Transform):
 
     [1] `Cholesky Factors of Correlation Matrices`, Stan Reference Manual v2.18, Section 10.12
     """
-    domain = constraints.interval(-1, 1)
+    domain = constraints.real
     codomain = corr_cholesky_constraint
     bijective = True
     sign = +1
     event_shape = 1
 
     def __eq__(self, other):
-        return isinstance(other, _PartialCorrToCorrLCholeskyTransform)
+        return isinstance(other, CorrLCholeskyTransform)
 
     def _call(self, x):
-        D = (1.0 + math.sqrt(1.0 + 8.0 * x.shape[-1]))/2.0
-        if D % 1 != 0:
-            raise ValueError("Correlation matrix transformation requires d choose 2 inputs")
-        D = int(D)
-
-        y = torch.zeros(list(x.shape[:-1]) + [D,D], device=x.device)
-
-        y[..., 0,0] = 1
-        y[..., 1:,0] = x[..., :(D-1)]
-        i = D - 1
-        last_squared_y = torch.zeros(list(x.shape[:-1]) + [D], device=x.device)
-        for j in range(1, D):
-            distance_to_copy = D - 1 - j
-            last_squared_y = last_squared_y[..., 1:] + y[...,j:,(j-1)].clone()**2
-            y[..., j, j] = (1 - last_squared_y[..., 0]).sqrt()
-            y[..., (j+1):, j] = x[..., i:(i + distance_to_copy)] * (1 - last_squared_y[..., 1:]).sqrt()
-            i += distance_to_copy
-        return y
+        z = x.tanh()
+        return _vector_to_l_cholesky(z)
 
     def _inverse(self, y):
         if (y.shape[-2] != y.shape[-1]):
@@ -90,7 +91,8 @@ class _PartialCorrToCorrLCholeskyTransform(Transform):
         for j in range(D - 2):
             z_stack.append(z_tri[..., j:, j])
 
-        return torch.cat(z_stack, -1)
+        z = torch.cat(z_stack, -1)
+        return torch.log((1 + z) / (1 - z)) / 2
 
     def log_abs_det_jacobian(self, x, y):
         # This can probably be replaced with tril when support for
@@ -99,36 +101,14 @@ class _PartialCorrToCorrLCholeskyTransform(Transform):
         mask = torch.eye(y.shape[-1], device=y.device).ne(1.0).to(dtype=y.dtype).expand_as(y)
         x_l = y * mask
 
-        return (1 - x_l.pow(2).sum(-1)).log().sum(-1).mul(0.5)
-
-class UnconstrainedToCorrLCholeskyTransform(Transform):
-    domain = constraints.real
-    codomain = corr_cholesky_constraint
-    bijective = True
-    sign = +1
-    event_shape = 1
-    _inner_transformation = _PartialCorrToCorrLCholeskyTransform()
-
-    def __eq__(self, other):
-        return isinstance(other, UnconstrainedToCorrLCholeskyTransform)
-
-    def _call(self, x):
-        z = x.tanh()
-        return self._inner_transformation(z)
-
-    def _inverse(self, y):
-        z = self._inner_transformation._inverse(y)
-        return torch.log((1 + z) / (1 - z)) / 2
-
-    def log_abs_det_jacobian(self, x, y):
-        return x.cosh().log().sum(-1).mul(-2) + self._inner_transformation.log_abs_det_jacobian(None, y)
+        return x.cosh().log().sum(-1).mul(-2) + (1 - x_l.pow(2).sum(-1)).log().sum(-1).mul(0.5)
 
 
 # register transform to global store
 @biject_to.register(corr_cholesky_constraint)
 @transform_to.register(corr_cholesky_constraint)
 def _transform_to_corr_cholesky(constraint):
-    return UnconstrainedToCorrLCholeskyTransform()
+    return CorrLCholeskyTransform()
 
 
 ########################################
@@ -171,14 +151,14 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
                 concentrations[..., i] = alpha
                 i += 1
         self._generating_distribution = Beta(concentrations, concentrations)
-        self._transformation = _PartialCorrToCorrLCholeskyTransform()
         self._eta = eta
         self._d = d
         self._lkj_constant = None
         self._event_shape = torch.Size((d, d))
 
     def sample(self, *args, **kwargs):
-        return self._transformation(self._generating_distribution.sample(*args, **kwargs).detach().mul(2).add(-1.0))
+        z = self._generating_distribution.sample(*args, **kwargs).detach().mul(2).add(-1.0)
+        return _vector_to_l_cholesky(z)
 
     def lkj_constant(self, eta, K):
         if self._lkj_constant is not None:
