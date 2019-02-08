@@ -3,23 +3,21 @@ from __future__ import absolute_import, division, print_function
 import json
 import logging
 import signal
-import sys
 import threading
 import warnings
 from collections import OrderedDict
 
 import six
-from six.moves import queue
 import torch
 import torch.multiprocessing as mp
+from six.moves import queue
 
 import pyro
+import pyro.ops.stats as stats
 from pyro.infer import TracePosterior
 from pyro.infer.abstract_infer import Marginals
-from pyro.infer.mcmc.logger import initialize_logger, initialize_progbar, DIAGNOSTIC_MSG, TqdmHandler
-import pyro.ops.stats as stats
+from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
 from pyro.util import optional
-
 
 MAX_SEED = 2**32 - 1
 
@@ -29,8 +27,7 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
     Logging thread that asynchronously consumes logging events from `log_queue`,
     and handles them appropriately.
     """
-    progress_bars = [initialize_progbar(warmup_steps, num_samples, pos=i, disable=disable_progbar)
-                     for i in range(num_chains)]
+    progress_bars = ProgressBar(warmup_steps, num_samples, disable=disable_progbar, num_bars=num_chains)
     logger = logging.getLogger(__name__)
     logger.propagate = False
     logger.addHandler(TqdmHandler())
@@ -49,18 +46,14 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
                 pbar_pos = int(logger_id.split(":")[-1])
                 num_samples[pbar_pos] += 1
                 if num_samples[pbar_pos] == warmup_steps:
-                    progress_bars[pbar_pos].set_description("Sample [{}]".format(pbar_pos + 1))
+                    progress_bars.set_description("Sample [{}]".format(pbar_pos + 1), pos=pbar_pos)
                 diagnostics = json.loads(msg, object_pairs_hook=OrderedDict)
-                progress_bars[pbar_pos].set_postfix(diagnostics)
-                progress_bars[pbar_pos].update()
+                progress_bars.set_postfix(diagnostics, pos=pbar_pos)
+                progress_bars.update(pos=pbar_pos)
             else:
                 logger.handle(record)
     finally:
-        for pbar in progress_bars:
-            pbar.close()
-            # Required to not overwrite multiple progress bars on exit.
-            if not pbar._ipython_env:
-                sys.stderr.write("\n")
+        progress_bars.close()
 
 
 class _Worker(object):
@@ -208,7 +201,7 @@ class _SingleSampler(TracePosterior):
         is_multiprocessing = log_queue is not None
         progress_bar = None
         if not is_multiprocessing:
-            progress_bar = initialize_progbar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
+            progress_bar = ProgressBar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
         self.logger = initialize_logger(self.logger, logger_id, progress_bar, log_queue)
         self.kernel.setup(self.warmup_steps, *args, **kwargs)
         trace = self.kernel.initial_trace
