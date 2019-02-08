@@ -66,7 +66,7 @@ def test_beta_binomial_log_prob(total_count, shape):
     expected = log_probs.logsumexp(0) - math.log(num_samples)
 
     actual = BetaBinomial(concentration1, concentration0, total_count).log_prob(value)
-    assert_close(actual, expected, atol=0.05)
+    assert_close(actual, expected, rtol=0.02)
 
 
 @pytest.mark.parametrize("total_count", [1, 2, 3, 10])
@@ -93,7 +93,7 @@ def test_gamma_poisson_log_prob(shape):
     gamma_rate = torch.randn(shape).exp()
     value = torch.arange(20.)
 
-    num_samples = 200000
+    num_samples = 300000
     poisson_rate = dist.Gamma(gamma_conc, gamma_rate).sample((num_samples,))
     log_probs = dist.Poisson(poisson_rate).log_prob(value)
     expected = log_probs.logsumexp(0) - math.log(num_samples)
