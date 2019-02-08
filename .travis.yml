@@ -13,9 +13,9 @@ cache:
 install:
     - pip install -U pip
     - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then
-          pip install https://download.pytorch.org/whl/cpu/torch-1.0.1-cp36-cp36m-linux_x86_64.whl
+          pip install https://download.pytorch.org/whl/cpu/torch-1.0.1-cp27-cp27mu-linux_x86_64.whl;
       else
-          pip install http://download.pytorch.org/whl/cpu/torch-1.0.1-cp36-cp36m-linux_x86_64.whl;
+          pip install https://download.pytorch.org/whl/cpu/torch-1.0.1-cp36-cp36m-linux_x86_64.whl;
       fi
     - pip install typing  # TODO: remove once cpu wheel is fixed upstream
     - pip install .[test]
