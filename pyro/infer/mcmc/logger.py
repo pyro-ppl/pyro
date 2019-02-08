@@ -47,8 +47,6 @@ class ProgressBar(object):
     :param int num_samples: Number of MCMC samples.
     :param int min_width: Minimum column width of the bar.
     :param int max_width: Maximum column width of the bar.
-    :param int pos: Position of the bar (e.g. in the case of
-        multiple parallel samplers).
     :param bool disable: Disable progress bar.
     :param int num_bars: Number of progress bars to initialize.
         If multiple bars are initialized, they need to be separately
