@@ -55,52 +55,51 @@ class _PartialCorrToCorrLCholeskyTransform(Transform):
     def __eq__(self, other):
         return isinstance(other, _PartialCorrToCorrLCholeskyTransform)
 
-    def _call(self, z):
-        D = (1.0 + math.sqrt(1.0 + 8.0 * z.shape[-1]))/2.0
+    def _call(self, x):
+        D = (1.0 + math.sqrt(1.0 + 8.0 * x.shape[-1]))/2.0
         if D % 1 != 0:
             raise ValueError("Correlation matrix transformation requires d choose 2 inputs")
         D = int(D)
 
-        x = torch.zeros(list(z.shape[:-1]) + [D,D], device=z.device)
+        y = torch.zeros(list(x.shape[:-1]) + [D,D], device=x.device)
 
-        x[..., 0,0] = 1
-        x[..., 1:,0] = z[..., :(D-1)]
+        y[..., 0,0] = 1
+        y[..., 1:,0] = x[..., :(D-1)]
         i = D - 1
-        last_squared_x = torch.zeros(list(z.shape[:-1]) + [D], device=z.device)
+        last_squared_y = torch.zeros(list(x.shape[:-1]) + [D], device=x.device)
         for j in range(1, D):
             distance_to_copy = D - 1 - j
-            last_squared_x = last_squared_x[..., 1:] + x[...,j:,(j-1)].clone()**2
-            x[..., j, j] = (1 - last_squared_x[..., 0]).sqrt()
-            x[..., (j+1):, j] = z[..., i:(i + distance_to_copy)] * (1 - last_squared_x[..., 1:]).sqrt()
+            last_squared_y = last_squared_y[..., 1:] + y[...,j:,(j-1)].clone()**2
+            y[..., j, j] = (1 - last_squared_y[..., 0]).sqrt()
+            y[..., (j+1):, j] = x[..., i:(i + distance_to_copy)] * (1 - last_squared_y[..., 1:]).sqrt()
             i += distance_to_copy
-        return x
+        return y
 
-    def _inverse(self, x):
-        if (x.shape[-2] != x.shape[-1]):
+    def _inverse(self, y):
+        if (y.shape[-2] != y.shape[-1]):
             raise ValueError("A matrix that isn't square can't be a Cholesky factor of a correlation matrix")
-        D = x.shape[-1]
-        outlen = int(D * (D - 1) / 2)
+        D = y.shape[-1]
 
-        z_tri = torch.zeros(x.shape[:-2] + (D - 2, D - 2))
+        z_tri = torch.zeros(y.shape[:-2] + (D - 2, D - 2))
         z_stack = [
-            x[..., 1:, 0]
+            y[..., 1:, 0]
         ]
 
         for i in range(2, D):
-            z_tri[..., i - 2, 0:(i-1)] = x[..., i, 1:i] / (1-x[...,i,0:(i-1)].pow(2).cumsum(-1)).sqrt()
+            z_tri[..., i - 2, 0:(i-1)] = y[..., i, 1:i] / (1-y[...,i,0:(i-1)].pow(2).cumsum(-1)).sqrt()
         for j in range(D - 2):
             z_stack.append(z_tri[..., j:, j])
 
         return torch.cat(z_stack, -1)
 
-    def log_abs_det_jacobian(self, z, x):
+    def log_abs_det_jacobian(self, x, y):
         # This can probably be replaced with tril when support for
         # batched tril appears in pytorch 1.1
         # return (1 - x.tril(-1).pow(2).sum(-1)).log().sum(-1).mul(.5)
-        mask = torch.eye(x.shape[-1], device=x.device).ne(1.0).to(dtype=x.dtype).expand_as(x)
-        x_l = x * mask
+        mask = torch.eye(y.shape[-1], device=y.device).ne(1.0).to(dtype=y.dtype).expand_as(y)
+        x_l = y * mask
 
-        return (1 - x.pow(2).sum(-1)).log().sum(-1).mul(0.5)
+        return (1 - x_l.pow(2).sum(-1)).log().sum(-1).mul(0.5)
 
 class UnconstrainedToCorrLCholeskyTransform(Transform):
     domain = constraints.real
@@ -113,16 +112,16 @@ class UnconstrainedToCorrLCholeskyTransform(Transform):
     def __eq__(self, other):
         return isinstance(other, UnconstrainedToCorrLCholeskyTransform)
 
-    def _call(self, y):
-        z = y.tanh()
+    def _call(self, x):
+        z = x.tanh()
         return self._inner_transformation(z)
 
-    def _inverse(self, x):
-        z = self._inner_transformation._inverse(x)
+    def _inverse(self, y):
+        z = self._inner_transformation._inverse(y)
         return torch.log((1 + z) / (1 - z)) / 2
 
-    def log_abs_det_jacobian(self, y, x):
-        return y.cosh().log().sum(-1).mul(-2) + self._inner_transformation.log_abs_det_jacobian(None, x)
+    def log_abs_det_jacobian(self, x, y):
+        return x.cosh().log().sum(-1).mul(-2) + self._inner_transformation.log_abs_det_jacobian(None, y)
 
 
 # register transform to global store
