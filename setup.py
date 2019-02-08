@@ -86,8 +86,6 @@ setup(
         'six>=1.10.0',
         'torch>=1.0.0',
         'tqdm>=4.28',
-        # TODO: remove when fixed upstream in pytorch
-        'typing>=3.6',
     ],
     extras_require={
         'extras': EXTRAS_REQUIRE,
