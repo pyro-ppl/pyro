@@ -6,7 +6,8 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
-from pyro.distributions.torch import Beta, Binomial, Dirichlet, Gamma, Multinomial, Poisson
+from pyro.distributions.torch import (Beta, Binomial, Dirichlet, Gamma,
+                                      Multinomial, Normal, Poisson)
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
@@ -233,3 +234,52 @@ class GammaPoisson(TorchDistribution):
     @property
     def variance(self):
         return self.concentration / self.rate.pow(2) * (1 + self.rate)
+
+
+class NormalNormalLocConjugate(TorchDistribution):
+    r"""
+    Compound distribution comprising a normal-normal pair. The mean of the first
+    normal distribution (``loc`` for the :class:`~pyro.distributions.Normal` distribution)
+    is unknown and randomly drawn from another :class:`~pyro.distributions.Normal` distribution
+    prior. The variance of the first normal distribution is assumed to be known.
+
+    :param float or torch.Tensor scale: scale parameter (standard deviation) for the first Normal
+        distribution.
+    :param float or torch.Tensor loc_prior: loc parameter (mean) for the Normal distribution acting
+        as a prior.
+    :param float or torch.Tensor scale_prior: scale parameter (standard deviation for the Normal
+        distribution acting as a prior.
+    """
+    arg_constraints = {'scale': constraints.positive, 'loc_prior': constraints.real,
+                       'scale_prior': constraints.positive}
+    support = Normal.support
+
+    def __init__(self, scale, loc_prior, scale_prior, validate_args=None):
+        self.scale, self.loc_prior, self.scale_prior = broadcast_all(scale, loc_prior, scale_prior)
+        self._normal_conjugate = Normal(loc_prior, (self.scale.pow(2) + self.scale_prior.pow(2)).sqrt())
+        super(NormalNormalLocConjugate, self).__init__(
+            self._normal_conjugate._batch_shape, validate_args=validate_args)
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(NormalNormalLocConjugate, _instance)
+        batch_shape = torch.Size(batch_shape)
+        new._normal_conjugate = self._normal_conjugate.expand(batch_shape)
+        super(NormalNormalLocConjugate, new).__init__(batch_shape, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
+
+    def sample(self, sample_shape=()):
+        return self._normal_conjugate.sample(sample_shape)
+
+    @property
+    def mean(self):
+        return self._normal_conjugate.loc
+
+    @property
+    def variance(self):
+        return self._normal_conjugate.variance
+
+    def log_prob(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+        return self._normal_conjugate.log_prob(value)

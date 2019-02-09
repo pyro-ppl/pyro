@@ -6,7 +6,7 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-from pyro.distributions import BetaBinomial, DirichletMultinomial, GammaPoisson
+from pyro.distributions import BetaBinomial, DirichletMultinomial, GammaPoisson, NormalNormalLocConjugate
 from tests.common import assert_close
 
 
@@ -17,6 +17,8 @@ from tests.common import assert_close
     DirichletMultinomial(torch.tensor([[0.5, 1.0, 2.0], [0.2, 0.5, 0.8]]), torch.tensor(10.)),
     GammaPoisson(2., 2.),
     GammaPoisson(torch.tensor([6., 2]), torch.tensor([2., 8.])),
+    NormalNormalLocConjugate(2., 0., 2.),
+    NormalNormalLocConjugate(torch.tensor([1.5, 2.]), torch.tensor([0., 0.]), torch.tensor([2., 3.])),
 ])
 def test_mean(dist):
     analytic_mean = dist.mean
@@ -32,6 +34,8 @@ def test_mean(dist):
     DirichletMultinomial(torch.tensor([[0.5, 1.0, 2.0], [0.2, 0.5, 0.8]]), torch.tensor(10.)),
     GammaPoisson(2., 2.),
     GammaPoisson(torch.tensor([6., 2]), torch.tensor([2., 8.])),
+    NormalNormalLocConjugate(2., 0., 2.),
+    NormalNormalLocConjugate(torch.tensor([4., 9.]), torch.tensor([0., 0.]), torch.tensor([6.25, 16.])),
 ])
 def test_variance(dist):
     analytic_var = dist.variance
@@ -99,4 +103,19 @@ def test_gamma_poisson_log_prob(shape):
     log_probs = dist.Poisson(poisson_rate).log_prob(value)
     expected = log_probs.logsumexp(0) - math.log(num_samples)
     actual = GammaPoisson(gamma_conc, gamma_rate).log_prob(value)
+    assert_close(actual, expected, rtol=0.05)
+
+
+@pytest.mark.parametrize("shape", [(1,), (3, 1), (2, 3, 1)])
+def test_normal_normal_loc_conjugate_log_prob(shape):
+    normal_scale = torch.randn(shape).exp()
+    normal_loc_prior = torch.randn(shape)
+    normal_scale_prior = torch.randn(shape).exp()
+    value = torch.randn(20)
+
+    num_samples = 50000
+    normal_loc = dist.Normal(normal_loc_prior, normal_scale_prior).sample((num_samples,))
+    log_probs = dist.Normal(normal_loc, normal_scale).log_prob(value)
+    expected = log_probs.logsumexp(0) - math.log(num_samples)
+    actual = NormalNormalLocConjugate(normal_scale, normal_loc_prior, normal_scale_prior).log_prob(value)
     assert_close(actual, expected, rtol=0.05)

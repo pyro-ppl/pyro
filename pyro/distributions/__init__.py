@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import pyro.distributions.torch_patch  # noqa F403
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
-from pyro.distributions.conjugate import BetaBinomial, DirichletMultinomial, GammaPoisson
+from pyro.distributions.conjugate import (BetaBinomial, DirichletMultinomial, GammaPoisson,
+                                          NormalNormalLocConjugate)
 from pyro.distributions.delta import Delta
 from pyro.distributions.diag_normal_mixture import MixtureOfDiagNormals
 from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNormalsSharedCovariance
@@ -40,6 +41,7 @@ __all__ = [
     "MaskedMixture",
     "MixtureOfDiagNormals",
     "MixtureOfDiagNormalsSharedCovariance",
+    "NormalNormalLocConjugate",
     "OMTMultivariateNormal",
     "PermuteTransform",
     "PlanarFlow",

@@ -119,6 +119,13 @@ MixtureOfDiagNormalsSharedCovariance
     :undoc-members:
     :show-inheritance:
 
+NormalNormalLocConjugate
+------------------------
+.. autoclass:: pyro.distributions.NormalNormalLocConjugate
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 OMTMultivariateNormal
 ---------------------
 .. autoclass:: pyro.distributions.OMTMultivariateNormal
