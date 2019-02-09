@@ -68,12 +68,13 @@ class CorrLCholeskyTransform(Transform):
     bijective = True
     sign = +1
     event_dim = 1
+    _eps = 1e-6
 
     def __eq__(self, other):
         return isinstance(other, CorrLCholeskyTransform)
 
     def _call(self, x):
-        z = x.tanh()
+        z = x.tanh().clamp(-1 + self._eps, 1 - self._eps)
         return _vector_to_l_cholesky(z)
 
     def _inverse(self, y):
