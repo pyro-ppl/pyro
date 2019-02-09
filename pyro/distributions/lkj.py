@@ -38,12 +38,12 @@ def _vector_to_l_cholesky(z):
     if D % 1 != 0:
         raise ValueError("Correlation matrix transformation requires d choose 2 inputs")
     D = int(D)
-    x = torch.zeros(list(z.shape[:-1]) + [D,D], device=z.device)
+    x = torch.zeros(list(z.shape[:-1]) + [D,D], dtype=z.dtype, device=z.device)
 
     x[..., 0,0] = 1
     x[..., 1:,0] = z[..., :(D-1)]
     i = D - 1
-    last_squared_x = torch.zeros(list(z.shape[:-1]) + [D], device=z.device)
+    last_squared_x = torch.zeros(list(z.shape[:-1]) + [D], dtype=z.dtype, device=z.device)
     for j in range(1, D):
         distance_to_copy = D - 1 - j
         last_squared_x = last_squared_x[..., 1:] + x[...,j:,(j-1)].clone()**2
@@ -67,7 +67,7 @@ class CorrLCholeskyTransform(Transform):
     codomain = corr_cholesky_constraint
     bijective = True
     sign = +1
-    event_shape = 1
+    event_dim = 1
 
     def __eq__(self, other):
         return isinstance(other, CorrLCholeskyTransform)
@@ -81,7 +81,7 @@ class CorrLCholeskyTransform(Transform):
             raise ValueError("A matrix that isn't square can't be a Cholesky factor of a correlation matrix")
         D = y.shape[-1]
 
-        z_tri = torch.zeros(y.shape[:-2] + (D - 2, D - 2))
+        z_tri = torch.zeros(y.shape[:-2] + (D - 2, D - 2), dtype=y.dtype, device=y.device)
         z_stack = [
             y[..., 1:, 0]
         ]
@@ -100,8 +100,9 @@ class CorrLCholeskyTransform(Transform):
         # return (1 - x.tril(-1).pow(2).sum(-1)).log().sum(-1).mul(.5)
         mask = torch.eye(y.shape[-1], device=y.device).ne(1.0).to(dtype=y.dtype).expand_as(y)
         x_l = y * mask
-
-        return x.cosh().log().sum(-1).mul(-2) + (1 - x_l.pow(2).sum(-1)).log().sum(-1).mul(0.5)
+        tanpart = x.cosh().log().sum(-1).mul(-2)
+        matpart = (1 - x_l.pow(2).sum(-1)).log().sum(-1).mul(0.5)
+        return tanpart + matpart
 
 
 # register transform to global store
@@ -137,9 +138,11 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
 
     def __init__(self, d, eta):
         if not torch.is_tensor(eta):
-            eta = torch.FloatTensor([eta])
+            raise ValueError("Eta must be a double precision tensor")
+        if eta.dtype is not torch.double:
+            raise ValueError("Eta must be a double precision tensor")
         if any(eta <= 0):
-            raise ValueException("eta must be > 0")
+            raise ValueError("eta must be > 0")
         vector_size = (d * (d - 1)) // 2
         alpha = eta.add(0.5 * (d  - 1.0))
 
@@ -157,7 +160,7 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
         self._event_shape = torch.Size((d, d))
 
     def sample(self, *args, **kwargs):
-        z = self._generating_distribution.sample(*args, **kwargs).detach().mul(2).add(-1.0)
+        z = self._generating_distribution.sample(*args, **kwargs).detach().to(torch.double).mul(2).add(-1.0)
         return _vector_to_l_cholesky(z)
 
     def lkj_constant(self, eta, K):
@@ -168,7 +171,7 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
 
         constant = torch.lgamma(eta.add(0.5 * Km1)).mul(Km1)
 
-        k = torch.linspace(start=1, end=Km1, steps=Km1, device=eta.device)
+        k = torch.linspace(start=1, end=Km1, steps=Km1, dtype=eta.dtype, device=eta.device)
         constant -= (k.mul(math.log(math.pi) * 0.5) + torch.lgamma(eta.add( 0.5 * (Km1 - k)))).sum()
 
         self._lkj_constant = constant
@@ -182,7 +185,7 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
         Km1 = x.shape[-1] - 1
         log_diagonals = x.diagonal(offset=0, dim1=-1, dim2=-2)[..., :-1].log()
         #TODO: Confirm that this should be a 0-indexed rather than 1-indexed vector
-        values = log_diagonals * torch.linspace(start=Km1 - 1, end=0, steps=Km1, device=x.device).expand_as(log_diagonals)
+        values = log_diagonals * torch.linspace(start=Km1 - 1, end=0, steps=Km1, dtype=x.dtype, device=x.device).expand_as(log_diagonals)
 
         values += log_diagonals.mul(eta.mul(2).add(-2.0))
         return values.sum(-1) + lp
