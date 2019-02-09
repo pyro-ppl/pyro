@@ -18,7 +18,8 @@ from pyro.distributions import Beta, TorchDistribution
 class _CorrCholesky(Constraint):
     """
     Constrains to lower-triangular square matrices with positive diagonals and
-    Euclidean norm of each row is 1.
+    Euclidean norm of each row is 1, such that `torch.mm(omega, omega.t())` will
+    have unit diagonal.
     """
     def check(self, value):
         unit_norm_row = (value.norm(dim=-1).sub(1) < 1e-6).min(-1)[0]
@@ -38,12 +39,12 @@ def _vector_to_l_cholesky(z):
     if D % 1 != 0:
         raise ValueError("Correlation matrix transformation requires d choose 2 inputs")
     D = int(D)
-    x = torch.zeros(list(z.shape[:-1]) + [D,D], dtype=z.dtype, device=z.device)
+    x = z.new_zeros(list(z.shape[:-1]) + [D,D])
 
     x[..., 0,0] = 1
     x[..., 1:,0] = z[..., :(D-1)]
     i = D - 1
-    last_squared_x = torch.zeros(list(z.shape[:-1]) + [D], dtype=z.dtype, device=z.device)
+    last_squared_x = z.new_zeros(list(z.shape[:-1]) + [D])
     for j in range(1, D):
         distance_to_copy = D - 1 - j
         last_squared_x = last_squared_x[..., 1:] + x[...,j:,(j-1)].clone()**2
@@ -57,7 +58,7 @@ class CorrLCholeskyTransform(Transform):
     Transforms a vector into the cholesky factor of a correlation matrix.
 
     The input should have shape `[batch_shape] + [d * (d-1)/2]`. The output will have
-    shape `[batch_shape + sample_shape] + [d, d]`.
+    shape `[batch_shape] + [d, d]`.
 
     Reference:
 
@@ -82,7 +83,7 @@ class CorrLCholeskyTransform(Transform):
             raise ValueError("A matrix that isn't square can't be a Cholesky factor of a correlation matrix")
         D = y.shape[-1]
 
-        z_tri = torch.zeros(y.shape[:-2] + (D - 2, D - 2), dtype=y.dtype, device=y.device)
+        z_tri = y.new_zeros(y.shape[:-2] + (D - 2, D - 2))
         z_stack = [
             y[..., 1:, 0]
         ]
@@ -139,15 +140,13 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
 
     def __init__(self, d, eta):
         if not torch.is_tensor(eta):
-            raise ValueError("Eta must be a double precision tensor")
-        if eta.dtype is not torch.double:
-            raise ValueError("Eta must be a double precision tensor")
+            raise ValueError("Eta must be a tensor")
         if any(eta <= 0):
             raise ValueError("eta must be > 0")
         vector_size = (d * (d - 1)) // 2
         alpha = eta.add(0.5 * (d  - 1.0))
 
-        concentrations = eta.new().resize_(vector_size,)
+        concentrations = eta.new_empty(vector_size,)
         i = 0
         for k in range(d-1):
             alpha -= .5
@@ -161,7 +160,7 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
         self._event_shape = torch.Size((d, d))
 
     def sample(self, *args, **kwargs):
-        z = self._generating_distribution.sample(*args, **kwargs).detach().to(torch.double).mul(2).add(-1.0)
+        z = self._generating_distribution.sample(*args, **kwargs).detach().to(dtype=self._eta.dtype).mul(2).add(-1.0)
         return _vector_to_l_cholesky(z)
 
     def lkj_constant(self, eta, K):
