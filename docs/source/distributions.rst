@@ -70,6 +70,13 @@ Delta
     :undoc-members:
     :show-inheritance:
 
+DirichletMultinomial
+--------------------
+.. autoclass:: pyro.distributions.DirichletMultinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 EmpiricalDistribution
 ----------------------
 .. autoclass:: pyro.distributions.Empirical
@@ -94,6 +101,13 @@ GaussianScaleMixture
 MaskedMixture
 -------------
 .. autoclass:: pyro.distributions.MaskedMixture
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+MixtureOfDiagNormals
+------------------------------------
+.. autoclass:: pyro.distributions.MixtureOfDiagNormals
     :members:
     :undoc-members:
     :show-inheritance:

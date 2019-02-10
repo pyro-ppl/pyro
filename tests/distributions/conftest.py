@@ -327,6 +327,17 @@ discrete_dists = [
             prec=0.05,
             min_samples=10000,
             is_discrete=True),
+    Fixture(pyro_dist=dist.DirichletMultinomial,
+            examples=[
+                {'concentration': [0.1, 0.6, 0.3],
+                 'test_data': [0., 1., 0.]},
+                {'concentration': [0.5, 1.0, 2.0], 'total_count': 8,
+                 'test_data': [0., 2., 6.]},
+                {'concentration': [[0.5, 1.0, 2.0], [3., 3., 0.1]], 'total_count': 8,
+                 'test_data': [[0., 2., 6.], [5., 2., 1.]]},
+            ],
+            prec=0.08,
+            is_discrete=True),
     Fixture(pyro_dist=dist.GammaPoisson,
             examples=[
                 {'concentration': [1.], 'rate': [2.],
