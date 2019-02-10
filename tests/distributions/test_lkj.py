@@ -9,7 +9,7 @@ from tests.common import assert_tensors_equal
 
 @pytest.mark.parametrize("value_shape", [(1, 1), (3, 3), (5, 5)])
 def test_constraint(value_shape):
-    value = torch.randn(value_shape).tril()
+    value = torch.randn(value_shape).clamp(-6, 6).tril()
     value.diagonal(dim1=-2, dim2=-1).exp_()
     value = value / value.norm(2, dim=-1, keepdim=True)
 
@@ -26,7 +26,7 @@ def _autograd_log_det(ys, x):
 @pytest.mark.parametrize("y_shape", [(1,), (3, 1), (6,), (1, 6), (2, 6)])
 def test_unconstrained_to_corr_cholesky_transform(y_shape):
     transform = CorrLCholeskyTransform()
-    y = torch.empty(y_shape).normal_(0, 10).requires_grad_()
+    y = torch.empty(y_shape).normal_(0, 4).clamp(-6, 6).requires_grad_()
     x = transform(y)
 
     # test codomain
@@ -48,7 +48,7 @@ def test_unconstrained_to_corr_cholesky_transform(y_shape):
 @pytest.mark.parametrize("mapping", [biject_to, transform_to])
 def test_corr_cholesky_transform(x_shape, mapping):
     transform = mapping(corr_cholesky_constraint)
-    x = torch.randn(x_shape, requires_grad=True)
+    x = torch.randn(x_shape, requires_grad=True).clamp(-6, 6)
     y = transform(x)
 
     # test codomain
