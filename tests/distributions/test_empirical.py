@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from pyro.distributions.empirical import Empirical
-from tests.common import assert_equal
+from tests.common import assert_equal, assert_close
 
 
 @pytest.mark.parametrize("size", [[], [1], [2, 3]])
@@ -61,8 +61,8 @@ def test_sample_examples(sample, weights, expected_mean, expected_var):
     assert_equal(emp_dist.mean, expected_mean)
     assert_equal(emp_dist.variance, expected_var)
     emp_samples = emp_dist.sample((num_samples,))
-    assert_equal(emp_samples.mean(0), emp_dist.mean, prec=1e-3)
-    assert_equal(emp_samples.var(0), emp_dist.variance, prec=1e-3)
+    assert_close(emp_samples.mean(0), emp_dist.mean, rtol=1e-2)
+    assert_close(emp_samples.var(0), emp_dist.variance, rtol=1e-2)
 
 
 @pytest.mark.parametrize("batch_shape, event_shape", [
