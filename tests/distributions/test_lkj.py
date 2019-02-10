@@ -3,8 +3,10 @@ from __future__ import absolute_import, division, print_function
 import pytest
 import torch
 from torch.distributions import biject_to, transform_to
+from torch.distributions.transforms import AffineTransform
 
-from pyro.distributions.lkj import corr_cholesky_constraint
+from pyro.distributions import Beta, TransformedDistribution
+from pyro.distributions.lkj import corr_cholesky_constraint, LKJCorrCholesky
 from tests.common import assert_tensors_equal, assert_close
 
 
@@ -57,3 +59,45 @@ def test_corr_cholesky_transform(x_shape, mapping):
         y[tril_index] = y_tril_vector
         z = transform.inv(y)
         assert_close(_autograd_log_det(z, y_tril_vector), -log_det)
+
+
+@pytest.mark.parametrize("concentration_shape", [(), (1,), (3,), (5, 3)])
+@pytest.mark.parametrize("sample_shape", [(), (1,), (3,), (5, 3)])
+@pytest.mark.parametrize("sample_method", ["cvine", "onion"])
+def test_shape(concentration_shape, sample_shape, sample_method):
+    dimension = 5
+    concentration = torch.rand(concentration_shape)
+    d = LKJCorrCholesky(dimension, concentration, sample_method=sample_method)
+    samples = d.sample(sample_shape)
+    #log_prob = d.log_prob(samples)
+
+    assert d.batch_shape == concentration_shape
+    assert d.event_shape == torch.Size([dimension, dimension])
+    assert samples.shape == sample_shape + d.batch_shape + d.event_shape
+    #assert log_prob.shape == samples.shape[:-2]
+
+
+@pytest.mark.parametrize("concentration", [0.5, 1, 2])
+def test_sample(concentration):
+    # We test the fact that marginal off-diagonal element of sampled correlation matrix is
+    # Beta(concentration + (D - 2) / 2, concentration + (D - 2) / 2) on (-1, 1)
+    dimension = 5
+    d = LKJCorrCholesky(dimension, concentration, sample_method=sample_method)
+    samples = d.sample(sample_shape=torch.Size([100000]))
+    corr_samples = samples.matmul(samples.transpose(-1, -2))
+
+    marginal = TransformedDistribution(
+        Beta(concentration + (dimension - 2) / 2., concentration + (dimension - 2) / 2.),
+        AffineTransform(loc=-1, scale=2))
+    target_mean = samples.new_full((dimension, dimension), marginal.mean)
+    target_mean[::dimension + 1] = 1  # diagonal elements of correlation matrices are 1
+    target_variance = samples.new_full((dimension, dimension), marginal.variance)
+    target_variance[::dimension + 1] = 0
+
+    assert_tensors_equal(transform.domain.check(z),
+                         x.new_ones(x_shape, dtype=torch.uint8))
+
+
+@pytest.mark.parametrize("concentration", [0.5, 1, 2])
+def test_log_prob("concentration", [0.5, 1, 2]):
+    pass

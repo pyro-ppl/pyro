@@ -158,12 +158,13 @@ class LKJCorrCholesky(TorchDistribution):
     :math:`\det(M)^{\eta - 1}`. Because of that, when ``concentration == 1``, we have a
     uniform distribution over Cholesky factors of correlation matrices.
 
-    When ``concentration > 1``, the distribution has mode at the identity matrix and favors
-    samples with large diagonal entries (hence large determinent). This is useful when we know
-    a priori that the underlying variables are not correlated.
+    When ``concentration > 1``, the distribution favors samples with large diagonal entries
+    (hence large determinent). This is useful when we know a priori that the underlying
+    variables are not correlated.
 
-    When ``concentration < 1``, the distribution favors samples with small diagonal entries.
-    This is useful when we know a priori that some underlying variables are correlated.
+    When ``concentration < 1``, the distribution favors samples with small diagonal entries
+    (hence small determinent). This is useful when we know a priori that some underlying
+    variables are correlated.
 
     Reference:
 
@@ -304,8 +305,3 @@ class LKJCorrCholesky(TorchDistribution):
         cholesky_diag = (1 - cholesky.pow(2).sum(-1)).sqrt()
         cholesky.view(-1, D * D)[..., ::D + 1] = cholesky_diag
         return cholesky
-
-    @property
-    def mean():
-        return eye_like(self.concentration, self.dimension).expand(self.batch_shape
-                                                                   + self.event_shape)
