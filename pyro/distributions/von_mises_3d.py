@@ -59,12 +59,12 @@ class VonMises3D(TorchDistribution):
         base_tensor = torch.tensor([0., 0., 1.], dtype=self._mean.dtype, device=self._mean.device)
         base_mean_cross = base_tensor.cross(self._mean, dim=-1)
         bmn = base_mean_cross.norm(2, -1)
-        base_mean_inner = base_tensor @ self._mean
+        base_mean_inner = torch.matmul(base_tensor, self._mean)
         z = torch.zeros_like(base_mean_inner)
         rotg = torch.stack([torch.stack([base_mean_inner, -bmn, z], dim=-1),
                             torch.stack([bmn, base_mean_inner, z], dim=-1),
                             torch.stack([z, z, z+1], dim=-1)], dim=-2)
-        vd = (self._mean - (base_tensor @ self._mean) * base_tensor)
+        vd = (self._mean - base_mean_inner * base_tensor)
         v = vd / vd.norm(2, -1)
         mean_base_cross = self._mean.cross(base_tensor, dim=-1)
         rotfi = torch.stack([base_tensor, v, mean_base_cross], dim=-2)
@@ -72,7 +72,7 @@ class VonMises3D(TorchDistribution):
         # If the tensors are on top of each others we do not get a useful rotation matrix.
         # So, we have to change only where they are different
         diffrot = (base_tensor != self._mean).any(-1)
-        self._rotation[diffrot] = rotfi[diffrot] @ rotg[diffrot] @ rotfi[diffrot].inverse()
+        self._rotation[diffrot] = torch.matmul(torch.matmul(rotfi[diffrot], rotg[diffrot]), rotfi[diffrot].inverse())
 
         super(VonMises3D, self).__init__(batch_shape, event_shape, validate_args=validate_args)
 
@@ -98,8 +98,8 @@ class VonMises3D(TorchDistribution):
         """
         The sampling algorithm for the von Mises-Fisher distribution on the unit sphere (S^2)
         is based on the following paper:
-        Jakob, Wenzel. "Numerically stable sampling of the von Mises-Fisher distribution on Sˆ2 (and other tricks)."
-        Interactive Geometry Lab, ETH Zürich, Tech. Rep (2012).
+        Jakob, Wenzel. "Numerically stable sampling of the von Mises-Fisher distribution on S^2 (and other tricks)."
+        Interactive Geometry Lab, ETH Zuerich, Tech. Rep (2012).
         """
         shape = self._extended_shape(sample_shape)
         vshape = shape[:-1] + (2,)
@@ -109,7 +109,7 @@ class VonMises3D(TorchDistribution):
         u = torch.rand(wshape, dtype=self.concentration.dtype, device=self.concentration.device)
         kappa = self._scale
         w = 1 + (u + (1 - u) * (-2 * kappa).exp()).log() / kappa
-        return (self._rotation @ torch.cat([(1 - w ** 2).sqrt() * v, w], dim=-1).unsqueeze(-1)).squeeze()
+        return torch.matmul(self._rotation, torch.cat([(1 - w ** 2).sqrt() * v, w], dim=-1).unsqueeze(-1)).squeeze()
 
     @property
     def mean(self):
