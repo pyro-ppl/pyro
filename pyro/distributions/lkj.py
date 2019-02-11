@@ -53,6 +53,15 @@ def _vector_to_l_cholesky(z):
         i += distance_to_copy
     return x
 
+# Note on the bijectivity of CorrLCholeskyTransform:
+# The transform has two phases - first, from the domain of reals to (-1, 1)
+# and second, from a vector in (-1, 1) to a lower cholesky factorself.
+# The second part of the transform cannot operate correctly if the inputs
+# consist of many 1s and -1s. This leads to a numerical precision issue with the
+# tanh transformation, where for inputs far from 0 tanh produces a -1 or 1.
+# For that reason, the output of the tanh operation is clamped, and the
+# transformation is not perfectly bijective.
+
 class CorrLCholeskyTransform(Transform):
     """
     Transforms a vector into the cholesky factor of a correlation matrix.
@@ -69,13 +78,13 @@ class CorrLCholeskyTransform(Transform):
     bijective = True
     sign = +1
     event_dim = 1
-    _eps = 1e-6
 
     def __eq__(self, other):
         return isinstance(other, CorrLCholeskyTransform)
 
     def _call(self, x):
-        z = x.tanh().clamp(-1 + self._eps, 1 - self._eps)
+        eps = torch.finfo(x.dtype).eps
+        z = x.tanh().clamp(-1 + eps, 1 - eps)
         return _vector_to_l_cholesky(z)
 
     def _inverse(self, y):
@@ -94,18 +103,13 @@ class CorrLCholeskyTransform(Transform):
             z_stack.append(z_tri[..., j:, j])
 
         z = torch.cat(z_stack, -1)
-        return torch.log((1 + z) / (1 - z)) / 2
+        return torch.log1p((2*z)/(1-z)) / 2
 
     def log_abs_det_jacobian(self, x, y):
-        # This can probably be replaced with tril when support for
-        # batched tril appears in pytorch 1.1
-        # return (1 - x.tril(-1).pow(2).sum(-1)).log().sum(-1).mul(.5)
-        mask = torch.eye(y.shape[-1], device=y.device).ne(1.0).to(dtype=y.dtype).expand_as(y)
-        x_l = y * mask
+        # Note dependence on pytorch 1.0.1 for batched tril
         tanpart = x.cosh().log().sum(-1).mul(-2)
-        matpart = (1 - x_l.pow(2).sum(-1)).log().sum(-1).mul(0.5)
+        matpart = (1 - y.pow(2).cumsum(-1).tril(diagonal=-2)).log().div(2).sum(-1).sum(-1)
         return tanpart + matpart
-
 
 # register transform to global store
 @biject_to.register(corr_cholesky_constraint)
@@ -184,7 +188,6 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
 
         Km1 = x.shape[-1] - 1
         log_diagonals = x.diagonal(offset=0, dim1=-1, dim2=-2)[..., :-1].log()
-        #TODO: Confirm that this should be a 0-indexed rather than 1-indexed vector
         values = log_diagonals * torch.linspace(start=Km1 - 1, end=0, steps=Km1, dtype=x.dtype, device=x.device).expand_as(log_diagonals)
 
         values += log_diagonals.mul(eta.mul(2).add(-2.0))
