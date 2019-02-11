@@ -9,7 +9,7 @@ from tests.common import assert_tensors_equal
 
 @pytest.mark.parametrize("value_shape", [(1, 1), (3, 3), (5, 5)])
 def test_constraint(value_shape):
-    value = torch.randn(value_shape).clamp(-6, 6).tril()
+    value = torch.randn(value_shape).clamp(-2, 2).tril()
     value.diagonal(dim1=-2, dim2=-1).exp_()
     value = value / value.norm(2, dim=-1, keepdim=True)
 
@@ -26,7 +26,7 @@ def _autograd_log_det(ys, x):
 @pytest.mark.parametrize("y_shape", [(1,), (3, 1), (6,), (1, 6), (2, 6)])
 def test_unconstrained_to_corr_cholesky_transform(y_shape):
     transform = CorrLCholeskyTransform()
-    y = torch.empty(y_shape).normal_(0, 4).clamp(-6, 6).requires_grad_()
+    y = torch.empty(y_shape).uniform_(-4, 4).requires_grad_()
     x = transform(y)
 
     # test codomain
@@ -42,13 +42,27 @@ def test_unconstrained_to_corr_cholesky_transform(y_shape):
     # test log_abs_det_jacobian
     log_det = transform.log_abs_det_jacobian(y, x)
     assert log_det.shape == y_shape[:-1]
+    if y_shape == ():
+        assert_tensors_equal(torch.autograd.grad(y, (x,), retain_graph=True)[0].abs().log(), log_det)
+        assert_tensors_equal(torch.autograd.grad(x, (y,), retain_graph=True)[0].abs().log(), -log_det)
+        assert log_det.shape == x_shape[:-1]
+    if len(y_shape) == 1:
+        triu_index = x.new_ones(x.shape).triu(diagonal=1).to(torch.uint8)
+        x_tril_vector = x.t()[triu_index]
+        assert_tensors_equal(_autograd_log_det(x_tril_vector, y), log_det, prec=1e-4)
 
+        x_tril_vector = x_tril_vector.detach().requires_grad_()
+        x = x.new_zeros(x.shape)
+        x[triu_index] = x_tril_vector
+        x = x.t()
+        z = transform.inv(x)
+        assert_tensors_equal(_autograd_log_det(z, x_tril_vector), -log_det, prec=1e-4)
 
 @pytest.mark.parametrize("x_shape", [(1,), (3, 1), (6,), (1, 6), (5, 6)])
 @pytest.mark.parametrize("mapping", [biject_to, transform_to])
 def test_corr_cholesky_transform(x_shape, mapping):
     transform = mapping(corr_cholesky_constraint)
-    x = torch.randn(x_shape, requires_grad=True).clamp(-6, 6)
+    x = torch.randn(x_shape, requires_grad=True).clamp(-2, 2)
     y = transform(x)
 
     # test codomain
