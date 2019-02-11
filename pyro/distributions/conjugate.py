@@ -14,8 +14,17 @@ def _log_beta(x, y):
     return torch.lgamma(x) + torch.lgamma(y) - torch.lgamma(x + y)
 
 
-def _log_factorial(x):
-    return torch.lgamma(1 + x)
+def _log_beta_1(alpha, value, is_sparse):
+    if is_sparse:
+        mask = (value != 0)
+        value, alpha, mask = torch.broadcast_tensors(value, alpha, mask)
+        result = torch.zeros_like(value)
+        value = value[mask]
+        alpha = alpha[mask]
+        result[mask] = torch.lgamma(1 + value) + torch.lgamma(alpha) - torch.lgamma(value + alpha)
+        return result
+    else:
+        return torch.lgamma(1 + value) + torch.lgamma(alpha) - torch.lgamma(value + alpha)
 
 
 class BetaBinomial(TorchDistribution):
@@ -147,19 +156,9 @@ class DirichletMultinomial(TorchDistribution):
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
-        n = self.total_count
         alpha = self.concentration
-        alpha_sum = self.concentration.sum(-1)
-        if self.is_sparse:
-            value, alpha = torch.broadcast_tensors(value, alpha)
-            elementwise = torch.zeros_like(value)
-            mask = (value != 0)
-            value = value[mask]
-            alpha = alpha[mask]
-            elementwise[mask] = torch.lgamma(value + alpha) - _log_factorial(value) - torch.lgamma(alpha)
-        else:
-            elementwise = torch.lgamma(value + alpha) - _log_factorial(value) - torch.lgamma(alpha)
-        return _log_factorial(n) + torch.lgamma(alpha_sum) - torch.lgamma(n + alpha_sum) + elementwise.sum(-1)
+        return (_log_beta_1(alpha.sum(-1), value.sum(-1), self.is_sparse) -
+                _log_beta_1(alpha, value, self.is_sparse).sum(-1))
 
     @property
     def mean(self):
