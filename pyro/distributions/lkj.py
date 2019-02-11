@@ -187,7 +187,7 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
         lp = self.lkj_constant(eta, self._d)
 
         Km1 = x.shape[-1] - 1
-        log_diagonals = x.diagonal(offset=0, dim1=-1, dim2=-2)[..., :-1].log()
+        log_diagonals = x.diagonal(offset=0, dim1=-1, dim2=-2)[..., 1:].log()
         values = log_diagonals * torch.linspace(start=Km1 - 1, end=0, steps=Km1, dtype=x.dtype, device=x.device).expand_as(log_diagonals)
 
         values += log_diagonals.mul(eta.mul(2).add(-2.0))
