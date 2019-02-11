@@ -52,7 +52,7 @@ def _signed_stick_breaking_tril(t):
     r = t.new_ones(t.shape[:-1] + (D, D)).tril(diagonal=-1)
     tril_index = r > 0.5
     r[tril_index] = t.reshape(-1)
-    r.view(-1, D * D)[..., ::D + 1] = 1
+    r.view(r.shape[:-2] + (D * D,))[..., ::D + 1] = 1
 
     # apply stick-breaking on the squared values;
     # we omit the step of computing s = z * z_cumprod by using the fact:
@@ -192,6 +192,7 @@ class LKJCorrCholesky(TorchDistribution):
         batch_shape = concentration.shape
         event_shape = torch.Size([dimension, dimension])
 
+        N = dimension * (dimension - 1) // 2
         # We construct base distributions to generate samples for each method.
         # The purpose of this base distribution is to generate a distribution for
         # correlation matrices which is propotional to `det(M)^{\eta - 1}`.
@@ -204,12 +205,15 @@ class LKJCorrCholesky(TorchDistribution):
             beta_concentration_offset = torch.arange(0.5, dimension / 2. - 0.1, step=0.5,
                                                      dtype=concentration.dtype,
                                                      device=concentration.device)
-            beta_concentration = beta_concentration_init - beta_concentration_offset
-            # expand to a matrix then takes the vector form of the lower triangular part
-            beta_concentration = beta_concentration.expand(dimension - 1, dimension - 1)
+            beta_concentration = (beta_concentration_init.unsqueeze(-1) -
+                                  beta_concentration_offset)
+            # expand to a matrix then takes the vector form of the lower triangular part;
+            # here we unsqueeze to make the generated vector be in a correct order.
+            beta_concentration = beta_concentration.unsqueeze(-2).expand(
+                batch_shape + (dimension - 1, dimension - 1))
             tril_index = concentration.new_ones(beta_concentration.shape).tril() > 0.5
-            beta_concentration_vector = beta_concentration[tril_index].expand(
-                batch_shape + (-1,))
+            beta_concentration_vector = beta_concentration[tril_index].reshape(
+                batch_shape + (N,))
             self._beta_dist = Beta(beta_concentration_vector, beta_concentration_vector)
         elif sample_method == "onion":
             # The following construction follows from the algorithm in Section 3.2 of [1].
@@ -217,19 +221,20 @@ class LKJCorrCholesky(TorchDistribution):
             beta_concentration0_offset = torch.arange(0.5, dimension / 2. - 0.1, step=0.5,
                                                       dtype=concentration.dtype,
                                                       device=concentration.device)
-            beta_concentration0 = beta_concentration0_init - beta_concentration0_offset
+            beta_concentration0 = (beta_concentration0_init.unsqueeze(-1) -
+                                   beta_concentration0_offset)
             beta_concentration1 = beta_concentration0_offset
             # expand to a matrix then takes the vector form of the lower triangular part;
             # here we unsqueeze to make the generated vector be in a correct order.
-            beta_concentration1 = beta_concentration1.unsqueeze(-1).expand(
-                dimension - 1, dimension - 1)
             beta_concentration0 = beta_concentration0.unsqueeze(-1).expand(
-                dimension - 1, dimension - 1)
+                batch_shape + (dimension - 1, dimension - 1))
+            beta_concentration1 = beta_concentration1.unsqueeze(-1).expand(
+                batch_shape + (dimension - 1, dimension - 1))
             tril_index = concentration.new_ones(beta_concentration0.shape).tril() > 0.5
-            beta_concentration1_vector = beta_concentration1[tril_index].expand(
-                batch_shape + (-1,))
-            beta_concentration0_vector = beta_concentration0[tril_index].expand(
-                batch_shape + (-1,))
+            beta_concentration0_vector = beta_concentration0[tril_index].reshape(
+                batch_shape + (N,))
+            beta_concentration1_vector = beta_concentration1[tril_index].reshape(
+                batch_shape + (N,))
             self._beta_dist = Beta(beta_concentration1_vector, beta_concentration0_vector)
         else:
             raise ValueError("`method` should be one of 'cvine' or 'onion'.")
@@ -252,7 +257,46 @@ class LKJCorrCholesky(TorchDistribution):
         return new
 
     def log_prob(self, value):
-        pass
+        # Note about computing Jacobain of the transformation from Cholesky factor to
+        # correlation matrix:
+        #
+        #   Assume C = L@Lt and L = (1 0 0; a \sqrt(1-a^2) 0; b c \sqrt(1-b^2-c^2)), we have
+        #   Then off-diagonal lower triangular vector of L is transformed to the off-diagonal
+        #   lower triangular vector of C by the transform:
+        #       (a, b, c) -> (a, b, ab + c\sqrt(1-a^2))
+        #   Hence, Jacobian = 1 * 1 * \sqrt(1 - a^2) = \sqrt(1 - a^2) = L22, where L22
+        #       is the 2th diagonal element of L
+        #   Generally, for a D dimensional matrix, we have:
+        #       Jacobian = L22^(D-2) * L33^(D-3) * ... * Ldd^0
+        #
+        # From [1], we know that probability of a correlation matrix is propotional to
+        #   determinant ** (concentration - 1) = prod(L_ii ^ 2*(concentration - 1))
+        # On the other hand, Jabobian of the transformation from Cholesky factor to
+        # correlation matrix is:
+        #   prod(L_ii ^ (D - i))
+        # So the probability of a Cholesky factor is propotional to
+        #   prod(L_ii ^ (2 * concentration - 2 + D - i)) =: prod(L_ii ^ order_i)
+        # with i = 2..D (we omit the element i = 1 because L_11 = 1)
+
+        # Compute `order` vector (note that we need to reindex i -> i-2):
+        order_offset = torch.arange(4 - self.dimension, 2.1, dtype=self.concentration.dtype,
+                                    device=self.concentration.device)
+        order = 2 * self.concentration.unsqueeze(-1) - order_offset
+
+        # Compute unnormalized log_prob:
+        cholesky_logprob = (order * value.diagonal(dim1=-2, dim2=-1)[..., 1:].log()).sum(-1)
+
+        # Compute normalization constant (on the first proof of page 1999 of [1])
+        denominator_concentration = self.concentration + (self.dimension - 1) / 2.
+        denominator = torch.lgamma(denominator_concentration)
+        numerator = torch.mvlgamma(denominator_concentration - 0.5, self.dimension - 1)
+        # pi_constant in [1] is D * (D - 1) / 4
+        # pi_constant in torch.mvlgamma is (D - 1) * (D - 2) / 2
+        # hence, we need to add a pi_constant = (D - 1) * (1 - D/4)
+        pi_constant = (self.dimension - 1) * (1 - self.dimension / 4.) * math.log(math.pi)
+        normalization_constant = pi_constant + numerator - denominator
+
+        return cholesky_logprob - normalization_constant
 
     def rsample(self, sample_shape=torch.Size()):
         if self.sample_method == "cvine":
@@ -303,5 +347,5 @@ class LKJCorrCholesky(TorchDistribution):
         tril_index = cholesky.new_ones(cholesky.shape).tril(diagonal=-1) > 0.5
         cholesky[tril_index] = w
         cholesky_diag = (1 - cholesky.pow(2).sum(-1)).sqrt()
-        cholesky.view(-1, D * D)[..., ::D + 1] = cholesky_diag
+        cholesky.view(cholesky.shape[:-2] + (D * D,))[..., ::D + 1] = cholesky_diag
         return cholesky

@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import math
+
 import pytest
 import torch
 from torch.distributions import biject_to, transform_to
@@ -61,7 +63,7 @@ def test_corr_cholesky_transform(x_shape, mapping):
         assert_close(_autograd_log_det(z, y_tril_vector), -log_det)
 
 
-@pytest.mark.parametrize("concentration_shape", [(), (1,), (3,), (5, 3)])
+@pytest.mark.parametrize("concentration_shape", [(), (1,), (4,), (6, 4)])
 @pytest.mark.parametrize("sample_shape", [(), (1,), (3,), (5, 3)])
 @pytest.mark.parametrize("sample_method", ["cvine", "onion"])
 def test_shape(concentration_shape, sample_shape, sample_method):
@@ -69,35 +71,66 @@ def test_shape(concentration_shape, sample_shape, sample_method):
     concentration = torch.rand(concentration_shape)
     d = LKJCorrCholesky(dimension, concentration, sample_method=sample_method)
     samples = d.sample(sample_shape)
-    #log_prob = d.log_prob(samples)
+    log_prob = d.log_prob(samples)
 
     assert d.batch_shape == concentration_shape
     assert d.event_shape == torch.Size([dimension, dimension])
     assert samples.shape == sample_shape + d.batch_shape + d.event_shape
-    #assert log_prob.shape == samples.shape[:-2]
+    assert log_prob.shape == samples.shape[:-2]
 
 
 @pytest.mark.parametrize("concentration", [0.5, 1, 2])
-def test_sample(concentration):
-    # We test the fact that marginal off-diagonal element of sampled correlation matrix is
-    # Beta(concentration + (D - 2) / 2, concentration + (D - 2) / 2) on (-1, 1)
+@pytest.mark.parametrize("sample_method", ["cvine", "onion"])
+def test_sample(concentration, sample_method):
+    # We test for the fact that the marginal distribution of off-diagonal elements of sampled
+    # correlation matrices is Beta(concentration + (D - 2) / 2, concentration + (D - 2) / 2)
+    # scaled by a linear mapping X -> 2 * X - 1 (to make its support on (-1, 1))
     dimension = 5
     d = LKJCorrCholesky(dimension, concentration, sample_method=sample_method)
-    samples = d.sample(sample_shape=torch.Size([100000]))
+    samples = d.sample(sample_shape=torch.Size([50000]))
     corr_samples = samples.matmul(samples.transpose(-1, -2))
 
-    marginal = TransformedDistribution(
-        Beta(concentration + (dimension - 2) / 2., concentration + (dimension - 2) / 2.),
-        AffineTransform(loc=-1, scale=2))
-    target_mean = samples.new_full((dimension, dimension), marginal.mean)
-    target_mean[::dimension + 1] = 1  # diagonal elements of correlation matrices are 1
-    target_variance = samples.new_full((dimension, dimension), marginal.variance)
-    target_variance[::dimension + 1] = 0
+    marginal = Beta(concentration + (dimension - 2) / 2.,
+                    concentration + (dimension - 2) / 2.)
+    marginal_mean = 2 * marginal.mean - 1
+    marginal_variance = 4 * marginal.variance
+    target_mean = samples.new_full((dimension, dimension), marginal_mean)
+    # diagonal elements of correlation matrices are 1
+    target_mean.view(-1)[::dimension + 1] = 1
+    # we multiply std by 2 because the marginal support is (-1, 1), not (0, 1)
+    target_variance = samples.new_full((dimension, dimension), marginal_variance)
+    target_variance.view(-1)[::dimension + 1] = 0
 
-    assert_tensors_equal(transform.domain.check(z),
-                         x.new_ones(x_shape, dtype=torch.uint8))
+    assert_close(corr_samples.mean(dim=0), target_mean, atol=0.005)
+    assert_close(corr_samples.var(dim=0), target_variance, atol=0.005)
 
 
-@pytest.mark.parametrize("concentration", [0.5, 1, 2])
-def test_log_prob("concentration", [0.5, 1, 2]):
-    pass
+@pytest.mark.parametrize("dimension", [2, 5, 10])
+def test_log_prob_uniform(dimension):
+    d = LKJCorrCholesky(dimension, concentration=1)
+    sample = d.sample()
+
+    # when concentration = 1, LKJ gives a uniform distribution over correlation matrix,
+    # hence density of a correlation matrix will be Uniform((-1, 1)^D) = 0.5^D
+    uniform_log_prob = -dimension * math.log(2)
+
+    # we need to compute jacobian from cholesky -> corr
+    tril_index = sample.new_ones(dimension, dimension).tril(diagonal=-1) > 0.5
+    sample_tril = sample[tril_index].clone().detach().requires_grad_()
+    sample_cloned = sample_tril.new_ones(dimension, dimension)
+    sample_cloned[tril_index] = sample_tril
+    sample_cloned.view(-1)[::dimension + 1] = (1 - sample_cloned.pow(2).sum(-1)).sqrt()
+    corr = sample_cloned.matmul(sample_cloned.t())
+    corr_tril = corr[tril_index]
+
+    cholesky_to_corr_jacobian = _autograd_log_det(corr_tril, sample_tril)
+    target_log_prob = cholesky_to_corr_jacobian + uniform_log_prob
+
+    assert_close(d.log_prob(sample), target_log_prob)
+
+
+@pytest.mark.parametrize("concentration", [0.5, 2])
+def test_log_prob(concentration):
+    if concentration == 1:
+        pass
+        # test for the 
