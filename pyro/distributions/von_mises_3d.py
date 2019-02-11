@@ -56,19 +56,19 @@ class VonMises3D(TorchDistribution):
         # Kuba Ober (https://math.stackexchange.com/users/76513/kuba-ober)
         # Calculate Rotation Matrix to align Vector A to Vector B in 3d?
         # URL (version: 2018-09-12): https://math.stackexchange.com/q/897677
-        base_tensor = torch.tensor([0.,0.,1.], dtype=self._mean.dtype, device=self._mean.device)
+        base_tensor = torch.tensor([0., 0., 1.], dtype=self._mean.dtype, device=self._mean.device)
         base_mean_cross = base_tensor.cross(self._mean, dim=-1)
         bmn = base_mean_cross.norm(2, -1)
         base_mean_inner = base_tensor @ self._mean
         z = torch.zeros_like(base_mean_inner)
-        rotg = torch.stack([torch.stack([base_mean_inner, -bmn, z], dim=-1), 
+        rotg = torch.stack([torch.stack([base_mean_inner, -bmn, z], dim=-1),
                             torch.stack([bmn, base_mean_inner, z], dim=-1),
-                            torch.stack([z,z,z+1], dim=-1)], dim=-2)
+                            torch.stack([z, z, z+1], dim=-1)], dim=-2)
         vd = (self._mean - (base_tensor @ self._mean) * base_tensor)
         v = vd / vd.norm(2, -1)
         mean_base_cross = self._mean.cross(base_tensor, dim=-1)
         rotfi = torch.stack([base_tensor, v, mean_base_cross], dim=-2)
-        self._rotation = torch.eye(3, dtype=self._mean.dtype, device=self._mean.device).expand(batch_shape+(3,3))
+        self._rotation = torch.eye(3, dtype=self._mean.dtype, device=self._mean.device).expand(batch_shape+(3, 3))
         # If the tensors are on top of each others we do not get a useful rotation matrix.
         # So, we have to change only where they are different
         diffrot = (base_tensor != self._mean).any(-1)
@@ -83,7 +83,7 @@ class VonMises3D(TorchDistribution):
                     value.shape))
             if not (torch.abs(value.norm(2, -1) - 1) < 1e-6).all():
                 raise ValueError('direction vectors are not normalized')
-        log_normalizer = self._scale.log() - scale.sinh().log() - math.log(4 * math.pi)
+        log_normalizer = self._scale.log() - self._scale.sinh().log() - math.log(4 * math.pi)
         return (self.concentration * value).sum(-1) + log_normalizer
 
     def expand(self, batch_shape):
@@ -98,7 +98,7 @@ class VonMises3D(TorchDistribution):
         """
         The sampling algorithm for the von Mises-Fisher distribution on the unit sphere (S^2)
         is based on the following paper:
-        Jakob, Wenzel. "Numerically stable sampling of the von Mises-Fisher distribution on Sˆ2 (and other tricks)." 
+        Jakob, Wenzel. "Numerically stable sampling of the von Mises-Fisher distribution on Sˆ2 (and other tricks)."
         Interactive Geometry Lab, ETH Zürich, Tech. Rep (2012).
         """
         shape = self._extended_shape(sample_shape)
