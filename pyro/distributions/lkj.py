@@ -83,7 +83,10 @@ class CorrLCholeskyTransform(Transform):
         return isinstance(other, CorrLCholeskyTransform)
 
     def _call(self, x):
-        eps = torch.finfo(x.dtype).eps
+        # Note: Limiting eps to finfo.eps was insufficient to resolve the issue
+        # described above
+        #eps = torch.finfo(x.dtype).eps
+        eps = 1e-4
         z = x.tanh().clamp(-1 + eps, 1 - eps)
         return _vector_to_l_cholesky(z)
 
