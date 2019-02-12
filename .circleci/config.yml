@@ -1,0 +1,78 @@
+version: 2
+workflows:
+  version: 2
+  test:
+    jobs:
+      - lint
+      - docs:
+          requires:
+            - lint
+      - unittest-2.7:
+          requires:
+            - docs
+      - unittest-3.6:
+          requires:
+            - docs
+jobs:
+  build-2.7:
+    docker: &docker2.7
+      - image: circleci/python:2.7-jessie
+    steps:
+      - checkout
+      - run: &install2.7
+          name: Install PyTorch and Pyro
+          command: |
+            pip install https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp27-cp27mu-linux_x86_64.whl
+            pip install .[test]
+            pip freeze
+  build-3.6:
+    docker: &docker3.6
+      - image: circleci/python:3.6-jessie
+    steps:
+      - checkout
+      - run: &install3.6
+          name: Install PyTorch and Pyro
+          command: |
+            pip install https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp36-cp36m-linux_x86_64.whl
+            pip install .[test]
+            pip freeze
+  lint:
+    docker:
+    - image: circleci/python:3.6-jessie
+    steps:
+      - checkout
+      - run:
+        name: Test docs
+          command: |
+            - pip install -r docs/requirements.txt
+            - make docs
+            - make doctest
+  docs:
+    docker:
+      - image: circleci/python:3.6-jessie
+    steps:
+      - checkout
+      - run:
+          name: Test docs
+          command: |
+            - pip install -r docs/requirements.txt
+            - make docs
+            - make doctest
+  unittest-2.7:
+    steps:
+      - checkout
+      - docker: *docker2.7
+      - run: *install2.7
+      - run:
+          name: Run unit tests
+          command: |
+            pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
+  unittest-3.6:
+    steps:
+      - checkout
+      - docker: *docker3.6
+      - run: *install3.6
+      - run:
+          name: Run unit tests
+          command: |
+            pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
