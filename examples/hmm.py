@@ -6,8 +6,9 @@ variable elimination algorithm, where we use enumeration to exactly
 marginalize out some variables from the ELBO computation. We might
 call the resulting algorithm collapsed SVI or collapsed SGVB (i.e
 collapsed Stochastic Gradient Variational Bayes). In the case where
-we exactly sum out all the latent variables, this algorithm reduces
-to a form of gradient-based Maximum Likelihood Estimation.
+we exactly sum out all the latent variables (as is the case here),
+this algorithm reduces to a form of gradient-based Maximum
+Likelihood Estimation.
 
 To marginalize out discrete variables ``x`` in Pyro's SVI:
 
@@ -19,6 +20,17 @@ To marginalize out discrete variables ``x`` in Pyro's SVI:
 3. Ensure your model can handle broadcasting of the sample values
     of those variables
 4. Use the ``TraceEnum_ELBO`` loss inside Pyro's ``SVI``.
+
+Note that empirical results for the models defined here can be found in
+reference [1]. This paper also includes a description of the "tensor
+variable elimination" algorithm that Pyro uses under the hood to
+marginalize out discrete latent variables.
+
+References
+
+1. "Tensor Variable Elimination for Plated Factor Graphs",
+Fritz Obermeyer, Eli Bingham, Martin Jankowiak, Justin Chiu,
+Neeraj Pradhan, Alexander Rush, Noah Goodman. https://arxiv.org/abs/1902.03210
 """
 from __future__ import absolute_import, division, print_function
 
@@ -134,6 +146,10 @@ def model_0(sequences, lengths, args, batch_size=None, include_prior=True):
 # compiler.  To add batch support, we'll introduce a second plate "sequences"
 # and randomly subsample data to size batch_size.  To add jit support we
 # silence some warnings and try to avoid dynamic program structure.
+
+# Note that this is the "HMM" model in reference [1] (with the difference that
+# in [1] the probabilities probs_x and probs_y are not MAP-regularized with
+# Dirichlet and Beta distributions for any of the models)
 def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
     # Sometimes it is safe to ignore jit warnings. Here we use the
     # pyro.util.ignore_jit_warnings context manager to silence warnings about
@@ -215,6 +231,7 @@ def model_1(sequences, lengths, args, batch_size=None, include_prior=True):
 #        V        V         V
 #     y[t-1] --> y[t] --> y[t+1]
 #
+# Note that this is the "arHMM" model in reference [1].
 def model_2(sequences, lengths, args, batch_size=None, include_prior=True):
     with ignore_jit_warnings():
         num_sequences, max_length, data_dim = map(int, sequences.shape)
@@ -257,6 +274,8 @@ def model_2(sequences, lengths, args, batch_size=None, include_prior=True):
 # entire joint space of these variables w[t],x[t] needs to be enumerated.
 # For that reason, we set the dimension of each to the square root of the
 # target hidden dimension.
+#
+# Note that this is the "FHMM" model in reference [1].
 def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
     with ignore_jit_warnings():
         num_sequences, max_length, data_dim = map(int, sequences.shape)
@@ -301,6 +320,8 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
 #
 # Note that message passing here has roughly the same cost as with the
 # Factorial HMM, but this model has more parameters.
+#
+# Note that this is the "PFHMM" model in reference [1].
 def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
     with ignore_jit_warnings():
         num_sequences, max_length, data_dim = map(int, sequences.shape)
@@ -378,6 +399,8 @@ tones_generator = None
 
 
 # The neural HMM model now uses tones_generator at each time step.
+#
+# Note that this is the "nnHMM" model in reference [1].
 def model_5(sequences, lengths, args, batch_size=None, include_prior=True):
     with ignore_jit_warnings():
         num_sequences, max_length, data_dim = map(int, sequences.shape)
@@ -423,7 +446,8 @@ def model_5(sequences, lengths, args, batch_size=None, include_prior=True):
 #
 #  Note that in this model (in contrast to the previous model) we treat
 #  the transition and emission probabilities as parameters (so they have no prior).
-
+#
+# Note that this is the "2HMM" model in reference [1].
 def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
     num_sequences, max_length, data_dim = sequences.shape
     assert lengths.shape == (num_sequences,)
