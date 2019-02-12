@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import math
+import os
 
 import pytest
 import torch
@@ -8,6 +9,7 @@ from torch import optim
 
 from pyro.distributions import VonMises, VonMises3D
 from pyro.distributions.von_mises import _log_modified_bessel_fn
+from tests.common import skipif_param
 
 
 def _fit_params_from_samples(samples, n_iter):
@@ -42,8 +44,10 @@ def _fit_params_from_samples(samples, n_iter):
 
 
 @pytest.mark.parametrize('loc', [-math.pi/2.0, 0.0, math.pi/2.0])
-@pytest.mark.parametrize('concentration', [0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0])
-def test_sample(loc, concentration, n_samples=int(1e6), n_iter=100):
+@pytest.mark.parametrize('concentration', [skipif_param(0.01, condition='CUDA_TEST' in os.environ,
+                                                        reason='low precision.'),
+                                           0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0])
+def test_sample(loc, concentration, n_samples=int(1e6), n_iter=50):
     prob = VonMises(loc, concentration)
     samples = prob.sample((n_samples,))
     mu, kappa = _fit_params_from_samples(samples, n_iter=n_iter)
