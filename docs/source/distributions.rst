@@ -78,7 +78,7 @@ DirichletMultinomial
     :show-inheritance:
 
 EmpiricalDistribution
-----------------------
+---------------------
 .. autoclass:: pyro.distributions.Empirical
     :members:
     :undoc-members:
@@ -92,8 +92,15 @@ GammaPoisson
     :show-inheritance:
 
 GaussianScaleMixture
-------------------------------------
+--------------------
 .. autoclass:: pyro.distributions.GaussianScaleMixture
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+LKJCorrCholesky
+---------------
+.. autoclass:: pyro.distributions.LKJCorrCholesky
     :members:
     :undoc-members:
     :show-inheritance:
@@ -106,7 +113,7 @@ MaskedMixture
     :show-inheritance:
 
 MixtureOfDiagNormals
-------------------------------------
+--------------------
 .. autoclass:: pyro.distributions.MixtureOfDiagNormals
     :members:
     :undoc-members:

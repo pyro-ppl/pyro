@@ -7,11 +7,10 @@ import torch
 import torch.nn.functional as F
 from torch.distributions import biject_to, constraints, transform_to
 from torch.distributions.constraints import Constraint
-from torch.distributions.transforms import Transform, ComposeTransform
+from torch.distributions.transforms import Transform
 
 from pyro.distributions.torch import Beta
 from pyro.distributions.torch_distribution import TorchDistribution
-from pyro.distributions.util import eye_like
 
 
 ########################################
@@ -71,29 +70,32 @@ def _signed_stick_breaking_tril(t):
 
 
 class CorrCholeskyTransform(Transform):
-    """
-    Transforms a uncontrained real vector `x` with length `D*(D-1)/2` into the Cholesky factor
-    of a D-dimension correlation matrix. This Cholesky factor is a lower triangular matrix
-    with positive diagonals and unit Euclidean norm for each row.
+    r"""
+    Transforms a uncontrained real vector :math:`x` with length :math:`D*(D-1)/2` into the
+    Cholesky factor of a D-dimension correlation matrix. This Cholesky factor is a lower
+    triangular matrix with positive diagonals and unit Euclidean norm for each row.
 
     The transform is processed as follows:
 
-    1. First we convert a `x` into a lower triangular matrix with the following order:
+    1. First we convert :math:`x` into a lower triangular matrix with the following order:
+
+    .. math::
+
         \begin{bmatrix}
             1   & 0 & 0 & 0 \\
             x_0 & 1 & 0 & 0 \\
             x_1 & x_2 & 1 & 0 \\
             x_3 & x_4 & x_5 & 1
         \end{bmatrix}
-    2. For each row `X_i` of the lower triangular part, we apply a *signed* version of class
-    :class:`~torch.distributions.StickBreakingTransform` to transform `X_i` into a unit
-    Euclidean length vector using the following steps:
-        a. Scales into the interval `(-1, 1)` domain: defines :math:`r_i = \tanh(X_i)`.
-        b. Transforms into an unsigned domain: defines :math:`z_i = r_i^2`.
-        c. Applies `s_i = StickBreakingTransform(z_i)`. Note that `s_i` has an additional
-        dimension.
-        d. Transforms back into signed domain: returns
-        :math:`y_i = (sign(r_i), 1) * \sqrt{s_i}`.
+
+    2. For each row :math:`X_i` of the lower triangular part, we apply a *signed* version of
+    class :class:`~torch.distributions.StickBreakingTransform` to transform :math:`X_i` into a
+    unit Euclidean length vector using the following steps:
+
+        a. Scales into the interval :math:`(-1, 1)` domain: :math:`r_i = \tanh(X_i)`.
+        b. Transforms into an unsigned domain: :math:`z_i = r_i^2`.
+        c. Applies :math:`s_i = StickBreakingTransform(z_i)`.
+        d. Transforms back into signed domain: :math:`y_i = (sign(r_i), 1) * \sqrt{s_i}`.
     """
     domain = constraints.real
     codomain = corr_cholesky_constraint
@@ -102,7 +104,7 @@ class CorrCholeskyTransform(Transform):
     event_dim = 1
 
     def __eq__(self, other):
-        return isinstance(other, _PartialCorrToCorrCholeskyTransform)
+        return isinstance(other, CorrCholeskyTransform)
 
     def _call(self, x):
         # we interchange step 1 and step 2.a for a better performance
@@ -151,7 +153,7 @@ def _transform_to_corr_cholesky(constraint):
 
 
 class LKJCorrCholesky(TorchDistribution):
-    """
+    r"""
     LKJ distribution for lower Cholesky factors of correlation matrices. The distribution is
     controlled by ``concentration`` parameter :math:`\eta` to make the probability of the
     correlation matrix :math:`M` generated from a Cholesky factor propotional to
@@ -172,9 +174,9 @@ class LKJCorrCholesky(TorchDistribution):
     Daniel Lewandowski, Dorota Kurowicka, Harry Joe
 
     :param int dimension: dimension of the matrices
-    :param float or torch.Tensor concentration: concentration/shape parameter of the
+    :param torch.Tensor concentration: concentration/shape parameter of the
         distribution (often referred to as eta)
-    :param str sample_method: Either "cvine" or "onion". Both methods are proposed in [1] and 
+    :param str sample_method: Either "cvine" or "onion". Both methods are proposed in [1] and
         offer the same distribution over correlation matrices. But they are different in how
         to generate samples. Defaults to "onion".
     """
@@ -270,13 +272,14 @@ class LKJCorrCholesky(TorchDistribution):
         #       Jacobian = L22^(D-2) * L33^(D-3) * ... * Ldd^0
         #
         # From [1], we know that probability of a correlation matrix is propotional to
-        #   determinant ** (concentration - 1) = prod(L_ii ^ 2*(concentration - 1))
+        #   determinant ** (concentration - 1) = prod(L_ii ^ 2(concentration - 1))
         # On the other hand, Jabobian of the transformation from Cholesky factor to
         # correlation matrix is:
         #   prod(L_ii ^ (D - i))
         # So the probability of a Cholesky factor is propotional to
         #   prod(L_ii ^ (2 * concentration - 2 + D - i)) =: prod(L_ii ^ order_i)
-        # with i = 2..D (we omit the element i = 1 because L_11 = 1)
+        # with order_i = 2 * concentration - 2 + D - i,
+        # i = 2..D (we omit the element i = 1 because L_11 = 1)
 
         # Compute `order` vector (note that we need to reindex i -> i-2):
         order_offset = torch.arange(4 - self.dimension, 2.1, dtype=self.concentration.dtype,
@@ -284,19 +287,19 @@ class LKJCorrCholesky(TorchDistribution):
         order = 2 * self.concentration.unsqueeze(-1) - order_offset
 
         # Compute unnormalized log_prob:
-        cholesky_logprob = (order * value.diagonal(dim1=-2, dim2=-1)[..., 1:].log()).sum(-1)
+        unnormalized = (order * value.diagonal(dim1=-2, dim2=-1)[..., 1:].log()).sum(-1)
 
         # Compute normalization constant (on the first proof of page 1999 of [1])
         denominator_concentration = self.concentration + (self.dimension - 1) / 2.
-        denominator = torch.lgamma(denominator_concentration)
+        denominator = torch.lgamma(denominator_concentration) * (self.dimension - 1)
         numerator = torch.mvlgamma(denominator_concentration - 0.5, self.dimension - 1)
-        # pi_constant in [1] is D * (D - 1) / 4
-        # pi_constant in torch.mvlgamma is (D - 1) * (D - 2) / 2
-        # hence, we need to add a pi_constant = (D - 1) * (1 - D/4)
-        pi_constant = (self.dimension - 1) * (1 - self.dimension / 4.) * math.log(math.pi)
+        # pi_constant in [1] is D * (D - 1) / 4 * log(pi)
+        # pi_constant in torch.mvlgamma is (D - 1) * (D - 2) / 4 * log(pi)
+        # hence, we need to add a pi_constant = (D - 1) * log(pi) / 2
+        pi_constant = (self.dimension - 1) / 2. * math.log(math.pi)
         normalization_constant = pi_constant + numerator - denominator
 
-        return cholesky_logprob - normalization_constant
+        return unnormalized - normalization_constant
 
     def rsample(self, sample_shape=torch.Size()):
         if self.sample_method == "cvine":
@@ -308,9 +311,9 @@ class LKJCorrCholesky(TorchDistribution):
         # C-vine method first uses beta_dist to generate partial correlations,
         # then apply signed stick breaking to transform to cholesky factor.
         # FIX ME: I can't find a reference to prove that using signed stick breaking to
-        # generate correlation matrices is the same as the C-vine method in [1]. One guarantee
-        # is Stan devs follows this approach. Here is an attempt to prove the correctness for
-        # the entry r_32.
+        # generate correlation matrices is the same as the C-vine method in [1]. One
+        # guarantee is Stan devs follows this approach. Here I present an attempt to prove
+        # the correctness for the entry r_32.
         #
         # With notations follow from [1], we define p: partial correlation matrix,
         # c: cholesky factor, r: correlation matrix.
@@ -344,8 +347,10 @@ class LKJCorrCholesky(TorchDistribution):
         # The diagonal entries of Cholesky factor is sqrt(1 - w^2). We can show it by linear
         # algebra or by recalling that each row of Cholesky factor has unit Euclidean length.
         cholesky = beta_sample.new_zeros(beta_sample.shape[:-1] + (D, D))
+        cholesky_cloned = cholesky.clone()  # this is used to compute diagonal entries
         tril_index = cholesky.new_ones(cholesky.shape).tril(diagonal=-1) > 0.5
         cholesky[tril_index] = w
-        cholesky_diag = (1 - cholesky.pow(2).sum(-1)).sqrt()
+        cholesky_cloned[tril_index] = w
+        cholesky_diag = (1 - cholesky_cloned.pow(2).sum(-1)).sqrt()
         cholesky.view(cholesky.shape[:-2] + (D * D,))[..., ::D + 1] = cholesky_diag
         return cholesky
