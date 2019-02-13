@@ -21,8 +21,12 @@ for line in open(os.path.join(PROJECT_PATH, 'pyro', '__init__.py')):
 # Append current commit sha to version
 commit_sha = ''
 try:
-    commit_sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
-                                         cwd=PROJECT_PATH).decode('ascii').strip()
+    current_tag = subprocess.check_output(['git', 'tag', '--points-at', 'HEAD'],
+                                          cwd=PROJECT_PATH).decode('ascii').strip()
+    # only add sha if HEAD does not point to the release tag
+    if not current_tag == version:
+        commit_sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
+                                             cwd=PROJECT_PATH).decode('ascii').strip()
 except OSError:
     pass
 
