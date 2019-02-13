@@ -28,7 +28,7 @@ jobs:
           name: Install PyTorch and Pyro
           command: |
             pip install https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp27-cp27mu-linux_x86_64.whl
-            pip install .[test]
+            pip install --user .[test]
             pip freeze
   build-3.6:
     docker: &docker36
@@ -43,8 +43,8 @@ jobs:
       - run: &install36
           name: Install PyTorch and Pyro
           command: |
-            pip install https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp36-cp36m-linux_x86_64.whl
-            pip install .[test]
+            pip install --quiet https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp36-cp36m-linux_x86_64.whl
+            pip install --user .[test]
             pip freeze
   lint:
     docker: *docker36
@@ -65,7 +65,7 @@ jobs:
       - run:
           name: Test docs
           command: |
-            pip install -r docs/requirements.txt
+            pip install --user -r docs/requirements.txt
             make docs
             make doctest
   unittest-2.7:
