@@ -44,9 +44,9 @@ jobs:
       - run:
         name: Test docs
         command: |
-          - pip install -r docs/requirements.txt
-          - make docs
-          - make doctest
+          pip install -r docs/requirements.txt
+          make docs
+          make doctest
   docs:
     docker:
       - image: circleci/python:3.6-jessie
@@ -55,9 +55,9 @@ jobs:
       - run:
           name: Test docs
           command: |
-            - pip install -r docs/requirements.txt
-            - make docs
-            - make doctest
+            pip install -r docs/requirements.txt
+            make docs
+            make doctest
   unittest-2.7:
     docker: *docker27
     steps:
