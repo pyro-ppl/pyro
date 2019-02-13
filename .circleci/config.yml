@@ -52,16 +52,16 @@ jobs:
       - checkout
       - run: *chown36
       - run:
-          name: Test docs
+          name: Lint
           command: |
-            pip install -r docs/requirements.txt
-            make docs
-            make doctest
+            pip install flake8 nbstripout nbformat
+            mmake lint
   docs:
     docker: *docker36
     steps:
       - checkout
       - run: *chown36
+      - run: *install36
       - run:
           name: Test docs
           command: |
