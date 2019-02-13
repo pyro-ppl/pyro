@@ -42,11 +42,11 @@ jobs:
     steps:
       - checkout
       - run:
-        name: Test docs
-        command: |
-          pip install -r docs/requirements.txt
-          make docs
-          make doctest
+          name: Test docs
+          command: |
+            pip install -r docs/requirements.txt
+            make docs
+            make doctest
   docs:
     docker:
       - image: circleci/python:3.6-jessie
