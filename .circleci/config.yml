@@ -21,7 +21,7 @@ jobs:
       - checkout
       - run: &chown27
           name: Chown dependency folders
-          command:
+          command: |
             sudo chown -R circleci:circleci /usr/local/bin
             sudo chown -R circleci:circleci /usr/local/lib/python2.7/site-packages
       - run: &install27
@@ -37,7 +37,7 @@ jobs:
       - checkout
       - run: &chown36
           name: Chown dependency folders
-          command:
+          command: |
             sudo chown -R circleci:circleci /usr/local/bin
             sudo chown -R circleci:circleci /usr/local/lib/python3.6/site-packages
       - run: &install36
