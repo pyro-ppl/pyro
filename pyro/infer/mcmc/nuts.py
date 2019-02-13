@@ -100,6 +100,7 @@ class NUTS(HMC):
         ...     y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         ...     return y
         >>>
+        >>> pyro.set_rng_seed(0)
         >>> nuts_kernel = NUTS(model, adapt_step_size=True)
         >>> mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=300).run(data)
         >>> posterior = mcmc_run.marginal('beta').empirical['beta']

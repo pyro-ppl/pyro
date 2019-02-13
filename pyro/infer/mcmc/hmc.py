@@ -81,6 +81,7 @@ class HMC(TraceKernel):
         ...     y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         ...     return y
         >>>
+        >>> pyro.set_rng_seed(0)
         >>> hmc_kernel = HMC(model, step_size=0.0855, num_steps=4)
         >>> mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
         >>> posterior = mcmc_run.marginal('beta').empirical['beta']
