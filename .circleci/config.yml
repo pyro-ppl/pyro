@@ -59,18 +59,18 @@ jobs:
             - make docs
             - make doctest
   unittest-2.7:
+    docker: *docker27
     steps:
       - checkout
-      - docker: *docker27
       - run: *install27
       - run:
           name: Run unit tests
           command: |
             pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
   unittest-3.6:
+    docker: *docker36
     steps:
       - checkout
-      - docker: *docker36
       - run: *install36
       - run:
           name: Run unit tests
