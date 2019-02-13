@@ -226,7 +226,7 @@ class Adam(object):
 
 # This is a unified interface for stochastic variational inference in Pyro.
 # The actual construction of the loss is taken care of by `loss`.
-# See http://docs.pyro.ai/en/0.3.0/inference_algos.html
+# See http://docs.pyro.ai/en/0.3.1/inference_algos.html
 class SVI(object):
     def __init__(self, model, guide, optim, loss):
         self.model = model
