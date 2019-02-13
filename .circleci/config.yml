@@ -55,7 +55,7 @@ jobs:
           name: Lint
           command: |
             pip install flake8 nbstripout nbformat
-            mmake lint
+            make lint
   docs:
     docker: *docker36
     steps:
