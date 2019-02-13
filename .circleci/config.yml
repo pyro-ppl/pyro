@@ -15,22 +15,22 @@ workflows:
             - docs
 jobs:
   build-2.7:
-    docker: &docker2.7
+    docker: &docker27
       - image: circleci/python:2.7-jessie
     steps:
       - checkout
-      - run: &install2.7
+      - run: &install27
           name: Install PyTorch and Pyro
           command: |
             pip install https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp27-cp27mu-linux_x86_64.whl
             pip install .[test]
             pip freeze
   build-3.6:
-    docker: &docker3.6
+    docker: &docker36
       - image: circleci/python:3.6-jessie
     steps:
       - checkout
-      - run: &install3.6
+      - run: &install36
           name: Install PyTorch and Pyro
           command: |
             pip install https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp36-cp36m-linux_x86_64.whl
@@ -61,8 +61,8 @@ jobs:
   unittest-2.7:
     steps:
       - checkout
-      - docker: *docker2.7
-      - run: *install2.7
+      - docker: *docker27
+      - run: *install27
       - run:
           name: Run unit tests
           command: |
@@ -70,8 +70,8 @@ jobs:
   unittest-3.6:
     steps:
       - checkout
-      - docker: *docker3.6
-      - run: *install3.6
+      - docker: *docker36
+      - run: *install36
       - run:
           name: Run unit tests
           command: |
