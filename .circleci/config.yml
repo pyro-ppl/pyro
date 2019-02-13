@@ -19,11 +19,14 @@ jobs:
       - image: circleci/python:2.7-jessie
     steps:
       - checkout
+      - run: &chown27
+          name: Chown dependency folders
+          command:
+            sudo chown -R circleci:circleci /usr/local/bin
+            sudo chown -R circleci:circleci /usr/local/lib/python2.7/site-packages
       - run: &install27
           name: Install PyTorch and Pyro
           command: |
-            sudo chown -R circleci:circleci /usr/local/bin
-            sudo chown -R circleci:circleci /usr/local/lib/python2.7/site-packages
             pip install https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp27-cp27mu-linux_x86_64.whl
             pip install .[test]
             pip freeze
@@ -32,19 +35,22 @@ jobs:
       - image: circleci/python:3.6-jessie
     steps:
       - checkout
+      - run: &chown36
+          name: Chown dependency folders
+          command:
+            sudo chown -R circleci:circleci /usr/local/bin
+            sudo chown -R circleci:circleci /usr/local/lib/python3.6/site-packages
       - run: &install36
           name: Install PyTorch and Pyro
           command: |
-            sudo chown -R circleci:circleci /usr/local/bin
-            sudo chown -R circleci:circleci /usr/local/lib/python3.6/site-packages
             pip install https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp36-cp36m-linux_x86_64.whl
             pip install .[test]
             pip freeze
   lint:
-    docker:
-    - image: circleci/python:3.6-jessie
+    docker: *docker36
     steps:
       - checkout
+      - run: *chown36
       - run:
           name: Test docs
           command: |
@@ -52,10 +58,10 @@ jobs:
             make docs
             make doctest
   docs:
-    docker:
-      - image: circleci/python:3.6-jessie
+    docker: *docker36
     steps:
       - checkout
+      - run: *chown36
       - run:
           name: Test docs
           command: |
@@ -66,6 +72,7 @@ jobs:
     docker: *docker27
     steps:
       - checkout
+      - run: *chown27
       - run: *install27
       - run:
           name: Run unit tests
@@ -75,6 +82,7 @@ jobs:
     docker: *docker36
     steps:
       - checkout
+      - run: *chown36
       - run: *install36
       - run:
           name: Run unit tests
