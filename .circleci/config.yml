@@ -22,6 +22,8 @@ jobs:
       - run: &install27
           name: Install PyTorch and Pyro
           command: |
+            sudo chown -R circleci:circleci /usr/local/bin
+            sudo chown -R circleci:circleci /usr/local/lib/python2.7/site-packages
             pip install https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp27-cp27mu-linux_x86_64.whl
             pip install .[test]
             pip freeze
@@ -33,6 +35,8 @@ jobs:
       - run: &install36
           name: Install PyTorch and Pyro
           command: |
+            sudo chown -R circleci:circleci /usr/local/bin
+            sudo chown -R circleci:circleci /usr/local/lib/python3.6/site-packages
             pip install https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp36-cp36m-linux_x86_64.whl
             pip install .[test]
             pip freeze
