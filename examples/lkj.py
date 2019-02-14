@@ -40,7 +40,7 @@ def main(args):
     if args.cuda:
         y = y.cuda()
     nuts_kernel = NUTS(model, jit_compile=args.jit)
-    posterior = MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps, num_chains=1).run(y)
+    MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps, num_chains=1).run(y)
 
 
 if __name__ == "__main__":
