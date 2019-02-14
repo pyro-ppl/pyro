@@ -20,9 +20,9 @@ def model(y):
     d = y.shape[1]
     N = y.shape[0]
     # Vector of variances for each of the d variables
-    theta = pyro.sample("theta", dist.HalfCauchy(torch.full((d,), 1, dtype=y.dtype)))
+    theta = pyro.sample("theta", dist.HalfCauchy(y.new_ones(d)))
     # Lower cholesky factor of a correlation matrix
-    eta = y.new_full((1,), 1)
+    eta = y.new_ones(1)
     L_omega = pyro.sample("L_omega", dist.CorrLCholeskyLKJPrior(d, eta))
     # Lower cholesky factor of the covariance matrix
     L_Omega = torch.mm(torch.diag(theta.sqrt()), L_omega)
@@ -30,15 +30,18 @@ def model(y):
     # Vector of expectations
     mu = y.new_zeros(d)
 
-    with pyro.plate("observations", N) as n:
-        obs = pyro.sample("obs", dist.MultivariateNormal(mu, scale_tril=L_Omega), obs=y[n])
+    with pyro.plate("observations", N):
+        obs = pyro.sample("obs", dist.MultivariateNormal(mu, scale_tril=L_Omega), obs=y)
     return obs
 
 
 def main(args):
     y = torch.randn(args.n, args.num_variables).to(dtype=torch.double)
-    nuts_kernel = NUTS(model, jit_compile=args.jit, step_size=1e-5)
-    MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps, num_chains=args.num_chains).run(y)
+    if args.cuda:
+        y = y.cuda()
+    nuts_kernel = NUTS(model, jit_compile=False, step_size=1e-5)
+    MCMC(nuts_kernel, num_samples=args.num_samples,
+         warmup_steps=args.warmup_steps, num_chains=args.num_chains).run(y)
 
 
 if __name__ == "__main__":
@@ -50,8 +53,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-variables", nargs='?', default=5, type=int)
     parser.add_argument("--warmup-steps", nargs='?', default=100, type=int)
     parser.add_argument("--rng_seed", nargs='?', default=0, type=int)
-    parser.add_argument("--jit", action="store_true", default=False,
-                        help="use PyTorch jit")
+    parser.add_argument("--cuda", action="store_true", default=False)
     args = parser.parse_args()
 
     pyro.set_rng_seed(args.rng_seed)
