@@ -127,7 +127,7 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
     Note that the `event_shape` of this distribution is `[d, d]`
 
     Important note: When using this distribution with HMC/NUTS, it is important to
-    use a `step_size` such as 1e-6. If not, you are likely to experience LAPACK
+    use a `step_size` such as 1e-4. If not, you are likely to experience LAPACK
     errors regarding positive-definiteness.
 
     :param int d: Dimensionality of the matrix
