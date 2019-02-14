@@ -39,7 +39,7 @@ def main(args):
     y = torch.randn(args.n, args.num_variables).to(dtype=torch.double)
     if args.cuda:
         y = y.cuda()
-    nuts_kernel = NUTS(model, jit_compile=args.jit)
+    nuts_kernel = NUTS(model, jit_compile=args.jit, step_size=1e-6)
     MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps, num_chains=1).run(y)
 
 
