@@ -27,7 +27,8 @@ try:
     if not current_tag == version:
         commit_sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
                                              cwd=PROJECT_PATH).decode('ascii').strip()
-except OSError:
+# catch all exception to be safe
+except Exception:
     pass
 
 # Write version to _version.py
