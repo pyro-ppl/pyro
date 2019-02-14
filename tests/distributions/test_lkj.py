@@ -13,7 +13,6 @@ def test_constraint(value_shape):
     value.diagonal(dim1=-2, dim2=-1).exp_()
     value = value / value.norm(2, dim=-1, keepdim=True)
 
-    #assert_tensors_equal(corr_cholesky_constraint.check(value), torch.ones(value_shape[:-2], dtype=value.dtype))
     assert (corr_cholesky_constraint.check(value) == 1).all()
 
 
@@ -42,10 +41,6 @@ def test_unconstrained_to_corr_cholesky_transform(y_shape):
     # test log_abs_det_jacobian
     log_det = transform.log_abs_det_jacobian(y, x)
     assert log_det.shape == y_shape[:-1]
-    if y_shape == ():
-        assert_tensors_equal(torch.autograd.grad(y, (x,), retain_graph=True)[0].abs().log(), log_det)
-        assert_tensors_equal(torch.autograd.grad(x, (y,), retain_graph=True)[0].abs().log(), -log_det)
-        assert log_det.shape == x_shape[:-1]
     if len(y_shape) == 1:
         triu_index = x.new_ones(x.shape).triu(diagonal=1).to(torch.uint8)
         x_tril_vector = x.t()[triu_index]
@@ -57,6 +52,7 @@ def test_unconstrained_to_corr_cholesky_transform(y_shape):
         x = x.t()
         z = transform.inv(x)
         assert_tensors_equal(_autograd_log_det(z, x_tril_vector), -log_det, prec=1e-4)
+
 
 @pytest.mark.parametrize("x_shape", [(1,), (3, 1), (6,), (1, 6), (5, 6)])
 @pytest.mark.parametrize("mapping", [biject_to, transform_to])

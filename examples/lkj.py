@@ -1,15 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-import math
 import argparse
 import torch
 
 import pyro
 import pyro.distributions as dist
-import torch.distributions.constraints as constraints
-import math
-from pyro.infer.mcmc import HMC, MCMC, NUTS
-from pyro import poutine
+from pyro.infer.mcmc import MCMC, NUTS
 
 """
 This simple example is intended to demonstrate how to use an LKJ prior with
@@ -18,6 +14,7 @@ a multivariate distribution.
 It generates entirely random, uncorrelated data, and then attempts to fit a correlation matrix
 and vector of variances.
 """
+
 
 def model(y):
     d = y.shape[1]
@@ -37,12 +34,14 @@ def model(y):
         obs = pyro.sample("obs", dist.MultivariateNormal(mu, scale_tril=L_Omega), obs=y[n])
     return obs
 
+
 def main(args):
     y = torch.randn(args.n, args.num_variables).to(dtype=torch.double)
     if args.cuda:
         y = y.cuda()
     nuts_kernel = NUTS(model, jit_compile=args.jit)
     posterior = MCMC(nuts_kernel, num_samples=args.num_samples, warmup_steps=args.warmup_steps, num_chains=1).run(y)
+
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith('0.3.0')

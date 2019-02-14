@@ -5,7 +5,7 @@ import math
 import torch
 from torch.distributions import biject_to, constraints, transform_to
 from torch.distributions.constraints import Constraint
-from torch.distributions.transforms import Transform, ComposeTransform
+from torch.distributions.transforms import Transform
 
 from pyro.distributions import Beta, TorchDistribution
 
@@ -26,7 +26,6 @@ class _CorrCholesky(Constraint):
         return constraints.lower_cholesky.check(value) & unit_norm_row
 
 
-# TODO rename this public interface to corr_cholesky if move upstream to pytorch
 corr_cholesky_constraint = _CorrCholesky()
 
 
@@ -39,28 +38,20 @@ def _vector_to_l_cholesky(z):
     if D % 1 != 0:
         raise ValueError("Correlation matrix transformation requires d choose 2 inputs")
     D = int(D)
-    x = z.new_zeros(list(z.shape[:-1]) + [D,D])
+    x = z.new_zeros(list(z.shape[:-1]) + [D, D])
 
-    x[..., 0,0] = 1
-    x[..., 1:,0] = z[..., :(D-1)]
+    x[..., 0, 0] = 1
+    x[..., 1:, 0] = z[..., :(D-1)]
     i = D - 1
     last_squared_x = z.new_zeros(list(z.shape[:-1]) + [D])
     for j in range(1, D):
         distance_to_copy = D - 1 - j
-        last_squared_x = last_squared_x[..., 1:] + x[...,j:,(j-1)].clone()**2
+        last_squared_x = last_squared_x[..., 1:] + x[..., j:, (j-1)].clone()**2
         x[..., j, j] = (1 - last_squared_x[..., 0]).sqrt()
         x[..., (j+1):, j] = z[..., i:(i + distance_to_copy)] * (1 - last_squared_x[..., 1:]).sqrt()
         i += distance_to_copy
     return x
 
-# Note on the bijectivity of CorrLCholeskyTransform:
-# The transform has two phases - first, from the domain of reals to (-1, 1)
-# and second, from a vector in (-1, 1) to a lower cholesky factorself.
-# The second part of the transform cannot operate correctly if the inputs
-# consist of many 1s and -1s. This leads to a numerical precision issue with the
-# tanh transformation, where for inputs far from 0 tanh produces a -1 or 1.
-# For that reason, the output of the tanh operation is clamped, and the
-# transformation is not perfectly bijective.
 
 class CorrLCholeskyTransform(Transform):
     """
@@ -83,11 +74,7 @@ class CorrLCholeskyTransform(Transform):
         return isinstance(other, CorrLCholeskyTransform)
 
     def _call(self, x):
-        # Note: Limiting eps to finfo.eps was insufficient to resolve the issue
-        # described above
-        #eps = torch.finfo(x.dtype).eps
-        eps = 1e-4
-        z = x.tanh().clamp(-1 + eps, 1 - eps)
+        z = x.tanh()
         return _vector_to_l_cholesky(z)
 
     def _inverse(self, y):
@@ -101,7 +88,7 @@ class CorrLCholeskyTransform(Transform):
         ]
 
         for i in range(2, D):
-            z_tri[..., i - 2, 0:(i-1)] = y[..., i, 1:i] / (1-y[...,i,0:(i-1)].pow(2).cumsum(-1)).sqrt()
+            z_tri[..., i - 2, 0:(i-1)] = y[..., i, 1:i] / (1-y[..., i, 0:(i-1)].pow(2).cumsum(-1)).sqrt()
         for j in range(D - 2):
             z_stack.append(z_tri[..., j:, j])
 
@@ -133,25 +120,32 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
     The expected use is to combine it with a vector of variances and pass it
     to the scale_tril parameter of a multivariate distribution such as MultivariateNormal.
 
-    E.g., if \theta is a (positive) vector of covariances with the same dimensionality
-    as this distribution, and \Omega is sampled from this distribution, scale_tril=torch.mm(torch.diag(sqrt(\theta)), \Omega)
+    E.g., if theta is a (positive) vector of covariances with the same dimensionality
+    as this distribution, and Omega is sampled from this distribution,
+    scale_tril=torch.mm(torch.diag(sqrt(theta)), Omega)
 
     Note that the `event_shape` of this distribution is `[d, d]`
+
+    Important note: When using this distribution with HMC/NUTS, it is important to
+    use a `step_size` such as 1e-6. If not, you are likely to experience LAPACK
+    errors regarding positive-definiteness.
 
     :param int d: Dimensionality of the matrix
     :param torch.Tensor eta: A single positive number parameterizing the distribution.
     """
     arg_constraints = {"eta": constraints.positive}
     support = corr_cholesky_constraint
-    has_rsample = False
+    has_rsample = True
 
-    def __init__(self, d, eta):
+    def __init__(self, d, eta, validate_args=None):
         if not torch.is_tensor(eta):
             raise ValueError("Eta must be a tensor")
         if any(eta <= 0):
             raise ValueError("eta must be > 0")
+        if eta.numel() != 1:
+            raise ValueError("eta must be a single number; for a larger batch size, call expand")
         vector_size = (d * (d - 1)) // 2
-        alpha = eta.add(0.5 * (d  - 1.0))
+        alpha = eta.add(0.5 * (d - 1.0))
 
         concentrations = eta.new_empty(vector_size,)
         i = 0
@@ -160,15 +154,27 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
             for j in range(k+1, d):
                 concentrations[..., i] = alpha
                 i += 1
-        self._generating_distribution = Beta(concentrations, concentrations)
-        self._eta = eta
+        self._gen = Beta(concentrations, concentrations)
+        self.eta = eta
         self._d = d
         self._lkj_constant = None
-        self._event_shape = torch.Size((d, d))
+        super(CorrLCholeskyLKJPrior, self).__init__(torch.Size(), torch.Size((d, d)), validate_args=validate_args)
 
-    def sample(self, *args, **kwargs):
-        z = self._generating_distribution.sample(*args, **kwargs).detach().to(dtype=self._eta.dtype).mul(2).add(-1.0)
+    def rsample(self, sample_shape=torch.Size()):
+        y = self._gen.rsample(sample_shape=self.batch_shape + sample_shape).detach()
+        z = y.to(dtype=self.eta.dtype).mul(2).add(-1.0)
         return _vector_to_l_cholesky(z)
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(CorrLCholeskyLKJPrior, _instance)
+        batch_shape = torch.Size(batch_shape)
+        new._gen = self._gen
+        new.eta = self.eta
+        new._d = self._d
+        new._lkj_constant = self._lkj_constant
+        super(CorrLCholeskyLKJPrior, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
 
     def lkj_constant(self, eta, K):
         if self._lkj_constant is not None:
@@ -179,19 +185,21 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
         constant = torch.lgamma(eta.add(0.5 * Km1)).mul(Km1)
 
         k = torch.linspace(start=1, end=Km1, steps=Km1, dtype=eta.dtype, device=eta.device)
-        constant -= (k.mul(math.log(math.pi) * 0.5) + torch.lgamma(eta.add( 0.5 * (Km1 - k)))).sum()
+        constant -= (k.mul(math.log(math.pi) * 0.5) + torch.lgamma(eta.add(0.5 * (Km1 - k)))).sum()
 
         self._lkj_constant = constant
         return constant
 
     def log_prob(self, x):
-        eta = self._eta
+        eta = self.eta
 
         lp = self.lkj_constant(eta, self._d)
 
         Km1 = x.shape[-1] - 1
         log_diagonals = x.diagonal(offset=0, dim1=-1, dim2=-2)[..., 1:].log()
-        values = log_diagonals * torch.linspace(start=Km1 - 1, end=0, steps=Km1, dtype=x.dtype, device=x.device).expand_as(log_diagonals)
+        values = log_diagonals * torch.linspace(start=Km1 - 1, end=0, steps=Km1,
+                                                dtype=x.dtype,
+                                                device=x.device).expand_as(log_diagonals)
 
         values += log_diagonals.mul(eta.mul(2).add(-2.0))
         return values.sum(-1) + lp
