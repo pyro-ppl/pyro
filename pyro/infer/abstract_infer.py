@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import numbers
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict, defaultdict
 
@@ -78,7 +79,7 @@ class EmpiricalMarginal(Empirical):
         # Apply default weight of 1.0.
         if log_weight is None:
             log_weight = 0.0
-        if self._validate_args and log_weight.dim() > 0:
+        if self._validate_args and not isinstance(log_weight, numbers.Number) and log_weight.dim() > 0:
             raise ValueError("``weight.dim() > 0``, but weight should be a scalar.")
 
         # Append to the buffer list
