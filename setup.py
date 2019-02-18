@@ -27,8 +27,9 @@ try:
     if not current_tag == version:
         commit_sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
                                              cwd=PROJECT_PATH).decode('ascii').strip()
-except OSError:
-    pass
+# catch all exception to be safe
+except Exception:
+    pass  # probably not a git repo
 
 # Write version to _version.py
 if commit_sha:
@@ -44,7 +45,7 @@ try:
     import pypandoc
     long_description = pypandoc.convert('README.md', 'rst')
     print(long_description)
-except (IOError, ImportError, OSError) as e:
+except Exception as e:
     sys.stderr.write('Failed to convert README.md to rst:\n  {}\n'.format(e))
     sys.stderr.flush()
     long_description = open('README.md').read()
