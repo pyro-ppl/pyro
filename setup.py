@@ -57,7 +57,6 @@ long_description = '\n'.join([str(line) for line in long_description.split('\n')
 EXTRAS_REQUIRE = [
     'jupyter>=1.0.0',
     'matplotlib>=1.3',
-    'numpy>=1.7',
     'observations>=0.1.4',
     'pillow',
     'torchvision',
@@ -84,6 +83,7 @@ setup(
         # add them to `docs/requirements.txt`
         'contextlib2',
         'graphviz>=0.8',
+        'numpy>=1.7',
         'opt_einsum>=2.3.2',
         'six>=1.10.0',
         'torch>=1.0.0',
