@@ -130,7 +130,7 @@ class Messenger(object):
         """
         :param fn: function implementing operation
         :param str type: name of the operation
-            (also passed to :func:~`pyro.poutine.runtime.effectful`)
+            (also passed to :func:`~pyro.poutine.runtime.effectful`)
         :param bool post: if `True`, use this operation as postprocess
 
         Dynamically add operations to an effect.
@@ -158,7 +158,7 @@ class Messenger(object):
         """
         :param fn: function implementing operation
         :param str type: name of the operation
-            (also passed to :func:~`pyro.poutine.runtime.effectful`)
+            (also passed to :func:`~pyro.poutine.runtime.effectful`)
 
         Dynamically remove operations from an effect.
         Useful for removing wrappers from libraries.

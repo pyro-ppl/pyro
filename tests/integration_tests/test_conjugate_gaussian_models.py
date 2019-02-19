@@ -5,7 +5,6 @@ import os
 import time
 from unittest import TestCase
 
-import networkx
 import numpy as np
 import pytest
 import torch
@@ -15,6 +14,7 @@ import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.distributions.testing import fakes
 from pyro.infer import SVI, TraceGraph_ELBO
+from pyro.poutine import Trace
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -207,7 +207,7 @@ class GaussianPyramidTests(TestCase):
         self.N_data = torch.tensor([float(self.N_data)])
         self.q_dag = self.construct_q_dag()
         # compute the order in which guide samples are generated
-        self.q_topo_sort = list(networkx.topological_sort(self.q_dag))
+        self.q_topo_sort = self.q_dag.topological_sort()
         self.which_nodes_reparam = self.setup_reparam_mask(len(self.q_topo_sort))
         self.calculate_variational_targets()
         self.set_model_permutations()
@@ -329,7 +329,7 @@ class GaussianPyramidTests(TestCase):
 
     # construct dependency structure for the guide
     def construct_q_dag(self):
-        g = networkx.DiGraph()
+        g = Trace()
 
         def add_edge(s):
             deps = []

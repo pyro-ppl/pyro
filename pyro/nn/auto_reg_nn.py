@@ -103,6 +103,7 @@ class AutoRegressiveNN(nn.Module):
     An implementation of a MADE-like auto-regressive neural network.
 
     Example usage:
+
     >>> x = torch.randn(100, 10)
     >>> arn = AutoRegressiveNN(10, [50], param_dims=[1])
     >>> p = arn(x)  # 1 parameters of size (100, 10)

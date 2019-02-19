@@ -20,9 +20,9 @@ import torch
 # Pyro keeps track of two kinds of global state:
 # i)  The effect handler stack, which enables non-standard interpretations of
 #     Pyro primitives like sample();
-#     See http://docs.pyro.ai/en/0.3.0-release/poutine.html
+#     See http://docs.pyro.ai/en/0.3.1/poutine.html
 # ii) Trainable parameters in the Pyro ParamStore;
-#     See http://docs.pyro.ai/en/0.3.0-release/parameters.html
+#     See http://docs.pyro.ai/en/0.3.1/parameters.html
 
 PYRO_STACK = []
 PARAM_STORE = {}
@@ -125,26 +125,50 @@ class PlateMessenger(Messenger):
         return range(self.size)
 
 
+# apply_stack is called by pyro.sample and pyro.param.
+# It is responsible for applying each Messenger to each effectful operation.
 def apply_stack(msg):
     for pointer, handler in enumerate(reversed(PYRO_STACK)):
         handler.process_message(msg)
+        # When a Messenger sets the "stop" field of a message,
+        # it prevents any Messengers above it on the stack from being applied.
         if msg.get("stop"):
             break
     if msg["value"] is None:
         msg["value"] = msg["fn"](*msg["args"])
+
+    # A Messenger that sets msg["stop"] == True also prevents application
+    # of postprocess_message by Messengers above it on the stack
+    # via the pointer variable from the process_message loop
     for handler in PYRO_STACK[-pointer-1:]:
         handler.postprocess_message(msg)
     return msg
 
 
+# sample is an effectful version of Distribution.sample(...)
+# When any effect handlers are active, it constructs an initial message and calls apply_stack.
 def sample(name, fn, obs=None):
+
+    # if there are no active Messengers, we just draw a sample and return it as expected:
     if not PYRO_STACK:
         return fn()
-    msg = apply_stack(dict(type="sample", name=name, fn=fn, args=(), value=obs))
+
+    # Otherwise, we initialize a message...
+    initial_msg = {
+        "type": "sample",
+        "name": name,
+        "fn": fn,
+        "args": (),
+        "value": obs,
+    }
+
+    # ...and use apply_stack to send it to the Messengers
+    msg = apply_stack(initial_msg)
     return msg["value"]
 
 
 # param is an effectful version of PARAM_STORE.setdefault
+# When any effect handlers are active, it constructs an initial message and calls apply_stack.
 def param(name, init_value=None):
 
     def fn(init_value):
@@ -152,19 +176,32 @@ def param(name, init_value=None):
         value.requires_grad_()
         return value
 
+    # if there are no active Messengers, we just draw a sample and return it as expected:
     if not PYRO_STACK:
         return fn(init_value)
-    msg = apply_stack(dict(type="param", name=name, fn=fn, args=(init_value,), value=None))
+
+    # Otherwise, we initialize a message...
+    initial_msg = {
+        "type": "param",
+        "name": name,
+        "fn": fn,
+        "args": (init_value,),
+        "value": None,
+    }
+
+    # ...and use apply_stack to send it to the Messengers
+    msg = apply_stack(initial_msg)
     return msg["value"]
 
 
+# boilerplate to match the syntax of actual pyro.plate:
 def plate(name, size, dim):
     return PlateMessenger(fn=None, size=size, dim=dim)
 
 
 # This is a thin wrapper around the `torch.optim.Adam` class that
 # dynamically generates optimizers for dynamically generated parameters.
-# See http://docs.pyro.ai/en/0.3.0-release/optimization.html
+# See http://docs.pyro.ai/en/0.3.1/optimization.html
 class Adam(object):
     def __init__(self, optim_args):
         self.optim_args = optim_args
@@ -189,7 +226,7 @@ class Adam(object):
 
 # This is a unified interface for stochastic variational inference in Pyro.
 # The actual construction of the loss is taken care of by `loss`.
-# See http://docs.pyro.ai/en/0.3.0-release/inference_algos.html
+# See http://docs.pyro.ai/en/0.3.1/inference_algos.html
 class SVI(object):
     def __init__(self, model, guide, optim, loss):
         self.model = model

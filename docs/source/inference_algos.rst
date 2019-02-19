@@ -53,6 +53,13 @@ Importance
     :undoc-members:
     :show-inheritance:
 
+Discrete Inference
+------------------
+
+.. automodule:: pyro.infer.discrete
+    :members:
+    :show-inheritance:
+
 Inference Utilities
 -------------------
 

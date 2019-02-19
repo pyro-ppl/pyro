@@ -21,10 +21,15 @@ for line in open(os.path.join(PROJECT_PATH, 'pyro', '__init__.py')):
 # Append current commit sha to version
 commit_sha = ''
 try:
-    commit_sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
-                                         cwd=PROJECT_PATH).decode('ascii').strip()
-except OSError:
-    pass
+    current_tag = subprocess.check_output(['git', 'tag', '--points-at', 'HEAD'],
+                                          cwd=PROJECT_PATH).decode('ascii').strip()
+    # only add sha if HEAD does not point to the release tag
+    if not current_tag == version:
+        commit_sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'],
+                                             cwd=PROJECT_PATH).decode('ascii').strip()
+# catch all exception to be safe
+except Exception:
+    pass  # probably not a git repo
 
 # Write version to _version.py
 if commit_sha:
@@ -39,16 +44,15 @@ with open(os.path.join(PROJECT_PATH, 'pyro', '_version.py'), 'w') as f:
 try:
     import pypandoc
     long_description = pypandoc.convert('README.md', 'rst')
-except (IOError, ImportError, OSError) as e:
+    print(long_description)
+except Exception as e:
     sys.stderr.write('Failed to convert README.md to rst:\n  {}\n'.format(e))
     sys.stderr.flush()
     long_description = open('README.md').read()
 
 # Remove badges since they will always be obsolete.
-blacklist = ['Build Status', 'Latest Version', 'Documentation Status',
-             'travis-ci.org', 'pypi.python.org', 'pyro-ppl.readthedocs.io']
-long_description = '\n'.join(
-    [line for line in long_description.split('\n') if not any(patt in line for patt in blacklist)])
+# This assumes the first 10 lines contain badge info.
+long_description = '\n'.join([str(line) for line in long_description.split('\n')[10:]])
 
 # examples/tutorials
 EXTRAS_REQUIRE = [
@@ -56,8 +60,7 @@ EXTRAS_REQUIRE = [
     'matplotlib>=1.3',
     'observations>=0.1.4',
     'pillow',
-    # TODO: uncomment on release; using torch-nightly build
-    # 'torchvision',
+    'torchvision',
     'visdom>=0.1.4',
     'pandas',
     'seaborn',
@@ -81,22 +84,19 @@ setup(
         # add them to `docs/requirements.txt`
         'contextlib2',
         'graphviz>=0.8',
-        'networkx>=2.2',
         'numpy>=1.7',
-        'opt_einsum>=2.3.0',
+        'opt_einsum>=2.3.2',
         'six>=1.10.0',
-        # TODO: uncomment on release; using torch-nightly build
-        # 'torch>=0.4.1',
-        'tqdm>=4.27',
+        'torch>=1.0.0',
+        'tqdm>=4.28',
     ],
     extras_require={
         'extras': EXTRAS_REQUIRE,
         'test': EXTRAS_REQUIRE + [
             'nbval',
-            'pytest==3.7',
+            'pytest>=4.1',
             'pytest-cov',
-            'scipy>=0.19.0',
-            'ipython<=6.5.0',  # https://github.com/jupyter/jupyter_console/issues/158
+            'scipy>=1.1',
         ],
         'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
         'dev': EXTRAS_REQUIRE + [
@@ -107,16 +107,15 @@ setup(
             'nbstripout',
             'nbval',
             'pypandoc',
-            'pytest==3.7',
+            'pytest>=4.1',
             'pytest-xdist',
-            'ipython<=6.5.0',  # https://github.com/jupyter/jupyter_console/issues/158
-            'scipy>=0.19.0',
+            'scipy>=1.1',
             'sphinx',
             'sphinx_rtd_theme',
             'yapf',
         ],
     },
-    tests_require=['flake8', 'pytest==3.7'],
+    tests_require=['flake8', 'pytest>=4.1'],
     keywords='machine learning statistics probabilistic programming bayesian modeling pytorch',
     license='MIT License',
     classifiers=[

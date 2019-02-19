@@ -4,7 +4,8 @@ import os
 import sys
 from collections import OrderedDict
 
-from tqdm.auto import tqdm
+from tqdm import tqdm
+from tqdm.auto import tqdm as tqdm_nb
 
 try:
     get_ipython
@@ -36,6 +37,73 @@ DIAGNOSTIC_MSG = "DIAGNOSTICS"
 # ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
 # IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+
+class ProgressBar(object):
+    """
+    Initialize progress bars using :class:`~tqdm.tqdm`.
+
+    :param int warmup_steps: Number of warmup steps.
+    :param int num_samples: Number of MCMC samples.
+    :param int min_width: Minimum column width of the bar.
+    :param int max_width: Maximum column width of the bar.
+    :param bool disable: Disable progress bar.
+    :param int num_bars: Number of progress bars to initialize.
+        If multiple bars are initialized, they need to be separately
+        updated via the ``pos`` kwarg.
+    """
+    def __init__(self, warmup_steps, num_samples, min_width=80, max_width=120,
+                 disable=False, num_bars=1):
+        total_steps = warmup_steps + num_samples
+        # Disable progress bar in "CI"
+        # (see https://github.com/travis-ci/travis-ci/issues/1337).
+        disable = disable or "CI" in os.environ or "PYTEST_XDIST_WORKER" in os.environ
+        bar_format = None
+        if not ipython_env:
+            bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]"
+        pbar_cls = tqdm_nb if num_bars > 1 and ipython_env else tqdm
+        self.progress_bars = []
+        for i in range(num_bars):
+            description = "Warmup" if num_bars == 1 else "Warmup [{}]".format(i + 1)
+            pbar = pbar_cls(total=total_steps, desc=description, bar_format=bar_format,
+                            position=i, file=sys.stderr, disable=disable)
+            # Assume reasonable values when terminal width not available
+            if getattr(pbar, "ncols", None) is not None:
+                pbar.ncols = max(min_width, pbar.ncols)
+                pbar.ncols = min(max_width, pbar.ncols)
+            self.progress_bars.append(pbar)
+        self.disable = disable
+        self.ipython_env = ipython_env
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
+
+    def set_description(self, *args, **kwargs):
+        pos = kwargs.pop("pos", 0)
+        if not self.disable:
+            self.progress_bars[pos].set_description(*args, **kwargs)
+
+    def set_postfix(self, *args, **kwargs):
+        pos = kwargs.pop("pos", 0)
+        if not self.disable:
+            self.progress_bars[pos].set_postfix(*args, **kwargs)
+
+    def update(self, *args, **kwargs):
+        pos = kwargs.pop("pos", 0)
+        if not self.disable:
+            self.progress_bars[pos].update(*args, **kwargs)
+
+    def close(self):
+        for pbar in self.progress_bars:
+            pbar.close()
+        # Required to not overwrite multiple progress bars on exit.
+        if not self.ipython_env and not self.disable:
+            sys.stderr.write("\n" * len(self.progress_bars))
+
 
 class QueueHandler(logging.Handler):
     """
@@ -156,35 +224,6 @@ class MetadataFilter(logging.Filter):
         if not getattr(record, "msg_type", None):
             record.msg_type = LOG_MSG
         return True
-
-
-def initialize_progbar(warmup_steps, num_samples, min_width=80, max_width=120, pos=None):
-    """
-    Initialize progress bar using :class:`~tqdm.tqdm`.
-
-    :param int warmup_steps: Number of warmup steps.
-    :param int num_samples: Number of MCMC samples.
-    :param int min_width: Minimum column width of the bar.
-    :param int max_width: Maximum column width of the bar.
-    :param int pos: Position of the bar (e.g. in the case of
-        multiple parallel samplers).
-    """
-    description = "Warmup" if pos is None else "Warmup [{}]".format(pos + 1)
-    total_steps = warmup_steps + num_samples
-    # Disable progress bar in "CI"
-    # (see https://github.com/travis-ci/travis-ci/issues/1337).
-    disable = "CI" in os.environ or "PYTEST_XDIST_WORKER" in os.environ
-    bar_format = None
-    if not ipython_env:
-        bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]"
-    progress_bar = tqdm(total=total_steps, desc=description, bar_format=bar_format,
-                        position=pos, file=sys.stderr, disable=disable)
-    progress_bar._ipython_env = ipython_env
-
-    if getattr(progress_bar, "ncols", None) is not None:
-        progress_bar.ncols = max(min_width, progress_bar.ncols)
-        progress_bar.ncols = min(max_width, progress_bar.ncols)
-    return progress_bar
 
 
 def initialize_logger(logger, logger_id, progress_bar=None, log_queue=None):

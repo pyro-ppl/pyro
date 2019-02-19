@@ -312,7 +312,7 @@ class AutoContinuous(AutoGuide):
 
     Reference:
 
-    [1] 'Automatic Differentiation Variational Inference',
+    [1] `Automatic Differentiation Variational Inference`,
         Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M.
         Blei
     """
@@ -602,7 +602,7 @@ class AutoIAFNormal(AutoContinuous):
 class AutoLaplaceApproximation(AutoContinuous):
     r"""
     Laplace approximation (quadratic approximation) approximates the posterior
-    math:`log p(z | x)` by a multivariate normal distribution in the
+    :math:`\log p(z | x)` by a multivariate normal distribution in the
     unconstrained space. Under the hood, it uses Delta distributions to
     construct a MAP guide over the entire (unconstrained) latent space. Its
     covariance is given by the inverse of the hessian of :math:`-\log p(x, z)`
@@ -664,7 +664,7 @@ class AutoDiscreteParallel(AutoGuide):
     """
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        model = config_enumerate(self.model, default="parallel")
+        model = config_enumerate(self.model)
         self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
         if self.master is not None:

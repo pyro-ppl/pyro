@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import weakref
 from operator import itemgetter
 
-import networkx
 import torch
 
 import pyro
@@ -39,7 +38,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     # 1. downstream costs used for rao-blackwellization
     # 2. model observe sites (as well as terms that arise from the model and guide having different
     # dependency structures) are taken care of via 'children_in_model' below
-    topo_sort_guide_nodes = list(reversed(list(networkx.topological_sort(guide_trace))))
+    topo_sort_guide_nodes = guide_trace.topological_sort(reverse=True)
     topo_sort_guide_nodes = [x for x in topo_sort_guide_nodes
                              if guide_trace.nodes[x]["type"] == "sample"]
     ordered_guide_nodes_dict = {n: i for i, n in enumerate(topo_sort_guide_nodes)}
@@ -169,8 +168,9 @@ class TraceGraph_ELBO(ELBO):
     and guide as well as baselines for non-reparameterizable random variables.
     Where possible, conditional dependency information as recorded in the
     :class:`~pyro.poutine.trace.Trace` is used to reduce the variance of the gradient estimator.
-    In particular three kinds of conditional dependency information are
+    In particular two kinds of conditional dependency information are
     used to reduce variance:
+
     - the sequential order of samples (z is sampled after y => y does not depend on z)
     - :class:`~pyro.plate` generators
 

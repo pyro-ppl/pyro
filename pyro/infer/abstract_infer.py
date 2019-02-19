@@ -14,17 +14,18 @@ from pyro.ops.stats import waic
 
 class EmpiricalMarginal(Empirical):
     """
-    Marginal distribution, that wraps over a TracePosterior object to provide a
-    a marginal over one or more latent sites or the return values of the
-    TracePosterior's model. If multiple sites are specified, they must have the
-    same tensor shape.
+    Marginal distribution over a single site (or multiple, provided they have the same
+    shape) from the ``TracePosterior``'s model.
 
-    :param TracePosterior trace_posterior: a TracePosterior instance representing
+    .. note:: If multiple sites are specified, they must have the same tensor shape.
+        Samples from each site will be stacked and stored within a single tensor. See
+        :class:`~pyro.distributions.Empirical`. To hold the marginal distribution of sites
+        having different shapes, use :class:`~pyro.infer.abstract_infer.Marginals` instead.
+
+    :param TracePosterior trace_posterior: a ``TracePosterior`` instance representing
         a Monte Carlo posterior.
     :param list sites: optional list of sites for which we need to generate
-        the marginal distribution. Note that for multiple sites, the shape
-        for the site values must match (needed by the underlying ``Empirical``
-        class).
+        the marginal distribution.
     """
 
     def __init__(self, trace_posterior, sites=None, validate_args=None):
@@ -50,8 +51,11 @@ class EmpiricalMarginal(Empirical):
         samples_by_chain = []
         weights_by_chain = []
         for i in range(num_chains):
-            samples_by_chain.append(torch.stack(self._samples_buffer[i], dim=0))
-            weights_by_chain.append(torch.stack(self._weights_buffer[i], dim=0))
+            samples = torch.stack(self._samples_buffer[i], dim=0)
+            samples_by_chain.append(samples)
+            weights_dtype = samples.dtype if samples.dtype.is_floating_point else torch.float32
+            weights = torch.as_tensor(self._weights_buffer[i], device=samples.device, dtype=weights_dtype)
+            weights_by_chain.append(weights)
         if len(samples_by_chain) == 1:
             return samples_by_chain[0], weights_by_chain[0]
         else:
@@ -72,14 +76,10 @@ class EmpiricalMarginal(Empirical):
             in ``[0, num_chains - 1]``, and there must be equal number
             of samples per chain.
         """
-        weight_type = value.new_empty(1).float().type() if value.dtype in (torch.int32, torch.int64) \
-            else value.type()
         # Apply default weight of 1.0.
         if log_weight is None:
-            log_weight = torch.tensor(0.0).type(weight_type)
-        if isinstance(log_weight, numbers.Number):
-            log_weight = torch.tensor(log_weight).type(weight_type)
-        if self._validate_args and log_weight.dim() > 0:
+            log_weight = 0.0
+        if self._validate_args and not isinstance(log_weight, numbers.Number) and log_weight.dim() > 0:
             raise ValueError("``weight.dim() > 0``, but weight should be a scalar.")
 
         # Append to the buffer list
@@ -95,6 +95,66 @@ class EmpiricalMarginal(Empirical):
             value = tr.nodes[sites]["value"] if isinstance(sites, str) else \
                 torch.stack([tr.nodes[site]["value"] for site in sites], 0)
             self._add_sample(value, log_weight=log_weight, chain_id=chain_id)
+
+
+class Marginals(object):
+    """
+    Holds the marginal distribution over one or more sites from the ``TracePosterior``'s
+    model. This is a convenience container class, which can be extended by ``TracePosterior``
+    subclasses. e.g. for implementing diagnostics.
+
+    :param TracePosterior trace_posterior: a TracePosterior instance representing
+        a Monte Carlo posterior.
+    :param list sites: optional list of sites for which we need to generate
+        the marginal distribution.
+    """
+    def __init__(self, trace_posterior, sites=None, validate_args=None):
+        assert isinstance(trace_posterior, TracePosterior), \
+            "trace_dist must be trace posterior distribution object"
+        if sites is None:
+            sites = ["_RETURN"]
+        elif isinstance(sites, str):
+            sites = [sites]
+        else:
+            assert isinstance(sites, list)
+        self.sites = sites
+        self._marginals = OrderedDict()
+        self._diagnostics = OrderedDict()
+        self._trace_posterior = trace_posterior
+        self._populate_traces(trace_posterior, validate_args)
+
+    def _populate_traces(self, trace_posterior, validate):
+        self._marginals = {site: EmpiricalMarginal(trace_posterior, site, validate)
+                           for site in self.sites}
+
+    def support(self, flatten=False):
+        """
+        Gets support of this marginal distribution.
+
+        :param bool flatten: A flag to decide if we want to flatten `batch_shape`
+            when the marginal distribution is collected from the posterior with
+            ``num_chains > 1``. Defaults to False.
+        :returns: a dict with keys are sites' names and values are sites' supports.
+        :rtype: :class:`OrderedDict`
+        """
+        support = OrderedDict([(site, value.enumerate_support())
+                               for site, value in self._marginals.items()])
+        if self._trace_posterior.num_chains > 1 and flatten:
+            for site, samples in support.items():
+                shape = samples.size()
+                flattened_shape = torch.Size((shape[0] * shape[1],)) + shape[2:]
+                support[site] = samples.reshape(flattened_shape)
+        return support
+
+    @property
+    def empirical(self):
+        """
+        A dictionary of sites' names and their corresponding :class:`EmpiricalMarginal`
+        distribution.
+
+        :type: :class:`OrderedDict`
+        """
+        return self._marginals
 
 
 @add_metaclass(ABCMeta)
@@ -117,7 +177,15 @@ class TracePosterior(object):
         self._categorical = None
 
     def marginal(self, sites=None):
-        return EmpiricalMarginal(self, sites)
+        """
+        Generates the marginal distribution of this posterior.
+
+        :param list sites: optional list of sites for which we need to generate
+            the marginal distribution.
+        :returns: A :class:`Marginals` class instance.
+        :rtype: :class:`Marginals`
+        """
+        return Marginals(self, sites)
 
     @abstractmethod
     def _traces(self, *args, **kwargs):
@@ -178,8 +246,9 @@ class TracePosterior(object):
 
         :param bool pointwise: a flag to decide if we want to get a vectorized WAIC or not. When
             ``pointwise=False``, returns the sum.
-        :returns OrderedDict: a dictionary containing values of WAIC and its effective number of
+        :returns: a dictionary containing values of WAIC and its effective number of
             parameters.
+        :rtype: :class:`OrderedDict`
         """
         if not self.exec_traces:
             return {}
@@ -232,4 +301,7 @@ class TracePredictive(TracePosterior):
             yield (replayed_trace, 0., 0)
 
     def marginal(self, sites=None):
+        """
+        Gets marginal distribution from posterior.
+        """
         return self.posterior.marginal(sites)

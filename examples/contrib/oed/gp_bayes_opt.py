@@ -3,9 +3,9 @@ import torch.autograd as autograd
 import torch.optim as optim
 from torch.distributions import transform_to
 
-import pyro
 import pyro.contrib.gp as gp
 from pyro.infer import TraceEnum_ELBO
+import pyro.optim
 
 
 class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
@@ -89,6 +89,8 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
             x_init = self.gpmodel.X.new_empty(1).uniform_(
                 self.constraints.lower_bound, self.constraints.upper_bound)
             x, y = self.find_a_candidate(differentiable, x_init)
+            if torch.isnan(y):
+                continue
             candidates.append(x)
             values.append(y)
 

@@ -2,9 +2,10 @@ from __future__ import absolute_import, division, print_function
 
 import pyro.distributions.torch_patch  # noqa F403
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
+from pyro.distributions.conjugate import BetaBinomial, DirichletMultinomial, GammaPoisson
 from pyro.distributions.delta import Delta
-from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNormalsSharedCovariance
 from pyro.distributions.diag_normal_mixture import MixtureOfDiagNormals
+from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNormalsSharedCovariance
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
@@ -26,19 +27,19 @@ from pyro.distributions.von_mises_3d import VonMises3D
 from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
 
 __all__ = [
-    "enable_validation",
-    "is_validation_enabled",
-    "validation_enabled",
     "AVFMultivariateNormal",
+    "BetaBinomial",
     "Delta",
+    "DirichletMultinomial",
     "Distribution",
     "Empirical",
+    "GammaPoisson",
     "GaussianScaleMixture",
     "InverseAutoregressiveFlow",
     "InverseAutoregressiveFlowStable",
     "MaskedMixture",
-    "MixtureOfDiagNormalsSharedCovariance",
     "MixtureOfDiagNormals",
+    "MixtureOfDiagNormalsSharedCovariance",
     "OMTMultivariateNormal",
     "PermuteTransform",
     "PlanarFlow",
@@ -49,7 +50,10 @@ __all__ = [
     "TransformModule",
     "VonMises",
     "VonMises3D",
-    "ZeroInflatedPoisson"
+    "ZeroInflatedPoisson",
+    "enable_validation",
+    "is_validation_enabled",
+    "validation_enabled",
 ]
 
 # Import all torch distributions from `pyro.distributions.torch_distribution`
