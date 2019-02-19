@@ -8,7 +8,6 @@ from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 
 # This helper function clamps gradients but still passes through the gradient in clamped regions
-# NOTE: Not sure how necessary this is, but I was copying the design of the TensorFlow implementation
 
 
 def clamp_preserve_gradients(x, min, max):
