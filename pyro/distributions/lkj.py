@@ -135,7 +135,7 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
     """
     arg_constraints = {"eta": constraints.positive}
     support = corr_cholesky_constraint
-    has_rsample = True
+    has_rsample = False
 
     def __init__(self, d, eta, validate_args=None):
         if not torch.is_tensor(eta):
@@ -144,6 +144,7 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
             raise ValueError("eta must be > 0")
         if eta.numel() != 1:
             raise ValueError("eta must be a single number; for a larger batch size, call expand")
+        eta = eta.squeeze()
         vector_size = (d * (d - 1)) // 2
         alpha = eta.add(0.5 * (d - 1.0))
 
@@ -151,18 +152,17 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
         i = 0
         for k in range(d-1):
             alpha -= .5
-            for j in range(k+1, d):
-                concentrations[..., i] = alpha
-                i += 1
+            concentrations[..., i:(i + d - k-1)] = alpha
+            i += d - k - 1
         self._gen = Beta(concentrations, concentrations)
         self.eta = eta
         self._d = d
         self._lkj_constant = None
         super(CorrLCholeskyLKJPrior, self).__init__(torch.Size(), torch.Size((d, d)), validate_args=validate_args)
 
-    def rsample(self, sample_shape=torch.Size()):
-        y = self._gen.rsample(sample_shape=self.batch_shape + sample_shape).detach()
-        z = y.to(dtype=self.eta.dtype).mul(2).add(-1.0)
+    def sample(self, sample_shape=torch.Size()):
+        y = self._gen.sample(sample_shape=self.batch_shape + sample_shape).detach()
+        z = y.mul(2).add(-1.0)
         return _vector_to_l_cholesky(z)
 
     def expand(self, batch_shape, _instance=None):
@@ -191,15 +191,20 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
         return constant
 
     def log_prob(self, x):
+        if x.shape[-1] != self._d or x.shape[-2] != self._d:
+            raise ValueError("CorrLCholeskyLKJPrior with dimensionality {} got {}".format(self._d, x.shape))
         eta = self.eta
 
         lp = self.lkj_constant(eta, self._d)
 
-        Km1 = x.shape[-1] - 1
+        Km1 = self._d - 1
+
         log_diagonals = x.diagonal(offset=0, dim1=-1, dim2=-2)[..., 1:].log()
         values = log_diagonals * torch.linspace(start=Km1 - 1, end=0, steps=Km1,
                                                 dtype=x.dtype,
                                                 device=x.device).expand_as(log_diagonals)
 
         values += log_diagonals.mul(eta.mul(2).add(-2.0))
-        return values.sum(-1) + lp
+        values = values.sum(-1) + lp
+        values, _ = torch.broadcast_tensors(values, values.new_empty(self.batch_shape))
+        return values

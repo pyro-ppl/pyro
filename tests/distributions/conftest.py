@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import scipy.stats as sp
 
+import torch
 import pyro.distributions as dist
 from pyro.distributions.testing.naive_dirichlet import NaiveBeta, NaiveDirichlet
 from pyro.distributions.testing.rejection_exponential import RejectionExponential
@@ -226,6 +227,10 @@ continuous_dists = [
                  'test_data': [[1.0], [2.0]]}
             ],
             scipy_arg_fn=lambda loc, concentration: ((), {"loc": np.array(loc), "kappa": np.array(concentration)})),
+    Fixture(pyro_dist=dist.CorrLCholeskyLKJPrior,
+            examples=[
+                {'d': 3, 'eta': [1.], 'test_data': torch.ones(5, 3, 3)},
+            ]),
 ]
 
 discrete_dists = [
