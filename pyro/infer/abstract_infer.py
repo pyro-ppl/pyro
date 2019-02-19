@@ -297,11 +297,12 @@ class TracePredictive(TracePosterior):
             self.posterior.run(*args, **kwargs)
         for _ in range(self.num_samples):
             model_trace = self.posterior()
-            replayed_trace = poutine.trace(poutine.replay(self.model, model_trace)).get_trace(*args, **kwargs)
-            yield (replayed_trace, 0., 0)
+            resampler = poutine.resample_posterior(self.model, model_trace)
+            resampled_trace = poutine.trace(resampler).get_trace(*args, **kwargs)
+            yield (resampled_trace, 0., 0)
 
     def marginal(self, sites=None):
         """
         Gets marginal distribution from posterior.
         """
-        return self.posterior.marginal(sites)
+        return Marginals(self, sites)

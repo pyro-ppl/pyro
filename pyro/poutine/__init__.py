@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from .handlers import (block, broadcast, condition, do, enum, escape, infer_config, lift, markov, mask, queue, replay,
-                       scale, trace, uncondition)
+                       resample_posterior, scale, trace, uncondition)
 from .runtime import NonlocalExit
 from .trace_struct import Trace
 from .util import enable_validation, is_validation_enabled
@@ -21,6 +21,7 @@ __all__ = [
     "mask",
     "NonlocalExit",
     "replay",
+    "resample_posterior",
     "queue",
     "scale",
     "trace",
