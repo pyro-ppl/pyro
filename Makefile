@@ -64,6 +64,6 @@ test-jit: FORCE
 		-k JIT=True | tee -a jit.log
 
 clean: FORCE
-	git clean -dfx -e pyro-egg.info
+	git clean -dfx -e pyro_ppl.egg-info
 
 FORCE:
