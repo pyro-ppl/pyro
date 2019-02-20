@@ -2,8 +2,9 @@ from __future__ import absolute_import, division, print_function
 
 import pytest
 import torch
-from torch.distributions import biject_to, transform_to
-from pyro.distributions.lkj import (corr_cholesky_constraint, CorrLCholeskyTransform)
+import math
+from torch.distributions import biject_to, transform_to, TransformedDistribution, Beta, AffineTransform
+from pyro.distributions.lkj import (corr_cholesky_constraint, CorrLCholeskyTransform, CorrLCholeskyLKJPrior)
 from tests.common import assert_tensors_equal
 
 
@@ -74,3 +75,27 @@ def test_corr_cholesky_transform(x_shape, mapping):
     # test log_abs_det_jacobian
     log_det = transform.log_abs_det_jacobian(x, y)
     assert log_det.shape == x_shape[:-1]
+
+@pytest.mark.parametrize("d", [2])
+def test_log_prob_eta1(d):
+    dist = CorrLCholeskyLKJPrior(d, torch.FloatTensor([1]))
+
+    a_sample = dist.sample(torch.Size([100]))
+    lp = dist.log_prob(a_sample)
+
+    if d == 2:
+        assert all(lp == -math.log(2))
+    else:
+        assert (lp - lp.min()).abs().sum() == 0.
+
+@pytest.mark.parametrize("eta", [.1, .5, 1, 2, 5])
+def test_log_prob_d2(eta):
+    dist = CorrLCholeskyLKJPrior(2, torch.DoubleTensor([eta]))
+    test_dist = TransformedDistribution(Beta(eta, eta), AffineTransform(loc=-1., scale=2.0))
+
+    samples = dist.sample(torch.Size([100]))
+    lp = dist.log_prob(samples)
+    x = samples[..., 1, 0]
+    tst = test_dist.log_prob(x)
+
+    assert_tensors_equal(lp, tst, prec=1e-6)

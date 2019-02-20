@@ -138,12 +138,10 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
     has_rsample = False
 
     def __init__(self, d, eta, validate_args=None):
-        if not torch.is_tensor(eta):
-            raise ValueError("Eta must be a tensor")
-        if any(eta <= 0):
-            raise ValueError("eta must be > 0")
         if eta.numel() != 1:
             raise ValueError("eta must be a single number; for a larger batch size, call expand")
+        if d <= 1:
+            raise ValueError("d must be >= 1 in any correlation matrix")
         eta = eta.squeeze()
         vector_size = (d * (d - 1)) // 2
         alpha = eta.add(0.5 * (d - 1.0))
@@ -191,8 +189,9 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
         return constant
 
     def log_prob(self, x):
-        if x.shape[-1] != self._d or x.shape[-2] != self._d:
-            raise ValueError("CorrLCholeskyLKJPrior with dimensionality {} got {}".format(self._d, x.shape))
+        if self._validate_args:
+            self._validate_sample(x)
+
         eta = self.eta
 
         lp = self.lkj_constant(eta, self._d)
