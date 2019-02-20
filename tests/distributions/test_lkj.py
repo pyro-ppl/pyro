@@ -76,6 +76,7 @@ def test_corr_cholesky_transform(x_shape, mapping):
     log_det = transform.log_abs_det_jacobian(x, y)
     assert log_det.shape == x_shape[:-1]
 
+
 @pytest.mark.parametrize("d", [2])
 def test_log_prob_eta1(d):
     dist = CorrLCholeskyLKJPrior(d, torch.FloatTensor([1]))
@@ -87,6 +88,7 @@ def test_log_prob_eta1(d):
         assert all(lp == -math.log(2))
     else:
         assert (lp - lp.min()).abs().sum() == 0.
+
 
 @pytest.mark.parametrize("eta", [.1, .5, 1, 2, 5])
 def test_log_prob_d2(eta):
