@@ -206,8 +206,8 @@ def test_expand_error(dist, initial_shape, proposed_shape):
         with xfail_if_not_implemented():
             large = small.expand(torch.Size(initial_shape) + small.batch_shape)
             proposed_batch_shape = torch.Size(proposed_shape) + small.batch_shape
-            if dist.get_test_distribution_name() == 'CorrLCholeskyLKJPrior':
-                pytest.skip('CorrLCholeskyLKJPrior can expand to a shape not' +
+            if dist.get_test_distribution_name() == 'LKJCorrCholesky':
+                pytest.skip('LKJCorrCholesky can expand to a shape not' +
                             'broadcastable with its original batch_shape.')
             with pytest.raises(RuntimeError):
                 large.expand(proposed_batch_shape)

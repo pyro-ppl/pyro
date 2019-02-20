@@ -4,7 +4,7 @@ import pytest
 import torch
 import math
 from torch.distributions import biject_to, transform_to, TransformedDistribution, Beta, AffineTransform
-from pyro.distributions.lkj import (corr_cholesky_constraint, CorrLCholeskyTransform, CorrLCholeskyLKJPrior)
+from pyro.distributions.lkj import (corr_cholesky_constraint, CorrLCholeskyTransform, LKJCorrCholesky)
 from tests.common import assert_tensors_equal
 
 
@@ -79,7 +79,7 @@ def test_corr_cholesky_transform(x_shape, mapping):
 
 @pytest.mark.parametrize("d", [2])
 def test_log_prob_eta1(d):
-    dist = CorrLCholeskyLKJPrior(d, torch.FloatTensor([1]))
+    dist = LKJCorrCholesky(d, torch.FloatTensor([1]))
 
     a_sample = dist.sample(torch.Size([100]))
     lp = dist.log_prob(a_sample)
@@ -92,7 +92,7 @@ def test_log_prob_eta1(d):
 
 @pytest.mark.parametrize("eta", [.1, .5, 1, 2, 5])
 def test_log_prob_d2(eta):
-    dist = CorrLCholeskyLKJPrior(2, torch.DoubleTensor([eta]))
+    dist = LKJCorrCholesky(2, torch.DoubleTensor([eta]))
     test_dist = TransformedDistribution(Beta(eta, eta), AffineTransform(loc=-1., scale=2.0))
 
     samples = dist.sample(torch.Size([100]))

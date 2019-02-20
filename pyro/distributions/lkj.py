@@ -22,7 +22,7 @@ class _CorrCholesky(Constraint):
     have unit diagonal.
     """
     def check(self, value):
-        unit_norm_row = (value.norm(dim=-1).sub(1) < 1e-6).min(-1)[0]
+        unit_norm_row = (value.norm(dim=-1).sub(1) < 1e-4).min(-1)[0]
         return constraints.lower_cholesky.check(value) & unit_norm_row
 
 
@@ -113,7 +113,7 @@ def _transform_to_corr_cholesky(constraint):
 ########################################
 
 # TODO: Modify class to support more than one eta value at a time?
-class CorrLCholeskyLKJPrior(TorchDistribution):
+class LKJCorrCholesky(TorchDistribution):
     """
     Generates cholesky factors of correlation matrices using an LKJ prior.
 
@@ -156,7 +156,7 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
         self.eta = eta
         self._d = d
         self._lkj_constant = None
-        super(CorrLCholeskyLKJPrior, self).__init__(torch.Size(), torch.Size((d, d)), validate_args=validate_args)
+        super(LKJCorrCholesky, self).__init__(torch.Size(), torch.Size((d, d)), validate_args=validate_args)
 
     def sample(self, sample_shape=torch.Size()):
         y = self._gen.sample(sample_shape=self.batch_shape + sample_shape).detach()
@@ -164,13 +164,13 @@ class CorrLCholeskyLKJPrior(TorchDistribution):
         return _vector_to_l_cholesky(z)
 
     def expand(self, batch_shape, _instance=None):
-        new = self._get_checked_instance(CorrLCholeskyLKJPrior, _instance)
+        new = self._get_checked_instance(LKJCorrCholesky, _instance)
         batch_shape = torch.Size(batch_shape)
         new._gen = self._gen
         new.eta = self.eta
         new._d = self._d
         new._lkj_constant = self._lkj_constant
-        super(CorrLCholeskyLKJPrior, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        super(LKJCorrCholesky, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
 
