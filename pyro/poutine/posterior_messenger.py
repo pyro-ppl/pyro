@@ -9,3 +9,4 @@ class SamplePosteriorMessenger(ReplayMessenger):
             super(SamplePosteriorMessenger, self)._pyro_sample(msg)
         if msg["name"] in self.trace:
             msg["cond_indep_stack"] = self.trace.nodes[msg["name"]]["cond_indep_stack"]
+        super(SamplePosteriorMessenger, self)._pyro_sample(msg)

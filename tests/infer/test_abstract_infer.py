@@ -19,7 +19,7 @@ def model(num_trials):
     return pyro.sample("obs", dist.Binomial(num_trials, success_prob))
 
 
-def test_posterior_predictive():
+def test_posterior_predictive_mcmc():
     true_probs = torch.ones(5) * 0.7
     num_trials = torch.ones(5) * 1000
     num_success = dist.Binomial(num_trials, true_probs).sample()

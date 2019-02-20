@@ -303,6 +303,6 @@ class TracePredictive(TracePosterior):
 
     def marginal(self, sites=None):
         """
-        Gets marginal distribution from posterior.
+        Gets marginal distribution for this predictive posterior distribution.
         """
         return Marginals(self, sites)
