@@ -20,8 +20,8 @@ def model(num_trials):
 
 
 def beta_guide(num_trials):
-    phi_c0 = pyro.param("phi_c0", num_trials.new_tensor(500.0).expand([num_trials.size(0)]))
-    phi_c1 = pyro.param("phi_c1", num_trials.new_tensor(500.0).expand([num_trials.size(0)]))
+    phi_c0 = pyro.param("phi_c0", num_trials.new_tensor(5.0).expand([num_trials.size(0)]))
+    phi_c1 = pyro.param("phi_c1", num_trials.new_tensor(5.0).expand([num_trials.size(0)]))
     with pyro.plate("data", num_trials.size(0)):
         phi_posterior = dist.Beta(concentration0=phi_c0, concentration1=phi_c1)
         pyro.sample("phi", phi_posterior)
@@ -44,10 +44,10 @@ def test_posterior_predictive_svi_manual_guide():
     num_trials = torch.ones(5) * 1000
     num_success = dist.Binomial(num_trials, true_probs).sample()
     conditioned_model = poutine.condition(model, data={"obs": num_success})
-    opt = optim.Adam(dict(lr=1e-3))
+    opt = optim.Adam(dict(lr=1.0))
     loss = Trace_ELBO()
     guide = beta_guide
-    svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=10000, num_samples=1000).run(num_trials)
+    svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=1000, num_samples=100).run(num_trials)
     posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials)
     marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
     assert_equal(marginal_return_vals.mean, torch.ones(5) * 700, prec=30)
@@ -58,10 +58,10 @@ def test_posterior_predictive_svi_auto_delta_guide():
     num_trials = torch.ones(5) * 1000
     num_success = dist.Binomial(num_trials, true_probs).sample()
     conditioned_model = poutine.condition(model, data={"obs": num_success})
-    opt = optim.Adam(dict(lr=1e-3))
+    opt = optim.Adam(dict(lr=1.0))
     loss = Trace_ELBO()
     guide = AutoDelta(conditioned_model)
-    svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=10000, num_samples=1000).run(num_trials)
+    svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=1000, num_samples=100).run(num_trials)
     posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials)
     marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
     assert_equal(marginal_return_vals.mean, torch.ones(5) * 700, prec=30)
@@ -72,10 +72,10 @@ def test_posterior_predictive_svi_auto_diag_normal_guide():
     num_trials = torch.ones(5) * 1000
     num_success = dist.Binomial(num_trials, true_probs).sample()
     conditioned_model = poutine.condition(model, data={"obs": num_success})
-    opt = optim.Adam(dict(lr=1e-3))
+    opt = optim.Adam(dict(lr=0.1))
     loss = Trace_ELBO()
     guide = AutoDiagonalNormal(conditioned_model)
-    svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=10000, num_samples=1000).run(num_trials)
+    svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=1000, num_samples=100).run(num_trials)
     posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials)
     marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
     assert_equal(marginal_return_vals.mean, torch.ones(5) * 700, prec=30)
