@@ -9,7 +9,7 @@ import pyro.poutine as poutine
 from pyro.contrib.autoguide import AutoDelta, AutoDiagonalNormal, AutoLaplaceApproximation
 from pyro.infer import SVI, TracePredictive, Trace_ELBO
 from pyro.infer.mcmc import MCMC, NUTS
-from tests.common import assert_equal
+from tests.common import assert_close, assert_equal
 
 
 def model(num_trials):
@@ -36,7 +36,7 @@ def test_posterior_predictive_mcmc():
     mcmc_run = MCMC(nuts_kernel, num_samples=1000, warmup_steps=200).run(num_trials)
     posterior_predictive = TracePredictive(model, mcmc_run, num_samples=10000).run(num_trials)
     marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
-    assert_equal(marginal_return_vals.mean, torch.ones(5) * 700, prec=30)
+    assert_close(marginal_return_vals.mean, torch.ones(5) * 700, rtol=0.05)
 
 
 def test_posterior_predictive_svi_manual_guide():
@@ -50,7 +50,7 @@ def test_posterior_predictive_svi_manual_guide():
     svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=1000, num_samples=100).run(num_trials)
     posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials)
     marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
-    assert_equal(marginal_return_vals.mean, torch.ones(5) * 700, prec=30)
+    assert_close(marginal_return_vals.mean, torch.ones(5) * 700, rtol=0.05)
 
 
 def test_posterior_predictive_svi_auto_delta_guide():
@@ -64,7 +64,7 @@ def test_posterior_predictive_svi_auto_delta_guide():
     svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=1000, num_samples=100).run(num_trials)
     posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials)
     marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
-    assert_equal(marginal_return_vals.mean, torch.ones(5) * 700, prec=30)
+    assert_close(marginal_return_vals.mean, torch.ones(5) * 700, rtol=0.05)
 
 
 def test_posterior_predictive_svi_auto_diag_normal_guide():
@@ -78,7 +78,7 @@ def test_posterior_predictive_svi_auto_diag_normal_guide():
     svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=1000, num_samples=100).run(num_trials)
     posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials)
     marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
-    assert_equal(marginal_return_vals.mean, torch.ones(5) * 700, prec=30)
+    assert_close(marginal_return_vals.mean, torch.ones(5) * 700, rtol=0.05)
 
 
 def test_nesting():
