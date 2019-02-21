@@ -77,7 +77,7 @@ def test_corr_cholesky_transform(x_shape, mapping):
     assert log_det.shape == x_shape[:-1]
 
 
-@pytest.mark.parametrize("d", [2])
+@pytest.mark.parametrize("d", [2, 3, 4, 10])
 def test_log_prob_eta1(d):
     dist = LKJCorrCholesky(d, torch.FloatTensor([1]))
 
@@ -87,7 +87,11 @@ def test_log_prob_eta1(d):
     if d == 2:
         assert all(lp == -math.log(2))
     else:
-        assert (lp - lp.min()).abs().sum() == 0.
+        ladj = a_sample.diagonal(dim1=-2, dim2=-1).log().mul(
+            torch.linspace(start=d-1, end=0, steps=d, device=a_sample.device, dtype=a_sample.dtype)
+        ).sum(-1)
+        lps_less_ladj = lp - ladj
+        assert (lps_less_ladj - lps_less_ladj.min()).abs().sum() < 1e-4
 
 
 @pytest.mark.parametrize("eta", [.1, .5, 1, 2, 5])
