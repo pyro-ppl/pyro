@@ -285,21 +285,33 @@ class TracePredictive(TracePosterior):
     :param TracePosterior posterior: trace posterior instance holding
         samples from the model's approximate posterior.
     :param int num_samples: number of samples to generate.
+    :param (:obj:`list(str)`, optional) resample_sites: list of sites to resample from posterior.
+    All sites are resampled by default.
     """
-    def __init__(self, model, posterior, num_samples):
+    def __init__(self, model, posterior, num_samples, resample_sites=None):
         self.model = model
         self.posterior = posterior
         self.num_samples = num_samples
+        self.resample_sites = resample_sites
         super(TracePredictive, self).__init__()
 
     def _traces(self, *args, **kwargs):
         if not self.posterior.exec_traces:
             self.posterior.run(*args, **kwargs)
         for _ in range(self.num_samples):
-            model_trace = self.posterior()
+            model_trace = self._keep_sites(self.posterior())
             resampler = poutine.resample_posterior(self.model, model_trace)
             resampled_trace = poutine.trace(resampler).get_trace(*args, **kwargs)
             yield (resampled_trace, 0., 0)
+
+    def _keep_sites(self, trace):
+        if self.resample_sites is None:
+            return trace
+        trace = trace.copy()
+        for name, site in list(trace.nodes.items()):
+            if name not in self.resample_sites:
+                trace.remove_node(name)
+        return trace
 
     def marginal(self, sites=None):
         """
