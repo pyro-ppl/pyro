@@ -264,9 +264,11 @@ class DMM(nn.Module):
                 # sample z_t from the distribution z_dist
                 with pyro.poutine.scale(scale=annealing_factor):
                     if len(self.iafs) > 0:
+                        # in output of normalizing flow, all dimensions are correlated (event shape is not empty)
                         z_t = pyro.sample("z_%d" % t,
                                           z_dist.mask(mini_batch_mask[:, t - 1]))
                     else:
+                        # when no normalizing flow used, ".to_event(1)" indicates latent dimensions are independent
                         z_t = pyro.sample("z_%d" % t,
                                           z_dist.mask(mini_batch_mask[:, t - 1:t])
                                           .to_event(1))
