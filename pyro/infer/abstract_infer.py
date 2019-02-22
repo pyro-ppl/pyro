@@ -10,6 +10,7 @@ from six import add_metaclass
 import pyro.poutine as poutine
 from pyro.distributions import Categorical, Empirical
 from pyro.ops.stats import waic
+from .util import site_is_subsample
 
 
 class EmpiricalMarginal(Empirical):
@@ -285,8 +286,8 @@ class TracePredictive(TracePosterior):
     :param TracePosterior posterior: trace posterior instance holding
         samples from the model's approximate posterior.
     :param int num_samples: number of samples to generate.
-    :param (:obj:`list(str)`, optional) resample_sites: list of sites to resample from posterior.
-    All sites are resampled by default.
+    :param list(str) resample_sites: sites to resample from in posterior predictive distribution.
+                                     By default all sites are used.
     """
     def __init__(self, model, posterior, num_samples, resample_sites=None):
         self.model = model
@@ -298,20 +299,41 @@ class TracePredictive(TracePosterior):
     def _traces(self, *args, **kwargs):
         if not self.posterior.exec_traces:
             self.posterior.run(*args, **kwargs)
+        data_trace = poutine.trace(self.model).get_trace(*args, **kwargs)
         for _ in range(self.num_samples):
-            model_trace = self._keep_sites(self.posterior())
+            model_trace = self.posterior().copy()
+            self._keep_sites(model_trace)
+            self._adjust_to_data(model_trace, data_trace)
             resampler = poutine.resample_posterior(self.model, model_trace)
             resampled_trace = poutine.trace(resampler).get_trace(*args, **kwargs)
             yield (resampled_trace, 0., 0)
 
     def _keep_sites(self, trace):
         if self.resample_sites is None:
-            return trace
-        trace = trace.copy()
+            return
         for name, site in list(trace.nodes.items()):
             if name not in self.resample_sites:
                 trace.remove_node(name)
-        return trace
+
+    def _adjust_to_data(self, trace, data_trace):
+        for name, site in list(trace.nodes.items()):
+            # Adjust subsample sites
+            if site_is_subsample(site):
+                site["fn"] = data_trace.nodes[name]["fn"]
+                site["value"] = data_trace.nodes[name]["value"]
+            # Adjust sites under conditionally independent stacks
+            try:
+                site["cond_indep_stack"] = data_trace.nodes[name]["cond_indep_stack"]
+                site["fn"] = data_trace.nodes[name]["fn"]
+                for cis in site["cond_indep_stack"]:
+                    # Select random sub-indices to replay values under conditionally independent stacks.
+                    # Otherwise, we assume there is an dependence of indexes between training data
+                    # and prediction data.
+                    cat = Categorical(logits=site["value"].new_ones(site["value"].size(cis.dim)))
+                    subidxs = cat.sample((cis.size,))
+                    site["value"] = site["value"].index_select(cis.dim, subidxs)
+            except KeyError:
+                pass
 
     def marginal(self, sites=None):
         """

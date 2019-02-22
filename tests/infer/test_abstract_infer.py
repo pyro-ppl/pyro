@@ -48,9 +48,9 @@ def test_posterior_predictive_svi_manual_guide():
     loss = Trace_ELBO()
     guide = beta_guide
     svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=1000, num_samples=100).run(num_trials)
-    posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials)
+    posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials[:3])
     marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
-    assert_close(marginal_return_vals.mean, torch.ones(5) * 700, rtol=0.05)
+    assert_close(marginal_return_vals.mean, torch.ones(3) * 700, rtol=0.05)
 
 
 def test_posterior_predictive_svi_auto_delta_guide():
