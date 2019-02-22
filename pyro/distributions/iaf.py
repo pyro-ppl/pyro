@@ -8,7 +8,6 @@ from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 
 # This helper function clamps gradients but still passes through the gradient in clamped regions
-# NOTE: Not sure how necessary this is, but I was copying the design of the TensorFlow implementation
 
 
 def clamp_preserve_gradients(x, min, max):
@@ -41,8 +40,8 @@ class InverseAutoregressiveFlow(TransformModule):
     The inverse of the Bijector is required when, e.g., scoring the log density of a sample with
     `TransformedDistribution`. This implementation caches the inverse of the Bijector when its forward
     operation is called, e.g., when sampling from `TransformedDistribution`. However, if the cached value
-    isn't available, either because it was already popped from the cache, or an arbitary value is being
-    scored, it will calculate it manually. Note that this is an operation that scales as O(D) where D is
+    isn't available, either because it was overwritten during sampling a new value or an arbitary value is
+    being scored, it will calculate it manually. Note that this is an operation that scales as O(D) where D is
     the input dimension, and so should be avoided for large dimensional uses. So in general, it is cheap
     to sample from IAF and score a value that was sampled by IAF, but expensive to score an arbitrary value.
 
@@ -66,13 +65,15 @@ class InverseAutoregressiveFlow(TransformModule):
     Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle
     """
 
+    domain = constraints.real
     codomain = constraints.real
+    bijective = True
+    event_dim = 1
 
     def __init__(self, autoregressive_nn, log_scale_min_clip=-5., log_scale_max_clip=3.):
-        super(InverseAutoregressiveFlow, self).__init__()
+        super(InverseAutoregressiveFlow, self).__init__(cache_size=1)
         self.arn = autoregressive_nn
-        self._intermediates_cache = {}
-        self.add_inverse_to_cache = True
+        self._cached_log_scale = None
         self.log_scale_min_clip = log_scale_min_clip
         self.log_scale_max_clip = log_scale_max_clip
 
@@ -86,11 +87,10 @@ class InverseAutoregressiveFlow(TransformModule):
         """
         mean, log_scale = self.arn(x)
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
+        self._cached_log_scale = log_scale
         scale = torch.exp(log_scale)
 
         y = scale * x + mean
-        self._add_intermediate_to_cache(x, y, 'x')
-        self._add_intermediate_to_cache(log_scale, y, 'log_scale')
         return y
 
     def _inverse(self, y):
@@ -100,42 +100,34 @@ class InverseAutoregressiveFlow(TransformModule):
 
         Inverts y => x. Uses a previously cached inverse if available, otherwise performs the inversion afresh.
         """
-        if (y, 'x') in self._intermediates_cache:
-            x = self._intermediates_cache.pop((y, 'x'))
-            return x
-        else:
-            x_size = y.size()[:-1]
-            perm = self.arn.permutation
-            input_dim = y.size(-1)
-            x = [torch.zeros(x_size, device=y.device)] * input_dim
+        x_size = y.size()[:-1]
+        perm = self.arn.permutation
+        input_dim = y.size(-1)
+        x = [torch.zeros(x_size, device=y.device)] * input_dim
 
-            # NOTE: Inversion is an expensive operation that scales in the dimension of the input
-            for idx in perm:
-                mean, log_scale = self.arn(torch.stack(x, dim=-1))
-                inverse_scale = torch.exp(-clamp_preserve_gradients(
-                    log_scale[..., idx], min=self.log_scale_min_clip, max=self.log_scale_max_clip))
-                mean = mean[..., idx]
-                x[idx] = (y[..., idx] - mean) * inverse_scale
+        # NOTE: Inversion is an expensive operation that scales in the dimension of the input
+        for idx in perm:
+            mean, log_scale = self.arn(torch.stack(x, dim=-1))
+            inverse_scale = torch.exp(-clamp_preserve_gradients(
+                log_scale[..., idx], min=self.log_scale_min_clip, max=self.log_scale_max_clip))
+            mean = mean[..., idx]
+            x[idx] = (y[..., idx] - mean) * inverse_scale
 
-            x = torch.stack(x, dim=-1)
-            log_scale = clamp_preserve_gradients(log_scale, min=self.log_scale_min_clip, max=self.log_scale_max_clip)
-            self._add_intermediate_to_cache(log_scale, y, 'log_scale')
-            return x
-
-    def _add_intermediate_to_cache(self, intermediate, y, name):
-        """
-        Internal function used to cache intermediate results computed during the forward call
-        """
-        assert((y, name) not in self._intermediates_cache),\
-            "key collision in _add_intermediate_to_cache"
-        self._intermediates_cache[(y, name)] = intermediate
+        x = torch.stack(x, dim=-1)
+        log_scale = clamp_preserve_gradients(log_scale, min=self.log_scale_min_clip, max=self.log_scale_max_clip)
+        self._cached_log_scale = log_scale
+        return x
 
     def log_abs_det_jacobian(self, x, y):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        log_scale = self._intermediates_cache.pop((y, 'log_scale'))
-        return log_scale
+        if self._cached_log_scale is not None:
+            log_scale = self._cached_log_scale
+        else:
+            _, log_scale = self.arn(x)
+            log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
+        return log_scale.sum(-1)
 
 
 @copy_docs_from(TransformModule)
@@ -147,11 +139,11 @@ class InverseAutoregressiveFlowStable(TransformModule):
 
     where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, :math:`\\mu_t,\\sigma_t`
     are calculated from an autoregressive network on :math:`\\mathbf{x}`, and :math:`\\sigma_t` is
-    restricted to :math:`[0,1]`.
+    restricted to :math:`(0,1)`.
 
     This variant of IAF is claimed by the authors to be more numerically stable than one using Eq (10),
     although in practice it leads to a restriction on the distributions that can be represented,
-    presumably since the input is restricted to rescaling by a number on :math:`[0,1]`.
+    presumably since the input is restricted to rescaling by a number on :math:`(0,1)`.
 
     Example usage:
 
@@ -184,16 +176,18 @@ class InverseAutoregressiveFlowStable(TransformModule):
     Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle
     """
 
+    domain = constraints.real
     codomain = constraints.real
+    bijective = True
+    event_dim = 1
 
     def __init__(self, autoregressive_nn, sigmoid_bias=2.0):
-        super(InverseAutoregressiveFlowStable, self).__init__()
+        super(InverseAutoregressiveFlowStable, self).__init__(cache_size=1)
         self.arn = autoregressive_nn
         self.sigmoid = nn.Sigmoid()
         self.logsigmoid = nn.LogSigmoid()
         self.sigmoid_bias = sigmoid_bias
-        self._intermediates_cache = {}
-        self.add_inverse_to_cache = True
+        self._cached_log_scale = None
 
     def _call(self, x):
         """
@@ -207,10 +201,9 @@ class InverseAutoregressiveFlowStable(TransformModule):
         logit_scale = logit_scale + self.sigmoid_bias
         scale = self.sigmoid(logit_scale)
         log_scale = self.logsigmoid(logit_scale)
+        self._cached_log_scale = log_scale
 
         y = scale * x + (1 - scale) * mean
-        self._add_intermediate_to_cache(x, y, 'x')
-        self._add_intermediate_to_cache(log_scale, y, 'log_scale')
         return y
 
     def _inverse(self, y):
@@ -218,41 +211,30 @@ class InverseAutoregressiveFlowStable(TransformModule):
         :param y: the output of the bijection
         :type y: torch.Tensor
 
-        Inverts y => x. Uses a previously cached inverse if available, otherwise performs the inversion afresh.
+        Inverts y => x.
         """
-        if (y, 'x') in self._intermediates_cache:
-            x = self._intermediates_cache.pop((y, 'x'))
-            return x
-        else:
-            x_size = y.size()[:-1]
-            perm = self.arn.permutation
-            input_dim = y.size(-1)
-            x = [torch.zeros(x_size, device=y.device)] * input_dim
+        x_size = y.size()[:-1]
+        perm = self.arn.permutation
+        input_dim = y.size(-1)
+        x = [torch.zeros(x_size, device=y.device)] * input_dim
 
-            # NOTE: Inversion is an expensive operation that scales in the dimension of the input
-            for idx in perm:
-                mean, logit_scale = self.arn(torch.stack(x, dim=-1))
-                inverse_scale = 1 + torch.exp(-logit_scale[..., idx] - self.sigmoid_bias)
-                x[idx] = inverse_scale * y[..., idx] + (1 - inverse_scale) * mean[..., idx]
+        # NOTE: Inversion is an expensive operation that scales in the dimension of the input
+        for idx in perm:
+            mean, logit_scale = self.arn(torch.stack(x, dim=-1))
+            inverse_scale = 1 + torch.exp(-logit_scale[..., idx] - self.sigmoid_bias)
+            x[idx] = inverse_scale * y[..., idx] + (1 - inverse_scale) * mean[..., idx]
+            self._cached_log_scale = inverse_scale
 
-            x = torch.stack(x, dim=-1)
-            return x
-
-    def _add_intermediate_to_cache(self, intermediate, y, name):
-        """
-        Internal function used to cache intermediate results computed during the forward call
-        """
-        assert((y, name) not in self._intermediates_cache),\
-            "key collision in _add_intermediate_to_cache"
-        self._intermediates_cache[(y, name)] = intermediate
+        x = torch.stack(x, dim=-1)
+        return x
 
     def log_abs_det_jacobian(self, x, y):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        if (y, 'log_scale') in self._intermediates_cache:
-            log_scale = self._intermediates_cache.pop((y, 'log_scale'))
+        if self._cached_log_scale is not None:
+            log_scale = self._cached_log_scale
         else:
             _, logit_scale = self.arn(x)
             log_scale = self.logsigmoid(logit_scale + self.sigmoid_bias)
-        return log_scale
+        return log_scale.sum(-1)
