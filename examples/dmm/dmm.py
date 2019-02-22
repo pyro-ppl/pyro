@@ -254,16 +254,18 @@ class DMM(nn.Module):
                 # to yield a transformed distribution that we use for q(z_t|...)
                 if len(self.iafs) > 0:
                     z_dist = TransformedDistribution(dist.Normal(z_loc, z_scale), self.iafs)
+                    assert z_dist.event_shape == (self.z_q_0.size(0),)
+                    assert z_dist.batch_shape == (len(mini_batch),)
                 else:
                     z_dist = dist.Normal(z_loc, z_scale)
                     assert z_dist.event_shape == ()
-                assert z_dist.batch_shape == (len(mini_batch), self.z_q_0.size(0))
+                    assert z_dist.batch_shape == (len(mini_batch), self.z_q_0.size(0))
 
                 # sample z_t from the distribution z_dist
                 with pyro.poutine.scale(scale=annealing_factor):
                     if len(self.iafs) > 0:
                         z_t = pyro.sample("z_%d" % t,
-                                          z_dist.mask(mini_batch_mask[:, t - 1:t]))
+                                          z_dist.mask(mini_batch_mask[:, t - 1]))
                     else:
                         z_t = pyro.sample("z_%d" % t,
                                           z_dist.mask(mini_batch_mask[:, t - 1:t])
