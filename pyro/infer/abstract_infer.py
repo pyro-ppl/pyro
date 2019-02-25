@@ -304,8 +304,7 @@ class TracePredictive(TracePosterior):
             model_trace = self.posterior().copy()
             self._keep_sites(model_trace)
             self._adjust_to_data(model_trace, data_trace)
-            resampler = poutine.resample_posterior(self.model, model_trace)
-            resampled_trace = poutine.trace(resampler).get_trace(*args, **kwargs)
+            resampled_trace = poutine.trace(poutine.replay(self.model, model_trace)).get_trace(*args, **kwargs)
             yield (resampled_trace, 0., 0)
 
     def _keep_sites(self, trace):

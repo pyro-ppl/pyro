@@ -9,7 +9,7 @@ from pyro.ops.contract import contract_tensor_tree
 from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import MapRing, SampleRing
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
-from pyro.poutine.posterior_messenger import SamplePosteriorMessenger
+from pyro.poutine.replay_messenger import ReplayMessenger
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import jit_iter
 
@@ -21,6 +21,16 @@ def _make_ring(temperature):
         return _RINGS[temperature]()
     except KeyError:
         raise ValueError("temperature must be 0 (map) or 1 (sample) for now")
+
+
+class SamplePosteriorMessenger(ReplayMessenger):
+    # This acts like ReplayMessenger but additionally replays cond_indep_stack.
+
+    def _pyro_sample(self, msg):
+        if msg["infer"].get("enumerate") == "parallel":
+            super(SamplePosteriorMessenger, self)._pyro_sample(msg)
+        if msg["name"] in self.trace:
+            msg["cond_indep_stack"] = self.trace.nodes[msg["name"]]["cond_indep_stack"]
 
 
 def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):

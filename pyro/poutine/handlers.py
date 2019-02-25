@@ -65,7 +65,6 @@ from .markov_messenger import MarkovMessenger
 from .mask_messenger import MaskMessenger
 from .plate_messenger import PlateMessenger  # noqa F403
 from .replay_messenger import ReplayMessenger
-from .posterior_messenger import SamplePosteriorMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
 from .trace_messenger import TraceMessenger
@@ -133,23 +132,6 @@ def replay(fn=None, trace=None, params=None):
     :returns: a stochastic function decorated with a :class:`~pyro.poutine.replay_messenger.ReplayMessenger`
     """
     msngr = ReplayMessenger(trace=trace, params=params)
-    return msngr(fn) if fn is not None else msngr
-
-
-def resample_posterior(fn=None, trace=None, params=None):
-    """
-    Given a callable that contains Pyro primitive calls,
-    return a callable that runs the original, reusing the values at sites in trace
-    at those sites in the new trace. This is like :func:`~pyro.poutine.replay` except
-    it also re-initializes the context-independent stacks used by :func:`~pyro.plate`.
-
-    :param fn: a stochastic function (callable containing Pyro primitive calls)
-    :param trace: a :class:`~pyro.poutine.Trace` data structure to re-sample posterior from
-    :param params: dict of names of param sites and constrained values
-        in fn to replay against
-    :returns: a stochastic function decorated with a :class:`~pyro.poutine.posterior_messenger.SamplePosteriorMessenger`
-    """
-    msngr = SamplePosteriorMessenger(trace=trace, params=params)
     return msngr(fn) if fn is not None else msngr
 
 
