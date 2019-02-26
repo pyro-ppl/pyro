@@ -317,7 +317,7 @@ class TracePredictive(TracePosterior):
                     # Select random sub-indices to replay values under conditionally independent stacks.
                     # Otherwise, we assume there is an dependence of indexes between training data
                     # and prediction data.
-                    subidxs = Categorical(logits=site["value"].new_ones(cis.size)).sample((cis.size,))
+                    subidxs = Categorical(logits=site["value"].new_ones(site["value"].size(cis.dim))).sample([cis.size])
                     site["value"] = site["value"].index_select(cis.dim, subidxs)
             except KeyError:
                 pass

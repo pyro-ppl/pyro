@@ -81,6 +81,20 @@ def test_posterior_predictive_svi_auto_diag_normal_guide():
     assert_close(marginal_return_vals.mean, torch.ones(5) * 700, rtol=0.05)
 
 
+def test_posterior_predictive_svi_auto_delta_guide_large_eval():
+    true_probs = torch.ones(5) * 0.7
+    num_trials = torch.ones(5) * 1000
+    num_success = dist.Binomial(num_trials[:3], true_probs[:3]).sample()
+    conditioned_model = poutine.condition(model, data={"obs": num_success})
+    opt = optim.Adam(dict(lr=1.0))
+    loss = Trace_ELBO()
+    guide = AutoDelta(conditioned_model)
+    svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=1000, num_samples=100).run(num_trials[:3])
+    posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials)
+    marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
+    assert_close(marginal_return_vals.mean, torch.ones(5) * 700, rtol=0.05)
+
+
 def test_nesting():
     def nested():
         true_probs = torch.ones(5) * 0.7
