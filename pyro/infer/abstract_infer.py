@@ -286,14 +286,11 @@ class TracePredictive(TracePosterior):
     :param TracePosterior posterior: trace posterior instance holding
         samples from the model's approximate posterior.
     :param int num_samples: number of samples to generate.
-    :param list(str) resample_sites: sites to resample from in posterior predictive distribution.
-                                     By default all sites are used.
     """
-    def __init__(self, model, posterior, num_samples, resample_sites=None):
+    def __init__(self, model, posterior, num_samples):
         self.model = model
         self.posterior = posterior
         self.num_samples = num_samples
-        self.resample_sites = resample_sites
         super(TracePredictive, self).__init__()
 
     def _traces(self, *args, **kwargs):
@@ -302,17 +299,9 @@ class TracePredictive(TracePosterior):
         data_trace = poutine.trace(self.model).get_trace(*args, **kwargs)
         for _ in range(self.num_samples):
             model_trace = self.posterior().copy()
-            self._keep_sites(model_trace)
             self._adjust_to_data(model_trace, data_trace)
             resampled_trace = poutine.trace(poutine.replay(self.model, model_trace)).get_trace(*args, **kwargs)
             yield (resampled_trace, 0., 0)
-
-    def _keep_sites(self, trace):
-        if self.resample_sites is None:
-            return
-        for name, site in list(trace.nodes.items()):
-            if name not in self.resample_sites:
-                trace.remove_node(name)
 
     def _adjust_to_data(self, trace, data_trace):
         for name, site in list(trace.nodes.items()):
@@ -328,8 +317,7 @@ class TracePredictive(TracePosterior):
                     # Select random sub-indices to replay values under conditionally independent stacks.
                     # Otherwise, we assume there is an dependence of indexes between training data
                     # and prediction data.
-                    cat = Categorical(logits=site["value"].new_ones(site["value"].size(cis.dim)))
-                    subidxs = cat.sample((cis.size,))
+                    subidxs = Categorical(logits=site["value"].new_ones(cis.size)).sample((cis.size,))
                     site["value"] = site["value"].index_select(cis.dim, subidxs)
             except KeyError:
                 pass
