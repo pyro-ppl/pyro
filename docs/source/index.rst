@@ -5,7 +5,7 @@
 
 :github_url: https://github.com/uber/pyro
 
-Pyro Documentation
+Welcome to Shun Pyro Documentation
 ================================
 
 .. toctree::
@@ -15,7 +15,7 @@ Pyro Documentation
 
    installation
    getting_started
-   primitives 
+   primitives
    inference
    distributions
    parameters
