@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
-
 import pytest
 import torch
 import torch.nn as nn
@@ -74,8 +72,7 @@ def test_param_no_grad(nn_module):
         def forward(self, s):
             pass
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    with pytest.warns(UserWarning):
         pyro.module('net', net())
     assert 'net$$$x' in pyro.get_param_store().keys()
     assert 'net$$$y' not in pyro.get_param_store().keys()

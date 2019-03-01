@@ -255,7 +255,7 @@ def module(name, nn_module, update_module_params=False):
                 target_state_dict[param_name] = returned_param
         else:
             warnings.warn("{} was not registered in the param store because".format(param_name) +
-                          "requires_grad=False")
+                          " requires_grad=False")
 
     if target_state_dict and update_module_params:
         # WARNING: this is very dangerous. better method?
