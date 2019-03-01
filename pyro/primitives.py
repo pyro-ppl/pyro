@@ -245,13 +245,17 @@ def module(name, nn_module, update_module_params=False):
     target_state_dict = OrderedDict()
 
     for param_name, param_value in nn_module.named_parameters():
-        # register the parameter in the module with pyro
-        # this only does something substantive if the parameter hasn't been seen before
-        full_param_name = param_with_module_name(name, param_name)
-        returned_param = param(full_param_name, param_value)
+        if param_value.requires_grad:
+            # register the parameter in the module with pyro
+            # this only does something substantive if the parameter hasn't been seen before
+            full_param_name = param_with_module_name(name, param_name)
+            returned_param = param(full_param_name, param_value)
 
-        if param_value._cdata != returned_param._cdata:
-            target_state_dict[param_name] = returned_param
+            if param_value._cdata != returned_param._cdata:
+                target_state_dict[param_name] = returned_param
+        else:
+            warnings.warn("{} was not registered in the param store because".format(param_name) +
+                          "requires_grad=False")
 
     if target_state_dict and update_module_params:
         # WARNING: this is very dangerous. better method?
