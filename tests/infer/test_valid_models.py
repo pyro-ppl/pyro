@@ -10,8 +10,10 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, config_enumerate
+from pyro.infer import (SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
+                        TraceTailAdaptive_ELBO, config_enumerate)
 from pyro.optim import Adam
+from pyro.distributions.testing import fakes
 
 logger = logging.getLogger(__name__)
 
@@ -1607,3 +1609,20 @@ def test_mean_field_warn():
         pyro.sample("x", dist.Normal(y, 1.))
 
     assert_warning(model, guide, TraceMeanField_ELBO())
+
+
+def test_tail_adaptive():
+
+    def model():
+        pyro.sample("x", dist.Normal(0., 1.))
+
+    def rep_guide():
+        pyro.sample("x", dist.Normal(0., 2.))
+
+    def nonrep_guide():
+        pyro.sample("x", fakes.NonreparameterizedNormal(0., 2.))
+
+    assert_ok(model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=2))
+    assert_error(model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=False, num_particles=2))
+    assert_warning(model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=1))
+    assert_error(model, nonrep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=2))

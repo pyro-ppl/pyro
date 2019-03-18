@@ -9,7 +9,7 @@ from torch.distributions import kl_divergence
 import pyro.ops.jit
 from pyro.distributions.util import is_identically_zero, scale_and_mask
 from pyro.infer.trace_elbo import Trace_ELBO
-from pyro.infer.util import is_validation_enabled, torch_item
+from pyro.infer.util import is_validation_enabled, torch_item, _check_fully_reparametrized
 from pyro.util import warn_if_nan
 
 
@@ -29,14 +29,6 @@ def _check_mean_field_requirement(model_trace, guide_trace):
                       "occur in the same order.\n" +
                       "Model sites:\n  " + "\n  ".join(model_sites) +
                       "Guide sites:\n  " + "\n  ".join(guide_sites))
-
-
-def _check_fully_reparametrized(guide_site):
-    log_prob, score_function_term, entropy_term = guide_site["score_parts"]
-    fully_rep = (guide_site["fn"].has_rsample and not is_identically_zero(entropy_term) and
-                 is_identically_zero(score_function_term))
-    if not fully_rep:
-        raise NotImplementedError("All distributions in the guide must be fully reparameterized.")
 
 
 class TraceMeanField_ELBO(Trace_ELBO):
