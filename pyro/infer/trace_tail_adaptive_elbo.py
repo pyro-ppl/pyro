@@ -38,7 +38,6 @@ class TraceTailAdaptive_ELBO(Trace_ELBO):
                 site_log_p = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
                 log_p = log_p + site_log_p
 
-
         for name, site in guide_trace.nodes.items():
             if site["type"] == "sample":
                 site_log_q = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
