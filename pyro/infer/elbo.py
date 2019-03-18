@@ -45,6 +45,8 @@ class ELBO(object):
         be ignored. Defaults to False.
     :param bool retain_graph: Whether to retain autograd graph during an SVI
         step. Defaults to None (False).
+    :param float tail_adaptive_beta: Exponent beta with -1.0 >= beta > 0.0 for
+        use with `TraceTailAdaptive_ELBO`.
 
     References
 
@@ -62,7 +64,8 @@ class ELBO(object):
                  vectorize_particles=False,
                  strict_enumeration_warning=True,
                  ignore_jit_warnings=False,
-                 retain_graph=None):
+                 retain_graph=None,
+                 tail_adaptive_beta=-1.0):
         if max_iarange_nesting is not None:
             warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
                           DeprecationWarning)
@@ -75,6 +78,7 @@ class ELBO(object):
             self.max_plate_nesting += 1
         self.strict_enumeration_warning = strict_enumeration_warning
         self.ignore_jit_warnings = ignore_jit_warnings
+        self.tail_adaptive_beta = tail_adaptive_beta
 
     def _guess_max_plate_nesting(self, model, guide, *args, **kwargs):
         """
