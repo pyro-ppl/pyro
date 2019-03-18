@@ -10,9 +10,10 @@ from pyro.infer.util import is_validation_enabled, check_fully_reparametrized
 
 class TraceTailAdaptive_ELBO(Trace_ELBO):
     """
-    Interface for Stochastic Variational Inference with an adaptive f-divergence
-    as described in ref. [1]. Only supports models in which all the latent
-    variables are fully reparameterized. User should specify `num_particles` > 1
+    Interface for Stochastic Variational Inference with an adaptive
+    f-divergence as described in ref. [1]. Only supports models in which
+    all the latent variables are fully reparameterized. It also does not
+    support data subsampling. Users should specify `num_particles` > 1
     and `vectorize_particles==True`. Note that this interface does not support
     computing the varational objective itself; rather it only supports computing
     gradients of the variational objective. Consequently, one might want to use
@@ -57,7 +58,7 @@ class TraceTailAdaptive_ELBO(Trace_ELBO):
         # rank the particles according to p/q
         log_pq = torch.logsumexp(log_p - log_q, dim=0)
         rank = torch.argsort(log_pq, descending=False)
-        rank = torch.index_select(torch.arange(self.num_particles) + 1, -1, rank).float().type_as(log_pq)
+        rank = torch.index_select(torch.arange(self.num_particles) + 1, -1, rank).type_as(log_pq)
 
         # compute the particle-specific weights used to construct the surrogate loss
         gamma = torch.pow(rank, self.tail_adaptive_beta).detach()
