@@ -269,7 +269,7 @@ class Dice(object):
         return expected_cost
 
 
-def _check_fully_reparametrized(guide_site):
+def check_fully_reparametrized(guide_site):
     log_prob, score_function_term, entropy_term = guide_site["score_parts"]
     fully_rep = (guide_site["fn"].has_rsample and not is_identically_zero(entropy_term) and
                  is_identically_zero(score_function_term))

@@ -9,7 +9,7 @@ from torch.distributions import kl_divergence
 import pyro.ops.jit
 from pyro.distributions.util import scale_and_mask
 from pyro.infer.trace_elbo import Trace_ELBO
-from pyro.infer.util import is_validation_enabled, torch_item, _check_fully_reparametrized
+from pyro.infer.util import is_validation_enabled, torch_item, check_fully_reparametrized
 from pyro.util import warn_if_nan
 
 
@@ -94,7 +94,7 @@ class TraceMeanField_ELBO(Trace_ELBO):
                 else:
                     guide_site = guide_trace.nodes[name]
                     if is_validation_enabled():
-                        _check_fully_reparametrized(guide_site)
+                        check_fully_reparametrized(guide_site)
 
                     # use kl divergence if available, else fall back on sampling
                     try:
@@ -111,7 +111,7 @@ class TraceMeanField_ELBO(Trace_ELBO):
             if guide_site["type"] == "sample" and name not in model_trace.nodes:
                 assert guide_site["infer"].get("is_auxiliary")
                 if is_validation_enabled():
-                    _check_fully_reparametrized(guide_site)
+                    check_fully_reparametrized(guide_site)
                 entropy_term = guide_site["score_parts"].entropy_term
                 elbo_particle = elbo_particle - entropy_term.sum()
 
