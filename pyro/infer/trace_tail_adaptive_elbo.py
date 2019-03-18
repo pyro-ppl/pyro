@@ -1,16 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
 import warnings
-import weakref
 
 import torch
-from torch.distributions import kl_divergence
 
-import pyro.ops.jit
-from pyro.distributions.util import is_identically_zero, scale_and_mask
 from pyro.infer.trace_elbo import Trace_ELBO
-from pyro.infer.util import is_validation_enabled, torch_item, _check_fully_reparametrized
-from pyro.util import warn_if_nan
+from pyro.infer.util import is_validation_enabled, _check_fully_reparametrized
 
 
 class TraceTailAdaptive_ELBO(Trace_ELBO):
@@ -33,7 +28,8 @@ class TraceTailAdaptive_ELBO(Trace_ELBO):
             raise NotImplementedError("TraceTailAdaptive_ELBO only implemented for vectorize_particles==True")
 
         if self.num_particles == 1:
-            warnings.warn("For num_particles==1 TraceTailAdaptive_ELBO uses the same loss function as Trace_ELBO. Increase num_particles to get an adaptive f-divergence.")
+            warnings.warn("For num_particles==1 TraceTailAdaptive_ELBO uses the same loss function as Trace_ELBO. " +
+                          "Increase num_particles to get an adaptive f-divergence.")
 
         log_p, log_q = 0, 0
 

@@ -35,5 +35,6 @@ __all__ = [
     "TraceMeanField_ELBO",
     "TracePosterior",
     "TracePredictive",
+    "TraceTailAdaptive_ELBO",
     "Trace_ELBO",
 ]
