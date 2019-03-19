@@ -1611,7 +1611,7 @@ def test_mean_field_warn():
     assert_warning(model, guide, TraceMeanField_ELBO())
 
 
-def test_tail_adaptive():
+def test_tail_adaptive_ok():
 
     def plateless_model():
         pyro.sample("x", dist.Normal(0., 1.))
@@ -1624,11 +1624,31 @@ def test_tail_adaptive():
     def rep_guide():
         pyro.sample("x", dist.Normal(0., 2.))
 
+    assert_ok(plateless_model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=2))
+    assert_ok(plate_model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=2))
+
+
+def test_tail_adaptive_error():
+
+    def plateless_model():
+        pyro.sample("x", dist.Normal(0., 1.))
+
+    def rep_guide():
+        pyro.sample("x", dist.Normal(0., 2.))
+
     def nonrep_guide():
         pyro.sample("x", fakes.NonreparameterizedNormal(0., 2.))
 
-    assert_ok(plateless_model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=2))
-    assert_ok(plate_model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=2))
     assert_error(plateless_model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=False, num_particles=2))
-    assert_warning(plateless_model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=1))
     assert_error(plateless_model, nonrep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=2))
+
+
+def test_tail_adaptive_warning():
+
+    def plateless_model():
+        pyro.sample("x", dist.Normal(0., 1.))
+
+    def rep_guide():
+        pyro.sample("x", dist.Normal(0., 2.))
+
+    assert_warning(plateless_model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=1))

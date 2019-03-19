@@ -11,15 +11,19 @@ from pyro.infer.util import is_validation_enabled, check_fully_reparametrized
 class TraceTailAdaptive_ELBO(Trace_ELBO):
     """
     Interface for Stochastic Variational Inference with an adaptive
-    f-divergence as described in ref. [1]. Only supports models in which
-    all the latent variables are fully reparameterized. It also does not
-    support data subsampling. Users should specify `num_particles` > 1
-    and `vectorize_particles==True`. Note that this interface does not support
-    computing the varational objective itself; rather it only supports computing
-    gradients of the variational objective. Consequently, one might want to use
+    f-divergence as described in ref. [1]. Users should specify
+    `num_particles` > 1 and `vectorize_particles==True`. The argument
+    `tail_adaptive_beta` can be specified to modify how the adaptive
+    f-divergence is constructed. See reference for details.
+
+    Note that this interface does not support computing the varational
+    objective itself; rather it only supports computing gradients of the
+    variational objective. Consequently, one might want to use
     another SVI interface (e.g. `RenyiELBO`) in order to monitor convergence.
-    Also, the argument `tail_adaptive_beta` can be specified to modify how the
-    adaptive f-divergence is constructed. See reference for details.
+
+    Note that this interface only supports models in which all the latent
+    variables are fully reparameterized. It also does not support data
+    subsampling.
 
     References
     [1] "Variational Inference with Tail-adaptive f-Divergence", Dilin Wang,
