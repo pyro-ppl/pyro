@@ -43,6 +43,8 @@ Tensor Contraction
     :show-inheritance:
     :member-order: bysource
 
+.. autofunction:: pyro.ops.contract.einsum
+
 .. autofunction:: pyro.ops.contract.ubersum
 
 Statistical Utilities

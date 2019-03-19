@@ -485,7 +485,7 @@ class IndirectLambdaHandlerTests(TestCase):
     def test_graph_structure(self):
         tracegraph = poutine.trace(self.model, graph_type="dense").get_trace()
         # Ignore structure on plate_* nodes.
-        actual_nodes = set(n for n in tracegraph.nodes() if not n.startswith("plate_"))
+        actual_nodes = set(n for n in tracegraph.nodes if not n.startswith("plate_"))
         actual_edges = set((n1, n2) for n1, n2 in tracegraph.edges
                            if not n1.startswith("plate_") if not n2.startswith("plate_"))
         assert actual_nodes == self.expected_nodes

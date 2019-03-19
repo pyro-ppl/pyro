@@ -35,6 +35,7 @@ class Emitter(nn.Module):
     """
     Parameterizes the bernoulli observation likelihood `p(x_t | z_t)`
     """
+
     def __init__(self, input_dim, z_dim, emission_dim):
         super(Emitter, self).__init__()
         # initialize the three linear transformations used in the neural network
@@ -60,6 +61,7 @@ class GatedTransition(nn.Module):
     Parameterizes the gaussian latent transition probability `p(z_t | z_{t-1})`
     See section 5 in the reference for comparison.
     """
+
     def __init__(self, z_dim, transition_dim):
         super(GatedTransition, self).__init__()
         # initialize the six linear transformations used in the neural network
@@ -105,6 +107,7 @@ class Combiner(nn.Module):
     of the guide (i.e. the variational distribution). The dependence on `x_{t:T}` is
     through the hidden state of the RNN (see the PyTorch module `rnn` below)
     """
+
     def __init__(self, z_dim, rnn_dim):
         super(Combiner, self).__init__()
         # initialize the three linear transformations used in the neural network
@@ -136,6 +139,7 @@ class DMM(nn.Module):
     This PyTorch Module encapsulates the model as well as the
     variational distribution (the guide) for the Deep Markov Model
     """
+
     def __init__(self, input_dim=88, z_dim=100, emission_dim=100,
                  transition_dim=200, rnn_dim=600, num_layers=1, rnn_dropout_rate=0.0,
                  num_iafs=0, iaf_dim=50, use_cuda=False):
@@ -250,16 +254,24 @@ class DMM(nn.Module):
                 # to yield a transformed distribution that we use for q(z_t|...)
                 if len(self.iafs) > 0:
                     z_dist = TransformedDistribution(dist.Normal(z_loc, z_scale), self.iafs)
+                    assert z_dist.event_shape == (self.z_q_0.size(0),)
+                    assert z_dist.batch_shape == (len(mini_batch),)
                 else:
                     z_dist = dist.Normal(z_loc, z_scale)
-                assert z_dist.event_shape == ()
-                assert z_dist.batch_shape == (len(mini_batch), self.z_q_0.size(0))
+                    assert z_dist.event_shape == ()
+                    assert z_dist.batch_shape == (len(mini_batch), self.z_q_0.size(0))
 
                 # sample z_t from the distribution z_dist
                 with pyro.poutine.scale(scale=annealing_factor):
-                    z_t = pyro.sample("z_%d" % t,
-                                      z_dist.mask(mini_batch_mask[:, t - 1:t])
-                                            .to_event(1))
+                    if len(self.iafs) > 0:
+                        # in output of normalizing flow, all dimensions are correlated (event shape is not empty)
+                        z_t = pyro.sample("z_%d" % t,
+                                          z_dist.mask(mini_batch_mask[:, t - 1]))
+                    else:
+                        # when no normalizing flow used, ".to_event(1)" indicates latent dimensions are independent
+                        z_t = pyro.sample("z_%d" % t,
+                                          z_dist.mask(mini_batch_mask[:, t - 1:t])
+                                          .to_event(1))
                 # the latent sampled at this time step will be conditioned upon in the next time step
                 # so keep track of it
                 z_prev = z_t
@@ -420,7 +432,7 @@ def main(args):
 
 # parse command-line arguments and execute the main method
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.0')
+    assert pyro.__version__.startswith('0.3.1')
 
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)

@@ -6,20 +6,28 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 import pyro.poutine as poutine
-from pyro.contrib.autoguide import AutoLaplaceApproximation
+from pyro.contrib.autoguide import AutoDelta, AutoDiagonalNormal, AutoLaplaceApproximation
 from pyro.infer import SVI, TracePredictive, Trace_ELBO
 from pyro.infer.mcmc import MCMC, NUTS
-from tests.common import assert_equal
+from tests.common import assert_close, assert_equal
 
 
 def model(num_trials):
-    phi_prior = dist.Uniform(num_trials.new_tensor(0.), num_trials.new_tensor(1.))\
-        .expand_by([num_trials.shape[0]])
-    success_prob = pyro.sample("phi", phi_prior)
-    return pyro.sample("obs", dist.Binomial(num_trials, success_prob))
+    with pyro.plate("data", num_trials.size(0)):
+        phi_prior = dist.Uniform(num_trials.new_tensor(0.), num_trials.new_tensor(1.))
+        success_prob = pyro.sample("phi", phi_prior)
+        return pyro.sample("obs", dist.Binomial(num_trials, success_prob))
 
 
-def test_posterior_predictive():
+def beta_guide(num_trials):
+    phi_c0 = pyro.param("phi_c0", num_trials.new_tensor(5.0).expand([num_trials.size(0)]))
+    phi_c1 = pyro.param("phi_c1", num_trials.new_tensor(5.0).expand([num_trials.size(0)]))
+    with pyro.plate("data", num_trials.size(0)):
+        phi_posterior = dist.Beta(concentration0=phi_c0, concentration1=phi_c1)
+        pyro.sample("phi", phi_posterior)
+
+
+def test_posterior_predictive_mcmc():
     true_probs = torch.ones(5) * 0.7
     num_trials = torch.ones(5) * 1000
     num_success = dist.Binomial(num_trials, true_probs).sample()
@@ -28,7 +36,63 @@ def test_posterior_predictive():
     mcmc_run = MCMC(nuts_kernel, num_samples=1000, warmup_steps=200).run(num_trials)
     posterior_predictive = TracePredictive(model, mcmc_run, num_samples=10000).run(num_trials)
     marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
-    assert_equal(marginal_return_vals.mean, torch.ones(5) * 700, prec=30)
+    assert_close(marginal_return_vals.mean, torch.ones(5) * 700, rtol=0.05)
+
+
+def test_posterior_predictive_svi_manual_guide():
+    true_probs = torch.ones(5) * 0.7
+    num_trials = torch.ones(5) * 1000
+    num_success = dist.Binomial(num_trials, true_probs).sample()
+    conditioned_model = poutine.condition(model, data={"obs": num_success})
+    opt = optim.Adam(dict(lr=1.0))
+    loss = Trace_ELBO()
+    guide = beta_guide
+    svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=1000, num_samples=100).run(num_trials)
+    posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials[:3])
+    marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
+    assert_close(marginal_return_vals.mean, torch.ones(3) * 700, rtol=0.05)
+
+
+def test_posterior_predictive_svi_auto_delta_guide():
+    true_probs = torch.ones(5) * 0.7
+    num_trials = torch.ones(5) * 1000
+    num_success = dist.Binomial(num_trials, true_probs).sample()
+    conditioned_model = poutine.condition(model, data={"obs": num_success})
+    opt = optim.Adam(dict(lr=1.0))
+    loss = Trace_ELBO()
+    guide = AutoDelta(conditioned_model)
+    svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=1000, num_samples=100).run(num_trials)
+    posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials)
+    marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
+    assert_close(marginal_return_vals.mean, torch.ones(5) * 700, rtol=0.05)
+
+
+def test_posterior_predictive_svi_auto_diag_normal_guide():
+    true_probs = torch.ones(5) * 0.7
+    num_trials = torch.ones(5) * 1000
+    num_success = dist.Binomial(num_trials, true_probs).sample()
+    conditioned_model = poutine.condition(model, data={"obs": num_success})
+    opt = optim.Adam(dict(lr=0.1))
+    loss = Trace_ELBO()
+    guide = AutoDiagonalNormal(conditioned_model)
+    svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=1000, num_samples=100).run(num_trials)
+    posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials)
+    marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
+    assert_close(marginal_return_vals.mean, torch.ones(5) * 700, rtol=0.05)
+
+
+def test_posterior_predictive_svi_auto_delta_guide_large_eval():
+    true_probs = torch.ones(5) * 0.7
+    num_trials = torch.ones(5) * 1000
+    num_success = dist.Binomial(num_trials[:3], true_probs[:3]).sample()
+    conditioned_model = poutine.condition(model, data={"obs": num_success})
+    opt = optim.Adam(dict(lr=1.0))
+    loss = Trace_ELBO()
+    guide = AutoDelta(conditioned_model)
+    svi_run = SVI(conditioned_model, guide, opt, loss, num_steps=1000, num_samples=100).run(num_trials[:3])
+    posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials)
+    marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
+    assert_close(marginal_return_vals.mean, torch.ones(5) * 700, rtol=0.05)
 
 
 def test_nesting():

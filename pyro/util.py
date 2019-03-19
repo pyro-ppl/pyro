@@ -63,7 +63,7 @@ def warn_if_inf(value, msg="", allow_posinf=False, allow_neginf=False):
     also works with numbers.
     """
     if torch.is_tensor(value) and value.requires_grad:
-            value.register_hook(lambda x: warn_if_inf(x, msg, allow_posinf, allow_neginf))
+        value.register_hook(lambda x: warn_if_inf(x, msg, allow_posinf, allow_neginf))
     if (not allow_posinf) and (value == float('inf') if isinstance(value, numbers.Number)
                                else (value == float('inf')).any()):
         warnings.warn("Encountered +inf{}".format((': ' if msg else '.') + msg), stacklevel=2)

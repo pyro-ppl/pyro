@@ -7,7 +7,7 @@ from subprocess import check_call
 
 import pytest
 
-from tests.common import EXAMPLES_DIR, requires_cuda, skipif_param
+from tests.common import EXAMPLES_DIR, requires_cuda, skipif_param, xfail_param
 
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
@@ -17,6 +17,7 @@ CPU_EXAMPLES = [
     'air/main.py --num-steps=1',
     'air/main.py --num-steps=1 --no-baseline',
     'baseball.py --num-samples=200 --warmup-steps=100 --num-chains=2',
+    'lkj.py --n=50 --num-chains=1 --warmup-steps=100 --num-samples=200',
     'bayesian_regression.py --num-epochs=1',
     'contrib/autoname/scoping_mixture.py --num-epochs=1',
     'contrib/autoname/mixture.py --num-epochs=1',
@@ -34,6 +35,7 @@ CPU_EXAMPLES = [
     'dmm/dmm.py --num-epochs=1 --num-iafs=1',
     'eight_schools/mcmc.py --num-samples=500 --warmup-steps=100',
     'eight_schools/svi.py --num-epochs=1',
+    'einsum.py',
     'hmm.py --num-steps=1 --truncate=10 --model=0',
     'hmm.py --num-steps=1 --truncate=10 --model=1',
     'hmm.py --num-steps=1 --truncate=10 --model=2',
@@ -46,6 +48,7 @@ CPU_EXAMPLES = [
     'lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8',
     'minipyro.py',
     'minipyro.py --full-pyro',
+    'mixed_hmm/experiment.py --timesteps=1',
     'rsa/generics.py --num-samples=10',
     'rsa/hyperbole.py --price=10000',
     'rsa/schelling.py --num-samples=10',
@@ -64,9 +67,13 @@ CPU_EXAMPLES = [
 CUDA_EXAMPLES = [
     'air/main.py --num-steps=1 --cuda',
     'bayesian_regression.py --num-epochs=1 --cuda',
+    xfail_param('baseball.py --num-samples=200 --warmup-steps=100 --num-chains=2 --cuda',
+                reason='https://github.com/pyro-ppl/pyro/issues/1725'),
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --cuda',
+    'lkj.py --n=50 --num-chains=1 --warmup-steps=100 --num-samples=200 --cuda',
     'dmm/dmm.py --num-epochs=1 --cuda',
     'dmm/dmm.py --num-epochs=1 --num-iafs=1 --cuda',
+    'einsum.py --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=0 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=1 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=2 --cuda',
@@ -93,6 +100,7 @@ JIT_EXAMPLES = [
     'baseball.py --num-samples=200 --warmup-steps=100 --jit',
     'bayesian_regression.py --num-epochs=1 --jit',
     'contrib/autoname/mixture.py --num-epochs=1 --jit',
+    xfail_jit('lkj.py --n=50 --num-chains=1 --warmup-steps=100 --num-samples=200 --jit'),
     xfail_jit('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --jit'),
     xfail_jit('dmm/dmm.py --num-epochs=1 --jit'),
     xfail_jit('dmm/dmm.py --num-epochs=1 --num-iafs=1 --jit'),
