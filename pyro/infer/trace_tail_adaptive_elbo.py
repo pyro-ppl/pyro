@@ -27,8 +27,8 @@ class TraceTailAdaptive_ELBO(Trace_ELBO):
 
     References
     [1] "Variational Inference with Tail-adaptive f-Divergence", Dilin Wang,
-        Hao Liu, Qiang Liu, NeurIPS 2018
-        https://papers.nips.cc/paper/7816-variational-inference-with-tail-adaptive-f-divergence
+    Hao Liu, Qiang Liu, NeurIPS 2018
+    https://papers.nips.cc/paper/7816-variational-inference-with-tail-adaptive-f-divergence
     """
     def loss(self, model, guide, *args, **kwargs):
         """
