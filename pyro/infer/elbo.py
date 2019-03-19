@@ -45,7 +45,7 @@ class ELBO(object):
         be ignored. Defaults to False.
     :param bool retain_graph: Whether to retain autograd graph during an SVI
         step. Defaults to None (False).
-    :param float tail_adaptive_beta: Exponent beta with -1.0 <= beta < 0.0 for
+    :param float tail_adaptive_beta: Exponent beta with ``-1.0 <= beta < 0.0`` for
         use with `TraceTailAdaptive_ELBO`.
 
     References
