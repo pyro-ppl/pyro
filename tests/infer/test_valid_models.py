@@ -10,8 +10,10 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, config_enumerate
+from pyro.infer import (SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
+                        TraceTailAdaptive_ELBO, config_enumerate)
 from pyro.optim import Adam
+from pyro.distributions.testing import fakes
 
 logger = logging.getLogger(__name__)
 
@@ -1607,3 +1609,46 @@ def test_mean_field_warn():
         pyro.sample("x", dist.Normal(y, 1.))
 
     assert_warning(model, guide, TraceMeanField_ELBO())
+
+
+def test_tail_adaptive_ok():
+
+    def plateless_model():
+        pyro.sample("x", dist.Normal(0., 1.))
+
+    def plate_model():
+        x = pyro.sample("x", dist.Normal(0., 1.))
+        with pyro.plate('observe_data'):
+            pyro.sample('obs', dist.Normal(x, 1.0), obs=torch.arange(5).type_as(x))
+
+    def rep_guide():
+        pyro.sample("x", dist.Normal(0., 2.))
+
+    assert_ok(plateless_model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=2))
+    assert_ok(plate_model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=2))
+
+
+def test_tail_adaptive_error():
+
+    def plateless_model():
+        pyro.sample("x", dist.Normal(0., 1.))
+
+    def rep_guide():
+        pyro.sample("x", dist.Normal(0., 2.))
+
+    def nonrep_guide():
+        pyro.sample("x", fakes.NonreparameterizedNormal(0., 2.))
+
+    assert_error(plateless_model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=False, num_particles=2))
+    assert_error(plateless_model, nonrep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=2))
+
+
+def test_tail_adaptive_warning():
+
+    def plateless_model():
+        pyro.sample("x", dist.Normal(0., 1.))
+
+    def rep_guide():
+        pyro.sample("x", dist.Normal(0., 2.))
+
+    assert_warning(plateless_model, rep_guide, TraceTailAdaptive_ELBO(vectorize_particles=True, num_particles=1))

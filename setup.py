@@ -60,7 +60,7 @@ EXTRAS_REQUIRE = [
     'matplotlib>=1.3',
     'observations>=0.1.4',
     'pillow',
-    'torchvision',
+    'torchvision==0.2.1',
     'visdom>=0.1.4',
     'pandas',
     'seaborn',
@@ -84,6 +84,7 @@ setup(
         # add them to `docs/requirements.txt`
         'contextlib2',
         'graphviz>=0.8',
+        # numpy is necessary for some functionality of PyTorch
         'numpy>=1.7',
         'opt_einsum>=2.3.2',
         'six>=1.10.0',
