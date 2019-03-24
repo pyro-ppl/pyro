@@ -57,11 +57,11 @@ class DeepSigmoidalFlow(TransformModule):
         super(DeepSigmoidalFlow, self).__init__()
         self.arn = autoregressive_nn
         self.hidden_units = hidden_units
-        
+
         # Not entirely sure this is necessary, but copying from NAF paper's implementation
         self.safe_log = lambda x: torch.log(x * 1e2) - math.log(1e2)
         self.safe_logit = lambda x: self.safe_log(x) - self.safe_log(1 - x)
-        
+
         # The output of safe_sigmoid is between [0.5*eps, 1-0.5*eps], which stops logit from returning +-Inf (overflow)
         self.sigmoid = nn.Sigmoid()
         self.safe_sigmoid = lambda x: self.sigmoid(x) * (1 - eps) + 0.5 * eps
@@ -104,12 +104,12 @@ class DeepSigmoidalFlow(TransformModule):
 
         # See C.1 of Huang Et Al. for a derivation of this
         # NOTE: Since safe_logit is mathematically the same as logit, this line doesn't need any modification
-        log_dydD = -torch.log(D+1e-8) - torch.log(1 - D)
+        log_dydD = -torch.log(D + 1e-8) - torch.log(1 - D)
 
         # NOTE: However, safe_sigmoid differs from torch.sigmoid, which we need to take into account in the derivative!
         # Hence the log(1 - eps) term
-        log_dDdx = torch.logsumexp(self.logsoftmax(W_pre) + F.logsigmoid(C) + F.logsigmoid(-C)  + torch.log1p(torch.tensor(-eps))
-                                   + torch.log(A), dim=-2)
+        log_dDdx = torch.logsumexp(self.logsoftmax(W_pre) + F.logsigmoid(C) + F.logsigmoid(-C) +
+                                   torch.log1p(torch.tensor(-eps)) + torch.log(A), dim=-2)
         log_det = log_dydD + log_dDdx
 
         return log_det.sum(-1)
