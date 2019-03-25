@@ -19,13 +19,13 @@ import numbers
 import weakref
 
 import torch
+import torch.nn as nn
 from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.util import hessian
-from pyro.contrib.autoguide.autoregressive import AutoAutoregressiveNormal
 from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
@@ -74,6 +74,7 @@ class AutoGuide(object):
     :param callable model: a pyro model
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
+
     def __init__(self, model, prefix="auto"):
         self.master = None
         self.model = model
@@ -142,6 +143,7 @@ class AutoGuideList(AutoGuide):
     :param callable model: a Pyro model
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
+
     def __init__(self, model, prefix="auto"):
         super(AutoGuideList, self).__init__(model, prefix)
         self.parts = []
@@ -234,6 +236,7 @@ class AutoCallable(AutoGuide):
     :param callable median: an optional callable returning a dict mapping
         sample site name to computed median tensor.
     """
+
     def __init__(self, model, guide, median=lambda *args, **kwargs: {}):
         super(AutoCallable, self).__init__(model, prefix="")
         self._guide = guide
@@ -267,6 +270,7 @@ class AutoDelta(AutoGuide):
         pyro.param("auto_concentration", torch.ones(k),
                    constraint=constraints.positive)
     """
+
     def __call__(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
@@ -318,6 +322,7 @@ class AutoContinuous(AutoGuide):
         Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M.
         Blei
     """
+
     def _setup_prototype(self, *args, **kwargs):
         super(AutoContinuous, self)._setup_prototype(*args, **kwargs)
         self._unconstrained_shapes = {}
@@ -458,6 +463,7 @@ class AutoMultivariateNormal(AutoContinuous):
         pyro.param("auto_scale_tril", torch.tril(torch.rand(latent_dim)),
                    constraint=constraints.lower_cholesky)
     """
+
     def get_posterior(self, *args, **kwargs):
         """
         Returns a MultivariateNormal posterior distribution.
@@ -495,6 +501,7 @@ class AutoDiagonalNormal(AutoContinuous):
         pyro.param("auto_scale", torch.ones(latent_dim),
                    constraint=constraints.positive)
     """
+
     def get_posterior(self, *args, **kwargs):
         """
         Returns a diagonal Normal posterior distribution.
@@ -539,6 +546,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
     :param int rank: the rank of the low-rank part of the covariance matrix
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
+
     def __init__(self, model, prefix="auto", rank=1):
         if not isinstance(rank, numbers.Number) or not rank > 0:
             raise ValueError("Expected rank > 0 but got {}".format(rank))
@@ -582,6 +590,7 @@ class AutoIAFNormal(AutoContinuous):
     :param int hidden_dim: number of hidden dimensions in the IAF
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
+
     def __init__(self, model, hidden_dim=None, prefix="auto"):
         self.hidden_dim = hidden_dim
         super(AutoIAFNormal, self).__init__(model, prefix)
@@ -664,6 +673,7 @@ class AutoDiscreteParallel(AutoGuide):
     A discrete mean-field guide that learns a latent discrete distribution for
     each discrete site in the model.
     """
+
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
         model = config_enumerate(self.model)
@@ -748,3 +758,99 @@ def mean_field_guide_entropy(guide, args, whitelist=None):
                 if whitelist is None or name in whitelist:
                     entropy += site["fn"].entropy()
     return entropy
+
+
+class SimpleEncoder(nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_dim):
+        super(SimpleEncoder, self).__init__()
+        # setup the three linear transformations used
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc31 = nn.Linear(hidden_dim, output_dim)
+        self.fc32 = nn.Linear(hidden_dim, output_dim)
+        # setup the non-linearities
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        # define the forward computation on the image x
+        x = x.reshape(-1, 1).squeeze(0)
+        # then compute the hidden units
+        hidden = self.relu(self.fc1(x))
+        hidden = self.relu(self.fc2(hidden))
+        # then return a mean vector and a log(sqrt(covar))
+        # each of size batch_size x z_dim
+        z_loc = self.fc31(hidden)
+        z_lg_scale = self.fc32(hidden)
+
+        return z_loc, z_lg_scale
+
+
+class AutoAutoregressiveNormal(AutoContinuous):
+    """
+    This implementation of :class:`AutoContinuous` uses a Cholesky
+    factorization of a Multivariate Normal distribution to construct a guide
+    over the entire latent space. The guide does not depend on the model's
+    ``*args, **kwargs``.
+
+    Usage::
+
+        guide = AutoMultivariateNormal(model)
+        svi = SVI(model, guide, ...)
+
+    By default the mean vector is initialized to zero and the Cholesky factor
+    is initialized to the identity.  To change this default behavior the user
+    should call :func:`pyro.param` before beginning inference, e.g.::
+
+        latent_dim = 10
+        pyro.param("auto_loc", torch.randn(latent_dim))
+        pyro.param("auto_scale_tril", torch.tril(torch.rand(latent_dim)),
+                   constraint=constraints.lower_cholesky)
+    """
+
+    def __call__(self, *args, **kwargs):
+        if self.prototype_trace is None:
+            self._setup_prototype(*args, **kwargs)
+
+            # Create the NNs to regress the values of each variable's parents to its params
+            # NOTE: The 0th variable has no parents, hence no NN
+            self.nns = nn.ModuleList()
+            for idx in range(1, self.latent_dim):
+                self.nns.append(SimpleEncoder(input_dim=idx, output_dim=1, hidden_dim=32))
+
+        return super(AutoAutoregressiveNormal, self).__call__(*args, **kwargs)
+
+    def sample_latent(self, *args, **kwargs):
+        """
+        Samples an encoded latent given the same ``*args, **kwargs`` as the
+        base ``model``.
+        """
+        unconstrained_samples = []
+
+        # Sample the first variable that doesn't use a NN
+        z0_loc = pyro.param('z0_loc', torch.tensor(0.05))
+        z0_lg_scale = pyro.param('z1_lg_scale', torch.tensor(0.0))
+        unconstrained_samples.append(
+            pyro.sample(
+                'z0',
+                dist.Normal(
+                    z0_loc,
+                    torch.exp(z0_lg_scale)),
+                infer={
+                    'is_auxiliary': True}))
+
+        # Sample the rest that do
+        for idx in range(1, self.latent_dim):
+            pyro.module(f"{self.prefix}_{idx}_encoder", self.nns[-1])
+            z_prev = torch.stack(unconstrained_samples[:idx], dim=-1)
+            z_loc, z_lg_scale = self.nns[idx - 1](z_prev)
+            unconstrained_samples.append(
+                pyro.sample(
+                    f'z{idx}', dist.Normal(
+                        z_loc.view_as(
+                            unconstrained_samples[0]), torch.exp(
+                            z_lg_scale.view_as(
+                                unconstrained_samples[0]))), infer={
+                        'is_auxiliary': True}))
+
+        pos_dist = dist.Delta(v=torch.stack(unconstrained_samples, dim=-1), event_dim=1)
+        return pyro.sample("_{}_latent".format(self.prefix), pos_dist, infer={"is_auxiliary": True})
