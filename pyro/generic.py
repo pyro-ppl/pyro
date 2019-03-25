@@ -73,8 +73,8 @@ _ALIASES = {
         'distributions': 'funsor.distributions',
     },
     'numpy': {
-        'pyro': 'numpyro.minipyro',
-        'distributions': 'numpyro.distributions',
+        'pyro': 'numpyro.compat.minipyro',
+        'distributions': 'numpyro.compat.distributions',
     },
 }
 
