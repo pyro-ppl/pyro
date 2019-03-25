@@ -25,7 +25,7 @@ class DeepSigmoidalFlow(TransformModule):
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> arn = AutoRegressiveNN(10, [40], param_dims=[16]*3)
     >>> naf = DeepSigmoidalFlow(arn, hidden_units=16)
-    >>> naf_module = pyro.module("my_naf", naf.module)
+    >>> naf_module = pyro.module("my_naf", naf)
     >>> naf_dist = dist.TransformedDistribution(base_dist, [naf])
     >>> naf_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
