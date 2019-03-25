@@ -31,25 +31,20 @@ def main(args):
         guide_scale = pyro.param("guide_scale_log", torch.tensor(0.)).exp()
         pyro.sample("loc", dist.Normal(guide_loc, guide_scale))
 
-    # Because the API in minipyro matches that of Pyro proper, this
-    # example code works with generic Pyro implementations.
+    # Generate some data.
+    torch.manual_seed(0)
+    data = torch.randn(100) + 3.0
+
+    # Because the API in minipyro matches that of Pyro proper,
+    # training code works with generic Pyro implementations.
     with backend(args.backend):
-        # Work around small differences in interface.
-        if args.backend == "minipyro":
-            elbo = infer.elbo
-        else:
-            elbo = infer.Trace_ELBO()
-
-        # Generate some data.
-        torch.manual_seed(0)
-        data = torch.randn(100) + 3.0
-        pyro.get_param_store().clear()
-
         # Construct an SVI object so we can do variational inference on our
-        # model/guide pair.
+        # model/guide pair. We work around small differences in elbo interface.
+        elbo = infer.elbo if args.backend == "minipyro" else infer.Trace_ELBO()
         svi = infer.SVI(model, guide, optim.Adam({"lr": args.learning_rate}), elbo)
 
         # Basic training loop
+        pyro.get_param_store().clear()
         for step in range(args.num_steps):
             loss = svi.step(data)
             if step % 100 == 0:
