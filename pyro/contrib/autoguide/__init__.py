@@ -775,7 +775,7 @@ class SimpleEncoder(nn.Module):
         # define the forward computation on the image x
         if len(x.size()) == 0:
             x = x.unsqueeze(-1)
-        #else:
+        # else:
         #    x = x.reshape(-1, 1).squeeze(0)
         # then compute the hidden units
         hidden = self.relu(self.fc1(x))
@@ -837,13 +837,13 @@ class AutoAutoregressiveNormal(AutoContinuous):
                 'z0',
                 dist.Normal(
                     z0_loc,
-                    torch.exp(z0_lg_scale)+1e-8),
+                    torch.exp(z0_lg_scale) + 1e-8),
                 infer={
                     'is_auxiliary': True}))
 
         # Sample the rest that do
         for idx in range(1, self.latent_dim):
-            pyro.module(f"{self.prefix}_{idx}_encoder", self.nns[idx-1])
+            pyro.module(f"{self.prefix}_{idx}_encoder", self.nns[idx - 1])
             z_prev = torch.stack(unconstrained_samples[:idx], dim=-1)
             z_loc, z_lg_scale = self.nns[idx - 1](z_prev)
             unconstrained_samples.append(
@@ -852,7 +852,7 @@ class AutoAutoregressiveNormal(AutoContinuous):
                         z_loc.view_as(
                             unconstrained_samples[0]), torch.exp(
                             z_lg_scale.view_as(
-                                unconstrained_samples[0]))+1e-8), infer={
+                                unconstrained_samples[0])) + 1e-8), infer={
                         'is_auxiliary': True}))
 
         pos_dist = dist.Delta(v=torch.stack(unconstrained_samples, dim=-1), event_dim=1)
