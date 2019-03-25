@@ -317,7 +317,7 @@ class NUTS(HMC):
             tree_depth = 0
             while tree_depth < self._max_tree_depth:
                 direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
-                                        dist.Bernoulli(probs=torch.ones(1) * 0.5))
+                                        dist.Bernoulli(probs=tree_weight.new_tensor(0.5)))
                 direction = int(direction.item())
                 if direction == 1:  # go to the right, start from the right leaf of current tree
                     new_tree = self._build_tree(z_right, r_right, z_right_grads, log_slice,

@@ -64,8 +64,8 @@ def test_expand(sample_shape, batch_shape, event_shape):
         with pytest.raises(ValueError):
             base_dist.to_event(len(event_shape)).expand(batch_shape)
     else:
-            expanded = base_dist.to_event(len(event_shape)).expand(batch_shape)
-            assert expanded.batch_shape == batch_shape
-            assert expanded.event_shape == (base_dist.batch_shape[len(base_dist.batch_shape) -
-                                                                  expanded.reinterpreted_batch_ndims:] +
-                                            base_dist.event_shape)
+        expanded = base_dist.to_event(len(event_shape)).expand(batch_shape)
+        assert expanded.batch_shape == batch_shape
+        assert expanded.event_shape == (base_dist.batch_shape[len(base_dist.batch_shape) -
+                                                              expanded.reinterpreted_batch_ndims:] +
+                                        base_dist.event_shape)
