@@ -17,27 +17,28 @@ from pyro.generic import infer, optim, pyro
 
 
 def main(args):
+    # Define a basic model with a single Normal latent random variable `loc`
+    # and a batch of Normally distributed observations.
+    def model(data):
+        loc = pyro.sample("loc", dist.Normal(0., 1.))
+        with pyro.plate("data", len(data), dim=-1):
+            pyro.sample("obs", dist.Normal(loc, 1.), obs=data)
+
+    # Define a guide (i.e. variational distribution) with a Normal
+    # distribution over the latent random variable `loc`.
+    def guide(data):
+        guide_loc = pyro.param("guide_loc", torch.tensor(0.))
+        guide_scale = pyro.param("guide_scale_log", torch.tensor(0.)).exp()
+        pyro.sample("loc", dist.Normal(guide_loc, guide_scale))
+
     # Because the API in minipyro matches that of Pyro proper, this
-    # example code works with both implementations.
-    with backend('pyro' if args.full_pyro else 'minipyro'):
-        if args.full_pyro:
-            elbo = infer.Trace_ELBO()
-        else:
+    # example code works with generic Pyro implementations.
+    with backend(args.backend):
+        # Work around small differences in interface.
+        if args.backend == "minipyro":
             elbo = infer.elbo
-
-        # Define a basic model with a single Normal latent random variable `loc`
-        # and a batch of Normally distributed observations.
-        def model(data):
-            loc = pyro.sample("loc", dist.Normal(0., 1.))
-            with pyro.plate("data", len(data), dim=-1):
-                pyro.sample("obs", dist.Normal(loc, 1.), obs=data)
-
-        # Define a guide (i.e. variational distribution) with a Normal
-        # distribution over the latent random variable `loc`.
-        def guide(data):
-            guide_loc = pyro.param("guide_loc", torch.tensor(0.))
-            guide_scale = pyro.param("guide_scale_log", torch.tensor(0.)).exp()
-            pyro.sample("loc", dist.Normal(guide_loc, guide_scale))
+        else:
+            elbo = infer.Trace_ELBO()
 
         # Generate some data.
         torch.manual_seed(0)
@@ -68,7 +69,7 @@ def main(args):
 if __name__ == "__main__":
     assert pyro.__version__.startswith('0.3.1')
     parser = argparse.ArgumentParser(description="Mini Pyro demo")
-    parser.add_argument("-f", "--full-pyro", action="store_true", default=False)
+    parser.add_argument("-b", "--backend", default="minipyro")
     parser.add_argument("-n", "--num-steps", default=1001, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.02, type=float)
     args = parser.parse_args()
