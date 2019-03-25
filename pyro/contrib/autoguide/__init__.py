@@ -25,6 +25,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.util import hessian
+from pyro.contrib.autoguide.autoregressive import AutoAutoregressiveNormal
 from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
@@ -44,6 +45,7 @@ __all__ = [
     'AutoGuide',
     'AutoGuideList',
     'AutoIAFNormal',
+    'AutoAutoregressiveNormal',
     'AutoLaplaceApproximation',
     'AutoLowRankMultivariateNormal',
     'AutoMultivariateNormal',
