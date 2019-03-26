@@ -596,7 +596,7 @@ class AutoIAFNormal(AutoContinuous):
         iaf = dist.InverseAutoregressiveFlow(AutoRegressiveNN(self.latent_dim, [self.hidden_dim]))
         pyro.module("{}_iaf".format(self.prefix), iaf, update_module_params=True)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
-        return iaf_dist.to_event(1)
+        return iaf_dist
 
 
 class AutoLaplaceApproximation(AutoContinuous):

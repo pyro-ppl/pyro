@@ -49,25 +49,23 @@ class PlanarFlow(TransformModule):
 
     """
 
+    domain = constraints.real
     codomain = constraints.real
+    bijective = True
+    event_dim = 1
 
     def __init__(self, input_dim):
-        super(PlanarFlow, self).__init__()
+        super(PlanarFlow, self).__init__(cache_size=1)
 
         self.input_dim = input_dim
         self.lin = nn.Linear(input_dim, 1)
         self.u = nn.Parameter(torch.Tensor(input_dim))
         self.reset_parameters()
-        self._intermediates_cache = {}
-        self.add_inverse_to_cache = True
 
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.u.size(0))
         self.lin.weight.data.uniform_(-stdv, stdv)
         self.u.data.uniform_(-stdv, stdv)
-
-    def __hash__(self):
-        return super(nn.Module, self).__hash__()
 
     # This method ensures that torch(u_hat, w) > -1, required for invertibility
     def u_hat(self):
@@ -87,8 +85,6 @@ class PlanarFlow(TransformModule):
         """
 
         y = x + self.u_hat() * torch.tanh(self.lin(x))
-
-        self._add_intermediate_to_cache(x, y, 'x')
         return y
 
     def _inverse(self, y):
@@ -100,20 +96,8 @@ class PlanarFlow(TransformModule):
         `y`; rather it assumes `y` is the result of a previously computed application of the bijector
         to some `x` (which was cached on the forward call)
         """
-        if (y, 'x') in self._intermediates_cache:
-            x = self._intermediates_cache.pop((y, 'x'))
-            return x
-        else:
-            raise KeyError("PlanarFlow expected to find "
-                           "key in intermediates cache but didn't")
 
-    def _add_intermediate_to_cache(self, intermediate, y, name):
-        """
-        Internal function used to cache intermediate results computed during the forward call
-        """
-        assert((y, name) not in self._intermediates_cache),\
-            "key collision in _add_intermediate_to_cache"
-        self._intermediates_cache[(y, name)] = intermediate
+        raise KeyError("PlanarFlow expected to find key in intermediates cache but didn't")
 
     def log_abs_det_jacobian(self, x, y):
         """
@@ -121,6 +105,5 @@ class PlanarFlow(TransformModule):
         """
         psi_z = (1 - torch.tanh(self.lin(x)).pow(2)) * self.lin.weight
 
-        # TODO: Simplify following line once using multivariate base distributions for multivariate flows
-        return torch.log(torch.abs(1 + torch.matmul(psi_z, self.u_hat())).unsqueeze(-1)) * \
-            torch.ones_like(x) / x.size(-1)
+        return (torch.log(torch.abs(1 + torch.matmul(psi_z, self.u_hat())).unsqueeze(-1)) *
+                torch.ones_like(x) / x.size(-1)).sum(-1)

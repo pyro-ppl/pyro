@@ -226,6 +226,15 @@ continuous_dists = [
                  'test_data': [[1.0], [2.0]]}
             ],
             scipy_arg_fn=lambda loc, concentration: ((), {"loc": np.array(loc), "kappa": np.array(concentration)})),
+    Fixture(pyro_dist=dist.LKJCorrCholesky,
+            examples=[
+                {'d': 3, 'eta': [1.], 'test_data':
+                    [[[1.0000,  0.0000,  0.0000], [-0.8221,  0.5693,  0.0000], [0.7655,  0.1756,  0.6190]],
+                     [[1.0000,  0.0000,  0.0000], [-0.5345,  0.8451,  0.0000], [-0.5459, -0.3847,  0.7444]],
+                     [[1.0000,  0.0000,  0.0000], [-0.3758,  0.9267,  0.0000], [-0.2409,  0.4044,  0.8823]],
+                     [[1.0000,  0.0000,  0.0000], [-0.8800,  0.4750,  0.0000], [-0.9493,  0.1546,  0.2737]],
+                     [[1.0000,  0.0000,  0.0000], [0.2284,  0.9736,  0.0000], [-0.1283,  0.0451,  0.9907]]]},
+                ]),
 ]
 
 discrete_dists = [
@@ -326,6 +335,32 @@ discrete_dists = [
             scipy_arg_fn=None,
             prec=0.05,
             min_samples=10000,
+            is_discrete=True),
+    Fixture(pyro_dist=dist.DirichletMultinomial,
+            examples=[
+                {'concentration': [0.1, 0.6, 0.3],
+                 'test_data': [0., 1., 0.]},
+                {'concentration': [0.5, 1.0, 2.0], 'total_count': 8,
+                 'test_data': [0., 2., 6.]},
+                {'concentration': [[0.5, 1.0, 2.0], [3., 3., 0.1]], 'total_count': 8,
+                 'test_data': [[0., 2., 6.], [5., 2., 1.]]},
+            ],
+            prec=0.08,
+            is_discrete=True),
+    Fixture(pyro_dist=dist.GammaPoisson,
+            examples=[
+                {'concentration': [1.], 'rate': [2.],
+                 'test_data': [0.]},
+                {'concentration': [1.], 'rate': [2.],
+                 'test_data': [1.]},
+                {'concentration': [1.], 'rate': [2.],
+                 'test_data': [4.]},
+                {'concentration': [1., 1., 1.], 'rate': [2., 2., 3.],
+                 'test_data': [[0., 1., 4.], [0., 1., 4.]]},
+                {'concentration': [[1.0], [1.0], [1.0]], 'rate': [[2.0], [2.0], [3.0]],
+                 'test_data': [[0.], [1.], [4.]]}
+            ],
+            prec=0.08,
             is_discrete=True),
     Fixture(pyro_dist=dist.OneHotCategorical,
             scipy_dist=sp.multinomial,

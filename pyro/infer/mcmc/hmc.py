@@ -408,7 +408,8 @@ class HMC(TraceKernel):
             accept_prob = delta_energy.new_tensor(0.0)
         else:
             accept_prob = (-delta_energy).exp().clamp(max=1.)
-        rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(torch.zeros(1), torch.ones(1)))
+        rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(accept_prob.new_tensor(0.),
+                                                                     accept_prob.new_tensor(1.)))
         if rand < accept_prob:
             self._accept_cnt += 1
             z = z_new

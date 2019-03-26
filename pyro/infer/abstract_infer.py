@@ -10,6 +10,7 @@ from six import add_metaclass
 import pyro.poutine as poutine
 from pyro.distributions import Categorical, Empirical
 from pyro.ops.stats import waic
+from .util import site_is_subsample
 
 
 class EmpiricalMarginal(Empirical):
@@ -51,8 +52,11 @@ class EmpiricalMarginal(Empirical):
         samples_by_chain = []
         weights_by_chain = []
         for i in range(num_chains):
-            samples_by_chain.append(torch.stack(self._samples_buffer[i], dim=0))
-            weights_by_chain.append(torch.stack(self._weights_buffer[i], dim=0))
+            samples = torch.stack(self._samples_buffer[i], dim=0)
+            samples_by_chain.append(samples)
+            weights_dtype = samples.dtype if samples.dtype.is_floating_point else torch.float32
+            weights = torch.as_tensor(self._weights_buffer[i], device=samples.device, dtype=weights_dtype)
+            weights_by_chain.append(weights)
         if len(samples_by_chain) == 1:
             return samples_by_chain[0], weights_by_chain[0]
         else:
@@ -73,14 +77,10 @@ class EmpiricalMarginal(Empirical):
             in ``[0, num_chains - 1]``, and there must be equal number
             of samples per chain.
         """
-        weight_type = value.new_empty(1).float().type() if value.dtype in (torch.int32, torch.int64) \
-            else value.type()
         # Apply default weight of 1.0.
         if log_weight is None:
-            log_weight = torch.tensor(0.0).type(weight_type)
-        if isinstance(log_weight, numbers.Number):
-            log_weight = torch.tensor(log_weight).type(weight_type)
-        if self._validate_args and log_weight.dim() > 0:
+            log_weight = 0.0
+        if self._validate_args and not isinstance(log_weight, numbers.Number) and log_weight.dim() > 0:
             raise ValueError("``weight.dim() > 0``, but weight should be a scalar.")
 
         # Append to the buffer list
@@ -296,13 +296,34 @@ class TracePredictive(TracePosterior):
     def _traces(self, *args, **kwargs):
         if not self.posterior.exec_traces:
             self.posterior.run(*args, **kwargs)
+        data_trace = poutine.trace(self.model).get_trace(*args, **kwargs)
         for _ in range(self.num_samples):
-            model_trace = self.posterior()
-            replayed_trace = poutine.trace(poutine.replay(self.model, model_trace)).get_trace(*args, **kwargs)
-            yield (replayed_trace, 0., 0)
+            model_trace = self.posterior().copy()
+            self._adjust_to_data(model_trace, data_trace)
+            resampled_trace = poutine.trace(poutine.replay(self.model, model_trace)).get_trace(*args, **kwargs)
+            yield (resampled_trace, 0., 0)
+
+    def _adjust_to_data(self, trace, data_trace):
+        for name, site in list(trace.nodes.items()):
+            # Adjust subsample sites
+            if site_is_subsample(site):
+                site["fn"] = data_trace.nodes[name]["fn"]
+                site["value"] = data_trace.nodes[name]["value"]
+            # Adjust sites under conditionally independent stacks
+            try:
+                site["cond_indep_stack"] = data_trace.nodes[name]["cond_indep_stack"]
+                site["fn"] = data_trace.nodes[name]["fn"]
+                for cis in site["cond_indep_stack"]:
+                    # Select random sub-indices to replay values under conditionally independent stacks.
+                    # Otherwise, we assume there is an dependence of indexes between training data
+                    # and prediction data.
+                    subidxs = Categorical(logits=site["value"].new_ones(site["value"].size(cis.dim))).sample([cis.size])
+                    site["value"] = site["value"].index_select(cis.dim, subidxs)
+            except KeyError:
+                pass
 
     def marginal(self, sites=None):
         """
-        Gets marginal distribution from posterior.
+        Gets marginal distribution for this predictive posterior distribution.
         """
-        return self.posterior.marginal(sites)
+        return Marginals(self, sites)
