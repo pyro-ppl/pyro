@@ -54,7 +54,7 @@ class DeepSigmoidalFlow(TransformModule):
     event_dim = 1
 
     def __init__(self, autoregressive_nn, hidden_units=16):
-        super(DeepSigmoidalFlow, self).__init__()
+        super(DeepSigmoidalFlow, self).__init__(cache_size=1)
         self.arn = autoregressive_nn
         self.hidden_units = hidden_units
 
