@@ -21,6 +21,7 @@ class _CorrCholesky(Constraint):
     Euclidean norm of each row is 1, such that `torch.mm(omega, omega.t())` will
     have unit diagonal.
     """
+
     def check(self, value):
         unit_norm_row = (value.norm(dim=-1).sub(1) < 1e-4).min(-1)[0]
         return constraints.lower_cholesky.check(value) & unit_norm_row
@@ -34,21 +35,21 @@ corr_cholesky_constraint = _CorrCholesky()
 ########################################
 
 def _vector_to_l_cholesky(z):
-    D = (1.0 + math.sqrt(1.0 + 8.0 * z.shape[-1]))/2.0
+    D = (1.0 + math.sqrt(1.0 + 8.0 * z.shape[-1])) / 2.0
     if D % 1 != 0:
         raise ValueError("Correlation matrix transformation requires d choose 2 inputs")
     D = int(D)
     x = z.new_zeros(list(z.shape[:-1]) + [D, D])
 
     x[..., 0, 0] = 1
-    x[..., 1:, 0] = z[..., :(D-1)]
+    x[..., 1:, 0] = z[..., :(D - 1)]
     i = D - 1
     last_squared_x = z.new_zeros(list(z.shape[:-1]) + [D])
     for j in range(1, D):
         distance_to_copy = D - 1 - j
-        last_squared_x = last_squared_x[..., 1:] + x[..., j:, (j-1)].clone()**2
+        last_squared_x = last_squared_x[..., 1:] + x[..., j:, (j - 1)].clone()**2
         x[..., j, j] = (1 - last_squared_x[..., 0]).sqrt()
-        x[..., (j+1):, j] = z[..., i:(i + distance_to_copy)] * (1 - last_squared_x[..., 1:]).sqrt()
+        x[..., (j + 1):, j] = z[..., i:(i + distance_to_copy)] * (1 - last_squared_x[..., 1:]).sqrt()
         i += distance_to_copy
     return x
 
@@ -88,12 +89,12 @@ class CorrLCholeskyTransform(Transform):
         ]
 
         for i in range(2, D):
-            z_tri[..., i - 2, 0:(i-1)] = y[..., i, 1:i] / (1-y[..., i, 0:(i-1)].pow(2).cumsum(-1)).sqrt()
+            z_tri[..., i - 2, 0:(i - 1)] = y[..., i, 1:i] / (1 - y[..., i, 0:(i - 1)].pow(2).cumsum(-1)).sqrt()
         for j in range(D - 2):
             z_stack.append(z_tri[..., j:, j])
 
         z = torch.cat(z_stack, -1)
-        return torch.log1p((2*z)/(1-z)) / 2
+        return torch.log1p((2 * z) / (1 - z)) / 2
 
     def log_abs_det_jacobian(self, x, y):
         # Note dependence on pytorch 1.0.1 for batched tril
@@ -102,6 +103,8 @@ class CorrLCholeskyTransform(Transform):
         return tanpart + matpart
 
 # register transform to global store
+
+
 @biject_to.register(corr_cholesky_constraint)
 @transform_to.register(corr_cholesky_constraint)
 def _transform_to_corr_cholesky(constraint):
@@ -148,9 +151,9 @@ class LKJCorrCholesky(TorchDistribution):
 
         concentrations = eta.new_empty(vector_size,)
         i = 0
-        for k in range(d-1):
+        for k in range(d - 1):
             alpha -= .5
-            concentrations[..., i:(i + d - k-1)] = alpha
+            concentrations[..., i:(i + d - k - 1)] = alpha
             i += d - k - 1
         self._gen = Beta(concentrations, concentrations)
         self.eta = eta
