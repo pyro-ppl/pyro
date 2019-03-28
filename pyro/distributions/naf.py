@@ -1,6 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import time
 import math
+import sys
 
 import torch
 import torch.nn as nn
@@ -86,7 +88,18 @@ class DeepSigmoidalFlow(TransformModule):
         A = F.softplus(A)
         C = A * x.unsqueeze(-2) + b
         W = F.softmax(W_pre, dim=-2)
-        D = (W * self.safe_sigmoid(C)).sum(dim=-2)
+
+        start = time.time()
+        for i in range(100000):
+          #print('W', W.size(), 'self.safe_sigmoid(C)', self.safe_sigmoid(C).size())
+          D = torch.einsum('...bc,...bc->...c', W, self.safe_sigmoid(C))
+          #sys.exit()
+        print('einsum', (time.time() - start)/60.)
+        
+        start = time.time()
+        for i in range(100000):
+          D = (W * self.safe_sigmoid(C)).sum(dim=-2)
+        print('naive', (time.time() - start)/60.)
 
         # The use of a special sigmoid here is so that logit doesn't overflow
         # NOTE: Element-wise multiplication by W then summing over second-last dim is equivalent to
