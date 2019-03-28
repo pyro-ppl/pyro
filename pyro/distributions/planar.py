@@ -29,7 +29,7 @@ class PlanarFlow(TransformModule):
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> plf = PlanarFlow(10)
-    >>> plf_module = pyro.module("my_plf", plf)
+    >>> pyro.module("my_plf", plf)
     >>> plf_dist = dist.TransformedDistribution(base_dist, [plf])
     >>> plf_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
