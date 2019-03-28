@@ -30,7 +30,7 @@ class GenericModule(object):
 
 
 @contextmanager
-def backend(*aliases, **new_backends):
+def pyro_backend(*aliases, **new_backends):
     """
     Context manager to set a custom backend for Pyro models.
 
