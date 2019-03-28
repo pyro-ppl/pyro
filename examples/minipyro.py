@@ -39,9 +39,10 @@ def main(args):
     # training code works with generic Pyro implementations.
     with backend(args.backend):
         # Construct an SVI object so we can do variational inference on our
-        # model/guide pair. We work around small differences in elbo interface.
-        elbo = infer.elbo if args.backend == "minipyro" else infer.Trace_ELBO()
-        svi = infer.SVI(model, guide, optim.Adam({"lr": args.learning_rate}), elbo)
+        # model/guide pair.
+        elbo = infer.Trace_ELBO()
+        adam = optim.Adam({"lr": args.learning_rate})
+        svi = infer.SVI(model, guide, adam, elbo)
 
         # Basic training loop
         pyro.get_param_store().clear()
