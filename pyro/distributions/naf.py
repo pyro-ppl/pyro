@@ -57,6 +57,10 @@ class DeepSigmoidalFlow(TransformModule):
         super(DeepSigmoidalFlow, self).__init__(cache_size=1)
         self.arn = autoregressive_nn
         self.hidden_units = hidden_units
+        self._cached_A = None
+        self._cached_C = None
+        self._cached_D = None
+        self._cached_W_pre = None
 
         # Not entirely sure this is necessary, but copying from NAF paper's implementation
         self.safe_log = lambda x: torch.log(x * 1e2) - math.log(1e2)
@@ -76,17 +80,23 @@ class DeepSigmoidalFlow(TransformModule):
         sample from the base distribution (or the output of a previous flow)
         """
         # A, W, b ~ batch_shape x hidden_units x event_shape
-        A, W, b = self.arn(x)
+        A, W_pre, b = self.arn(x)
 
         # Divide the autoregressive output into the component activations
         A = F.softplus(A)
-        W = F.softmax(W, dim=-2)
+        C = A * x.unsqueeze(-2) + b
+        W = F.softmax(W_pre, dim=-2)
+        D = (W * self.safe_sigmoid(C)).sum(dim=-2)
 
         # The use of a special sigmoid here is so that logit doesn't overflow
         # NOTE: Element-wise multiplication by W then summing over second-last dim is equivalent to
         # dot-product over cols (or rows?) and cols (or rows?) of sigmoid term
         # The unsqueeze on `x` is so that A * x.unsqueeze(-2) broadcasts correctly over hidden_units dimension
-        y = self.safe_logit(torch.sum(W * self.safe_sigmoid(A * x.unsqueeze(-2) + b), dim=-2))
+        y = self.safe_logit(D)
+        self._cached_W_pre = W_pre
+        self._cached_A = A
+        self._cached_C = C
+        self._cached_D = D
         return y
 
     # This method returns log(abs(det(dy/dx)), which is equal to -log(abs(det(dx/dy))
@@ -94,13 +104,11 @@ class DeepSigmoidalFlow(TransformModule):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        A, W_pre, b = self.arn(x)
-
-        A = F.softplus(A)
-        W = F.softmax(W_pre, dim=-2)
-
-        C = A * x.unsqueeze(-2) + b
-        D = (W * self.safe_sigmoid(C)).sum(dim=-2)
+        # Need W_pre, A, C, D
+        W_pre = self._cached_W_pre
+        A = self._cached_A
+        C = self._cached_C
+        D = self._cached_D
 
         # See C.1 of Huang Et Al. for a derivation of this
         # NOTE: Since safe_logit is mathematically the same as logit, this line doesn't need any modification
