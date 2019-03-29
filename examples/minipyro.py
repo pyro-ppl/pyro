@@ -11,7 +11,7 @@ import argparse
 import torch
 
 # We use the pyro.generic interface to support dynamic choice of backend.
-from pyro.generic import backend
+from pyro.generic import pyro_backend
 from pyro.generic import distributions as dist
 from pyro.generic import infer, optim, pyro
 
@@ -37,11 +37,12 @@ def main(args):
 
     # Because the API in minipyro matches that of Pyro proper,
     # training code works with generic Pyro implementations.
-    with backend(args.backend):
+    with pyro_backend(args.backend):
         # Construct an SVI object so we can do variational inference on our
-        # model/guide pair. We work around small differences in elbo interface.
-        elbo = infer.elbo if args.backend == "minipyro" else infer.Trace_ELBO()
-        svi = infer.SVI(model, guide, optim.Adam({"lr": args.learning_rate}), elbo)
+        # model/guide pair.
+        elbo = infer.Trace_ELBO()
+        adam = optim.Adam({"lr": args.learning_rate})
+        svi = infer.SVI(model, guide, adam, elbo)
 
         # Basic training loop
         pyro.get_param_store().clear()
