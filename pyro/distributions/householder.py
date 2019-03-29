@@ -24,9 +24,9 @@ class HouseholderFlow(TransformModule):
     origin with normal :math:`\\mathbf{u}`. Together with `TransformedDistribution` this provides a way to
     create richer variational approximations.
 
-    :math:`D` applications of this transformation are able to transform standard i.i.d. Gaussian noise into a
-    variable with an arbitrary multivariate Gaussian distribution. With :math:`K<D` transformations, one is able
-    to approximate a full-rank multivariate Gaussian.
+    :math:`D` applications of this transformation are able to transform standard i.i.d. standard Gaussian noise
+    into a Gaussian variable with an arbitrary covariance matrix. With :math:`K<D` transformations, one is able
+    to approximate a full-rank covariance Gaussian distribution.
 
     Example usage:
 
