@@ -73,8 +73,8 @@ class HouseholderFlow(TransformModule):
         sample from the base distribution (or the output of a previous flow)
         """
 
-        squared_norm = self.u.pow(2).sum(-1, keepdim=True)
-        projection = (self.u * x).sum(dim=-1) * self.u / squared_norm
+        squared_norm = self.u.pow(2).sum(-1)
+        projection = (self.u * x).sum(dim=-1, keepdim=True) * self.u / squared_norm
         y = x - 2. * projection
         return y
 
