@@ -28,6 +28,10 @@ PYRO_STACK = []
 PARAM_STORE = {}
 
 
+def get_param_store():
+    return PARAM_STORE
+
+
 # The base effect handler class (called Messenger here for consistency with Pyro).
 class Messenger(object):
     def __init__(self, fn=None):
@@ -124,7 +128,6 @@ class PlateMessenger(Messenger):
 # apply_stack is called by pyro.sample and pyro.param.
 # It is responsible for applying each Messenger to each effectful operation.
 def apply_stack(msg):
-    print('Inside apply_stack')
     for pointer, handler in enumerate(reversed(PYRO_STACK)):
         handler.process_message(msg)
         # When a Messenger sets the "stop" field of a message,
@@ -137,7 +140,7 @@ def apply_stack(msg):
     # A Messenger that sets msg["stop"] == True also prevents application
     # of postprocess_message by Messengers above it on the stack
     # via the pointer variable from the process_message loop
-    for handler in PYRO_STACK[-pointer - 1:]:
+    for handler in PYRO_STACK[-pointer-1:]:
         handler.postprocess_message(msg)
     return msg
 
@@ -241,7 +244,6 @@ class SVI(object):
             # We use block here to allow tracing to record parameters only.
             with block(hide_fn=lambda msg: msg["type"] == "sample"):
                 loss = self.loss(self.model, self.guide, *args, **kwargs)
-
         # Differentiate the loss.
         loss.backward()
         # Grab all the parameters from the trace.
@@ -263,11 +265,7 @@ class SVI(object):
 def elbo(model, guide, *args, **kwargs):
     # Run the guide with the arguments passed to SVI.step() and trace the execution,
     # i.e. record all the calls to Pyro primitives like sample() and param().
-    print('Inside elbo')
-
-    # .get_trace runs stochastic function
     guide_trace = trace(guide).get_trace(*args, **kwargs)
-
     # Now run the model with the same arguments and trace the execution. Because
     # model is being run with replay, whenever we encounter a sample site in the
     # model, instead of sampling from the corresponding distribution in the model,
