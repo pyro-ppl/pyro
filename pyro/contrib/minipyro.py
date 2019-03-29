@@ -27,9 +27,6 @@ import torch
 PYRO_STACK = []
 PARAM_STORE = {}
 
-def get_param_store():
-    return PARAM_STORE
-
 
 # The base effect handler class (called Messenger here for consistency with Pyro).
 class Messenger(object):
