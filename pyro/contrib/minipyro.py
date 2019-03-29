@@ -13,7 +13,6 @@ found at examples/minipyro.py.
 """
 from __future__ import absolute_import, division, print_function
 
-import sys
 from collections import OrderedDict
 
 import torch
@@ -27,18 +26,6 @@ import torch
 
 PYRO_STACK = []
 PARAM_STORE = {}
-
-# Print the state of Pyro
-
-
-def print_state(exit=True):
-    print('Pyro Stack')
-    print(PYRO_STACK)
-    print('Parameter Store')
-    print(PARAM_STORE)
-    if exit:
-        sys.exit()
-
 
 def get_param_store():
     return PARAM_STORE
@@ -142,9 +129,6 @@ class PlateMessenger(Messenger):
 def apply_stack(msg):
     print('Inside apply_stack')
     for pointer, handler in enumerate(reversed(PYRO_STACK)):
-        print('pointer', pointer, 'handler', handler)
-        print('msg', msg)
-        sys.exit()
         handler.process_message(msg)
         # When a Messenger sets the "stop" field of a message,
         # it prevents any Messengers above it on the stack from being applied.
@@ -259,10 +243,8 @@ class SVI(object):
         with trace() as param_capture:
             # We use block here to allow tracing to record parameters only.
             with block(hide_fn=lambda msg: msg["type"] == "sample"):
-                print('Before loss')
                 loss = self.loss(self.model, self.guide, *args, **kwargs)
 
-                # print_state()
         # Differentiate the loss.
         loss.backward()
         # Grab all the parameters from the trace.
@@ -286,10 +268,8 @@ def elbo(model, guide, *args, **kwargs):
     # i.e. record all the calls to Pyro primitives like sample() and param().
     print('Inside elbo')
 
-    # print_state()
     # .get_trace runs stochastic function
     guide_trace = trace(guide).get_trace(*args, **kwargs)
-    print_state()
 
     # Now run the model with the same arguments and trace the execution. Because
     # model is being run with replay, whenever we encounter a sample site in the
