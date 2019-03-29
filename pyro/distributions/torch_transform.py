@@ -10,8 +10,8 @@ class TransformModule(torch.distributions.Transform, torch.nn.Module):
 
     """
 
-    def __init__(self):
-        super(TransformModule, self).__init__()
+    def __init__(self, *args, **kwargs):
+        super(TransformModule, self).__init__(*args, **kwargs)
 
     def __hash__(self):
         return super(torch.nn.Module, self).__hash__()

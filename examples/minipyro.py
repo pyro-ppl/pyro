@@ -67,7 +67,7 @@ def main(args):
 
 if __name__ == "__main__":
     import pyro
-    assert pyro.__version__.startswith('0.3.0')
+    assert pyro.__version__.startswith('0.3.1')
     parser = argparse.ArgumentParser(description="Mini Pyro demo")
     parser.add_argument("-f", "--full-pyro", action="store_true", default=False)
     parser.add_argument("-n", "--num-steps", default=1001, type=int)

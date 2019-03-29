@@ -1,27 +1,23 @@
 from __future__ import absolute_import, division, print_function
 
-import errno
 import json
 import logging
 import signal
-import socket
-import sys
 import threading
 import warnings
 from collections import OrderedDict
 
 import six
-from six.moves import queue
 import torch
 import torch.multiprocessing as mp
+from six.moves import queue
 
 import pyro
+import pyro.ops.stats as stats
 from pyro.infer import TracePosterior
 from pyro.infer.abstract_infer import Marginals
-from pyro.infer.mcmc.logger import initialize_logger, initialize_progbar, DIAGNOSTIC_MSG, TqdmHandler
-import pyro.ops.stats as stats
+from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
 from pyro.util import optional
-
 
 MAX_SEED = 2**32 - 1
 
@@ -31,8 +27,7 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
     Logging thread that asynchronously consumes logging events from `log_queue`,
     and handles them appropriately.
     """
-    progress_bars = [initialize_progbar(warmup_steps, num_samples, pos=i, disable=disable_progbar)
-                     for i in range(num_chains)]
+    progress_bars = ProgressBar(warmup_steps, num_samples, disable=disable_progbar, num_bars=num_chains)
     logger = logging.getLogger(__name__)
     logger.propagate = False
     logger.addHandler(TqdmHandler())
@@ -51,22 +46,18 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
                 pbar_pos = int(logger_id.split(":")[-1])
                 num_samples[pbar_pos] += 1
                 if num_samples[pbar_pos] == warmup_steps:
-                    progress_bars[pbar_pos].set_description("Sample [{}]".format(pbar_pos + 1))
+                    progress_bars.set_description("Sample [{}]".format(pbar_pos + 1), pos=pbar_pos)
                 diagnostics = json.loads(msg, object_pairs_hook=OrderedDict)
-                progress_bars[pbar_pos].set_postfix(diagnostics)
-                progress_bars[pbar_pos].update()
+                progress_bars.set_postfix(diagnostics, pos=pbar_pos)
+                progress_bars.update(pos=pbar_pos)
             else:
                 logger.handle(record)
     finally:
-        for pbar in progress_bars:
-            pbar.close()
-            # Required to not overwrite multiple progress bars on exit.
-            if not pbar._ipython_env:
-                sys.stderr.write("\n")
+        progress_bars.close()
 
 
 class _Worker(object):
-    def __init__(self, chain_id, result_queue, log_queue,
+    def __init__(self, chain_id, result_queue, log_queue, event,
                  kernel, num_samples, warmup_steps=0,
                  args=None, kwargs=None):
         self.chain_id = chain_id
@@ -74,19 +65,35 @@ class _Worker(object):
                                         disable_progbar=True)
         self.args = args if args is not None else []
         self.kwargs = kwargs if kwargs is not None else {}
-        self.rng_seed = torch.initial_seed()
+        self.rng_seed = (torch.initial_seed() + chain_id) % MAX_SEED
         self.log_queue = log_queue
         self.result_queue = result_queue
         self.default_tensor_type = torch.Tensor().type()
+        self.event = event
 
-    def run(self, *args, **kwargs):
-        pyro.set_rng_seed((self.chain_id + self.rng_seed) % MAX_SEED)
+    def run(self):
+        pyro.set_rng_seed(self.rng_seed)
         torch.set_default_tensor_type(self.default_tensor_type)
+        # XXX we clone CUDA tensor args to resolve the issue "Invalid device pointer"
+        # at https://github.com/pytorch/pytorch/issues/10375
+        args = [arg.clone().detach() if (torch.is_tensor(arg) and arg.is_cuda) else arg for arg in self.args]
+        kwargs = self.kwargs
         kwargs["logger_id"] = "CHAIN:{}".format(self.chain_id)
         kwargs["log_queue"] = self.log_queue
         try:
+            # XXX to make MCMC work on GPU, we need to store generated samples in a list
+            # until this process is terminated or the main process sends a signal to clear
+            # the list.
+            # The following code will make MCMC work in GPU:
+            #
+            # samples = []
+            # for sample in self.trace_gen._traces(*args, **kwargs):
+            #     samples.append(sample)
+            # ...
             for sample in self.trace_gen._traces(*args, **kwargs):
                 self.result_queue.put_nowait((self.chain_id, sample))
+                self.event.wait()
+                self.event.clear()
             self.result_queue.put_nowait((self.chain_id, None))
         except Exception as e:
             self.trace_gen.logger.exception(e)
@@ -121,15 +128,15 @@ class _ParallelSampler(TracePosterior):
                                                  self.num_chains, disable_progbar))
         self.log_thread.daemon = True
         self.log_thread.start()
+        self.events = [self.ctx.Event() for i in range(num_chains)]
 
     def init_workers(self, *args, **kwargs):
         self.workers = []
         for i in range(self.num_chains):
-            worker = _Worker(i, self.result_queue, self.log_queue, self.kernel,
-                             self.num_samples, self.warmup_steps)
+            worker = _Worker(i, self.result_queue, self.log_queue, self.events[i], self.kernel,
+                             self.num_samples, self.warmup_steps, args, kwargs)
             worker.daemon = True
-            self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
-                                                 args=args, kwargs=kwargs))
+            self.workers.append(self.ctx.Process(name=str(i), target=worker.run))
 
     def terminate(self):
         if self.log_thread.is_alive():
@@ -153,13 +160,7 @@ class _ParallelSampler(TracePosterior):
             while active_workers:
                 try:
                     chain_id, val = self.result_queue.get(timeout=5)
-                # This can happen when the worker process has terminated.
-                # See https://github.com/pytorch/pytorch/pull/5380 for motivation.
-                except socket.error as e:
-                    if getattr(e, "errno", None) == errno.ENOENT:
-                        pass
-                    else:
-                        raise e
+                    self.events[chain_id].set()
                 except queue.Empty:
                     continue
                 if isinstance(val, Exception):
@@ -200,7 +201,7 @@ class _SingleSampler(TracePosterior):
         is_multiprocessing = log_queue is not None
         progress_bar = None
         if not is_multiprocessing:
-            progress_bar = initialize_progbar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
+            progress_bar = ProgressBar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
         self.logger = initialize_logger(self.logger, logger_id, progress_bar, log_queue)
         self.kernel.setup(self.warmup_steps, *args, **kwargs)
         trace = self.kernel.initial_trace
