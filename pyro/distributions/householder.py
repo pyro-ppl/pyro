@@ -12,40 +12,40 @@ from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(TransformModule)
-class PlanarFlow(TransformModule):
+class HouseholderFlow(TransformModule):
     """
-    A 'planar' normalizing flow that uses the transformation
+    A single transformation of Householder flow,
 
-        :math:`\\mathbf{y} = \\mathbf{x} + \\mathbf{u}\\tanh(\\mathbf{w}^T\\mathbf{z}+b)`
+        :math:`\\mathbf{y} = (I - 2*\\frac{\\mathbf{u}\\mathbf{u}^T}{||\\mathbf{u}||^2})\\mathbf{x}`
 
     where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, and the learnable parameters
-    are :math:`b\\in\\mathbb{R}`, :math:`\\mathbf{u}\\in\\mathbb{R}^D`, :math:`\\mathbf{w}\\in\\mathbb{R}^D` for input
-    dimension :math:`D`. For this to be an invertible transformation, the condition
-    :math:`\\mathbf{w}^T\\mathbf{u}>-1` is enforced.
+    are :math:`\\mathbf{u}\\in\\mathbb{R}^D` for input dimension :math:`D`.
 
-    Together with `TransformedDistribution` this provides a way to create richer variational approximations.
+    The transformation represents the reflection of :math:`\\mathbf{x}` through the plane passing through the
+    origin with normal :math:`\\mathbf{u}`. Together with `TransformedDistribution` this provides a way to
+    create richer variational approximations.
+
+    :math:`D` applications of this transformation are able to transform standard i.i.d. Gaussian noise into a
+    variable with an arbitrary multivariate Gaussian distribution. With :math:`K<D` transformations, one is able
+    to approximate a full-rank multivariate Gaussian.
 
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> plf = PlanarFlow(10)
-    >>> plf_module = pyro.module("my_plf", plf)
-    >>> plf_dist = dist.TransformedDistribution(base_dist, [plf])
-    >>> plf_dist.sample()  # doctest: +SKIP
+    >>> flows = [HouseholderFlow(10) for _ in range(3)]
+    >>> [pyro.module("my_flow", p) for f in flows] # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, flows)
+    >>> flow_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
-
-    The inverse of this transform does not possess an analytical solution and is left unimplemented. However,
-    the inverse is cached when the forward operation is called during sampling, and so samples drawn using
-    planar flow can be scored.
 
     :param input_dim: the dimension of the input (and output) variable.
     :type input_dim: int
 
     References:
 
-    Variational Inference with Normalizing Flows [arXiv:1505.05770]
-    Danilo Jimenez Rezende, Shakir Mohamed
+    Improving Variational Auto-Encoders using Householder Flow, [arXiv:1611.09630]
+    Tomczak, J. M., & Welling, M.
 
     """
 
@@ -55,25 +55,15 @@ class PlanarFlow(TransformModule):
     event_dim = 1
 
     def __init__(self, input_dim):
-        super(PlanarFlow, self).__init__(cache_size=1)
+        super(HouseholderFlow, self).__init__(cache_size=1)
 
         self.input_dim = input_dim
-        self.lin = nn.Linear(input_dim, 1)
         self.u = nn.Parameter(torch.Tensor(input_dim))
         self.reset_parameters()
 
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.u.size(0))
-        self.lin.weight.data.uniform_(-stdv, stdv)
         self.u.data.uniform_(-stdv, stdv)
-
-    # This method ensures that torch(u_hat, w) > -1, required for invertibility
-    def u_hat(self):
-        u = self.u
-        w = self.lin.weight.squeeze(0)
-        alpha = torch.dot(u, w)
-        a_prime = -1 + F.softplus(alpha)
-        return u + (a_prime - alpha) * w.div(w.norm())
 
     def _call(self, x):
         """
@@ -84,7 +74,9 @@ class PlanarFlow(TransformModule):
         sample from the base distribution (or the output of a previous flow)
         """
 
-        y = x + self.u_hat() * torch.tanh(self.lin(x))
+        squared_norm = self.u.pow(2).sum(-1, keepdim=True)
+        projection = (self.u * x).sum(dim=-1) * self.u / squared_norm
+        y = x - 2. * projection
         return y
 
     def _inverse(self, y):
@@ -97,13 +89,14 @@ class PlanarFlow(TransformModule):
         to some `x` (which was cached on the forward call)
         """
 
-        raise KeyError("PlanarFlow expected to find key in intermediates cache but didn't")
+        # The Householder transformation, H, is "involutory," i.e. H^2 = I
+        # If you reflect a point around a plane, then the same operation will reflect it back
+        return self._call(y)
 
     def log_abs_det_jacobian(self, x, y):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        psi_z = (1 - torch.tanh(self.lin(x)).pow(2)) * self.lin.weight
 
-        return (torch.log(torch.abs(1 + torch.matmul(psi_z, self.u_hat())).unsqueeze(-1)) *
-                torch.ones_like(x) / x.size(-1)).sum(-1)
+        # Householder flow is measure preserving, so log(|detJ|) = 0
+        return torch.zeros(x.size()[:-1])

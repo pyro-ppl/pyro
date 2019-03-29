@@ -81,6 +81,9 @@ class FlowTests(TestCase):
         sample = dist.TransformedDistribution(base_dist, [flow]).sample()
         assert sample.shape == base_shape
 
+    def _make_householder(self, input_dim):
+        return dist.HouseholderFlow(input_dim)
+
     def _make_iaf(self, input_dim):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
         return dist.InverseAutoregressiveFlow(arn)
@@ -108,6 +111,10 @@ class FlowTests(TestCase):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_planar)
 
+    def test_householder_inverses(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_inverse(input_dim, self._make_householder)
+
     def test_iaf_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_inverse(input_dim, self._make_iaf)
@@ -119,6 +126,10 @@ class FlowTests(TestCase):
     def test_permute_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_inverse(input_dim, self._make_permute)
+
+    def test_householder_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_householder)
 
     def test_iaf_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
