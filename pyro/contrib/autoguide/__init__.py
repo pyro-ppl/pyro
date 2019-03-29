@@ -72,6 +72,7 @@ class AutoGuide(object):
     :param callable model: a pyro model
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
+
     def __init__(self, model, prefix="auto"):
         self.master = None
         self.model = model
@@ -140,6 +141,7 @@ class AutoGuideList(AutoGuide):
     :param callable model: a Pyro model
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
+
     def __init__(self, model, prefix="auto"):
         super(AutoGuideList, self).__init__(model, prefix)
         self.parts = []
@@ -232,6 +234,7 @@ class AutoCallable(AutoGuide):
     :param callable median: an optional callable returning a dict mapping
         sample site name to computed median tensor.
     """
+
     def __init__(self, model, guide, median=lambda *args, **kwargs: {}):
         super(AutoCallable, self).__init__(model, prefix="")
         self._guide = guide
@@ -265,6 +268,7 @@ class AutoDelta(AutoGuide):
         pyro.param("auto_concentration", torch.ones(k),
                    constraint=constraints.positive)
     """
+
     def __call__(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
@@ -316,6 +320,7 @@ class AutoContinuous(AutoGuide):
         Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M.
         Blei
     """
+
     def _setup_prototype(self, *args, **kwargs):
         super(AutoContinuous, self)._setup_prototype(*args, **kwargs)
         self._unconstrained_shapes = {}
@@ -456,6 +461,7 @@ class AutoMultivariateNormal(AutoContinuous):
         pyro.param("auto_scale_tril", torch.tril(torch.rand(latent_dim)),
                    constraint=constraints.lower_cholesky)
     """
+
     def get_posterior(self, *args, **kwargs):
         """
         Returns a MultivariateNormal posterior distribution.
@@ -493,6 +499,7 @@ class AutoDiagonalNormal(AutoContinuous):
         pyro.param("auto_scale", torch.ones(latent_dim),
                    constraint=constraints.positive)
     """
+
     def get_posterior(self, *args, **kwargs):
         """
         Returns a diagonal Normal posterior distribution.
@@ -537,6 +544,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
     :param int rank: the rank of the low-rank part of the covariance matrix
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
+
     def __init__(self, model, prefix="auto", rank=1):
         if not isinstance(rank, numbers.Number) or not rank > 0:
             raise ValueError("Expected rank > 0 but got {}".format(rank))
@@ -580,8 +588,10 @@ class AutoIAFNormal(AutoContinuous):
     :param int hidden_dim: number of hidden dimensions in the IAF
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
+
     def __init__(self, model, hidden_dim=None, prefix="auto"):
         self.hidden_dim = hidden_dim
+        self.arn = None
         super(AutoIAFNormal, self).__init__(model, prefix)
 
     def get_posterior(self, *args, **kwargs):
@@ -593,7 +603,10 @@ class AutoIAFNormal(AutoContinuous):
             raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
         if self.hidden_dim is None:
             self.hidden_dim = self.latent_dim
-        iaf = dist.InverseAutoregressiveFlow(AutoRegressiveNN(self.latent_dim, [self.hidden_dim]))
+        if self.arn is None:
+            self.arn = AutoRegressiveNN(self.latent_dim, [self.hidden_dim])
+
+        iaf = dist.InverseAutoregressiveFlow(self.arn)
         pyro.module("{}_iaf".format(self.prefix), iaf)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
         return iaf_dist
@@ -662,6 +675,7 @@ class AutoDiscreteParallel(AutoGuide):
     A discrete mean-field guide that learns a latent discrete distribution for
     each discrete site in the model.
     """
+
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
         model = config_enumerate(self.model)

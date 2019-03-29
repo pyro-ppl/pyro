@@ -277,7 +277,7 @@ class SVI(object):
 # fundamental objective in Variational Inference.
 # See http://pyro.ai/examples/svi_part_i.html for details.
 # This implementation has various limitations (for example it only supports
-# random variablbes with reparameterized samplers), but all the ELBO
+# random variables with reparameterized samplers), but all the ELBO
 # implementations in Pyro share the same basic logic.
 def elbo(model, guide, *args, **kwargs):
     # Run the guide with the arguments passed to SVI.step() and trace the execution,
@@ -312,3 +312,8 @@ def elbo(model, guide, *args, **kwargs):
     # Return (-elbo) since by convention we do gradient descent on a loss and
     # the ELBO is a lower bound that needs to be maximized.
     return -elbo
+
+
+# This is a wrapper for compatibility with full Pyro.
+def Trace_ELBO(*args, **kwargs):
+    return elbo
