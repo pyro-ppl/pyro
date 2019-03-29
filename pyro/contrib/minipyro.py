@@ -29,13 +29,15 @@ PYRO_STACK = []
 PARAM_STORE = {}
 
 # Print the state of Pyro
+
+
 def print_state(exit=True):
-  print('Pyro Stack')
-  print(PYRO_STACK)
-  print('Parameter Store')
-  print(PARAM_STORE)
-  if exit:
-    sys.exit()
+    print('Pyro Stack')
+    print(PYRO_STACK)
+    print('Parameter Store')
+    print(PARAM_STORE)
+    if exit:
+        sys.exit()
 
 
 def get_param_store():
@@ -154,7 +156,7 @@ def apply_stack(msg):
     # A Messenger that sets msg["stop"] == True also prevents application
     # of postprocess_message by Messengers above it on the stack
     # via the pointer variable from the process_message loop
-    for handler in PYRO_STACK[-pointer-1:]:
+    for handler in PYRO_STACK[-pointer - 1:]:
         handler.postprocess_message(msg)
     return msg
 
@@ -259,8 +261,8 @@ class SVI(object):
             with block(hide_fn=lambda msg: msg["type"] == "sample"):
                 print('Before loss')
                 loss = self.loss(self.model, self.guide, *args, **kwargs)
-                
-                #print_state()
+
+                # print_state()
         # Differentiate the loss.
         loss.backward()
         # Grab all the parameters from the trace.
@@ -284,7 +286,7 @@ def elbo(model, guide, *args, **kwargs):
     # i.e. record all the calls to Pyro primitives like sample() and param().
     print('Inside elbo')
 
-    #print_state()
+    # print_state()
     # .get_trace runs stochastic function
     guide_trace = trace(guide).get_trace(*args, **kwargs)
     print_state()
