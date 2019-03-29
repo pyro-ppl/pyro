@@ -39,6 +39,12 @@ ELBO
     :show-inheritance:
     :member-order: bysource
 
+.. automodule:: pyro.infer.trace_tail_adaptive_elbo
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+
 .. automodule:: pyro.infer.renyi_elbo
     :members:
     :undoc-members:

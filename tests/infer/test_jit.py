@@ -12,6 +12,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.ops.jit
 import pyro.poutine as poutine
+from pyro.distributions.util import scale_and_mask
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, JitTraceMeanField_ELBO, Trace_ELBO,
                         TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, infer_discrete)
 from pyro.optim import Adam
@@ -125,6 +126,22 @@ def test_grad_expand():
     f(torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True))
     logger.debug('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
+
+
+def test_scale_and_mask():
+    def f(tensor, scale, mask): return scale_and_mask(tensor, scale=scale, mask=mask)
+
+    x = torch.tensor([-float('inf'), -1., 0., 1., float('inf')])
+    y = x / x.unsqueeze(-1)
+    mask = y == y
+    scale = torch.ones(y.shape)
+    jit_f = torch.jit.trace(f, (y, scale, mask))
+    assert_equal(jit_f(y, scale, mask), f(y, scale, mask))
+
+    mask = torch.tensor([True])
+    y = torch.tensor([1.5, 2.5, 3.5, 4.5, 5.5, 6.5])
+    scale = torch.ones(y.shape)
+    assert_equal(jit_f(y, scale, mask), f(y, scale, mask))
 
 
 def test_masked_fill():
