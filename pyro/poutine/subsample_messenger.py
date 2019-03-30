@@ -117,7 +117,7 @@ class SubsampleMessenger(IndepMessenger):
         return size, subsample_size, subsample
 
     def _reset(self):
-        self.subsample = None
+        self._indices = None
         super(SubsampleMessenger, self)._reset()
 
     def _process_message(self, msg):
@@ -128,3 +128,11 @@ class SubsampleMessenger(IndepMessenger):
                 with ignore_jit_warnings():
                     msg["scale"] = torch.tensor(msg["scale"])
         msg["scale"] = msg["scale"] * self.size / self.subsample_size
+
+    def _postprocess_message(self, msg):
+        if msg["type"] == "param" and self.subsample_size < self.size:
+            # Subsample parameters with known batch semantics.
+            event_dim = msg["kwargs"].get("event_dim")
+            if event_dim is not None:
+                assert event_dim >= 0
+                msg["value"] = msg["value"].index_select(self.dim - event_dim, self._indices)

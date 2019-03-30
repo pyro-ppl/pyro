@@ -30,7 +30,10 @@ def clear_param_store():
     return _PYRO_PARAM_STORE.clear()
 
 
-_param = effectful(_PYRO_PARAM_STORE.get_param, type="param")
+@effectful(type="param")
+def _param(name, **kwargs):
+    kwargs.pop('event_dim', None)
+    return _PYRO_PARAM_STORE.get_param(name, **kwargs)
 
 
 def param(name, *args, **kwargs):
@@ -43,7 +46,9 @@ def param(name, *args, **kwargs):
     :returns: parameter
     """
     kwargs["name"] = name
-    return _param(name, *args, **kwargs)
+    # Convert args to kwargs to make it easier for handlers to inspect.
+    kwargs.update(zip(('init_tensor', 'constraint', 'event_dim'), args))
+    return _param(name, **kwargs)
 
 
 def sample(name, fn, *args, **kwargs):
