@@ -30,10 +30,7 @@ def clear_param_store():
     return _PYRO_PARAM_STORE.clear()
 
 
-@effectful(type="param")
-def _param(name, **kwargs):
-    kwargs.pop('event_dim', None)
-    return _PYRO_PARAM_STORE.get_param(name, **kwargs)
+_param = effectful(_PYRO_PARAM_STORE.get_param, type="param")
 
 
 def param(name, *args, **kwargs):
@@ -60,9 +57,7 @@ def param(name, *args, **kwargs):
     :rtype: torch.Tensor
     """
     kwargs["name"] = name
-    # Convert args to kwargs to make it easier for handlers to inspect.
-    kwargs.update(zip(('init_tensor', 'constraint', 'event_dim'), args))
-    return _param(name, **kwargs)
+    return _param(name, *args, **kwargs)
 
 
 def sample(name, fn, *args, **kwargs):
