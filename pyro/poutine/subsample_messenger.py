@@ -134,6 +134,7 @@ class SubsampleMessenger(IndepMessenger):
         if msg["type"] == "param" and self.dim is not None:
             event_dim = msg["kwargs"].get("event_dim")
             if event_dim is not None:
+                assert event_dim >= 0
                 dim = self.dim - event_dim
                 shape = msg["value"].shape
                 if len(shape) >= -dim and shape[dim] != 1:
@@ -144,5 +145,4 @@ class SubsampleMessenger(IndepMessenger):
                             .format(self.name, self.size, self.dim, msg["name"], event_dim, shape))
                     # Subsample parameters with known batch semantics.
                     if self.subsample_size < self.size:
-                        assert event_dim >= 0
                         msg["value"] = msg["value"].index_select(dim, self._indices)
