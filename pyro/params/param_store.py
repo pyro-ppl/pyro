@@ -184,7 +184,7 @@ class ParamStoreDict(object):
         self[param_name] = new_param
 
     def get_param(self, name, init_tensor=None, constraint=constraints.real):
-        r"""
+        """
         Get parameter from its name. If it does not yet exist in the
         ParamStore, it will be created and stored.
         The Pyro primitive `pyro.param` dispatches to this method.
