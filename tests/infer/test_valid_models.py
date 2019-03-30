@@ -221,12 +221,14 @@ def test_plate_subsample_param_ok(subsample_size, Elbo):
 
     def model():
         p = torch.tensor(0.5)
-        with pyro.plate("plate", 10, subsample_size) as ind:
-            pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind)]))
+        with pyro.plate("plate", 10, subsample_size):
+            pyro.sample("x", dist.Bernoulli(p))
 
     def guide():
         with pyro.plate("plate", 10, subsample_size) as ind:
-            p = pyro.param("p", lambda: 0.5 * torch.ones(10), event_dim=0)
+            p0 = pyro.param("p0", torch.tensor(0.), event_dim=0)
+            assert p0.shape == ()
+            p = pyro.param("p", 0.5 * torch.ones(10), event_dim=0)
             assert len(p) == len(ind)
             pyro.sample("x", dist.Bernoulli(p))
 
@@ -234,6 +236,39 @@ def test_plate_subsample_param_ok(subsample_size, Elbo):
         guide = config_enumerate(guide)
 
     assert_ok(model, guide, Elbo())
+
+
+@pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("shape,ok", [
+    ((), True),
+    ((1,), True),
+    ((10,), True),
+    ((3, 1), True),
+    ((3, 10), True),
+    ((5), False),
+    ((3, 5), False),
+])
+def test_plate_param_size_mismatch_error(subsample_size, Elbo, shape, ok):
+
+    def model():
+        p = torch.tensor(0.5)
+        with pyro.plate("plate", 10, subsample_size):
+            pyro.sample("x", dist.Bernoulli(p))
+
+    def guide():
+        with pyro.plate("plate", 10, subsample_size):
+            pyro.param("p0", torch.ones(shape), event_dim=0)
+            p = pyro.param("p", torch.ones(10), event_dim=0)
+            pyro.sample("x", dist.Bernoulli(p))
+
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
+
+    if ok:
+        assert_ok(model, guide, Elbo())
+    else:
+        assert_error(model, guide, Elbo(), match="invalid shape of pyro.param")
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
