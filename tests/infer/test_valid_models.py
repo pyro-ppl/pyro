@@ -503,22 +503,21 @@ def test_nested_plate_plate_dim_error_4(Elbo):
 def test_nested_plate_plate_subsample_param_ok(Elbo):
 
     def model():
-        p = torch.tensor(0.5, requires_grad=True)
-        with pyro.plate("plate_outer", 10, 5) as ind_outer:
+        with pyro.plate("plate_outer", 10, 5):
             pyro.sample("x", dist.Bernoulli(0.2))
-            with pyro.plate("plate_inner", 11, 6) as ind_inner:
+            with pyro.plate("plate_inner", 11, 6):
                 pyro.sample("y", dist.Bernoulli(0.2))
 
     def guide():
         p0 = pyro.param("p0", 0.5 * torch.ones(4, 5), event_dim=2)
         assert p0.shape == (4, 5)
-        with pyro.plate("plate_outer", 10, 5) as ind_outer:
+        with pyro.plate("plate_outer", 10, 5):
             p1 = pyro.param("p1", 0.5 * torch.ones(10, 3), event_dim=1)
             assert p1.shape == (5, 3)
             px = pyro.param("px", 0.5 * torch.ones(10), event_dim=0)
             assert px.shape == (5,)
             pyro.sample("x", dist.Bernoulli(px))
-            with pyro.plate("plate_inner", 11, 6) as ind_inner:
+            with pyro.plate("plate_inner", 11, 6):
                 py = pyro.param("py", 0.5 * torch.ones(11, 10), event_dim=0)
                 assert py.shape == (6, 5)
                 pyro.sample("y", dist.Bernoulli(py))
