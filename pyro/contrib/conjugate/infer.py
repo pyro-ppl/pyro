@@ -7,42 +7,50 @@ from pyro.poutine.messenger import Messenger
 from pyro.poutine.replay_messenger import ReplayMessenger
 
 
-class _LatentBeta(dist.Beta):
+class _Beta(dist.Beta):
     collapsible = True
 
     def __init__(self, parent, *args, **kwargs):
         self.parent = parent
-        super(_LatentBeta, self).__init__(*args, **kwargs)
+        super(_Beta, self).__init__(*args, **kwargs)
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(_Beta, _instance)
+        new.parent = self.parent
+        return super(_Beta, self).expand(batch_shape, _instance=new)
 
 
-class _CondBinomial(dist.Binomial):
+class _Binomial(dist.Binomial):
     marginalize_latent = True
 
     def __init__(self, parent, probs, **kwargs):
         self.parent = parent
         self.latent_param = probs
-        super(_CondBinomial, self).__init__(probs=probs, **kwargs)
+        super(_Binomial, self).__init__(probs=probs, **kwargs)
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(_Binomial, _instance)
+        new.parent = self.parent
+        return super(_Binomial, self).expand(batch_shape, _instance=new)
 
 
-class BetaBinomialConjugate(object):
+class BetaBinomialPair(object):
     def __init__(self):
         self._latent = None
-        self._conditioned = None
-        self.cond_kwargs = {}
+        self._conditional = None
 
     def latent(self, *args, **kwargs):
-        self._latent = _LatentBeta(self, *args, **kwargs)
+        self._latent = _Beta(self, *args, **kwargs)
         return self._latent
 
-    def conditioned(self, probs, **kwargs):
-        self.cond_kwargs = kwargs
-        self._conditioned = _CondBinomial(self, probs, **kwargs)
-        return self._conditioned
+    def conditional(self, probs, **kwargs):
+        self._conditional = _Binomial(self, probs, **kwargs)
+        return self._conditional
 
     def posterior(self, obs):
         concentration1 = self._latent.concentration1
         concentration0 = self._latent.concentration0
-        total_count = self.cond_kwargs["total_count"]
+        total_count = self._conditional.total_count
         reduce_dims = len(obs.size()) - len(concentration1.size())
         num_obs = reduce(mul, obs.size()[:reduce_dims], 1)
         total_count = total_count[tuple(slice(1) if i < reduce_dims else slice(None)
@@ -55,7 +63,7 @@ class BetaBinomialConjugate(object):
     def compound(self):
         return dist.BetaBinomial(concentration1=self._latent.concentration1,
                                  concentration0=self._latent.concentration0,
-                                 total_count=self._conditioned.total_count)
+                                 total_count=self._conditional.total_count)
 
 
 class UncollapseConjugateMessenger(ReplayMessenger):
