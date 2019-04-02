@@ -331,7 +331,7 @@ def test_beta_binomial(hyperpriors):
             with pyro.plate("plate_1", data.shape[-2]):
                 probs = pyro.sample("beta", beta_binom.latent(alpha, beta))
                 with pyro.plate("data", data.shape[0]):
-                    pyro.sample("binomial", beta_binom.conditional(probs, total_count=1000), obs=data)
+                    pyro.sample("binomial", beta_binom.conditional(probs=probs, total_count=1000), obs=data)
 
     true_probs = torch.tensor([[0.7, 0.4], [0.6, 0.4]])
     data = dist.Binomial(total_count=1000, probs=true_probs).sample(sample_shape=(torch.Size((10,))))

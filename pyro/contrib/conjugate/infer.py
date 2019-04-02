@@ -12,26 +12,41 @@ class _Beta(dist.Beta):
 
     def __init__(self, parent, *args, **kwargs):
         self.parent = parent
+        self.site_name = None
         super(_Beta, self).__init__(*args, **kwargs)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(_Beta, _instance)
+        new.site_name = self.site_name
         new.parent = self.parent
+        new.parent._latent = new
         return super(_Beta, self).expand(batch_shape, _instance=new)
 
 
 class _Binomial(dist.Binomial):
     marginalize_latent = True
 
-    def __init__(self, parent, probs, **kwargs):
+    def __init__(self, parent, *args, **kwargs):
         self.parent = parent
-        self.latent_param = probs
-        super(_Binomial, self).__init__(probs=probs, **kwargs)
+        super(_Binomial, self).__init__(*args, **kwargs)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(_Binomial, _instance)
         new.parent = self.parent
+        new.parent._conditional = new
         return super(_Binomial, self).expand(batch_shape, _instance=new)
+
+
+class _BetaBinomial(dist.BetaBinomial):
+    def __init__(self, parent, *args, **kwargs):
+        self.parent = parent
+        super(_BetaBinomial, self).__init__(*args, **kwargs)
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(_BetaBinomial, _instance)
+        new.parent = self.parent
+        self.parent._conditional = self
+        return super(_BetaBinomial, self).expand(batch_shape, _instance=new)
 
 
 class BetaBinomialPair(object):
@@ -43,8 +58,8 @@ class BetaBinomialPair(object):
         self._latent = _Beta(self, *args, **kwargs)
         return self._latent
 
-    def conditional(self, probs, **kwargs):
-        self._conditional = _Binomial(self, probs, **kwargs)
+    def conditional(self, *args, **kwargs):
+        self._conditional = _Binomial(self, *args, **kwargs)
         return self._conditional
 
     def posterior(self, obs):
@@ -61,9 +76,10 @@ class BetaBinomialPair(object):
                          validate_args=self._latent._validate_args)
 
     def compound(self):
-        return dist.BetaBinomial(concentration1=self._latent.concentration1,
-                                 concentration0=self._latent.concentration0,
-                                 total_count=self._conditional.total_count)
+        return _BetaBinomial(self,
+                             concentration1=self._latent.concentration1,
+                             concentration0=self._latent.concentration0,
+                             total_count=self._conditional.total_count)
 
 
 class UncollapseConjugateMessenger(ReplayMessenger):
@@ -76,13 +92,15 @@ class UncollapseConjugateMessenger(ReplayMessenger):
     def _pyro_sample(self, msg):
         is_collapsible = getattr(msg["fn"], "collapsible", False)
         if is_collapsible:
-            conj_node = self.trace.nodes[msg["name"]]["fn"].parent
+            observed_node, conj_pair = None, None
             for site_name in self.trace.observation_nodes:
-                obs_parent = getattr(self.trace.nodes[site_name]["fn"], "parent")
-                if obs_parent == conj_node:
+                conj_pair = getattr(self.trace.nodes[site_name]["fn"], "parent")
+                if conj_pair is not None and conj_pair._latent.site_name == msg["name"]:
                     observed_node = self.trace.nodes[site_name]
                     break
-            msg["fn"] = conj_node.posterior(observed_node["value"])
+            assert observed_node is not None, "Collapsible latent site `{}` with no observed."\
+                .format(msg["name"])
+            msg["fn"] = conj_pair.posterior(observed_node["value"])
             msg["value"] = msg["fn"].sample()
         else:
             return super(UncollapseConjugateMessenger, self)._pyro_sample(msg)
@@ -106,6 +124,7 @@ class CollapseConjugateMessenger(Messenger):
         is_collapsible = getattr(msg["fn"], "collapsible", False)
         marginalize_latent = getattr(msg["fn"], "marginalize_latent", False)
         if is_collapsible:
+            msg["fn"].site_name = msg["name"]
             msg["stop"] = True
         elif marginalize_latent:
             msg["fn"] = msg["fn"].parent.compound()
