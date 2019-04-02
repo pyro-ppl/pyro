@@ -156,7 +156,7 @@ class HMC(TraceKernel):
 
     def _kinetic_energy(self, r):
         r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)]) if r \
-            else torch.tensor([])
+            else 0.
         if self.inverse_mass_matrix.dim() == 2:
             return 0.5 * self.inverse_mass_matrix.matmul(r_flat).dot(r_flat)
         else:
