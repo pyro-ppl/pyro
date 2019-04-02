@@ -90,7 +90,7 @@ def test_num_chains(num_chains, cpu_count, monkeypatch):
 
 
 def _empty_model():
-    return torch.ones([])
+    return torch.tensor(1)
 
 
 @pytest.mark.parametrize("kernel, kernel_args", [

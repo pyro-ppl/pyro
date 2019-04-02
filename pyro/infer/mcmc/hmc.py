@@ -144,25 +144,18 @@ class HMC(TraceKernel):
                 yield (name, node)
 
     def _compute_trace_log_prob(self, model_trace):
-        # Wrap log_prob value in a tensor for JIT compatibility
-        if not model_trace.stochastic_nodes:
-            device = torch.zeros([]).device
-            for name, node in model_trace.nodes.items():
-                value = node.get("value", None)
-                if value is not None:
-                    device = value.device
-            return torch.zeros([], device=device)
         return self._trace_prob_evaluator.log_prob(model_trace)
 
     def _kinetic_energy(self, r):
-        r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)]) if r \
-            else 0.
+        r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)])
         if self.inverse_mass_matrix.dim() == 2:
             return 0.5 * self.inverse_mass_matrix.matmul(r_flat).dot(r_flat)
         else:
             return 0.5 * self.inverse_mass_matrix.dot(r_flat ** 2)
 
     def _potential_energy(self, z):
+        if not z:
+            return 0.
         if self._jit_compile:
             return self._potential_energy_jit(z)
         # Since the model is specified in the constrained space, transform the
@@ -178,7 +171,7 @@ class HMC(TraceKernel):
         return potential_energy
 
     def _potential_energy_jit(self, z):
-        names, vals = zip(*sorted(z.items())) if z else [], []
+        names, vals = zip(*sorted(z.items()))
         if self._compiled_potential_fn:
             return self._compiled_potential_fn(*vals)
 
@@ -344,7 +337,7 @@ class HMC(TraceKernel):
             self.transforms = {}
         trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
         self._prototype_trace = trace
-        site_value = torch.tensor([])
+        site_value = None
         for name, node in trace.iter_stochastic_nodes():
             if isinstance(node["fn"], _Subsample):
                 continue
@@ -360,14 +353,15 @@ class HMC(TraceKernel):
         self._trace_prob_evaluator = TraceEinsumEvaluator(trace,
                                                           self._has_enumerable_sites,
                                                           self.max_plate_nesting)
-        mass_matrix_size = sum(self._r_numels.values())
-        if self._adapter.is_diag_mass:
-            initial_mass_matrix = site_value.new_ones(mass_matrix_size)
-        else:
-            initial_mass_matrix = eye_like(site_value, mass_matrix_size)
-        self._adapter.configure(self._warmup_steps,
-                                inv_mass_matrix=initial_mass_matrix,
-                                find_reasonable_step_size_fn=self._find_reasonable_step_size)
+        if site_value is not None:
+            mass_matrix_size = sum(self._r_numels.values())
+            if self._adapter.is_diag_mass:
+                initial_mass_matrix = site_value.new_ones(mass_matrix_size)
+            else:
+                initial_mass_matrix = eye_like(site_value, mass_matrix_size)
+            self._adapter.configure(self._warmup_steps,
+                                    inv_mass_matrix=initial_mass_matrix,
+                                    find_reasonable_step_size_fn=self._find_reasonable_step_size)
         self._initialize_step_size()  # this method also caches z and its potential energy
 
     def _initialize_step_size(self):
@@ -378,7 +372,7 @@ class HMC(TraceKernel):
             z[name] = transform(z[name])
         potential_energy = self._potential_energy(z)
         self._cache(z, potential_energy, None)
-        if self._adapter.adapt_step_size:
+        if z and self._adapter.adapt_step_size:
             self._adapter.reset_step_size_adaptation()
 
     def setup(self, warmup_steps, *args, **kwargs):
