@@ -8,6 +8,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
+from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.mcmc import MCMC, _SingleSampler, _ParallelSampler
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.util import optional
@@ -86,3 +87,22 @@ def test_num_chains(num_chains, cpu_count, monkeypatch):
         assert isinstance(mcmc.sampler, _SingleSampler)
     else:
         assert isinstance(mcmc.sampler, _ParallelSampler)
+
+
+def _empty_model():
+    return torch.ones([])
+
+
+@pytest.mark.parametrize("kernel, kernel_args", [
+    (HMC, _empty_model),
+    (NUTS, _empty_model),
+])
+@pytest.mark.parametrize("jit", [False, True])
+@pytest.mark.parametrize("num_chains", [1, 2])
+def test_empty_sample_sites(kernel, kernel_args, jit, num_chains):
+    num_warmup, num_samples = 10, 10
+    kern = kernel(kernel_args, jit_compile=jit)
+    mcmc = MCMC(kern, num_samples=num_samples, warmup_steps=num_warmup, num_chains=num_chains).run()
+    expected = torch.ones(num_samples) if num_chains <= 1 else torch.ones(num_chains, num_samples)
+    assert_equal(mcmc.marginal(["_RETURN"]).empirical["_RETURN"].enumerate_support(),
+                 expected)

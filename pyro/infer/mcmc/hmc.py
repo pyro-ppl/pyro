@@ -4,6 +4,7 @@ import math
 from collections import OrderedDict
 
 import torch
+from torch import tensor
 from torch.distributions import biject_to, constraints
 
 import pyro
@@ -144,10 +145,19 @@ class HMC(TraceKernel):
                 yield (name, node)
 
     def _compute_trace_log_prob(self, model_trace):
+        # Wrap log_prob value in a tensor for JIT compatibility
+        if not model_trace.stochastic_nodes:
+            device = torch.zeros([]).device
+            for name, node in model_trace.nodes.items():
+                value = node.get("value", None)
+                if value is not None:
+                    device = value.device
+            return torch.zeros([], device=device)
         return self._trace_prob_evaluator.log_prob(model_trace)
 
     def _kinetic_energy(self, r):
-        r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)])
+        r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)]) if r \
+            else torch.tensor([])
         if self.inverse_mass_matrix.dim() == 2:
             return 0.5 * self.inverse_mass_matrix.matmul(r_flat).dot(r_flat)
         else:
@@ -169,7 +179,7 @@ class HMC(TraceKernel):
         return potential_energy
 
     def _potential_energy_jit(self, z):
-        names, vals = zip(*sorted(z.items()))
+        names, vals = zip(*sorted(z.items())) if z else [], []
         if self._compiled_potential_fn:
             return self._compiled_potential_fn(*vals)
 
@@ -221,6 +231,8 @@ class HMC(TraceKernel):
         # near the target_accept_prob. If accept_prob:=exp(-delta_energy) is small,
         # then we have to decrease step_size; otherwise, increase step_size.
         z, potential_energy, z_grads = self._fetch_from_cache()
+        if not z:
+            return self.step_size
         r, _ = self._sample_r(name="r_presample_0")
         energy_current = self._kinetic_energy(r) + potential_energy
         z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
@@ -333,6 +345,7 @@ class HMC(TraceKernel):
             self.transforms = {}
         trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
         self._prototype_trace = trace
+        site_value = torch.tensor([])
         for name, node in trace.iter_stochastic_nodes():
             if isinstance(node["fn"], _Subsample):
                 continue
@@ -388,6 +401,11 @@ class HMC(TraceKernel):
 
     def sample(self, trace):
         z, potential_energy, z_grads = self._fetch_from_cache()
+        # return early if no sample sites
+        if not z:
+            self._accept_cnt += 1
+            self._t += 1
+            return self._get_trace(z)
         r, _ = self._sample_r(name="r_t={}".format(self._t))
         energy_current = self._kinetic_energy(r) + potential_energy
 
