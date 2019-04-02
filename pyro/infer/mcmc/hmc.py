@@ -4,7 +4,6 @@ import math
 from collections import OrderedDict
 
 import torch
-from torch import tensor
 from torch.distributions import biject_to, constraints
 
 import pyro
