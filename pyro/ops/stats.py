@@ -348,16 +348,17 @@ def waic(input, log_weights=None, pointwise=False, dim=0):
 
 def fit_generalized_pareto(X):
     """
-    Given a dataset X assumed to be drawn from the Generalized Pareto Distribution,
-    estimate the parameters k, sigma using the technique described in reference [1].
-    This implementation is modified from the implementation used in reference [2].
+    Given a dataset X assumed to be drawn from the Generalized Pareto
+    Distribution, estimate the distributional parameters k, sigma using a
+    variant of the technique described in reference [1]. This
+    implementation is modified from the implementation used in reference [2].
 
     References
     [1] 'A new and efficient estimation method for the generalized Pareto distribution.'
-        Zhang, J. and Stephens, M.A. (2009).
+    Zhang, J. and Stephens, M.A. (2009).
     [2] 'Pareto Smoothed Importance Sampling.'
-        Aki Vehtari, Andrew Gelman, Jonah Gabry
-        https://github.com/avehtari/PSIS/blob/904146236767182270c9718a7b2a30831fe701fe/py/psis.py#L211
+    Aki Vehtari, Andrew Gelman, Jonah Gabry
+    https://github.com/avehtari/PSIS/blob/904146236767182270c9718a7b2a30831fe701fe/py/psis.py#L211
 
     :param torch.Tensor or numpy.ndarray X: the input data X
     :returns tuple: tuple of floats (k, sigma) corresponding to the fit parameters
