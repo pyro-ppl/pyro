@@ -329,7 +329,7 @@ def test_beta_binomial(hyperpriors):
             beta = pyro.sample("beta", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
             beta_binom = BetaBinomialPair()
             with pyro.plate("plate_1", data.shape[-2]):
-                probs = pyro.sample("beta", beta_binom.latent(alpha, beta))
+                probs = pyro.sample("probs", beta_binom.latent(alpha, beta))
                 with pyro.plate("data", data.shape[0]):
                     pyro.sample("binomial", beta_binom.conditional(probs=probs, total_count=1000), obs=data)
 
@@ -339,5 +339,5 @@ def test_beta_binomial(hyperpriors):
     mcmc_run = MCMC(hmc_kernel, num_samples=80, warmup_steps=50).run(data)
     mcmc_run.exec_traces = [poutine.trace(uncollapse_conjugate(model, tr)).get_trace(data)
                             for tr in mcmc_run.exec_traces]
-    posterior = mcmc_run.marginal(["beta"]).empirical["beta"]
+    posterior = mcmc_run.marginal(["probs"]).empirical["probs"]
     assert_equal(posterior.mean, true_probs, prec=0.05)

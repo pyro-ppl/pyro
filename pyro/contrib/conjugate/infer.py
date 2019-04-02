@@ -45,7 +45,6 @@ class _BetaBinomial(dist.BetaBinomial):
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(_BetaBinomial, _instance)
         new.parent = self.parent
-        self.parent._conditional = self
         return super(_BetaBinomial, self).expand(batch_shape, _instance=new)
 
 
