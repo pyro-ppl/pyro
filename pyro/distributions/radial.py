@@ -20,8 +20,8 @@ class RadialFlow(TransformModule):
 
     where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, and the learnable parameters
     are :math:`\\alpha\\in\\mathbb{R}^+`, :math:`\\beta\\in\\mathbb{R}`, :math:`\\mathbf{x}_0\\in\\mathbb{R}^D`,
-    for input dimension :math:`D`, :math:`r=||x-x_0||_2`, :math:`h(\\alpha,r)=1/(\\alpha+r)`. For this to be an
-    invertible transformation, the condition :math:`\\beta>-\\alpha` is enforced.
+    for input dimension :math:`D`, :math:`r=||\\mathbf{x}-\\mathbf{x}_0||_2`, :math:`h(\\alpha,r)=1/(\\alpha+r)`.
+    For this to be an invertible transformation, the condition :math:`\\beta>-\\alpha` is enforced.
 
     Together with `TransformedDistribution` this provides a way to create richer variational approximations.
 
