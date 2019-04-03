@@ -20,7 +20,7 @@ class RadialFlow(TransformModule):
 
     where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, and the learnable parameters
     are :math:`\\alpha\\in\\mathbb{R}^+`, :math:`\\beta\\in\\mathbb{R}`, :math:`\\mathbf{x}_0\\in\\mathbb{R}^D`,
-    for input dimension :math:`D`, :math:`r=||x-x_0||_2`, :math:`h(\\alpha,r)=1/(\\alpha+r)`. For this to be an 
+    for input dimension :math:`D`, :math:`r=||x-x_0||_2`, :math:`h(\\alpha,r)=1/(\\alpha+r)`. For this to be an
     invertible transformation, the condition :math:`\\beta>-\\alpha` is enforced.
 
     Together with `TransformedDistribution` this provides a way to create richer variational approximations.
@@ -89,9 +89,10 @@ class RadialFlow(TransformModule):
         r = diff.norm(dim=-1, keepdim=True)
         h = (alpha + r).reciprocal()
         h_prime = - (h ** 2)
-        beta_h = beta*h
+        beta_h = beta * h
 
-        self._cached_logDetJ = ((self.input_dim - 1) * torch.log1p(beta_h) + torch.log1p(beta_h + beta * h_prime * r)).sum(-1)
+        self._cached_logDetJ = ((self.input_dim - 1) * torch.log1p(beta_h) +
+                                torch.log1p(beta_h + beta * h_prime * r)).sum(-1)
         return x + beta_h * diff
 
     def _inverse(self, y):

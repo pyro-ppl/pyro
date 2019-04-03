@@ -50,6 +50,7 @@ __all__ = [
     "OMTMultivariateNormal",
     "PermuteTransform",
     "PlanarFlow",
+    "RadialFlow",
     "Rejector",
     "RelaxedBernoulliStraightThrough",
     "RelaxedOneHotCategoricalStraightThrough",
