@@ -40,7 +40,7 @@ class RadialFlow(TransformModule):
     radial flow can be scored.
 
     :param input_dim: the dimension of the input (and output) variable.
-    :type autoregressive_nn: int
+    :type input_dim: int
 
     References:
 
