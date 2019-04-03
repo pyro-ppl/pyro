@@ -16,28 +16,28 @@ class RadialFlow(TransformModule):
     """
     A 'radial' normalizing flow that uses the transformation
 
-        :math:`\\mathbf{y} = \\mathbf{x} + \\mathbf{u}\\tanh(\\mathbf{w}^T\\mathbf{z}+b)`
+        :math:`\\mathbf{y} = \\mathbf{x} + \\beta h(\\alpha,r)(\\mathbf{x} - \\mathbf{x}_0)`
 
     where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, and the learnable parameters
-    are :math:`b\\in\\mathbb{R}`, :math:`\\mathbf{u}\\in\\mathbb{R}^D`, :math:`\\mathbf{w}\\in\\mathbb{R}^D` for input
-    dimension :math:`D`. For this to be an invertible transformation, the condition
-    :math:`\\mathbf{w}^T\\mathbf{u}>-1` is enforced.
+    are :math:`\\alpha\\in\\mathbb{R}^+`, :math:`\\beta\\in\\mathbb{R}`, :math:`\\mathbf{x}_0\\in\\mathbb{R}^D`,
+    for input dimension :math:`D`, :math:`r=||x-x_0||_2`, :math:`h(\\alpha,r)=1/(\\alpha+r)`. For this to be an 
+    invertible transformation, the condition :math:`\\beta>-\\alpha` is enforced.
 
     Together with `TransformedDistribution` this provides a way to create richer variational approximations.
 
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> plf = PlanarFlow(10)
-    >>> pyro.module("my_plf", plf)  # doctest: +SKIP
-    >>> plf_dist = dist.TransformedDistribution(base_dist, [plf])
-    >>> plf_dist.sample()  # doctest: +SKIP
+    >>> flow = RadialFlow(10)
+    >>> pyro.module("my_flow", flow)  # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [flow])
+    >>> flow_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
 
     The inverse of this transform does not possess an analytical solution and is left unimplemented. However,
     the inverse is cached when the forward operation is called during sampling, and so samples drawn using
-    planar flow can be scored.
+    radial flow can be scored.
 
     :param input_dim: the dimension of the input (and output) variable.
     :type autoregressive_nn: int
@@ -58,21 +58,19 @@ class RadialFlow(TransformModule):
         super(RadialFlow, self).__init__(cache_size=1)
 
         self.input_dim = input_dim
-        #self.lin = nn.Linear(input_dim, 1)
+        self._cached_logDetJ = None
         self.x0 = nn.Parameter(torch.Tensor(input_dim))
-        self.alpha = nn.Parameter(torch.Tensor(1))
-        self.beta = nn.Parameter(torch.Tensor(1))
+
+        # These are the unconstrained parameters
+        self.alpha_prime = nn.Parameter(torch.Tensor(1))
+        self.beta_prime = nn.Parameter(torch.Tensor(1))
         self.reset_parameters()
 
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.x0.size(0))
-        self.alpha.data.uniform_(-stdv, stdv)
-        self.beta.data.uniform_(-stdv, stdv)
+        self.alpha_prime.data.uniform_(-stdv, stdv)
+        self.beta_prime.data.uniform_(-stdv, stdv)
         self.x0.data.uniform_(-stdv, stdv)
-
-    # This method ensures that beta > -alpha, required for invertibility
-    def beta_prime(self):
-        return -self.alpha + F.softplus(self.beta)
 
     def _call(self, x):
         """
@@ -82,10 +80,19 @@ class RadialFlow(TransformModule):
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
-        r = (x - self.x0).norm(dim=-1, keepdim=True)
-        h = (self.alpha + r).reciprocal()
-        y = x + self.beta_prime() * h * (x - self.x0)
-        return y
+        # Ensure invertibility using approach in appendix A.2
+        alpha = F.softplus(self.alpha_prime)
+        beta = -alpha + F.softplus(self.beta_prime)
+
+        # Compute y and logDet using Equation 14.
+        diff = x - self.x0
+        r = diff.norm(dim=-1, keepdim=True)
+        h = (alpha + r).reciprocal()
+        h_prime = - (h ** 2)
+        beta_h = beta*h
+
+        self._cached_logDetJ = ((self.input_dim - 1) * torch.log1p(beta_h) + torch.log1p(beta_h + beta * h_prime * r)).sum(-1)
+        return x + beta_h * diff
 
     def _inverse(self, y):
         """
@@ -103,12 +110,4 @@ class RadialFlow(TransformModule):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        r = (x - self.x0).norm(dim=-1, keepdim=True)
-        h = (self.alpha + r).reciprocal()
-        h_prime = -(self.alpha + r).pow(-2)
-        beta_prime = self.beta_prime()
-
-        first_term = (self.input_dim - 1) * torch.log1p(beta_prime*h) 
-        second_term = torch.log1p(beta_prime*h + h_prime*r)
-
-        return (first_term + second_term).sum(-1)
+        return self._cached_logDetJ
