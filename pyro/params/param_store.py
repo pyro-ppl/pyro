@@ -183,7 +183,7 @@ class ParamStoreDict(object):
         assert self._params[param_name] is old_param.unconstrained()
         self[param_name] = new_param
 
-    def get_param(self, name, init_tensor=None, constraint=constraints.real):
+    def get_param(self, name, init_tensor=None, constraint=constraints.real, event_dim=None):
         """
         Get parameter from its name. If it does not yet exist in the
         ParamStore, it will be created and stored.
@@ -195,6 +195,7 @@ class ParamStoreDict(object):
         :type init_tensor: torch.Tensor
         :param constraint: torch constraint
         :type constraint: torch.distributions.constraints.Constraint
+        :param int event_dim: (ignored)
         :returns: parameter
         :rtype: torch.Tensor
         """

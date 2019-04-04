@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 from pyro.distributions.distribution import Distribution
+from pyro.poutine.util import is_validation_enabled
 from pyro.util import ignore_jit_warnings, jit_compatible_arange
 
 from .indep_messenger import CondIndepStackFrame, IndepMessenger
@@ -117,7 +118,7 @@ class SubsampleMessenger(IndepMessenger):
         return size, subsample_size, subsample
 
     def _reset(self):
-        self.subsample = None
+        self._indices = None
         super(SubsampleMessenger, self)._reset()
 
     def _process_message(self, msg):
@@ -128,3 +129,20 @@ class SubsampleMessenger(IndepMessenger):
                 with ignore_jit_warnings():
                     msg["scale"] = torch.tensor(msg["scale"])
         msg["scale"] = msg["scale"] * self.size / self.subsample_size
+
+    def _postprocess_message(self, msg):
+        if msg["type"] == "param" and self.dim is not None:
+            event_dim = msg["kwargs"].get("event_dim")
+            if event_dim is not None:
+                assert event_dim >= 0
+                dim = self.dim - event_dim
+                shape = msg["value"].shape
+                if len(shape) >= -dim and shape[dim] != 1:
+                    if is_validation_enabled() and shape[dim] != self.size:
+                        raise ValueError(
+                            "Inside pyro.plate({}, {}, dim={}) "
+                            "invalid shape of pyro.param({}, ..., event_dim={}): {}"
+                            .format(self.name, self.size, self.dim, msg["name"], event_dim, shape))
+                    # Subsample parameters with known batch semantics.
+                    if self.subsample_size < self.size:
+                        msg["value"] = msg["value"].index_select(dim, self._indices)

@@ -20,9 +20,9 @@ import torch
 # Pyro keeps track of two kinds of global state:
 # i)  The effect handler stack, which enables non-standard interpretations of
 #     Pyro primitives like sample();
-#     See http://docs.pyro.ai/en/0.3.0-release/poutine.html
+#     See http://docs.pyro.ai/en/0.3.1/poutine.html
 # ii) Trainable parameters in the Pyro ParamStore;
-#     See http://docs.pyro.ai/en/0.3.0-release/parameters.html
+#     See http://docs.pyro.ai/en/0.3.1/parameters.html
 
 PYRO_STACK = []
 PARAM_STORE = {}
@@ -201,7 +201,7 @@ def plate(name, size, dim):
 
 # This is a thin wrapper around the `torch.optim.Adam` class that
 # dynamically generates optimizers for dynamically generated parameters.
-# See http://docs.pyro.ai/en/0.3.0-release/optimization.html
+# See http://docs.pyro.ai/en/0.3.1/optimization.html
 class Adam(object):
     def __init__(self, optim_args):
         self.optim_args = optim_args
@@ -226,7 +226,7 @@ class Adam(object):
 
 # This is a unified interface for stochastic variational inference in Pyro.
 # The actual construction of the loss is taken care of by `loss`.
-# See http://docs.pyro.ai/en/0.3.0-release/inference_algos.html
+# See http://docs.pyro.ai/en/0.3.1/inference_algos.html
 class SVI(object):
     def __init__(self, model, guide, optim, loss):
         self.model = model
@@ -260,7 +260,7 @@ class SVI(object):
 # fundamental objective in Variational Inference.
 # See http://pyro.ai/examples/svi_part_i.html for details.
 # This implementation has various limitations (for example it only supports
-# random variablbes with reparameterized samplers), but all the ELBO
+# random variables with reparameterized samplers), but all the ELBO
 # implementations in Pyro share the same basic logic.
 def elbo(model, guide, *args, **kwargs):
     # Run the guide with the arguments passed to SVI.step() and trace the execution,
@@ -289,3 +289,8 @@ def elbo(model, guide, *args, **kwargs):
     # Return (-elbo) since by convention we do gradient descent on a loss and
     # the ELBO is a lower bound that needs to be maximized.
     return -elbo
+
+
+# This is a wrapper for compatibility with full Pyro.
+def Trace_ELBO(*args, **kwargs):
+    return elbo

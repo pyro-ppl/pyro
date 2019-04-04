@@ -154,6 +154,8 @@ class HMC(TraceKernel):
             return 0.5 * self.inverse_mass_matrix.dot(r_flat ** 2)
 
     def _potential_energy(self, z):
+        if not z:
+            return 0.
         if self._jit_compile:
             return self._potential_energy_jit(z)
         # Since the model is specified in the constrained space, transform the
@@ -221,6 +223,8 @@ class HMC(TraceKernel):
         # near the target_accept_prob. If accept_prob:=exp(-delta_energy) is small,
         # then we have to decrease step_size; otherwise, increase step_size.
         z, potential_energy, z_grads = self._fetch_from_cache()
+        if not z:
+            return self.step_size
         r, _ = self._sample_r(name="r_presample_0")
         energy_current = self._kinetic_energy(r) + potential_energy
         z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
@@ -333,6 +337,7 @@ class HMC(TraceKernel):
             self.transforms = {}
         trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
         self._prototype_trace = trace
+        site_value = None
         for name, node in trace.iter_stochastic_nodes():
             if isinstance(node["fn"], _Subsample):
                 continue
@@ -348,14 +353,15 @@ class HMC(TraceKernel):
         self._trace_prob_evaluator = TraceEinsumEvaluator(trace,
                                                           self._has_enumerable_sites,
                                                           self.max_plate_nesting)
-        mass_matrix_size = sum(self._r_numels.values())
-        if self._adapter.is_diag_mass:
-            initial_mass_matrix = site_value.new_ones(mass_matrix_size)
-        else:
-            initial_mass_matrix = eye_like(site_value, mass_matrix_size)
-        self._adapter.configure(self._warmup_steps,
-                                inv_mass_matrix=initial_mass_matrix,
-                                find_reasonable_step_size_fn=self._find_reasonable_step_size)
+        if site_value is not None:
+            mass_matrix_size = sum(self._r_numels.values())
+            if self._adapter.is_diag_mass:
+                initial_mass_matrix = site_value.new_ones(mass_matrix_size)
+            else:
+                initial_mass_matrix = eye_like(site_value, mass_matrix_size)
+            self._adapter.configure(self._warmup_steps,
+                                    inv_mass_matrix=initial_mass_matrix,
+                                    find_reasonable_step_size_fn=self._find_reasonable_step_size)
         self._initialize_step_size()  # this method also caches z and its potential energy
 
     def _initialize_step_size(self):
@@ -366,7 +372,7 @@ class HMC(TraceKernel):
             z[name] = transform(z[name])
         potential_energy = self._potential_energy(z)
         self._cache(z, potential_energy, None)
-        if self._adapter.adapt_step_size:
+        if z and self._adapter.adapt_step_size:
             self._adapter.reset_step_size_adaptation()
 
     def setup(self, warmup_steps, *args, **kwargs):
@@ -388,6 +394,11 @@ class HMC(TraceKernel):
 
     def sample(self, trace):
         z, potential_energy, z_grads = self._fetch_from_cache()
+        # return early if no sample sites
+        if not z:
+            self._accept_cnt += 1
+            self._t += 1
+            return self._get_trace(z)
         r, _ = self._sample_r(name="r_t={}".format(self._t))
         energy_current = self._kinetic_energy(r) + potential_energy
 

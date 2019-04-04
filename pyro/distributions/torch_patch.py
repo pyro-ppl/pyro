@@ -59,6 +59,16 @@ def _torch_linspace(*args, **kwargs):
     return ret
 
 
+# Fixes a shape error in Multinomial.support with inhomogeneous .total_count
+@patch_dependency('torch.distributions.Multinomial.support')
+@torch.distributions.constraints.dependent_property
+def _Multinomial_support(self):
+    total_count = self.total_count
+    if isinstance(total_count, torch.Tensor):
+        total_count = total_count.unsqueeze(-1)
+    return torch.distributions.constraints.integer_interval(0, total_count)
+
+
 @patch_dependency('torch.einsum')
 def _einsum(equation, *operands):
     if len(operands) == 1 and isinstance(operands[0], (list, tuple)):

@@ -48,11 +48,10 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, sca
             pyro.sample("x", Normal(z, 1), obs=x)
 
     def guide(subsample):
-        loc = pyro.param("loc", lambda: torch.zeros(len(data), requires_grad=True))
-        scale = pyro.param("scale", lambda: torch.tensor([1.0], requires_grad=True))
-        with pyro.plate("data", len(data), subsample_size, subsample) as ind:
-            loc_ind = loc[ind]
-            pyro.sample("z", Normal(loc_ind, scale))
+        scale = pyro.param("scale", lambda: torch.tensor([1.0]))
+        with pyro.plate("data", len(data), subsample_size, subsample):
+            loc = pyro.param("loc", lambda: torch.zeros(len(data)), event_dim=0)
+            pyro.sample("z", Normal(loc, scale))
 
     if scale != 1.0:
         model = poutine.scale(model, scale=scale)

@@ -186,7 +186,7 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
         return tensor * scale
     tensor, mask = broadcast_all(tensor, mask)
     tensor = tensor * scale
-    tensor.masked_fill_(~mask, 0.)
+    tensor.masked_fill_(mask == 0, 0.)
     return tensor
 
 

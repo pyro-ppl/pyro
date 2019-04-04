@@ -14,7 +14,7 @@ pytestmark = pytest.mark.init(rng_seed=123)
 class FlowTests(TestCase):
     def setUp(self):
         # Epsilon is used to compare numerical gradient to analytical one
-        self.epsilon = 1e-3
+        self.epsilon = 1e-4
 
         # Delta is tolerance for testing f(f^{-1}(x)) = x
         self.delta = 1e-6
@@ -28,7 +28,7 @@ class FlowTests(TestCase):
 
         x = torch.randn(1, input_dim)
         flow_x = flow(x)
-        analytic_ldt = flow.log_abs_det_jacobian(x, flow_x).data.sum()
+        analytic_ldt = flow.log_abs_det_jacobian(x, flow_x).data
 
         for j in range(input_dim):
             for k in range(input_dim):
@@ -69,11 +69,6 @@ class FlowTests(TestCase):
         x_true = base_dist.sample(torch.Size([10]))
         y = flow._call(x_true)
 
-        # This line empties the inverse cache, if the flow uses it
-        if hasattr(flow, '_intermediates_cache'):
-            flow._intermediates_cache.pop((y, 'log_scale'))
-            flow._intermediates_cache.pop((y, 'x'))
-
         # Cache is empty, hence must be calculating inverse afresh
         x_calculated = flow._inverse(y)
 
@@ -94,12 +89,19 @@ class FlowTests(TestCase):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
         return dist.InverseAutoregressiveFlowStable(arn, sigmoid_bias=0.5)
 
-    def _make_flipflow(self, input_dim):
+    def _make_dsf(self, input_dim):
+        arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1], param_dims=[16]*3)
+        return dist.DeepSigmoidalFlow(arn, hidden_units=16)
+
+    def _make_permute(self, input_dim):
         permutation = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
         return dist.PermuteTransform(permutation)
 
     def _make_planar(self, input_dim):
         return dist.PlanarFlow(input_dim)
+
+    def _make_radial(self, input_dim):
+        return dist.RadialFlow(input_dim)
 
     def test_iaf_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -109,9 +111,17 @@ class FlowTests(TestCase):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_iaf_stable)
 
+    def test_dsf_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_dsf)
+
     def test_planar_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_planar)
+
+    def test_radial_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_radial)
 
     def test_iaf_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -121,9 +131,9 @@ class FlowTests(TestCase):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_inverse(input_dim, self._make_iaf_stable)
 
-    def test_flipflow_inverses(self):
+    def test_permute_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
-            self._test_inverse(input_dim, self._make_flipflow)
+            self._test_inverse(input_dim, self._make_permute)
 
     def test_iaf_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
@@ -133,10 +143,18 @@ class FlowTests(TestCase):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_iaf_stable)
 
-    def test_flipflow_shapes(self):
+    def test_dsf_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
-            self._test_shape(shape, self._make_flipflow)
+            self._test_shape(shape, self._make_dsf)
+
+    def test_permute_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_permute)
 
     def test_planar_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_planar)
+
+    def test_radial_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_radial)
