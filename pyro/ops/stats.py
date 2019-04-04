@@ -427,6 +427,9 @@ def psis_diagnostic(model, guide, *args, **kwargs):
     Note that we assume that the model and guide are both vectorized. As is
     canonical in Pyro, the args and kwargs are passed to the model and guide.
 
+    Finally note that this implementation is adapated from the implementation
+    in reference [2].
+
     References
     [1] 'Yes, but Did It Work?: Evaluating Variational Inference.'
     Yuling Yao, Aki Vehtari, Daniel Simpson, Andrew Gelman
