@@ -270,6 +270,11 @@ class NUTS(HMC):
 
     def sample(self, trace):
         z, potential_energy, z_grads = self._fetch_from_cache()
+        # return early if no sample sites
+        if not z:
+            self._accept_cnt += 1
+            self._t += 1
+            return self._get_trace(z)
         r, r_flat = self._sample_r(name="r_t={}".format(self._t))
         energy_current = self._kinetic_energy(r) + potential_energy
 

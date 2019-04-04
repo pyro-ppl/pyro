@@ -31,7 +31,7 @@ class InverseAutoregressiveFlow(TransformModule):
     >>> from pyro.nn import AutoRegressiveNN
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> iaf = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
-    >>> iaf_module = pyro.module("my_iaf", iaf)
+    >>> pyro.module("my_iaf", iaf)  # doctest: +SKIP
     >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf])
     >>> iaf_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,

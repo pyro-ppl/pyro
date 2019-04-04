@@ -12,32 +12,32 @@ from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(TransformModule)
-class PlanarFlow(TransformModule):
+class RadialFlow(TransformModule):
     """
-    A 'planar' normalizing flow that uses the transformation
+    A 'radial' normalizing flow that uses the transformation
 
-        :math:`\\mathbf{y} = \\mathbf{x} + \\mathbf{u}\\tanh(\\mathbf{w}^T\\mathbf{z}+b)`
+        :math:`\\mathbf{y} = \\mathbf{x} + \\beta h(\\alpha,r)(\\mathbf{x} - \\mathbf{x}_0)`
 
     where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, and the learnable parameters
-    are :math:`b\\in\\mathbb{R}`, :math:`\\mathbf{u}\\in\\mathbb{R}^D`, :math:`\\mathbf{w}\\in\\mathbb{R}^D` for input
-    dimension :math:`D`. For this to be an invertible transformation, the condition
-    :math:`\\mathbf{w}^T\\mathbf{u}>-1` is enforced.
+    are :math:`\\alpha\\in\\mathbb{R}^+`, :math:`\\beta\\in\\mathbb{R}`, :math:`\\mathbf{x}_0\\in\\mathbb{R}^D`,
+    for input dimension :math:`D`, :math:`r=||\\mathbf{x}-\\mathbf{x}_0||_2`, :math:`h(\\alpha,r)=1/(\\alpha+r)`.
+    For this to be an invertible transformation, the condition :math:`\\beta>-\\alpha` is enforced.
 
     Together with `TransformedDistribution` this provides a way to create richer variational approximations.
 
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> plf = PlanarFlow(10)
-    >>> pyro.module("my_plf", plf)  # doctest: +SKIP
-    >>> plf_dist = dist.TransformedDistribution(base_dist, [plf])
-    >>> plf_dist.sample()  # doctest: +SKIP
+    >>> flow = RadialFlow(10)
+    >>> pyro.module("my_flow", flow)  # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [flow])
+    >>> flow_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
 
     The inverse of this transform does not possess an analytical solution and is left unimplemented. However,
     the inverse is cached when the forward operation is called during sampling, and so samples drawn using
-    planar flow can be scored.
+    radial flow can be scored.
 
     :param input_dim: the dimension of the input (and output) variable.
     :type input_dim: int
@@ -55,25 +55,22 @@ class PlanarFlow(TransformModule):
     event_dim = 1
 
     def __init__(self, input_dim):
-        super(PlanarFlow, self).__init__(cache_size=1)
+        super(RadialFlow, self).__init__(cache_size=1)
 
         self.input_dim = input_dim
-        self.lin = nn.Linear(input_dim, 1)
-        self.u = nn.Parameter(torch.Tensor(input_dim))
+        self._cached_logDetJ = None
+        self.x0 = nn.Parameter(torch.Tensor(input_dim))
+
+        # These are the unconstrained parameters
+        self.alpha_prime = nn.Parameter(torch.Tensor(1))
+        self.beta_prime = nn.Parameter(torch.Tensor(1))
         self.reset_parameters()
 
     def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.u.size(0))
-        self.lin.weight.data.uniform_(-stdv, stdv)
-        self.u.data.uniform_(-stdv, stdv)
-
-    # This method ensures that torch(u_hat, w) > -1, required for invertibility
-    def u_hat(self):
-        u = self.u
-        w = self.lin.weight.squeeze(0)
-        alpha = torch.dot(u, w)
-        a_prime = -1 + F.softplus(alpha)
-        return u + (a_prime - alpha) * w.div(w.norm())
+        stdv = 1. / math.sqrt(self.x0.size(0))
+        self.alpha_prime.data.uniform_(-stdv, stdv)
+        self.beta_prime.data.uniform_(-stdv, stdv)
+        self.x0.data.uniform_(-stdv, stdv)
 
     def _call(self, x):
         """
@@ -83,9 +80,20 @@ class PlanarFlow(TransformModule):
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
+        # Ensure invertibility using approach in appendix A.2
+        alpha = F.softplus(self.alpha_prime)
+        beta = -alpha + F.softplus(self.beta_prime)
 
-        y = x + self.u_hat() * torch.tanh(self.lin(x))
-        return y
+        # Compute y and logDet using Equation 14.
+        diff = x - self.x0
+        r = diff.norm(dim=-1, keepdim=True)
+        h = (alpha + r).reciprocal()
+        h_prime = - (h ** 2)
+        beta_h = beta * h
+
+        self._cached_logDetJ = ((self.input_dim - 1) * torch.log1p(beta_h) +
+                                torch.log1p(beta_h + beta * h_prime * r)).sum(-1)
+        return x + beta_h * diff
 
     def _inverse(self, y):
         """
@@ -97,13 +105,10 @@ class PlanarFlow(TransformModule):
         to some `x` (which was cached on the forward call)
         """
 
-        raise KeyError("PlanarFlow expected to find key in intermediates cache but didn't")
+        raise KeyError("RadialFlow expected to find key in intermediates cache but didn't")
 
     def log_abs_det_jacobian(self, x, y):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        psi_z = (1 - torch.tanh(self.lin(x)).pow(2)) * self.lin.weight
-
-        return (torch.log(torch.abs(1 + torch.matmul(psi_z, self.u_hat())).unsqueeze(-1)) *
-                torch.ones_like(x) / x.size(-1)).sum(-1)
+        return self._cached_logDetJ
