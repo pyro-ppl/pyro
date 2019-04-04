@@ -37,8 +37,8 @@ Pyro Documentation
    contrib.gp
    contrib.minipyro
    contrib.oed
-   contrib.tabular
    contrib.tracking
+   contrib.treecat
 
 
 Indices and tables
