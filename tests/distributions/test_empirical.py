@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from pyro.distributions.empirical import Empirical
-from tests.common import assert_equal
+from tests.common import assert_equal, assert_close
 
 
 @pytest.mark.parametrize("size", [[], [1], [2, 3]])
@@ -19,18 +19,50 @@ def test_unweighted_mean_and_var(size, dtype):
     assert_equal(empirical_dist.variance, true_var)
 
 
-@pytest.mark.parametrize("batch_shape", [[], [1], [2, 3]])
-@pytest.mark.parametrize("sample_shape", [[20], [20, 3, 4]])
+@pytest.mark.parametrize("batch_shape, event_shape", [
+    ([], []),
+    ([2], []),
+    ([2], [5]),
+    ([2], [5, 3]),
+    ([2, 5], [3]),
+])
+@pytest.mark.parametrize("sample_shape", [[], [20], [20, 3, 4]])
 @pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
-def test_unweighted_samples(batch_shape, sample_shape, dtype):
-    samples = []
-    for i in range(5):
-        samples.append(torch.ones(batch_shape, dtype=dtype) * i)
-    samples = torch.stack(samples)
-    empirical_dist = Empirical(samples, torch.ones(5))
+def test_unweighted_samples(batch_shape, event_shape, sample_shape, dtype):
+    agg_dim_size = 5
+    # empirical samples with desired shape
+    dim_ordering = list(range(len(batch_shape + event_shape) + 1))  # +1 for agg dim
+    dim_ordering.insert(len(batch_shape), dim_ordering.pop())
+    emp_samples = torch.arange(agg_dim_size, dtype=dtype)\
+        .expand(batch_shape + event_shape + [agg_dim_size])\
+        .permute(dim_ordering)
+    # initial weight assignment
+    weights = torch.ones(batch_shape + [agg_dim_size])
+    empirical_dist = Empirical(emp_samples, weights)
     samples = empirical_dist.sample(sample_shape=torch.Size(sample_shape))
-    assert_equal(samples.size(), torch.Size(sample_shape + batch_shape))
-    assert_equal(set(samples.view(-1).tolist()), set(range(5)))
+    assert_equal(samples.size(), torch.Size(sample_shape + batch_shape + event_shape))
+
+
+@pytest.mark.parametrize("sample, weights, expected_mean, expected_var", [(
+        torch.tensor([[0., 0., 0.], [1., 1., 1.]]),
+        torch.ones(2),
+        torch.tensor([0.5, 0.5, 0.5]),
+        torch.tensor([0.25, 0.25, 0.25]),
+     ), (
+        torch.tensor([[0., 0., 0.], [1., 1., 1.]]),
+        torch.ones(2, 3),
+        torch.tensor([0., 1.]),
+        torch.tensor([0., 0.]),
+    ),
+])
+def test_sample_examples(sample, weights, expected_mean, expected_var):
+    emp_dist = Empirical(sample, weights)
+    num_samples = 10000
+    assert_equal(emp_dist.mean, expected_mean)
+    assert_equal(emp_dist.variance, expected_var)
+    emp_samples = emp_dist.sample((num_samples,))
+    assert_close(emp_samples.mean(0), emp_dist.mean, rtol=1e-2)
+    assert_close(emp_samples.var(0), emp_dist.variance, rtol=1e-2)
 
 
 @pytest.mark.parametrize("batch_shape, event_shape", [
@@ -87,9 +119,9 @@ def test_weighted_sample_coherence(event_shape, dtype):
     assert_equal(num_ones.item() / 1000, 0.25, prec=0.02)
 
 
+@pytest.mark.parametrize("batch_shape", [[], [1], [2], [2, 3]])
 @pytest.mark.parametrize("event_shape", [[], [1], [2, 3]])
 @pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
-@pytest.mark.parametrize("batch_shape", [[1], [2], [2, 3]])
 def test_weighted_mean_var(event_shape, dtype, batch_shape):
     data = [(1.0, 0.5), (0.0, 1.5), (1.0, 0.5), (0.0, 1.5)]
     samples, weights = [], []

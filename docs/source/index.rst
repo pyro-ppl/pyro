@@ -23,6 +23,7 @@ Pyro Documentation
    optimization
    poutine
    ops
+   pyro.generic
 
 .. toctree::
    :glob:

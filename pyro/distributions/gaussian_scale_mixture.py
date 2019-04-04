@@ -24,11 +24,11 @@ class GaussianScaleMixture(TorchDistribution):
 
     Sigma_ii = (component_scale_k * coord_scale_i) ** 2   (i = 1, ..., D)
 
-    where `component_scale`_k is a positive scale factor and `coord_scale`_i
+    where `component_scale_k` is a positive scale factor and `coord_scale_i`
     are positive scale parameters shared between all K components. The mixture
     weights are controlled by a K-dimensional vector of softmax logits,
     `component_logits`. This distribution implements pathwise derivatives for
-    samples from the distribution.  This distribution does not currently
+    samples from the distribution. This distribution does not currently
     support batched parameters.
 
     See reference [1] for details on the implementations of the pathwise

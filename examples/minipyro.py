@@ -10,21 +10,13 @@ import argparse
 
 import torch
 
-import pyro.distributions as dist
+# We use the pyro.generic interface to support dynamic choice of backend.
+from pyro.generic import pyro_backend
+from pyro.generic import distributions as dist
+from pyro.generic import infer, optim, pyro
 
 
 def main(args):
-    # Because the API in minipyro matches that of Pyro proper, this
-    # example code works with both implementations.
-    if args.full_pyro:
-        import pyro
-        from pyro.infer import SVI, Trace_ELBO
-        from pyro.optim import Adam
-        elbo = Trace_ELBO()
-    else:
-        import pyro.contrib.minipyro as pyro
-        from pyro.contrib.minipyro import SVI, Adam, elbo
-
     # Define a basic model with a single Normal latent random variable `loc`
     # and a batch of Normally distributed observations.
     def model(data):
@@ -42,34 +34,38 @@ def main(args):
     # Generate some data.
     torch.manual_seed(0)
     data = torch.randn(100) + 3.0
-    pyro.get_param_store().clear()
 
-    # Construct an SVI object so we can do variational inference on our
-    # model/guide pair.
-    svi = SVI(model, guide, Adam({"lr": args.learning_rate}), elbo)
+    # Because the API in minipyro matches that of Pyro proper,
+    # training code works with generic Pyro implementations.
+    with pyro_backend(args.backend):
+        # Construct an SVI object so we can do variational inference on our
+        # model/guide pair.
+        elbo = infer.Trace_ELBO()
+        adam = optim.Adam({"lr": args.learning_rate})
+        svi = infer.SVI(model, guide, adam, elbo)
 
-    # Basic training loop
-    for step in range(args.num_steps):
-        loss = svi.step(data)
-        if step % 100 == 0:
-            print("step {} loss = {}".format(step, loss))
+        # Basic training loop
+        pyro.get_param_store().clear()
+        for step in range(args.num_steps):
+            loss = svi.step(data)
+            if step % 100 == 0:
+                print("step {} loss = {}".format(step, loss))
 
-    # Report the final values of the variational parameters
-    # in the guide after training.
-    for name, value in pyro.get_param_store().items():
-        print("{} = {}".format(name, value.detach().cpu().numpy()))
+        # Report the final values of the variational parameters
+        # in the guide after training.
+        for name, value in pyro.get_param_store().items():
+            print("{} = {}".format(name, value.detach().cpu().numpy()))
 
-    # For this simple (conjugate) model we know the exact posterior. In
-    # particular we know that the variational distribution should be
-    # centered near 3.0. So let's check this explicitly.
-    assert (pyro.param("guide_loc") - 3.0).abs() < 0.1
+        # For this simple (conjugate) model we know the exact posterior. In
+        # particular we know that the variational distribution should be
+        # centered near 3.0. So let's check this explicitly.
+        assert (pyro.param("guide_loc") - 3.0).abs() < 0.1
 
 
 if __name__ == "__main__":
-    import pyro
-    assert pyro.__version__.startswith('0.3.0')
+    assert pyro.__version__.startswith('0.3.1')
     parser = argparse.ArgumentParser(description="Mini Pyro demo")
-    parser.add_argument("-f", "--full-pyro", action="store_true", default=False)
+    parser.add_argument("-b", "--backend", default="minipyro")
     parser.add_argument("-n", "--num-steps", default=1001, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.02, type=float)
     args = parser.parse_args()

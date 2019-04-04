@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import logging
-import os
 import warnings
 
 import pytest
@@ -13,10 +12,12 @@ import pyro
 import pyro.distributions as dist
 import pyro.ops.jit
 import pyro.poutine as poutine
+from pyro.distributions.util import scale_and_mask
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, JitTraceMeanField_ELBO, Trace_ELBO,
-                        TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO)
+                        TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, infer_discrete)
 from pyro.optim import Adam
 from pyro.poutine.indep_messenger import CondIndepStackFrame
+from pyro.util import ignore_jit_warnings
 from tests.common import assert_equal
 
 
@@ -27,8 +28,6 @@ def constant(*args, **kwargs):
 
 
 logger = logging.getLogger(__name__)
-pytestmark = pytest.mark.skipif('CUDA_TEST' in os.environ,
-                                reason='https://github.com/uber/pyro/issues/1419')
 
 
 def test_simple():
@@ -127,6 +126,22 @@ def test_grad_expand():
     f(torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True))
     logger.debug('Invoking f')
     f(torch.zeros(2, requires_grad=True), torch.zeros(1, requires_grad=True))
+
+
+def test_scale_and_mask():
+    def f(tensor, scale, mask): return scale_and_mask(tensor, scale=scale, mask=mask)
+
+    x = torch.tensor([-float('inf'), -1., 0., 1., float('inf')])
+    y = x / x.unsqueeze(-1)
+    mask = y == y
+    scale = torch.ones(y.shape)
+    jit_f = torch.jit.trace(f, (y, scale, mask))
+    assert_equal(jit_f(y, scale, mask), f(y, scale, mask))
+
+    mask = torch.tensor([True])
+    y = torch.tensor([1.5, 2.5, 3.5, 4.5, 5.5, 6.5])
+    scale = torch.ones(y.shape)
+    assert_equal(jit_f(y, scale, mask), f(y, scale, mask))
 
 
 def test_masked_fill():
@@ -397,6 +412,75 @@ def test_dirichlet_bernoulli(Elbo, vectorized):
     svi = SVI(model, guide, optim, elbo)
     for step in range(40):
         svi.step(data)
+
+
+@pytest.mark.parametrize('length', [1, 2, 10])
+def test_traceenum_elbo(length):
+    hidden_dim = 10
+    transition = pyro.param("transition",
+                            0.3 / hidden_dim + 0.7 * torch.eye(hidden_dim),
+                            constraint=constraints.positive)
+    means = pyro.param("means", torch.arange(float(hidden_dim)))
+    data = 1 + 2 * torch.randn(length)
+
+    @ignore_jit_warnings()
+    def model(data):
+        transition = pyro.param("transition")
+        means = pyro.param("means")
+        states = [torch.tensor(0)]
+        for t in pyro.markov(range(len(data))):
+            states.append(pyro.sample("states_{}".format(t),
+                                      dist.Categorical(transition[states[-1]]),
+                                      infer={"enumerate": "parallel"}))
+            pyro.sample("obs_{}".format(t),
+                        dist.Normal(means[states[-1]], 1.),
+                        obs=data[t])
+        return tuple(states)
+
+    def guide(data):
+        pass
+
+    expected_loss = TraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(model, guide, data)
+    actual_loss = JitTraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(model, guide, data)
+    assert_equal(expected_loss, actual_loss)
+
+    expected_grads = grad(expected_loss, [transition, means], allow_unused=True)
+    actual_grads = grad(actual_loss, [transition, means], allow_unused=True)
+    for e, a, name in zip(expected_grads, actual_grads, ["transition", "means"]):
+        assert_equal(e, a, msg="bad gradient for {}".format(name))
+
+
+@pytest.mark.parametrize('length', [1, 2, 10])
+@pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
+def test_infer_discrete(temperature, length):
+
+    @ignore_jit_warnings()
+    def hmm(transition, means, data):
+        states = [torch.tensor(0)]
+        for t in pyro.markov(range(len(data))):
+            states.append(pyro.sample("states_{}".format(t),
+                                      dist.Categorical(transition[states[-1]]),
+                                      infer={"enumerate": "parallel"}))
+            pyro.sample("obs_{}".format(t),
+                        dist.Normal(means[states[-1]], 1.),
+                        obs=data[t])
+        return tuple(states)
+
+    hidden_dim = 10
+    transition = 0.3 / hidden_dim + 0.7 * torch.eye(hidden_dim)
+    means = torch.arange(float(hidden_dim))
+    data = 1 + 2 * torch.randn(length)
+
+    decoder = infer_discrete(hmm, first_available_dim=-1, temperature=temperature)
+    jit_decoder = pyro.ops.jit.trace(decoder)
+
+    states = decoder(transition, means, data)
+    jit_states = jit_decoder(transition, means, data)
+    assert len(states) == len(jit_states)
+    for state, jit_state in zip(states, jit_states):
+        assert state.shape == jit_state.shape
+        if temperature == 0:
+            assert_equal(state, jit_state)
 
 
 @pytest.mark.parametrize("x,y", [

@@ -102,7 +102,7 @@ def _config_enumerate(default, expand, num_samples):
     return config_fn
 
 
-def config_enumerate(guide=None, default="sequential", expand=False, num_samples=None):
+def config_enumerate(guide=None, default="parallel", expand=False, num_samples=None):
     """
     Configures enumeration for all relevant sites in a guide. This is mainly
     used in conjunction with :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO`.
@@ -124,14 +124,14 @@ def config_enumerate(guide=None, default="sequential", expand=False, num_samples
         def guide1(*args, **kwargs):
             ...
 
-        @config_enumerate(default="parallel", expand=True)
+        @config_enumerate(default="sequential", expand=True)
         def guide2(*args, **kwargs):
             ...
 
     :param callable guide: a pyro model that will be used as a guide in
         :class:`~pyro.infer.svi.SVI`.
     :param str default: Which enumerate strategy to use, one of
-        "sequential", "parallel", or None.
+        "sequential", "parallel", or None. Defaults to "parallel".
     :param bool expand: Whether to expand enumerated sample values. See
         :meth:`~pyro.distributions.Distribution.enumerate_support` for details.
         This only applies to exhaustive enumeration, where ``num_samples=None``.

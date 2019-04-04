@@ -11,12 +11,38 @@ from pyro.distributions.util import copy_docs_from
 @copy_docs_from(TorchDistribution)
 class Empirical(TorchDistribution):
     r"""
-    Empirical distribution associated with the sampled data.
+    Empirical distribution associated with the sampled data. Note that the shape
+    requirement for `log_weights` is that its shape must match the leftmost shape
+    of `samples`. Samples are aggregated along the ``aggregation_dim``, which is
+    the rightmost dim of `log_weights`.
+
+    Example:
+
+    >>> emp_dist = Empirical(torch.randn(2, 3, 10), torch.ones(2, 3))
+    >>> emp_dist.batch_shape
+    torch.Size([2])
+    >>> emp_dist.event_shape
+    torch.Size([10])
+
+    >>> single_sample = emp_dist.sample()
+    >>> single_sample.shape
+    torch.Size([2, 10])
+    >>> batch_sample = emp_dist.sample((100,))
+    >>> batch_sample.shape
+    torch.Size([100, 2, 10])
+
+    >>> emp_dist.log_prob(single_sample).shape
+    torch.Size([2])
+    >>> # Vectorized samples cannot be scored by log_prob.
+    >>> with pyro.validation_enabled():
+    ...     emp_dist.log_prob(batch_sample).shape
+    Traceback (most recent call last):
+    ...
+    ValueError: ``value.shape`` must be torch.Size([2, 10])
 
     :param torch.Tensor samples: samples from the empirical distribution.
     :param torch.Tensor log_weights: log weights (optional) corresponding
-        to the samples. The leftmost shape of ``log_weights`` must match
-        that of samples
+        to the samples.
     """
 
     arg_constraints = {}
@@ -47,8 +73,14 @@ class Empirical(TorchDistribution):
         return self._log_weights.numel()
 
     def sample(self, sample_shape=torch.Size()):
-        sample_idx = self._categorical.sample(sample_shape)
-        return self._samples[sample_idx]
+        sample_idx = self._categorical.sample(sample_shape)  # sample_shape x batch_shape
+        # reorder samples to bring aggregation_dim to the front:
+        # batch_shape x num_samples x event_shape -> num_samples x batch_shape x event_shape
+        samples = self._samples.unsqueeze(0).transpose(0, self._aggregation_dim + 1).squeeze(self._aggregation_dim + 1)
+        # make sample_idx.shape compatible with samples.shape: sample_shape_numel x batch_shape x event_shape
+        sample_idx = sample_idx.reshape((-1,) + self.batch_shape + (1,) * len(self.event_shape))
+        sample_idx = sample_idx.expand((-1,) + samples.shape[1:])
+        return samples.gather(0, sample_idx).reshape(sample_shape + samples.shape[1:])
 
     def log_prob(self, value):
         """

@@ -1,12 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-import os
-
 import torch
 
-if 'READTHEDOCS' not in os.environ:
-    # RTD is running 0.4.1 due to a memory issue with pytorch 1.0
-    assert torch.__version__.startswith('1.')
+assert torch.__version__.startswith('1.')
 
 
 def patch_dependency(target, root_module=torch):
@@ -61,6 +57,16 @@ def _torch_linspace(*args, **kwargs):
     else:
         ret = unpatched_fn(*args, **kwargs)
     return ret
+
+
+# Fixes a shape error in Multinomial.support with inhomogeneous .total_count
+@patch_dependency('torch.distributions.Multinomial.support')
+@torch.distributions.constraints.dependent_property
+def _Multinomial_support(self):
+    total_count = self.total_count
+    if isinstance(total_count, torch.Tensor):
+        total_count = total_count.unsqueeze(-1)
+    return torch.distributions.constraints.integer_interval(0, total_count)
 
 
 @patch_dependency('torch.einsum')

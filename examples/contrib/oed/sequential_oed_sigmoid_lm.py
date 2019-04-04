@@ -144,7 +144,7 @@ def main(num_experiments, num_runs, plot=True):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.3.0')
+    assert pyro.__version__.startswith('0.3.1')
     parser = argparse.ArgumentParser(description="Sigmoid iterated experiment design")
     parser.add_argument("--num-experiments", nargs="?", default=5, type=int)
     parser.add_argument("--num-runs", nargs="?", default=5, type=int)

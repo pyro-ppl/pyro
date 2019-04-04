@@ -84,9 +84,9 @@ def true_ape(ns):
     return torch.tensor(true_ape)
 
 
-def main(num_vi_steps, num_bo_steps):
+def main(num_vi_steps, num_bo_steps, seed):
 
-    pyro.set_rng_seed(42)
+    pyro.set_rng_seed(seed)
     pyro.clear_param_store()
 
     est_ape = partial(estimated_ape, num_vi_steps=num_vi_steps)
@@ -113,9 +113,11 @@ def main(num_vi_steps, num_bo_steps):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.3.0')
+    assert pyro.__version__.startswith('0.3.1')
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
     parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
     parser.add_argument('--num-bo-steps', nargs="?", default=5, type=int)
+    parser.add_argument('--seed', type=int, default=1, metavar='S',
+                        help='random seed (default: 1)')
     args = parser.parse_args()
-    main(args.num_vi_steps, args.num_bo_steps)
+    main(args.num_vi_steps, args.num_bo_steps, args.seed)
