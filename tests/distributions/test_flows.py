@@ -82,7 +82,7 @@ class FlowTests(TestCase):
         assert sample.shape == base_shape
 
     def _make_householder(self, input_dim):
-        return dist.HouseholderFlow(input_dim)
+        return dist.HouseholderFlow(input_dim, count_transforms=min(1, input_dim//2))
 
     def _make_iaf(self, input_dim):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])

@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import math
+import warnings
 
 import torch
 import torch.nn as nn
@@ -40,6 +41,8 @@ class HouseholderFlow(TransformModule):
 
     :param input_dim: the dimension of the input (and output) variable.
     :type input_dim: int
+    :param count_transforms: number of layers of Householder flow to apply.
+    :type count_transforms: int
 
     References:
 
@@ -53,15 +56,21 @@ class HouseholderFlow(TransformModule):
     bijective = True
     event_dim = 1
 
-    def __init__(self, input_dim):
+    def __init__(self, input_dim, count_transforms=1):
         super(HouseholderFlow, self).__init__(cache_size=1)
 
         self.input_dim = input_dim
-        self.u = nn.Parameter(torch.Tensor(input_dim))
+        assert count_transforms > 0
+        if count_transforms > input_dim:
+            warnings.warn(
+                "{} layers of Householder flow applied to input of dimension {}".format(
+                    count_transforms, input_dim))
+        self.count_transforms = count_transforms
+        self.u = nn.Parameter(torch.Tensor(count_transforms, input_dim))
         self.reset_parameters()
 
     def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.u.size(0))
+        stdv = 1. / math.sqrt(self.u.size(-1))
         self.u.data.uniform_(-stdv, stdv)
 
     def _call(self, x):
@@ -73,9 +82,11 @@ class HouseholderFlow(TransformModule):
         sample from the base distribution (or the output of a previous flow)
         """
 
-        squared_norm = self.u.pow(2).sum(-1)
-        projection = (self.u * x).sum(dim=-1, keepdim=True) * self.u / squared_norm
-        y = x - 2. * projection
+        y = x
+        for idx in range(self.count_transforms):
+            squared_norm = self.u[idx].pow(2).sum(-1)
+            projection = (self.u[idx] * x).sum(dim=-1, keepdim=True) * self.u[idx] / squared_norm
+            y = y - 2. * projection
         return y
 
     def _inverse(self, y):
@@ -83,13 +94,10 @@ class HouseholderFlow(TransformModule):
         :param y: the output of the bijection
         :type y: torch.Tensor
 
-        Inverts y => x. As noted above, this implementation is incapable of inverting arbitrary values
-        `y`; rather it assumes `y` is the result of a previously computed application of the bijector
-        to some `x` (which was cached on the forward call)
+        Inverts y => x. The Householder transformation, H, is "involutory," i.e. H^2 = I. If you reflect a
+        point around a plane, then the same operation will reflect it back
         """
 
-        # The Householder transformation, H, is "involutory," i.e. H^2 = I
-        # If you reflect a point around a plane, then the same operation will reflect it back
         return self._call(y)
 
     def log_abs_det_jacobian(self, x, y):
