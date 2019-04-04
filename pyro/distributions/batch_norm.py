@@ -28,8 +28,8 @@ class BatchNormTransform(TransformModule):
     When the module is set to training mode, the moving averages of the sample mean and variance are updated every time
     the inverse operator is called, e.g., when a normalizing flow scores a minibatch with the `log_prob` method.
 
-    Also, when module is set to training mode, the sample mean and variance on the current minibatch are used in place
-    of the smoothed averages, :math:`\\hat{\\mu}` and :math:`\\hat{\\sigma^2}`, for the inverse operator. For this
+    Also, when the module is set to training mode, the sample mean and variance on the current minibatch are used in
+    place of the smoothed averages, :math:`\\hat{\\mu}` and :math:`\\hat{\\sigma^2}`, for the inverse operator. For this
     reason it is not the case that :math:`x=g(g^{-1}(x))` during training, i.e., that the inverse operation is the
     inverse of the forward one.
 
