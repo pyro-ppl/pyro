@@ -2,9 +2,8 @@ from __future__ import absolute_import, division, print_function
 import torch
 import warnings
 
+import pyro
 import pyro.poutine as poutine
-
-from pyro.primitives import plate
 
 from .abstract_infer import TracePosterior
 from .enum import get_importance_trace
@@ -84,28 +83,41 @@ class Importance(TracePosterior):
         return ess
 
 
-def vectorized_importance_weights(model, guide, num_samples, *args, **kwargs):
+def vectorized_importance_weights(model, guide, *args, **kwargs):
 
-    with plate("num_particles_vectorized", num_samples, dim=-10):
-        model_trace, guide_trace = get_importance_trace(
-            "flat", 10, model, guide, *args, **kwargs)
+    num_samples = kwargs.pop("num_samples", 1)
+    max_plate_nesting = kwargs.pop("max_plate_nesting", 7)
+    normalized = kwargs.pop("normalized", False)
+
+    def vectorize(fn):
+        def _fn(*args, **kwargs):
+            with pyro.plate("num_particles_vectorized", num_samples, dim=-max_plate_nesting):
+                return fn(*args, **kwargs)
+        return _fn
+
+    model_trace, guide_trace = get_importance_trace(
+        "flat", max_plate_nesting, vectorize(model), vectorize(guide), *args, **kwargs)
 
     guide_trace.pack_tensors()
     model_trace.pack_tensors(guide_trace.plate_to_symbol)
 
-    wd = guide_trace.plate_to_symbol["num_particles_vectorized"]
-    log_weights = 0.
-    for site in model_trace.nodes.values():
-        if site["type"] != "sample":
-            continue
-        log_weights += torch.einsum(site["packed"]["log_prob"]._pyro_dims + "->" + wd,
-                                    site["packed"]["log_prob"])
+    if num_samples == 1:
+        log_weights = model_trace.log_prob_sum() - guide_trace.log_prob_sum()
+    else:
+        wd = guide_trace.plate_to_symbol["num_particles_vectorized"]
+        log_weights = 0.
+        for site in model_trace.nodes.values():
+            if site["type"] != "sample":
+                continue
+            log_weights += torch.einsum(site["packed"]["log_prob"]._pyro_dims + "->" + wd,
+                                        [site["packed"]["log_prob"]])
 
-    for site in guide_trace.nodes.values():
-        if site["type"] != "sample":
-            continue
-        log_weights -= torch.einsum(site["packed"]["log_prob"]._pyro_dims + "->" + wd,
-                                    site["packed"]["log_prob"])
+        for site in guide_trace.nodes.values():
+            if site["type"] != "sample":
+                continue
+            log_weights -= torch.einsum(site["packed"]["log_prob"]._pyro_dims + "->" + wd,
+                                        site["packed"]["log_prob"])
 
-    log_weights = log_weights - torch.logsumexp(log_weights, 0)
+    if normalized:
+        log_weights = log_weights - torch.logsumexp(log_weights)
     return log_weights, model_trace, guide_trace

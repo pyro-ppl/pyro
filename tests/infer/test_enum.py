@@ -18,6 +18,8 @@ import pyro.poutine as poutine
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import SVI, config_enumerate
 from pyro.infer.enum import iter_discrete_traces
+from pyro.infer.importance import vectorized_importance_weights
+from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from pyro.infer.util import LAST_CACHE_SIZE
 from pyro.util import torch_isnan
@@ -3181,3 +3183,54 @@ def test_backwardsample_posterior_restrictions(ok, enumerate_guide, num_particle
     else:
         with pytest.raises(NotImplementedError, match="sample_posterior"):
             elbo.sample_posterior(model, guide)
+
+
+@pytest.mark.parametrize("num_samples", [100000])
+def test_vectorized_importance(num_samples):
+
+    pyro.param("model_probs_a",
+               torch.tensor([0.45, 0.55]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_b",
+               torch.tensor([0.6, 0.4]),
+               constraint=constraints.simplex)
+    pyro.param("model_probs_c",
+               torch.tensor([[[0.4, 0.5, 0.1], [0.3, 0.5, 0.2]],
+                             [[0.3, 0.4, 0.3], [0.4, 0.4, 0.2]]]),
+               constraint=constraints.simplex)
+
+    pyro.param("guide_probs_a",
+               torch.tensor([0.33, 0.67]),
+               constraint=constraints.simplex)
+
+    pyro.param("guide_probs_b",
+               torch.tensor([0.8, 0.2]),
+               constraint=constraints.simplex)
+
+    data = torch.tensor([[0, 1], [0, 2]])
+    c_ind = torch.arange(3, dtype=torch.long)
+
+    def model():
+        probs_a = pyro.param("model_probs_a")
+        probs_b = pyro.param("model_probs_b")
+        probs_c = pyro.param("model_probs_c")
+        a = pyro.sample("a", dist.Categorical(probs_a))
+        with pyro.plate("outer", 2):
+            b = pyro.sample("b", dist.Categorical(probs_b))
+            with pyro.plate("inner", 2):
+                pyro.sample("c",
+                            dist.Categorical(probs_c[a.unsqueeze(-1), b.unsqueeze(-1), c_ind]),
+                            obs=data)
+
+    def guide():
+        probs_a = pyro.param("guide_probs_a")
+        pyro.sample("a", dist.Categorical(probs_a))
+        probs_b = pyro.param("guide_probs_b")
+        with pyro.plate("outer", 2):
+            pyro.sample("b", dist.Categorical(probs_b))
+
+    vectorized_weights, _, _ = vectorized_importance_weights(model, guide, num_samples=num_samples)
+
+    elbo = Trace_ELBO(vectorize_particles=True, num_particles=num_samples).loss(model, guide)
+
+    assert_equal(vectorized_weights.sum().item() / num_samples, -elbo)
