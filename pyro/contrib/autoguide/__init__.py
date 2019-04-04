@@ -843,7 +843,7 @@ class AutoAutoregressiveNormal(AutoContinuous):
 
         # Sample the rest that do
         for idx in range(1, self.latent_dim):
-            pyro.module(f"{self.prefix}_{idx}_encoder", self.nns[idx - 1])
+            pyro.module("{}_{}_encoder".format(self.prefix, idx), self.nns[idx - 1])
             z_prev = torch.stack(unconstrained_samples[:idx], dim=-1)
             z_loc, z_lg_scale = self.nns[idx - 1](z_prev)
             unconstrained_samples.append(
