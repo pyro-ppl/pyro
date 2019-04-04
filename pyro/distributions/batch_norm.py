@@ -128,4 +128,4 @@ class BatchNormTransform(TransformModule):
         else:
             # NOTE: You wouldn't typically run this function in eval mode, but included for gradient tests
             var = self.moving_variance
-        return -self.constrained_gamma.log() + 0.5 * torch.log(var + self.epsilon)
+        return (-self.constrained_gamma.log() + 0.5 * torch.log(var + self.epsilon))
