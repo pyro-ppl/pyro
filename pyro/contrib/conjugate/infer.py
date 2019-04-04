@@ -1,6 +1,3 @@
-from functools import reduce
-from operator import mul
-
 import pyro.distributions as dist
 from pyro.distributions.util import sum_leftmost
 from pyro.poutine.messenger import Messenger
@@ -67,7 +64,7 @@ class BetaBinomialPair(object):
         concentration0 = self._latent.concentration0
         total_count = self._conditional.total_count
         reduce_dims = len(obs.size()) - len(concentration1.size())
-        num_obs = reduce(mul, obs.size()[:reduce_dims], 1)
+        num_obs = obs.shape[:reduce_dims].numel()
         # Unexpand total_count to have the same shape as concentration0.
         # Raise exception if this isn't possible.
         total_count = total_count[tuple(slice(None) if stride else slice(1)
@@ -105,7 +102,7 @@ class GammaPoissonPair(object):
         concentration = self._latent.concentration
         rate = self._latent.rate
         reduce_dims = len(obs.size()) - len(rate.size())
-        num_obs = reduce(mul, obs.size()[:reduce_dims], 1)
+        num_obs = obs.shape[:reduce_dims].numel()
         summed_obs = sum_leftmost(obs, reduce_dims)
         return dist.Gamma(concentration + summed_obs, rate + num_obs)
 
