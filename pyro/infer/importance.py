@@ -4,7 +4,10 @@ import warnings
 
 import pyro.poutine as poutine
 
+from pyro.primitives import plate
+
 from .abstract_infer import TracePosterior
+from .enum import get_importance_trace
 
 
 class Importance(TracePosterior):
@@ -79,3 +82,30 @@ class Importance(TracePosterior):
             warnings.warn("The log_weights list is empty, effective sample size is zero.")
             ess = 0
         return ess
+
+
+def vectorized_importance_weights(model, guide, num_samples, *args, **kwargs):
+
+    with plate("num_particles_vectorized", num_samples, dim=-10):
+        model_trace, guide_trace = get_importance_trace(
+            "flat", 10, model, guide, *args, **kwargs)
+
+    guide_trace.pack_tensors()
+    model_trace.pack_tensors(guide_trace.plate_to_symbol)
+
+    wd = guide_trace.plate_to_symbol["num_particles_vectorized"]
+    log_weights = 0.
+    for site in model_trace.nodes.values():
+        if site["type"] != "sample":
+            continue
+        log_weights += torch.einsum(site["packed"]["log_prob"]._pyro_dims + "->" + wd,
+                                    site["packed"]["log_prob"])
+
+    for site in guide_trace.nodes.values():
+        if site["type"] != "sample":
+            continue
+        log_weights -= torch.einsum(site["packed"]["log_prob"]._pyro_dims + "->" + wd,
+                                    site["packed"]["log_prob"])
+
+    log_weights = log_weights - torch.logsumexp(log_weights, 0)
+    return log_weights, model_trace, guide_trace
