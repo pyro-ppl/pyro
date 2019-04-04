@@ -331,10 +331,11 @@ def test_beta_binomial(hyperpriors):
             with pyro.plate("plate_1", data.shape[-2]):
                 probs = pyro.sample("probs", beta_binom.latent(alpha, beta))
                 with pyro.plate("data", data.shape[0]):
-                    pyro.sample("binomial", beta_binom.conditional(probs=probs, total_count=1000), obs=data)
+                    pyro.sample("binomial", beta_binom.conditional(probs=probs, total_count=total_count), obs=data)
 
     true_probs = torch.tensor([[0.7, 0.4], [0.6, 0.4]])
-    data = dist.Binomial(total_count=1000, probs=true_probs).sample(sample_shape=(torch.Size((10,))))
+    total_count = torch.tensor([[1000, 600], [400, 800]])
+    data = dist.Binomial(total_count=total_count, probs=true_probs).sample(sample_shape=(torch.Size((10,))))
     hmc_kernel = NUTS(collapse_conjugate(model), jit_compile=True, ignore_jit_warnings=True)
     mcmc_run = MCMC(hmc_kernel, num_samples=80, warmup_steps=50).run(data)
     mcmc_run.exec_traces = [poutine.trace(uncollapse_conjugate(model, tr)).get_trace(data)
