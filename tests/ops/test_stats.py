@@ -1,11 +1,12 @@
 from __future__ import absolute_import, division, print_function
+import warnings
 
 import pytest
 import torch
 
 from pyro.ops.stats import (autocorrelation, autocovariance, effective_sample_size, gelman_rubin,
                             hpdi, pi, quantile, resample, split_gelman_rubin, waic, _cummin,
-                            _fft_next_good_size)
+                            _fft_next_good_size, fit_generalized_pareto)
 from tests.common import assert_equal, xfail_if_not_implemented
 
 
@@ -236,3 +237,16 @@ def test_weighted_waic():
     w3, p3 = waic(x.t(), log_weights, dim=-1)
     assert_equal(w1, w3)
     assert_equal(p1, p3)
+
+
+@pytest.mark.parametrize('k', [0.2, 0.5])
+@pytest.mark.parametrize('sigma', [0.8, 1.3])
+def test_fit_generalized_pareto(k, sigma, n_samples=5000):
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        from scipy.stats import genpareto
+
+        X = genpareto.rvs(c=k, scale=sigma, size=n_samples)
+        fit_k, fit_sigma = fit_generalized_pareto(torch.tensor(X))
+        assert_equal(k, fit_k, prec=0.02)
+        assert_equal(sigma, fit_sigma, prec=0.02)
