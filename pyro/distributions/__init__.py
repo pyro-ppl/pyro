@@ -16,6 +16,7 @@ from pyro.distributions.naf import DeepSigmoidalFlow
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
 from pyro.distributions.permute import PermuteTransform
 from pyro.distributions.planar import PlanarFlow
+from pyro.distributions.radial import RadialFlow
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.relaxed_straight_through import (RelaxedBernoulliStraightThrough,
                                                          RelaxedOneHotCategoricalStraightThrough)
@@ -51,6 +52,7 @@ __all__ = [
     "OMTMultivariateNormal",
     "PermuteTransform",
     "PlanarFlow",
+    "RadialFlow",
     "Rejector",
     "RelaxedBernoulliStraightThrough",
     "RelaxedOneHotCategoricalStraightThrough",
