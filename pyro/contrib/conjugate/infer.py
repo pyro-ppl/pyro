@@ -7,45 +7,33 @@ from pyro.poutine.messenger import Messenger
 from pyro.poutine.replay_messenger import ReplayMessenger
 
 
-class _Beta(dist.Beta):
-    collapsible = True
+def _make_cls(base, class_attrs, instance_attrs, parent_linkage=None):
+    def _expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(cls, _instance)
+        for attr in instance_attrs:
+            setattr(new, attr, getattr(self, attr))
+        if parent_linkage:
+            setattr(new.parent, parent_linkage, new)
+        return base.expand(self, batch_shape, _instance=new)
 
-    def __init__(self, parent, *args, **kwargs):
-        self.parent = parent
-        self.site_name = None
-        super(_Beta, self).__init__(*args, **kwargs)
-
-    def expand(self, batch_shape, _instance=None):
-        new = self._get_checked_instance(_Beta, _instance)
-        new.site_name = self.site_name
-        new.parent = self.parent
-        new.parent._latent = new
-        return super(_Beta, self).expand(batch_shape, _instance=new)
-
-
-class _Binomial(dist.Binomial):
-    marginalize_latent = True
-
-    def __init__(self, parent, *args, **kwargs):
-        self.parent = parent
-        super(_Binomial, self).__init__(*args, **kwargs)
-
-    def expand(self, batch_shape, _instance=None):
-        new = self._get_checked_instance(_Binomial, _instance)
-        new.parent = self.parent
-        new.parent._conditional = new
-        return super(_Binomial, self).expand(batch_shape, _instance=new)
+    name = "_" + base.__name__
+    cls = type(name, (base,), instance_attrs)
+    for k, v in class_attrs.items():
+        setattr(cls, k, v)
+    cls.expand = _expand
+    return cls
 
 
-class _BetaBinomial(dist.BetaBinomial):
-    def __init__(self, parent, *args, **kwargs):
-        self.parent = parent
-        super(_BetaBinomial, self).__init__(*args, **kwargs)
+def _latent(base, parent):
+    return _make_cls(base, {"collapsible": True}, {"site_name": None, "parent": parent}, "_latent")
 
-    def expand(self, batch_shape, _instance=None):
-        new = self._get_checked_instance(_BetaBinomial, _instance)
-        new.parent = self.parent
-        return super(_BetaBinomial, self).expand(batch_shape, _instance=new)
+
+def _conditional(base, parent):
+    return _make_cls(base, {"marginalize_latent": True}, {"parent": parent}, "_conditional")
+
+
+def _compound(base, parent):
+    return _make_cls(base, {}, {"parent": parent})
 
 
 class BetaBinomialPair(object):
@@ -54,11 +42,11 @@ class BetaBinomialPair(object):
         self._conditional = None
 
     def latent(self, *args, **kwargs):
-        self._latent = _Beta(self, *args, **kwargs)
+        self._latent = _latent(dist.Beta, parent=self)(*args, **kwargs)
         return self._latent
 
     def conditional(self, *args, **kwargs):
-        self._conditional = _Binomial(self, *args, **kwargs)
+        self._conditional = _conditional(dist.Binomial, parent=self)(*args, **kwargs)
         return self._conditional
 
     def posterior(self, obs):
@@ -75,18 +63,41 @@ class BetaBinomialPair(object):
                          validate_args=self._latent._validate_args)
 
     def compound(self):
-        return _BetaBinomial(self,
-                             concentration1=self._latent.concentration1,
-                             concentration0=self._latent.concentration0,
-                             total_count=self._conditional.total_count)
+        return _compound(dist.BetaBinomial, parent=self)(concentration1=self._latent.concentration1,
+                                                         concentration0=self._latent.concentration0,
+                                                         total_count=self._conditional.total_count)
+
+
+class GammaPoissonPair(object):
+    def __init__(self):
+        self._latent = None
+        self._conditional = None
+
+    def latent(self, *args, **kwargs):
+        self._latent = _latent(dist.Gamma, parent=self)(*args, **kwargs)
+        return self._latent
+
+    def conditional(self, *args, **kwargs):
+        self._conditional = _conditional(dist.Poisson, parent=self)(*args, **kwargs)
+        return self._conditional
+
+    def posterior(self, obs):
+        concentration = self._latent.concentration
+        rate = self._latent.rate
+        reduce_dims = len(obs.size()) - len(rate.size())
+        num_obs = reduce(mul, obs.size()[:reduce_dims], 1)
+        summed_obs = sum_leftmost(obs, reduce_dims)
+        return dist.Gamma(concentration + summed_obs, rate + num_obs)
+
+    def compound(self):
+        return _compound(dist.GammaPoisson, parent=self)(concentration=self._latent.concentration,
+                                                         rate=self._latent.rate)
 
 
 class UncollapseConjugateMessenger(ReplayMessenger):
     r"""
     Extends `~pyro.poutine.replay_messenger.ReplayMessenger` to uncollapse
-    compound distributions. Note that if the original collapsed observed site
-    was named "x", it is replaced with a sample site named "x.latent" followed
-    by an observed site name "x.predictive".
+    compound distributions.
     """
     def _pyro_sample(self, msg):
         is_collapsible = getattr(msg["fn"], "collapsible", False)
@@ -133,8 +144,11 @@ class CollapseConjugateMessenger(Messenger):
 
 def collapse_conjugate(fn=None):
     r"""
-    This simply collapses (removes from the trace) and sample sites that have
-    `collapse=True` set in their `infer` config.
+    This replaces a latent-observed pair by collapsing the latent site
+    (whose distribution has attribute `collapsible=True`), and replacing the
+    observed site (whose distribution has attribute `marginalize_latent=True`)
+    with a compound probability distribution that marginalizes out the latent
+    site.
     """
     msngr = CollapseConjugateMessenger()
     return msngr(fn) if fn is not None else msngr
