@@ -7,7 +7,20 @@ from pyro.poutine.messenger import Messenger
 from pyro.poutine.replay_messenger import ReplayMessenger
 
 
-def _make_cls(base, class_attrs, instance_attrs, parent_linkage=None):
+def _make_cls(base, static_attrs, instance_attrs, parent_linkage=None):
+    r"""
+    Dynamically create classes named `_ + base.__name__`, which extend the
+    base class with other optional instance and class attributes, and have
+    a custom `.expand` method to propagate these attributes on expanded
+    instances.
+
+    :param cls base: Base class.
+    :param dict static_attrs: static attributes to add to class.
+    :param dict instance_attrs: instance attributes for initialization.
+    :param str parent_linkage: attribute in the parent class that holds
+        a reference to the distribution class.
+    :return cls: dynamically generated class.
+    """
     def _expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(cls, _instance)
         for attr in instance_attrs:
@@ -18,7 +31,7 @@ def _make_cls(base, class_attrs, instance_attrs, parent_linkage=None):
 
     name = "_" + base.__name__
     cls = type(name, (base,), instance_attrs)
-    for k, v in class_attrs.items():
+    for k, v in static_attrs.items():
         setattr(cls, k, v)
     cls.expand = _expand
     return cls
