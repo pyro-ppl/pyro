@@ -19,7 +19,7 @@ class BatchNormTransform(TransformModule):
 
     that is, the standard batch norm equation, where :math:`x` is the input, :math:`y` is the output,
     :math:`\\gamma,\\beta` are learnable parameters, and :math:`\\hat{\\mu}`/:math:`\\hat{\\sigma^2}` are smoothed
-    running averages of the sample mean and variance, respectively. The constraint :math:`\\gamma>0` is enforced to 
+    running averages of the sample mean and variance, respectively. The constraint :math:`\\gamma>0` is enforced to
     ease calculation of the log-det-Jacobian term.
 
     This is an element-wise transform, and when applied to a vector, learns two parameters (:math:`\\gamma,\\beta`)
@@ -122,5 +122,9 @@ class BatchNormTransform(TransformModule):
         """
         Calculates the elementwise determinant of the log jacobian, dx/dy
         """
-        var = torch.var(y, dim=0, keepdim=True)
-        return (-self.constrained_gamma.log() + 0.5 * torch.log(var + self.epsilon))
+        if self.training:
+            var = torch.var(y, dim=0, keepdim=True)
+        else:
+            # NOTE: You wouldn't typically run this function in eval mode, but included for gradient tests
+            var = self.moving_variance
+        return -self.constrained_gamma.log() + 0.5 * torch.log(var + self.epsilon)
