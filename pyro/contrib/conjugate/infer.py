@@ -64,7 +64,6 @@ class BetaBinomialPair(object):
         concentration0 = self._latent.concentration0
         total_count = self._conditional.total_count
         reduce_dims = len(obs.size()) - len(concentration1.size())
-        num_obs = obs.shape[:reduce_dims].numel()
         # Unexpand total_count to have the same shape as concentration0.
         # Raise exception if this isn't possible.
         total_count = sum_leftmost(total_count, reduce_dims)
