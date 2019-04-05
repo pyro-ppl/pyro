@@ -112,15 +112,15 @@ class UncollapseConjugateMessenger(ReplayMessenger):
     def _pyro_sample(self, msg):
         is_collapsible = getattr(msg["fn"], "collapsible", False)
         if is_collapsible:
-            observed_node, conj_pair = None, None
-            for site_name in self.trace.observation_nodes:
-                conj_pair = getattr(self.trace.nodes[site_name]["fn"], "parent")
-                if conj_pair is not None and conj_pair._latent.site_name == msg["name"]:
-                    observed_node = self.trace.nodes[site_name]
+            conj_node, parent = None, None
+            for site_name in self.trace.observation_nodes + self.trace.stochastic_nodes:
+                parent = getattr(self.trace.nodes[site_name]["fn"], "parent")
+                if parent is not None and parent._latent.site_name == msg["name"]:
+                    conj_node = self.trace.nodes[site_name]
                     break
-            assert observed_node is not None, "Collapsible latent site `{}` with no observed."\
+            assert conj_node is not None, "Collapsible latent site `{}` with no corresponding conjugate site."\
                 .format(msg["name"])
-            msg["fn"] = conj_pair.posterior(observed_node["value"])
+            msg["fn"] = parent.posterior(conj_node["value"])
             msg["value"] = msg["fn"].sample()
         else:
             return super(UncollapseConjugateMessenger, self)._pyro_sample(msg)
