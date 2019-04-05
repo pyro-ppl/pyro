@@ -67,16 +67,10 @@ class BetaBinomialPair(object):
         num_obs = obs.shape[:reduce_dims].numel()
         # Unexpand total_count to have the same shape as concentration0.
         # Raise exception if this isn't possible.
-        total_count = total_count[tuple(slice(None) if stride else slice(1)
-                                  for stride in total_count.stride())]
-        try:
-            total_count = total_count.reshape(concentration0.shape)
-        except RuntimeError:
-            raise ValueError("`total_count.dim() = {}` cannot be unexpanded to `concentration0.dim() = {}`."
-                             .format(total_count.dim(), concentration0.dim()))
+        total_count = sum_leftmost(total_count, reduce_dims)
         summed_obs = sum_leftmost(obs, reduce_dims)
         return dist.Beta(concentration1 + summed_obs,
-                         num_obs * total_count + concentration0 - summed_obs,
+                         total_count + concentration0 - summed_obs,
                          validate_args=self._latent._validate_args)
 
     def compound(self):
