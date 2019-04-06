@@ -95,7 +95,7 @@ def vectorized_importance_weights(model, guide, *args, **kwargs):
 
     Vectorized computation of importance weights for models with static structure::
 
-        log_weights, model_trace, guide_trace = \
+        log_weights, model_trace, guide_trace = \\
             vectorized_importance_weights(model, guide, *args,
                                           num_particles=1000,
                                           max_plate_nesting=4,
