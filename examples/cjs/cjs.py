@@ -9,7 +9,7 @@ This is Norway's national bird.
 Compare to the Stan implementations in [6].
 
 References
-[1] Kéry, M., & Schaub, M. (2011). Bayesian population analysis using
+[1] Kery, M., & Schaub, M. (2011). Bayesian population analysis using
     WinBUGS: a hierarchical perspective. Academic Press.
 [2] Lebreton, J.D., Burnham, K.P., Clobert, J., & Anderson, D.R. (1992).
     Modeling survival and testing biological hypotheses using marked animals:
