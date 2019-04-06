@@ -75,25 +75,24 @@ def model_2(data):
     rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
 
     z = torch.ones(N)
-    # we use this mask to eliminate extraneous log probabilities
-    # that arise for a given individual bird before its first capture.
     first_capture_mask = torch.zeros(N).byte()
+    # we create the plate once, outside of the loop over t
+    dippers_plate = pyro.plate("dippers", N, dim=-1)
     for t in pyro.markov(range(T)):
         # note that phi_t needs to be outside the plate, since
         # phi_t is shared across all N birds
         phi_t = pyro.sample("phi_{}".format(t), dist.Uniform(0.0, 1.0)) if t > 0 \
                 else 1.0
-        with pyro.plate("dippers_{}".format(t), N, dim=-1):
-            with poutine.mask(mask=first_capture_mask):
-                mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
-                # we use parallel enumeration to exactly sum out
-                # the discrete states z_t.
-                z = pyro.sample("z_{}".format(t), dist.Bernoulli(mu_z_t),
-                                infer={"enumerate": "parallel"})
-                mu_y_t = rho * z
-                pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
+        with dippers_plate, poutine.mask(mask=first_capture_mask):
+            mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
+            # we use parallel enumeration to exactly sum out
+            # the discrete states z_t.
+            z = pyro.sample("z_{}".format(t), dist.Bernoulli(mu_z_t),
+                            infer={"enumerate": "parallel"})
+            mu_y_t = rho * z
+            pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
                             obs=data[:, t])
-            first_capture_mask |= data[:, t].byte()
+        first_capture_mask |= data[:, t].byte()
 
 
 """
@@ -111,26 +110,25 @@ def model_3(data):
     phi_sigma = pyro.sample("phi_sigma", dist.Uniform(0.0, 10.0))
     rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
 
-    with pyro.plate("dippers", N, dim=-1):
-        z = torch.ones(N)
-        # we use this mask to eliminate extraneous log probabilities
-        # that arise for a given individual bird before its first capture.
-        first_capture_mask = torch.zeros(N).byte()
-        for t in pyro.markov(range(T)):
-            phi_logit_t = pyro.sample("phi_logit_{}".format(t),
-                                      dist.Normal(phi_logit_mean, phi_sigma)) if t > 0 \
-                          else torch.tensor(0.0)
-            phi_t = torch.sigmoid(phi_logit_t)
-            with poutine.mask(mask=first_capture_mask):
-                mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
-                # we use parallel enumeration to exactly sum out
-                # the discrete states z_t.
-                z = pyro.sample("z_{}".format(t), dist.Bernoulli(mu_z_t),
-                                infer={"enumerate": "parallel"})
-                mu_y_t = rho * z
-                pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
-                            obs=data[:, t])
-            first_capture_mask |= data[:, t].byte()
+    z = torch.ones(N)
+    first_capture_mask = torch.zeros(N).byte()
+    # we create the plate once, outside of the loop over t
+    dippers_plate = pyro.plate("dippers", N, dim=-1)
+    for t in pyro.markov(range(T)):
+        phi_logit_t = pyro.sample("phi_logit_{}".format(t),
+                                  dist.Normal(phi_logit_mean, phi_sigma)) if t > 0 \
+                      else torch.tensor(0.0)
+        phi_t = torch.sigmoid(phi_logit_t)
+        with dippers_plate, poutine.mask(mask=first_capture_mask):
+            mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
+            # we use parallel enumeration to exactly sum out
+            # the discrete states z_t.
+            z = pyro.sample("z_{}".format(t), dist.Bernoulli(mu_z_t),
+                            infer={"enumerate": "parallel"})
+            mu_y_t = rho * z
+            pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
+                        obs=data[:, t])
+        first_capture_mask |= data[:, t].byte()
 
 
 
@@ -178,7 +176,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="CSJ capture-recapture model for ecological data")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
-    parser.add_argument("-n", "--num-steps", default=500, type=int)
-    parser.add_argument("-lr", "--learning-rate", default=0.003, type=float)
+    parser.add_argument("-n", "--num-steps", default=300, type=int)
+    parser.add_argument("-lr", "--learning-rate", default=0.002, type=float)
     args = parser.parse_args()
     main(args)
