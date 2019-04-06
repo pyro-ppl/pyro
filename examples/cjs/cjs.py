@@ -15,10 +15,10 @@ References
     Modeling survival and testing biological hypotheses using marked animals:
     a unified approach with case studies. Ecological monographs, 62(1), 67-118.
 [3] Cormack, R.M., 1964. Estimates of survival from the sighting of marked animals.
-    Biometrika 51, 429–438.
+    Biometrika 51, 429-438.
 [4] Jolly, G.M., 1965. Explicit estimates from capture-recapture data with both death
-    and immigration-stochastic model. Biometrika 52, 225–247.
-[5] Seber, G.A.F., 1965. A note on the multiple recapture census. Biometrika 52, 249–259.
+    and immigration-stochastic model. Biometrika 52, 225-247.
+[5] Seber, G.A.F., 1965. A note on the multiple recapture census. Biometrika 52, 249-259.
 [6] https://github.com/stan-dev/example-models/tree/master/BPA/Ch.07
 """
 
