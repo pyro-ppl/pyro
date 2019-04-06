@@ -3185,7 +3185,7 @@ def test_backwardsample_posterior_restrictions(ok, enumerate_guide, num_particle
             elbo.sample_posterior(model, guide)
 
 
-@pytest.mark.parametrize("num_samples", [100000])
+@pytest.mark.parametrize("num_samples", [10000, 100000])
 def test_vectorized_importance(num_samples):
 
     pyro.param("model_probs_a",
@@ -3229,8 +3229,8 @@ def test_vectorized_importance(num_samples):
         with pyro.plate("outer", 2):
             pyro.sample("b", dist.Categorical(probs_b))
 
-    vectorized_weights, _, _ = vectorized_importance_weights(model, guide, num_samples=num_samples)
+    vectorized_weights, _, _ = vectorized_importance_weights(model, guide, max_plate_nesting=4, num_samples=num_samples)
 
     elbo = Trace_ELBO(vectorize_particles=True, num_particles=num_samples).loss(model, guide)
 
-    assert_equal(vectorized_weights.sum().item() / num_samples, -elbo)
+    assert_equal(vectorized_weights.sum().item() / num_samples, -elbo, prec=0.01)
