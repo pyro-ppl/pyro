@@ -32,8 +32,9 @@ class TraceTailAdaptive_ELBO(Trace_ELBO):
     """
     def loss(self, model, guide, *args, **kwargs):
         """
-        The tail-adaptive f-divergence in [1] is not straightforward to estimate;
-        the gradients, however, can be estimated easily.
+        It is not necessary to estimate the tail-adaptive f-divergence itself in order
+        to compute the corresponding gradients. Consequently the loss method is left
+        unimplemented.
         """
         raise NotImplementedError("Loss method for TraceTailAdaptive_ELBO not implemented")
 
@@ -60,7 +61,7 @@ class TraceTailAdaptive_ELBO(Trace_ELBO):
                     check_fully_reparametrized(site)
 
         # rank the particles according to p/q
-        log_pq = torch.logsumexp(log_p - log_q, dim=0)
+        log_pq = log_p - log_q
         rank = torch.argsort(log_pq, descending=False)
         rank = torch.index_select(torch.arange(self.num_particles) + 1, -1, rank).type_as(log_pq)
 

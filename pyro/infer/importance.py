@@ -84,11 +84,38 @@ class Importance(TracePosterior):
 
 
 def vectorized_importance_weights(model, guide, *args, **kwargs):
+<<<<<<< HEAD
 
     num_samples = kwargs.pop("num_samples", 1)
     max_plate_nesting = kwargs.pop("max_plate_nesting", 7)
     normalized = kwargs.pop("normalized", False)
 
+=======
+    """
+    :param model: probabilistic model defined as a function
+    :param guide: guide used for sampling defined as a function
+    :param num_samples: number of samples to draw from the guide (default 1)
+    :param int max_plate_nesting: Bound on max number of nested :func:`pyro.plate` contexts.
+    :param bool normalized: set to True to return self-normalized importance weights
+    :returns: returns a ``(num_samples,)``-shaped tensor of importance weights
+        and the model and guide traces that produced them
+
+    Vectorized computation of importance weights for models with static structure::
+
+        log_weights, model_trace, guide_trace = \\
+            vectorized_importance_weights(model, guide, *args,
+                                          num_particles=1000,
+                                          max_plate_nesting=4,
+                                          normalized=False)
+    """
+    num_samples = kwargs.pop("num_samples", 1)
+    max_plate_nesting = kwargs.pop("max_plate_nesting", None)
+    normalized = kwargs.pop("normalized", False)
+
+    if max_plate_nesting is None:
+        raise ValueError("must provide max_plate_nesting")
+
+>>>>>>> dev
     def vectorize(fn):
         def _fn(*args, **kwargs):
             with pyro.plate("num_particles_vectorized", num_samples, dim=-max_plate_nesting):
@@ -116,7 +143,7 @@ def vectorized_importance_weights(model, guide, *args, **kwargs):
             if site["type"] != "sample":
                 continue
             log_weights -= torch.einsum(site["packed"]["log_prob"]._pyro_dims + "->" + wd,
-                                        site["packed"]["log_prob"])
+                                        [site["packed"]["log_prob"]])
 
     if normalized:
         log_weights = log_weights - torch.logsumexp(log_weights)

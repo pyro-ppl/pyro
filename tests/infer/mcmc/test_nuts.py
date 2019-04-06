@@ -10,6 +10,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.autoguide import AutoDelta
+from pyro.contrib.conjugate.infer import BetaBinomialPair, collapse_conjugate, uncollapse_conjugate, GammaPoissonPair
 from pyro.infer import TraceEnum_ELBO, SVI
 from pyro.infer.mcmc.mcmc import MCMC
 from pyro.infer.mcmc.nuts import NUTS
@@ -318,3 +319,47 @@ def test_gaussian_hmm(num_steps):
     if num_steps == 30:
         nuts_kernel.initial_trace = _get_initial_trace()
     MCMC(nuts_kernel, num_samples=5, warmup_steps=5).run(data)
+
+
+@pytest.mark.parametrize("hyperpriors", [False, True])
+def test_beta_binomial(hyperpriors):
+    def model(data):
+        with pyro.plate("plate_0", data.shape[-1]):
+            alpha = pyro.sample("alpha", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
+            beta = pyro.sample("beta", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
+            beta_binom = BetaBinomialPair()
+            with pyro.plate("plate_1", data.shape[-2]):
+                probs = pyro.sample("probs", beta_binom.latent(alpha, beta))
+                with pyro.plate("data", data.shape[0]):
+                    pyro.sample("binomial", beta_binom.conditional(probs=probs, total_count=total_count), obs=data)
+
+    true_probs = torch.tensor([[0.7, 0.4], [0.6, 0.4]])
+    total_count = torch.tensor([[1000, 600], [400, 800]])
+    data = dist.Binomial(total_count=total_count, probs=true_probs).sample(sample_shape=(torch.Size((10,))))
+    hmc_kernel = NUTS(collapse_conjugate(model), jit_compile=True, ignore_jit_warnings=True)
+    mcmc_run = MCMC(hmc_kernel, num_samples=80, warmup_steps=50).run(data)
+    mcmc_run.exec_traces = [poutine.trace(uncollapse_conjugate(model, tr)).get_trace(data)
+                            for tr in mcmc_run.exec_traces]
+    posterior = mcmc_run.marginal(["probs"]).empirical["probs"]
+    assert_equal(posterior.mean, true_probs, prec=0.05)
+
+
+@pytest.mark.parametrize("hyperpriors", [False, True])
+def test_gamma_poisson(hyperpriors):
+    def model(data):
+        with pyro.plate("latent_dim", data.shape[1]):
+            alpha = pyro.sample("alpha", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
+            beta = pyro.sample("beta", dist.HalfCauchy(1.)) if hyperpriors else torch.tensor([1., 1.])
+            gamma_poisson = GammaPoissonPair()
+            rate = pyro.sample("rate", gamma_poisson.latent(alpha, beta))
+            with pyro.plate("data", data.shape[0]):
+                pyro.sample("obs", gamma_poisson.conditional(rate), obs=data)
+
+    true_rate = torch.tensor([3., 10.])
+    data = dist.Poisson(rate=true_rate).sample(sample_shape=(torch.Size((100,))))
+    hmc_kernel = NUTS(collapse_conjugate(model), jit_compile=True, ignore_jit_warnings=True)
+    mcmc_run = MCMC(hmc_kernel, num_samples=100, warmup_steps=50).run(data)
+    mcmc_run.exec_traces = [poutine.trace(uncollapse_conjugate(model, tr)).get_trace(data)
+                            for tr in mcmc_run.exec_traces]
+    posterior = mcmc_run.marginal(["rate"]).empirical["rate"]
+    assert_equal(posterior.mean, true_rate, prec=0.2)

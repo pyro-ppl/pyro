@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import pyro.distributions.torch_patch  # noqa F403
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
+from pyro.distributions.batch_norm import BatchNormTransform
 from pyro.distributions.conjugate import BetaBinomial, DirichletMultinomial, GammaPoisson
 from pyro.distributions.delta import Delta
 from pyro.distributions.diag_normal_mixture import MixtureOfDiagNormals
@@ -31,6 +32,7 @@ from pyro.distributions.lkj import (LKJCorrCholesky, CorrLCholeskyTransform, cor
 
 __all__ = [
     "AVFMultivariateNormal",
+    "BatchNormTransform",
     "BetaBinomial",
     "DeepSigmoidalFlow",
     "Delta",
