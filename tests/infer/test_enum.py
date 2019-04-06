@@ -3185,11 +3185,7 @@ def test_backwardsample_posterior_restrictions(ok, enumerate_guide, num_particle
             elbo.sample_posterior(model, guide)
 
 
-<<<<<<< HEAD
-@pytest.mark.parametrize("num_samples", [100000])
-=======
 @pytest.mark.parametrize("num_samples", [10000, 100000])
->>>>>>> dev
 def test_vectorized_importance(num_samples):
 
     pyro.param("model_probs_a",
