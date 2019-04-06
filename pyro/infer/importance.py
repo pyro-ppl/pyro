@@ -84,13 +84,6 @@ class Importance(TracePosterior):
 
 
 def vectorized_importance_weights(model, guide, *args, **kwargs):
-<<<<<<< HEAD
-
-    num_samples = kwargs.pop("num_samples", 1)
-    max_plate_nesting = kwargs.pop("max_plate_nesting", 7)
-    normalized = kwargs.pop("normalized", False)
-
-=======
     """
     :param model: probabilistic model defined as a function
     :param guide: guide used for sampling defined as a function
@@ -115,7 +108,6 @@ def vectorized_importance_weights(model, guide, *args, **kwargs):
     if max_plate_nesting is None:
         raise ValueError("must provide max_plate_nesting")
 
->>>>>>> dev
     def vectorize(fn):
         def _fn(*args, **kwargs):
             with pyro.plate("num_particles_vectorized", num_samples, dim=-max_plate_nesting):
