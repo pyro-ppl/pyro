@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from abc import ABCMeta, abstractmethod
 
+import torch
 from six import add_metaclass
 
 import pyro
@@ -41,8 +42,11 @@ class Feature(object):
         :func:`pyro.sample` statements inside :meth:`sample_shared` and
         :meth:`sample_group`.
     """
-    def __init__(self, name):
+    def __init__(self, name, linear_dim=0):
+        assert isinstance(name, str)
+        assert isinstance(linear_dim, int) and linear_dim >= 0
         self.name = name
+        self.linear_dim = linear_dim
 
     def __str__(self):
         return '{}("{}")'.format(type(self).__name__, self.name)
@@ -88,16 +92,31 @@ class Boolean(Feature):
     def sample_shared(self):
         alpha = pyro.sample("{}_alpha".format(self.name), dist.Gamma(0.5, 1.))
         beta = pyro.sample("{}_beta".format(self.name), dist.Gamma(0.5, 1.))
-        return alpha, beta
+        if self.linear_dim == 0:
+            sigma = None
+        else:
+            sigma = pyro.sample("{}_sigma".format(self.name), dist.LogNormal(0., 3.))
+        return alpha, beta, sigma
 
     def sample_group(self, shared):
-        alpha, beta = shared
+        alpha, beta, sigma = shared
         probs = pyro.sample("{}_probs".format(self.name), dist.Beta(alpha, beta))
-        return probs
+        if self.linear_dim == 0:
+            scales = None
+        else:
+            scales = pyro.sample("{}_scales".format(self.name),
+                                 dist.LogNormal(0, sigma))
+        return probs, scales
 
-    def value_dist(self, group, component):
-        probs = group
-        return dist.Bernoulli(probs[component])
+    def value_dist(self, group, component, linear=None):
+        probs, scales = group
+        probs = probs[..., component, :]
+        if self.linear_dim != 0:
+            scales = scales[..., component, :, :]
+            scale = torch.matmul(linear.unsqueeze(-2), scales).squeeze(-2)
+            probs = probs * scale
+            probs = probs / probs.sum(-1, True)
+        return dist.Bernoulli(probs)
 
 
 class Real(Feature):
