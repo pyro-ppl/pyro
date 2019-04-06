@@ -6,8 +6,6 @@ import torch
 import math
 import numpy as np
 
-from pyro.infer.importance import vectorized_importance_weights
-
 
 def _compute_chain_variance_stats(input):
     # compute within-chain variance and variance estimator
@@ -406,66 +404,3 @@ def fit_generalized_pareto(X):
     k = k * N / (N + a) + a * 0.5 / (N + a)
 
     return k, sigma
-
-
-def psis_diagnostic(model, guide, *args, **kwargs):
-    """
-    Computes the Pareto tail index k for a model/guide pair using the technique
-    described in [1], which builds on previous work in [2]. If :math:`0 < k < 0.5`
-    the guide is a good approximation to the model posterior, in the sense
-    described in [1]. If :math:`0.5 \\le k \\le 0.7`, the guide provides a suboptimal
-    approximation to the posterior, but may still be useful in practice. If
-    :math:`k > 0.7` the guide program provides a poor approximation to the full
-    posterior, and caution should be used when using the guide. Note, however,
-    that a guide may be a poor fit to the full posterior while still yielding
-    reasonable model predictions. If :math:`k < 0.0` the importance weights
-    corresponding to the model and guide appear to be bounded from above; this
-    would be a bizarre outcome for a guide trained via ELBO maximization. Please
-    see [1] for a more complete discussion of how the tail index k should be
-    interpreted.
-
-    Note that we assume that the model and guide are both vectorized. As is
-    canonical in Pyro, the args and kwargs are passed to the model and guide.
-
-    Finally note that this implementation is adapated from the implementation
-    in reference [2].
-
-    References
-    [1] 'Yes, but Did It Work?: Evaluating Variational Inference.'
-    Yuling Yao, Aki Vehtari, Daniel Simpson, Andrew Gelman
-    [2] 'Pareto Smoothed Importance Sampling.'
-    Aki Vehtari, Andrew Gelman, Jonah Gabry
-    https://github.com/avehtari/PSIS/blob/904146236767182270c9718a7b2a30831fe701fe/py/psis.py#L112
-
-    :param callable model: the model program.
-    :param callable guide: the guide program.
-    :param int num_particles: the number of times we run the model and guide in order to
-    compute the diagnostic. defaults to 500.
-    :param int max_plate_nesting: optional bound on max number of nested :func:`pyro.plate`
-    contexts in the model/guide. defaults to 7.
-    :returns float: the PSIS diagnostic k
-    """
-
-    num_particles = kwargs.pop('num_particles', 500)
-    max_plate_nesting = kwargs.pop('max_plate_nesting', 7)
-
-    log_weights, _, _ = vectorized_importance_weights(model, guide, num_samples=num_particles,
-                                                      max_plate_nesting=max_plate_nesting,
-                                                      *args, **kwargs)
-    log_weights -= log_weights.max()
-    log_weights = log_weights.data.numpy()
-    log_weights.sort()
-
-    cutoff_index = - int(math.ceil(min(0.2 * num_particles, 3.0 * math.sqrt(num_particles)))) - 1
-    lw_cutoff = max(math.log(np.finfo(float).tiny), log_weights[cutoff_index])
-    tail_indices, = np.where(log_weights > lw_cutoff)
-    lw_tail = log_weights[tail_indices]
-    N_tail = len(lw_tail)
-
-    if N_tail <= 4:
-        warnings.warn("Not enough tail samples to compute PSIS diagnostic; increase num_particles.")
-        k = np.inf
-    else:
-        k, _ = fit_generalized_pareto(np.exp(lw_tail) - math.exp(lw_cutoff))
-
-    return k

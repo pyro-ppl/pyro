@@ -250,21 +250,3 @@ def test_fit_generalized_pareto(k, sigma, n_samples=5000):
         fit_k, fit_sigma = fit_generalized_pareto(torch.tensor(X))
         assert_equal(k, fit_k, prec=0.02)
         assert_equal(sigma, fit_sigma, prec=0.02)
-
-
-@pytest.mark.parametrize('scale_krange', zip([0.50, 0.95], [(0.3, 0.9), (0.0, 0.3)]))
-@pytest.mark.parametrize('zdim', [1, 3])
-def test_psis_diagnostic(scale_krange, zdim, num_particles=50000):
-
-    def model(zdim=1, scale=1.0):
-        with pyro.plate("x_axis", zdim, dim=-1):
-            pyro.sample("z", Normal(0.0, 1.0).expand([zdim]))
-
-    def guide(zdim=1, scale=1.0):
-        with pyro.plate("x_axis", zdim, dim=-1):
-            pyro.sample("z", Normal(0.0, scale).expand([zdim]))
-
-    scale, krange = scale_krange
-    k = psis_diagnostic(model, guide, num_particles=num_particles, zdim=zdim, scale=scale)
-    print("scale", scale, "krange", krange, "k", k)
-

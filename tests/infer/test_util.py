@@ -5,6 +5,8 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+import pytest
+from pyro.infer.importance import psis_diagnostic
 from pyro.infer.util import MultiFrameTensor
 from tests.common import assert_equal
 
@@ -44,3 +46,22 @@ def test_multi_frame_tensor():
     for name, expected_sum in expected.items():
         actual_sum = actual.sum_to(stacks[name])
         assert_equal(actual_sum, expected_sum, msg=name)
+
+
+@pytest.mark.parametrize('scale_krange', zip([0.50, 0.95], [(0.5, 0.9), (0.0, 0.2)]))
+@pytest.mark.parametrize('zdim', [1, 3])
+@pytest.mark.parametrize('max_particles', [10000, 25000])
+def test_psis_diagnostic(scale_krange, zdim, max_particles, num_particles=100000):
+
+    def model(zdim=1, scale=1.0):
+        with pyro.plate("x_axis", zdim, dim=-1):
+            pyro.sample("z", dist.Normal(0.0, 1.0).expand([zdim]))
+
+    def guide(zdim=1, scale=1.0):
+        with pyro.plate("x_axis", zdim, dim=-1):
+            pyro.sample("z", dist.Normal(0.0, scale).expand([zdim]))
+
+    scale, krange = scale_krange
+    k = psis_diagnostic(model, guide, num_particles=num_particles, max_simultaneous_particles=max_particles,
+                        zdim=zdim, scale=scale)
+    print("scale", scale, "krange", krange, "k", k)
