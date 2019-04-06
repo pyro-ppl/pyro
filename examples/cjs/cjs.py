@@ -44,8 +44,10 @@ Our first and simplest CJS model variant only has two continuous
 and ii) the recapture probability rho. These are treated as fixed
 effects with no temporal or individual/group variation.
 """
-def model_1(data):
-    N, T = data.shape
+
+
+def model_1(capture_history, sex):
+    N, T = capture_history.shape
     phi = pyro.sample("phi", dist.Uniform(0.0, 1.0))  # survival probability
     rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
 
@@ -63,15 +65,18 @@ def model_1(data):
                                 infer={"enumerate": "parallel"})
                 mu_y_t = rho * z
                 pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
-                            obs=data[:, t])
-            first_capture_mask |= data[:, t].byte()
+                            obs=capture_history[:, t])
+            first_capture_mask |= capture_history[:, t].byte()
+
 
 """
 In our second model variant there is a survival probability phi_t for 6
 of the 7 years of the capture data; each phi_t is treated as a fixed effect.
 """
-def model_2(data):
-    N, T = data.shape
+
+
+def model_2(capture_history, sex):
+    N, T = capture_history.shape
     rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
 
     z = torch.ones(N)
@@ -91,8 +96,8 @@ def model_2(data):
                             infer={"enumerate": "parallel"})
             mu_y_t = rho * z
             pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
-                            obs=data[:, t])
-        first_capture_mask |= data[:, t].byte()
+                        obs=capture_history[:, t])
+        first_capture_mask |= capture_history[:, t].byte()
 
 
 """
@@ -100,10 +105,12 @@ In our third model variant there is a survival probability phi_t for 6
 of the 7 years of the capture data (just like in model_2), but here
 each phi_t is treated as a random effect.
 """
-def model_3(data):
+
+
+def model_3(capture_history, sex):
     def logit(p):
         return torch.log(p / (1.0 - p))
-    N, T = data.shape
+    N, T = capture_history.shape
     phi_mean = pyro.sample("phi_mean", dist.Uniform(0.0, 1.0))  # mean survival probability
     phi_logit_mean = logit(phi_mean)
     # controls temporal variability of survival probability
@@ -127,10 +134,42 @@ def model_3(data):
                             infer={"enumerate": "parallel"})
             mu_y_t = rho * z
             pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
-                        obs=data[:, t])
-        first_capture_mask |= data[:, t].byte()
+                        obs=capture_history[:, t])
+        first_capture_mask |= capture_history[:, t].byte()
 
 
+"""
+In our fourth model variant we include group-level fixed effects
+for bird sex (male, female).
+"""
+
+
+def model_4(capture_history, sex):
+    N, T = capture_history.shape
+    # survival probabilities for males/females
+    phi_male = pyro.sample("phi_male", dist.Uniform(0.0, 1.0))
+    phi_female = pyro.sample("phi_female", dist.Uniform(0.0, 1.0))
+    # we construct a 294-dimensional vector that contains the appropriate
+    # phi for each bird given its sex (female = 0, male = 1)
+    phi = sex * phi_male + (1.0 - sex) * phi_female
+    rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
+
+    with pyro.plate("dippers", N, dim=-1):
+        z = torch.ones(N)
+        # we use this mask to eliminate extraneous log probabilities
+        # that arise for a given individual bird before its first capture.
+        first_capture_mask = torch.zeros(N).byte()
+        for t in pyro.markov(range(T)):
+            with poutine.mask(mask=first_capture_mask):
+                mu_z_t = first_capture_mask.float() * phi * z + (1 - first_capture_mask.float())
+                # we use parallel enumeration to exactly sum out
+                # the discrete states z_t.
+                z = pyro.sample("z_{}".format(t), dist.Bernoulli(mu_z_t),
+                                infer={"enumerate": "parallel"})
+                mu_y_t = rho * z
+                pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
+                            obs=capture_history[:, t])
+            first_capture_mask |= capture_history[:, t].byte()
 
 
 models = {name[len('model_'):]: model
@@ -143,16 +182,21 @@ def main(args):
     pyro.clear_param_store()
     pyro.enable_validation(True)
 
-    data_file = os.path.dirname(os.path.abspath(__file__)) + '/dipper_capture_histories.csv'
-    data = torch.tensor(np.genfromtxt(data_file, delimiter=',')).float()[:, 1:]
-    N, T = data.shape
+    capture_history_file = os.path.dirname(os.path.abspath(__file__)) + '/dipper_capture_history.csv'
+    capture_history = torch.tensor(np.genfromtxt(capture_history_file, delimiter=',')).float()[:, 1:]
+    N, T = capture_history.shape
     print("Loaded dipper capture history for {} individuals collected over {} years.".format(
           N, T))
+    sex_file = os.path.dirname(os.path.abspath(__file__)) + '/dipper_sex.csv'
+    sex = torch.tensor(np.genfromtxt(sex_file, delimiter=',')).float()[:, 1]
 
     model = models[args.model]
+
+    def expose_fn(msg):
+        return msg["name"][0:3] in ['phi', 'rho']
+
     # we use a mean field diagonal normal variational distributions (i.e. guide)
     # for the continuous latent variables.
-    expose_fn = lambda msg: msg["name"][0:3] in ['phi', 'rho']
     guide = AutoDiagonalNormal(poutine.block(model, expose_fn=expose_fn))
 
     # since we enumerate the discrete random variables,
@@ -166,7 +210,7 @@ def main(args):
     print("Beginning training of model_{} with Stochastic Variational Inference.".format(args.model))
 
     for step in range(args.num_steps):
-        loss = svi.step(data)
+        loss = svi.step(capture_history, sex)
         losses.append(loss)
         if step % 20 == 0 and step > 0 or step == args.num_steps - 1:
             print("[iter %03d] loss: %.3f" % (step, np.mean(losses[-20:])))
@@ -176,7 +220,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="CSJ capture-recapture model for ecological data")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
-    parser.add_argument("-n", "--num-steps", default=300, type=int)
+    parser.add_argument("-n", "--num-steps", default=400, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.002, type=float)
     args = parser.parse_args()
     main(args)
