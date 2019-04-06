@@ -25,6 +25,7 @@ References
 from __future__ import absolute_import, division, print_function
 
 import argparse
+import os
 
 import numpy as np
 import torch
@@ -65,7 +66,8 @@ def main(args):
     pyro.clear_param_store()
     pyro.enable_validation(True)
 
-    data = torch.tensor(np.genfromtxt('dipper_capture_histories.csv', delimiter=',')).float()[:, 1:]
+    data_file = os.path.dirname(os.path.abspath(__file__)) + '/dipper_capture_histories.csv'
+    data = torch.tensor(np.genfromtxt(data_file, delimiter=',')).float()[:, 1:]
     N, T = data.shape
     print("Loaded dipper capture history for {} individuals collected over {} years.".format(
           N, T))
