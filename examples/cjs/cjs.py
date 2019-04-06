@@ -25,6 +25,7 @@ References
 from __future__ import absolute_import, division, print_function
 
 import argparse
+import os
 
 import numpy as np
 import torch
@@ -37,7 +38,13 @@ from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
 
 
-def model(data):
+"""
+Our first and simplest CJS model variant only has two continuous
+(scalar) latent random variables: i) the survival probability phi;
+and ii) the recapture probability rho. These are treated as fixed
+effects with no temporal or individual/group variation.
+"""
+def model_1(data):
     N, T = data.shape
     phi = pyro.sample("phi", dist.Uniform(0.0, 1.0))  # survival probability
     rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
@@ -59,20 +66,96 @@ def model(data):
                             obs=data[:, t])
             first_capture_mask |= data[:, t].byte()
 
+"""
+In our second model variant there is a survival probability phi_t for 6
+of the 7 years of the capture data; each phi_t is treated as a fixed effect.
+"""
+def model_2(data):
+    N, T = data.shape
+    rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
+
+    z = torch.ones(N)
+    # we use this mask to eliminate extraneous log probabilities
+    # that arise for a given individual bird before its first capture.
+    first_capture_mask = torch.zeros(N).byte()
+    for t in pyro.markov(range(T)):
+        # note that phi_t needs to be outside the plate, since
+        # phi_t is shared across all N birds
+        phi_t = pyro.sample("phi_{}".format(t), dist.Uniform(0.0, 1.0)) if t > 0 \
+                else 1.0
+        with pyro.plate("dippers_{}".format(t), N, dim=-1):
+            with poutine.mask(mask=first_capture_mask):
+                mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
+                # we use parallel enumeration to exactly sum out
+                # the discrete states z_t.
+                z = pyro.sample("z_{}".format(t), dist.Bernoulli(mu_z_t),
+                                infer={"enumerate": "parallel"})
+                mu_y_t = rho * z
+                pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
+                            obs=data[:, t])
+            first_capture_mask |= data[:, t].byte()
+
+
+"""
+In our third model variant there is a survival probability phi_t for 6
+of the 7 years of the capture data (just like in model_2), but here
+each phi_t is treated as a random effect.
+"""
+def model_3(data):
+    def logit(p):
+        return torch.log(p / (1.0 - p))
+    N, T = data.shape
+    phi_mean = pyro.sample("phi_mean", dist.Uniform(0.0, 1.0))  # mean survival probability
+    phi_logit_mean = logit(phi_mean)
+    # controls temporal variability of survival probability
+    phi_sigma = pyro.sample("phi_sigma", dist.Uniform(0.0, 10.0))
+    rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
+
+    with pyro.plate("dippers", N, dim=-1):
+        z = torch.ones(N)
+        # we use this mask to eliminate extraneous log probabilities
+        # that arise for a given individual bird before its first capture.
+        first_capture_mask = torch.zeros(N).byte()
+        for t in pyro.markov(range(T)):
+            phi_logit_t = pyro.sample("phi_logit_{}".format(t),
+                                      dist.Normal(phi_logit_mean, phi_sigma)) if t > 0 \
+                          else torch.tensor(0.0)
+            phi_t = torch.sigmoid(phi_logit_t)
+            with poutine.mask(mask=first_capture_mask):
+                mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
+                # we use parallel enumeration to exactly sum out
+                # the discrete states z_t.
+                z = pyro.sample("z_{}".format(t), dist.Bernoulli(mu_z_t),
+                                infer={"enumerate": "parallel"})
+                mu_y_t = rho * z
+                pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
+                            obs=data[:, t])
+            first_capture_mask |= data[:, t].byte()
+
+
+
+
+models = {name[len('model_'):]: model
+          for name, model in globals().items()
+          if name.startswith('model_')}
+
 
 def main(args):
     pyro.set_rng_seed(0)
     pyro.clear_param_store()
     pyro.enable_validation(True)
 
-    data = torch.tensor(np.genfromtxt('dipper_capture_histories.csv', delimiter=',')).float()[:, 1:]
+    data_file = os.path.dirname(os.path.abspath(__file__)) + '/dipper_capture_histories.csv'
+    data = torch.tensor(np.genfromtxt(data_file, delimiter=',')).float()[:, 1:]
     N, T = data.shape
     print("Loaded dipper capture history for {} individuals collected over {} years.".format(
           N, T))
 
+    model = models[args.model]
     # we use a mean field diagonal normal variational distributions (i.e. guide)
     # for the continuous latent variables.
-    guide = AutoDiagonalNormal(poutine.block(model, expose=['phi', 'rho']))
+    expose_fn = lambda msg: msg["name"][0:3] in ['phi', 'rho']
+    guide = AutoDiagonalNormal(poutine.block(model, expose_fn=expose_fn))
 
     # since we enumerate the discrete random variables,
     # we need to use TraceEnum_ELBO.
@@ -82,7 +165,7 @@ def main(args):
 
     losses = []
 
-    print("Beginning training with Stochastic Variational Inference.")
+    print("Beginning training of model_{} with Stochastic Variational Inference.".format(args.model))
 
     for step in range(args.num_steps):
         loss = svi.step(data)
@@ -93,6 +176,8 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="CSJ capture-recapture model for ecological data")
+    parser.add_argument("-m", "--model", default="1", type=str,
+                        help="one of: {}".format(", ".join(sorted(models.keys()))))
     parser.add_argument("-n", "--num-steps", default=500, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.003, type=float)
     args = parser.parse_args()
