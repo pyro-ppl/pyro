@@ -70,8 +70,8 @@ def model_1(capture_history, sex):
 
 
 """
-In our second model variant there is a survival probability phi_t for 6
-of the 7 years of the capture data; each phi_t is treated as a fixed effect.
+In our second model variant there is a time-varying survival probability phi_t for
+6 of the 7 years of the capture data; each phi_t is treated as a fixed effect.
 """
 
 
@@ -109,7 +109,7 @@ each phi_t is treated as a random effect.
 
 def model_3(capture_history, sex):
     def logit(p):
-        return torch.log(p / (1.0 - p))
+        return torch.log(p) - torch.log1p(-p)
     N, T = capture_history.shape
     phi_mean = pyro.sample("phi_mean", dist.Uniform(0.0, 1.0))  # mean survival probability
     phi_logit_mean = logit(phi_mean)
