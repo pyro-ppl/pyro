@@ -56,6 +56,7 @@ Welcome to Pyro Examples and Tutorials!
    :maxdepth: 2
    :caption: Code Examples:
 
+   capture_recapture
    hmm
    lda
    mcmc

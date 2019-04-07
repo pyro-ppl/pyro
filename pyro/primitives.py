@@ -39,8 +39,22 @@ def param(name, *args, **kwargs):
     To interact with the param store or write to disk,
     see `Parameters <parameters.html>`_.
 
-    :param name: name of parameter
+    :param str name: name of parameter
+    :param init_tensor: initial tensor or lazy callable that returns a tensor.
+        For large tensors, it may be cheaper to write e.g.
+        ``lambda: torch.randn(100000)``, which will only be evaluated on the
+        initial statement.
+    :type init_tensor: torch.Tensor or callable
+    :param constraint: torch constraint, defaults to ``constraints.real``.
+    :type constraint: torch.distributions.constraints.Constraint
+    :param int event_dim: (optional) number of rightmost dimensions unrelated
+        to baching. Dimension to the left of this will be considered batch
+        dimensions; if the param statement is inside a subsampled plate, then
+        corresponding batch dimensions of the parameter will be correspondingly
+        subsampled. If unspecified, all dimensions will be considered event
+        dims and no subsampling will be performed.
     :returns: parameter
+    :rtype: torch.Tensor
     """
     kwargs["name"] = name
     return _param(name, *args, **kwargs)
