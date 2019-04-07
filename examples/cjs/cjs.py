@@ -267,7 +267,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="CSJ capture-recapture model for ecological data")
+    parser = argparse.ArgumentParser(description="CJS capture-recapture model for ecological data")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
     parser.add_argument("-n", "--num-steps", default=400, type=int)
