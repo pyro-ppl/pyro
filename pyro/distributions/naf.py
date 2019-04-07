@@ -14,6 +14,106 @@ eps = 1e-6
 
 
 @copy_docs_from(TransformModule)
+class DeepELUFlow(TransformModule):
+    """
+    An implementation of deep ELU flow (DSF) Neural Autoregressive Flow (NAF), of the "IAF flavour"
+    that can be used for sampling and scoring samples drawn from it (but not arbitrary ones). This
+    flow is suggested in Huang et al., 2018, section 3.3, but left for future experiments.
+
+    Example usage:
+
+    >>> from pyro.nn import AutoRegressiveNN
+    >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
+    >>> arn = AutoRegressiveNN(10, [40], param_dims=[16]*3)
+    >>> naf = DeepELUFlow(arn, hidden_units=16)
+    >>> pyro.module("my_naf", naf)  # doctest: +SKIP
+    >>> naf_dist = dist.TransformedDistribution(base_dist, [naf])
+    >>> naf_dist.sample()  # doctest: +SKIP
+        tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
+                0.1389, -0.4629,  0.0986])
+
+    The inverse operation is not implemented. This would require numerical inversion, e.g., using a
+    root finding method - a possibility for a future implementation.
+
+    :param autoregressive_nn: an autoregressive neural network whose forward call returns a tuple of three
+        real-valued tensors, whose last dimension is the input dimension, and whose penultimate dimension
+        is equal to hidden_units.
+    :type autoregressive_nn: nn.Module
+    :param hidden_units: the number of hidden units to use in the NAF transformation (see Eq (8) in reference)
+    :type hidden_units: int
+
+    Reference:
+
+    Neural Autoregressive Flows [arXiv:1804.00779]
+    Chin-Wei Huang, David Krueger, Alexandre Lacoste, Aaron Courville
+
+    """
+
+    domain = constraints.real
+    codomain = constraints.real
+    bijective = True
+    event_dim = 1
+
+    def __init__(self, autoregressive_nn, hidden_units=16):
+        super(DeepELUFlow, self).__init__(cache_size=1)
+        self.arn = autoregressive_nn
+        self.hidden_units = hidden_units
+        self._cached_A = None
+        self._cached_W_pre = None
+        self._cached_C = None
+        self._cached_D = None
+
+        # Inverse ELU and the log of its derivative
+        self.inverse_elu = lambda y: torch.max(y, torch.zeros_like(
+            y)) + torch.min(torch.log1p(y + eps), torch.zeros_like(y))
+        self.log_dELU_inverse_dx = lambda y: F.relu(-torch.log1p(y + eps))
+
+        self.log_dELU_dx = lambda x: -F.relu(-x)
+        self.logsoftmax = nn.LogSoftmax(dim=-2)
+
+    def _call(self, x):
+        """
+        :param x: the input into the bijection
+        :type x: torch.Tensor
+
+        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
+        sample from the base distribution (or the output of a previous flow)
+        """
+        # A, W, b ~ batch_shape x hidden_units x event_shape
+        A, W_pre, b = self.arn(x)
+
+        # Divide the autoregressive output into the component activations
+        A = F.softplus(A)
+        C = A * x.unsqueeze(-2) + b
+        W = F.softmax(W_pre, dim=-2)
+        D = (W * F.elu(C)).sum(dim=-2)
+        y = self.inverse_elu(D)
+
+        self._cached_A = A
+        self._cached_W_pre = W_pre
+        self._cached_C = C
+        self._cached_D = D
+
+        return y
+
+    # This method returns log(abs(det(dy/dx)), which is equal to -log(abs(det(dx/dy))
+    def log_abs_det_jacobian(self, x, y):
+        """
+        Calculates the elementwise determinant of the log jacobian
+        """
+
+        A = self._cached_A
+        W_pre = self._cached_W_pre
+        C = self._cached_C
+        D = self._cached_D
+
+        log_dydD = self.log_dELU_inverse_dx(D)
+        log_dDdx = torch.logsumexp(torch.log(A + eps) + self.logsoftmax(W_pre) + self.log_dELU_dx(C), dim=-2)
+        log_det = log_dydD + log_dDdx
+        return log_det.sum(-1)
+
+
+@copy_docs_from(TransformModule)
 class DeepSigmoidalFlow(TransformModule):
     """
     An implementation of deep sigmoidal flow (DSF) Neural Autoregressive Flow (NAF), of the "IAF flavour"

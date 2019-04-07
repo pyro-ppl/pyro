@@ -99,6 +99,10 @@ class FlowTests(TestCase):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
         return dist.InverseAutoregressiveFlowStable(arn, sigmoid_bias=0.5)
 
+    def _make_def(self, input_dim):
+        arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1], param_dims=[16]*3)
+        return dist.DeepELUFlow(arn, hidden_units=16)
+
     def _make_dsf(self, input_dim):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1], param_dims=[16]*3)
         return dist.DeepSigmoidalFlow(arn, hidden_units=16)
@@ -124,6 +128,10 @@ class FlowTests(TestCase):
     def test_iaf_stable_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_iaf_stable)
+
+    def test_def_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_def)
 
     def test_dsf_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -164,6 +172,10 @@ class FlowTests(TestCase):
     def test_iaf_stable_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_iaf_stable)
+
+    def test_def_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_def)
 
     def test_dsf_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
