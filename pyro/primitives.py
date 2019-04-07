@@ -39,8 +39,22 @@ def param(name, *args, **kwargs):
     To interact with the param store or write to disk,
     see `Parameters <parameters.html>`_.
 
-    :param name: name of parameter
+    :param str name: name of parameter
+    :param init_tensor: initial tensor or lazy callable that returns a tensor.
+        For large tensors, it may be cheaper to write e.g.
+        ``lambda: torch.randn(100000)``, which will only be evaluated on the
+        initial statement.
+    :type init_tensor: torch.Tensor or callable
+    :param constraint: torch constraint, defaults to ``constraints.real``.
+    :type constraint: torch.distributions.constraints.Constraint
+    :param int event_dim: (optional) number of rightmost dimensions unrelated
+        to baching. Dimension to the left of this will be considered batch
+        dimensions; if the param statement is inside a subsampled plate, then
+        corresponding batch dimensions of the parameter will be correspondingly
+        subsampled. If unspecified, all dimensions will be considered event
+        dims and no subsampling will be performed.
     :returns: parameter
+    :rtype: torch.Tensor
     """
     kwargs["name"] = name
     return _param(name, *args, **kwargs)
@@ -245,13 +259,17 @@ def module(name, nn_module, update_module_params=False):
     target_state_dict = OrderedDict()
 
     for param_name, param_value in nn_module.named_parameters():
-        # register the parameter in the module with pyro
-        # this only does something substantive if the parameter hasn't been seen before
-        full_param_name = param_with_module_name(name, param_name)
-        returned_param = param(full_param_name, param_value)
+        if param_value.requires_grad:
+            # register the parameter in the module with pyro
+            # this only does something substantive if the parameter hasn't been seen before
+            full_param_name = param_with_module_name(name, param_name)
+            returned_param = param(full_param_name, param_value)
 
-        if param_value._cdata != returned_param._cdata:
-            target_state_dict[param_name] = returned_param
+            if param_value._cdata != returned_param._cdata:
+                target_state_dict[param_name] = returned_param
+        else:
+            warnings.warn("{} was not registered in the param store because".format(param_name) +
+                          " requires_grad=False")
 
     if target_state_dict and update_module_params:
         # WARNING: this is very dangerous. better method?
@@ -273,9 +291,9 @@ def module(name, nn_module, update_module_params=False):
 
 
 def random_module(name, nn_module, prior, *args, **kwargs):
-    """
+    r"""
     Places a prior over the parameters of the module `nn_module`.
-    Returns a distribution (callable) over `nn.Module`s, which
+    Returns a distribution (callable) over `nn.Module`\s, which
     upon calling returns a sampled `nn.Module`.
 
     See the `Bayesian Regression tutorial <http://pyro.ai/examples/bayesian_regression.html>`_

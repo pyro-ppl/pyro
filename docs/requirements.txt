@@ -1,10 +1,8 @@
 sphinx
 sphinx_rtd_theme
-numpy>=1.7
 contextlib2
-cloudpickle>=0.3.1
 graphviz>=0.8
-networkx>=2.2
+numpy>=1.7
 observations>=0.1.4
-opt_einsum>=2.3.0
-tqdm>=4.25
+opt_einsum>=2.3.2
+tqdm>=4.28

@@ -63,7 +63,7 @@ def warn_if_inf(value, msg="", allow_posinf=False, allow_neginf=False):
     also works with numbers.
     """
     if torch.is_tensor(value) and value.requires_grad:
-            value.register_hook(lambda x: warn_if_inf(x, msg, allow_posinf, allow_neginf))
+        value.register_hook(lambda x: warn_if_inf(x, msg, allow_posinf, allow_neginf))
     if (not allow_posinf) and (value == float('inf') if isinstance(value, numbers.Number)
                                else (value == float('inf')).any()):
         warnings.warn("Encountered +inf{}".format((': ' if msg else '.') + msg), stacklevel=2)
@@ -261,7 +261,13 @@ def check_site_shape(site, max_plate_nesting):
                 '- .to_event(...) the distribution being sampled',
                 '- .permute() data dimensions']))
 
-    # TODO Check parallel dimensions on the left of max_plate_nesting.
+    # Check parallel dimensions on the left of max_plate_nesting.
+    enum_dim = site["infer"].get("_enumerate_dim")
+    if enum_dim is not None:
+        if len(site["fn"].batch_shape) >= -enum_dim and site["fn"].batch_shape[enum_dim] != 1:
+            raise ValueError('\n  '.join([
+                'Enumeration dim conflict at site "{}"'.format(site["name"]),
+                'Try increasing pyro.markov history size']))
 
 
 def _are_independent(counters1, counters2):

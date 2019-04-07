@@ -69,7 +69,7 @@ def main(N, M):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.3.0')
+    assert pyro.__version__.startswith('0.3.1')
     parser = argparse.ArgumentParser(description="Item response experiment design using NMC")
     parser.add_argument("-N", nargs="?", default=5000, type=int)
     parser.add_argument("-M", nargs="?", default=5000, type=int)

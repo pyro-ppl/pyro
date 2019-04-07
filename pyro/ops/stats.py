@@ -3,6 +3,8 @@ from __future__ import absolute_import, division, print_function
 import numbers
 
 import torch
+import math
+import numpy as np
 
 
 def _compute_chain_variance_stats(input):
@@ -164,8 +166,10 @@ def effective_sample_size(input, chain_dim=0, sample_dim=1):
     Computes effective sample size of input.
 
     Reference:
+
     [1] `Introduction to Markov Chain Monte Carlo`,
         Charles J. Geyer
+
     [2] `Stan Reference Manual version 2.18`,
         Stan Development Team
 
@@ -340,3 +344,63 @@ def waic(input, log_weights=None, pointwise=False, dim=0):
     elpd = lpd - p_waic
     waic = -2 * elpd
     return (waic, p_waic) if pointwise else (waic.sum(), p_waic.sum())
+
+
+def fit_generalized_pareto(X):
+    """
+    Given a dataset X assumed to be drawn from the Generalized Pareto
+    Distribution, estimate the distributional parameters k, sigma using a
+    variant of the technique described in reference [1]. This
+    implementation is modified from the implementation used in reference [2].
+
+    References
+    [1] 'A new and efficient estimation method for the generalized Pareto distribution.'
+    Zhang, J. and Stephens, M.A. (2009).
+    [2] 'Pareto Smoothed Importance Sampling.'
+    Aki Vehtari, Andrew Gelman, Jonah Gabry
+    https://github.com/avehtari/PSIS/blob/904146236767182270c9718a7b2a30831fe701fe/py/psis.py#L211
+
+    :param torch.Tensor or numpy.ndarray X: the input data X
+    :returns tuple: tuple of floats (k, sigma) corresponding to the fit parameters
+    """
+    if isinstance(X, torch.Tensor):
+        X = X.data.cpu().float().numpy()
+
+    if X.ndim != 1 or len(X) <= 1:
+        raise ValueError("Invalid input array.")
+
+    X.sort()
+
+    N = len(X)
+    PRIOR = 3
+    M = 30 + int(math.sqrt(N))
+
+    bs = np.arange(1, M + 1, dtype=float) - 0.5
+    bs = 1.0 - math.sqrt(M) / np.sqrt(bs)
+    bs /= PRIOR * X[int(N/4 - 0.5)]
+    bs += 1 / X[-1]
+
+    temp = np.log1p(-bs[:, None] * X)
+    ks = np.mean(temp, axis=1)
+
+    L = np.log(-bs / ks) - (ks + 1)
+    L *= N
+
+    temp = np.exp(L - L[:, None])
+    w = 1.0 / np.sum(temp, axis=1)
+
+    # remove negligible weights
+    dii = w >= 10 * np.finfo(float).eps
+    if not np.all(dii):
+        w = w[dii]
+        bs = bs[dii]
+    w /= w.sum()
+
+    b = np.sum(bs * w)
+    temp = np.log1p((-b) * X)
+    k = np.mean(temp)
+    sigma = -k / b
+    a = 10  # weakly informative prior for k
+    k = k * N / (N + a) + a * 0.5 / (N + a)
+
+    return k, sigma

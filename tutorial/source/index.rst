@@ -44,6 +44,7 @@ Welcome to Pyro Examples and Tutorials!
 
    gmm
    gp
+   gplvm
    bo
    tracking_1d
    csis
@@ -59,6 +60,8 @@ Welcome to Pyro Examples and Tutorials!
    lda
    mcmc
    sparse_gamma
+   dkl
+   einsum
 
 
 Indices and tables

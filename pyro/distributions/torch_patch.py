@@ -1,13 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-import os
-
-import opt_einsum
 import torch
 
-if 'READTHEDOCS' not in os.environ:
-    # RTD is running 0.4.1 due to a memory issue with pytorch 1.0
-    assert torch.__version__.startswith('1.')
+assert torch.__version__.startswith('1.')
 
 
 def patch_dependency(target, root_module=torch):
@@ -64,6 +59,16 @@ def _torch_linspace(*args, **kwargs):
     return ret
 
 
+# Fixes a shape error in Multinomial.support with inhomogeneous .total_count
+@patch_dependency('torch.distributions.Multinomial.support')
+@torch.distributions.constraints.dependent_property
+def _Multinomial_support(self):
+    total_count = self.total_count
+    if isinstance(total_count, torch.Tensor):
+        total_count = total_count.unsqueeze(-1)
+    return torch.distributions.constraints.integer_interval(0, total_count)
+
+
 @patch_dependency('torch.einsum')
 def _einsum(equation, *operands):
     if len(operands) == 1 and isinstance(operands[0], (list, tuple)):
@@ -83,24 +88,6 @@ def _einsum(equation, *operands):
         return (x.unsqueeze(1) * y).sum(0).transpose(0, 1)
 
     return _einsum._pyro_unpatched(equation, *operands)
-
-
-# This can be removed after https://github.com/dgasmith/opt_einsum/pull/77 is released.
-@patch_dependency('opt_einsum.helpers.compute_size_by_dict', opt_einsum)
-def _compute_size_by_dict(indices, idx_dict):
-    if torch._C._get_tracing_state():
-        # If running under the jit, convert all sizes from tensors to ints, the
-        # first time each idx_dict is seen.
-        last_idx_dict = getattr(_compute_size_by_dict, '_last_idx_dict', None)
-        if idx_dict is not last_idx_dict:
-            _compute_size_by_dict._last_idx_dict = idx_dict
-            for key, value in idx_dict.items():
-                idx_dict[key] = int(value)
-
-    ret = 1
-    for i in indices:
-        ret *= idx_dict[i]
-    return ret
 
 
 __all__ = []

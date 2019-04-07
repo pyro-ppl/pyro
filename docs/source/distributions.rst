@@ -56,6 +56,13 @@ AVFMultivariateNormal
     :undoc-members:
     :show-inheritance:
 
+BetaBinomial
+------------
+.. autoclass:: pyro.distributions.BetaBinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Delta
 -----
 .. autoclass:: pyro.distributions.Delta
@@ -63,9 +70,23 @@ Delta
     :undoc-members:
     :show-inheritance:
 
+DirichletMultinomial
+--------------------
+.. autoclass:: pyro.distributions.DirichletMultinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 EmpiricalDistribution
 ----------------------
 .. autoclass:: pyro.distributions.Empirical
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+GammaPoisson
+------------
+.. autoclass:: pyro.distributions.GammaPoisson
     :members:
     :undoc-members:
     :show-inheritance:
@@ -80,6 +101,13 @@ GaussianScaleMixture
 MaskedMixture
 -------------
 .. autoclass:: pyro.distributions.MaskedMixture
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+MixtureOfDiagNormals
+------------------------------------
+.. autoclass:: pyro.distributions.MixtureOfDiagNormals
     :members:
     :undoc-members:
     :show-inheritance:

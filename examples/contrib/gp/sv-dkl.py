@@ -1,10 +1,22 @@
 """
-An example to use Gaussian Process (GP) module to classify MNIST. Follow the idea
-from reference [1], we will combine a convolutional neural network with a RBF kernel
-to create a "deep" kernel. Then we train a SparseVariationalGP model using SVI. Note
-that the model is trained end-to-end in mini-batch.
+An example to use Pyro Gaussian Process module to classify MNIST and binary MNIST.
 
-With default arguments (trained on CPU), the accuracy is 98.59%.
+Follow the idea from reference [1], we will combine a convolutional neural network
+(CNN) with a RBF kernel to create a "deep" kernel:
+
+    >>> deep_kernel = gp.kernels.Warping(rbf, iwarping_fn=cnn)
+
+SparseVariationalGP model allows us train the data in mini-batch (time complexity
+scales linearly to the number of data points).
+
+Note that the implementation here is different from [1]. There the authors
+use CNN as a feature extraction layer, then add a Gaussian Process layer on the
+top of CNN. Hence, their inducing points lie in the space of extracted features.
+Here we join CNN module and RBF kernel together to make it a deep kernel.
+Hence, our inducing points lie in the space of original images.
+
+After 16 epochs with default hyperparameters, the accuaracy of 10-class MNIST
+is 98.45% and the accuaracy of binary MNIST is 99.41%.
 
 Reference:
 
@@ -50,6 +62,9 @@ def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
     for batch_idx, (data, target) in enumerate(train_loader):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
+        if args.binary:
+            target = (target % 2).float()  # convert numbers 0->9 to 0 or 1
+
         gpmodule.set_data(data, target)
         optimizer.zero_grad()
         loss = loss_fn(gpmodule.model, gpmodule.guide)
@@ -66,6 +81,9 @@ def test(args, test_loader, gpmodule):
     for data, target in test_loader:
         if args.cuda:
             data, target = data.cuda(), target.cuda()
+        if args.binary:
+            target = (target % 2).float()  # convert numbers 0->9 to 0 or 1
+
         # get prediction of GP model on new data
         f_loc, f_var = gpmodule(data)
         # use its likelihood to give prediction class
@@ -73,7 +91,7 @@ def test(args, test_loader, gpmodule):
         # compare prediction and target to count accuaracy
         correct += pred.eq(target).long().cpu().sum()
 
-    print("\nTest set: Accuracy: {}/{} ({:.0f}%)\n"
+    print("\nTest set: Accuracy: {}/{} ({:.2f}%)\n"
           .format(correct, len(test_loader.dataset), 100. * correct / len(test_loader.dataset)))
 
 
@@ -87,10 +105,13 @@ def main(args):
                                    shuffle=True)
     test_loader = get_data_loader(dataset_name='MNIST',
                                   data_dir=data_dir,
-                                  batch_size=args.batch_size,
+                                  batch_size=args.test_batch_size,
                                   dataset_transforms=[transforms.Normalize((0.1307,), (0.3081,))],
                                   is_training_set=False,
-                                  shuffle=True)
+                                  shuffle=False)
+    if args.cuda:
+        train_loader.num_workers = 1
+        test_loader.num_workers = 1
 
     cnn = CNN()
 
@@ -102,14 +123,27 @@ def main(args):
     deep_kernel = gp.kernels.Warping(rbf, iwarping_fn=cnn)
 
     # init inducing points (taken randomly from dataset)
-    Xu = next(iter(train_loader))[0][:args.num_inducing]
-    # use MultiClass likelihood for 10-class classification problem
-    likelihood = gp.likelihoods.MultiClass(num_classes=10)
-    # Because we use Categorical distribution in MultiClass likelihood, we need GP model returns
-    # a list of probabilities of each class. Hence it is required to use latent_shape = 10.
+    batches = []
+    for i, (data, _) in enumerate(train_loader):
+        batches.append(data)
+        if i >= ((args.num_inducing - 1) // args.batch_size):
+            break
+    Xu = torch.cat(batches)[:args.num_inducing].clone()
+
+    if args.binary:
+        likelihood = gp.likelihoods.Binary()
+        latent_shape = torch.Size([])
+    else:
+        # use MultiClass likelihood for 10-class classification problem
+        likelihood = gp.likelihoods.MultiClass(num_classes=10)
+        # Because we use Categorical distribution in MultiClass likelihood, we need GP model
+        # returns a list of probabilities of each class. Hence it is required to use
+        # latent_shape = 10.
+        latent_shape = torch.Size([10])
+
     # Turns on "whiten" flag will help optimization for variational models.
     gpmodule = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=deep_kernel, Xu=Xu,
-                                             likelihood=likelihood, latent_shape=torch.Size([10]),
+                                             likelihood=likelihood, latent_shape=latent_shape,
                                              num_data=60000, whiten=True)
     if args.cuda:
         gpmodule.cuda()
@@ -129,12 +163,14 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.0')
+    assert pyro.__version__.startswith('0.3.1')
     parser = argparse.ArgumentParser(description='Pyro GP MNIST Example')
     parser.add_argument('--data-dir', type=str, default=None, metavar='PATH',
                         help='default directory to cache MNIST data')
     parser.add_argument('--num-inducing', type=int, default=70, metavar='N',
                         help='number of inducing input (default: 70)')
+    parser.add_argument('--binary', action='store_true', default=False,
+                        help='do binary classification')
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
@@ -154,5 +190,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     pyro.set_rng_seed(args.seed)
+    if args.cuda:
+        torch.backends.cudnn.deterministic = True
 
     main(args)

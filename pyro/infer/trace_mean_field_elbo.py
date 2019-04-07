@@ -7,9 +7,9 @@ import torch
 from torch.distributions import kl_divergence
 
 import pyro.ops.jit
-from pyro.distributions.util import is_identically_zero, scale_and_mask
+from pyro.distributions.util import scale_and_mask
 from pyro.infer.trace_elbo import Trace_ELBO
-from pyro.infer.util import is_validation_enabled, torch_item
+from pyro.infer.util import is_validation_enabled, torch_item, check_fully_reparametrized
 from pyro.util import warn_if_nan
 
 
@@ -29,14 +29,6 @@ def _check_mean_field_requirement(model_trace, guide_trace):
                       "occur in the same order.\n" +
                       "Model sites:\n  " + "\n  ".join(model_sites) +
                       "Guide sites:\n  " + "\n  ".join(guide_sites))
-
-
-def _check_fully_reparametrized(guide_site):
-    log_prob, score_function_term, entropy_term = guide_site["score_parts"]
-    fully_rep = (guide_site["fn"].has_rsample and not is_identically_zero(entropy_term) and
-                 is_identically_zero(score_function_term))
-    if not fully_rep:
-        raise NotImplementedError("All distributions in the guide must be fully reparameterized.")
 
 
 class TraceMeanField_ELBO(Trace_ELBO):
@@ -102,7 +94,7 @@ class TraceMeanField_ELBO(Trace_ELBO):
                 else:
                     guide_site = guide_trace.nodes[name]
                     if is_validation_enabled():
-                        _check_fully_reparametrized(guide_site)
+                        check_fully_reparametrized(guide_site)
 
                     # use kl divergence if available, else fall back on sampling
                     try:
@@ -116,10 +108,10 @@ class TraceMeanField_ELBO(Trace_ELBO):
 
         # handle auxiliary sites in the guide
         for name, guide_site in guide_trace.nodes.items():
-            if guide_site["type"] == "sample" and name not in model_trace.nodes():
+            if guide_site["type"] == "sample" and name not in model_trace.nodes:
                 assert guide_site["infer"].get("is_auxiliary")
                 if is_validation_enabled():
-                    _check_fully_reparametrized(guide_site)
+                    check_fully_reparametrized(guide_site)
                 entropy_term = guide_site["score_parts"].entropy_term
                 elbo_particle = elbo_particle - entropy_term.sum()
 

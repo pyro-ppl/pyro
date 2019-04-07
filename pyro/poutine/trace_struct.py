@@ -1,9 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-import collections
+from collections import OrderedDict
 import sys
 
-import networkx
 import opt_einsum
 import six
 
@@ -14,9 +13,10 @@ from pyro.poutine.util import is_validation_enabled
 from pyro.util import warn_if_inf, warn_if_nan
 
 
-class Trace(networkx.DiGraph):
+class Trace(object):
     """
-    Execution trace data structure built on top of :class:`networkx.DiGraph`.
+    Graph data structure denoting the relationships amongst different pyro primitives
+    in the execution trace.
 
     An execution trace of a Pyro program is a record of every call
     to ``pyro.sample()`` and ``pyro.param()`` in a single execution of that program.
@@ -51,7 +51,7 @@ class Trace(networkx.DiGraph):
         >>> list(name for name in trace.nodes.keys())  # doctest: +SKIP
         ["_INPUT", "s", "z", "_RETURN"]
 
-    As in :class:`networkx.DiGraph`, values of ``trace.nodes`` are dictionaries of node metadata:
+    Values of ``trace.nodes`` are dictionaries of node metadata:
 
         >>> trace.nodes["z"]  # doctest: +SKIP
         {'type': 'sample', 'name': 'z', 'is_observed': False,
@@ -66,31 +66,38 @@ class Trace(networkx.DiGraph):
     ``'cond_indep_stack'`` contains data structures corresponding to ``pyro.plate`` contexts
     appearing in the execution.
     ``'done'``, ``'stop'``, and ``'continuation'`` are only used by Pyro's internals.
+
+    :param string graph_type: string specifying the kind of trace graph to construct
     """
 
-    node_dict_factory = collections.OrderedDict
-
-    def __init__(self, *args, **kwargs):
-        """
-        :param string graph_type: string specifying the kind of trace graph to construct
-
-        Constructor. Currently identical to :meth:`networkx.DiGraph.__init__`,
-        except for storing the graph_type attribute
-        """
-        graph_type = kwargs.pop("graph_type", "flat")
+    def __init__(self, graph_type="flat"):
         assert graph_type in ("flat", "dense"), \
             "{} not a valid graph type".format(graph_type)
         self.graph_type = graph_type
-        super(Trace, self).__init__(*args, **kwargs)
+        self.nodes = OrderedDict()
+        self._succ = OrderedDict()
+        self._pred = OrderedDict()
 
-    def add_node(self, site_name, *args, **kwargs):
+    def __iter__(self):
+        for node in self.nodes:
+            yield node
+
+    def __len__(self):
+        return len(self.nodes)
+
+    @property
+    def edges(self):
+        for site, adj_nodes in self._succ.items():
+            for adj_node in adj_nodes:
+                yield site, adj_node
+
+    def add_node(self, site_name, **kwargs):
         """
         :param string site_name: the name of the site to be added
 
         Adds a site to the trace.
 
-        Identical to :meth:`networkx.DiGraph.add_node`
-        but raises an error when attempting to add a duplicate node
+        Raises an error when attempting to add a duplicate node
         instead of silently overwriting.
         """
         if site_name in self:
@@ -103,18 +110,64 @@ class Trace(networkx.DiGraph):
                 raise RuntimeError("Multiple {} sites named '{}'".format(kwargs['type'], site_name))
 
         # XXX should copy in case site gets mutated, or dont bother?
-        super(Trace, self).add_node(site_name, *args, **kwargs)
+        self.nodes[site_name] = kwargs
+        self._pred[site_name] = set()
+        self._succ[site_name] = set()
+
+    def add_edge(self, site1, site2):
+        for site in (site1, site2):
+            if site not in self.nodes:
+                self.add_node(site)
+        self._succ[site1].add(site2)
+        self._pred[site2].add(site1)
+
+    def remove_node(self, site_name):
+        self.nodes.pop(site_name)
+        for p in self._pred[site_name]:
+            self._succ[p].remove(site_name)
+        for s in self._succ[site_name]:
+            self._pred[s].remove(site_name)
+        self._pred.pop(site_name)
+        self._succ.pop(site_name)
+
+    def predecessors(self, site_name):
+        return self._pred[site_name]
+
+    def successors(self, site_name):
+        return self._succ[site_name]
 
     def copy(self):
         """
         Makes a shallow copy of self with nodes and edges preserved.
-        Identical to :meth:`networkx.DiGraph.copy`, but preserves the type
-        and the self.graph_type attribute
         """
-        trace = super(Trace, self).copy()
-        trace.__class__ = Trace
-        trace.graph_type = self.graph_type
-        return trace
+        new_tr = Trace(graph_type=self.graph_type)
+        new_tr.nodes.update(self.nodes)
+        new_tr._succ.update(self._succ)
+        new_tr._pred.update(self._pred)
+        return new_tr
+
+    def _dfs(self, site, visited):
+        if site in visited:
+            return
+        for s in self._succ[site]:
+            for node in self._dfs(s, visited):
+                yield node
+        visited.add(site)
+        yield site
+
+    def topological_sort(self, reverse=False):
+        """
+        Return a list of nodes (site names) in topologically sorted order.
+
+        :param bool reverse: Return the list in reverse order.
+        :return: list of topologically sorted nodes (site names).
+        """
+        visited = set()
+        top_sorted = []
+        for s in self._succ:
+            for node in self._dfs(s, visited):
+                top_sorted.append(node)
+        return top_sorted if reverse else list(reversed(top_sorted))
 
     def log_prob_sum(self, site_filter=lambda name, site: True):
         """
@@ -146,7 +199,7 @@ class Trace(networkx.DiGraph):
                     if is_validation_enabled():
                         warn_if_nan(log_p, "log_prob_sum at site '{}'".format(name))
                         warn_if_inf(log_p, "log_prob_sum at site '{}'".format(name), allow_neginf=True)
-                result += log_p
+                result = result + log_p
         return result
 
     def compute_log_prob(self, site_filter=lambda name, site: True):
