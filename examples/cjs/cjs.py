@@ -255,7 +255,11 @@ def main(args):
         loss = svi.step(capture_history, sex)
         losses.append(loss)
         if step % 20 == 0 and step > 0 or step == args.num_steps - 1:
-            print("[iter %03d] loss: %.3f" % (step, np.mean(losses[-20:])))
+            print("[iteration %03d] loss: %.3f" % (step, np.mean(losses[-20:])))
+
+    elbo_eval = TraceEnum_ELBO(max_plate_nesting=1, num_particles=2000, vectorize_particles=True)
+    svi_eval = SVI(model, guide, optim, elbo)
+    print("Final loss: %.4f" % svi_eval.evaluate_loss(capture_history, sex))
 
 
 if __name__ == '__main__':

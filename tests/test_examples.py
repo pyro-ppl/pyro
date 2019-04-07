@@ -23,6 +23,7 @@ CPU_EXAMPLES = [
     'cjs/cjs.py --num-steps=1 -m 2',
     'cjs/cjs.py --num-steps=1 -m 3',
     'cjs/cjs.py --num-steps=1 -m 4',
+    'cjs/cjs.py --num-steps=1 -m 5',
     'contrib/autoname/scoping_mixture.py --num-epochs=1',
     'contrib/autoname/mixture.py --num-epochs=1',
     'contrib/autoname/tree_data.py --num-epochs=1',
