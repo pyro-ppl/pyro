@@ -187,7 +187,8 @@ and female survival probabilities.
 def model_5(capture_history, sex):
     N, T = capture_history.shape
 
-    # mean survival probabilities for males/females in logit space
+    # phi_beta controls the survival probability differential
+    # for males versus females (in logit space)
     phi_beta = pyro.sample("phi_beta", dist.Normal(0.0, 10.0))
     phi_beta = sex * phi_beta
     rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
@@ -197,8 +198,6 @@ def model_5(capture_history, sex):
     # we create the plate once, outside of the loop over t
     dippers_plate = pyro.plate("dippers", N, dim=-1)
     for t in pyro.markov(range(T)):
-        # note that phi_t needs to be outside the plate, since
-        # phi_t is shared across all N birds
         phi_gamma_t = pyro.sample("phi_gamma_{}".format(t), dist.Normal(0.0, 10.0)) if t > 0 \
                       else 0.0
         phi_t = torch.sigmoid(phi_beta + phi_gamma_t)
@@ -224,6 +223,7 @@ def main(args):
     pyro.clear_param_store()
     pyro.enable_validation(True)
 
+    # load data
     capture_history_file = os.path.dirname(os.path.abspath(__file__)) + '/dipper_capture_history.csv'
     capture_history = torch.tensor(np.genfromtxt(capture_history_file, delimiter=',')).float()[:, 1:]
     N, T = capture_history.shape
@@ -234,6 +234,9 @@ def main(args):
 
     model = models[args.model]
 
+    # we use poutine.block to only expose the continuous latent variables
+    # in the models to AutoDiagonalNormal (all of which begin with 'phi'
+    # or 'rho')
     def expose_fn(msg):
         return msg["name"][0:3] in ['phi', 'rho']
 
@@ -257,6 +260,7 @@ def main(args):
         if step % 20 == 0 and step > 0 or step == args.num_steps - 1:
             print("[iteration %03d] loss: %.3f" % (step, np.mean(losses[-20:])))
 
+    # evaluate final trained model
     elbo_eval = TraceEnum_ELBO(max_plate_nesting=1, num_particles=2000, vectorize_particles=True)
     svi_eval = SVI(model, guide, optim, elbo)
     print("Final loss: %.4f" % svi_eval.evaluate_loss(capture_history, sex))
