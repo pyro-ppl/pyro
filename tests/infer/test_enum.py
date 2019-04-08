@@ -3234,5 +3234,3 @@ def test_vectorized_importance(num_samples):
     elbo = Trace_ELBO(vectorize_particles=True, num_particles=num_samples).loss(model, guide)
 
     assert_equal(vectorized_weights.sum().item() / num_samples, -elbo, prec=0.01)
-
-

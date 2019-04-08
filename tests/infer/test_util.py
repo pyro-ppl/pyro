@@ -48,10 +48,10 @@ def test_multi_frame_tensor():
         assert_equal(actual_sum, expected_sum, msg=name)
 
 
-@pytest.mark.parametrize('scale_krange', zip([0.50, 0.95], [(0.5, 0.9), (0.0, 0.2)]))
-@pytest.mark.parametrize('zdim', [1, 3])
-@pytest.mark.parametrize('max_particles', [10000, 25000])
-def test_psis_diagnostic(scale_krange, zdim, max_particles, num_particles=100000):
+@pytest.mark.parametrize('max_particles', [250 * 1000, 500 * 1000])
+@pytest.mark.parametrize('scale_krange', zip([0.50, 0.95], [(0.7, 0.9), (0.05, 0.2)]))
+@pytest.mark.parametrize('zdim', [1, 5])
+def test_psis_diagnostic(scale_krange, zdim, max_particles, num_particles=500 * 1000):
 
     def model(zdim=1, scale=1.0):
         with pyro.plate("x_axis", zdim, dim=-1):
@@ -64,4 +64,4 @@ def test_psis_diagnostic(scale_krange, zdim, max_particles, num_particles=100000
     scale, krange = scale_krange
     k = psis_diagnostic(model, guide, num_particles=num_particles, max_simultaneous_particles=max_particles,
                         zdim=zdim, scale=scale)
-    print("scale", scale, "krange", krange, "k", k)
+    assert k > krange[0] and k < krange[1]

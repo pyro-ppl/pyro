@@ -351,7 +351,7 @@ def fit_generalized_pareto(X):
     Given a dataset X assumed to be drawn from the Generalized Pareto
     Distribution, estimate the distributional parameters k, sigma using a
     variant of the technique described in reference [1]. This
-    implementation is modified from the implementation used in reference [2].
+    implementation is adapted from the implementation used in reference [2].
 
     References
     [1] 'A new and efficient estimation method for the generalized Pareto distribution.'
@@ -386,8 +386,9 @@ def fit_generalized_pareto(X):
     L = np.log(-bs / ks) - (ks + 1)
     L *= N
 
-    temp = np.exp(L - L[:, None])
-    w = 1.0 / np.sum(temp, axis=1)
+    L_max = np.max(L)
+    L_logsumexp = np.log(np.sum(np.exp(L - L_max))) + L_max
+    w = np.exp(L - L_logsumexp)
 
     # remove negligible weights
     dii = w >= 10 * np.finfo(float).eps

@@ -163,6 +163,9 @@ def psis_diagnostic(model, guide, *args, **kwargs):
     see [1] for a more complete discussion of how the tail index k should be
     interpreted.
 
+    Please be advised that a large number of samples may be requires for an
+    accurate estimate of k.
+
     Note that we assume that the model and guide are both vectorized and have
     static structure. As is canonical in Pyro, the args and kwargs are passed
     to the model and guide.
@@ -180,17 +183,17 @@ def psis_diagnostic(model, guide, *args, **kwargs):
     :param callable model: the model program.
     :param callable guide: the guide program.
     :param int num_particles: the total number of times we run the model and guide in order to
-    compute the diagnostic. defaults to 500.
-    :param max_simultaneous_particles: the maximum number of simulteanous samples drawn from the
+    compute the diagnostic. defaults to 1000.
+    :param max_simultaneous_particles: the maximum number of simultaneous samples drawn from the
     model and guide. defaults to `num_particles`. `num_particles` must be divisible by
     `max_simultaneous_particles`.
-    compute the diagnostic. defaults to 500.
+    compute the diagnostic. defaults to 1000.
     :param int max_plate_nesting: optional bound on max number of nested :func:`pyro.plate`
     contexts in the model/guide. defaults to 7.
     :returns float: the PSIS diagnostic k
     """
 
-    num_particles = kwargs.pop('num_particles', 500)
+    num_particles = kwargs.pop('num_particles', 1000)
     max_simultaneous_particles = kwargs.pop('max_simultaneous_particles', num_particles)
     max_plate_nesting = kwargs.pop('max_plate_nesting', 7)
 

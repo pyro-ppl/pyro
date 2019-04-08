@@ -6,7 +6,7 @@ import torch
 
 from pyro.ops.stats import (autocorrelation, autocovariance, effective_sample_size, gelman_rubin,
                             hpdi, pi, quantile, resample, split_gelman_rubin, waic, _cummin,
-                            _fft_next_good_size, fit_generalized_pareto, psis_diagnostic)
+                            _fft_next_good_size, fit_generalized_pareto)
 from tests.common import assert_equal, xfail_if_not_implemented
 
 
@@ -239,9 +239,9 @@ def test_weighted_waic():
     assert_equal(p1, p3)
 
 
-@pytest.mark.parametrize('k', [0.2, 0.5])
+@pytest.mark.parametrize('k', [0.2, 0.5, 0.8])
 @pytest.mark.parametrize('sigma', [0.8, 1.3])
-def test_fit_generalized_pareto(k, sigma, n_samples=5000):
+def test_fit_generalized_pareto(k, sigma, n_samples=20000):
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         from scipy.stats import genpareto
