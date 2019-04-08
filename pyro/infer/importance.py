@@ -163,7 +163,7 @@ def psis_diagnostic(model, guide, *args, **kwargs):
     see [1] for a more complete discussion of how the tail index k should be
     interpreted.
 
-    Please be advised that a large number of samples may be requires for an
+    Please be advised that a large number of samples may be required for an
     accurate estimate of k.
 
     Note that we assume that the model and guide are both vectorized and have
