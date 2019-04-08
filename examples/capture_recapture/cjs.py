@@ -6,7 +6,7 @@ For a discussion of these models see reference [1].
 We make use of two datasets:
 -- the European Dipper (Cinclus cinclus) data from reference [2]
    (this is Norway's national bird).
--- the meadow voles dataset from reference [3].
+-- the meadow voles data from reference [3].
 
 Compare to the Stan implementations in [7].
 
@@ -59,7 +59,7 @@ def model_1(capture_history, sex):
     with pyro.plate("animals", N, dim=-1):
         z = torch.ones(N)
         # we use this mask to eliminate extraneous log probabilities
-        # that arise for a given individual bird before its first capture.
+        # that arise for a given individual before its first capture.
         first_capture_mask = torch.zeros(N).byte()
         for t in pyro.markov(range(T)):
             with poutine.mask(mask=first_capture_mask):
@@ -90,7 +90,7 @@ def model_2(capture_history, sex):
     animals_plate = pyro.plate("animals", N, dim=-1)
     for t in pyro.markov(range(T)):
         # note that phi_t needs to be outside the plate, since
-        # phi_t is shared across all N birds
+        # phi_t is shared across all N individuals
         phi_t = pyro.sample("phi_{}".format(t), dist.Uniform(0.0, 1.0)) if t > 0 \
                 else 1.0
         with animals_plate, poutine.mask(mask=first_capture_mask):
@@ -145,7 +145,7 @@ def model_3(capture_history, sex):
 
 """
 In our fourth model variant we include group-level fixed effects
-for bird sex (male, female).
+for sex (male, female).
 """
 
 
@@ -154,15 +154,15 @@ def model_4(capture_history, sex):
     # survival probabilities for males/females
     phi_male = pyro.sample("phi_male", dist.Uniform(0.0, 1.0))
     phi_female = pyro.sample("phi_female", dist.Uniform(0.0, 1.0))
-    # we construct a 294-dimensional vector that contains the appropriate
-    # phi for each bird given its sex (female = 0, male = 1)
+    # we construct a N-dimensional vector that contains the appropriate
+    # phi for each individual given its sex (female = 0, male = 1)
     phi = sex * phi_male + (1.0 - sex) * phi_female
     rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
 
     with pyro.plate("animals", N, dim=-1):
         z = torch.ones(N)
         # we use this mask to eliminate extraneous log probabilities
-        # that arise for a given individual bird before its first capture.
+        # that arise for a given individual before its first capture.
         first_capture_mask = torch.zeros(N).byte()
         for t in pyro.markov(range(T)):
             with poutine.mask(mask=first_capture_mask):
@@ -229,24 +229,24 @@ def main(args):
     pyro.enable_validation(True)
 
     # load data
-    if args.dataset == "dippers":
+    if args.dataset == "dipper":
         capture_history_file = os.path.dirname(os.path.abspath(__file__)) + '/dipper_capture_history.csv'
-    elif args.dataset == "voles":
+    elif args.dataset == "vole":
         capture_history_file = os.path.dirname(os.path.abspath(__file__)) + '/meadow_voles_capture_history.csv'
     else:
-        raise ValueError("Available datasets are \'dippers\' and \'voles\'.")
+        raise ValueError("Available datasets are \'dipper\' and \'vole\'.")
 
     capture_history = torch.tensor(np.genfromtxt(capture_history_file, delimiter=',')).float()[:, 1:]
     N, T = capture_history.shape
     print("Loaded {} capture history for {} individuals collected over {} time periods.".format(
           args.dataset, N, T))
 
-    if args.dataset == "dippers" and args.model == "4":
+    if args.dataset == "dipper" and args.model == "4":
         sex_file = os.path.dirname(os.path.abspath(__file__)) + '/dipper_sex.csv'
         sex = torch.tensor(np.genfromtxt(sex_file, delimiter=',')).float()[:, 1]
-        print("Loaded dippers sex data.")
-    elif args.dataset == "voles" and args.model == "4":
-        raise ValueError("Cannot run model_5 on meadow voles data, since we lack sex information for these animals.")
+        print("Loaded dipper sex data.")
+    elif args.dataset == "vole" and args.model == "4":
+        raise ValueError("Cannot run model_4 on meadow voles data, since we lack sex information for these animals.")
     else:
         sex = None
 
@@ -288,7 +288,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="CJS capture-recapture model for ecological data")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
-    parser.add_argument("-d", "--dataset", default="dippers", type=str)
+    parser.add_argument("-d", "--dataset", default="dipper", type=str)
     parser.add_argument("-n", "--num-steps", default=400, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.002, type=float)
     args = parser.parse_args()
