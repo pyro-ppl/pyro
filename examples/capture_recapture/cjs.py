@@ -241,12 +241,13 @@ def main(args):
     print("Loaded {} capture history for {} individuals collected over {} time periods.".format(
           args.dataset, N, T))
 
-    if args.dataset == "dipper" and args.model == "4":
+    if args.dataset == "dipper" and args.model in ["4", "5"]:
         sex_file = os.path.dirname(os.path.abspath(__file__)) + '/dipper_sex.csv'
         sex = torch.tensor(np.genfromtxt(sex_file, delimiter=',')).float()[:, 1]
         print("Loaded dipper sex data.")
-    elif args.dataset == "vole" and args.model == "4":
-        raise ValueError("Cannot run model_4 on meadow voles data, since we lack sex information for these animals.")
+    elif args.dataset == "vole" and args.model in ["4", "5"]:
+        raise ValueError("Cannot run model_{} on meadow voles data, since we lack sex information for these animals.".format(
+            args.model))
     else:
         sex = None
 
