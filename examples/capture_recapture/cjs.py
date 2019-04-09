@@ -1,12 +1,14 @@
 """
 We show how to implement several variants of the Cormack-Jolly-Seber (CJS)
-[3, 4, 5] model used in ecology to analyze animal capture-recapture data.
+[4, 5, 6] model used in ecology to analyze animal capture-recapture data.
 For a discussion of these models see reference [1].
 
-Throughout we use the European Dipper (Cinclus cinclus) data from reference [2].
-This is Norway's national bird.
+We make use of two datasets:
+-- the European Dipper (Cinclus cinclus) data from reference [2]
+   (this is Norway's national bird).
+-- the meadow voles data from reference [3].
 
-Compare to the Stan implementations in [6].
+Compare to the Stan implementations in [7].
 
 References
 [1] Kery, M., & Schaub, M. (2011). Bayesian population analysis using
@@ -14,12 +16,15 @@ References
 [2] Lebreton, J.D., Burnham, K.P., Clobert, J., & Anderson, D.R. (1992).
     Modeling survival and testing biological hypotheses using marked animals:
     a unified approach with case studies. Ecological monographs, 62(1), 67-118.
-[3] Cormack, R.M., 1964. Estimates of survival from the sighting of marked animals.
+[3] Nichols, Pollock, Hines (1984) The use of a robust capture-recapture design
+    in small mammal population studies: A field example with Microtus pennsylvanicus.
+    Acta Theriologica 29:357-365.
+[4] Cormack, R.M., 1964. Estimates of survival from the sighting of marked animals.
     Biometrika 51, 429-438.
-[4] Jolly, G.M., 1965. Explicit estimates from capture-recapture data with both death
+[5] Jolly, G.M., 1965. Explicit estimates from capture-recapture data with both death
     and immigration-stochastic model. Biometrika 52, 225-247.
-[5] Seber, G.A.F., 1965. A note on the multiple recapture census. Biometrika 52, 249-259.
-[6] https://github.com/stan-dev/example-models/tree/master/BPA/Ch.07
+[6] Seber, G.A.F., 1965. A note on the multiple recapture census. Biometrika 52, 249-259.
+[7] https://github.com/stan-dev/example-models/tree/master/BPA/Ch.07
 """
 
 from __future__ import absolute_import, division, print_function
@@ -51,10 +56,10 @@ def model_1(capture_history, sex):
     phi = pyro.sample("phi", dist.Uniform(0.0, 1.0))  # survival probability
     rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
 
-    with pyro.plate("dippers", N, dim=-1):
+    with pyro.plate("animals", N, dim=-1):
         z = torch.ones(N)
         # we use this mask to eliminate extraneous log probabilities
-        # that arise for a given individual bird before its first capture.
+        # that arise for a given individual before its first capture.
         first_capture_mask = torch.zeros(N).byte()
         for t in pyro.markov(range(T)):
             with poutine.mask(mask=first_capture_mask):
@@ -71,7 +76,7 @@ def model_1(capture_history, sex):
 
 """
 In our second model variant there is a time-varying survival probability phi_t for
-6 of the 7 years of the capture data; each phi_t is treated as a fixed effect.
+T-1 of the T time periods of the capture data; each phi_t is treated as a fixed effect.
 """
 
 
@@ -82,13 +87,13 @@ def model_2(capture_history, sex):
     z = torch.ones(N)
     first_capture_mask = torch.zeros(N).byte()
     # we create the plate once, outside of the loop over t
-    dippers_plate = pyro.plate("dippers", N, dim=-1)
+    animals_plate = pyro.plate("animals", N, dim=-1)
     for t in pyro.markov(range(T)):
         # note that phi_t needs to be outside the plate, since
-        # phi_t is shared across all N birds
+        # phi_t is shared across all N individuals
         phi_t = pyro.sample("phi_{}".format(t), dist.Uniform(0.0, 1.0)) if t > 0 \
                 else 1.0
-        with dippers_plate, poutine.mask(mask=first_capture_mask):
+        with animals_plate, poutine.mask(mask=first_capture_mask):
             mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
             # we use parallel enumeration to exactly sum out
             # the discrete states z_t.
@@ -101,8 +106,8 @@ def model_2(capture_history, sex):
 
 
 """
-In our third model variant there is a survival probability phi_t for 6
-of the 7 years of the capture data (just like in model_2), but here
+In our third model variant there is a survival probability phi_t for T-1
+of the T time periods of the capture data (just like in model_2), but here
 each phi_t is treated as a random effect.
 """
 
@@ -120,13 +125,13 @@ def model_3(capture_history, sex):
     z = torch.ones(N)
     first_capture_mask = torch.zeros(N).byte()
     # we create the plate once, outside of the loop over t
-    dippers_plate = pyro.plate("dippers", N, dim=-1)
+    animals_plate = pyro.plate("animals", N, dim=-1)
     for t in pyro.markov(range(T)):
         phi_logit_t = pyro.sample("phi_logit_{}".format(t),
                                   dist.Normal(phi_logit_mean, phi_sigma)) if t > 0 \
                       else torch.tensor(0.0)
         phi_t = torch.sigmoid(phi_logit_t)
-        with dippers_plate, poutine.mask(mask=first_capture_mask):
+        with animals_plate, poutine.mask(mask=first_capture_mask):
             mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
             # we use parallel enumeration to exactly sum out
             # the discrete states z_t.
@@ -140,7 +145,7 @@ def model_3(capture_history, sex):
 
 """
 In our fourth model variant we include group-level fixed effects
-for bird sex (male, female).
+for sex (male, female).
 """
 
 
@@ -149,15 +154,15 @@ def model_4(capture_history, sex):
     # survival probabilities for males/females
     phi_male = pyro.sample("phi_male", dist.Uniform(0.0, 1.0))
     phi_female = pyro.sample("phi_female", dist.Uniform(0.0, 1.0))
-    # we construct a 294-dimensional vector that contains the appropriate
-    # phi for each bird given its sex (female = 0, male = 1)
+    # we construct a N-dimensional vector that contains the appropriate
+    # phi for each individual given its sex (female = 0, male = 1)
     phi = sex * phi_male + (1.0 - sex) * phi_female
     rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
 
-    with pyro.plate("dippers", N, dim=-1):
+    with pyro.plate("animals", N, dim=-1):
         z = torch.ones(N)
         # we use this mask to eliminate extraneous log probabilities
-        # that arise for a given individual bird before its first capture.
+        # that arise for a given individual before its first capture.
         first_capture_mask = torch.zeros(N).byte()
         for t in pyro.markov(range(T)):
             with poutine.mask(mask=first_capture_mask):
@@ -196,12 +201,12 @@ def model_5(capture_history, sex):
     z = torch.ones(N)
     first_capture_mask = torch.zeros(N).byte()
     # we create the plate once, outside of the loop over t
-    dippers_plate = pyro.plate("dippers", N, dim=-1)
+    animals_plate = pyro.plate("animals", N, dim=-1)
     for t in pyro.markov(range(T)):
         phi_gamma_t = pyro.sample("phi_gamma_{}".format(t), dist.Normal(0.0, 10.0)) if t > 0 \
                       else 0.0
         phi_t = torch.sigmoid(phi_beta + phi_gamma_t)
-        with dippers_plate, poutine.mask(mask=first_capture_mask):
+        with animals_plate, poutine.mask(mask=first_capture_mask):
             mu_z_t = first_capture_mask.float() * phi_t * z + (1 - first_capture_mask.float())
             # we use parallel enumeration to exactly sum out
             # the discrete states z_t.
@@ -224,13 +229,27 @@ def main(args):
     pyro.enable_validation(True)
 
     # load data
-    capture_history_file = os.path.dirname(os.path.abspath(__file__)) + '/dipper_capture_history.csv'
+    if args.dataset == "dipper":
+        capture_history_file = os.path.dirname(os.path.abspath(__file__)) + '/dipper_capture_history.csv'
+    elif args.dataset == "vole":
+        capture_history_file = os.path.dirname(os.path.abspath(__file__)) + '/meadow_voles_capture_history.csv'
+    else:
+        raise ValueError("Available datasets are \'dipper\' and \'vole\'.")
+
     capture_history = torch.tensor(np.genfromtxt(capture_history_file, delimiter=',')).float()[:, 1:]
     N, T = capture_history.shape
-    print("Loaded dipper capture history for {} individuals collected over {} years.".format(
-          N, T))
-    sex_file = os.path.dirname(os.path.abspath(__file__)) + '/dipper_sex.csv'
-    sex = torch.tensor(np.genfromtxt(sex_file, delimiter=',')).float()[:, 1]
+    print("Loaded {} capture history for {} individuals collected over {} time periods.".format(
+          args.dataset, N, T))
+
+    if args.dataset == "dipper" and args.model in ["4", "5"]:
+        sex_file = os.path.dirname(os.path.abspath(__file__)) + '/dipper_sex.csv'
+        sex = torch.tensor(np.genfromtxt(sex_file, delimiter=',')).float()[:, 1]
+        print("Loaded dipper sex data.")
+    elif args.dataset == "vole" and args.model in ["4", "5"]:
+        raise ValueError("Cannot run model_{} on meadow voles data, since we lack sex " +
+                         "information for these animals.".format(args.model))
+    else:
+        sex = None
 
     model = models[args.model]
 
@@ -270,6 +289,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="CJS capture-recapture model for ecological data")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
+    parser.add_argument("-d", "--dataset", default="dipper", type=str)
     parser.add_argument("-n", "--num-steps", default=400, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.002, type=float)
     args = parser.parse_args()
