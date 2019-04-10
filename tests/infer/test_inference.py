@@ -114,7 +114,7 @@ class NormalNormalTests(TestCase):
         pyro.clear_param_store()
 
         def model():
-            loc_latent = pyro.sample(
+            pyro.sample(
                 "loc_latent", dist.Normal(
                     torch.stack([self.loc0]*self.sample_batch_size, dim=0),
                     torch.stack([torch.pow(self.lam0, -0.5)]*self.sample_batch_size, dim=0)
@@ -296,7 +296,7 @@ class PoissonGammaTests(TestCase):
         Gamma = dist.Gamma if reparameterized else fakes.NonreparameterizedGamma
 
         def model():
-            lambda_latent = pyro.sample(
+            pyro.sample(
                 "lambda_latent", Gamma(
                     torch.stack([torch.stack([self.alpha0])]*self.sample_batch_size),
                     torch.stack([torch.stack([self.beta0])]*self.sample_batch_size)
@@ -492,7 +492,7 @@ class BernoulliBetaTests(TestCase):
         Beta = dist.Beta if reparameterized else fakes.NonreparameterizedBeta
 
         def model():
-            p_latent = pyro.sample(
+            pyro.sample(
                 "p_latent", Beta(
                     torch.stack([torch.stack([self.alpha0])]*self.sample_batch_size),
                     torch.stack([torch.stack([self.beta0])]*self.sample_batch_size)
