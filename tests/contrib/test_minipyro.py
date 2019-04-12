@@ -5,9 +5,9 @@ import warnings
 import pytest
 import torch
 from torch.distributions import constraints
+
 from pyro.generic import distributions as dist
 from pyro.generic import infer, optim, pyro, pyro_backend
-
 from tests.common import assert_close, xfail_param
 
 # This file tests a variety of model,guide pairs with valid and invalid structure.
