@@ -53,7 +53,8 @@ def main(args):
 
         # Report the final values of the variational parameters
         # in the guide after training.
-        for name, value in pyro.get_param_store().items():
+        for name in pyro.get_param_store():
+            value = pyro.param(name)
             print("{} = {}".format(name, value.detach().cpu().numpy()))
 
         # For this simple (conjugate) model we know the exact posterior. In
