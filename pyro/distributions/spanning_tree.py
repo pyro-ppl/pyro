@@ -188,6 +188,27 @@ def sample_tree_2(grid, edge_logits):
     return edges
 
 
+def sample_tree_3(edge_logits):
+    if hasattr(sample_tree_3, '_impl'):
+        return sample_tree_3._impl(edge_logits)
+
+    import warnings
+    from torch.utils.cpp_extension import load_inline
+    source = """
+    at::Tensor sample_tree(at::Tensor edge_logits) {
+      return -edge_logits;  // FIXME bogus op
+    }
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        module = load_inline(name="cspanningtree",
+                             cpp_sources=[source],
+                             functions=["sample_tree"],
+                             verbose=True)
+    sample_tree_3._impl = module.sample_tree
+    return sample_tree_3._impl(edge_logits)
+
+
 class SpanningTree(TorchDistribution):
     """
     Distribution over spanning trees on a fixed set of vertices.

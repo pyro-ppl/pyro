@@ -6,7 +6,7 @@ import pytest
 import torch
 
 import pyro
-from pyro.distributions.spanning_tree import make_complete_graph, sample_tree, sample_tree_2
+from pyro.distributions.spanning_tree import make_complete_graph, sample_tree, sample_tree_2, sample_tree_3
 from tests.common import assert_equal
 
 # https://oeis.org/A000272
@@ -48,9 +48,21 @@ def test_sample_tree_2_smoke(num_edges):
     grid = make_complete_graph(V)
     K = grid.shape[1]
     edge_logits = torch.rand(K)
-    edges = [(v, v + 1) for v in range(V - 1)]
     for _ in range(10):
         sample_tree_2(grid, edge_logits)
+
+
+@pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
+def test_sample_tree_3_smoke(num_edges):
+    pyro.set_rng_seed(num_edges)
+    E = num_edges
+    V = 1 + E
+    grid = make_complete_graph(V)
+    K = grid.shape[1]
+    edge_logits = torch.rand(K)
+    for _ in range(10):
+        result = sample_tree_3(edge_logits)
+        assert (result == -edge_logits).all()
 
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
