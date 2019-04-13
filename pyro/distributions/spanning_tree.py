@@ -188,25 +188,83 @@ def sample_tree_2(grid, edge_logits):
     return edges
 
 
-def sample_tree_3(edge_logits):
-    if hasattr(sample_tree_3, '_impl'):
-        return sample_tree_3._impl(edge_logits)
+_cpp_module = None
+_cpp_source = """
+#include <cmath>
 
-    import warnings
-    from torch.utils.cpp_extension import load_inline
-    source = """
-    at::Tensor sample_tree(at::Tensor edge_logits) {
-      return -edge_logits;  // FIXME bogus op
+at::Tensor make_complete_graph(long num_vertices) {
+  const long V = num_vertices;
+  const long K = V * (V - 1) / 2;
+  auto grid = torch::empty({3, K}, at::kLong);
+  int k = 0;
+  for (int v2 = 0; v2 != V; ++v2) {
+    for (int v1 = 0; v1 != v2; ++v1) {
+      grid[0][k] = k;
+      grid[1][k] = v1;
+      grid[2][k] = v2;
+      k += 1;
     }
-    """
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning)
-        module = load_inline(name="cspanningtree",
-                             cpp_sources=[source],
-                             functions=["sample_tree"],
-                             verbose=True)
-    sample_tree_3._impl = module.sample_tree
-    return sample_tree_3._impl(edge_logits)
+  }
+  return grid;
+}
+
+at::Tensor sample_tree(at::Tensor edge_logits) {
+  torch::NoGradGuard no_grad;
+
+  const long K = edge_logits.size(0);
+  const long V = static_cast<long>(0.5 + std::sqrt(0.25 + 2 * K));
+  const long E = V - 1;
+  auto grid = make_complete_graph(V);
+  auto components = torch::zeros({V}, at::kByte);
+  auto ks = torch::empty({E}, at::kLong);
+
+  // Sample the first edge at random.
+  auto probs = (edge_logits - edge_logits.max()).exp();
+  auto k = probs.multinomial(1)[0];
+  components[grid[1][k]] = 1;
+  components[grid[2][k]] = 1;
+  ks[0] = k;
+
+  // Sample edges connecting the cumulative tree to a new leaf.
+  for (int e = 1; e != E; ++e) {
+    auto c1 = components.index_select(0, grid[1]);
+    auto c2 = components.index_select(0, grid[2]);
+    auto mask = c1.__xor__(c2);
+    auto valid_logits = edge_logits.masked_select(mask);
+    auto probs = (valid_logits - valid_logits.max()).exp();
+    auto k = grid[0].masked_select(mask)[probs.multinomial(1)[0]];
+    components[grid[1][k]] = 1;
+    components[grid[2][k]] = 1;
+    ks[e] = k;
+  }
+
+  ks.sort();
+  auto edges = torch::empty({E, 2}, at::kLong);
+  for (int e = 0; e != E; ++e) {
+    edges[e][0] = grid[1][ks[e]];
+    edges[e][1] = grid[2][ks[e]];
+  }
+  return edges;
+}
+"""
+
+
+def _get_cpp_module():
+    global _cpp_module
+    if _cpp_module is None:
+        import warnings
+        from torch.utils.cpp_extension import load_inline
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            _cpp_module = load_inline(name="cpp_spanning_tree",
+                                      cpp_sources=[_cpp_source],
+                                      functions=["sample_tree"],
+                                      verbose=True)
+    return _cpp_module
+
+
+def sample_tree_3(edge_logits):
+    return _get_cpp_module().sample_tree(edge_logits)
 
 
 class SpanningTree(TorchDistribution):
