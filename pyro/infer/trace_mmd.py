@@ -5,8 +5,9 @@ from collections import defaultdict
 import pyro
 import pyro.ops.jit
 from pyro import poutine
-from pyro.infer.trace_elbo import Trace_ELBO
-from pyro.infer.util import torch_item
+from pyro.infer.elbo import ELBO
+from pyro.infer.util import torch_item, is_validation_enabled
+from pyro.infer.enum import get_importance_trace
 from pyro.util import warn_if_nan
 
 
@@ -15,13 +16,21 @@ def _compute_mmd(X, Z, kernel):
     return mmd
 
 
-class Trace_MMD(Trace_ELBO):
+class Trace_MMD(ELBO):
     """
     An objective similar to ELBO, but with Maximum Mean Discrepancy (MMD)
     between marginal variational posterior and prior distributions
     instead of KL-divergence between variational posterior and prior distributions
-    as in vanilla ELBO. See [1] for the corresponding variant of VAE model,
-    which is a special case of InfoVAE model [2].
+    as in vanilla ELBO.
+    The simplest example is MMD-VAE model [1]. The corresponding loss function is given as follows:
+
+        :math: `L(\\theta, \\phi) = -E_{p_{data}(x)} E_{q(z | x; \\phi)} \\log p(x | z; \\theta) + MMD(q(z; \\phi) \\| p(z))`,
+
+    where z is a latent code. MMD between two distributions is defined as follows:
+
+        :math: `MMD(q(z) \\| p(z)) = E_{p(z), p(z')} k(z,z') + E_{q(z), q(z')} k(z,z') - 2 E_{p(z), q(z')} k(z,z')`,
+
+    where k is a kernel.
 
     :param kernel: A kernel used to compute MMD.
         An instance of :class: `pyro.contrib.gp.kernels.kernel.Kernel`,
@@ -51,7 +60,7 @@ class Trace_MMD(Trace_ELBO):
                  strict_enumeration_warning=True,
                  ignore_jit_warnings=False,
                  retain_graph=None):
-        super().__init__(
+        super(Trace_MMD, self).__init__(
             num_particles, max_plate_nesting, max_iarange_nesting, vectorize_particles,
             strict_enumeration_warning, ignore_jit_warnings, retain_graph,
         )
@@ -86,30 +95,55 @@ class Trace_MMD(Trace_ELBO):
         else:
             raise TypeError("`mmd_scale` should be either float, or a dict of floats")
 
+    def _get_trace(self, model, guide, *args, **kwargs):
+        """
+        Returns a single trace from the guide, and the model that is run
+        against it.
+        """
+        model_trace, guide_trace = get_importance_trace(
+            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)
+        if is_validation_enabled():
+            check_if_enumerated(guide_trace)
+        return model_trace, guide_trace
+
     def _differentiable_loss_parts(self, model, guide, *args, **kwargs):
         loglikelihood = 0.0
         penalty = 0.0
-        model_trace_independent = poutine.trace(model, graph_type="flat").get_trace(*args, **kwargs)
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+            if self.vectorize_particles:
+                model_trace_independent = poutine.trace(
+                    self._vectorized_num_particles(model)
+                ).get_trace(*args, **kwargs)
+            else:
+                model_trace_independent = poutine.trace(model, graph_type='flat').get_trace(*args, **kwargs)
             loglikelihood_particle = 0.0
             penalty_particle = 0.0
             for name, model_site in model_trace.nodes.items():
                 if model_site['type'] == 'sample':
-                    if name in guide_trace:
+                    if name in guide_trace and not model_site['is_observed']:
                         guide_site = guide_trace.nodes[name]
                         independent_model_site = model_trace_independent.nodes[name]
+                        if not independent_model_site["fn"].has_rsample:
+                            raise ValueError("Model site {} is not reparameterizable".format(name))
+                        if not guide_site["fn"].has_rsample:
+                            raise ValueError("Guide site {} is not reparameterizable".format(name))
                         model_samples = independent_model_site['value']
                         guide_samples = guide_site['value']
-                        divergence = _compute_mmd(
-                            model_samples.view(model_samples.size(0), -1),
-                            guide_samples.view(guide_samples.size(0), -1),
-                            kernel=self._kernel[name]
+                        model_samples = model_samples.view(
+                            -1, *[model_samples.size(j) for j in range(-independent_model_site['fn'].event_dim, 0)]
                         )
+                        guide_samples = guide_samples.view(
+                            -1, *[guide_samples.size(j) for j in range(-guide_site['fn'].event_dim, 0)]
+                        )
+                        divergence = _compute_mmd(model_samples, guide_samples, kernel=self._kernel[name])
                         penalty_particle = penalty_particle + self._mmd_scale[name] * divergence
                     else:
                         loglikelihood_particle = loglikelihood_particle + model_site['log_prob_sum']
             loglikelihood = loglikelihood_particle / self.num_particles + loglikelihood
-            penalty = penalty_particle / self.num_particles + penalty
+            if self.vectorize_particles:
+                penalty = penalty_particle * self.num_particles + penalty
+            else:
+                penalty = penalty_particle / self.num_particles + penalty
 
         warn_if_nan(loglikelihood, "loglikelihood")
         warn_if_nan(penalty, "penalty")

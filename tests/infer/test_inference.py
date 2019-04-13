@@ -70,7 +70,7 @@ class NormalNormalTests(TestCase):
     def test_mmd(self):
         z_size = self.loc0.shape[0]
         self.do_fit_prior_test(
-            True, 5000, Trace_MMD(
+            True, 3000, Trace_MMD(
                 kernel=kernels.RBF(
                     z_size,
                     lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
@@ -114,24 +114,26 @@ class NormalNormalTests(TestCase):
         pyro.clear_param_store()
 
         def model():
-            pyro.sample(
-                "loc_latent", dist.Normal(
-                    torch.stack([self.loc0]*self.sample_batch_size, dim=0),
-                    torch.stack([torch.pow(self.lam0, -0.5)]*self.sample_batch_size, dim=0)
-                ).to_event(1)
-            )
+            with pyro.plate('samples', self.sample_batch_size):
+                pyro.sample(
+                    "loc_latent", dist.Normal(
+                        torch.stack([self.loc0]*self.sample_batch_size, dim=0),
+                        torch.stack([torch.pow(self.lam0, -0.5)]*self.sample_batch_size, dim=0)
+                    ).to_event(1)
+                )
 
         def guide():
             loc_q = pyro.param("loc_q", self.loc0.detach() + 0.134)
             log_sig_q = pyro.param("log_sig_q", -0.5*torch.log(self.lam0).data.detach() - 0.14)
             sig_q = torch.exp(log_sig_q)
             Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
-            pyro.sample(
-                "loc_latent", Normal(
-                    torch.stack([loc_q]*self.sample_batch_size, dim=0),
-                    torch.stack([sig_q]*self.sample_batch_size, dim=0)
-                ).to_event(1)
-            )
+            with pyro.plate('samples', self.sample_batch_size):
+                pyro.sample(
+                    "loc_latent", Normal(
+                        torch.stack([loc_q]*self.sample_batch_size, dim=0),
+                        torch.stack([sig_q]*self.sample_batch_size, dim=0)
+                    ).to_event(1)
+                )
 
         adam = optim.Adam({"lr": .001})
         svi = SVI(model, guide, adam, loss=loss)
@@ -255,7 +257,7 @@ class PoissonGammaTests(TestCase):
     def test_mmd(self):
         z_size = 1
         self.do_fit_prior_test(
-            True, 25000, Trace_MMD(
+            True, 20000, Trace_MMD(
                 kernel=kernels.RBF(
                     z_size,
                     lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
@@ -296,24 +298,26 @@ class PoissonGammaTests(TestCase):
         Gamma = dist.Gamma if reparameterized else fakes.NonreparameterizedGamma
 
         def model():
-            pyro.sample(
-                "lambda_latent", Gamma(
-                    torch.stack([torch.stack([self.alpha0])]*self.sample_batch_size),
-                    torch.stack([torch.stack([self.beta0])]*self.sample_batch_size)
-                ).to_event(1)
-            )
+            with pyro.plate('samples', self.sample_batch_size):
+                pyro.sample(
+                    "lambda_latent", Gamma(
+                        torch.stack([torch.stack([self.alpha0])]*self.sample_batch_size),
+                        torch.stack([torch.stack([self.beta0])]*self.sample_batch_size)
+                    ).to_event(1)
+                )
 
         def guide():
             alpha_q = pyro.param("alpha_q", self.alpha0.detach() + math.exp(0.17),
                                  constraint=constraints.positive)
             beta_q = pyro.param("beta_q", self.beta0.detach() / math.exp(0.143),
                                 constraint=constraints.positive)
-            pyro.sample(
-                "lambda_latent", Gamma(
-                    torch.stack([torch.stack([alpha_q])]*self.sample_batch_size),
-                    torch.stack([torch.stack([beta_q])]*self.sample_batch_size)
-                ).to_event(1)
-            )
+            with pyro.plate('samples', self.sample_batch_size):
+                pyro.sample(
+                    "lambda_latent", Gamma(
+                        torch.stack([torch.stack([alpha_q])]*self.sample_batch_size),
+                        torch.stack([torch.stack([beta_q])]*self.sample_batch_size)
+                    ).to_event(1)
+                )
 
         adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
         svi = SVI(model, guide, adam, loss)
@@ -450,7 +454,7 @@ class BernoulliBetaTests(TestCase):
     def test_mmd(self):
         z_size = 1
         self.do_fit_prior_test(
-            True, 5000, Trace_MMD(
+            True, 2500, Trace_MMD(
                 kernel=kernels.RBF(
                     z_size,
                     lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
@@ -492,12 +496,13 @@ class BernoulliBetaTests(TestCase):
         Beta = dist.Beta if reparameterized else fakes.NonreparameterizedBeta
 
         def model():
-            pyro.sample(
-                "p_latent", Beta(
-                    torch.stack([torch.stack([self.alpha0])]*self.sample_batch_size),
-                    torch.stack([torch.stack([self.beta0])]*self.sample_batch_size)
-                ).to_event(1)
-            )
+            with pyro.plate('samples', self.sample_batch_size):
+                pyro.sample(
+                    "p_latent", Beta(
+                        torch.stack([torch.stack([self.alpha0])]*self.sample_batch_size),
+                        torch.stack([torch.stack([self.beta0])]*self.sample_batch_size)
+                    ).to_event(1)
+                )
 
         def guide():
             alpha_q_log = pyro.param("alpha_q_log",
@@ -505,12 +510,13 @@ class BernoulliBetaTests(TestCase):
             beta_q_log = pyro.param("beta_q_log",
                                     torch.log(self.beta0) - 0.143)
             alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
-            pyro.sample(
-                "p_latent", Beta(
-                    torch.stack([torch.stack([alpha_q])]*self.sample_batch_size),
-                    torch.stack([torch.stack([beta_q])]*self.sample_batch_size)
-                ).to_event(1)
-            )
+            with pyro.plate('samples', self.sample_batch_size):
+                pyro.sample(
+                    "p_latent", Beta(
+                        torch.stack([torch.stack([alpha_q])]*self.sample_batch_size),
+                        torch.stack([torch.stack([beta_q])]*self.sample_batch_size)
+                    ).to_event(1)
+                )
 
         adam = optim.Adam({"lr": .001, "betas": (0.97, 0.999)})
         svi = SVI(model, guide, adam, loss=loss)
