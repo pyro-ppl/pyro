@@ -8,7 +8,7 @@ from pyro import poutine
 from pyro.infer.elbo import ELBO
 from pyro.infer.util import torch_item, is_validation_enabled
 from pyro.infer.enum import get_importance_trace
-from pyro.util import warn_if_nan
+from pyro.util import check_if_enumerated, warn_if_nan
 
 
 def _compute_mmd(X, Z, kernel):
@@ -24,7 +24,8 @@ class Trace_MMD(ELBO):
     as in vanilla ELBO.
     The simplest example is MMD-VAE model [1]. The corresponding loss function is given as follows:
 
-        :math: `L(\\theta, \\phi) = -E_{p_{data}(x)} E_{q(z | x; \\phi)} \\log p(x | z; \\theta) + MMD(q(z; \\phi) \\| p(z))`,
+        :math: `L(\\theta, \\phi) = -E_{p_{data}(x)} E_{q(z | x; \\phi)} \\log p(x | z; \\theta) +
+        MMD(q(z; \\phi) \\| p(z))`,
 
     where z is a latent code. MMD between two distributions is defined as follows:
 
