@@ -1,10 +1,109 @@
 from __future__ import absolute_import, division, print_function
 
+import itertools
+
 import torch
-from torch.distributions import constraints
 from six.moves import range
+from torch.distributions import constraints
+from torch.distributions.utils import lazy_property
 
 from pyro.distributions.torch_distribution import TorchDistribution
+
+# https://oeis.org/A000272
+NUM_SPANNING_TREES = [
+    1, 1, 1, 3, 16, 125, 1296, 16807, 262144, 4782969, 100000000, 2357947691,
+    61917364224, 1792160394037, 56693912375296, 1946195068359375,
+    72057594037927936, 2862423051509815793, 121439531096594251776,
+    5480386857784802185939,
+]
+
+
+class SpanningTree(TorchDistribution):
+    """
+    Distribution over spanning trees on a fixed number of vertices.
+    """
+    arg_constraints = {'edge_logits': constraints.real}
+    support = constraints.positive_integer
+
+    def __init__(self, edge_logits, initial_edges=None, mcmc_steps=1, validate_args=None):
+        K = len(edge_logits)
+        V = int(round(0.5 + (0.25 + 2 * K)**0.5))
+        assert K == V * (V - 1) // 2
+        E = V - 1
+        event_shape = (E, 2)
+        batch_shape = ()
+        if initial_edges is None:
+            initial_edges = torch.stack((torch.arange(0, V - 1), torch.arange(1, V)), dim=-1)
+        self.edge_logits = edge_logits
+        self.initial_edges = initial_edges
+        super(SpanningTree, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        if self._validate_args:
+            if edge_logits.shape != (K,):
+                raise ValueError("Expected edge_logits of shape ({},), but got shape {}"
+                                 .format(K, edge_logits.shape))
+            if initial_edges.shape != (E, 2):
+                raise ValueError("Expected initial_edges of shape ({},2), but got shape {}"
+                                 .format(K, edge_logits.shape))
+        self.mcmc_steps = mcmc_steps
+        self.complete_graph = make_complete_graph(V)
+        self.num_vertices = V
+
+    @lazy_property
+    def log_partition_function(self):
+        # By Kirchoff's matrix-tree theorem, the partition function is the
+        # determinant of a truncated version of the graph Laplacian matrix. We
+        # use a Cholesky decomposition to compute the log determinant.
+        # See https://en.wikipedia.org/wiki/Kirchhoff%27s_theorem
+        V = self.num_vertices
+        grid = self.complete_graph
+        shift = self.edge_logits.max()
+        edge_probs = (self.edge_logits - shift).exp()
+        adjacency = edge_probs.new_zeros(V, V)
+        adjacency[grid[1], grid[2]] = edge_probs
+        adjacency[grid[2], grid[1]] = edge_probs
+        laplacian = adjacency.sum(-1).diag() - adjacency
+        truncated = laplacian[:-1, :-1]
+        log_det = torch.cholesky(truncated).diag().log().sum() * 2
+        return log_det + shift * (V - 1)
+
+    def log_prob(self, edges):
+        if self._validate_args:
+            assert edges.dim() >= 2
+            assert edges.shape[-2:] == self.event_shape
+        v1 = edges[..., 0]
+        v2 = edges[..., 1]
+        if self._validate_args:
+            assert (v1 < v2).all()
+        k = v1 + v2 * (v2 - 1) // 2
+        return self.edge_logits[k].sum(-1) - self.log_partition_function
+
+    def sample(self, sample_shape=torch.Size()):
+        if sample_shape:
+            raise NotImplementedError("SpanningTree does not support batching")
+        edges = [(v1.item(), v2.item()) for v1, v2 in self.initial_edges]
+        for _ in range(self.mcmc_steps):
+            edges = sample_tree(self.complete_graph, self.edge_logits, edges)
+        result = self.edge_logits.new_empty((len(edges), 2), dtype=torch.long)
+        for e, vs in edges:
+            result[e] = vs
+        return result
+
+    def enumerate_support(self, expand=True):
+        """
+        Enumerates over all spanning trees on ``self.num_vertices`` vertices.
+
+        Note this is only defined for small num_vertices; for large
+        num_vertices this raises ``NotImplementedError``.
+        """
+        V = self.num_vertices
+        E = V - 1
+        trees = get_spanning_trees(V)
+        result = torch.empty((len(trees), E, 2), dtype=torch.long)
+        for i, tree in enumerate(trees):
+            for e, (v1, v2) in enumerate(tree):
+                result[i, e, 0] = v1
+                result[i, e, 1] = v2
+        return result
 
 
 def find_complete_edge(v1, v2):
@@ -179,7 +278,7 @@ def sample_tree_2(grid, edge_logits):
         mask = (c1 != c2)
         valid_logits = edge_logits[mask]
         probs = (valid_logits - valid_logits.max()).exp()
-        k = grid[0, mask][torch.multinomial(probs, 1)[0]]
+        k = mask.nonzero()[torch.multinomial(probs, 1)[0]]
         components[grid[1:, k]] = 1
         ks.append(k)
 
@@ -232,7 +331,7 @@ at::Tensor sample_tree(at::Tensor edge_logits) {
     auto mask = c1.__xor__(c2);
     auto valid_logits = edge_logits.masked_select(mask);
     auto probs = (valid_logits - valid_logits.max()).exp();
-    auto k = grid[0].masked_select(mask)[probs.multinomial(1)[0]];
+    auto k = mask.nonzero().view(-1)[probs.multinomial(1)[0]];
     components[grid[1][k]] = 1;
     components[grid[2][k]] = 1;
     ks[e] = k;
@@ -259,6 +358,7 @@ def _get_cpp_module():
             _cpp_module = load_inline(name="cpp_spanning_tree",
                                       cpp_sources=[_cpp_source],
                                       functions=["sample_tree"],
+                                      extra_cflags=['-O2'],
                                       verbose=True)
     return _cpp_module
 
@@ -267,45 +367,45 @@ def sample_tree_3(edge_logits):
     return _get_cpp_module().sample_tree(edge_logits)
 
 
-class SpanningTree(TorchDistribution):
+# These topologically distinct sets of trees generate sets of all trees
+# under permutation of vertices.
+TREE_GENERATORS = [
+    [[]],
+    [[]],
+    [[(0, 1)]],
+    [[(0, 1), (0, 2)]],
+    [
+        [(0, 1), (0, 2), (0, 3)],
+        [(0, 1), (1, 2), (2, 3)],
+    ],
+    [
+        [(0, 1), (0, 2), (0, 3), (0, 4)],
+        [(0, 1), (0, 2), (0, 3), (1, 4)],
+        [(0, 1), (1, 2), (2, 3), (3, 4)],
+    ],
+]
+
+
+def _permute_tree(perm, tree):
+    return tuple(sorted(tuple(sorted([perm[u], perm[v]])) for (u, v) in tree))
+
+
+def _close_under_permutations(V, tree_generators):
+    vertices = list(range(V))
+    trees = []
+    for tree in tree_generators:
+        trees.extend(set(_permute_tree(perm, tree)
+                         for perm in itertools.permutations(vertices)))
+    trees.sort()
+    return trees
+
+
+def get_spanning_trees(V):
     """
-    Distribution over spanning trees on a fixed set of vertices.
+    Compute the set of spanning trees on V vertices.
     """
-    arg_constraings = {'edge_logits': constraints.real}
-    support = constraints.positive_integer
-
-    def __init__(self, edge_logits, initial_edges=None, mcmc_steps=1, validate_args=None):
-        K = len(edge_logits)
-        V = int(round(0.5 + (0.25 + 2 * K)**0.5))
-        assert K == V * (V - 1) // 2
-        E = V - 1
-        event_shape = (E, 2)
-        batch_shape = ()
-        super(SpanningTree, self).__init__(batch_shape, event_shape, validate_args=validate_args)
-        if initial_edges is None:
-            initial_edges = torch.stack((torch.arange(0, V - 1), torch.arange(1, V)), dim=-1)
-        if self._validate_args:
-            if edge_logits.shape != (K, 2):
-                raise ValueError("Expected edge_logits of shape ({},2), but got shape {}"
-                                 .format(K, edge_logits.shape))
-            if initial_edges.shape != (E, 2):
-                raise ValueError("Expected initial_edges of shape ({},2), but got shape {}"
-                                 .format(K, edge_logits.shape))
-        self.edge_logits = edge_logits
-        self.initial_edges = initial_edges
-        self.mcmc_steps = mcmc_steps
-        self.complete_graph = make_complete_graph(V)
-
-    def log_prob(self, edges):
-        return self.edge_logits.new_tensor(0.)
-
-    def sample(self, sample_shape=torch.Size()):
-        if sample_shape:
-            raise NotImplementedError("SpanningTree does not support batching")
-        edges = [(v1.item(), v2.item()) for v1, v2 in self.initial_edges]
-        for _ in range(self.mcmc_steps):
-            edges = sample_tree(self.complete_graph, self.edge_logits, edges)
-        result = self.edge_logits.new_empty((len(edges), 2), dtype=torch.long)
-        for e, vs in edges:
-            result[e] = vs
-        return result
+    if V >= len(TREE_GENERATORS):
+        raise NotImplementedError
+    all_trees = _close_under_permutations(V, TREE_GENERATORS[V])
+    assert len(all_trees) == NUM_SPANNING_TREES[V]
+    return all_trees

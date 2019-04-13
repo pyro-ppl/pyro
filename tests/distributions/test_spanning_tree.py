@@ -6,11 +6,9 @@ import pytest
 import torch
 
 import pyro
-from pyro.distributions.spanning_tree import make_complete_graph, sample_tree, sample_tree_2, sample_tree_3
-from tests.common import assert_equal
-
-# https://oeis.org/A000272
-NUM_SPANNING_TREES = [1, 1, 1, 3, 16, 125, 1296, 16807, 262144, 4782969]
+from pyro.distributions.spanning_tree import (NUM_SPANNING_TREES, SpanningTree, make_complete_graph, sample_tree,
+                                              sample_tree_2, sample_tree_3)
+from tests.common import assert_equal, xfail_if_not_implemented
 
 
 @pytest.mark.parametrize('num_vertices,expected_grid', [
@@ -177,3 +175,52 @@ def test_sample_tree_3_gof(num_edges):
     gof = goftests.multinomial_goodness_of_fit(
         probs.numpy(), counts.numpy(), num_samples, plot=True, truncated=truncated)
     assert 1e-2 < gof
+
+
+@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
+def test_enumerate_support(num_edges):
+    pyro.set_rng_seed(2 ** 32 - num_edges)
+    E = num_edges
+    V = 1 + E
+    K = V * (V - 1) // 2
+    edge_logits = torch.randn(K)
+    d = SpanningTree(edge_logits)
+    with xfail_if_not_implemented():
+        support = d.enumerate_support()
+    assert support.dim() == 3
+    assert support.shape[1:] == d.event_shape
+    assert support.size(0) == NUM_SPANNING_TREES[V]
+
+
+@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
+def test_partition_function(num_edges):
+    pyro.set_rng_seed(2 ** 32 - num_edges)
+    E = num_edges
+    V = 1 + E
+    K = V * (V - 1) // 2
+    edge_logits = torch.randn(K)
+    d = SpanningTree(edge_logits)
+    with xfail_if_not_implemented():
+        support = d.enumerate_support()
+    v1 = support[..., 0]
+    v2 = support[..., 1]
+    k = v1 + v2 * (v2 - 1) // 2
+    expected = edge_logits[k].sum(-1).logsumexp(0)
+    actual = d.log_partition_function
+    assert (actual - expected).abs() < 1e-6, (actual, expected)
+
+
+@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
+def test_log_prob(num_edges):
+    pyro.set_rng_seed(2 ** 32 - num_edges)
+    E = num_edges
+    V = 1 + E
+    K = V * (V - 1) // 2
+    edge_logits = torch.randn(K)
+    d = SpanningTree(edge_logits)
+    with xfail_if_not_implemented():
+        support = d.enumerate_support()
+    log_probs = d.log_prob(support)
+    assert log_probs.shape == (len(support),)
+    log_total = log_probs.logsumexp(0).item()
+    assert abs(log_total) < 1e-6, log_total
