@@ -6,7 +6,7 @@ import pytest
 import torch
 
 import pyro
-from pyro.distributions.spanning_tree import make_complete_graph, sample_tree
+from pyro.distributions.spanning_tree import make_complete_graph, sample_tree, sample_tree_2
 from tests.common import assert_equal
 
 # https://oeis.org/A000272
@@ -27,7 +27,7 @@ def test_make_complete_graph(num_vertices, expected_grid):
     assert_equal(grid, expected_grid)
 
 
-@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
+@pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
 def test_sample_tree_smoke(num_edges):
     pyro.set_rng_seed(num_edges)
     E = num_edges
@@ -36,8 +36,21 @@ def test_sample_tree_smoke(num_edges):
     K = grid.shape[1]
     edge_logits = torch.rand(K)
     edges = [(v, v + 1) for v in range(V - 1)]
-    for _ in range(100):
+    for _ in range(10):
         edges = sample_tree(grid, edge_logits, edges)
+
+
+@pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
+def test_sample_tree_2_smoke(num_edges):
+    pyro.set_rng_seed(num_edges)
+    E = num_edges
+    V = 1 + E
+    grid = make_complete_graph(V)
+    K = grid.shape[1]
+    edge_logits = torch.rand(K)
+    edges = [(v, v + 1) for v in range(V - 1)]
+    for _ in range(10):
+        sample_tree_2(grid, edge_logits)
 
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
@@ -58,6 +71,44 @@ def test_sample_tree_gof(num_edges):
     for _ in range(num_samples):
         edges = sample_tree(grid, edge_logits, edges)
         counts[tuple(edges)] += 1
+    assert len(counts) == NUM_SPANNING_TREES[V]
+
+    # Check accuracy using Pearson's chi-squared test.
+    keys = counts.keys()
+    counts = torch.tensor([counts[key] for key in keys])
+    probs = torch.tensor([sum(edge_logits_dict[edge] for edge in key) for key in keys])
+    probs /= probs.sum()
+
+    # Possibly truncate.
+    T = 100
+    truncated = False
+    if len(counts) > T:
+        counts = counts[:T]
+        probs = probs[:T]
+        truncated = True
+
+    gof = goftests.multinomial_goodness_of_fit(
+        probs.numpy(), counts.numpy(), num_samples, plot=True, truncated=truncated)
+    assert 1e-2 < gof
+
+
+@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
+def test_sample_tree_2_gof(num_edges):
+    goftests = pytest.importorskip('goftests')
+    pyro.set_rng_seed(2 ** 32 - num_edges)
+    E = num_edges
+    V = 1 + E
+    grid = make_complete_graph(V)
+    K = grid.shape[1]
+    edge_logits = torch.rand(K)
+    edge_logits_dict = {(v1, v2): edge_logits[k] for k, v1, v2 in grid.t().numpy()}
+
+    # Generate many samples.
+    num_samples = 30 * NUM_SPANNING_TREES[V]
+    counts = defaultdict(int)
+    for _ in range(num_samples):
+        edges = sample_tree_2(grid, edge_logits)
+        counts[edges] += 1
     assert len(counts) == NUM_SPANNING_TREES[V]
 
     # Check accuracy using Pearson's chi-squared test.

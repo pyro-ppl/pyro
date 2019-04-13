@@ -149,6 +149,45 @@ def sample_tree(grid, edge_logits, edges):
     return edges
 
 
+# FIXME This is probably an incorrect sampler.
+@torch.no_grad()
+def sample_tree_2(grid, edge_logits):
+    """
+    Sample a random spanning tree of a dense weighted graph.
+
+    :param grid: A 3 x K array as returned by :func:`make_complete_graph`.
+    :param edge_logits: A length-K array of nonnormalized log probabilities.
+    :param edges: A list of E initial edges in the form of (vertex,vertex) pairs.
+    :returns: A list of ``(vertex, vertex)`` pairs.
+    """
+    K = len(edge_logits)
+    V = int(round(0.5 + (0.25 + 2 * K)**0.5))
+    assert K == V * (V - 1) // 2
+    E = V - 1
+    components = edge_logits.new_zeros(V, dtype=torch.uint8)
+    ks = []
+
+    # Sample the first edge at random.
+    probs = (edge_logits - edge_logits.max()).exp()
+    k = torch.multinomial(probs, 1)[0]
+    components[grid[1:, k]] = 1
+    ks.append(k)
+
+    # Sample edges connecting the cumulative tree to a new leaf.
+    for e in range(1, E):
+        c1, c2 = components[grid[1:]]
+        mask = (c1 != c2)
+        valid_logits = edge_logits[mask]
+        probs = (valid_logits - valid_logits.max()).exp()
+        k = grid[0, mask][torch.multinomial(probs, 1)[0]]
+        components[grid[1:, k]] = 1
+        ks.append(k)
+
+    edges = tuple((grid[1, k].item(), grid[2, k].item()) for k in sorted(ks))
+    assert len(edges) == E
+    return edges
+
+
 class SpanningTree(TorchDistribution):
     """
     Distribution over spanning trees on a fixed set of vertices.
