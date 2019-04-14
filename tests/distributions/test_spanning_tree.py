@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import defaultdict
+from collections import Counter
 
 import pytest
 import torch
@@ -56,37 +56,29 @@ def test_sample_tree_mcmc_gof(num_edges):
     E = num_edges
     V = 1 + E
     K = V * (V - 1) // 2
-    grid = make_complete_graph(V)
     edge_logits = torch.rand(K)
-    edge_logits_dict = {(v1, v2): edge_logits[k] for k, (v1, v2) in enumerate(grid.t().numpy())}
 
     # Generate many samples via MCMC.
     num_samples = 30 * NUM_SPANNING_TREES[V]
-    counts = defaultdict(int)
+    counts = Counter()
+    tensors = {}
     edges = torch.tensor([(v, v + 1) for v in range(V - 1)], dtype=torch.long)
     for _ in range(num_samples):
         edges = sample_tree_mcmc(edge_logits, edges)
         key = tuple(sorted((v1.item(), v2.item()) for v1, v2 in edges))
         counts[key] += 1
+        tensors[key] = edges
     assert len(counts) == NUM_SPANNING_TREES[V]
 
-    # Check accuracy using Pearson's chi-squared test.
-    keys = counts.keys()
+    # Check accuracy using a Pearson's chi-squared test.
+    keys = [k for k, _ in counts.most_common(100)]
+    truncated = (len(keys) < len(counts))
     counts = torch.tensor([counts[key] for key in keys])
-    probs = torch.tensor([sum(edge_logits_dict[edge] for edge in key) for key in keys])
-    probs /= probs.sum()
-
-    # Possibly truncate.
-    T = 100
-    truncated = False
-    if len(counts) > T:
-        counts = counts[:T]
-        probs = probs[:T]
-        truncated = True
-
+    tensors = torch.stack([tensors[key] for key in keys])
+    probs = SpanningTree(edge_logits).log_prob(tensors).exp()
     gof = goftests.multinomial_goodness_of_fit(
         probs.numpy(), counts.numpy(), num_samples, plot=True, truncated=truncated)
-    assert 1e-2 < gof
+    assert 1e-3 < gof
 
 
 # TODO Switch this to do 1 MCMC step.
@@ -99,36 +91,28 @@ def test_sample_tree_approx_gof(num_edges, backend):
     E = num_edges
     V = 1 + E
     K = V * (V - 1) // 2
-    grid = make_complete_graph(V)
     edge_logits = torch.rand(K)
-    edge_logits_dict = {(v1, v2): edge_logits[k] for k, (v1, v2) in enumerate(grid.t().numpy())}
 
     # Generate many samples.
     num_samples = 30 * NUM_SPANNING_TREES[V]
-    counts = defaultdict(int)
+    counts = Counter()
+    tensors = {}
     for _ in range(num_samples):
         edges = sample_tree_approx(edge_logits, backend=backend)
         key = tuple(sorted((v1.item(), v2.item()) for v1, v2 in edges))
         counts[key] += 1
+        tensors[key] = edges
     assert len(counts) == NUM_SPANNING_TREES[V]
 
-    # Check accuracy using Pearson's chi-squared test.
-    keys = counts.keys()
+    # Check accuracy using a Pearson's chi-squared test.
+    keys = [k for k, _ in counts.most_common(100)]
+    truncated = (len(keys) < len(counts))
     counts = torch.tensor([counts[key] for key in keys])
-    probs = torch.tensor([sum(edge_logits_dict[edge] for edge in key) for key in keys])
-    probs /= probs.sum()
-
-    # Possibly truncate.
-    T = 100
-    truncated = False
-    if len(counts) > T:
-        counts = counts[:T]
-        probs = probs[:T]
-        truncated = True
-
+    tensors = torch.stack([tensors[key] for key in keys])
+    probs = SpanningTree(edge_logits).log_prob(tensors).exp()
     gof = goftests.multinomial_goodness_of_fit(
         probs.numpy(), counts.numpy(), num_samples, plot=True, truncated=truncated)
-    assert 1e-2 < gof
+    assert 1e-3 < gof
 
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6])

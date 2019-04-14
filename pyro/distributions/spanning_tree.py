@@ -45,6 +45,8 @@ class SpanningTree(TorchDistribution):
     has_enumerate_support = True
 
     def __init__(self, edge_logits, sampler_options=None, validate_args=None):
+        if edge_logits.is_cuda():
+            raise NotImplementedError("SpanningTree does not support cuda tensors")
         K = len(edge_logits)
         V = int(round(0.5 + (0.25 + 2 * K)**0.5))
         assert K == V * (V - 1) // 2
