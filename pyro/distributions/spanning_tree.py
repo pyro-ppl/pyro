@@ -123,15 +123,12 @@ def _get_cpp_module():
     global _cpp_module
     if _cpp_module is None:
         import os
-        import warnings
         from torch.utils.cpp_extension import load
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spanning_tree.cpp")
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning)
-            _cpp_module = load(name="cpp_spanning_tree",
-                               sources=[path],
-                               extra_cflags=['-O2'],
-                               verbose=True)
+        _cpp_module = load(name="cpp_spanning_tree",
+                           sources=[path],
+                           extra_cflags=['-O2'],
+                           verbose=True)
     return _cpp_module
 
 

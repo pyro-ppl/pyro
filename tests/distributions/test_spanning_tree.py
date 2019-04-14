@@ -10,7 +10,7 @@ from pyro.distributions.spanning_tree import (NUM_SPANNING_TREES, SpanningTree, 
                                               sample_tree_mcmc)
 from tests.common import assert_equal, xfail_if_not_implemented
 
-
+@pytest.mark.filterwarnings("always")
 @pytest.mark.parametrize('num_vertices,expected_grid', [
     (2, [[0], [1]]),
     (3, [[0, 0, 1], [1, 2, 2]]),
@@ -26,6 +26,7 @@ def test_make_complete_graph(num_vertices, expected_grid, backend):
     assert_equal(grid, expected_grid)
 
 
+@pytest.mark.filterwarnings("always")
 @pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
 @pytest.mark.parametrize('backend', ["python", "cpp"])
 def test_sample_tree_mcmc_smoke(num_edges, backend):
@@ -39,6 +40,7 @@ def test_sample_tree_mcmc_smoke(num_edges, backend):
         edges = sample_tree_mcmc(edge_logits, edges, backend=backend)
 
 
+@pytest.mark.filterwarnings("always")
 @pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
 @pytest.mark.parametrize('backend', ["python", "cpp"])
 def test_sample_tree_approx_smoke(num_edges, backend):
@@ -100,6 +102,7 @@ def test_log_prob(num_edges):
     assert abs(log_total) < 1e-6, log_total
 
 
+@pytest.mark.filterwarnings("always")
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
 @pytest.mark.parametrize('backend', ["python", "cpp"])
 @pytest.mark.parametrize('method', ["mcmc", "approx"])

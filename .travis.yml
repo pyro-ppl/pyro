@@ -5,6 +5,7 @@ sudo: true
 env:
     global:
         - PYTHONPATH=$PWD:$PYTHONPATH
+        - CXX="g++-4.9"
 
 cache:
     directories:
