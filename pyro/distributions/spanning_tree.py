@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import itertools
 
 import torch
-from six.moves import range
 from torch.distributions import constraints
 from torch.distributions.utils import lazy_property
 
