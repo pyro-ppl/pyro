@@ -1,6 +1,7 @@
 #include <cmath>
 #include <vector>
 #include <unordered_set>
+#include <algorithm>
 
 #include <torch/extension.h>
 
@@ -21,7 +22,7 @@ at::Tensor make_complete_graph(int num_vertices) {
 
 int _remove_edge(at::Tensor grid, at::Tensor e2k,
                  std::vector<std::unordered_set<int>> &neighbors,
-                 at::Tensor components, int e) {
+                 std::vector<bool> &components, int e) {
   int k = e2k[e].item().to<int>();
   int v1 = grid[0][k].item().to<int>();
   int v2 = grid[1][k].item().to<int>();
@@ -33,7 +34,7 @@ int _remove_edge(at::Tensor grid, at::Tensor e2k,
     int v1 = pending.back();
     pending.pop_back();
     for (int v2 : neighbors[v1]) {
-      if (!components[v2].is_nonzero()) {
+      if (!components[v2]) {
         components[v2] = 1;
         pending.push_back(v2);
       }
@@ -44,23 +45,23 @@ int _remove_edge(at::Tensor grid, at::Tensor e2k,
 
 void _add_edge(at::Tensor grid, at::Tensor e2k,
                std::vector<std::unordered_set<int>> &neighbors,
-               at::Tensor components, int e, int k) {
+               std::vector<bool> &components, int e, int k) {
   e2k[e] = k;
   int v1 = grid[0][k].item().to<int>();
   int v2 = grid[1][k].item().to<int>();
   neighbors[v1].insert(v2);
   neighbors[v2].insert(v1);
-  components.fill_(0);
+  std::fill(components.begin(), components.end(), 0);
 }
 
-int _find_valid_edges(at::Tensor components, at::Tensor valid_edges) {
+int _find_valid_edges(const std::vector<bool> &components, at::Tensor valid_edges) {
   int k = 0;
   int end = 0;
-  const int V = components.size(0);
+  const int V = components.size();
   for (int v2 = 0; v2 != V; ++v2) {
-    bool c2 = components[v2].is_nonzero();
+    bool c2 = components[v2];
     for (int v1 = 0; v1 != v2; ++v1) {
-      if (c2 ^ components[v1].is_nonzero()) {
+      if (c2 ^ components[v1]) {
         valid_edges[end] = k;
         end += 1;
       }
@@ -83,7 +84,7 @@ at::Tensor sample_tree_mcmc(at::Tensor edge_logits, at::Tensor edges) {
   auto grid = make_complete_graph(V);
   auto e2k = torch::empty({E}, at::kLong);
   std::vector<std::unordered_set<int>> neighbors(V);
-  auto components = torch::zeros({V}, at::kByte);
+  std::vector<bool> components(V);
   for (int e = 0; e != E; ++e) {
     int v1 = edges[e][0].item().to<int>();
     int v2 = edges[e][1].item().to<int>();
