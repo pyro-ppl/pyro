@@ -52,8 +52,8 @@ class SpanningTree(TorchDistribution):
         shift = self.edge_logits.max()
         edge_probs = (self.edge_logits - shift).exp()
         adjacency = edge_probs.new_zeros(V, V)
-        adjacency[grid[1], grid[2]] = edge_probs
-        adjacency[grid[2], grid[1]] = edge_probs
+        adjacency[grid[0], grid[1]] = edge_probs
+        adjacency[grid[1], grid[0]] = edge_probs
         laplacian = adjacency.sum(-1).diag() - adjacency
         truncated = laplacian[:-1, :-1]
         log_det = torch.cholesky(truncated).diag().log().sum() * 2
@@ -115,22 +115,18 @@ def make_complete_graph(num_vertices):
     The pairing function is: ``k = v1 + v2 * (v2 - 1) // 2``
 
     :param int num_vertices: Number of vertices.
-    :returns: A tuple with elements:
-        V: Number of vertices.
-        K: Number of edges.
-        grid: a 3 x K grid of (edge, vertex, vertex) triples.
+    :returns: a 2 x K grid of (vertex, vertex) pairs.
     """
     if num_vertices < 2:
         raise ValueError('PyTorch cannot handle zero-sized multidimensional tensors')
     V = num_vertices
     K = V * (V - 1) // 2
-    grid = torch.zeros((3, K), dtype=torch.long)
+    grid = torch.empty((2, K), dtype=torch.long)
     k = 0
     for v2 in range(V):
         for v1 in range(v2):
-            grid[0, k] = k
-            grid[1, k] = v1
-            grid[2, k] = v2
+            grid[0, k] = v1
+            grid[1, k] = v2
             k += 1
     return grid
 
@@ -140,8 +136,8 @@ def remove_edge(grid, e2k, neighbors, components, e):
     Remove an edge from a spanning tree.
     """
     k = e2k[e]
-    v1 = grid[1, k].item()
-    v2 = grid[2, k].item()
+    v1 = grid[0, k].item()
+    v2 = grid[1, k].item()
     neighbors[v1].remove(v2)
     neighbors[v2].remove(v1)
     pending = {v1}
@@ -159,8 +155,8 @@ def add_edge(grid, e2k, neighbors, components, e, k):
     Add an edge connecting two components to create a spanning tree.
     """
     e2k[e] = k
-    v1 = grid[1, k].item()
-    v2 = grid[2, k].item()
+    v1 = grid[0, k].item()
+    v2 = grid[1, k].item()
     neighbors[v1].add(v2)
     neighbors[v2].add(v1)
     components[:] = 0
@@ -203,7 +199,7 @@ def sample_tree(grid, edge_logits, edges):
     (vertex,vertex) pairs and sample from them in proportion to
     ``exp(edge_logits)``.
 
-    :param grid: A 3 x K array as returned by :func:`make_complete_graph`.
+    :param grid: A 2 x K array as returned by :func:`make_complete_graph`.
     :param edge_logits: A length-K array of nonnormalized log probabilities.
     :param edges: A list of E initial edges in the form of (vertex,vertex) pairs.
     :returns: A list of ``(vertex, vertex)`` pairs.
@@ -236,7 +232,7 @@ def sample_tree(grid, edge_logits, edges):
             k2 = k1
         add_edge(grid, e2k, neighbors, components, e, k2)
 
-    edges = sorted((grid[1, k].item(), grid[2, k].item()) for k in e2k)
+    edges = sorted((grid[0, k].item(), grid[1, k].item()) for k in e2k)
     assert len(edges) == E
     return edges
 
@@ -247,7 +243,7 @@ def sample_tree_2(grid, edge_logits):
     """
     Sample a random spanning tree of a dense weighted graph.
 
-    :param grid: A 3 x K array as returned by :func:`make_complete_graph`.
+    :param grid: A 2 x K array as returned by :func:`make_complete_graph`.
     :param edge_logits: A length-K array of nonnormalized log probabilities.
     :param edges: A list of E initial edges in the form of (vertex,vertex) pairs.
     :returns: A list of ``(vertex, vertex)`` pairs.
@@ -262,20 +258,20 @@ def sample_tree_2(grid, edge_logits):
     # Sample the first edge at random.
     probs = (edge_logits - edge_logits.max()).exp()
     k = torch.multinomial(probs, 1)[0]
-    components[grid[1:, k]] = 1
+    components[grid[:, k]] = 1
     ks.append(k)
 
     # Sample edges connecting the cumulative tree to a new leaf.
     for e in range(1, E):
-        c1, c2 = components[grid[1:]]
+        c1, c2 = components[grid]
         mask = (c1 != c2)
         valid_logits = edge_logits[mask]
         probs = (valid_logits - valid_logits.max()).exp()
         k = mask.nonzero()[torch.multinomial(probs, 1)[0]]
-        components[grid[1:, k]] = 1
+        components[grid[:, k]] = 1
         ks.append(k)
 
-    edges = tuple((grid[1, k].item(), grid[2, k].item()) for k in sorted(ks))
+    edges = tuple((grid[0, k].item(), grid[1, k].item()) for k in sorted(ks))
     assert len(edges) == E
     return edges
 
@@ -287,13 +283,12 @@ _cpp_source = """
 at::Tensor make_complete_graph(long num_vertices) {
   const long V = num_vertices;
   const long K = V * (V - 1) / 2;
-  auto grid = torch::empty({3, K}, at::kLong);
+  auto grid = torch::empty({2, K}, at::kLong);
   int k = 0;
   for (int v2 = 0; v2 != V; ++v2) {
     for (int v1 = 0; v1 != v2; ++v1) {
-      grid[0][k] = k;
-      grid[1][k] = v1;
-      grid[2][k] = v2;
+      grid[0][k] = v1;
+      grid[1][k] = v2;
       k += 1;
     }
   }
@@ -313,28 +308,28 @@ at::Tensor sample_tree(at::Tensor edge_logits) {
   // Sample the first edge at random.
   auto probs = (edge_logits - edge_logits.max()).exp();
   auto k = probs.multinomial(1)[0];
+  components[grid[0][k]] = 1;
   components[grid[1][k]] = 1;
-  components[grid[2][k]] = 1;
   ks[0] = k;
 
   // Sample edges connecting the cumulative tree to a new leaf.
   for (int e = 1; e != E; ++e) {
-    auto c1 = components.index_select(0, grid[1]);
-    auto c2 = components.index_select(0, grid[2]);
+    auto c1 = components.index_select(0, grid[0]);
+    auto c2 = components.index_select(0, grid[1]);
     auto mask = c1.__xor__(c2);
     auto valid_logits = edge_logits.masked_select(mask);
     auto probs = (valid_logits - valid_logits.max()).exp();
     auto k = mask.nonzero().view(-1)[probs.multinomial(1)[0]];
+    components[grid[0][k]] = 1;
     components[grid[1][k]] = 1;
-    components[grid[2][k]] = 1;
     ks[e] = k;
   }
 
   ks.sort();
   auto edges = torch::empty({E, 2}, at::kLong);
   for (int e = 0; e != E; ++e) {
-    edges[e][0] = grid[1][ks[e]];
-    edges[e][1] = grid[2][ks[e]];
+    edges[e][0] = grid[0][ks[e]];
+    edges[e][1] = grid[1][ks[e]];
   }
   return edges;
 }

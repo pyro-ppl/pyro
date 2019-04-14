@@ -12,14 +12,14 @@ from tests.common import assert_equal, xfail_if_not_implemented
 
 
 @pytest.mark.parametrize('num_vertices,expected_grid', [
-    (2, [[0], [0], [1]]),
-    (3, [[0, 1, 2], [0, 0, 1], [1, 2, 2]]),
-    (4, [[0, 1, 2, 3, 4, 5], [0, 0, 1, 0, 1, 2], [1, 2, 2, 3, 3, 3]]),
+    (2, [[0], [1]]),
+    (3, [[0, 0, 1], [1, 2, 2]]),
+    (4, [[0, 0, 1, 0, 1, 2], [1, 2, 2, 3, 3, 3]]),
 ])
 def test_make_complete_graph(num_vertices, expected_grid):
     V = num_vertices
     K = V * (V - 1) // 2
-    expected_grid = torch.tensor(expected_grid, dtype=torch.long).reshape(3, K)
+    expected_grid = torch.tensor(expected_grid, dtype=torch.long).reshape(2, K)
 
     grid = make_complete_graph(V)
     assert_equal(grid, expected_grid)
@@ -31,7 +31,7 @@ def test_sample_tree_smoke(num_edges):
     E = num_edges
     V = 1 + E
     grid = make_complete_graph(V)
-    K = grid.shape[1]
+    K = grid.size(1)
     edge_logits = torch.rand(K)
     edges = [(v, v + 1) for v in range(V - 1)]
     for _ in range(10):
@@ -44,7 +44,7 @@ def test_sample_tree_2_smoke(num_edges):
     E = num_edges
     V = 1 + E
     grid = make_complete_graph(V)
-    K = grid.shape[1]
+    K = grid.size(1)
     edge_logits = torch.rand(K)
     for _ in range(10):
         sample_tree_2(grid, edge_logits)
@@ -68,9 +68,9 @@ def test_sample_tree_gof(num_edges):
     E = num_edges
     V = 1 + E
     grid = make_complete_graph(V)
-    K = grid.shape[1]
+    K = grid.size(1)
     edge_logits = torch.rand(K)
-    edge_logits_dict = {(v1, v2): edge_logits[k] for k, v1, v2 in grid.t().numpy()}
+    edge_logits_dict = {(v1, v2): edge_logits[k] for k, (v1, v2) in enumerate(grid.t().numpy())}
 
     # Generate many samples via MCMC.
     num_samples = 30 * NUM_SPANNING_TREES[V]
@@ -108,9 +108,9 @@ def test_sample_tree_2_gof(num_edges):
     E = num_edges
     V = 1 + E
     grid = make_complete_graph(V)
-    K = grid.shape[1]
+    K = grid.size(1)
     edge_logits = torch.rand(K)
-    edge_logits_dict = {(v1, v2): edge_logits[k] for k, v1, v2 in grid.t().numpy()}
+    edge_logits_dict = {(v1, v2): edge_logits[k] for k, (v1, v2) in enumerate(grid.t().numpy())}
 
     # Generate many samples.
     num_samples = 30 * NUM_SPANNING_TREES[V]
@@ -147,9 +147,9 @@ def test_sample_tree_3_gof(num_edges):
     E = num_edges
     V = 1 + E
     grid = make_complete_graph(V)
-    K = grid.shape[1]
+    K = grid.size(1)
     edge_logits = torch.rand(K)
-    edge_logits_dict = {(v1, v2): edge_logits[k] for k, v1, v2 in grid.t().numpy()}
+    edge_logits_dict = {(v1, v2): edge_logits[k] for k, (v1, v2) in enumerate(grid.t().numpy())}
 
     # Generate many samples.
     num_samples = 30 * NUM_SPANNING_TREES[V]
