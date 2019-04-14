@@ -169,15 +169,6 @@ def _make_complete_graph(num_vertices):
     return grid
 
 
-def _find_complete_edge(v1, v2):
-    """
-    Find the edge index ``k`` of an unsorted pair of vertices ``(v1, v2)``.
-    """
-    if v2 < v1:
-        v1, v2 = v2, v1
-    return v1 + v2 * (v2 - 1) // 2
-
-
 def _remove_edge(grid, e2k, neighbors, components, e):
     """
     Remove an edge from a spanning tree.
@@ -187,13 +178,14 @@ def _remove_edge(grid, e2k, neighbors, components, e):
     v2 = grid[1, k].item()
     neighbors[v1].remove(v2)
     neighbors[v2].remove(v1)
-    pending = {v1}
+    components[v1] = 1
+    pending = [v1]
     while pending:
         v1 = pending.pop()
-        components[v1] = 1
         for v2 in neighbors[v1]:
             if not components[v2]:
-                pending.add(v2)
+                components[v2] = 1
+                pending.append(v2)
     return k
 
 
@@ -206,7 +198,7 @@ def _add_edge(grid, e2k, neighbors, components, e, k):
     v2 = grid[1, k].item()
     neighbors[v1].add(v2)
     neighbors[v2].add(v1)
-    components[:] = 0
+    components.fill_(0)
 
 
 def _find_valid_edges(components, valid_edges):
@@ -235,6 +227,7 @@ def _find_valid_edges(components, valid_edges):
 def _sample_tree_mcmc(edge_logits, edges):
     if len(edges) <= 1:
         return edges
+
     E = len(edges)
     V = E + 1
     K = V * (V - 1) // 2
@@ -244,22 +237,23 @@ def _sample_tree_mcmc(edge_logits, edges):
     components = torch.zeros(V, dtype=torch.uint8)
     for e in range(E):
         v1, v2 = map(int, edges[e])
-        e2k[e] = _find_complete_edge(v1, v2)
+        assert v1 < v2
+        e2k[e] = v1 + v2 * (v2 - 1) // 2;
         neighbors[v1].add(v2)
         neighbors[v2].add(v1)
-    valid_edges = torch.empty(K, dtype=torch.long)
+    valid_edges_buffer = torch.empty(K, dtype=torch.long)
 
     for e in range(E):
-        k1 = _remove_edge(grid, e2k, neighbors, components, e)
-        num_valid_edges = _find_valid_edges(components, valid_edges)
-        valid_logits = edge_logits[valid_edges[:num_valid_edges]]
-        valid_probs = torch.exp(valid_logits - valid_logits.max())
+        k = _remove_edge(grid, e2k, neighbors, components, e)
+        num_valid_edges = _find_valid_edges(components, valid_edges_buffer)
+        valid_edges = valid_edges_buffer[:num_valid_edges]
+        valid_logits = edge_logits[valid_edges]
+        valid_probs = (valid_logits - valid_logits.max()).exp()
         total_prob = valid_probs.sum()
         if total_prob > 0:
-            k2 = valid_edges[torch.multinomial(valid_probs, 1)[0]]
-        else:
-            k2 = k1
-        _add_edge(grid, e2k, neighbors, components, e, k2)
+            sample = torch.multinomial(valid_probs, 1)[0]
+            k = valid_edges[sample]
+        _add_edge(grid, e2k, neighbors, components, e, k)
 
     e2k.sort()
     edges = edge_logits.new_empty((E, 2), dtype=torch.long)

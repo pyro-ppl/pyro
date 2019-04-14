@@ -1,10 +1,12 @@
 #include <cmath>
+#include <vector>
+#include <unordered_set>
 
-#include <torch/torch.h>
+#include <torch/extension.h>
 
-at::Tensor make_complete_graph(long num_vertices) {
-  const long V = num_vertices;
-  const long K = V * (V - 1) / 2;
+at::Tensor make_complete_graph(int num_vertices) {
+  const int V = num_vertices;
+  const int K = V * (V - 1) / 2;
   auto grid = torch::empty({2, K}, at::kLong);
   int k = 0;
   for (int v2 = 0; v2 != V; ++v2) {
@@ -17,23 +19,116 @@ at::Tensor make_complete_graph(long num_vertices) {
   return grid;
 }
 
+int _remove_edge(at::Tensor grid, at::Tensor e2k,
+                 std::vector<std::unordered_set<int>> &neighbors,
+                 at::Tensor components, int e) {
+  int k = e2k[e].item().to<int>();
+  int v1 = grid[0][k].item().to<int>();
+  int v2 = grid[1][k].item().to<int>();
+  neighbors[v1].erase(v2);
+  neighbors[v2].erase(v1);
+  components[v1] = 1;
+  std::vector<int> pending = {v1};
+  while (!pending.empty()) {
+    int v1 = pending.back();
+    pending.pop_back();
+    for (int v2 : neighbors[v1]) {
+      if (!components[v2].is_nonzero()) {
+        components[v2] = 1;
+        pending.push_back(v2);
+      }
+    }
+  }
+  return k;
+}
+
+void _add_edge(at::Tensor grid, at::Tensor e2k,
+               std::vector<std::unordered_set<int>> &neighbors,
+               at::Tensor components, int e, int k) {
+  e2k[e] = k;
+  int v1 = grid[0][k].item().to<int>();
+  int v2 = grid[1][k].item().to<int>();
+  neighbors[v1].insert(v2);
+  neighbors[v2].insert(v1);
+  components.fill_(0);
+}
+
+int _find_valid_edges(at::Tensor components, at::Tensor valid_edges) {
+  int k = 0;
+  int end = 0;
+  const int V = components.size(0);
+  for (int v2 = 0; v2 != V; ++v2) {
+    bool c2 = components[v2].is_nonzero();
+    for (int v1 = 0; v1 != v2; ++v1) {
+      if (c2 ^ components[v1].is_nonzero()) {
+        valid_edges[end] = k;
+        end += 1;
+      }
+      k += 1;
+    }
+  }
+  return end;
+}
+
 at::Tensor sample_tree_mcmc(at::Tensor edge_logits, at::Tensor edges) {
-  return edges;  // TODO implement a sampler.
+  torch::NoGradGuard no_grad;
+
+  if (edges.size(0) <= 1) {
+    return edges;
+  }
+
+  const int E = edges.size(0);
+  const int V = E + 1;
+  const int K = V * (V - 1) / 2;
+  auto grid = make_complete_graph(V);
+  auto e2k = torch::empty({E}, at::kLong);
+  std::vector<std::unordered_set<int>> neighbors(V);
+  auto components = torch::zeros({V}, at::kByte);
+  for (int e = 0; e != E; ++e) {
+    int v1 = edges[e][0].item().to<int>();
+    int v2 = edges[e][1].item().to<int>();
+    e2k[e] = v1 + v2 * (v2 - 1) / 2;
+    neighbors[v1].insert(v2);
+    neighbors[v2].insert(v1);
+  }
+  auto valid_edges_buffer = torch::empty({K}, at::kLong);
+
+  for (int e = 0; e != E; ++e) {
+     int k = _remove_edge(grid, e2k, neighbors, components, e);
+     int num_valid_edges = _find_valid_edges(components, valid_edges_buffer);
+     auto valid_edges = valid_edges_buffer.slice(0, 0, num_valid_edges);
+     auto valid_logits = edge_logits.index_select(0, valid_edges);
+     auto valid_probs = (valid_logits - valid_logits.max()).exp();
+     double total_prob = valid_probs.sum().item().to<double>();
+     if (total_prob > 0) {
+       int sample = valid_probs.multinomial(1)[0].item().to<int>();
+       k = valid_edges[sample].item().to<int>();
+     }
+     _add_edge(grid, e2k, neighbors, components, e, k);
+  }
+
+  e2k.sort();
+  edges = torch::empty({E, 2}, at::kLong);
+  for (int e = 0; e != E; ++e) {
+    edges[e][0] = grid[0][e2k[e]];
+    edges[e][1] = grid[1][e2k[e]];
+  }
+  return edges;
 }
 
 at::Tensor sample_tree_approx(at::Tensor edge_logits) {
   torch::NoGradGuard no_grad;
 
-  const long K = edge_logits.size(0);
-  const long V = static_cast<long>(0.5 + std::sqrt(0.25 + 2 * K));
-  const long E = V - 1;
+  const int K = edge_logits.size(0);
+  const int V = static_cast<int>(0.5 + std::sqrt(0.25 + 2 * K));
+  const int E = V - 1;
   auto grid = make_complete_graph(V);
   auto components = torch::zeros({V}, at::kByte);
   auto e2k = torch::empty({E}, at::kLong);
 
   // Sample the first edge at random.
   auto probs = (edge_logits - edge_logits.max()).exp();
-  auto k = probs.multinomial(1)[0];
+  int k = probs.multinomial(1)[0].item().to<int>();
   components[grid[0][k]] = 1;
   components[grid[1][k]] = 1;
   e2k[0] = k;
@@ -45,7 +140,8 @@ at::Tensor sample_tree_approx(at::Tensor edge_logits) {
     auto mask = c1.__xor__(c2);
     auto valid_logits = edge_logits.masked_select(mask);
     auto probs = (valid_logits - valid_logits.max()).exp();
-    auto k = mask.nonzero().view(-1)[probs.multinomial(1)[0]];
+    int sample = probs.multinomial(1)[0].item().to<int>();
+    int k = mask.nonzero().view(-1)[sample].item().to<int>();
     components[grid[0][k]] = 1;
     components[grid[1][k]] = 1;
     e2k[e] = k;

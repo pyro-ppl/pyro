@@ -27,7 +27,8 @@ def test_make_complete_graph(num_vertices, expected_grid, backend):
 
 
 @pytest.mark.parametrize('num_edges', [1, 3, 10, 30])
-def test_sample_tree_mcmc_smoke(num_edges):
+@pytest.mark.parametrize('backend', ["python", "cpp"])
+def test_sample_tree_mcmc_smoke(num_edges, backend):
     pyro.set_rng_seed(num_edges)
     E = num_edges
     V = 1 + E
@@ -35,7 +36,7 @@ def test_sample_tree_mcmc_smoke(num_edges):
     edge_logits = torch.rand(K)
     edges = torch.tensor([(v, v + 1) for v in range(V - 1)], dtype=torch.long)
     for _ in range(10):
-        edges = sample_tree_mcmc(edge_logits, edges)
+        edges = sample_tree_mcmc(edge_logits, edges, backend=backend)
 
 
 @pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
@@ -51,7 +52,7 @@ def test_sample_tree_approx_smoke(num_edges, backend):
 
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
-@pytest.mark.parametrize('backend', ["python"])
+@pytest.mark.parametrize('backend', ["python", "cpp"])
 def test_sample_tree_mcmc_gof(num_edges, backend):
     goftests = pytest.importorskip('goftests')
     pyro.set_rng_seed(2 ** 32 - num_edges)
