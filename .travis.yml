@@ -5,6 +5,7 @@ sudo: true
 env:
     global:
         - PYTHONPATH=$PWD:$PYTHONPATH
+        - TMPDIR=$HOME/tmp
 
 cache:
     directories:
@@ -19,6 +20,7 @@ install:
       fi
     - pip install .[test]
     - pip freeze
+    - mkdir -p $HOME/tmp
 
 branches:
     only:
