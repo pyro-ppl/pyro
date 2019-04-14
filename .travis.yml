@@ -5,11 +5,21 @@ sudo: true
 env:
     global:
         - PYTHONPATH=$PWD:$PYTHONPATH
-        - CXX="g++-4.9"
+
+addons:
+    apt:
+        sources:
+            - ubuntu-toolchain-r-test
+        packages:
+            - gcc-4.9
+            - g++-4.9
 
 cache:
     directories:
         - $HOME/.data
+
+before_install:
+    - if [ "$CXX" = "g++" ]; then export CXX="g++-4.9" CC="gcc-4.9"; fi
 
 install:
     - pip install -U pip
