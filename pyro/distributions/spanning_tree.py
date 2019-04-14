@@ -12,33 +12,53 @@ from pyro.distributions.torch_distribution import TorchDistribution
 
 class SpanningTree(TorchDistribution):
     """
-    Distribution over spanning trees on a fixed number of vertices.
+    Distribution over spanning trees on a fixed number ``V`` of vertices.
+
+    This sampler implements:
+
+    - :meth:`log_prob` using Kirchoff's theorem and a Cholesky-based
+        determinant.
+    - :meth:`enumerate_support` for trees with up to 6 vertices.
+    - :meth:`sample` using MCMC run for a small number of steps after being
+        initialized by a cheap approximate sampler. This sampler is approximate
+        and cubic time. Recent research [1,2] proposes samplers that run in
+        sub-matrix-multiply time but are more complex to implement.
+
+    [1] `Sampling Random Spanning Trees Faster than Matrix Multiplication`
+        David Durfee, Rasmus Kyng,,John Peebles, Anup B. Rao, Sushant Sachdeva
+        (2017) https://arxiv.org/abs/1611.07451
+
+    [2] `An almost-linear time algorithm for uniform random spanning tree generation`
+        Aaron Schild (2017) https://arxiv.org/abs/1711.06455
+
+    :param torch.Tensor edge_logits: A tensor of length ``V*(V-1)//2``
+        containing logits (aka negative energies) of all edges in the complete
+        graph.  Edges in the complete graph are ordered:
+        ``(0,1), (0,2), (1,2), (0,3), (1,3), (2,3), (0,4), (1,4), (1,5), ...``
+    :param dict sampler_options: An optional dict of sampler options including:
+        ``mcmc_steps`` defaulting to a single MCMC step (which is pretty good);
+        ``initial_edges`` defaulting to a cheap approximate sample;
+        ``backend`` one of "python" or "cpp", defaulting to "python".
     """
     arg_constraints = {'edge_logits': constraints.real}
     support = constraints.positive_integer
     has_enumerate_support = True
 
-    def __init__(self, edge_logits, initial_edges=None, mcmc_steps=1, validate_args=None):
+    def __init__(self, edge_logits, sampler_options=None, validate_args=None):
         K = len(edge_logits)
         V = int(round(0.5 + (0.25 + 2 * K)**0.5))
         assert K == V * (V - 1) // 2
         E = V - 1
         event_shape = (E, 2)
         batch_shape = ()
-        if initial_edges is None:
-            initial_edges = torch.stack((torch.arange(0, V - 1), torch.arange(1, V)), dim=-1)
         self.edge_logits = edge_logits
-        self.initial_edges = initial_edges
         super(SpanningTree, self).__init__(batch_shape, event_shape, validate_args=validate_args)
         if self._validate_args:
             if edge_logits.shape != (K,):
                 raise ValueError("Expected edge_logits of shape ({},), but got shape {}"
                                  .format(K, edge_logits.shape))
-            if initial_edges.shape != (E, 2):
-                raise ValueError("Expected initial_edges of shape ({},2), but got shape {}"
-                                 .format(K, edge_logits.shape))
-        self.mcmc_steps = mcmc_steps
         self.num_vertices = V
+        self.sampler_options = {} if sampler_options is None else sampler_options
 
     @lazy_property
     def log_partition_function(self):
@@ -60,8 +80,8 @@ class SpanningTree(TorchDistribution):
 
     def log_prob(self, edges):
         if self._validate_args:
-            assert edges.dim() >= 2
-            assert edges.shape[-2:] == self.event_shape
+            if edges.dim() < 2 or edges.shape[-2:] != self.event_shape:
+                raise ValueError("Invalid edges shape: {}".format(edges.shape))
         v1 = edges[..., 0]
         v2 = edges[..., 1]
         if self._validate_args:
@@ -72,39 +92,18 @@ class SpanningTree(TorchDistribution):
     def sample(self, sample_shape=torch.Size()):
         if sample_shape:
             raise NotImplementedError("SpanningTree does not support batching")
-        edges = [(v1.item(), v2.item()) for v1, v2 in self.initial_edges]
-        for _ in range(self.mcmc_steps):
-            edges = sample_tree(self.edge_logits, edges)
-        result = self.edge_logits.new_empty((len(edges), 2), dtype=torch.long)
-        for e, vs in edges:
-            result[e] = vs
-        return result
+        edges = sample_tree(self.edge_logits, **self.sampler_options)
+        assert edges.dim() >= 2 and edges.shape[-2:] == self.event_shape
+        return edges
 
     def enumerate_support(self, expand=True):
-        """
-        Enumerates over all spanning trees on ``self.num_vertices`` vertices.
-
-        Note this is only defined for small num_vertices; for large
-        num_vertices this raises ``NotImplementedError``.
-        """
-        V = self.num_vertices
-        E = V - 1
-        trees = _get_spanning_trees(V)
-        result = torch.empty((len(trees), E, 2), dtype=torch.long)
-        for i, tree in enumerate(trees):
-            for e, (v1, v2) in enumerate(tree):
-                result[i, e, 0] = v1
-                result[i, e, 1] = v2
-        return result
+        trees = enumerate_spanning_trees(self.num_vertices)
+        return torch.tensor(trees, dtype=torch.long)
 
 
-def find_complete_edge(v1, v2):
-    """
-    Find the edge index ``k`` of an unsorted pair of vertices ``(v1, v2)``.
-    """
-    if v2 < v1:
-        v1, v2 = v2, v1
-    return v1 + v2 * (v2 - 1) // 2
+################################################################################
+# Sampler implementation.
+################################################################################
 
 
 def make_complete_graph(num_vertices):
@@ -131,7 +130,16 @@ def make_complete_graph(num_vertices):
     return grid
 
 
-def remove_edge(grid, e2k, neighbors, components, e):
+def _find_complete_edge(v1, v2):
+    """
+    Find the edge index ``k`` of an unsorted pair of vertices ``(v1, v2)``.
+    """
+    if v2 < v1:
+        v1, v2 = v2, v1
+    return v1 + v2 * (v2 - 1) // 2
+
+
+def _remove_edge(grid, e2k, neighbors, components, e):
     """
     Remove an edge from a spanning tree.
     """
@@ -150,7 +158,7 @@ def remove_edge(grid, e2k, neighbors, components, e):
     return k
 
 
-def add_edge(grid, e2k, neighbors, components, e, k):
+def _add_edge(grid, e2k, neighbors, components, e, k):
     """
     Add an edge connecting two components to create a spanning tree.
     """
@@ -162,7 +170,7 @@ def add_edge(grid, e2k, neighbors, components, e, k):
     components[:] = 0
 
 
-def find_valid_edges(components, valid_edges):
+def _find_valid_edges(components, valid_edges):
     """
     Find all edges between two components in a complete undirected graph.
 
@@ -184,7 +192,8 @@ def find_valid_edges(components, valid_edges):
     return end
 
 
-def sample_tree(edge_logits, edges):
+@torch.no_grad()
+def _sample_tree_mcmc(edge_logits, edges):
     """
     Sample a random spanning tree of a dense weighted graph using MCMC.
 
@@ -199,9 +208,15 @@ def sample_tree(edge_logits, edges):
     (vertex,vertex) pairs and sample from them in proportion to
     ``exp(edge_logits)``.
 
-    :param edge_logits: A length-K array of nonnormalized log probabilities.
-    :param edges: A list of E initial edges in the form of (vertex,vertex) pairs.
-    :returns: A list of ``(vertex, vertex)`` pairs.
+    :param torch.Tensor edge_logits: A length-K array of nonnormalized log
+        probabilities.
+    :param torch.Tensor edges: An E x 2 tensor of initial edges in the form
+        of (vertex,vertex) pairs. Each edge should be sorted and the entire
+        tensor should be lexicographically sorted.
+    :returns: An E x 2 tensor of edges in the form of (vertex,vertex) pairs.
+        Each edge should be sorted and the entire tensor should be
+        lexicographically sorted.
+    :rtype: torch.Tensor
     """
     if len(edges) <= 1:
         return edges
@@ -209,20 +224,20 @@ def sample_tree(edge_logits, edges):
     V = E + 1
     K = V * (V - 1) // 2
     grid = make_complete_graph(V)
-    e2k = torch.zeros(E, dtype=torch.long)
+    e2k = torch.empty(E, dtype=torch.long)
     neighbors = {v: set() for v in range(V)}
     components = torch.zeros(V, dtype=torch.uint8)
     for e in range(E):
-        v1, v2 = edges[e]
-        e2k[e] = find_complete_edge(v1, v2)
+        v1, v2 = map(int, edges[e])
+        e2k[e] = _find_complete_edge(v1, v2)
         neighbors[v1].add(v2)
         neighbors[v2].add(v1)
     valid_edges = torch.empty(K, dtype=torch.long)
 
     for e in torch.randperm(E):  # Sequential scanning doesn't seem to work.
         e = e.item()
-        k1 = remove_edge(grid, e2k, neighbors, components, e)
-        num_valid_edges = find_valid_edges(components, valid_edges)
+        k1 = _remove_edge(grid, e2k, neighbors, components, e)
+        num_valid_edges = _find_valid_edges(components, valid_edges)
         valid_logits = edge_logits[valid_edges[:num_valid_edges]]
         valid_probs = torch.exp(valid_logits - valid_logits.max())
         total_prob = valid_probs.sum()
@@ -230,22 +245,28 @@ def sample_tree(edge_logits, edges):
             k2 = valid_edges[torch.multinomial(valid_probs, 1)[0]]
         else:
             k2 = k1
-        add_edge(grid, e2k, neighbors, components, e, k2)
+        _add_edge(grid, e2k, neighbors, components, e, k2)
 
-    edges = sorted((grid[0, k].item(), grid[1, k].item()) for k in e2k)
-    assert len(edges) == E
+    e2k.sort()
+    edges = edge_logits.new_empty((E, 2), dtype=torch.long)
+    edges[:, 0] = grid[0, e2k]
+    edges[:, 1] = grid[1, e2k]
     return edges
 
 
-# FIXME This is probably an incorrect sampler.
 @torch.no_grad()
-def sample_tree_2(edge_logits):
+def _sample_tree_approx(edge_logits):
     """
-    Sample a random spanning tree of a dense weighted graph.
+    Approximately sample a random spanning tree of a dense weighted graph.
 
-    :param edge_logits: A length-K array of nonnormalized log probabilities.
-    :param edges: A list of E initial edges in the form of (vertex,vertex) pairs.
-    :returns: A list of ``(vertex, vertex)`` pairs.
+    This is mainly useful for initializing an MCMC sampler.
+
+    :param torch.Tensor edge_logits: A length-K array of nonnormalized log
+        probabilities.
+    :returns: An E x 2 tensor of edges in the form of (vertex,vertex) pairs.
+        Each edge should be sorted and the entire tensor should be
+        lexicographically sorted.
+    :rtype: torch.Tensor
     """
     K = len(edge_logits)
     V = int(round(0.5 + (0.25 + 2 * K)**0.5))
@@ -253,13 +274,13 @@ def sample_tree_2(edge_logits):
     E = V - 1
     grid = make_complete_graph(V)
     components = edge_logits.new_zeros(V, dtype=torch.uint8)
-    ks = []
+    e2k = edge_logits.new_empty((E,), dtype=torch.long)
 
     # Sample the first edge at random.
     probs = (edge_logits - edge_logits.max()).exp()
     k = torch.multinomial(probs, 1)[0]
     components[grid[:, k]] = 1
-    ks.append(k)
+    e2k[0] = k
 
     # Sample edges connecting the cumulative tree to a new leaf.
     for e in range(1, E):
@@ -269,10 +290,12 @@ def sample_tree_2(edge_logits):
         probs = (valid_logits - valid_logits.max()).exp()
         k = mask.nonzero()[torch.multinomial(probs, 1)[0]]
         components[grid[:, k]] = 1
-        ks.append(k)
+        e2k[e] = k
 
-    edges = tuple((grid[0, k].item(), grid[1, k].item()) for k in sorted(ks))
-    assert len(edges) == E
+    e2k.sort()
+    edges = edge_logits.new_empty((E, 2), dtype=torch.long)
+    edges[:, 0] = grid[0, e2k]
+    edges[:, 1] = grid[1, e2k]
     return edges
 
 
@@ -295,7 +318,11 @@ at::Tensor make_complete_graph(long num_vertices) {
   return grid;
 }
 
-at::Tensor sample_tree(at::Tensor edge_logits) {
+at::Tensor sample_tree_mcmc(at::Tensor edge_logits, at::Tensor edges) {
+  return edges;  // TODO implement a sampler.
+}
+
+at::Tensor sample_tree_approx(at::Tensor edge_logits) {
   torch::NoGradGuard no_grad;
 
   const long K = edge_logits.size(0);
@@ -303,14 +330,14 @@ at::Tensor sample_tree(at::Tensor edge_logits) {
   const long E = V - 1;
   auto grid = make_complete_graph(V);
   auto components = torch::zeros({V}, at::kByte);
-  auto ks = torch::empty({E}, at::kLong);
+  auto e2k = torch::empty({E}, at::kLong);
 
   // Sample the first edge at random.
   auto probs = (edge_logits - edge_logits.max()).exp();
   auto k = probs.multinomial(1)[0];
   components[grid[0][k]] = 1;
   components[grid[1][k]] = 1;
-  ks[0] = k;
+  e2k[0] = k;
 
   // Sample edges connecting the cumulative tree to a new leaf.
   for (int e = 1; e != E; ++e) {
@@ -322,14 +349,14 @@ at::Tensor sample_tree(at::Tensor edge_logits) {
     auto k = mask.nonzero().view(-1)[probs.multinomial(1)[0]];
     components[grid[0][k]] = 1;
     components[grid[1][k]] = 1;
-    ks[e] = k;
+    e2k[e] = k;
   }
 
-  ks.sort();
+  e2k.sort();
   auto edges = torch::empty({E, 2}, at::kLong);
   for (int e = 0; e != E; ++e) {
-    edges[e][0] = grid[0][ks[e]];
-    edges[e][1] = grid[1][ks[e]];
+    edges[e][0] = grid[0][e2k[e]];
+    edges[e][1] = grid[1][e2k[e]];
   }
   return edges;
 }
@@ -346,17 +373,45 @@ def _get_cpp_module():
         from torch.utils.cpp_extension import load_inline
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=UserWarning)
-            _cpp_module = load_inline(name="cpp_spanning_tree",
-                                      cpp_sources=[_cpp_source],
-                                      functions=["sample_tree"],
-                                      extra_cflags=['-O2'],
-                                      verbose=True)
+            _cpp_module = load_inline(
+                name="cpp_spanning_tree",
+                cpp_sources=[_cpp_source],
+                functions=["sample_tree_approx", "sample_tree_mcmc"],
+                extra_cflags=['-O2'],
+                verbose=True)
     return _cpp_module
 
 
-def sample_tree_3(edge_logits):
-    return _get_cpp_module().sample_tree(edge_logits)
+def sample_tree_mcmc(edge_logits, edges, backend="python"):
+    if backend == "python":
+        return _sample_tree_mcmc(edge_logits, edges)
+    elif backend == "cpp":
+        return _get_cpp_module().sample_tree_mcmc(edge_logits, edges)
+    else:
+        raise ValueError("unknown backend: {}".format(repr(backend)))
 
+
+def sample_tree_approx(edge_logits, backend="python"):
+    if backend == "python":
+        return _sample_tree_approx(edge_logits)
+    elif backend == "cpp":
+        return _get_cpp_module().sample_tree_approx(edge_logits)
+    else:
+        raise ValueError("unknown backend: {}".format(repr(backend)))
+
+
+def sample_tree(edge_logits, init_edges=None, mcmc_steps=1, backend="python"):
+    edges = init_edges
+    if edges is None:
+        edges = sample_tree_approx(backend=backend)
+    for step in range(mcmc_steps):
+        edges = sample_tree_mcmc(edge_logits, edges, backend=backend)
+    return edges
+
+
+################################################################################
+# Enumeration implementation.
+################################################################################
 
 # See https://oeis.org/A000272
 NUM_SPANNING_TREES = [
@@ -407,7 +462,7 @@ def _close_under_permutations(V, tree_generators):
     return trees
 
 
-def _get_spanning_trees(V):
+def enumerate_spanning_trees(V):
     """
     Compute the set of spanning trees on V vertices.
     """

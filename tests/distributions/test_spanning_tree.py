@@ -6,8 +6,8 @@ import pytest
 import torch
 
 import pyro
-from pyro.distributions.spanning_tree import (NUM_SPANNING_TREES, SpanningTree, make_complete_graph, sample_tree,
-                                              sample_tree_2, sample_tree_3)
+from pyro.distributions.spanning_tree import (NUM_SPANNING_TREES, SpanningTree, make_complete_graph, sample_tree_approx,
+                                              sample_tree_mcmc)
 from tests.common import assert_equal, xfail_if_not_implemented
 
 
@@ -25,42 +25,32 @@ def test_make_complete_graph(num_vertices, expected_grid):
     assert_equal(grid, expected_grid)
 
 
-@pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
-def test_sample_tree_smoke(num_edges):
+@pytest.mark.parametrize('num_edges', [1, 3, 10, 30])
+def test_sample_tree_mcmc_smoke(num_edges):
     pyro.set_rng_seed(num_edges)
     E = num_edges
     V = 1 + E
     K = V * (V - 1) // 2
     edge_logits = torch.rand(K)
-    edges = [(v, v + 1) for v in range(V - 1)]
+    edges = torch.tensor([(v, v + 1) for v in range(V - 1)], dtype=torch.long)
     for _ in range(10):
-        edges = sample_tree(edge_logits, edges)
+        edges = sample_tree_mcmc(edge_logits, edges)
 
 
 @pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
-def test_sample_tree_2_smoke(num_edges):
-    pyro.set_rng_seed(num_edges)
-    E = num_edges
-    V = 1 + E
-    K = V * (V - 1) // 2
-    edge_logits = torch.rand(K)
-    for _ in range(10):
-        sample_tree_2(edge_logits)
-
-
-@pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
-def test_sample_tree_3_smoke(num_edges):
+@pytest.mark.parametrize('backend', ["python", "cpp"])
+def test_sample_tree_approx_smoke(num_edges, backend):
     pyro.set_rng_seed(num_edges)
     E = num_edges
     V = 1 + E
     K = V * (V - 1) // 2
     edge_logits = torch.rand(K)
     for _ in range(10):
-        sample_tree_3(edge_logits)
+        sample_tree_approx(edge_logits, backend=backend)
 
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
-def test_sample_tree_gof(num_edges):
+def test_sample_tree_mcmc_gof(num_edges):
     goftests = pytest.importorskip('goftests')
     pyro.set_rng_seed(2 ** 32 - num_edges)
     E = num_edges
@@ -73,10 +63,11 @@ def test_sample_tree_gof(num_edges):
     # Generate many samples via MCMC.
     num_samples = 30 * NUM_SPANNING_TREES[V]
     counts = defaultdict(int)
-    edges = [(v, v + 1) for v in range(V - 1)]
+    edges = torch.tensor([(v, v + 1) for v in range(V - 1)], dtype=torch.long)
     for _ in range(num_samples):
-        edges = sample_tree(edge_logits, edges)
-        counts[tuple(edges)] += 1
+        edges = sample_tree_mcmc(edge_logits, edges)
+        key = tuple(sorted((v1.item(), v2.item()) for v1, v2 in edges))
+        counts[key] += 1
     assert len(counts) == NUM_SPANNING_TREES[V]
 
     # Check accuracy using Pearson's chi-squared test.
@@ -98,9 +89,11 @@ def test_sample_tree_gof(num_edges):
     assert 1e-2 < gof
 
 
+# TODO Switch this to do 1 MCMC step.
 @pytest.mark.xfail(reason="approximate sampler is used only for initialization")
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
-def test_sample_tree_2_gof(num_edges):
+@pytest.mark.parametrize('backend', ["python", "cpp"])
+def test_sample_tree_approx_gof(num_edges, backend):
     goftests = pytest.importorskip('goftests')
     pyro.set_rng_seed(2 ** 32 - num_edges)
     E = num_edges
@@ -114,48 +107,9 @@ def test_sample_tree_2_gof(num_edges):
     num_samples = 30 * NUM_SPANNING_TREES[V]
     counts = defaultdict(int)
     for _ in range(num_samples):
-        edges = sample_tree_2(edge_logits)
-        counts[edges] += 1
-    assert len(counts) == NUM_SPANNING_TREES[V]
-
-    # Check accuracy using Pearson's chi-squared test.
-    keys = counts.keys()
-    counts = torch.tensor([counts[key] for key in keys])
-    probs = torch.tensor([sum(edge_logits_dict[edge] for edge in key) for key in keys])
-    probs /= probs.sum()
-
-    # Possibly truncate.
-    T = 100
-    truncated = False
-    if len(counts) > T:
-        counts = counts[:T]
-        probs = probs[:T]
-        truncated = True
-
-    gof = goftests.multinomial_goodness_of_fit(
-        probs.numpy(), counts.numpy(), num_samples, plot=True, truncated=truncated)
-    assert 1e-2 < gof
-
-
-@pytest.mark.xfail(reason="approximate sampler is used only for initialization")
-@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
-def test_sample_tree_3_gof(num_edges):
-    goftests = pytest.importorskip('goftests')
-    pyro.set_rng_seed(2 ** 32 - num_edges)
-    E = num_edges
-    V = 1 + E
-    K = V * (V - 1) // 2
-    grid = make_complete_graph(V)
-    edge_logits = torch.rand(K)
-    edge_logits_dict = {(v1, v2): edge_logits[k] for k, (v1, v2) in enumerate(grid.t().numpy())}
-
-    # Generate many samples.
-    num_samples = 30 * NUM_SPANNING_TREES[V]
-    counts = defaultdict(int)
-    for _ in range(num_samples):
-        edges = sample_tree_3(edge_logits)
-        edges = tuple(sorted((v1.item(), v2.item()) for v1, v2 in edges))
-        counts[edges] += 1
+        edges = sample_tree_approx(edge_logits, backend=backend)
+        key = tuple(sorted((v1.item(), v2.item()) for v1, v2 in edges))
+        counts[key] += 1
     assert len(counts) == NUM_SPANNING_TREES[V]
 
     # Check accuracy using Pearson's chi-squared test.
