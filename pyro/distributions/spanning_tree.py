@@ -237,7 +237,7 @@ def _sample_tree_mcmc(edge_logits, edges):
     for e in range(E):
         v1, v2 = map(int, edges[e])
         assert v1 < v2
-        e2k[e] = v1 + v2 * (v2 - 1) // 2;
+        e2k[e] = v1 + v2 * (v2 - 1) // 2
         neighbors[v1].add(v2)
         neighbors[v2].add(v1)
     valid_edges_buffer = torch.empty(K, dtype=torch.long)
