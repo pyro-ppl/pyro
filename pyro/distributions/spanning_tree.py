@@ -9,14 +9,6 @@ from torch.distributions.utils import lazy_property
 
 from pyro.distributions.torch_distribution import TorchDistribution
 
-# https://oeis.org/A000272
-NUM_SPANNING_TREES = [
-    1, 1, 1, 3, 16, 125, 1296, 16807, 262144, 4782969, 100000000, 2357947691,
-    61917364224, 1792160394037, 56693912375296, 1946195068359375,
-    72057594037927936, 2862423051509815793, 121439531096594251776,
-    5480386857784802185939,
-]
-
 
 class SpanningTree(TorchDistribution):
     """
@@ -24,6 +16,7 @@ class SpanningTree(TorchDistribution):
     """
     arg_constraints = {'edge_logits': constraints.real}
     support = constraints.positive_integer
+    has_enumerate_support = True
 
     def __init__(self, edge_logits, initial_edges=None, mcmc_steps=1, validate_args=None):
         K = len(edge_logits)
@@ -97,7 +90,7 @@ class SpanningTree(TorchDistribution):
         """
         V = self.num_vertices
         E = V - 1
-        trees = get_spanning_trees(V)
+        trees = _get_spanning_trees(V)
         result = torch.empty((len(trees), E, 2), dtype=torch.long)
         for i, tree in enumerate(trees):
             for e, (v1, v2) in enumerate(tree):
@@ -349,6 +342,9 @@ at::Tensor sample_tree(at::Tensor edge_logits) {
 
 
 def _get_cpp_module():
+    """
+    JIT compiles the cpp_spanning_tree module.
+    """
     global _cpp_module
     if _cpp_module is None:
         import warnings
@@ -367,9 +363,17 @@ def sample_tree_3(edge_logits):
     return _get_cpp_module().sample_tree(edge_logits)
 
 
+# See https://oeis.org/A000272
+NUM_SPANNING_TREES = [
+    1, 1, 1, 3, 16, 125, 1296, 16807, 262144, 4782969, 100000000, 2357947691,
+    61917364224, 1792160394037, 56693912375296, 1946195068359375,
+    72057594037927936, 2862423051509815793, 121439531096594251776,
+    5480386857784802185939,
+]
+
 # These topologically distinct sets of trees generate sets of all trees
-# under permutation of vertices.
-TREE_GENERATORS = [
+# under permutation of vertices. See https://oeis.org/A000055
+_TREE_GENERATORS = [
     [[]],
     [[]],
     [[(0, 1)]],
@@ -382,6 +386,14 @@ TREE_GENERATORS = [
         [(0, 1), (0, 2), (0, 3), (0, 4)],
         [(0, 1), (0, 2), (0, 3), (1, 4)],
         [(0, 1), (1, 2), (2, 3), (3, 4)],
+    ],
+    [
+        [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5)],
+        [(0, 1), (0, 2), (0, 3), (0, 4), (1, 5)],
+        [(0, 1), (0, 2), (0, 3), (1, 4), (4, 5)],
+        [(0, 1), (0, 2), (0, 3), (2, 4), (3, 5)],
+        [(0, 1), (0, 2), (0, 3), (3, 4), (3, 5)],
+        [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5)],
     ],
 ]
 
@@ -400,12 +412,12 @@ def _close_under_permutations(V, tree_generators):
     return trees
 
 
-def get_spanning_trees(V):
+def _get_spanning_trees(V):
     """
     Compute the set of spanning trees on V vertices.
     """
-    if V >= len(TREE_GENERATORS):
+    if V >= len(_TREE_GENERATORS):
         raise NotImplementedError
-    all_trees = _close_under_permutations(V, TREE_GENERATORS[V])
+    all_trees = _close_under_permutations(V, _TREE_GENERATORS[V])
     assert len(all_trees) == NUM_SPANNING_TREES[V]
     return all_trees

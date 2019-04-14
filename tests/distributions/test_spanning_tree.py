@@ -100,6 +100,7 @@ def test_sample_tree_gof(num_edges):
     assert 1e-2 < gof
 
 
+@pytest.mark.xfail(reason="approximate sampler is used only for initialization")
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
 def test_sample_tree_2_gof(num_edges):
     goftests = pytest.importorskip('goftests')
@@ -138,6 +139,7 @@ def test_sample_tree_2_gof(num_edges):
     assert 1e-2 < gof
 
 
+@pytest.mark.xfail(reason="approximate sampler is used only for initialization")
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
 def test_sample_tree_3_gof(num_edges):
     goftests = pytest.importorskip('goftests')
@@ -177,7 +179,7 @@ def test_sample_tree_3_gof(num_edges):
     assert 1e-2 < gof
 
 
-@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
+@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6])
 def test_enumerate_support(num_edges):
     pyro.set_rng_seed(2 ** 32 - num_edges)
     E = num_edges
@@ -192,7 +194,7 @@ def test_enumerate_support(num_edges):
     assert support.size(0) == NUM_SPANNING_TREES[V]
 
 
-@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
+@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6])
 def test_partition_function(num_edges):
     pyro.set_rng_seed(2 ** 32 - num_edges)
     E = num_edges
@@ -210,7 +212,7 @@ def test_partition_function(num_edges):
     assert (actual - expected).abs() < 1e-6, (actual, expected)
 
 
-@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
+@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6])
 def test_log_prob(num_edges):
     pyro.set_rng_seed(2 ** 32 - num_edges)
     E = num_edges
