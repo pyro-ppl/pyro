@@ -30,12 +30,11 @@ def test_sample_tree_smoke(num_edges):
     pyro.set_rng_seed(num_edges)
     E = num_edges
     V = 1 + E
-    grid = make_complete_graph(V)
-    K = grid.size(1)
+    K = V * (V - 1) // 2
     edge_logits = torch.rand(K)
     edges = [(v, v + 1) for v in range(V - 1)]
     for _ in range(10):
-        edges = sample_tree(grid, edge_logits, edges)
+        edges = sample_tree(edge_logits, edges)
 
 
 @pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
@@ -43,11 +42,10 @@ def test_sample_tree_2_smoke(num_edges):
     pyro.set_rng_seed(num_edges)
     E = num_edges
     V = 1 + E
-    grid = make_complete_graph(V)
-    K = grid.size(1)
+    K = V * (V - 1) // 2
     edge_logits = torch.rand(K)
     for _ in range(10):
-        sample_tree_2(grid, edge_logits)
+        sample_tree_2(edge_logits)
 
 
 @pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
@@ -67,8 +65,8 @@ def test_sample_tree_gof(num_edges):
     pyro.set_rng_seed(2 ** 32 - num_edges)
     E = num_edges
     V = 1 + E
+    K = V * (V - 1) // 2
     grid = make_complete_graph(V)
-    K = grid.size(1)
     edge_logits = torch.rand(K)
     edge_logits_dict = {(v1, v2): edge_logits[k] for k, (v1, v2) in enumerate(grid.t().numpy())}
 
@@ -77,7 +75,7 @@ def test_sample_tree_gof(num_edges):
     counts = defaultdict(int)
     edges = [(v, v + 1) for v in range(V - 1)]
     for _ in range(num_samples):
-        edges = sample_tree(grid, edge_logits, edges)
+        edges = sample_tree(edge_logits, edges)
         counts[tuple(edges)] += 1
     assert len(counts) == NUM_SPANNING_TREES[V]
 
@@ -107,8 +105,8 @@ def test_sample_tree_2_gof(num_edges):
     pyro.set_rng_seed(2 ** 32 - num_edges)
     E = num_edges
     V = 1 + E
+    K = V * (V - 1) // 2
     grid = make_complete_graph(V)
-    K = grid.size(1)
     edge_logits = torch.rand(K)
     edge_logits_dict = {(v1, v2): edge_logits[k] for k, (v1, v2) in enumerate(grid.t().numpy())}
 
@@ -116,7 +114,7 @@ def test_sample_tree_2_gof(num_edges):
     num_samples = 30 * NUM_SPANNING_TREES[V]
     counts = defaultdict(int)
     for _ in range(num_samples):
-        edges = sample_tree_2(grid, edge_logits)
+        edges = sample_tree_2(edge_logits)
         counts[edges] += 1
     assert len(counts) == NUM_SPANNING_TREES[V]
 
@@ -146,8 +144,8 @@ def test_sample_tree_3_gof(num_edges):
     pyro.set_rng_seed(2 ** 32 - num_edges)
     E = num_edges
     V = 1 + E
+    K = V * (V - 1) // 2
     grid = make_complete_graph(V)
-    K = grid.size(1)
     edge_logits = torch.rand(K)
     edge_logits_dict = {(v1, v2): edge_logits[k] for k, (v1, v2) in enumerate(grid.t().numpy())}
 

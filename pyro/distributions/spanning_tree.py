@@ -38,7 +38,6 @@ class SpanningTree(TorchDistribution):
                 raise ValueError("Expected initial_edges of shape ({},2), but got shape {}"
                                  .format(K, edge_logits.shape))
         self.mcmc_steps = mcmc_steps
-        self.complete_graph = make_complete_graph(V)
         self.num_vertices = V
 
     @lazy_property
@@ -48,7 +47,7 @@ class SpanningTree(TorchDistribution):
         # use a Cholesky decomposition to compute the log determinant.
         # See https://en.wikipedia.org/wiki/Kirchhoff%27s_theorem
         V = self.num_vertices
-        grid = self.complete_graph
+        grid = make_complete_graph(V)
         shift = self.edge_logits.max()
         edge_probs = (self.edge_logits - shift).exp()
         adjacency = edge_probs.new_zeros(V, V)
@@ -75,7 +74,7 @@ class SpanningTree(TorchDistribution):
             raise NotImplementedError("SpanningTree does not support batching")
         edges = [(v1.item(), v2.item()) for v1, v2 in self.initial_edges]
         for _ in range(self.mcmc_steps):
-            edges = sample_tree(self.complete_graph, self.edge_logits, edges)
+            edges = sample_tree(self.edge_logits, edges)
         result = self.edge_logits.new_empty((len(edges), 2), dtype=torch.long)
         for e, vs in edges:
             result[e] = vs
@@ -101,7 +100,7 @@ class SpanningTree(TorchDistribution):
 
 def find_complete_edge(v1, v2):
     """
-    Find the edge index k of an unsorted pair of vertices (v1, v2).
+    Find the edge index ``k`` of an unsorted pair of vertices ``(v1, v2)``.
     """
     if v2 < v1:
         v1, v2 = v2, v1
@@ -121,13 +120,14 @@ def make_complete_graph(num_vertices):
         raise ValueError('PyTorch cannot handle zero-sized multidimensional tensors')
     V = num_vertices
     K = V * (V - 1) // 2
-    grid = torch.empty((2, K), dtype=torch.long)
-    k = 0
-    for v2 in range(V):
-        for v1 in range(v2):
-            grid[0, k] = v1
-            grid[1, k] = v2
-            k += 1
+    v1 = torch.arange(V)
+    v2 = torch.arange(V).unsqueeze(-1)
+    v1, v2 = torch.broadcast_tensors(v1, v2)
+    v1 = v1.contiguous().view(-1)
+    v2 = v2.contiguous().view(-1)
+    mask = (v1 < v2)
+    grid = torch.stack((v1[mask], v2[mask]))
+    assert grid.shape == (2, K)
     return grid
 
 
@@ -184,7 +184,7 @@ def find_valid_edges(components, valid_edges):
     return end
 
 
-def sample_tree(grid, edge_logits, edges):
+def sample_tree(edge_logits, edges):
     """
     Sample a random spanning tree of a dense weighted graph using MCMC.
 
@@ -199,7 +199,6 @@ def sample_tree(grid, edge_logits, edges):
     (vertex,vertex) pairs and sample from them in proportion to
     ``exp(edge_logits)``.
 
-    :param grid: A 2 x K array as returned by :func:`make_complete_graph`.
     :param edge_logits: A length-K array of nonnormalized log probabilities.
     :param edges: A list of E initial edges in the form of (vertex,vertex) pairs.
     :returns: A list of ``(vertex, vertex)`` pairs.
@@ -209,6 +208,7 @@ def sample_tree(grid, edge_logits, edges):
     E = len(edges)
     V = E + 1
     K = V * (V - 1) // 2
+    grid = make_complete_graph(V)
     e2k = torch.zeros(E, dtype=torch.long)
     neighbors = {v: set() for v in range(V)}
     components = torch.zeros(V, dtype=torch.uint8)
@@ -239,11 +239,10 @@ def sample_tree(grid, edge_logits, edges):
 
 # FIXME This is probably an incorrect sampler.
 @torch.no_grad()
-def sample_tree_2(grid, edge_logits):
+def sample_tree_2(edge_logits):
     """
     Sample a random spanning tree of a dense weighted graph.
 
-    :param grid: A 2 x K array as returned by :func:`make_complete_graph`.
     :param edge_logits: A length-K array of nonnormalized log probabilities.
     :param edges: A list of E initial edges in the form of (vertex,vertex) pairs.
     :returns: A list of ``(vertex, vertex)`` pairs.
@@ -252,6 +251,7 @@ def sample_tree_2(grid, edge_logits):
     V = int(round(0.5 + (0.25 + 2 * K)**0.5))
     assert K == V * (V - 1) // 2
     E = V - 1
+    grid = make_complete_graph(V)
     components = edge_logits.new_zeros(V, dtype=torch.uint8)
     ks = []
 
