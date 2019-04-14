@@ -14,21 +14,28 @@ class SpanningTree(TorchDistribution):
     """
     Distribution over spanning trees on a fixed number ``V`` of vertices.
 
-    This sampler implements:
+    :meth:`log_prob` is implemented using Kirchoff's theorem and a
+    Cholesky-based computation of log determinant.
 
-    - :meth:`log_prob` using Kirchoff's theorem and a Cholesky-based
-        determinant.
-    - :meth:`enumerate_support` for trees with up to 6 vertices.
-    - :meth:`sample` using MCMC run for a small number of steps after being
-        initialized by a cheap approximate sampler. This sampler is approximate
-        and cubic time. Recent research [1,2] proposes samplers that run in
-        sub-matrix-multiply time but are more complex to implement.
+    :meth:`sample` is implemented using MCMC run for a small number of steps
+    after being initialized by a cheap approximate sampler. This sampler is
+    approximate and cubic time. This is much faster than the classic
+    Aldous-Broder sampler [1,2] for graphs with large mixing time. Recent
+    research [3,4] proposes samplers that run in sub-matrix-multiply time but
+    are more complex to implement.
 
-    [1] `Sampling Random Spanning Trees Faster than Matrix Multiplication`
-        David Durfee, Rasmus Kyng,,John Peebles, Anup B. Rao, Sushant Sachdeva
+    :meth:`enumerate_support` is implemented for trees with up to 6 vertices.
+
+    **References**
+
+    [1] `Generating random spanning trees`
+        Andrei Broder (1989)
+    [2] `The Random Walk Construction of Uniform Spanning Trees and Uniform Labelled Trees`,
+        David J. Aldous (1990)
+    [3] `Sampling Random Spanning Trees Faster than Matrix Multiplication`,
+        David Durfee, Rasmus Kyng, John Peebles, Anup B. Rao, Sushant Sachdeva
         (2017) https://arxiv.org/abs/1611.07451
-
-    [2] `An almost-linear time algorithm for uniform random spanning tree generation`
+    [4] `An almost-linear time algorithm for uniform random spanning tree generation`,
         Aaron Schild (2017) https://arxiv.org/abs/1711.06455
 
     :param torch.Tensor edge_logits: A tensor of length ``V*(V-1)//2``
@@ -45,7 +52,7 @@ class SpanningTree(TorchDistribution):
     has_enumerate_support = True
 
     def __init__(self, edge_logits, sampler_options=None, validate_args=None):
-        if edge_logits.is_cuda():
+        if edge_logits.is_cuda:
             raise NotImplementedError("SpanningTree does not support cuda tensors")
         K = len(edge_logits)
         V = int(round(0.5 + (0.25 + 2 * K)**0.5))
@@ -224,6 +231,43 @@ def _find_valid_edges(components, valid_edges):
     return end
 
 
+@torch.no_grad()
+def _sample_tree_mcmc(edge_logits, edges):
+    if len(edges) <= 1:
+        return edges
+    E = len(edges)
+    V = E + 1
+    K = V * (V - 1) // 2
+    grid = make_complete_graph(V)
+    e2k = torch.empty(E, dtype=torch.long)
+    neighbors = {v: set() for v in range(V)}
+    components = torch.zeros(V, dtype=torch.uint8)
+    for e in range(E):
+        v1, v2 = map(int, edges[e])
+        e2k[e] = _find_complete_edge(v1, v2)
+        neighbors[v1].add(v2)
+        neighbors[v2].add(v1)
+    valid_edges = torch.empty(K, dtype=torch.long)
+
+    for e in range(E):
+        k1 = _remove_edge(grid, e2k, neighbors, components, e)
+        num_valid_edges = _find_valid_edges(components, valid_edges)
+        valid_logits = edge_logits[valid_edges[:num_valid_edges]]
+        valid_probs = torch.exp(valid_logits - valid_logits.max())
+        total_prob = valid_probs.sum()
+        if total_prob > 0:
+            k2 = valid_edges[torch.multinomial(valid_probs, 1)[0]]
+        else:
+            k2 = k1
+        _add_edge(grid, e2k, neighbors, components, e, k2)
+
+    e2k.sort()
+    edges = edge_logits.new_empty((E, 2), dtype=torch.long)
+    edges[:, 0] = grid[0, e2k]
+    edges[:, 1] = grid[1, e2k]
+    return edges
+
+
 def sample_tree_mcmc(edge_logits, edges, backend="python"):
     """
     Sample a random spanning tree of a dense weighted graph using MCMC.
@@ -253,65 +297,6 @@ def sample_tree_mcmc(edge_logits, edges, backend="python"):
         return _sample_tree_mcmc(edge_logits, edges)
     elif backend == "cpp":
         return _get_cpp_module().sample_tree_mcmc(edge_logits, edges)
-    else:
-        raise ValueError("unknown backend: {}".format(repr(backend)))
-
-
-@torch.no_grad()
-def _sample_tree_mcmc(edge_logits, edges):
-    if len(edges) <= 1:
-        return edges
-    E = len(edges)
-    V = E + 1
-    K = V * (V - 1) // 2
-    grid = make_complete_graph(V)
-    e2k = torch.empty(E, dtype=torch.long)
-    neighbors = {v: set() for v in range(V)}
-    components = torch.zeros(V, dtype=torch.uint8)
-    for e in range(E):
-        v1, v2 = map(int, edges[e])
-        e2k[e] = _find_complete_edge(v1, v2)
-        neighbors[v1].add(v2)
-        neighbors[v2].add(v1)
-    valid_edges = torch.empty(K, dtype=torch.long)
-
-    for e in torch.randperm(E):  # Sequential scanning doesn't seem to work.
-        e = e.item()
-        k1 = _remove_edge(grid, e2k, neighbors, components, e)
-        num_valid_edges = _find_valid_edges(components, valid_edges)
-        valid_logits = edge_logits[valid_edges[:num_valid_edges]]
-        valid_probs = torch.exp(valid_logits - valid_logits.max())
-        total_prob = valid_probs.sum()
-        if total_prob > 0:
-            k2 = valid_edges[torch.multinomial(valid_probs, 1)[0]]
-        else:
-            k2 = k1
-        _add_edge(grid, e2k, neighbors, components, e, k2)
-
-    e2k.sort()
-    edges = edge_logits.new_empty((E, 2), dtype=torch.long)
-    edges[:, 0] = grid[0, e2k]
-    edges[:, 1] = grid[1, e2k]
-    return edges
-
-
-def sample_tree_approx(edge_logits, backend="python"):
-    """
-    Approximately sample a random spanning tree of a dense weighted graph.
-
-    This is mainly useful for initializing an MCMC sampler.
-
-    :param torch.Tensor edge_logits: A length-K array of nonnormalized log
-        probabilities.
-    :returns: An E x 2 tensor of edges in the form of (vertex,vertex) pairs.
-        Each edge should be sorted and the entire tensor should be
-        lexicographically sorted.
-    :rtype: torch.Tensor
-    """
-    if backend == "python":
-        return _sample_tree_approx(edge_logits)
-    elif backend == "cpp":
-        return _get_cpp_module().sample_tree_approx(edge_logits)
     else:
         raise ValueError("unknown backend: {}".format(repr(backend)))
 
@@ -347,6 +332,27 @@ def _sample_tree_approx(edge_logits):
     edges[:, 0] = grid[0, e2k]
     edges[:, 1] = grid[1, e2k]
     return edges
+
+
+def sample_tree_approx(edge_logits, backend="python"):
+    """
+    Approximately sample a random spanning tree of a dense weighted graph.
+
+    This is mainly useful for initializing an MCMC sampler.
+
+    :param torch.Tensor edge_logits: A length-K array of nonnormalized log
+        probabilities.
+    :returns: An E x 2 tensor of edges in the form of (vertex,vertex) pairs.
+        Each edge should be sorted and the entire tensor should be
+        lexicographically sorted.
+    :rtype: torch.Tensor
+    """
+    if backend == "python":
+        return _sample_tree_approx(edge_logits)
+    elif backend == "cpp":
+        return _get_cpp_module().sample_tree_approx(edge_logits)
+    else:
+        raise ValueError("unknown backend: {}".format(repr(backend)))
 
 
 def sample_tree(edge_logits, init_edges=None, mcmc_steps=1, backend="python"):
