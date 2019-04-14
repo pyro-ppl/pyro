@@ -10,6 +10,7 @@ from pyro.distributions.spanning_tree import (NUM_SPANNING_TREES, SpanningTree, 
                                               sample_tree_mcmc)
 from tests.common import assert_equal, xfail_if_not_implemented
 
+
 @pytest.mark.filterwarnings("always")
 @pytest.mark.parametrize('num_vertices,expected_grid', [
     (2, [[0], [1]]),
