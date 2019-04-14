@@ -63,4 +63,5 @@ at::Tensor sample_tree_approx(at::Tensor edge_logits) {
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("sample_tree_mcmc", &sample_tree_mcmc, "Sample a random spanning tree using MCMC");
   m.def("sample_tree_approx", &sample_tree_approx, "Approximate sample a random spanning tree");
+  m.def("make_complete_graph", &make_complete_graph, "Constructs a complete graph");
 }

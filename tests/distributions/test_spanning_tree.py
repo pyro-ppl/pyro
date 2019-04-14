@@ -16,12 +16,13 @@ from tests.common import assert_equal, xfail_if_not_implemented
     (3, [[0, 0, 1], [1, 2, 2]]),
     (4, [[0, 0, 1, 0, 1, 2], [1, 2, 2, 3, 3, 3]]),
 ])
-def test_make_complete_graph(num_vertices, expected_grid):
+@pytest.mark.parametrize('backend', ["python", "cpp"])
+def test_make_complete_graph(num_vertices, expected_grid, backend):
     V = num_vertices
     K = V * (V - 1) // 2
     expected_grid = torch.tensor(expected_grid, dtype=torch.long).reshape(2, K)
 
-    grid = make_complete_graph(V)
+    grid = make_complete_graph(V, backend=backend)
     assert_equal(grid, expected_grid)
 
 
@@ -50,7 +51,8 @@ def test_sample_tree_approx_smoke(num_edges, backend):
 
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
-def test_sample_tree_mcmc_gof(num_edges):
+@pytest.mark.parametrize('backend', ["python"])
+def test_sample_tree_mcmc_gof(num_edges, backend):
     goftests = pytest.importorskip('goftests')
     pyro.set_rng_seed(2 ** 32 - num_edges)
     E = num_edges
@@ -64,7 +66,7 @@ def test_sample_tree_mcmc_gof(num_edges):
     tensors = {}
     edges = torch.tensor([(v, v + 1) for v in range(V - 1)], dtype=torch.long)
     for _ in range(num_samples):
-        edges = sample_tree_mcmc(edge_logits, edges)
+        edges = sample_tree_mcmc(edge_logits, edges, backend=backend)
         key = tuple(sorted((v1.item(), v2.item()) for v1, v2 in edges))
         counts[key] += 1
         tensors[key] = edges
@@ -73,8 +75,8 @@ def test_sample_tree_mcmc_gof(num_edges):
     # Check accuracy using a Pearson's chi-squared test.
     keys = [k for k, _ in counts.most_common(100)]
     truncated = (len(keys) < len(counts))
-    counts = torch.tensor([counts[key] for key in keys])
-    tensors = torch.stack([tensors[key] for key in keys])
+    counts = torch.tensor([counts[k] for k in keys])
+    tensors = torch.stack([tensors[k] for k in keys])
     probs = SpanningTree(edge_logits).log_prob(tensors).exp()
     gof = goftests.multinomial_goodness_of_fit(
         probs.numpy(), counts.numpy(), num_samples, plot=True, truncated=truncated)
@@ -107,8 +109,8 @@ def test_sample_tree_approx_gof(num_edges, backend):
     # Check accuracy using a Pearson's chi-squared test.
     keys = [k for k, _ in counts.most_common(100)]
     truncated = (len(keys) < len(counts))
-    counts = torch.tensor([counts[key] for key in keys])
-    tensors = torch.stack([tensors[key] for key in keys])
+    counts = torch.tensor([counts[k] for k in keys])
+    tensors = torch.stack([tensors[k] for k in keys])
     probs = SpanningTree(edge_logits).log_prob(tensors).exp()
     gof = goftests.multinomial_goodness_of_fit(
         probs.numpy(), counts.numpy(), num_samples, plot=True, truncated=truncated)

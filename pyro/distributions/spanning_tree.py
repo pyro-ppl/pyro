@@ -107,8 +107,29 @@ class SpanningTree(TorchDistribution):
 # Sampler implementation.
 ################################################################################
 
+_cpp_module = None
 
-def make_complete_graph(num_vertices):
+
+def _get_cpp_module():
+    """
+    JIT compiles the cpp_spanning_tree module.
+    """
+    global _cpp_module
+    if _cpp_module is None:
+        import os
+        import warnings
+        from torch.utils.cpp_extension import load
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spanning_tree.cpp")
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            _cpp_module = load(name="cpp_spanning_tree",
+                               sources=[path],
+                               extra_cflags=['-O2'],
+                               verbose=True)
+    return _cpp_module
+
+
+def make_complete_graph(num_vertices, backend="python"):
     """
     Constructs a complete graph.
 
@@ -117,6 +138,15 @@ def make_complete_graph(num_vertices):
     :param int num_vertices: Number of vertices.
     :returns: a 2 x K grid of (vertex, vertex) pairs.
     """
+    if backend == "python":
+        return _make_complete_graph(num_vertices)
+    elif backend == "cpp":
+        return _get_cpp_module().make_complete_graph(num_vertices)
+    else:
+        raise ValueError("unknown backend: {}".format(repr(backend)))
+
+
+def _make_complete_graph(num_vertices):
     if num_vertices < 2:
         raise ValueError('PyTorch cannot handle zero-sized multidimensional tensors')
     V = num_vertices
@@ -194,8 +224,7 @@ def _find_valid_edges(components, valid_edges):
     return end
 
 
-@torch.no_grad()
-def _sample_tree_mcmc(edge_logits, edges):
+def sample_tree_mcmc(edge_logits, edges, backend="python"):
     """
     Sample a random spanning tree of a dense weighted graph using MCMC.
 
@@ -220,6 +249,16 @@ def _sample_tree_mcmc(edge_logits, edges):
         lexicographically sorted.
     :rtype: torch.Tensor
     """
+    if backend == "python":
+        return _sample_tree_mcmc(edge_logits, edges)
+    elif backend == "cpp":
+        return _get_cpp_module().sample_tree_mcmc(edge_logits, edges)
+    else:
+        raise ValueError("unknown backend: {}".format(repr(backend)))
+
+
+@torch.no_grad()
+def _sample_tree_mcmc(edge_logits, edges):
     if len(edges) <= 1:
         return edges
     E = len(edges)
@@ -256,8 +295,7 @@ def _sample_tree_mcmc(edge_logits, edges):
     return edges
 
 
-@torch.no_grad()
-def _sample_tree_approx(edge_logits):
+def sample_tree_approx(edge_logits, backend="python"):
     """
     Approximately sample a random spanning tree of a dense weighted graph.
 
@@ -270,6 +308,16 @@ def _sample_tree_approx(edge_logits):
         lexicographically sorted.
     :rtype: torch.Tensor
     """
+    if backend == "python":
+        return _sample_tree_approx(edge_logits)
+    elif backend == "cpp":
+        return _get_cpp_module().sample_tree_approx(edge_logits)
+    else:
+        raise ValueError("unknown backend: {}".format(repr(backend)))
+
+
+@torch.no_grad()
+def _sample_tree_approx(edge_logits):
     K = len(edge_logits)
     V = int(round(0.5 + (0.25 + 2 * K)**0.5))
     assert K == V * (V - 1) // 2
@@ -299,46 +347,6 @@ def _sample_tree_approx(edge_logits):
     edges[:, 0] = grid[0, e2k]
     edges[:, 1] = grid[1, e2k]
     return edges
-
-
-_cpp_module = None
-
-
-def _get_cpp_module():
-    """
-    JIT compiles the cpp_spanning_tree module.
-    """
-    global _cpp_module
-    if _cpp_module is None:
-        import os
-        import warnings
-        from torch.utils.cpp_extension import load
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spanning_tree.cpp")
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning)
-            _cpp_module = load(name="cpp_spanning_tree",
-                               sources=[path],
-                               extra_cflags=['-O2'],
-                               verbose=True)
-    return _cpp_module
-
-
-def sample_tree_mcmc(edge_logits, edges, backend="python"):
-    if backend == "python":
-        return _sample_tree_mcmc(edge_logits, edges)
-    elif backend == "cpp":
-        return _get_cpp_module().sample_tree_mcmc(edge_logits, edges)
-    else:
-        raise ValueError("unknown backend: {}".format(repr(backend)))
-
-
-def sample_tree_approx(edge_logits, backend="python"):
-    if backend == "python":
-        return _sample_tree_approx(edge_logits)
-    elif backend == "cpp":
-        return _get_cpp_module().sample_tree_approx(edge_logits)
-    else:
-        raise ValueError("unknown backend: {}".format(repr(backend)))
 
 
 def sample_tree(edge_logits, init_edges=None, mcmc_steps=1, backend="python"):
