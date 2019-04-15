@@ -40,6 +40,10 @@ branches:
 jobs:
     fast_finish: true
     include:
+        - stage: debug
+          python: 3.6
+          env: STAGE=unit
+          script: pytest -vsx tests/distributions/test_spanning_tree.py::test_make_complete_graph
         - stage: lint
           python: 2.7
           before_install: pip install flake8 nbstripout nbformat
