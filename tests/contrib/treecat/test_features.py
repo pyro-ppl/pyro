@@ -8,7 +8,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta
-from pyro.contrib.tabular import Boolean, Real
+from pyro.contrib.treecat import Boolean, Real
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
 from pyro.util import torch_isnan

@@ -39,6 +39,9 @@ branches:
 jobs:
     fast_finish: true
     include:
+        - stage: debug
+          python: 3.6
+          script: pytest -vs tests/contrib/treecat
         - stage: lint
           python: 2.7
           before_install: pip install flake8 nbstripout nbformat

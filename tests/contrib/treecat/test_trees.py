@@ -6,7 +6,7 @@ import pytest
 import torch
 
 import pyro
-from pyro.contrib.tabular.trees import make_complete_graph, sample_tree
+from pyro.contrib.treecat.trees import make_complete_graph, sample_tree
 from tests.common import assert_equal
 
 # https://oeis.org/A000272
