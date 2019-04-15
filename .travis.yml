@@ -11,8 +11,8 @@ addons:
         sources:
             - ubuntu-toolchain-r-test
         packages:
-            - gcc-4.9
-            - g++-4.9
+            - gcc-8
+            - g++-8
             - ninja-build
 
 cache:
@@ -20,7 +20,7 @@ cache:
         - $HOME/.data
 
 before_install:
-    - if [ "$CXX" = "g++" ]; then export CXX="g++-4.9" CC="gcc-4.9"; fi
+    - if [ "$CXX" = "g++" ]; then export CXX="g++-8" CC="gcc-8"; fi
 
 install:
     - pip install -U pip
