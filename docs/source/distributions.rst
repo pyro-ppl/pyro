@@ -147,6 +147,13 @@ Rejector
     :undoc-members:
     :show-inheritance:
 
+SpanningTree
+------------
+.. autoclass:: pyro.distributions.SpanningTree
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 VonMises
 --------
 .. autoclass:: pyro.distributions.VonMises
