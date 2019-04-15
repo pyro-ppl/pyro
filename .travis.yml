@@ -5,6 +5,8 @@ sudo: true
 env:
     global:
         - PYTHONPATH=$PWD:$PYTHONPATH
+        - CXX="g++-8"
+        - CC="gcc-8"
 
 addons:
     apt:
@@ -18,9 +20,6 @@ addons:
 cache:
     directories:
         - $HOME/.data
-
-before_install:
-    - if [ "$CXX" = "g++" ]; then export CXX="g++-8" CC="gcc-8"; fi
 
 install:
     - pip install -U pip
