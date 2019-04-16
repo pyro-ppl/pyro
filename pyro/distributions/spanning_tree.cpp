@@ -20,10 +20,10 @@ at::Tensor make_complete_graph(int num_vertices) {
   return grid;
 }
 
-int _remove_edge(at::Tensor grid, at::Tensor e2k,
+int _remove_edge(at::Tensor grid, at::Tensor edge_ids,
                  std::vector<std::unordered_set<int>> &neighbors,
                  std::vector<bool> &components, int e) {
-  int k = e2k[e].item().to<int>();
+  int k = edge_ids[e].item().to<int>();
   int v1 = grid[0][k].item().to<int>();
   int v2 = grid[1][k].item().to<int>();
   neighbors[v1].erase(v2);
@@ -43,10 +43,10 @@ int _remove_edge(at::Tensor grid, at::Tensor e2k,
   return k;
 }
 
-void _add_edge(at::Tensor grid, at::Tensor e2k,
+void _add_edge(at::Tensor grid, at::Tensor edge_ids,
                std::vector<std::unordered_set<int>> &neighbors,
                std::vector<bool> &components, int e, int k) {
-  e2k[e] = k;
+  edge_ids[e] = k;
   int v1 = grid[0][k].item().to<int>();
   int v2 = grid[1][k].item().to<int>();
   neighbors[v1].insert(v2);
@@ -54,7 +54,7 @@ void _add_edge(at::Tensor grid, at::Tensor e2k,
   std::fill(components.begin(), components.end(), 0);
 }
 
-int _find_valid_edges(const std::vector<bool> &components, at::Tensor valid_edges) {
+int _find_valid_edges(const std::vector<bool> &components, at::Tensor valid_edge_ids) {
   int k = 0;
   int end = 0;
   const int V = components.size();
@@ -62,7 +62,7 @@ int _find_valid_edges(const std::vector<bool> &components, at::Tensor valid_edge
     bool c2 = components[v2];
     for (int v1 = 0; v1 != v2; ++v1) {
       if (c2 ^ components[v1]) {
-        valid_edges[end] = k;
+        valid_edge_ids[end] = k;
         end += 1;
       }
       k += 1;
@@ -73,7 +73,6 @@ int _find_valid_edges(const std::vector<bool> &components, at::Tensor valid_edge
 
 at::Tensor sample_tree_mcmc(at::Tensor edge_logits, at::Tensor edges) {
   torch::NoGradGuard no_grad;
-
   if (edges.size(0) <= 1) {
     return edges;
   }
@@ -82,57 +81,72 @@ at::Tensor sample_tree_mcmc(at::Tensor edge_logits, at::Tensor edges) {
   const int V = E + 1;
   const int K = V * (V - 1) / 2;
   auto grid = make_complete_graph(V);
-  auto e2k = torch::empty({E}, at::kLong);
+
+  // Each of E edges in the tree is stored as an id k in [0, K) indexing into
+  // the complete graph. The id of an edge (v1,v2) is k = v1+v2*(v2-1)/2.
+  auto edge_ids = torch::empty({E}, at::kLong);
+  // This maps each vertex to the set of its neighboring vertices.
   std::vector<std::unordered_set<int>> neighbors(V);
+  // This maps each vertex to its connected component id (0 or 1).
   std::vector<bool> components(V);
   for (int e = 0; e != E; ++e) {
     int v1 = edges[e][0].item().to<int>();
     int v2 = edges[e][1].item().to<int>();
-    e2k[e] = v1 + v2 * (v2 - 1) / 2;
+    edge_ids[e] = v1 + v2 * (v2 - 1) / 2;
     neighbors[v1].insert(v2);
     neighbors[v2].insert(v1);
   }
+  // This stores ids of edges that are valid candidates for Gibbs moves.
   auto valid_edges_buffer = torch::empty({K}, at::kLong);
 
-  for (int e = 0; e != E; ++e) {
-     int k = _remove_edge(grid, e2k, neighbors, components, e);
+  // Cycle through all edges in a random order.
+  auto order = torch::randperm(E);
+  for (int i = 0; i != E; ++i) {
+     int e = order[i].item().to<int>();
+
+     // Perform a single-site Gibbs update by moving this edge elsewhere.
+     int k = _remove_edge(grid, edge_ids, neighbors, components, e);
      int num_valid_edges = _find_valid_edges(components, valid_edges_buffer);
-     auto valid_edges = valid_edges_buffer.slice(0, 0, num_valid_edges);
-     auto valid_logits = edge_logits.index_select(0, valid_edges);
+     auto valid_edge_ids = valid_edges_buffer.slice(0, 0, num_valid_edges);
+     auto valid_logits = edge_logits.index_select(0, valid_edge_ids);
      auto valid_probs = (valid_logits - valid_logits.max()).exp();
      double total_prob = valid_probs.sum().item().to<double>();
      if (total_prob > 0) {
        int sample = valid_probs.multinomial(1)[0].item().to<int>();
-       k = valid_edges[sample].item().to<int>();
+       k = valid_edge_ids[sample].item().to<int>();
      }
-     _add_edge(grid, e2k, neighbors, components, e, k);
+     _add_edge(grid, edge_ids, neighbors, components, e, k);
   }
 
-  e2k.sort();
+  // Convert edge ids to a canonical list of pairs.
+  edge_ids = std::get<0>(edge_ids.sort());
   edges = torch::empty({E, 2}, at::kLong);
   for (int e = 0; e != E; ++e) {
-    edges[e][0] = grid[0][e2k[e]];
-    edges[e][1] = grid[1][e2k[e]];
+    edges[e][0] = grid[0][edge_ids[e]];
+    edges[e][1] = grid[1][edge_ids[e]];
   }
   return edges;
 }
 
 at::Tensor sample_tree_approx(at::Tensor edge_logits) {
   torch::NoGradGuard no_grad;
-
   const int K = edge_logits.size(0);
   const int V = static_cast<int>(0.5 + std::sqrt(0.25 + 2 * K));
   const int E = V - 1;
   auto grid = make_complete_graph(V);
+
+  // Each of E edges in the tree is stored as an id k in [0, K) indexing into
+  // the complete graph. The id of an edge (v1,v2) is k = v1+v2*(v2-1)/2.
+  auto edge_ids = torch::empty({E}, at::kLong);
+  // This maps each vertex to whether it is a member of the cumulative tree.
   auto components = torch::zeros({V}, at::kByte);
-  auto e2k = torch::empty({E}, at::kLong);
 
   // Sample the first edge at random.
   auto probs = (edge_logits - edge_logits.max()).exp();
   int k = probs.multinomial(1)[0].item().to<int>();
   components[grid[0][k]] = 1;
   components[grid[1][k]] = 1;
-  e2k[0] = k;
+  edge_ids[0] = k;
 
   // Sample edges connecting the cumulative tree to a new leaf.
   for (int e = 1; e != E; ++e) {
@@ -145,14 +159,15 @@ at::Tensor sample_tree_approx(at::Tensor edge_logits) {
     int k = mask.nonzero().view(-1)[sample].item().to<int>();
     components[grid[0][k]] = 1;
     components[grid[1][k]] = 1;
-    e2k[e] = k;
+    edge_ids[e] = k;
   }
 
-  e2k.sort();
+  // Convert edge ids to a canonical list of pairs.
+  edge_ids = std::get<0>(edge_ids.sort());
   auto edges = torch::empty({E, 2}, at::kLong);
   for (int e = 0; e != E; ++e) {
-    edges[e][0] = grid[0][e2k[e]];
-    edges[e][1] = grid[1][e2k[e]];
+    edges[e][0] = grid[0][edge_ids[e]];
+    edges[e][1] = grid[1][edge_ids[e]];
   }
   return edges;
 }
