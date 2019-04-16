@@ -5,6 +5,17 @@ sudo: true
 env:
     global:
         - PYTHONPATH=$PWD:$PYTHONPATH
+        - CXX="g++-8"
+        - CC="gcc-8"
+
+addons:
+    apt:
+        sources:
+            - ubuntu-toolchain-r-test
+        packages:
+            - gcc-8
+            - g++-8
+            - ninja-build
 
 cache:
     directories:
