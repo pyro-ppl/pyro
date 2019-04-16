@@ -73,7 +73,6 @@ int _find_valid_edges(const std::vector<bool> &components, at::Tensor valid_edge
 
 at::Tensor sample_tree_mcmc(at::Tensor edge_logits, at::Tensor edges) {
   torch::NoGradGuard no_grad;
-
   if (edges.size(0) <= 1) {
     return edges;
   }
@@ -82,8 +81,13 @@ at::Tensor sample_tree_mcmc(at::Tensor edge_logits, at::Tensor edges) {
   const int V = E + 1;
   const int K = V * (V - 1) / 2;
   auto grid = make_complete_graph(V);
+
+  // Each of E edges in the tree is stored as an id k in [0, K) indexing into
+  // the complete graph. The id of an edge (v1,v2) is k = v1+v2*(v2-1)/2.
   auto edge_ids = torch::empty({E}, at::kLong);
+  // This maps each vertex to the set of its neighboring vertices.
   std::vector<std::unordered_set<int>> neighbors(V);
+  // This maps each vertex to its connected component id (0 or 1).
   std::vector<bool> components(V);
   for (int e = 0; e != E; ++e) {
     int v1 = edges[e][0].item().to<int>();
@@ -92,11 +96,15 @@ at::Tensor sample_tree_mcmc(at::Tensor edge_logits, at::Tensor edges) {
     neighbors[v1].insert(v2);
     neighbors[v2].insert(v1);
   }
+  // This stores ids of edges that are valid candidates for Gibbs moves.
   auto valid_edges_buffer = torch::empty({K}, at::kLong);
 
+  // Cycle through all edges in a random order.
   auto order = torch::randperm(E);
   for (int i = 0; i != E; ++i) {
      int e = order[i].item().to<int>();
+
+     // Perform a single-site Gibbs update by moving this edge elsewhere.
      int k = _remove_edge(grid, edge_ids, neighbors, components, e);
      int num_valid_edges = _find_valid_edges(components, valid_edges_buffer);
      auto valid_edge_ids = valid_edges_buffer.slice(0, 0, num_valid_edges);
@@ -110,6 +118,7 @@ at::Tensor sample_tree_mcmc(at::Tensor edge_logits, at::Tensor edges) {
      _add_edge(grid, edge_ids, neighbors, components, e, k);
   }
 
+  // Convert edge ids to a canonical list of pairs.
   edge_ids = std::get<0>(edge_ids.sort());
   edges = torch::empty({E, 2}, at::kLong);
   for (int e = 0; e != E; ++e) {
@@ -121,13 +130,16 @@ at::Tensor sample_tree_mcmc(at::Tensor edge_logits, at::Tensor edges) {
 
 at::Tensor sample_tree_approx(at::Tensor edge_logits) {
   torch::NoGradGuard no_grad;
-
   const int K = edge_logits.size(0);
   const int V = static_cast<int>(0.5 + std::sqrt(0.25 + 2 * K));
   const int E = V - 1;
   auto grid = make_complete_graph(V);
-  auto components = torch::zeros({V}, at::kByte);
+
+  // Each of E edges in the tree is stored as an id k in [0, K) indexing into
+  // the complete graph. The id of an edge (v1,v2) is k = v1+v2*(v2-1)/2.
   auto edge_ids = torch::empty({E}, at::kLong);
+  // This maps each vertex to whether it is a member of the cumulative tree.
+  auto components = torch::zeros({V}, at::kByte);
 
   // Sample the first edge at random.
   auto probs = (edge_logits - edge_logits.max()).exp();
@@ -150,6 +162,7 @@ at::Tensor sample_tree_approx(at::Tensor edge_logits) {
     edge_ids[e] = k;
   }
 
+  // Convert edge ids to a canonical list of pairs.
   edge_ids = std::get<0>(edge_ids.sort());
   auto edges = torch::empty({E, 2}, at::kLong);
   for (int e = 0; e != E; ++e) {

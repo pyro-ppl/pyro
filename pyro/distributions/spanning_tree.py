@@ -284,8 +284,13 @@ def _sample_tree_mcmc(edge_logits, edges):
     V = E + 1
     K = V * (V - 1) // 2
     grid = make_complete_graph(V)
+
+    # Each of E edges in the tree is stored as an id k in [0, K) indexing into
+    # the complete graph. The id of an edge (v1,v2) is k = v1+v2*(v2-1)/2.
     edge_ids = torch.empty(E, dtype=torch.long)
+    # This maps each vertex to the set of its neighboring vertices.
     neighbors = {v: set() for v in range(V)}
+    # This maps each vertex to its connected component id (0 or 1).
     components = torch.zeros(V, dtype=torch.uint8)
     for e in range(E):
         v1, v2 = map(int, edges[e])
@@ -293,10 +298,14 @@ def _sample_tree_mcmc(edge_logits, edges):
         edge_ids[e] = v1 + v2 * (v2 - 1) // 2
         neighbors[v1].add(v2)
         neighbors[v2].add(v1)
+    # This stores ids of edges that are valid candidates for Gibbs moves.
     valid_edges_buffer = torch.empty(K, dtype=torch.long)
 
+    # Cycle through all edges in a random order.
     for e in torch.randperm(E):
         e = int(e)
+
+        # Perform a single-site Gibbs update by moving this edge elsewhere.
         k = _remove_edge(grid, edge_ids, neighbors, components, e)
         num_valid_edges = _find_valid_edges(components, valid_edges_buffer)
         valid_edge_ids = valid_edges_buffer[:num_valid_edges]
@@ -308,6 +317,7 @@ def _sample_tree_mcmc(edge_logits, edges):
             k = valid_edge_ids[sample]
         _add_edge(grid, edge_ids, neighbors, components, e, k)
 
+    # Convert edge ids to a canonical list of pairs.
     edge_ids = edge_ids.sort()[0]
     edges = edge_logits.new_empty((E, 2), dtype=torch.long)
     edges[:, 0] = grid[0, edge_ids]
@@ -374,6 +384,7 @@ def _sample_tree_approx(edge_logits):
         components[grid[:, k]] = 1
         edge_ids[e] = k
 
+    # Convert edge ids to a canonical list of pairs.
     edge_ids = edge_ids.sort()[0]
     edges = edge_logits.new_empty((E, 2), dtype=torch.long)
     edges[:, 0] = grid[0, edge_ids]
