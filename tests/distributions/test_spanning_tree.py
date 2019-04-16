@@ -105,31 +105,47 @@ def test_log_prob(num_edges):
 
 
 @pytest.mark.filterwarnings("always")
+@pytest.mark.parametrize('pattern', ["uniform", "random", "sparse"])
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
 @pytest.mark.parametrize('backend', ["python", "cpp"])
 @pytest.mark.parametrize('method', ["mcmc", "approx"])
-def test_sample_tree_gof(method, backend, num_edges):
+def test_sample_tree_gof(method, backend, num_edges, pattern):
     goftests = pytest.importorskip('goftests')
     pyro.set_rng_seed(2 ** 32 - num_edges)
     E = num_edges
     V = 1 + E
     K = V * (V - 1) // 2
-    edge_logits = torch.rand(K)
+
+    if pattern == "uniform":
+        edge_logits = torch.zeros(K)
+        num_samples = 10 * NUM_SPANNING_TREES[V]
+    elif pattern == "random":
+        edge_logits = torch.rand(K)
+        num_samples = 30 * NUM_SPANNING_TREES[V]
+    elif pattern == "sparse":
+        edge_logits = torch.rand(K)
+        k = 0
+        for v2 in range(V):
+            for v1 in range(v2):
+                if v1 + 1 < v2:
+                    edge_logits[k] = -float('inf')
+        num_samples = 10 * NUM_SPANNING_TREES[V]
 
     # Generate many samples.
-    num_samples = 30 * NUM_SPANNING_TREES[V]
     counts = Counter()
     tensors = {}
-    edges = torch.tensor([(v, v + 1) for v in range(V - 1)], dtype=torch.long)
+    # Initialize using approximate sampler, to ensure feasibility.
+    edges = sample_tree_approx(edge_logits, backend=backend)
     for _ in range(num_samples):
         if method == "approx":
             # Reset the chain with an approximate sample, then perform 1 step of mcmc.
             edges = sample_tree_approx(edge_logits, backend=backend)
         edges = sample_tree_mcmc(edge_logits, edges, backend=backend)
-        key = tuple(sorted((v1.item(), v2.item()) for v1, v2 in edges))
+        key = tuple((v1.item(), v2.item()) for v1, v2 in edges)
         counts[key] += 1
         tensors[key] = edges
-    assert len(counts) == NUM_SPANNING_TREES[V]
+    if pattern != "sparse":
+        assert len(counts) == NUM_SPANNING_TREES[V]
 
     # Check accuracy using a Pearson's chi-squared test.
     keys = [k for k, _ in counts.most_common(100)]
@@ -140,4 +156,7 @@ def test_sample_tree_gof(method, backend, num_edges):
     gof = goftests.multinomial_goodness_of_fit(
         probs.numpy(), counts.numpy(), num_samples, plot=True, truncated=truncated)
     logging.info('gof = {}'.format(gof))
-    assert gof >= 0.01
+    if method == "approx":
+        assert gof >= 0.0001
+    else:
+        assert gof >= 0.005
