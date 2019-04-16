@@ -124,11 +124,10 @@ def test_sample_tree_gof(method, backend, num_edges, pattern):
         num_samples = 30 * NUM_SPANNING_TREES[V]
     elif pattern == "sparse":
         edge_logits = torch.rand(K)
-        k = 0
         for v2 in range(V):
             for v1 in range(v2):
                 if v1 + 1 < v2:
-                    edge_logits[k] = -float('inf')
+                    edge_logits[v1 + v2 * (v2 - 1) // 2] = -float('inf')
         num_samples = 10 * NUM_SPANNING_TREES[V]
 
     # Generate many samples.
