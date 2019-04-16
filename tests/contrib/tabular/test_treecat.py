@@ -2,21 +2,11 @@ from __future__ import absolute_import, division, print_function
 
 import pytest
 import torch
-from contextlib2 import contextmanager
 
-from pyro.contrib.treecat import Boolean, Real, TreeCat, TreeCatTrainer
-from pyro.infer import SVI, TraceEnum_ELBO
-from pyro.optim import Adam
+from pyro.contrib.tabular.features import Boolean, Real
+from pyro.contrib.tabular.treecat import TreeCat, TreeCatTrainer
+from pyro.distributions.util import default_dtype
 
-
-@contextmanager
-def default_dtype(dtype):
-    old = torch.get_default_dtype()
-    torch.set_default_dtype(dtype)
-    try:
-        yield
-    finally:
-        torch.set_default_dtype(old)
 
 with default_dtype(torch.float):
     TINY_DATASETS = [
@@ -24,7 +14,6 @@ with default_dtype(torch.float):
         [None, torch.tensor([-0.5, 0.5, 10.])],
         [torch.tensor([0., 0., 1.]), None],
     ]
-
 
 
 @default_dtype(torch.float)

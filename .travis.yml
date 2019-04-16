@@ -41,7 +41,7 @@ jobs:
     include:
         - stage: debug
           python: 3.6
-          script: pytest -vs tests/contrib/treecat
+          script: pytest -vs tests/contrib/tabular
         - stage: lint
           python: 2.7
           before_install: pip install flake8 nbstripout nbformat

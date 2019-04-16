@@ -1,17 +1,17 @@
-TreeCat
-=======
+Models of Tabular Data
+======================
 
 Feature models
 --------------
-.. automodule:: pyro.contrib.treecat.features
+.. automodule:: pyro.contrib.tabular.features
     :members:
     :undoc-members:
     :show-inheritance:
     :member-order: bysource
 
-Table model
------------
-.. automodule:: pyro.contrib.treecat.models
+TreeCat Model
+-------------
+.. automodule:: pyro.contrib.tabular.treecat
     :members:
     :undoc-members:
     :show-inheritance:
