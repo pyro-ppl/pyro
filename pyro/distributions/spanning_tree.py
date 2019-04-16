@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import itertools
+import math
 
 import torch
 from torch.distributions import constraints
@@ -19,6 +20,8 @@ class SpanningTree(TorchDistribution):
     1. The edges constitute a tree, i.e. are connected and cycle free.
     2. Each edge ``(v1,v2) = edges[e]`` is sorted, i.e. ``v1 < v2``.
     3. The entire tensor is sorted in colexicographic order.
+
+    Use :func:`validate_edges` to verify `edges` are correctly formed.
 
     The ``edge_logits`` tensor has one entry for each of the ``V*(V-1)//2``
     edges in the complete graph on ``V`` vertices, where edges are each sorted
@@ -67,6 +70,40 @@ class SpanningTree(TorchDistribution):
         self.num_vertices = V
         self.sampler_options = {} if sampler_options is None else sampler_options
 
+    def validate_edges(self, edges):
+        """
+        Validates a batch of ``edges`` tensors, as returned by :meth:`sample` or
+        :meth:`enumerate_support` or as input to :meth:`log_prob()`.
+
+        :param torch.LongTensor edges: A batch of edges.
+        :raises: ValueError
+        :returns: None
+        """
+        if edges.shape[-2:] != self.event_shape:
+            raise ValueError("Invalid edges shape: {}".format(edges.shape))
+
+        # Verify canonical ordering.
+        if not ((0 <= edges) & (edges < self.num_vertices)).all():
+            raise ValueError("Invalid vertex ids:\n{}".format(edges))
+        if not (edges[..., 0] < edges[..., 1]).all():
+            raise ValueError("Vertices are not sorted in each edge:\n{}".format(edges))
+        if not ((edges[..., :-1, 1] < edges[..., 1:, 1]) |
+                ((edges[..., :-1, 1] == edges[..., 1:, 1]) &
+                 (edges[..., :-1, 0] < edges[..., 1:, 0]))).all():
+            raise ValueError("Edges are not sorted colexicographically:\n{}".format(edges))
+
+        # Verify tree property, i.e. connectivity.
+        V = self.num_vertices
+        for i in itertools.product(*map(range, edges.shape[:-2])):
+            edges_i = edges[i]
+            connected = torch.eye(V, dtype=torch.float)
+            connected[edges_i[:, 0], edges_i[:, 1]] = 1
+            connected[edges_i[:, 1], edges_i[:, 0]] = 1
+            for i in range(int(math.ceil(V ** 0.5))):
+                connected = connected.mm(connected).clamp_(max=1)
+            if not connected.min() > 0:
+                raise ValueError("Edges do not constitute a tree:\n{}".format(edges_i))
+
     @lazy_property
     def log_partition_function(self):
         # By Kirchoff's matrix-tree theorem, the partition function is the
@@ -87,18 +124,7 @@ class SpanningTree(TorchDistribution):
 
     def log_prob(self, edges):
         if self._validate_args:
-            if edges.shape[-2:] != self.event_shape:
-                raise ValueError("Invalid edges shape: {}".format(edges.shape))
-            if not ((0 <= edges) & (edges < self.num_vertices)).all():
-                raise ValueError("Invalid vertex ids:\n{}".format(edges))
-            if not (edges[..., 0] < edges[..., 1]).all():
-                raise ValueError("Vertices are not sorted:\n{}".format(edges))
-            if not ((edges[..., :-1, 1] < edges[..., 1:, 1]) |
-                    ((edges[..., :-1, 1] == edges[..., 1:, 1]) &
-                     (edges[..., :-1, 0] < edges[..., 1:, 0]))).all():
-                raise ValueError("Edges are not sorted:\n{}".format(edges))
-            # Note this does not perform the expensive check that edges form a tree.
-
+            self.validate_edges(edges)
         v1 = edges[..., 0]
         v2 = edges[..., 1]
         k = v1 + v2 * (v2 - 1) // 2
