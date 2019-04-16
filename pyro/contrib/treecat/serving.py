@@ -26,4 +26,5 @@ class TreeCatServer(object):
         model = infer_discrete(model, first_available_dim=-1, temperature=temperature)
 
         # Run the model.
-        return model(data, impute=True)
+        z, x = model(data, impute=True)
+        return x

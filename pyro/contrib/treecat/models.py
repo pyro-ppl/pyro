@@ -6,6 +6,62 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta
+from pyro.distributions.spanning_tree import make_complete_graph
+from pyro.infer.discrete import infer_discrete
+
+
+class EdgeGuide(object):
+    """
+    Conjugate guide for latent z distribution.
+    """
+    def __init__(self, capacity, edges):
+        E = len(edges)
+        V = E + 1
+        K = V * (V - 1) // 2
+        M = capacity
+        self.capacity = capacity
+        self.edges = edges
+        self._grid = make_complete_graph(V)
+
+        self._count_prior = 0.5 * M
+        self._count_stats = 0.
+        self._vertex_prior = 0.5
+        self._vertex_stats = torch.zeros((V, M), dtype=torch.float)
+        self._edge_prior = 0.5 / M
+        self._edge_stats = torch.zeros((E, M * M), dtype=torch.float)
+        self._complete_stats = torch.zeros((K, M * M), dtype=torch.float)
+
+    @torch.no_grad()
+    def get_posterior(self):
+        count = self._count_prior + self.count_stats
+        vertex_probs = (self._vertex_prior + self._vertex_stats) / count
+        edge_probs = (self._edge_prior + self._edge_stats) / count
+        return vertex_probs, edge_probs
+
+    @torch.no_grad()
+    def update_stats(self, data, num_rows, z):
+        E = len(self.edges)
+        V = E - 1
+        K = V * (V - 1) // 2
+        M = self.capacity
+        batch_size = z.shape(-1)
+        assert z.dim() == 2
+
+        decay = 1. - batch_size / num_rows
+        self._count_stats *= decay
+        self._vertex_stats *= decay
+        self._edge_stats *= decay
+        self._complete_stats *= decay
+
+        self._count_stats += batch_size
+        # TODO Find a vectorized version of this.
+        for i in range(batch_size):
+            z_i = z[:, i]
+            self._vertex_stats[torch.arange(V), z_i] += 1
+            zz_i = M * z_i[self.edges[:, 0]] + z_i[self.edges[:, 1]]
+            self._edge_stats[torch.arange(E), zz_i] += 1
+            zz_i = M * z_i[self.grid[0]] + z_i[self.grid[1]]
+            self._complete_stats[torch.arange(K), zz_i] += 1
 
 
 class TreeCat(object):
@@ -34,8 +90,11 @@ class TreeCat(object):
         self.features = features
         self.capacity = capacity
         self.edges = edges
-        self._guide = AutoDelta(poutine.block(
+
+        self._feature_guide = AutoDelta(poutine.block(
             self.model, hide_fn=lambda msg: msg["name"].startswith("treecat_")))
+        self._edge_guide = EdgeGuide(num_vertices=len(features), capacity=capacity)
+        self._saved_z = None
 
     def model(self, data, num_rows=None, batch_size=None, impute=False):
         """
@@ -81,39 +140,40 @@ class TreeCat(object):
 
         # Sample latent vertex- and edge- distributions from a Dirichlet prior.
         with pyro.plate("vertices_plate", V):
-            vertex_probs = pyro.sample("vertex_probs",
-                                       dist.Dirichlet(0.5 * torch.ones(M)))
+            vertex_probs = pyro.sample("treecat_vertex_probs",
+                                       dist.Dirichlet(self._vertex_prior))
         with pyro.plate("edges_plate", E):
-            edge_probs = pyro.sample("edge_probs",
-                                     dist.Dirichlet(0.5 / M * torch.ones(M * M)))
+            edge_probs = pyro.sample("treecat_edge_probs",
+                                     dist.Dirichlet(self._edge_prior))
 
         # Sample data-local variables.
-        with pyro.plate("data", num_rows, batch_size) as row_ids:
+        subsample = None if batch_size is None else [None] * batch_size
+        with pyro.plate("data", num_rows, subsample=subsample):
 
             # Sample discrete latent state from an undirected tree structure.
             z = [None] * V
             for v in vertices_plate:
                 z[v] = pyro.sample("treecat_z_{}".format(v),
                                    dist.Categorical(vertex_probs[v]),
-                                   infer={'enumerate': 'parallel'})
+                                   infer={"enumerate": "parallel"})
             for e in edges_plate:
-                v1, v2 = self.edges[e]
+                v1, v2 = map(int, self.edges[e])
                 probs = (edge_probs[e].reshape(M, M) /
                          vertex_probs[v1].unsqueeze(-1) /
                          vertex_probs[v2]).reshape(M * M)
                 pyro.sample("treecat_z_{}_{}".format(v1, v2),
                             dist.Categorical(probs),
                             obs=M * z[v1] + z[v2])
+            self._saved_z = z
 
             # Sample observed features conditioned on latent classes.
             x = [None] * V
             for v in vertices_plate:
-                column = data[v]
-                if column is None and not impute:
+                if data[v] is None and not impute:
                     continue
                 component_dist = self.features[v].value_dist(mixtures[v], component=z[v])
                 x[v] = pyro.sample("treecat_x_{}".format(v), component_dist,
-                                   obs=None if column is None else column[row_ids])
+                                   obs=data[v])
 
         return x
 
@@ -122,5 +182,23 @@ class TreeCat(object):
         A :class:`~pyro.contrib.autoguide.AutoDelta` guide for MAP inference of
         continuous parameters.
         """
-        pyro.plate("data", num_rows, batch_size, dim=-1)
-        return self._guide(data, impute=impute)
+        V = len(self.features)
+        E = V - 1
+
+        self._feature_guide(data, num_rows=num_rows, impute=impute)
+
+        vertex_probs, edge_probs = self._edge_guide.get_posterior()
+        with pyro.plate("vertices_plate", V):
+            pyro.sample("treecat_vertex_probs", dist.Delta(vertex_probs, event_dim=1))
+        with pyro.plate("edges_plate", E):
+            pyro.sample("treecat_edge_probs", dist.Delta(edge_probs, event_dim=1))
+
+        pyro.plate("data", num_rows, dim=-1)
+
+    def _update_stats(self, data, num_rows, batch_size):
+        guide_trace = poutine.trace(self.guide).get_trace(data)
+        model = poutine.replay(self.model, guide_trace=guide_trace)
+        model = infer_discrete(model, first_available_dim=-2)
+        model(data, num_rows, batch_size, impute=False)
+        z = torch.stack(self._saved_z)
+        self._edge_guide.update_stats(data, num_rows, batch_size, z)

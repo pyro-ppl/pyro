@@ -33,5 +33,5 @@ def test_predict_smoke(data, capacity):
     features = [Boolean("b"), Real("r")]
     edges = ((0, 1),)
     treecat = TreeCat(features, capacity, edges)
-    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    elbo = TraceEnum_ELBO(max_plate_nesting=1)
     elbo.sample_posterior(treecat.model, treecat.guide, data, impute=True)

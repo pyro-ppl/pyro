@@ -14,8 +14,8 @@ from pyro.optim import Adam
 from pyro.util import torch_isnan
 
 
-@pytest.mark.parametrize('MyFeature', [Boolean, Real])
 @pytest.mark.parametrize('size', [1, 2, 100])
+@pytest.mark.parametrize('MyFeature', [Boolean, Real])
 def test_smoke(MyFeature, size):
 
     @poutine.broadcast
@@ -30,9 +30,9 @@ def test_smoke(MyFeature, size):
 
         f = MyFeature("foo")
         shared = f.sample_shared()
-        with pyro.iarange("components", num_components):
+        with pyro.plate("components", num_components):
             group = f.sample_group(shared)
-        with pyro.iarange("data", size):
+        with pyro.plate("data", size):
             component = pyro.sample("component", membership_dist,
                                     infer={"enumerate": "parallel"})
             return pyro.sample("obs", f.value_dist(group, component), obs=data)
@@ -46,7 +46,7 @@ def test_smoke(MyFeature, size):
     pyro.set_rng_seed(1)
     pyro.clear_param_store()
     guide = AutoDelta(poutine.block(model, hide=["component"]))
-    elbo = TraceEnum_ELBO(max_iarange_nesting=1)
+    elbo = TraceEnum_ELBO(max_plate_nesting=1)
     optim = Adam({'lr': 0.1})
     svi = SVI(model, guide, optim, elbo)
     losses = []
