@@ -365,8 +365,12 @@ def _sample_tree_approx(edge_logits):
     assert K == V * (V - 1) // 2
     E = V - 1
     grid = make_complete_graph(V)
-    components = edge_logits.new_zeros(V, dtype=torch.uint8)
+
+    # Each of E edges in the tree is stored as an id k in [0, K) indexing into
+    # the complete graph. The id of an edge (v1,v2) is k = v1+v2*(v2-1)/2.
     edge_ids = edge_logits.new_empty((E,), dtype=torch.long)
+    # This maps each vertex to whether it is a member of the cumulative tree.
+    components = edge_logits.new_zeros(V, dtype=torch.uint8)
 
     # Sample the first edge at random.
     probs = (edge_logits - edge_logits.max()).exp()
