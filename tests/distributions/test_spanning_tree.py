@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
 from collections import Counter
 
 import pytest
@@ -138,7 +139,5 @@ def test_sample_tree_gof(method, backend, num_edges):
     probs = SpanningTree(edge_logits).log_prob(tensors).exp()
     gof = goftests.multinomial_goodness_of_fit(
         probs.numpy(), counts.numpy(), num_samples, plot=True, truncated=truncated)
-    if method == "approx":
-        assert gof >= 5e-5
-    else:
-        assert gof >= 5e-3
+    logging.info('gof = {}'.format(gof))
+    assert gof >= 0.01
