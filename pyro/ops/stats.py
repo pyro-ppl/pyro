@@ -4,7 +4,6 @@ import numbers
 
 import torch
 import math
-import numpy as np
 
 
 def _compute_chain_variance_stats(input):
@@ -350,57 +349,46 @@ def fit_generalized_pareto(X):
     """
     Given a dataset X assumed to be drawn from the Generalized Pareto
     Distribution, estimate the distributional parameters k, sigma using a
-    variant of the technique described in reference [1]. This
-    implementation is modified from the implementation used in reference [2].
+    variant of the technique described in reference [1], as described in
+    reference [2].
 
     References
     [1] 'A new and efficient estimation method for the generalized Pareto distribution.'
     Zhang, J. and Stephens, M.A. (2009).
     [2] 'Pareto Smoothed Importance Sampling.'
     Aki Vehtari, Andrew Gelman, Jonah Gabry
-    https://github.com/avehtari/PSIS/blob/904146236767182270c9718a7b2a30831fe701fe/py/psis.py#L211
 
-    :param torch.Tensor or numpy.ndarray X: the input data X
+    :param torch.Tensor: the input data X
     :returns tuple: tuple of floats (k, sigma) corresponding to the fit parameters
     """
-    if isinstance(X, torch.Tensor):
-        X = X.data.cpu().float().numpy()
+    if not isinstance(X, torch.Tensor) or X.dim() != 1:
+        raise ValueError("Input X must be a 1-dimensional torch tensor")
 
-    if X.ndim != 1 or len(X) <= 1:
-        raise ValueError("Invalid input array.")
+    X = X.cpu().double()
+    X = torch.sort(X, descending=False)[0]
 
-    X.sort()
-
-    N = len(X)
-    PRIOR = 3
+    N = X.size(0)
     M = 30 + int(math.sqrt(N))
 
-    bs = np.arange(1, M + 1, dtype=float) - 0.5
-    bs = 1.0 - math.sqrt(M) / np.sqrt(bs)
-    bs /= PRIOR * X[int(N/4 - 0.5)]
+    # b = k / sigma
+    bs = 1.0 - math.sqrt(M) / (torch.arange(1, M + 1).double() - 0.5).sqrt()
+    bs /= 3.0 * X[int(N/4 - 0.5)]
     bs += 1 / X[-1]
 
-    temp = np.log1p(-bs[:, None] * X)
-    ks = np.mean(temp, axis=1)
+    ks = torch.log1p(-bs.unsqueeze(-1) * X).mean(-1)
+    Ls = N * (torch.log(-bs / ks) - (ks + 1.0))
 
-    L = np.log(-bs / ks) - (ks + 1)
-    L *= N
+    weights = torch.exp(Ls - Ls.unsqueeze(-1))
+    weights = 1.0 / weights.sum(-1)
 
-    temp = np.exp(L - L[:, None])
-    w = 1.0 / np.sum(temp, axis=1)
+    not_small_weights = weights > 1.0e-30
+    weights = weights[not_small_weights]
+    bs = bs[not_small_weights]
+    weights /= weights.sum()
 
-    # remove negligible weights
-    dii = w >= 10 * np.finfo(float).eps
-    if not np.all(dii):
-        w = w[dii]
-        bs = bs[dii]
-    w /= w.sum()
-
-    b = np.sum(bs * w)
-    temp = np.log1p((-b) * X)
-    k = np.mean(temp)
+    b = (bs * weights).sum().item()
+    k = torch.log1p(-b * X).mean().item()
     sigma = -k / b
-    a = 10  # weakly informative prior for k
-    k = k * N / (N + a) + a * 0.5 / (N + a)
+    k = k * N / (N + 10.0) + 5.0 / (N + 10.0)
 
     return k, sigma

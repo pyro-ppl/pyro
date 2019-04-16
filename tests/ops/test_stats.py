@@ -246,7 +246,7 @@ def test_fit_generalized_pareto(k, sigma, n_samples=5000):
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         from scipy.stats import genpareto
 
-        X = genpareto.rvs(c=k, scale=sigma, size=n_samples)
-        fit_k, fit_sigma = fit_generalized_pareto(torch.tensor(X))
-        assert_equal(k, fit_k, prec=0.02)
-        assert_equal(sigma, fit_sigma, prec=0.02)
+    X = genpareto.rvs(c=k, scale=sigma, size=n_samples)
+    fit_k, fit_sigma = fit_generalized_pareto(torch.tensor(X))
+    assert_equal(k, fit_k, prec=0.02)
+    assert_equal(sigma, fit_sigma, prec=0.02)
