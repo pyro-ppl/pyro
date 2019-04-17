@@ -8,6 +8,12 @@ from pyro.contrib.tabular.treecat import TreeCat, TreeCatTrainer
 from pyro.distributions.util import default_dtype
 
 
+@pytest.fixture(scope="module")
+def with_floats():
+    with default_dtype(torch.float):
+        yield
+
+
 with default_dtype(torch.float):
     TINY_DATASETS = [
         [torch.tensor([0., 0., 1.]), torch.tensor([-0.5, 0.5, 10.])],
@@ -16,10 +22,9 @@ with default_dtype(torch.float):
     ]
 
 
-@default_dtype(torch.float)
 @pytest.mark.parametrize('data', TINY_DATASETS)
 @pytest.mark.parametrize('capacity', [2, 16])
-def test_train_smoke(data, capacity):
+def test_train_smoke(data, capacity, with_floats):
     features = [Boolean("b"), Real("r")]
     edges = torch.LongTensor([[0, 1]])
     model = TreeCat(features, capacity, edges)
@@ -28,11 +33,10 @@ def test_train_smoke(data, capacity):
         trainer.step(data)
 
 
-@default_dtype(torch.float)
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('data', TINY_DATASETS)
 @pytest.mark.parametrize('num_particles', [None, 8])
-def test_impute_smoke(data, capacity, num_particles):
+def test_impute_smoke(data, capacity, num_particles, with_floats):
     features = [Boolean("b"), Real("r")]
     edges = torch.LongTensor([[0, 1]])
     model = TreeCat(features, capacity, edges)

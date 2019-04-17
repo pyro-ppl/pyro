@@ -20,8 +20,8 @@ def default_dtype(dtype):
     Temporarily set default torch floating point type.
     """
     old = torch.get_default_dtype()
-    torch.set_default_dtype(dtype)
     try:
+        torch.set_default_dtype(dtype)
         yield
     finally:
         torch.set_default_dtype(old)

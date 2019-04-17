@@ -202,23 +202,6 @@ class TreeCatTrainer(object):
         return loss
 
 
-def _index_increment(accum, index, delta=1.0):
-    """
-    This a vectorized equivalent of::
-
-        for idx in index:
-            for i, j in enumerate(idx):
-                accum[i, j] += delta
-    """
-    assert accum.dim() == 2
-    V, M = accum.size()
-    assert index.dim() >= 1
-    assert index.size(-1) == V
-    flat_accum = accum.view(-1)
-    flat_index = (index + torch.arange(V) * M).view(-1)
-    flat_accum.index_put((flat_index,), accum.new_tensor(delta), accumulate=True)
-
-
 class EdgeGuide(object):
     """
     Conjugate guide for latent categorical distribution parameters.
@@ -260,9 +243,10 @@ class EdgeGuide(object):
         self._complete_stats *= decay
 
         self._count_stats += batch_size
-        _index_increment(self._vertex_stats, z)
-        _index_increment(self._complete_stats,
-                         (M * z)[self._grid[0]] + z[self._grid[1]])
+        one = self._vertex_stats.new_tensor(1.)
+        self._vertex_stats.scatter_add_(-1, z, one.expand_as(z))
+        zz = (M * z)[self._grid[0]] + z[self._grid[1]]
+        self._complete_stats.scatter_add(-1, zz, one.expand_as(zz))
 
     @torch.no_grad()
     def get_posterior(self):
