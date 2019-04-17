@@ -39,9 +39,13 @@ branches:
 jobs:
     fast_finish: true
     include:
+        # TODO remove these before merging
         - stage: debug
           python: 3.6
           script: pytest -vs tests/contrib/tabular
+        - stage: fail
+          script: test ''  # will fail
+
         - stage: lint
           python: 2.7
           before_install: pip install flake8 nbstripout nbformat

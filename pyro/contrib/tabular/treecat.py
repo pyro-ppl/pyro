@@ -28,11 +28,12 @@ class TreeCat(object):
         structure. Each of the ``E = (V-1)`` edges is a tuple ``v1,v2`` of
         vertices.
     """
-    def __init__(self, features, capacity, edges):
+    def __init__(self, features, capacity, edges=None):
         V = len(features)
         E = V - 1
         M = capacity
-
+        if edges is None:
+            edges = torch.stack([torch.arange(E), torch.arange(1, 1 + E)], dim=-1)
         assert capacity > 1
         assert isinstance(edges, torch.LongTensor)
         assert edges.shape == (E, 2)
