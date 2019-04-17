@@ -86,32 +86,32 @@ class Feature(object):
 
 class Boolean(Feature):
     def sample_shared(self):
-        alpha = pyro.sample("{}_alpha".format(self.name), dist.Gamma(0.5, 1.))
-        beta = pyro.sample("{}_beta".format(self.name), dist.Gamma(0.5, 1.))
-        return alpha, beta
+        loc = pyro.sample("{}_loc".format(self.name), dist.Normal(0., 3.))
+        scale = pyro.sample("{}_scale".format(self.name), dist.LogNormal(0., 3.))
+        return loc, scale
 
     def sample_group(self, shared):
-        alpha, beta = shared
-        probs = pyro.sample("{}_probs".format(self.name), dist.Beta(alpha, beta))
-        return probs
+        loc, scale = shared
+        logits = pyro.sample("{}_logits".format(self.name), dist.Normal(loc, scale))
+        return logits
 
     def value_dist(self, group, component):
-        probs = group
-        return dist.Bernoulli(probs[component])
+        logits = group
+        return dist.Bernoulli(logits=logits[component])
 
 
 class Real(Feature):
     def sample_shared(self):
-        loc_loc = pyro.sample("{}_loc_loc".format(self.name), dist.Normal(0., 1.))
-        hyper_scale = pyro.sample("{}_hyper_scale".format(self.name), dist.LogNormal(0., 10.))
-        scale_alpha = pyro.sample("{}_scale_alpha".format(self.name), dist.Gamma(0.5, 1.))
-        scale_beta = pyro.sample("{}_scale_beta".format(self.name), dist.Gamma(0.5, 1.))
-        return loc_loc, hyper_scale, scale_alpha, scale_beta
+        scale_loc = pyro.sample("{}_scale_loc".format(self.name), dist.Normal(0., 10.))
+        scale_scale = pyro.sample("{}_scale_scale".format(self.name), dist.LogNormal(0., 3.))
+        loc_loc = pyro.sample("{}_loc_loc".format(self.name), dist.Normal(0., 3.))
+        loc_scale = pyro.sample("{}_loc_scale".format(self.name), dist.LogNormal(0., 3.))
+        return scale_loc, scale_scale, loc_loc, loc_scale
 
     def sample_group(self, shared):
-        loc_loc, hyper_scale, scale_alpha, scale_beta = shared
+        scale_loc, scale_scale, loc_loc, loc_scale = shared
         scale = pyro.sample("{}_scale".format(self.name),
-                            dist.Gamma(scale_alpha, scale_beta)).pow(-0.5)
+                            dist.LogNormal(scale_loc, scale_scale))
         loc = pyro.sample("{}_loc".format(self.name),
                           dist.Normal(loc_loc * scale, scale))
         return loc, scale

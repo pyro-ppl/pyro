@@ -18,17 +18,17 @@ class TreeCat(object):
     """
     The TreeCat model of sparse heterogeneous tabular data.
 
-    :param list features: a ``V``-lenth list of
+    :param list features: A ``V``-lenth list of
         :class:`~pyro.contrib.tabular.features.Feature` objects defining a
         feature model for each column. Feature models can be repeated,
         indicating that two columns share a common feature model (with shared
         learned parameters).
-    :param int capacity: cardinality of latent categorical variables
-    :param tuple edges: an ``(V-1) x 2`` nested tuple representing the tree
+    :param int capacity: Cardinality of latent categorical variables.
+    :param tuple edges: An ``(V-1) x 2`` nested tuple representing the tree
         structure. Each of the ``E = (V-1)`` edges is a tuple ``v1,v2`` of
         vertices.
     """
-    def __init__(self, features, capacity, edges=None):
+    def __init__(self, features, capacity=16, edges=None):
         V = len(features)
         E = V - 1
         M = capacity
@@ -181,7 +181,7 @@ class TreeCat(object):
         with pyro.plate("edges_plate", E):
             pyro.sample("treecat_edge_probs", dist.Delta(edge_probs, event_dim=1))
 
-    def impute(self, data, num_particles=None):
+    def impute(self, data, num_samples=None):
         """
         Impute missing columns in data.
         """
@@ -190,8 +190,8 @@ class TreeCat(object):
         first_available_dim = -2
 
         # Optionally draw vectorized samples.
-        if num_particles is not None:
-            plate = pyro.plate("num_particles_vectorized", num_particles,
+        if num_samples is not None:
+            plate = pyro.plate("num_samples_vectorized", num_samples,
                                dim=first_available_dim)
             model = plate(model)
             guide = plate(guide)

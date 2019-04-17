@@ -24,7 +24,7 @@ def test_find_center_of_tree(expected_vertex, edges):
     assert v == expected_vertex
 
 
-SCHEMA = [Boolean("f1"), Real("f2"), Real("f3"), Boolean("f4")]
+TINY_SCHEMA = [Boolean("f1"), Real("f2"), Real("f3"), Boolean("f4")]
 TINY_DATASETS = [
     [torch.tensor([0., 0., 1.]), torch.tensor([-0.5, 0.5, 10.])],
     [None, torch.tensor([-0.5, 0.5, 10.])],
@@ -40,7 +40,7 @@ TINY_DATASETS = [
 @pytest.mark.parametrize('capacity', [2, 16])
 def test_train_smoke(data, capacity):
     V = len(data)
-    features = SCHEMA[:V]
+    features = TINY_SCHEMA[:V]
     model = TreeCat(features, capacity)
     trainer = TreeCatTrainer(model)
     for i in range(10):
@@ -49,8 +49,8 @@ def test_train_smoke(data, capacity):
 
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('data', TINY_DATASETS)
-@pytest.mark.parametrize('num_particles', [None, 8])
-def test_impute_smoke(data, capacity, num_particles):
-    features = SCHEMA[:len(data)]
+@pytest.mark.parametrize('num_samples', [None, 8])
+def test_impute_smoke(data, capacity, num_samples):
+    features = TINY_SCHEMA[:len(data)]
     model = TreeCat(features, capacity)
-    model.impute(data, num_particles=num_particles)
+    model.impute(data, num_samples=num_samples)
