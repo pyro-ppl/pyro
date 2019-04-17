@@ -56,7 +56,7 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
             log_probs.setdefault(ordinal, []).append(log_prob)
             sum_dims.update(log_prob._pyro_dims)
             for frame in node["cond_indep_stack"]:
-                if frame.vectorized:
+                if frame.vectorized and frame.size > 1:
                     sum_dims.remove(plate_to_symbol[frame.name])
             # Note we mark all sample sites with require_backward to gather
             # enumerated sites and adjust cond_indep_stack of all sample sites.
