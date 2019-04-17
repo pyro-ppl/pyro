@@ -146,6 +146,7 @@ def vectorized_importance_weights(model, guide, *args, **kwargs):
     return log_weights, model_trace, guide_trace
 
 
+@torch.no_grad()
 def psis_diagnostic(model, guide, *args, **kwargs):
     """
     Computes the Pareto tail index k for a model/guide pair using the technique
