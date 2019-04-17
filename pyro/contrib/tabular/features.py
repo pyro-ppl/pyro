@@ -103,7 +103,7 @@ class Boolean(Feature):
 class Real(Feature):
     def sample_shared(self):
         scale_loc = pyro.sample("{}_scale_loc".format(self.name), dist.Normal(0., 10.))
-        scale_scale = pyro.sample("{}_scale_scale".format(self.name), dist.LogNormal(0., 3.))
+        scale_scale = pyro.sample("{}_scale_scale".format(self.name), dist.LogNormal(0., 1.))
         loc_loc = pyro.sample("{}_loc_loc".format(self.name), dist.Normal(0., 3.))
         loc_scale = pyro.sample("{}_loc_scale".format(self.name), dist.LogNormal(0., 3.))
         return scale_loc, scale_scale, loc_loc, loc_scale

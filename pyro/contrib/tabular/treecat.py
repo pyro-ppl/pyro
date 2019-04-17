@@ -68,6 +68,7 @@ class TreeCat(object):
             self._neighbors[v1].add(v2)
             self._neighbors[v2].add(v1)
             self._edge_index[v1, v2] = e
+            self._edge_index[v2, v1] = e
 
     def model(self, data, num_rows=None, impute=False):
         """
@@ -96,17 +97,11 @@ class TreeCat(object):
 
         # Sample a mixture model for each feature.
         mixtures = [None] * V
-        prev_features = {}  # allows feature models to be shared by multiple columns
         components_plate = pyro.plate("components_plate", M)
-        for v in range(V):  # TODO support sequential plates in AutoDelta.
-            feature = self.features[v]
-            prev_v = prev_features.setdefault(id(feature), v)
-            if prev_v != v:
-                mixtures[v] = mixtures[prev_v]
-            else:
-                shared = feature.sample_shared()
-                with components_plate:
-                    mixtures[v] = feature.sample_group(shared)
+        for v, feature in enumerate(self.features):
+            shared = feature.sample_shared()
+            with components_plate:
+                mixtures[v] = feature.sample_group(shared)
 
         # Sample latent vertex- and edge- distributions from a Dirichlet prior.
         with pyro.plate("vertices_plate", V):
@@ -141,16 +136,22 @@ class TreeCat(object):
                 v0 = v2
 
         # Sample discrete latent state from an arbitrarily directed tree structure.
+        M = self.capacity
+        batch_shape = vertex_probs.shape[:-2]
         if v0 is None:
-            probs = vertex_probs[v]
+            probs = vertex_probs[..., v, :]  # Sample root node unconditionally.
+            if batch_shape:
+                probs = probs.reshape(batch_shape + (1, M))
         else:
-            M = self.capacity
-            if v0 < v:
-                probs = edge_probs[self._edge_index[v0, v]].reshape(M, M)
-            else:
-                probs = edge_probs[self._edge_index[v, v0]].reshape(M, M).t()
-            probs = probs / vertex_probs[v0].unsqueeze(-1)
-            probs = probs[z[v0]]
+            probs = edge_probs[..., self._edge_index[v, v0], :]
+            probs = probs.reshape(batch_shape + (M, M))
+            if v0 > v:
+                probs = probs.transpose(-1, -2)
+            probs = probs / vertex_probs[..., v0, :].unsqueeze(-1)
+            ellipsis = tuple(torch.arange(s).reshape((s,) + (1,) * d)
+                            for s, d in zip(batch_shape, range(probs.dim() - 1, -1, -1)))
+            colon = torch.arange(M)
+            probs = probs[ellipsis + (z[v0].unsqueeze(-1), colon)]
         z[v] = pyro.sample("treecat_z_{}".format(v), dist.Categorical(probs),
                            infer={"enumerate": "parallel"})
 
@@ -198,8 +199,8 @@ class TreeCat(object):
             first_available_dim -= 1
 
         # Sample global parameters from the guide.
-        guide_trace = poutine.trace(self.guide).get_trace(data)
-        model = poutine.replay(self.model, guide_trace)
+        guide_trace = poutine.trace(guide).get_trace(data)
+        model = poutine.replay(model, guide_trace)
 
         # Sample local latent variables using variable elimination.
         model = infer_discrete(model, first_available_dim=first_available_dim)
@@ -209,7 +210,7 @@ class TreeCat(object):
 class TreeCatTrainer(object):
     def __init__(self, model, optim=None):
         if optim is None:
-            optim = Adam({'lr': 1e-3})
+            optim = Adam({"lr": 1e-3})
         elbo = TraceEnum_ELBO(max_plate_nesting=1)
         self._svi = SVI(model.model, model.guide, optim, elbo)
         self._model = model
@@ -218,6 +219,7 @@ class TreeCatTrainer(object):
         # Perform a gradient optimizer step to learn parameters.
         loss = self._svi.step(data, num_rows=num_rows)
 
+        # Update sufficient statistics in the edge guide.
         guide_trace = poutine.trace(self._model.guide).get_trace(data, num_rows)
         model = poutine.replay(self._model.model, guide_trace)
         model = infer_discrete(model, first_available_dim=-2)
