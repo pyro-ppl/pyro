@@ -5,13 +5,6 @@ import torch
 
 from pyro.contrib.tabular.features import Boolean, Real
 from pyro.contrib.tabular.treecat import TreeCat, TreeCatTrainer, find_center_of_tree
-from pyro.distributions.util import default_dtype
-
-
-@pytest.fixture(scope="module")
-def with_floats():
-    with default_dtype(torch.float):
-        yield
 
 
 @pytest.mark.parametrize('expected_vertex,edges', [
@@ -31,17 +24,16 @@ def test_find_center_of_tree(expected_vertex, edges):
     assert v == expected_vertex
 
 
-with default_dtype(torch.float):
-    TINY_DATASETS = [
-        [torch.tensor([0., 0., 1.]), torch.tensor([-0.5, 0.5, 10.])],
-        [None, torch.tensor([-0.5, 0.5, 10.])],
-        [torch.tensor([0., 0., 1.]), None],
-    ]
+TINY_DATASETS = [
+    [torch.tensor([0., 0., 1.]), torch.tensor([-0.5, 0.5, 10.])],
+    [None, torch.tensor([-0.5, 0.5, 10.])],
+    [torch.tensor([0., 0., 1.]), None],
+]
 
 
 @pytest.mark.parametrize('data', TINY_DATASETS)
 @pytest.mark.parametrize('capacity', [2, 16])
-def test_train_smoke(data, capacity, with_floats):
+def test_train_smoke(data, capacity):
     features = [Boolean("b"), Real("r")]
     edges = torch.LongTensor([[0, 1]])
     model = TreeCat(features, capacity, edges)
@@ -53,7 +45,7 @@ def test_train_smoke(data, capacity, with_floats):
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('data', TINY_DATASETS)
 @pytest.mark.parametrize('num_particles', [None, 8])
-def test_impute_smoke(data, capacity, num_particles, with_floats):
+def test_impute_smoke(data, capacity, num_particles):
     features = [Boolean("b"), Real("r")]
     edges = torch.LongTensor([[0, 1]])
     model = TreeCat(features, capacity, edges)

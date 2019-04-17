@@ -42,8 +42,8 @@ class TreeCat(object):
         self._feature_guide = AutoDelta(poutine.block(
             self.model, hide_fn=lambda msg: msg["name"].startswith("treecat_")))
         self._edge_guide = EdgeGuide(capacity=capacity, edges=edges)
-        self._vertex_prior = torch.empty(M, dtype=torch.float).fill_(0.5)
-        self._edge_prior = torch.empty(M * M, dtype=torch.float).fill_(0.5 / M)
+        self._vertex_prior = torch.empty(M).fill_(0.5)
+        self._edge_prior = torch.empty(M * M).fill_(0.5 / M)
         self._saved_z = None
 
         self.edges = edges
@@ -251,8 +251,8 @@ class EdgeGuide(object):
         self._edge_prior = 0.5 / M  # A uniform Dirichlet of shape (M,M).
 
         self._count_stats = 0.
-        self._vertex_stats = torch.zeros((V, M), dtype=torch.float)
-        self._complete_stats = torch.zeros((K, M * M), dtype=torch.float)
+        self._vertex_stats = torch.zeros((V, M))
+        self._complete_stats = torch.zeros((K, M * M))
 
     @torch.no_grad()
     def update(self, num_rows, z):

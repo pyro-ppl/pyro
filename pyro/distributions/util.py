@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
-from contextlib2 import contextmanager
+from contextlib import contextmanager
 
 import torch
 import torch.distributions as torch_dist
@@ -12,19 +12,6 @@ from torch.distributions.utils import broadcast_all
 _VALIDATION_ENABLED = False
 
 log_sum_exp = logsumexp  # DEPRECATED
-
-
-@contextmanager
-def default_dtype(dtype):
-    """
-    Temporarily set default torch floating point type.
-    """
-    old = torch.get_default_dtype()
-    try:
-        torch.set_default_dtype(dtype)
-        yield
-    finally:
-        torch.set_default_dtype(old)
 
 
 def copy_docs_from(source_class, full_text=False):
