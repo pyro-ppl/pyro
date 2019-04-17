@@ -35,6 +35,27 @@ def log_mean_prob(trace, particle_dim):
 
 
 @pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
+@pytest.mark.parametrize('plate_size', [1, 2])
+def test_plate_smoke(temperature, plate_size):
+    #       +-----------------+
+    #  z1 --|--> z2 ---> x2   |
+    #       |               N | for N in {1,2}
+    #       +-----------------+
+
+    @config_enumerate
+    def model():
+        p = pyro.param("p", torch.tensor([0.25, 0.75]))
+        loc = pyro.param("loc", torch.tensor([-1., 1.]))
+        z1 = pyro.sample("z1", dist.Categorical(p))
+        with pyro.plate("plate", plate_size):
+            z2 = pyro.sample("z2", dist.Categorical(p))
+            pyro.sample("x2", dist.Normal(loc[z2], 1.), obs=torch.ones(plate_size))
+
+    first_available_dim = -2
+    infer_discrete(model, first_available_dim, temperature)()
+
+
+@pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
 def test_distribution_1(temperature):
     #      +-------+
     #  z --|--> x  |
