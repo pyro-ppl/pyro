@@ -16,9 +16,9 @@ from pyro.util import jit_iter
 _RINGS = {0: MapRing, 1: SampleRing}
 
 
-def _make_ring(temperature):
+def _make_ring(temperature, dim_to_size):
     try:
-        return _RINGS[temperature]()
+        return _RINGS[temperature](dim_to_size=dim_to_size)
     except KeyError:
         raise ValueError("temperature must be 0 (map) or 1 (sample) for now")
 
@@ -48,15 +48,18 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
     log_probs = OrderedDict()
     sum_dims = set()
     queries = []
+    dim_to_size = {}
     for node in enum_trace.nodes.values():
         if node["type"] == "sample":
             ordinal = frozenset(plate_to_symbol[f.name]
-                                for f in node["cond_indep_stack"] if f.vectorized)
+                                for f in node["cond_indep_stack"]
+                                if f.vectorized and f.size > 1)
             log_prob = node["packed"]["log_prob"]
             log_probs.setdefault(ordinal, []).append(log_prob)
             sum_dims.update(log_prob._pyro_dims)
+            dim_to_size.update(zip(log_prob._pyro_dims, log_prob.shape))
             for frame in node["cond_indep_stack"]:
-                if frame.vectorized:
+                if frame.vectorized and frame.size > 1:
                     sum_dims.remove(plate_to_symbol[frame.name])
             # Note we mark all sample sites with require_backward to gather
             # enumerated sites and adjust cond_indep_stack of all sample sites.
@@ -65,7 +68,7 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
                 require_backward(log_prob)
 
     # Run forward-backward algorithm, collecting the ordinal of each connected component.
-    ring = _make_ring(temperature)
+    ring = _make_ring(temperature, dim_to_size)
     log_probs = contract_tensor_tree(log_probs, sum_dims, ring=ring)  # run forward algorithm
     query_to_ordinal = {}
     pending = object()  # a constant value for pending queries
@@ -99,7 +102,7 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
                 ordinal = query_to_ordinal[log_prob]
                 new_node["cond_indep_stack"] = tuple(
                     f for f in node["cond_indep_stack"]
-                    if not f.vectorized or plate_to_symbol[f.name] in ordinal)
+                    if not (f.vectorized and f.size > 1) or plate_to_symbol[f.name] in ordinal)
 
                 # Gather if node depended on an enumerated value.
                 sample = log_prob._pyro_backward_result
