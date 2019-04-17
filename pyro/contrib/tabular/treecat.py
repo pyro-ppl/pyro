@@ -119,7 +119,7 @@ class TreeCat(object):
         subsample = None if (batch_size == num_rows) else [None] * batch_size
         with pyro.plate("data", num_rows, subsample=subsample):
 
-            # Recursively sample in Markov contexts.
+            # Recursively sample z and x in Markov contexts.
             z = [None] * V
             x = [None] * V
             v = self._root
@@ -192,19 +192,24 @@ class TreeCat(object):
         """
         Impute missing columns in data.
         """
+        model = self.model
+        guide = self.guide
+        first_available_dim = -2
+
+        # Optionally draw vectorized samples.
+        if num_particles is not None:
+            plate = pyro.plate("num_particles_vectorized", num_particles,
+                               dim=first_available_dim)
+            model = plate(model)
+            guide = plate(guide)
+            first_available_dim -= 1
+
         # Sample global parameters from the guide.
         guide_trace = poutine.trace(self.guide).get_trace(data)
         model = poutine.replay(self.model, guide_trace)
 
         # Sample local latent variables using variable elimination.
-        first_available_dim = -2
-        if num_particles is not None:
-            model = pyro.plate("num_particles_vectorized", num_particles,
-                               dim=first_available_dim)(model)
-            first_available_dim -= 1
         model = infer_discrete(model, first_available_dim=first_available_dim)
-
-        # Run the model.
         return model(data, impute=True)
 
 
