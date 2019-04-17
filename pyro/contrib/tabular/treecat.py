@@ -180,14 +180,6 @@ class TreeCat(object):
         with pyro.plate("edges_plate", E):
             pyro.sample("treecat_edge_probs", dist.Delta(edge_probs, event_dim=1))
 
-    def _update_stats(self, data, num_rows):
-        guide_trace = poutine.trace(self.guide).get_trace(data, num_rows)
-        model = poutine.replay(self.model, guide_trace=guide_trace)
-        model = infer_discrete(model, first_available_dim=-2)
-        model(data, num_rows, impute=False)
-        z = torch.stack(self._saved_z)
-        self._edge_guide.update(num_rows, z)
-
     def impute(self, data, num_particles=None):
         """
         Impute missing columns in data.
@@ -223,7 +215,14 @@ class TreeCatTrainer(object):
 
     def step(self, data, num_rows=None):
         # Perform a gradient optimizer step to learn parameters.
-        loss = self._svi.step(data, num_rows=num_rows, impute=False)
+        loss = self._svi.step(data, num_rows=num_rows)
+
+        guide_trace = poutine.trace(self._model.guide).get_trace(data, num_rows)
+        model = poutine.replay(self._model.model, guide_trace)
+        model = infer_discrete(model, first_available_dim=-2)
+        model(data, num_rows)
+        z = torch.stack(self._model._saved_z)
+        self._model._edge_guide.update(num_rows, z)
 
         # Perform an MCMC step to learn the model.
         model = self._model
@@ -265,7 +264,9 @@ class EdgeGuide(object):
         """
         assert z.dim() == 2
         M = self.capacity
-        batch_size = z.shape(-1)
+        batch_size = z.size(-1)
+        if num_rows is None:
+            num_rows = batch_size
 
         decay = 1. - batch_size / num_rows
         self._count_stats *= decay
@@ -276,7 +277,7 @@ class EdgeGuide(object):
         one = self._vertex_stats.new_tensor(1.)
         self._vertex_stats.scatter_add_(-1, z, one.expand_as(z))
         zz = (M * z)[self._grid[0]] + z[self._grid[1]]
-        self._complete_stats.scatter_add(-1, zz, one.expand_as(zz))
+        self._complete_stats.scatter_add_(-1, zz, one.expand_as(zz))
 
     @torch.no_grad()
     def get_posterior(self):
