@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import deque
+
 import torch
 
 import pyro
@@ -36,7 +38,6 @@ class TreeCat(object):
         assert edges.shape == (E, 2)
         self.features = features
         self.capacity = capacity
-        self._edges = edges
 
         self._feature_guide = AutoDelta(poutine.block(
             self.model, hide_fn=lambda msg: msg["name"].startswith("treecat_")))
@@ -44,6 +45,8 @@ class TreeCat(object):
         self._vertex_prior = torch.empty(M, dtype=torch.float).fill_(0.5)
         self._edge_prior = torch.empty(M * M, dtype=torch.float).fill_(0.5 / M)
         self._saved_z = None
+
+        self.edges = edges
 
     @property
     def edges(self):
@@ -54,39 +57,47 @@ class TreeCat(object):
         self._edges = edges
         self._edge_guide.edges = edges
 
-    def model(self, data, num_rows=None, batch_size=None, impute=False):
+        # Construct a directed tree data structures used by ._propagate().
+        # The root has no statistical meaning; we choose a root vertex based on
+        # computational concerns only, maximizing opportunity for parallelism.
+        self._root = find_center_of_tree(edges)
+        self._neighbors = [set() for _ in self.features]
+        self._edge_index = {}
+        for e, (v1, v2) in enumerate(edges.numpy()):
+            self._neighbors[v1].add(v2)
+            self._neighbors[v2].add(v1)
+            self._edge_index[v1, v2] = e
+
+    def model(self, data, num_rows=None, impute=False):
         """
         :param list data: batch of heterogeneous column-oriented data.  Each
-            column should be either a torch.Tensor (if oberved) or None (if
+            column should be either a torch.Tensor (if observed) or None (if
             unobserved).
+        :param int num_rows: Optional number of rows in entire dataset, if data
+            is is a minibatch.
         :param bool impute: Whether to impute missing features. This should be
             set to False during training and True when making predictions.
         :returns: a copy of the input data, optionally with missing columns
-            stochastically imputed according the the joint posterior.
+            stochastically imputed according the joint posterior.
         :rtype: list
         """
         assert len(data) == len(self.features)
-        assert any(column is not None for column in data)
+        assert not all(column is None for column in data)
+        for column in data:
+            if column is not None:
+                batch_size = column.size(0)
+                break
         if num_rows is None:
-            for column in data:
-                if column is not None:
-                    num_rows = column.size(0)
-                    break
+            num_rows = batch_size
         V = len(self.features)
         E = len(self.edges)
         M = self.capacity
 
-        # TODO fix AutoDelta to support sequential pyro.plate.
-        # vertices_plate = pyro.plate("vertices_range", V)
-        # edges_plate = pyro.plate("edges_range", E)
-        vertices_plate = range(V)
-        edges_plate = range(E)
-        components_plate = pyro.plate("components_plate", M)
-
         # Sample a mixture model for each feature.
         mixtures = [None] * V
         prev_features = {}  # allows feature models to be shared by multiple columns
-        for v in vertices_plate:
+        components_plate = pyro.plate("components_plate", M)
+        for v in range(V):  # TODO support sequential plates in AutoDelta.
             feature = self.features[v]
             prev_v = prev_features.setdefault(id(feature), v)
             if prev_v != v:
@@ -97,43 +108,62 @@ class TreeCat(object):
                     mixtures[v] = feature.sample_group(shared)
 
         # Sample latent vertex- and edge- distributions from a Dirichlet prior.
-        with poutine.mask(mask=False):
-            with pyro.plate("vertices_plate", V):
-                vertex_probs = pyro.sample("treecat_vertex_probs",
-                                           dist.Dirichlet(self._vertex_prior))
-            with pyro.plate("edges_plate", E):
-                edge_probs = pyro.sample("treecat_edge_probs",
-                                         dist.Dirichlet(self._edge_prior))
+        with pyro.plate("vertices_plate", V):
+            vertex_probs = pyro.sample("treecat_vertex_probs",
+                                       dist.Dirichlet(self._vertex_prior))
+        with pyro.plate("edges_plate", E):
+            edge_probs = pyro.sample("treecat_edge_probs",
+                                     dist.Dirichlet(self._edge_prior))
 
         # Sample data-local variables.
-        subsample = None if batch_size is None else [None] * batch_size
+        subsample = None if (batch_size == num_rows) else [None] * batch_size
         with pyro.plate("data", num_rows, subsample=subsample):
 
-            # Sample discrete latent state from an undirected tree structure.
+            # Recursively sample in Markov contexts.
             z = [None] * V
-            for v in vertices_plate:
-                z[v] = pyro.sample("treecat_z_{}".format(v),
-                                   dist.Categorical(vertex_probs[v]),
-                                   infer={"enumerate": "parallel"})
-            for e in edges_plate:
-                v1, v2 = map(int, self.edges[e])
-                pyro.sample("treecat_z_{}_{}".format(v1, v2),
-                            dist.Categorical(edge_probs[e]),
-                            obs=M * z[v1] + z[v2])
-            self._saved_z = z
-
-            # Sample observed features conditioned on latent classes.
             x = [None] * V
-            for v in vertices_plate:
-                if data[v] is None and not impute:
-                    continue
-                component_dist = self.features[v].value_dist(mixtures[v], component=z[v])
-                x[v] = pyro.sample("treecat_x_{}".format(v), component_dist,
-                                   obs=data[v])
+            v = self._root
+            self._propagate(data, impute, mixtures, vertex_probs, edge_probs, z, x, v)
 
+        self._saved_z = z
         return x
 
-    def guide(self, data, num_rows=None, batch_size=None, impute=False):
+    @poutine.markov
+    def _propagate(self, data, impute, mixtures, vertex_probs, edge_probs, z, x, v):
+        # Determine upstream parent v0 and downstream children.
+        v0 = None
+        children = []
+        for v2 in self._neighbors[v]:
+            if z[v2] is None:
+                children.append(v2)
+            else:
+                v0 = v2
+
+        # Sample discrete latent state from an arbitrarily directed tree structure.
+        if v0 is None:
+            probs = vertex_probs[v]
+        else:
+            M = self.capacity
+            if v0 < v:
+                probs = edge_probs[self._edge_index[v0, v]].reshape(M, M)
+            else:
+                probs = edge_probs[self._edge_index[v, v0]].reshape(M, M).t()
+            probs = probs / vertex_probs[v0].unsqueeze(-1)
+            probs = probs[z[v0]]
+        z[v] = pyro.sample("treecat_z_{}".format(v), dist.Categorical(probs),
+                           infer={"enumerate": "parallel"})
+
+        # Sample observed features conditioned on latent classes.
+        if data[v] is not None or impute:
+            x[v] = pyro.sample("treecat_x_{}".format(v),
+                               self.features[v].value_dist(mixtures[v], component=z[v]),
+                               obs=data[v])
+
+        # Continue sampling downstream.
+        for v2 in children:
+            self._propagate(data, impute, mixtures, vertex_probs, edge_probs, z, x, v2)
+
+    def guide(self, data, num_rows=None, impute=False):
         """
         A :class:`~pyro.contrib.autoguide.AutoDelta` guide for MAP inference of
         continuous parameters.
@@ -143,28 +173,25 @@ class TreeCat(object):
 
         self._feature_guide(data, num_rows=num_rows, impute=impute)
 
+        # This guide uses the posterior mean as a point estimate.
         vertex_probs, edge_probs = self._edge_guide.get_posterior()
-        with poutine.mask(mask=False):
-            with pyro.plate("vertices_plate", V):
-                pyro.sample("treecat_vertex_probs", dist.Delta(vertex_probs, event_dim=1))
-            with pyro.plate("edges_plate", E):
-                pyro.sample("treecat_edge_probs", dist.Delta(edge_probs, event_dim=1))
+        with pyro.plate("vertices_plate", V):
+            pyro.sample("treecat_vertex_probs", dist.Delta(vertex_probs, event_dim=1))
+        with pyro.plate("edges_plate", E):
+            pyro.sample("treecat_edge_probs", dist.Delta(edge_probs, event_dim=1))
 
-    def _update_stats(self, data, num_rows, batch_size):
-        guide_trace = poutine.trace(self.guide).get_trace(data)
+    def _update_stats(self, data, num_rows):
+        guide_trace = poutine.trace(self.guide).get_trace(data, num_rows)
         model = poutine.replay(self.model, guide_trace=guide_trace)
         model = infer_discrete(model, first_available_dim=-2)
-        model(data, num_rows, batch_size, impute=False)
+        model(data, num_rows, impute=False)
         z = torch.stack(self._saved_z)
         self._edge_guide.update(num_rows, z)
 
-    def impute(self, data=None, num_particles=None, temperature=1):
+    def impute(self, data, num_particles=None):
         """
-        Impute data given
+        Impute missing columns in data.
         """
-        if data is None:
-            data = [None] * len(self.features)
-
         # Sample global parameters from the guide.
         guide_trace = poutine.trace(self.guide).get_trace(data)
         model = poutine.replay(self.model, guide_trace)
@@ -175,8 +202,7 @@ class TreeCat(object):
             model = pyro.plate("num_particles_vectorized", num_particles,
                                dim=first_available_dim)(model)
             first_available_dim -= 1
-        model = infer_discrete(model, first_available_dim=first_available_dim,
-                               temperature=temperature)
+        model = infer_discrete(model, first_available_dim=first_available_dim)
 
         # Run the model.
         return model(data, impute=True)
@@ -229,7 +255,6 @@ class EdgeGuide(object):
         Updates count statistics given a minibatch of latent samples.
 
         :param int num_rows: Size of the complete dataset.
-        :param int batch_size: Size of the minibatch.
         :param torch.Tensor z: A minibatch of latent variables of size
             ``(V, batch_size)``.
         """
@@ -254,7 +279,7 @@ class EdgeGuide(object):
         Computes posterior mean under a Dirichlet prior.
 
         :returns: a pair ``vetex_probs,edge_probs`` with the posterior mean
-            probabilites of each of the ``V`` latent variables and pairwise
+            probabilities of each of the ``V`` latent variables and pairwise
             probabilities of each of the ``K=V*(V-1)/2`` pairs of latent
             variables.
         :rtype: tuple
@@ -288,3 +313,26 @@ class EdgeGuide(object):
         edge_logits -= vertex_logits[self._grid[1]]
         assert edge_logits.shape == (K,)
         return edge_logits
+
+
+def find_center_of_tree(edges):
+    """
+    Finds a maximally central vertex in a tree.
+
+    :param torch.LongTensor edges: A tensor of shape ``(E,2)``
+    :returns: Vertex id of a maximally central vertex.
+    :rtype: int
+    """
+    V = len(edges) + 1
+    neighbors = [set() for _ in range(V)]
+    for v1, v2 in edges.numpy():
+        neighbors[v1].add(v2)
+        neighbors[v2].add(v1)
+    queue = deque(v for v in range(V) if len(neighbors[v]) <= 1)
+    while queue:
+        v = queue.popleft()
+        for v2 in sorted(neighbors[v]):
+            neighbors[v2].remove(v)
+            if len(neighbors[v2]) == 1:
+                queue.append(v2)
+    return v

@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from pyro.contrib.tabular.features import Boolean, Real
-from pyro.contrib.tabular.treecat import TreeCat, TreeCatTrainer
+from pyro.contrib.tabular.treecat import TreeCat, TreeCatTrainer, find_center_of_tree
 from pyro.distributions.util import default_dtype
 
 
@@ -12,6 +12,23 @@ from pyro.distributions.util import default_dtype
 def with_floats():
     with default_dtype(torch.float):
         yield
+
+
+@pytest.mark.parametrize('expected_vertex,edges', [
+    (0, []),
+    (1, [(0, 1)]),
+    (0, [(0, 1), (0, 2)]),
+    (1, [(0, 1), (1, 2)]),
+    (2, [(0, 2), (1, 2)]),
+    (2, [(0, 1), (1, 2), (2, 3)]),
+    (1, [(0, 1), (1, 2), (1, 3)]),
+    (2, [(0, 1), (1, 2), (2, 3), (3, 4)]),
+    (2, [(0, 2), (1, 2), (2, 3), (2, 4)]),
+])
+def test_find_center_of_tree(expected_vertex, edges):
+    edges = torch.LongTensor(edges)
+    v = find_center_of_tree(edges)
+    assert v == expected_vertex
 
 
 with default_dtype(torch.float):
