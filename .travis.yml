@@ -42,7 +42,9 @@ jobs:
         # TODO remove these before merging
         - stage: debug
           python: 3.6
-          script: pytest -vs tests/contrib/tabular
+          script:
+              - pytest -vs tests/contrib/tabular
+              - pytest -vs tests/test_examples.py -k tabular
         - stage: fail
           script: test ''  # will fail
 
