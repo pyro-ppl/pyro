@@ -61,6 +61,7 @@ CPU_EXAMPLES = [
     'rsa/semantic_parsing.py --num-samples=10',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --auto-guide',
+    'tabular.py --num-epochs=1',
     'vae/ss_vae_M2.py --num-epochs=1',
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel',

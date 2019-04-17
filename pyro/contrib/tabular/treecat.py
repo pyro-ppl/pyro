@@ -149,7 +149,7 @@ class TreeCat(object):
                 probs = probs.transpose(-1, -2)
             probs = probs / vertex_probs[..., v0, :].unsqueeze(-1)
             ellipsis = tuple(torch.arange(s).reshape((s,) + (1,) * d)
-                            for s, d in zip(batch_shape, range(probs.dim() - 1, -1, -1)))
+                             for s, d in zip(batch_shape, range(probs.dim() - 1, -1, -1)))
             colon = torch.arange(M)
             probs = probs[ellipsis + (z[v0].unsqueeze(-1), colon)]
         z[v] = pyro.sample("treecat_z_{}".format(v), dist.Categorical(probs),

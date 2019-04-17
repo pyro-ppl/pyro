@@ -63,6 +63,7 @@ Welcome to Pyro Examples and Tutorials!
    sparse_gamma
    dkl
    einsum
+   tabular
 
 
 Indices and tables
