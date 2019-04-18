@@ -1228,8 +1228,8 @@ def test_enum_in_model_multi_scale_error():
                  match='Expected all enumerated sample sites to share a common poutine.scale')
 
 
-@pytest.mark.parametrize('use_broadcasted', [False, True])
-def test_enum_in_model_diamond_error(use_broadcasted):
+@pytest.mark.parametrize('use_vindex', [False, True])
+def test_enum_in_model_diamond_error(use_vindex):
     data = torch.tensor([[0, 1], [0, 0]])
 
     @config_enumerate
@@ -1251,7 +1251,7 @@ def test_enum_in_model_diamond_error(use_broadcasted):
         with c_axis:
             c = pyro.sample("c", dist.Categorical(probs_c[a]))
         with b_axis, c_axis:
-            if use_broadcasted:
+            if use_vindex:
                 probs = Vindex(probs_d)[b, c]
             else:
                 d_ind = torch.arange(2, dtype=torch.long)
@@ -1389,9 +1389,9 @@ def test_enum_recycling_chain():
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
 
 
-@pytest.mark.parametrize('use_broadcasted', [False, True])
+@pytest.mark.parametrize('use_vindex', [False, True])
 @pytest.mark.parametrize('markov', [False, True])
-def test_enum_recycling_dbn(markov, use_broadcasted):
+def test_enum_recycling_dbn(markov, use_vindex):
     #    x --> x --> x  enum "state"
     # y  |  y  |  y  |  enum "occlusion"
     #  \ |   \ |   \ |
@@ -1408,7 +1408,7 @@ def test_enum_recycling_dbn(markov, use_broadcasted):
         for t in times:
             x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
             y = pyro.sample("y_{}".format(t), dist.Categorical(q))
-            if use_broadcasted:
+            if use_vindex:
                 probs = Vindex(r)[x, y]
             else:
                 z_ind = torch.arange(4, dtype=torch.long)
@@ -1466,8 +1466,8 @@ def test_enum_recycling_nested():
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
 
 
-@pytest.mark.parametrize('use_broadcasted', [False, True])
-def test_enum_recycling_grid(use_broadcasted):
+@pytest.mark.parametrize('use_vindex', [False, True])
+def test_enum_recycling_grid(use_vindex):
     #  x---x---x---x    -----> i
     #  |   |   |   |   |
     #  x---x---x---x   |
@@ -1483,7 +1483,7 @@ def test_enum_recycling_grid(use_broadcasted):
         y_axis = pyro.markov(range(4), keep=True)
         for i in pyro.markov(range(4)):
             for j in y_axis:
-                if use_broadcasted:
+                if use_vindex:
                     probs = Vindex(p)[x[i - 1, j], x[i, j - 1]]
                 else:
                     ind = torch.arange(2, dtype=torch.long)
