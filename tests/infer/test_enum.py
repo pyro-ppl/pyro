@@ -22,7 +22,7 @@ from pyro.infer.importance import vectorized_importance_weights
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from pyro.infer.util import LAST_CACHE_SIZE
-from pyro.ops.indexing import broadcasted
+from pyro.ops.indexing import Vindex
 from pyro.util import torch_isnan
 from tests.common import assert_equal, skipif_param
 
@@ -1709,7 +1709,7 @@ def test_elbo_enumerate_plate_5():
         a = pyro.sample("a", dist.Categorical(probs_a))
         with pyro.plate("b_axis", 2):
             b = pyro.sample("b", dist.Categorical(probs_b))
-            pyro.sample("c", dist.Categorical(broadcasted(probs_c)[a, b]),
+            pyro.sample("c", dist.Categorical(Vindex(probs_c)[a, b]),
                         obs=data)
 
     @config_enumerate
@@ -1727,7 +1727,7 @@ def test_elbo_enumerate_plate_5():
         for i in pyro.plate("b_axis", 2):
             b = pyro.sample("b_{}".format(i), dist.Categorical(probs_b))
             pyro.sample("c_{}".format(i),
-                        dist.Categorical(broadcasted(probs_c)[a, b]),
+                        dist.Categorical(Vindex(probs_c)[a, b]),
                         obs=data[i])
 
     @config_enumerate
@@ -1777,7 +1777,7 @@ def test_elbo_enumerate_plate_6(enumerate1):
         a = pyro.sample("a", dist.Categorical(probs_a))
         b = pyro.sample("b", dist.Categorical(probs_b))
         with pyro.plate("b_axis", 2):
-            pyro.sample("c", dist.Categorical(broadcasted(probs_c)[a, b]),
+            pyro.sample("c", dist.Categorical(Vindex(probs_c)[a, b]),
                         obs=data)
 
     @config_enumerate
@@ -1789,7 +1789,7 @@ def test_elbo_enumerate_plate_6(enumerate1):
         b = pyro.sample("b", dist.Categorical(probs_b))
         for i in pyro.plate("b_axis", 2):
             pyro.sample("c_{}".format(i),
-                        dist.Categorical(broadcasted(probs_c)[a, b]),
+                        dist.Categorical(Vindex(probs_c)[a, b]),
                         obs=data[i])
 
     @config_enumerate(default=enumerate1)
@@ -1848,7 +1848,7 @@ def test_elbo_enumerate_plate_7(scale):
                         infer={"enumerate": "parallel"})
         with pyro.plate("data", 2):
             c = pyro.sample("c", dist.Categorical(probs_c[a]))
-            d = pyro.sample("d", dist.Categorical(broadcasted(probs_d)[b, c]),
+            d = pyro.sample("d", dist.Categorical(Vindex(probs_d)[b, c]),
                             infer={"enumerate": "parallel"})
             pyro.sample("obs", dist.Categorical(probs_e[d]), obs=data)
 
@@ -1874,7 +1874,7 @@ def test_elbo_enumerate_plate_7(scale):
         for i in pyro.plate("data", 2):
             c = pyro.sample("c_{}".format(i), dist.Categorical(probs_c[a]))
             d = pyro.sample("d_{}".format(i),
-                            dist.Categorical(broadcasted(probs_d)[b, c]),
+                            dist.Categorical(Vindex(probs_d)[b, c]),
                             infer={"enumerate": "parallel"})
             pyro.sample("obs_{}".format(i), dist.Categorical(probs_e[d]), obs=data[i])
 
@@ -2153,7 +2153,7 @@ def test_elbo_enumerate_plates_5(scale):
         with pyro.plate("outer", 2):
             b = pyro.sample("b", dist.Categorical(probs_b[a]))
             with pyro.plate("inner", 2):
-                pyro.sample("c", dist.Categorical(broadcasted(probs_c)[a, b]),
+                pyro.sample("c", dist.Categorical(Vindex(probs_c)[a, b]),
                             obs=data)
 
     @config_enumerate
@@ -2168,7 +2168,7 @@ def test_elbo_enumerate_plates_5(scale):
             b = pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a]))
             for j in inner:
                 pyro.sample("c_{}_{}".format(i, j),
-                            dist.Categorical(broadcasted(probs_c)[a, b]),
+                            dist.Categorical(Vindex(probs_c)[a, b]),
                             obs=data[i, j])
 
     def guide():
@@ -2223,7 +2223,7 @@ def test_elbo_enumerate_plates_6(scale):
         for i in b_axis:
             for j in c_axis:
                 pyro.sample("d_{}_{}".format(i, j),
-                            dist.Categorical(broadcasted(probs_d)[b[i], c[j]]),
+                            dist.Categorical(Vindex(probs_d)[b[i], c[j]]),
                             obs=data[i, j])
 
     @config_enumerate
@@ -2242,7 +2242,7 @@ def test_elbo_enumerate_plates_6(scale):
         for i in b_axis:
             with c_axis:
                 pyro.sample("d_{}".format(i),
-                            dist.Categorical(broadcasted(probs_d)[b[i], c]),
+                            dist.Categorical(Vindex(probs_d)[b[i], c]),
                             obs=data[i])
 
     @config_enumerate
@@ -2261,7 +2261,7 @@ def test_elbo_enumerate_plates_6(scale):
         with b_axis:
             for j in c_axis:
                 pyro.sample("d_{}".format(j),
-                            dist.Categorical(broadcasted(probs_d)[b, c[j]]),
+                            dist.Categorical(Vindex(probs_d)[b, c[j]]),
                             obs=data[:, j])
 
     @config_enumerate
@@ -2280,7 +2280,7 @@ def test_elbo_enumerate_plates_6(scale):
             c = pyro.sample("c", dist.Categorical(probs_c[a]))
         with b_axis, c_axis:
             pyro.sample("d",
-                        dist.Categorical(broadcasted(probs_d)[b, c]),
+                        dist.Categorical(Vindex(probs_d)[b, c]),
                         obs=data)
 
     def guide(data):
@@ -2471,7 +2471,7 @@ def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, out
             b = pyro.sample("b", dist.Categorical(probs_b))
             with pyro.plate("inner", 2):
                 pyro.sample("c",
-                            dist.Categorical(broadcasted(probs_c)[a, b]),
+                            dist.Categorical(Vindex(probs_c)[a, b]),
                             obs=data)
 
     @config_enumerate
@@ -2486,7 +2486,7 @@ def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, out
             b = pyro.sample("b_{}".format(i), dist.Categorical(probs_b))
             with inner:
                 pyro.sample("c_{}".format(i),
-                            dist.Categorical(broadcasted(probs_c)[a, b]),
+                            dist.Categorical(Vindex(probs_c)[a, b]),
                             obs=data[:, i])
 
     @config_enumerate
@@ -2500,7 +2500,7 @@ def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, out
             b = pyro.sample("b", dist.Categorical(probs_b))
             for j in pyro.plate("inner", 2):
                 pyro.sample("c_{}".format(j),
-                            dist.Categorical(broadcasted(probs_c)[a, b]),
+                            dist.Categorical(Vindex(probs_c)[a, b]),
                             obs=data[j])
 
     @config_enumerate
@@ -2515,7 +2515,7 @@ def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, out
             b = pyro.sample("b_{}".format(i), dist.Categorical(probs_b))
             for j in inner:
                 pyro.sample("c_{}_{}".format(i, j),
-                            dist.Categorical(broadcasted(probs_c)[a, b]),
+                            dist.Categorical(Vindex(probs_c)[a, b]),
                             obs=data[j, i])
 
     @config_enumerate
@@ -3208,7 +3208,7 @@ def test_vectorized_importance(num_samples):
         with pyro.plate("outer", 2):
             b = pyro.sample("b", dist.Categorical(probs_b))
             with pyro.plate("inner", 2):
-                pyro.sample("c", dist.Categorical(broadcasted(probs_c)[a, b]),
+                pyro.sample("c", dist.Categorical(Vindex(probs_c)[a, b]),
                             obs=data)
 
     def guide():

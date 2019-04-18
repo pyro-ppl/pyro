@@ -13,7 +13,7 @@ import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.infer import (SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO,
                         config_enumerate)
-from pyro.ops.indexing import broadcasted
+from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 
 logger = logging.getLogger(__name__)
@@ -1252,7 +1252,7 @@ def test_enum_in_model_diamond_error(use_broadcasted):
             c = pyro.sample("c", dist.Categorical(probs_c[a]))
         with b_axis, c_axis:
             if use_broadcasted:
-                probs = broadcasted(probs_d)[b, c]
+                probs = Vindex(probs_d)[b, c]
             else:
                 d_ind = torch.arange(2, dtype=torch.long)
                 probs = probs_d[b.unsqueeze(-1), c.unsqueeze(-1), d_ind]
@@ -1409,7 +1409,7 @@ def test_enum_recycling_dbn(markov, use_broadcasted):
             x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
             y = pyro.sample("y_{}".format(t), dist.Categorical(q))
             if use_broadcasted:
-                probs = broadcasted(r)[x, y]
+                probs = Vindex(r)[x, y]
             else:
                 z_ind = torch.arange(4, dtype=torch.long)
                 probs = r[x.unsqueeze(-1), y.unsqueeze(-1), z_ind]
@@ -1484,7 +1484,7 @@ def test_enum_recycling_grid(use_broadcasted):
         for i in pyro.markov(range(4)):
             for j in y_axis:
                 if use_broadcasted:
-                    probs = broadcasted(p)[x[i - 1, j], x[i, j - 1]]
+                    probs = Vindex(p)[x[i - 1, j], x[i, j - 1]]
                 else:
                     ind = torch.arange(2, dtype=torch.long)
                     probs = p[x[i - 1, j].unsqueeze(-1),

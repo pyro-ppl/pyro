@@ -7,9 +7,11 @@ def _is_batched(arg):
     return isinstance(arg, torch.Tensor) and arg.dim()
 
 
-def broadcasted_getitem(tensor, args):
+def vindex(tensor, args):
     """
-    Advanced indexing with broadcasting semantics.
+    Vectorized advanced indexing with broadcasting semantics.
+
+    See https://www.numpy.org/neps/nep-0021-advanced-indexing.html
 
     This assumes:
 
@@ -74,14 +76,14 @@ def broadcasted_getitem(tensor, args):
     return tensor[args]
 
 
-class broadcasted(object):
+class Vindex(object):
     """
-    Convenience wrapper around :func:`broadcasted_getitem`.
+    Convenience wrapper around :func:`vindex`.
 
     The following are equivalent::
 
-        broadcasted(x)[..., i, j, :]
-        broadcasted_getitem(x, (Ellipsis, i, j, slice(None)))
+        Vindex(x)[..., i, j, :]
+        vindex(x, (Ellipsis, i, j, slice(None)))
 
     :param torch.Tensor tensor: A tensor to be indexed.
     :return: An object with a special :meth:`__getitem__` method.
@@ -90,4 +92,4 @@ class broadcasted(object):
         self._tensor = tensor
 
     def __getitem__(self, args):
-        return broadcasted_getitem(self._tensor, args)
+        return vindex(self._tensor, args)

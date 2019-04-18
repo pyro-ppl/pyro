@@ -47,7 +47,7 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
-from pyro.ops.indexing import broadcasted
+from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 from pyro.util import ignore_jit_warnings
 
@@ -353,7 +353,7 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
                 w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
                                 infer={"enumerate": "parallel"})
                 x = pyro.sample("x_{}".format(t),
-                                dist.Categorical(broadcasted(probs_x)[w, x]),
+                                dist.Categorical(Vindex(probs_x)[w, x]),
                                 infer={"enumerate": "parallel"})
                 with tones_plate as tones:
                     pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[w, x, tones]),
@@ -483,7 +483,7 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
         # since our model is now 2-markov
         for t in pyro.markov(range(lengths.max()), history=2):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
-                probs_x_t = broadcasted(probs_x)[x_prev, x_curr]
+                probs_x_t = Vindex(probs_x)[x_prev, x_curr]
                 x_prev, x_curr = x_curr, pyro.sample("x_{}".format(t), dist.Categorical(probs_x_t),
                                                      infer={"enumerate": "parallel"})
                 with tones_plate:
