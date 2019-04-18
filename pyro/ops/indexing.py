@@ -15,11 +15,11 @@ def vindex(tensor, args):
 
     This assumes:
 
-    1. Each arg is either ``Ellipsis``, a ``slice``, or a batched
+    1.  Each arg is either ``Ellipsis``, a ``slice``, or a batched
         :class:`~torch.LongTensor` (i.e. with empty event shape).
-    2. If ``args[0] is not Ellipsis`` then ``tensor`` is not
+    2.  If ``args[0] is not Ellipsis`` then ``tensor`` is not
         batched, and its event dim is equal to ``len(args)``.
-    3. If ``args[0] is Ellipsis`` then ``tensor`` is batched and
+    3.  If ``args[0] is Ellipsis`` then ``tensor`` is batched and
         its event dim is equal to ``len(args[1:])``.
 
     :param torch.Tensor tensor: A tensor to be indexed.
