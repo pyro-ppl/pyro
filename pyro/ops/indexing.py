@@ -18,12 +18,15 @@ def vindex(tensor, args):
     random variables.
 
     For example suppose ``x`` is a parameter with ``x.dim() == 3`` and we wish
-    to generalize the expression ``x[i, :, j]`` from integer ``i``,``j`` to
-    tensors ``i``,``j`` with batch dims and enum dims (but no event dims).
-    Then we can write the generalize version using :class:`Vindex` ::
+    to generalize the expression ``x[i, :, j]`` from integer ``i,j`` to tensors
+    ``i,j`` with batch dims and enum dims (but no event dims). Then we can
+    write the generalize version using :class:`Vindex` ::
 
         xij = Vindex(x)[i, :, j]
-        assert xij.shape == broadcast_shape(i.shape, j.shape) + (x.size(1),)
+
+        batch_shape = broadcast_shape(i.shape, j.shape)
+        event_shape = (x.size(1),)
+        assert xij.shape == batch_shape + event_shape
 
     To handle the case when ``x`` may also contain batch dimensions (e.g. if
     ``x`` was sampled in a plated context as when using vectorized particles),
@@ -33,7 +36,9 @@ def vindex(tensor, args):
 
         old_batch_shape = x.shape[:-3]
         old_event_shape = x.shape[-3:]
-        xij = Vindex(x)[i, :, j]
+
+        xij = Vindex(x)[..., i, :, j]   # The ... denotes unknown batch shape.
+
         new_batch_shape = broadcast_shape(old_batch_shape, i.shape, j.shape)
         new_event_shape = (x.size(1),)
         assert xij.shape = new_batch_shape + new_event_shape
