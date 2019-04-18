@@ -3,6 +3,10 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 
+def _is_batched(arg):
+    return isinstance(arg, torch.Tensor) and arg.dim()
+
+
 def broadcasted_getitem(tensor, args):
     """
     Advanced indexing with broadcasting semantics.
@@ -41,11 +45,12 @@ def broadcasted_getitem(tensor, args):
         raise NotImplementedError("Non-leading Ellipsis is not supported")
 
     # In simple cases, standard advanced indexing broadcasts correctly.
-    num_batched = (tensor.dim() > old_event_dim)
-    for arg in args:
-        if isinstance(arg, torch.Tensor) and arg.dim():
-            num_batched += 1
-    if num_batched <= 1:
+    is_standard = True
+    if tensor.dim() > old_event_dim and _is_batched(args[0]):
+        is_standard = False
+    elif any(_is_batched(a) for a in args[1:]):
+        is_standard = False
+    if is_standard:
         return tensor[args]
 
     # Convert args to use broadcasting semantics.
@@ -60,7 +65,7 @@ def broadcasted_getitem(tensor, args):
             arg = torch.arange(tensor.size(i), dtype=torch.long, device=tensor.device)
             arg = arg.reshape((-1,) + (1,) * new_dim)
             new_dim += 1
-        elif isinstance(arg, torch.Tensor) and arg.dim():
+        elif _is_batched(arg):
             # Reshape nontrivial tensors.
             arg = arg.reshape(arg.shape + (1,) * new_event_dim)
         args[i] = arg
