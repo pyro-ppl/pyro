@@ -11,16 +11,60 @@ def vindex(tensor, args):
     """
     Vectorized advanced indexing with broadcasting semantics.
 
-    See https://www.numpy.org/neps/nep-0021-advanced-indexing.html
+    See also the convenience wrapper :class:`Vindex`.
 
-    This assumes:
+    This is useful for writing indexing code that is compatible with batching
+    and enumeration, especially for selecting mixture components with discrete
+    random variables.
 
-    1.  Each arg is either ``Ellipsis``, a ``slice``, or a batched
-        :class:`~torch.LongTensor` (i.e. with empty event shape).
+    For example suppose ``x`` is a parameter with ``x.dim() == 3`` and we wish
+    to generalize the expression ``x[i, :, j]`` from integer ``i``,``j`` to
+    tensors ``i``,``j`` with batch dims and enum dims (but no event dims).
+    Then we can write the generalize version using :class:`Vindex` ::
+
+        xij = Vindex(x)[i, :, j]
+        assert xij.shape == broadcast_shape(i.shape, j.shape) + (x.size(1),)
+
+    To handle the case when ``x`` may also contain batch dimensions (e.g. if
+    ``x`` was sampled in a plated context as when using vectorized particles),
+    :func:`vindex` uses the special convention that ``Ellipsis`` denotes batch
+    dimensions (hence ``...`` can appear only on the left, never in the middle
+    or in the right). Suppose ``x`` has event dim 3. Then we can write::
+
+        old_batch_shape = x.shape[:-3]
+        old_event_shape = x.shape[-3:]
+        xij = Vindex(x)[i, :, j]
+        new_batch_shape = broadcast_shape(old_batch_shape, i.shape, j.shape)
+        new_event_shape = (x.size(1),)
+        assert xij.shape = new_batch_shape + new_event_shape
+
+    Note that this special handling of ``Ellipsis`` differs from the NEP [1].
+
+    Formally, this function assumes:
+
+    1.  Each arg is either ``Ellipsis``, ``slice(None)``, an integer, or a
+        batched ``torch.LongTensor`` (i.e. with empty event shape). This
+        function does not support Nontrivial slices or ``torch.ByteTensor``
+        masks. ``Ellipsis`` can only appear on the left as ``args[0]``.
     2.  If ``args[0] is not Ellipsis`` then ``tensor`` is not
         batched, and its event dim is equal to ``len(args)``.
     3.  If ``args[0] is Ellipsis`` then ``tensor`` is batched and
-        its event dim is equal to ``len(args[1:])``.
+        its event dim is equal to ``len(args[1:])``. Dims of ``tensor``
+        to the left of the event dims are considered batch dims and will be
+        broadcasted with dims of tensor args.
+
+    Note that if none of the args is a tensor with ``.dim() > 0``, then this
+    function behaves like standard indexing::
+
+        if not any(isinstance(a, torch.Tensor) and a.dim() for a in args):
+            assert Vindex(x)[args] == x[args]
+
+    **References**
+
+    [1] https://www.numpy.org/neps/nep-0021-advanced-indexing.html
+        introduces ``vindex`` as a helper for vectorized indexing.
+        The Pyro implementation is similar to the proposed notation
+        ``x.vindex[]`` except for slightly different handling of ``Ellipsis``.
 
     :param torch.Tensor tensor: A tensor to be indexed.
     :param tuple args: An index, as args to ``__getitem__``.
@@ -28,7 +72,7 @@ def vindex(tensor, args):
     :rtype: torch.Tensor
     """
     if not isinstance(args, tuple):
-        args = (args,)
+        return tensor[args]
     if not args:
         return tensor
 
