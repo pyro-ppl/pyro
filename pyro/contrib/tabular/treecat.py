@@ -207,12 +207,13 @@ class TreeCat(object):
 
 
 class TreeCatTrainer(object):
-    def __init__(self, model, optim=None):
+    def __init__(self, model, optim=None, backend="python"):
         if optim is None:
             optim = Adam({"lr": 1e-3})
         elbo = TraceEnum_ELBO(max_plate_nesting=1)
         self._svi = SVI(model.model, model.guide, optim, elbo)
         self._model = model
+        self.backend = backend
 
     def step(self, data, num_rows=None):
         # Perform a gradient optimizer step to learn parameters.
@@ -229,7 +230,7 @@ class TreeCatTrainer(object):
         # Perform an MCMC step to learn the model.
         model = self._model
         edge_logits = model._edge_guide.compute_edge_logits()
-        model.edges = sample_tree_mcmc(edge_logits, model.edges)
+        model.edges = sample_tree_mcmc(edge_logits, model.edges, backend=self.backend)
 
         return loss
 

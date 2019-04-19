@@ -45,7 +45,7 @@ def main(args):
     pyro.enable_validation(args.validate)
     model = TreeCat(features, args.capacity)
     optim = Adam({"lr": args.learning_rate})
-    trainer = TreeCatTrainer(model, optim)
+    trainer = TreeCatTrainer(model, optim, backend=args.backend)
     num_rows = len(data[0])
     for epoch in range(args.num_epochs):
         loss = 0
@@ -81,5 +81,6 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--num-epochs", default=100, type=int)
     parser.add_argument("-s", "--num-samples", default=100, type=int)
     parser.add_argument("-v", "--validate", default=True, type=bool)
+    parser.add_argument("--backend", default="python")
     args = parser.parse_args()
     main(args)
