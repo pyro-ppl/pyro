@@ -11,6 +11,7 @@ from pyro.contrib.autoguide import AutoDelta
 from pyro.distributions.spanning_tree import make_complete_graph, sample_tree_mcmc
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.infer.discrete import infer_discrete
+from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 
 
@@ -110,6 +111,9 @@ class TreeCat(object):
         with pyro.plate("edges_plate", E):
             edge_probs = pyro.sample("treecat_edge_probs",
                                      dist.Dirichlet(self._edge_prior))
+        if vertex_probs.dim() > 2:
+            vertex_probs = vertex_probs.unsqueeze(-3)
+            edge_probs = edge_probs.unsqueeze(-3)
 
         # Sample data-local variables.
         subsample = None if (batch_size == num_rows) else [None] * batch_size
@@ -126,7 +130,7 @@ class TreeCat(object):
 
     @poutine.markov
     def _propagate(self, data, impute, mixtures, vertex_probs, edge_probs, z, x, v):
-        # Determine upstream parent v0 and downstream children.
+        # Determine the upstream parent v0 and all downstream children.
         v0 = None
         children = []
         for v2 in self._neighbors[v]:
@@ -137,21 +141,16 @@ class TreeCat(object):
 
         # Sample discrete latent state from an arbitrarily directed tree structure.
         M = self.capacity
-        batch_shape = vertex_probs.shape[:-2]
         if v0 is None:
-            probs = vertex_probs[..., v, :]  # Sample root node unconditionally.
-            if batch_shape:
-                probs = probs.reshape(batch_shape + (1, M))
+            # Sample root node unconditionally.
+            probs = vertex_probs[..., v, :]
         else:
-            probs = edge_probs[..., self._edge_index[v, v0], :]
-            probs = probs.reshape(batch_shape + (M, M))
+            # Sample node v conditional on its parent v0.
+            joint = edge_probs[..., self._edge_index[v, v0], :]
+            joint = joint.reshape(joint.shape[:-1] + (M, M))
             if v0 > v:
-                probs = probs.transpose(-1, -2)
-            probs = probs / vertex_probs[..., v0, :].unsqueeze(-1)
-            ellipsis = tuple(torch.arange(s).reshape((s,) + (1,) * d)
-                             for s, d in zip(batch_shape, range(probs.dim() - 1, -1, -1)))
-            colon = torch.arange(M)
-            probs = probs[ellipsis + (z[v0].unsqueeze(-1), colon)]
+                joint = joint.transpose(-1, -2)
+            probs = Vindex(joint)[..., z[v0], :]
         z[v] = pyro.sample("treecat_z_{}".format(v), dist.Categorical(probs),
                            infer={"enumerate": "parallel"})
 

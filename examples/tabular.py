@@ -64,12 +64,12 @@ def main(args):
     assert price.shape == (args.num_samples, 20)
     price_mean = price.mean(dim=0)
     price_std = price.std(dim=0)
+    logging.info("--------------------------------")
+    logging.info("NOX\tMEDV")
     for i in range(20):
-        logging.info("--------------------------------")
-        logging.info("NOX\tMEDV")
         logging.info("{:0.3g}\t{:0.3g} += {:0.3g}".format(
             nox[i].item(), price_mean[i].item(), price_std[i].item()))
-        logging.info("--------------------------------")
+    logging.info("--------------------------------")
 
 
 if __name__ == "__main__":

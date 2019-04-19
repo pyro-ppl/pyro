@@ -6,6 +6,7 @@ from six import add_metaclass
 
 import pyro
 import pyro.distributions as dist
+from pyro.ops.indexing import Vindex
 
 
 @add_metaclass(ABCMeta)
@@ -93,11 +94,14 @@ class Boolean(Feature):
     def sample_group(self, shared):
         loc, scale = shared
         logits = pyro.sample("{}_logits".format(self.name), dist.Normal(loc, scale))
+        if logits.dim() > 1:
+            logits = logits.unsqueeze(-2)
         return logits
 
     def value_dist(self, group, component):
         logits = group
-        return dist.Bernoulli(logits=logits[component])
+        logits = Vindex(logits)[..., component]
+        return dist.Bernoulli(logits=logits)
 
 
 class Real(Feature):
@@ -114,8 +118,13 @@ class Real(Feature):
                             dist.LogNormal(scale_loc, scale_scale))
         loc = pyro.sample("{}_loc".format(self.name),
                           dist.Normal(loc_loc * scale, scale))
+        if loc.dim() > 1:
+            loc = loc.unsqueeze(-2)
+            scale = scale.unsqueeze(-2)
         return loc, scale
 
     def value_dist(self, group, component):
         loc, scale = group
-        return dist.Normal(loc[component], scale[component])
+        loc = Vindex(loc)[..., component]
+        scale = Vindex(scale)[..., component]
+        return dist.Normal(loc, scale)
