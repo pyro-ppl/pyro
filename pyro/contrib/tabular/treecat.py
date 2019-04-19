@@ -11,7 +11,7 @@ from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta
 from pyro.distributions.spanning_tree import make_complete_graph, sample_tree_mcmc
 from pyro.infer import SVI, TraceEnum_ELBO
-from pyro.infer.discrete import infer_discrete
+from pyro.infer.discrete import TraceEnumSample_ELBO, infer_discrete
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 
@@ -208,11 +208,13 @@ class TreeCat(object):
 
 
 class TreeCatTrainer(object):
-    def __init__(self, model, optim=None, backend="python"):
+    def __init__(self, model, optim=None, backend="python",
+                 experimental_sampler=True):
         if optim is None:
             optim = Adam({"lr": 1e-3})
-        elbo = TraceEnum_ELBO(max_plate_nesting=1)
-        self._svi = SVI(model.model, model.guide, optim, elbo)
+        Elbo = TraceEnumSample_ELBO if experimental_sampler else TraceEnum_ELBO
+        self._elbo = Elbo(max_plate_nesting=1)
+        self._svi = SVI(model.model, model.guide, optim, self._elbo)
         self._model = model
         self.backend = backend
 
@@ -227,10 +229,13 @@ class TreeCatTrainer(object):
         loss = self._svi.step(data, num_rows=num_rows)
 
         # Update sufficient statistics in the edge guide.
-        guide_trace = poutine.trace(self._model.guide).get_trace(data, num_rows)
-        model = poutine.replay(self._model.model, guide_trace)
-        model = infer_discrete(model, first_available_dim=-2)
-        model(data, num_rows)
+        if isinstance(self._elbo, TraceEnumSample_ELBO):
+            self._elbo.sample_saved()
+        else:
+            guide_trace = poutine.trace(self._model.guide).get_trace(data, num_rows)
+            model = poutine.replay(self._model.model, guide_trace)
+            model = infer_discrete(model, first_available_dim=-2)
+            model(data, num_rows)
         z = torch.stack(self._model._saved_z)
         self._model._edge_guide.update(num_rows, z)
 

@@ -12,6 +12,7 @@ from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.poutine.replay_messenger import ReplayMessenger
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import jit_iter
+from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 
 _RINGS = {0: MapRing, 1: SampleRing}
 
@@ -42,6 +43,11 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
     enum_trace = prune_subsample_sites(enum_trace)
     enum_trace.compute_log_prob()
     enum_trace.pack_tensors()
+
+    return _sample_posterior_from_trace(model, enum_trace, temperature, *args, **kwargs)
+
+
+def _sample_posterior_from_trace(model, enum_trace, temperature, *args, **kwargs):
     plate_to_symbol = enum_trace.plate_to_symbol
 
     # Collect a set of query sample sites to which the backward algorithm will propagate.
@@ -160,3 +166,16 @@ def infer_discrete(fn=None, first_available_dim=None, temperature=1):
                                  first_available_dim=first_available_dim,
                                  temperature=temperature)
     return functools.partial(_sample_posterior, fn, first_available_dim, temperature)
+
+
+class TraceEnumSample_ELBO(TraceEnum_ELBO):
+    def _get_trace(self, model, guide, *args, **kwargs):
+        model_trace, guide_trace = super(TraceEnumSample_ELBO, self)._get_trace(
+            model, guide, *args, **kwargs)
+        self._saved_state = model, model_trace, guide_trace, args, kwargs
+        return model_trace, guide_trace
+
+    def sample_saved(self, temperature=1):
+        model, model_trace, guide_trace, args, kwargs = self._saved_state
+        model = poutine.replay(model, guide_trace)
+        return _sample_posterior_from_trace(model, model_trace, temperature, *args, **kwargs)
