@@ -5,6 +5,14 @@ from torch.distributions import constraints, kl_divergence, register_kl
 
 from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistributionMixin
 from pyro.distributions.util import sum_rightmost
+from pyro.ops.indexing import Vindex
+
+
+class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
+    def log_prob(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+        return Vindex(self.logits)[..., value.long()]
 
 
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
