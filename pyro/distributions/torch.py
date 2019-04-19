@@ -14,7 +14,7 @@ from pyro.distributions.util import sum_rightmost
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
 
     def log_prob(self, value):
-        if hasattr(value, '_pyro_categorical_support'):
+        if getattr(value, '_pyro_categorical_support', None) == id(self):
             # Assume value is a reshaped torch.arange(event_shape[0]).
             # In this case we can call .reshape() rather than torch.gather().
             if self._validate_args:
@@ -30,7 +30,7 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
     def enumerate_support(self, expand=True):
         result = super(Categorical, self).enumerate_support(expand=expand)
         if not expand:
-            result._pyro_categorical_support = None
+            result._pyro_categorical_support = id(self)
         return result
 
 
