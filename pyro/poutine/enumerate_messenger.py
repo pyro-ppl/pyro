@@ -71,7 +71,13 @@ class EnumerateMessenger(Messenger):
         # Move actual_dim to a safe target_dim.
         target_dim, id_ = _ENUM_ALLOCATOR.allocate(None if scope is None else param_dims)
         event_dim = msg["fn"].event_dim
-        if actual_dim < target_dim:
+        if hasattr(value, '_pyro_categorical_support'):
+            # Preserve categorical supports to speed up Categorical.log_prob().
+            # See pyro/distributions/torch.py for details.
+            assert target_dim < 0
+            value = value.reshape(value.shape[:1] + (1,) * (-1 - target_dim))
+            value._pyro_categorical_support = None
+        elif actual_dim < target_dim:
             assert value.size(target_dim - event_dim) == 1, \
                 'pyro.markov dim conflict at dim {}'.format(actual_dim)
             value = value.transpose(target_dim - event_dim, actual_dim - event_dim)
