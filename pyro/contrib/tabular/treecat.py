@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
 from collections import deque
 
 import torch
@@ -98,17 +99,17 @@ class TreeCat(object):
 
         # Sample a mixture model for each feature.
         mixtures = [None] * V
-        components_plate = pyro.plate("components_plate", M)
+        components_plate = pyro.plate("components_plate", M, dim=-1)
         for v, feature in enumerate(self.features):
             shared = feature.sample_shared()
             with components_plate:
                 mixtures[v] = feature.sample_group(shared)
 
         # Sample latent vertex- and edge- distributions from a Dirichlet prior.
-        with pyro.plate("vertices_plate", V):
+        with pyro.plate("vertices_plate", V, dim=-1):
             vertex_probs = pyro.sample("treecat_vertex_probs",
                                        dist.Dirichlet(self._vertex_prior))
-        with pyro.plate("edges_plate", E):
+        with pyro.plate("edges_plate", E, dim=-1):
             edge_probs = pyro.sample("treecat_edge_probs",
                                      dist.Dirichlet(self._edge_prior))
         if vertex_probs.dim() > 2:
@@ -117,7 +118,7 @@ class TreeCat(object):
 
         # Sample data-local variables.
         subsample = None if (batch_size == num_rows) else [None] * batch_size
-        with pyro.plate("data", num_rows, subsample=subsample):
+        with pyro.plate("data", num_rows, subsample=subsample, dim=-1):
 
             # Recursively sample z and x in Markov contexts.
             z = [None] * V
@@ -176,9 +177,9 @@ class TreeCat(object):
 
         # This guide uses the posterior mean as a point estimate.
         vertex_probs, edge_probs = self._edge_guide.get_posterior()
-        with pyro.plate("vertices_plate", V):
+        with pyro.plate("vertices_plate", V, dim=-1):
             pyro.sample("treecat_vertex_probs", dist.Delta(vertex_probs, event_dim=1))
-        with pyro.plate("edges_plate", E):
+        with pyro.plate("edges_plate", E, dim=-1):
             pyro.sample("treecat_edge_probs", dist.Delta(edge_probs, event_dim=1))
 
     def impute(self, data, num_samples=None):
@@ -214,6 +215,12 @@ class TreeCatTrainer(object):
         self._svi = SVI(model.model, model.guide, optim, elbo)
         self._model = model
         self.backend = backend
+
+    def init(self, data):
+        assert len(data) == len(self._model.features)
+        for feature, column in zip(self._model.features, data):
+            if column is not None:
+                feature.init(column)
 
     def step(self, data, num_rows=None):
         # Perform a gradient optimizer step to learn parameters.
@@ -282,6 +289,13 @@ class EdgeGuide(object):
         zz = (M * z)[self._grid[0]] + z[self._grid[1]]
         self._complete_stats.scatter_add_(-1, zz, one.expand_as(zz))
 
+        if logging.Logger(None).isEnabledFor(logging.DEBUG):
+            probs = 0.5 + self._vertex_stats
+            probs /= probs.sum(-1, True)
+            perplexity = (-probs * probs.log()).sum(-1).exp().sort(descending=True)[0]
+            perplexity = ["{: >4.1f}".format(p) for p in perplexity]
+            logging.debug(" ".join(["perplexity:"] + perplexity))
+
     @torch.no_grad()
     def get_posterior(self):
         """
@@ -316,12 +330,26 @@ class EdgeGuide(object):
         E = len(self.edges)
         V = E + 1
         K = V * (V - 1) // 2
-        vertex_logits = (self._vertex_prior + self._vertex_stats).lgamma().sum(-1)
-        edge_logits = (self._edge_prior + self._complete_stats).lgamma().sum(-1)
+        vertex_logits = _dm_log_prob(self._vertex_prior, self._vertex_stats)
+        edge_logits = _dm_log_prob(self._edge_prior, self._complete_stats)
         edge_logits -= vertex_logits[self._grid[0]]
         edge_logits -= vertex_logits[self._grid[1]]
         assert edge_logits.shape == (K,)
         return edge_logits
+
+
+def _dm_log_prob(alpha, counts):
+    """
+    Computes non-normalized log probability of a Dirichlet-multinomial
+    distribution in a numerically stable way. Equivalent to::
+
+        (alpha + counts).lgamma().sum(-1) - (1 + counts).lgamma().sum(-1)
+    """
+    assert isinstance(alpha, float)
+    shape = counts.shape
+    temp = (counts.unsqueeze(-1) + counts.new_tensor([alpha, 1])).lgamma_()
+    temp = temp.reshape(-1, 2).mv(temp.new_tensor([1., -1.])).reshape(shape)
+    return temp.sum(-1)
 
 
 def find_center_of_tree(edges):

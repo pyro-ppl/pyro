@@ -19,11 +19,12 @@ def load_data():
     x_train = torch.tensor(x_train.T, dtype=torch.get_default_dtype()).contiguous()
     features = []
     data = []
+    logging.info("loaded {} rows x {} features:".format(x_train.size(1), x_train.size(0)))
     for name, column in zip(metadata["columns"], x_train):
-        ftype = Boolean if name == "CHAR" else Real
+        ftype = Boolean if name == "CHAS" else Real
         features.append(ftype(name))
         data.append(column)
-    logging.info("loaded {} rows x {} features".format(x_train.size(1), x_train.size(0)))
+        logging.info(" {} {}".format(name, ftype.__name__))
     return features, data
 
 
@@ -46,6 +47,7 @@ def main(args):
     model = TreeCat(features, args.capacity)
     optim = Adam({"lr": args.learning_rate})
     trainer = TreeCatTrainer(model, optim, backend=args.backend)
+    trainer.init(data)
     num_rows = len(data[0])
     for epoch in range(args.num_epochs):
         loss = 0
@@ -76,11 +78,11 @@ if __name__ == "__main__":
     assert pyro.__version__.startswith('0.3.1')
     parser = argparse.ArgumentParser(description="Tabular data analysis of Boston Housing")
     parser.add_argument("-c", "--capacity", default=16, type=int)
-    parser.add_argument("-lr", "--learning-rate", default=0.002, type=float)
+    parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
     parser.add_argument("-b", "--batch-size", default=22, type=int)
     parser.add_argument("-n", "--num-epochs", default=100, type=int)
     parser.add_argument("-s", "--num-samples", default=100, type=int)
-    parser.add_argument("-v", "--validate", default=True, type=bool)
     parser.add_argument("--backend", default="python")
+    parser.add_argument("--validate", default=True, type=bool)
     args = parser.parse_args()
     main(args)

@@ -2,7 +2,9 @@ from __future__ import absolute_import, division, print_function
 
 from abc import ABCMeta, abstractmethod
 
+import torch
 from six import add_metaclass
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
@@ -31,6 +33,7 @@ class Feature(object):
 
         # Feature objects adapt the component id to a given feature type.
         f = MyFeature("foo")
+        f.init(data)  # (optional) initializes AutoGuide parameters
         shared = f.sample_shared()
         with pyro.plate("components", num_components):
             group = f.sample_group(shared)  # broadcasts to each component
@@ -84,11 +87,26 @@ class Feature(object):
         """
         raise NotImplementedError
 
+    @torch.no_grad()
+    def init(self, data):
+        """
+        Heuristically initializes :class:`~pyro.contrib.autoguide.AutoDelta`
+        parameters for shared variables based on example data.
+
+        This returns nothing; results are saved in the Pyro param store.
+
+        This method is optional. For subclasses that do not implement this
+        method, parameters will be sampled from the prior.
+
+        :param torch.Tensor data: A dataset or subsample of data.
+        """
+        assert data.dim() == 1
+
 
 class Boolean(Feature):
     def sample_shared(self):
-        loc = pyro.sample("{}_loc".format(self.name), dist.Normal(0., 3.))
-        scale = pyro.sample("{}_scale".format(self.name), dist.LogNormal(0., 3.))
+        loc = pyro.sample("{}_loc".format(self.name), dist.Normal(0., 2.))
+        scale = pyro.sample("{}_scale".format(self.name), dist.LogNormal(0., 1.))
         return loc, scale
 
     def sample_group(self, shared):
@@ -102,6 +120,17 @@ class Boolean(Feature):
         logits = group
         logits = Vindex(logits)[..., component]
         return dist.Bernoulli(logits=logits)
+
+    @torch.no_grad()
+    def init(self, data):
+        assert data.dim() == 1
+        mean = data.mean() * 0.98 + 0.01
+        loc = mean.log() - (-mean).log1p()
+        scale = data.new_tensor(1.)
+
+        pyro.param("auto_{}_loc".format(self.name), loc)
+        pyro.param("auto_{}_scale".format(self.name), scale,
+                   constraint=constraints.positive)
 
 
 class Real(Feature):
@@ -128,3 +157,22 @@ class Real(Feature):
         loc = Vindex(loc)[..., component]
         scale = Vindex(scale)[..., component]
         return dist.Normal(loc, scale)
+
+    @torch.no_grad()
+    def init(self, data):
+        assert data.dim() == 1
+        data = data.clone()
+        data[data == 0] = data.mean()
+        log_data = (data.abs() + 1e-10).log()
+        scale_loc = log_data.mean()
+        scale_scale = log_data.std(unbiased=False) + 0.5
+        scaled_data = data / scale_loc.exp()
+        loc_loc = scaled_data.mean()
+        loc_scale = scaled_data.std(unbiased=False) + 0.5
+
+        pyro.param("auto_{}_scale_loc".format(self.name), scale_loc)
+        pyro.param("auto_{}_scale_scale".format(self.name), scale_scale,
+                   constraint=constraints.positive)
+        pyro.param("auto_{}_loc_loc".format(self.name), loc_loc)
+        pyro.param("auto_{}_loc_scale".format(self.name), loc_scale,
+                   constraint=constraints.positive)

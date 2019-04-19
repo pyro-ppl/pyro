@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import logging
+
 import pytest
 import torch
 from torch.distributions import constraints
@@ -50,9 +52,10 @@ def test_smoke(MyFeature, size):
     optim = Adam({'lr': 0.1})
     svi = SVI(model, guide, optim, elbo)
     losses = []
+    MyFeature("foo").init(data)
     for step in range(10):
         loss = svi.step(data)
         losses.append(loss)
         assert not torch_isnan(loss)
-        print('step {} loss = {}'.format(step, loss))
+        logging.info('step {} loss = {}'.format(step, loss))
     assert losses[-1] < losses[0]

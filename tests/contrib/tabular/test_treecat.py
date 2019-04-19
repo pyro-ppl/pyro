@@ -4,7 +4,8 @@ import pytest
 import torch
 
 from pyro.contrib.tabular.features import Boolean, Real
-from pyro.contrib.tabular.treecat import TreeCat, TreeCatTrainer, find_center_of_tree
+from pyro.contrib.tabular.treecat import TreeCat, TreeCatTrainer, _dm_log_prob, find_center_of_tree
+from tests.common import assert_close
 
 
 @pytest.mark.parametrize('expected_vertex,edges', [
@@ -22,6 +23,15 @@ def test_find_center_of_tree(expected_vertex, edges):
     edges = torch.LongTensor(edges)
     v = find_center_of_tree(edges)
     assert v == expected_vertex
+
+
+@pytest.mark.parametrize('alpha', [0.5, 0.1])
+@pytest.mark.parametrize('counts_shape', [(6,), (5, 4), (4, 3, 2)])
+def test_dm_log_prob(alpha, counts_shape):
+    counts = torch.randn(counts_shape).exp()
+    actual = _dm_log_prob(alpha, counts)
+    expected = (alpha + counts).lgamma().sum(-1) - (1 + counts).lgamma().sum(-1)
+    assert_close(actual, expected)
 
 
 TINY_SCHEMA = [Boolean("f1"), Real("f2"), Real("f3"), Boolean("f4")]
@@ -43,6 +53,7 @@ def test_train_smoke(data, capacity):
     features = TINY_SCHEMA[:V]
     model = TreeCat(features, capacity)
     trainer = TreeCatTrainer(model)
+    trainer.init(data)
     for i in range(10):
         trainer.step(data)
 
