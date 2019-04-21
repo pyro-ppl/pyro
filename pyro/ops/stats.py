@@ -364,14 +364,14 @@ def fit_generalized_pareto(X):
     if not isinstance(X, torch.Tensor) or X.dim() != 1:
         raise ValueError("Input X must be a 1-dimensional torch tensor")
 
-    X = X.cpu().double()
+    X = X.double()
     X = torch.sort(X, descending=False)[0]
 
     N = X.size(0)
     M = 30 + int(math.sqrt(N))
 
     # b = k / sigma
-    bs = 1.0 - math.sqrt(M) / (torch.arange(1, M + 1).double() - 0.5).sqrt()
+    bs = 1.0 - math.sqrt(M) / (torch.arange(1, M + 1, dtype=torch.double) - 0.5).sqrt()
     bs /= 3.0 * X[int(N/4 - 0.5)]
     bs += 1 / X[-1]
 
