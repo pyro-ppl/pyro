@@ -202,9 +202,11 @@ class LKJCorrCholesky(TorchDistribution):
         Km1 = self._d - 1
 
         log_diagonals = x.diagonal(offset=0, dim1=-1, dim2=-2)[..., 1:].log()
+        # TODO: Figure out why the `device` kwarg to torch.linspace seems to not work in certain situations,
+        # and a seemingly redundant .to(x.device) is needed below.
         values = log_diagonals * torch.linspace(start=Km1 - 1, end=0, steps=Km1,
                                                 dtype=x.dtype,
-                                                device=x.device).expand_as(log_diagonals)
+                                                device=x.device).expand_as(log_diagonals).to(x.device)
 
         values += log_diagonals.mul(eta.mul(2).add(-2.0))
         values = values.sum(-1) + lp
