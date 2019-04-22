@@ -100,7 +100,8 @@ def _empty_model():
 @pytest.mark.parametrize("jit", [False, True])
 @pytest.mark.parametrize("num_chains", [
     1,
-    skipif_param(2, condition="CI" in os.environ, reason="CI only provides 1 CPU")
+    skipif_param(2, condition="CI" in os.environ or "CUDA_TEST" in os.environ,
+                 reason="CI only provides 1 CPU; also see https://github.com/pytorch/pytorch/issues/2517")
 ])
 def test_empty_sample_sites(kernel, kernel_args, jit, num_chains):
     num_warmup, num_samples = 10, 10

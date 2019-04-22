@@ -362,4 +362,4 @@ def test_gamma_poisson(hyperpriors):
     mcmc_run.exec_traces = [poutine.trace(uncollapse_conjugate(model, tr)).get_trace(data)
                             for tr in mcmc_run.exec_traces]
     posterior = mcmc_run.marginal(["rate"]).empirical["rate"]
-    assert_equal(posterior.mean, true_rate, prec=0.2)
+    assert_equal(posterior.mean, true_rate, prec=0.3)
