@@ -146,38 +146,38 @@ class MNISTCached(MNIST):
 
             # transform the training data if transformations are provided
             if transform is not None:
-                self.train_data = (transform(self.train_data.float()))
+                self.data = (transform(self.data.float()))
             if target_transform is not None:
-                self.train_labels = (target_transform(self.train_labels))
+                self.targets = (target_transform(self.targets))
 
             if MNISTCached.train_data_sup is None:
                 if sup_num is None:
                     assert mode == "unsup"
                     MNISTCached.train_data_unsup, MNISTCached.train_labels_unsup = \
-                        self.train_data, self.train_labels
+                        self.data, self.targets
                 else:
                     MNISTCached.train_data_sup, MNISTCached.train_labels_sup, \
                         MNISTCached.train_data_unsup, MNISTCached.train_labels_unsup, \
                         MNISTCached.data_valid, MNISTCached.labels_valid = \
-                        split_sup_unsup_valid(self.train_data, self.train_labels, sup_num)
+                        split_sup_unsup_valid(self.data, self.targets, sup_num)
 
             if mode == "sup":
-                self.train_data, self.train_labels = MNISTCached.train_data_sup, MNISTCached.train_labels_sup
+                self.data, self.targets = MNISTCached.train_data_sup, MNISTCached.train_labels_sup
             elif mode == "unsup":
-                self.train_data = MNISTCached.train_data_unsup
+                self.data = MNISTCached.train_data_unsup
 
                 # making sure that the unsupervised labels are not available to inference
-                self.train_labels = (torch.Tensor(
+                self.targets = (torch.Tensor(
                     MNISTCached.train_labels_unsup.shape[0]).view(-1, 1)) * np.nan
             else:
-                self.train_data, self.train_labels = MNISTCached.data_valid, MNISTCached.labels_valid
+                self.data, self.targets = MNISTCached.data_valid, MNISTCached.labels_valid
 
         else:
             # transform the testing data if transformations are provided
             if transform is not None:
-                self.test_data = (transform(self.test_data.float()))
+                self.data = (transform(self.data.float()))
             if target_transform is not None:
-                self.test_labels = (target_transform(self.test_labels))
+                self.targets = (target_transform(self.targets))
 
     def __getitem__(self, index):
         """
@@ -185,9 +185,9 @@ class MNISTCached(MNIST):
         :returns tuple: (image, target) where target is index of the target class.
         """
         if self.mode in ["sup", "unsup", "valid"]:
-            img, target = self.train_data[index], self.train_labels[index]
+            img, target = self.data[index], self.targets[index]
         elif self.mode == "test":
-            img, target = self.test_data[index], self.test_labels[index]
+            img, target = self.data[index], self.targets[index]
         else:
             assert False, "invalid mode: {}".format(self.mode)
         return img, target

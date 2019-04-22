@@ -60,7 +60,7 @@ EXTRAS_REQUIRE = [
     'matplotlib>=1.3',
     'observations>=0.1.4',
     'pillow',
-    'torchvision==0.2.1',
+    'torchvision>=0.2.2',
     'visdom>=0.1.4',
     'pandas',
     'seaborn',
