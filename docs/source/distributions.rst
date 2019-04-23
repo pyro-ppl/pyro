@@ -98,6 +98,13 @@ GaussianScaleMixture
     :undoc-members:
     :show-inheritance:
 
+LKJCorrCholesky
+---------------
+.. autoclass:: pyro.distributions.LKJCorrCholesky
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 MaskedMixture
 -------------
 .. autoclass:: pyro.distributions.MaskedMixture
@@ -171,6 +178,20 @@ VonMises3D
 Transformed Distributions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+BatchNormTransform
+------------------
+.. autoclass:: pyro.distributions.BatchNormTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+DeepSigmoidalFlow
+-----------------
+.. autoclass:: pyro.distributions.DeepSigmoidalFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 InverseAutoRegressiveFlow
 -------------------------
 .. autoclass:: pyro.distributions.InverseAutoregressiveFlow
@@ -195,6 +216,13 @@ PermuteTransform
 PlanarFlow
 ----------------
 .. autoclass:: pyro.distributions.PlanarFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+RadialFlow
+----------
+.. autoclass:: pyro.distributions.RadialFlow
     :members:
     :undoc-members:
     :show-inheritance:
