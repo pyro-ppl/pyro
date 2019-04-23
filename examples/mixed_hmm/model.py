@@ -7,29 +7,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer import config_enumerate
-
-
-def _index_param(param, ind, dim=-2):
-    """helper for advanced indexing black magic"""
-    # assume: dim < 0
-    # assume: param.shape[dim:] == event_shape
-    # assume: index.shape == batch_shape
-    # assume: param.shape == batch_shape + event_shape
-    # goal: slice into an event_dim with index
-    # step 1: unsqueeze event dims in index
-    for d in range(len(param.shape[dim:])):
-        ind = ind.unsqueeze(-1)
-    # step 2: generate dummy indices for all other dimensions of param
-    inds = [None] * len(param.shape)
-    for d, sd in enumerate(reversed(param.shape)):
-        if dim == -d-1:
-            inds[-d-1] = ind
-        else:
-            inds[-d-1] = torch.arange(sd).reshape((sd,) + (1,) * d)
-    # step 3: use the index and dummy indices to select
-    res = param[tuple(inds)]
-    # step 4: squeeze out the empty event_dim
-    return res.squeeze(dim)
+from pyro.ops.indexing import Vindex
 
 
 def guide_generic(config):
@@ -127,7 +105,7 @@ def model_generic(config):
         if config["group"]["random"] == "discrete":
             # group-level discrete effect
             e_g = pyro.sample("e_g", dist.Categorical(probs_e_g))
-            eps_g = _index_param(theta_g, e_g, dim=-2)
+            eps_g = Vindex(theta_g)[..., e_g, :]
         elif config["group"]["random"] == "continuous":
             eps_g = pyro.sample("eps_g", dist.Normal(loc_g, scale_g).to_event(1),
                                 )  # infer={"num_samples": 10})
@@ -144,7 +122,7 @@ def model_generic(config):
             if config["individual"]["random"] == "discrete":
                 # individual-level discrete effect
                 e_i = pyro.sample("e_i", dist.Categorical(probs_e_i))
-                eps_i = _index_param(theta_i, e_i, dim=-2)
+                eps_i = Vindex(theta_i)[..., e_i, :]
                 # assert eps_i.shape[-3:] == (1, N_c, N_state ** 2) and eps_i.shape[0] == N_v
             elif config["individual"]["random"] == "continuous":
                 eps_i = pyro.sample("eps_i", dist.Normal(loc_i, scale_i).to_event(1),
@@ -166,18 +144,17 @@ def model_generic(config):
                     gamma_t = gamma_t.reshape(tuple(gamma_t.shape[:-1]) + (N_state, N_state))
 
                     # we've accounted for all effects, now actually compute gamma_y
-                    # gamma_y = _index_gamma(gamma_t, y, t)
-                    gamma_y = _index_param(gamma_t, y, dim=-2)
+                    gamma_y = Vindex(gamma_t)[..., y, :]
                     y = pyro.sample("y_{}".format(t), dist.Categorical(logits=gamma_y))
 
                     # observation 1: step size
                     step_dist = dist.Gamma(
-                        concentration=_index_param(step_concentration, y, dim=-1),
-                        rate=_index_param(step_rate, y, dim=-1),
+                        concentration=Vindex(step_concentration)[..., y],
+                        rate=Vindex(step_rate)[..., y]
                     )
 
                     # zero-inflation with MaskedMixture
-                    step_zi = _index_param(step_zi_param, y, dim=-2)
+                    step_zi = Vindex(step_zi_param)[..., y, :]
                     step_zi_mask = pyro.sample("step_zi_{}".format(t),
                                                dist.Categorical(logits=step_zi),
                                                obs=(config["observations"]["step"][..., t] == MISSING))
@@ -190,8 +167,8 @@ def model_generic(config):
 
                     # observation 2: step angle
                     angle_dist = dist.VonMises(
-                        concentration=_index_param(angle_concentration, y, dim=-1),
-                        loc=_index_param(angle_loc, y, dim=-1),
+                        concentration=Vindex(angle_concentration)[..., y],
+                        loc=Vindex(angle_loc)[..., y]
                     )
                     pyro.sample("angle_{}".format(t),
                                 angle_dist,
@@ -199,12 +176,12 @@ def model_generic(config):
 
                     # observation 3: dive activity
                     omega_dist = dist.Beta(
-                        concentration0=_index_param(omega_concentration0, y, dim=-1),
-                        concentration1=_index_param(omega_concentration1, y, dim=-1),
+                        concentration0=Vindex(omega_concentration0)[..., y],
+                        concentration1=Vindex(omega_concentration1)[..., y]
                     )
 
                     # zero-inflation with MaskedMixture
-                    omega_zi = _index_param(omega_zi_param, y, dim=-2)
+                    omega_zi = Vindex(omega_zi_param)[..., y, :]
                     omega_zi_mask = pyro.sample(
                         "omega_zi_{}".format(t),
                         dist.Categorical(logits=omega_zi),
