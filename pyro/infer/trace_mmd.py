@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 from collections import defaultdict
 
+import torch
+
 import pyro
 import pyro.ops.jit
 from pyro import poutine
@@ -11,8 +13,28 @@ from pyro.infer.enum import get_importance_trace
 from pyro.util import check_if_enumerated, warn_if_nan
 
 
-def _compute_mmd(X, Z, kernel):
-    mmd = kernel(X).mean() + kernel(Z).mean() - 2 * kernel(X, Z).mean()
+def _reshape_covariance_matrix(cov_matrix, num_particles, vectorize_particles):
+    if vectorize_particles:
+        return cov_matrix.view(
+            num_particles, cov_matrix.shape[0] // num_particles,
+            num_particles, cov_matrix.shape[1] // num_particles
+        )
+    else:
+        return cov_matrix.view(
+            1, cov_matrix.shape[0], 1, cov_matrix.shape[1]
+        )
+
+
+def _covariance_matrix_mean(cov_matrix, num_particles, vectorize_particles):
+    cov_matrix = _reshape_covariance_matrix(cov_matrix, num_particles, vectorize_particles).transpose(2, 1)
+    cov_matrix_mean = torch.mean(cov_matrix, [2, 3])
+    return torch.diag(cov_matrix_mean).mean()
+
+
+def _compute_mmd(X, Z, kernel, num_particles, vectorize_particles):
+    mmd = _covariance_matrix_mean(kernel(X), num_particles, vectorize_particles) + \
+          _covariance_matrix_mean(kernel(Z), num_particles, vectorize_particles) - \
+          _covariance_matrix_mean(kernel(X, Z), num_particles, vectorize_particles) * 2
     return mmd
 
 
@@ -136,13 +158,16 @@ class Trace_MMD(ELBO):
                         guide_samples = guide_samples.view(
                             -1, *[guide_samples.size(j) for j in range(-guide_site['fn'].event_dim, 0)]
                         )
-                        divergence = _compute_mmd(model_samples, guide_samples, kernel=self._kernel[name])
+                        divergence = _compute_mmd(
+                            model_samples, guide_samples, kernel=self._kernel[name],
+                            num_particles=self.num_particles, vectorize_particles=self.vectorize_particles
+                        )
                         penalty_particle = penalty_particle + self._mmd_scale[name] * divergence
                     else:
                         loglikelihood_particle = loglikelihood_particle + model_site['log_prob_sum']
             loglikelihood = loglikelihood_particle / self.num_particles + loglikelihood
             if self.vectorize_particles:
-                penalty = penalty_particle * self.num_particles + penalty
+                penalty = penalty_particle + penalty
             else:
                 penalty = penalty_particle / self.num_particles + penalty
 

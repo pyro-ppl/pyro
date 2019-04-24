@@ -74,7 +74,7 @@ class NormalNormalTests(TestCase):
                 kernel=kernels.RBF(
                     z_size,
                     lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
-                )
+                ),
             )
         )
 
