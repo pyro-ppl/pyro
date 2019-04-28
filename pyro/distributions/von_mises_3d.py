@@ -4,7 +4,7 @@ import math
 
 import torch
 from torch.distributions import constraints
-
+from torch.distributions.utils import lazy_property
 from pyro.distributions import TorchDistribution
 
 
@@ -40,39 +40,6 @@ class VonMises3D(TorchDistribution):
         # Moments
         self._scale = self.concentration.norm(2, -1)
         self._mean = self.concentration / self._scale.unsqueeze(-1)
-
-        # Variance-Covariance Matrix based on:
-        # Hillen, Thomas, et al. "Moments of von Mises and Fisher distributions and applications."
-        # Mathematical Biosciences & Engineering 14.3 (2017): 673-694.
-        cothk = 1 / torch.tanh(self._scale)
-        i = torch.eye(3, dtype=self._mean.dtype, device=self._mean.device)
-        var_l = (cothk / self._scale - 1 / self._scale ** 2) * i
-        mean_outer = self._mean.unsqueeze(-1) * self._mean.unsqueeze(-2)
-        var_r = 1 - cothk / self._scale + 2 / self._scale ** 2 - cothk ** 2
-        self._variance = var_l + var_r * mean_outer
-
-        # Rotation
-        # Based on:
-        # Kuba Ober (https://math.stackexchange.com/users/76513/kuba-ober)
-        # Calculate Rotation Matrix to align Vector A to Vector B in 3d?
-        # URL (version: 2018-09-12): https://math.stackexchange.com/q/897677
-        base_tensor = torch.tensor([0., 0., 1.], dtype=self._mean.dtype, device=self._mean.device)
-        base_mean_cross = base_tensor.cross(self._mean, dim=-1)
-        bmn = base_mean_cross.norm(2, -1)
-        base_mean_inner = torch.matmul(base_tensor, self._mean)
-        z = torch.zeros_like(base_mean_inner)
-        rotg = torch.stack([torch.stack([base_mean_inner, -bmn, z], dim=-1),
-                            torch.stack([bmn, base_mean_inner, z], dim=-1),
-                            torch.stack([z, z, z+1], dim=-1)], dim=-2)
-        vd = (self._mean - base_mean_inner * base_tensor)
-        v = vd / vd.norm(2, -1)
-        mean_base_cross = self._mean.cross(base_tensor, dim=-1)
-        rotfi = torch.stack([base_tensor, v, mean_base_cross], dim=-2)
-        self._rotation = torch.eye(3, dtype=self._mean.dtype, device=self._mean.device).expand(batch_shape+(3, 3))
-        # If the tensors are on top of each others we do not get a useful rotation matrix.
-        # So, we have to change only where they are different
-        diffrot = (base_tensor != self._mean).any(-1)
-        self._rotation[diffrot] = torch.matmul(torch.matmul(rotfi[diffrot], rotg[diffrot]), rotfi[diffrot].inverse())
 
         super(VonMises3D, self).__init__(batch_shape, event_shape, validate_args=validate_args)
 
@@ -118,11 +85,42 @@ class VonMises3D(TorchDistribution):
         """
         return self._mean
 
-    @property
+    @lazy_property
     def variance(self):
         """
         The variance-covariance matrix based on:
         Hillen, Thomas, et al. "Moments of von Mises and Fisher distributions and applications."
         Mathematical Biosciences & Engineering 14.3 (2017): 673-694.
         """
-        return self._variance
+        cothk = 1 / torch.tanh(self._scale)
+        i = torch.eye(3, dtype=self._mean.dtype, device=self._mean.device)
+        var_l = (cothk / self._scale - 1 / self._scale ** 2) * i
+        mean_outer = self._mean.unsqueeze(-1) * self._mean.unsqueeze(-2)
+        var_r = 1 - cothk / self._scale + 2 / self._scale ** 2 - cothk ** 2
+        return var_l + var_r * mean_outer
+
+    @lazy_property
+    def _rotation(self):
+        # Rotation
+        # Based on:
+        # Kuba Ober (https://math.stackexchange.com/users/76513/kuba-ober)
+        # Calculate Rotation Matrix to align Vector A to Vector B in 3d?
+        # URL (version: 2018-09-12): https://math.stackexchange.com/q/897677
+        base_tensor = torch.tensor([0., 0., 1.], dtype=self._mean.dtype, device=self._mean.device)
+        base_mean_cross = base_tensor.cross(self._mean, dim=-1)
+        bmn = base_mean_cross.norm(2, -1)
+        base_mean_inner = torch.matmul(base_tensor, self._mean)
+        z = torch.zeros_like(base_mean_inner)
+        rotg = torch.stack([torch.stack([base_mean_inner, -bmn, z], dim=-1),
+                            torch.stack([bmn, base_mean_inner, z], dim=-1),
+                            torch.stack([z, z, z+1], dim=-1)], dim=-2)
+        vd = (self._mean - base_mean_inner * base_tensor)
+        v = vd / vd.norm(2, -1)
+        mean_base_cross = self._mean.cross(base_tensor, dim=-1)
+        rotfi = torch.stack([base_tensor, v, mean_base_cross], dim=-2)
+        rot = torch.eye(3, dtype=self._mean.dtype, device=self._mean.device).expand(self.batch_shape+(3, 3))
+        # If the tensors are on top of each others we do not get a useful rotation matrix.
+        # So, we have to change only where they are different
+        diffrot = (base_tensor != self._mean).any(-1)
+        rot[diffrot] = torch.matmul(torch.matmul(rotfi[diffrot], rotg[diffrot]), rotfi[diffrot].inverse())
+        return rot
