@@ -40,7 +40,8 @@ def main(args):
     with pyro_backend(args.backend):
         # Construct an SVI object so we can do variational inference on our
         # model/guide pair.
-        elbo = infer.Trace_ELBO()
+        Elbo = infer.JitTrace_ELBO if args.jit else infer.Trace_ELBO
+        elbo = Elbo()
         adam = optim.Adam({"lr": args.learning_rate})
         svi = infer.SVI(model, guide, adam, elbo)
 
@@ -69,5 +70,6 @@ if __name__ == "__main__":
     parser.add_argument("-b", "--backend", default="minipyro")
     parser.add_argument("-n", "--num-steps", default=1001, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.02, type=float)
+    parser.add_argument("--jit", action="store_true")
     args = parser.parse_args()
     main(args)
