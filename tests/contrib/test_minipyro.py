@@ -84,8 +84,9 @@ def test_generate_data_plate(backend):
         assert 1.9 <= mean <= 2.1
 
 
+@pytest.mark.parametrize("jit", [False, True], ids=["py", "jit"])
 @pytest.mark.parametrize("backend", ["pyro", "minipyro"])
-def test_nonempty_model_empty_guide_ok(backend):
+def test_nonempty_model_empty_guide_ok(backend, jit):
 
     def model(data):
         loc = pyro.param("loc", torch.tensor(0.0))
@@ -96,12 +97,14 @@ def test_nonempty_model_empty_guide_ok(backend):
 
     data = torch.tensor(2.)
     with pyro_backend(backend):
-        elbo = infer.Trace_ELBO()
+        Elbo = infer.JitTrace_ELBO if jit else infer.Trace_ELBO
+        elbo = Elbo(ignore_jit_warnings=True)
         assert_ok(model, guide, elbo, data)
 
 
+@pytest.mark.parametrize("jit", [False, True], ids=["py", "jit"])
 @pytest.mark.parametrize("backend", ["pyro", "minipyro"])
-def test_plate_ok(backend):
+def test_plate_ok(backend, jit):
     data = torch.randn(10)
 
     def model():
@@ -117,12 +120,14 @@ def test_plate_ok(backend):
             pyro.sample("x", dist.Categorical(p))
 
     with pyro_backend(backend):
-        elbo = infer.Trace_ELBO()
+        Elbo = infer.JitTrace_ELBO if jit else infer.Trace_ELBO
+        elbo = Elbo(ignore_jit_warnings=True)
         assert_ok(model, guide, elbo)
 
 
+@pytest.mark.parametrize("jit", [False, True], ids=["py", "jit"])
 @pytest.mark.parametrize("backend", ["pyro", "minipyro"])
-def test_nested_plate_plate_ok(backend):
+def test_nested_plate_plate_ok(backend, jit):
     data = torch.randn(2, 3)
 
     def model():
@@ -139,15 +144,17 @@ def test_nested_plate_plate_ok(backend):
             pyro.sample("x", dist.Normal(loc, scale))
 
     with pyro_backend(backend):
-        elbo = infer.Trace_ELBO()
+        Elbo = infer.JitTrace_ELBO if jit else infer.Trace_ELBO
+        elbo = Elbo(ignore_jit_warnings=True)
         assert_ok(model, guide, elbo)
 
 
+@pytest.mark.parametrize("jit", [False, True], ids=["py", "jit"])
 @pytest.mark.parametrize("backend", [
     "pyro",
     xfail_param("minipyro", reason="not implemented"),
 ])
-def test_local_param_ok(backend):
+def test_local_param_ok(backend, jit):
     data = torch.randn(10)
 
     def model():
@@ -163,7 +170,8 @@ def test_local_param_ok(backend):
         return p
 
     with pyro_backend(backend):
-        elbo = infer.Trace_ELBO()
+        Elbo = infer.JitTrace_ELBO if jit else infer.Trace_ELBO
+        elbo = Elbo(ignore_jit_warnings=True)
         assert_ok(model, guide, elbo)
 
         # Check that pyro.param() can be called without init_value.
@@ -172,8 +180,9 @@ def test_local_param_ok(backend):
         assert_close(actual, expected)
 
 
+@pytest.mark.parametrize("jit", [False, True], ids=["py", "jit"])
 @pytest.mark.parametrize("backend", ["pyro", "minipyro"])
-def test_constraints(backend):
+def test_constraints(backend, jit):
     data = torch.tensor(0.5)
 
     def model():
@@ -188,5 +197,6 @@ def test_constraints(backend):
         pyro.sample("x", dist.Categorical(q))
 
     with pyro_backend(backend):
-        elbo = infer.Trace_ELBO()
+        Elbo = infer.JitTrace_ELBO if jit else infer.Trace_ELBO
+        elbo = Elbo(ignore_jit_warnings=True)
         assert_ok(model, guide, elbo)
