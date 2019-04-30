@@ -134,7 +134,7 @@ def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
             param_name = "__baseline_avg_downstream_cost_" + node
             with torch.no_grad():
                 avg_downstream_cost_old = pyro.param(param_name,
-                                                     guide_site['value'].new_zeros(dc_shape))
+                                                     torch.zeros(dc_shape, device=guide_site['value'].device))
                 avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
                     baseline_beta * avg_downstream_cost_old
             pyro.get_param_store()[param_name] = avg_downstream_cost_new

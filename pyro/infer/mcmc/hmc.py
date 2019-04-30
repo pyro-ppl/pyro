@@ -10,13 +10,14 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions.util import eye_like
+from pyro.distributions.utils import scalar_like
 from pyro.infer import config_enumerate
 from pyro.infer.mcmc.adaptation import WarmupAdapter
 from pyro.infer.mcmc.trace_kernel import TraceKernel
 from pyro.infer.mcmc.util import TraceEinsumEvaluator
 from pyro.ops.integrator import velocity_verlet
 from pyro.poutine.subsample_messenger import _Subsample
-from pyro.util import optional, torch_isinf, torch_isnan, ignore_jit_warnings
+from pyro.util import ignore_jit_warnings, optional, torch_isinf, torch_isnan
 
 
 class HMC(TraceKernel):
@@ -356,7 +357,7 @@ class HMC(TraceKernel):
         if site_value is not None:
             mass_matrix_size = sum(self._r_numels.values())
             if self._adapter.is_diag_mass:
-                initial_mass_matrix = site_value.new_ones(mass_matrix_size)
+                initial_mass_matrix = torch.full(mass_matrix_size, dtype=site_value.dtype, device=site_value.device)
             else:
                 initial_mass_matrix = eye_like(site_value, mass_matrix_size)
             self._adapter.configure(self._warmup_steps,
@@ -416,11 +417,11 @@ class HMC(TraceKernel):
         # Set accept prob to 0.0 if delta_energy is `NaN` which may be
         # the case for a diverging trajectory when using a large step size.
         if torch_isnan(delta_energy):
-            accept_prob = delta_energy.new_tensor(0.0)
+            accept_prob = scalar_like(delta_energy, 0.)
         else:
             accept_prob = (-delta_energy).exp().clamp(max=1.)
-        rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(accept_prob.new_tensor(0.),
-                                                                     accept_prob.new_tensor(1.)))
+        rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(scalar_like(accept_prob, 0.),
+                                                                     scalar_like(accept_prob, 1.)))
         if rand < accept_prob:
             self._accept_cnt += 1
             z = z_new

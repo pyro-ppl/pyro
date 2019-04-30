@@ -210,5 +210,5 @@ class LKJCorrCholesky(TorchDistribution):
 
         values += log_diagonals.mul(eta.mul(2).add(-2.0))
         values = values.sum(-1) + lp
-        values, _ = torch.broadcast_tensors(values, torch.empty(self.batch_shape, dtype=values.dtype, device=values.device))
+        values, _ = torch.broadcast_tensors(values, torch.empty(self.batch_shape))
         return values

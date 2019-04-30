@@ -297,7 +297,8 @@ class MCMCMarginals(Marginals):
             try:
                 site_stats["n_eff"] = stats.effective_sample_size(site_support)
             except NotImplementedError:
-                site_stats["n_eff"] = site_support.new_full(site_support.shape[2:], float("nan"))
+                site_stats["n_eff"] = torch.full(site_support.shape[2:], float("nan"),
+                                                 dtype=site_support.dtype, device=site_support)
             site_stats["r_hat"] = stats.split_gelman_rubin(site_support)
             self._diagnostics[site] = site_stats
         return self._diagnostics

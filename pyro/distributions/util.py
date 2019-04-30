@@ -190,6 +190,10 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
     return tensor
 
 
+def scalar_like(prototype, fill_value):
+    return torch.tensor(fill_value, dtype=prototype.dtype, device=prototype.device)
+
+
 # work around lack of jit support for torch.eye(..., out=value)
 def eye_like(value, m, n=None):
     if n is None:
