@@ -8,6 +8,7 @@ import torch.distributions as torch_dist
 from torch import logsumexp
 from torch.distributions.utils import broadcast_all
 
+from pyro.util import ignore_jit_warnings
 
 _VALIDATION_ENABLED = False
 
@@ -106,7 +107,9 @@ def gather(value, index, dim):
     Broadcasted gather of indexed values along a named dim.
     """
     value, index = broadcast_all(value, index)
-    index = index.index_select(dim, torch.tensor([0], device=index.device))
+    with ignore_jit_warnings():
+        zero = torch.zeros(1, dtype=torch.long, device=index.device)
+    index = index.index_select(dim, zero)
     return value.gather(dim, index)
 
 
