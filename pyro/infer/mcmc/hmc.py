@@ -356,7 +356,7 @@ class HMC(TraceKernel):
         if site_value is not None:
             mass_matrix_size = sum(self._r_numels.values())
             if self._adapter.is_diag_mass:
-                initial_mass_matrix = torch.full(mass_matrix_size, dtype=site_value.dtype, device=site_value.device)
+                initial_mass_matrix = torch.ones(mass_matrix_size, dtype=site_value.dtype, device=site_value.device)
             else:
                 initial_mass_matrix = eye_like(site_value, mass_matrix_size)
             self._adapter.configure(self._warmup_steps,
