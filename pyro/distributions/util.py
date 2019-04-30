@@ -106,7 +106,7 @@ def gather(value, index, dim):
     Broadcasted gather of indexed values along a named dim.
     """
     value, index = broadcast_all(value, index)
-    index = index.index_select(dim, index.new_tensor([0]))
+    index = index.index_select(dim, torch.tensor([0], device=index.device))
     return value.gather(dim, index)
 
 
@@ -194,7 +194,7 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
 def eye_like(value, m, n=None):
     if n is None:
         n = m
-    eye = value.new_zeros(m, n)
+    eye = torch.zeros(m, n, dtype=value.dtype, device=value.device)
     eye.view(-1)[:min(m, n) * n:n + 1] = 1
     return eye
 
