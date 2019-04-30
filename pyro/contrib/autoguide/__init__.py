@@ -431,7 +431,7 @@ class AutoContinuous(AutoGuide):
         :rtype: dict
         """
         loc, scale = self._loc_scale(*args, **kwargs)
-        quantiles = loc.new_tensor(quantiles).unsqueeze(-1)
+        quantiles = torch.tensor(quantiles, dtype=loc.dtype, device=loc.device).unsqueeze(-1)
         latents = dist.Normal(loc, scale).icdf(quantiles)
         result = {}
         for latent in latents:

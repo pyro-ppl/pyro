@@ -119,7 +119,8 @@ class MarginalAssignmentSparse(object):
 
         # Wrap the results in Distribution objects.
         # This adds a final logit=0 element denoting spurious detection.
-        padded_assign = assign.new_empty(num_detections, num_objects + 1).fill_(-float('inf'))
+        padded_assign = torch.full((num_detections, num_objects + 1), -float('inf'),
+                                   dtype=assign.dtype, device=assign.device)
         padded_assign[:, -1] = 0
         padded_assign[edges[0], edges[1]] = assign
         self.assign_dist = dist.Categorical(logits=padded_assign)
@@ -198,9 +199,11 @@ def compute_marginals(exists_logits, assign_logits):
     """
     num_detections, num_objects = assign_logits.shape
     assert exists_logits.shape == (num_objects,)
+    dtype = exists_logits.dtype
+    device = exists_logits.device
 
-    exists_probs = exists_logits.new_zeros(2, num_objects)  # [not exist, exist]
-    assign_probs = assign_logits.new_zeros(num_detections, num_objects + 1)
+    exists_probs = torch.zeros(2, num_objects, dtype=dtype, device=device)  # [not exist, exist]
+    assign_probs = torch.zeros(num_detections, num_objects + 1, dtype=dtype, device=device)
     for assign in itertools.product(range(num_objects + 1), repeat=num_detections):
         assign_part = sum(assign_logits[j, i] for j, i in enumerate(assign) if i < num_objects)
         for exists in itertools.product(*[[1] if i in assign else [0, 1] for i in range(num_objects)]):
@@ -233,8 +236,8 @@ def compute_marginals_bp(exists_logits, assign_logits, bp_iters):
         belief propagation
         https://arxiv.org/abs/1209.6299
     """
-    message_e_to_a = exists_logits.new_zeros(assign_logits.shape)
-    message_a_to_e = exists_logits.new_zeros(assign_logits.shape)
+    message_e_to_a = torch.zeros_like(assign_logits)
+    message_a_to_e = torch.zeros_like(assign_logits)
     for i in range(bp_iters):
         message_e_to_a = -(message_a_to_e - message_a_to_e.sum(0, True) - exists_logits).exp().log1p()
         joint = (assign_logits + message_e_to_a).exp()
@@ -267,13 +270,14 @@ def compute_marginals_sparse_bp(num_objects, num_detections, edges,
 
     def sparse_sum(x, dim, keepdim=False):
         assert dim in (0, 1)
-        x = x.new_zeros([num_objects, num_detections][dim]).scatter_add_(0, edges[1 - dim], x)
+        x = (torch.zeros([num_objects, num_detections][dim], dtype=x.dtype, device=x.device)
+                  .scatter_add_(0, edges[1 - dim], x))
         if keepdim:
             x = x[edges[1 - dim]]
         return x
 
-    message_e_to_a = exists_logits.new_zeros(assign_logits.shape)
-    message_a_to_e = exists_logits.new_zeros(assign_logits.shape)
+    message_e_to_a = torch.zeros_like(assign_logits)
+    message_a_to_e = torch.zeros_like(assign_logits)
     for i in range(bp_iters):
         message_e_to_a = -(message_a_to_e - sparse_sum(message_a_to_e, 0, True) - exists_factor).exp().log1p()
         joint = (assign_logits + message_e_to_a).exp()
@@ -298,10 +302,12 @@ def compute_marginals_persistent(exists_logits, assign_logits):
     """
     num_frames, num_detections, num_objects = assign_logits.shape
     assert exists_logits.shape == (num_objects,)
+    dtype = exists_logits.dtype
+    device = exists_logits.device
 
     total = 0
-    exists_probs = exists_logits.new_zeros(num_objects)
-    assign_probs = assign_logits.new_zeros(num_frames, num_detections, num_objects)
+    exists_probs = torch.zeros(num_objects, dtype=dtype, device=device)
+    assign_probs = torch.zeros(num_frames, num_detections, num_objects, dtype=dtype, device=device)
     for exists in itertools.product([0, 1], repeat=num_objects):
         exists = [i for i, e in enumerate(exists) if e]
         exists_part = _exp(sum(exists_logits[i] for i in exists))
@@ -363,10 +369,12 @@ def compute_marginals_persistent_bp(exists_logits, assign_logits, bp_iters, bp_m
     assert 0 <= bp_momentum < 1, bp_momentum
     old, new = bp_momentum, 1 - bp_momentum
     num_frames, num_detections, num_objects = assign_logits.shape
-    message_b_to_a = assign_logits.new_zeros(num_frames, num_detections, num_objects)
-    message_a_to_b = assign_logits.new_zeros(num_frames, num_detections, num_objects)
-    message_b_to_e = assign_logits.new_zeros(num_frames, num_objects)
-    message_e_to_b = assign_logits.new_zeros(num_frames, num_objects)
+    dtype = assign_logits.dtype
+    device = assign_logits.device
+    message_b_to_a = torch.zeros(num_frames, num_detections, num_objects, dtype=dtype, device=device)
+    message_a_to_b = torch.zeros(num_frames, num_detections, num_objects, dtype=dtype, device=device)
+    message_b_to_e = torch.zeros(num_frames, num_objects, dtype=dtype, device=device)
+    message_e_to_b = torch.zeros(num_frames, num_objects, dtype=dtype, device=device)
 
     for i in range(bp_iters):
         odds_a = (assign_logits + message_b_to_a).exp()

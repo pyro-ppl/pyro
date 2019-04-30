@@ -161,7 +161,7 @@ class EKFState(object):
         :return: Likelihood of hypothetical update.
         '''
         dz, S = self.innovation(measurement)
-        return dist.MultivariateNormal(S.new_zeros(S.shape[-1]),
+        return dist.MultivariateNormal(torch.zeros(S.size(-1), dtype=S.dtype, device=S.device),
                                        S).log_prob(dz)
 
     def update(self, measurement):
