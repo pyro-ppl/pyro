@@ -192,14 +192,14 @@ class EKFState(object):
         S = H.mm(P).mm(H.transpose(-1, -2)) + R  # innovation cov
 
         K_prefix = self._cov.mm(H.transpose(-1, -2))
-        dx = K_prefix.mm(torch.gesv(dz.unsqueeze(1), S)[0]).squeeze(1)  # K*dz
+        dx = K_prefix.mm(torch.solve(dz.unsqueeze(1), S)[0]).squeeze(1)  # K*dz
         x = self._dynamic_model.geodesic_difference(x, -dx)
 
         I = eye_like(x, self._dynamic_model.dimension)  # noqa: E741
-        ImKH = I - K_prefix.mm(torch.gesv(H, S)[0])
+        ImKH = I - K_prefix.mm(torch.solve(H, S)[0])
         # *Joseph form* of covariance update for numerical stability.
         P = ImKH.mm(self.cov).mm(ImKH.transpose(-1, -2)) \
-            + K_prefix.mm(torch.gesv((K_prefix.mm(torch.gesv(R, S)[0])).transpose(-1, -2),
+            + K_prefix.mm(torch.solve((K_prefix.mm(torch.gesv(R, S)[0])).transpose(-1, -2),
                           S)[0])
 
         pred_mean = x
