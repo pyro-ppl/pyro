@@ -83,8 +83,8 @@ class VAE(nn.Module):
         pyro.module("decoder", self.decoder)
         with pyro.plate("data", x.shape[0]):
             # setup hyperparameters for prior p(z)
-            z_loc = x.new_zeros(torch.Size((x.shape[0], self.z_dim)))
-            z_scale = x.new_ones(torch.Size((x.shape[0], self.z_dim)))
+            z_loc = torch.zeros(x.shape[0], self.z_dim, dtype=x.dtype, device=x.device)
+            z_scale = torch.ones(x.shape[0], self.z_dim, dtype=x.dtype, device=x.device)
             # sample from prior (value will be sampled by guide when computing the ELBO)
             z = pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
             # decode the latent code z

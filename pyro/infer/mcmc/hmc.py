@@ -9,8 +9,7 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.distributions.util import eye_like
-from pyro.distributions.utils import scalar_like
+from pyro.distributions.util import eye_like, scalar_like
 from pyro.infer import config_enumerate
 from pyro.infer.mcmc.adaptation import WarmupAdapter
 from pyro.infer.mcmc.trace_kernel import TraceKernel

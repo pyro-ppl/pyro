@@ -6,8 +6,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.util import logsumexp
-from pyro.distributions.utils import scalar_like
+from pyro.distributions.util import logsumexp, scalar_like
 from pyro.infer.mcmc.hmc import HMC
 from pyro.ops.integrator import velocity_verlet
 from pyro.util import optional, torch_isnan
