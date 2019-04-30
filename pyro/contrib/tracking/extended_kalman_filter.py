@@ -199,7 +199,7 @@ class EKFState(object):
         ImKH = I - K_prefix.mm(torch.solve(H, S)[0])
         # *Joseph form* of covariance update for numerical stability.
         P = ImKH.mm(self.cov).mm(ImKH.transpose(-1, -2)) \
-            + K_prefix.mm(torch.solve((K_prefix.mm(torch.gesv(R, S)[0])).transpose(-1, -2),
+            + K_prefix.mm(torch.solve((K_prefix.mm(torch.solve(R, S)[0])).transpose(-1, -2),
                           S)[0])
 
         pred_mean = x
