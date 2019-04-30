@@ -104,7 +104,9 @@ class WarmupAdapter(object):
         self.step_size = math.exp(log_step_size)
 
     def _update_r_dist(self):
-        loc = self._inverse_mass_matrix.new_zeros(self._inverse_mass_matrix.size(0))
+        loc = torch.zeros(self._inverse_mass_matrix.size(0),
+                          dtype=self._inverse_mass_matrix.dtype,
+                          device=self._inverse_mass_matrix.device)
         if self.is_diag_mass:
             self._r_dist = dist.Normal(loc, self._inverse_mass_matrix.rsqrt())
         else:

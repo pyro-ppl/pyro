@@ -270,7 +270,7 @@ class TracePosterior(object):
                                    .log_prob(trace.nodes[obs_node]["value"]))
 
         ll = torch.stack(log_likelihoods, dim=0)
-        waic_value, p_waic = waic(ll, ll.new_tensor(self.log_weights), pointwise)
+        waic_value, p_waic = waic(ll, torch.tensor(self.log_weights, device=ll.device), pointwise)
         return OrderedDict([("waic", waic_value), ("p_waic", p_waic)])
 
 
@@ -317,7 +317,8 @@ class TracePredictive(TracePosterior):
                     # Select random sub-indices to replay values under conditionally independent stacks.
                     # Otherwise, we assume there is an dependence of indexes between training data
                     # and prediction data.
-                    subidxs = Categorical(logits=site["value"].new_ones(site["value"].size(cis.dim))).sample([cis.size])
+                    logits = torch.ones(site["value"].size(cis.dim), device=site["value"].device)
+                    subidxs = Categorical(logits=logits).sample([cis.size])
                     site["value"] = site["value"].index_select(cis.dim, subidxs)
             except KeyError:
                 pass

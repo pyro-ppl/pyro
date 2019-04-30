@@ -8,6 +8,7 @@ import torch.distributions as torch_dist
 from torch import logsumexp
 from torch.distributions.utils import broadcast_all
 
+from pyro.util import ignore_jit_warnings
 
 _VALIDATION_ENABLED = False
 
@@ -106,7 +107,9 @@ def gather(value, index, dim):
     Broadcasted gather of indexed values along a named dim.
     """
     value, index = broadcast_all(value, index)
-    index = index.index_select(dim, index.new_tensor([0]))
+    with ignore_jit_warnings():
+        zero = torch.zeros(1, dtype=torch.long, device=index.device)
+    index = index.index_select(dim, zero)
     return value.gather(dim, index)
 
 
@@ -190,11 +193,15 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
     return tensor
 
 
+def scalar_like(prototype, fill_value):
+    return torch.tensor(fill_value, dtype=prototype.dtype, device=prototype.device)
+
+
 # work around lack of jit support for torch.eye(..., out=value)
 def eye_like(value, m, n=None):
     if n is None:
         n = m
-    eye = value.new_zeros(m, n)
+    eye = torch.zeros(m, n, dtype=value.dtype, device=value.device)
     eye.view(-1)[:min(m, n) * n:n + 1] = 1
     return eye
 

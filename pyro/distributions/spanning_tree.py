@@ -114,7 +114,7 @@ class SpanningTree(TorchDistribution):
         grid = make_complete_graph(V)
         shift = self.edge_logits.max()
         edge_probs = (self.edge_logits - shift).exp()
-        adjacency = edge_probs.new_zeros(V, V)
+        adjacency = torch.zeros(V, V, dtype=edge_probs.dtype)
         adjacency[grid[0], grid[1]] = edge_probs
         adjacency[grid[1], grid[0]] = edge_probs
         laplacian = adjacency.sum(-1).diag() - adjacency
@@ -319,7 +319,7 @@ def _sample_tree_mcmc(edge_logits, edges):
 
     # Convert edge ids to a canonical list of pairs.
     edge_ids = edge_ids.sort()[0]
-    edges = edge_logits.new_empty((E, 2), dtype=torch.long)
+    edges = torch.empty((E, 2), dtype=torch.long)
     edges[:, 0] = grid[0, edge_ids]
     edges[:, 1] = grid[1, edge_ids]
     return edges
@@ -368,9 +368,9 @@ def _sample_tree_approx(edge_logits):
 
     # Each of E edges in the tree is stored as an id k in [0, K) indexing into
     # the complete graph. The id of an edge (v1,v2) is k = v1+v2*(v2-1)/2.
-    edge_ids = edge_logits.new_empty((E,), dtype=torch.long)
+    edge_ids = torch.empty((E,), dtype=torch.long)
     # This maps each vertex to whether it is a member of the cumulative tree.
-    components = edge_logits.new_zeros(V, dtype=torch.uint8)
+    components = torch.zeros(V, dtype=torch.uint8)
 
     # Sample the first edge at random.
     probs = (edge_logits - edge_logits.max()).exp()
@@ -390,7 +390,7 @@ def _sample_tree_approx(edge_logits):
 
     # Convert edge ids to a canonical list of pairs.
     edge_ids = edge_ids.sort()[0]
-    edges = edge_logits.new_empty((E, 2), dtype=torch.long)
+    edges = torch.empty((E, 2), dtype=torch.long)
     edges[:, 0] = grid[0, edge_ids]
     edges[:, 1] = grid[1, edge_ids]
     return edges

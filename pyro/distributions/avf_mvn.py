@@ -57,7 +57,7 @@ class AVFMultivariateNormal(MultivariateNormal):
 class _AVFMVNSample(Function):
     @staticmethod
     def forward(ctx, loc, scale_tril, control_var, shape):
-        white = loc.new_empty(shape).normal_()
+        white = torch.randn(shape, dtype=loc.dtype, device=loc.device)
         z = torch.matmul(white, scale_tril.t())
         ctx.save_for_backward(scale_tril, control_var, white)
         return loc + z

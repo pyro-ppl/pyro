@@ -9,7 +9,7 @@ import torch
 
 import pyro
 from pyro.distributions import Beta, Binomial, HalfCauchy, Normal, Pareto, Uniform
-from pyro.distributions.util import logsumexp
+from pyro.distributions.util import logsumexp, scalar_like
 from pyro.infer.abstract_infer import TracePredictive
 from pyro.infer.mcmc import MCMC, NUTS
 
@@ -67,7 +67,7 @@ def fully_pooled(at_bats, hits):
     :param (torch.Tensor) hits: Number of hits for the given at bats.
     :return: Number of hits predicted by the model.
     """
-    phi_prior = Uniform(at_bats.new_tensor(0), at_bats.new_tensor(1))
+    phi_prior = Uniform(scalar_like(at_bats, 0), scalar_like(at_bats, 1))
     phi = pyro.sample("phi", phi_prior)
     return pyro.sample("obs", Binomial(at_bats, phi), obs=hits)
 
@@ -83,7 +83,7 @@ def not_pooled(at_bats, hits):
     """
     num_players = at_bats.shape[0]
     with pyro.plate("num_players", num_players):
-        phi_prior = Uniform(at_bats.new_tensor(0), at_bats.new_tensor(1))
+        phi_prior = Uniform(scalar_like(at_bats, 0), scalar_like(at_bats, 1))
         phi = pyro.sample("phi", phi_prior)
         return pyro.sample("obs", Binomial(at_bats, phi), obs=hits)
 
@@ -101,8 +101,8 @@ def partially_pooled(at_bats, hits):
     :return: Number of hits predicted by the model.
     """
     num_players = at_bats.shape[0]
-    m = pyro.sample("m", Uniform(at_bats.new_tensor(0), at_bats.new_tensor(1)))
-    kappa = pyro.sample("kappa", Pareto(at_bats.new_tensor(1), at_bats.new_tensor(1.5)))
+    m = pyro.sample("m", Uniform(scalar_like(at_bats, 0), scalar_like(at_bats, 1)))
+    kappa = pyro.sample("kappa", Pareto(scalar_like(at_bats, 1), scalar_like(at_bats, 1.5)))
     with pyro.plate("num_players", num_players):
         phi_prior = Beta(m * kappa, (1 - m) * kappa)
         phi = pyro.sample("phi", phi_prior)
@@ -120,8 +120,8 @@ def partially_pooled_with_logit(at_bats, hits):
     :return: Number of hits predicted by the model.
     """
     num_players = at_bats.shape[0]
-    loc = pyro.sample("loc", Normal(at_bats.new_tensor(-1), at_bats.new_tensor(1)))
-    scale = pyro.sample("scale", HalfCauchy(scale=at_bats.new_tensor(1)))
+    loc = pyro.sample("loc", Normal(scalar_like(at_bats, -1), scalar_like(at_bats, 1)))
+    scale = pyro.sample("scale", HalfCauchy(scale=scalar_like(at_bats, 1)))
     with pyro.plate("num_players", num_players):
         alpha = pyro.sample("alpha", Normal(loc, scale))
         return pyro.sample("obs", Binomial(at_bats, logits=alpha), obs=hits)

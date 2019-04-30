@@ -6,7 +6,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.util import logsumexp
+from pyro.distributions.util import logsumexp, scalar_like
 from pyro.infer.mcmc.hmc import HMC
 from pyro.ops.integrator import velocity_verlet
 from pyro.util import optional, torch_isnan
@@ -167,7 +167,7 @@ class NUTS(HMC):
         r_new_flat = torch.cat([r_new[site_name].reshape(-1) for site_name in sorted(r_new)])
         energy_new = potential_energy + self._kinetic_energy(r_new)
         # handle the NaN case
-        energy_new = energy_new.new_tensor(float("inf")) if torch_isnan(energy_new) else energy_new
+        energy_new = scalar_like(energy_new, float("inf")) if torch_isnan(energy_new) else energy_new
         sliced_energy = energy_new + log_slice
         diverging = (sliced_energy > self._max_sliced_energy)
         delta_energy = energy_new - energy_current
@@ -180,8 +180,7 @@ class NUTS(HMC):
             #   we eliminate states which p(z, r) < u, or dE > 0.
             # Due to this elimination (and stop doubling conditions),
             #   the weight of binary tree might not equal to 2^tree_depth.
-            tree_weight = (sliced_energy.new_ones(()) if sliced_energy <= 0
-                           else sliced_energy.new_zeros(()))
+            tree_weight = scalar_like(sliced_energy, 1. if sliced_energy <= 0 else 0.)
 
         return _TreeInfo(z_new, r_new, z_grads, z_new, r_new, z_grads, z_new, potential_energy,
                          z_grads, r_new_flat, tree_weight, False, diverging, accept_prob, 1)
@@ -232,7 +231,7 @@ class NUTS(HMC):
             #   we choose the proposal from the first half
             #   (any is fine, because the probability of picking it at the end is 0!).
             other_half_tree_prob = (other_half_tree.weight / tree_weight if tree_weight > 0
-                                    else tree_weight.new_zeros(()))
+                                    else scalar_like(tree_weight, 0.))
         is_other_half_tree = pyro.sample("is_other_half_tree",
                                          dist.Bernoulli(probs=other_half_tree_prob))
 
@@ -300,7 +299,7 @@ class NUTS(HMC):
             # sample log_slice directly using `energy`, so as to avoid potential underflow or
             # overflow issues ([2]).
             slice_exp_term = pyro.sample("slicevar_exp_t={}".format(self._t),
-                                         dist.Exponential(energy_current.new_tensor(1.)))
+                                         dist.Exponential(scalar_like(energy_current, 1.)))
             log_slice = -energy_current - slice_exp_term
 
         z_left = z_right = z
@@ -310,10 +309,7 @@ class NUTS(HMC):
         r_sum = r_flat
         sum_accept_probs = 0.
         num_proposals = 0
-        if self.use_multinomial_sampling:
-            tree_weight = energy_current.new_zeros(())
-        else:
-            tree_weight = energy_current.new_ones(())
+        tree_weight = scalar_like(energy_current, 0. if self.use_multinomial_sampling else 1.)
 
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation.
@@ -322,7 +318,7 @@ class NUTS(HMC):
             tree_depth = 0
             while tree_depth < self._max_tree_depth:
                 direction = pyro.sample("direction_t={}_treedepth={}".format(self._t, tree_depth),
-                                        dist.Bernoulli(probs=tree_weight.new_tensor(0.5)))
+                                        dist.Bernoulli(probs=scalar_like(tree_weight, 0.5)))
                 direction = int(direction.item())
                 if direction == 1:  # go to the right, start from the right leaf of current tree
                     new_tree = self._build_tree(z_right, r_right, z_right_grads, log_slice,
@@ -351,8 +347,8 @@ class NUTS(HMC):
                 else:
                     new_tree_prob = new_tree.weight / tree_weight
                 rand = pyro.sample("rand_t={}_treedepth={}".format(self._t, tree_depth),
-                                   dist.Uniform(new_tree_prob.new_tensor(0.),
-                                                new_tree_prob.new_tensor(1.)))
+                                   dist.Uniform(scalar_like(new_tree_prob, 0.),
+                                                scalar_like(new_tree_prob, 1.)))
                 if rand < new_tree_prob:
                     accepted = True
                     z = new_tree.z_proposal

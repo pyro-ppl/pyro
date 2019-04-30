@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import math
 
+import torch
 from torch.optim.optimizer import Optimizer
 
 
@@ -56,9 +57,9 @@ class ClippedAdam(Optimizer):
                 if len(state) == 0:
                     state['step'] = 0
                     # Exponential moving average of gradient values
-                    state['exp_avg'] = grad.new_zeros(grad.shape)
+                    state['exp_avg'] = torch.zeros_like(grad)
                     # Exponential moving average of squared gradient values
-                    state['exp_avg_sq'] = grad.new_zeros(grad.shape)
+                    state['exp_avg_sq'] = torch.zeros_like(grad)
 
                 exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
                 beta1, beta2 = group['betas']

@@ -136,7 +136,7 @@ class _MixDiagNormalSample(Function):
         mu_cd = locs.unsqueeze(-2) - locs.unsqueeze(-3)  # b c d i
         mu_cd_norm = torch.pow(mu_cd, 2.0).sum(-1).sqrt()  # b c d
         mu_cd /= mu_cd_norm.unsqueeze(-1)  # b c d i
-        diagonals = z.new_empty((K,), dtype=torch.long)
+        diagonals = torch.empty((K,), dtype=torch.long, device=z.device)
         torch.arange(K, out=diagonals)
         mu_cd[..., diagonals, diagonals, :] = 0.0
 
@@ -145,7 +145,7 @@ class _MixDiagNormalSample(Function):
         z_perp_cd = z.unsqueeze(-2).unsqueeze(-2) - z_ll_cd.unsqueeze(-1) * mu_cd  # l b c d i
         z_perp_cd_sqr = torch.pow(z_perp_cd, 2.0).sum(-1)  # l b c d
 
-        shift_indices = z.new_empty((dim,), dtype=torch.long)
+        shift_indices = torch.empty((dim,), dtype=torch.long, device=z.device)
         torch.arange(dim, out=shift_indices)
         shift_indices = shift_indices - 1
         shift_indices[0] = 0
@@ -170,7 +170,7 @@ class _MixDiagNormalSample(Function):
         shift_log_scales[..., 0] = 0.0
         sigma_products = torch.cumsum(shift_log_scales, dim=-1).exp()  # b j i
 
-        reverse_indices = z.new_tensor(range(dim - 1, -1, -1), dtype=torch.long)
+        reverse_indices = torch.tensor(range(dim - 1, -1, -1), dtype=torch.long, device=z.device)
         reverse_log_sigma_0 = sigma_0.log()[..., reverse_indices]  # b 1 i
         sigma_0_products = torch.cumsum(reverse_log_sigma_0, dim=-1).exp()[..., reverse_indices - 1]  # b 1 i
         sigma_0_products[..., -1] = 1.0

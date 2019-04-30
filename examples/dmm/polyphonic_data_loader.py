@@ -101,7 +101,7 @@ def load_data(dataset):
 # this function takes a torch mini-batch and reverses each sequence
 # (w.r.t. the temporal axis, i.e. axis=1).
 def reverse_sequences(mini_batch, seq_lengths):
-    reversed_mini_batch = mini_batch.new_zeros(mini_batch.size())
+    reversed_mini_batch = torch.zeros_like(mini_batch)
     for b in range(mini_batch.size(0)):
         T = seq_lengths[b]
         time_slice = torch.arange(T - 1, -1, -1, device=mini_batch.device)

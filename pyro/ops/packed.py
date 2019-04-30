@@ -91,7 +91,9 @@ def gather(value, index, dim):
     value, index = broadcast_all(value, index)
     dims = value._pyro_dims.replace(dim, '')
     pos = value._pyro_dims.index(dim)
-    index = index.index_select(pos, index.new_tensor([0]))
+    with ignore_jit_warnings():
+        zero = torch.zeros(1, dtype=torch.long, device=index.device)
+    index = index.index_select(pos, zero)
     value = value.gather(pos, index).squeeze(pos)
     value._pyro_dims = dims
     assert value.dim() == len(value._pyro_dims)
