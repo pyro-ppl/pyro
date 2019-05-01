@@ -55,6 +55,9 @@ class Trace_MMD(ELBO):
 
     where k is a kernel.
 
+    DISCLAIMER: this implementation assumes that all latent variables are independent wrt batch dimensions.
+    Else, it can work incorrectly. The general case will be implemented in future versions.
+
     :param kernel: A kernel used to compute MMD.
         An instance of :class: `pyro.contrib.gp.kernels.kernel.Kernel`,
         or a dict that maps latent variable names to instances of :class: `pyro.contrib.gp.kernels.kernel.Kernel`.
@@ -152,12 +155,14 @@ class Trace_MMD(ELBO):
                             raise ValueError("Guide site {} is not reparameterizable".format(name))
                         model_samples = independent_model_site['value']
                         guide_samples = guide_site['value']
-                        model_samples = model_samples.view(
-                            -1, *[model_samples.size(j) for j in range(-independent_model_site['fn'].event_dim, 0)]
+                        model_event_dim_sum = sum(
+                            model_samples.size(j) for j in range(-independent_model_site['fn'].event_dim, 0)
                         )
-                        guide_samples = guide_samples.view(
-                            -1, *[guide_samples.size(j) for j in range(-guide_site['fn'].event_dim, 0)]
+                        model_samples = model_samples.view(-1, model_event_dim_sum)
+                        guide_event_dim_sum = sum(
+                            guide_samples.size(j) for j in range(-guide_site['fn'].event_dim, 0)
                         )
+                        guide_samples = guide_samples.view(-1, guide_event_dim_sum)
                         divergence = _compute_mmd(
                             model_samples, guide_samples, kernel=self._kernel[name],
                             num_particles=self.num_particles, vectorize_particles=self.vectorize_particles
