@@ -19,6 +19,7 @@ addons:
 
 cache:
     directories:
+        - $HOME/.cache/pip
         - $HOME/.data
 
 install:
