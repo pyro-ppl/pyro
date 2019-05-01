@@ -99,7 +99,6 @@ def test_dynamic_lr(scheduler):
     for epoch in range(4):
         svi.step()
         loc = pyro.param('loc').unconstrained()
-        scale = pyro.param('scale').unconstrained()
         opt_loc = scheduler.optim_objs[loc].optimizer
         opt_scale = scheduler.optim_objs[loc].optimizer
         assert opt_loc.state_dict()['param_groups'][0]['initial_lr'] == 0.01
