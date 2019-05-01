@@ -88,7 +88,7 @@ setup(
         'numpy>=1.7',
         'opt_einsum>=2.3.2',
         'six>=1.10.0',
-        'torch>=1.0.1',
+        'torch>=1.1.0',
         'tqdm>=4.28',
     ],
     extras_require={
