@@ -8,6 +8,17 @@ from torch.distributions.utils import lazy_property
 from pyro.distributions import TorchDistribution
 
 
+def _log_modified_real_bessel_fn(x, order):
+    # Based on: 
+    # Tanabe, A., Fukumizu, K., Oba, S., Takenouchi, T., & Ishii, S. (2007). 
+    # Parameter estimation for von Mises–Fisher distributions. Computational Statistics, 22(1), 145-157.
+    fs = []
+    for s in torch.arange(int(5 * order + 1)).float():
+        fs.append(2 * s * (x.log() - math.log(2)) - torch.lgamma(s + 1) - torch.lgamma(order + s + 1))
+    log_fss = torch.stack(fs, dim=-1).logsumexp(-1)
+    return order * (x.log() - math.log(2)) + log_fss
+
+
 class VonMises3D(TorchDistribution):
     """
     Spherical von Mises distribution.

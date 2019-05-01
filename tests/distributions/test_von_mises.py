@@ -24,19 +24,23 @@ def _fit_params_from_samples(samples, n_iter):
     # Estimating kappa of von Mises distribution, URL (version: 2015-06-12):
     # https://stats.stackexchange.com/q/156692
     kappa = (samples_r * 2 - samples_r ** 3) / (1 - samples_r ** 2)
+
+    def log_a2(kappa):
+        return (_log_modified_bessel_fn(kappa, order=1) - 
+                _log_modified_bessel_fn(kappa, order=0))
+
     lr = 1e-2
     kappa.requires_grad = True
     bfgs = optim.LBFGS([kappa], lr=lr)
 
     def bfgs_closure():
         bfgs.zero_grad()
-        obj = (_log_modified_bessel_fn(kappa, order=1)
-               - _log_modified_bessel_fn(kappa, order=0))
+        obj = log_a2(kappa)
         obj = (obj - samples_r.log()).abs()
         obj.backward()
         return obj
 
-    for i in range(n_iter):
+    for _ in range(n_iter):
         bfgs.step(bfgs_closure)
     return mu, kappa.detach()
 
