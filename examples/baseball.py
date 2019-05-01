@@ -271,10 +271,13 @@ def main(args):
 
     # (3) Partially Pooled Model
     nuts_kernel = NUTS(partially_pooled)
-    posterior_partially_pooled = MCMC(nuts_kernel,
-                                      num_samples=args.num_samples,
-                                      warmup_steps=args.warmup_steps,
-                                      num_chains=args.num_chains).run(at_bats, hits)
+
+    # TODO: Provide a way to record divergent transitions
+    with pyro.validation_enabled(False):
+        posterior_partially_pooled = MCMC(nuts_kernel,
+                                          num_samples=args.num_samples,
+                                          warmup_steps=args.warmup_steps,
+                                          num_chains=args.num_chains).run(at_bats, hits)
     logging.info("\nModel: Partially Pooled")
     logging.info("=======================")
     logging.info("\nphi:")
