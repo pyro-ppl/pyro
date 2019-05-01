@@ -1,9 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 from torch.distributions import constraints
-from torch.distributions.gamma import Gamma
 from torch.distributions.transforms import PowerTransform
-from torch.distributions.transformed_distribution import TransformedDistribution
+from pyro.distributions.torch import Gamma, TransformedDistribution
 
 
 class InverseGamma(TransformedDistribution):
