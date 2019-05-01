@@ -68,7 +68,7 @@ class VariationalGP(GPModel):
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
 
         N = self.X.size(0)
-        f_loc = self.X.new_zeros(self.latent_shape + (N,))
+        f_loc = torch.zeros(self.latent_shape + (N,), dtype=X.dtype, device=X.device)
         self.f_loc = Parameter(f_loc)
 
         identity = eye_like(self.X, N)
@@ -88,7 +88,7 @@ class VariationalGP(GPModel):
         Kff.view(-1)[::N + 1] += self.jitter  # add jitter to the diagonal
         Lff = Kff.cholesky()
 
-        zero_loc = self.X.new_zeros(self.f_loc.shape)
+        zero_loc = torch.zeros_like(self.f_loc)
         if self.whiten:
             identity = eye_like(self.X, N)
             pyro.sample("f",

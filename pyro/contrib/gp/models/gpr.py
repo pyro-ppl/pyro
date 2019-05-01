@@ -67,7 +67,7 @@ class GPRegression(GPModel):
     def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6):
         super(GPRegression, self).__init__(X, y, kernel, mean_function, jitter)
 
-        noise = self.X.new_tensor(1.) if noise is None else noise
+        noise = torch.tensor(1., dtype=X.dtype, device=X.device) if noise is None else noise
         self.noise = Parameter(noise)
         self.set_constraint("noise", torchdist.constraints.positive)
 
@@ -80,7 +80,7 @@ class GPRegression(GPModel):
         Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to diagonal
         Lff = Kff.cholesky()
 
-        zero_loc = self.X.new_zeros(self.X.size(0))
+        zero_loc = torch.zeros(N, dtype=self.X.dtype, device=self.X.device)
         f_loc = zero_loc + self.mean_function(self.X)
         if self.y is None:
             f_var = Lff.pow(2).sum(dim=-1)
@@ -191,7 +191,7 @@ class GPRegression(GPModel):
 
             # Update kernel matrix
             N = outside_vars["N"]
-            Kffnew = Kff.new_empty(N+1, N+1)
+            Kffnew = torch.empty(N + 1, N + 1, dtype=Kff.dtype, device=Kff.device)
             Kffnew[:N, :N] = Kff
             cross = self.kernel(X, xnew).squeeze()
             end = self.kernel(xnew, xnew).squeeze()

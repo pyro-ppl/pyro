@@ -51,4 +51,4 @@ class WhiteNoise(Kernel):
         if Z is None:
             return self.variance.expand(X.size(0)).diag()
         else:
-            return X.data.new_zeros(X.size(0), Z.size(0))
+            return torch.zeros((X.size(0), Z.size(0)), dtype=X.dtype, device=X.device)

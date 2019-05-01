@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import torch
 from torch.nn import Parameter
 
 import pyro.distributions as dist
@@ -63,7 +64,7 @@ class GPLVM(Parameterized):
         self.base_model = base_model
 
         self.X = Parameter(self.base_model.X)
-        self.set_prior("X", dist.Normal(self.X.new_zeros(self.X.shape), 1.).to_event())
+        self.set_prior("X", dist.Normal(torch.zeros_like(self.X), 1.).to_event())
         self.autoguide("X", dist.Normal)
 
     def model(self):

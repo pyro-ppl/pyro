@@ -88,7 +88,7 @@ class VariationalSparseGP(GPModel):
         self.latent_shape = latent_shape if latent_shape is not None else y_batch_shape
 
         M = self.Xu.size(0)
-        u_loc = self.Xu.new_zeros(self.latent_shape + (M,))
+        u_loc = torch.zeros(self.latent_shape + (M,), dtype=Xu.dtype, device=Xu.device)
         self.u_loc = Parameter(u_loc)
 
         identity = eye_like(self.Xu, M)
@@ -109,7 +109,7 @@ class VariationalSparseGP(GPModel):
         Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
         Luu = Kuu.cholesky()
 
-        zero_loc = self.Xu.new_zeros(self.u_loc.shape)
+        zero_loc = torch.zeros_like(self.u_loc)
         if self.whiten:
             identity = eye_like(self.Xu, M)
             pyro.sample("u",

@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from collections import OrderedDict
 
+import torch
 import torch.nn as nn
 from torch.distributions import biject_to, constraints, transform_to
 from torch.nn import Parameter
@@ -174,7 +175,7 @@ class Parameterized(nn.Module):
             dist_args = {"map"}
         elif dist_constructor is dist.Normal:
             loc = Parameter(biject_to(self._priors[name].support).inv(p).detach())
-            scale = Parameter(loc.new_ones(loc.shape))
+            scale = Parameter(torch.ones_like(loc))
             self.register_parameter("{}_loc".format(name), loc)
             self.register_parameter("{}_scale".format(name), scale)
             dist_args = {"loc", "scale"}

@@ -45,4 +45,4 @@ class Brownian(Kernel):
         Zt = Z.t()
         return torch.where(X.sign() == Zt.sign(),
                            self.variance * torch.min(X.abs(), Zt.abs()),
-                           X.data.new_zeros(X.size(0), Z.size(0)))
+                           torch.zeros((X.size(0), Z.size(0)), dtype=X.dtype, device=X.device))

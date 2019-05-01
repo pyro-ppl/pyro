@@ -98,7 +98,7 @@ class SparseGPRegression(GPModel):
 
         self.Xu = Parameter(Xu)
 
-        noise = self.X.new_tensor(1.) if noise is None else noise
+        noise = torch.tensor(1., dtype=X.dtype, device=X.device) if noise is None else noise
         self.noise = Parameter(noise)
         self.set_constraint("noise", constraints.positive)
 
@@ -141,7 +141,7 @@ class SparseGPRegression(GPModel):
                 trace_term = (Kffdiag - Qffdiag).sum() / self.noise
                 trace_term = trace_term.clamp(min=0)
 
-        zero_loc = self.X.new_zeros(N)
+        zero_loc = torch.zeros(N, dtype=self.X.dtype, device=self.X.device)
         f_loc = zero_loc + self.mean_function(self.X)
         if self.y is None:
             f_var = D + W.pow(2).sum(dim=-1)
@@ -149,7 +149,7 @@ class SparseGPRegression(GPModel):
         else:
             if self.approx == "VFE":
                 pyro.sample("trace_term", dist.Bernoulli(probs=torch.exp(-trace_term / 2.)),
-                            obs=trace_term.new_tensor(1.))
+                            obs=torch.tensor(1., dtype=trace_term.dtype, device=trace_term.device))
 
             return pyro.sample("y",
                                dist.LowRankMultivariateNormal(f_loc, W, D)
