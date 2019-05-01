@@ -23,7 +23,7 @@ cache:
 
 install:
     - pip install -U pip
-    - pip install torch -f https://download.pytorch.org/whl/cpu/stable
+    - pip install torch==1.1.0 -f https://download.pytorch.org/whl/cpu/
     - pip install .[test]
     - pip freeze
 
