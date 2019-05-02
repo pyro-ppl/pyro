@@ -51,10 +51,10 @@ def model():
 
 
 nuts_kernel = NUTS(model, adapt_step_size=True, jit_compile=True, adapt_mass_matrix=True,
-                   full_mass=False, ignore_jit_warnings=True, max_tree_depth=6)
+                   full_mass=False, ignore_jit_warnings=True, max_tree_depth=7)
 
-N_samples = 500
-N_warmup = 200
+N_samples = 700
+N_warmup = 300
 hmc_posterior = MCMC(nuts_kernel, num_samples=N_samples, warmup_steps=N_warmup).run()
 
 for site in ['w1', 'w2', 'xi1', 'xi2', 'sigsq1', 'sigsq2']:
