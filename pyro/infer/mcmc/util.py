@@ -208,3 +208,7 @@ class TraceEinsumEvaluator(object):
         log_probs = self._get_log_factors(model_trace)
         with shared_intermediates() as cache:
             return contract_to_tensor(log_probs, self._enum_dims, cache=cache)
+
+
+def initialize_model(model):
+    return init_trace, potential_fn, transform_fn
