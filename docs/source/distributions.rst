@@ -98,6 +98,13 @@ GaussianScaleMixture
     :undoc-members:
     :show-inheritance:
 
+InverseGamma
+------------
+.. autoclass:: pyro.distributions.InverseGamma
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 LKJCorrCholesky
 ---------------
 .. autoclass:: pyro.distributions.LKJCorrCholesky

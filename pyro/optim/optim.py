@@ -29,9 +29,6 @@ class PyroOptim(object):
         # holds the torch optimizer objects
         self.optim_objs = {}
 
-        # holds the current epoch
-        self.epoch = None
-
         # any optimizer state that's waiting to be consumed (because that parameter hasn't been seen before)
         self._state_waiting_to_be_consumed = {}
 
@@ -59,9 +56,7 @@ class PyroOptim(object):
 
             # if optim object was a scheduler, perform an actual optim step
             if isinstance(self.optim_objs[p], torch.optim.lr_scheduler._LRScheduler):
-                optim_kwargs = kwargs.copy()
-                optim_kwargs.pop('epoch', None)
-                self.optim_objs[p].optimizer.step(*args, **optim_kwargs)
+                self.optim_objs[p].optimizer.step(*args, **kwargs)
 
     def get_state(self):
         """
