@@ -90,6 +90,7 @@ class HMC(TraceKernel):
 
     def __init__(self,
                  model,
+                 potential_fn=None,
                  step_size=1,
                  trajectory_length=None,
                  num_steps=None,
@@ -377,9 +378,10 @@ class HMC(TraceKernel):
 
     def setup(self, warmup_steps, *args, **kwargs):
         self._warmup_steps = warmup_steps
-        self._args = args
-        self._kwargs = kwargs
-        self._initialize_model_properties()
+        if model is not None:
+            init_params, potential_fn = initialize_model(self.model, args, kwargs, jit_compile, ignore_jit_warnings)
+        self.potential_fn = potential_fn
+        self.init_params = init_params
 
     def cleanup(self):
         self._reset()

@@ -210,5 +210,62 @@ class TraceEinsumEvaluator(object):
             return contract_to_tensor(log_probs, self._enum_dims, cache=cache)
 
 
-def initialize_model(model):
-    return init_trace, potential_fn, transform_fn
+def _potential_energy_jit(self, z):
+    names, vals = zip(*sorted(z.items()))
+    if self._compiled_potential_fn:
+        return self._compiled_potential_fn(*vals)
+
+    def compiled(*zi):
+        z_constrained = list(zi)
+        # transform to constrained space.
+        for i, name in enumerate(names):
+            if name in self.transforms:
+                transform = self.transforms[name]
+                z_constrained[i] = transform.inv(z_constrained[i])
+        z_constrained = dict(zip(names, z_constrained))
+        trace = self._get_trace(z_constrained)
+        potential_energy = -self._compute_trace_log_prob(trace)
+        # adjust by the jacobian for this transformation.
+        for i, name in enumerate(names):
+            if name in self.transforms:
+                transform = self.transforms[name]
+                potential_energy += transform.log_abs_det_jacobian(z_constrained[name], zi[i]).sum()
+        return potential_energy
+
+    with pyro.validation_enabled(False), optional(ignore_jit_warnings(), self._ignore_jit_warnings):
+        self._compiled_potential_fn = torch.jit.trace(compiled, vals, **self._jit_options)
+    return self._compiled_potential_fn(*vals)
+
+
+def pe_maker(model, model_args, model_kwargs, transforms, has_enumerable_sites, max_plate_nesting):
+    # TODO: get has_enumerable_sites, max_plate_nesting
+    trace_prob_evaluator = TraceEinsumEvaluator(trace,
+                                                has_enumerable_sites,
+                                                max_plate_nesting)
+
+    def potential_energy(params):
+        params_constrained = {k: transforms[k](v) for k, v in params.items()}
+        model = poutine.condition(model, params_constrained)
+        model_trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
+        joint_density = trace_prob_evaluator.log_prob(model_trace)
+        for name, t in transforms.items():
+            joint_density = joint_density + torch.sum(
+                t.log_abs_det_jacobian(params[name], params_constrained[name]))
+        return -joint_density
+
+    return potential_energy
+
+
+def transform_fn(transforms, params, invert=False):
+    return {k: transforms[k](v) if not invert else transforms[k].inv(v)
+            for k, v in params.items()}
+
+
+def initialize_model(model, model_args, model_kwargs, jit_compile=False, ignore_jit_warnings=False):
+    model = seed(model, rng)
+    model_trace = trace(model).get_trace(*model_args, **model_kwargs)
+    sample_sites = {k: v for k, v in model_trace.items() if v['type'] == 'sample' and not v['is_observed']}
+    transforms = {k: biject_to(v['fn'].support) for k, v in sample_sites.items()}
+    init_params = transform_fn(transforms, {k: v['value'] for k, v in sample_sites.items()}, invert=True)
+    potential_fn = pe_maker(model, model_args, model_kwargs, transforms)
+    return init_params, potential_fn, partial(transform_fn, transforms)
