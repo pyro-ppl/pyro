@@ -246,34 +246,29 @@ class HMC(TraceKernel):
 
     @property
     def initial_trace(self):
-        """
-        Find a valid trace to initiate the MCMC sampler. This is also used as a
-        prototype trace to inter-convert between Pyro's trace object and dict
-        object used by the integrator.
-        """
-        if self._initial_trace:
-            return self._initial_trace
-        trace = self._prototype_trace
-        for i in range(self._max_tries_initial_trace):
-            z = {name: node["value"].detach()
-                 for name, node in self._iter_latent_nodes(trace)}
-            # automatically transform `z` to unconstrained space, if needed.
-            for name, transform in self.transforms.items():
-                z[name] = transform(z[name])
-            potential_energy = self._potential_energy(z)
-            if not torch_isnan(potential_energy) and not torch_isinf(potential_energy):
-                self._initial_trace = trace
-                return trace
-            trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
-        raise ValueError("Model specification seems incorrect - cannot find a valid trace.")
+        return self._initial_trace
 
     @initial_trace.setter
     def initial_trace(self, trace):
         self._initial_trace = trace
-        if self._warmup_steps is not None:  # if setup is already called
-            self._initialize_step_size()
+        init_samples = {name: trace[name]["value"] for name in self._init_params}
+        self._init_params = self._transform_fn(init_samples, invert=False)
 
-    def _initialize_model_properties(self):
+    def _initialize_model_properties(self, model_args, model_kwargs):
+        init_params, potential_fn, transform_fn, inital_trace = initialize_model(
+            self.model,
+            model_args,
+            model_kwargs,
+            transforms=self.transforms,
+            max_plate_nesting=self._max_plate_nesting,
+            jit_compile=self._jit_compile,
+            jit_options=self._jit_options,
+            ignore_jit_warnings=self._ignore_jit_warnings,
+        )
+        self._init_params = init_params
+        self.potential_fn = potential_fn
+        self.transform_fn = transform_fn
+        self._initial_trace = initial_trace
         # make mass_matrix based on init_params
         if site_value is not None:
             mass_matrix_size = sum(self._r_numels.values())
@@ -299,10 +294,8 @@ class HMC(TraceKernel):
 
     def setup(self, warmup_steps, *args, **kwargs):
         self._warmup_steps = warmup_steps
-        if model is not None:
-            init_params, potential_fn = initialize_model(self.model, args, kwargs, jit_compile, ignore_jit_warnings)
-        self.potential_fn = potential_fn
-        self._init_params = init_params
+        if self.model is not None:
+            self._initialize_model_properties(self.model, args, kwargs)
 
     def cleanup(self):
         self._reset()

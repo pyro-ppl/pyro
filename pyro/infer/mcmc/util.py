@@ -230,7 +230,7 @@ def _guess_max_plate_nesting(model, args, kwargs):
     return max_plate_nesting
 
 
-def _transform_fn(transforms, params, invert=False):
+def _transform_fn(transforms, params, invert=True):
     return {k: transforms[k](v) if not invert else transforms[k].inv(v)
             for k, v in params.items()}
 
@@ -250,15 +250,15 @@ def _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
 
 
 def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, prototype_params,
-                     max_tries_initial_trace=100):
+                     max_tries_initial_params=100):
     params = prototype_params
-    for i in range(max_tries_initial_trace):
+    for i in range(max_tries_initial_params):
         potential_energy = potential_fn(params)
         if not torch_isnan(potential_energy) and not torch_isinf(potential_energy):
             return params
         trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
         samples = {name: trace[name]["value"] for name in params}
-        params = _transform_fn(transforms, samples)
+        params = _transform_fn(transforms, samples, invert=False)
     raise ValueError("Model specification seems incorrect - cannot find a valid params.")
 
 
@@ -291,9 +291,9 @@ def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate
     trace_prob_evaluator = TraceEinsumEvaluator(model_trace,
                                                 has_enumerable_sites,
                                                 max_plate_nesting)
-    prototype_params = _transform_fn(transforms, prototype_samples)
-    potential_fn = _pe_maker(model, model_args, model_kwargs,
-                             trace_prob_evaluator, inv_transform_fn)
+    prototype_params = _transform_fn(transforms, prototype_samples, invert=False)
+
+    potential_fn = _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
     if jit_compile:
         jit_options = {"check_trace": False} if jit_options is None else jit_options
         with pyro.validation_enabled(False), optional(ignore_jit_warnings(), ignore_jit_warnings):
@@ -311,5 +311,5 @@ def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate
 
     init_params = _get_init_params(model, model_args, model_kwargs, transforms,
                                    potential_fn, prototype_params)
-    inv_transform_fn = partial(_transform_fn, transforms, invert=True)
-    return init_params, potential_fn, inv_transform_fn
+    transform_fn = partial(_transform_fn, transforms)
+    return init_params, potential_fn, transform_fn, model_trace
