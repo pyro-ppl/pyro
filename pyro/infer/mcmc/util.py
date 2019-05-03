@@ -230,9 +230,14 @@ def _guess_max_plate_nesting(model, args, kwargs):
     return max_plate_nesting
 
 
-def _pe_maker(model, model_args, model_kwargs, transforms, trace_prob_evaluator):
+def _transform_fn(transforms, params, invert=False):
+    return {k: transforms[k](v) if not invert else transforms[k].inv(v)
+            for k, v in params.items()}
+
+
+def _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms):
     def potential_energy(params):
-        params_constrained = {k: transforms[k].inv(v) for k, v in params.items()}
+        params_constrained = _transform_fn(transforms, params, invert=True)
         model = poutine.condition(model, params_constrained)
         model_trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
         log_joint = -trace_prob_evaluator.log_prob(model_trace)
@@ -244,13 +249,17 @@ def _pe_maker(model, model_args, model_kwargs, transforms, trace_prob_evaluator)
     return potential_energy
 
 
-def _transform_fn(transforms, params, invert=False):
-    return {k: transforms[k](v) if not invert else transforms[k].inv(v)
-            for k, v in params.items()}
-
-
-def initial_params():
-    max_tries_initial_trace = 100
+def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, prototype_params,
+                     max_tries_initial_trace=100):
+    params = prototype_params
+    for i in range(max_tries_initial_trace):
+        potential_energy = potential_fn(params)
+        if not torch_isnan(potential_energy) and not torch_isinf(potential_energy):
+            return params
+        trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
+        samples = {name: trace[name]["value"] for name in params}
+        params = _transform_fn(transforms, samples)
+    raise ValueError("Model specification seems incorrect - cannot find a valid params.")
 
 
 def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate_nesting=None,
@@ -268,31 +277,27 @@ def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate
                          first_available_dim=-1 - max_plate_nesting)
     model_trace = trace(model).get_trace(*model_args, **model_kwargs)
     has_enumerable_sites = False
-    sample_sites = {}
+    prototype_samples = {}
     for name, node in trace.iter_stochastic_nodes():
         if isinstance(node["fn"], _Subsample):
             continue
         if node["fn"].has_enumerate_support:
             has_enumerable_sites = True
             continue
-        sample_sites[name] = node["value"]
-        if node["fn"].support is not constraints.real and automatic_transform_enabled:
+        prototype_samples[name] = node["value"]
+        if automatic_transform_enabled:
             transforms[name] = biject_to(node["fn"].support).inv
-        site_value = transforms[name](node["value"])
 
     trace_prob_evaluator = TraceEinsumEvaluator(model_trace,
                                                 has_enumerable_sites,
                                                 max_plate_nesting)
-    # TODO: max tries initial_params
-    init_params = _transform_fn(transforms,
-                                {k: v['value'] for k, v in sample_sites.items()},
-                                invert=True)
-    potential_fn = _pe_maker(model, model_args, model_kwargs, transforms)
-
+    prototype_params = _transform_fn(transforms, prototype_samples)
+    potential_fn = _pe_maker(model, model_args, model_kwargs,
+                             trace_prob_evaluator, inv_transform_fn)
     if jit_compile:
         jit_options = {"check_trace": False} if jit_options is None else jit_options
         with pyro.validation_enabled(False), optional(ignore_jit_warnings(), ignore_jit_warnings):
-            names, vals = zip(*sorted(sample_sites.items()))
+            names, vals = zip(*sorted(prototype_params.items()))
 
             def _pe_jit(*zi):
                 params = dict(zip(names, zi))
@@ -300,8 +305,11 @@ def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate
 
             compiled_pe = torch.jit.trace(_pe_jit, vals, **jit_options)
 
-            def potental_fn(params):
+            def potential_fn(params):
                 _, vals = zip(*sorted(params.items()))
                 return compiled_pe(*vals)
 
-    return init_params, potential_fn, partial(transform_fn, transforms)
+    init_params = _get_init_params(model, model_args, model_kwargs, transforms,
+                                   potential_fn, prototype_params)
+    inv_transform_fn = partial(_transform_fn, transforms, invert=True)
+    return init_params, potential_fn, inv_transform_fn
