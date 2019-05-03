@@ -120,8 +120,6 @@ class HMC(TraceKernel):
         self._direction_threshold = math.log(0.8)  # from Stan
         # number of tries to get a valid initial trace
         self._max_tries_initial_trace = 100
-        self.transforms = {} if transforms is None else transforms
-        self._automatic_transform_enabled = True if transforms is None else False
         self._reset()
         self._adapter = WarmupAdapter(step_size,
                                       adapt_step_size=adapt_step_size,
@@ -130,46 +128,12 @@ class HMC(TraceKernel):
                                       is_diag_mass=not full_mass)
         super(HMC, self).__init__()
 
-    def _get_trace(self, z):
-        z_trace = self._prototype_trace
-        for name, value in z.items():
-            z_trace.nodes[name]["value"] = value
-        trace_poutine = poutine.trace(poutine.replay(self.model, trace=z_trace))
-        trace_poutine(*self._args, **self._kwargs)
-        return trace_poutine.trace
-
-    @staticmethod
-    def _iter_latent_nodes(trace):
-        for name, node in sorted(trace.iter_stochastic_nodes(), key=lambda x: x[0]):
-            if not (node["fn"].has_enumerate_support or isinstance(node["fn"], _Subsample)):
-                yield (name, node)
-
-    def _compute_trace_log_prob(self, model_trace):
-        return self._trace_prob_evaluator.log_prob(model_trace)
-
     def _kinetic_energy(self, r):
         r_flat = torch.cat([r[site_name].reshape(-1) for site_name in sorted(r)])
         if self.inverse_mass_matrix.dim() == 2:
             return 0.5 * self.inverse_mass_matrix.matmul(r_flat).dot(r_flat)
         else:
             return 0.5 * self.inverse_mass_matrix.dot(r_flat ** 2)
-
-    def _potential_energy(self, z):
-        if not z:
-            return 0.
-        if self._jit_compile:
-            return self._potential_energy_jit(z)
-        # Since the model is specified in the constrained space, transform the
-        # unconstrained R.V.s `z` to the constrained space.
-        z_constrained = z.copy()
-        for name, transform in self.transforms.items():
-            z_constrained[name] = transform.inv(z_constrained[name])
-        trace = self._get_trace(z_constrained)
-        potential_energy = -self._compute_trace_log_prob(trace)
-        # adjust by the jacobian for this transformation.
-        for name, transform in self.transforms.items():
-            potential_energy += transform.log_abs_det_jacobian(z_constrained[name], z[name]).sum()
-        return potential_energy
 
     def _potential_energy_jit(self, z):
         names, vals = zip(*sorted(z.items()))
@@ -256,24 +220,6 @@ class HMC(TraceKernel):
             direction_new = 1 if self._direction_threshold < -delta_energy else -1
         return step_size
 
-    def _guess_max_plate_nesting(self):
-        """
-        Guesses max_plate_nesting by running the model once
-        without enumeration. This optimistically assumes static model
-        structure.
-        """
-        with poutine.block():
-            model_trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
-        sites = [site
-                 for site in model_trace.nodes.values()
-                 if site["type"] == "sample"]
-
-        dims = [frame.dim
-                for site in sites
-                for frame in site["cond_indep_stack"]
-                if frame.vectorized]
-        self.max_plate_nesting = -min(dims) if dims else 0
-
     def _sample_r(self, name):
         r_dist = self._adapter.r_dist
         r_flat = pyro.sample(name, r_dist)
@@ -328,32 +274,7 @@ class HMC(TraceKernel):
             self._initialize_step_size()
 
     def _initialize_model_properties(self):
-        if self.max_plate_nesting is None:
-            self._guess_max_plate_nesting()
-        # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
-        # No-op if model does not have any discrete latents.
-        self.model = poutine.enum(config_enumerate(self.model),
-                                  first_available_dim=-1 - self.max_plate_nesting)
-        if self._automatic_transform_enabled:
-            self.transforms = {}
-        trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
-        self._prototype_trace = trace
-        site_value = None
-        for name, node in trace.iter_stochastic_nodes():
-            if isinstance(node["fn"], _Subsample):
-                continue
-            if node["fn"].has_enumerate_support:
-                self._has_enumerable_sites = True
-                continue
-            site_value = node["value"]
-            if node["fn"].support is not constraints.real and self._automatic_transform_enabled:
-                self.transforms[name] = biject_to(node["fn"].support).inv
-                site_value = self.transforms[name](node["value"])
-            self._r_shapes[name] = site_value.shape
-            self._r_numels[name] = site_value.numel()
-        self._trace_prob_evaluator = TraceEinsumEvaluator(trace,
-                                                          self._has_enumerable_sites,
-                                                          self.max_plate_nesting)
+        # make mass_matrix based on init_params
         if site_value is not None:
             mass_matrix_size = sum(self._r_numels.values())
             if self._adapter.is_diag_mass:
@@ -381,7 +302,7 @@ class HMC(TraceKernel):
         if model is not None:
             init_params, potential_fn = initialize_model(self.model, args, kwargs, jit_compile, ignore_jit_warnings)
         self.potential_fn = potential_fn
-        self.init_params = init_params
+        self._init_params = init_params
 
     def cleanup(self):
         self._reset()

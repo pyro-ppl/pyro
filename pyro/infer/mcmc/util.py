@@ -1,4 +1,5 @@
 from collections import OrderedDict, defaultdict
+from functools import partial
 
 import torch
 from opt_einsum import shared_intermediates
@@ -210,62 +211,97 @@ class TraceEinsumEvaluator(object):
             return contract_to_tensor(log_probs, self._enum_dims, cache=cache)
 
 
-def _potential_energy_jit(self, z):
-    names, vals = zip(*sorted(z.items()))
-    if self._compiled_potential_fn:
-        return self._compiled_potential_fn(*vals)
+def _guess_max_plate_nesting(model, args, kwargs):
+    """
+    Guesses max_plate_nesting by running the model once
+    without enumeration. This optimistically assumes static model
+    structure.
+    """
+    with poutine.block():
+        model_trace = poutine.trace(model).get_trace(*args, **kwargs)
+    sites = [site for site in model_trace.nodes.values()
+             if site["type"] == "sample"]
 
-    def compiled(*zi):
-        z_constrained = list(zi)
-        # transform to constrained space.
-        for i, name in enumerate(names):
-            if name in self.transforms:
-                transform = self.transforms[name]
-                z_constrained[i] = transform.inv(z_constrained[i])
-        z_constrained = dict(zip(names, z_constrained))
-        trace = self._get_trace(z_constrained)
-        potential_energy = -self._compute_trace_log_prob(trace)
-        # adjust by the jacobian for this transformation.
-        for i, name in enumerate(names):
-            if name in self.transforms:
-                transform = self.transforms[name]
-                potential_energy += transform.log_abs_det_jacobian(z_constrained[name], zi[i]).sum()
-        return potential_energy
-
-    with pyro.validation_enabled(False), optional(ignore_jit_warnings(), self._ignore_jit_warnings):
-        self._compiled_potential_fn = torch.jit.trace(compiled, vals, **self._jit_options)
-    return self._compiled_potential_fn(*vals)
+    dims = [frame.dim
+            for site in sites
+            for frame in site["cond_indep_stack"]
+            if frame.vectorized]
+    max_plate_nesting = -min(dims) if dims else 0
+    return max_plate_nesting
 
 
-def pe_maker(model, model_args, model_kwargs, transforms, has_enumerable_sites, max_plate_nesting):
-    # TODO: get has_enumerable_sites, max_plate_nesting
-    trace_prob_evaluator = TraceEinsumEvaluator(trace,
-                                                has_enumerable_sites,
-                                                max_plate_nesting)
-
+def _pe_maker(model, model_args, model_kwargs, transforms, trace_prob_evaluator):
     def potential_energy(params):
-        params_constrained = {k: transforms[k](v) for k, v in params.items()}
+        params_constrained = {k: transforms[k].inv(v) for k, v in params.items()}
         model = poutine.condition(model, params_constrained)
         model_trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
-        joint_density = trace_prob_evaluator.log_prob(model_trace)
+        log_joint = -trace_prob_evaluator.log_prob(model_trace)
         for name, t in transforms.items():
-            joint_density = joint_density + torch.sum(
-                t.log_abs_det_jacobian(params[name], params_constrained[name]))
-        return -joint_density
+            log_joint = log_joint + torch.sum(
+                t.log_abs_det_jacobian(params_constrained[name], params[name]))
+        return log_joint
 
     return potential_energy
 
 
-def transform_fn(transforms, params, invert=False):
+def _transform_fn(transforms, params, invert=False):
     return {k: transforms[k](v) if not invert else transforms[k].inv(v)
             for k, v in params.items()}
 
 
-def initialize_model(model, model_args, model_kwargs, jit_compile=False, ignore_jit_warnings=False):
-    model = seed(model, rng)
+def initial_params():
+    max_tries_initial_trace = 100
+
+
+def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate_nesting=None,
+                     jit_compile=False, jit_options=None, ignore_jit_warnings=False):
+    # XXX `transforms` domains are sites' supports
+    if transforms is None:
+        automatic_transform_enabled = True
+        transforms = {}
+    else:
+        automatic_transform_enabled = False
+    max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
+    # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
+    # No-op if model does not have any discrete latents.
+    model = poutine.enum(config_enumerate(model),
+                         first_available_dim=-1 - max_plate_nesting)
     model_trace = trace(model).get_trace(*model_args, **model_kwargs)
-    sample_sites = {k: v for k, v in model_trace.items() if v['type'] == 'sample' and not v['is_observed']}
-    transforms = {k: biject_to(v['fn'].support) for k, v in sample_sites.items()}
-    init_params = transform_fn(transforms, {k: v['value'] for k, v in sample_sites.items()}, invert=True)
-    potential_fn = pe_maker(model, model_args, model_kwargs, transforms)
+    has_enumerable_sites = False
+    sample_sites = {}
+    for name, node in trace.iter_stochastic_nodes():
+        if isinstance(node["fn"], _Subsample):
+            continue
+        if node["fn"].has_enumerate_support:
+            has_enumerable_sites = True
+            continue
+        sample_sites[name] = node["value"]
+        if node["fn"].support is not constraints.real and automatic_transform_enabled:
+            transforms[name] = biject_to(node["fn"].support).inv
+        site_value = transforms[name](node["value"])
+
+    trace_prob_evaluator = TraceEinsumEvaluator(model_trace,
+                                                has_enumerable_sites,
+                                                max_plate_nesting)
+    # TODO: max tries initial_params
+    init_params = _transform_fn(transforms,
+                                {k: v['value'] for k, v in sample_sites.items()},
+                                invert=True)
+    potential_fn = _pe_maker(model, model_args, model_kwargs, transforms)
+
+    if jit_compile:
+        jit_options = {"check_trace": False} if jit_options is None else jit_options
+        with pyro.validation_enabled(False), optional(ignore_jit_warnings(), ignore_jit_warnings):
+            names, vals = zip(*sorted(sample_sites.items()))
+
+            def _pe_jit(*zi):
+                params = dict(zip(names, zi))
+                return potential_fn(params)
+
+            compiled_pe = torch.jit.trace(_pe_jit, vals, **jit_options)
+
+            def potental_fn(params):
+                _, vals = zip(*sorted(params.items()))
+                return compiled_pe(*vals)
+
     return init_params, potential_fn, partial(transform_fn, transforms)
