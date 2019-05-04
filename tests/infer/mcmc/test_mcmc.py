@@ -10,18 +10,19 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.mcmc import MCMC, _SingleSampler, _ParallelSampler
-from pyro.infer.mcmc.trace_kernel import TraceKernel
+from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.util import optional
 from tests.common import assert_equal, skipif_param
 
 
-class PriorKernel(TraceKernel):
+class PriorKernel(MCMCKernel):
     """
     Disregards the value of the current trace (or observed data) and
     samples a value from the model's prior.
     """
     def __init__(self, model):
         self.model = model
+        self.transforms = {}
         self.data = None
 
     def setup(self, warmup_steps, data):
@@ -30,11 +31,12 @@ class PriorKernel(TraceKernel):
     def cleanup(self):
         self.data = None
 
-    def initial_trace(self):
-        return poutine.trace(self.model).get_trace(self.data)
+    def initial_params(self):
+        trace = poutine.trace(self.model).get_trace(self.data)
+        return {k: v["value"] for k, v in trace.iter_stochastic_nodes()}
 
     def sample(self, trace):
-        return self.initial_trace()
+        return self.initial_params()
 
 
 def normal_normal_model(data):

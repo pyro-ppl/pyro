@@ -17,6 +17,7 @@ import pyro.ops.stats as stats
 from pyro.infer import TracePosterior
 from pyro.infer.abstract_infer import Marginals
 from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
+import pyro.poutine as poutine
 from pyro.util import optional
 
 MAX_SEED = 2**32 - 1
@@ -186,13 +187,13 @@ class _SingleSampler(TracePosterior):
         self.disable_progbar = disable_progbar
         super(_SingleSampler, self).__init__()
 
-    def _gen_samples(self, num_samples, init_trace):
-        trace = init_trace
+    def _gen_samples(self, num_samples, init_params):
+        params = init_params
         for _ in range(num_samples):
-            trace = self.kernel.sample(trace)
+            params = self.kernel.sample(params)
             diagnostics = json.dumps(self.kernel.diagnostics())
             self.logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
-            yield trace
+            yield params
 
     def _traces(self, *args, **kwargs):
         logger_id = kwargs.pop("logger_id", "")
@@ -204,14 +205,14 @@ class _SingleSampler(TracePosterior):
             progress_bar = ProgressBar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
         self.logger = initialize_logger(self.logger, logger_id, progress_bar, log_queue)
         self.kernel.setup(self.warmup_steps, *args, **kwargs)
-        trace = self.kernel.initial_trace
+        params = self.kernel.initial_params
         with optional(progress_bar, not is_multiprocessing):
-            for trace in self._gen_samples(self.warmup_steps, trace):
+            for params in self._gen_samples(self.warmup_steps, params):
                 continue
             if progress_bar:
                 progress_bar.set_description("Sample")
-            for trace in self._gen_samples(self.num_samples, trace):
-                yield (trace, 1.0)
+            for params in self._gen_samples(self.num_samples, params):
+                yield (params, 1.0)
         self.kernel.cleanup()
 
 
@@ -247,6 +248,7 @@ class MCMC(TracePosterior):
     """
     def __init__(self, kernel, num_samples, warmup_steps=None,
                  num_chains=1, mp_context=None, disable_progbar=False):
+        self.kernel = kernel
         self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
         if num_chains > 1:
@@ -264,9 +266,21 @@ class MCMC(TracePosterior):
             self.sampler = _SingleSampler(kernel, num_samples, self.warmup_steps, disable_progbar)
         super(MCMC, self).__init__(num_chains=num_chains)
 
+    # TODO: Refactor so that the MCMC class directly has access to the
+    # trace generator and transforms needed to do this wrapping.
+    def _trace_wrap(self, z, *args, **kwargs):
+        for name, transform in self.kernel.transforms.items():
+            z[name] = transform.inv(z[name])
+        z_trace = self.kernel._prototype_trace
+        for name, value in z.items():
+            z_trace.nodes[name]["value"] = value
+        trace_poutine = poutine.trace(poutine.replay(self.kernel.model, z_trace))
+        trace_poutine(*args, **kwargs)
+        return trace_poutine.trace
+
     def _traces(self, *args, **kwargs):
-        for sample in self.sampler._traces(*args, **kwargs):
-            yield sample
+        for values in self.sampler._traces(*args, **kwargs):
+            yield (self._trace_wrap(values[0], *args, **kwargs),) + values[1:]
 
     def marginal(self, sites=None):
         """
