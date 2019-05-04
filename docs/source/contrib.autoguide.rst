@@ -90,3 +90,13 @@ AutoDiscreteParallel
     :undoc-members:
     :special-members: __call__
     :show-inheritance:
+
+
+Initialization
+--------------
+.. automodule:: pyro.contrib.autoguide.initialization
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+    :member-order: bysource
