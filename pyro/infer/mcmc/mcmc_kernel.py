@@ -53,16 +53,17 @@ class MCMCKernel(object):
     @initial_params.setter
     def initial_params(self, params):
         """
-        Sets the parameters to initiate the MCMC run.
+        Sets the parameters to initiate the MCMC run. Note that the parameters must
+        have unconstrained support.
         """
         raise NotImplementedError
 
     @abstractmethod
     def sample(self, params):
         """
-        Samples parameters from the posterior distribution, when given an existing trace.
+        Samples parameters from the posterior distribution, when given existing parameters.
 
-        :param trace: Current parameter values.
+        :param dict params: Current parameter values.
         :param int time_step: Current time step.
         :return: New parameters from the posterior distribution.
         """

@@ -266,8 +266,9 @@ class MCMC(TracePosterior):
             self.sampler = _SingleSampler(kernel, num_samples, self.warmup_steps, disable_progbar)
         super(MCMC, self).__init__(num_chains=num_chains)
 
-    # TODO: Refactor so that the MCMC class directly has access to the
-    # trace generator and transforms needed to do this wrapping.
+    # TODO: Refactor so that the MCMC class directly has access to the trace generator
+    # and transforms needed to do this wrapping. Note that only unconstrained parameters
+    # are passed to `MCMCKernel` classes.
     def _trace_wrap(self, z, *args, **kwargs):
         for name, transform in self.kernel.transforms.items():
             z[name] = transform.inv(z[name])

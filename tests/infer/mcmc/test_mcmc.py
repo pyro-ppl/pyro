@@ -24,9 +24,11 @@ class PriorKernel(MCMCKernel):
         self.model = model
         self.transforms = {}
         self.data = None
+        self._prototype_trace = None
 
     def setup(self, warmup_steps, data):
         self.data = data
+        self._prototype_trace = poutine.trace(self.model).get_trace(data)
 
     def cleanup(self):
         self.data = None
