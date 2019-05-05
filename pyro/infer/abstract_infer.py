@@ -284,15 +284,13 @@ class TracePredictive(TracePosterior):
     :param model: arbitrary Python callable containing Pyro primitives.
     :param TracePosterior posterior: trace posterior instance holding samples from the model's approximate posterior.
     :param int num_samples: number of samples to generate.
-    :param keep_sites: The sites which should be sampled from posterior predictive distribution (default: all)
-    :param keep_plates: The plates which should be sampled from posterior predictive distribution (default: all)
+    :param keep_sites: The sites which should be sampled from posterior distribution (default: all)
     """
-    def __init__(self, model, posterior, num_samples, keep_sites=None, keep_plates=None):
+    def __init__(self, model, posterior, num_samples, keep_sites=None):
         self.model = model
         self.posterior = posterior
         self.num_samples = num_samples
         self.keep_sites = keep_sites
-        self.keep_plates = keep_plates
         super(TracePredictive, self).__init__()
 
     def _traces(self, *args, **kwargs):
@@ -307,17 +305,12 @@ class TracePredictive(TracePosterior):
             yield (resampled_trace, 0., 0)
 
     def _remove_dropped_nodes(self, trace):
-        if self.keep_sites is None and self.keep_plates is None:
+        if self.keep_sites is None:
             return
         for name, site in list(trace.nodes.items()):
-            if name not in self.keep_sites and name not in self.keep_plates:
+            if name not in self.keep_sites:
                 trace.remove_node(name)
                 continue
-            try:
-                if any(cis.name in self.keep_plates for cis in site["cond_indep_stack"]):
-                    trace.remove_node(name)
-            except KeyError:
-                pass
 
     def _adjust_to_data(self, trace, data_trace):
         for name, site in list(trace.nodes.items()):
@@ -333,12 +326,9 @@ class TracePredictive(TracePosterior):
                     # Select random sub-indices to replay values under conditionally independent stacks.
                     # Otherwise, we assume there is an dependence of indexes between training data
                     # and prediction data.
-                    bdim = cis.dim - site["fn"].event_dim
-                    cat = Categorical(logits=torch.ones(site["value"].size(bdim),
-                                                        device=site["value"].device,
-                                                        dtype=torch.float))
-                    subidxs = cat.sample((cis.size,))
-                    site["value"] = site["value"].index_select(bdim, subidxs)
+                    batch_dim = cis.dim - site["fn"].event_dim
+                    subidxs = torch.randint(0, site['value'].size(batch_dim), (cis.size,))
+                    site["value"] = site["value"].index_select(batch_dim, subidxs)
             except KeyError:
                 pass
 
