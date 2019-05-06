@@ -195,6 +195,19 @@ class _SingleSampler(TracePosterior):
             self.logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
             yield params
 
+    # TODO: Refactor so that this class directly has access to the trace generator
+    # and transforms needed to do this wrapping. Note that only unconstrained parameters
+    # are passed to `MCMCKernel` classes.
+    def _trace_wrap(self, z, *args, **kwargs):
+        for name, transform in self.kernel.transforms.items():
+            z[name] = transform.inv(z[name])
+        z_trace = self.kernel._prototype_trace
+        for name, value in z.items():
+            z_trace.nodes[name]["value"] = value
+        trace_poutine = poutine.trace(poutine.replay(self.kernel.model, z_trace))
+        trace_poutine(*args, **kwargs)
+        return trace_poutine.trace
+
     def _traces(self, *args, **kwargs):
         logger_id = kwargs.pop("logger_id", "")
         log_queue = kwargs.pop("log_queue", None)
@@ -212,7 +225,8 @@ class _SingleSampler(TracePosterior):
             if progress_bar:
                 progress_bar.set_description("Sample")
             for params in self._gen_samples(self.num_samples, params):
-                yield (params, 1.0)
+                trace = self._trace_wrap(params, *args, **kwargs)
+                yield (trace, 1.0)
         self.kernel.cleanup()
 
 
@@ -266,22 +280,9 @@ class MCMC(TracePosterior):
             self.sampler = _SingleSampler(kernel, num_samples, self.warmup_steps, disable_progbar)
         super(MCMC, self).__init__(num_chains=num_chains)
 
-    # TODO: Refactor so that the MCMC class directly has access to the trace generator
-    # and transforms needed to do this wrapping. Note that only unconstrained parameters
-    # are passed to `MCMCKernel` classes.
-    def _trace_wrap(self, z, *args, **kwargs):
-        for name, transform in self.kernel.transforms.items():
-            z[name] = transform.inv(z[name])
-        z_trace = self.kernel._prototype_trace
-        for name, value in z.items():
-            z_trace.nodes[name]["value"] = value
-        trace_poutine = poutine.trace(poutine.replay(self.kernel.model, z_trace))
-        trace_poutine(*args, **kwargs)
-        return trace_poutine.trace
-
     def _traces(self, *args, **kwargs):
-        for values in self.sampler._traces(*args, **kwargs):
-            yield (self._trace_wrap(values[0], *args, **kwargs),) + values[1:]
+        for sample in self.sampler._traces(*args, **kwargs):
+            yield sample
 
     def marginal(self, sites=None):
         """
