@@ -262,7 +262,6 @@ class MCMC(TracePosterior):
     """
     def __init__(self, kernel, num_samples, warmup_steps=None,
                  num_chains=1, mp_context=None, disable_progbar=False):
-        self.kernel = kernel
         self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
         if num_chains > 1:
