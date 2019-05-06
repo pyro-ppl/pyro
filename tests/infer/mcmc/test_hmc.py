@@ -177,7 +177,7 @@ def test_logistic_regression(step_size, trajectory_length, num_steps,
     labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
 
     def model(data):
-        coefs_mean = torch.zeros(dim)
+        coefs_mean = pyro.param('coefs_mean', torch.zeros(dim))
         coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(dim)))
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
@@ -263,7 +263,7 @@ def test_bernoulli_latent_model(jit):
     assert_equal(posterior, y_prob, prec=0.06)
 
 
-def test_initial_trace(monkeypatch):
+def test_initial_params(monkeypatch):
     dim = 3
     data = torch.randn(2000, dim)
     true_coefs = torch.arange(1., dim + 1.)
@@ -283,5 +283,5 @@ def test_initial_trace(monkeypatch):
     hmc_kernel = HMC(model, adapt_step_size=False)
     monkeypatch.setattr(hmc_kernel, '_compute_trace_log_prob', tr_log_prob)
     hmc_kernel.setup(0, data)
-    hmc_kernel.initial_trace
+    hmc_kernel.initial_params
     assert len(trace_log_prob_replay) == 0

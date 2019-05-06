@@ -273,7 +273,7 @@ class NUTS(HMC):
         if not z:
             self._accept_cnt += 1
             self._t += 1
-            return self._get_trace(z)
+            return z
         r, r_flat = self._sample_r(name="r_t={}".format(self._t))
         energy_current = self._kinetic_energy(r) + potential_energy
 
@@ -371,8 +371,4 @@ class NUTS(HMC):
             self._accept_cnt += 1
 
         self._t += 1
-        # get trace with the constrained values for `z`.
-        z = z.copy()
-        for name, transform in self.transforms.items():
-            z[name] = transform.inv(z[name])
-        return self._get_trace(z)
+        return z.copy()
