@@ -230,7 +230,7 @@ class HMC(MCMCKernel):
             max_plate_nesting=self._max_plate_nesting,
             jit_compile=self._jit_compile,
             jit_options=self._jit_options,
-            ignore_jit_warnings=self._ignore_jit_warnings,
+            skip_jit_warnings=self._ignore_jit_warnings,
         )
         self.potential_fn = potential_fn
         self.transforms = transforms
@@ -238,8 +238,8 @@ class HMC(MCMCKernel):
         self._prototype_trace = trace
 
     def _initialize_adapter(self):
-        mass_matrix_size = sum({p.numel() for p in self.initial_params})
-        site_value = self.initial_params.values()[0]
+        mass_matrix_size = sum({p.numel() for p in self.initial_params.values()})
+        site_value = list(self.initial_params.values())[0]
         if self._adapter.is_diag_mass:
             initial_mass_matrix = torch.ones(mass_matrix_size,
                                              dtype=site_value.dtype,
@@ -256,10 +256,10 @@ class HMC(MCMCKernel):
     def setup(self, warmup_steps, *args, **kwargs):
         self._warmup_steps = warmup_steps
         if self.model is not None:
-            self._initialize_model_properties(self.model, args, kwargs)
+            self._initialize_model_properties(args, kwargs)
         potential_energy = self.potential_fn(self.initial_params)
         self._cache(self.initial_params, potential_energy, None)
-        if self.inital_params:
+        if self.initial_params:
             self._initialize_adapter()
 
     def cleanup(self):

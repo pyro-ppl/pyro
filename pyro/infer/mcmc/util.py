@@ -260,7 +260,7 @@ def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, 
         if not torch_isnan(potential_energy) and not torch_isinf(potential_energy):
             return params
         trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
-        samples = {name: trace[name]["value"] for name in params}
+        samples = {name: trace.nodes[name]["value"].detach() for name in params}
         params = {k: transforms[k](v) for k, v in samples.items()}
     raise ValueError("Model specification seems incorrect - cannot find a valid params.")
 
@@ -287,7 +287,7 @@ def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate
         if node["fn"].has_enumerate_support:
             has_enumerable_sites = True
             continue
-        prototype_samples[name] = node["value"]
+        prototype_samples[name] = node["value"].detach()
         if automatic_transform_enabled:
             transforms[name] = biject_to(node["fn"].support).inv
 
