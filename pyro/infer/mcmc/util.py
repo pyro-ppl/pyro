@@ -297,7 +297,7 @@ def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate
     prototype_params = {k: transforms[k](v) for k, v in prototype_samples.items()}
 
     potential_fn = _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
-    if jit_compile:
+    if prototype_params and jit_compile:
         jit_options = {"check_trace": False} if jit_options is None else jit_options
         with pyro.validation_enabled(False), optional(ignore_jit_warnings(), skip_jit_warnings):
             names, vals = zip(*sorted(prototype_params.items()))

@@ -104,7 +104,7 @@ class HMC(MCMCKernel):
                  target_accept_prob=0.8):
         # NB: deprecating args
         self.model = model
-        self._transforms = transforms
+        self.transforms = transforms
         self._max_plate_nesting = max_plate_nesting
         self._jit_compile = jit_compile
         self._jit_options = jit_options
@@ -226,7 +226,7 @@ class HMC(MCMCKernel):
             self.model,
             model_args,
             model_kwargs,
-            transforms=self._transforms,
+            transforms=self.transforms,
             max_plate_nesting=self._max_plate_nesting,
             jit_compile=self._jit_compile,
             jit_options=self._jit_options,
@@ -238,7 +238,7 @@ class HMC(MCMCKernel):
         self._prototype_trace = trace
 
     def _initialize_adapter(self):
-        mass_matrix_size = sum({p.numel() for p in self.initial_params.values()})
+        mass_matrix_size = sum([p.numel() for p in self.initial_params.values()])
         site_value = list(self.initial_params.values())[0]
         if self._adapter.is_diag_mass:
             initial_mass_matrix = torch.ones(mass_matrix_size,
