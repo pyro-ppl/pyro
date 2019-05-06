@@ -182,8 +182,9 @@ def test_logistic_regression(step_size, trajectory_length, num_steps,
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
-    hmc_kernel = HMC(model, None, step_size, trajectory_length, num_steps,
-                     adapt_step_size, adapt_mass_matrix, full_mass)
+    hmc_kernel = HMC(model, step_size=step_size, trajectory_length=trajectory_length,
+                     num_steps=num_steps, adapt_step_size=adapt_step_size,
+                     adapt_mass_matrix=adapt_mass_matrix, full_mass=full_mass)
     mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100, disable_progbar=False).run(data)
     beta_posterior = mcmc_run.marginal(['beta']).empirical['beta']
     assert_equal(rmse(true_coefs, beta_posterior.mean).item(), 0.0, prec=0.1)
@@ -261,3 +262,19 @@ def test_bernoulli_latent_model(jit):
     mcmc_run = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal("y_prob").empirical["y_prob"].mean
     assert_equal(posterior, y_prob, prec=0.06)
+
+
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+def test_unnormalized_normal(jit):
+    true_mean, true_std = torch.tensor(1.), torch.tensor(2.)
+
+    def potential_fn(params):
+        return 0.5 * torch.sum(((params["z"] - true_mean) / true_std) ** 2)
+
+    hmc_kernel = HMC(model=None, potential_fn=potential_fn, jit_compile=jit,
+                     ignore_jit_warnings=True)
+    hmc_kernel.initial_params = {"z": torch.tensor(0.)}
+    mcmc_run = MCMC(hmc_kernel, num_samples=4000, warmup_steps=500).run()
+    posterior = torch.stack([sample["z"] for sample in mcmc_run.exec_traces])
+    assert_equal(torch.mean(posterior), true_mean, prec=0.1)
+    assert_equal(torch.std(posterior), true_std, prec=0.1)

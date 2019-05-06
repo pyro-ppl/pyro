@@ -265,8 +265,37 @@ def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, 
     raise ValueError("Model specification seems incorrect - cannot find a valid params.")
 
 
-def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate_nesting=None,
+def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max_plate_nesting=None,
                      jit_compile=False, jit_options=None, skip_jit_warnings=False):
+    """
+    Generates models' properties for a Pyro model to be used in HMC/NUTS kernels
+    which contains
+    * initial parameters to be sampled using a HMC kernel,
+    * a potential function whose input is a dict of parameters in unconstrained space,
+    * transforms to transform latent sites of `model` to unconstrained space,
+    * a prototype trace to be used in MCMC to consume traces from sampled parameters.
+
+    :param model: a Pyro model which contains Pyro primitives.
+    :param tuple model_args: optional args taken by `model`.
+    :param dict model_kwargs: optional kwargs taken by `model`.
+    :param dict transforms: Optional dictionary that specifies a transform
+        for a sample site with constrained support to unconstrained space. The
+        transform should be invertible, and implement `log_abs_det_jacobian`.
+        If not specified and the model has sites with constrained support,
+        automatic transformations will be applied, as specified in
+        :mod:`torch.distributions.constraint_registry`.
+    :param int max_plate_nesting: Optional bound on max number of nested
+        :func:`pyro.plate` contexts. This is required if model contains
+        discrete sample sites that can be enumerated over in parallel.
+    :param bool jit_compile: Optional parameter denoting whether to use
+        the PyTorch JIT to trace the log density computation, and use this
+        optimized executable trace in the integrator.
+    :param dict jit_options: A dictionary contains optional arguments for
+        :func:`torch.jit.trace` function.
+    :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
+        tracer when ``jit_compile=True``. Default is False.
+    :returns: a tuple of (`initial_params`, `potential_fn`, `transforms`, `prototype_trace`)
+    """
     # XXX `transforms` domains are sites' supports
     if transforms is None:
         automatic_transform_enabled = True

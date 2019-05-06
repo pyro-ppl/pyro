@@ -190,6 +190,8 @@ class _SingleSampler(TracePosterior):
     # and transforms needed to do this wrapping. Note that only unconstrained parameters
     # are passed to `MCMCKernel` classes.
     def _trace_wrap(self, z, *args, **kwargs):
+        if self.kernel.model is None:
+            return z
         for name, transform in self.kernel.transforms.items():
             z[name] = transform.inv(z[name])
         z_trace = self.kernel._prototype_trace
