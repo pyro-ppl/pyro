@@ -114,7 +114,7 @@ def auto_guide_list_x(model):
 def auto_guide_callable(model):
     def guide_x():
         x_loc = pyro.param("x_loc", torch.tensor(1.))
-        x_scale = pyro.param("x_scale", torch.tensor(2.), constraint=constraints.positive)
+        x_scale = pyro.param("x_scale", torch.tensor(.1), constraint=constraints.positive)
         pyro.sample("x", dist.Normal(x_loc, x_scale))
 
     def median_x():
