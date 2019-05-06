@@ -30,6 +30,8 @@ class HMC(MCMCKernel):
     Radford M. Neal
 
     :param model: Python callable containing Pyro primitives.
+    :param potential_fn: Python callable calculating potential energy with input
+        is a dict of parameters.
     :param float step_size: Determines the size of a single step taken by the
         verlet integrator while computing the trajectory using Hamiltonian
         dynamics. If not specified, it will be set to 1.
@@ -103,17 +105,21 @@ class HMC(MCMCKernel):
                  jit_options=None,
                  ignore_jit_warnings=False,
                  target_accept_prob=0.8):
+        # NB: deprecating args
         self.model = model
-        self.max_plate_nesting = max_plate_nesting
+        self._transforms = transforms
+        self._max_plate_nesting = max_plate_nesting
+        self._jit_compile = jit_compile
+        self._jit_options = jit_option
+        self._ignore_jit_warnings = ignore_jit_warnings
+
+        self.potential_fn = potential_fn
         if trajectory_length is not None:
             self.trajectory_length = trajectory_length
         elif num_steps is not None:
             self.trajectory_length = step_size * num_steps
         else:
             self.trajectory_length = 2 * math.pi  # from Stan
-        self._jit_compile = jit_compile
-        self._jit_options = {"check_trace": False} if jit_options is None else jit_options
-        self._ignore_jit_warnings = ignore_jit_warnings
         # The following parameter is used in find_reasonable_step_size method.
         # In NUTS paper, this threshold is set to a fixed log(0.5).
         # After https://github.com/stan-dev/stan/pull/356, it is set to a fixed log(0.8).
@@ -133,44 +139,15 @@ class HMC(MCMCKernel):
         else:
             return 0.5 * self.inverse_mass_matrix.dot(r_flat ** 2)
 
-    def _potential_energy_jit(self, z):
-        names, vals = zip(*sorted(z.items()))
-        if self._compiled_potential_fn:
-            return self._compiled_potential_fn(*vals)
-
-        def compiled(*zi):
-            z_constrained = list(zi)
-            # transform to constrained space.
-            for i, name in enumerate(names):
-                if name in self.transforms:
-                    transform = self.transforms[name]
-                    z_constrained[i] = transform.inv(z_constrained[i])
-            z_constrained = dict(zip(names, z_constrained))
-            trace = self._get_trace(z_constrained)
-            potential_energy = -self._compute_trace_log_prob(trace)
-            # adjust by the jacobian for this transformation.
-            for i, name in enumerate(names):
-                if name in self.transforms:
-                    transform = self.transforms[name]
-                    potential_energy += transform.log_abs_det_jacobian(z_constrained[name], zi[i]).sum()
-            return potential_energy
-
-        with pyro.validation_enabled(False), optional(ignore_jit_warnings(), self._ignore_jit_warnings):
-            self._compiled_potential_fn = torch.jit.trace(compiled, vals, **self._jit_options)
-        return self._compiled_potential_fn(*vals)
-
     def _energy(self, z, r):
-        return self._kinetic_energy(r) + self._potential_energy(z)
+        return self._kinetic_energy(r) + self.potential_fn(z)
 
     def _reset(self):
         self._t = 0
         self._accept_cnt = 0
-        self._r_shapes = {}
-        self._r_numels = {}
-        self._args = None
-        self._kwargs = None
         self._prototype_trace = None
         self._initial_params = None
+        self._inv_transform = None
         self._z_last = None
         self._potential_energy_last = None
         self._z_grads_last = None
@@ -188,7 +165,7 @@ class HMC(MCMCKernel):
         r, _ = self._sample_r(name="r_presample_0")
         energy_current = self._kinetic_energy(r) + potential_energy
         z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
-            z, r, self._potential_energy, self.inverse_mass_matrix, step_size, z_grads=z_grads)
+            z, r, self.potential_fn, self.inverse_mass_matrix, step_size, z_grads=z_grads)
         energy_new = self._kinetic_energy(r_new) + potential_energy_new
         delta_energy = energy_new - energy_current
         # direction=1 means keep increasing step_size, otherwise decreasing step_size.
@@ -209,7 +186,7 @@ class HMC(MCMCKernel):
             r, _ = self._sample_r(name="r_presample_{}".format(t))
             energy_current = self._kinetic_energy(r) + potential_energy
             z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
-                z, r, self._potential_energy, self.inverse_mass_matrix, step_size, z_grads=z_grads)
+                z, r, self.potential_fn, self.inverse_mass_matrix, step_size, z_grads=z_grads)
             energy_new = self._kinetic_energy(r_new) + potential_energy_new
             delta_energy = energy_new - energy_current
             direction_new = 1 if self._direction_threshold < -delta_energy else -1
@@ -220,9 +197,9 @@ class HMC(MCMCKernel):
         r_flat = pyro.sample(name, r_dist)
         r = {}
         pos = 0
-        for name in sorted(self._r_shapes):
-            next_pos = pos + self._r_numels[name]
-            r[name] = r_flat[pos:next_pos].reshape(self._r_shapes[name])
+        for name, param in sorted(self.initial_params.items()):
+            next_pos = pos + param.numel()
+            r[name] = r_flat[pos:next_pos].reshape(param.shape)
             pos = next_pos
         assert pos == r_flat.size(0)
         return r, r_flat
@@ -245,73 +222,31 @@ class HMC(MCMCKernel):
 
     @initial_trace.setter
     def initial_params(self, params):
-        self._init_params = params
+        self._initial_params = params
 
     def _initialize_model_properties(self, model_args, model_kwargs):
-        init_params, potential_fn, transform_fn, inital_trace = initialize_model(
+        init_params, potential_fn, inv_transform, trace = initialize_model(
             self.model,
             model_args,
             model_kwargs,
-            transforms=self.transforms,
+            transforms=self._transforms,
             max_plate_nesting=self._max_plate_nesting,
             jit_compile=self._jit_compile,
             jit_options=self._jit_options,
             ignore_jit_warnings=self._ignore_jit_warnings,
         )
-        self._init_params = init_params
         self.potential_fn = potential_fn
-        self.transform_fn = transform_fn
-        self._initial_trace = initial_trace
-        # make mass_matrix based on init_params
+        self._initial_params = init_params
+        self._inv_transform = inv_transform
+        self._prototype_trace = trace
 
     @initial_params.setter
     def initial_params(self, params):
         self._initial_params = params
-        if self._warmup_steps is not None:  # if setup is already called
-            self._initialize_step_size()
 
-    def _initialize_sampler(self):
-        if self.max_plate_nesting is None:
-            self._guess_max_plate_nesting()
-        # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
-        # No-op if model does not have any discrete latents.
-        self.model = poutine.enum(config_enumerate(self.model),
-                                  first_available_dim=-1 - self.max_plate_nesting)
-        if self._automatic_transform_enabled:
-            self.transforms = {}
-        trace = poutine.trace(self.model).get_trace(*self._args, **self._kwargs)
-        self._prototype_trace = trace
-        site_value = None
-        for name, node in trace.iter_stochastic_nodes():
-            if isinstance(node["fn"], _Subsample):
-                continue
-            if node["fn"].has_enumerate_support:
-                self._has_enumerable_sites = True
-                continue
-            site_value = node["value"]
-            if node["fn"].support is not constraints.real and self._automatic_transform_enabled:
-                self.transforms[name] = biject_to(node["fn"].support).inv
-                site_value = self.transforms[name](node["value"])
-            self._r_shapes[name] = site_value.shape
-            self._r_numels[name] = site_value.numel()
-        self._trace_prob_evaluator = TraceEinsumEvaluator(trace,
-                                                          self._has_enumerable_sites,
-                                                          self.max_plate_nesting)
-
-        if site_value is not None:
-            mass_matrix_size = sum(self._r_numels.values())
-            if self._adapter.is_diag_mass:
-                initial_mass_matrix = torch.ones(mass_matrix_size, dtype=site_value.dtype, device=site_value.device)
-            else:
-                initial_mass_matrix = eye_like(site_value, mass_matrix_size)
-            self._adapter.configure(self._warmup_steps,
-                                    inv_mass_matrix=initial_mass_matrix,
-                                    find_reasonable_step_size_fn=self._find_reasonable_step_size)
-        self._initialize_step_size()  # this method also caches z and its potential energy
-
-    def _initialize_step_size(self):
+    def _initialize_adapter(self):
         z = self.initial_params
-        potential_energy = self._potential_energy(z)
+        potential_energy = self.potential_fn(z)
         self._cache(z, potential_energy, None)
         if z and self._adapter.adapt_step_size:
             self._adapter.reset_step_size_adaptation()
@@ -320,9 +255,18 @@ class HMC(MCMCKernel):
         self._warmup_steps = warmup_steps
         if self.model is not None:
             self._initialize_model_properties(self.model, args, kwargs)
-        self._args = args
-        self._kwargs = kwargs
-        self._initialize_sampler()
+        if self.inital_params:
+            mass_matrix_size = sum({p.numel() for p in self.initial_params})
+            if self._adapter.is_diag_mass:
+                initial_mass_matrix = torch.ones(mass_matrix_size,
+                                                 dtype=site_value.dtype,
+                                                 device=site_value.device)
+            else:
+                initial_mass_matrix = eye_like(site_value, mass_matrix_size)
+            self._adapter.configure(self._warmup_steps,
+                                    inv_mass_matrix=initial_mass_matrix,
+                                    find_reasonable_step_size_fn=self._find_reasonable_step_size)
+            self._initialize_step_size()
 
     def cleanup(self):
         self._reset()
@@ -348,7 +292,7 @@ class HMC(MCMCKernel):
         # Temporarily disable distributions args checking as
         # NaNs are expected during step size adaptation
         with optional(pyro.validation_enabled(False), self._t < self._warmup_steps):
-            z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(z, r, self._potential_energy,
+            z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(z, r, self.potential_fn,
                                                                               self.inverse_mass_matrix,
                                                                               self.step_size,
                                                                               self.num_steps,

@@ -52,6 +52,8 @@ class NUTS(HMC):
         Radford M. Neal
 
     :param model: Python callable containing Pyro primitives.
+    :param potential_fn: Python callable calculating potential energy with input
+        is a dict of parameters.
     :param float step_size: Determines the size of a single step taken by the
         verlet integrator while computing the trajectory using Hamiltonian
         dynamics. If not specified, it will be set to 1.
@@ -109,6 +111,7 @@ class NUTS(HMC):
 
     def __init__(self,
                  model,
+                 potential_fn=None,
                  step_size=1,
                  adapt_step_size=True,
                  adapt_mass_matrix=True,
@@ -122,6 +125,7 @@ class NUTS(HMC):
                  target_accept_prob=0.8,
                  max_tree_depth=10):
         super(NUTS, self).__init__(model,
+                                   potential_fn,
                                    step_size,
                                    adapt_step_size=adapt_step_size,
                                    adapt_mass_matrix=adapt_mass_matrix,
@@ -163,7 +167,7 @@ class NUTS(HMC):
     def _build_basetree(self, z, r, z_grads, log_slice, direction, energy_current):
         step_size = self.step_size if direction == 1 else -self.step_size
         z_new, r_new, z_grads, potential_energy = velocity_verlet(
-            z, r, self._potential_energy, self.inverse_mass_matrix, step_size, z_grads=z_grads)
+            z, r, self.potential_fn, self.inverse_mass_matrix, step_size, z_grads=z_grads)
         r_new_flat = torch.cat([r_new[site_name].reshape(-1) for site_name in sorted(r_new)])
         energy_new = potential_energy + self._kinetic_energy(r_new)
         # handle the NaN case
