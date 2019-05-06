@@ -1,5 +1,4 @@
 from collections import OrderedDict, defaultdict
-from functools import partial
 
 import torch
 from torch.distributions import biject_to
@@ -241,7 +240,7 @@ def _transform_fn(transforms, params, invert=True):
 
 def _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms):
     def potential_energy(params):
-        params_constrained = _transform_fn(transforms, params, invert=True)
+        params_constrained = {k: transforms[k].inv(v) for k, v in params.items()}
         cond_model = poutine.condition(model, params_constrained)
         model_trace = poutine.trace(cond_model).get_trace(*model_args, **model_kwargs)
         log_joint = -trace_prob_evaluator.log_prob(model_trace)
@@ -262,7 +261,7 @@ def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, 
             return params
         trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
         samples = {name: trace[name]["value"] for name in params}
-        params = _transform_fn(transforms, samples, invert=False)
+        params = {k: transforms[k](v) for k, v in samples.items()}
     raise ValueError("Model specification seems incorrect - cannot find a valid params.")
 
 
@@ -295,7 +294,7 @@ def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate
     trace_prob_evaluator = TraceEinsumEvaluator(model_trace,
                                                 has_enumerable_sites,
                                                 max_plate_nesting)
-    prototype_params = _transform_fn(transforms, prototype_samples, invert=False)
+    prototype_params = {k: transforms[k](v) for k, v in prototype_samples.items()}
 
     potential_fn = _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
     if jit_compile:
@@ -315,5 +314,4 @@ def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate
 
     init_params = _get_init_params(model, model_args, model_kwargs, transforms,
                                    potential_fn, prototype_params)
-    transform_fn = partial(_transform_fn, transforms)
-    return init_params, potential_fn, transform_fn, model_trace
+    return init_params, potential_fn, transforms, model_trace

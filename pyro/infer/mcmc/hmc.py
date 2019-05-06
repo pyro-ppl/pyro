@@ -222,7 +222,7 @@ class HMC(MCMCKernel):
         self._initial_params = params
 
     def _initialize_model_properties(self, model_args, model_kwargs):
-        init_params, potential_fn, inv_transform, trace = initialize_model(
+        init_params, potential_fn, transforms, trace = initialize_model(
             self.model,
             model_args,
             model_kwargs,
@@ -233,8 +233,8 @@ class HMC(MCMCKernel):
             ignore_jit_warnings=self._ignore_jit_warnings,
         )
         self.potential_fn = potential_fn
+        self.transforms = transforms
         self._initial_params = init_params
-        self._inv_transform = inv_transform
         self._prototype_trace = trace
 
     def _initialize_adapter(self):
