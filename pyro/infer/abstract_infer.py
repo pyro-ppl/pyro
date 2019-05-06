@@ -327,7 +327,8 @@ class TracePredictive(TracePosterior):
                     # Otherwise, we assume there is an dependence of indexes between training data
                     # and prediction data.
                     batch_dim = cis.dim - site["fn"].event_dim
-                    subidxs = torch.randint(0, site['value'].size(batch_dim), (cis.size,))
+                    subidxs = torch.randint(0, site['value'].size(batch_dim), (cis.size,),
+                                            device=site["value"].device)
                     site["value"] = site["value"].index_select(batch_dim, subidxs)
             except KeyError:
                 pass
