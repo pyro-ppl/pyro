@@ -276,7 +276,8 @@ class AutoDelta(AutoGuide):
                    constraint=constraints.positive)
 
     :param callable model: A Pyro model.
-    :param callable init_loc_fn: A per-site initialzation function.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
     """
     def __init__(self, model, prefix="auto", init_loc_fn=init_to_median):
         model = InitMessenger(init_loc_fn)(model)
@@ -335,7 +336,8 @@ class AutoContinuous(AutoGuide):
         Blei
 
     :param callable model: A Pyro model.
-    :param callable init_loc_fn: A per-site initialzation function.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
     """
     def __init__(self, model, prefix="auto", init_loc_fn=init_to_median):
         model = InitMessenger(init_loc_fn)(model)
@@ -573,6 +575,8 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 
     :param callable model: a generative model
     :param int rank: the rank of the low-rank part of the covariance matrix
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
 
@@ -617,6 +621,8 @@ class AutoIAFNormal(AutoContinuous):
 
     :param callable model: a generative model
     :param int hidden_dim: number of hidden dimensions in the IAF
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
 

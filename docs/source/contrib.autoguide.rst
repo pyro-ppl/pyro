@@ -91,6 +91,7 @@ AutoDiscreteParallel
     :special-members: __call__
     :show-inheritance:
 
+.. _autoguide-initialization:
 
 Initialization
 --------------
