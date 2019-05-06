@@ -186,6 +186,19 @@ class _SingleSampler(TracePosterior):
             self.logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
             yield params
 
+    # TODO: Refactor so that this class directly has access to the trace generator
+    # and transforms needed to do this wrapping. Note that only unconstrained parameters
+    # are passed to `MCMCKernel` classes.
+    def _trace_wrap(self, z, *args, **kwargs):
+        for name, transform in self.kernel.transforms.items():
+            z[name] = transform.inv(z[name])
+        z_trace = self.kernel._prototype_trace
+        for name, value in z.items():
+            z_trace.nodes[name]["value"] = value
+        trace_poutine = poutine.trace(poutine.replay(self.kernel.model, z_trace))
+        trace_poutine(*args, **kwargs)
+        return trace_poutine.trace
+
     def _traces(self, *args, **kwargs):
         logger_id = kwargs.pop("logger_id", "")
         log_queue = kwargs.pop("log_queue", None)
@@ -203,19 +216,9 @@ class _SingleSampler(TracePosterior):
             if progress_bar:
                 progress_bar.set_description("Sample")
             for params in self._gen_samples(self.num_samples, params):
-                yield (self._trace_wrap(params, *args, **kwargs), 1.0)
+                trace = self._trace_wrap(params, *args, **kwargs)
+                yield (trace, 1.0)
         self.kernel.cleanup()
-
-    # Note that only unconstrained parameters are passed to `MCMCKernel` classes.
-    def _trace_wrap(self, z, *args, **kwargs):
-        for name, transform in self.kernel.transforms.items():
-            z[name] = transform.inv(z[name])
-        z_trace = self.kernel._prototype_trace
-        for name, value in z.items():
-            z_trace.nodes[name]["value"] = value
-        trace_poutine = poutine.trace(poutine.replay(self.kernel.model, z_trace))
-        trace_poutine(*args, **kwargs)
-        return trace_poutine.trace
 
 
 class MCMC(TracePosterior):
@@ -250,7 +253,6 @@ class MCMC(TracePosterior):
     """
     def __init__(self, kernel, num_samples, warmup_steps=None,
                  num_chains=1, mp_context=None, disable_progbar=False):
-        self.kernel = kernel
         self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
         if num_chains > 1:
@@ -269,8 +271,8 @@ class MCMC(TracePosterior):
         super(MCMC, self).__init__(num_chains=num_chains)
 
     def _traces(self, *args, **kwargs):
-        for values in self.sampler._traces(*args, **kwargs):
-            yield values
+        for sample in self.sampler._traces(*args, **kwargs):
+            yield sample
 
     def marginal(self, sites=None):
         """
