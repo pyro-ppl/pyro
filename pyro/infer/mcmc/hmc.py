@@ -4,19 +4,16 @@ import math
 from collections import OrderedDict
 
 import torch
-from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
-import pyro.poutine as poutine
 from pyro.distributions.util import eye_like, scalar_like
-from pyro.infer import config_enumerate
+
 from pyro.infer.mcmc.adaptation import WarmupAdapter
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
-from pyro.infer.mcmc.util import TraceEinsumEvaluator
+from pyro.infer.mcmc.util import initialize_model
 from pyro.ops.integrator import velocity_verlet
-from pyro.poutine.subsample_messenger import _Subsample
-from pyro.util import ignore_jit_warnings, optional, torch_isinf, torch_isnan
+from pyro.util import optional, torch_isnan
 
 
 class HMC(MCMCKernel):
@@ -110,7 +107,7 @@ class HMC(MCMCKernel):
         self._transforms = transforms
         self._max_plate_nesting = max_plate_nesting
         self._jit_compile = jit_compile
-        self._jit_options = jit_option
+        self._jit_options = jit_options
         self._ignore_jit_warnings = ignore_jit_warnings
 
         self.potential_fn = potential_fn
@@ -220,7 +217,7 @@ class HMC(MCMCKernel):
     def initial_params(self):
         return self._initial_params
 
-    @initial_trace.setter
+    @initial_params.setter
     def initial_params(self, params):
         self._initial_params = params
 
@@ -242,6 +239,7 @@ class HMC(MCMCKernel):
 
     def _initialize_adapter(self):
         mass_matrix_size = sum({p.numel() for p in self.initial_params})
+        site_value = self.initial_params.values()[0]
         if self._adapter.is_diag_mass:
             initial_mass_matrix = torch.ones(mass_matrix_size,
                                              dtype=site_value.dtype,

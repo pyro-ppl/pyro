@@ -2,13 +2,17 @@ from collections import OrderedDict, defaultdict
 from functools import partial
 
 import torch
+from torch.distributions import biject_to
 from opt_einsum import shared_intermediates
 
+import pyro
+import pyro.poutine as poutine
 from pyro.distributions.util import broadcast_shape, logsumexp
+from pyro.infer import config_enumerate
 from pyro.infer.util import is_validation_enabled
 from pyro.ops.contract import contract_to_tensor
 from pyro.poutine.subsample_messenger import _Subsample
-from pyro.util import check_site_shape
+from pyro.util import check_site_shape, ignore_jit_warnings, optional, torch_isinf, torch_isnan
 
 
 class TraceTreeEvaluator(object):
@@ -238,8 +242,8 @@ def _transform_fn(transforms, params, invert=True):
 def _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms):
     def potential_energy(params):
         params_constrained = _transform_fn(transforms, params, invert=True)
-        model = poutine.condition(model, params_constrained)
-        model_trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
+        cond_model = poutine.condition(model, params_constrained)
+        model_trace = poutine.trace(cond_model).get_trace(*model_args, **model_kwargs)
         log_joint = -trace_prob_evaluator.log_prob(model_trace)
         for name, t in transforms.items():
             log_joint = log_joint + torch.sum(
@@ -263,7 +267,7 @@ def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, 
 
 
 def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate_nesting=None,
-                     jit_compile=False, jit_options=None, ignore_jit_warnings=False):
+                     jit_compile=False, jit_options=None, skip_jit_warnings=False):
     # XXX `transforms` domains are sites' supports
     if transforms is None:
         automatic_transform_enabled = True
@@ -275,10 +279,10 @@ def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate
     # No-op if model does not have any discrete latents.
     model = poutine.enum(config_enumerate(model),
                          first_available_dim=-1 - max_plate_nesting)
-    model_trace = trace(model).get_trace(*model_args, **model_kwargs)
+    model_trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
     has_enumerable_sites = False
     prototype_samples = {}
-    for name, node in trace.iter_stochastic_nodes():
+    for name, node in model_trace.iter_stochastic_nodes():
         if isinstance(node["fn"], _Subsample):
             continue
         if node["fn"].has_enumerate_support:
@@ -296,7 +300,7 @@ def initialize_model(model, model_args, model_kwargs, transforms=None, max_plate
     potential_fn = _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
     if jit_compile:
         jit_options = {"check_trace": False} if jit_options is None else jit_options
-        with pyro.validation_enabled(False), optional(ignore_jit_warnings(), ignore_jit_warnings):
+        with pyro.validation_enabled(False), optional(ignore_jit_warnings(), skip_jit_warnings):
             names, vals = zip(*sorted(prototype_params.items()))
 
             def _pe_jit(*zi):
