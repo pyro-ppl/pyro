@@ -240,33 +240,29 @@ class HMC(MCMCKernel):
         self._inv_transform = inv_transform
         self._prototype_trace = trace
 
-    @initial_params.setter
-    def initial_params(self, params):
-        self._initial_params = params
-
     def _initialize_adapter(self):
-        z = self.initial_params
-        potential_energy = self.potential_fn(z)
-        self._cache(z, potential_energy, None)
-        if z and self._adapter.adapt_step_size:
+        mass_matrix_size = sum({p.numel() for p in self.initial_params})
+        if self._adapter.is_diag_mass:
+            initial_mass_matrix = torch.ones(mass_matrix_size,
+                                             dtype=site_value.dtype,
+                                             device=site_value.device)
+        else:
+            initial_mass_matrix = eye_like(site_value, mass_matrix_size)
+        self._adapter.configure(self._warmup_steps,
+                                inv_mass_matrix=initial_mass_matrix,
+                                find_reasonable_step_size_fn=self._find_reasonable_step_size)
+
+        if self._adapter.adapt_step_size:
             self._adapter.reset_step_size_adaptation()
 
     def setup(self, warmup_steps, *args, **kwargs):
         self._warmup_steps = warmup_steps
         if self.model is not None:
             self._initialize_model_properties(self.model, args, kwargs)
+        potential_energy = self.potential_fn(self.initial_params)
+        self._cache(self.initial_params, potential_energy, None)
         if self.inital_params:
-            mass_matrix_size = sum({p.numel() for p in self.initial_params})
-            if self._adapter.is_diag_mass:
-                initial_mass_matrix = torch.ones(mass_matrix_size,
-                                                 dtype=site_value.dtype,
-                                                 device=site_value.device)
-            else:
-                initial_mass_matrix = eye_like(site_value, mass_matrix_size)
-            self._adapter.configure(self._warmup_steps,
-                                    inv_mass_matrix=initial_mass_matrix,
-                                    find_reasonable_step_size_fn=self._find_reasonable_step_size)
-            self._initialize_step_size()
+            self._initialize_adapter()
 
     def cleanup(self):
         self._reset()
