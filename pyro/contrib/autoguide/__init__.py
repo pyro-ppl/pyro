@@ -512,6 +512,7 @@ class AutoMultivariateNormal(AutoContinuous):
         scale = pyro.param("{}_scale_tril".format(self.prefix)).diag()
         return loc, scale
 
+
 class AutoDiagonalNormal(AutoContinuous):
     """
     This implementation of :class:`AutoContinuous` uses a Normal distribution
