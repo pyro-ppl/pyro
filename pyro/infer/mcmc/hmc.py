@@ -28,7 +28,7 @@ class HMC(MCMCKernel):
 
     :param model: Python callable containing Pyro primitives.
     :param potential_fn: Python callable calculating potential energy with input
-        is a dict of real parameters.
+        is a dict of real support parameters.
     :param float step_size: Determines the size of a single step taken by the
         verlet integrator while computing the trajectory using Hamiltonian
         dynamics. If not specified, it will be set to 1.
@@ -144,7 +144,6 @@ class HMC(MCMCKernel):
         self._accept_cnt = 0
         self._prototype_trace = None
         self._initial_params = None
-        self._inv_transform = None
         self._z_last = None
         self._potential_energy_last = None
         self._z_grads_last = None
