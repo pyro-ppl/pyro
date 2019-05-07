@@ -27,7 +27,7 @@ import pyro.poutine as poutine
 from pyro.contrib.autoguide.initialization import (InitMessenger, init_to_feasible, init_to_mean, init_to_median,
                                                    init_to_sample)
 from pyro.contrib.util import hessian
-from pyro.distributions.util import broadcast_shape, sum_rightmost
+from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
 from pyro.poutine.util import prune_subsample_sites
@@ -503,7 +503,7 @@ class AutoMultivariateNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
         scale_tril = pyro.param("{}_scale_tril".format(self.prefix),
-                                lambda: torch.eye(self.latent_dim),
+                                lambda: eye_like(loc, self.latent_dim),
                                 constraint=constraints.lower_cholesky)
         return dist.MultivariateNormal(loc, scale_tril=scale_tril)
 
@@ -511,7 +511,6 @@ class AutoMultivariateNormal(AutoContinuous):
         loc = pyro.param("{}_loc".format(self.prefix))
         scale = pyro.param("{}_scale_tril".format(self.prefix)).diag()
         return loc, scale
-
 
 class AutoDiagonalNormal(AutoContinuous):
     """
@@ -540,7 +539,7 @@ class AutoDiagonalNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
         scale = pyro.param("{}_scale".format(self.prefix),
-                           lambda: torch.ones(self.latent_dim),
+                           lambda: loc.new_ones(self.latent_dim),
                            constraint=constraints.positive)
         return dist.Normal(loc, scale).to_event(1)
 
@@ -593,9 +592,9 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
         factor = pyro.param("{}_cov_factor".format(self.prefix),
-                            lambda: torch.randn(self.latent_dim, self.rank) * (0.5 / self.rank) ** 0.5)
+                            lambda: loc.new_empty(self.latent_dim, self.rank).normal_(0, (0.5 / self.rank) ** 0.5))
         diagonal = pyro.param("{}_cov_diag".format(self.prefix),
-                              lambda: torch.ones(self.latent_dim) * 0.5,
+                              lambda: loc.new_full((self.latent_dim,), 0.5),
                               constraint=constraints.positive)
         return dist.LowRankMultivariateNormal(loc, factor, diagonal)
 
