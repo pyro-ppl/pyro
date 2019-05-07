@@ -182,8 +182,9 @@ def test_logistic_regression(step_size, trajectory_length, num_steps,
         y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         return y
 
-    hmc_kernel = HMC(model, step_size, trajectory_length, num_steps,
-                     adapt_step_size, adapt_mass_matrix, full_mass)
+    hmc_kernel = HMC(model, step_size=step_size, trajectory_length=trajectory_length,
+                     num_steps=num_steps, adapt_step_size=adapt_step_size,
+                     adapt_mass_matrix=adapt_mass_matrix, full_mass=full_mass)
     mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100, disable_progbar=True).run(data)
     beta_posterior = mcmc_run.marginal(['beta']).empirical['beta']
     assert_equal(rmse(true_coefs, beta_posterior.mean).item(), 0.0, prec=0.1)
@@ -263,25 +264,17 @@ def test_bernoulli_latent_model(jit):
     assert_equal(posterior, y_prob, prec=0.06)
 
 
-def test_initial_params(monkeypatch):
-    dim = 3
-    data = torch.randn(2000, dim)
-    true_coefs = torch.arange(1., dim + 1.)
-    labels = dist.Bernoulli(logits=(true_coefs * data).sum(-1)).sample()
-    # mock values to replay - from right to left
-    trace_log_prob_replay = [-5, -5, float('NaN'), float('Inf')]
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+def test_unnormalized_normal(jit):
+    true_mean, true_std = torch.tensor(1.), torch.tensor(2.)
 
-    def model(data):
-        coefs_mean = torch.zeros(dim)
-        coefs = pyro.sample('beta', dist.Normal(coefs_mean, torch.ones(dim)))
-        y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
-        return y
+    def potential_fn(params):
+        return 0.5 * torch.sum(((params["z"] - true_mean) / true_std) ** 2)
 
-    def tr_log_prob(trace, values=trace_log_prob_replay):
-        return values.pop()
-
-    hmc_kernel = HMC(model, adapt_step_size=False)
-    monkeypatch.setattr(hmc_kernel, '_compute_trace_log_prob', tr_log_prob)
-    hmc_kernel.setup(0, data)
-    hmc_kernel.initial_params
-    assert len(trace_log_prob_replay) == 0
+    hmc_kernel = HMC(model=None, potential_fn=potential_fn, jit_compile=jit,
+                     ignore_jit_warnings=True)
+    hmc_kernel.initial_params = {"z": torch.tensor(0.)}
+    mcmc_run = MCMC(hmc_kernel, num_samples=4000, warmup_steps=500).run()
+    posterior = torch.stack([sample["z"] for sample in mcmc_run.exec_traces])
+    assert_equal(torch.mean(posterior), true_mean, prec=0.1)
+    assert_equal(torch.std(posterior), true_std, prec=0.1)

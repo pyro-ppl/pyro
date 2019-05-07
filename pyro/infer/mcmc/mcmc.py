@@ -82,15 +82,6 @@ class _Worker(object):
         kwargs["logger_id"] = "CHAIN:{}".format(self.chain_id)
         kwargs["log_queue"] = self.log_queue
         try:
-            # XXX to make MCMC work on GPU, we need to store generated samples in a list
-            # until this process is terminated or the main process sends a signal to clear
-            # the list.
-            # The following code will make MCMC work in GPU:
-            #
-            # samples = []
-            # for sample in self.trace_gen._traces(*args, **kwargs):
-            #     samples.append(sample)
-            # ...
             for sample in self.trace_gen._traces(*args, **kwargs):
                 self.result_queue.put_nowait((self.chain_id, sample))
                 self.event.wait()
@@ -199,6 +190,8 @@ class _SingleSampler(TracePosterior):
     # and transforms needed to do this wrapping. Note that only unconstrained parameters
     # are passed to `MCMCKernel` classes.
     def _trace_wrap(self, z, *args, **kwargs):
+        if self.kernel.model is None:
+            return z
         for name, transform in self.kernel.transforms.items():
             z[name] = transform.inv(z[name])
         z_trace = self.kernel._prototype_trace
