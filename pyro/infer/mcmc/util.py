@@ -238,11 +238,11 @@ def _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
         params_constrained = {k: transforms[k].inv(v) for k, v in params.items()}
         cond_model = poutine.condition(model, params_constrained)
         model_trace = poutine.trace(cond_model).get_trace(*model_args, **model_kwargs)
-        log_joint = -trace_prob_evaluator.log_prob(model_trace)
+        log_joint = trace_prob_evaluator.log_prob(model_trace)
         for name, t in transforms.items():
-            log_joint = log_joint + torch.sum(
+            log_joint = log_joint - torch.sum(
                 t.log_abs_det_jacobian(params_constrained[name], params[name]))
-        return log_joint
+        return -log_joint
 
     return potential_energy
 
@@ -257,7 +257,7 @@ def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, 
         trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
         samples = {name: trace.nodes[name]["value"].detach() for name in params}
         params = {k: transforms[k](v) for k, v in samples.items()}
-    raise ValueError("Model specification seems incorrect - cannot find a valid params.")
+    raise ValueError("Model specification seems incorrect - cannot find valid initial params.")
 
 
 def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max_plate_nesting=None,
@@ -292,6 +292,7 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
     :returns: a tuple of (`initial_params`, `potential_fn`, `transforms`, `prototype_trace`)
     """
     # XXX `transforms` domains are sites' supports
+    # FIXME: find a good pattern to deal with `transforms` arg
     if transforms is None:
         automatic_transform_enabled = True
         transforms = {}
@@ -312,6 +313,9 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
         if node["fn"].has_enumerate_support:
             has_enumerable_sites = True
             continue
+        # we need to detach here because this sample can be a leaf variabl,
+        # so we can't change its requires_grad flag to calculate its grad in
+        # verlocity_verlet
         prototype_samples[name] = node["value"].detach()
         if automatic_transform_enabled:
             transforms[name] = biject_to(node["fn"].support).inv
