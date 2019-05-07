@@ -297,7 +297,8 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
         transforms = {}
     else:
         automatic_transform_enabled = False
-    max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
+    if max_plate_nesting is None:
+        max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
     # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
     # No-op if model does not have any discrete latents.
     model = poutine.enum(config_enumerate(model),
