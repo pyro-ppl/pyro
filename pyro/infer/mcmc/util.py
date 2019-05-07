@@ -233,11 +233,6 @@ def _guess_max_plate_nesting(model, args, kwargs):
     return max_plate_nesting
 
 
-def _transform_fn(transforms, params, invert=True):
-    return {k: transforms[k](v) if not invert else transforms[k].inv(v)
-            for k, v in params.items()}
-
-
 def _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms):
     def potential_energy(params):
         params_constrained = {k: transforms[k].inv(v) for k, v in params.items()}
