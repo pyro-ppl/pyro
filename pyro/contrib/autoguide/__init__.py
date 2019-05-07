@@ -24,8 +24,10 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.contrib.autoguide.initialization import (InitMessenger, init_to_feasible, init_to_mean, init_to_median,
+                                                   init_to_sample)
 from pyro.contrib.util import hessian
-from pyro.distributions.util import broadcast_shape, sum_rightmost
+from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
 from pyro.poutine.util import prune_subsample_sites
@@ -47,6 +49,11 @@ __all__ = [
     'AutoLaplaceApproximation',
     'AutoLowRankMultivariateNormal',
     'AutoMultivariateNormal',
+    'init_to_feasible',
+    'init_to_mean',
+    'init_to_median',
+    'init_to_sample',
+    'mean_field_guide_entropy',
 ]
 
 
@@ -267,7 +274,14 @@ class AutoDelta(AutoGuide):
         pyro.param("auto_level", torch.tensor([-1., 0., 1.]))
         pyro.param("auto_concentration", torch.ones(k),
                    constraint=constraints.positive)
+
+    :param callable model: A Pyro model.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
     """
+    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median):
+        model = InitMessenger(init_loc_fn)(model)
+        super(AutoDelta, self).__init__(model, prefix=prefix)
 
     def __call__(self, *args, **kwargs):
         """
@@ -287,7 +301,8 @@ class AutoDelta(AutoGuide):
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
                         stack.enter_context(plates[frame.name])
-                value = pyro.param("{}_{}".format(self.prefix, name), site["value"].detach(),
+                value = pyro.param("{}_{}".format(self.prefix, name),
+                                   site["value"].detach(),
                                    constraint=site["fn"].support)
                 result[name] = pyro.sample(name, dist.Delta(value, event_dim=site["fn"].event_dim))
         return result
@@ -319,7 +334,14 @@ class AutoContinuous(AutoGuide):
     [1] `Automatic Differentiation Variational Inference`,
         Alp Kucukelbir, Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M.
         Blei
+
+    :param callable model: A Pyro model.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
     """
+    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median):
+        model = InitMessenger(init_loc_fn)(model)
+        super(AutoContinuous, self).__init__(model, prefix=prefix)
 
     def _setup_prototype(self, *args, **kwargs):
         super(AutoContinuous, self)._setup_prototype(*args, **kwargs)
@@ -336,6 +358,19 @@ class AutoContinuous(AutoGuide):
         self.latent_dim = sum(_product(shape) for shape in self._unconstrained_shapes.values())
         if self.latent_dim == 0:
             raise RuntimeError('{} found no latent variables; Use an empty guide instead'.format(type(self).__name__))
+
+    def _init_loc(self):
+        """
+        Creates an initial latent vector using a per-site init function.
+        """
+        parts = []
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            constrained_value = site["value"].detach()
+            unconstrained_value = biject_to(site["fn"].support).inv(constrained_value)
+            parts.append(unconstrained_value.reshape(-1))
+        latent = torch.cat(parts)
+        assert latent.size() == (self.latent_dim,)
+        return latent
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -466,10 +501,9 @@ class AutoMultivariateNormal(AutoContinuous):
         """
         Returns a MultivariateNormal posterior distribution.
         """
-        loc = pyro.param("{}_loc".format(self.prefix),
-                         lambda: torch.zeros(self.latent_dim))
+        loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
         scale_tril = pyro.param("{}_scale_tril".format(self.prefix),
-                                lambda: torch.eye(self.latent_dim),
+                                lambda: eye_like(loc, self.latent_dim),
                                 constraint=constraints.lower_cholesky)
         return dist.MultivariateNormal(loc, scale_tril=scale_tril)
 
@@ -504,10 +538,9 @@ class AutoDiagonalNormal(AutoContinuous):
         """
         Returns a diagonal Normal posterior distribution.
         """
-        loc = pyro.param("{}_loc".format(self.prefix),
-                         lambda: torch.zeros(self.latent_dim))
+        loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
         scale = pyro.param("{}_scale".format(self.prefix),
-                           lambda: torch.ones(self.latent_dim),
+                           lambda: loc.new_ones(self.latent_dim),
                            constraint=constraints.positive)
         return dist.Normal(loc, scale).to_event(1)
 
@@ -542,25 +575,27 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 
     :param callable model: a generative model
     :param int rank: the rank of the low-rank part of the covariance matrix
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
 
-    def __init__(self, model, prefix="auto", rank=1):
+    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median, rank=1):
         if not isinstance(rank, numbers.Number) or not rank > 0:
             raise ValueError("Expected rank > 0 but got {}".format(rank))
         self.rank = rank
-        super(AutoLowRankMultivariateNormal, self).__init__(model, prefix)
+        super(AutoLowRankMultivariateNormal, self).__init__(
+            model, prefix=prefix, init_loc_fn=init_loc_fn)
 
     def get_posterior(self, *args, **kwargs):
         """
         Returns a LowRankMultivariateNormal posterior distribution.
         """
-        loc = pyro.param("{}_loc".format(self.prefix),
-                         lambda: torch.zeros(self.latent_dim))
+        loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
         factor = pyro.param("{}_cov_factor".format(self.prefix),
-                            lambda: torch.randn(self.latent_dim, self.rank) * (0.5 / self.rank) ** 0.5)
+                            lambda: loc.new_empty(self.latent_dim, self.rank).normal_(0, (0.5 / self.rank) ** 0.5))
         diagonal = pyro.param("{}_cov_diag".format(self.prefix),
-                              lambda: torch.ones(self.latent_dim) * 0.5,
+                              lambda: loc.new_full((self.latent_dim,), 0.5),
                               constraint=constraints.positive)
         return dist.LowRankMultivariateNormal(loc, factor, diagonal)
 
@@ -586,13 +621,15 @@ class AutoIAFNormal(AutoContinuous):
 
     :param callable model: a generative model
     :param int hidden_dim: number of hidden dimensions in the IAF
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
 
-    def __init__(self, model, hidden_dim=None, prefix="auto"):
+    def __init__(self, model, hidden_dim=None, prefix="auto", init_loc_fn=init_to_median):
         self.hidden_dim = hidden_dim
         self.arn = None
-        super(AutoIAFNormal, self).__init__(model, prefix)
+        super(AutoIAFNormal, self).__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -639,8 +676,7 @@ class AutoLaplaceApproximation(AutoContinuous):
         """
         Returns a Delta posterior distribution for MAP inference.
         """
-        loc = pyro.param("{}_loc".format(self.prefix),
-                         lambda: torch.zeros(self.latent_dim))
+        loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
         return dist.Delta(loc).to_event(1)
 
     def laplace_approximation(self, *args, **kwargs):
