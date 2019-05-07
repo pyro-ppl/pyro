@@ -17,6 +17,7 @@ import pyro.ops.stats as stats
 from pyro.infer import TracePosterior
 from pyro.infer.abstract_infer import Marginals
 from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
+import pyro.poutine as poutine
 from pyro.util import optional
 
 MAX_SEED = 2**32 - 1
@@ -186,13 +187,26 @@ class _SingleSampler(TracePosterior):
         self.disable_progbar = disable_progbar
         super(_SingleSampler, self).__init__()
 
-    def _gen_samples(self, num_samples, init_trace):
-        trace = init_trace
+    def _gen_samples(self, num_samples, init_params):
+        params = init_params
         for _ in range(num_samples):
-            trace = self.kernel.sample(trace)
+            params = self.kernel.sample(params)
             diagnostics = json.dumps(self.kernel.diagnostics())
             self.logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
-            yield trace
+            yield params
+
+    # TODO: Refactor so that this class directly has access to the trace generator
+    # and transforms needed to do this wrapping. Note that only unconstrained parameters
+    # are passed to `MCMCKernel` classes.
+    def _trace_wrap(self, z, *args, **kwargs):
+        for name, transform in self.kernel.transforms.items():
+            z[name] = transform.inv(z[name])
+        z_trace = self.kernel._prototype_trace
+        for name, value in z.items():
+            z_trace.nodes[name]["value"] = value
+        trace_poutine = poutine.trace(poutine.replay(self.kernel.model, z_trace))
+        trace_poutine(*args, **kwargs)
+        return trace_poutine.trace
 
     def _traces(self, *args, **kwargs):
         logger_id = kwargs.pop("logger_id", "")
@@ -204,13 +218,14 @@ class _SingleSampler(TracePosterior):
             progress_bar = ProgressBar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
         self.logger = initialize_logger(self.logger, logger_id, progress_bar, log_queue)
         self.kernel.setup(self.warmup_steps, *args, **kwargs)
-        trace = self.kernel.initial_trace
+        params = self.kernel.initial_params
         with optional(progress_bar, not is_multiprocessing):
-            for trace in self._gen_samples(self.warmup_steps, trace):
+            for params in self._gen_samples(self.warmup_steps, params):
                 continue
             if progress_bar:
                 progress_bar.set_description("Sample")
-            for trace in self._gen_samples(self.num_samples, trace):
+            for params in self._gen_samples(self.num_samples, params):
+                trace = self._trace_wrap(params, *args, **kwargs)
                 yield (trace, 1.0)
         self.kernel.cleanup()
 
