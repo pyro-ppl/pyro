@@ -115,7 +115,7 @@ JIT_EXAMPLES = [
     'hmm.py --num-steps=1 --truncate=10 --model=3 --jit',
     'hmm.py --num-steps=1 --truncate=10 --model=4 --jit',
     'hmm.py --num-steps=1 --truncate=10 --model=5 --jit',
-    xfail_jit('lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8 --jit'),
+    'lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8 --jit',
     'minipyro.py --backend=pyro --jit',
     'minipyro.py --jit',
     xfail_jit('vae/ss_vae_M2.py --num-epochs=1 --aux-loss --jit'),
