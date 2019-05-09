@@ -2,9 +2,6 @@ import os
 import sys
 
 import sphinx_rtd_theme
-import re
-import os
-import sys
 
 
 # import pkg_resources

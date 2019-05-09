@@ -14,7 +14,7 @@ pytestmark = pytest.mark.init(rng_seed=123)
 class FlowTests(TestCase):
     def setUp(self):
         # Epsilon is used to compare numerical gradient to analytical one
-        self.epsilon = 1e-4
+        self.epsilon = 1e-6
 
         # Delta is tolerance for testing f(f^{-1}(x)) = x
         self.delta = 1e-6
@@ -110,12 +110,15 @@ class FlowTests(TestCase):
     def _make_planar(self, input_dim):
         return dist.PlanarFlow(input_dim)
 
+    def _make_radial(self, input_dim):
+        return dist.RadialFlow(input_dim)
+
+    def _make_sylvester(self, input_dim):
+        return dist.SylvesterFlow(input_dim, count_transforms=1)
+
     def test_batchnorm_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_batchnorm)
-
-    def _make_radial(self, input_dim):
-        return dist.RadialFlow(input_dim)
 
     def test_iaf_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -133,13 +136,17 @@ class FlowTests(TestCase):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_planar)
 
-    def test_batchnorm_inverses(self):
-        for input_dim in [2, 3, 5, 7, 9, 11]:
-            self._test_inverse(input_dim, self._make_batchnorm)
-
     def test_radial_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_radial)
+
+    def test_sylvester_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_sylvester)
+
+    def test_batchnorm_inverses(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_inverse(input_dim, self._make_batchnorm)
 
     def test_iaf_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -180,3 +187,7 @@ class FlowTests(TestCase):
     def test_radial_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_radial)
+
+    def test_sylvester_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_sylvester)
