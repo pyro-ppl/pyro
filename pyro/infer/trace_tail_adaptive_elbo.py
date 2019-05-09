@@ -63,7 +63,7 @@ class TraceTailAdaptive_ELBO(Trace_ELBO):
         # rank the particles according to p/q
         log_pq = log_p - log_q
         rank = torch.argsort(log_pq, descending=False)
-        rank = torch.index_select(torch.arange(self.num_particles) + 1, -1, rank).type_as(log_pq)
+        rank = torch.index_select(torch.arange(self.num_particles, device=log_pq.device) + 1, -1, rank).type_as(log_pq)
 
         # compute the particle-specific weights used to construct the surrogate loss
         gamma = torch.pow(rank, self.tail_adaptive_beta).detach()
