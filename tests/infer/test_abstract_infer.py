@@ -98,7 +98,7 @@ def test_posterior_predictive_svi_one_hot():
     svi_run = SVI(one_hot_model, guide, opt, loss, num_steps=1000, num_samples=100).run(pseudocounts, classes=classes)
     posterior_predictive = TracePredictive(one_hot_model, svi_run, num_samples=10000).run(pseudocounts)
     marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
-    assert_close(marginal_return_vals.mean, true_probs.unsqueeze(0), rtol=0.05)
+    assert_close(marginal_return_vals.mean, true_probs.unsqueeze(0), rtol=0.1)
 
 
 def test_posterior_predictive_svi_auto_delta_guide_large_eval():
