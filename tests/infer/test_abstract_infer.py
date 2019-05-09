@@ -91,7 +91,7 @@ def test_posterior_predictive_svi_auto_diag_normal_guide():
 def test_posterior_predictive_svi_one_hot():
     pseudocounts = torch.ones(3) * 0.1
     true_probs = torch.tensor([0.15, 0.6, 0.25])
-    classes = dist.OneHotCategorical(true_probs).sample((100000,))
+    classes = dist.OneHotCategorical(true_probs).sample((1000,))
     opt = optim.Adam(dict(lr=0.1))
     loss = Trace_ELBO()
     guide = AutoDiagonalNormal(one_hot_model)
