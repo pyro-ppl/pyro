@@ -106,7 +106,7 @@ class SylvesterFlow(TransformModule):
         partial_Q = torch.eye(self.input_dim) - 2. * torch.ger(u[0], u[0])
 
         for idx in range(1, self.count_transforms):
-            partial_Q = partial_Q @ (torch.eye(self.input_dim) - 2. * torch.ger(u[idx], u[idx]))
+            partial_Q = torch.matmul(partial_Q, torch.eye(self.input_dim) - 2. * torch.ger(u[idx], u[idx]))
 
         return partial_Q
 
