@@ -1,0 +1,2 @@
+include LICENSE.md MANIFEST.in
+recursive-include pyro *.cpp

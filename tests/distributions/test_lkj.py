@@ -5,7 +5,7 @@ import torch
 import math
 from torch.distributions import biject_to, transform_to, TransformedDistribution, Beta, AffineTransform
 from pyro.distributions.lkj import (corr_cholesky_constraint, CorrLCholeskyTransform, LKJCorrCholesky)
-from tests.common import assert_tensors_equal
+from tests.common import assert_tensors_equal, assert_equal
 
 
 @pytest.mark.parametrize("value_shape", [(1, 1), (3, 3), (5, 5)])
@@ -79,13 +79,13 @@ def test_corr_cholesky_transform(x_shape, mapping):
 
 @pytest.mark.parametrize("d", [2, 3, 4, 10])
 def test_log_prob_eta1(d):
-    dist = LKJCorrCholesky(d, torch.FloatTensor([1]))
+    dist = LKJCorrCholesky(d, torch.tensor([1.]))
 
     a_sample = dist.sample(torch.Size([100]))
     lp = dist.log_prob(a_sample)
 
     if d == 2:
-        assert all(lp == -math.log(2))
+        assert_equal(lp, lp.new_full(lp.size(), -math.log(2)))
     else:
         ladj = a_sample.diagonal(dim1=-2, dim2=-1).log().mul(
             torch.linspace(start=d-1, end=0, steps=d, device=a_sample.device, dtype=a_sample.dtype)
@@ -94,9 +94,9 @@ def test_log_prob_eta1(d):
         assert (lps_less_ladj - lps_less_ladj.min()).abs().sum() < 1e-4
 
 
-@pytest.mark.parametrize("eta", [.1, .5, 1, 2, 5])
+@pytest.mark.parametrize("eta", [.1, .5, 1., 2., 5.])
 def test_log_prob_d2(eta):
-    dist = LKJCorrCholesky(2, torch.DoubleTensor([eta]))
+    dist = LKJCorrCholesky(2, torch.tensor([eta]))
     test_dist = TransformedDistribution(Beta(eta, eta), AffineTransform(loc=-1., scale=2.0))
 
     samples = dist.sample(torch.Size([100]))

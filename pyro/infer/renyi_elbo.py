@@ -182,15 +182,15 @@ class RenyiELBO(ELBO):
 
             if is_identically_zero(elbo_particle):
                 if tensor_holder is not None:
-                    elbo_particle = tensor_holder.new_zeros(tensor_holder.shape)
-                    surrogate_elbo_particle = tensor_holder.new_zeros(tensor_holder.shape)
+                    elbo_particle = torch.zeros_like(tensor_holder)
+                    surrogate_elbo_particle = torch.zeros_like(tensor_holder)
             else:  # elbo_particle is not None
                 if tensor_holder is None:
-                    tensor_holder = elbo_particle.new_empty(elbo_particle.shape)
+                    tensor_holder = torch.zeros_like(elbo_particle)
                     # change types of previous `elbo_particle`s
                     for i in range(len(elbo_particles)):
-                        elbo_particles[i] = tensor_holder.new_zeros(tensor_holder.shape)
-                        surrogate_elbo_particles[i] = tensor_holder.new_zeros(tensor_holder.shape)
+                        elbo_particles[i] = torch.zeros_like(tensor_holder)
+                        surrogate_elbo_particles[i] = torch.zeros_like(tensor_holder)
 
             elbo_particles.append(elbo_particle)
             surrogate_elbo_particles.append(surrogate_elbo_particle)

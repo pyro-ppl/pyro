@@ -75,7 +75,7 @@ class EKFDistribution(TorchDistribution):
         state = EKFState(self.dynamic_model, self.x0, self.P0, time=0.)
         result = 0.
         assert value.shape == self.event_shape
-        zero = value.new_zeros(self.event_shape[-1])
+        zero = torch.zeros(self.event_shape[-1], dtype=value.dtype, device=value.device)
         for i, measurement_mean in enumerate(value):
             if i:
                 state = state.predict(self.dt)

@@ -106,7 +106,7 @@ class _MixDiagNormalSharedCovarianceSample(Function):
     @staticmethod
     def forward(ctx, locs, coord_scale, component_logits, pis, which, noise_shape):
         dim = coord_scale.size(-1)
-        white = locs.new(noise_shape).normal_()
+        white = torch.randn(noise_shape, dtype=locs.dtype, device=locs.device)
         n_unsqueezes = locs.dim() - which.dim()
         for _ in range(n_unsqueezes):
             which = which.unsqueeze(-1)
@@ -130,7 +130,7 @@ class _MixDiagNormalSharedCovarianceSample(Function):
         mu_ab = locs_tilde.unsqueeze(-2) - locs_tilde.unsqueeze(-3)  # b k j i
         mu_ab_norm = torch.pow(mu_ab, 2.0).sum(-1).sqrt()  # b k j
         mu_ab /= mu_ab_norm.unsqueeze(-1)  # b k j i
-        diagonals = z.new_empty((K,), dtype=torch.long)
+        diagonals = torch.empty((K,), dtype=torch.long, device=z.device)
         torch.arange(K, out=diagonals)
         mu_ab[..., diagonals, diagonals, :] = 0.0
 

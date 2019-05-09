@@ -5,17 +5,29 @@ sudo: true
 env:
     global:
         - PYTHONPATH=$PWD:$PYTHONPATH
+        - CXX="g++-8"
+        - CC="gcc-8"
+
+addons:
+    apt:
+        sources:
+            - ubuntu-toolchain-r-test
+        packages:
+            - gcc-8
+            - g++-8
+            - ninja-build
 
 cache:
     directories:
+        - $HOME/.cache/pip
         - $HOME/.data
 
 install:
     - pip install -U pip
     - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then
-          pip install https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp27-cp27mu-linux_x86_64.whl;
+          pip install https://download.pytorch.org/whl/cpu/torch-1.1.0-cp27-cp27mu-linux_x86_64.whl;
       else
-          pip install https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp36-cp36m-linux_x86_64.whl;
+          pip install https://download.pytorch.org/whl/cpu/torch-1.1.0-cp36-cp36m-linux_x86_64.whl;
       fi
     - pip install .[test]
     - pip freeze

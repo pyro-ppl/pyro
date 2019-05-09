@@ -10,10 +10,11 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer import (SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO,
-                        TraceTailAdaptive_ELBO, config_enumerate)
-from pyro.optim import Adam
 from pyro.distributions.testing import fakes
+from pyro.infer import (SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO,
+                        config_enumerate)
+from pyro.ops.indexing import Vindex
+from pyro.optim import Adam
 
 logger = logging.getLogger(__name__)
 
@@ -1227,7 +1228,8 @@ def test_enum_in_model_multi_scale_error():
                  match='Expected all enumerated sample sites to share a common poutine.scale')
 
 
-def test_enum_in_model_diamond_error():
+@pytest.mark.parametrize('use_vindex', [False, True])
+def test_enum_in_model_diamond_error(use_vindex):
     data = torch.tensor([[0, 1], [0, 0]])
 
     @config_enumerate
@@ -1243,16 +1245,18 @@ def test_enum_in_model_diamond_error():
         probs_d = pyro.param("probs_d")
         b_axis = pyro.plate("b_axis", 2, dim=-1)
         c_axis = pyro.plate("c_axis", 2, dim=-2)
-        d_ind = torch.arange(2, dtype=torch.long)
         a = pyro.sample("a", dist.Categorical(probs_a))
         with b_axis:
             b = pyro.sample("b", dist.Categorical(probs_b[a]))
         with c_axis:
             c = pyro.sample("c", dist.Categorical(probs_c[a]))
         with b_axis, c_axis:
-            pyro.sample("d",
-                        dist.Categorical(probs_d[b.unsqueeze(-1), c.unsqueeze(-1), d_ind]),
-                        obs=data)
+            if use_vindex:
+                probs = Vindex(probs_d)[b, c]
+            else:
+                d_ind = torch.arange(2, dtype=torch.long)
+                probs = probs_d[b.unsqueeze(-1), c.unsqueeze(-1), d_ind]
+            pyro.sample("d", dist.Categorical(probs), obs=data)
 
     def guide():
         pass
@@ -1385,8 +1389,9 @@ def test_enum_recycling_chain():
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
 
 
+@pytest.mark.parametrize('use_vindex', [False, True])
 @pytest.mark.parametrize('markov', [False, True])
-def test_enum_recycling_dbn(markov):
+def test_enum_recycling_dbn(markov, use_vindex):
     #    x --> x --> x  enum "state"
     # y  |  y  |  y  |  enum "occlusion"
     #  \ |   \ |   \ |
@@ -1397,15 +1402,18 @@ def test_enum_recycling_dbn(markov):
         p = pyro.param("p", torch.ones(3, 3))
         q = pyro.param("q", torch.ones(2))
         r = pyro.param("r", torch.ones(3, 2, 4))
-        z_ind = torch.arange(4, dtype=torch.long)
 
         x = 0
         times = pyro.markov(range(100)) if markov else range(11)
         for t in times:
             x = pyro.sample("x_{}".format(t), dist.Categorical(p[x]))
             y = pyro.sample("y_{}".format(t), dist.Categorical(q))
-            pyro.sample("z_{}".format(t),
-                        dist.Categorical(r[x.unsqueeze(-1), y.unsqueeze(-1), z_ind]),
+            if use_vindex:
+                probs = Vindex(r)[x, y]
+            else:
+                z_ind = torch.arange(4, dtype=torch.long)
+                probs = r[x.unsqueeze(-1), y.unsqueeze(-1), z_ind]
+            pyro.sample("z_{}".format(t), dist.Categorical(probs),
                         obs=torch.tensor(0.))
 
     def guide():
@@ -1458,7 +1466,8 @@ def test_enum_recycling_nested():
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
 
 
-def test_enum_recycling_grid():
+@pytest.mark.parametrize('use_vindex', [False, True])
+def test_enum_recycling_grid(use_vindex):
     #  x---x---x---x    -----> i
     #  |   |   |   |   |
     #  x---x---x---x   |
@@ -1470,14 +1479,18 @@ def test_enum_recycling_grid():
     @config_enumerate
     def model():
         p = pyro.param("p_leaf", torch.ones(2, 2, 2))
-        ind = torch.arange(2, dtype=torch.long)
         x = defaultdict(lambda: torch.tensor(0))
         y_axis = pyro.markov(range(4), keep=True)
         for i in pyro.markov(range(4)):
             for j in y_axis:
+                if use_vindex:
+                    probs = Vindex(p)[x[i - 1, j], x[i, j - 1]]
+                else:
+                    ind = torch.arange(2, dtype=torch.long)
+                    probs = p[x[i - 1, j].unsqueeze(-1),
+                              x[i, j - 1].unsqueeze(-1), ind]
                 x[i, j] = pyro.sample("x_{}_{}".format(i, j),
-                                      dist.Categorical(p[x[i - 1, j].unsqueeze(-1),
-                                                         x[i, j - 1].unsqueeze(-1), ind]))
+                                      dist.Categorical(probs))
 
     def guide():
         pass

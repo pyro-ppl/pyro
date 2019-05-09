@@ -511,7 +511,8 @@ def naive_ubersum(equation, *operands, **kwargs):
             flat_operands.append(_select(operand, offsets, index))
 
     # Defer to unplated einsum.
-    result = operands[0].new_empty(torch.Size(sizes[d] for d in output))
+    result = torch.empty(torch.Size(sizes[d] for d in output),
+                         dtype=operands[0].dtype, device=operands[0].device)
     local_dims = [d for d in output if d in plates]
     offsets = [output.index(d) - len(output) for d in local_dims]
     for index in itertools.product(*(range(sizes[d]) for d in local_dims)):
