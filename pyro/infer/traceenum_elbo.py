@@ -443,7 +443,8 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
             # build a closure for differentiable_loss
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings)
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings,
+                                jit_options=self.jit_options)
             def differentiable_loss(*args, **kwargs):
                 kwargs.pop('_model_id')
                 kwargs.pop('_guide_id')
