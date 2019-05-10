@@ -13,28 +13,8 @@ from pyro.infer.enum import get_importance_trace
 from pyro.util import check_if_enumerated, warn_if_nan
 
 
-def _reshape_covariance_matrix(cov_matrix, num_particles, vectorize_particles):
-    if vectorize_particles:
-        return cov_matrix.view(
-            num_particles, cov_matrix.shape[0] // num_particles,
-            num_particles, cov_matrix.shape[1] // num_particles
-        )
-    else:
-        return cov_matrix.view(
-            1, cov_matrix.shape[0], 1, cov_matrix.shape[1]
-        )
-
-
-def _covariance_matrix_mean(cov_matrix, num_particles, vectorize_particles):
-    cov_matrix = _reshape_covariance_matrix(cov_matrix, num_particles, vectorize_particles).transpose(2, 1)
-    cov_matrix_mean = torch.mean(cov_matrix, [2, 3])
-    return torch.diag(cov_matrix_mean).mean()
-
-
-def _compute_mmd(X, Z, kernel, num_particles, vectorize_particles):
-    mmd = _covariance_matrix_mean(kernel(X), num_particles, vectorize_particles) + \
-          _covariance_matrix_mean(kernel(Z), num_particles, vectorize_particles) - \
-          _covariance_matrix_mean(kernel(X, Z), num_particles, vectorize_particles) * 2
+def _compute_mmd(X, Z, kernel):
+    mmd = torch.mean(kernel(X)) + torch.mean(kernel(Z)) - torch.mean(kernel(X, Z)) * 2
     return mmd
 
 
@@ -55,8 +35,11 @@ class Trace_MMD(ELBO):
 
     where k is a kernel.
 
-    DISCLAIMER: this implementation assumes that all latent variables are independent wrt batch dimensions.
-    Else, it can work incorrectly. The general case will be implemented in future versions.
+    DISCLAIMER: this implementation treats only the particle dimension as batch dimension when computing MMD.
+    All other dimensions are treated as event dimensions.
+    For this reason, one needs large `num_particles` in order to have reasonable variance of MMD Monte-Carlo estimate.
+    As a consequence, it is recommended to set `vectorize_particles=True` (default).
+    The general case will be implemented in future versions.
 
     :param kernel: A kernel used to compute MMD.
         An instance of :class: `pyro.contrib.gp.kernels.kernel.Kernel`,
@@ -79,10 +62,10 @@ class Trace_MMD(ELBO):
 
     def __init__(self,
                  kernel, mmd_scale=1,
-                 num_particles=1,
+                 num_particles=10,
                  max_plate_nesting=float('inf'),
                  max_iarange_nesting=None,  # DEPRECATED
-                 vectorize_particles=False,
+                 vectorize_particles=True,
                  strict_enumeration_warning=True,
                  ignore_jit_warnings=False,
                  retain_graph=None):
@@ -133,6 +116,9 @@ class Trace_MMD(ELBO):
         return model_trace, guide_trace
 
     def _differentiable_loss_parts(self, model, guide, *args, **kwargs):
+        all_model_samples = defaultdict(list)
+        all_guide_samples = defaultdict(list)
+
         loglikelihood = 0.0
         penalty = 0.0
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
@@ -142,8 +128,8 @@ class Trace_MMD(ELBO):
                 ).get_trace(*args, **kwargs)
             else:
                 model_trace_independent = poutine.trace(model, graph_type='flat').get_trace(*args, **kwargs)
+
             loglikelihood_particle = 0.0
-            penalty_particle = 0.0
             for name, model_site in model_trace.nodes.items():
                 if model_site['type'] == 'sample':
                     if name in guide_trace and not model_site['is_observed']:
@@ -153,28 +139,34 @@ class Trace_MMD(ELBO):
                             raise ValueError("Model site {} is not reparameterizable".format(name))
                         if not guide_site["fn"].has_rsample:
                             raise ValueError("Guide site {} is not reparameterizable".format(name))
+
+                        particle_dim = -self.max_plate_nesting - independent_model_site["fn"].event_dim
+
                         model_samples = independent_model_site['value']
                         guide_samples = guide_site['value']
-                        model_event_dim_sum = sum(
-                            model_samples.size(j) for j in range(-independent_model_site['fn'].event_dim, 0)
-                        )
-                        model_samples = model_samples.view(-1, model_event_dim_sum)
-                        guide_event_dim_sum = sum(
-                            guide_samples.size(j) for j in range(-guide_site['fn'].event_dim, 0)
-                        )
-                        guide_samples = guide_samples.view(-1, guide_event_dim_sum)
-                        divergence = _compute_mmd(
-                            model_samples, guide_samples, kernel=self._kernel[name],
-                            num_particles=self.num_particles, vectorize_particles=self.vectorize_particles
-                        )
-                        penalty_particle = penalty_particle + self._mmd_scale[name] * divergence
+
+                        if self.vectorize_particles:
+                            model_samples = model_samples.transpose(-model_samples.dim(), particle_dim)
+                            model_samples = model_samples.view(model_samples.shape[0], -1)
+
+                            guide_samples = guide_samples.transpose(-guide_samples.dim(), particle_dim)
+                            guide_samples = guide_samples.view(guide_samples.shape[0], -1)
+                        else:
+                            model_samples = model_samples.view(1, -1)
+                            guide_samples = guide_samples.view(1, -1)
+
+                        all_model_samples[name].append(model_samples)
+                        all_guide_samples[name].append(guide_samples)
                     else:
                         loglikelihood_particle = loglikelihood_particle + model_site['log_prob_sum']
+
             loglikelihood = loglikelihood_particle / self.num_particles + loglikelihood
-            if self.vectorize_particles:
-                penalty = penalty_particle + penalty
-            else:
-                penalty = penalty_particle / self.num_particles + penalty
+
+        for name in all_model_samples.keys():
+            all_model_samples[name] = torch.cat(all_model_samples[name])
+            all_guide_samples[name] = torch.cat(all_guide_samples[name])
+            divergence = _compute_mmd(all_model_samples[name], all_guide_samples[name], kernel=self._kernel[name])
+            penalty = self._mmd_scale[name] * divergence + penalty
 
         warn_if_nan(loglikelihood, "loglikelihood")
         warn_if_nan(penalty, "penalty")

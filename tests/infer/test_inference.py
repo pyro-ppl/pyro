@@ -47,7 +47,7 @@ class NormalNormalTests(TestCase):
         self.analytic_loc_n = self.data_sum * (self.lam / self.analytic_lam_n) +\
             self.loc0 * (self.lam0 / self.analytic_lam_n)
         self.batch_size = 4
-        self.sample_batch_size = 100
+        self.sample_batch_size = 2
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000, Trace_ELBO())
@@ -67,14 +67,25 @@ class NormalNormalTests(TestCase):
     def test_renyi_nonreparameterized(self):
         self.do_elbo_test(False, 7500, RenyiELBO(num_particles=3))
 
-    def test_mmd(self):
+    def test_mmd_vectorized(self):
         z_size = self.loc0.shape[0]
         self.do_fit_prior_test(
-            True, 3000, Trace_MMD(
+            True, 1000, Trace_MMD(
                 kernel=kernels.RBF(
                     z_size,
                     lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
-                ),
+                ), vectorize_particles=True, num_particles=100
+            )
+        )
+
+    def test_mmd_nonvectorized(self):
+        z_size = self.loc0.shape[0]
+        self.do_fit_prior_test(
+            True, 1000, Trace_MMD(
+                kernel=kernels.RBF(
+                    z_size,
+                    lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
+                ), vectorize_particles=False, num_particles=100
             )
         )
 
@@ -240,7 +251,7 @@ class PoissonGammaTests(TestCase):
         data_sum = self.data.sum(0)
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
         self.beta_n = self.beta0 + torch.tensor(float(self.n_data))  # posterior beta
-        self.sample_batch_size = 100
+        self.sample_batch_size = 2
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 10000, Trace_ELBO())
@@ -254,15 +265,15 @@ class PoissonGammaTests(TestCase):
     def test_renyi_nonreparameterized(self):
         self.do_elbo_test(False, 12500, RenyiELBO(alpha=0.2, num_particles=2))
 
-    def test_mmd(self):
+    def test_mmd_vectorized(self):
         z_size = 1
         self.do_fit_prior_test(
-            True, 20000, Trace_MMD(
+            True, 25000, Trace_MMD(
                 kernel=kernels.RBF(
                     z_size,
                     lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
-                )
-            )
+                ), vectorize_particles=True, num_particles=100
+            ), debug=True
         )
 
     def do_elbo_test(self, reparameterized, n_steps, loss):
@@ -419,7 +430,7 @@ class BernoulliBetaTests(TestCase):
         # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
-        self.sample_batch_size = 200
+        self.sample_batch_size = 2
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 10000, Trace_ELBO())
@@ -451,14 +462,14 @@ class BernoulliBetaTests(TestCase):
         self.do_elbo_test(False, 5000, RenyiELBO(alpha=0.2, num_particles=2, vectorize_particles=True,
                                                  max_plate_nesting=1))
 
-    def test_mmd(self):
+    def test_mmd_vectorized(self):
         z_size = 1
         self.do_fit_prior_test(
             True, 2500, Trace_MMD(
                 kernel=kernels.RBF(
                     z_size,
                     lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
-                )
+                ), vectorize_particles=True, num_particles=100
             )
         )
 
