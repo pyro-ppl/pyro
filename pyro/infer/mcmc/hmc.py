@@ -233,7 +233,8 @@ class HMC(MCMCKernel):
         )
         self.potential_fn = potential_fn
         self.transforms = transforms
-        self._initial_params = init_params
+        if self._initial_params is None:
+            self._initial_params = init_params
         self._prototype_trace = trace
 
     def _initialize_adapter(self):
