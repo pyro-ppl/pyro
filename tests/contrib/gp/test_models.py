@@ -380,8 +380,8 @@ def _mape(y_true, y_pred):
 
 
 def _post_test_mean_function(gpmodule, Xnew, y_true):
-    assert_equal(gpmodule.mean_function.a.item(), 2, prec=0.02)
-    assert_equal(gpmodule.mean_function.b.item(), 3, prec=0.02)
+    assert_equal(gpmodule.mean_function.a.item(), 2, prec=0.03)
+    assert_equal(gpmodule.mean_function.b.item(), 3, prec=0.03)
 
     y_pred, _ = gpmodule(Xnew)
     assert_equal(_mape(y_true, y_pred).item(), 0, prec=0.02)

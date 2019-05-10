@@ -39,12 +39,12 @@ def _vector_to_l_cholesky(z):
     if D % 1 != 0:
         raise ValueError("Correlation matrix transformation requires d choose 2 inputs")
     D = int(D)
-    x = z.new_zeros(list(z.shape[:-1]) + [D, D])
+    x = torch.zeros(z.shape[:-1] + (D, D), dtype=z.dtype, device=z.device)
 
     x[..., 0, 0] = 1
     x[..., 1:, 0] = z[..., :(D - 1)]
     i = D - 1
-    last_squared_x = z.new_zeros(list(z.shape[:-1]) + [D])
+    last_squared_x = torch.zeros(z.shape[:-1] + (D,), dtype=z.dtype, device=z.device)
     for j in range(1, D):
         distance_to_copy = D - 1 - j
         last_squared_x = last_squared_x[..., 1:] + x[..., j:, (j - 1)].clone()**2
@@ -83,7 +83,7 @@ class CorrLCholeskyTransform(Transform):
             raise ValueError("A matrix that isn't square can't be a Cholesky factor of a correlation matrix")
         D = y.shape[-1]
 
-        z_tri = y.new_zeros(y.shape[:-2] + (D - 2, D - 2))
+        z_tri = torch.zeros(y.shape[:-2] + (D - 2, D - 2), dtype=y.dtype, device=y.device)
         z_stack = [
             y[..., 1:, 0]
         ]
@@ -149,7 +149,7 @@ class LKJCorrCholesky(TorchDistribution):
         vector_size = (d * (d - 1)) // 2
         alpha = eta.add(0.5 * (d - 1.0))
 
-        concentrations = eta.new_empty(vector_size,)
+        concentrations = torch.empty(vector_size, dtype=eta.dtype, device=eta.device)
         i = 0
         for k in range(d - 1):
             alpha -= .5
@@ -202,11 +202,13 @@ class LKJCorrCholesky(TorchDistribution):
         Km1 = self._d - 1
 
         log_diagonals = x.diagonal(offset=0, dim1=-1, dim2=-2)[..., 1:].log()
+        # TODO: Figure out why the `device` kwarg to torch.linspace seems to not work in certain situations,
+        # and a seemingly redundant .to(x.device) is needed below.
         values = log_diagonals * torch.linspace(start=Km1 - 1, end=0, steps=Km1,
                                                 dtype=x.dtype,
-                                                device=x.device).expand_as(log_diagonals)
+                                                device=x.device).expand_as(log_diagonals).to(x.device)
 
         values += log_diagonals.mul(eta.mul(2).add(-2.0))
         values = values.sum(-1) + lp
-        values, _ = torch.broadcast_tensors(values, values.new_empty(self.batch_shape))
+        values, _ = torch.broadcast_tensors(values, torch.empty(self.batch_shape))
         return values

@@ -86,8 +86,8 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
         candidates = []
         values = []
         for j in range(num_candidates):
-            x_init = self.gpmodel.X.new_empty(1).uniform_(
-                self.constraints.lower_bound, self.constraints.upper_bound)
+            x_init = (torch.empty(1, dtype=self.gpmodel.X.dtype, device=self.gpmodel.X.device)
+                      .uniform_(self.constraints.lower_bound, self.constraints.upper_bound))
             x, y = self.find_a_candidate(differentiable, x_init)
             if torch.isnan(y):
                 continue
@@ -109,7 +109,8 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
         """
 
         # Initialize the return tensor
-        X = self.gpmodel.X.new_empty(num_acquisitions, *self.gpmodel.X.shape[1:])
+        X = self.gpmodel.X
+        X = torch.empty(num_acquisitions, *X.shape[1:], dtype=X.dtype, device=X.device)
 
         for i in range(num_acquisitions):
             sampler = self.gpmodel.iter_sample(noiseless=False)

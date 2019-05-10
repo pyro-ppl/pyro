@@ -13,10 +13,13 @@ found at examples/minipyro.py.
 """
 from __future__ import absolute_import, division, print_function
 
-from collections import OrderedDict
+import warnings
 import weakref
+from collections import OrderedDict
 
 import torch
+
+from pyro.distributions import validation_enabled
 
 # Pyro keeps track of two kinds of global state:
 # i)  The effect handler stack, which enables non-standard interpretations of
@@ -70,7 +73,8 @@ class trace(Messenger):
     # trace illustrates why we need postprocess_message in addition to process_message:
     # We only want to record a value after all other effects have been applied
     def postprocess_message(self, msg):
-        assert msg["name"] not in self.trace, "all sites must have unique names"
+        assert msg["type"] != "sample" or msg["name"] not in self.trace, \
+            "sample sites must have unique names"
         self.trace[msg["name"]] = msg.copy()
 
     def get_trace(self, *args, **kwargs):
@@ -266,7 +270,7 @@ class SVI(object):
         self.optim(params)
         # Zero out the gradients so that they don't accumulate.
         for p in params:
-            p.grad = p.new_zeros(p.shape)
+            p.grad = torch.zeros_like(p)
         return loss.item()
 
 
@@ -306,5 +310,46 @@ def elbo(model, guide, *args, **kwargs):
 
 
 # This is a wrapper for compatibility with full Pyro.
-def Trace_ELBO(*args, **kwargs):
+def Trace_ELBO(**kwargs):
     return elbo
+
+
+# This is a Jit wrapper around elbo() that (1) delays tracing until the first
+# invocation, and (2) registers pyro.param() statements with torch.jit.trace.
+# This version does not support variable number of args or non-tensor kwargs.
+class JitTrace_ELBO(object):
+    def __init__(self, **kwargs):
+        self.ignore_jit_warnings = kwargs.pop("ignore_jit_warnings", False)
+        self._compiled = None
+        self._param_trace = None
+
+    def __call__(self, model, guide, *args):
+        # On first call, initialize params and save their names.
+        if self._param_trace is None:
+            with block(), trace() as tr, block(hide_fn=lambda m: m["type"] != "param"):
+                elbo(model, guide, *args)
+            self._param_trace = tr
+
+        # Augment args with reads from the global param store.
+        unconstrained_params = tuple(param(name).unconstrained()
+                                     for name in self._param_trace)
+        params_and_args = unconstrained_params + args
+
+        # On first call, create a compiled elbo.
+        if self._compiled is None:
+
+            def compiled(*params_and_args):
+                unconstrained_params = params_and_args[:len(self._param_trace)]
+                args = params_and_args[len(self._param_trace):]
+                for name, unconstrained_param in zip(self._param_trace, unconstrained_params):
+                    constrained_param = param(name)  # assume param has been initialized
+                    assert constrained_param.unconstrained() is unconstrained_param
+                    self._param_trace[name]["value"] = constrained_param
+                return replay(elbo, guide_trace=self._param_trace)(model, guide, *args)
+
+            with validation_enabled(False), warnings.catch_warnings():
+                if self.ignore_jit_warnings:
+                    warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+                self._compiled = torch.jit.trace(compiled, params_and_args, check_trace=False)
+
+        return self._compiled(*params_and_args)

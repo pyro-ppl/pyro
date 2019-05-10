@@ -53,10 +53,11 @@ regression_model = RegressionModel(p)
 
 def model(data):
     # Create unit normal priors over the parameters
-    loc = data.new_zeros(torch.Size((1, p)))
-    scale = 2 * data.new_ones(torch.Size((1, p)))
-    bias_loc = data.new_zeros(torch.Size((1,)))
-    bias_scale = 2 * data.new_ones(torch.Size((1,)))
+    options = dict(dtype=data.dtype, device=data.device)
+    loc = torch.zeros(1, p, **options)
+    scale = 2 * torch.ones(1, p, **options)
+    bias_loc = torch.zeros(1, **options)
+    bias_scale = 2 * torch.ones(1, **options)
     w_prior = Normal(loc, scale).to_event(1)
     b_prior = Normal(bias_loc, bias_scale).to_event(1)
     priors = {'linear.weight': w_prior, 'linear.bias': b_prior}
@@ -136,7 +137,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.1')
+    assert pyro.__version__.startswith('0.3.3')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=1000, type=int)
     parser.add_argument('-b', '--batch-size', default=N, type=int)

@@ -102,16 +102,17 @@ class SSVAE(nn.Module):
         pyro.module("ss_vae", self)
 
         batch_size = xs.size(0)
+        options = dict(dtype=xs.dtype, device=xs.device)
         with pyro.plate("data"):
 
             # sample the handwriting style from the constant prior distribution
-            prior_loc = xs.new_zeros([batch_size, self.z_dim])
-            prior_scale = xs.new_ones([batch_size, self.z_dim])
+            prior_loc = torch.zeros(batch_size, self.z_dim, **options)
+            prior_scale = torch.ones(batch_size, self.z_dim, **options)
             zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).to_event(1))
 
             # if the label y (which digit to write) is supervised, sample from the
             # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
-            alpha_prior = xs.new_ones([batch_size, self.output_size]) / (1.0 * self.output_size)
+            alpha_prior = torch.ones(batch_size, self.output_size, **options) / (1.0 * self.output_size)
             ys = pyro.sample("y", dist.OneHotCategorical(alpha_prior), obs=ys)
 
             # finally, score the image (x) using the handwriting style (z) and
@@ -167,8 +168,7 @@ class SSVAE(nn.Module):
         res, ind = torch.topk(alpha, 1)
 
         # convert the digit(s) to one-hot tensor(s)
-        ys = xs.new_zeros(alpha.size())
-        ys = ys.scatter_(1, ind, 1.0)
+        ys = torch.zeros_like(alpha).scatter_(1, ind, 1.0)
         return ys
 
     def model_classify(self, xs, ys=None):
@@ -380,7 +380,7 @@ EXAMPLE_RUN = "example run: python ss_vae_M2.py --seed 0 --cuda -n 2 --aux-loss 
               "-sup 3000 -zd 50 -hl 500 -lr 0.00042 -b1 0.95 -bs 200 -log ./tmp.log"
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.3.1')
+    assert pyro.__version__.startswith('0.3.3')
 
     parser = argparse.ArgumentParser(description="SS-VAE\n{}".format(EXAMPLE_RUN))
 

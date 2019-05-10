@@ -6,7 +6,7 @@ from six import add_metaclass
 
 
 @add_metaclass(ABCMeta)
-class TraceKernel(object):
+class MCMCKernel(object):
 
     def setup(self, warmup_steps, *args, **kwargs):
         r"""
@@ -42,34 +42,35 @@ class TraceKernel(object):
         pass
 
     @property
-    def initial_trace(self):
+    def initial_params(self):
         """
-        Returns an initial trace (by default, from the prior) to initiate the MCMC run.
+        Returns a dict of initial params (by default, from the prior) to initiate the MCMC run.
 
-        :return: Trace instance.
+        :return: dict of parameter values keyed by their name.
         """
         raise NotImplementedError
 
-    @initial_trace.setter
-    def initial_trace(self, trace):
+    @initial_params.setter
+    def initial_params(self, params):
         """
-        Sets the trace to initiate the MCMC run.
+        Sets the parameters to initiate the MCMC run. Note that the parameters must
+        have unconstrained support.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def sample(self, trace):
+    def sample(self, params):
         """
-        Samples a trace from the approximate posterior distribution, when given an existing trace.
+        Samples parameters from the posterior distribution, when given existing parameters.
 
-        :param trace: Current execution trace.
+        :param dict params: Current parameter values.
         :param int time_step: Current time step.
-        :return: New trace sampled from the approximate posterior distribution.
+        :return: New parameters from the posterior distribution.
         """
         raise NotImplementedError
 
-    def __call__(self, trace):
+    def __call__(self, params):
         """
-        Alias for TraceKernel.sample() method.
+        Alias for MCMCKernel.sample() method.
         """
-        return self.sample(trace)
+        return self.sample(params)

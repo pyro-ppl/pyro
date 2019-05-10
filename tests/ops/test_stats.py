@@ -42,7 +42,7 @@ def test_quantile():
 
 
 def test_pi():
-    x = torch.empty(1000).log_normal_(0, 1)
+    x = torch.randn(1000).exp()
     assert_equal(pi(x, prob=0.8), quantile(x, probs=[0.1, 0.9]))
 
 

@@ -51,7 +51,7 @@ class AutoGaussianChain(GaussianChain):
                      .format(self.target_auto_diag_cov[1:].detach().cpu().numpy()))
 
         # TODO speed up with parallel num_particles > 1
-        adam = optim.Adam({"lr": .0005, "betas": (0.95, 0.999)})
+        adam = optim.Adam({"lr": .001, "betas": (0.95, 0.999)})
         svi = SVI(self.model, self.guide, adam, loss=Trace_ELBO())
 
         for k in range(n_steps):

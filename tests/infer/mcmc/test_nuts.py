@@ -173,7 +173,8 @@ def test_beta_bernoulli(step_size, adapt_step_size, adapt_mass_matrix, full_mass
 
     true_probs = torch.tensor([0.9, 0.1])
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
-    nuts_kernel = NUTS(model, step_size, adapt_step_size, adapt_mass_matrix, full_mass)
+    nuts_kernel = NUTS(model, step_size=step_size, adapt_step_size=adapt_step_size,
+                       adapt_mass_matrix=adapt_mass_matrix, full_mass=full_mass)
     mcmc_run = MCMC(nuts_kernel, num_samples=400, warmup_steps=200).run(data)
     posterior = mcmc_run.marginal(sites='p_latent').empirical['p_latent']
     assert_equal(posterior.mean, true_probs, prec=0.02)
@@ -362,4 +363,4 @@ def test_gamma_poisson(hyperpriors):
     mcmc_run.exec_traces = [poutine.trace(uncollapse_conjugate(model, tr)).get_trace(data)
                             for tr in mcmc_run.exec_traces]
     posterior = mcmc_run.marginal(["rate"]).empirical["rate"]
-    assert_equal(posterior.mean, true_rate, prec=0.2)
+    assert_equal(posterior.mean, true_rate, prec=0.3)

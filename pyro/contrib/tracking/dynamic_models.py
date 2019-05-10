@@ -118,7 +118,7 @@ class DynamicModel(nn.Module):
         :return: :class:`~pyro.distributions.torch.MultivariateNormal`.
         '''
         Q = self.process_noise_cov(dt)
-        return dist.MultivariateNormal(Q.new_zeros(Q.shape[-1]), Q)
+        return dist.MultivariateNormal(torch.zeros(Q.shape[-1], dtype=Q.dtype, device=Q.device), Q)
 
 
 class DifferentiableDynamicModel(DynamicModel):
@@ -182,7 +182,7 @@ class Ncp(DifferentiableDynamicModel):
         :return: PV state estimate mean.
         '''
         with torch.no_grad():
-            x_pv = x.new_zeros(2*self._dimension)
+            x_pv = torch.zeros(2 * self._dimension, dtype=x.dtype, device=x.device)
             x_pv[:self._dimension] = x
         return x_pv
 
@@ -197,7 +197,7 @@ class Ncp(DifferentiableDynamicModel):
         '''
         d = 2*self._dimension
         with torch.no_grad():
-            P_pv = P.new_zeros((d, d))
+            P_pv = torch.zeros(d, d, dtype=P.dtype, device=P.device)
             P_pv[:self._dimension, :self._dimension] = P
         return P_pv
 
@@ -372,7 +372,7 @@ class NcvContinuous(Ncv):
                 d = self._dimension
                 dt2 = dt * dt
                 dt3 = dt2 * dt
-                Q = self.sa2.new_zeros(d, d)
+                Q = torch.zeros(d, d, dtype=self.sa2.dtype, device=self.sa2.device)
                 eye = eye_like(self.sa2, d//2)
                 Q[:d//2, :d//2] = dt3 * eye / 3.0
                 Q[:d//2, d//2:] = dt2 * eye / 2.0
@@ -445,7 +445,7 @@ class NcvDiscrete(Ncv):
                 dt2 = dt*dt
                 dt3 = dt2*dt
                 dt4 = dt2*dt2
-                Q = self.sa2.new_zeros(d, d)
+                Q = torch.zeros(d, d, dtype=self.sa2.dtype, device=self.sa2.device)
                 Q[:d//2, :d//2] = 0.25 * dt4 * eye_like(self.sa2, d//2)
                 Q[:d//2, d//2:] = 0.5 * dt3 * eye_like(self.sa2, d//2)
                 Q[d//2:, :d//2] = 0.5 * dt3 * eye_like(self.sa2, d//2)

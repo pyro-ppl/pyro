@@ -270,7 +270,7 @@ class TracePosterior(object):
                                    .log_prob(trace.nodes[obs_node]["value"]))
 
         ll = torch.stack(log_likelihoods, dim=0)
-        waic_value, p_waic = waic(ll, ll.new_tensor(self.log_weights), pointwise)
+        waic_value, p_waic = waic(ll, torch.tensor(self.log_weights, device=ll.device), pointwise)
         return OrderedDict([("waic", waic_value), ("p_waic", p_waic)])
 
 
@@ -281,16 +281,16 @@ class TracePredictive(TracePosterior):
     achieved by constraining latent sites to randomly sampled parameter
     values from the model execution traces and running the model forward
     to generate traces with new response ("_RETURN") sites.
-
     :param model: arbitrary Python callable containing Pyro primitives.
-    :param TracePosterior posterior: trace posterior instance holding
-        samples from the model's approximate posterior.
+    :param TracePosterior posterior: trace posterior instance holding samples from the model's approximate posterior.
     :param int num_samples: number of samples to generate.
+    :param keep_sites: The sites which should be sampled from posterior distribution (default: all)
     """
-    def __init__(self, model, posterior, num_samples):
+    def __init__(self, model, posterior, num_samples, keep_sites=None):
         self.model = model
         self.posterior = posterior
         self.num_samples = num_samples
+        self.keep_sites = keep_sites
         super(TracePredictive, self).__init__()
 
     def _traces(self, *args, **kwargs):
@@ -299,9 +299,18 @@ class TracePredictive(TracePosterior):
         data_trace = poutine.trace(self.model).get_trace(*args, **kwargs)
         for _ in range(self.num_samples):
             model_trace = self.posterior().copy()
+            self._remove_dropped_nodes(model_trace)
             self._adjust_to_data(model_trace, data_trace)
             resampled_trace = poutine.trace(poutine.replay(self.model, model_trace)).get_trace(*args, **kwargs)
             yield (resampled_trace, 0., 0)
+
+    def _remove_dropped_nodes(self, trace):
+        if self.keep_sites is None:
+            return
+        for name, site in list(trace.nodes.items()):
+            if name not in self.keep_sites:
+                trace.remove_node(name)
+                continue
 
     def _adjust_to_data(self, trace, data_trace):
         for name, site in list(trace.nodes.items()):
@@ -317,8 +326,10 @@ class TracePredictive(TracePosterior):
                     # Select random sub-indices to replay values under conditionally independent stacks.
                     # Otherwise, we assume there is an dependence of indexes between training data
                     # and prediction data.
-                    subidxs = Categorical(logits=site["value"].new_ones(site["value"].size(cis.dim))).sample([cis.size])
-                    site["value"] = site["value"].index_select(cis.dim, subidxs)
+                    batch_dim = cis.dim - site["fn"].event_dim
+                    subidxs = torch.randint(0, site['value'].size(batch_dim), (cis.size,),
+                                            device=site["value"].device)
+                    site["value"] = site["value"].index_select(batch_dim, subidxs)
             except KeyError:
                 pass
 

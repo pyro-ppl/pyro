@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import functools
+
 import numpy as np
 import pytest
 import torch
@@ -10,7 +12,8 @@ import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.contrib.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
                                     AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
-                                    AutoMultivariateNormal)
+                                    AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
+                                    init_to_sample)
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.optim import Adam
 from tests.common import assert_equal
@@ -43,6 +46,12 @@ def test_scores(auto_class):
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("init_loc_fn", [
+    init_to_feasible,
+    init_to_mean,
+    init_to_median,
+    init_to_sample,
+])
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
@@ -51,7 +60,7 @@ def test_scores(auto_class):
     AutoIAFNormal,
     AutoLaplaceApproximation,
 ])
-def test_shapes(auto_class, Elbo):
+def test_shapes(auto_class, init_loc_fn, Elbo):
 
     def model():
         pyro.sample("z1", dist.Normal(0.0, 1.0))
@@ -59,7 +68,7 @@ def test_shapes(auto_class, Elbo):
         with pyro.plate("plate", 3):
             pyro.sample("z3", dist.Normal(torch.zeros(3), torch.ones(3)))
 
-    guide = auto_class(model)
+    guide = auto_class(model, init_loc_fn=init_loc_fn)
     elbo = Elbo(strict_enumeration_warning=False)
     loss = elbo.loss(model, guide)
     assert np.isfinite(loss), loss
@@ -105,7 +114,7 @@ def auto_guide_list_x(model):
 def auto_guide_callable(model):
     def guide_x():
         x_loc = pyro.param("x_loc", torch.tensor(1.))
-        x_scale = pyro.param("x_scale", torch.tensor(2.), constraint=constraints.positive)
+        x_scale = pyro.param("x_scale", torch.tensor(.1), constraint=constraints.positive)
         pyro.sample("x", dist.Normal(x_loc, x_scale))
 
     def median_x():
@@ -125,6 +134,10 @@ def auto_guide_callable(model):
     AutoLaplaceApproximation,
     auto_guide_list_x,
     auto_guide_callable,
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_feasible),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_median(auto_class, Elbo):

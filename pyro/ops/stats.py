@@ -115,20 +115,20 @@ def autocorrelation(input, dim=0):
 
     # centering and padding x
     centered_signal = input - input.mean(dim=-1, keepdim=True)
-    pad = input.new_zeros(input.shape[:-1] + (M2 - N,))
+    pad = torch.zeros(input.shape[:-1] + (M2 - N,), dtype=input.dtype)
     centered_signal = torch.cat([centered_signal, pad], dim=-1)
 
     # Fourier transform
     freqvec = torch.rfft(centered_signal, signal_ndim=1, onesided=False)
     # take square of magnitude of freqvec (or freqvec x freqvec*)
     freqvec_gram = freqvec.pow(2).sum(-1, keepdim=True)
-    freqvec_gram = torch.cat([freqvec_gram, input.new_zeros(freqvec_gram.shape)], dim=-1)
+    freqvec_gram = torch.cat([freqvec_gram, torch.zeros(freqvec_gram.shape, dtype=input.dtype)], dim=-1)
     # inverse Fourier transform
     autocorr = torch.irfft(freqvec_gram, signal_ndim=1, onesided=False)
 
     # truncate and normalize the result, then transpose back to original shape
     autocorr = autocorr[..., :N]
-    autocorr = autocorr / input.new_tensor(range(N, 0, -1))
+    autocorr = autocorr / torch.tensor(range(N, 0, -1), dtype=input.dtype)
     autocorr = autocorr / autocorr[..., :1]
     return autocorr.transpose(dim, -1)
 
@@ -154,7 +154,8 @@ def _cummin(input):
     # FIXME: is there a better trick to find accumulate min of a sequence?
     N = input.size(0)
     input_tril = input.unsqueeze(0).repeat((N,) + (1,) * input.dim())
-    triu_mask = input.new_ones(N, N).triu(diagonal=1).reshape((N, N) + (1,) * (input.dim() - 1))
+    triu_mask = (torch.ones(N, N, dtype=input.dtype, device=input.device)
+                 .triu(diagonal=1).reshape((N, N) + (1,) * (input.dim() - 1)))
     triu_mask = triu_mask.expand((N, N) + input.shape[1:]) > 0.5
     input_tril.masked_fill_(triu_mask, input.max())
     return input_tril.min(dim=1)[0]
@@ -229,7 +230,7 @@ def resample(input, num_samples, dim=0, replacement=False):
     :param int dim: dimension to draw from ``input``.
     :returns torch.Tensor: samples drawn randomly from ``input``.
     """
-    weights = input.new_ones(input.size(dim))
+    weights = torch.ones(input.size(dim), dtype=input.dtype, device=input.device)
     indices = torch.multinomial(weights, num_samples, replacement)
     return input.index_select(dim, indices)
 
@@ -245,7 +246,7 @@ def quantile(input, probs, dim=0):
     :returns torch.Tensor: quantiles of ``input`` at ``probs``.
     """
     if isinstance(probs, (numbers.Number, list, tuple)):
-        probs = input.new_tensor(probs)
+        probs = torch.tensor(probs, dtype=input.dtype, device=input.device)
     sorted_input = input.sort(dim)[0]
     max_index = input.size(dim) - 1
     indices = probs * max_index
@@ -290,9 +291,9 @@ def hpdi(input, prob, dim=0):
     mass = input.size(dim)
     index_length = int(prob * mass)
     intervals_left = sorted_input.index_select(
-        dim, input.new_tensor(range(mass - index_length), dtype=torch.long))
+        dim, torch.tensor(range(mass - index_length), dtype=torch.long, device=input.device))
     intervals_right = sorted_input.index_select(
-        dim, input.new_tensor(range(index_length, mass), dtype=torch.long))
+        dim, torch.tensor(range(index_length, mass), dtype=torch.long, device=input.device))
     intervals_length = intervals_right - intervals_left
     index_start = intervals_length.argmin(dim)
     indices = torch.stack([index_start, index_start + index_length], dim)
@@ -329,7 +330,8 @@ def waic(input, log_weights=None, pointwise=False, dim=0):
     :param int dim: the sample dimension of ``input``.
     :returns tuple: tuple of WAIC and effective number of parameters.
     """
-    log_weights = input.new_zeros(input.size(dim)) if log_weights is None else log_weights
+    if log_weights is None:
+        log_weights = torch.zeros(input.size(dim), dtype=input.dtype, device=input.device)
 
     # computes log pointwise predictive density: formula (3) of [1]
     dim = input.dim() + dim if dim < 0 else dim
@@ -364,14 +366,14 @@ def fit_generalized_pareto(X):
     if not isinstance(X, torch.Tensor) or X.dim() != 1:
         raise ValueError("Input X must be a 1-dimensional torch tensor")
 
-    X = X.cpu().double()
+    X = X.double()
     X = torch.sort(X, descending=False)[0]
 
     N = X.size(0)
     M = 30 + int(math.sqrt(N))
 
     # b = k / sigma
-    bs = 1.0 - math.sqrt(M) / (torch.arange(1, M + 1).double() - 0.5).sqrt()
+    bs = 1.0 - math.sqrt(M) / (torch.arange(1, M + 1, dtype=torch.double) - 0.5).sqrt()
     bs /= 3.0 * X[int(N/4 - 0.5)]
     bs += 1 / X[-1]
 
