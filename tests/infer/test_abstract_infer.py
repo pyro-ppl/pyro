@@ -95,7 +95,7 @@ def test_posterior_predictive_svi_one_hot():
     opt = optim.Adam(dict(lr=0.1))
     loss = Trace_ELBO()
     guide = AutoDiagonalNormal(one_hot_model)
-    svi_run = SVI(one_hot_model, guide, opt, loss, num_steps=1000, num_samples=100).run(pseudocounts, classes=classes)
+    svi_run = SVI(one_hot_model, guide, opt, loss, num_steps=1000, num_samples=1000).run(pseudocounts, classes=classes)
     posterior_predictive = TracePredictive(one_hot_model, svi_run, num_samples=10000).run(pseudocounts)
     marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
     assert_close(marginal_return_vals.mean, true_probs.unsqueeze(0), rtol=0.1)
