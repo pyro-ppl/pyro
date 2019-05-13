@@ -40,7 +40,8 @@ def main(args):
     with pyro_backend(args.backend):
         # Construct an SVI object so we can do variational inference on our
         # model/guide pair.
-        elbo = infer.Trace_ELBO()
+        Elbo = infer.JitTrace_ELBO if args.jit else infer.Trace_ELBO
+        elbo = Elbo()
         adam = optim.Adam({"lr": args.learning_rate})
         svi = infer.SVI(model, guide, adam, elbo)
 
@@ -53,7 +54,8 @@ def main(args):
 
         # Report the final values of the variational parameters
         # in the guide after training.
-        for name, value in pyro.get_param_store().items():
+        for name in pyro.get_param_store():
+            value = pyro.param(name)
             print("{} = {}".format(name, value.detach().cpu().numpy()))
 
         # For this simple (conjugate) model we know the exact posterior. In
@@ -63,10 +65,11 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.3.1')
+    assert pyro.__version__.startswith('0.3.3')
     parser = argparse.ArgumentParser(description="Mini Pyro demo")
     parser.add_argument("-b", "--backend", default="minipyro")
     parser.add_argument("-n", "--num-steps", default=1001, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.02, type=float)
+    parser.add_argument("--jit", action="store_true")
     args = parser.parse_args()
     main(args)

@@ -42,8 +42,10 @@ class RejectionStandardGamma(Rejector):
         return new
 
     def propose(self, sample_shape=torch.Size()):
-        # Marsaglia & Tsang's x == Naesseth's epsilon
-        x = self.concentration.new_empty(sample_shape + self.concentration.shape).normal_()
+        # Marsaglia & Tsang's x == Naesseth's epsilon`
+        x = torch.randn(sample_shape + self.concentration.shape,
+                        dtype=self.concentration.dtype,
+                        device=self.concentration.device)
         y = 1.0 + self._c * x
         v = y * y * y
         return (self._d * v).clamp_(1e-30, 1e30)
@@ -129,7 +131,8 @@ class ShapeAugmentedGamma(Gamma):
         x = self._rejection_gamma.rsample(sample_shape)
         boosted_x = x.clone()
         for i in range(self._boost):
-            boosted_x *= (1 - x.new_empty(x.shape).uniform_()) ** (1 / (i + self.concentration))
+            u = torch.rand(x.shape, dtype=x.dtype, device=x.device)
+            boosted_x *= (1 - u) ** (1 / (i + self.concentration))
         self._unboost_x_cache = boosted_x, x
         return boosted_x
 

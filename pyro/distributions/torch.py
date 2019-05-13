@@ -7,6 +7,35 @@ from pyro.distributions.torch_distribution import IndependentConstraint, TorchDi
 from pyro.distributions.util import sum_rightmost
 
 
+# This overloads .log_prob() and .enumerate_support() to speed up evaluating
+# log_prob on the support of this variable: we can completely avoid tensor ops
+# and merely reshape the self.logits tensor. This is especially important for
+# Pyro models that use enumeration.
+class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
+
+    def log_prob(self, value):
+        if getattr(value, '_pyro_categorical_support', None) == id(self):
+            # Assume value is a reshaped torch.arange(event_shape[0]).
+            # In this case we can call .reshape() rather than torch.gather().
+            if not torch._C._get_tracing_state():
+                if self._validate_args:
+                    self._validate_sample(value)
+                assert value.size(0) == self.logits.size(-1)
+            logits = self.logits
+            if logits.dim() <= value.dim():
+                logits = logits.reshape((1,) * (1 + value.dim() - logits.dim()) + logits.shape)
+            if not torch._C._get_tracing_state():
+                assert logits.size(-1 - value.dim()) == 1
+            return logits.transpose(-1 - value.dim(), -1).squeeze(-1)
+        return super(Categorical, self).log_prob(value)
+
+    def enumerate_support(self, expand=True):
+        result = super(Categorical, self).enumerate_support(expand=expand)
+        if not expand:
+            result._pyro_categorical_support = id(self)
+        return result
+
+
 class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
     support = IndependentConstraint(constraints.real, 1)  # TODO move upstream
 

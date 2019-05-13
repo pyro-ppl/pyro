@@ -43,13 +43,13 @@ def test_simple():
     logger.debug('Compiling f')
     f = torch.jit.trace(f, (y,), check_trace=False)
     logger.debug('Calling f(y)')
-    assert_equal(f(y), y.new_tensor([2., 2.]))
+    assert_equal(f(y), torch.tensor([2., 2.]))
     logger.debug('Calling f(y)')
-    assert_equal(f(y), y.new_tensor([2., 2.]))
+    assert_equal(f(y), torch.tensor([2., 2.]))
     logger.debug('Calling f(torch.zeros(2))')
-    assert_equal(f(torch.zeros(2)), y.new_tensor([1., 1.]))
+    assert_equal(f(torch.zeros(2)), torch.tensor([1., 1.]))
     logger.debug('Calling f(torch.zeros(5))')
-    assert_equal(f(torch.ones(5)), y.new_tensor([2., 2., 2., 2., 2.]))
+    assert_equal(f(torch.ones(5)), torch.tensor([2., 2., 2., 2., 2.]))
 
 
 def test_multi_output():
@@ -65,13 +65,13 @@ def test_multi_output():
     logger.debug('Compiling f')
     f = torch.jit.trace(f, (y,), check_trace=False)
     logger.debug('Calling f(y)')
-    assert_equal(f(y)[1], y.new_tensor([2., 2.]))
+    assert_equal(f(y)[1], torch.tensor([2., 2.]))
     logger.debug('Calling f(y)')
-    assert_equal(f(y)[1], y.new_tensor([2., 2.]))
+    assert_equal(f(y)[1], torch.tensor([2., 2.]))
     logger.debug('Calling f(torch.zeros(2))')
-    assert_equal(f(torch.zeros(2))[1], y.new_tensor([1., 1.]))
+    assert_equal(f(torch.zeros(2))[1], torch.tensor([1., 1.]))
     logger.debug('Calling f(torch.zeros(5))')
-    assert_equal(f(torch.ones(5))[1], y.new_tensor([2., 2., 2., 2., 2.]))
+    assert_equal(f(torch.ones(5))[1], torch.tensor([2., 2., 2., 2., 2.]))
 
 
 def test_backward():
@@ -164,7 +164,7 @@ def test_masked_fill():
 def test_scatter():
 
     def make_one_hot(x, i):
-        return x.new_zeros(x.shape).scatter(-1, i.unsqueeze(-1), 1.0)
+        return torch.zeros_like(x).scatter(-1, i.unsqueeze(-1), 1.0)
 
     x = torch.randn(5, 4, 3)
     i = torch.randint(0, 3, torch.Size((5, 4)))
@@ -175,7 +175,7 @@ def test_scatter():
 def test_scatter_workaround():
 
     def make_one_hot_expected(x, i):
-        return x.new_zeros(x.shape).scatter(-1, i.unsqueeze(-1), 1.0)
+        return torch.zeros_like(x).scatter(-1, i.unsqueeze(-1), 1.0)
 
     def make_one_hot_actual(x, i):
         eye = torch.eye(x.shape[-1], dtype=x.dtype, device=x.device)
@@ -441,7 +441,8 @@ def test_traceenum_elbo(length):
         pass
 
     expected_loss = TraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(model, guide, data)
-    actual_loss = JitTraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(model, guide, data)
+    actual_loss = JitTraceEnum_ELBO(max_plate_nesting=0,
+                                    jit_options={"optimize": False}).differentiable_loss(model, guide, data)
     assert_equal(expected_loss, actual_loss)
 
     expected_grads = grad(expected_loss, [transition, means], allow_unused=True)

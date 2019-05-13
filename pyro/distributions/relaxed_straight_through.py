@@ -44,7 +44,7 @@ class QuantizeCategorical(torch.autograd.Function):
     @staticmethod
     def forward(ctx, soft_value):
         argmax = soft_value.max(-1)[1]
-        hard_value = soft_value.new_zeros(soft_value.shape)
+        hard_value = torch.zeros_like(soft_value)
         hard_value._unquantize = soft_value
         if argmax.dim() < hard_value.dim():
             argmax = argmax.unsqueeze(-1)

@@ -63,7 +63,8 @@ class AIR(nn.Module):
         self.baseline_scalar = baseline_scalar
         self.likelihood_sd = likelihood_sd
         self.use_cuda = use_cuda
-        self.prototype = torch.tensor(0.).cuda() if use_cuda else torch.tensor(0.)
+        prototype = torch.tensor(0.).cuda() if use_cuda else torch.tensor(0.)
+        self.options = dict(dtype=prototype.dtype, device=prototype.device)
 
         self.z_pres_size = 1
         self.z_where_size = 3
@@ -107,8 +108,8 @@ class AIR(nn.Module):
     def prior(self, n, **kwargs):
 
         state = ModelState(
-            x=self.prototype.new_zeros([n, self.x_size, self.x_size]),
-            z_pres=self.prototype.new_ones([n, self.z_pres_size]),
+            x=torch.zeros(n, self.x_size, self.x_size, **self.options),
+            z_pres=torch.ones(n, self.z_pres_size, **self.options),
             z_where=None)
 
         z_pres = []
@@ -143,8 +144,8 @@ class AIR(nn.Module):
 
         # Sample latent code for contents of the attention window.
         z_what = pyro.sample('z_what_{}'.format(t),
-                             dist.Normal(self.prototype.new_zeros([n, self.z_what_size]),
-                                         self.prototype.new_ones([n, self.z_what_size]))
+                             dist.Normal(torch.zeros(n, self.z_what_size, **self.options),
+                                         torch.ones(n, self.z_what_size, **self.options))
                                  .mask(sample_mask)
                                  .to_event(1))
 
@@ -169,7 +170,7 @@ class AIR(nn.Module):
             (z_where, z_pres), x = self.prior(n, **kwargs)
             pyro.sample('obs',
                         dist.Normal(x.view(n, -1),
-                                    (self.likelihood_sd * self.prototype.new_ones(n, self.x_size ** 2)))
+                                    (self.likelihood_sd * torch.ones(n, self.x_size ** 2, **self.options)))
                             .to_event(1),
                         obs=batch.view(n, -1))
 
@@ -207,7 +208,7 @@ class AIR(nn.Module):
                 c=batch_expand(self.c_init, n),
                 bl_h=batch_expand(self.bl_h_init, n),
                 bl_c=batch_expand(self.bl_c_init, n),
-                z_pres=self.prototype.new_ones(n, self.z_pres_size),
+                z_pres=torch.ones(n, self.z_pres_size, **self.options),
                 z_where=batch_expand(self.z_where_init, n),
                 z_what=batch_expand(self.z_what_init, n))
 

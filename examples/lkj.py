@@ -19,17 +19,18 @@ and vector of variances.
 def model(y):
     d = y.shape[1]
     N = y.shape[0]
+    options = dict(dtype=y.dtype, device=y.device)
     # Vector of variances for each of the d variables
-    theta = pyro.sample("theta", dist.HalfCauchy(y.new_ones(d)))
+    theta = pyro.sample("theta", dist.HalfCauchy(torch.ones(d, **options)))
     # Lower cholesky factor of a correlation matrix
-    eta = y.new_ones(1)  # Implies a uniform distribution over correlation matrices
+    eta = torch.ones(1, **options)  # Implies a uniform distribution over correlation matrices
     L_omega = pyro.sample("L_omega", dist.LKJCorrCholesky(d, eta))
     # Lower cholesky factor of the covariance matrix
     L_Omega = torch.mm(torch.diag(theta.sqrt()), L_omega)
     # For inference with SVI, one might prefer to use torch.bmm(theta.sqrt().diag_embed(), L_omega)
 
     # Vector of expectations
-    mu = y.new_zeros(d)
+    mu = torch.zeros(d, **options)
 
     with pyro.plate("observations", N):
         obs = pyro.sample("obs", dist.MultivariateNormal(mu, scale_tril=L_Omega), obs=y)
@@ -46,7 +47,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.3.1')
+    assert pyro.__version__.startswith('0.3.3')
     parser = argparse.ArgumentParser(description="Demonstrate the use of an LKJ Prior")
     parser.add_argument("--num-samples", nargs="?", default=200, type=int)
     parser.add_argument("--n", nargs="?", default=500, type=int)

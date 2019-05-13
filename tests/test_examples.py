@@ -7,7 +7,7 @@ from subprocess import check_call
 
 import pytest
 
-from tests.common import EXAMPLES_DIR, requires_cuda, skipif_param, xfail_param
+from tests.common import EXAMPLES_DIR, requires_cuda
 
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage('test_examples')
@@ -19,15 +19,16 @@ CPU_EXAMPLES = [
     'baseball.py --num-samples=200 --warmup-steps=100 --num-chains=2',
     'lkj.py --n=50 --num-chains=1 --warmup-steps=100 --num-samples=200',
     'bayesian_regression.py --num-epochs=1',
+    'capture_recapture/cjs.py --num-steps=1 -m 1',
+    'capture_recapture/cjs.py --num-steps=1 -m 2',
+    'capture_recapture/cjs.py --num-steps=1 -m 3',
+    'capture_recapture/cjs.py --num-steps=1 -m 4',
+    'capture_recapture/cjs.py --num-steps=1 -m 5',
     'contrib/autoname/scoping_mixture.py --num-epochs=1',
     'contrib/autoname/mixture.py --num-epochs=1',
     'contrib/autoname/tree_data.py --num-epochs=1',
-    skipif_param('contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --batch-size=1000',
-                 condition='CI' in os.environ,
-                 reason='https://github.com/uber/pyro/issues/1540'),
-    skipif_param('contrib/gp/sv-dkl.py --binary --epochs=1 --num-inducing=4 --batch-size=1000',
-                 condition='CI' in os.environ,
-                 reason='https://github.com/uber/pyro/issues/1540'),
+    'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --batch-size=1000',
+    'contrib/gp/sv-dkl.py --binary --epochs=1 --num-inducing=4 --batch-size=1000',
     'contrib/oed/ab_test.py --num-vi-steps=10 --num-bo-steps=2',
     'contrib/oed/item_response.py -N=1000 -M=1000',
     'contrib/oed/sequential_oed_sigmoid_lm.py --num-experiments=2 --num-runs=2 --no-plot',
@@ -67,8 +68,7 @@ CPU_EXAMPLES = [
 CUDA_EXAMPLES = [
     'air/main.py --num-steps=1 --cuda',
     'bayesian_regression.py --num-epochs=1 --cuda',
-    xfail_param('baseball.py --num-samples=200 --warmup-steps=100 --num-chains=2 --cuda',
-                reason='https://github.com/pyro-ppl/pyro/issues/1725'),
+    'baseball.py --num-samples=200 --warmup-steps=100 --num-chains=2 --cuda',
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --cuda',
     'lkj.py --n=50 --num-chains=1 --warmup-steps=100 --num-samples=200 --cuda',
     'dmm/dmm.py --num-epochs=1 --cuda',
@@ -111,7 +111,9 @@ JIT_EXAMPLES = [
     'hmm.py --num-steps=1 --truncate=10 --model=3 --jit',
     'hmm.py --num-steps=1 --truncate=10 --model=4 --jit',
     'hmm.py --num-steps=1 --truncate=10 --model=5 --jit',
-    xfail_jit('lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8 --jit'),
+    'lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8 --jit',
+    'minipyro.py --backend=pyro --jit',
+    'minipyro.py --jit',
     xfail_jit('vae/ss_vae_M2.py --num-epochs=1 --aux-loss --jit'),
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel --jit',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential --jit',

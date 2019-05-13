@@ -121,7 +121,7 @@ class DirichletMultinomial(TorchDistribution):
 
     def __init__(self, concentration, total_count=1, is_sparse=False, validate_args=None):
         if isinstance(total_count, numbers.Number):
-            total_count = concentration.new_tensor(total_count)
+            total_count = torch.tensor(total_count, dtype=concentration.dtype, device=concentration.device)
         total_count_1 = total_count.unsqueeze(-1)
         concentration, total_count = torch.broadcast_tensors(concentration, total_count_1)
         total_count = total_count_1.squeeze(-1)

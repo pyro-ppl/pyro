@@ -70,10 +70,10 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, sca
     inference = SVI(model, guide, optim, loss=elbo)
     with xfail_if_not_implemented():
         if subsample_size == 1:
-            inference.loss_and_grads(model, guide, subsample=torch.LongTensor([0]))
-            inference.loss_and_grads(model, guide, subsample=torch.LongTensor([1]))
+            inference.loss_and_grads(model, guide, subsample=torch.tensor([0], dtype=torch.long))
+            inference.loss_and_grads(model, guide, subsample=torch.tensor([1], dtype=torch.long))
         else:
-            inference.loss_and_grads(model, guide, subsample=torch.LongTensor([0, 1]))
+            inference.loss_and_grads(model, guide, subsample=torch.tensor([0, 1], dtype=torch.long))
     params = dict(pyro.get_param_store().named_parameters())
     normalizer = 2 if subsample else 1
     actual_grads = {name: param.grad.detach().cpu().numpy() / normalizer for name, param in params.items()}
