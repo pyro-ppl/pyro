@@ -234,7 +234,7 @@ class DeepLeakyReLUFlow(DeepNAFFlow):
     >>> from pyro.nn import AutoRegressiveNN
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> arn = AutoRegressiveNN(10, [40], param_dims=[16]*3)
-    >>> naf = DeepLeakyReluFlow(arn, hidden_units=16)
+    >>> naf = DeepLeakyReLUFlow(arn, hidden_units=16)
     >>> pyro.module("my_naf", naf)  # doctest: +SKIP
     >>> naf_dist = dist.TransformedDistribution(base_dist, [naf])
     >>> naf_dist.sample()  # doctest: +SKIP
