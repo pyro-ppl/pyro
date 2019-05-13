@@ -14,7 +14,8 @@ from pyro.distributions.util import copy_docs_from
 @copy_docs_from(TransformModule)
 class HouseholderFlow(TransformModule):
     """
-    A single transformation of Householder flow,
+    A flow formed from multiple applications of the Householder transformation. A single Householder transformation
+    takes the form,
 
         :math:`\\mathbf{y} = (I - 2*\\frac{\\mathbf{u}\\mathbf{u}^T}{||\\mathbf{u}||^2})\\mathbf{x}`
 
@@ -22,19 +23,20 @@ class HouseholderFlow(TransformModule):
     are :math:`\\mathbf{u}\\in\\mathbb{R}^D` for input dimension :math:`D`.
 
     The transformation represents the reflection of :math:`\\mathbf{x}` through the plane passing through the
-    origin with normal :math:`\\mathbf{u}`. Together with `TransformedDistribution` this provides a way to
-    create richer variational approximations.
+    origin with normal :math:`\\mathbf{u}`.
 
     :math:`D` applications of this transformation are able to transform standard i.i.d. standard Gaussian noise
     into a Gaussian variable with an arbitrary covariance matrix. With :math:`K<D` transformations, one is able
-    to approximate a full-rank covariance Gaussian distribution.
+    to approximate a full-rank Gaussian distribution using a linear transformation of rank :math:`K`.
+
+    Together with `TransformedDistribution` this provides a way to create richer variational approximations.
 
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> flows = [HouseholderFlow(10) for _ in range(3)]
-    >>> [pyro.module("my_flow", p) for f in flows] # doctest: +SKIP
-    >>> flow_dist = dist.TransformedDistribution(base_dist, flows)
+    >>> flow = HouseholderFlow(10, count_transforms=5)
+    >>> pyro.module("my_flow", p) # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, flow)
     >>> flow_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
