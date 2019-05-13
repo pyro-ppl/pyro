@@ -43,7 +43,7 @@ class HouseholderFlow(TransformModule):
 
     :param input_dim: the dimension of the input (and output) variable.
     :type input_dim: int
-    :param count_transforms: number of layers of Householder flow to apply.
+    :param count_transforms: number of applications of Householder transformation to apply.
     :type count_transforms: int
 
     References:
