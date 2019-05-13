@@ -223,6 +223,7 @@ class TreeCatTrainer(object):
         for feature, column in zip(self._model.features, data):
             if column is not None:
                 feature.init(column)
+        return self._elbo.loss(self._model.model, self._model.guide, data)
 
     def step(self, data, num_rows=None):
         # Perform a gradient optimizer step to learn parameters.

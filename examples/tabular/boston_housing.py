@@ -52,7 +52,7 @@ def main(args):
     for epoch in range(args.num_epochs):
         loss = 0
         for batch in partition_data(data, args.batch_size):
-            loss += trainer.step(data, num_rows=num_rows)
+            loss += trainer.step(batch, num_rows=num_rows)
         logging.info("epoch {} loss = {:0.4g}".format(epoch, loss))
 
     # Predict housing price (MEDV) as function of NOX.
@@ -75,7 +75,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.3.1')
+    assert pyro.__version__.startswith('0.3.3')
     parser = argparse.ArgumentParser(description="Tabular data analysis of Boston Housing")
     parser.add_argument("-c", "--capacity", default=16, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)

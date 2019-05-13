@@ -146,7 +146,7 @@ class Real(Feature):
         scale = pyro.sample("{}_scale".format(self.name),
                             dist.LogNormal(scale_loc, scale_scale))
         loc = pyro.sample("{}_loc".format(self.name),
-                          dist.Normal(loc_loc * scale, scale))
+                          dist.Normal(loc_loc * scale, loc_scale * scale))
         if loc.dim() > 1:
             loc = loc.unsqueeze(-2)
             scale = scale.unsqueeze(-2)
@@ -161,14 +161,11 @@ class Real(Feature):
     @torch.no_grad()
     def init(self, data):
         assert data.dim() == 1
-        data = data.clone()
-        data[data == 0] = data.mean()
-        log_data = (data.abs() + 1e-10).log()
-        scale_loc = log_data.mean()
-        scale_scale = log_data.std(unbiased=False) + 0.5
-        scaled_data = data / scale_loc.exp()
-        loc_loc = scaled_data.mean()
-        loc_scale = scaled_data.std(unbiased=False) + 0.5
+        data_std = data.std(unbiased=False) + 1e-6
+        scale_loc = data_std.log()
+        scale_scale = data.new_tensor(1.)
+        loc_loc = data.mean() / data_std
+        loc_scale = data.new_tensor(1.)
 
         pyro.param("auto_{}_scale_loc".format(self.name), scale_loc)
         pyro.param("auto_{}_scale_scale".format(self.name), scale_scale,
