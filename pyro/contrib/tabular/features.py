@@ -133,6 +133,44 @@ class Boolean(Feature):
                    constraint=constraints.positive)
 
 
+class Discrete(Feature):
+    def __init__(self, name, cardinality):
+        super(Discrete, self).__init__(name)
+        self.cardinality = cardinality
+
+    def sample_shared(self):
+        loc = pyro.sample("{}_loc".format(self.name),
+                          dist.Normal(0., 2.).expand([self.cardinality]).to_event(1))
+        scale = pyro.sample("{}_scale".format(self.name),
+                            dist.LogNormal(0., 1.).expand([self.cardinality]).to_event(1))
+        return loc, scale
+
+    def sample_group(self, shared):
+        loc, scale = shared
+        logits = pyro.sample("{}_logits".format(self.name),
+                             dist.Normal(loc, scale).to_event(1))
+        if logits.dim() > 1:
+            logits = logits.unsqueeze(-3)
+        return logits
+
+    def value_dist(self, group, component):
+        logits = group
+        logits = Vindex(logits)[..., component, :]
+        return dist.Categorical(logits=logits)
+
+    @torch.no_grad()
+    def init(self, data):
+        assert data.dim() == 1
+        counts = torch.zeros(self.cardinality, device=data.device)
+        counts = counts.scatter_add(0, data, torch.ones(data.shape, device=data.device))
+        loc = (counts + 0.5) / (len(data) + 0.5 * len(counts))
+        scale = loc.new_ones(loc.shape)
+
+        pyro.param("auto_{}_loc".format(self.name), loc)
+        pyro.param("auto_{}_scale".format(self.name), scale,
+                   constraint=constraints.positive)
+
+
 class Real(Feature):
     def sample_shared(self):
         scale_loc = pyro.sample("{}_scale_loc".format(self.name), dist.Normal(0., 10.))

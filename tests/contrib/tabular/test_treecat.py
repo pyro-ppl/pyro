@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import pytest
 import torch
 
-from pyro.contrib.tabular.features import Boolean, Real
+from pyro.contrib.tabular.features import Boolean, Discrete, Real
 from pyro.contrib.tabular.treecat import TreeCat, TreeCatTrainer, _dm_log_prob, find_center_of_tree
 from tests.common import assert_close
 
@@ -34,13 +34,15 @@ def test_dm_log_prob(alpha, counts_shape):
     assert_close(actual, expected)
 
 
-TINY_SCHEMA = [Boolean("f1"), Real("f2"), Real("f3"), Boolean("f4")]
+TINY_SCHEMA = [Boolean("f1"), Real("f2"), Discrete("f3", 3), Real("f4"), Boolean("f5")]
 TINY_DATASETS = [
-    [torch.tensor([0., 0., 1.]), torch.tensor([-0.5, 0.5, 10.])],
-    [None, torch.tensor([-0.5, 0.5, 10.])],
     [torch.tensor([0., 0., 1.]), None],
+    [None, torch.tensor([-0.5, 0.5, 10.])],
+    [None, None, torch.tensor([0, 1, 2, 2, 2], dtype=torch.long)],
+    [torch.tensor([0., 0., 1.]), torch.tensor([-0.5, 0.5, 10.])],
     [torch.tensor([0., 0., 0., 1., 1.]),
      torch.tensor([-1.1, -1.0, -0.9, 0.9, 1.0]),
+     torch.tensor([0, 1, 2, 2, 2], dtype=torch.long),
      torch.tensor([-2., -1., -0., 1., 2.]),
      torch.tensor([0., 1., 1., 1., 0.])],
 ]

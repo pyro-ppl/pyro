@@ -10,14 +10,19 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta
-from pyro.contrib.tabular import Boolean, Real
+from pyro.contrib.tabular import Boolean, Discrete, Real
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
 from pyro.util import torch_isnan
 
 
+class Discrete5(Discrete):
+    def __init__(self, name):
+        super(Discrete5, self).__init__(name, 5)
+
+
 @pytest.mark.parametrize('size', [1, 2, 100])
-@pytest.mark.parametrize('MyFeature', [Boolean, Real])
+@pytest.mark.parametrize('MyFeature', [Boolean, Discrete5, Real])
 def test_smoke(MyFeature, size):
 
     @poutine.broadcast
