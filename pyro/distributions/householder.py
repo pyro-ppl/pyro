@@ -65,8 +65,8 @@ class HouseholderFlow(TransformModule):
         assert count_transforms > 0
         if count_transforms > input_dim:
             warnings.warn(
-                "{} layers of Householder flow applied to input of dimension {}".format(
-                    count_transforms, input_dim))
+                "Number of Householder transforms, {}, is greater than input dimension {}, which is an \
+over-parametrization!".format(count_transforms, input_dim))
         self.count_transforms = count_transforms
         self.u = nn.Parameter(torch.Tensor(count_transforms, input_dim))
         self.reset_parameters()
