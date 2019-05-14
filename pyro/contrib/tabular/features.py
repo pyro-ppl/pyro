@@ -138,6 +138,9 @@ class Discrete(Feature):
         super(Discrete, self).__init__(name)
         self.cardinality = cardinality
 
+    def __str__(self):
+        return '{}("{}", {})'.format(type(self).__name__, self.name, self.cardinality)
+
     def sample_shared(self):
         loc = pyro.sample("{}_loc".format(self.name),
                           dist.Normal(0., 2.).expand([self.cardinality]).to_event(1))
@@ -149,7 +152,7 @@ class Discrete(Feature):
         loc, scale = shared
         logits = pyro.sample("{}_logits".format(self.name),
                              dist.Normal(loc, scale).to_event(1))
-        if logits.dim() > 1:
+        if logits.dim() > 2:
             logits = logits.unsqueeze(-3)
         return logits
 
@@ -163,7 +166,8 @@ class Discrete(Feature):
         assert data.dim() == 1
         counts = torch.zeros(self.cardinality, device=data.device)
         counts = counts.scatter_add(0, data, torch.ones(data.shape, device=data.device))
-        loc = (counts + 0.5) / (len(data) + 0.5 * len(counts))
+        loc = (counts + 0.5).log()
+        loc = loc - loc.logsumexp(-1, True)
         scale = loc.new_ones(loc.shape)
 
         pyro.param("auto_{}_loc".format(self.name), loc)

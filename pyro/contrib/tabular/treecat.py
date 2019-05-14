@@ -218,12 +218,13 @@ class TreeCatTrainer(object):
         self._model = model
         self.backend = backend
 
-    def init(self, data):
+    def init(self, data, init_groups=True):
         assert len(data) == len(self._model.features)
         for feature, column in zip(self._model.features, data):
             if column is not None:
                 feature.init(column)
-        return self._elbo.loss(self._model.model, self._model.guide, data)
+        if init_groups:
+            self._elbo.loss(self._model.model, self._model.guide, data)
 
     def step(self, data, num_rows=None):
         # Perform a gradient optimizer step to learn parameters.
@@ -261,11 +262,9 @@ class EdgeGuide(object):
         self.edges = edges
         self._grid = make_complete_graph(V)
 
-        self._count_prior = 0.5 * M  # A scalar.
         self._vertex_prior = 0.5  # A uniform Dirichlet of shape (M,).
         self._edge_prior = 0.5 / M  # A uniform Dirichlet of shape (M,M).
 
-        self._count_stats = 0.
         self._vertex_stats = torch.zeros((V, M))
         self._complete_stats = torch.zeros((K, M * M))
 
@@ -285,11 +284,9 @@ class EdgeGuide(object):
             num_rows = batch_size
 
         decay = 1. - batch_size / num_rows
-        self._count_stats *= decay
         self._vertex_stats *= decay
         self._complete_stats *= decay
 
-        self._count_stats += batch_size
         one = self._vertex_stats.new_tensor(1.)
         self._vertex_stats.scatter_add_(-1, z, one.expand_as(z))
         zz = (M * z)[self._grid[0]] + z[self._grid[1]]
@@ -317,9 +314,10 @@ class EdgeGuide(object):
         k = v1 + v2 * (v2 - 1) // 2
         edge_stats = self._complete_stats[k]
 
-        count = self._count_prior + self._count_stats
-        vertex_probs = (self._vertex_prior + self._vertex_stats) / count
-        edge_probs = (self._edge_prior + edge_stats) / count
+        vertex_probs = self._vertex_prior + self._vertex_stats
+        vertex_probs /= vertex_probs.sum(-1, True)
+        edge_probs = self._edge_prior + edge_stats
+        edge_probs /= edge_probs.sum(-1, True)
         return vertex_probs, edge_probs
 
     @torch.no_grad()
@@ -379,3 +377,39 @@ def find_center_of_tree(edges):
             if len(neighbors[v2]) == 1:
                 queue.append(v2)
     return v
+
+
+def print_tree(edges, feature_names, root=None):
+    """
+    Returns a text representation of the feature tree.
+
+    :param torch.Tensor edges: A list of (vertex, vertex) pairs.
+    :param list feature_names: A list of feature names.
+    :param torch.Tensor root: The name of the root feature (optional).
+    :returns: A text representation of the tree with one feature per line.
+    :rtype: str
+    """
+    assert len(feature_names) == 1 + len(edges)
+    if root is None:
+        root = feature_names[find_center_of_tree(edges)]
+    assert root in feature_names
+    neighbors = [set() for _ in feature_names]
+    for v1, v2 in edges.numpy():
+        neighbors[v1].add(v2)
+        neighbors[v2].add(v1)
+    stack = [feature_names.index(root)]
+    seen = set(stack)
+    lines = []
+    while stack:
+        backtrack = True
+        for neighbor in sorted(neighbors[stack[-1]], reverse=True):
+            if neighbor not in seen:
+                seen.add(neighbor)
+                stack.append(neighbor)
+                backtrack = False
+                break
+        if backtrack:
+            name = feature_names[stack.pop()]
+            lines.append((len(stack), name))
+    lines.reverse()
+    return "\n".join(["{}{}".format("  " * i, n) for i, n in lines])
