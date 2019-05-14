@@ -19,6 +19,13 @@ def model(num_trials):
         return pyro.sample("obs", dist.Binomial(num_trials, success_prob))
 
 
+def one_hot_model(pseudocounts, classes=None):
+    probs_prior = dist.Dirichlet(pseudocounts)
+    probs = pyro.sample("probs", probs_prior)
+    with pyro.plate("classes", classes.size(0) if classes is not None else 1, dim=-1):
+        return pyro.sample("obs", dist.OneHotCategorical(probs), obs=classes)
+
+
 def beta_guide(num_trials):
     phi_c0 = pyro.param("phi_c0", num_trials.new_tensor(5.0).expand([num_trials.size(0)]))
     phi_c1 = pyro.param("phi_c1", num_trials.new_tensor(5.0).expand([num_trials.size(0)]))
@@ -79,6 +86,19 @@ def test_posterior_predictive_svi_auto_diag_normal_guide():
     posterior_predictive = TracePredictive(model, svi_run, num_samples=10000).run(num_trials)
     marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
     assert_close(marginal_return_vals.mean, torch.ones(5) * 700, rtol=0.05)
+
+
+def test_posterior_predictive_svi_one_hot():
+    pseudocounts = torch.ones(3) * 0.1
+    true_probs = torch.tensor([0.15, 0.6, 0.25])
+    classes = dist.OneHotCategorical(true_probs).sample((10000,))
+    opt = optim.Adam(dict(lr=0.1))
+    loss = Trace_ELBO()
+    guide = AutoDelta(one_hot_model)
+    svi_run = SVI(one_hot_model, guide, opt, loss, num_steps=1000, num_samples=1000).run(pseudocounts, classes=classes)
+    posterior_predictive = TracePredictive(one_hot_model, svi_run, num_samples=10000).run(pseudocounts)
+    marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
+    assert_close(marginal_return_vals.mean, true_probs.unsqueeze(0), rtol=0.1)
 
 
 def test_posterior_predictive_svi_auto_delta_guide_large_eval():
