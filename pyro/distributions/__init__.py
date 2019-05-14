@@ -13,7 +13,7 @@ from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
 from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.iaf import InverseAutoregressiveFlow, InverseAutoregressiveFlowStable
 from pyro.distributions.mixture import MaskedMixture
-from pyro.distributions.naf import DeepSigmoidalFlow
+from pyro.distributions.naf import DeepELUFlow, DeepLeakyReLUFlow, DeepSigmoidalFlow
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
 from pyro.distributions.permute import PermuteTransform
 from pyro.distributions.planar import PlanarFlow
@@ -36,6 +36,8 @@ __all__ = [
     "AVFMultivariateNormal",
     "BatchNormTransform",
     "BetaBinomial",
+    "DeepELUFlow",
+    "DeepLeakyReLUFlow",
     "DeepSigmoidalFlow",
     "Delta",
     "DirichletMultinomial",
