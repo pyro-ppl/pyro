@@ -26,11 +26,13 @@ class TreeCat(object):
         indicating that two columns share a common feature model (with shared
         learned parameters).
     :param int capacity: Cardinality of latent categorical variables.
-    :param tuple edges: An ``(V-1) x 2`` nested tuple representing the tree
-        structure. Each of the ``E = (V-1)`` edges is a tuple ``v1,v2`` of
-        vertices.
+    :param torch.LongTensor edges: A ``(V-1, 2)`` shaped tensor representing
+        the tree structure. Each of the ``E = (V-1)`` edges is a row ``v1,v2``
+        of vertices.
+    :param float annealing_rate: The logistic growth rate with which sufficient
+        statistics approach the full dataset. Should be between 0 and 1.
     """
-    def __init__(self, features, capacity=16, edges=None):
+    def __init__(self, features, capacity=16, edges=None, annealing_rate=0.01):
         V = len(features)
         E = V - 1
         M = capacity
@@ -44,9 +46,9 @@ class TreeCat(object):
 
         self._feature_guide = AutoDelta(poutine.block(
             self.model, hide_fn=lambda msg: msg["name"].startswith("treecat_")))
-        self._edge_guide = EdgeGuide(capacity=capacity, edges=edges)
-        self._vertex_prior = torch.empty(M).fill_(0.5)
-        self._edge_prior = torch.empty(M * M).fill_(0.5 / M)
+        self._edge_guide = EdgeGuide(capacity=capacity, edges=edges, annealing_rate=annealing_rate)
+        self._vertex_prior = torch.full((M,), 0.5)
+        self._edge_prior = torch.full((M * M,), 0.5 / M)
         self._saved_z = None
 
         self.edges = edges
@@ -146,7 +148,7 @@ class TreeCat(object):
             # Sample root node unconditionally.
             probs = vertex_probs[..., v, :]
         else:
-            # Sample node v conditional on its parent v0.
+            # Sample node v conditioned on its parent v0.
             joint = edge_probs[..., self._edge_index[v, v0], :]
             joint = joint.reshape(joint.shape[:-1] + (M, M))
             if v0 > v:
@@ -252,21 +254,30 @@ class TreeCatTrainer(object):
 class EdgeGuide(object):
     """
     Conjugate guide for latent categorical distribution parameters.
+
+    :param int capacity: The cardinality of discrete latent variables.
+    :param torch.LongTensor edges: A ``(V-1, 2)`` shaped tensor representing
+        the tree structure. Each of the ``E = (V-1)`` edges is a row ``v1,v2``
+        of vertices.
+    :param float annealing_rate: The logistic growth rate with which sufficient
+        statistics approach the full dataset. Should be between 0 and 1.
     """
-    def __init__(self, capacity, edges):
+    def __init__(self, capacity, edges, annealing_rate):
+        assert 0 < annealing_rate and annealing_rate <= 1
         E = len(edges)
         V = E + 1
         K = V * (V - 1) // 2
         M = capacity
         self.capacity = capacity
         self.edges = edges
+        self.annealing_rate = annealing_rate
         self._grid = make_complete_graph(V)
-
         self._vertex_prior = 0.5  # A uniform Dirichlet of shape (M,).
         self._edge_prior = 0.5 / M  # A uniform Dirichlet of shape (M,M).
-
+        self._count_stats = 0.
         self._vertex_stats = torch.zeros((V, M))
         self._complete_stats = torch.zeros((K, M * M))
+        self._target_size = 1.
 
     @torch.no_grad()
     def update(self, num_rows, z):
@@ -283,15 +294,23 @@ class EdgeGuide(object):
         if num_rows is None:
             num_rows = batch_size
 
-        decay = 1. - batch_size / num_rows
+        # Increase target_size towards num_rows via logistic growth.
+        self._target_size *= 1 + self.annealing_rate * (1 - self._target_size / num_rows)
+        self._target_size = max(batch_size, self._target_size)
+
+        # Accumulate statistics via exponential smoothing.
+        decay = 1. - batch_size / self._target_size
+        self._count_stats *= decay
         self._vertex_stats *= decay
         self._complete_stats *= decay
-
+        self._count_stats += batch_size
         one = self._vertex_stats.new_tensor(1.)
         self._vertex_stats.scatter_add_(-1, z, one.expand_as(z))
         zz = (M * z)[self._grid[0]] + z[self._grid[1]]
         self._complete_stats.scatter_add_(-1, zz, one.expand_as(zz))
 
+        logging.debug("count_stats = {:0.1f}, target_size = {:0.1f}, num_rows = {}".format(
+            self._count_stats, self._target_size, num_rows))
         if logging.Logger(None).isEnabledFor(logging.DEBUG):
             probs = 0.5 + self._vertex_stats
             probs /= probs.sum(-1, True)
@@ -360,7 +379,9 @@ def find_center_of_tree(edges):
     """
     Finds a maximally central vertex in a tree.
 
-    :param torch.LongTensor edges: A tensor of shape ``(E,2)``
+    :param torch.LongTensor edges: A ``(V-1, 2)`` shaped tensor representing
+        the tree structure. Each of the ``E = (V-1)`` edges is a row ``v1,v2``
+        of vertices.
     :returns: Vertex id of a maximally central vertex.
     :rtype: int
     """
@@ -383,9 +404,11 @@ def print_tree(edges, feature_names, root=None):
     """
     Returns a text representation of the feature tree.
 
-    :param torch.Tensor edges: A list of (vertex, vertex) pairs.
+    :param torch.LongTensor edges: A ``(V-1, 2)`` shaped tensor representing
+        the tree structure. Each of the ``E = (V-1)`` edges is a row ``v1,v2``
+        of vertices.
     :param list feature_names: A list of feature names.
-    :param torch.Tensor root: The name of the root feature (optional).
+    :param str root: The name of the root feature (optional).
     :returns: A text representation of the tree with one feature per line.
     :rtype: str
     """
