@@ -60,7 +60,7 @@ def _sample_posterior_from_trace(model, enum_trace, temperature, *args, **kwargs
             ordinal = frozenset(plate_to_symbol[f.name]
                                 for f in node["cond_indep_stack"]
                                 if f.vectorized and f.size > 1)
-            log_prob = node["packed"]["log_prob"]
+            log_prob = node["packed"]["unscaled_log_prob"]
             log_probs.setdefault(ordinal, []).append(log_prob)
             sum_dims.update(log_prob._pyro_dims)
             dim_to_size.update(zip(log_prob._pyro_dims, log_prob.shape))
@@ -102,7 +102,7 @@ def _sample_posterior_from_trace(model, enum_trace, temperature, *args, **kwargs
                 "cond_indep_stack": node["cond_indep_stack"],
                 "value": node["value"],
             }
-            log_prob = node["packed"]["log_prob"]
+            log_prob = node["packed"]["unscaled_log_prob"]
             if hasattr(log_prob, "_pyro_backward_result"):
                 # Adjust the cond_indep_stack.
                 ordinal = query_to_ordinal[log_prob]
