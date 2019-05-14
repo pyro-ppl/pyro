@@ -85,9 +85,9 @@ over-parametrization!".format(count_transforms, input_dim))
         """
 
         y = x
+        squared_norm = self.u.pow(2).sum(-1)
         for idx in range(self.count_transforms):
-            squared_norm = self.u[idx].pow(2).sum(-1)
-            projection = (self.u[idx] * x).sum(dim=-1, keepdim=True) * self.u[idx] / squared_norm
+            projection = (self.u[idx] * y).sum(dim=-1, keepdim=True) * self.u[idx] / squared_norm[idx]
             y = y - 2. * projection
         return y
 
