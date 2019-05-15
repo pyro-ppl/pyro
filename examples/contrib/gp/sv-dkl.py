@@ -70,6 +70,7 @@ def train(args, train_loader, gpmodule, optimizer, loss_fn, epoch):
         loss = loss_fn(gpmodule.model, gpmodule.guide)
         loss.backward()
         optimizer.step()
+        batch_idx = batch_idx + 1
         if batch_idx % args.log_interval == 0:
             print("Train Epoch: {:2d} [{:5d}/{} ({:2.0f}%)]\tLoss: {:.6f}"
                   .format(epoch, batch_idx * len(data), len(train_loader.dataset),
