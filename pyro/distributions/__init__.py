@@ -10,6 +10,7 @@ from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNorma
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
+from pyro.distributions.householder import HouseholderFlow
 from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.iaf import InverseAutoregressiveFlow, InverseAutoregressiveFlowStable
 from pyro.distributions.mixture import MaskedMixture
@@ -45,6 +46,7 @@ __all__ = [
     "Empirical",
     "GammaPoisson",
     "GaussianScaleMixture",
+    "HouseholderFlow",
     "InverseAutoregressiveFlow",
     "InverseGamma",
     "InverseAutoregressiveFlowStable",
