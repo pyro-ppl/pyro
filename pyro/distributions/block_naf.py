@@ -35,8 +35,22 @@ class BlockNAFFlow(TransformModule):
 
         # Initialize modules for each layer in flow
         self.input_dim = input_dim
-        self.layers = nn.ModuleList([MaskedBlockLinear(input_dim, input_dim*2, input_dim), MaskedBlockLinear(input_dim*2, input_dim, input_dim)])
+        #self.layers = nn.ModuleList([MaskedBlockLinear(input_dim, input_dim*2, input_dim), MaskedBlockLinear(input_dim*2, input_dim, input_dim)])
+        self.layers = nn.ModuleList([
+            MaskedBlockLinear(input_dim, input_dim*2, input_dim),
+            MaskedBlockLinear(input_dim*2, input_dim*2, input_dim),
+            MaskedBlockLinear(input_dim*2, input_dim*2, input_dim),
+            MaskedBlockLinear(input_dim*2, input_dim, input_dim)])
         self._cached_logDetJ = None
+
+    def f(self, x):
+        """
+        The nonlinearity to apply after each masked block linear layer
+        """
+        return torch.tanh(x)
+
+    def log_df_dx(self, x):
+        return - 2. * (x - math.log(2.) + F.softplus(- 2. * x))
 
     def _call(self, x):
         """
@@ -48,13 +62,21 @@ class BlockNAFFlow(TransformModule):
         """
         y = x
         for idx in range(len(self.layers)):
-            y, dy_dx = self.layers[idx](y.unsqueeze(-1))
+            pre_activation, dy_dx = self.layers[idx](y.unsqueeze(-1))
             #print('y', y.size(), 'dy_dx', dy_dx.size())
 
+            J_act = self.log_df_dx(pre_activation).view(self.input_dim, -1, 1)
+
+            #print(J_act)
+
             if idx == 0:
-                logDetJ = dy_dx
+                #print('dy_dx', dy_dx.size(), 'log_df_dx', J_act.size())
+                logDetJ = dy_dx + J_act
             else:
-                logDetJ = log_matrix_product(dy_dx, logDetJ)
+                #print('dy_dx', log_matrix_product(dy_dx, logDetJ).size(), 'log_df_dx', J_act.size())
+                logDetJ = log_matrix_product(dy_dx, logDetJ) + J_act
+
+            y = self.f(pre_activation)
 
         self._cached_logDetJ = logDetJ.squeeze(-1).squeeze(-1)
         
