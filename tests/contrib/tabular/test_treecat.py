@@ -3,8 +3,10 @@ from __future__ import absolute_import, division, print_function
 import pytest
 import torch
 
+import pyro.poutine as poutine
 from pyro.contrib.tabular.features import Boolean, Discrete, Real
-from pyro.contrib.tabular.treecat import TreeCat, TreeCatTrainer, _dm_log_prob, find_center_of_tree
+from pyro.contrib.tabular.treecat import (TreeCat, TreeCatTrainer,
+                                          _dm_log_prob, find_center_of_tree)
 from tests.common import assert_close
 
 
@@ -67,3 +69,28 @@ def test_impute_smoke(data, capacity, num_samples):
     features = TINY_SCHEMA[:len(data)]
     model = TreeCat(features, capacity)
     model.impute(data, num_samples=num_samples)
+
+
+@pytest.mark.parametrize('data', TINY_DATASETS)
+@pytest.mark.parametrize('capacity', [2, 16])
+def test_save_load(data, capacity):
+    V = len(data)
+    features = TINY_SCHEMA[:V]
+    model = TreeCat(features, capacity)
+    trainer = TreeCatTrainer(model)
+    trainer.init(data)
+    trainer.step(data)
+    del trainer
+    model.save()
+
+    model2 = TreeCat(features, capacity)
+    model2.load()
+    assert (model2.edges == model.edges).all()
+
+    expected = poutine.trace(model.guide).get_trace(data)
+    actual = poutine.trace(model2.guide).get_trace(data)
+    assert expected.nodes.keys() == actual.nodes.keys()
+    for key, expected_node in expected.nodes.items():
+        if expected_node["type"] in ("param", "sample"):
+            actual_node = actual.nodes[key]
+            assert_close(expected_node["value"], actual_node["value"])
