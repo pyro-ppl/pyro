@@ -19,6 +19,7 @@ class DeepNAFFlow(TransformModule):
     codomain = constraints.real
     bijective = True
     event_dim = 1
+    autoregressive = True
 
     def __init__(self, autoregressive_nn, hidden_units=16):
         super(DeepNAFFlow, self).__init__(cache_size=1)

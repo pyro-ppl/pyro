@@ -40,7 +40,7 @@ class FlowTests(TestCase):
                 delta = (flow(x + 0.5 * epsilon_vector) - flow(x - 0.5 * epsilon_vector)) / self.epsilon
                 jacobian[j, k] = float(delta[0, k].data.sum())
 
-        # Apply permutation for autoregressive flows
+        # Apply permutation for autoregressive flows with a network
         if hasattr(flow, 'arn'):
             permutation = flow.arn.get_permutation()
             permuted_jacobian = jacobian.clone()
@@ -50,7 +50,7 @@ class FlowTests(TestCase):
             jacobian = permuted_jacobian
 
         # For autoregressive flow, Jacobian is sum of diagonal, otherwise need full determinate
-        if hasattr(flow, 'arn'):
+        if hasattr(flow, 'autoregressive') and flow.autoregressive == True:
             numeric_ldt = torch.sum(torch.log(torch.diag(jacobian)))
         else:
             numeric_ldt = torch.log(torch.abs(jacobian.det()))
@@ -91,6 +91,9 @@ class FlowTests(TestCase):
         bn.eval()
         return bn
 
+    def _make_blocknaf(self, input_dim):
+        return dist.BlockNAFFlow(input_dim)
+
     def _make_iaf(self, input_dim):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
         return dist.InverseAutoregressiveFlow(arn)
@@ -121,6 +124,10 @@ class FlowTests(TestCase):
     def test_batchnorm_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_batchnorm)
+
+    def test_blocknaf_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_blocknaf)
 
     def _make_radial(self, input_dim):
         return dist.RadialFlow(input_dim)
@@ -172,6 +179,10 @@ class FlowTests(TestCase):
     def test_batchnorm_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_batchnorm)
+
+    def test_blocknaf_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_blocknaf)
 
     def test_iaf_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
