@@ -34,14 +34,17 @@ class BlockNAFFlow(TransformModule):
         super(BlockNAFFlow, self).__init__(cache_size=1)
 
         # Initialize modules for each layer in flow
+        self.gated = gated
         self.input_dim = input_dim
-        #self.layers = nn.ModuleList([MaskedBlockLinear(input_dim, input_dim*2, input_dim), MaskedBlockLinear(input_dim*2, input_dim, input_dim)])
         self.layers = nn.ModuleList([
             MaskedBlockLinear(input_dim, input_dim*2, input_dim),
             MaskedBlockLinear(input_dim*2, input_dim*2, input_dim),
             MaskedBlockLinear(input_dim*2, input_dim*2, input_dim),
             MaskedBlockLinear(input_dim*2, input_dim, input_dim)])
         self._cached_logDetJ = None
+
+        if gated:
+            self.gate = torch.nn.Parameter(torch.nn.init.normal_(torch.Tensor(1)))
 
     def f(self, x):
         """
@@ -79,7 +82,11 @@ class BlockNAFFlow(TransformModule):
             y = self.f(pre_activation)
 
         self._cached_logDetJ = logDetJ.squeeze(-1).squeeze(-1)
-        
+
+        if self.gated:
+            y = self.gate.sigmoid() * x + (1. - self.gate.sigmoid()) * y
+            self._cached_logDetJ = torch.log(self.gate.sigmoid()) + F.softplus(torch.log(1. - self.gate.sigmoid()) - torch.log(self.gate.sigmoid()) + self._cached_logDetJ) 
+            
         #print('logDetJ', self._cached_logDetJ.size())
 
         return y
