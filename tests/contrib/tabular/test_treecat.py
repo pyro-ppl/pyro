@@ -1,13 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
+import os
+
 import pytest
 import torch
+from six.moves import cPickle as pickle
 
 import pyro.poutine as poutine
 from pyro.contrib.tabular.features import Boolean, Discrete, Real
-from pyro.contrib.tabular.treecat import (TreeCat, TreeCatTrainer,
-                                          _dm_log_prob, find_center_of_tree)
-from tests.common import assert_close
+from pyro.contrib.tabular.treecat import TreeCat, TreeCatTrainer, _dm_log_prob, find_center_of_tree
+from tests.common import TemporaryDirectory, assert_close
 
 
 @pytest.mark.parametrize('expected_vertex,edges', [
@@ -85,6 +87,35 @@ def test_save_load(data, capacity):
 
     model2 = TreeCat(features, capacity)
     model2.load()
+    assert (model2.edges == model.edges).all()
+
+    expected = poutine.trace(model.guide).get_trace(data)
+    actual = poutine.trace(model2.guide).get_trace(data)
+    assert expected.nodes.keys() == actual.nodes.keys()
+    for key, expected_node in expected.nodes.items():
+        if expected_node["type"] in ("param", "sample"):
+            actual_node = actual.nodes[key]
+            assert_close(expected_node["value"], actual_node["value"])
+
+
+@pytest.mark.parametrize('data', TINY_DATASETS)
+@pytest.mark.parametrize('capacity', [2, 16])
+def test_pickle(data, capacity):
+    V = len(data)
+    features = TINY_SCHEMA[:V]
+    model = TreeCat(features, capacity)
+    trainer = TreeCatTrainer(model)
+    trainer.init(data)
+    trainer.step(data)
+    del trainer
+
+    with TemporaryDirectory() as path:
+        filename = os.path.join(path, "model.pkl")
+        with open(filename, "wb") as f:
+            pickle.dump(model, f, pickle.HIGHEST_PROTOCOL)
+        with open(filename, "rb") as f:
+            model2 = pickle.load(f)
+
     assert (model2.edges == model.edges).all()
 
     expected = poutine.trace(model.guide).get_trace(data)

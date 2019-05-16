@@ -53,6 +53,15 @@ class TreeCat(object):
 
         self.edges = edges
 
+    def __getstate__(self):
+        init_args = (self.features, self.capacity, self.edges)
+        return {"init_args": init_args, "edge_guide": self._edge_guide}
+
+    def __setstate__(self, state):
+        self.__init__(*state["init_args"])
+        self._edge_guide = state["edge_guide"]
+        self._edge_guide.edges = self.edges
+
     @property
     def edges(self):
         return self._edges
