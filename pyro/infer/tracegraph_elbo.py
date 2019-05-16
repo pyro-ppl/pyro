@@ -91,7 +91,7 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     return downstream_costs, downstream_guide_cost_nodes
 
 
-def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
+def _compute_elbo_reparam(model_trace, guide_trace):
     elbo = 0.0
     surrogate_elbo = 0.0
 
@@ -227,15 +227,17 @@ class TraceGraph_ELBO(ELBO):
 
     def _loss_and_grads_particle(self, weight, model_trace, guide_trace):
         # compute elbo for reparameterized nodes
-        non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
-        elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes)
+        elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace)
+        baseline_loss = 0.0
 
         # the following computations are only necessary if we have non-reparameterizable nodes
-        baseline_loss = 0.0
+        non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
+
         if non_reparam_nodes:
             downstream_costs, _ = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
             surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(guide_trace,
                                                                            non_reparam_nodes, downstream_costs)
+
             surrogate_elbo += surrogate_elbo_term
 
         # collect parameters to train from model and guide
@@ -244,12 +246,11 @@ class TraceGraph_ELBO(ELBO):
                                for site in trace.nodes.values())
 
         if trainable_params:
-            surrogate_loss = -surrogate_elbo
-            torch_backward(weight * (surrogate_loss + baseline_loss), retain_graph=self.retain_graph)
+            torch_backward(weight * (- surrogate_elbo + baseline_loss), retain_graph=self.retain_graph)
 
-        loss = -torch_item(elbo)
+        loss = torch_item(- weight * elbo)
         warn_if_nan(loss, "loss")
-        return weight * loss
+        return loss
 
 
 class JitTraceGraph_ELBO(TraceGraph_ELBO):
@@ -280,16 +281,14 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
                 kwargs.pop('_pyro_model_id')
                 kwargs.pop('_pyro_guide_id')
                 self = weakself()
-                loss = 0.0
-                surrogate_loss = 0.0
                 weight = 1.0 / self.num_particles
                 for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
                     # compute elbo for reparameterized nodes
-                    non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
-                    elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes)
+                    elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace)
+                    baseline_loss = 0.0
 
                     # the following computations are only necessary if we have non-reparameterizable nodes
-                    baseline_loss = 0.0
+                    non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
                     if non_reparam_nodes:
                         downstream_costs, _ = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
                         surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(guide_trace,
@@ -297,16 +296,17 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
                                                                                        downstream_costs)
                         surrogate_elbo += surrogate_elbo_term
 
-                    loss = loss - weight * elbo
-                    surrogate_loss = surrogate_loss - weight * surrogate_elbo
+                    loss = - weight * elbo
+                    surrogate_loss = - weight * surrogate_elbo
 
                 return loss, surrogate_loss
 
             self._loss_and_surrogate_loss = loss_and_surrogate_loss
 
         loss, surrogate_loss = self._loss_and_surrogate_loss(*args, **kwargs)
-        surrogate_loss.backward()
-        loss = loss.item()
 
+        surrogate_loss.backward()
+
+        loss = loss.item()
         warn_if_nan(loss, "loss")
         return loss
