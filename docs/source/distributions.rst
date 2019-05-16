@@ -192,9 +192,30 @@ BatchNormTransform
     :undoc-members:
     :show-inheritance:
 
+DeepELUFlow
+-----------------
+.. autoclass:: pyro.distributions.DeepELUFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+DeepLeakyReLUFlow
+-----------------
+.. autoclass:: pyro.distributions.DeepLeakyReLUFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 DeepSigmoidalFlow
 -----------------
 .. autoclass:: pyro.distributions.DeepSigmoidalFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+HouseholderFlow
+-----------------
+.. autoclass:: pyro.distributions.HouseholderFlow
     :members:
     :undoc-members:
     :show-inheritance:
