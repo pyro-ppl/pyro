@@ -1,18 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
-import math
-import warnings
-
 import torch
 import torch.nn as nn
 from torch.distributions import constraints
 
+from pyro.distributions import HouseholderFlow
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(TransformModule)
-class SylvesterFlow(TransformModule):
+class SylvesterFlow(HouseholderFlow):
     """
     An implementation of Sylvester flow of the Householder variety (Van den Berg Et Al., 2018),
 
@@ -55,18 +53,7 @@ class SylvesterFlow(TransformModule):
     event_dim = 1
 
     def __init__(self, input_dim, count_transforms=1):
-        super(SylvesterFlow, self).__init__(cache_size=1)
-
-        # Create parameters for Householder transform
-        # TODO: Inherit from HouseholderFlow and omit the following!
-        self.input_dim = input_dim
-        assert count_transforms > 0
-        if count_transforms > input_dim:
-            warnings.warn(
-                "Number of Householder transforms, {}, is greater than input dimension {}, which is an \
-over-parametrization!".format(count_transforms, input_dim))
-        self.count_transforms = count_transforms
-        self.u_unnormed = nn.Parameter(torch.Tensor(count_transforms, input_dim))
+        super(SylvesterFlow, self).__init__(input_dim, count_transforms)
 
         # Create parameters for Sylvester transform
         self.R_dense = nn.Parameter(torch.Tensor(input_dim, input_dim))
@@ -81,16 +68,11 @@ over-parametrization!".format(count_transforms, input_dim))
 
         self._cached_logDetJ = None
         self.tanh = nn.Tanh()
-        self.reset_parameters()
+        self.reset_parameters2()
 
     # Derivative of hyperbolic tan
     def dtanh_dx(self, x):
         return 1. - self.tanh(x).pow(2)
-
-    # Construct normalized vectors for Householder transform
-    def u(self):
-        norm = torch.norm(self.u_unnormed, p=2, dim=-1, keepdim=True)
-        return torch.div(self.u_unnormed, norm)
 
     # Construct upper diagonal R matrix
     def R(self):
@@ -110,11 +92,8 @@ over-parametrization!".format(count_transforms, input_dim))
 
         return partial_Q
 
-    def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.input_dim)
-        for v in [self.u_unnormed]:
-            v.data.uniform_(-stdv, stdv)
-
+    # NOTE: self.u_unnormed is initialized in parent class
+    def reset_parameters2(self):
         for v in [self.b, self.R_diag, self.S_diag, self.R_dense, self.S_dense]:
             v.data.uniform_(-0.01, 0.01)
 
