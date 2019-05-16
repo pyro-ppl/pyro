@@ -92,20 +92,30 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
 
 
 def _compute_elbo_reparam(model_trace, guide_trace):
+
+    # Compute a surrogate ELBO. In [1], this is simply the ELBO because
+    # (non)reparameterization is captured in the structure of the computation
+    # graph, and the required behavior under parameter differentiation emerges
+    # from that structure. Here the behavior of E_p[log(p)] under parameter
+    # differentiation is instead represented in site["score_parts"].
+
     elbo = 0.0
     surrogate_elbo = 0.0
 
-    # deal with log p(z|...) terms
+    # Bring log p(x, z|...) terms into both the ELBO and the surrogate
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
             elbo += site["log_prob_sum"]
             surrogate_elbo += site["log_prob_sum"]
 
-    # deal with log q(z|...) terms
+    # Bring log q(z|...) terms into the ELBO, and effective terms into the
+    # surrogate
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample":
             elbo -= site["log_prob_sum"]
             entropy_term = site["score_parts"].entropy_term
+            # For fully reparameterized terms, this entropy_term is log q(z|...)
+            # For fully non-reparameterized terms, it is zero
             if not is_identically_zero(entropy_term):
                 surrogate_elbo -= entropy_term.sum()
 
