@@ -30,7 +30,7 @@ class BlockNAFFlow(TransformModule):
     event_dim = 1
     autoregressive = True
 
-    def __init__(self, input_dim):
+    def __init__(self, input_dim, gated=True):
         super(BlockNAFFlow, self).__init__(cache_size=1)
 
         # Initialize modules for each layer in flow
@@ -149,16 +149,16 @@ class MaskedBlockLinear(torch.nn.Module):
 
         # NOTE: Commented out weight normalization for now!
         # Sum is taken over columns, i.e. one norm per row
-        #w_squared_norm = (w ** 2).sum(-1, keepdim=True)
+        w_squared_norm = (w ** 2).sum(-1, keepdim=True)
 
         # Effect of multiplication and division is that each row is normalized and rescaled
-        #w = self._diag_weight.exp() * w / w_squared_norm.sqrt()
+        w = self._diag_weight.exp() * w / w_squared_norm.sqrt()
 
-        # NOTE: Not sure what's going on here... It's to do with the gradient of weight normalization
-        #wpl = self._diag_weight + self._weight - 0.5 * torch.log(w_squared_norm)
-        wpl = self._weight
-
-        # TODO: Check I understand how wpl is working!
+        # Taking the effect of weight normalization into account in calculating the log-gradient is straightforward!
+        # Instead of differenting, e.g. d(W_1x)/dx, we have d(g_1W_1/(W_1^TW_1)^0.5x)/dx, roughly speaking, and taking the log
+        # gives the right hand side below:
+        wpl = self._diag_weight + self._weight - 0.5 * torch.log(w_squared_norm)
+        
         return w, wpl[self.mask_d.byte()].view(self.dim, self.out_features // self.dim, self.in_features // self.dim)
 
     def forward(self, x):
