@@ -31,7 +31,7 @@ def test_find_center_of_tree(expected_vertex, edges):
 
 @pytest.mark.parametrize('alpha', [0.5, 0.1])
 @pytest.mark.parametrize('counts_shape', [(6,), (5, 4), (4, 3, 2)])
-def test_dm_log_prob(alpha, counts_shape):
+def test_dirmul_log_prob(alpha, counts_shape):
     counts = torch.randn(counts_shape).exp()
     actual = _dirmul_log_prob(alpha, counts)
     expected = (alpha + counts).lgamma().sum(-1) - (1 + counts).lgamma().sum(-1)

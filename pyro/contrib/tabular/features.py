@@ -46,6 +46,7 @@ class Feature(object):
         :meth:`sample_group`.
     """
     def __init__(self, name):
+        assert isinstance(name, str)
         self.name = name
         self.device = torch.empty(1).device
 
@@ -130,7 +131,7 @@ class Boolean(Feature):
 
     @torch.no_grad()
     def init(self, data):
-        super(Boolean, self).__init__(data)
+        super(Boolean, self).init(data)
 
         assert data.dim() == 1
         mean = data.mean() * 0.98 + 0.01
@@ -174,7 +175,7 @@ class Discrete(Feature):
 
     @torch.no_grad()
     def init(self, data):
-        super(Discrete, self).__init__(data)
+        super(Discrete, self).init(data)
 
         assert data.dim() == 1
         counts = torch.zeros(self.cardinality, device=data.device)
@@ -220,7 +221,7 @@ class Real(Feature):
 
     @torch.no_grad()
     def init(self, data):
-        super(Real, self).__init__(data)
+        super(Real, self).init(data)
 
         assert data.dim() == 1
         data_std = data.std(unbiased=False) + 1e-6
