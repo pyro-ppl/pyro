@@ -20,7 +20,7 @@ class TreeCat(object):
     """
     The TreeCat model of sparse heterogeneous tabular data.
 
-    :param list features: A ``V``-lenth list of
+    :param list features: A ``V``-length list of
         :class:`~pyro.contrib.tabular.features.Feature` objects defining a
         feature model for each column. Feature models can be repeated,
         indicating that two columns share a common feature model (with shared
@@ -33,7 +33,7 @@ class TreeCat(object):
         sufficient statistics approach the full dataset early in training.
         Should be positive.
     """
-    def __init__(self, features, capacity=16, edges=None, annealing_rate=0.01):
+    def __init__(self, features, capacity=8, edges=None, annealing_rate=0.01):
         V = len(features)
         E = V - 1
         M = capacity
@@ -318,7 +318,7 @@ class EdgeGuide(object):
     @torch.no_grad()
     def update(self, num_rows, z):
         """
-        Updates count statistics given a minibatch of latent samples.
+        Updates count statistics given a minibatch of latent samples ``z``.
 
         :param int num_rows: Size of the complete dataset.
         :param torch.Tensor z: A minibatch of latent variables of size
@@ -349,14 +349,22 @@ class EdgeGuide(object):
         self._complete_stats.scatter_add_(-1, zz, one.expand_as(zz))
         self._complete_stats *= decay
 
-        logging.debug("count_stats = {:0.1f}, batch_size = {}, num_rows = {}".format(
-            self._count_stats, batch_size, num_rows))
+        # Log metrics to diagnose convergence issues.
         if logging.Logger(None).isEnabledFor(logging.DEBUG):
-            probs = 0.5 + self._vertex_stats
-            probs /= probs.sum(-1, True)
-            perplexity = (-probs * probs.log()).sum(-1).exp().sort(descending=True)[0]
+            logging.debug("count_stats = {:0.1f}, batch_size = {}, num_rows = {}".format(
+                self._count_stats, batch_size, num_rows))
+
+            vertex_probs, edge_probs = self.get_posterior()
+            vertex_entropy = -(vertex_probs * vertex_probs.log()).sum(-1)
+            perplexity = vertex_entropy.exp().sort(descending=True)[0]
             perplexity = ["{: >4.1f}".format(p) for p in perplexity]
             logging.debug(" ".join(["perplexity:"] + perplexity))
+
+            edge_entropy = -(edge_probs * edge_probs.log()).sum(-1)
+            mutual_info = vertex_entropy[self.edges].sum(-1) - edge_entropy
+            mutual_info = mutual_info.sort(descending=True)[0]
+            mutual_info = ["{: >4.1f}".format(i) for i in mutual_info]
+            logging.debug(" ".join(["mutual_info:"] + mutual_info))
 
     @torch.no_grad()
     def get_posterior(self):
