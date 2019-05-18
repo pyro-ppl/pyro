@@ -83,4 +83,4 @@ class PermuteTransform(Transform):
         vector of zeros works.
         """
 
-        return torch.zeros(x.size()[:-1])
+        return torch.zeros(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device)

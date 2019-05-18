@@ -313,25 +313,28 @@ class TracePredictive(TracePosterior):
                 continue
 
     def _adjust_to_data(self, trace, data_trace):
-        for name, site in list(trace.nodes.items()):
+        subsampled_idxs = dict()
+        for name, site in trace.iter_stochastic_nodes():
             # Adjust subsample sites
             if site_is_subsample(site):
                 site["fn"] = data_trace.nodes[name]["fn"]
                 site["value"] = data_trace.nodes[name]["value"]
             # Adjust sites under conditionally independent stacks
-            try:
-                site["cond_indep_stack"] = data_trace.nodes[name]["cond_indep_stack"]
-                site["fn"] = data_trace.nodes[name]["fn"]
-                for cis in site["cond_indep_stack"]:
-                    # Select random sub-indices to replay values under conditionally independent stacks.
-                    # Otherwise, we assume there is an dependence of indexes between training data
-                    # and prediction data.
-                    batch_dim = cis.dim - site["fn"].event_dim
-                    subidxs = torch.randint(0, site['value'].size(batch_dim), (cis.size,),
-                                            device=site["value"].device)
-                    site["value"] = site["value"].index_select(batch_dim, subidxs)
-            except KeyError:
-                pass
+            orig_cis_stack = site["cond_indep_stack"]
+            site["cond_indep_stack"] = data_trace.nodes[name]["cond_indep_stack"]
+            assert len(orig_cis_stack) == len(site["cond_indep_stack"])
+            site["fn"] = data_trace.nodes[name]["fn"]
+            for ocis, cis in zip(orig_cis_stack, site["cond_indep_stack"]):
+                # Select random sub-indices to replay values under conditionally independent stacks.
+                # Otherwise, we assume there is an dependence of indexes between training data
+                # and prediction data.
+                assert ocis.name == cis.name
+                assert not site_is_subsample(site)
+                batch_dim = cis.dim - site["fn"].event_dim
+                subsampled_idxs[cis.name] = subsampled_idxs.get(cis.name,
+                                                                torch.randint(0, ocis.size, (cis.size,),
+                                                                              device=site["value"].device))
+                site["value"] = site["value"].index_select(batch_dim, subsampled_idxs[cis.name])
 
     def marginal(self, sites=None):
         """
