@@ -218,28 +218,6 @@ class TreeCat(object):
         model = infer_discrete(model, first_available_dim=first_available_dim)
         return model(data, impute=True)
 
-    def save(self, prefix="treecat", store=None):
-        """
-        Save to the Pyro param store.
-        """
-        if store is None:
-            store = pyro.get_param_store()
-        store["{}_edges".format(prefix)] = self.edges.float()
-        self._edge_guide.save(prefix, store)
-
-    def load(self, prefix="treecat", store=None):
-        """
-        Load from the Pyro param store.
-        """
-        if store is None:
-            store = pyro.get_param_store()
-        self.edges = store["{}_edges".format(prefix)].long()
-        self._edge_guide.load(prefix, store)
-
-        V = len(self.features)
-        E = V - 1
-        assert self._edges.shape == (E, 2)
-
 
 class TreeCatTrainer(object):
     def __init__(self, model, optim=None, backend="python",
@@ -407,33 +385,6 @@ class EdgeGuide(object):
         edge_logits -= vertex_logits[self._grid[1]]
         assert edge_logits.shape == (K,)
         return edge_logits
-
-    def save(self, prefix="treecat", store=None):
-        """
-        Save to the Pyro param store.
-        """
-        if store is None:
-            store = pyro.get_param_store()
-        store["{}_count_stats".format(prefix)] = torch.tensor(self._count_stats)
-        store["{}_vertex_stats".format(prefix)] = self._vertex_stats
-        store["{}_complete_stats".format(prefix)] = self._complete_stats
-
-    def load(self, prefix="treecat", store=None):
-        """
-        Load from the Pyro param store.
-        """
-        if store is None:
-            store = pyro.get_param_store()
-        self._count_stats = store["{}_count_stats".format(prefix)].item()
-        self._vertex_stats = store["{}_vertex_stats".format(prefix)]
-        self._complete_stats = store["{}_complete_stats".format(prefix)]
-
-        E = len(self.edges)
-        V = E + 1
-        K = V * (V - 1) // 2
-        M = self.capacity
-        assert self._vertex_stats.shape == (V, M)
-        assert self._complete_stats.shape == (K, M * M)
 
 
 def _dm_log_prob(alpha, counts):

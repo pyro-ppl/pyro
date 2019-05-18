@@ -75,31 +75,6 @@ def test_impute_smoke(data, capacity, num_samples):
 
 @pytest.mark.parametrize('data', TINY_DATASETS)
 @pytest.mark.parametrize('capacity', [2, 16])
-def test_save_load(data, capacity):
-    V = len(data)
-    features = TINY_SCHEMA[:V]
-    model = TreeCat(features, capacity)
-    trainer = TreeCatTrainer(model)
-    trainer.init(data)
-    trainer.step(data)
-    del trainer
-    model.save()
-
-    model2 = TreeCat(features, capacity)
-    model2.load()
-    assert (model2.edges == model.edges).all()
-
-    expected = poutine.trace(model.guide).get_trace(data)
-    actual = poutine.trace(model2.guide).get_trace(data)
-    assert expected.nodes.keys() == actual.nodes.keys()
-    for key, expected_node in expected.nodes.items():
-        if expected_node["type"] in ("param", "sample"):
-            actual_node = actual.nodes[key]
-            assert_close(expected_node["value"], actual_node["value"])
-
-
-@pytest.mark.parametrize('data', TINY_DATASETS)
-@pytest.mark.parametrize('capacity', [2, 16])
 def test_pickle(data, capacity):
     V = len(data)
     features = TINY_SCHEMA[:V]
