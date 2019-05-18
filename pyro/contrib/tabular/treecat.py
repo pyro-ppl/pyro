@@ -24,11 +24,11 @@ class TreeCat(object):
         :class:`~pyro.contrib.tabular.features.Feature` objects defining a
         feature model for each column. Feature models can be repeated,
         indicating that two columns share a common feature model (with shared
-        learned parameters).
+        learned parameters). Features should reside on the same device as data.
     :param int capacity: Cardinality of latent categorical variables.
     :param torch.LongTensor edges: A ``(V-1, 2)`` shaped tensor representing
         the tree structure. Each of the ``E = (V-1)`` edges is a row ``v1,v2``
-        of vertices.
+        of vertices. Edges must reside on the CPU.
     :param float annealing_rate: The exponential growth rate limit with which
         sufficient statistics approach the full dataset early in training.
         Should be positive.
@@ -38,16 +38,17 @@ class TreeCat(object):
         E = V - 1
         M = capacity
         if edges is None:
-            edges = torch.stack([torch.arange(E), torch.arange(1, 1 + E)], dim=-1)
+            edges = torch.stack([torch.arange(E, device="cpu"),
+                                 torch.arange(1, 1 + E, device="cpu")], dim=-1)
         assert capacity > 1
-        assert isinstance(edges, torch.LongTensor)
+        assert isinstance(edges, torch.LongTensor)  # Note edges must live on CPU.
         assert edges.shape == (E, 2)
         self.features = features
         self.capacity = capacity
 
         self._feature_guide = AutoDelta(poutine.block(
             self.model, hide_fn=lambda msg: msg["name"].startswith("treecat_")))
-        self._edge_guide = EdgeGuide(capacity=capacity, edges=edges, annealing_rate=annealing_rate)
+        self._edge_guide = _EdgeGuide(capacity=capacity, edges=edges, annealing_rate=annealing_rate)
         self._vertex_prior = torch.full((M,), 0.5)
         self._edge_prior = torch.full((M * M,), 0.5 / M)
         self._saved_z = None
@@ -99,10 +100,8 @@ class TreeCat(object):
         """
         assert len(data) == len(self.features)
         assert not all(column is None for column in data)
-        for column in data:
-            if column is not None:
-                batch_size = column.size(0)
-                break
+        device = next(col.device for col in data if col is not None)
+        batch_size = next(col.size(0) for col in data if col is not None)
         if num_rows is None:
             num_rows = batch_size
         V = len(self.features)
@@ -120,10 +119,10 @@ class TreeCat(object):
         # Sample latent vertex- and edge- distributions from a Dirichlet prior.
         with pyro.plate("vertices_plate", V, dim=-1):
             vertex_probs = pyro.sample("treecat_vertex_probs",
-                                       dist.Dirichlet(self._vertex_prior))
+                                       dist.Dirichlet(self._vertex_prior.to(device)))
         with pyro.plate("edges_plate", E, dim=-1):
             edge_probs = pyro.sample("treecat_edge_probs",
-                                     dist.Dirichlet(self._edge_prior))
+                                     dist.Dirichlet(self._edge_prior.to(device)))
         if vertex_probs.dim() > 2:
             vertex_probs = vertex_probs.unsqueeze(-3)
             edge_probs = edge_probs.unsqueeze(-3)
@@ -165,7 +164,7 @@ class TreeCat(object):
                 joint = joint.transpose(-1, -2)
             probs = Vindex(joint)[..., z[v0], :]
         z[v] = pyro.sample("treecat_z_{}".format(v), dist.Categorical(probs),
-                           infer={"enumerate": "parallel"})
+                           infer={"enumerate": "parallel"}).cpu()
 
         # Sample observed features conditioned on latent classes.
         if data[v] is not None or impute:
@@ -182,6 +181,7 @@ class TreeCat(object):
         A :class:`~pyro.contrib.autoguide.AutoDelta` guide for MAP inference of
         continuous parameters.
         """
+        device = next(col.device for col in data if col is not None)
         V = len(self.features)
         E = V - 1
 
@@ -190,9 +190,11 @@ class TreeCat(object):
         # This guide uses the posterior mean as a point estimate.
         vertex_probs, edge_probs = self._edge_guide.get_posterior()
         with pyro.plate("vertices_plate", V, dim=-1):
-            pyro.sample("treecat_vertex_probs", dist.Delta(vertex_probs, event_dim=1))
+            pyro.sample("treecat_vertex_probs",
+                        dist.Delta(vertex_probs.to(device), event_dim=1))
         with pyro.plate("edges_plate", E, dim=-1):
-            pyro.sample("treecat_edge_probs", dist.Delta(edge_probs, event_dim=1))
+            pyro.sample("treecat_edge_probs",
+                        dist.Delta(edge_probs.to(device), event_dim=1))
 
     def impute(self, data, num_samples=None):
         """
@@ -220,8 +222,18 @@ class TreeCat(object):
 
 
 class TreeCatTrainer(object):
+    """
+    Maintains state to initialize and train a :class:`TreeCat` model.
+
+    :param TreeCat model: A TreeCat model to train.
+    :param pyro.optim.optim.PyroOptim optim: A Pyro optimizer to learn feature
+        parameters.
+    :param str backend: Either "python" or "cpp". Defaults to "python". The
+        "cpp" backend is much faster for data with more than ~10 features.
+    """
     def __init__(self, model, optim=None, backend="python",
                  experimental_sampler=True):
+        assert isinstance(model, TreeCat)
         if optim is None:
             optim = Adam({"lr": 1e-3})
         Elbo = TraceEnumSample_ELBO if experimental_sampler else TraceEnum_ELBO
@@ -261,9 +273,11 @@ class TreeCatTrainer(object):
         return loss
 
 
-class EdgeGuide(object):
+class _EdgeGuide(object):
     """
     Conjugate guide for latent categorical distribution parameters.
+
+    .. note:: This is memory intensive and therefore resides on the CPU.
 
     :param int capacity: The cardinality of discrete latent variables.
     :param torch.LongTensor edges: A ``(V-1, 2)`` shaped tensor representing
@@ -290,8 +304,8 @@ class EdgeGuide(object):
 
         # Initialize stats to duplicate the Jeffreys prior.
         self._count_stats = 0.5 * M
-        self._vertex_stats = torch.full((V, M), 0.5)
-        self._complete_stats = torch.full((K, M * M), 0.5 / M)
+        self._vertex_stats = torch.full((V, M), 0.5, device="cpu")
+        self._complete_stats = torch.full((K, M * M), 0.5 / M, device="cpu")
 
     @torch.no_grad()
     def update(self, num_rows, z):
@@ -379,15 +393,15 @@ class EdgeGuide(object):
         E = len(self.edges)
         V = E + 1
         K = V * (V - 1) // 2
-        vertex_logits = _dm_log_prob(self._vertex_prior, self._vertex_stats)
-        edge_logits = _dm_log_prob(self._edge_prior, self._complete_stats)
+        vertex_logits = _dirmul_log_prob(self._vertex_prior, self._vertex_stats)
+        edge_logits = _dirmul_log_prob(self._edge_prior, self._complete_stats)
         edge_logits -= vertex_logits[self._grid[0]]
         edge_logits -= vertex_logits[self._grid[1]]
         assert edge_logits.shape == (K,)
         return edge_logits
 
 
-def _dm_log_prob(alpha, counts):
+def _dirmul_log_prob(alpha, counts):
     """
     Computes non-normalized log probability of a Dirichlet-multinomial
     distribution in a numerically stable way. Equivalent to::

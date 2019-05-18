@@ -8,7 +8,7 @@ from six.moves import cPickle as pickle
 
 import pyro.poutine as poutine
 from pyro.contrib.tabular.features import Boolean, Discrete, Real
-from pyro.contrib.tabular.treecat import TreeCat, TreeCatTrainer, _dm_log_prob, find_center_of_tree
+from pyro.contrib.tabular.treecat import TreeCat, TreeCatTrainer, _dirmul_log_prob, find_center_of_tree
 from tests.common import TemporaryDirectory, assert_close
 
 
@@ -33,7 +33,7 @@ def test_find_center_of_tree(expected_vertex, edges):
 @pytest.mark.parametrize('counts_shape', [(6,), (5, 4), (4, 3, 2)])
 def test_dm_log_prob(alpha, counts_shape):
     counts = torch.randn(counts_shape).exp()
-    actual = _dm_log_prob(alpha, counts)
+    actual = _dirmul_log_prob(alpha, counts)
     expected = (alpha + counts).lgamma().sum(-1) - (1 + counts).lgamma().sum(-1)
     assert_close(actual, expected)
 

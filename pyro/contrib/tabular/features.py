@@ -47,9 +47,14 @@ class Feature(object):
     """
     def __init__(self, name):
         self.name = name
+        self.device = torch.empty(1).device
 
     def __str__(self):
         return '{}("{}")'.format(type(self).__name__, self.name)
+
+    def new_tensor(self, *args, **kwargs):
+        kwargs.setdefault("device", self.device)
+        return torch.tensor(*args, **kwargs)
 
     @abstractmethod
     def sample_shared(self):
@@ -100,13 +105,15 @@ class Feature(object):
 
         :param torch.Tensor data: A dataset or subsample of data.
         """
-        assert data.dim() == 1
+        self.device = data.device
 
 
 class Boolean(Feature):
     def sample_shared(self):
-        loc = pyro.sample("{}_loc".format(self.name), dist.Normal(0., 2.))
-        scale = pyro.sample("{}_scale".format(self.name), dist.LogNormal(0., 1.))
+        loc = pyro.sample("{}_loc".format(self.name),
+                          dist.Normal(self.new_tensor(0.), self.new_tensor(2.)))
+        scale = pyro.sample("{}_scale".format(self.name),
+                            dist.LogNormal(self.new_tensor(0.), self.new_tensor(1.)))
         return loc, scale
 
     def sample_group(self, shared):
@@ -123,6 +130,8 @@ class Boolean(Feature):
 
     @torch.no_grad()
     def init(self, data):
+        super(Boolean, self).__init__(data)
+
         assert data.dim() == 1
         mean = data.mean() * 0.98 + 0.01
         loc = mean.log() - (-mean).log1p()
@@ -143,9 +152,11 @@ class Discrete(Feature):
 
     def sample_shared(self):
         loc = pyro.sample("{}_loc".format(self.name),
-                          dist.Normal(0., 2.).expand([self.cardinality]).to_event(1))
+                          dist.Normal(self.new_tensor(0.), self.new_tensor(2.))
+                              .expand([self.cardinality]).to_event(1))
         scale = pyro.sample("{}_scale".format(self.name),
-                            dist.LogNormal(0., 1.).expand([self.cardinality]).to_event(1))
+                            dist.LogNormal(self.new_tensor(0.), self.new_tensor(1.))
+                                .expand([self.cardinality]).to_event(1))
         return loc, scale
 
     def sample_group(self, shared):
@@ -163,6 +174,8 @@ class Discrete(Feature):
 
     @torch.no_grad()
     def init(self, data):
+        super(Discrete, self).__init__(data)
+
         assert data.dim() == 1
         counts = torch.zeros(self.cardinality, device=data.device)
         counts = counts.scatter_add(0, data, torch.ones(data.shape, device=data.device))
@@ -177,10 +190,14 @@ class Discrete(Feature):
 
 class Real(Feature):
     def sample_shared(self):
-        scale_loc = pyro.sample("{}_scale_loc".format(self.name), dist.Normal(0., 10.))
-        scale_scale = pyro.sample("{}_scale_scale".format(self.name), dist.LogNormal(0., 1.))
-        loc_loc = pyro.sample("{}_loc_loc".format(self.name), dist.Normal(0., 3.))
-        loc_scale = pyro.sample("{}_loc_scale".format(self.name), dist.LogNormal(0., 3.))
+        scale_loc = pyro.sample("{}_scale_loc".format(self.name),
+                                dist.Normal(self.new_tensor(0.), self.new_tensor(10.)))
+        scale_scale = pyro.sample("{}_scale_scale".format(self.name),
+                                  dist.LogNormal(self.new_tensor(0.), self.new_tensor(1.)))
+        loc_loc = pyro.sample("{}_loc_loc".format(self.name),
+                              dist.Normal(self.new_tensor(0.), self.new_tensor(3.)))
+        loc_scale = pyro.sample("{}_loc_scale".format(self.name),
+                                dist.LogNormal(self.new_tensor(0.), self.new_tensor(3.)))
         return scale_loc, scale_scale, loc_loc, loc_scale
 
     def sample_group(self, shared):
@@ -203,6 +220,8 @@ class Real(Feature):
 
     @torch.no_grad()
     def init(self, data):
+        super(Real, self).__init__(data)
+
         assert data.dim() == 1
         data_std = data.std(unbiased=False) + 1e-6
         scale_loc = data_std.log() - 1.
