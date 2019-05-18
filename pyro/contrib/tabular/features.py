@@ -168,7 +168,7 @@ class Discrete(Feature):
         counts = counts.scatter_add(0, data, torch.ones(data.shape, device=data.device))
         loc = (counts + 0.5).log()
         loc = loc - loc.logsumexp(-1, True)
-        scale = loc.new_ones(loc.shape)
+        scale = loc.new_full(loc.shape, 2.)
 
         pyro.param("auto_{}_loc".format(self.name), loc)
         pyro.param("auto_{}_scale".format(self.name), scale,

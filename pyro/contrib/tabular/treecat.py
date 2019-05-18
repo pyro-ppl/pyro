@@ -29,8 +29,9 @@ class TreeCat(object):
     :param torch.LongTensor edges: A ``(V-1, 2)`` shaped tensor representing
         the tree structure. Each of the ``E = (V-1)`` edges is a row ``v1,v2``
         of vertices.
-    :param float annealing_rate: The logistic growth rate with which sufficient
-        statistics approach the full dataset. Should be between 0 and 1.
+    :param float annealing_rate: The exponential growth rate limit with which
+        sufficient statistics approach the full dataset early in training.
+        Should be positive.
     """
     def __init__(self, features, capacity=16, edges=None, annealing_rate=0.01):
         V = len(features)
@@ -290,11 +291,12 @@ class EdgeGuide(object):
     :param torch.LongTensor edges: A ``(V-1, 2)`` shaped tensor representing
         the tree structure. Each of the ``E = (V-1)`` edges is a row ``v1,v2``
         of vertices.
-    :param float annealing_rate: The logistic growth rate with which sufficient
-        statistics approach the full dataset. Should be between 0 and 1.
+    :param float annealing_rate: The exponential growth rate limit with which
+        sufficient statistics approach the full dataset early in training.
+        Should be positive.
     """
     def __init__(self, capacity, edges, annealing_rate):
-        assert 0 < annealing_rate and annealing_rate <= 1
+        assert 0 < annealing_rate
         E = len(edges)
         V = E + 1
         K = V * (V - 1) // 2
@@ -303,12 +305,15 @@ class EdgeGuide(object):
         self.edges = edges
         self.annealing_rate = annealing_rate
         self._grid = make_complete_graph(V)
+
+        # Use a Jeffreys prior on vertices, forcing a sparse prior on edges.
         self._vertex_prior = 0.5  # A uniform Dirichlet of shape (M,).
         self._edge_prior = 0.5 / M  # A uniform Dirichlet of shape (M,M).
-        self._count_stats = 0.
-        self._vertex_stats = torch.zeros((V, M))
-        self._complete_stats = torch.zeros((K, M * M))
-        self._target_size = 1.
+
+        # Initialize stats to duplicate the Jeffreys prior.
+        self._count_stats = 0.5 * M
+        self._vertex_stats = torch.full((V, M), 0.5)
+        self._complete_stats = torch.full((K, M * M), 0.5 / M)
 
     @torch.no_grad()
     def update(self, num_rows, z):
@@ -325,23 +330,27 @@ class EdgeGuide(object):
         if num_rows is None:
             num_rows = batch_size
 
-        # Increase target_size towards num_rows via logistic growth.
-        self._target_size *= 1 + self.annealing_rate * (1 - self._target_size / num_rows)
-        self._target_size = max(batch_size, self._target_size)
+        # Early in learning, we limit stats accumulation to slow exponential
+        # growth determined by annealing_rate. Later in learning we
+        # exponentially smooth batches to approximate the entire dataset.
+        assert batch_size <= num_rows
+        assert self._count_stats > 0
+        annealing = (1 + self.annealing_rate) / (1 + batch_size / self._count_stats)
+        exponential_smoothing = 1 / (1 + batch_size / num_rows)
+        decay = min(annealing, exponential_smoothing)
 
-        # Accumulate statistics via exponential smoothing.
-        decay = 1. - batch_size / self._target_size
-        self._count_stats *= decay
-        self._vertex_stats *= decay
-        self._complete_stats *= decay
+        # Accumulate statistics and decay.
         self._count_stats += batch_size
+        self._count_stats *= decay
         one = self._vertex_stats.new_tensor(1.)
         self._vertex_stats.scatter_add_(-1, z, one.expand_as(z))
+        self._vertex_stats *= decay
         zz = (M * z)[self._grid[0]] + z[self._grid[1]]
         self._complete_stats.scatter_add_(-1, zz, one.expand_as(zz))
+        self._complete_stats *= decay
 
-        logging.debug("count_stats = {:0.1f}, target_size = {:0.1f}, num_rows = {}".format(
-            self._count_stats, self._target_size, num_rows))
+        logging.debug("count_stats = {:0.1f}, batch_size = {}, num_rows = {}".format(
+            self._count_stats, batch_size, num_rows))
         if logging.Logger(None).isEnabledFor(logging.DEBUG):
             probs = 0.5 + self._vertex_stats
             probs /= probs.sum(-1, True)
