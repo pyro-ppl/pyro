@@ -63,8 +63,9 @@ class HouseholderFlow(TransformModule):
         super(HouseholderFlow, self).__init__(cache_size=1)
 
         self.input_dim = input_dim
-        assert count_transforms > 0
-        if count_transforms > input_dim:
+        if count_transforms < 1:
+            raise ValueError('Number of Householder transforms, {}, is less than 1!'.format(count_transforms))
+        elif count_transforms > input_dim:
             warnings.warn(
                 "Number of Householder transforms, {}, is greater than input dimension {}, which is an \
 over-parametrization!".format(count_transforms, input_dim))
