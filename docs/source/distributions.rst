@@ -193,7 +193,7 @@ BatchNormTransform
     :show-inheritance:
 
 DeepELUFlow
------------------
+-----------
 .. autoclass:: pyro.distributions.DeepELUFlow
     :members:
     :undoc-members:
@@ -214,7 +214,7 @@ DeepSigmoidalFlow
     :show-inheritance:
 
 HouseholderFlow
------------------
+---------------
 .. autoclass:: pyro.distributions.HouseholderFlow
     :members:
     :undoc-members:
@@ -242,7 +242,7 @@ PermuteTransform
     :show-inheritance:
 
 PlanarFlow
-----------------
+----------
 .. autoclass:: pyro.distributions.PlanarFlow
     :members:
     :undoc-members:
@@ -256,7 +256,7 @@ RadialFlow
     :show-inheritance:
 
 TransformModule
-----------------
+---------------
 .. autoclass:: pyro.distributions.TransformModule
     :members:
     :undoc-members:

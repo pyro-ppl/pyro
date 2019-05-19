@@ -105,7 +105,7 @@ over-parametrization!".format(count_transforms, input_dim))
     def log_abs_det_jacobian(self, x, y):
         """
         Calculates the elementwise determinant of the log jacobian. Householder flow is measure preserving,
-        so log(|detJ|) = 0
+        so :math:`\\log(|detJ|) = 0`
         """
 
         return torch.zeros(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device)
