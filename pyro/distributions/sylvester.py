@@ -83,9 +83,10 @@ class SylvesterFlow(HouseholderFlow):
         return self.S_dense * self.triangular_mask + torch.diag(self.tanh(self.S_diag))
 
     # Construct orthonomal matrix using Householder flow
-    def Q(self):
+    def Q(self, x):
         u = self.u()
-        partial_Q = torch.eye(self.input_dim) - 2. * torch.ger(u[0], u[0])
+        partial_Q = torch.eye(self.input_dim, dtype=x.dtype, layout=x.layout,
+                              device=x.device) - 2. * torch.ger(u[0], u[0])
 
         for idx in range(1, self.count_transforms):
             partial_Q = torch.matmul(partial_Q, torch.eye(self.input_dim) - 2. * torch.ger(u[idx], u[idx]))
@@ -105,7 +106,7 @@ class SylvesterFlow(HouseholderFlow):
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
-        Q = self.Q()
+        Q = self.Q(x)
         R = self.R()
         S = self.S()
 
