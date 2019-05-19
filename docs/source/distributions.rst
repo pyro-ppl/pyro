@@ -221,7 +221,7 @@ PermuteTransform
     :show-inheritance:
 
 PlanarFlow
-----------------
+----------
 .. autoclass:: pyro.distributions.PlanarFlow
     :members:
     :undoc-members:
@@ -235,14 +235,14 @@ RadialFlow
     :show-inheritance:
 
 SylvesterFlow
-----------
+-------------
 .. autoclass:: pyro.distributions.SylvesterFlow
     :members:
     :undoc-members:
     :show-inheritance:
 
 TransformModule
-----------------
+---------------
 .. autoclass:: pyro.distributions.TransformModule
     :members:
     :undoc-members:
