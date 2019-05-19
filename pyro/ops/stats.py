@@ -122,7 +122,8 @@ def autocorrelation(input, dim=0):
     freqvec = torch.rfft(centered_signal, signal_ndim=1, onesided=False)
     # take square of magnitude of freqvec (or freqvec x freqvec*)
     freqvec_gram = freqvec.pow(2).sum(-1, keepdim=True)
-    freqvec_gram = torch.cat([freqvec_gram, torch.zeros(freqvec_gram.shape, dtype=input.dtype, device=input.device)], dim=-1)
+    freqvec_gram = torch.cat([freqvec_gram, torch.zeros(freqvec_gram.shape, dtype=input.dtype,
+                                                        device=input.device)], dim=-1)
     # inverse Fourier transform
     autocorr = torch.irfft(freqvec_gram, signal_ndim=1, onesided=False)
 
