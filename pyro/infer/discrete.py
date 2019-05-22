@@ -196,12 +196,12 @@ class TraceEnumSample_ELBO(TraceEnum_ELBO):
     between the computations of ``loss`` and ``z``::
 
         # Version 1.
-        elbo = TraceEnumSample_ELBO(first_available_dim=-2)
+        elbo = TraceEnumSample_ELBO(max_plate_nesting=1)
         loss = elbo.loss(*args, **kwargs)
         z = elbo.sample_saved()
 
         # Version 2.
-        elbo = TraceEnum_ELBO(first_available_dim=-2)
+        elbo = TraceEnum_ELBO(max_plate_nesting=1)
         loss = elbo.loss(*args, **kwargs)
         guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
         z = infer_discrete(poutine.replay(model, guide_trace),
