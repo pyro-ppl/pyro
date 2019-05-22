@@ -112,7 +112,9 @@ setup(
             'pypandoc',
             'pytest>=4.1',
             'pytest-xdist',
-            'scipy>=1.1',
+            # TODO: remove once https://github.com/pyro-ppl/pyro/issues/1871
+            # is fixed.
+            'scipy>=1.1, < 1.3',
             'sphinx',
             'sphinx_rtd_theme',
             'yapf',
