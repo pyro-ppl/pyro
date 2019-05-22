@@ -11,6 +11,7 @@ GID=$(shell id -g)
 OSTYPE=$(shell uname)
 USER=pyromancer
 DOCKER_WORK_DIR=/home/${USER}/workspace/shared
+pyro_git_url=https://github.com/pyro-ppl/pyro.git
 
 # Optional args
 python_version?=2.7
@@ -54,6 +55,7 @@ build: ##
 	--build-arg ostype=${OSTYPE} \
 	--build-arg python_version=${python_version} \
 	--build-arg pytorch_branch=${pytorch_branch} \
+	--build-arg pyro_git_url=${pyro_git_url} \
 	--build-arg pyro_branch=${pyro_branch} -f ${DOCKER_FILE} .
 
 build-gpu: ##
@@ -75,6 +77,7 @@ build-gpu: ##
 	--build-arg cuda=1 \
 	--build-arg python_version=${python_version} \
 	--build-arg pytorch_branch=${pytorch_branch} \
+	--build-arg pyro_git_url=${pyro_git_url} \
 	--build-arg pyro_branch=${pyro_branch} -f ${DOCKER_FILE} .
 
 create-host-workspace: ##

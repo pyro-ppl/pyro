@@ -30,6 +30,6 @@ if [ ${pyro_branch} = "release" ]
 then
     pip install pyro-ppl
 else
-    git clone https://github.com/uber/pyro.git
+    git clone ${pyro_git_url}
     (cd pyro && git checkout ${pyro_branch} && pip install .[dev])
 fi
