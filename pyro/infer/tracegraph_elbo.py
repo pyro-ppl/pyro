@@ -240,13 +240,7 @@ class TraceGraph_ELBO(ELBO):
 
             surrogate_elbo += surrogate_elbo_term
 
-        # collect parameters to train from model and guide
-        trainable_params = any(site["type"] == "param"
-                               for trace in (model_trace, guide_trace)
-                               for site in trace.nodes.values())
-
-        if trainable_params:
-            torch_backward(weight * (- surrogate_elbo + baseline_loss), retain_graph=self.retain_graph)
+        torch_backward(weight * (-surrogate_elbo + baseline_loss))
 
         loss = torch_item(- weight * elbo)
         warn_if_nan(loss, "loss")
