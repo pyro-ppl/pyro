@@ -72,7 +72,7 @@ def load_mnist(root_path):
 def load(root_path):
     file_path = os.path.join(root_path, 'multi_mnist_uint8.npz')
     if os.path.exists(file_path):
-        data = np.load(file_path)
+        data = np.load(file_path, allow_pickle=True)
         return data['x'], data['y']
     else:
         # Set RNG to known state.
