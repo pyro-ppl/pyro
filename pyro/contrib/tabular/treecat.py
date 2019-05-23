@@ -220,6 +220,9 @@ class TreeCat(object):
         model = infer_discrete(model, first_available_dim=first_available_dim)
         return model(data, impute=True)
 
+    def trainer(self, optim=None, backend="python"):
+        return TreeCatTrainer(self, optim, backend)
+
 
 class TreeCatTrainer(object):
     """
@@ -234,7 +237,7 @@ class TreeCatTrainer(object):
     def __init__(self, model, optim=None, backend="python"):
         assert isinstance(model, TreeCat)
         if optim is None:
-            optim = Adam({"lr": 1e-3})
+            optim = Adam({})
         self._elbo = TraceEnumSample_ELBO(max_plate_nesting=1)
         self._svi = SVI(model.model, model.guide, optim, self._elbo)
         self._model = model
@@ -294,10 +297,10 @@ class _EdgeGuide(object):
         self._vertex_prior = 0.5  # A uniform Dirichlet of shape (M,).
         self._edge_prior = 0.5 / M  # A uniform Dirichlet of shape (M,M).
 
-        # Initialize stats to duplicate the Jeffreys prior.
-        self._count_stats = 0.5 * M
-        self._vertex_stats = torch.full((V, M), 0.5, device="cpu")
-        self._complete_stats = torch.full((K, M * M), 0.5 / M, device="cpu")
+        # Initialize stats to a single pseudo-observation.
+        self._count_stats = 1.
+        self._vertex_stats = torch.full((V, M), 1. / M, device="cpu")
+        self._complete_stats = torch.full((K, M * M), 1. / M ** 2, device="cpu")
 
     @torch.no_grad()
     def update(self, num_rows, z):

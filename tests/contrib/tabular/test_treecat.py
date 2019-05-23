@@ -1,15 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-import os
-
 import pytest
 import torch
-from six.moves import cPickle as pickle
 
-import pyro.poutine as poutine
 from pyro.contrib.tabular.features import Boolean, Discrete, Real
-from pyro.contrib.tabular.treecat import TreeCat, TreeCatTrainer, _dirmul_log_prob, find_center_of_tree
-from tests.common import TemporaryDirectory, assert_close
+from pyro.contrib.tabular.treecat import _dirmul_log_prob, find_center_of_tree
+from tests.common import assert_close
 
 
 @pytest.mark.parametrize('expected_vertex,edges', [
@@ -50,53 +46,3 @@ TINY_DATASETS = [
      torch.tensor([-2., -1., -0., 1., 2.]),
      torch.tensor([0., 1., 1., 1., 0.])],
 ]
-
-
-@pytest.mark.parametrize('data', TINY_DATASETS)
-@pytest.mark.parametrize('capacity', [2, 16])
-def test_train_smoke(data, capacity):
-    V = len(data)
-    features = TINY_SCHEMA[:V]
-    model = TreeCat(features, capacity)
-    trainer = TreeCatTrainer(model)
-    trainer.init(data)
-    for i in range(10):
-        trainer.step(data)
-
-
-@pytest.mark.parametrize('capacity', [2, 16])
-@pytest.mark.parametrize('data', TINY_DATASETS)
-@pytest.mark.parametrize('num_samples', [None, 8])
-def test_impute_smoke(data, capacity, num_samples):
-    features = TINY_SCHEMA[:len(data)]
-    model = TreeCat(features, capacity)
-    model.impute(data, num_samples=num_samples)
-
-
-@pytest.mark.parametrize('data', TINY_DATASETS)
-@pytest.mark.parametrize('capacity', [2, 16])
-def test_pickle(data, capacity):
-    V = len(data)
-    features = TINY_SCHEMA[:V]
-    model = TreeCat(features, capacity)
-    trainer = TreeCatTrainer(model)
-    trainer.init(data)
-    trainer.step(data)
-    del trainer
-
-    with TemporaryDirectory() as path:
-        filename = os.path.join(path, "model.pkl")
-        with open(filename, "wb") as f:
-            pickle.dump(model, f, pickle.HIGHEST_PROTOCOL)
-        with open(filename, "rb") as f:
-            model2 = pickle.load(f)
-
-    assert (model2.edges == model.edges).all()
-
-    expected = poutine.trace(model.guide).get_trace(data)
-    actual = poutine.trace(model2.guide).get_trace(data)
-    assert expected.nodes.keys() == actual.nodes.keys()
-    for key, expected_node in expected.nodes.items():
-        if expected_node["type"] in ("param", "sample"):
-            actual_node = actual.nodes[key]
-            assert_close(expected_node["value"], actual_node["value"])
