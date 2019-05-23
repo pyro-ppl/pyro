@@ -265,7 +265,7 @@ class AutoDelta(AutoGuide):
         guide = AutoDelta(model)
         svi = SVI(model, guide, ...)
 
-    By default latent variables are randomly initialized by the model. To
+    By default latent variables are initialized using ``init_loc_fn()``. To
     change this default behavior the user should call :func:`pyro.param` before
     beginning inference, with ``"auto_"`` prefixed to the targetd sample site
     names e.g. for sample sites named "level" and "concentration", initialize
@@ -280,8 +280,16 @@ class AutoDelta(AutoGuide):
         See :ref:`autoguide-initialization` section for available functions.
     """
     def __init__(self, model, prefix="auto", init_loc_fn=init_to_median):
-        model = InitMessenger(init_loc_fn)(model)
+        self.init_loc_fn = init_loc_fn
+        model = InitMessenger(self._init_loc_fn)(model)
         super(AutoDelta, self).__init__(model, prefix=prefix)
+
+    def _init_loc_fn(self, site):
+        name = "{}_{}".format(self.prefix, site["name"])
+        store = pyro.get_param_store()
+        if name in store:
+            return store[name]
+        return self.init_loc_fn(site)
 
     def __call__(self, *args, **kwargs):
         """
