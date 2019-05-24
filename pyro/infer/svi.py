@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import torch
 
 import pyro
+import pyro.optim
 import pyro.poutine as poutine
 from pyro.infer.abstract_infer import TracePosterior
 from pyro.infer.elbo import ELBO
