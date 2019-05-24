@@ -65,6 +65,7 @@ Discrete Inference
 .. automodule:: pyro.infer.discrete
     :members:
     :show-inheritance:
+    :member-order: bysource
 
 Inference Utilities
 -------------------

@@ -18,6 +18,7 @@ from pyro.infer.enum import get_importance_trace, iter_discrete_escape, iter_dis
 from pyro.infer.util import Dice, is_validation_enabled
 from pyro.ops import packed
 from pyro.ops.contract import contract_tensor_tree, contract_to_tensor
+from pyro.ops.rings import SampleRing
 from pyro.poutine.enumerate_messenger import EnumerateMessenger
 from pyro.util import check_traceenum_requirements, ignore_jit_warnings, warn_if_nan
 
@@ -121,6 +122,11 @@ def _compute_dice_elbo(model_trace, guide_trace):
     marginal_costs, log_factors, ordering, sum_dims, scale = _compute_model_factors(
             model_trace, guide_trace)
     if log_factors:
+        dim_to_size = {}
+        for terms in log_factors.values():
+            for term in terms:
+                dim_to_size.update(zip(term._pyro_dims, term.shape))
+
         # Note that while most applications of tensor message passing use the
         # contract_to_tensor() interface and can be easily refactored to use ubersum(),
         # the application here relies on contract_tensor_tree() to extract the dependency
@@ -130,7 +136,9 @@ def _compute_dice_elbo(model_trace, guide_trace):
         # replace contract_tensor_tree() with a RaggedTensor -> RaggedTensor contraction
         # that preserves some dependency structure.
         with shared_intermediates() as cache:
-            log_factors = contract_tensor_tree(log_factors, sum_dims, cache=cache)
+            ring = SampleRing(cache=cache, dim_to_size=dim_to_size)
+            log_factors = contract_tensor_tree(log_factors, sum_dims, ring=ring)
+            model_trace._sharing_cache = cache  # For TraceEnumSample_ELBO.
         for t, log_factors_t in log_factors.items():
             marginal_costs_t = marginal_costs.setdefault(t, [])
             for term in log_factors_t:
