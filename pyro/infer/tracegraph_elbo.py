@@ -297,7 +297,7 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
                         surrogate_elbo += surrogate_elbo_term
 
                     loss = - weight * elbo
-                    surrogate_loss = - weight * surrogate_elbo
+                    surrogate_loss = weight * (-surrogate_elbo + baseline_loss)
 
                 return loss, surrogate_loss
 
