@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import weakref
-from operator import itemgetter
+from collections import defaultdict
 
 import torch
 
@@ -76,64 +76,115 @@ def _construct_baseline(node, guide_site, downstream_cost):
     return use_baseline, baseline_loss, baseline
 
 
-def _compute_downstream_costs(model_trace, guide_trace,  #
-                              non_reparam_nodes):
-    # recursively compute downstream cost nodes for all sample sites in model and guide
-    # (even though ultimately just need for non-reparameterizable sample sites)
-    # 1. downstream costs used for rao-blackwellization
-    # 2. model observe sites (as well as terms that arise from the model and guide having different
-    # dependency structures) are taken care of via 'children_in_model' below
-    topo_sort_guide_nodes = guide_trace.topological_sort(reverse=True)
-    topo_sort_guide_nodes = [x for x in topo_sort_guide_nodes
-                             if guide_trace.nodes[x]["type"] == "sample"]
-    ordered_guide_nodes_dict = {n: i for i, n in enumerate(topo_sort_guide_nodes)}
+def _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes):
 
-    downstream_guide_cost_nodes = {}
+    # Computes a surrogate cost for each nonreparam node in the guide. It would
+    # be equivalent (in expectation), to use the full ELBO as a cost for each
+    # node. But for many models/guides, there will be "upstream" terms in the
+    # ELBO which would only add variance to the gradient estimates.
+    #
+    # As in [1], only downstream costs are included. This multitree structure
+    # motivates a recursive computation. Note, while only the downstream costs
+    # for nonreparameterized guide nodes will ultimately be used, the reparam
+    # node costs count toward those downstream totals.
+
     downstream_costs = {}
+
+    # While accumulating costs, track which terms have been included for each
+    # node to support detecting and handling redundant paths.
+    included_model_terms = defaultdict(set)
+    included_guide_terms = defaultdict(set)
+
+    def charge(paying_node, cost):
+        # Add to the downstream total of paying_node
+        if paying_node in downstream_costs:
+            downstream_costs[paying_node].add(*cost.items())
+        else:
+            downstream_costs[paying_node] = cost
+
     stacks = get_plate_stacks(model_trace)
 
-    for node in topo_sort_guide_nodes:
-        downstream_costs[node] = MultiFrameTensor((stacks[node],
-                                                   model_trace.nodes[node]['log_prob'] -
-                                                   guide_trace.nodes[node]['log_prob']))
-        nodes_included_in_sum = set([node])
-        downstream_guide_cost_nodes[node] = set([node])
-        # make more efficient by ordering children appropriately (higher children first)
-        children = [(k, -ordered_guide_nodes_dict[k]) for k in guide_trace.successors(node)]
-        sorted_children = sorted(children, key=itemgetter(1))
-        for child, _ in sorted_children:
-            child_cost_nodes = downstream_guide_cost_nodes[child]
-            downstream_guide_cost_nodes[node].update(child_cost_nodes)
-            if nodes_included_in_sum.isdisjoint(child_cost_nodes):  # avoid duplicates
-                downstream_costs[node].add(*downstream_costs[child].items())
-                # XXX nodes_included_in_sum logic could be more fine-grained, possibly leading
-                # to speed-ups in case there are many duplicates
-                nodes_included_in_sum.update(child_cost_nodes)
-        missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
-        # include terms we missed because we had to avoid duplicates
-        for missing_node in missing_downstream_costs:
-            downstream_costs[node].add((stacks[missing_node],
-                                        model_trace.nodes[missing_node]['log_prob'] -
-                                        guide_trace.nodes[missing_node]['log_prob']))
+    def charge_individual(paying_node, cost_node, model_term=True, guide_term=True):
 
-    # finish assembling complete downstream costs
-    # (the above computation may be missing terms from model)
-    for site in non_reparam_nodes:
-        children_in_model = set()
-        for node in downstream_guide_cost_nodes[site]:
-            children_in_model.update(model_trace.successors(node))
-        # remove terms accounted for above
-        children_in_model.difference_update(downstream_guide_cost_nodes[site])
-        for child in children_in_model:
-            assert (model_trace.nodes[child]["type"] == "sample")
-            downstream_costs[site].add((stacks[child],
-                                        model_trace.nodes[child]['log_prob']))
-            downstream_guide_cost_nodes[site].update([child])
+        log_prob = 0.0
+        if model_term:
+            log_prob = log_prob + model_trace.nodes[cost_node]['log_prob']
+            included_model_terms[paying_node].add(cost_node)
+        if guide_term:
+            log_prob = log_prob - guide_trace.nodes[cost_node]['log_prob']
+            included_guide_terms[paying_node].add(cost_node)
 
-    for k in non_reparam_nodes:
-        downstream_costs[k] = downstream_costs[k].sum_to(guide_trace.nodes[k]["cond_indep_stack"])
+        cost = MultiFrameTensor((stacks[cost_node], log_prob))
+        charge(paying_node, cost)
 
-    return downstream_costs, downstream_guide_cost_nodes
+    def attempt_charge_downstream(paying_node, cost_node):
+        # If no duplication, charge paying_node for the full
+        # downstream cost from cost_node. Return any terms that *may* still
+        # be needed
+        required_model_terms = included_model_terms[cost_node]
+        required_guide_terms = included_guide_terms[cost_node]
+
+        already_model_terms = included_model_terms[paying_node]
+        already_guide_terms = included_guide_terms[paying_node]
+
+        needs_all = (
+            required_model_terms.isdisjoint(already_model_terms) and
+            required_guide_terms.isdisjoint(already_guide_terms)
+        )
+
+        if needs_all:
+            charge(paying_node, downstream_costs[cost_node])
+            already_model_terms.update(required_model_terms)
+            already_guide_terms.update(required_guide_terms)
+            return set(), set()
+
+        return required_model_terms, required_guide_terms
+
+    # The processing proceeds from later to earlier nodes in the guide
+    guide_nodes = [x for x in guide_trace.topological_sort(reverse=True)
+                   if guide_trace.nodes[x]["type"] == "sample"]
+    guide_node_to_index = dict((i, n) for n, i in enumerate(guide_nodes))
+
+    # From later to earlier...
+    for node in guide_nodes:
+        charge_individual(node, node)
+        # Process downstream nodes from earlier to later to potentially reduce
+        # the number of operations
+        children = sorted(
+            guide_trace.successors(node),
+            key=lambda n: guide_node_to_index[n],
+            reverse=True
+        )
+        required_model_terms = set()
+        required_guide_terms = set()
+        for child in children:
+            # In the case of duplicates, reduce the chance of further collisions
+            # by deferring adding the missing terms
+            more_model_terms, more_guide_terms = attempt_charge_downstream(node, child)
+            required_model_terms.update(more_model_terms)
+            required_guide_terms.update(more_guide_terms)
+
+        # Add any missing terms
+        for missing_node in required_model_terms.difference(included_model_terms[node]):
+            charge_individual(node, missing_node, guide_term=False)
+        for missing_node in required_guide_terms.difference(included_guide_terms[node]):
+            charge_individual(node, missing_node, model_term=False)
+
+    # Add any missing terms for children in the model of downstream guide nodes.
+    # This includes observation nodes and terms that arise from the model
+    # and guide having different dependency structures.
+    for node in non_reparam_nodes:
+        possibly_missing_terms = set()
+        for downstream_node in included_guide_terms[node]:
+            possibly_missing_terms.update(model_trace.successors(downstream_node))
+        missing_model_terms = possibly_missing_terms.difference(included_model_terms[node])
+        [charge_individual(node, n, guide_term=False) for n in missing_model_terms]
+
+    # Collapse the conditionally independent stacks for needed costs
+    for node in non_reparam_nodes:
+        downstream_costs[node] = downstream_costs[node].sum_to(guide_trace.nodes[node]["cond_indep_stack"])
+
+    return downstream_costs, included_model_terms, included_guide_terms
 
 
 def _compute_elbo_reparam(model_trace, guide_trace):
@@ -285,7 +336,7 @@ class TraceGraph_ELBO(ELBO):
         # the following computations are only necessary if we have non-reparameterizable nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
         if non_reparam_nodes:
-            downstream_costs, _ = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
+            downstream_costs, _, _ = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
             surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(guide_trace,
                                                                            non_reparam_nodes,
                                                                            downstream_costs)

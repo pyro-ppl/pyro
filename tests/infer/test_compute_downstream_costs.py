@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import math
 
+from collections import defaultdict
+
 import pytest
 import torch
 
@@ -93,6 +95,13 @@ def big_model_guide(include_obs=True, include_single=False, include_inner_1=Fals
                             obs=torch.ones(d2.size()))
 
 
+def combine_terms(included_model_terms, included_guide_terms):
+    dc_nodes = defaultdict(set)
+    [dc_nodes[n].update(terms) for n, terms in included_model_terms.items()]
+    [dc_nodes[n].update(terms) for n, terms in included_guide_terms.items()]
+    return dc_nodes
+
+
 @pytest.mark.parametrize("include_inner_1", [True, False])
 @pytest.mark.parametrize("include_single", [True, False])
 @pytest.mark.parametrize("flip_c23", [True, False])
@@ -115,8 +124,9 @@ def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_
     guide_trace.compute_log_prob()
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
-    dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             non_reparam_nodes)
+    dc, included_model_terms, included_guide_terms = _compute_downstream_costs(model_trace, guide_trace,
+                                                                               non_reparam_nodes)
+    dc_nodes = combine_terms(included_model_terms, included_guide_terms)
 
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
                                                                      non_reparam_nodes)
@@ -235,8 +245,10 @@ def test_compute_downstream_costs_duplicates(dim):
 
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
-    dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             non_reparam_nodes)
+    dc, included_model_terms, included_guide_terms = _compute_downstream_costs(model_trace, guide_trace,
+                                                                               non_reparam_nodes)
+    dc_nodes = combine_terms(included_model_terms, included_guide_terms)
+
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
                                                                      non_reparam_nodes)
 
@@ -297,8 +309,10 @@ def test_compute_downstream_costs_plate_in_iplate(dim1):
 
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
 
-    dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             non_reparam_nodes)
+    dc, included_model_terms, included_guide_terms = _compute_downstream_costs(model_trace, guide_trace,
+                                                                               non_reparam_nodes)
+    dc_nodes = combine_terms(included_model_terms, included_guide_terms)
+
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace,
                                                                      non_reparam_nodes)
 
@@ -357,7 +371,11 @@ def test_compute_downstream_costs_iplate_in_plate(dim1, dim2):
     guide_trace.compute_log_prob()
 
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
-    dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
+
+    dc, included_model_terms, included_guide_terms = _compute_downstream_costs(model_trace, guide_trace,
+                                                                               non_reparam_nodes)
+    dc_nodes = combine_terms(included_model_terms, included_guide_terms)
+
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
 
     assert dc_nodes == dc_nodes_brute
@@ -413,8 +431,10 @@ def test_compute_downstream_costs_plate_reuse(dim1, dim2):
     guide_trace.compute_log_prob()
 
     non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
-    dc, dc_nodes = _compute_downstream_costs(model_trace, guide_trace,
-                                             non_reparam_nodes)
+    dc, included_model_terms, included_guide_terms = _compute_downstream_costs(model_trace, guide_trace,
+                                                                               non_reparam_nodes)
+    dc_nodes = combine_terms(included_model_terms, included_guide_terms)
+
     dc_brute, dc_nodes_brute = _brute_force_compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
     assert dc_nodes == dc_nodes_brute
 
