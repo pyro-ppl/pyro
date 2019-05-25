@@ -3,8 +3,11 @@ from __future__ import absolute_import, division, print_function
 import functools
 from collections import OrderedDict
 
+from opt_einsum import shared_intermediates
+
 import pyro.ops.packed as packed
 from pyro import poutine
+from pyro.infer.traceenum_elbo import TraceEnum_ELBO
 from pyro.ops.contract import contract_tensor_tree
 from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import MapRing, SampleRing
@@ -16,9 +19,9 @@ from pyro.util import jit_iter
 _RINGS = {0: MapRing, 1: SampleRing}
 
 
-def _make_ring(temperature, dim_to_size):
+def _make_ring(temperature, cache, dim_to_size):
     try:
-        return _RINGS[temperature](dim_to_size=dim_to_size)
+        return _RINGS[temperature](cache=cache, dim_to_size=dim_to_size)
     except KeyError:
         raise ValueError("temperature must be 0 (map) or 1 (sample) for now")
 
@@ -42,34 +45,56 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
     enum_trace = prune_subsample_sites(enum_trace)
     enum_trace.compute_log_prob()
     enum_trace.pack_tensors()
+
+    return _sample_posterior_from_trace(model, enum_trace, temperature, *args, **kwargs)
+
+
+def _sample_posterior_from_trace(model, enum_trace, temperature, *args, **kwargs):
     plate_to_symbol = enum_trace.plate_to_symbol
 
     # Collect a set of query sample sites to which the backward algorithm will propagate.
-    log_probs = OrderedDict()
     sum_dims = set()
     queries = []
     dim_to_size = {}
+    cost_terms = OrderedDict()
+    enum_terms = OrderedDict()
     for node in enum_trace.nodes.values():
         if node["type"] == "sample":
             ordinal = frozenset(plate_to_symbol[f.name]
                                 for f in node["cond_indep_stack"]
                                 if f.vectorized and f.size > 1)
-            log_prob = node["packed"]["log_prob"]
-            log_probs.setdefault(ordinal, []).append(log_prob)
+            log_prob = node["packed"]["unscaled_log_prob"]
             sum_dims.update(log_prob._pyro_dims)
-            dim_to_size.update(zip(log_prob._pyro_dims, log_prob.shape))
             for frame in node["cond_indep_stack"]:
                 if frame.vectorized and frame.size > 1:
                     sum_dims.remove(plate_to_symbol[frame.name])
+            if sum_dims.isdisjoint(log_prob._pyro_dims):
+                continue
+            dim_to_size.update(zip(log_prob._pyro_dims, log_prob.shape))
+            if node["infer"].get("_enumerate_dim") is None:
+                cost_terms.setdefault(ordinal, []).append(log_prob)
+            else:
+                enum_terms.setdefault(ordinal, []).append(log_prob)
             # Note we mark all sample sites with require_backward to gather
             # enumerated sites and adjust cond_indep_stack of all sample sites.
             if not node["is_observed"]:
                 queries.append(log_prob)
                 require_backward(log_prob)
 
+    # We take special care to match the term ordering in
+    # pyro.infer.traceenum_elbo._compute_model_factors() to allow
+    # contract_tensor_tree() to use shared_intermediates() inside
+    # TraceEnumSample_ELBO. The special ordering is: first all cost terms in
+    # order of model_trace, then all enum_terms in order of model trace.
+    log_probs = cost_terms
+    for ordinal, terms in enum_terms.items():
+        log_probs.setdefault(ordinal, []).extend(terms)
+
     # Run forward-backward algorithm, collecting the ordinal of each connected component.
-    ring = _make_ring(temperature, dim_to_size)
-    log_probs = contract_tensor_tree(log_probs, sum_dims, ring=ring)  # run forward algorithm
+    cache = getattr(enum_trace, "_sharing_cache", {})
+    ring = _make_ring(temperature, cache, dim_to_size)
+    with shared_intermediates(cache):
+        log_probs = contract_tensor_tree(log_probs, sum_dims, ring=ring)  # run forward algorithm
     query_to_ordinal = {}
     pending = object()  # a constant value for pending queries
     for query in queries:
@@ -96,7 +121,7 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
                 "cond_indep_stack": node["cond_indep_stack"],
                 "value": node["value"],
             }
-            log_prob = node["packed"]["log_prob"]
+            log_prob = node["packed"]["unscaled_log_prob"]
             if hasattr(log_prob, "_pyro_backward_result"):
                 # Adjust the cond_indep_stack.
                 ordinal = query_to_ordinal[log_prob]
@@ -160,3 +185,48 @@ def infer_discrete(fn=None, first_available_dim=None, temperature=1):
                                  first_available_dim=first_available_dim,
                                  temperature=temperature)
     return functools.partial(_sample_posterior, fn, first_available_dim, temperature)
+
+
+class TraceEnumSample_ELBO(TraceEnum_ELBO):
+    """
+    This extends :class:`TraceEnum_ELBO` to make it cheaper to sample from
+    discrete latent states during SVI.
+
+    The following are equivalent but the first is cheaper, sharing work
+    between the computations of ``loss`` and ``z``::
+
+        # Version 1.
+        elbo = TraceEnumSample_ELBO(max_plate_nesting=1)
+        loss = elbo.loss(*args, **kwargs)
+        z = elbo.sample_saved()
+
+        # Version 2.
+        elbo = TraceEnum_ELBO(max_plate_nesting=1)
+        loss = elbo.loss(*args, **kwargs)
+        guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
+        z = infer_discrete(poutine.replay(model, guide_trace),
+                           first_available_dim=-2)(*args, **kwargs)
+
+    """
+    def _get_trace(self, model, guide, *args, **kwargs):
+        model_trace, guide_trace = super(TraceEnumSample_ELBO, self)._get_trace(
+            model, guide, *args, **kwargs)
+
+        # Mark all sample sites with require_backward to gather enumerated
+        # sites and adjust cond_indep_stack of all sample sites.
+        for node in model_trace.nodes.values():
+            if node["type"] == "sample" and not node["is_observed"]:
+                log_prob = node["packed"]["unscaled_log_prob"]
+                require_backward(log_prob)
+
+        self._saved_state = model, model_trace, guide_trace, args, kwargs
+        return model_trace, guide_trace
+
+    def sample_saved(self):
+        """
+        Generate latent samples while reusing work from SVI.step().
+        """
+        model, model_trace, guide_trace, args, kwargs = self._saved_state
+        model = poutine.replay(model, guide_trace)
+        temperature = 1
+        return _sample_posterior_from_trace(model, model_trace, temperature, *args, **kwargs)
