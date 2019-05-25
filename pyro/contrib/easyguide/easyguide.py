@@ -11,8 +11,9 @@ from torch.distributions import biject_to
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+import pyro.poutine.runtime as runtime
 from pyro.distributions.util import sum_rightmost
-from pyro.poutine.util import site_is_subsample
+from pyro.poutine.util import prune_subsample_sites
 
 
 def numel(shape):
@@ -31,9 +32,13 @@ class EasyGuide(object):
     Base class for "easy guides".
 
     Derived classes should define a :meth:`guide` method. This :meth:`guide`
-    method can combine ordinary guide statements (like ``pyro.sample`` and
-    ``pyro.param``) with special ``self.sample()`` statements that cover
-    multiple ``pyro.sample`` sites in the model.
+    method can combine ordinary guide statements (e.g. ``pyro.sample`` and
+    ``pyro.param``) with the following special statements:
+
+    - ``group = self.group(...)`` selects multiple ``pyro.sample`` sites in the
+      model. See :class:`Group` for subsequent methods.
+    - ``with self.plate(...): ...`` should be used instead of ``pyro.plate``.
+    - ``self.map_estimate(...)`` uses a ``Delta`` guide for a single site.
 
     :param callable model: A Pyro model.
     """
@@ -41,23 +46,20 @@ class EasyGuide(object):
         self.model = model
         self.prototype_trace = None
         self.frames = {}
-        self.plate_sizes = {}
         self.groups = {}
         self.plates = {}
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
         self.prototype_trace = poutine.block(poutine.trace(self.model).get_trace)(*args, **kwargs)
+        self.prototype_trace = prune_subsample_sites(self.prototype_trace)
 
         for name, site in self.prototype_trace.iter_stochastic_nodes():
-            if site_is_subsample(site):
-                self.plate_sizes[name] = name
-            else:
-                for frame in site["cond_indep_stack"]:
-                    if frame.vectorized:
-                        self.frames[frame.name] = frame
-                    else:
-                        raise NotImplementedError("EasyGuide does not support sequential pyro.plate")
+            for frame in site["cond_indep_stack"]:
+                if frame.vectorized:
+                    self.frames[frame.name] = frame
+                else:
+                    raise NotImplementedError("EasyGuide does not support sequential pyro.plate")
 
     @abstractmethod
     def guide(self, *args, **kargs):
@@ -67,24 +69,23 @@ class EasyGuide(object):
         raise NotImplementedError
 
     def __call__(self, *args, **kwargs):
+        """
+        Runs the guide. This is typically used by inference algorithms.
+        """
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
         result = self.guide(*args, **kwargs)
         self.plates.clear()
         return result
 
-    def plate(self, name, size=None, subsample_size=None, *args, **kwargs):
+    def plate(self, name, size=None, subsample_size=None, subsample=None, *args, **kwargs):
         """
         A wrapper around :class:`pyro.plate` to allow `EasyGuide` to
         automatically construct plates. You should use this rather than
         :class:`pyro.plate` inside your :meth:`guide` implementation.
         """
         if name not in self.plates:
-            if size is None:
-                size = self.plate_sizes[name]
-            if subsample_size is None:
-                subsample_size = self.frames[name].size
-            self.plates[name] = pyro.plate(name, size, subsample_size, *args, **kwargs)
+            self.plates[name] = pyro.plate(name, size, subsample_size, subsample, *args, **kwargs)
         return self.plates[name]
 
     def group(self, match=".*"):
@@ -95,16 +96,15 @@ class EasyGuide(object):
         :return: A group of model sites.
         :rtype: Group
         """
-        if match not in self._groups:
+        if match not in self.groups:
             sites = [site
                      for name, site in self.prototype_trace.iter_stochastic_nodes()
-                     if re.match(match, name)
-                     if not site_is_subsample(site)]
+                     if re.match(match, name)]
             if not sites:
                 raise ValueError("EasyGuide.group() pattern {} matched no model sites"
                                  .format(repr(match)))
-            self._groups[match] = Group(self, sites)
-        return self._groups[match]
+            self.groups[match] = Group(self, sites)
+        return self.groups[match]
 
     def map_estimate(self, name):
         """
@@ -145,20 +145,14 @@ class Group(object):
             frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
             for site in sites))
 
-        # Compute grouped shape.
-        full_shape = [1] * max(-f.dim for f in self.frames)
-        batch_shape = [1] * max(-f.dim for f in self.frames)
-        event_shape = [1]
+        # Compute flattened concatenated event_shape.
+        event_shape = [0]
         for site in sites:
             site_event_size = numel(site["fn"].event_shape)
             site_batch_shape = list(site["fn"].batch_shape)
             for f in self.frames:
-                batch_shape[f.dim] = site_batch_shape[f.dim]
-                full_shape[f.dim] = self.guide.plate_sizes[f.name]
                 site_batch_shape[f.dim] = 1
             event_shape[0] += site_event_size * numel(site_batch_shape)
-        self.full_shape = tuple(full_shape)
-        self.batch_shape = tuple(batch_shape)
         self.event_shape = tuple(event_shape)
 
     @property
@@ -184,14 +178,16 @@ class Group(object):
 
         # Sample packed tensor.
         guide_z = pyro.sample(guide_name, fn, infer=infer)
+        batch_shape = guide_z.shape[:-1]
 
         model_zs = {}
         pos = 0
         for site in self.sites:
             # Extract slice from packed sample.
             fn = site["fn"]
-            size = numel(fn.shape)
+            size = numel(fn.event_shape)
             unconstrained_z = guide_z[..., pos: pos + size]
+            unconstrained_z = unconstrained_z.reshape(batch_shape + fn.event_shape)
             pos += size
 
             # Transform to constrained space.
@@ -204,7 +200,9 @@ class Group(object):
             # Replay model sample statement.
             with ExitStack() as stack:
                 for frame in site["cond_indep_stack"]:
-                    stack.enter_context(self.guide.plate(frame.name))
+                    plate = self.guide.plate(frame.name)
+                    if plate not in runtime._PYRO_STACK:
+                        stack.enter_context(plate)
                 model_zs[site["name"]] = pyro.sample(site["name"], delta_dist)
 
         return guide_z, model_zs
