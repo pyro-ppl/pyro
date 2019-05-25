@@ -122,50 +122,69 @@ def _compute_elbo_reparam(model_trace, guide_trace):
     return elbo, surrogate_elbo
 
 
+def _construct_baseline(node, guide_site, downstream_cost):
+
+    # XXX should the average baseline be in the param store as below?
+
+    baseline = 0.0
+    baseline_loss = 0.0
+
+    (nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta,
+        baseline_value) = _get_baseline_options(guide_site)
+
+    use_nn_baseline = nn_baseline is not None
+    use_baseline_value = baseline_value is not None
+
+    use_baseline = use_nn_baseline or use_decaying_avg_baseline or use_baseline_value
+
+    assert(not (use_nn_baseline and use_baseline_value)), \
+        "cannot use baseline_value and nn_baseline simultaneously"
+    if use_decaying_avg_baseline:
+        dc_shape = downstream_cost.shape
+        param_name = "__baseline_avg_downstream_cost_" + node
+        with torch.no_grad():
+            avg_downstream_cost_old = pyro.param(param_name,
+                                                 torch.zeros(dc_shape, device=guide_site['value'].device))
+            avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
+                baseline_beta * avg_downstream_cost_old
+        pyro.get_param_store()[param_name] = avg_downstream_cost_new
+        baseline += avg_downstream_cost_old
+    if use_nn_baseline:
+        # block nn_baseline_input gradients except in baseline loss
+        baseline += nn_baseline(detach_iterable(nn_baseline_input))
+    elif use_baseline_value:
+        # it's on the user to make sure baseline_value tape only points to baseline params
+        baseline += baseline_value
+    if use_nn_baseline or use_baseline_value:
+        # accumulate baseline loss
+        baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
+
+    if use_baseline:
+        if downstream_cost.shape != baseline.shape:
+            raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
+                node, downstream_cost.shape, baseline.shape))
+
+    return use_baseline, baseline_loss, baseline
+
+
 def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
     # construct all the reinforce-like terms.
     # we include only downstream costs to reduce variance
     # optionally include baselines to further reduce variance
-    # XXX should the average baseline be in the param store as below?
     surrogate_elbo = 0.0
     baseline_loss = 0.0
     for node in non_reparam_nodes:
         guide_site = guide_trace.nodes[node]
         downstream_cost = downstream_costs[node]
-        baseline = 0.0
-        (nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta,
-            baseline_value) = _get_baseline_options(guide_site)
-        use_nn_baseline = nn_baseline is not None
-        use_baseline_value = baseline_value is not None
-        assert(not (use_nn_baseline and use_baseline_value)), \
-            "cannot use baseline_value and nn_baseline simultaneously"
-        if use_decaying_avg_baseline:
-            dc_shape = downstream_cost.shape
-            param_name = "__baseline_avg_downstream_cost_" + node
-            with torch.no_grad():
-                avg_downstream_cost_old = pyro.param(param_name,
-                                                     torch.zeros(dc_shape, device=guide_site['value'].device))
-                avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
-                    baseline_beta * avg_downstream_cost_old
-            pyro.get_param_store()[param_name] = avg_downstream_cost_new
-            baseline += avg_downstream_cost_old
-        if use_nn_baseline:
-            # block nn_baseline_input gradients except in baseline loss
-            baseline += nn_baseline(detach_iterable(nn_baseline_input))
-        elif use_baseline_value:
-            # it's on the user to make sure baseline_value tape only points to baseline params
-            baseline += baseline_value
-        if use_nn_baseline or use_baseline_value:
-            # accumulate baseline loss
-            baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
+        score_function = guide_site["score_parts"].score_function
 
-        score_function_term = guide_site["score_parts"].score_function
-        if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
-            if downstream_cost.shape != baseline.shape:
-                raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
-                    node, downstream_cost.shape, baseline.shape))
-            downstream_cost = downstream_cost - baseline
-        surrogate_elbo += (score_function_term * downstream_cost.detach()).sum()
+        use_baseline, baseline_loss_term, baseline = _construct_baseline(node, guide_site, downstream_cost)
+
+        if use_baseline:
+            downstream_cost -= baseline
+            baseline_loss += baseline_loss_term
+
+        surrogate_elbo += (score_function * downstream_cost.detach()).sum()
 
     return surrogate_elbo, baseline_loss
 
