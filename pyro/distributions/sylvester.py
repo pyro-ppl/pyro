@@ -93,7 +93,7 @@ class SylvesterFlow(HouseholderFlow):
 
         return partial_Q
 
-    # NOTE: self.u_unnormed is initialized in parent class
+    # Self.u_unnormed is initialized in parent class
     def reset_parameters2(self):
         for v in [self.b, self.R_diag, self.S_diag, self.R_dense, self.S_dense]:
             v.data.uniform_(-0.01, 0.01)
