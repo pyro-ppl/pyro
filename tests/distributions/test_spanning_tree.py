@@ -8,10 +8,8 @@ import pytest
 import torch
 
 import pyro
-from pyro.distributions.spanning_tree import (NUM_SPANNING_TREES, SpanningTree, make_complete_graph, sample_tree_approx,
-                                              sample_tree_mcmc)
+from pyro.distributions.spanning_tree import NUM_SPANNING_TREES, SpanningTree, make_complete_graph, sample_tree
 from tests.common import assert_equal, xfail_if_not_implemented
-
 
 pytestmark = pytest.mark.skipif("CUDA_TEST" in os.environ, reason="spanning_tree unsupported on CUDA.")
 
@@ -43,7 +41,7 @@ def test_sample_tree_mcmc_smoke(num_edges, backend):
     edge_logits = torch.rand(K)
     edges = torch.tensor([(v, v + 1) for v in range(V - 1)], dtype=torch.long)
     for _ in range(10 if backend == "cpp" or num_edges <= 30 else 1):
-        edges = sample_tree_mcmc(edge_logits, edges, backend=backend)
+        edges = sample_tree(edge_logits, edges, backend=backend)
 
 
 @pytest.mark.filterwarnings("always")
@@ -56,7 +54,7 @@ def test_sample_tree_approx_smoke(num_edges, backend):
     K = V * (V - 1) // 2
     edge_logits = torch.rand(K)
     for _ in range(10 if backend == "cpp" or num_edges <= 30 else 1):
-        sample_tree_approx(edge_logits, backend=backend)
+        sample_tree(edge_logits, backend=backend)
 
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6])
@@ -138,12 +136,12 @@ def test_sample_tree_gof(method, backend, num_edges, pattern):
     counts = Counter()
     tensors = {}
     # Initialize using approximate sampler, to ensure feasibility.
-    edges = sample_tree_approx(edge_logits, backend=backend)
+    edges = sample_tree(edge_logits, backend=backend)
     for _ in range(num_samples):
         if method == "approx":
             # Reset the chain with an approximate sample, then perform 1 step of mcmc.
-            edges = sample_tree_approx(edge_logits, backend=backend)
-        edges = sample_tree_mcmc(edge_logits, edges, backend=backend)
+            edges = sample_tree(edge_logits, backend=backend)
+        edges = sample_tree(edge_logits, edges, backend=backend)
         key = tuple((v1.item(), v2.item()) for v1, v2 in edges)
         counts[key] += 1
         tensors[key] = edges

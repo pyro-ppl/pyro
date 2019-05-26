@@ -115,20 +115,21 @@ def autocorrelation(input, dim=0):
 
     # centering and padding x
     centered_signal = input - input.mean(dim=-1, keepdim=True)
-    pad = torch.zeros(input.shape[:-1] + (M2 - N,), dtype=input.dtype)
+    pad = torch.zeros(input.shape[:-1] + (M2 - N,), dtype=input.dtype, device=input.device)
     centered_signal = torch.cat([centered_signal, pad], dim=-1)
 
     # Fourier transform
     freqvec = torch.rfft(centered_signal, signal_ndim=1, onesided=False)
     # take square of magnitude of freqvec (or freqvec x freqvec*)
     freqvec_gram = freqvec.pow(2).sum(-1, keepdim=True)
-    freqvec_gram = torch.cat([freqvec_gram, torch.zeros(freqvec_gram.shape, dtype=input.dtype)], dim=-1)
+    freqvec_gram = torch.cat([freqvec_gram, torch.zeros(freqvec_gram.shape, dtype=input.dtype,
+                                                        device=input.device)], dim=-1)
     # inverse Fourier transform
     autocorr = torch.irfft(freqvec_gram, signal_ndim=1, onesided=False)
 
     # truncate and normalize the result, then transpose back to original shape
     autocorr = autocorr[..., :N]
-    autocorr = autocorr / torch.tensor(range(N, 0, -1), dtype=input.dtype)
+    autocorr = autocorr / torch.tensor(range(N, 0, -1), dtype=input.dtype, device=input.device)
     autocorr = autocorr / autocorr[..., :1]
     return autocorr.transpose(dim, -1)
 

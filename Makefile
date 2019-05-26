@@ -39,7 +39,7 @@ test: lint docs doctest FORCE
 	pytest -vx -n auto --stage unit
 
 test-examples: lint FORCE
-	pytest -vx -n auto --stage test_examples
+	pytest -vx --stage test_examples
 
 test-tutorials: lint FORCE
 	grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \

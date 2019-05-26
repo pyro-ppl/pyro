@@ -420,7 +420,7 @@ def sample_tree_approx(edge_logits, backend="python"):
 def sample_tree(edge_logits, init_edges=None, mcmc_steps=1, backend="python"):
     edges = init_edges
     if edges is None:
-        edges = sample_tree_approx(backend=backend)
+        edges = sample_tree_approx(edge_logits, backend=backend)
     for step in range(mcmc_steps):
         edges = sample_tree_mcmc(edge_logits, edges, backend=backend)
     return edges
