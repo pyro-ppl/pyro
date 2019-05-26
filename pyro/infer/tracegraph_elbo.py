@@ -69,7 +69,7 @@ def _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes):
             log_prob -= guide_trace.nodes[cost_node]['log_prob']
             included_guide_terms[paying_node].add(cost_node)
 
-        cost = MultiFrameTensor((stacks[paying_node], log_prob))
+        cost = MultiFrameTensor((stacks[cost_node], log_prob))
         charge(paying_node, cost)
 
     def attempt_charge_downstream(paying_node, cost_node):
@@ -119,19 +119,14 @@ def _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes):
             required_model_terms.update(more_model_terms)
             required_guide_terms.update(more_guide_terms)
 
+        # Require terms for children in the model
+        required_model_terms.update(model_trace.successors(node))
+
         # Add any missing terms
         for missing_node in required_model_terms.difference(included_model_terms[node]):
             charge_individual(node, missing_node, guide_term=False)
         for missing_node in required_guide_terms.difference(included_guide_terms[node]):
             charge_individual(node, missing_node, model_term=False)
-
-    # Add any missing terms for children in the model of downstream guide nodes
-    for node in non_reparam_nodes:
-        possibly_missing_terms = set()
-        for downstream_node in included_guide_terms[node]:
-            possibly_missing_terms.update(model_trace.successors(downstream_node))
-        missing_model_terms = possibly_missing_terms.difference(included_model_terms[node])
-        [charge_individual(node, n, guide_term=False) for n in missing_model_terms]
 
     # Collapse the conditionally independent stacks for needed costs
     for node in non_reparam_nodes:
