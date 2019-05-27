@@ -262,6 +262,13 @@ RadialFlow
     :undoc-members:
     :show-inheritance:
 
+SylvesterFlow
+-------------
+.. autoclass:: pyro.distributions.SylvesterFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 TransformModule
 ---------------
 .. autoclass:: pyro.distributions.TransformModule
