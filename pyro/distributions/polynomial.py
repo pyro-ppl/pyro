@@ -1,12 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
 import math
-import sys
 
 import torch
 import torch.nn as nn
 from torch.distributions import constraints
-import torch.nn.functional as F
 
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
@@ -20,9 +18,9 @@ class PolynomialFlow(TransformModule):
         :math:`y_n = c_n + \\int^{x_n}_0\\sum^K_{k=1}\\left(\\sum^R_{r=0}a^{(n)}_{r,k}u^r\\right)du`
 
     where :math:`x_n` is the :math:`n`th input, :math:`y_n` is the :math:`n`th output, and :math:`c_n\\in\\mathbb{R}`,
-    :math:`\\left{a^{(n)}_{r,k}\\in\\mathbb{R}\\right}` are learnable parameters that are the output of an autoregressive
-    NN inputting :math:`x_{\\prec n}={x_1,x_2,\\ldots,x_{n-1}}`.
-    
+    :math:`\\left{a^{(n)}_{r,k}\\in\\mathbb{R}\\right}` are learnable parameters that are the output of an
+    autoregressive NN inputting :math:`x_{\\prec n}={x_1,x_2,\\ldots,x_{n-1}}`.
+
     Together with `TransformedDistribution` this provides a way to create richer variational approximations.
 
     Example usage:
@@ -78,18 +76,16 @@ class PolynomialFlow(TransformModule):
         self.reset_parameters()
 
         # Vector of powers of input dimension
-        powers = torch.arange(1, count_degree+2, dtype=torch.get_default_dtype())
+        powers = torch.arange(1, count_degree + 2, dtype=torch.get_default_dtype())
         self.register_buffer('powers', powers)
 
         # Build mask of constants
-        mask = torch.zeros(count_degree+1, count_degree+1)
-        for jdx in range(count_degree+1):
-            mask.data[jdx] = self.powers+jdx
+        mask = torch.zeros(count_degree + 1, count_degree + 1)
+        for jdx in range(count_degree + 1):
+            mask.data[jdx] = self.powers + jdx
         power_mask = mask
         mask = mask.reciprocal()
 
-        #print(mask)
-        #sys.exit(0)
         self.register_buffer('power_mask', power_mask)
         self.register_buffer('mask', mask)
 
@@ -107,37 +103,22 @@ class PolynomialFlow(TransformModule):
         """
         # Calculate the polynomial coefficients
         # ~ (batch_size, count_sum, count_degree+1, input_dim)
-        A = self.arn(x).view(-1, self.count_sum, self.count_degree+1, self.input_dim)
-        #print('A', A.size())
+        A = self.arn(x).view(-1, self.count_sum, self.count_degree + 1, self.input_dim)
 
         # Take cross product of coefficients across degree dim
         # ~ (batch_size, count_sum, count_degree+1, count_degree+1, input_dim)
-        # TODO: Verify that this is calculating cross product!
         coefs = A.unsqueeze(-2) * A.unsqueeze(-3)
-        #print('coefs', coefs.size())
 
         # Calculate output as sum-of-squares polynomial
         x_view = x.view(-1, 1, 1, self.input_dim)
-        #print('x_view', x_view.size())
-        #print('power_mask', self.power_mask.size())
         x_pow_matrix = x_view.pow(self.power_mask.unsqueeze(-1)).unsqueeze(-4)
-        #print('x_pow_matrix', x_pow_matrix.size())
-
-        #u = x[0,0]
-        #print(x_pow_matrix[0,:,:,:,0])
-        #print(u, u**2, u**3, u**4, u**5)
 
         # NOTE: The view_as is necessary because the batch dimensions were collapsed previously
-        y = self.c + (coefs * x_pow_matrix * self.mask.unsqueeze(-1)).sum((1,2,3)).view_as(x)
+        y = self.c + (coefs * x_pow_matrix * self.mask.unsqueeze(-1)).sum((1, 2, 3)).view_as(x)
 
-        #print('y', y.size())
-        #print('mask', self.mask.size(), self.mask)
-        
-        x_pow_matrix = x_view.pow(self.power_mask.unsqueeze(-1)-1).unsqueeze(-4)
-        #print(x_pow_matrix.size())
+        x_pow_matrix = x_view.pow(self.power_mask.unsqueeze(-1) - 1).unsqueeze(-4)
+        self._cached_logDetJ = torch.log((coefs * x_pow_matrix).sum((1, 2, 3)).view_as(x) + 1e-8).sum(-1)
 
-        self._cached_logDetJ = torch.log((coefs * x_pow_matrix).sum((1,2,3)).view_as(x) + 1e-8).sum(-1)
-    
         return y
 
     def _inverse(self, y):
@@ -154,6 +135,6 @@ class PolynomialFlow(TransformModule):
 
     def log_abs_det_jacobian(self, x, y):
         """
-        Calculates the elementwise determinant of the log jacobian
+        Calculates the elementwise determinant of the log Jacobian
         """
         return self._cached_logDetJ
