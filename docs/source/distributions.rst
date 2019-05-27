@@ -248,6 +248,13 @@ PlanarFlow
     :undoc-members:
     :show-inheritance:
 
+PolynomialFlow
+--------------
+.. autoclass:: pyro.distributions.PolynomialFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 RadialFlow
 ----------
 .. autoclass:: pyro.distributions.RadialFlow
