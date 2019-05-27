@@ -85,10 +85,12 @@ class PolynomialFlow(TransformModule):
         mask = torch.zeros(count_degree+1, count_degree+1)
         for jdx in range(count_degree+1):
             mask.data[jdx] = self.powers+jdx
+        power_mask = mask
         mask = mask.reciprocal()
 
         #print(mask)
         #sys.exit(0)
+        self.register_buffer('power_mask', power_mask)
         self.register_buffer('mask', mask)
 
     def reset_parameters(self):
@@ -109,23 +111,34 @@ class PolynomialFlow(TransformModule):
         #print('A', A.size())
 
         # Take cross product of coefficients across degree dim
+        # ~ (batch_size, count_sum, count_degree+1, count_degree+1, input_dim)
         # TODO: Verify that this is calculating cross product!
         coefs = A.unsqueeze(-2) * A.unsqueeze(-3)
         #print('coefs', coefs.size())
 
         # Calculate output as sum-of-squares polynomial
-        x_view = x.view(-1, self.input_dim, 1)
-        x_pow = x_view.pow(self.powers)
+        x_view = x.view(-1, 1, 1, self.input_dim)
+        #print('x_view', x_view.size())
+        #print('power_mask', self.power_mask.size())
+        x_pow_matrix = x_view.pow(self.power_mask.unsqueeze(-1)).unsqueeze(-4)
+        #print('x_pow_matrix', x_pow_matrix.size())
 
-        print('x_pow', x_pow.size())
-        sys.exit(0)
+        #u = x[0,0]
+        #print(x_pow_matrix[0,:,:,:,0])
+        #print(u, u**2, u**3, u**4, u**5)
 
-        # TODO: Resize output back to x, since the resize in A may have destroyed batch
-        # dimentions!
+        # NOTE: The view_as is necessary because the batch dimensions were collapsed previously
+        y = self.c + (coefs * x_pow_matrix * self.mask.unsqueeze(-1)).sum((1,2,3)).view_as(x)
 
-        self._cached_logDetJ = ((self.input_dim - 1) * torch.log1p(beta_h) +
-                                torch.log1p(beta_h + beta * h_prime * r)).sum(-1)
-        return x + beta_h * diff
+        #print('y', y.size())
+        #print('mask', self.mask.size(), self.mask)
+        
+        x_pow_matrix = x_view.pow(self.power_mask.unsqueeze(-1)-1).unsqueeze(-4)
+        #print(x_pow_matrix.size())
+
+        self._cached_logDetJ = torch.log((coefs * x_pow_matrix).sum((1,2,3)).view_as(x) + 1e-8).sum(-1)
+    
+        return y
 
     def _inverse(self, y):
         """
