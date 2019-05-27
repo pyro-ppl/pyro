@@ -137,12 +137,7 @@ def _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes):
     for node in non_reparam_nodes:
         downstream_costs[node] = downstream_costs[node].sum_to(guide_trace.nodes[node]["cond_indep_stack"])
 
-    # Combine the included guide and model nodes for backward compatibility with tests
-    nodes_included = defaultdict(lambda: set())
-    [nodes_included[n].update(terms) for n, terms in included_model_terms.items()]
-    [nodes_included[n].update(terms) for n, terms in included_guide_terms.items()]
-
-    return downstream_costs, nodes_included
+    return downstream_costs, included_model_terms, included_guide_terms
 
 
 def _compute_elbo_reparam(model_trace, guide_trace):
@@ -336,7 +331,7 @@ class TraceGraph_ELBO(ELBO):
         # the following computations are only necessary if we have non-reparameterizable nodes
         non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
         if non_reparam_nodes:
-            downstream_costs, _ = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
+            downstream_costs, _, _ = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
             surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(guide_trace,
                                                                            non_reparam_nodes,
                                                                            downstream_costs)
