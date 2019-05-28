@@ -24,9 +24,8 @@ def model(batch, subsample, full_size):
         for t in range(num_time_steps):
             z = pyro.sample("state_{}".format(t),
                             dist.Normal(z, drift))
-            result[t] = pyro.sample("obs_{}".format(t),
-                                   dist.Bernoulli(logits=z),
-                                   obs=batch[t])
+            result[t] = pyro.sample("obs_{}".format(t), dist.Bernoulli(logits=z),
+                                    obs=batch[t])
     return torch.stack(result)
 
 
