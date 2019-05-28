@@ -32,6 +32,9 @@ class EasyGuide(object):
     - ``with self.plate(...): ...`` should be used instead of ``pyro.plate``.
     - ``self.map_estimate(...)`` uses a ``Delta`` guide for a single site.
 
+    Derived classes may also override the :meth:`init` method to provide custom
+    initialization for models sites.
+
     :param callable model: A Pyro model.
     """
     def __init__(self, model):
@@ -49,10 +52,9 @@ class EasyGuide(object):
 
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             for frame in site["cond_indep_stack"]:
-                if frame.vectorized:
-                    self.frames[frame.name] = frame
-                else:
+                if not frame.vectorized:
                     raise NotImplementedError("EasyGuide does not support sequential pyro.plate")
+                self.frames[frame.name] = frame
 
     @abstractmethod
     def guide(self, *args, **kargs):
@@ -64,6 +66,14 @@ class EasyGuide(object):
     def init(self, site):
         """
         Model initialization method, may be overridden by user.
+
+        This should input a site and output a valid sample from that site.
+        The default behavior is to draw a random sample::
+
+            return site["fn"]()
+
+        For other possible initialization functions see
+        http://docs.pyro.ai/en/stable/contrib.autoguide.html#module-pyro.contrib.autoguide.initialization
         """
         return site["fn"]()
 
@@ -115,14 +125,24 @@ class EasyGuide(object):
         """
         site = self.prototype_trace.nodes[name]
         fn = site["fn"]
+        param_name = "auto_{}".format(name)
+        init_value = None
+        if param_name not in pyro.get_param_store():
+            init_value = site["value"].detach()
         with ExitStack() as stack:
             for frame in site["cond_indep_stack"]:
-                if frame.vectorized:
-                    stack.enter_context(self.plate(frame.name))
-            value = pyro.param("auto_{}".format(name),
-                               site["value"].detach(),
-                               constraint=fn.support,
-                               event_dim=fn.event_dim)
+                plate = self.plate(frame.name)
+                if plate not in runtime._PYRO_STACK:
+                    stack.enter_context(plate)
+                elif init_value is not None and plate.subsample_size < plate.size:
+                    # Repeat the init_value to full size.
+                    dim = plate.dim - fn.event_dim
+                    assert init_value.size(dim) == plate.subsample_size
+                    ind = torch.arange(plate.size, device=init_value.device)
+                    ind = ind % plate.subsample_size
+                    init_value = init_value.index_select(dim, ind)
+            value = pyro.param(param_name, init_value,
+                               constraint=fn.support, event_dim=fn.event_dim)
             return pyro.sample(name, dist.Delta(value, event_dim=fn.event_dim))
 
 
@@ -131,8 +151,8 @@ class Group(object):
     An autoguide helper to match a group of model sites.
 
     :ivar list sites: A list of all matching sample sites in the model.
-    :ivar tuple event_shape: The total flattened concatenated shape of
-        all matching sample sites in the model.
+    :ivar torch.Size event_shape: The total flattened concatenated shape of all
+        matching sample sites in the model.
     :param EasyGuide guide: An easyguide instance.
     :param list sites: A list of model sites.
     """
@@ -156,7 +176,7 @@ class Group(object):
             for f in self.frames:
                 site_batch_shape[f.dim] = 1
             event_shape[0] += site_event_size * torch.Size(site_batch_shape).numel()
-        self.event_shape = tuple(event_shape)
+        self.event_shape = torch.Size(event_shape)
 
     @property
     def guide(self):
@@ -217,7 +237,7 @@ class Group(object):
         :return: A dict mapping model site name to sampled value.
         :rtype: dict
         """
-        return {site["name"]: self.guide.optimize(site["name"])
+        return {site["name"]: self.guide.map_estimate(site["name"])
                 for site in self.sites}
 
 
