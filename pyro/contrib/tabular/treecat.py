@@ -49,8 +49,8 @@ class TreeCat(object):
         self._feature_guide = AutoDelta(poutine.block(
             self.model, hide_fn=lambda msg: msg["name"].startswith("treecat_")))
         self._edge_guide = _EdgeGuide(capacity=capacity, edges=edges, annealing_rate=annealing_rate)
-        self._vertex_prior = torch.full((M,), 0.5)
-        self._edge_prior = torch.full((M * M,), 0.5 / M)
+        self._vertex_prior = torch.full((M,), 1.)
+        self._edge_prior = torch.full((M * M,), 1. / M)
         self._saved_z = None
 
         self.edges = edges
@@ -196,6 +196,12 @@ class TreeCat(object):
             pyro.sample("treecat_edge_probs",
                         dist.Delta(edge_probs.to(device), event_dim=1))
 
+    def trainer(self, optim=None, backend="python"):
+        """
+        Creates a :class:`TreeCatTrainer` object for training.
+        """
+        return TreeCatTrainer(self, optim, backend)
+
     def impute(self, data, num_samples=None):
         """
         Impute missing columns in data.
@@ -220,9 +226,6 @@ class TreeCat(object):
         model = infer_discrete(model, first_available_dim=first_available_dim)
         return model(data, impute=True)
 
-    def trainer(self, optim=None, backend="python"):
-        return TreeCatTrainer(self, optim, backend)
-
 
 class TreeCatTrainer(object):
     """
@@ -238,10 +241,11 @@ class TreeCatTrainer(object):
         assert isinstance(model, TreeCat)
         if optim is None:
             optim = Adam({})
+        self.backend = backend
         self._elbo = TraceEnumSample_ELBO(max_plate_nesting=1)
         self._svi = SVI(model.model, model.guide, optim, self._elbo)
         self._model = model
-        self.backend = backend
+        self._initialized = False
 
     def init(self, data, init_groups=True):
         assert len(data) == len(self._model.features)
@@ -250,8 +254,12 @@ class TreeCatTrainer(object):
                 feature.init(column)
         if init_groups:
             self._elbo.loss(self._model.model, self._model.guide, data)
+        self._initialized = True
 
     def step(self, data, num_rows=None):
+        if not self._initialized:
+            self.init(data)
+
         # Perform a gradient optimizer step to learn parameters.
         loss = self._svi.step(data, num_rows=num_rows)
 
@@ -293,9 +301,9 @@ class _EdgeGuide(object):
         self.annealing_rate = annealing_rate
         self._grid = make_complete_graph(V)
 
-        # Use a Jeffreys prior on vertices, forcing a sparse prior on edges.
-        self._vertex_prior = 0.5  # A uniform Dirichlet of shape (M,).
-        self._edge_prior = 0.5 / M  # A uniform Dirichlet of shape (M,M).
+        # Use a uniform prior on vertices, forcing a sparse prior on edges.
+        self._vertex_prior = 1.  # A uniform Dirichlet of shape (M,).
+        self._edge_prior = 1. / M  # A uniform Dirichlet of shape (M,M).
 
         # Initialize stats to a single pseudo-observation.
         self._count_stats = 1.
