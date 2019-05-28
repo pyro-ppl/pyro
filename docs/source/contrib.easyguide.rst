@@ -23,7 +23,3 @@ Group
     :undoc-members:
     :show-inheritance:
     :member-order: bysource
-
-numel
------
-.. autofunction:: pyro.contrib.easyguide.easyguide.numel

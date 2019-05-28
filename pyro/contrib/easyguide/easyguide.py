@@ -7,6 +7,7 @@ from abc import ABCMeta, abstractmethod
 from contextlib2 import ExitStack
 from six import add_metaclass
 from torch.distributions import biject_to
+import torch
 
 import pyro
 import pyro.distributions as dist
@@ -14,16 +15,7 @@ import pyro.poutine as poutine
 import pyro.poutine.runtime as runtime
 from pyro.distributions.util import sum_rightmost
 from pyro.poutine.util import prune_subsample_sites
-
-
-def numel(shape):
-    """
-    Computes the total number of elements of a given tensor shape.
-    """
-    result = 1
-    for size in shape:
-        result *= size
-    return result
+from pyro.contrib.autoguide.initialization import InitMessenger
 
 
 @add_metaclass(ABCMeta)
@@ -51,7 +43,8 @@ class EasyGuide(object):
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
-        self.prototype_trace = poutine.block(poutine.trace(self.model).get_trace)(*args, **kwargs)
+        model = InitMessenger(self.init)(self.model)
+        self.prototype_trace = poutine.block(poutine.trace(model).get_trace)(*args, **kwargs)
         self.prototype_trace = prune_subsample_sites(self.prototype_trace)
 
         for name, site in self.prototype_trace.iter_stochastic_nodes():
@@ -67,6 +60,12 @@ class EasyGuide(object):
         Guide implementation, to be overridden by user.
         """
         raise NotImplementedError
+
+    def init(self, site):
+        """
+        Model initialization method, may be overridden by user.
+        """
+        return site["fn"]()
 
     def __call__(self, *args, **kwargs):
         """
@@ -131,10 +130,14 @@ class Group(object):
     """
     An autoguide helper to match a group of model sites.
 
+    :ivar list sites: A list of all matching sample sites in the model.
+    :ivar tuple event_shape: The total flattened concatenated shape of
+        all matching sample sites in the model.
     :param EasyGuide guide: An easyguide instance.
     :param list sites: A list of model sites.
     """
     def __init__(self, guide, sites):
+        assert isinstance(sites, list)
         assert sites
         self._guide = weakref.ref(guide)
         self.sites = sites
@@ -148,11 +151,11 @@ class Group(object):
         # Compute flattened concatenated event_shape.
         event_shape = [0]
         for site in sites:
-            site_event_size = numel(site["fn"].event_shape)
+            site_event_size = torch.Size(site["fn"].event_shape).numel()
             site_batch_shape = list(site["fn"].batch_shape)
             for f in self.frames:
                 site_batch_shape[f.dim] = 1
-            event_shape[0] += site_event_size * numel(site_batch_shape)
+            event_shape[0] += site_event_size * torch.Size(site_batch_shape).numel()
         self.event_shape = tuple(event_shape)
 
     @property
@@ -185,7 +188,7 @@ class Group(object):
         for site in self.sites:
             # Extract slice from packed sample.
             fn = site["fn"]
-            size = numel(fn.event_shape)
+            size = torch.Size(fn.event_shape).numel()
             unconstrained_z = guide_z[..., pos: pos + size]
             unconstrained_z = unconstrained_z.reshape(batch_shape + fn.event_shape)
             pos += size
