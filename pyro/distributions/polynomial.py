@@ -43,7 +43,7 @@ class PolynomialFlow(TransformModule):
     polynomial flow can be scored.
 
     :param autoregressive_nn: an autoregressive neural network whose forward call returns a tensor of real-valued
-    numbers of size (batch_size, (count_degree+1)*count_sum, input_dim)
+        numbers of size (batch_size, (count_degree+1)*count_sum, input_dim)
     :type autoregressive_nn: nn.Module
     :param count_degree: The degree of the polynomial to use for each element-wise transformation.
     :type count_degree: int
