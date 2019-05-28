@@ -54,7 +54,6 @@ class PolynomialFlow(TransformModule):
 
     Sum-of-squares polynomial flow. [arXiv:1905.02325]
     Priyank Jaini, Kira A. Shelby, Yaoliang Yu
-
     """
 
     domain = constraints.real
