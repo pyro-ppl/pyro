@@ -224,11 +224,13 @@ class TraceEnumSample_ELBO(TraceEnum_ELBO):
         self._saved_state = model, model_trace, guide_trace, args, kwargs
         return model_trace, guide_trace
 
-    def sample_saved(self):
+    def sample_saved(self, retain=False):
         """
         Generate latent samples while reusing work from SVI.step().
         """
         model, model_trace, guide_trace, args, kwargs = self._saved_state
+        if not retain:
+            del self._saved_state
         model = poutine.replay(model, guide_trace)
         temperature = 1
         return _sample_posterior_from_trace(model, model_trace, temperature, *args, **kwargs)
