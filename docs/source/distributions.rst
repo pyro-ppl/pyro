@@ -192,6 +192,13 @@ BatchNormTransform
     :undoc-members:
     :show-inheritance:
 
+BlockNAFFlow
+------------
+.. autoclass:: pyro.distributions.BlockNAFFlow
+    :members:
+    :undoc-members
+    :show-inheritance:
+
 DeepELUFlow
 -----------
 .. autoclass:: pyro.distributions.DeepELUFlow
