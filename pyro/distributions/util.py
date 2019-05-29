@@ -60,8 +60,9 @@ def is_identically_zero(x):
     """
     if isinstance(x, numbers.Number):
         return x == 0
-    elif isinstance(x, torch.Tensor) and x.dtype == torch.int64 and not x.shape:
-        return x.item() == 0
+    if not torch._C._get_tracing_state():
+        if isinstance(x, torch.Tensor) and x.dtype == torch.int64 and not x.shape:
+            return x.item() == 0
     return False
 
 
@@ -72,8 +73,9 @@ def is_identically_one(x):
     """
     if isinstance(x, numbers.Number):
         return x == 1
-    elif isinstance(x, torch.Tensor) and x.dtype == torch.int64 and not x.shape:
-        return x.item() == 1
+    if not torch._C._get_tracing_state():
+        if isinstance(x, torch.Tensor) and x.dtype == torch.int64 and not x.shape:
+            return x.item() == 1
     return False
 
 
@@ -182,13 +184,12 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
     :param mask: an optional masking tensor
     :type mask: torch.ByteTensor or None
     """
-    if not torch._C._get_tracing_state():
-        if is_identically_zero(tensor) or (mask is None and is_identically_one(scale)):
-            return tensor
+    if is_identically_zero(tensor) or (mask is None and is_identically_one(scale)):
+        return tensor
     if mask is None:
         return tensor * scale
     tensor, mask = broadcast_all(tensor, mask)
-    tensor = tensor * scale
+    tensor = tensor * scale  # triggers a copy, avoiding in-place op errors
     tensor.masked_fill_(mask == 0, 0.)
     return tensor
 
