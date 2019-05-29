@@ -242,7 +242,7 @@ class TreeCatTrainer(object):
     :param str backend: Either "python" or "cpp". Defaults to "python". The
         "cpp" backend is much faster for data with more than ~10 features.
     """
-    def __init__(self, model, optim=None, backend="python"):
+    def __init__(self, model, optim=None, backend="cpp"):
         assert isinstance(model, TreeCat)
         if optim is None:
             optim = Adam({})
@@ -252,7 +252,7 @@ class TreeCatTrainer(object):
         self._model = model
         self._initialized = False
 
-    def init(self, data, mask=True, init_groups=True):
+    def init(self, data, mask=True, init_groups=False):
         assert len(data) == len(self._model.features)
         if mask is True:
             mask = [True] * len(data)
