@@ -85,11 +85,13 @@ class TreeCat(object):
             self._edge_index[v1, v2] = e
             self._edge_index[v2, v1] = e
 
-    def model(self, data, num_rows=None, impute=False):
+    def model(self, data, mask=True, num_rows=None, impute=False):
         """
         :param list data: batch of heterogeneous column-oriented data.  Each
             column should be either a torch.Tensor (if observed) or None (if
             unobserved).
+        :param list mask: optional batch of column-oriented masks for partially
+            observed data. True means observed, False means missing.
         :param int num_rows: Optional number of rows in entire dataset, if data
             is is a minibatch.
         :param bool impute: Whether to impute missing features. This should be
@@ -100,6 +102,8 @@ class TreeCat(object):
         """
         assert len(data) == len(self.features)
         assert not all(column is None for column in data)
+        if mask is True:
+            mask = [True] * len(data)
         device = next(col.device for col in data if col is not None)
         batch_size = next(col.size(0) for col in data if col is not None)
         if num_rows is None:
@@ -135,13 +139,13 @@ class TreeCat(object):
             z = [None] * V
             x = [None] * V
             v = self._root
-            self._propagate(data, impute, mixtures, vertex_probs, edge_probs, z, x, v)
+            self._propagate(data, mask, impute, mixtures, vertex_probs, edge_probs, z, x, v)
 
         self._saved_z = z
         return x
 
     @poutine.markov
-    def _propagate(self, data, impute, mixtures, vertex_probs, edge_probs, z, x, v):
+    def _propagate(self, data, mask, impute, mixtures, vertex_probs, edge_probs, z, x, v):
         # Determine the upstream parent v0 and all downstream children.
         v0 = None
         children = []
@@ -167,16 +171,17 @@ class TreeCat(object):
                            infer={"enumerate": "parallel"}).cpu()
 
         # Sample observed features conditioned on latent classes.
-        if data[v] is not None or impute:
-            x[v] = pyro.sample("treecat_x_{}".format(v),
-                               self.features[v].value_dist(mixtures[v], component=z[v]),
-                               obs=data[v])
+        if (data[v] is not None and mask[v] is not False) or impute:
+            with poutine.mask(mask=mask[v]):
+                x[v] = pyro.sample("treecat_x_{}".format(v),
+                                   self.features[v].value_dist(mixtures[v], component=z[v]),
+                                   obs=data[v])
 
         # Continue sampling downstream.
         for v2 in children:
-            self._propagate(data, impute, mixtures, vertex_probs, edge_probs, z, x, v2)
+            self._propagate(data, mask, impute, mixtures, vertex_probs, edge_probs, z, x, v2)
 
-    def guide(self, data, num_rows=None, impute=False):
+    def guide(self, data, mask=True, num_rows=None, impute=False):
         """
         A :class:`~pyro.contrib.autoguide.AutoDelta` guide for MAP inference of
         continuous parameters.
@@ -202,7 +207,7 @@ class TreeCat(object):
         """
         return TreeCatTrainer(self, optim, backend)
 
-    def impute(self, data, num_samples=None):
+    def impute(self, data, mask=True, num_samples=None):
         """
         Impute missing columns in data.
         """
@@ -219,12 +224,12 @@ class TreeCat(object):
             first_available_dim -= 1
 
         # Sample global parameters from the guide.
-        guide_trace = poutine.trace(guide).get_trace(data)
+        guide_trace = poutine.trace(guide).get_trace(data, mask)
         model = poutine.replay(model, guide_trace)
 
         # Sample local latent variables using variable elimination.
         model = infer_discrete(model, first_available_dim=first_available_dim)
-        return model(data, impute=True)
+        return model(data, mask, impute=True)
 
 
 class TreeCatTrainer(object):
@@ -247,21 +252,26 @@ class TreeCatTrainer(object):
         self._model = model
         self._initialized = False
 
-    def init(self, data, init_groups=True):
+    def init(self, data, mask=True, init_groups=True):
         assert len(data) == len(self._model.features)
-        for feature, column in zip(self._model.features, data):
-            if column is not None:
-                feature.init(column)
+        if mask is True:
+            mask = [True] * len(data)
+        assert len(mask) == len(data)
+        for feature, col_data, col_mask in zip(self._model.features, data, mask):
+            if col_data is not None and col_mask is not False:
+                if isinstance(col_mask, torch.Tensor):
+                    col_data = col_data[col_mask]
+                feature.init(col_data)
         if init_groups:
-            self._elbo.loss(self._model.model, self._model.guide, data)
+            self._elbo.loss(self._model.model, self._model.guide, data, mask)
         self._initialized = True
 
-    def step(self, data, num_rows=None):
+    def step(self, data, mask=True, num_rows=None):
         if not self._initialized:
-            self.init(data)
+            self.init(data, mask)
 
         # Perform a gradient optimizer step to learn parameters.
-        loss = self._svi.step(data, num_rows=num_rows)
+        loss = self._svi.step(data, mask, num_rows=num_rows)
 
         # Update sufficient statistics in the edge guide.
         self._elbo.sample_saved()

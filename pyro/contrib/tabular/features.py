@@ -110,6 +110,8 @@ class Feature(object):
 
 
 class Boolean(Feature):
+    dtype = torch.float
+
     def sample_shared(self):
         loc = pyro.sample("{}_loc".format(self.name),
                           dist.Normal(self.new_tensor(0.), self.new_tensor(2.)))
@@ -144,6 +146,8 @@ class Boolean(Feature):
 
 
 class Discrete(Feature):
+    dtype = torch.long
+
     def __init__(self, name, cardinality):
         super(Discrete, self).__init__(name)
         self.cardinality = cardinality
@@ -190,6 +194,8 @@ class Discrete(Feature):
 
 
 class Real(Feature):
+    dtype = torch.float
+
     def sample_shared(self):
         scale_loc = pyro.sample("{}_scale_loc".format(self.name),
                                 dist.Normal(self.new_tensor(0.), self.new_tensor(10.)))
