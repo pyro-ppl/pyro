@@ -14,6 +14,7 @@ from pyro.infer import SVI
 from pyro.infer.discrete import TraceEnumSample_ELBO, infer_discrete
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
+from pyro.util import optional
 
 
 class TreeCat(object):
@@ -172,7 +173,7 @@ class TreeCat(object):
 
         # Sample observed features conditioned on latent classes.
         if (data[v] is not None and mask[v] is not False) or impute:
-            with poutine.mask(mask=mask[v]):
+            with optional(poutine.mask(mask=mask[v]), mask[v] is not True):
                 x[v] = pyro.sample("treecat_x_{}".format(v),
                                    self.features[v].value_dist(mixtures[v], component=z[v]),
                                    obs=data[v])
