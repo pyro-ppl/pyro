@@ -40,6 +40,7 @@ class PermuteTransform(Transform):
     codomain = constraints.real
     bijective = True
     event_dim = 1
+    volume_preserving = True
 
     def __init__(self, permutation):
         super(PermuteTransform, self).__init__(cache_size=1)
@@ -83,4 +84,4 @@ class PermuteTransform(Transform):
         vector of zeros works.
         """
 
-        return torch.zeros(x.size()[:-1])
+        return torch.zeros(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device)

@@ -84,10 +84,13 @@ class FlowTests(TestCase):
         sample = dist.TransformedDistribution(base_dist, [flow]).sample()
         assert sample.shape == base_shape
 
+    def _make_householder(self, input_dim):
+        return dist.HouseholderFlow(input_dim, count_transforms=min(1, input_dim // 2))
+
     def _make_batchnorm(self, input_dim):
         # Create batchnorm transform
         bn = dist.BatchNormTransform(input_dim)
-        bn._inverse(torch.normal(torch.arange(0., input_dim), torch.arange(1., 1.+input_dim)/input_dim))
+        bn._inverse(torch.normal(torch.arange(0., input_dim), torch.arange(1., 1. + input_dim) / input_dim))
         bn.eval()
         return bn
 
@@ -111,7 +114,7 @@ class FlowTests(TestCase):
         return dist.DeepLeakyReLUFlow(arn, hidden_units=16)
 
     def _make_dsf(self, input_dim):
-        arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1], param_dims=[16]*3)
+        arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1], param_dims=[16] * 3)
         return dist.DeepSigmoidalFlow(arn, hidden_units=16)
 
     def _make_permute(self, input_dim):
@@ -131,6 +134,9 @@ class FlowTests(TestCase):
 
     def _make_radial(self, input_dim):
         return dist.RadialFlow(input_dim)
+
+    def _make_sylvester(self, input_dim):
+        return dist.SylvesterFlow(input_dim, count_transforms=input_dim//2 + 1)
 
     def test_iaf_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -156,6 +162,10 @@ class FlowTests(TestCase):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_planar)
 
+    def test_householder_inverses(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_inverse(input_dim, self._make_householder)
+
     def test_batchnorm_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_inverse(input_dim, self._make_batchnorm)
@@ -163,6 +173,10 @@ class FlowTests(TestCase):
     def test_radial_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_radial)
+
+    def test_sylvester_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_sylvester)
 
     def test_iaf_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -175,6 +189,10 @@ class FlowTests(TestCase):
     def test_permute_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_inverse(input_dim, self._make_permute)
+
+    def test_householder_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_householder)
 
     def test_batchnorm_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
@@ -215,3 +233,7 @@ class FlowTests(TestCase):
     def test_radial_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_radial)
+
+    def test_sylvester_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_sylvester)
