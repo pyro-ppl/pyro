@@ -361,7 +361,8 @@ class _EdgeGuide(object):
                 self._count_stats, batch_size, num_rows))
 
             # Compute empirical perplexity of latent variables.
-            vertex_probs = self._vertex_stats / self._vertex_stats.sum(-1, True)
+            vertex_probs = self._vertex_stats + 1e-6
+            vertex_probs /= vertex_probs.sum(-1, True)
             vertex_entropy = -(vertex_probs * vertex_probs.log()).sum(-1)
             perplexity = vertex_entropy.exp().sort(descending=True)[0]
             perplexity = ["{: >4.1f}".format(p) for p in perplexity]
@@ -370,8 +371,8 @@ class _EdgeGuide(object):
             # Compute empirical mutual information across edges.
             v1, v2 = self.edges.t()
             k = v1 + v2 * (v2 - 1) // 2
-            edge_stats = self._complete_stats[k]
-            edge_probs = edge_stats / edge_stats.sum(-1, True)
+            edge_probs = self._complete_stats[k] + 1e-6
+            edge_probs /= edge_probs.sum(-1, True)
             edge_entropy = -(edge_probs * edge_probs.log()).sum(-1)
             mutual_info = vertex_entropy[self.edges].sum(-1) - edge_entropy
             mutual_info = mutual_info.sort(descending=True)[0]
