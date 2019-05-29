@@ -58,7 +58,6 @@ long_description = '\n'.join([str(line) for line in long_description.split('\n')
 EXTRAS_REQUIRE = [
     'jupyter>=1.0.0',
     'matplotlib>=1.3',
-    'observations>=0.1.4',
     'pillow',
     'torchvision>=0.2.2',
     'visdom>=0.1.4',

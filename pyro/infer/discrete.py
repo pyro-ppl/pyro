@@ -83,7 +83,7 @@ def _sample_posterior_from_trace(model, enum_trace, temperature, *args, **kwargs
 
     # We take special care to match the term ordering in
     # pyro.infer.traceenum_elbo._compute_model_factors() to allow
-    # contract_tensor_tree() to use shared_intermediates() inside.
+    # contract_tensor_tree() to use shared_intermediates() inside
     # TraceEnumSample_ELBO. The special ordering is: first all cost terms in
     # order of model_trace, then all enum_terms in order of model trace.
     log_probs = cost_terms
@@ -192,19 +192,20 @@ class TraceEnumSample_ELBO(TraceEnum_ELBO):
     This extends :class:`TraceEnum_ELBO` to make it cheaper to sample from
     discrete latent states during SVI.
 
-    The following are equivalent, but the first is cheaper::
+    The following are equivalent but the first is cheaper, sharing work
+    between the computations of ``loss`` and ``z``::
 
-            # Version 1.
-            elbo = TraceEnumSample_ELBO(first_available_dim=-2)
-            loss = elbo.loss(*args, **kwargs)
-            z = elbo.sample_saved()
+        # Version 1.
+        elbo = TraceEnumSample_ELBO(max_plate_nesting=1)
+        loss = elbo.loss(*args, **kwargs)
+        z = elbo.sample_saved()
 
-            # Version 2.
-            elbo = TraceEnum_ELBO(first_available_dim=-2)
-            loss = elbo.loss(*args, **kwargs)
-            guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
-            z = infer_discrete(poutine.replay(model, guide_trace),
-                               first_available_dim=-2)(*args, **kwargs)
+        # Version 2.
+        elbo = TraceEnum_ELBO(max_plate_nesting=1)
+        loss = elbo.loss(*args, **kwargs)
+        guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
+        z = infer_discrete(poutine.replay(model, guide_trace),
+                           first_available_dim=-2)(*args, **kwargs)
 
     """
     def _get_trace(self, model, guide, *args, **kwargs):

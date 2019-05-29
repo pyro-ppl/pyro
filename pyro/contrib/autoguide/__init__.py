@@ -267,7 +267,7 @@ class AutoDelta(AutoGuide):
 
     By default latent variables are initialized using ``init_loc_fn()``. To
     change this default behavior the user should call :func:`pyro.param` before
-    beginning inference, with ``"auto_"`` prefixed to the targetd sample site
+    beginning inference, with ``"auto_"`` prefixed to the targeted sample site
     names e.g. for sample sites named "level" and "concentration", initialize
     via::
 

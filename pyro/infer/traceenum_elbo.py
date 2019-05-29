@@ -138,7 +138,7 @@ def _compute_dice_elbo(model_trace, guide_trace):
         with shared_intermediates() as cache:
             ring = SampleRing(cache=cache, dim_to_size=dim_to_size)
             log_factors = contract_tensor_tree(log_factors, sum_dims, ring=ring)
-            model_trace._sharing_cache = cache
+            model_trace._sharing_cache = cache  # For TraceEnumSample_ELBO.
         for t, log_factors_t in log_factors.items():
             marginal_costs_t = marginal_costs.setdefault(t, [])
             for term in log_factors_t:

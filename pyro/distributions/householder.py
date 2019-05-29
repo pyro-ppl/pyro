@@ -57,23 +57,30 @@ class HouseholderFlow(TransformModule):
     codomain = constraints.real
     bijective = True
     event_dim = 1
+    volume_preserving = True
 
     def __init__(self, input_dim, count_transforms=1):
         super(HouseholderFlow, self).__init__(cache_size=1)
 
         self.input_dim = input_dim
-        assert count_transforms > 0
-        if count_transforms > input_dim:
+        if count_transforms < 1:
+            raise ValueError('Number of Householder transforms, {}, is less than 1!'.format(count_transforms))
+        elif count_transforms > input_dim:
             warnings.warn(
                 "Number of Householder transforms, {}, is greater than input dimension {}, which is an \
 over-parametrization!".format(count_transforms, input_dim))
         self.count_transforms = count_transforms
-        self.u = nn.Parameter(torch.Tensor(count_transforms, input_dim))
+        self.u_unnormed = nn.Parameter(torch.Tensor(count_transforms, input_dim))
         self.reset_parameters()
 
     def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.u.size(-1))
-        self.u.data.uniform_(-stdv, stdv)
+        stdv = 1. / math.sqrt(self.u_unnormed.size(-1))
+        self.u_unnormed.data.uniform_(-stdv, stdv)
+
+    # Construct normalized vectors for Householder transform
+    def u(self):
+        norm = torch.norm(self.u_unnormed, p=2, dim=-1, keepdim=True)
+        return torch.div(self.u_unnormed, norm)
 
     def _call(self, x):
         """
@@ -85,9 +92,9 @@ over-parametrization!".format(count_transforms, input_dim))
         """
 
         y = x
-        squared_norm = self.u.pow(2).sum(-1)
+        u = self.u()
         for idx in range(self.count_transforms):
-            projection = (self.u[idx] * y).sum(dim=-1, keepdim=True) * self.u[idx] / squared_norm[idx]
+            projection = (u[idx] * y).sum(dim=-1, keepdim=True) * u[idx]
             y = y - 2. * projection
         return y
 
@@ -105,7 +112,7 @@ over-parametrization!".format(count_transforms, input_dim))
     def log_abs_det_jacobian(self, x, y):
         """
         Calculates the elementwise determinant of the log jacobian. Householder flow is measure preserving,
-        so log(|detJ|) = 0
+        so :math:`\\log(|detJ|) = 0`
         """
 
         return torch.zeros(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device)

@@ -40,6 +40,7 @@ class PermuteTransform(Transform):
     codomain = constraints.real
     bijective = True
     event_dim = 1
+    volume_preserving = True
 
     def __init__(self, permutation):
         super(PermuteTransform, self).__init__(cache_size=1)
