@@ -7,5 +7,5 @@ Tabular Data Models
 
 __ github_
 
-.. literalinclude:: ../../examples/contrub/tabular.py
+.. literalinclude:: ../../examples/contrib/tabular.py
     :language: python
