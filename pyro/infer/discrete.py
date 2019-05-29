@@ -63,11 +63,13 @@ def _sample_posterior_from_trace(model, enum_trace, temperature, *args, **kwargs
             ordinal = frozenset(plate_to_symbol[f.name]
                                 for f in node["cond_indep_stack"]
                                 if f.vectorized and f.size > 1)
-            log_prob = node["packed"]["unscaled_log_prob"]
-            sum_dims.update(log_prob._pyro_dims)
-            for frame in node["cond_indep_stack"]:
-                if frame.vectorized and frame.size > 1:
-                    sum_dims.remove(plate_to_symbol[frame.name])
+            # For sites that depend on an enumerated variable, we need to apply
+            # the mask but not the scale when sampling.
+            if "masked_log_prob" not in node["packed"]:
+                node["packed"]["masked_log_prob"] = packed.scale_and_mask(
+                    node["packed"]["unscaled_log_prob"], mask=node["packed"]["mask"])
+            log_prob = node["packed"]["masked_log_prob"]
+            sum_dims.update(frozenset(log_prob._pyro_dims) - ordinal)
             if sum_dims.isdisjoint(log_prob._pyro_dims):
                 continue
             dim_to_size.update(zip(log_prob._pyro_dims, log_prob.shape))
@@ -121,7 +123,7 @@ def _sample_posterior_from_trace(model, enum_trace, temperature, *args, **kwargs
                 "cond_indep_stack": node["cond_indep_stack"],
                 "value": node["value"],
             }
-            log_prob = node["packed"]["unscaled_log_prob"]
+            log_prob = node["packed"]["masked_log_prob"]
             if hasattr(log_prob, "_pyro_backward_result"):
                 # Adjust the cond_indep_stack.
                 ordinal = query_to_ordinal[log_prob]
