@@ -202,7 +202,7 @@ class TreeCat(object):
             pyro.sample("treecat_edge_probs",
                         dist.Delta(edge_probs.to(device), event_dim=1))
 
-    def trainer(self, optim=None, backend="python"):
+    def trainer(self, optim=None, backend="cpp"):
         """
         Creates a :class:`TreeCatTrainer` object for training.
         """
