@@ -196,7 +196,7 @@ BlockNAFFlow
 ------------
 .. autoclass:: pyro.distributions.BlockNAFFlow
     :members:
-    :undoc-members
+    :undoc-members:
     :show-inheritance:
 
 DeepELUFlow
