@@ -37,11 +37,9 @@ def check_guide(guide):
     data = model([None] * num_time_steps, torch.arange(full_size), full_size)
     assert data.shape == (num_time_steps, full_size)
 
-    full_size = data.size(-1)
     pyro.get_param_store().clear()
     pyro.set_rng_seed(123456789)
     svi = SVI(model, guide, Adam({"lr": 0.02}), Trace_ELBO())
-
     for epoch in range(2):
         beg = 0
         while beg < full_size:
@@ -121,3 +119,89 @@ def test_amortized_smoke(init_fn):
         guide.init = init_fn
 
     check_guide(guide)
+
+
+def test_overlapping_plates_ok():
+
+    def model(batch, subsample, full_size):
+        # This is ok because the shared plate is left of the nonshared plate.
+        with pyro.plate("shared", full_size, subsample=subsample, dim=-2):
+            x = pyro.sample("x", dist.Normal(0, 1))
+            with pyro.plate("nonshared", 2, dim=-1):
+                y = pyro.sample("y", dist.Normal(0, 1))
+            xy = x + y.sum(-1, keepdim=True)
+            return pyro.sample("z", dist.Normal(xy, 1),
+                               obs=batch)
+
+    @easy_guide(model)
+    def guide(self, batch, subsample, full_size):
+        with self.plate("shared", full_size, subsample=subsample, dim=-2):
+            group = self.group(match="x|y")
+            loc = pyro.param("guide_loc",
+                             torch.zeros((full_size, 1) + group.event_shape),
+                             event_dim=1)
+            scale = pyro.param("guide_scale",
+                               torch.ones((full_size, 1) + group.event_shape),
+                               constraint=constraints.positive,
+                               event_dim=1)
+            group.sample("xy", dist.Normal(loc, scale).to_event(1))
+
+    # Generate data.
+    full_size = 5
+    batch_size = 2
+    data = model(None, torch.arange(full_size), full_size)
+    assert data.shape == (full_size, 1)
+
+    # Train for one epoch.
+    pyro.get_param_store().clear()
+    svi = SVI(model, guide, Adam({"lr": 0.02}), Trace_ELBO())
+    beg = 0
+    while beg < full_size:
+        end = min(full_size, beg + batch_size)
+        subsample = torch.arange(beg, end)
+        batch = data[beg:end]
+        beg = end
+        svi.step(batch, subsample, full_size=full_size)
+
+
+def test_overlapping_plates_error():
+
+    def model(batch, subsample, full_size):
+        # This is an error because the shared plate is right of the nonshared plate.
+        with pyro.plate("shared", full_size, subsample=subsample, dim=-1):
+            x = pyro.sample("x", dist.Normal(0, 1))
+            with pyro.plate("nonshared", 2, dim=-2):
+                y = pyro.sample("y", dist.Normal(0, 1))
+            xy = x + y.sum(-2)
+            return pyro.sample("z", dist.Normal(xy, 1),
+                               obs=batch)
+
+    @easy_guide(model)
+    def guide(self, batch, subsample, full_size):
+        with self.plate("shared", full_size, subsample=subsample, dim=-1):
+            group = self.group(match="x|y")
+            loc = pyro.param("guide_loc",
+                             torch.zeros((full_size,) + group.event_shape),
+                             event_dim=1)
+            scale = pyro.param("guide_scale",
+                               torch.ones((full_size,) + group.event_shape),
+                               constraint=constraints.positive,
+                               event_dim=1)
+            group.sample("xy", dist.Normal(loc, scale).to_event(1))
+
+    # Generate data.
+    full_size = 5
+    batch_size = 2
+    data = model(None, torch.arange(full_size), full_size)
+    assert data.shape == (full_size,)
+
+    # Train for one epoch.
+    pyro.get_param_store().clear()
+    svi = SVI(model, guide, Adam({"lr": 0.02}), Trace_ELBO())
+    beg = 0
+    end = min(full_size, beg + batch_size)
+    subsample = torch.arange(beg, end)
+    batch = data[beg:end]
+    beg = end
+    with pytest.raises(ValueError, match="Group expects all per-site plates"):
+        svi.step(batch, subsample, full_size=full_size)

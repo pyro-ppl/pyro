@@ -4,18 +4,18 @@ import re
 import weakref
 from abc import ABCMeta, abstractmethod
 
+import torch
 from contextlib2 import ExitStack
 from six import add_metaclass
 from torch.distributions import biject_to
-import torch
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 import pyro.poutine.runtime as runtime
-from pyro.distributions.util import sum_rightmost
-from pyro.poutine.util import prune_subsample_sites
 from pyro.contrib.autoguide.initialization import InitMessenger
+from pyro.distributions.util import broadcast_shape, sum_rightmost
+from pyro.poutine.util import prune_subsample_sites
 
 
 @add_metaclass(ABCMeta)
@@ -150,9 +150,10 @@ class Group(object):
     """
     An autoguide helper to match a group of model sites.
 
-    :ivar list sites: A list of all matching sample sites in the model.
     :ivar torch.Size event_shape: The total flattened concatenated shape of all
         matching sample sites in the model.
+    :ivar list prototype_sites: A list of all matching sample sites in a
+        prototype trace of the model.
     :param EasyGuide guide: An easyguide instance.
     :param list sites: A list of model sites.
     """
@@ -160,23 +161,39 @@ class Group(object):
         assert isinstance(sites, list)
         assert sites
         self._guide = weakref.ref(guide)
-        self.sites = sites
+        self.prototype_sites = sites
+        self._site_sizes = {}
+        self._site_batch_shapes = {}
 
         # A group is in a frame only if all its sample sites are in that frame.
         # Thus a group can be subsampled only if all its sites can be subsampled.
-        self.frames = frozenset.intersection(*(
+        self.common_frames = frozenset.intersection(*(
             frozenset(f for f in site["cond_indep_stack"] if f.vectorized)
             for site in sites))
+        rightmost_common_dim = -float('inf')
+        if self.common_frames:
+            rightmost_common_dim = max(f.dim for f in self.common_frames)
 
-        # Compute flattened concatenated event_shape.
-        event_shape = [0]
+        # Compute flattened concatenated event_shape and split batch_shape into
+        # a common batch_shape (which can change each SVI step due to
+        # subsampling) and site batch_shapes (which must remain constant size).
         for site in sites:
-            site_event_size = torch.Size(site["fn"].event_shape).numel()
+            site_event_numel = torch.Size(site["fn"].event_shape).numel()
             site_batch_shape = list(site["fn"].batch_shape)
-            for f in self.frames:
+            for f in self.common_frames:
+                # Consider this dim part of the common_batch_shape.
                 site_batch_shape[f.dim] = 1
-            event_shape[0] += site_event_size * torch.Size(site_batch_shape).numel()
-        self.event_shape = torch.Size(event_shape)
+            while site_batch_shape and site_batch_shape[0] == 1:
+                site_batch_shape = site_batch_shape[1:]
+            if len(site_batch_shape) > -rightmost_common_dim:
+                raise ValueError(
+                    "Group expects all per-site plates to be right of all common plates, "
+                    "but found a per-site plate {} on left at site {}"
+                    .format(-len(site_batch_shape), repr(site["name"])))
+            site_batch_shape = torch.Size(site_batch_shape)
+            self._site_batch_shapes[site["name"]] = site_batch_shape
+            self._site_sizes[site["name"]] = site_batch_shape.numel() * site_event_numel
+        self.event_shape = torch.Size([sum(self._site_sizes.values())])
 
     @property
     def guide(self):
@@ -188,27 +205,32 @@ class Group(object):
         site and then unpack to multiple sample sites for model replay.
 
         :param str guide_name: The name of the auxiliary guide site.
-        :param callable fn: A distribution.
+        :param callable fn: A distribution with shape ``self.event_shape``.
         :param dict infer: Optional inference configuration dict.
         :returns: A pair ``(guide_z, model_zs)`` where ``guide_z`` is the
             single concatenated blob and ``model_zs`` is a dict mapping
             site name to constrained model sample.
         :rtype: tuple
         """
+        # Sample a packed tensor.
+        if fn.event_shape != self.event_shape:
+            raise ValueError("Invalid fn.event_shape for group: expected {}, actual {}"
+                             .format(tuple(self.event_shape), tuple(fn.event_shape)))
         if infer is None:
             infer = {}
         infer["is_auxiliary"] = True
-
-        # Sample packed tensor.
         guide_z = pyro.sample(guide_name, fn, infer=infer)
-        batch_shape = guide_z.shape[:-1]
+        common_batch_shape = guide_z.shape[:-1]
 
         model_zs = {}
         pos = 0
-        for site in self.sites:
-            # Extract slice from packed sample.
+        for site in self.prototype_sites:
+            name = site["name"]
             fn = site["fn"]
-            size = torch.Size(fn.event_shape).numel()
+
+            # Extract slice from packed sample.
+            size = self._site_sizes[name]
+            batch_shape = broadcast_shape(common_batch_shape, self._site_batch_shapes[name])
             unconstrained_z = guide_z[..., pos: pos + size]
             unconstrained_z = unconstrained_z.reshape(batch_shape + fn.event_shape)
             pos += size
@@ -226,7 +248,7 @@ class Group(object):
                     plate = self.guide.plate(frame.name)
                     if plate not in runtime._PYRO_STACK:
                         stack.enter_context(plate)
-                model_zs[site["name"]] = pyro.sample(site["name"], delta_dist)
+                model_zs[name] = pyro.sample(name, delta_dist)
 
         return guide_z, model_zs
 
@@ -238,7 +260,7 @@ class Group(object):
         :rtype: dict
         """
         return {site["name"]: self.guide.map_estimate(site["name"])
-                for site in self.sites}
+                for site in self.prototype_sites}
 
 
 def easy_guide(model):
