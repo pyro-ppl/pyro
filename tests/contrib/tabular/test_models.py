@@ -6,12 +6,12 @@ import pytest
 import torch
 from six.moves import cPickle as pickle
 
+import pyro
 import pyro.poutine as poutine
 from pyro.contrib.tabular.features import Boolean, Discrete, Real
 from pyro.contrib.tabular.mixture import Mixture
 from pyro.contrib.tabular.treecat import TreeCat
 from tests.common import TemporaryDirectory, assert_close
-
 
 TINY_SCHEMA = [Boolean("f1"), Real("f2"), Discrete("f3", 3), Real("f4"), Boolean("f5")]
 TINY_DATASETS = [
@@ -54,28 +54,40 @@ def test_impute_smoke(data, Model, capacity, num_samples):
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('Model', [Mixture, TreeCat])
 def test_pickle(data, Model, capacity):
-    V = len(data)
-    features = TINY_SCHEMA[:V]
-    model = Model(features, capacity)
-    trainer = model.trainer()
-    trainer.init(data)
-    trainer.step(data)
-    del trainer
+
+    def train_model():
+        V = len(data)
+        features = TINY_SCHEMA[:V]
+        model = Model(features, capacity)
+        trainer = model.trainer()
+        trainer.init(data)
+        trainer.step(data)
+        return model
+
+    model = train_model()
+    if Model is TreeCat:
+        expected_edges = model.edges
+    expected_trace = poutine.trace(model.guide).get_trace(data)
 
     with TemporaryDirectory() as path:
-        filename = os.path.join(path, "model.pkl")
-        with open(filename, "wb") as f:
+        param_filename = os.path.join(path, "model.pyro")
+        pickle_filename = os.path.join(path, "model.pkl")
+        pyro.get_param_store().save(param_filename)
+        with open(pickle_filename, "wb") as f:
             pickle.dump(model, f, pickle.HIGHEST_PROTOCOL)
-        with open(filename, "rb") as f:
-            model2 = pickle.load(f)
 
-    if isinstance(Model, TreeCat):
-        assert (model2.edges == model.edges).all()
+        pyro.get_param_store().clear()
+        del model
 
-    expected = poutine.trace(model.guide).get_trace(data)
-    actual = poutine.trace(model2.guide).get_trace(data)
-    assert expected.nodes.keys() == actual.nodes.keys()
-    for key, expected_node in expected.nodes.items():
+        pyro.get_param_store().load(param_filename)
+        with open(pickle_filename, "rb") as f:
+            model = pickle.load(f)
+
+    if Model is TreeCat:
+        assert (model.edges == expected_edges).all()
+    actual_trace = poutine.trace(model.guide).get_trace(data)
+    assert expected_trace.nodes.keys() == actual_trace.nodes.keys()
+    for key, expected_node in expected_trace.nodes.items():
         if expected_node["type"] in ("param", "sample"):
-            actual_node = actual.nodes[key]
+            actual_node = actual_trace.nodes[key]
             assert_close(expected_node["value"], actual_node["value"])

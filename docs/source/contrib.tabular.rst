@@ -1,5 +1,5 @@
-Models of Tabular Data
-======================
+Tabular Data Models
+===================
 
 Feature models
 --------------
@@ -9,7 +9,7 @@ Feature models
     :show-inheritance:
     :member-order: bysource
 
-TreeCat Model
+TreeCat model
 -------------
 .. automodule:: pyro.contrib.tabular.treecat
     :members:

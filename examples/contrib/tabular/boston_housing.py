@@ -8,10 +8,9 @@ from observations import boston_housing
 
 import pyro
 from pyro.contrib.examples.util import get_data_directory
-from pyro.contrib.tabular import Boolean, Real, TreeCat, TreeCatTrainer
+from pyro.contrib.tabular import Boolean, Real, TreeCat
+from pyro.contrib.tabular.treecat import print_tree
 from pyro.optim import Adam
-
-logging.basicConfig(format="%(relativeCreated) 9d %(message)s", level=logging.INFO)
 
 
 def load_data():
@@ -43,10 +42,10 @@ def main(args):
     # Train a model.
     pyro.set_rng_seed(0)
     pyro.clear_param_store()
-    pyro.enable_validation(args.validate)
-    model = TreeCat(features, args.capacity)
+    pyro.enable_validation(__debug__)
+    model = TreeCat(features, args.capacity, annealing_rate=args.learning_rate)
     optim = Adam({"lr": args.learning_rate})
-    trainer = TreeCatTrainer(model, optim, backend=args.backend)
+    trainer = model.trainer(optim, backend=args.backend)
     trainer.init(data)
     num_rows = len(data[0])
     for epoch in range(args.num_epochs):
@@ -54,6 +53,7 @@ def main(args):
         for batch in partition_data(data, args.batch_size):
             loss += trainer.step(batch, num_rows=num_rows)
         logging.info("epoch {} loss = {:0.4g}".format(epoch, loss))
+    logging.info("Learned Tree:\n{}".format(print_tree(model.edges, model.features)))
 
     # Predict housing price (MEDV) as function of NOX.
     index = {f.name: i for i, f in enumerate(features)}
@@ -66,12 +66,14 @@ def main(args):
     assert price.shape == (args.num_samples, 20)
     price_mean = price.mean(dim=0)
     price_std = price.std(dim=0)
-    logging.info("--------------------------------")
+    logging.info("--------------------------------------------")
+    logging.info("Predicted housing price as a function of NOX")
+    logging.info("--------------------------------------------")
     logging.info("NOX\tMEDV")
     for i in range(20):
         logging.info("{:0.3g}\t{:0.3g} += {:0.3g}".format(
             nox[i].item(), price_mean[i].item(), price_std[i].item()))
-    logging.info("--------------------------------")
+    logging.info("--------------------------------------------")
 
 
 if __name__ == "__main__":
@@ -83,6 +85,9 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--num-epochs", default=100, type=int)
     parser.add_argument("-s", "--num-samples", default=100, type=int)
     parser.add_argument("--backend", default="python")
-    parser.add_argument("--validate", default=True, type=bool)
+    parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
+
+    logging.basicConfig(format="%(relativeCreated) 9d %(message)s",
+                        level=logging.DEBUG if args.verbose else logging.INFO)
     main(args)

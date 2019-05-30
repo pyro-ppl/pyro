@@ -21,6 +21,26 @@ class TreeCat(object):
     """
     The TreeCat model of sparse heterogeneous tabular data.
 
+    **Serialization:** :class:`TreeCat` models distribute state between a
+    :class:`TreeCat` object and the Pyro param store. Thus to save and load a
+    model you'll need to combine Pyro's
+    :meth:`~pyro.params.param_store.ParamStoreDict.save` /
+    :meth:`~pyro.params.param_store.ParamStoreDict.load` with
+    :py:func:`pickle.dump` / :py:func:`pickle.load` . For example::
+
+        model = TreeCat(...)
+        # ...train model...
+
+        # Save model.
+        pyro.get_param_store().save("model.pyro")
+        with open("model.pkl", "wb") as f:
+            pickle.dump(model, f)
+
+        # Load model.
+        pyro.get_param_store().load("model.pyro")
+        with open("model.pkl", "rb") as f:
+            model = pickle.load(f)
+
     :param list features: A ``V``-length list of
         :class:`~pyro.contrib.tabular.features.Feature` objects defining a
         feature model for each column. Feature models can be repeated,
@@ -56,6 +76,8 @@ class TreeCat(object):
 
         self.edges = edges
 
+    # These custom __getstate__ and __setstate__ methods are used by the pickle
+    # module for model serialization.
     def __getstate__(self):
         init_args = (self.features, self.capacity, self.edges)
         return {"init_args": init_args, "edge_guide": self._edge_guide}
@@ -67,6 +89,12 @@ class TreeCat(object):
 
     @property
     def edges(self):
+        """
+        A ``(V-1, 2)`` shaped tensor representing the tree structure.
+        You can examine the tree using :func:`print_tree` ::
+
+            print(print_tree(model.edges, model.features))
+        """
         return self._edges
 
     @edges.setter
@@ -74,7 +102,7 @@ class TreeCat(object):
         self._edges = edges
         self._edge_guide.edges = edges
 
-        # Construct a directed tree data structures used by ._propagate().
+        # Construct a directed tree data structure used by ._propagate().
         # The root has no statistical meaning; we choose a root vertex based on
         # computational concerns only, maximizing opportunity for parallelism.
         self._root = find_center_of_tree(edges)
@@ -88,13 +116,15 @@ class TreeCat(object):
 
     def model(self, data, mask=True, num_rows=None, impute=False):
         """
-        :param list data: batch of heterogeneous column-oriented data.  Each
-            column should be either a torch.Tensor (if observed) or None (if
-            unobserved).
-        :param list mask: optional batch of column-oriented masks for partially
-            observed data. True means observed, False means missing.
-        :param int num_rows: Optional number of rows in entire dataset, if data
-            is is a minibatch.
+        The generative model of tabular data.
+
+        :param list data: A minibatch of column-oriented data.  Each column may
+            be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
+        :param list mask: A minibatch of column masks. Each column may be
+            ``True`` if fully observed, ``False`` if fully unobserved, or a
+            :class:`torch.ByteTensor` if partially observed.
+        :param int num_rows: The total number of rows in the dataset.
+            This is needed only when subsampling data.
         :param bool impute: Whether to impute missing features. This should be
             set to False during training and True when making predictions.
         :returns: a copy of the input data, optionally with missing columns
@@ -186,6 +216,16 @@ class TreeCat(object):
         """
         A :class:`~pyro.contrib.autoguide.AutoDelta` guide for MAP inference of
         continuous parameters.
+
+        :param list data: A minibatch of column-oriented data.  Each column may
+            be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
+        :param list mask: A minibatch of column masks. Each column may be
+            ``True`` if fully observed, ``False`` if fully unobserved, or a
+            :class:`torch.ByteTensor` if partially observed.
+        :param int num_rows: The total number of rows in the dataset.
+            This is needed only when subsampling data.
+        :param bool impute: Whether to impute missing features. This should be
+            set to False during training and True when making predictions.
         """
         device = next(col.device for col in data if col is not None)
         V = len(self.features)
@@ -205,12 +245,25 @@ class TreeCat(object):
     def trainer(self, optim=None, backend="cpp"):
         """
         Creates a :class:`TreeCatTrainer` object for training.
+
+        :param pyro.optim.optim.PyroOptim optim: A Pyro optimizer to learn
+            feature parameters.
+        :param str backend: Either "python" or "cpp". Defaults to "cpp". The
+            "cpp" backend is much faster for data with more than ~10 features.
+        :rtype: TreeCatTrainer
         """
         return TreeCatTrainer(self, optim, backend)
 
     def impute(self, data, mask=True, num_samples=None):
         """
         Impute missing columns in data.
+
+        :param list data: A minibatch of column-oriented data.  Each column may
+            be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
+        :param list mask: A minibatch of column masks. Each column may be
+            ``True`` if fully observed, ``False`` if fully unobserved, or a
+            :class:`torch.ByteTensor` if partially observed.
+        :param int num_samples: Optional number of samples to draw.
         """
         model = self.model
         guide = self.guide
@@ -240,7 +293,7 @@ class TreeCatTrainer(object):
     :param TreeCat model: A TreeCat model to train.
     :param pyro.optim.optim.PyroOptim optim: A Pyro optimizer to learn feature
         parameters.
-    :param str backend: Either "python" or "cpp". Defaults to "python". The
+    :param str backend: Either "python" or "cpp". Defaults to "cpp". The
         "cpp" backend is much faster for data with more than ~10 features.
     """
     def __init__(self, model, optim=None, backend="cpp"):
@@ -253,7 +306,16 @@ class TreeCatTrainer(object):
         self._model = model
         self._initialized = False
 
-    def init(self, data, mask=True, init_groups=False):
+    def init(self, data, mask=True):
+        """
+        Initializes shared feature parameters given some or all data.
+
+        :param list data: A minibatch of column-oriented data.  Each column may
+            be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
+        :param list mask: A minibatch of column masks. Each column may be
+            ``True`` if fully observed, ``False`` if fully unobserved, or a
+            :class:`torch.ByteTensor` if partially observed.
+        """
         assert len(data) == len(self._model.features)
         if mask is True:
             mask = [True] * len(data)
@@ -263,11 +325,20 @@ class TreeCatTrainer(object):
                 if isinstance(col_mask, torch.Tensor):
                     col_data = col_data[col_mask]
                 feature.init(col_data)
-        if init_groups:
-            self._elbo.loss(self._model.model, self._model.guide, data, mask)
         self._initialized = True
 
     def step(self, data, mask=True, num_rows=None):
+        """
+        Runs one training step.
+
+        :param list data: A minibatch of column-oriented data.  Each column may
+            be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
+        :param list mask: A minibatch of column masks. Each column may be
+            ``True`` if fully observed, ``False`` if fully unobserved, or a
+            :class:`torch.ByteTensor` if partially observed.
+        :param int num_rows: The total number of rows in the dataset.
+            This is needed only when subsampling data.
+        """
         if not self._initialized:
             self.init(data, mask)
 
