@@ -108,7 +108,7 @@ class BlockNAFFlow(TransformModule):
         y = x
         for idx in range(len(self.layers)):
             pre_activation, dy_dx = self.layers[idx](y.unsqueeze(-1))
-            J_act = self.log_df_dx(pre_activation).view(*x.size(), -1, 1)
+            J_act = self.log_df_dx(pre_activation).view(*(list(x.size()) + [-1, 1]))
 
             if idx == 0:
                 logDetJ = dy_dx + J_act
