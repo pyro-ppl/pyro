@@ -61,7 +61,7 @@ def main(args):
     nox = torch.linspace(nox.min(), nox.max(), 20)
     query = [None] * len(features)
     query[index["NOX"]] = nox
-    samples = model.impute(query, num_samples=args.num_samples)
+    samples = model.sample(query, num_samples=args.num_samples)
     price = samples[index["MEDV"]]  # = median housing value / $1000
     assert price.shape == (args.num_samples, 20)
     price_mean = price.mean(dim=0)
@@ -79,9 +79,9 @@ def main(args):
 if __name__ == "__main__":
     assert pyro.__version__.startswith('0.3.3')
     parser = argparse.ArgumentParser(description="Tabular data analysis of Boston Housing")
-    parser.add_argument("-c", "--capacity", default=16, type=int)
+    parser.add_argument("-c", "--capacity", default=8, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
-    parser.add_argument("-b", "--batch-size", default=22, type=int)
+    parser.add_argument("-b", "--batch-size", default=128, type=int)
     parser.add_argument("-n", "--num-epochs", default=100, type=int)
     parser.add_argument("-s", "--num-samples", default=100, type=int)
     parser.add_argument("--backend", default="python")
