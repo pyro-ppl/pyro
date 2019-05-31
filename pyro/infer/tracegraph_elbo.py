@@ -222,7 +222,7 @@ class TraceGraph_ELBO(ELBO):
 
         loss, surrogate_loss = self._loss_and_surrogate_loss(model, guide, *args, **kwargs)
 
-        torch_backward(surrogate_loss)
+        torch_backward(surrogate_loss, retain_graph=self.retain_graph)
 
         loss = torch_item(loss)
         warn_if_nan(loss, "loss")
