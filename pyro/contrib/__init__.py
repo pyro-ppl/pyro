@@ -8,12 +8,13 @@ Contributed Code
 
 from __future__ import absolute_import, division, print_function
 
-from pyro.contrib import autoguide, autoname, bnn, gp, oed, tabular, tracking
+from pyro.contrib import autoguide, autoname, bnn, easyguide, gp, oed, tabular, tracking
 
 __all__ = [
     "autoguide",
     "autoname",
     "bnn",
+    "easyguide",
     "gp",
     "tabular",
     "tracking",
