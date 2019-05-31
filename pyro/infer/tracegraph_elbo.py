@@ -92,8 +92,8 @@ def _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes):
 
     # While accumulating costs, track which terms have been included for each
     # node to support detecting and handling redundant paths.
-    included_model_terms = defaultdict(lambda: set())
-    included_guide_terms = defaultdict(lambda: set())
+    included_model_terms = defaultdict(set)
+    included_guide_terms = defaultdict(set)
 
     def charge(paying_node, cost):
         # Add to the downstream total of paying_node
