@@ -155,12 +155,12 @@ def main(args):
     # due to the special logic in the custom guide (e.g. parameter clipping), the custom guide
     # is more numerically stable and enables us to use a larger learning rate (and consequently
     # achieves better results)
-    learning_rate = 0.2 if args.auto_guide else 4.5
-    momentum = 0.05 if args.auto_guide else 0.1
+    learning_rate = 0.2 if args.guide == 'auto' else 4.5
+    momentum = 0.05 if args.guide == 'auto' else 0.1
     opt = optim.AdagradRMSProp({"eta": learning_rate, "t": momentum})
 
     # either use an automatically constructed guide (see pyro.contrib.autoguide for details) or our custom guide
-    guide = AutoDiagonalNormal(sparse_gamma_def.model) if args.auto_guide else sparse_gamma_def.guide
+    guide = AutoDiagonalNormal(sparse_gamma_def.model) if args.guide == 'auto' else sparse_gamma_def.guide
 
     # this is the svi object we use during training; we use TraceMeanField_ELBO to
     # get analytic KL divergences
@@ -171,13 +171,12 @@ def main(args):
     svi_eval = SVI(sparse_gamma_def.model, guide, opt,
                    loss=TraceMeanField_ELBO(num_particles=args.eval_particles, vectorize_particles=True))
 
-    guide_description = 'automatically constructed' if args.auto_guide else 'custom'
-    print('\nbeginning training with %s guide...' % guide_description)
+    print('\nbeginning training with %s guide...' % args.guide)
 
     # the training loop
     for k in range(args.num_epochs):
         loss = svi.step(data)
-        if not args.auto_guide:
+        if args.guide == 'custom':
             # for the custom guide we clip parameters after each gradient step
             sparse_gamma_def.clip_params()
 
@@ -191,10 +190,11 @@ if __name__ == '__main__':
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=1000, type=int, help='number of training epochs')
-    parser.add_argument('-ef', '--eval-frequency', default=25, type=int,
+    parser.add_argument('-ef', '--eval-frequency', default=10, type=int,
                         help='how often to evaluate elbo (number of epochs)')
     parser.add_argument('-ep', '--eval-particles', default=20, type=int,
                         help='number of samples/particles to use during evaluation')
-    parser.add_argument('--auto-guide', action='store_true', help='whether to use an automatically constructed guide')
+    parser.add_argument('--guide', default='custom', type=str,
+                        help='use a custom, auto, or easy guide')
     args = parser.parse_args()
     main(args)
