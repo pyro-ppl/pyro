@@ -4,9 +4,9 @@ import argparse
 import logging
 
 import torch
-from observations import boston_housing
 
 import pyro
+from pyro.contrib.examples import boston_housing
 from pyro.contrib.examples.util import get_data_directory
 from pyro.contrib.tabular import Boolean, Real, TreeCat
 from pyro.contrib.tabular.treecat import print_tree
@@ -14,12 +14,12 @@ from pyro.optim import Adam
 
 
 def load_data():
-    x_train, metadata = boston_housing(get_data_directory(__file__))
-    x_train = torch.tensor(x_train.T, dtype=torch.get_default_dtype()).contiguous()
+    x_train, header = boston_housing.load(get_data_directory(__file__))
+    x_train = torch.tensor(x_train.t(), dtype=torch.get_default_dtype()).contiguous()
     features = []
     data = []
     logging.info("loaded {} rows x {} features:".format(x_train.size(1), x_train.size(0)))
-    for name, column in zip(metadata["columns"], x_train):
+    for name, column in zip(header, x_train):
         ftype = Boolean if name == "CHAS" else Real
         features.append(ftype(name))
         data.append(column)
