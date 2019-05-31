@@ -355,21 +355,21 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
     def loss_and_grads(self, model, guide, *args, **kwargs):
         kwargs['_pyro_model_id'] = id(model)
         kwargs['_pyro_guide_id'] = id(guide)
-        if getattr(self, '_jit_lsl', None) is None:
+        if getattr(self, '_jit_loss_and_surrogate_loss', None) is None:
             # build a closure for loss_and_surrogate_loss
             weakself = weakref.ref(self)
 
             @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings,
                                 jit_options=self.jit_options)
-            def jit_lsl(*args, **kwargs):
+            def jit_loss_and_surrogate_loss(*args, **kwargs):
                 kwargs.pop('_pyro_model_id')
                 kwargs.pop('_pyro_guide_id')
                 self = weakself()
                 return self._loss_and_surrogate_loss(model, guide, *args, **kwargs)
 
-            self._jit_lsl = jit_lsl
+            self._jit_loss_and_surrogate_loss = jit_loss_and_surrogate_loss
 
-        loss, surrogate_loss = self._jit_lsl(*args, **kwargs)
+        loss, surrogate_loss = self._jit_loss_and_surrogate_loss(*args, **kwargs)
 
         surrogate_loss.backward()  # triggers jit compilation
 
