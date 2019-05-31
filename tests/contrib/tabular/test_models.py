@@ -44,10 +44,22 @@ def test_train_smoke(Model, data, capacity):
 @pytest.mark.parametrize('data', TINY_DATASETS)
 @pytest.mark.parametrize('num_samples', [None, 8])
 @pytest.mark.parametrize('Model', [Mixture, TreeCat])
-def test_impute_smoke(data, Model, capacity, num_samples):
+def test_sample_smoke(data, Model, capacity, num_samples):
     features = TINY_SCHEMA[:len(data)]
     model = Model(features, capacity)
-    model.impute(data, num_samples=num_samples)
+    samples = model.sample(data, num_samples=num_samples)
+    assert isinstance(samples, list)
+    assert len(samples) == len(features)
+
+
+@pytest.mark.parametrize('capacity', [2, 16])
+@pytest.mark.parametrize('data', TINY_DATASETS)
+@pytest.mark.parametrize('Model', [Mixture, TreeCat])
+def test_log_prob_smoke(data, Model, capacity):
+    features = TINY_SCHEMA[:len(data)]
+    model = Model(features, capacity)
+    loss = model.log_prob(data)
+    assert isinstance(loss, torch.Tensor)
 
 
 @pytest.mark.parametrize('data', TINY_DATASETS)

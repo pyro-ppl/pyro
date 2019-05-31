@@ -10,7 +10,7 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta
 from pyro.distributions.spanning_tree import make_complete_graph, sample_tree_mcmc
-from pyro.infer import SVI
+from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.infer.discrete import TraceEnumSample_ELBO, infer_discrete
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
@@ -254,9 +254,9 @@ class TreeCat(object):
         """
         return TreeCatTrainer(self, optim, backend)
 
-    def impute(self, data, mask=True, num_samples=None):
+    def sample(self, data, mask=True, num_samples=None):
         """
-        Impute missing columns in data.
+        Sample missing data conditioned on observed data.
 
         :param list data: A minibatch of column-oriented data.  Each column may
             be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
@@ -284,6 +284,22 @@ class TreeCat(object):
         # Sample local latent variables using variable elimination.
         model = infer_discrete(model, first_available_dim=first_available_dim)
         return model(data, mask, impute=True)
+
+    def log_prob(self, data, mask=True):
+        """
+        Compute posterior predictive probability of partially observed data.
+
+        Note this is not normalized. To compute a normalized probability,
+        subtract the log prob of empty data.
+
+        :param list data: A minibatch of column-oriented data.  Each column may
+            be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
+        :param list mask: A minibatch of column masks. Each column may be
+            ``True`` if fully observed, ``False`` if fully unobserved, or a
+            :class:`torch.ByteTensor` if partially observed.
+        """
+        elbo = TraceEnum_ELBO(max_plate_nesting=1)
+        return elbo.differentiable_loss(self.model, self.guide, data, mask)
 
 
 class TreeCatTrainer(object):

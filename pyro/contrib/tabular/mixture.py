@@ -86,9 +86,12 @@ class Mixture(object):
 
         return x
 
-    def impute(self, data, num_samples=None):
+    def trainer(self, optim=None):
+        return MixtureTrainer(self, optim)
+
+    def sample(self, data, num_samples=None):
         """
-        Impute missing columns in data.
+        Sample missing data conditioned on observed data.
         """
         model = self.model
         guide = self.guide
@@ -110,8 +113,12 @@ class Mixture(object):
         model = infer_discrete(model, first_available_dim=first_available_dim)
         return model(data, impute=True)
 
-    def trainer(self, optim=None):
-        return MixtureTrainer(self, optim)
+    def log_prob(self, data):
+        """
+        Compute posterior preditive probability of partially observed data.
+        """
+        elbo = TraceEnum_ELBO(max_plate_nesting=1)
+        return elbo.differentiable_loss(self.model, self.guide, data)
 
 
 class MixtureTrainer(object):
