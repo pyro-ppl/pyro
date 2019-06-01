@@ -19,8 +19,6 @@ import os
 
 import numpy as np
 import torch
-import torch.nn as nn
-from torch.distributions import constraints
 from torch.nn.functional import softplus
 
 import pyro
@@ -28,7 +26,7 @@ import pyro.optim as optim
 import wget
 
 from pyro.contrib.examples.util import get_data_directory
-from pyro.distributions import Gamma, Poisson, Normal
+from pyro.distributions import Gamma, Poisson
 from pyro.infer import SVI, TraceMeanField_ELBO
 from pyro.contrib.autoguide import AutoDiagonalNormal
 from pyro.contrib.autoguide.initialization import init_to_feasible
@@ -157,7 +155,7 @@ class MyEasyGuide(EasyGuide):
         global_alpha = softplus(pyro.param("alpha_w",
                                 lambda: rand_tensor(global_group.event_shape, 0.5, 0.1)))
         global_mean = softplus(pyro.param("mean_w",
-                                lambda: rand_tensor(global_group.event_shape, 0.0, 0.1)))
+                               lambda: rand_tensor(global_group.event_shape, 0.0, 0.1)))
         # use a mean field gamma distribution on all the ws
         global_group.sample("ws", Gamma(global_alpha, global_alpha / global_mean).to_event(1))
 
@@ -221,9 +219,9 @@ def main(args):
     for k in range(args.num_epochs):
         loss = svi.step(data)
         # for these two guides we clip parameters after each gradient step
-        if args.guide=='custom':
+        if args.guide == 'custom':
             clip_params()
-        elif args.guide=='easy':
+        elif args.guide == 'easy':
             clip_params(layers=[''])
 
         if k % args.eval_frequency == 0 and k > 0 or k == args.num_epochs - 1:
