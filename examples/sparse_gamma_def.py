@@ -26,7 +26,7 @@ import pyro.optim as optim
 import wget
 
 from pyro.contrib.examples.util import get_data_directory
-from pyro.distributions import Gamma, Poisson
+from pyro.distributions import Gamma, Poisson, Normal
 from pyro.infer import SVI, TraceMeanField_ELBO
 from pyro.contrib.autoguide import AutoDiagonalNormal
 from pyro.contrib.autoguide.initialization import init_to_feasible
@@ -133,18 +133,18 @@ class SparseGammaDEF(object):
             sample_zs("bottom", self.bottom_width)
 
 
-# define a helper function to clip parameters defining the custom and easy guide.
+# define a helper function to clip parameters defining the custom guide.
 # (this is to avoid regions of the gamma distributions with extremely small means)
-def clip_params(layers=["_q_top", "_q_mid", "_q_bottom"]):
+def clip_params():
     for param, clip in zip(("alpha", "mean"), (-2.5, -4.5)):
-        for layer in layers:
+        for layer in ["_q_top", "_q_mid", "_q_bottom"]:
             for wz in ["_w", "_z"]:
                 pyro.param(param + wz + layer).data.clamp_(min=clip)
 
 
 # Define a custom guide using the EasyGuide class.
 # Unlike the 'auto' guide, this guide supports data subsampling.
-# (This guide is functionally similar to the custom guide, but performs
+# (This guide is functionally similar to the auto guide, but performs
 # somewhat worse, since KL divergences are not computed analytically in the ELBO
 # because the ELBO thinks the mean-field structure is violated by the various
 # group statements.)
@@ -152,24 +152,24 @@ class MyEasyGuide(EasyGuide):
     def guide(self, x):
         # group all the latent weights into one large latent variable
         global_group = self.group(match="w_.*")
-        global_alpha = softplus(pyro.param("alpha_w",
-                                lambda: rand_tensor(global_group.event_shape, 0.5, 0.1)))
-        global_mean = softplus(pyro.param("mean_w",
+        global_mean = pyro.param("w_mean",
+                                lambda: rand_tensor(global_group.event_shape, 0.5, 0.1))
+        global_scale = softplus(pyro.param("w_scale",
                                lambda: rand_tensor(global_group.event_shape, 0.0, 0.1)))
-        # use a mean field gamma distribution on all the ws
-        global_group.sample("ws", Gamma(global_alpha, global_alpha / global_mean).to_event(1))
+        # use a mean field Normal distribution on all the ws
+        global_group.sample("ws", Normal(global_mean, global_scale).to_event(1))
 
         # group all the latent zs into one large latent variable
         local_group = self.group(match="z_.*")
         x_shape = x.shape[:1] + local_group.event_shape
 
         with self.plate("data", x.size(0)):
-            local_alpha = softplus(pyro.param("alpha_z",
-                                   lambda: rand_tensor(x_shape, 0.5, 0.1)))
-            local_mean = softplus(pyro.param("mean_z",
+            local_mean = pyro.param("z_mean",
+                                   lambda: rand_tensor(x_shape, 0.5, 0.1))
+            local_scale = softplus(pyro.param("z_scale",
                                   lambda: rand_tensor(x_shape, 0.0, 0.1)))
-            # use a mean field gamma distribution on all the zs
-            local_group.sample("zs", Gamma(local_alpha, local_alpha / local_mean).to_event(1))
+            # use a mean field Normal distribution on all the zs
+            local_group.sample("zs", Normal(local_mean, local_scale).to_event(1))
 
 
 def main(args):
@@ -218,11 +218,9 @@ def main(args):
     # the training loop
     for k in range(args.num_epochs):
         loss = svi.step(data)
-        # for these two guides we clip parameters after each gradient step
+        # for the custom guide we clip parameters after each gradient step
         if args.guide == 'custom':
             clip_params()
-        elif args.guide == 'easy':
-            clip_params(layers=[''])
 
         if k % args.eval_frequency == 0 and k > 0 or k == args.num_epochs - 1:
             loss = svi_eval.evaluate_loss(data)
@@ -233,7 +231,7 @@ if __name__ == '__main__':
     assert pyro.__version__.startswith('0.3.3')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=1000, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=2000, type=int, help='number of training epochs')
     parser.add_argument('-ef', '--eval-frequency', default=25, type=int,
                         help='how often to evaluate elbo (number of epochs)')
     parser.add_argument('-ep', '--eval-particles', default=20, type=int,
