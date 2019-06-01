@@ -96,7 +96,7 @@ class SparseGammaDEF(object):
             pyro.sample('obs', Poisson(mean_obs).to_event(1), obs=x)
 
     # define our custom guide a.k.a. variational distribution.
-    # (note the guide is mean field)
+    # (note the guide is mean field gamma)
     def guide(self, x):
         x_size = x.size(0)
 
@@ -144,6 +144,7 @@ def clip_params():
 
 # Define a custom guide using the EasyGuide class.
 # Unlike the 'auto' guide, this guide supports data subsampling.
+# This is the best performing of the three guides.
 # (This guide is functionally similar to the auto guide, but performs
 # somewhat better. The reason seems to be some combination of: i) the better
 # numerical stability of the softplus; and ii) the custom initialization.
@@ -192,9 +193,10 @@ def main(args):
 
     sparse_gamma_def = SparseGammaDEF()
 
-    # due to the special logic in the custom guide (e.g. parameter clipping), the custom guide
-    # is more numerically stable and enables us to use a larger learning rate (and consequently
-    # achieves better results)
+    # Due to the special logic in the custom guide (e.g. parameter clipping), the custom guide
+    # seems to be more amenable to higher learning rates.
+    # Nevertheless, the easy guide performs the best (presumably because of numerical instabilities
+    # related to the gamma distribution in the custom guide).
     learning_rate = 0.2 if args.guide in ['auto', 'easy'] else 4.5
     momentum = 0.05 if args.guide in ['auto', 'easy'] else 0.1
     opt = optim.AdagradRMSProp({"eta": learning_rate, "t": momentum})
@@ -234,7 +236,7 @@ if __name__ == '__main__':
     assert pyro.__version__.startswith('0.3.3')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=1000, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=1500, type=int, help='number of training epochs')
     parser.add_argument('-ef', '--eval-frequency', default=25, type=int,
                         help='how often to evaluate elbo (number of epochs)')
     parser.add_argument('-ep', '--eval-particles', default=20, type=int,
