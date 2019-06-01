@@ -153,9 +153,9 @@ class MyEasyGuide(EasyGuide):
         # group all the latent weights into one large latent variable
         global_group = self.group(match="w_.*")
         global_mean = pyro.param("w_mean",
-                                lambda: rand_tensor(global_group.event_shape, 0.5, 0.1))
+                                 lambda: rand_tensor(global_group.event_shape, 0.5, 0.1))
         global_scale = softplus(pyro.param("w_scale",
-                               lambda: rand_tensor(global_group.event_shape, 0.0, 0.1)))
+                                lambda: rand_tensor(global_group.event_shape, 0.0, 0.1)))
         # use a mean field Normal distribution on all the ws
         global_group.sample("ws", Normal(global_mean, global_scale).to_event(1))
 
@@ -165,9 +165,9 @@ class MyEasyGuide(EasyGuide):
 
         with self.plate("data", x.size(0)):
             local_mean = pyro.param("z_mean",
-                                   lambda: rand_tensor(x_shape, 0.5, 0.1))
+                                    lambda: rand_tensor(x_shape, 0.5, 0.1))
             local_scale = softplus(pyro.param("z_scale",
-                                  lambda: rand_tensor(x_shape, 0.0, 0.1)))
+                                   lambda: rand_tensor(x_shape, 0.0, 0.1)))
             # use a mean field Normal distribution on all the zs
             local_group.sample("zs", Normal(local_mean, local_scale).to_event(1))
 
