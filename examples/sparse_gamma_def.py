@@ -146,7 +146,7 @@ def clip_params():
 # Unlike the 'auto' guide, this guide supports data subsampling.
 # (This guide is functionally similar to the auto guide, but performs
 # somewhat better. The reason seems to be some combination of: i) the better
-# numerical stability of the softplus; and ii) the custom initalization.
+# numerical stability of the softplus; and ii) the custom initialization.
 # Though note that in the easy guide case KL divergences are not computed
 # analytically in the ELBO because the ELBO thinks the mean-field structure
 # is violated by the various group statements, which leads to higher variance
@@ -234,7 +234,7 @@ if __name__ == '__main__':
     assert pyro.__version__.startswith('0.3.3')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=2000, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=1000, type=int, help='number of training epochs')
     parser.add_argument('-ef', '--eval-frequency', default=25, type=int,
                         help='how often to evaluate elbo (number of epochs)')
     parser.add_argument('-ep', '--eval-particles', default=20, type=int,
