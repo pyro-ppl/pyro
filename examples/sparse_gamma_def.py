@@ -145,9 +145,12 @@ def clip_params():
 # Define a custom guide using the EasyGuide class.
 # Unlike the 'auto' guide, this guide supports data subsampling.
 # (This guide is functionally similar to the auto guide, but performs
-# somewhat worse, since KL divergences are not computed analytically in the ELBO
-# because the ELBO thinks the mean-field structure is violated by the various
-# group statements.)
+# somewhat better. The reason seems to be some combination of: i) the better
+# numerical stability of the softplus; and ii) the custom initalization.
+# Though note that in the easy guide case KL divergences are not computed
+# analytically in the ELBO because the ELBO thinks the mean-field structure
+# is violated by the various group statements, which leads to higher variance
+# gradients.)
 class MyEasyGuide(EasyGuide):
     def guide(self, x):
         # group all the latent weights into one large latent variable
