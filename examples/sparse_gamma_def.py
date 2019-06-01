@@ -52,7 +52,7 @@ class SparseGammaDEF(object):
         self.mid_width = 40
         self.bottom_width = 15
         self.image_size = 64 * 64
-        # define hyperpaameters that control the prior
+        # define hyperparameters that control the prior
         self.alpha_z = torch.tensor(0.1)
         self.beta_z = torch.tensor(0.1)
         self.alpha_w = torch.tensor(0.1)
@@ -135,7 +135,7 @@ class SparseGammaDEF(object):
             sample_zs("bottom", self.bottom_width)
 
 
-# define a helper function to clip parameters defining the custom guide.
+# define a helper function to clip parameters defining the custom and easy guide.
 # (this is to avoid regions of the gamma distributions with extremely small means)
 def clip_params(layers=["_q_top", "_q_mid", "_q_bottom"]):
     for param, clip in zip(("alpha", "mean"), (-2.5, -4.5)):
@@ -147,7 +147,9 @@ def clip_params(layers=["_q_top", "_q_mid", "_q_bottom"]):
 # Define a custom guide using the EasyGuide class.
 # Unlike the 'auto' guide, this guide supports data subsampling.
 # (This guide is functionally similar to the custom guide, but performs
-# somewhat worse, since KL divergences are not computed analytically in the ELBO.)
+# somewhat worse, since KL divergences are not computed analytically in the ELBO
+# because the ELBO thinks the mean-field structure is violated by the various
+# group statements.)
 class MyEasyGuide(EasyGuide):
     def guide(self, x):
         # group all the latent weights into one large latent variable
