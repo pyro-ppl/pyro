@@ -298,7 +298,7 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
 
         loss, surrogate_loss = self._jit_loss_and_surrogate_loss(*args, **kwargs)
 
-        surrogate_loss.backward()  # triggers jit compilation
+        surrogate_loss.backward(retain_graph=self.retain_graph)  # triggers jit compilation
 
         loss = loss.item()
         warn_if_nan(loss, "loss")
