@@ -299,7 +299,8 @@ class TreeCat(object):
             :class:`torch.ByteTensor` if partially observed.
         """
         elbo = TraceEnum_ELBO(max_plate_nesting=1)
-        return elbo.differentiable_loss(self.model, self.guide, data, mask)
+        loss = elbo.differentiable_loss if torch.is_grad_enabled() else elbo.loss
+        return loss(self.model, self.guide, data, mask)
 
 
 class TreeCatTrainer(object):

@@ -118,7 +118,8 @@ class Mixture(object):
         Compute posterior preditive probability of partially observed data.
         """
         elbo = TraceEnum_ELBO(max_plate_nesting=1)
-        return elbo.differentiable_loss(self.model, self.guide, data)
+        loss = elbo.differentiable_loss if torch.is_grad_enabled() else elbo.loss
+        return loss(self.model, self.guide, data)
 
 
 class MixtureTrainer(object):
