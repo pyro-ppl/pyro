@@ -14,7 +14,6 @@ from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.infer.discrete import TraceEnumSample_ELBO, infer_discrete
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
-from pyro.util import optional
 
 
 class TreeCat(object):
@@ -114,7 +113,7 @@ class TreeCat(object):
             self._edge_index[v1, v2] = e
             self._edge_index[v2, v1] = e
 
-    def model(self, data, mask=True, num_rows=None, impute=False):
+    def model(self, data, mask=None, num_rows=None, impute=False):
         """
         The generative model of tabular data.
 
@@ -132,9 +131,9 @@ class TreeCat(object):
         :rtype: list
         """
         assert len(data) == len(self.features)
-        assert not all(column is None for column in data)
-        if mask is True:
-            mask = [True] * len(data)
+        assert not all(col is None for col in data)
+        if mask is None:
+            mask = [col is not None for col in data]
         device = next(col.device for col in data if col is not None)
         batch_size = next(col.size(0) for col in data if col is not None)
         if num_rows is None:
@@ -168,7 +167,7 @@ class TreeCat(object):
 
             # Recursively sample z and x in Markov contexts.
             z = [None] * V
-            x = [None] * V
+            x = list(data)
             v = self._root
             self._propagate(data, mask, impute, mixtures, vertex_probs, edge_probs, z, x, v)
 
@@ -202,17 +201,30 @@ class TreeCat(object):
                            infer={"enumerate": "parallel"}).cpu()
 
         # Sample observed features conditioned on latent classes.
-        if (data[v] is not None and mask[v] is not False) or impute:
-            with optional(poutine.mask(mask=mask[v]), mask[v] is not True):
-                x[v] = pyro.sample("treecat_x_{}".format(v),
-                                   self.features[v].value_dist(mixtures[v], component=z[v]),
-                                   obs=data[v])
+        x_dist = self.features[v].value_dist(mixtures[v], component=z[v])
+        if mask[v] is True:
+            # All rows are observed.
+            pyro.sample("treecat_x_obs_{}".format(v), x_dist, obs=data[v])
+        elif mask[v] is False:
+            # No rows are observed.
+            if impute:
+                x[v] = pyro.sample("treecat_x_{}".format(v), x_dist)
+        else:
+            # Some rows are observed. This simulates a masked sample statement.
+            with poutine.mask(mask=mask[v]):
+                pyro.sample("treecat_x_obs_{}".format(v), x_dist, obs=data[v])
+            if impute:
+                with poutine.mask(mask=~mask[v]):
+                    x[v] = pyro.sample("treecat_x_{}".format(v), x_dist)
+                # Interleave conditioned and sampled data.
+                mask_v = (slice(None),) * (x[v].dim() - data[v].dim()) + (mask[v],)
+                x[v][mask_v] = data[v][mask[v]]
 
         # Continue sampling downstream.
         for v2 in children:
             self._propagate(data, mask, impute, mixtures, vertex_probs, edge_probs, z, x, v2)
 
-    def guide(self, data, mask=True, num_rows=None, impute=False):
+    def guide(self, data, mask=None, num_rows=None, impute=False):
         """
         A :class:`~pyro.contrib.autoguide.AutoDelta` guide for MAP inference of
         continuous parameters.
@@ -254,7 +266,7 @@ class TreeCat(object):
         """
         return TreeCatTrainer(self, optim, backend)
 
-    def sample(self, data, mask=True, num_samples=None):
+    def sample(self, data, mask=None, num_samples=None):
         """
         Sample missing data conditioned on observed data.
 
@@ -265,6 +277,9 @@ class TreeCat(object):
             :class:`torch.ByteTensor` if partially observed.
         :param int num_samples: Optional number of samples to draw.
         """
+        assert len(data) == len(self.features)
+        if mask is None:
+            mask = [col is not None for col in data]
         model = self.model
         guide = self.guide
         first_available_dim = -2
@@ -279,13 +294,13 @@ class TreeCat(object):
 
         # Sample global parameters from the guide.
         guide_trace = poutine.trace(guide).get_trace(data, mask)
-        model = poutine.replay(model, guide_trace)
 
-        # Sample local latent variables using variable elimination.
-        model = infer_discrete(model, first_available_dim=first_available_dim)
-        return model(data, mask, impute=True)
+        # Sample local variables using variable elimination.
+        return infer_discrete(
+            poutine.replay(model, guide_trace),
+            first_available_dim=first_available_dim)(data, mask, impute=True)
 
-    def log_prob(self, data, mask=True):
+    def log_prob(self, data, mask=None):
         """
         Compute posterior predictive probability of partially observed data.
 
@@ -323,7 +338,7 @@ class TreeCatTrainer(object):
         self._model = model
         self._initialized = False
 
-    def init(self, data, mask=True):
+    def init(self, data, mask=None):
         """
         Initializes shared feature parameters given some or all data.
 
@@ -334,7 +349,7 @@ class TreeCatTrainer(object):
             :class:`torch.ByteTensor` if partially observed.
         """
         assert len(data) == len(self._model.features)
-        if mask is True:
+        if mask is None:
             mask = [True] * len(data)
         assert len(mask) == len(data)
         for feature, col_data, col_mask in zip(self._model.features, data, mask):
@@ -344,7 +359,7 @@ class TreeCatTrainer(object):
                 feature.init(col_data)
         self._initialized = True
 
-    def step(self, data, mask=True, num_rows=None):
+    def step(self, data, mask=None, num_rows=None):
         """
         Runs one training step.
 
