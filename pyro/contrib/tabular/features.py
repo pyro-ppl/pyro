@@ -236,6 +236,7 @@ class Real(Feature):
         loc_loc = data.mean() / scale_loc.exp()
         loc_scale = data.new_tensor(2.).exp()
 
+        # TODO add event_dim args for funsor backend
         pyro.param("auto_{}_scale_loc".format(self.name), scale_loc)
         pyro.param("auto_{}_scale_scale".format(self.name), scale_scale,
                    constraint=constraints.positive)
