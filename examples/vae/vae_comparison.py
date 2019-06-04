@@ -250,7 +250,7 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--num-epochs', nargs='?', default=10, type=int)
     parser.add_argument('--batch_size', nargs='?', default=128, type=int)
     parser.add_argument('--rng_seed', nargs='?', default=0, type=int)
-    parser.add_argument('--impl', nargs='?', default='pytorch', type=str)
+    parser.add_argument('--impl', nargs='?', default='pyro', type=str)
     parser.add_argument('--skip_eval', action='store_true')
     parser.add_argument('--jit', action='store_true')
     parser.set_defaults(skip_eval=False)
