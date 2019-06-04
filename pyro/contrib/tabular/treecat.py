@@ -202,15 +202,12 @@ class TreeCat(object):
 
         # Sample observed features conditioned on latent classes.
         x_dist = self.features[v].value_dist(mixtures[v], component=z[v])
-        if mask[v] is True:
-            # All rows are observed.
+        if mask[v] is True:  # All rows are observed.
             pyro.sample("treecat_x_obs_{}".format(v), x_dist, obs=data[v])
-        elif mask[v] is False:
-            # No rows are observed.
+        elif mask[v] is False:  # No rows are observed.
             if impute:
                 x[v] = pyro.sample("treecat_x_{}".format(v), x_dist)
-        else:
-            # Some rows are observed. This simulates a masked sample statement.
+        else:  # Some rows are observed.
             with poutine.mask(mask=mask[v]):
                 pyro.sample("treecat_x_obs_{}".format(v), x_dist, obs=data[v])
             if impute:
