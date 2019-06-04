@@ -181,8 +181,8 @@ def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
         use_baseline, baseline_loss_term, baseline = _construct_baseline(node, guide_site, downstream_cost)
 
         if use_baseline:
-            downstream_cost -= baseline
-            baseline_loss += baseline_loss_term
+            downstream_cost = downstream_cost - baseline
+            baseline_loss = baseline_loss + baseline_loss_term
 
         surrogate_elbo += (score_function * downstream_cost.detach()).sum()
 
