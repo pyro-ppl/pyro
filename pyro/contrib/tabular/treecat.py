@@ -1,17 +1,19 @@
 from __future__ import absolute_import, division, print_function
 
 import logging
-from collections import deque
-
-import torch
+import re
+from collections import OrderedDict, deque
 
 import pyro
 import pyro.distributions as dist
+import torch
 from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta
 from pyro.distributions.spanning_tree import make_complete_graph, sample_tree_mcmc
-from pyro.infer import SVI, TraceEnum_ELBO
+from pyro.infer import SVI
 from pyro.infer.discrete import TraceEnumSample_ELBO, infer_discrete
+from pyro.ops import packed
+from pyro.ops.contract import contract_to_tensor
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 
@@ -299,20 +301,38 @@ class TreeCat(object):
 
     def log_prob(self, data, mask=None):
         """
-        Compute posterior predictive probability of partially observed data.
-
-        Note this is not normalized. To compute a normalized probability,
-        subtract the log prob of empty data.
+        Compute posterior predictive probabilities of partially observed rows.
 
         :param list data: A minibatch of column-oriented data.  Each column may
             be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
         :param list mask: A minibatch of column masks. Each column may be
             ``True`` if fully observed, ``False`` if fully unobserved, or a
             :class:`torch.ByteTensor` if partially observed.
+        :return: A batch of posterior predictive log probabilities with one
+            entry per row.
+        :rtype: torch.Tensor
         """
-        elbo = TraceEnum_ELBO(max_plate_nesting=1)
-        loss = elbo.differentiable_loss if torch.is_grad_enabled() else elbo.loss
-        return loss(self.model, self.guide, data, mask)
+        assert len(data) == len(self.features)
+        num_rows = next(col.size(0) for col in data if col is not None)
+
+        # Trace the guide and model.
+        guide_trace = poutine.trace(self.guide).get_trace(data, mask)
+        model_trace = poutine.trace(
+            poutine.replay(self.model, guide_trace)).get_trace(data, mask)
+        model_trace.compute_log_prob()
+        model_trace.pack_tensors()
+
+        # Perform variable elimination, preserving the data plate.
+        ordinal = frozenset({model_trace.plate_to_symbol["data"]})
+        log_factors = [packed.scale_and_mask(site["packed"]["unscaled_log_prob"],
+                                             mask=site["packed"]["mask"])
+                       for name, site in model_trace.nodes.items()
+                       if re.match("treecat_[zx]_.*", name)]
+        sum_dims = set.union(*(set(x._pyro_dims) for x in log_factors)) - ordinal
+        tensor_tree = OrderedDict({ordinal: log_factors})
+        log_prob = contract_to_tensor(tensor_tree, sum_dims, ordinal)
+        assert log_prob.shape == (num_rows,)
+        return log_prob
 
 
 class TreeCatTrainer(object):

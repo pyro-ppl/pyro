@@ -55,13 +55,15 @@ def test_sample_smoke(data, Model, capacity, num_samples):
 @pytest.mark.parametrize('grad_enabled', [True, False])
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('data', TINY_DATASETS)
-@pytest.mark.parametrize('Model', [Mixture, TreeCat])
+@pytest.mark.parametrize('Model', [TreeCat])
 def test_log_prob_smoke(data, Model, capacity, grad_enabled):
     features = TINY_SCHEMA[:len(data)]
     model = Model(features, capacity)
     with torch.set_grad_enabled(grad_enabled):
         loss = model.log_prob(data)
-    assert isinstance(loss, torch.Tensor if grad_enabled else float)
+    assert isinstance(loss, torch.Tensor)
+    num_rows = next(col.size(0) for col in data if col is not None)
+    assert loss.shape == (num_rows,)
 
 
 @pytest.mark.parametrize('data', TINY_DATASETS)

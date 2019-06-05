@@ -113,14 +113,6 @@ class Mixture(object):
         model = infer_discrete(model, first_available_dim=first_available_dim)
         return model(data, impute=True)
 
-    def log_prob(self, data):
-        """
-        Compute posterior preditive probability of partially observed data.
-        """
-        elbo = TraceEnum_ELBO(max_plate_nesting=1)
-        loss = elbo.differentiable_loss if torch.is_grad_enabled() else elbo.loss
-        return loss(self.model, self.guide, data)
-
 
 class MixtureTrainer(object):
     """
