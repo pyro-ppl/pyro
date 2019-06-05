@@ -80,11 +80,14 @@ class TreeCat(object):
     # These custom __getstate__ and __setstate__ methods are used by the pickle
     # module for model serialization.
     def __getstate__(self):
-        init_args = (self.features, self.capacity, self.edges)
+        edges = self.edges.tolist()
+        init_args = (self.features, self.capacity, edges)
         return {"init_args": init_args, "edge_guide": self._edge_guide}
 
     def __setstate__(self, state):
-        self.__init__(*state["init_args"])
+        features, capacity, edges = state["init_args"]
+        edges = torch.tensor(edges, device="cpu")
+        self.__init__(features, capacity, edges)
         self._edge_guide = state["edge_guide"]
         self._edge_guide.edges = self.edges
 

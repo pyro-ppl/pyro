@@ -69,7 +69,8 @@ def test_log_prob_smoke(data, Model, capacity, grad_enabled):
 @pytest.mark.parametrize('data', TINY_DATASETS)
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('Model', [Mixture, TreeCat])
-def test_pickle(data, Model, capacity):
+@pytest.mark.parametrize('method', ['pickle', 'torch'])
+def test_pickle(method, data, Model, capacity):
 
     def train_model():
         V = len(data)
@@ -90,14 +91,21 @@ def test_pickle(data, Model, capacity):
         pickle_filename = os.path.join(path, "model.pkl")
         pyro.get_param_store().save(param_filename)
         with open(pickle_filename, "wb") as f:
-            pickle.dump(model, f, pickle.HIGHEST_PROTOCOL)
+            if method == 'pickle':
+                pickle.dump(model, f, pickle.HIGHEST_PROTOCOL)
+            elif method == 'torch':
+                torch.save(model, f, pickle_module=pickle,
+                           pickle_protocol=pickle.HIGHEST_PROTOCOL)
 
         pyro.get_param_store().clear()
         del model
 
         pyro.get_param_store().load(param_filename)
         with open(pickle_filename, "rb") as f:
-            model = pickle.load(f)
+            if method == 'pickle':
+                model = pickle.load(f)
+            elif method == 'torch':
+                model = torch.load(f, pickle_module=pickle)
 
     if Model is TreeCat:
         assert (model.edges == expected_edges).all()
