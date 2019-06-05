@@ -138,11 +138,11 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
 
 def _compute_elbo_reparam(model_trace, guide_trace):
 
-    # Compute a surrogate ELBO. In [1], this is simply the ELBO because
-    # (non)reparameterization is captured in the structure of the computation
-    # graph, and the required behavior under parameter differentiation emerges
-    # from that structure. Here the behavior of E_p[log(p)] under parameter
-    # differentiation is instead represented in site["score_parts"].
+    # In ref [1], section 3.2, the part of the surrogate loss computed here is
+    # \sum{cost}, which in this case is the ELBO. Instead of using the ELBO,
+    # this implementation uses a surrogate ELBO which modifies some entropy
+    # terms depending on the parameterization. This reduces the variance of the
+    # gradient under some conditions.
 
     elbo = 0.0
     surrogate_elbo = 0.0
@@ -154,7 +154,10 @@ def _compute_elbo_reparam(model_trace, guide_trace):
             surrogate_elbo += site["log_prob_sum"]
 
     # Bring log q(z|...) terms into the ELBO, and effective terms into the
-    # surrogate
+    # surrogate. Depending on the parameterization of a site, its log q(z|...)
+    # cost term may not contribute (in expectation) to the gradient. To reduce
+    # the variance under some conditions, the default entropy terms from
+    # site[`score_parts`] are used.
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample":
             elbo -= site["log_prob_sum"]
