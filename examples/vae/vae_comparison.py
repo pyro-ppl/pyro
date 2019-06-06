@@ -103,7 +103,7 @@ class VAE(object):
         """
         z_mean, z_var = self.vae_encoder(x)
         if self.mode == TRAIN:
-            z = Normal(z_mean, z_var.sqrt()).sample()
+            z = Normal(z_mean, z_var.sqrt()).rsample()
         else:
             z = z_mean
         return self.vae_decoder(z), z_mean, z_var
