@@ -75,6 +75,7 @@ setup(
     description='A Python library for probabilistic modeling and inference',
     long_description=long_description,
     packages=find_packages(include=['pyro', 'pyro.*']),
+    package_data={"pyro.distributions": ["*.cpp"]},
     url='http://pyro.ai',
     author='Uber AI Labs',
     author_email='pyro@uber.com',
