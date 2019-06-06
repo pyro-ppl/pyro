@@ -15,7 +15,6 @@ from pyro.infer.discrete import TraceEnumSample_ELBO, infer_discrete
 from pyro.ops import packed
 from pyro.ops.contract import contract_to_tensor
 from pyro.ops.indexing import Vindex
-from pyro.optim import Adam
 
 
 class TreeCat(object):
@@ -118,12 +117,21 @@ class TreeCat(object):
             self._edge_index[v1, v2] = e
             self._edge_index[v2, v1] = e
 
+    def _validate_data_mask(self, data, mask):
+        assert len(data) == len(self.features)
+        assert all(isinstance(col, torch.Tensor) for col in data)
+        if mask is None:
+            mask = [True] * len(self.features)
+        assert len(mask) == len(self.features)
+        assert all(isinstance(col, (torch.Tensor, bool)) for col in mask)
+        return data, mask
+
     def model(self, data, mask=None, num_rows=None, impute=False):
         """
         The generative model of tabular data.
 
-        :param list data: A minibatch of column-oriented data.  Each column may
-            be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
+        :param list data: A minibatch of column-oriented data. Each column
+            should be a :class:`torch.Tensor` .
         :param list mask: A minibatch of column masks. Each column may be
             ``True`` if fully observed, ``False`` if fully unobserved, or a
             :class:`torch.ByteTensor` if partially observed.
@@ -135,12 +143,9 @@ class TreeCat(object):
             stochastically imputed according the joint posterior.
         :rtype: list
         """
-        assert len(data) == len(self.features)
-        assert not all(col is None for col in data)
-        if mask is None:
-            mask = [col is not None for col in data]
-        device = next(col.device for col in data if col is not None)
-        batch_size = next(col.size(0) for col in data if col is not None)
+        data, mask = self._validate_data_mask(data, mask)
+        device = data[0].device
+        batch_size = len(data[0])
         if num_rows is None:
             num_rows = batch_size
         V = len(self.features)
@@ -231,8 +236,8 @@ class TreeCat(object):
         A :class:`~pyro.contrib.autoguide.AutoDelta` guide for MAP inference of
         continuous parameters.
 
-        :param list data: A minibatch of column-oriented data.  Each column may
-            be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
+        :param list data: A minibatch of column-oriented data. Each column
+            should be a :class:`torch.Tensor` .
         :param list mask: A minibatch of column masks. Each column may be
             ``True`` if fully observed, ``False`` if fully unobserved, or a
             :class:`torch.ByteTensor` if partially observed.
@@ -241,7 +246,8 @@ class TreeCat(object):
         :param bool impute: Whether to impute missing features. This should be
             set to False during training and True when making predictions.
         """
-        device = next(col.device for col in data if col is not None)
+        data, mask = self._validate_data_mask(data, mask)
+        device = data[0].device
         V = len(self.features)
         E = V - 1
 
@@ -256,12 +262,12 @@ class TreeCat(object):
             pyro.sample("treecat_edge_probs",
                         dist.Delta(edge_probs.to(device), event_dim=1))
 
-    def trainer(self, optim=None, backend="cpp"):
+    def trainer(self, optim, backend="cpp"):
         """
         Creates a :class:`TreeCatTrainer` object for training.
 
         :param pyro.optim.optim.PyroOptim optim: A Pyro optimizer to learn
-            feature parameters.
+            parameters, e.g. :class:`~pyro.optim.pytorch_optimizers.Adam` .
         :param str backend: Either "python" or "cpp". Defaults to "cpp". The
             "cpp" backend is much faster for data with more than ~10 features.
         :rtype: TreeCatTrainer
@@ -272,16 +278,13 @@ class TreeCat(object):
         """
         Sample missing data conditioned on observed data.
 
-        :param list data: A minibatch of column-oriented data.  Each column may
-            be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
+        :param list data: A minibatch of column-oriented data. Each column
+            should be a :class:`torch.Tensor` .
         :param list mask: A minibatch of column masks. Each column may be
             ``True`` if fully observed, ``False`` if fully unobserved, or a
             :class:`torch.ByteTensor` if partially observed.
         :param int num_samples: Optional number of samples to draw.
         """
-        assert len(data) == len(self.features)
-        if mask is None:
-            mask = [col is not None for col in data]
         model = self.model
         guide = self.guide
         first_available_dim = -2
@@ -306,8 +309,8 @@ class TreeCat(object):
         """
         Compute posterior predictive probabilities of partially observed rows.
 
-        :param list data: A minibatch of column-oriented data.  Each column may
-            be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
+        :param list data: A minibatch of column-oriented data. Each column
+            should be a :class:`torch.Tensor` .
         :param list mask: A minibatch of column masks. Each column may be
             ``True`` if fully observed, ``False`` if fully unobserved, or a
             :class:`torch.ByteTensor` if partially observed.
@@ -315,9 +318,6 @@ class TreeCat(object):
             entry per row.
         :rtype: torch.Tensor
         """
-        assert len(data) == len(self.features)
-        num_rows = next(col.size(0) for col in data if col is not None)
-
         # Trace the guide and model.
         guide_trace = poutine.trace(self.guide).get_trace(data, mask)
         model_trace = poutine.trace(
@@ -334,7 +334,7 @@ class TreeCat(object):
         sum_dims = set.union(*(set(x._pyro_dims) for x in log_factors)) - ordinal
         tensor_tree = OrderedDict({ordinal: log_factors})
         log_prob = contract_to_tensor(tensor_tree, sum_dims, ordinal)
-        assert log_prob.shape == (num_rows,)
+        assert log_prob.shape == (len(data[0]),)
         return log_prob
 
 
@@ -342,16 +342,14 @@ class TreeCatTrainer(object):
     """
     Maintains state to initialize and train a :class:`TreeCat` model.
 
-    :param TreeCat model: A TreeCat model to train.
+    :param TreeCat model: A :class:`TreeCat` model to train.
     :param pyro.optim.optim.PyroOptim optim: A Pyro optimizer to learn feature
-        parameters.
+        parameters, e.g. :class:`~pyro.optim.pytorch_optimizers.Adam` .
     :param str backend: Either "python" or "cpp". Defaults to "cpp". The
         "cpp" backend is much faster for data with more than ~10 features.
     """
-    def __init__(self, model, optim=None, backend="cpp"):
+    def __init__(self, model, optim, backend="cpp"):
         assert isinstance(model, TreeCat)
-        if optim is None:
-            optim = Adam({})
         self.backend = backend
         self._elbo = TraceEnumSample_ELBO(max_plate_nesting=1)
         self._svi = SVI(model.model, model.guide, optim, self._elbo)
@@ -362,16 +360,13 @@ class TreeCatTrainer(object):
         """
         Initializes shared feature parameters given some or all data.
 
-        :param list data: A minibatch of column-oriented data.  Each column may
-            be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
+        :param list data: A minibatch of column-oriented data. Each column
+            should be a :class:`torch.Tensor` .
         :param list mask: A minibatch of column masks. Each column may be
             ``True`` if fully observed, ``False`` if fully unobserved, or a
             :class:`torch.ByteTensor` if partially observed.
         """
-        assert len(data) == len(self._model.features)
-        if mask is None:
-            mask = [True] * len(data)
-        assert len(mask) == len(data)
+        data, mask = self._model._validate_data_mask(data, mask)
         for feature, col_data, col_mask in zip(self._model.features, data, mask):
             if col_data is not None and col_mask is not False:
                 if isinstance(col_mask, torch.Tensor):
@@ -383,8 +378,8 @@ class TreeCatTrainer(object):
         """
         Runs one training step.
 
-        :param list data: A minibatch of column-oriented data.  Each column may
-            be a :class:`torch.Tensor` (if observed) or ``None`` (if unobserved).
+        :param list data: A minibatch of column-oriented data. Each column
+            should be a :class:`torch.Tensor` .
         :param list mask: A minibatch of column masks. Each column may be
             ``True`` if fully observed, ``False`` if fully unobserved, or a
             :class:`torch.ByteTensor` if partially observed.

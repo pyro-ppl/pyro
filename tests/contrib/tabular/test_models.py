@@ -10,77 +10,108 @@ import pyro
 import pyro.poutine as poutine
 from pyro.contrib.tabular.features import Boolean, Discrete, Real
 from pyro.contrib.tabular.treecat import TreeCat
+from pyro.optim import Adam
 from tests.common import TemporaryDirectory, assert_close
 
-TINY_SCHEMA = [Boolean("f1"), Real("f2"), Discrete("f3", 3), Real("f4"), Boolean("f5")]
 TINY_DATASETS = [
-    [torch.tensor([0., 0., 1.]), None],
-    [None, torch.tensor([-0.5, 0.5, 10.])],
-    [None, None, torch.tensor([0, 1, 2, 2, 2], dtype=torch.long)],
-    [torch.tensor([0., 0., 1.]), torch.tensor([-0.5, 0.5, 10.])],
-    [torch.tensor([0., 0., 0., 1., 1.]),
-     torch.tensor([-1.1, -1.0, -0.9, 0.9, 1.0]),
-     torch.tensor([0, 1, 2, 2, 2], dtype=torch.long),
-     torch.tensor([-2., -1., -0., 1., 2.]),
-     torch.tensor([0., 1., 1., 1., 0.])],
+    {
+        "features": [Boolean("f1"), Boolean("f2"), Boolean("f3")],
+        "data": [torch.tensor([0., 0., 1.])] * 3,
+        "mask": [torch.tensor([True, False, True], dtype=torch.uint8), True, False],
+    },
+    {
+        "features": [Discrete("f1", 3), Discrete("f2", 4), Discrete("f3", 5)],
+        "data": [torch.tensor([0, 1, 2, 2, 2])] * 3,
+        "mask": [torch.tensor([True, False, True, False, True], dtype=torch.uint8),
+                 True, False],
+    },
+    {
+        "features": [Real("f1"), Real("f2"), Real("f3")],
+        "data": [torch.tensor([-0.5, 0.5, 10.])] * 3,
+        "mask": [torch.tensor([True, False, True], dtype=torch.uint8), True, False],
+    },
+    {
+        "features": [Boolean("f1"), Real("f2"), Discrete("f3", 3), Real("f4"), Boolean("f5")],
+        "data": [torch.tensor([0., 0., 0., 1., 1.]),
+                 torch.tensor([-1.1, -1.0, -0.9, 0.9, 1.0]),
+                 torch.tensor([0, 1, 2, 2, 2], dtype=torch.long),
+                 torch.tensor([-2., -1., -0., 1., 2.]),
+                 torch.tensor([0., 1., 1., 1., 0.])],
+        "mask": [torch.tensor([True, False, True, False, True], dtype=torch.uint8),
+                 torch.tensor([True, True, True, False, True], dtype=torch.uint8),
+                 torch.tensor([True, False, True, True, True], dtype=torch.uint8),
+                 False,
+                 True],
+    },
 ]
 
 
-@pytest.mark.parametrize('data', TINY_DATASETS)
+def train_model(model, data, mask=None):
+    trainer = model.trainer(Adam({}))
+    trainer.init(data, mask)
+    for epoch in range(2):
+        trainer.step(data, mask)
+
+
+@pytest.mark.parametrize('masked', [False, True])
+@pytest.mark.parametrize('dataset', TINY_DATASETS)
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('Model', [TreeCat])
-def test_train_smoke(Model, data, capacity):
-    V = len(data)
-    features = TINY_SCHEMA[:V]
+def test_train_smoke(Model, dataset, capacity, masked):
+    features = dataset["features"]
+    data = dataset["data"]
+    mask = dataset["mask"]
+
     model = Model(features, capacity)
-    trainer = model.trainer()
-    trainer.init(data)
-    for i in range(10):
-        trainer.step(data)
+    train_model(model, data, mask if masked else None)
 
 
+@pytest.mark.parametrize('grad_enabled', [True, False])
 @pytest.mark.parametrize('capacity', [2, 16])
-@pytest.mark.parametrize('data', TINY_DATASETS)
+@pytest.mark.parametrize('dataset', TINY_DATASETS)
 @pytest.mark.parametrize('num_samples', [None, 8])
 @pytest.mark.parametrize('Model', [TreeCat])
-def test_sample_smoke(data, Model, capacity, num_samples):
-    features = TINY_SCHEMA[:len(data)]
+def test_sample_smoke(dataset, Model, capacity, num_samples, grad_enabled):
+    features = dataset["features"]
+    data = dataset["data"]
+    mask = dataset["mask"]
     model = Model(features, capacity)
-    samples = model.sample(data, num_samples=num_samples)
+    train_model(model, data)
+
+    with torch.set_grad_enabled(grad_enabled):
+        samples = model.sample(data, mask, num_samples=num_samples)
     assert isinstance(samples, list)
     assert len(samples) == len(features)
 
 
 @pytest.mark.parametrize('grad_enabled', [True, False])
 @pytest.mark.parametrize('capacity', [2, 16])
-@pytest.mark.parametrize('data', TINY_DATASETS)
+@pytest.mark.parametrize('dataset', TINY_DATASETS)
 @pytest.mark.parametrize('Model', [TreeCat])
-def test_log_prob_smoke(data, Model, capacity, grad_enabled):
-    features = TINY_SCHEMA[:len(data)]
+def test_log_prob_smoke(dataset, Model, capacity, grad_enabled):
+    features = dataset["features"]
+    data = dataset["data"]
     model = Model(features, capacity)
-    with torch.set_grad_enabled(grad_enabled):
-        loss = model.log_prob(data)
-    assert isinstance(loss, torch.Tensor)
-    num_rows = next(col.size(0) for col in data if col is not None)
-    assert loss.shape == (num_rows,)
+    train_model(model, data)
+
+    for mask in [None, dataset["mask"]]:
+        with torch.set_grad_enabled(grad_enabled):
+            loss = model.log_prob(data, mask)
+        assert isinstance(loss, torch.Tensor)
+        num_rows = len(data[0])
+        assert loss.shape == (num_rows,)
 
 
-@pytest.mark.parametrize('data', TINY_DATASETS)
+@pytest.mark.parametrize('dataset', TINY_DATASETS)
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('Model', [TreeCat])
 @pytest.mark.parametrize('method', ['pickle', 'torch'])
-def test_pickle(method, data, Model, capacity):
+def test_pickle(method, dataset, Model, capacity):
+    features = dataset["features"]
+    data = dataset["data"]
+    model = Model(features, capacity)
+    train_model(model, data)
 
-    def train_model():
-        V = len(data)
-        features = TINY_SCHEMA[:V]
-        model = Model(features, capacity)
-        trainer = model.trainer()
-        trainer.init(data)
-        trainer.step(data)
-        return model
-
-    model = train_model()
     if Model is TreeCat:
         expected_edges = model.edges
     expected_trace = poutine.trace(model.guide).get_trace(data)
