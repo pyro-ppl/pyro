@@ -109,6 +109,7 @@ setup(
             'nbsphinx>=0.3.2',
             'nbstripout',
             'nbval',
+            'ninja',
             'pypandoc',
             'pytest>=4.1',
             'pytest-xdist',
