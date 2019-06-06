@@ -183,7 +183,7 @@ class Discrete(Feature):
 
         assert data.dim() == 1
         counts = torch.zeros(self.cardinality, device=data.device)
-        counts = counts.scatter_add(0, data, torch.ones(data.shape, device=data.device))
+        counts = counts.scatter_add(0, data.long(), torch.ones(data.shape, device=data.device))
         loc = (counts + 0.5).log()
         loc = loc - loc.logsumexp(-1, True)
         scale = loc.new_full(loc.shape, 2.)
