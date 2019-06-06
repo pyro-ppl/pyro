@@ -9,7 +9,6 @@ from six.moves import cPickle as pickle
 import pyro
 import pyro.poutine as poutine
 from pyro.contrib.tabular.features import Boolean, Discrete, Real
-from pyro.contrib.tabular.mixture import Mixture
 from pyro.contrib.tabular.treecat import TreeCat
 from tests.common import TemporaryDirectory, assert_close
 
@@ -29,7 +28,7 @@ TINY_DATASETS = [
 
 @pytest.mark.parametrize('data', TINY_DATASETS)
 @pytest.mark.parametrize('capacity', [2, 16])
-@pytest.mark.parametrize('Model', [Mixture, TreeCat])
+@pytest.mark.parametrize('Model', [TreeCat])
 def test_train_smoke(Model, data, capacity):
     V = len(data)
     features = TINY_SCHEMA[:V]
@@ -43,7 +42,7 @@ def test_train_smoke(Model, data, capacity):
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('data', TINY_DATASETS)
 @pytest.mark.parametrize('num_samples', [None, 8])
-@pytest.mark.parametrize('Model', [Mixture, TreeCat])
+@pytest.mark.parametrize('Model', [TreeCat])
 def test_sample_smoke(data, Model, capacity, num_samples):
     features = TINY_SCHEMA[:len(data)]
     model = Model(features, capacity)
@@ -68,7 +67,7 @@ def test_log_prob_smoke(data, Model, capacity, grad_enabled):
 
 @pytest.mark.parametrize('data', TINY_DATASETS)
 @pytest.mark.parametrize('capacity', [2, 16])
-@pytest.mark.parametrize('Model', [Mixture, TreeCat])
+@pytest.mark.parametrize('Model', [TreeCat])
 @pytest.mark.parametrize('method', ['pickle', 'torch'])
 def test_pickle(method, data, Model, capacity):
 

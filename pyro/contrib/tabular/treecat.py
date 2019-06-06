@@ -176,7 +176,7 @@ class TreeCat(object):
             v = self._root
             self._propagate(data, mask, impute, mixtures, vertex_probs, edge_probs, z, x, v)
 
-        self._saved_z = z
+        self._saved_z = [z_v.cpu() for z_v in z]
         return x
 
     @poutine.markov
@@ -203,7 +203,7 @@ class TreeCat(object):
                 joint = joint.transpose(-1, -2)
             probs = Vindex(joint)[..., z[v0], :]
         z[v] = pyro.sample("treecat_z_{}".format(v), dist.Categorical(probs),
-                           infer={"enumerate": "parallel"}).cpu()
+                           infer={"enumerate": "parallel"})
 
         # Sample observed features conditioned on latent classes.
         x_dist = self.features[v].value_dist(mixtures[v], component=z[v])
