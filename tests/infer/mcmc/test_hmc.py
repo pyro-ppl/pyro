@@ -10,7 +10,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.infer.mcmc.hmc import HMC
-from pyro.infer.mcmc.mcmc import MCMC
+from pyro.infer.mcmc.api import MCMC
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -220,9 +220,8 @@ def test_beta_bernoulli(jit):
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     hmc_kernel = HMC(model, trajectory_length=1, max_plate_nesting=2,
                      jit_compile=jit, ignore_jit_warnings=True)
-    mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
-    posterior = mcmc_run.marginal(["p_latent"]).empirical["p_latent"]
-    assert_equal(posterior.mean, true_probs, prec=0.05)
+    samples = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
+    assert_equal(samples['p_latent'].mean(0), true_probs, prec=0.05)
 
 
 def test_gamma_normal():
