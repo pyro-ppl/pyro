@@ -48,7 +48,14 @@ class Feature(object):
     def __init__(self, name):
         assert isinstance(name, str)
         self.name = name
-        self.device = torch.empty(1).device
+        # We store a prototype rather than the device so that
+        # when serialzing Features via torch.save() and torch.load(),
+        # the map_location kwarg is respected.
+        self._prototype = torch.empty(1)
+
+    @property
+    def device(self):
+        return self._prototype.device
 
     def __str__(self):
         return '{}("{}")'.format(type(self).__name__, self.name)
@@ -106,7 +113,7 @@ class Feature(object):
 
         :param torch.Tensor data: A dataset or subsample of data.
         """
-        self.device = data.device
+        self._prototype = data.new_empty(1)
 
 
 class Boolean(Feature):
@@ -182,8 +189,8 @@ class Discrete(Feature):
         super(Discrete, self).init(data)
 
         assert data.dim() == 1
-        counts = torch.zeros(self.cardinality, device=data.device)
-        counts = counts.scatter_add(0, data.long(), torch.ones(data.shape, device=data.device))
+        counts = torch.zeros(self.cardinality, device=self.device)
+        counts = counts.scatter_add(0, data.long(), torch.ones(data.shape, device=self.device))
         loc = (counts + 0.5).log()
         loc = loc - loc.logsumexp(-1, True)
         scale = loc.new_full(loc.shape, 2.)
