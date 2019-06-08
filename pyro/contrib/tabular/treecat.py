@@ -207,7 +207,9 @@ class TreeCat(object):
             if v0 > v:
                 joint = joint.transpose(-1, -2)
             probs = Vindex(joint)[..., z[v0], :]
-        z[v] = pyro.sample("treecat_z_{}".format(v), dist.Categorical(probs),
+        z[v] = pyro.sample("treecat_z_{}".format(v),
+                           # Avoid spurious validation errors of constraints.simplex.
+                           dist.Categorical(probs, validate_args=(probs.size(-1) <= 8)),
                            infer={"enumerate": "parallel"})
 
         # Sample observed features conditioned on latent classes.
