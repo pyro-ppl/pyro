@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 from abc import ABCMeta, abstractmethod
 
 import torch
@@ -204,23 +205,24 @@ class Real(Feature):
     dtype = torch.float
 
     def sample_shared(self):
-        scale_loc = pyro.sample("{}_scale_loc".format(self.name),
-                                dist.Normal(self.new_tensor(0.), self.new_tensor(10.)))
-        scale_scale = pyro.sample("{}_scale_scale".format(self.name),
-                                  dist.LogNormal(self.new_tensor(0.), self.new_tensor(1.)))
+        precision_shape = pyro.sample("{}_precision_shape".format(self.name),
+                                      dist.LogNormal(self.new_tensor(0.), self.new_tensor(1.)))
+        precision_rate = pyro.sample("{}_precision_rate".format(self.name),
+                                     dist.LogNormal(self.new_tensor(0.), self.new_tensor(30.)))
         loc_loc = pyro.sample("{}_loc_loc".format(self.name),
                               dist.Normal(self.new_tensor(0.), self.new_tensor(3.)))
         loc_scale = pyro.sample("{}_loc_scale".format(self.name),
                                 dist.LogNormal(self.new_tensor(0.), self.new_tensor(3.)))
-        return scale_loc, scale_scale, loc_loc, loc_scale
+        return precision_shape, precision_rate, loc_loc, loc_scale
 
     def sample_group(self, shared):
-        scale_loc, scale_scale, loc_loc, loc_scale = shared
-        scale = pyro.sample("{}_scale".format(self.name),
-                            dist.LogNormal(scale_loc, scale_scale))
-        factor = scale_loc.exp()
+        precision_shape, precision_rate, loc_loc, loc_scale = shared
+        precision = pyro.sample("{}_precision".format(self.name),
+                                dist.Gamma(precision_shape, precision_rate))
+        factor = precision_rate.sqrt()
         loc = pyro.sample("{}_loc".format(self.name),
                           dist.Normal(loc_loc * factor, loc_scale * factor))
+        scale = precision.pow(-0.5)
         if loc.dim() > 1:
             loc = loc.unsqueeze(-2)
             scale = scale.unsqueeze(-2)
@@ -237,15 +239,16 @@ class Real(Feature):
         super(Real, self).init(data)
 
         assert data.dim() == 1
-        data_std = data.std(unbiased=False) + 1e-6
-        scale_loc = data_std.log() - 1.
-        scale_scale = data.new_tensor(1.)
-        loc_loc = data.mean() / scale_loc.exp()
+        data_scale = data.std(unbiased=False) + 1e-6
+        precision_rate = data_scale.pow(2) / math.exp(2.)
+        precision_shape = data.new_tensor(0.5)
+        loc_loc = data.mean() / data_scale * math.exp(1.)
         loc_scale = data.new_tensor(2.).exp()
 
         # TODO add event_dim args for funsor backend
-        pyro.param("auto_{}_scale_loc".format(self.name), scale_loc)
-        pyro.param("auto_{}_scale_scale".format(self.name), scale_scale,
+        pyro.param("auto_{}_precision_shape".format(self.name), precision_shape,
+                   constraint=constraints.positive)
+        pyro.param("auto_{}_precision_rate".format(self.name), precision_rate,
                    constraint=constraints.positive)
         pyro.param("auto_{}_loc_loc".format(self.name), loc_loc)
         pyro.param("auto_{}_loc_scale".format(self.name), loc_scale,
