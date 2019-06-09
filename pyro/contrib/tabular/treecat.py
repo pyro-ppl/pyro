@@ -73,6 +73,8 @@ class TreeCat(object):
         self._vertex_prior = torch.full((M,), 1.)
         self._edge_prior = torch.full((M * M,), 1. / M)
         self._saved_z = None
+        # Avoid spurious validation errors due to high-dimensional categoricals.
+        self._validate_discrete = False if capacity > 8 else None
 
         self.edges = edges
 
@@ -163,10 +165,12 @@ class TreeCat(object):
         # Sample latent vertex- and edge- distributions from a Dirichlet prior.
         with pyro.plate("vertices_plate", V, dim=-1):
             vertex_probs = pyro.sample("treecat_vertex_probs",
-                                       dist.Dirichlet(self._vertex_prior.to(device)))
+                                       dist.Dirichlet(self._vertex_prior.to(device),
+                                                      validate_args=self._validate_discrete))
         with pyro.plate("edges_plate", E, dim=-1):
             edge_probs = pyro.sample("treecat_edge_probs",
-                                     dist.Dirichlet(self._edge_prior.to(device)))
+                                     dist.Dirichlet(self._edge_prior.to(device),
+                                                    validate_args=self._validate_discrete))
         if vertex_probs.dim() > 2:
             vertex_probs = vertex_probs.unsqueeze(-3)
             edge_probs = edge_probs.unsqueeze(-3)
@@ -208,8 +212,7 @@ class TreeCat(object):
                 joint = joint.transpose(-1, -2)
             probs = Vindex(joint)[..., z[v0], :]
         z[v] = pyro.sample("treecat_z_{}".format(v),
-                           # Avoid spurious validation errors of constraints.simplex.
-                           dist.Categorical(probs, validate_args=(probs.size(-1) <= 8)),
+                           dist.Categorical(probs, validate_args=self._validate_discrete),
                            infer={"enumerate": "parallel"})
 
         # Sample observed features conditioned on latent classes.
