@@ -114,10 +114,13 @@ class BlockNAFFlow(TransformModule):
 
             if idx == 0:
                 logDetJ = dy_dx + J_act
-            else:
+                y = self.f(pre_activation)
+            elif idx < len(self.layers) - 1:
                 logDetJ = log_matrix_product(dy_dx, logDetJ) + J_act
-
-            y = self.f(pre_activation)
+                y = self.f(pre_activation)
+            else:
+                logDetJ = log_matrix_product(dy_dx, logDetJ)
+                y = pre_activation
 
         self._cached_logDetJ = logDetJ.squeeze(-1).squeeze(-1)
 
