@@ -196,7 +196,7 @@ def psis_diagnostic(model, guide, *args, **kwargs):
         raise ValueError("num_particles must be divisible by max_simultaneous_particles.")
 
     N = num_particles // max_simultaneous_particles
-    log_weights = [vectorized_importance_weights(model, guide, num_samples=num_particles,
+    log_weights = [vectorized_importance_weights(model, guide, num_samples=max_simultaneous_particles,
                                                  max_plate_nesting=max_plate_nesting,
                                                  *args, **kwargs)[0] for _ in range(N)]
     log_weights = torch.cat(log_weights)
