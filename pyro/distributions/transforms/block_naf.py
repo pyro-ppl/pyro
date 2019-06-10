@@ -2,7 +2,6 @@
 from __future__ import absolute_import, division, print_function
 
 import math
-import types
 
 import torch
 import torch.nn as nn
@@ -83,8 +82,8 @@ class BlockNAFFlow(TransformModule):
         name_to_mixin = {'ELU': ELUMixin, 'LeakyReLU': LeakyReLUMixin, 'sigmoid': SigmoidalMixin, 'tanh': TanhMixin}
         if activation not in name_to_mixin:
             raise ValueError('Invalid activation function "{}"'.format(activation))
-        self.f = types.MethodType(name_to_mixin[activation].f, self)
-        self.log_df_dx = types.MethodType(name_to_mixin[activation].log_df_dx, self)
+        self.f = name_to_mixin[activation].f
+        self.log_df_dx = name_to_mixin[activation].log_df_dx
 
         # Initialize modules for each layer in flow
         self.residual = residual
@@ -202,7 +201,6 @@ class MaskedBlockLinear(torch.nn.Module):
         # Form block weight matrix, making sure it's positive on diagonal!
         w = torch.exp(self._weight) * self.mask_d + self._weight * self.mask_o
 
-        # NOTE: Commented out weight normalization for now!
         # Sum is taken over columns, i.e. one norm per row
         w_squared_norm = (w ** 2).sum(-1, keepdim=True)
 
@@ -210,8 +208,8 @@ class MaskedBlockLinear(torch.nn.Module):
         w = self._diag_weight.exp() * w / (w_squared_norm.sqrt() + eps)
 
         # Taking the effect of weight normalization into account in calculating the log-gradient is straightforward!
-        # Instead of differenting, e.g. d(W_1x)/dx, we have d(g_1W_1/(W_1^TW_1)^0.5x)/dx, roughly speaking, and taking
-        # the log gives the right hand side below:
+        # Instead of differentiating, e.g. d(W_1x)/dx, we have d(g_1W_1/(W_1^TW_1)^0.5x)/dx, roughly speaking, and
+        # taking the log gives the right hand side below:
         wpl = self._diag_weight + self._weight - 0.5 * torch.log(w_squared_norm + eps)
 
         return w, wpl[self.mask_d.byte()].view(self.dim, self.out_features // self.dim, self.in_features // self.dim)

@@ -14,25 +14,29 @@ eps = 1e-8
 
 
 class ELUMixin(object):
-    def f(self, x):
+    @staticmethod
+    def f(x):
         """
         Implements the nonlinearity of NAF, in this case ELU
         """
         return F.elu(x)
 
-    def f_inv(self, x):
+    @staticmethod
+    def f_inv(x):
         """
         Implements the inverse of ELU
         """
         return torch.max(x, torch.zeros_like(x)) + torch.min(torch.log1p(x + eps), torch.zeros_like(x))
 
-    def log_df_dx(self, x):
+    @staticmethod
+    def log_df_dx(x):
         """
         Implements the log derivative of NAF nonlinearity
         """
         return -F.relu(-x)
 
-    def log_df_inv_dx(self, x):
+    @staticmethod
+    def log_df_inv_dx(x):
         """
         Implements the log derivative of inverse NAF nonlinearity
         """
@@ -40,56 +44,65 @@ class ELUMixin(object):
 
 
 class LeakyReLUMixin(object):
-    def f(self, x):
+    @staticmethod
+    def f(x):
         """
         Implements the nonlinearity of NAF, in this case leaky ReLU
         """
         return F.leaky_relu(x)
 
-    def f_inv(self, x):
+    @staticmethod
+    def f_inv(x):
         """
         Implements the inverse of leaky ReLU
         """
         # slope for negative part is inverse of slope for positive part in f(x)
         return F.leaky_relu(x, negative_slope=100.0)
 
-    def log_df_dx(self, x):
+    @staticmethod
+    def log_df_dx(x):
         """
         Implements the log derivative of NAF nonlinearity
         """
         return torch.where(x >= 0., torch.zeros_like(x), torch.ones_like(x) * math.log(0.01))
 
-    def log_df_inv_dx(self, x):
+    @staticmethod
+    def log_df_inv_dx(x):
         """
         Implements the log derivative of inverse NAF nonlinearity
         """
         return torch.where(x >= 0., torch.zeros_like(x), torch.ones_like(x) * math.log(100.0))
 
 
+def safe_log(x):
+    return torch.log(x * 1e2) - math.log(1e2)
+
+
 class SigmoidalMixin(object):
-    def f(self, x):
+    @staticmethod
+    def f(x):
         """
         Implements the nonlinearity of NAF, in this case sigmoid with scaled output
         """
         return torch.sigmoid(x) * (1. - eps) + 0.5 * eps
 
-    def safe_log(self, x):
-        return torch.log(x * 1e2) - math.log(1e2)
-
-    def f_inv(self, x):
+    @staticmethod
+    def f_inv(x):
         """
         Implements the inverse scaled sigmoid nonlinearity
         """
         y = (x - 0.5 * eps) / (1. - eps)
-        return self.safe_log(y) - self.safe_log(1. - y)
+        return safe_log(y) - safe_log(1. - y)
 
-    def log_df_dx(self, x):
+    @staticmethod
+    def log_df_dx(x):
         """
         Implements the log derivative of scaled sigmoid nonlinearity
         """
         return F.logsigmoid(x) + F.logsigmoid(-x) + torch.log1p(torch.tensor(-eps))
 
-    def log_df_inv_dx(self, x):
+    @staticmethod
+    def log_df_inv_dx(x):
         """
         Implements the log derivative of inverse scaled sigmoid nonlinearity
         """
@@ -98,13 +111,15 @@ class SigmoidalMixin(object):
 
 
 class TanhMixin(object):
-    def f(self, x):
+    @staticmethod
+    def f(x):
         """
         The nonlinearity to apply after each masked block linear layer
         """
         return torch.tanh(x)
 
-    def log_df_dx(self, x):
+    @staticmethod
+    def log_df_dx(x):
         return - 2. * (x - math.log(2.) + F.softplus(- 2. * x))
 
 
@@ -167,25 +182,29 @@ class DeepNAFFlow(TransformModule):
         log_det = log_dydD + log_dDdx
         return log_det.sum(-1)
 
-    def f(self, x):
+    @staticmethod
+    def f(x):
         """
         Implements the nonlinearity of NAF
         """
         raise NotImplementedError
 
-    def f_inv(self, x):
+    @staticmethod
+    def f_inv(x):
         """
         Implements the inverse of the NAF nonlinearity
         """
         raise NotImplementedError
 
-    def log_df_dx(self, x):
+    @staticmethod
+    def log_df_dx(x):
         """
         Implements the log derivative of NAF nonlinearity
         """
         raise NotImplementedError
 
-    def log_df_inv_dx(self, x):
+    @staticmethod
+    def log_df_inv_dx(x):
         """
         Implements the log derivative of inverse NAF nonlinearity
         """
