@@ -79,9 +79,7 @@ class PolynomialFlow(TransformModule):
         self.register_buffer('powers', powers)
 
         # Build mask of constants
-        mask = torch.zeros(count_degree + 1, count_degree + 1)
-        for jdx in range(count_degree + 1):
-            mask.data[jdx] = self.powers + jdx
+        mask = self.powers + torch.arange(count_degree+1).unsqueeze(-1).type_as(powers)
         power_mask = mask
         mask = mask.reciprocal()
 
