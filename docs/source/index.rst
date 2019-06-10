@@ -33,6 +33,7 @@ Pyro Documentation
    contrib.autoguide
    contrib.autoname
    contrib.bnn
+   contrib.easyguide
    contrib.glmm
    contrib.gp
    contrib.minipyro

@@ -37,9 +37,9 @@ def torch_item(x):
 def torch_backward(x, retain_graph=None):
     """
     Like ``x.backward()`` for a :class:`~torch.Tensor`, but also accepts
-    numbers (a no-op if given a number).
+    numbers and tensors without grad_fn (resulting in a no-op)
     """
-    if torch.is_tensor(x):
+    if torch.is_tensor(x) and x.grad_fn:
         x.backward(retain_graph=retain_graph)
 
 

@@ -1,8 +1,10 @@
 # This is an implementation of the sparse gamma deep exponential family model described in
 # Ranganath, Rajesh, Tang, Linpeng, Charlin, Laurent, and Blei, David. Deep exponential families.
 #
-# To do inference we use either a custom guide (i.e. a hand-designed variational family) or
-# a guide that is automatically constructed using pyro.contrib.autoguide.
+# To do inference we use one of the following guides:
+# i)   a custom guide (i.e. a hand-designed variational family) or
+# ii)  an 'auto' guide that is automatically constructed using pyro.contrib.autoguide or
+# iii) an 'easy' guide whose construction is facilitated using pyro.contrib.easyguide.
 #
 # The Olivetti faces dataset is originally from http://www.cl.cam.ac.uk/research/dtg/attarchive/facedatabase.html
 #
@@ -17,19 +19,28 @@ import os
 
 import numpy as np
 import torch
+from torch.nn.functional import softplus
 
 import pyro
 import pyro.optim as optim
 import wget
 
 from pyro.contrib.examples.util import get_data_directory
-from pyro.distributions import Gamma, Poisson
+from pyro.distributions import Gamma, Poisson, Normal
 from pyro.infer import SVI, TraceMeanField_ELBO
 from pyro.contrib.autoguide import AutoDiagonalNormal
+from pyro.contrib.autoguide.initialization import init_to_feasible
+from pyro.contrib.easyguide import EasyGuide
+
 
 torch.set_default_tensor_type('torch.FloatTensor')
 pyro.enable_validation(True)
 pyro.util.set_rng_seed(0)
+
+
+# helper for initializing variational parameters
+def rand_tensor(shape, mean, sigma):
+    return mean * torch.ones(shape) + sigma * torch.randn(shape)
 
 
 class SparseGammaDEF(object):
@@ -39,7 +50,7 @@ class SparseGammaDEF(object):
         self.mid_width = 40
         self.bottom_width = 15
         self.image_size = 64 * 64
-        # define hyperpaameters that control the prior
+        # define hyperparameters that control the prior
         self.alpha_z = torch.tensor(0.1)
         self.beta_z = torch.tensor(0.1)
         self.alpha_w = torch.tensor(0.1)
@@ -48,7 +59,6 @@ class SparseGammaDEF(object):
         self.alpha_init = 0.5
         self.mean_init = 0.0
         self.sigma_init = 0.1
-        self.softplus = torch.nn.Softplus()
 
     # define the model
     def model(self, x):
@@ -86,30 +96,26 @@ class SparseGammaDEF(object):
             pyro.sample('obs', Poisson(mean_obs).to_event(1), obs=x)
 
     # define our custom guide a.k.a. variational distribution.
-    # (note the guide is mean field)
+    # (note the guide is mean field gamma)
     def guide(self, x):
         x_size = x.size(0)
 
-        # helper for initializing variational parameters
-        def rand_tensor(shape, mean, sigma):
-            return mean * torch.ones(shape) + sigma * torch.randn(shape)
-
         # define a helper function to sample z's for a single layer
         def sample_zs(name, width):
-            alpha_z_q = pyro.param("log_alpha_z_q_%s" % name,
+            alpha_z_q = pyro.param("alpha_z_q_%s" % name,
                                    lambda: rand_tensor((x_size, width), self.alpha_init, self.sigma_init))
-            mean_z_q = pyro.param("log_mean_z_q_%s" % name,
+            mean_z_q = pyro.param("mean_z_q_%s" % name,
                                   lambda: rand_tensor((x_size, width), self.mean_init, self.sigma_init))
-            alpha_z_q, mean_z_q = self.softplus(alpha_z_q), self.softplus(mean_z_q)
+            alpha_z_q, mean_z_q = softplus(alpha_z_q), softplus(mean_z_q)
             pyro.sample("z_%s" % name, Gamma(alpha_z_q, alpha_z_q / mean_z_q).to_event(1))
 
         # define a helper function to sample w's for a single layer
         def sample_ws(name, width):
-            alpha_w_q = pyro.param("log_alpha_w_q_%s" % name,
+            alpha_w_q = pyro.param("alpha_w_q_%s" % name,
                                    lambda: rand_tensor((width), self.alpha_init, self.sigma_init))
-            mean_w_q = pyro.param("log_mean_w_q_%s" % name,
+            mean_w_q = pyro.param("mean_w_q_%s" % name,
                                   lambda: rand_tensor((width), self.mean_init, self.sigma_init))
-            alpha_w_q, mean_w_q = self.softplus(alpha_w_q), self.softplus(mean_w_q)
+            alpha_w_q, mean_w_q = softplus(alpha_w_q), softplus(mean_w_q)
             pyro.sample("w_%s" % name, Gamma(alpha_w_q, alpha_w_q / mean_w_q))
 
         # sample the global weights
@@ -126,13 +132,48 @@ class SparseGammaDEF(object):
             sample_zs("mid", self.mid_width)
             sample_zs("bottom", self.bottom_width)
 
-    # define a helper function to clip parameters defining the custom guide.
-    # (this is to avoid regions of the gamma distributions with extremely small means)
-    def clip_params(self):
-        for param, clip in zip(("log_alpha", "log_mean"), (-2.5, -4.5)):
-            for layer in ["top", "mid", "bottom"]:
-                for wz in ["_w_q_", "_z_q_"]:
-                    pyro.param(param + wz + layer).data.clamp_(min=clip)
+
+# define a helper function to clip parameters defining the custom guide.
+# (this is to avoid regions of the gamma distributions with extremely small means)
+def clip_params():
+    for param, clip in zip(("alpha", "mean"), (-2.5, -4.5)):
+        for layer in ["_q_top", "_q_mid", "_q_bottom"]:
+            for wz in ["_w", "_z"]:
+                pyro.param(param + wz + layer).data.clamp_(min=clip)
+
+
+# Define a guide using the EasyGuide class.
+# Unlike the 'auto' guide, this guide supports data subsampling.
+# This is the best performing of the three guides.
+#
+# This guide is functionally similar to the auto guide, but performs
+# somewhat better. The reason seems to be some combination of: i) the better
+# numerical stability of the softplus; and ii) the custom initialization.
+# Note however that for both the easy guide and auto guide KL divergences
+# are not computed analytically in the ELBO because the ELBO thinks the
+# mean-field condition is not satisfied, which leads to higher variance gradients.
+class MyEasyGuide(EasyGuide):
+    def guide(self, x):
+        # group all the latent weights into one large latent variable
+        global_group = self.group(match="w_.*")
+        global_mean = pyro.param("w_mean",
+                                 lambda: rand_tensor(global_group.event_shape, 0.5, 0.1))
+        global_scale = softplus(pyro.param("w_scale",
+                                lambda: rand_tensor(global_group.event_shape, 0.0, 0.1)))
+        # use a mean field Normal distribution on all the ws
+        global_group.sample("ws", Normal(global_mean, global_scale).to_event(1))
+
+        # group all the latent zs into one large latent variable
+        local_group = self.group(match="z_.*")
+        x_shape = x.shape[:1] + local_group.event_shape
+
+        with self.plate("data", x.size(0)):
+            local_mean = pyro.param("z_mean",
+                                    lambda: rand_tensor(x_shape, 0.5, 0.1))
+            local_scale = softplus(pyro.param("z_scale",
+                                   lambda: rand_tensor(x_shape, 0.0, 0.1)))
+            # use a mean field Normal distribution on all the zs
+            local_group.sample("zs", Normal(local_mean, local_scale).to_event(1))
 
 
 def main(args):
@@ -152,15 +193,21 @@ def main(args):
 
     sparse_gamma_def = SparseGammaDEF()
 
-    # due to the special logic in the custom guide (e.g. parameter clipping), the custom guide
-    # is more numerically stable and enables us to use a larger learning rate (and consequently
-    # achieves better results)
-    learning_rate = 0.2 if args.auto_guide else 4.5
-    momentum = 0.05 if args.auto_guide else 0.1
+    # Due to the special logic in the custom guide (e.g. parameter clipping), the custom guide
+    # seems to be more amenable to higher learning rates.
+    # Nevertheless, the easy guide performs the best (presumably because of numerical instabilities
+    # related to the gamma distribution in the custom guide).
+    learning_rate = 0.2 if args.guide in ['auto', 'easy'] else 4.5
+    momentum = 0.05 if args.guide in ['auto', 'easy'] else 0.1
     opt = optim.AdagradRMSProp({"eta": learning_rate, "t": momentum})
 
-    # either use an automatically constructed guide (see pyro.contrib.autoguide for details) or our custom guide
-    guide = AutoDiagonalNormal(sparse_gamma_def.model) if args.auto_guide else sparse_gamma_def.guide
+    # use one of our three different guide types
+    if args.guide == 'auto':
+        guide = AutoDiagonalNormal(sparse_gamma_def.model, init_loc_fn=init_to_feasible)
+    elif args.guide == 'easy':
+        guide = MyEasyGuide(sparse_gamma_def.model)
+    else:
+        guide = sparse_gamma_def.guide
 
     # this is the svi object we use during training; we use TraceMeanField_ELBO to
     # get analytic KL divergences
@@ -171,15 +218,14 @@ def main(args):
     svi_eval = SVI(sparse_gamma_def.model, guide, opt,
                    loss=TraceMeanField_ELBO(num_particles=args.eval_particles, vectorize_particles=True))
 
-    guide_description = 'automatically constructed' if args.auto_guide else 'custom'
-    print('\nbeginning training with %s guide...' % guide_description)
+    print('\nbeginning training with %s guide...' % args.guide)
 
     # the training loop
     for k in range(args.num_epochs):
         loss = svi.step(data)
-        if not args.auto_guide:
-            # for the custom guide we clip parameters after each gradient step
-            sparse_gamma_def.clip_params()
+        # for the custom guide we clip parameters after each gradient step
+        if args.guide == 'custom':
+            clip_params()
 
         if k % args.eval_frequency == 0 and k > 0 or k == args.num_epochs - 1:
             loss = svi_eval.evaluate_loss(data)
@@ -190,11 +236,13 @@ if __name__ == '__main__':
     assert pyro.__version__.startswith('0.3.3')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
-    parser.add_argument('-n', '--num-epochs', default=1000, type=int, help='number of training epochs')
+    parser.add_argument('-n', '--num-epochs', default=1500, type=int, help='number of training epochs')
     parser.add_argument('-ef', '--eval-frequency', default=25, type=int,
                         help='how often to evaluate elbo (number of epochs)')
     parser.add_argument('-ep', '--eval-particles', default=20, type=int,
                         help='number of samples/particles to use during evaluation')
-    parser.add_argument('--auto-guide', action='store_true', help='whether to use an automatically constructed guide')
+    parser.add_argument('--guide', default='custom', type=str,
+                        help='use a custom, auto, or easy guide')
     args = parser.parse_args()
+    assert args.guide in ['custom', 'auto', 'easy']
     main(args)

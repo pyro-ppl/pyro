@@ -31,6 +31,51 @@ def _get_baseline_options(site):
     return options_tuple
 
 
+def _construct_baseline(node, guide_site, downstream_cost):
+
+    # XXX should the average baseline be in the param store as below?
+
+    baseline = 0.0
+    baseline_loss = 0.0
+
+    (nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta,
+        baseline_value) = _get_baseline_options(guide_site)
+
+    use_nn_baseline = nn_baseline is not None
+    use_baseline_value = baseline_value is not None
+
+    use_baseline = use_nn_baseline or use_decaying_avg_baseline or use_baseline_value
+
+    assert(not (use_nn_baseline and use_baseline_value)), \
+        "cannot use baseline_value and nn_baseline simultaneously"
+    if use_decaying_avg_baseline:
+        dc_shape = downstream_cost.shape
+        param_name = "__baseline_avg_downstream_cost_" + node
+        with torch.no_grad():
+            avg_downstream_cost_old = pyro.param(param_name,
+                                                 torch.zeros(dc_shape, device=guide_site['value'].device))
+            avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
+                baseline_beta * avg_downstream_cost_old
+        pyro.get_param_store()[param_name] = avg_downstream_cost_new
+        baseline += avg_downstream_cost_old
+    if use_nn_baseline:
+        # block nn_baseline_input gradients except in baseline loss
+        baseline += nn_baseline(detach_iterable(nn_baseline_input))
+    elif use_baseline_value:
+        # it's on the user to make sure baseline_value tape only points to baseline params
+        baseline += baseline_value
+    if use_nn_baseline or use_baseline_value:
+        # accumulate baseline loss
+        baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
+
+    if use_baseline:
+        if downstream_cost.shape != baseline.shape:
+            raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
+                node, downstream_cost.shape, baseline.shape))
+
+    return use_baseline, baseline_loss, baseline
+
+
 def _compute_downstream_costs(model_trace, guide_trace,  #
                               non_reparam_nodes):
     # recursively compute downstream cost nodes for all sample sites in model and guide
@@ -91,21 +136,34 @@ def _compute_downstream_costs(model_trace, guide_trace,  #
     return downstream_costs, downstream_guide_cost_nodes
 
 
-def _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes):
+def _compute_elbo_reparam(model_trace, guide_trace):
+
+    # In ref [1], section 3.2, the part of the surrogate loss computed here is
+    # \sum{cost}, which in this case is the ELBO. Instead of using the ELBO,
+    # this implementation uses a surrogate ELBO which modifies some entropy
+    # terms depending on the parameterization. This reduces the variance of the
+    # gradient under some conditions.
+
     elbo = 0.0
     surrogate_elbo = 0.0
 
-    # deal with log p(z|...) terms
+    # Bring log p(x, z|...) terms into both the ELBO and the surrogate
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample":
             elbo += site["log_prob_sum"]
             surrogate_elbo += site["log_prob_sum"]
 
-    # deal with log q(z|...) terms
+    # Bring log q(z|...) terms into the ELBO, and effective terms into the
+    # surrogate. Depending on the parameterization of a site, its log q(z|...)
+    # cost term may not contribute (in expectation) to the gradient. To reduce
+    # the variance under some conditions, the default entropy terms from
+    # site[`score_parts`] are used.
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample":
             elbo -= site["log_prob_sum"]
             entropy_term = site["score_parts"].entropy_term
+            # For fully reparameterized terms, this entropy_term is log q(z|...)
+            # For fully non-reparameterized terms, it is zero
             if not is_identically_zero(entropy_term):
                 surrogate_elbo -= entropy_term.sum()
 
@@ -116,46 +174,20 @@ def _compute_elbo_non_reparam(guide_trace, non_reparam_nodes, downstream_costs):
     # construct all the reinforce-like terms.
     # we include only downstream costs to reduce variance
     # optionally include baselines to further reduce variance
-    # XXX should the average baseline be in the param store as below?
     surrogate_elbo = 0.0
     baseline_loss = 0.0
     for node in non_reparam_nodes:
         guide_site = guide_trace.nodes[node]
         downstream_cost = downstream_costs[node]
-        baseline = 0.0
-        (nn_baseline, nn_baseline_input, use_decaying_avg_baseline, baseline_beta,
-            baseline_value) = _get_baseline_options(guide_site)
-        use_nn_baseline = nn_baseline is not None
-        use_baseline_value = baseline_value is not None
-        assert(not (use_nn_baseline and use_baseline_value)), \
-            "cannot use baseline_value and nn_baseline simultaneously"
-        if use_decaying_avg_baseline:
-            dc_shape = downstream_cost.shape
-            param_name = "__baseline_avg_downstream_cost_" + node
-            with torch.no_grad():
-                avg_downstream_cost_old = pyro.param(param_name,
-                                                     torch.zeros(dc_shape, device=guide_site['value'].device))
-                avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + \
-                    baseline_beta * avg_downstream_cost_old
-            pyro.get_param_store()[param_name] = avg_downstream_cost_new
-            baseline += avg_downstream_cost_old
-        if use_nn_baseline:
-            # block nn_baseline_input gradients except in baseline loss
-            baseline += nn_baseline(detach_iterable(nn_baseline_input))
-        elif use_baseline_value:
-            # it's on the user to make sure baseline_value tape only points to baseline params
-            baseline += baseline_value
-        if use_nn_baseline or use_baseline_value:
-            # accumulate baseline loss
-            baseline_loss += torch.pow(downstream_cost.detach() - baseline, 2.0).sum()
+        score_function = guide_site["score_parts"].score_function
 
-        score_function_term = guide_site["score_parts"].score_function
-        if use_nn_baseline or use_decaying_avg_baseline or use_baseline_value:
-            if downstream_cost.shape != baseline.shape:
-                raise ValueError("Expected baseline at site {} to be {} instead got {}".format(
-                    node, downstream_cost.shape, baseline.shape))
+        use_baseline, baseline_loss_term, baseline = _construct_baseline(node, guide_site, downstream_cost)
+
+        if use_baseline:
             downstream_cost = downstream_cost - baseline
-        surrogate_elbo += (score_function_term * downstream_cost.detach()).sum()
+            baseline_loss = baseline_loss + baseline_loss_term
+
+        surrogate_elbo += (score_function * downstream_cost.detach()).sum()
 
     return surrogate_elbo, baseline_loss
 
@@ -219,37 +251,49 @@ class TraceGraph_ELBO(ELBO):
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         If baselines are present, a baseline loss is also constructed and differentiated.
         """
-        loss = 0.0
-        weight = 1./self.num_particles
-        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            loss += self._loss_and_grads_particle(weight, model_trace, guide_trace)
+
+        loss, surrogate_loss = self._loss_and_surrogate_loss(model, guide, *args, **kwargs)
+
+        torch_backward(surrogate_loss, retain_graph=self.retain_graph)
+
+        loss = torch_item(loss)
+        warn_if_nan(loss, "loss")
         return loss
 
-    def _loss_and_grads_particle(self, weight, model_trace, guide_trace):
+    def _loss_and_surrogate_loss(self, model, guide, *args, **kwargs):
+
+        loss = 0.0
+        surrogate_loss = 0.0
+
+        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+
+            lp, slp = self._loss_and_surrogate_loss_particle(model_trace, guide_trace, *args, **kwargs)
+            loss += lp
+            surrogate_loss += slp
+
+        loss /= self.num_particles
+        surrogate_loss /= self.num_particles
+
+        return loss, surrogate_loss
+
+    def _loss_and_surrogate_loss_particle(self, model_trace, guide_trace, *args, **kwargs):
+
         # compute elbo for reparameterized nodes
-        non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
-        elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes)
+        elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace)
+        baseline_loss = 0.0
 
         # the following computations are only necessary if we have non-reparameterizable nodes
-        baseline_loss = 0.0
+        non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
         if non_reparam_nodes:
             downstream_costs, _ = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
             surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(guide_trace,
-                                                                           non_reparam_nodes, downstream_costs)
+                                                                           non_reparam_nodes,
+                                                                           downstream_costs)
             surrogate_elbo += surrogate_elbo_term
 
-        # collect parameters to train from model and guide
-        trainable_params = any(site["type"] == "param"
-                               for trace in (model_trace, guide_trace)
-                               for site in trace.nodes.values())
+        surrogate_loss = -surrogate_elbo + baseline_loss
 
-        if trainable_params:
-            surrogate_loss = -surrogate_elbo
-            torch_backward(weight * (surrogate_loss + baseline_loss), retain_graph=self.retain_graph)
-
-        loss = -torch_item(elbo)
-        warn_if_nan(loss, "loss")
-        return weight * loss
+        return elbo, surrogate_loss
 
 
 class JitTraceGraph_ELBO(TraceGraph_ELBO):
@@ -270,43 +314,24 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
     def loss_and_grads(self, model, guide, *args, **kwargs):
         kwargs['_pyro_model_id'] = id(model)
         kwargs['_pyro_guide_id'] = id(guide)
-        if getattr(self, '_loss_and_surrogate_loss', None) is None:
+        if getattr(self, '_jit_loss_and_surrogate_loss', None) is None:
             # build a closure for loss_and_surrogate_loss
             weakself = weakref.ref(self)
 
             @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings,
                                 jit_options=self.jit_options)
-            def loss_and_surrogate_loss(*args, **kwargs):
+            def jit_loss_and_surrogate_loss(*args, **kwargs):
                 kwargs.pop('_pyro_model_id')
                 kwargs.pop('_pyro_guide_id')
                 self = weakself()
-                loss = 0.0
-                surrogate_loss = 0.0
-                weight = 1.0 / self.num_particles
-                for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-                    # compute elbo for reparameterized nodes
-                    non_reparam_nodes = set(guide_trace.nonreparam_stochastic_nodes)
-                    elbo, surrogate_elbo = _compute_elbo_reparam(model_trace, guide_trace, non_reparam_nodes)
+                return self._loss_and_surrogate_loss(model, guide, *args, **kwargs)
 
-                    # the following computations are only necessary if we have non-reparameterizable nodes
-                    baseline_loss = 0.0
-                    if non_reparam_nodes:
-                        downstream_costs, _ = _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes)
-                        surrogate_elbo_term, baseline_loss = _compute_elbo_non_reparam(guide_trace,
-                                                                                       non_reparam_nodes,
-                                                                                       downstream_costs)
-                        surrogate_elbo += surrogate_elbo_term
+            self._jit_loss_and_surrogate_loss = jit_loss_and_surrogate_loss
 
-                    loss = loss - weight * elbo
-                    surrogate_loss = surrogate_loss - weight * surrogate_elbo
+        loss, surrogate_loss = self._jit_loss_and_surrogate_loss(*args, **kwargs)
 
-                return loss, surrogate_loss
+        surrogate_loss.backward(retain_graph=self.retain_graph)  # triggers jit compilation
 
-            self._loss_and_surrogate_loss = loss_and_surrogate_loss
-
-        loss, surrogate_loss = self._loss_and_surrogate_loss(*args, **kwargs)
-        surrogate_loss.backward()
         loss = loss.item()
-
         warn_if_nan(loss, "loss")
         return loss

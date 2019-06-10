@@ -89,8 +89,7 @@ class ParamStoreDict(object):
         """
         Remove a parameter from the param store.
         """
-        constrained_value = self._params.pop(name)
-        unconstrained_value = constrained_value.unconstrained()
+        unconstrained_value = self._params.pop(name)
         self._param_to_name.pop(unconstrained_value)
         self._constraints.pop(name)
 
