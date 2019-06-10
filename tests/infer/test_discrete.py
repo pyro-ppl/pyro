@@ -222,6 +222,44 @@ def test_distribution_3(infer, temperature):
     assert_equal(expected_probs.reshape(-1), actual_probs.reshape(-1), prec=1e-2)
 
 
+@pytest.mark.parametrize('infer,temperature', [
+    (infer_discrete, 0),
+    (infer_discrete, 1),
+    (elbo_infer_discrete, 1),
+], ids=['map', 'sample', 'sample-elbo'])
+def test_distribution_masked(infer, temperature):
+    #      +-------+
+    #  z --|--> x  |
+    #      +-------+
+    num_particles = 10000
+    data = torch.tensor([1., 2., 3.])
+    mask = torch.tensor([True, False, False])
+
+    @config_enumerate
+    def model(num_particles=1, z=None):
+        p = pyro.param("p", torch.tensor(0.25))
+        with pyro.plate("num_particles", num_particles, dim=-2):
+            z = pyro.sample("z", dist.Bernoulli(p), obs=z)
+            logger.info("z.shape = {}".format(z.shape))
+            with pyro.plate("data", 3), poutine.mask(mask=mask):
+                pyro.sample("x", dist.Normal(z, 1.), obs=data)
+
+    first_available_dim = -3
+    sampled_model = infer(model, first_available_dim, temperature)
+    sampled_trace = poutine.trace(sampled_model).get_trace(num_particles)
+    conditioned_traces = {z: poutine.trace(model).get_trace(z=torch.tensor(z)) for z in [0., 1.]}
+
+    # Check  posterior over z.
+    actual_z_mean = sampled_trace.nodes["z"]["value"].mean()
+    if temperature:
+        expected_z_mean = 1 / (1 + (conditioned_traces[0].log_prob_sum() -
+                                    conditioned_traces[1].log_prob_sum()).exp())
+    else:
+        expected_z_mean = (conditioned_traces[1].log_prob_sum() >
+                           conditioned_traces[0].log_prob_sum()).float()
+    assert_equal(actual_z_mean, expected_z_mean, prec=1e-2)
+
+
 @pytest.mark.parametrize('length', [1, 2, 10, 100])
 @pytest.mark.parametrize('infer,temperature', [
     (infer_discrete, 0),
