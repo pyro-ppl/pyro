@@ -112,9 +112,12 @@ class PolynomialFlow(TransformModule):
         x_view = x.view(-1, 1, 1, self.input_dim)
         x_pow_matrix = x_view.pow(self.power_mask.unsqueeze(-1)).unsqueeze(-4)
 
+        # Eq (8) from the paper, expanding the squared term and integrating
         # NOTE: The view_as is necessary because the batch dimensions were collapsed previously
         y = self.c + (coefs * x_pow_matrix * self.mask.unsqueeze(-1)).sum((1, 2, 3)).view_as(x)
 
+        # log(|det(J)|) is calculated by the fundamental theorem of calculus, i.e. remove the constant
+        # term and the integral from eq (8) (the equation for this isn't given in the paper)
         x_pow_matrix = x_view.pow(self.power_mask.unsqueeze(-1) - 1).unsqueeze(-4)
         self._cached_logDetJ = torch.log((coefs * x_pow_matrix).sum((1, 2, 3)).view_as(x) + 1e-8).sum(-1)
 
