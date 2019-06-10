@@ -120,7 +120,7 @@ class BlockNAFFlow(TransformModule):
         self._cached_logDetJ = logDetJ.squeeze(-1).squeeze(-1)
 
         if self.residual == 'normal':
-            y += x
+            y = y + x
             self._cached_logDetJ = F.softplus(self._cached_logDetJ)
         elif self.residual == 'gated':
             y = self.gate.sigmoid() * x + (1. - self.gate.sigmoid()) * y
