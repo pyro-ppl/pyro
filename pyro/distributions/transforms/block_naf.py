@@ -2,6 +2,7 @@
 from __future__ import absolute_import, division, print_function
 
 import math
+import types
 
 import torch
 import torch.nn as nn
@@ -10,6 +11,7 @@ from torch.distributions import constraints
 import torch.nn.functional as F
 
 from pyro.distributions.util import copy_docs_from
+from pyro.distributions.transforms.naf import ELUMixin, LeakyReLUMixin, TanhMixin, SigmoidalMixin
 
 eps = 1e-8
 
@@ -50,6 +52,8 @@ class BlockNAFFlow(TransformModule):
         corresponds to both :math:`a` and :math:`b` in De Cao et al. (2019). The elements of hidden_factors
         must be integers.
     :type hidden_factors: list
+    :param activation: Activation function to use. One of 'ELU', 'LeakyReLU', 'sigmoid', or 'tanh'.
+    :type activation: string
     :param residual: Type of residual connections to use. Choices are "None", "normal" for
         :math:`\\mathbf{y}+f(\\mathbf{y})`, and "gated" for :math:`\\alpha\\mathbf{y} + (1 - \\alpha\\mathbf{y})`
         for learnable parameter :math:`\\alpha`.
@@ -66,7 +70,7 @@ class BlockNAFFlow(TransformModule):
     event_dim = 1
     autoregressive = True
 
-    def __init__(self, input_dim, hidden_factors=[8, 8], residual=None):
+    def __init__(self, input_dim, hidden_factors=[8, 8], activation='tanh', residual=None):
         super(BlockNAFFlow, self).__init__(cache_size=1)
 
         if any([h < 1 for h in hidden_factors]):
@@ -74,6 +78,13 @@ class BlockNAFFlow(TransformModule):
 
         if residual not in [None, 'normal', 'gated']:
             raise ValueError('Invalid value {} for keyword argument "residual"'.format(residual))
+
+        # Mix in activation function methods
+        name_to_mixin = {'ELU': ELUMixin, 'LeakyReLU': LeakyReLUMixin, 'sigmoid': SigmoidalMixin, 'tanh': TanhMixin}
+        if activation not in name_to_mixin:
+            raise ValueError('Invalid activation function "{}"'.format(activation))
+        self.f = types.MethodType(name_to_mixin[activation].f, self)
+        self.log_df_dx = types.MethodType(name_to_mixin[activation].log_df_dx, self)
 
         # Initialize modules for each layer in flow
         self.residual = residual
@@ -87,15 +98,6 @@ class BlockNAFFlow(TransformModule):
 
         if residual == 'gated':
             self.gate = torch.nn.Parameter(torch.nn.init.normal_(torch.Tensor(1)))
-
-    def f(self, x):
-        """
-        The nonlinearity to apply after each masked block linear layer
-        """
-        return torch.tanh(x)
-
-    def log_df_dx(self, x):
-        return - 2. * (x - math.log(2.) + F.softplus(- 2. * x))
 
     def _call(self, x):
         """

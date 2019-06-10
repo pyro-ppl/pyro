@@ -13,6 +13,101 @@ from pyro.distributions.util import copy_docs_from
 eps = 1e-8
 
 
+class ELUMixin(object):
+    def f(self, x):
+        """
+        Implements the nonlinearity of NAF, in this case ELU
+        """
+        return F.elu(x)
+
+    def f_inv(self, x):
+        """
+        Implements the inverse of ELU
+        """
+        return torch.max(x, torch.zeros_like(x)) + torch.min(torch.log1p(x + eps), torch.zeros_like(x))
+
+    def log_df_dx(self, x):
+        """
+        Implements the log derivative of NAF nonlinearity
+        """
+        return -F.relu(-x)
+
+    def log_df_inv_dx(self, x):
+        """
+        Implements the log derivative of inverse NAF nonlinearity
+        """
+        return F.relu(-torch.log1p(x + eps))
+
+
+class LeakyReLUMixin(object):
+    def f(self, x):
+        """
+        Implements the nonlinearity of NAF, in this case leaky ReLU
+        """
+        return F.leaky_relu(x)
+
+    def f_inv(self, x):
+        """
+        Implements the inverse of leaky ReLU
+        """
+        # slope for negative part is inverse of slope for positive part in f(x)
+        return F.leaky_relu(x, negative_slope=100.0)
+
+    def log_df_dx(self, x):
+        """
+        Implements the log derivative of NAF nonlinearity
+        """
+        return torch.where(x >= 0., torch.zeros_like(x), torch.ones_like(x) * math.log(0.01))
+
+    def log_df_inv_dx(self, x):
+        """
+        Implements the log derivative of inverse NAF nonlinearity
+        """
+        return torch.where(x >= 0., torch.zeros_like(x), torch.ones_like(x) * math.log(100.0))
+
+
+class SigmoidalMixin(object):
+    def f(self, x):
+        """
+        Implements the nonlinearity of NAF, in this case sigmoid with scaled output
+        """
+        return torch.sigmoid(x) * (1. - eps) + 0.5 * eps
+
+    def safe_log(self, x):
+        return torch.log(x * 1e2) - math.log(1e2)
+
+    def f_inv(self, x):
+        """
+        Implements the inverse scaled sigmoid nonlinearity
+        """
+        y = (x - 0.5 * eps) / (1. - eps)
+        return self.safe_log(y) - self.safe_log(1. - y)
+
+    def log_df_dx(self, x):
+        """
+        Implements the log derivative of scaled sigmoid nonlinearity
+        """
+        return F.logsigmoid(x) + F.logsigmoid(-x) + torch.log1p(torch.tensor(-eps))
+
+    def log_df_inv_dx(self, x):
+        """
+        Implements the log derivative of inverse scaled sigmoid nonlinearity
+        """
+        y = (x - 0.5 * eps) / (1. - eps)
+        return -torch.log(y + eps) - torch.log(1. - y) - math.log(1. - eps)
+
+
+class TanhMixin(object):
+    def f(self, x):
+        """
+        The nonlinearity to apply after each masked block linear layer
+        """
+        return torch.tanh(x)
+
+    def log_df_dx(self, x):
+        return - 2. * (x - math.log(2.) + F.softplus(- 2. * x))
+
+
 @copy_docs_from(TransformModule)
 class DeepNAFFlow(TransformModule):
     domain = constraints.real
@@ -98,7 +193,7 @@ class DeepNAFFlow(TransformModule):
 
 
 @copy_docs_from(TransformModule)
-class DeepELUFlow(DeepNAFFlow):
+class DeepELUFlow(ELUMixin, DeepNAFFlow):
     """
     An implementation of deep ELU flow (DSF) Neural Autoregressive Flow (NAF), of the "IAF flavour"
     that can be used for sampling and scoring samples drawn from it (but not arbitrary ones). This
@@ -132,34 +227,11 @@ class DeepELUFlow(DeepNAFFlow):
     Chin-Wei Huang, David Krueger, Alexandre Lacoste, Aaron Courville
 
     """
-
-    def f(self, x):
-        """
-        Implements the nonlinearity of NAF, in this case ELU
-        """
-        return F.elu(x)
-
-    def f_inv(self, x):
-        """
-        Implements the inverse of ELU
-        """
-        return torch.max(x, torch.zeros_like(x)) + torch.min(torch.log1p(x + eps), torch.zeros_like(x))
-
-    def log_df_dx(self, x):
-        """
-        Implements the log derivative of NAF nonlinearity
-        """
-        return -F.relu(-x)
-
-    def log_df_inv_dx(self, x):
-        """
-        Implements the log derivative of inverse NAF nonlinearity
-        """
-        return F.relu(-torch.log1p(x + eps))
+    pass
 
 
 @copy_docs_from(TransformModule)
-class DeepSigmoidalFlow(DeepNAFFlow):
+class DeepSigmoidalFlow(SigmoidalMixin, DeepNAFFlow):
     """
     An implementation of deep sigmoidal flow (DSF) Neural Autoregressive Flow (NAF), of the "IAF flavour"
     that can be used for sampling and scoring samples drawn from it (but not arbitrary ones).
@@ -192,39 +264,11 @@ class DeepSigmoidalFlow(DeepNAFFlow):
     Chin-Wei Huang, David Krueger, Alexandre Lacoste, Aaron Courville
 
     """
-
-    def f(self, x):
-        """
-        Implements the nonlinearity of NAF, in this case sigmoid with scaled output
-        """
-        return torch.sigmoid(x) * (1. - eps) + 0.5 * eps
-
-    def safe_log(self, x):
-        return torch.log(x * 1e2) - math.log(1e2)
-
-    def f_inv(self, x):
-        """
-        Implements the inverse scaled sigmoid nonlinearity
-        """
-        y = (x - 0.5 * eps) / (1. - eps)
-        return self.safe_log(y) - self.safe_log(1. - y)
-
-    def log_df_dx(self, x):
-        """
-        Implements the log derivative of scaled sigmoid nonlinearity
-        """
-        return F.logsigmoid(x) + F.logsigmoid(-x) + torch.log1p(torch.tensor(-eps))
-
-    def log_df_inv_dx(self, x):
-        """
-        Implements the log derivative of inverse scaled sigmoid nonlinearity
-        """
-        y = (x - 0.5 * eps) / (1. - eps)
-        return -torch.log(y + eps) - torch.log(1. - y) - math.log(1. - eps)
+    pass
 
 
 @copy_docs_from(TransformModule)
-class DeepLeakyReLUFlow(DeepNAFFlow):
+class DeepLeakyReLUFlow(LeakyReLUMixin, DeepNAFFlow):
     """
     An implementation of deep leaky ReLU flow (DSF) Neural Autoregressive Flow (NAF), of the "IAF flavour"
     that can be used for sampling and scoring samples drawn from it (but not arbitrary ones). This
@@ -258,28 +302,4 @@ class DeepLeakyReLUFlow(DeepNAFFlow):
     Chin-Wei Huang, David Krueger, Alexandre Lacoste, Aaron Courville
 
     """
-
-    def f(self, x):
-        """
-        Implements the nonlinearity of NAF, in this case leaky ReLU
-        """
-        return F.leaky_relu(x)
-
-    def f_inv(self, x):
-        """
-        Implements the inverse of leaky ReLU
-        """
-        # slope for negative part is inverse of slope for positive part in f(x)
-        return F.leaky_relu(x, negative_slope=100.0)
-
-    def log_df_dx(self, x):
-        """
-        Implements the log derivative of NAF nonlinearity
-        """
-        return torch.where(x >= 0., torch.zeros_like(x), torch.ones_like(x) * math.log(0.01))
-
-    def log_df_inv_dx(self, x):
-        """
-        Implements the log derivative of inverse NAF nonlinearity
-        """
-        return torch.where(x >= 0., torch.zeros_like(x), torch.ones_like(x) * math.log(100.0))
+    pass
