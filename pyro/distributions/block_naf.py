@@ -1,4 +1,4 @@
-# This implementation uses some code from https://github.com/nicola-decao/BNAF under the MIT license.
+# This implementation is adapted in part from https://github.com/nicola-decao/BNAF under the MIT license.
 from __future__ import absolute_import, division, print_function
 
 import math
