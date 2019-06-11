@@ -342,6 +342,25 @@ class TreeCat(object):
         assert log_prob.shape == (len(data[0]),)
         return log_prob
 
+    def __call__(self, data, mask, num_rows=None):
+        """
+        Use a :class:`TreeCat` model as a guide for another Pyro model of
+        tabular data.
+
+        This supports arbitrary column-wise conditioning, but does not support
+        row-wise conditioning, i.e. ``mask`` must be a list of booleans.
+        """
+        if mask is None:
+            mask = [True] * len(data)
+        if any(isinstance(m, torch.Tensor) for m in mask):
+            raise NotImplementedError("Row-wise mask is not supported")
+        expose = ["treecat_x_{}".format(f.name)
+                  for f, m in zip(self.features, mask)
+                  if m is not False]
+        with poutine.block(expose=expose):
+            guide_trace = poutine.trace(self.guide).get_trace(data, mask, num_rows)
+            return poutine.replay(self.model, guide_trace)(data, mask, num_rows, impute=True)
+
 
 class TreeCatTrainer(object):
     """
