@@ -51,12 +51,12 @@ class PyroOptim(object):
                     state = self._state_waiting_to_be_consumed.pop(param_name)
                     self.optim_objs[p].load_state_dict(state)
 
-            # actually perform the step for the optim object
-            self.optim_objs[p].step(*args, **kwargs)
-
-            # if optim object was a scheduler, perform an actual optim step
-            if isinstance(self.optim_objs[p], torch.optim.lr_scheduler._LRScheduler):
+            if isinstance(self.optim_objs[p], torch.optim.lr_scheduler._LRScheduler) or \
+                    isinstance(self.optim_objs[p], torch.optim.lr_scheduler.ReduceLROnPlateau):
+                # if optim object was a scheduler, perform an actual optim step
                 self.optim_objs[p].optimizer.step(*args, **kwargs)
+            else:
+                self.optim_objs[p].step(*args, **kwargs)
 
     def get_state(self):
         """
