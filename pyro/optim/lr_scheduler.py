@@ -5,20 +5,22 @@ from pyro.optim.optim import PyroOptim
 
 class PyroLRScheduler(PyroOptim):
     """
-    A wrapper for torch.optim.lr_scheduler objects that adjust learning rates
+    A wrapper for :class:`~torch.optim.lr_scheduler` objects that adjusts learning rates
     for dynamically generated parameters.
 
-    :param optim_constructor: a torch.optim.lr_scheduler
+    :param scheduler_constructor: a :class:`~torch.optim.lr_scheduler`
     :param optim_args: a dictionary of learning arguments for the optimizer or a callable that returns
         such dictionaries. must contain the key 'optimizer' with pytorch optimizer value
 
     Example::
 
         optimizer = torch.optim.SGD
-        pyro_scheduler = pyro.optim.ExponentialLR({'optimizer': optimizer, 'optim_args': {'lr': 0.01}, 'gamma': 0.1})
+        scheduler = pyro.optim.ExponentialLR({'optimizer': optimizer, 'optim_args': {'lr': 0.01}, 'gamma': 0.1})
         svi = SVI(model, guide, pyro_scheduler, loss=TraceGraph_ELBO())
-        svi.step()
-        pyro_scheduler.step(epoch=epoch)
+        for i in range(epochs):
+            for minibatch in DataLoader(dataset, batch_size):
+                svi.step(minibatch)
+            scheduler.step(epoch=epoch)
     """
     def __init__(self, scheduler_constructor, optim_args):
         # pytorch scheduler
@@ -38,5 +40,9 @@ class PyroLRScheduler(PyroOptim):
         return self.pt_scheduler_constructor(optim, **self.kwargs)
 
     def step(self, *args, **kwargs):
+        """
+        Takes the same arguments as the PyTorch scheduler
+        (optional ``epoch`` kwarg or ``loss`` in for ``ReduceLROnPlateau``)
+        """
         for scheduler in self.optim_objs.values():
             scheduler.step(*args, **kwargs)
