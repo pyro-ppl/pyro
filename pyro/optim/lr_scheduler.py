@@ -20,7 +20,7 @@ class PyroLRScheduler(PyroOptim):
         for i in range(epochs):
             for minibatch in DataLoader(dataset, batch_size):
                 svi.step(minibatch)
-            scheduler.step(epoch=epoch)
+            scheduler.step(epoch=i)
     """
     def __init__(self, scheduler_constructor, optim_args):
         # pytorch scheduler
