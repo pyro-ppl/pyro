@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import pyro.distributions.torch_patch  # noqa F403
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
+from pyro.distributions.conditional_transformed_distribution import ConditionalTransformedDistribution
 from pyro.distributions.conjugate import BetaBinomial, DirichletMultinomial, GammaPoisson
 from pyro.distributions.delta import Delta
 from pyro.distributions.diag_normal_mixture import MixtureOfDiagNormals
@@ -30,6 +31,7 @@ from pyro.distributions.transforms import * # noqa F403
 __all__ = [
     "AVFMultivariateNormal",
     "BetaBinomial",
+    "ConditionalTransformedDistribution",
     "Delta",
     "DirichletMultinomial",
     "Distribution",
