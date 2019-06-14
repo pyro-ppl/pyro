@@ -121,6 +121,12 @@ class FlowTests(TestCase):
     def _make_planar(self, input_dim):
         return dist.PlanarFlow(input_dim)
 
+    def _make_poly(self, input_dim):
+        count_degree = 4
+        count_sum = 3
+        arn = AutoRegressiveNN(input_dim, [input_dim*10], param_dims=[(count_degree + 1)*count_sum])
+        return dist.PolynomialFlow(arn, input_dim=input_dim, count_degree=count_degree, count_sum=count_sum)
+
     def test_batchnorm_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_batchnorm)
@@ -154,6 +160,10 @@ class FlowTests(TestCase):
     def test_planar_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_planar)
+
+    def test_poly_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_poly)
 
     def test_householder_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -218,6 +228,10 @@ class FlowTests(TestCase):
     def test_planar_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_planar)
+
+    def test_poly_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_poly)
 
     def test_radial_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
