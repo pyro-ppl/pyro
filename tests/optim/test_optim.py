@@ -104,7 +104,7 @@ def test_dynamic_lr(scheduler):
         loc = pyro.param('loc').unconstrained()
         opt_loc = scheduler.optim_objs[loc].optimizer
         opt_scale = scheduler.optim_objs[loc].optimizer
-        if scheduler.pt_scheduler_constructor is torch.optim.lr_scheduler.ReduceLROnPlateau:
+        if issubclass(scheduler.pt_scheduler_constructor, torch.optim.lr_scheduler.ReduceLROnPlateau):
             scheduler.step(1.)
             if epoch == 2:
                 assert opt_loc.state_dict()['param_groups'][0]['lr'] == 0.1

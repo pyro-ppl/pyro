@@ -53,7 +53,7 @@ class PyroOptim(object):
 
             if isinstance(self.optim_objs[p], torch.optim.lr_scheduler._LRScheduler) or \
                     isinstance(self.optim_objs[p], torch.optim.lr_scheduler.ReduceLROnPlateau):
-                # if optim object was a scheduler, perform an actual optim step
+                # if optim object was a scheduler, perform an optimizer step
                 self.optim_objs[p].optimizer.step(*args, **kwargs)
             else:
                 self.optim_objs[p].step(*args, **kwargs)
