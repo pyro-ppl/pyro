@@ -3,6 +3,7 @@ from torch.distributions import constraints
 from torch.distributions.distribution import Distribution
 from torch.distributions.transforms import Transform
 from torch.distributions.utils import _sum_rightmost
+from pyro.distributions import ConditionalTransform
 
 
 class ConditionalTransformedDistribution(Distribution):
@@ -26,7 +27,7 @@ class ConditionalTransformedDistribution(Distribution):
         if isinstance(transforms, Transform):
             self.transforms = [transforms, ]
         elif isinstance(transforms, list):
-            if not all(isinstance(t, Transform) for t in transforms):
+            if not all(isinstance(t, Transform) or isinstance(t, ConditionalTransform) for t in transforms):
                 raise ValueError("transforms must be a Transform or a list of Transforms")
             self.transforms = transforms
         else:
@@ -65,10 +66,10 @@ class ConditionalTransformedDistribution(Distribution):
         with torch.no_grad():
             x = self.base_dist.sample(sample_shape)
             for transform in self.transforms:
-                if isinstance(transform, torch.distributions.Transform):
-                    x = transform(x)
-                else:
+                if isinstance(transform, ConditionalTransform):
                     x = transform(x, obs)
+                else:
+                    x = transform(x)
             return x
 
     def rsample(self, obs, sample_shape=torch.Size()):
@@ -80,10 +81,10 @@ class ConditionalTransformedDistribution(Distribution):
         """
         x = self.base_dist.rsample(sample_shape)
         for transform in self.transforms:
-            if isinstance(transform, torch.distributions.Transform):
-                x = transform(x)
-            else:
+            if isinstance(transform, ConditionalTransform):
                 x = transform(x, obs)
+            else:
+                x = transform(x)
         return x
 
     def log_prob(self, value, obs):
@@ -95,13 +96,13 @@ class ConditionalTransformedDistribution(Distribution):
         log_prob = 0.0
         y = value
         for transform in reversed(self.transforms):
-            if isinstance(transform, torch.distributions.Transform):
+            if isinstance(transform, ConditionalTransform):
                 x = transform.inv(y)
-                log_prob = log_prob - _sum_rightmost(transform.log_abs_det_jacobian(x, y),
+                log_prob = log_prob - _sum_rightmost(transform.log_abs_det_jacobian(x, y, obs),
                                                      event_dim - transform.event_dim)
             else:
                 x = transform.inv(y, obs)
-                log_prob = log_prob - _sum_rightmost(transform.log_abs_det_jacobian(x, y, obs),
+                log_prob = log_prob - _sum_rightmost(transform.log_abs_det_jacobian(x, y),
                                                      event_dim - transform.event_dim)
 
             y = x
@@ -129,10 +130,10 @@ class ConditionalTransformedDistribution(Distribution):
         transform(s) and computing the score of the base distribution.
         """
         for transform in self.transforms[::-1]:
-            if isinstance(transform, torch.distributions.Transform):
-                value = transform.inv(value)
-            else:
+            if isinstance(transform, ConditionalTransform):
                 value = transform.inv(value, obs)
+            else:
+                value = transform.inv(value)
         if self._validate_args:
             self.base_dist._validate_sample(value)
         value = self.base_dist.cdf(value)
@@ -149,8 +150,8 @@ class ConditionalTransformedDistribution(Distribution):
             self.base_dist._validate_sample(value)
         value = self.base_dist.icdf(value)
         for transform in self.transforms:
-            if isinstance(transform, torch.distributions.Transform):
-                value = transform(value)
-            else:
+            if isinstance(transform, ConditionalTransform):
                 value = transform(value, obs)
+            else:
+                value = transform(value)
         return value

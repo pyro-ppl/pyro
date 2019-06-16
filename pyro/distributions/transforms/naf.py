@@ -4,7 +4,7 @@ import math
 
 import torch
 import torch.nn as nn
-from pyro.distributions.torch_transform import TransformModule
+from pyro.distributions import TransformModule
 from torch.distributions import constraints
 import torch.nn.functional as F
 

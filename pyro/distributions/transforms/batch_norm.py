@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.distributions import constraints
 import torch.nn.functional as F
 
-from pyro.distributions.torch_transform import TransformModule
+from pyro.distributions import TransformModule
 from pyro.distributions.util import copy_docs_from
 
 

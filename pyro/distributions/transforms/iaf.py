@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import constraints
 
-from pyro.distributions.torch_transform import TransformModule
+from pyro.distributions import TransformModule
 from pyro.distributions.util import copy_docs_from
 
 # This helper function clamps gradients but still passes through the gradient in clamped regions

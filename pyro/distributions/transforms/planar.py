@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch.distributions import constraints
 import torch.nn.functional as F
 
-from pyro.distributions.torch_transform import ConditionalTransformModule, TransformModule
+from pyro.distributions import TransformModule, ConditionalTransformModule
 from pyro.distributions.util import copy_docs_from
 
 
@@ -104,9 +104,7 @@ class PlanarFlow(TransformModule):
         Calculates the elementwise determinant of the log jacobian
         """
         psi_z = (1 - torch.tanh(self.lin(x)).pow(2)) * self.lin.weight
-
-        return (torch.log(torch.abs(1 + torch.matmul(psi_z, self.u_hat())).unsqueeze(-1)) *
-                torch.ones_like(x) / x.size(-1)).sum(-1)
+        return torch.log(torch.abs(1 + torch.matmul(psi_z, self.u_hat())))
 
 
 @copy_docs_from(ConditionalTransformModule)
@@ -169,9 +167,9 @@ class ConditionalPlanarFlow(ConditionalTransformModule):
 
     # This method ensures that torch(u_hat, w) > -1, required for invertibility
     def u_hat(self, u, w):
-        alpha = torch.dot(u, w)
+        alpha = torch.matmul(u.unsqueeze(-2), w.unsqueeze(-1)).squeeze(-1)
         a_prime = -1 + F.softplus(alpha)
-        return u + (a_prime - alpha) * w.div(w.norm())
+        return u + (a_prime - alpha) * w.div(w.norm(dim=-1, keepdim=True))
 
     def _call(self, x, obs):
         """
@@ -182,15 +180,16 @@ class ConditionalPlanarFlow(ConditionalTransformModule):
         sample from the base distribution (or the output of a previous flow)
         """
         bias, u, w = self.nn(obs)
-        act = torch.tanh(F.linear(x, w, bias))
+        # x ~ (batch_size, dim_size, 1)
+        # w ~ (batch_size, 1, dim_size)
+        # bias ~ (batch_size, 1)
+        act = torch.tanh(torch.matmul(w.unsqueeze(-2), x.unsqueeze(-1)).squeeze(-1) + bias)  # .squeeze(-1)))
         u_hat = self.u_hat(u, w)
-
         y = x + u_hat * act
 
-        # TODO: Need to unsqueeze w?
         psi_z = (1. - act.pow(2)) * w
-        self._cached_logDetJ = (torch.log(torch.abs(1 + torch.matmul(psi_z, u_hat)).unsqueeze(-1)) *
-                                torch.ones_like(x) / x.size(-1)).sum(-1)
+        self._cached_logDetJ = torch.log(
+            torch.abs(1 + torch.matmul(psi_z.unsqueeze(-2), u_hat.unsqueeze(-1)).squeeze(-1).squeeze(-1)))
 
         return y
 

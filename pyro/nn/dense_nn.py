@@ -9,7 +9,6 @@ class DenseNN(nn.Module):
     An implementation of a simple dense feedforward network, for use in, e.g., some conditional flows such as
     :class:`pyro.distributions.transforms.ConditionalPlanarFlow`.
 
-    # *** TODO: Fix up example usage, params, etc. ***
     Example usage:
 
     >>> x = torch.randn(100, 10)
@@ -69,7 +68,7 @@ class DenseNN(nn.Module):
         layers = [nn.Linear(input_dim, hidden_dims[0])]
         for i in range(1, len(hidden_dims)):
             layers.append(nn.Linear(hidden_dims[i - 1], hidden_dims[i]))
-        layers.append(nn.Linear(hidden_dims[-1], input_dim * self.output_multiplier))
+        layers.append(nn.Linear(hidden_dims[-1], self.output_multiplier))
         self.layers = nn.ModuleList(layers)
 
         # Save the nonlinearity
@@ -88,15 +87,15 @@ class DenseNN(nn.Module):
         if self.output_multiplier == 1:
             return h
         else:
-            h = h.reshape(list(x.size()[:-1]) + [self.output_multiplier, self.input_dim])
+            h = h.reshape(list(x.size()[:-1]) + [self.output_multiplier])
 
             # Squeeze dimension if all parameters are one dimensional
             if self.count_params == 1:
                 return h
 
             elif self.all_ones:
-                return torch.unbind(h, dim=-2)
+                return torch.unbind(h, dim=-1)
 
             # If not all ones, then probably don't want to squeeze a single dimension parameter
             else:
-                return tuple([h[..., s, :] for s in self.param_slices])
+                return tuple([h[..., s] for s in self.param_slices])
