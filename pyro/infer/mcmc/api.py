@@ -54,12 +54,9 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
 
 class _Worker(object):
     def __init__(self, chain_id, result_queue, log_queue, event,
-                 kernel, num_samples, warmup_steps=0, hook=None,
-                 args=None, kwargs=None):
+                 kernel, num_samples, warmup_steps=0, hook=None):
         self.chain_id = chain_id
         self.kernel = kernel
-        self.args = args if args is not None else []
-        self.kwargs = kwargs if kwargs is not None else {}
         self.num_samples = num_samples
         self.warmup_steps = warmup_steps
         self.rng_seed = (torch.initial_seed() + chain_id) % MAX_SEED
@@ -69,13 +66,13 @@ class _Worker(object):
         self.hook = hook
         self.event = event
 
-    def run(self):
+    def run(self, *args, **kwargs):
         pyro.set_rng_seed(self.rng_seed)
         torch.set_default_tensor_type(self.default_tensor_type)
         # XXX we clone CUDA tensor args to resolve the issue "Invalid device pointer"
         # at https://github.com/pytorch/pytorch/issues/10375
-        args = [arg.clone().detach() if (torch.is_tensor(arg) and arg.is_cuda) else arg for arg in self.args]
-        kwargs = self.kwargs
+        args = [arg.clone().detach() if (torch.is_tensor(arg) and arg.is_cuda) else arg for arg in args]
+        kwargs = kwargs
         logger = logging.getLogger("pyro.infer.mcmc")
         logger_id = "CHAIN:{}".format(self.chain_id)
         log_queue = self.log_queue
@@ -140,7 +137,7 @@ class _UnarySampler(object):
         logging_hook = _add_logging_hook(logger, progress_bar, self.hook)
         for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, logging_hook,
                                    *args, **kwargs):
-            yield sample
+            yield sample, 0  # sample, chain_id (default=0)
         progress_bar.close()
 
 
@@ -177,9 +174,10 @@ class _MultiSampler(object):
         self.workers = []
         for i in range(self.num_chains):
             worker = _Worker(i, self.result_queue, self.log_queue, self.events[i], self.kernel,
-                             self.num_samples, self.warmup_steps, args, kwargs)
+                             self.num_samples, self.warmup_steps)
             worker.daemon = True
-            self.workers.append(self.ctx.Process(name=str(i), target=worker.run))
+            self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
+                                                 args=args, kwargs=kwargs))
 
     def terminate(self):
         if self.log_thread.is_alive():
@@ -251,6 +249,7 @@ class MCMC(object):
                  num_chains=1, mp_context=None, disable_progbar=False):
         self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
+        self.num_chains = num_chains
         self.kernel = kernel
         if num_chains > 1:
             # verify num_chains is compatible with available CPU.
@@ -267,11 +266,12 @@ class MCMC(object):
             self.sampler = _UnarySampler(kernel, num_samples, self.warmup_steps, disable_progbar)
 
     def run(self, *args, **kwargs):
-        z_acc = defaultdict(list)
-        for sample in self.sampler.run(*args, **kwargs):
+        z_acc = defaultdict(lambda: [[] for _ in range(self.num_chains)])
+        for sample, chain_id in self.sampler.run(*args, **kwargs):
             for k, v in sample.items():
-                z_acc[k].append(v)
-        z_acc = {k: torch.stack(v) for k, v in z_acc.items()}
+                z_acc[k][chain_id].append(v)
+        z_acc = {k: [torch.stack(l) for l in v] for k, v in z_acc.items()}
+        z_acc = {k: v[0] if self.num_chains == 1 else torch.stack(v) for k, v in z_acc.items()}
 
         # transform samples back to constrained space
         if self.kernel.transforms:
