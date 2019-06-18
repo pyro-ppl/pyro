@@ -34,7 +34,7 @@ def velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, num_step
                                                                         inverse_mass_matrix,
                                                                         step_size,
                                                                         z_grads)
-    return z_next, r_next, z_grads, potential_energy
+    return z_next, r_next, z_grads, potential_energy.detach()
 
 
 def _single_step_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, z_grads=None):
