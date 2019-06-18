@@ -19,6 +19,7 @@ def _logsumexp(vals, dim=0):
     p = (vals-M).exp().sum().log() + M
     return p
 
+
 # sum_accept_probs and num_proposals are used to calculate
 # the statistic accept_prob for Dual Averaging scheme;
 # z_left_grads and z_right_grads are kept to avoid recalculating
