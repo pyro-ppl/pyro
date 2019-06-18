@@ -34,7 +34,8 @@ def velocity_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, num_step
                                                                         inverse_mass_matrix,
                                                                         step_size,
                                                                         z_grads)
-    return z_next, r_next, z_grads, potential_energy.detach()
+        
+    return z_next, r_next, z_grads, potential_energy
 
 
 def _single_step_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, z_grads=None):
@@ -66,7 +67,7 @@ def _potential_grad(potential_fn, z):
     grads = grad(potential_energy, z_nodes)
     for node in z_nodes:
         node.requires_grad_(False)
-    return dict(zip(z_keys, grads)), potential_energy
+    return dict(zip(z_keys, grads)), potential_energy.detach()
 
 
 def _kinetic_grad(inverse_mass_matrix, r):
