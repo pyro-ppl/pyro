@@ -6,10 +6,18 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.util import logsumexp, scalar_like
+from pyro.distributions.util import scalar_like
 from pyro.infer.mcmc.hmc import HMC
 from pyro.ops.integrator import velocity_verlet
 from pyro.util import optional, torch_isnan
+
+
+def _logsumexp(vals, dim=0):
+    assert dim == 0
+    assert vals.shape == (2,)
+    M = vals[0] if vals[0] > vals[1] else vals[1]
+    p = (vals-M).exp().sum().log() + M
+    return p
 
 # sum_accept_probs and num_proposals are used to calculate
 # the statistic accept_prob for Dual Averaging scheme;
@@ -219,7 +227,7 @@ class NUTS(HMC):
                                            direction, tree_depth-1, energy_current)
 
         if self.use_multinomial_sampling:
-            tree_weight = logsumexp(torch.stack([half_tree.weight, other_half_tree.weight]), dim=0)
+            tree_weight = _logsumexp(torch.stack([half_tree.weight, other_half_tree.weight]), dim=0)
         else:
             tree_weight = half_tree.weight + other_half_tree.weight
         sum_accept_probs = half_tree.sum_accept_probs + other_half_tree.sum_accept_probs
@@ -363,7 +371,7 @@ class NUTS(HMC):
                     break
                 else:  # update tree_weight
                     if self.use_multinomial_sampling:
-                        tree_weight = logsumexp(torch.stack([tree_weight, new_tree.weight]), dim=0)
+                        tree_weight = _logsumexp(torch.stack([tree_weight, new_tree.weight]), dim=0)
                     else:
                         tree_weight = tree_weight + new_tree.weight
 
