@@ -12,12 +12,9 @@ from pyro.ops.integrator import velocity_verlet
 from pyro.util import optional, torch_isnan
 
 
-def _logsumexp(vals, dim=0):
-    assert dim == 0
-    assert vals.shape == (2,)
-    M = vals[0] if vals[0] > vals[1] else vals[1]
-    p = (vals-M).exp().sum().log() + M
-    return p
+def _logaddexp(x, y):
+    minval, maxval = (x, y) if x < y else (y, x)
+    return (minval - maxval).exp().log1p() + maxval
 
 
 # sum_accept_probs and num_proposals are used to calculate
@@ -228,7 +225,7 @@ class NUTS(HMC):
                                            direction, tree_depth-1, energy_current)
 
         if self.use_multinomial_sampling:
-            tree_weight = _logsumexp(torch.stack([half_tree.weight, other_half_tree.weight]), dim=0)
+            tree_weight = _logaddexp(half_tree.weight, other_half_tree.weight)
         else:
             tree_weight = half_tree.weight + other_half_tree.weight
         sum_accept_probs = half_tree.sum_accept_probs + other_half_tree.sum_accept_probs
@@ -372,7 +369,7 @@ class NUTS(HMC):
                     break
                 else:  # update tree_weight
                     if self.use_multinomial_sampling:
-                        tree_weight = _logsumexp(torch.stack([tree_weight, new_tree.weight]), dim=0)
+                        tree_weight = _logaddexp(tree_weight, new_tree.weight)
                     else:
                         tree_weight = tree_weight + new_tree.weight
 
