@@ -12,7 +12,9 @@ import torch.nn.functional as F
 from pyro.distributions.util import copy_docs_from
 from pyro.distributions.transforms.naf import ELUMixin, LeakyReLUMixin, TanhMixin, SigmoidalMixin
 
-eps = 1e-8
+
+def _eps(x):
+    return torch.finfo(x.dtype).tiny
 
 
 def log_matrix_product(A, B):
@@ -106,6 +108,7 @@ class BlockNAFFlow(TransformModule):
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
+        eps = _eps(x)
         y = x
         for idx in range(len(self.layers)):
             pre_activation, dy_dx = self.layers[idx](y.unsqueeze(-1))
@@ -202,6 +205,7 @@ class MaskedBlockLinear(torch.nn.Module):
         Computes the weight matrix using masks and weight normalization.
         It also compute the log diagonal blocks of it.
         """
+        eps = _eps(self._weight)
 
         # Form block weight matrix, making sure it's positive on diagonal!
         w = torch.exp(self._weight) * self.mask_d + self._weight * self.mask_o
