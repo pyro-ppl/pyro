@@ -12,9 +12,10 @@ class DenseNN(nn.Module):
     Example usage:
 
     >>> input_dim = 10
+    >>> observed_dim = 5
     >>> z = torch.rand(100, observed_dim)
     >>> hypernet = DenseNN(observed_dim, [50], param_dims=[1, input_dim, input_dim])
-    >>> a, b, c = hypernet(x)  # parameters of size (100, 1), (100, 10), (100, 10)
+    >>> a, b, c = hypernet(z)  # parameters of size (100, 1), (100, 10), (100, 10)
 
     :param input_dim: the dimensionality of the input
     :type input_dim: int
