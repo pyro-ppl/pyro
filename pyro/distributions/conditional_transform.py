@@ -14,7 +14,7 @@ class ConditionalTransform(object):
     Caching is useful for tranforms whose inverses are either expensive or
     numerically unstable. Note that care must be taken with memoized values
     since the autograd graph may be reversed. For example while the following
-    works with or without caching::
+    works with or without caching:
 
         y = t(x, obs=z)
         t.log_abs_det_jacobian(x, y, obs=z).backward()  # x will receive gradients.

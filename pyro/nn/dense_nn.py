@@ -11,36 +11,21 @@ class DenseNN(nn.Module):
 
     Example usage:
 
-    >>> x = torch.randn(100, 10)
-    >>> arn = AutoRegressiveNN(10, [50], param_dims=[1])
-    >>> p = arn(x)  # 1 parameters of size (100, 10)
-    >>> arn = AutoRegressiveNN(10, [50], param_dims=[1, 1])
-    >>> m, s = arn(x) # 2 parameters of size (100, 10)
-    >>> arn = AutoRegressiveNN(10, [50], param_dims=[1, 5, 3])
-    >>> a, b, c = arn(x) # 3 parameters of sizes, (100, 1, 10), (100, 5, 10), (100, 3, 10)
+    >>> input_dim = 10
+    >>> z = torch.rand(100, observed_dim)
+    >>> hypernet = DenseNN(observed_dim, [50], param_dims=[1, input_dim, input_dim])
+    >>> a, b, c = hypernet(x)  # parameters of size (100, 1), (100, 10), (100, 10)
 
     :param input_dim: the dimensionality of the input
     :type input_dim: int
     :param hidden_dims: the dimensionality of the hidden units per layer
     :type hidden_dims: list[int]
-    :param param_dims: shape the output into parameters of dimension (p_n, input_dim) for p_n in param_dims
-        when p_n > 1 and dimension (input_dim) when p_n == 1. The default is [1, 1], i.e. output two parameters
-        of dimension (input_dim), which is useful for inverse autoregressive flow.
+    :param param_dims: shape the output into parameters of dimension (p_n,) for p_n in param_dims
+        when p_n > 1 and dimension () when p_n == 1. The default is [1, 1], i.e. output two parameters of dimension ().
     :type param_dims: list[int]
-    :param permutation: an optional permutation that is applied to the inputs and controls the order of the
-        autoregressive factorization. in particular for the identity permutation the autoregressive structure
-        is such that the Jacobian is upper triangular. By default this is chosen at random.
-    :type permutation: torch.LongTensor
-    :param skip_connections: Whether to add skip connections from the input to the output.
-    :type skip_connections: bool
     :param nonlinearity: The nonlinearity to use in the feedforward network such as torch.nn.ReLU(). Note that no
         nonlinearity is applied to the final network output, so the output is an unbounded real number.
     :type nonlinearity: torch.nn.module
-
-    Reference:
-
-    MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]
-    Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle
 
     """
 
