@@ -63,6 +63,13 @@ BetaBinomial
     :undoc-members:
     :show-inheritance:
 
+ConditionalTransformedDistribution
+----------------------------------
+.. autoclass:: pyro.distributions.ConditionalTransformedDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Delta
 -----
 .. autoclass:: pyro.distributions.Delta
@@ -190,7 +197,7 @@ BatchNormTransform
 .. autoclass:: pyro.distributions.BatchNormTransform
     :members:
     :undoc-members:
-    :show-inheritance:
+    :show-inheritance:    
 
 DeepELUFlow
 -----------
@@ -272,6 +279,16 @@ SylvesterFlow
 TransformModule
 ---------------
 .. autoclass:: pyro.distributions.TransformModule
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Conditional Transformed Distributions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ConditionalPlanarFlow
+---------------------
+.. autoclass:: pyro.distributions.ConditionalPlanarFlow
     :members:
     :undoc-members:
     :show-inheritance:

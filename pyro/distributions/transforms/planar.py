@@ -125,24 +125,21 @@ class ConditionalPlanarFlow(ConditionalTransformModule):
 
     Example usage:
 
-    *** FINISH THIS EXAMPLE ONCE HAVE BASIC NN ***
-    >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> plf = ConditionalPlanarFlow(10, 5)
-    >>> pyro.module("my_plf", plf)  # doctest: +SKIP
-    >>> plf_dist = dist.TransformedDistribution(base_dist, [plf])
-    >>> z =
-    >>> plf_dist.sample(obs=z)  # doctest: +SKIP
-        tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
-                0.1389, -0.4629,  0.0986])
+    >>> from pyro.nn.dense_nn import DenseNN
+    >>> input_dim = 10
+    >>> observed_dim = 5
+    >>> batch_size = 3
+    >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+    >>> hypernet = DenseNN(observed_dim, [50, 50], param_dims=[1, input_dim, input_dim])
+    >>> plf = ConditionalPlanarFlow(hypernet)
+    >>> z = torch.rand(batch_size, observed_dim)
+    >>> plf_dist = dist.ConditionalTransformedDistribution(base_dist, [plf])
+    >>> plf_dist.sample(obs=z, sample_shape=torch.Size([batch_size])) # doctest: +SKIP
 
     The inverse of this transform does not possess an analytical solution and is left unimplemented. However,
     the inverse is cached when the forward operation is called during sampling, and so samples drawn using
     planar flow can be scored.
 
-    :param input_dim: the dimension of the input (and output) variable.
-    :type input_dim: int
-    :param observed_dim: the dimension of the observed variable.
-    :type input_dim: int
     :param nn: a function inputting the observed variable and outputting a triplet of real-valued parameters
         of dimensions :math:`(1, D, D)`.
     :type nn: callable
