@@ -134,4 +134,9 @@ class SylvesterFlow(HouseholderFlow):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        return self._cached_logDetJ
+        x_old, y_old = self._cached_x_y
+        if x is x_old and y is y_old:
+            return self._cached_logDetJ
+        else:
+            self._call(x)
+            return self._cached_logDetJ

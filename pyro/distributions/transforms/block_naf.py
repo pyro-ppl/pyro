@@ -152,7 +152,12 @@ class BlockNAFFlow(TransformModule):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        return self._cached_logDetJ.sum(-1)
+        x_old, y_old = self._cached_x_y
+        if x is x_old and y is y_old:
+            return self._cached_logDetJ.sum(-1)
+        else:
+            self._call(x)
+            return self._cached_logDetJ.sum(-1)
 
 
 class MaskedBlockLinear(torch.nn.Module):
