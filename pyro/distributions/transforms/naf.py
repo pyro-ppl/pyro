@@ -76,10 +76,6 @@ class LeakyReLUMixin(object):
         return torch.where(x >= 0., torch.zeros_like(x), torch.ones_like(x) * math.log(100.0))
 
 
-def safe_log(x):
-    return torch.log(x * 1e2) - math.log(1e2)
-
-
 class SigmoidalMixin(object):
     @staticmethod
     def f(x):
@@ -96,7 +92,7 @@ class SigmoidalMixin(object):
         """
         eps = _eps(x)
         y = (x - 0.5 * eps) / (1. - eps)
-        return safe_log(y) - safe_log(1. - y)
+        return torch.log(y) - torch.log1p(-y)
 
     @staticmethod
     def log_df_dx(x):
