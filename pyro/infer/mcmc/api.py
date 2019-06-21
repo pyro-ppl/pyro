@@ -54,9 +54,10 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
 
 class _Worker(object):
     def __init__(self, chain_id, result_queue, log_queue, event,
-                 kernel, num_samples, warmup_steps=0, hook=None):
+                 kernel, num_samples, warmup_steps, initial_params, hook=None):
         self.chain_id = chain_id
         self.kernel = kernel
+        self.kernel.initial_params = initial_params
         self.num_samples = num_samples
         self.warmup_steps = warmup_steps
         self.rng_seed = (torch.initial_seed() + chain_id) % MAX_SEED
@@ -121,8 +122,9 @@ class _UnarySampler(object):
     Single process runner class optimized for the case `num_chains=1`.
     """
 
-    def __init__(self, kernel, num_samples, warmup_steps, disable_progbar, hook=None):
+    def __init__(self, kernel, num_samples, warmup_steps, initial_params, disable_progbar, hook=None):
         self.kernel = kernel
+        self.kernel.initial_params = initial_params
         self.warmup_steps = warmup_steps
         self.num_samples = num_samples
         self.logger = None
@@ -147,7 +149,8 @@ class _MultiSampler(object):
     `torch.multiprocessing` module (itself a light wrapper over the python
     `multiprocessing` module) to spin up parallel workers.
     """
-    def __init__(self, kernel, num_samples, warmup_steps, num_chains, mp_context, disable_progbar):
+    def __init__(self, kernel, num_samples, warmup_steps, initial_params, num_chains,
+                 mp_context, disable_progbar):
         self.kernel = kernel
         self.warmup_steps = warmup_steps
         self.num_chains = num_chains
@@ -163,6 +166,7 @@ class _MultiSampler(object):
         self.logger = initialize_logger(logging.getLogger("pyro.infer.mcmc"),
                                         "MAIN", log_queue=self.log_queue)
         self.num_samples = num_samples
+        self.initial_params = initial_params
         self.log_thread = threading.Thread(target=logger_thread,
                                            args=(self.log_queue, self.warmup_steps, self.num_samples,
                                                  self.num_chains, disable_progbar))
@@ -173,8 +177,9 @@ class _MultiSampler(object):
     def init_workers(self, *args, **kwargs):
         self.workers = []
         for i in range(self.num_chains):
+            init_params = {k: v[i] for k, v in self.initial_params.items()}
             worker = _Worker(i, self.result_queue, self.log_queue, self.events[i], self.kernel,
-                             self.num_samples, self.warmup_steps)
+                             self.num_samples, self.warmup_steps, init_params)
             worker.daemon = True
             self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
                                                  args=args, kwargs=kwargs))
@@ -245,7 +250,7 @@ class MCMC(object):
         CUDA.
     :param bool disable_progbar: Disable progress bar and diagnostics update.
     """
-    def __init__(self, kernel, num_samples, warmup_steps=None,
+    def __init__(self, kernel, initial_params, num_samples, warmup_steps=None,
                  num_chains=1, mp_context=None, disable_progbar=False):
         self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
@@ -260,10 +265,11 @@ class MCMC(object):
                               .format(num_chains, available_cpu))
                 num_chains = available_cpu
         if num_chains > 1:
-            self.sampler = _MultiSampler(kernel, num_samples, self.warmup_steps,
+            self.sampler = _MultiSampler(kernel, num_samples, self.warmup_steps, initial_params,
                                          num_chains, mp_context, disable_progbar)
         else:
-            self.sampler = _UnarySampler(kernel, num_samples, self.warmup_steps, disable_progbar)
+            self.sampler = _UnarySampler(kernel, num_samples, self.warmup_steps, initial_params,
+                                         disable_progbar)
 
     def run(self, *args, **kwargs):
         z_acc = defaultdict(lambda: [[] for _ in range(self.num_chains)])
@@ -278,4 +284,3 @@ class MCMC(object):
             for name, transform in self.kernel.transforms.items():
                 z_acc[name] = transform.inv(z_acc[name])
         return z_acc
-

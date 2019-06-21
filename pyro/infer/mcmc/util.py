@@ -9,8 +9,10 @@ import pyro.poutine as poutine
 from pyro.distributions.util import broadcast_shape, logsumexp
 from pyro.infer import config_enumerate
 from pyro.infer.util import is_validation_enabled
+from pyro.ops import stats
 from pyro.ops.contract import contract_to_tensor
 from pyro.poutine.subsample_messenger import _Subsample
+from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_site_shape, ignore_jit_warnings, optional, torch_isinf, torch_isnan
 
 
@@ -248,20 +250,29 @@ def _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
 
 
 def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, prototype_params,
-                     max_tries_initial_params=100):
+                     max_tries_initial_params=100, num_chains=1):
     params = prototype_params
+    params_per_chain = defaultdict(list)
+    n = 0
     for i in range(max_tries_initial_params):
-        potential_energy = potential_fn(params)
-        if not torch_isnan(potential_energy) and not torch_isinf(potential_energy):
-            return params
-        trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
-        samples = {name: trace.nodes[name]["value"].detach() for name in params}
-        params = {k: transforms[k](v) for k, v in samples.items()}
+        while n < num_chains:
+            potential_energy = potential_fn(params)
+            if not torch_isnan(potential_energy) and not torch_isinf(potential_energy):
+                for k, v in params.items():
+                    params_per_chain[k].append(v)
+                n += 1
+            trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
+            samples = {name: trace.nodes[name]["value"].detach() for name in params}
+            params = {k: transforms[k](v) for k, v in samples.items()}
+        if num_chains == 1:
+            return {k: v[0] for k, v in params_per_chain.items()}
+        else:
+            return {k: torch.stack(v) for k, v in params_per_chain.items()}
     raise ValueError("Model specification seems incorrect - cannot find valid initial params.")
 
 
 def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max_plate_nesting=None,
-                     jit_compile=False, jit_options=None, skip_jit_warnings=False):
+                     jit_compile=False, jit_options=None, skip_jit_warnings=False, num_chains=1):
     """
     Generates models' properties for a Pyro model to be used in HMC/NUTS kernels
     which contains
@@ -289,6 +300,8 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
         :func:`torch.jit.trace` function.
     :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
         tracer when ``jit_compile=True``. Default is False.
+    :param int num_chains: Number of parallel chains. If `num_chains > 1`,
+        the returned `initial_params` will be a list with `num_chains` elements.
     :returns: a tuple of (`initial_params`, `potential_fn`, `transforms`, `prototype_trace`)
     """
     # XXX `transforms` domains are sites' supports
@@ -342,5 +355,85 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
                 return compiled_pe(*vals)
 
     init_params = _get_init_params(model, model_args, model_kwargs, transforms,
-                                   potential_fn, prototype_params)
+                                   potential_fn, prototype_params, num_chains=num_chains)
     return init_params, potential_fn, transforms, model_trace
+
+
+def diagnostics(posterior_samples, num_chains=1):
+    """
+    Gets some diagnostics statistics such as effective sample size and
+    split Gelman-Rubin from the sampler.
+    """
+    diagnostics = {}
+    for site, support in posterior_samples.items():
+        if num_chains == 1:
+            support = support.unsqueeze(0)
+        site_stats = OrderedDict()
+        try:
+            site_stats["n_eff"] = stats.effective_sample_size(support)
+        except NotImplementedError:
+            site_stats["n_eff"] = torch.full(support.shape[2:], float("nan"),
+                                             dtype=support.dtype, device=support.device)
+        site_stats["r_hat"] = stats.split_gelman_rubin(support)
+        diagnostics[site] = site_stats
+    return diagnostics
+
+
+def predictive(model, posterior_samples, *args, **kwargs):
+    num_chains = kwargs.pop('num_chains', 1)
+    num_samples = kwargs.pop('num_samples', None)
+    return_trace = kwargs.pop('return_trace', False)
+
+    max_plate_nesting = _guess_max_plate_nesting(model, args, kwargs)
+    model_trace = prune_subsample_sites(poutine.trace(model).get_trace(*args, **kwargs))
+
+    resampled_idxs = None
+    for name, sample in posterior_samples.items():
+        if num_chains > 1:
+            sample = sample.reshape((-1,) + sample.shape[2:])
+
+        if num_samples is None:
+            num_samples = sample.shape[0]
+
+        if resampled_idxs is None:
+            resampled_idxs = torch.randint(0, sample.shape[0], size=(num_samples,), device=sample.device)
+
+        sample_shape = sample.shape[1:]
+        sample = sample.index_select(0, resampled_idxs)
+        sample = sample.reshape((num_samples,) + (1,) * (max_plate_nesting - len(sample_shape)) + sample_shape)
+        posterior_samples[name] = sample
+
+    if num_samples is None:
+        raise ValueError("No sample sites in model to infer `num_samples`.")
+
+    site_shapes = {}
+    for site in model_trace.stochastic_nodes + model_trace.observation_nodes:
+        if site not in posterior_samples:
+            site_shapes[site] = (num_samples,) + model_trace.nodes[site]['value'].shape
+
+    def _vectorized_fn(fn):
+        """
+        Wraps a callable inside an outermost :class:`~pyro.plate` to parallelize
+        generating samples from the posterior predictive.
+
+        :param fn: arbitrary callable containing Pyro primitives.
+        :return: wrapped callable.
+        """
+
+        def wrapped_fn(*args, **kwargs):
+            with pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting-1):
+                return fn(*args, **kwargs)
+
+        return wrapped_fn
+
+    trace = poutine.trace(poutine.condition(_vectorized_fn(model), posterior_samples))\
+        .get_trace(*args, **kwargs)
+
+    if return_trace:
+        return trace
+
+    predictions = {}
+    for site, shape in site_shapes.items():
+        predictions[site] = trace.nodes[site]['value'].reshape(shape)
+
+    return predictions

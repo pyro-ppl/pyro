@@ -88,7 +88,7 @@ class HMC(MCMCKernel):
     """
 
     def __init__(self,
-                 model,
+                 model=None,
                  potential_fn=None,
                  step_size=1,
                  trajectory_length=None,
