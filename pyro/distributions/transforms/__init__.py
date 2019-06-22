@@ -8,6 +8,7 @@ from pyro.distributions.transforms.permute import PermuteTransform
 from pyro.distributions.transforms.polynomial import PolynomialFlow
 from pyro.distributions.transforms.planar import PlanarFlow
 from pyro.distributions.transforms.radial import RadialFlow
+from pyro.distributions.transforms.real_nvp import RealNVP
 from pyro.distributions.transforms.sylvester import SylvesterFlow
 
 __all__ = [
@@ -22,5 +23,6 @@ __all__ = [
     'PolynomialFlow',
     'PlanarFlow',
     'RadialFlow',
+    'RealNVP',
     'SylvesterFlow',
 ]

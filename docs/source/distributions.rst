@@ -262,6 +262,13 @@ RadialFlow
     :undoc-members:
     :show-inheritance:
 
+RealNVPFlow
+-----------
+.. autoclass:: pyro.distributions.RealNVPFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 SylvesterFlow
 -------------
 .. autoclass:: pyro.distributions.SylvesterFlow
