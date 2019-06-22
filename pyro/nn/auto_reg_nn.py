@@ -214,7 +214,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
         """
         The forward method
         """
-        x = torch.cat([x, obs], dim=-1)
+        x = torch.cat([obs, x], dim=-1)
         return self._forward(x)
 
     def _forward(self, x):
