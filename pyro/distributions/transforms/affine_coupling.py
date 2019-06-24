@@ -6,10 +6,9 @@ from torch.distributions import constraints
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 
-# This helper function clamps gradients but still passes through the gradient in clamped regions
-
 
 def clamp_preserve_gradients(x, min, max):
+    # This helper function clamps gradients but still passes through the gradient in clamped regions
     return x + (x.clamp(min, max) - x).detach()
 
 
@@ -91,23 +90,11 @@ class AffineCoupling(TransformModule):
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
-        x1, x2 = x[..., 0:self.split_dim], x[..., self.split_dim:]
+        x1, x2 = x[..., :self.split_dim], x[..., self.split_dim:]
 
         mean, log_scale = self.hypernet(x1)
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         self._cached_log_scale = log_scale
-
-        print(
-            'split_dim',
-            self.split_dim,
-            'x1',
-            x1.size(),
-            'x2',
-            x2.size(),
-            'log_scale',
-            log_scale.size(),
-            'mean',
-            mean.size())
 
         y1 = x1
         y2 = torch.exp(log_scale) * x2 + mean
