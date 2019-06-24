@@ -187,28 +187,35 @@ Transformed Distributions
 
 BatchNormTransform
 ------------------
-.. autoclass:: pyro.distributions.BatchNormTransform
+.. autoclass:: pyro.distributions.transforms.BatchNormTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+BlockAutoregressive
+-------------------
+.. autoclass:: pyro.distributions.transforms.BlockAutoregressive
     :members:
     :undoc-members:
     :show-inheritance:
 
 DeepELUFlow
 -----------
-.. autoclass:: pyro.distributions.DeepELUFlow
+.. autoclass:: pyro.distributions.transforms.DeepELUFlow
     :members:
     :undoc-members:
     :show-inheritance:
 
 DeepLeakyReLUFlow
 -----------------
-.. autoclass:: pyro.distributions.DeepLeakyReLUFlow
+.. autoclass:: pyro.distributions.transforms.DeepLeakyReLUFlow
     :members:
     :undoc-members:
     :show-inheritance:
 
 DeepSigmoidalFlow
 -----------------
-.. autoclass:: pyro.distributions.DeepSigmoidalFlow
+.. autoclass:: pyro.distributions.transforms.DeepSigmoidalFlow
     :members:
     :undoc-members:
     :show-inheritance:
@@ -222,28 +229,28 @@ HouseholderFlow
 
 InverseAutoRegressiveFlow
 -------------------------
-.. autoclass:: pyro.distributions.InverseAutoregressiveFlow
+.. autoclass:: pyro.distributions.transforms.InverseAutoregressiveFlow
     :members:
     :undoc-members:
     :show-inheritance:
 
 InverseAutoRegressiveFlowStable
 -------------------------------
-.. autoclass:: pyro.distributions.InverseAutoregressiveFlowStable
+.. autoclass:: pyro.distributions.transforms.InverseAutoregressiveFlowStable
     :members:
     :undoc-members:
     :show-inheritance:
 
 PermuteTransform
 ----------------
-.. autoclass:: pyro.distributions.PermuteTransform
+.. autoclass:: pyro.distributions.transforms.PermuteTransform
     :members:
     :undoc-members:
     :show-inheritance:
 
 PlanarFlow
 ----------
-.. autoclass:: pyro.distributions.PlanarFlow
+.. autoclass:: pyro.distributions.transforms.PlanarFlow
     :members:
     :undoc-members:
     :show-inheritance:
@@ -257,14 +264,14 @@ PolynomialFlow
 
 RadialFlow
 ----------
-.. autoclass:: pyro.distributions.RadialFlow
+.. autoclass:: pyro.distributions.transforms.RadialFlow
     :members:
     :undoc-members:
     :show-inheritance:
 
 SylvesterFlow
 -------------
-.. autoclass:: pyro.distributions.SylvesterFlow
+.. autoclass:: pyro.distributions.transforms.SylvesterFlow
     :members:
     :undoc-members:
     :show-inheritance:
