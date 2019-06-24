@@ -35,7 +35,7 @@ class AffineCoupling(TransformModule):
     >>> input_dim = 10
     >>> split_dim = 6
     >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
-    >>> hypernet = DenseNN(split_dim, [10*input_dim], [input_dim-split_dim, input_dimsplit_dim])
+    >>> hypernet = DenseNN(split_dim, [10*input_dim], [input_dim-split_dim, input_dim-split_dim])
     >>> flow = AffineCoupling(split_dim, hypernet)
     >>> pyro.module("my_flow", flow)  # doctest: +SKIP
     >>> flow_dist = dist.TransformedDistribution(base_dist, [flow])
