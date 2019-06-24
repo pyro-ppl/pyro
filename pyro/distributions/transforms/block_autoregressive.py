@@ -12,9 +12,7 @@ import torch.nn.functional as F
 from pyro.distributions.util import copy_docs_from
 from pyro.distributions.transforms.naf import ELUMixin, LeakyReLUMixin, TanhMixin, SigmoidalMixin
 
-
-def _eps(x):
-    return torch.finfo(x.dtype).tiny
+eps = 1e-8
 
 
 def log_matrix_product(A, B):
@@ -26,18 +24,18 @@ def log_matrix_product(A, B):
 
 
 @copy_docs_from(TransformModule)
-class BlockNAFFlow(TransformModule):
+class BlockAutoregressive(TransformModule):
     """
-    An implementation of Block Neural Autoregressive Flow (block-NAF) (De Cao et al., 2019). Block-NAF uses a
-    similar transformation to deep dense NAF, building the autoregressive NN into the structure of the flow,
-    in a sense.
+    An implementation of Block Neural Autoregressive Flow (block-NAF) (De Cao et al., 2019) transformation.
+    Block-NAF uses a similar transformation to deep dense NAF, building the autoregressive NN into the structure
+    of the flow, in a sense.
 
     Together with `TransformedDistribution` this provides a way to create richer variational approximations.
 
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> naf = BlockNAFFlow(input_dim=10)
+    >>> naf = BlockAutoregressive(input_dim=10)
     >>> pyro.module("my_naf", naf)  # doctest: +SKIP
     >>> naf_dist = dist.TransformedDistribution(base_dist, [naf])
     >>> naf_dist.sample()  # doctest: +SKIP
@@ -72,7 +70,7 @@ class BlockNAFFlow(TransformModule):
     autoregressive = True
 
     def __init__(self, input_dim, hidden_factors=[8, 8], activation='tanh', residual=None):
-        super(BlockNAFFlow, self).__init__(cache_size=1)
+        super(BlockAutoregressive, self).__init__(cache_size=1)
 
         if any([h < 1 for h in hidden_factors]):
             raise ValueError('Hidden factors, {}, must all be >= 1'.format(hidden_factors))
@@ -108,7 +106,6 @@ class BlockNAFFlow(TransformModule):
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
-        eps = _eps(x)
         y = x
         for idx in range(len(self.layers)):
             pre_activation, dy_dx = self.layers[idx](y.unsqueeze(-1))
@@ -149,7 +146,7 @@ class BlockNAFFlow(TransformModule):
         to some `x` (which was cached on the forward call)
         """
 
-        raise KeyError("BlockNAFFlow expected to find key in intermediates cache but didn't")
+        raise KeyError("BlockAutoregressive expected to find key in intermediates cache but didn't")
 
     def log_abs_det_jacobian(self, x, y):
         """
@@ -205,7 +202,6 @@ class MaskedBlockLinear(torch.nn.Module):
         Computes the weight matrix using masks and weight normalization.
         It also compute the log diagonal blocks of it.
         """
-        eps = _eps(self._weight)
 
         # Form block weight matrix, making sure it's positive on diagonal!
         w = torch.exp(self._weight) * self.mask_d + self._weight * self.mask_o

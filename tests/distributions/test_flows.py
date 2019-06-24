@@ -95,8 +95,8 @@ class FlowTests(TestCase):
         bn.eval()
         return bn
 
-    def _make_blocknaf(self, input_dim, activation='tanh', residual=None):
-        return dist.BlockNAFFlow(input_dim, activation=activation, residual=residual)
+    def _make_block_autoregressive(self, input_dim, activation='tanh', residual=None):
+        return dist.BlockAutoregressive(input_dim, activation=activation, residual=residual)
 
     def _make_iaf(self, input_dim):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
@@ -129,13 +129,13 @@ class FlowTests(TestCase):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_batchnorm)
 
-    def test_blocknaf_jacobians(self):
+    def test_block_autoregressive_jacobians(self):
         for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
             for input_dim in [2, 3, 5, 7, 9, 11]:
                 self._test_jacobian(
                     input_dim,
                     partial(
-                        self._make_blocknaf,
+                        self._make_block_autoregressive,
                         activation=activation))
 
         for residual in [None, 'normal', 'gated']:
@@ -143,7 +143,7 @@ class FlowTests(TestCase):
                 self._test_jacobian(
                     input_dim,
                     partial(
-                        self._make_blocknaf,
+                        self._make_block_autoregressive,
                         residual=residual))
 
     def _make_radial(self, input_dim):
@@ -212,14 +212,14 @@ class FlowTests(TestCase):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_batchnorm)
 
-    def test_blocknaf_shapes(self):
+    def test_block_autoregressive_shapes(self):
         for residual in [None, 'normal', 'gated']:
             for shape in [(3,), (3, 4), (3, 4, 2)]:
-                self._test_shape(shape, partial(self._make_blocknaf, residual=residual))
+                self._test_shape(shape, partial(self._make_block_autoregressive, residual=residual))
 
         for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
             for shape in [(3,), (3, 4), (3, 4, 2)]:
-                self._test_shape(shape, partial(self._make_blocknaf, activation=activation))
+                self._test_shape(shape, partial(self._make_block_autoregressive, activation=activation))
 
     def test_iaf_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:

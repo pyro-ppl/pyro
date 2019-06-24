@@ -10,9 +10,7 @@ import torch.nn.functional as F
 
 from pyro.distributions.util import copy_docs_from
 
-
-def _eps(x):
-    return torch.finfo(x.dtype).tiny
+eps = 1e-8
 
 
 class ELUMixin(object):
@@ -28,7 +26,7 @@ class ELUMixin(object):
         """
         Implements the inverse of ELU
         """
-        return torch.max(x, torch.zeros_like(x)) + torch.min(torch.log1p(x + _eps(x)), torch.zeros_like(x))
+        return torch.max(x, torch.zeros_like(x)) + torch.min(torch.log1p(x + eps), torch.zeros_like(x))
 
     @staticmethod
     def log_df_dx(x):
@@ -42,7 +40,7 @@ class ELUMixin(object):
         """
         Implements the log derivative of inverse NAF nonlinearity
         """
-        return F.relu(-torch.log1p(x + _eps(x)))
+        return F.relu(-torch.log1p(x + eps))
 
 
 class LeakyReLUMixin(object):
@@ -82,7 +80,6 @@ class SigmoidalMixin(object):
         """
         Implements the nonlinearity of NAF, in this case sigmoid with scaled output
         """
-        eps = _eps(x)
         return torch.sigmoid(x) * (1. - eps) + 0.5 * eps
 
     @staticmethod
@@ -90,7 +87,6 @@ class SigmoidalMixin(object):
         """
         Implements the inverse scaled sigmoid nonlinearity
         """
-        eps = _eps(x)
         y = (x - 0.5 * eps) / (1. - eps)
         return torch.log(y) - torch.log1p(-y)
 
@@ -99,7 +95,6 @@ class SigmoidalMixin(object):
         """
         Implements the log derivative of scaled sigmoid nonlinearity
         """
-        eps = _eps(x)
         return F.logsigmoid(x) + F.logsigmoid(-x) + torch.log1p(torch.tensor(-eps))
 
     @staticmethod
@@ -107,7 +102,6 @@ class SigmoidalMixin(object):
         """
         Implements the log derivative of inverse scaled sigmoid nonlinearity
         """
-        eps = _eps(x)
         y = (x - 0.5 * eps) / (1. - eps)
         return -torch.log(y + eps) - torch.log(1. - y) - math.log(1. - eps)
 
@@ -178,7 +172,6 @@ class DeepNAFFlow(TransformModule):
         W_pre = self._cached_W_pre
         C = self._cached_C
         D = self._cached_D
-        eps = _eps(x)
 
         log_dydD = self.log_df_inv_dx(D)
         log_dDdx = torch.logsumexp(torch.log(A + eps) + self.logsoftmax(W_pre) + self.log_df_dx(C), dim=-2)
