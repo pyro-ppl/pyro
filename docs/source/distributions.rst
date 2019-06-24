@@ -257,7 +257,7 @@ SylvesterFlow
 
 TransformModule
 ---------------
-.. autoclass:: pyro.distributions.transforms.TransformModule
+.. autoclass:: pyro.distributions.TransformModule
     :members:
     :undoc-members:
     :show-inheritance:
