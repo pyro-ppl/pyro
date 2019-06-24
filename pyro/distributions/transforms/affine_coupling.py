@@ -14,9 +14,9 @@ def clamp_preserve_gradients(x, min, max):
 
 
 @copy_docs_from(TransformModule)
-class RealNVPFlow(TransformModule):
+class AffineCoupling(TransformModule):
     """
-    An implementation of RealNVP (Dinh et al., 2017) that uses the transformation with operation,
+    An implementation of the affine coupling layer of RealNVP (Dinh et al., 2017) that uses the transformation,
 
         :math:`\\mathbf{y}_{1:d} = \\mathbf{x}_{1:d}`
         :math:`\\mathbf{y}_{(d+1):D} = \\mu + \\sigma\\odot\\mathbf{x}_{(d+1):D}`
@@ -36,8 +36,8 @@ class RealNVPFlow(TransformModule):
     >>> input_dim = 10
     >>> split_dim = 6
     >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
-    >>> hypernet = DenseNN(input_dim, [10*input_dim], [split_dim, split_dim])
-    >>> flow = RealNVP(split_dim, hypernet)
+    >>> hypernet = DenseNN(split_dim, [10*input_dim], [input_dim-split_dim, input_dimsplit_dim])
+    >>> flow = AffineCoupling(split_dim, hypernet)
     >>> pyro.module("my_flow", flow)  # doctest: +SKIP
     >>> flow_dist = dist.TransformedDistribution(base_dist, [flow])
     >>> flow_dist.sample()  # doctest: +SKIP
@@ -51,12 +51,13 @@ class RealNVPFlow(TransformModule):
     being scored, it will calculate it manually.
 
     This is an operation that scales as O(1), i.e. constant in the input dimension. So in general, it is cheap
-    to sample *and* score (an arbitrary value) from RealNVP.
+    to sample *and* score (an arbitrary value) from AffineCoupling.
 
     :param split_dim: Zero-indexed dimension :math:`d` upon which to perform input/output split for transformation.
     :type split_dim: int
     :param hypernet: an autoregressive neural network whose forward call returns a real-valued
-        mean and logit-scale as a tuple
+        mean and logit-scale as a tuple. The input should have final dimension split_dim and the output final
+        dimension input_dim-split_dim for each member of the tuple.
     :type hypernet: callable
     :param log_scale_min_clip: The minimum value for clipping the log(scale) from the autoregressive NN
     :type log_scale_min_clip: float
@@ -75,7 +76,7 @@ class RealNVPFlow(TransformModule):
     event_dim = 1
 
     def __init__(self, split_dim, hypernet, log_scale_min_clip=-5., log_scale_max_clip=3.):
-        super(RealNVPFlow, self).__init__(cache_size=1)
+        super(AffineCoupling, self).__init__(cache_size=1)
         self.split_dim = split_dim
         self.hypernet = hypernet
         self._cached_log_scale = None
@@ -90,14 +91,26 @@ class RealNVPFlow(TransformModule):
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
-        x1, x2 = x.unbind(self.split_dim)
+        x1, x2 = x[..., 0:self.split_dim], x[..., self.split_dim:]
 
         mean, log_scale = self.hypernet(x1)
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         self._cached_log_scale = log_scale
 
+        print(
+            'split_dim',
+            self.split_dim,
+            'x1',
+            x1.size(),
+            'x2',
+            x2.size(),
+            'log_scale',
+            log_scale.size(),
+            'mean',
+            mean.size())
+
         y1 = x1
-        y2 = torch.exp(log_scale) * x + mean
+        y2 = torch.exp(log_scale) * x2 + mean
         return torch.cat([y1, y2], dim=-1)
 
     def _inverse(self, y):
@@ -107,8 +120,7 @@ class RealNVPFlow(TransformModule):
 
         Inverts y => x. Uses a previously cached inverse if available, otherwise performs the inversion afresh.
         """
-        y1, y2 = y.unbind(self.split_dim)
-
+        y1, y2 = y[..., :self.split_dim], y[..., self.split_dim:]
         x1 = y1
         mean, log_scale = self.arn(x1)
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
@@ -124,9 +136,8 @@ class RealNVPFlow(TransformModule):
         x_old, y_old = self._cached_x_y
         if self._cached_log_scale is not None and x is x_old and y is y_old:
             log_scale = self._cached_log_scale
-
         else:
-            x1, _ = x.unbind(self.split_dim)
+            x1 = x[..., :self.split_dim]
             _, log_scale = self.hypernet(x1)
             log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         return log_scale.sum(-1)

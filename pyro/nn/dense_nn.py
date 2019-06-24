@@ -43,7 +43,6 @@ class DenseNN(nn.Module):
         self.param_dims = param_dims
         self.count_params = len(param_dims)
         self.output_multiplier = sum(param_dims)
-        self.all_ones = (torch.tensor(param_dims) == 1).all().item()
 
         # Calculate the indices on the output corresponding to each parameter
         ends = torch.cumsum(torch.tensor(param_dims), dim=0)
@@ -75,13 +74,8 @@ class DenseNN(nn.Module):
         else:
             h = h.reshape(list(x.size()[:-1]) + [self.output_multiplier])
 
-            # Squeeze dimension if all parameters are one dimensional
             if self.count_params == 1:
                 return h
 
-            elif self.all_ones:
-                return torch.unbind(h, dim=-1)
-
-            # If not all ones, then probably don't want to squeeze a single dimension parameter
             else:
                 return tuple([h[..., s] for s in self.param_slices])
