@@ -82,7 +82,9 @@ class OptimTests(TestCase):
                                        optim.StepLR({'optimizer': torch.optim.SGD, 'optim_args': {'lr': 0.01},
                                                      'gamma': 2, 'step_size': 1}),
                                        optim.ExponentialLR({'optimizer': torch.optim.SGD, 'optim_args': {'lr': 0.01},
-                                                            'gamma': 2})])
+                                                            'gamma': 2}),
+                                       optim.ReduceLROnPlateau({'optimizer': torch.optim.SGD, 'optim_args': {'lr': 1.0},
+                                                                'factor': 0.1, 'patience': 1})])
 def test_dynamic_lr(scheduler):
     pyro.clear_param_store()
 
@@ -98,19 +100,31 @@ def test_dynamic_lr(scheduler):
     svi = SVI(model, guide, scheduler, loss=TraceGraph_ELBO())
     for epoch in range(4):
         svi.step()
+        svi.step()
         loc = pyro.param('loc').unconstrained()
         opt_loc = scheduler.optim_objs[loc].optimizer
         opt_scale = scheduler.optim_objs[loc].optimizer
+        if issubclass(scheduler.pt_scheduler_constructor, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            scheduler.step(1.)
+            if epoch == 2:
+                assert opt_loc.state_dict()['param_groups'][0]['lr'] == 0.1
+                assert opt_scale.state_dict()['param_groups'][0]['lr'] == 0.1
+            if epoch == 4:
+                assert opt_loc.state_dict()['param_groups'][0]['lr'] == 0.01
+                assert opt_scale.state_dict()['param_groups'][0]['lr'] == 0.01
+            continue
         assert opt_loc.state_dict()['param_groups'][0]['initial_lr'] == 0.01
         assert opt_scale.state_dict()['param_groups'][0]['initial_lr'] == 0.01
         if epoch == 0:
+            scheduler.step()
             assert opt_loc.state_dict()['param_groups'][0]['lr'] == 0.02
             assert opt_scale.state_dict()['param_groups'][0]['lr'] == 0.02
             assert abs(pyro.param('loc').item()) > 1e-5
             assert abs(pyro.param('scale').item() - 0.5) > 1e-5
         if epoch == 2:
-            assert opt_loc.state_dict()['param_groups'][0]['lr'] == 0.08
-            assert opt_scale.state_dict()['param_groups'][0]['lr'] == 0.08
+            scheduler.step(epoch=epoch)
+            assert opt_loc.state_dict()['param_groups'][0]['lr'] == 0.04
+            assert opt_scale.state_dict()['param_groups'][0]['lr'] == 0.04
 
 
 @pytest.mark.parametrize('factory', [optim.Adam, optim.ClippedAdam, optim.RMSprop, optim.SGD])

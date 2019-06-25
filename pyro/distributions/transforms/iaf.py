@@ -69,6 +69,7 @@ class InverseAutoregressiveFlow(TransformModule):
     codomain = constraints.real
     bijective = True
     event_dim = 1
+    autoregressive = True
 
     def __init__(self, autoregressive_nn, log_scale_min_clip=-5., log_scale_max_clip=3.):
         super(InverseAutoregressiveFlow, self).__init__(cache_size=1)

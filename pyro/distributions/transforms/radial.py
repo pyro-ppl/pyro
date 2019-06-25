@@ -111,4 +111,5 @@ class RadialFlow(TransformModule):
         """
         Calculates the elementwise determinant of the log jacobian
         """
+
         return self._cached_logDetJ
