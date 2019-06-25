@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 from pyro.distributions.transforms.affine_coupling import AffineCoupling
 from pyro.distributions.transforms.batch_norm import BatchNormTransform
+from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive
 from pyro.distributions.transforms.householder import HouseholderFlow
 from pyro.distributions.transforms.iaf import InverseAutoregressiveFlow, InverseAutoregressiveFlowStable
 from pyro.distributions.transforms.naf import DeepELUFlow, DeepLeakyReLUFlow, DeepSigmoidalFlow
@@ -14,6 +15,7 @@ from pyro.distributions.transforms.sylvester import SylvesterFlow
 __all__ = [
     'AffineCoupling',
     'BatchNormTransform',
+    'BlockAutoregressive',
     'DeepELUFlow',
     'DeepLeakyReLUFlow',
     'DeepSigmoidalFlow',

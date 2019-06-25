@@ -101,7 +101,7 @@ def vectorized_importance_weights(model, guide, *args, **kwargs):
 
         log_weights, model_trace, guide_trace = \\
             vectorized_importance_weights(model, guide, *args,
-                                          num_particles=1000,
+                                          num_samples=1000,
                                           max_plate_nesting=4,
                                           normalized=False)
     """
