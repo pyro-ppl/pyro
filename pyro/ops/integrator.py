@@ -66,7 +66,7 @@ def _potential_grad(potential_fn, z):
     grads = grad(potential_energy, z_nodes)
     for node in z_nodes:
         node.requires_grad_(False)
-    return dict(zip(z_keys, grads)), potential_energy
+    return dict(zip(z_keys, grads)), potential_energy.detach()
 
 
 def _kinetic_grad(inverse_mass_matrix, r):

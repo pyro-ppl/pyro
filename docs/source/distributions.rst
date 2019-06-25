@@ -192,6 +192,13 @@ BatchNormTransform
     :undoc-members:
     :show-inheritance:
 
+BlockAutoregressive
+-------------------
+.. autoclass:: pyro.distributions.transforms.BlockAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 HouseholderFlow
 ---------------
 .. autoclass:: pyro.distributions.transforms.HouseholderFlow

@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 from pyro.distributions.transforms.batch_norm import BatchNormTransform
+from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive
 from pyro.distributions.transforms.householder import HouseholderFlow
 from pyro.distributions.transforms.iaf import InverseAutoregressiveFlow, InverseAutoregressiveFlowStable
 from pyro.distributions.transforms.neural_autoregressive import NeuralAutoregressive
@@ -12,6 +13,7 @@ from pyro.distributions.transforms.sylvester import SylvesterFlow
 
 __all__ = [
     'BatchNormTransform',
+    'BlockAutoregressive',
     'HouseholderFlow',
     'InverseAutoregressiveFlow',
     'InverseAutoregressiveFlowStable',
