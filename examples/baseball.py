@@ -163,14 +163,15 @@ def summary(posterior, sites, player_names, transforms={}, return_diagnostics=Tr
         if site_name in transforms:
             marginal_site = transforms[site_name](marginal_site)
 
-        if diag_stats:
-            site_stats[site_name] = {"n_eff": diag_stats[site_name]["n_eff"].cpu().numpy(),
-                                     "r_hat": diag_stats[site_name]["r_hat"].cpu().numpy()}
-
         # Flatten samples from multiple chains onto a single axis
         if num_chains > 1:
             marginal_site = marginal_site.reshape((-1,) + marginal_site.shape[2:])
         site_stats[site_name] = get_site_stats(marginal_site.cpu().numpy(), player_names)
+
+        if diag_stats:
+            site_stats[site_name] = site_stats[site_name].assign(
+                n_eff=diag_stats[site_name]["n_eff"].cpu().numpy(),
+                r_hat=diag_stats[site_name]["r_hat"].cpu().numpy())
     return site_stats
 
 
@@ -341,7 +342,7 @@ if __name__ == "__main__":
     assert pyro.__version__.startswith('0.3.3')
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
     parser.add_argument("-n", "--num-samples", nargs="?", default=200, type=int)
-    parser.add_argument("--num-chains", nargs='?', default=4, type=int)
+    parser.add_argument("--num-chains", nargs='?', default=1, type=int)
     parser.add_argument("--warmup-steps", nargs='?', default=100, type=int)
     parser.add_argument("--rng_seed", nargs='?', default=0, type=int)
     parser.add_argument("--jit", action="store_true", default=False,
