@@ -1,5 +1,6 @@
 from collections import OrderedDict, defaultdict
 
+import numpy as np
 import torch
 from torch.distributions import biject_to
 from opt_einsum import shared_intermediates
@@ -434,6 +435,10 @@ def predictive(model, posterior_samples, *args, **kwargs):
 
     predictions = {}
     for site, shape in site_shapes.items():
-        predictions[site] = trace.nodes[site]['value'].reshape(shape)
+        value = trace.nodes[site]['value']
+        if value.numel() < int(np.product(shape)):
+            predictions[site] = value.expand(shape)
+        else:
+            predictions[site] = value.reshape(shape)
 
     return predictions
