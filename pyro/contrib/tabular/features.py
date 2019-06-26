@@ -253,3 +253,29 @@ class Real(Feature):
         pyro.param("auto_{}_shared_loc".format(self.name), loc)
         pyro.param("auto_{}_shared_scale".format(self.name), scale,
                    constraint=constraints.positive)
+
+    class Summary(object):
+        def __init__(self, feature, group):
+            loc, scale = group
+            self.count = loc.new_zeros(loc.shape)
+            self.mean = loc.new_zeros(loc.shape)
+            self.count_times_variance = loc.new_zeros(loc.shape)
+
+        def scatter_update(self, component, data):
+            count = torch.zeros_like(self.count).scatter_add_(component, 1.)
+            mean = torch.zeros_like(self.mean).scatter_add_(component, data) / count
+            self.count_times_var += self.count * (mean - self.mean).pow(2)
+            self.mean += count / (count + self.count) * (mean - self.mean)
+            self.count += count
+            self.count_times_var.scatter_add_(component, (data - self.mean[component]).pow(2))
+
+        def __imul__(self, scale):
+            self.count *= scale
+            self.count_times_variance *= scale
+
+        def as_scaled_data(self):
+            mean = self.count_times_mean / self.count
+            scale = (self.count_times_variance / self.count).sqrt()
+            data = torch.stack([mean - scale, mean + scale])
+            scale = 0.5 * self.count
+            return scale, data
