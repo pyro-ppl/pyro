@@ -13,6 +13,7 @@ from pyro.distributions.util import scalar_like, sum_rightmost
 from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.util import diagnostics, predictive, initialize_model
+from pyro.poutine.util import site_is_subsample
 
 """
 Example has been adapted from [1]. It demonstrates how to do Bayesian inference using
@@ -236,13 +237,12 @@ def evaluate_log_posterior_density(model, posterior_samples, baseball_dataset, n
     # Use LogSumExp trick to evaluate $log(1/num_samples \sum_i p(new_data | \theta^{i})) $,
     # where $\theta^{i}$ are parameter samples from the model's posterior.
     trace.compute_log_prob()
-    log_joint = []
+    log_joint = 0.
     for name, site in trace.nodes.items():
-        if site["type"] == "sample":
-            log_joint.append(site.get('log_prob', 0.))
-    log_joint = sum_rightmost(sum(log_joint), -1)
+        if site["type"] == "sample" and not site_is_subsample(site):
+            log_joint += sum_rightmost(site['log_prob'], -1)
     posterior_pred_density = torch.logsumexp(log_joint, dim=0) - math.log(log_joint.shape[0])
-    logging.info("\nLog posterior density")
+    logging.info("\nLog posterior predictive density")
     logging.info("--------------------------------")
     logging.info("{:.4f}\n".format(posterior_pred_density))
 
@@ -342,7 +342,7 @@ if __name__ == "__main__":
     assert pyro.__version__.startswith('0.3.3')
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
     parser.add_argument("-n", "--num-samples", nargs="?", default=200, type=int)
-    parser.add_argument("--num-chains", nargs='?', default=1, type=int)
+    parser.add_argument("--num-chains", nargs='?', default=4, type=int)
     parser.add_argument("--warmup-steps", nargs='?', default=100, type=int)
     parser.add_argument("--rng_seed", nargs='?', default=0, type=int)
     parser.add_argument("--jit", action="store_true", default=False,

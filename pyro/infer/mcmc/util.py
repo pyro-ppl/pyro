@@ -381,8 +381,34 @@ def diagnostics(posterior_samples, num_chains=1):
 
 
 def predictive(model, posterior_samples, *args, **kwargs):
+    """
+    Run model by sampling latent parameters from `posterior_samples`, and return
+    values at sample sites from the forward run. By default, only sites not contained in
+    `posterior_samples` are returned. This can be modified by changing the `return_sites`
+    keyword argument.
+
+    :param model: Python callable containing Pyro primitives.
+    :param dict posterior_samples: dictionary of samples from the posterior.
+    :param args: model arguments.
+    :param kwargs: model kwargs; and other keyword arguments (see below).
+
+    :Keyword Arguments:
+        * num_chains - number of chains (determines leading dimension of tensors in
+          `posterior_samples`). By default, this is assumed to be 1.
+        * num_samples - number of samples to draw from the predictive distribution.
+          By default, the number of sites is equal to the number of posterior
+          samples.
+        * return_sites - sites to return; by default only sample sites not present
+          in `posterior_samples` are returned.
+        * return_trace - whether to return the full trace. Note that this is vectorized
+          over `num_samples`.
+
+    :return: dict of samples from the predictive distribution, or a single vectorized
+        `trace` (if `return_trace=True`).
+    """
     num_chains = kwargs.pop('num_chains', 1)
     num_samples = kwargs.pop('num_samples', None)
+    return_sites = kwargs.pop('return_sites', None)
     return_trace = kwargs.pop('return_trace', False)
 
     max_plate_nesting = _guess_max_plate_nesting(model, args, kwargs)
@@ -407,15 +433,20 @@ def predictive(model, posterior_samples, *args, **kwargs):
     if num_samples is None:
         raise ValueError("No sample sites in model to infer `num_samples`.")
 
-    site_shapes = {}
+    return_site_shapes = {}
     for site in model_trace.stochastic_nodes + model_trace.observation_nodes:
-        if site not in posterior_samples:
-            site_shapes[site] = (num_samples,) + model_trace.nodes[site]['value'].shape
+        site_shape = (num_samples,) + model_trace.nodes[site]['value'].shape
+        if return_sites:
+            if site in return_sites:
+                return_site_shapes[site] = site_shape
+        else:
+            if site not in posterior_samples:
+                return_site_shapes[site] = site_shape
 
     def _vectorized_fn(fn):
         """
         Wraps a callable inside an outermost :class:`~pyro.plate` to parallelize
-        generating samples from the posterior predictive.
+        sampling from the posterior predictive.
 
         :param fn: arbitrary callable containing Pyro primitives.
         :return: wrapped callable.
@@ -434,7 +465,7 @@ def predictive(model, posterior_samples, *args, **kwargs):
         return trace
 
     predictions = {}
-    for site, shape in site_shapes.items():
+    for site, shape in return_site_shapes.items():
         value = trace.nodes[site]['value']
         if value.numel() < int(np.product(shape)):
             predictions[site] = value.expand(shape)
