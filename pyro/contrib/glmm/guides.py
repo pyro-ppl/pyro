@@ -24,6 +24,7 @@ class LinearModelPosteriorGuide(nn.Module):
         Guide for linear models. No amortisation happens over designs.
         Amortisation over data is taken care of by analytic formulae for
         linear models (heavy use of truth).
+
         :param tuple d: the number of designs
         :param dict w_sizes: map from variable string names to int.
         :param float tikhonov_init: initial value for `tikhonov_diag` parameter.
