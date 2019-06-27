@@ -11,8 +11,7 @@ import pyro
 from pyro.distributions import Beta, Binomial, HalfCauchy, Normal, Pareto, Uniform
 from pyro.distributions.util import logsumexp, scalar_like
 from pyro.infer.abstract_infer import TracePredictive
-from pyro.infer.mcmc.api import MCMC
-from pyro.infer.mcmc import NUTS
+from pyro.infer.mcmc import MCMC, NUTS
 
 """
 Example has been adapted from [1]. It demonstrates how to do Bayesian inference using

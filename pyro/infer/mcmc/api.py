@@ -1,3 +1,12 @@
+"""
+This module offers a modified interface for MCMC inference with the following objectives:
+  - making MCMC independent of Pyro specific trace data structure, to facilitate
+    integration with other PyTorch based libraries.
+  - bringing the interface closer to that of NumPyro to make it easier to write
+    code that works with different backends.
+  - minimal memory consumption with multiprocessing and CUDA.
+"""
+
 from __future__ import absolute_import, division, print_function
 
 import json
@@ -54,9 +63,10 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
 
 class _Worker(object):
     def __init__(self, chain_id, result_queue, log_queue, event,
-                 kernel, num_samples, warmup_steps=0, hook=None):
+                 kernel, num_samples, warmup_steps, initial_params, hook=None):
         self.chain_id = chain_id
         self.kernel = kernel
+        self.kernel.initial_params = initial_params
         self.num_samples = num_samples
         self.warmup_steps = warmup_steps
         self.rng_seed = (torch.initial_seed() + chain_id) % MAX_SEED
@@ -121,8 +131,9 @@ class _UnarySampler(object):
     Single process runner class optimized for the case `num_chains=1`.
     """
 
-    def __init__(self, kernel, num_samples, warmup_steps, disable_progbar, hook=None):
+    def __init__(self, kernel, num_samples, warmup_steps, initial_params, disable_progbar, hook=None):
         self.kernel = kernel
+        self.kernel.initial_params = initial_params
         self.warmup_steps = warmup_steps
         self.num_samples = num_samples
         self.logger = None
@@ -134,8 +145,8 @@ class _UnarySampler(object):
         logger = logging.getLogger("pyro.infer.mcmc")
         progress_bar = ProgressBar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
         logger = initialize_logger(logger, "", progress_bar)
-        logging_hook = _add_logging_hook(logger, progress_bar, self.hook)
-        for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, logging_hook,
+        hook_w_logging = _add_logging_hook(logger, progress_bar, self.hook)
+        for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, hook_w_logging,
                                    *args, **kwargs):
             yield sample, 0  # sample, chain_id (default=0)
         progress_bar.close()
@@ -147,10 +158,12 @@ class _MultiSampler(object):
     `torch.multiprocessing` module (itself a light wrapper over the python
     `multiprocessing` module) to spin up parallel workers.
     """
-    def __init__(self, kernel, num_samples, warmup_steps, num_chains, mp_context, disable_progbar):
+    def __init__(self, kernel, num_samples, warmup_steps, initial_params, num_chains,
+                 mp_context, disable_progbar, hook=None):
         self.kernel = kernel
         self.warmup_steps = warmup_steps
         self.num_chains = num_chains
+        self.hook = hook
         self.workers = []
         self.ctx = mp
         if mp_context:
@@ -163,6 +176,7 @@ class _MultiSampler(object):
         self.logger = initialize_logger(logging.getLogger("pyro.infer.mcmc"),
                                         "MAIN", log_queue=self.log_queue)
         self.num_samples = num_samples
+        self.initial_params = initial_params
         self.log_thread = threading.Thread(target=logger_thread,
                                            args=(self.log_queue, self.warmup_steps, self.num_samples,
                                                  self.num_chains, disable_progbar))
@@ -173,8 +187,9 @@ class _MultiSampler(object):
     def init_workers(self, *args, **kwargs):
         self.workers = []
         for i in range(self.num_chains):
+            init_params = {k: v[i] for k, v in self.initial_params.items()}
             worker = _Worker(i, self.result_queue, self.log_queue, self.events[i], self.kernel,
-                             self.num_samples, self.warmup_steps)
+                             self.num_samples, self.warmup_steps, init_params, hook=self.hook)
             worker.daemon = True
             self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
                                                  args=args, kwargs=kwargs))
@@ -232,6 +247,8 @@ class MCMC(object):
     :param kernel: An instance of the ``TraceKernel`` class, which when
         given an execution trace returns another sample trace from the target
         (posterior) distribution.
+    :param dict initial_params: dict containing initial tensors to initiate
+        the markov chain. The leading dimension must
     :param int num_samples: The number of samples that need to be generated,
         excluding the samples discarded during the warmup phase.
     :param int warmup_steps: Number of warmup iterations. The samples generated
@@ -240,18 +257,35 @@ class MCMC(object):
     :param int num_chains: Number of MCMC chains to run in parallel. Depending on
         whether `num_chains` is 1 or more than 1, this class internally dispatches
         to either `_SingleSampler` or `_ParallelSampler`.
+    :param hook_fn: Python callable that takes in `(kernel, samples, stage, i)`
+        as arguments. stage is either `sample` or `warmup` and i refers to the
+        i'th sample for the given stage. This can be
     :param str mp_context: Multiprocessing context to use when `num_chains > 1`.
         Only applicable for Python 3.5 and above. Use `mp_context="spawn"` for
         CUDA.
     :param bool disable_progbar: Disable progress bar and diagnostics update.
     """
-    def __init__(self, kernel, num_samples, warmup_steps=None,
-                 num_chains=1, mp_context=None, disable_progbar=False):
+    def __init__(self, kernel, initial_params, num_samples, warmup_steps=None,
+                 num_chains=1, hook_fn=None, mp_context=None, disable_progbar=False):
         self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
-        self.num_chains = num_chains
         self.kernel = kernel
         if num_chains > 1:
+            # old API does not work since we need reference to transforms
+            # in the main process.
+            if kernel.transforms is None:
+                raise ValueError("`pyro.infer.mcmc.api` needs explicit reference"
+                                 " to transforms from the real domain to the site's bounded"
+                                 " support. Use `initialize_model` utility to convert your model"
+                                 " function into a potential function along with the required"
+                                 " transforms.")
+
+            # check that initial_params is different for each chain
+            for v in initial_params.values():
+                if v.shape[0] != num_chains:
+                    raise ValueError("The leading dimension of tensors in `initial_params` "
+                                     "must match the number of chains.")
+
             # verify num_chains is compatible with available CPU.
             available_cpu = max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
             if num_chains > available_cpu:
@@ -259,11 +293,14 @@ class MCMC(object):
                               "Resetting number of chains to available CPU count."
                               .format(num_chains, available_cpu))
                 num_chains = available_cpu
+        self.num_chains = num_chains
+
         if num_chains > 1:
-            self.sampler = _MultiSampler(kernel, num_samples, self.warmup_steps,
-                                         num_chains, mp_context, disable_progbar)
+            self.sampler = _MultiSampler(kernel, num_samples, self.warmup_steps, initial_params,
+                                         num_chains, mp_context, disable_progbar, hook=hook_fn)
         else:
-            self.sampler = _UnarySampler(kernel, num_samples, self.warmup_steps, disable_progbar)
+            self.sampler = _UnarySampler(kernel, num_samples, self.warmup_steps, initial_params,
+                                         disable_progbar, hook=hook_fn)
 
     def run(self, *args, **kwargs):
         z_acc = defaultdict(lambda: [[] for _ in range(self.num_chains)])
@@ -278,4 +315,3 @@ class MCMC(object):
             for name, transform in self.kernel.transforms.items():
                 z_acc[name] = transform.inv(z_acc[name])
         return z_acc
-

@@ -248,20 +248,29 @@ def _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
 
 
 def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, prototype_params,
-                     max_tries_initial_params=100):
+                     max_tries_initial_params=100, num_chains=1):
     params = prototype_params
+    params_per_chain = defaultdict(list)
+    n = 0
     for i in range(max_tries_initial_params):
-        potential_energy = potential_fn(params)
-        if not torch_isnan(potential_energy) and not torch_isinf(potential_energy):
-            return params
-        trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
-        samples = {name: trace.nodes[name]["value"].detach() for name in params}
-        params = {k: transforms[k](v) for k, v in samples.items()}
+        while n < num_chains:
+            potential_energy = potential_fn(params)
+            if not torch_isnan(potential_energy) and not torch_isinf(potential_energy):
+                for k, v in params.items():
+                    params_per_chain[k].append(v)
+                n += 1
+            trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
+            samples = {name: trace.nodes[name]["value"].detach() for name in params}
+            params = {k: transforms[k](v) for k, v in samples.items()}
+        if num_chains == 1:
+            return {k: v[0] for k, v in params_per_chain.items()}
+        else:
+            return {k: torch.stack(v) for k, v in params_per_chain.items()}
     raise ValueError("Model specification seems incorrect - cannot find valid initial params.")
 
 
 def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max_plate_nesting=None,
-                     jit_compile=False, jit_options=None, skip_jit_warnings=False):
+                     jit_compile=False, jit_options=None, skip_jit_warnings=False, num_chains=1):
     """
     Generates models' properties for a Pyro model to be used in HMC/NUTS kernels
     which contains
@@ -289,6 +298,8 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
         :func:`torch.jit.trace` function.
     :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
         tracer when ``jit_compile=True``. Default is False.
+    :param int num_chains: Number of parallel chains. If `num_chains > 1`,
+        the returned `initial_params` will be a list with `num_chains` elements.
     :returns: a tuple of (`initial_params`, `potential_fn`, `transforms`, `prototype_trace`)
     """
     # XXX `transforms` domains are sites' supports
@@ -342,5 +353,5 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
                 return compiled_pe(*vals)
 
     init_params = _get_init_params(model, model_args, model_kwargs, transforms,
-                                   potential_fn, prototype_params)
+                                   potential_fn, prototype_params, num_chains=num_chains)
     return init_params, potential_fn, transforms, model_trace

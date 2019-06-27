@@ -88,7 +88,7 @@ class HMC(MCMCKernel):
     """
 
     def __init__(self,
-                 model,
+                 model=None,
                  potential_fn=None,
                  step_size=1,
                  trajectory_length=None,
@@ -102,6 +102,8 @@ class HMC(MCMCKernel):
                  jit_options=None,
                  ignore_jit_warnings=False,
                  target_accept_prob=0.8):
+        if not ((model is None) ^ (potential_fn is None)):
+            raise ValueError("Only one of `model` or `potential_fn` must be specified.")
         # NB: deprecating args
         self.model = model
         self.transforms = transforms
