@@ -16,9 +16,6 @@ try:
 except ImportError:
     from contextlib2 import ExitStack  # python 2
 
-# TODO read from torch float spec
-epsilon = torch.tensor(2**-24)
-
 
 def known_covariance_linear_model(coef_means, coef_sds, observation_sd,
                                   coef_labels="w", observation_label="y"):
