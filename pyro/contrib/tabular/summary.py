@@ -50,10 +50,15 @@ class Summary(object):
 
 
 class BernoulliSummary(Summary):
+    """
+    Summary of :class:`~torch.distributions.Bernoulli` data.
+    """
     def __init__(self, num_components, prototype):
         self.counts = prototype.new_zeros(num_components, 2)
 
     def scatter_update(self, component, data):
+        assert component.dim() == 1
+        assert component.shape == data.shape
         self.counts[:, 0].scatter_add_(0, component, 1 - data)
         self.counts[:, 1].scatter_add_(0, component, data)
 
@@ -66,9 +71,31 @@ class BernoulliSummary(Summary):
         return scale, data
 
 
+class CategoricalSummary(Summary):
+    """
+    Summary of :class:`~torch.distributions.Categorical` data.
+    """
+    def __init__(self, num_components, prototype, num_categories):
+        self.counts = prototype.new_zeros(num_components, num_categories)
+
+    def scatter_update(self, component, data):
+        assert component.dim() == 1
+        assert component.shape == data.shape
+        index = component * self.counts.size(-1) + data
+        self.counts.view(-1).scatter_add_(0, index, self.counts.new_ones(index.shape))
+
+    def __imul__(self, scale):
+        self.counts *= scale
+
+    def as_scaled_data(self):
+        scale = self.counts
+        data = torch.arange(scale.size(-1), device=scale.device)
+        return scale, data
+
+
 class NormalSummary(Summary):
     """
-    Summary of univariate Normal data.
+    Summary of :class:`~torch.distributions.Normal` data.
     """
     def __init__(self, num_components, prototype):
         self.count = prototype.new_zeros(num_components)

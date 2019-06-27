@@ -9,7 +9,7 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.tabular.summary import BernoulliSummary, NormalSummary
+from pyro.contrib.tabular.summary import BernoulliSummary, CategoricalSummary, NormalSummary
 from pyro.ops.indexing import Vindex
 
 
@@ -203,7 +203,10 @@ class Discrete(Feature):
         return dist.Categorical(logits=logits)
 
     def summary(self, group):
-        raise NotImplementedError('TODO')
+        logits = group
+        num_components, num_categories = logits.shape
+        return CategoricalSummary(num_components=num_components, prototype=logits,
+                                  num_categories=num_categories)
 
     @torch.no_grad()
     def init(self, data):
