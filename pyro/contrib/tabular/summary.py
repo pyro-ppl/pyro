@@ -49,6 +49,23 @@ class Summary(object):
         pass
 
 
+class BernoulliSummary(Summary):
+    def __init__(self, num_components, prototype):
+        self.counts = prototype.new_zeros(num_components, 2)
+
+    def scatter_update(self, component, data):
+        self.counts[:, 0].scatter_add_(0, component, 1 - data)
+        self.counts[:, 1].scatter_add_(0, component, data)
+
+    def __imul__(self, scale):
+        self.counts *= scale
+
+    def as_scaled_data(self):
+        scale = self.counts
+        data = scale.new_tensor([0., 1.])
+        return scale, data
+
+
 class NormalSummary(Summary):
     """
     Summary of univariate Normal data.

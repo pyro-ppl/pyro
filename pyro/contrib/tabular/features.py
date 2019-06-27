@@ -9,7 +9,7 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.tabular.summary import NormalSummary
+from pyro.contrib.tabular.summary import BernoulliSummary, NormalSummary
 from pyro.ops.indexing import Vindex
 
 
@@ -153,7 +153,8 @@ class Boolean(Feature):
         return dist.Bernoulli(logits=logits)
 
     def summary(self, group):
-        raise NotImplementedError('TODO')
+        logits = group
+        return BernoulliSummary(num_components=len(logits), prototype=logits)
 
     @torch.no_grad()
     def init(self, data):
