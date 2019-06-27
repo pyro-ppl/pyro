@@ -10,7 +10,7 @@ from pyro.contrib.autoguide import mean_field_guide_entropy
 from pyro.contrib.oed.search import Search
 from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.util import torch_isnan, torch_isinf
-from pyro.contrib.util import lexpand, rexpand
+from pyro.contrib.util import lexpand
 
 
 def laplace_vi_ape(model, design, observation_labels, target_labels,
@@ -212,79 +212,6 @@ def nmc_eig(model, design, observation_labels, target_labels=None,
     return s/N_seq
 
 
-# Pre-release
-def accelerated_nmc_eig(model, design, observation_labels, target_labels,
-                        yspace, N=100, M_prime=None):
-    """
-    Unnested Monte Carlo estimate of the expected information
-    gain (EIG). The estimate is, when there are not any random effects,
-
-    .. math::
-
-            \\frac{1}{N}\\sum_{n=1}^N\\sum_{y=1}^{|Y|}p(y | \\theta_n, d) \\log p(y | \\theta_n, d)-
-            \\sum_{y=1}^{|Y|}\\left[ \\left( \\frac{1}{N} \\sum_{n=1}^N p(y | \\theta_n, d)\\right)
-            log\\left(\\frac{1}{N}\\sum_{n=1}^N p(y | \\theta_n, d)\\right)\\right]
-
-    The estimate is, in the presence of random effects,
-
-    .. math::
-
-        \\frac{1}{N}\\sum_{n=1}^N\\sum_{y=1}^{|Y|}\\left(\\left(\\frac{1}{M'}\\sum_{m=1}^{M'}
-        p(y | \\theta_n, \\widetilde{\\theta}_{nm}, d)\\right)
-        \\log \\left(\\frac{1}{M'}\\sum_{m=1}^{M'}p(y | \\theta_n, \\widetilde{\\theta}_{nm}, d)\\right)\\right)-
-        \\sum_{y=1}^{|Y|}\\left(\\left( \\frac{1}{N}\\sum_{n=1}^N p(y | \\theta_n, \\widetilde{\\theta}_{n}, d)\\right)
-        \\log \\left(\\frac{1}{N}\\sum_{n=1}^N p(y | \\theta_n, \\widetilde{\\theta}_{n}, d)\\right)\\right)
-
-    The latter form is used when `M_prime != None`.
-
-    :param function model: A pyro model accepting `design` as only argument.
-    :param torch.Tensor design: Tensor representation of design
-    :param list observation_labels: A subset of the sample sites
-        present in `model`. These sites are regarded as future observations
-        and other sites are regarded as latent variables over which a
-        posterior is to be inferred.
-    :param list target_labels: A subset of the sample sites over which the posterior
-        entropy is to be measured.
-    :param dictionary yspace: maps y to a tensor that contains the possible values that y can take
-    :param int N: Number of outer expectation samples.
-    :param int M_prime: Number of samples for `p(y | theta, d)` if required.
-    :return: EIG estimate
-    :rtype: `torch.Tensor`
-    """
-
-    if isinstance(observation_labels, str):  # list of strings instead of strings
-        observation_labels = [observation_labels]
-    if isinstance(target_labels, str):
-        target_labels = [target_labels]
-
-    expanded_design = lexpand(design, N, 1)  # N copies of the model
-    shape = list(design.shape[:-1])
-    expanded_yspace = {k: rexpand(y, *shape) for k, y in yspace.items()}
-    newmodel = pyro.condition(model, data=expanded_yspace)
-    trace = poutine.trace(newmodel).get_trace(expanded_design)
-    trace.compute_log_prob()
-    lp = sum(trace.nodes[l]["log_prob"] for l in observation_labels)
-
-    if M_prime is None:
-        first_term = xexpx(lp).sum(0).sum(0)/N
-
-    else:
-        y_dict = {l: lexpand(trace.nodes[l]["value"], M_prime, 1) for l in observation_labels}
-        theta_dict = {l: lexpand(trace.nodes[l]["value"], M_prime) for l in target_labels}
-        theta_dict.update(y_dict)
-        # Resample M values of theta_tilde and compute conditional probabilities
-        othermodel = pyro.condition(model, data=theta_dict)
-        reexpanded_design = lexpand(design, M_prime, N, 1)
-        retrace = poutine.trace(othermodel).get_trace(reexpanded_design)
-        retrace.compute_log_prob()
-        relp = sum(retrace.nodes[l]["log_prob"] for l in observation_labels).logsumexp(0) \
-            - math.log(M_prime)
-        first_term = xexpx(relp).sum(0).sum(0)/N
-
-    second_term = xexpx(lp.logsumexp(0) - math.log(N)).sum(0)
-    return first_term - second_term
-
-
 def donsker_varadhan_eig(model, design, observation_labels, target_labels,
                          num_samples, num_steps, T, optim, return_history=False,
                          final_design=None, final_num_samples=None):
@@ -414,19 +341,6 @@ def marginal_likelihood_eig(model, design, observation_labels, target_labels,
                             final_design, final_num_samples)
 
 
-# Pre-release
-def amortized_lfire_eig(model, design, observation_labels, target_labels,
-                        num_samples, num_steps, classifier, optim, return_history=False,
-                        final_design=None, final_num_samples=None):
-    if isinstance(observation_labels, str):
-        observation_labels = [observation_labels]
-    if isinstance(target_labels, str):
-        target_labels = [target_labels]
-    loss = alfire_loss(model, classifier, observation_labels, target_labels)
-    return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
-                            final_design, final_num_samples)
-
-
 def lfire_eig(model, design, observation_labels, target_labels,
               num_y_samples, num_theta_samples, num_steps, classifier, optim, return_history=False,
               final_design=None, final_num_samples=None):
@@ -449,17 +363,6 @@ def lfire_eig(model, design, observation_labels, target_labels,
         return out[0], out[1].sum(0) / num_theta_samples
     else:
         return out.sum(0) / num_theta_samples
-
-
-def elbo_learn(model, design, observation_labels, target_labels,
-               num_samples, num_steps, guide, data, optim):
-
-    if isinstance(observation_labels, str):
-        observation_labels = [observation_labels]
-    if isinstance(target_labels, str):
-        target_labels = [target_labels]
-    loss = elbo(model, guide, data, observation_labels, target_labels)
-    return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim)
 
 
 def vnmc_eig(model, design, observation_labels, target_labels,
@@ -638,40 +541,6 @@ def marginal_likelihood_loss(model, marginal_guide, likelihood_guide, observatio
     return loss_fn
 
 
-def alfire_loss(model, h, observation_labels, target_labels):
-
-    def loss_fn(design, num_particles, evaluation=False, **kwargs):
-
-        try:
-            pyro.module("h", h)
-        except AssertionError:
-            pass
-
-        expanded_design = lexpand(design, num_particles)
-
-        # Unshuffled data
-        unshuffled_trace = poutine.trace(model).get_trace(expanded_design)
-        y_dict = {l: unshuffled_trace.nodes[l]["value"] for l in observation_labels}
-
-        if not evaluation:
-            # Shuffled data
-            # Not actually shuffling, re-simulate for safety
-            conditional_model = pyro.condition(model, data=y_dict)
-            shuffled_trace = poutine.trace(conditional_model).get_trace(expanded_design)
-
-            h_joint = h(expanded_design, unshuffled_trace, observation_labels, target_labels)
-            h_independent = h(expanded_design, shuffled_trace, observation_labels, target_labels)
-
-            terms = torch.nn.functional.softplus(-h_joint) + torch.nn.functional.softplus(h_independent)
-            return safe_mean_terms(terms)
-
-        else:
-            h_joint = h(expanded_design, unshuffled_trace, observation_labels, target_labels)
-            return safe_mean_terms(h_joint)
-
-    return loss_fn
-
-
 def lfire_loss(model_marginal, model_conditional, h, observation_labels, target_labels):
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
@@ -696,34 +565,6 @@ def lfire_loss(model_marginal, model_conditional, h, observation_labels, target_
         else:
             h_joint = h(expanded_design, model_conditional_trace, observation_labels, target_labels)
             return safe_mean_terms(h_joint)
-
-    return loss_fn
-
-
-def elbo(model, guide, data, observation_labels, target_labels):
-
-    def loss_fn(design, num_particles, **kwargs):
-
-        y_dict = {l: lexpand(y, num_particles) for l, y in data.items()}
-
-        expanded_design = lexpand(design, num_particles)
-
-        # Sample from q(theta)
-        trace = poutine.trace(guide).get_trace(expanded_design)
-        theta_y_dict = {l: trace.nodes[l]["value"] for l in target_labels}
-        theta_y_dict.update(y_dict)
-        trace.compute_log_prob()
-
-        # Run through p(theta)
-        modelp = pyro.condition(model, data=theta_y_dict)
-        model_trace = poutine.trace(modelp).get_trace(expanded_design)
-        model_trace.compute_log_prob()
-
-        terms = sum(trace.nodes[l]["log_prob"] for l in target_labels)
-        terms -= sum(model_trace.nodes[l]["log_prob"] for l in target_labels)
-        terms -= sum(model_trace.nodes[l]["log_prob"] for l in observation_labels)
-
-        return safe_mean_terms(terms)
 
     return loss_fn
 
