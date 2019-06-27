@@ -10,24 +10,39 @@ from torch.distributions.transforms import AffineTransform, SigmoidTransform
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.util import rmv
+from pyro.contrib.util import rmv, iter_plates_to_shape
 
 try:
     from contextlib import ExitStack  # python 3
 except ImportError:
     from contextlib2 import ExitStack  # python 2
 
+# TODO read from torch float spec
+epsilon = torch.tensor(2**-24)
 
-def known_covariance_linear_model(coef_mean, coef_sd, observation_sd,
-                                  coef_label="w", observation_label="y"):
+
+def known_covariance_linear_model(coef_means, coef_sds, observation_sd,
+                                  coef_labels="w", observation_label="y"):
+
+    if not isinstance(coef_means, list):
+        coef_means = [coef_means]
+    if not isinstance(coef_sds, list):
+        coef_sds = [coef_sds]
+    if not isinstance(coef_labels, list):
+        coef_labels = [coef_labels]
+
     model = partial(bayesian_linear_model,
-                    w_means={coef_label: coef_mean},
-                    w_sqrtlambdas={coef_label: 1./(observation_sd*coef_sd)},
+                    w_means=OrderedDict([(label, mean) for label, mean in zip(coef_labels, coef_means)]),
+                    w_sqrtlambdas=OrderedDict([
+                        (label, 1./(observation_sd*sd)) for label, sd in zip(coef_labels, coef_sds)]),
                     obs_sd=observation_sd,
                     response_label=observation_label)
-    # For testing, add these
+    # For computing the true EIG
     model.obs_sd = observation_sd
-    model.w_sds = {coef_label: coef_sd}
+    model.w_sds = OrderedDict([(label, sd) for label, sd in zip(coef_labels, coef_sds)])
+    model.w_sizes = OrderedDict([(label, sd.shape[-1]) for label, sd in zip(coef_labels, coef_sds)])
+    model.observation_label = observation_label
+    model.coef_labels = coef_labels
     return model
 
 
@@ -133,34 +148,24 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
                           response_label="y", k=None):
     """
     A pyro model for Bayesian linear regression.
-
     If :param:`response` is `"normal"` this corresponds to a linear regression
     model
-
         :math:`Y = Xw + \\epsilon`
-
     with `\\epsilon`` i.i.d. zero-mean Gaussian. The observation standard deviation
     (:param:`obs_sd`) may be known or unknown. If unknown, it is assumed to follow an
     inverse Gamma distribution with parameters :param:`alpha_0` and :param:`beta_0`.
-
     If the response type is `"bernoulli"` we instead have :math:`Y \\sim Bernoulli(p)`
     with
-
         :math:`logit(p) = Xw`
-
     Given parameter groups in :param:`w_means` and :param:`w_sqrtlambda`, the fixed effects
     regression coefficient is taken to be Gaussian with mean `w_mean` and standard deviation
     given by
-
         :math:`\\sigma / \\sqrt{\\lambda}`
-
     corresponding to the normal inverse Gamma family.
-
     The random effects coefficient is constructed as follows. For each random effect
     group, standard deviations for that group are sampled from a normal inverse Gamma
     distribution. For each group, a random effect coefficient is then sampled from a zero
     mean Gaussian with those standard deviations.
-
     :param torch.Tensor design: a tensor with last two dimensions `n` and `p`
             corresponding to observations and features respectively.
     :param OrderedDict w_means: map from variable names to tensors of fixed effect means.
@@ -186,15 +191,15 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
     """
     # design is size batch x n x p
     # tau is size batch
-    tau_shape = design.shape[:-2]
+    batch_shape = design.shape[:-2]
     with ExitStack() as stack:
-        for plate in iter_plates_to_shape(tau_shape):
+        for plate in iter_plates_to_shape(batch_shape):
             stack.enter_context(plate)
 
         if obs_sd is None:
             # First, sample tau (observation precision)
-            tau_prior = dist.Gamma(alpha_0.expand(tau_shape),
-                                   beta_0.expand(tau_shape))
+            tau_prior = dist.Gamma(alpha_0.expand(batch_shape).unsqueeze(-1),
+                                   beta_0.expand(batch_shape).unsqueeze(-1)).to_event(1)
             tau = pyro.sample("tau", tau_prior)
             obs_sd = 1./torch.sqrt(tau)
 
@@ -202,8 +207,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
             warnings.warn("Values of `alpha_0` and `beta_0` unused becased"
                           "`obs_sd` was specified already.")
 
-        # response will be shape batch x n
-        obs_sd = obs_sd.expand(tau_shape).unsqueeze(-1)
+        obs_sd = obs_sd.expand(batch_shape + (1,))
 
         # Build the regression coefficient
         w = []
@@ -219,15 +223,15 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
             # Sample `G` once for this group
             alpha, beta = re_alphas[name], re_betas[name]
             group_p = alpha.shape[-1]
-            G_prior = dist.Gamma(alpha.expand(tau_shape + (group_p,)),
-                                 beta.expand(tau_shape + (group_p,))).to_event(1)
+            G_prior = dist.Gamma(alpha.expand(batch_shape + (group_p,)),
+                                 beta.expand(batch_shape + (group_p,))).to_event(1)
             G = 1./torch.sqrt(pyro.sample("G_" + name, G_prior))
             # Repeat `G` for each group
-            repeat_shape = tuple(1 for _ in tau_shape) + (group_size,)
+            repeat_shape = tuple(1 for _ in batch_shape) + (group_size,)
             u_prior = dist.Normal(torch.tensor(0.), G.repeat(repeat_shape)).to_event(1)
             w.append(pyro.sample(name, u_prior))
         # Regression coefficient `w` is batch x p
-        w = torch.cat(w, dim=-1)
+        w = broadcast_cat(w)
 
         # Run the regressor forward conditioned on inputs
         prediction_mean = rmv(design, w)
@@ -237,11 +241,11 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         elif response == "bernoulli":
             return pyro.sample(response_label, dist.Bernoulli(logits=prediction_mean).to_event(1))
         elif response == "sigmoid":
-            base_dist = dist.Normal(prediction_mean, obs_sd).to_event(1)
             # You can add loc via the linear model itself
             k = k.expand(prediction_mean.shape)
-            transforms = [AffineTransform(loc=torch.tensor(0.), scale=k), SigmoidTransform()]
-            response_dist = dist.TransformedDistribution(base_dist, transforms)
+            response_dist = dist.CensoredSigmoidNormal(
+                loc=k * prediction_mean, scale=k * obs_sd, upper_lim=1. - epsilon, lower_lim=epsilon
+            ).to_event(1)
             return pyro.sample(response_label, response_dist)
         else:
             raise ValueError("Unknown response distribution: '{}'".format(response))
@@ -358,7 +362,22 @@ def analytic_posterior_cov(prior_cov, x, obs_sd):
     return posterior_cov
 
 
-def iter_plates_to_shape(shape):
-    # Go backwards (right to left)
-    for i, s in enumerate(shape[::-1]):
-        yield pyro.plate("plate_" + str(i), s)
+def _broadcast_shape(shapes):
+    r"""
+    Given a list of tensor sizes, returns the size of the resulting broadcasted
+    tensor.
+    Args:
+        shapes (list of torch.Size): list of tensor sizes
+    Copied from PyTorch 0.4.0
+    """
+    shape = torch.Size()
+    for s in shapes:
+        shape = torch._C._infer_size(s, shape)
+    return shape
+
+
+def broadcast_cat(ws):
+    shapes = [w.shape[:-1] for w in ws]
+    target = _broadcast_shape(shapes)
+    expanded = [w.expand(target + (w.shape[-1],)) for w in ws]
+    return torch.cat(expanded, dim=-1)
