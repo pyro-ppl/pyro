@@ -66,7 +66,7 @@ class _Worker(object):
                  kernel, num_samples, warmup_steps, initial_params=None, hook=None):
         self.chain_id = chain_id
         self.kernel = kernel
-        if initial_params:
+        if initial_params is not None:
             self.kernel.initial_params = initial_params
         self.num_samples = num_samples
         self.warmup_steps = warmup_steps
@@ -134,7 +134,7 @@ class _UnarySampler(object):
 
     def __init__(self, kernel, num_samples, warmup_steps, disable_progbar, initial_params=None, hook=None):
         self.kernel = kernel
-        if initial_params:
+        if initial_params is not None:
             self.kernel.initial_params = initial_params
         self.warmup_steps = warmup_steps
         self.num_samples = num_samples

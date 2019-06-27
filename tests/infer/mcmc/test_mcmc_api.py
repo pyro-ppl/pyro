@@ -118,8 +118,8 @@ def test_null_model_with_hook(kernel, model, jit, num_chains):
         iters.append((stage, i))
 
     kern = kernel(potential_fn=potential_fn, transforms=transforms, jit_compile=jit)
-    samples = MCMC(kern, initial_params, num_samples=num_samples, warmup_steps=num_warmup,
-                   num_chains=num_chains, hook_fn=hook).run()
+    samples = MCMC(kern, num_samples=num_samples, warmup_steps=num_warmup,
+                   num_chains=num_chains, initial_params=initial_params, hook_fn=hook).run()
     assert samples == {}
     if num_chains == 1:
         expected = [("warmup", i) for i in range(num_warmup)] + [("sample", i) for i in range(num_samples)]
