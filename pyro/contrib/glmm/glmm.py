@@ -6,7 +6,6 @@ from functools import partial
 import torch
 from torch.nn.functional import softplus
 from torch.distributions import constraints
-from torch.distributions.transforms import AffineTransform, SigmoidTransform
 
 import pyro
 import pyro.distributions as dist
@@ -148,24 +147,34 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
                           response_label="y", k=None):
     """
     A pyro model for Bayesian linear regression.
+
     If :param:`response` is `"normal"` this corresponds to a linear regression
     model
+
         :math:`Y = Xw + \\epsilon`
+
     with `\\epsilon`` i.i.d. zero-mean Gaussian. The observation standard deviation
     (:param:`obs_sd`) may be known or unknown. If unknown, it is assumed to follow an
     inverse Gamma distribution with parameters :param:`alpha_0` and :param:`beta_0`.
+
     If the response type is `"bernoulli"` we instead have :math:`Y \\sim Bernoulli(p)`
     with
+
         :math:`logit(p) = Xw`
+
     Given parameter groups in :param:`w_means` and :param:`w_sqrtlambda`, the fixed effects
     regression coefficient is taken to be Gaussian with mean `w_mean` and standard deviation
     given by
+
         :math:`\\sigma / \\sqrt{\\lambda}`
+
     corresponding to the normal inverse Gamma family.
+
     The random effects coefficient is constructed as follows. For each random effect
     group, standard deviations for that group are sampled from a normal inverse Gamma
     distribution. For each group, a random effect coefficient is then sampled from a zero
     mean Gaussian with those standard deviations.
+
     :param torch.Tensor design: a tensor with last two dimensions `n` and `p`
             corresponding to observations and features respectively.
     :param OrderedDict w_means: map from variable names to tensors of fixed effect means.
