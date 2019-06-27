@@ -98,13 +98,9 @@ class FlowTests(TestCase):
     def _make_block_autoregressive(self, input_dim, activation='tanh', residual=None):
         return dist.BlockAutoregressive(input_dim, activation=activation, residual=residual)
 
-    def _make_iaf(self, input_dim):
+    def _make_affine_autoregressive(self, input_dim, stable):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
-        return dist.InverseAutoregressiveFlow(arn)
-
-    def _make_iaf_stable(self, input_dim):
-        arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
-        return dist.InverseAutoregressiveFlowStable(arn, sigmoid_bias=0.5)
+        return dist.AffineAutoregressive(arn, stable=stable)
 
     def _make_def(self, input_dim):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1], param_dims=[16] * 3)
