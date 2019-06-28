@@ -112,12 +112,15 @@ class TreeCat(object):
     def __getstate__(self):
         edges = self.edges.tolist()
         init_args = (self.features, self.capacity, edges)
-        return {"init_args": init_args, "edge_guide": self._edge_guide}
+        return {"init_args": init_args,
+                "feature_model": self._feature_model,
+                "edge_guide": self._edge_guide}
 
     def __setstate__(self, state):
         features, capacity, edges = state["init_args"]
         edges = torch.tensor(edges, device="cpu")
         self.__init__(features, capacity, edges)
+        self._feature_model = state["feature_model"]
         self._edge_guide = state["edge_guide"]
         self._edge_guide.edges = self.edges
 
