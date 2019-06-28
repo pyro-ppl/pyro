@@ -474,7 +474,7 @@ def vnmc_eig(model, design, observation_labels, target_labels,
          {q(\\theta_{mn} | y_n)} \\right) \\right]
 
     where :math:`q(\\theta | y)` is the learned variational posterior approximation and
-    :math:`\\theta_n, y_n \sim p(\\theta, y | d)`, :math:`\\theta_{mn} \sim q(\\theta|y=y_n)`.
+    :math:`\\theta_n, y_n \\sim p(\\theta, y | d)`, :math:`\\theta_{mn} \\sim q(\\theta|y=y_n)`.
 
     As :math:`N \\to \\infty` this is an upper bound on EIG. We minimise this upper bound by stochastic gradient.
 
