@@ -259,10 +259,10 @@ def main(args):
                                                                 num_chains=args.num_chains)
     nuts_kernel = NUTS(potential_fn=potential_fn, transforms=transforms)
     samples_fully_pooled = MCMC(nuts_kernel,
-                                init_params,
                                 num_samples=args.num_samples,
                                 warmup_steps=args.warmup_steps,
-                                num_chains=args.num_chains).run(at_bats, hits)
+                                num_chains=args.num_chains,
+                                initial_params=init_params).run(at_bats, hits)
     logging.info("\nModel: Fully Pooled")
     logging.info("===================")
     logging.info("\nphi:")
@@ -278,10 +278,10 @@ def main(args):
                                                                 num_chains=args.num_chains)
     nuts_kernel = NUTS(potential_fn=potential_fn, transforms=transforms)
     samples_not_pooled = MCMC(nuts_kernel,
-                              init_params,
                               num_samples=args.num_samples,
                               warmup_steps=args.warmup_steps,
-                              num_chains=args.num_chains).run(at_bats, hits)
+                              num_chains=args.num_chains,
+                              initial_params=init_params).run(at_bats, hits)
     logging.info("\nModel: Not Pooled")
     logging.info("=================")
     logging.info("\nphi:")
@@ -300,10 +300,10 @@ def main(args):
     # TODO: Provide a way to record divergent transitions
     with pyro.validation_enabled(False):
         samples_partially_pooled = MCMC(nuts_kernel,
-                                        init_params,
                                         num_samples=args.num_samples,
                                         warmup_steps=args.warmup_steps,
-                                        num_chains=args.num_chains).run(at_bats, hits)
+                                        num_chains=args.num_chains,
+                                        initial_params=init_params).run(at_bats, hits)
     logging.info("\nModel: Partially Pooled")
     logging.info("=======================")
     logging.info("\nphi:")
@@ -320,10 +320,10 @@ def main(args):
                                                                 num_chains=args.num_chains)
     nuts_kernel = NUTS(potential_fn=potential_fn, transforms=transforms)
     samples_partially_pooled_logit = MCMC(nuts_kernel,
-                                          init_params,
                                           num_samples=args.num_samples,
                                           warmup_steps=args.warmup_steps,
-                                          num_chains=args.num_chains).run(at_bats, hits)
+                                          num_chains=args.num_chains,
+                                          initial_params=init_params).run(at_bats, hits)
     logging.info("\nModel: Partially Pooled with Logit")
     logging.info("==================================")
     logging.info("\nSigmoid(alpha):")
