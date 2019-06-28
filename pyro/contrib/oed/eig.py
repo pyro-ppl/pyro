@@ -13,8 +13,7 @@ from pyro.util import torch_isnan, torch_isinf
 from pyro.contrib.util import lexpand
 
 
-def laplace_vi_ape(model, design, observation_labels, target_labels,
-                   guide, loss, optim, num_steps,
+def laplace_vi_ape(model, design, observation_labels, target_labels, guide, loss, optim, num_steps,
                    final_num_samples, y_dist=None):
     """
     Laplace approximation

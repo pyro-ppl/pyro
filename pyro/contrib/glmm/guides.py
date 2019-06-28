@@ -25,10 +25,13 @@ class LinearModelPosteriorGuide(nn.Module):
         Amortisation over data is taken care of by analytic formulae for
         linear models (heavy use of truth).
 
-        :param tuple d: the number of designs
-        :param dict w_sizes: map from variable string names to int.
-        :param float tikhonov_init: initial value for `tikhonov_diag` parameter.
-        :param float scale_tril_init: initial value for `scale_tril` parameter.
+        :param tuple d: the shape by which to expand the guide parameters, e.g. `(num_batches, num_designs)`.
+        :param dict w_sizes: map from variable string names to int, indicating the dimension of each
+                             weight vector in the linear model.
+        :param float regressor_init: initial value for the regressor matrix used to learn the posterior mean.
+        :param float scale_tril_init: initial value for posterior `scale_tril` parameter.
+        :param bool use_softplus: whether to transform the regressor by a softplus transform: useful if the
+                                  regressor should be nonnegative but close to zero.
         """
         super(LinearModelPosteriorGuide, self).__init__()
         # Represent each parameter group as independent Gaussian
@@ -77,7 +80,14 @@ class LinearModelPosteriorGuide(nn.Module):
 
 class LinearModelLaplaceGuide(nn.Module):
     """
-    Laplace approximation for a (G)LM
+    Laplace approximation for a (G)LM.
+
+    :param tuple d: the shape by which to expand the guide parameters, e.g. `(num_batches, num_designs)`.
+    :param dict w_sizes: map from variable string names to int, indicating the dimension of each
+                         weight vector in the linear model.
+    :param str tau_label: the label used for inverse variance parameter sample site, or `None` to indicate a
+                          fixed variance.
+    :param float init_value: initial value for the posterior mean parameters.
     """
     def __init__(self, d, w_sizes, tau_label=None, init_value=0.1, **kwargs):
         super(LinearModelLaplaceGuide, self).__init__()
@@ -126,8 +136,12 @@ class LinearModelLaplaceGuide(nn.Module):
         """
         Compute the Hessian of the parameters wrt ``loss``
         Usage::
-            >>> guide = LinearModelLaplace(...)
+            >>> guide = LinearModelLaplaceGuide(...)
             >>> guide.finalize(loss)
+
+        :param function loss: a loss function such as `pyro.infer.ELBO()`.
+        :param list target_labels: list indicating the sample sites that are targets, i.e. for which information gain
+                                   should be measured.
         """
         # set self.training = False
         self.eval()
@@ -140,14 +154,17 @@ class LinearModelLaplaceGuide(nn.Module):
 
     def forward(self, design, target_labels=None):
         """
-        Sample the posterior
+        Sample the posterior.
+
+        :param torch.Tensor design: tensor of possible designs.
+        :param list target_labels: list indicating the sample sites that are targets, i.e. for which information gain
+                                   should be measured.
         """
         if target_labels is None:
             target_labels = list(self.means.keys())
 
         pyro.module("laplace_guide", self)
         with ExitStack() as stack:
-            stack.enter_context(poutine.broadcast())
             for plate in iter_plates_to_shape(design.shape[:-2]):
                 stack.enter_context(plate)
 
