@@ -208,8 +208,8 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
 
         if obs_sd is None:
             # First, sample tau (observation precision)
-            tau_prior = dist.Gamma(alpha_0.expand(batch_shape).unsqueeze(-1),
-                                   beta_0.expand(batch_shape).unsqueeze(-1)).to_event(1)
+            tau_prior = dist.Gamma(alpha_0.unsqueeze(-1),
+                                   beta_0.unsqueeze(-1)).to_event(1)
             tau = pyro.sample("tau", tau_prior)
             obs_sd = 1./torch.sqrt(tau)
 
@@ -232,9 +232,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         for name, group_size in re_group_sizes.items():
             # Sample `G` once for this group
             alpha, beta = re_alphas[name], re_betas[name]
-            group_p = alpha.shape[-1]
-            G_prior = dist.Gamma(alpha.expand(batch_shape + (group_p,)),
-                                 beta.expand(batch_shape + (group_p,))).to_event(1)
+            G_prior = dist.Gamma(alpha, beta).to_event(1)
             G = 1./torch.sqrt(pyro.sample("G_" + name, G_prior))
             # Repeat `G` for each group
             repeat_shape = tuple(1 for _ in batch_shape) + (group_size,)
