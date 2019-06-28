@@ -149,14 +149,18 @@ class HMC(MCMCKernel):
         self._z_grads_last = None
         self._warmup_steps = None
 
-    def _find_reasonable_step_size(self):
+    def _find_reasonable_step_size(self, params):
         step_size = self.step_size
 
         # We are going to find a step_size which make accept_prob (Metropolis correction)
         # near the target_accept_prob. If accept_prob:=exp(-delta_energy) is small,
         # then we have to decrease step_size; otherwise, increase step_size.
         z, potential_energy, z_grads = self._fetch_from_cache()
-        if not z:
+        # recompute PE when cache is cleared
+        if z is None:
+            z = params
+            potential_energy = self.potential_fn(z)
+        elif len(z) == 0:
             return self.step_size
         r, _ = self._sample_r(name="r_presample_0")
         energy_current = self._kinetic_energy(r) + potential_energy
@@ -251,7 +255,7 @@ class HMC(MCMCKernel):
                                 find_reasonable_step_size_fn=self._find_reasonable_step_size)
 
         if self._adapter.adapt_step_size:
-            self._adapter.reset_step_size_adaptation()
+            self._adapter.reset_step_size_adaptation(self._initial_params)
 
     def setup(self, warmup_steps, *args, **kwargs):
         self._warmup_steps = warmup_steps

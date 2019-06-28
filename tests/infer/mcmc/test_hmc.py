@@ -268,15 +268,16 @@ def test_bernoulli_latent_model(jit):
 @pytest.mark.parametrize("kernel", [HMC, NUTS])
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_unnormalized_normal(kernel, jit):
-    true_mean, true_std = torch.tensor(1.), torch.tensor(2.)
+    true_mean, true_std = torch.tensor(5.), torch.tensor(1.)
+    init_params = {"z": torch.tensor(0.)}
 
-    def potential_fn(params):
+    def potential_energy(params):
         return 0.5 * torch.sum(((params["z"] - true_mean) / true_std) ** 2)
 
-    hmc_kernel = kernel(model=None, potential_fn=potential_fn, jit_compile=jit,
-                        ignore_jit_warnings=True)
+    potential_fn = potential_energy if not jit else torch.jit.trace(potential_energy, init_params)
+    hmc_kernel = kernel(model=None, potential_fn=potential_fn)
 
-    samples = {"z": torch.tensor(0.)}
+    samples = init_params
     warmup_steps = 400
     hmc_kernel.initial_params = samples
     hmc_kernel.setup(warmup_steps)
@@ -285,7 +286,7 @@ def test_unnormalized_normal(kernel, jit):
         samples = hmc_kernel(samples)
 
     posterior = []
-    for i in range(4000):
+    for i in range(2000):
         hmc_kernel.clear_cache()
         samples = hmc_kernel(samples)
         posterior.append(samples)
