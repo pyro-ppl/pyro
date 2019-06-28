@@ -13,7 +13,7 @@ from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta, init_to_sample
 from pyro.distributions.spanning_tree import make_complete_graph, sample_tree_mcmc
 from pyro.infer import SVI
-from pyro.infer.discrete import TraceEnum_ELBO, TraceEnumSample_ELBO, infer_discrete
+from pyro.infer.discrete import TraceEnumSample_ELBO, infer_discrete
 from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.util import TraceEinsumEvaluator
 from pyro.ops import packed
@@ -403,7 +403,7 @@ class TreeCatTrainer(object):
         assert isinstance(model, TreeCat)
         self.backend = backend
         self._model = model
-        self._elbo = TraceEnum_ELBO(max_plate_nesting=2)
+        self._elbo = TraceEnumSample_ELBO(max_plate_nesting=2)
         self._svi = SVI(model.model, model.guide, optim, self._elbo)
         self._initialized = False
 
@@ -443,21 +443,19 @@ class TreeCatTrainer(object):
         # Perform a gradient optimizer step to learn parameters.
         loss = self._svi.step(data, mask, num_rows=num_rows)
 
-        # Sample latent categoricals.
-        model = self._model
         with torch.no_grad():
-            guide_trace = poutine.trace(model.guide).get_trace(data, mask)
-            infer_discrete(poutine.replay(model.model, guide_trace),
-                           first_available_dim=-3)(data, mask)
+            # Sample latent categoricals.
+            model = self._model
+            self._elbo.sample_saved()
             z = torch.stack(model._saved_z)
 
-        # Update sufficient statistics.
-        model._feature_model.update(data, mask, num_rows, z)
-        model._edge_guide.update(num_rows, z)
+            # Update sufficient statistics.
+            model._feature_model.update(data, mask, num_rows, z)
+            model._edge_guide.update(num_rows, z)
 
-        # Perform an MCMC step on the tree structure.
-        edge_logits = model._edge_guide.compute_edge_logits()
-        model.edges = sample_tree_mcmc(edge_logits, model.edges, backend=self.backend)
+            # Perform an MCMC step on the tree structure.
+            edge_logits = model._edge_guide.compute_edge_logits()
+            model.edges = sample_tree_mcmc(edge_logits, model.edges, backend=self.backend)
 
         return loss
 
@@ -650,6 +648,8 @@ class AnnealingSchedule(object):
         :return: A decay factor in ``(0,1)``.
         :rtype: float
         """
+        if complete_size is None:
+            complete_size = batch_size
         assert batch_size <= complete_size
         memory_size = max(self.min_memory_size, memory_size)
         annealing = (1 + self.annealing_rate) * memory_size / (memory_size + batch_size)
