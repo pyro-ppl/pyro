@@ -135,11 +135,9 @@ class LinearModelLaplaceGuide(nn.Module):
     def finalize(self, loss, target_labels):
         """
         Compute the Hessian of the parameters wrt ``loss``
-        Usage::
-            >>> guide = LinearModelLaplaceGuide(...)
-            >>> guide.finalize(loss)
 
-        :param function loss: a loss function such as `pyro.infer.ELBO()`.
+        :param torch.Tensor loss: the output of evaluating a loss function such as
+                                  `pyro.infer.Trace_ELBO().differentiable_loss` on the model, guide and design.
         :param list target_labels: list indicating the sample sites that are targets, i.e. for which information gain
                                    should be measured.
         """

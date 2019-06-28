@@ -52,14 +52,34 @@ def mc_H_prior(model, design, observation_labels, target_labels, num_samples=100
 
 
 def vi_eig_lm(model, design, observation_labels, target_labels, *args, **kwargs):
-    # **Only** applies to linear models - analytic prior entropy
+    """Estimates the EIG by using `vi_ape` to estimate the APE and then computing the prior entropy analytically
+    assuming a Gaussian prior. The `model` should have a `w_sds` attribute giving the prior standard deviations of
+    the latent variables.
+
+    :param function model: Model (pyro stochastic function) accepting `design` as its only argument.
+    :param torch.Tensor design: Tensor of possible designs.
+    :param list observation_labels: labels of sample sites regarded as experimental observations.
+    :param list target_labels: labels of sample sites regarded as latent variables of interest.
+    :param args: passed to `vi_ape`
+    :param kwargs: passed to `vi_ape`
+    :return: torch.Tensor
+    """
     ape = vi_ape(model, design, observation_labels, target_labels, *args, **kwargs)
     prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
     return prior_entropy - ape
 
 
 def vi_eig_mc(model, design, observation_labels, target_labels, *args, **kwargs):
-    # Compute the prior entropy by Monte Carlo, then uses vi_ape
+    """Estimates the EIG by using `vi_ape` to estimate the APE and then computing the prior entropy using Monte Carlo.
+
+    :param function model: Model (pyro stochastic function) accepting `design` as its only argument.
+    :param torch.Tensor design: Tensor of possible designs.
+    :param list observation_labels: labels of sample sites regarded as experimental observations.
+    :param list target_labels: labels of sample sites regarded as latent variables of interest.
+    :param args: passed to `vi_ape`
+    :param kwargs: passed to `vi_ape`
+    :return: torch.Tensor
+    """
     if "num_hprior_samples" in kwargs:
         hprior = mc_H_prior(model, design, observation_labels, target_labels, kwargs["num_hprior_samples"])
     else:
@@ -69,7 +89,17 @@ def vi_eig_mc(model, design, observation_labels, target_labels, *args, **kwargs)
 
 
 def laplace_vi_eig_mc(model, design, observation_labels, target_labels, *args, **kwargs):
-    # Compute the prior entropy by Monte Carlo, then uses vi_ape
+    """Estimates the EIG by using `laplace_vi_ape` to estimate the APE and then computing the prior entropy using
+    Monte Carlo.
+
+    :param function model: Model (pyro stochastic function) accepting `design` as its only argument.
+    :param torch.Tensor design: Tensor of possible designs.
+    :param list observation_labels: labels of sample sites regarded as experimental observations.
+    :param list target_labels: labels of sample sites regarded as latent variables of interest.
+    :param args: passed to `laplace_vi_ape`
+    :param kwargs: passed to `laplace_vi_ape`
+    :return: torch.Tensor
+    """
     if "num_hprior_samples" in kwargs:
         hprior = mc_H_prior(model, design, observation_labels, target_labels, kwargs["num_hprior_samples"])
     else:
@@ -79,7 +109,18 @@ def laplace_vi_eig_mc(model, design, observation_labels, target_labels, *args, *
 
 
 def posterior_eig_lm(model, design, observation_labels, target_labels, *args, **kwargs):
-    # **Only** applies to linear models - analytic prior entropy
+    """Estimates the EIG by using `posterior_ape` to estimate the APE and then computing the prior entropy analytically
+    assuming a Gaussian prior. The `model` should have a `w_sds` attribute giving the prior standard deviations of
+    the latent variables.
+
+    :param function model: Model (pyro stochastic function) accepting `design` as its only argument.
+    :param torch.Tensor design: Tensor of possible designs.
+    :param list observation_labels: labels of sample sites regarded as experimental observations.
+    :param list target_labels: labels of sample sites regarded as latent variables of interest.
+    :param args: passed to `posterior_ape`
+    :param kwargs: passed to `posterior_ape`
+    :return: torch.Tensor
+    """
     ape = posterior_ape(model, design, observation_labels, target_labels, *args, **kwargs)
     prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
     if isinstance(ape, tuple):
@@ -89,7 +130,17 @@ def posterior_eig_lm(model, design, observation_labels, target_labels, *args, **
 
 
 def posterior_eig_mc(model, design, observation_labels, target_labels, *args, **kwargs):
-    # Compute the prior entropy my Monte Carlo, then uses posterior_ape
+    """Estimates the EIG by using `posterior_ape` to estimate the APE and then computing the prior entropy using
+    Monte Carlo.
+
+    :param function model: Model (pyro stochastic function) accepting `design` as its only argument.
+    :param torch.Tensor design: Tensor of possible designs.
+    :param list observation_labels: labels of sample sites regarded as experimental observations.
+    :param list target_labels: labels of sample sites regarded as latent variables of interest.
+    :param args: passed to `posterior_ape`
+    :param kwargs: passed to `posterior_ape`
+    :return: torch.Tensor
+    """
     if "num_hprior_samples" in kwargs:
         hprior = mc_H_prior(model, design, observation_labels, target_labels, kwargs["num_hprior_samples"])
     else:
