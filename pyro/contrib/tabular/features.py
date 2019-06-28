@@ -105,8 +105,8 @@ class Feature(object):
     @abstractmethod
     def summary(self, group):
         """
-        Constructs a :class:`~pyro.contrib.tabular.summary.Summary`
-        object from the given group data.
+        Constructs an empty :class:`~pyro.contrib.tabular.summary.Summary`
+        object from the given group object.
 
         :param group: an opaque result of :meth:`sample_group`
         :returns: an empty data summary

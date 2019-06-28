@@ -38,7 +38,7 @@ class Summary(object):
     def as_scaled_data(self):
         """
         Create a pseudo dataset that is indistinguishable from the original
-        summarized dataset from the point of view of the feature model.
+        summarized dataset from the point of view of the mixture model.
 
         :return: A pair ``scale, data`` where ``scale`` is a scaling tensor
             and ``data`` is a batch of data with batch shape
@@ -64,6 +64,7 @@ class BernoulliSummary(Summary):
 
     def __imul__(self, scale):
         self.counts *= scale
+        return self
 
     def as_scaled_data(self):
         scale = self.counts
@@ -86,6 +87,7 @@ class CategoricalSummary(Summary):
 
     def __imul__(self, scale):
         self.counts *= scale
+        return self
 
     def as_scaled_data(self):
         scale = self.counts
@@ -117,6 +119,7 @@ class NormalSummary(Summary):
     def __imul__(self, scale):
         self.count *= scale
         self.count_times_variance *= scale
+        return self
 
     def as_scaled_data(self):
         scale = (self.count_times_variance / self.count).sqrt()

@@ -13,7 +13,7 @@ from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta, init_to_sample
 from pyro.distributions.spanning_tree import make_complete_graph, sample_tree_mcmc
 from pyro.infer import SVI
-from pyro.infer.discrete import TraceEnumSample_ELBO, infer_discrete
+from pyro.infer.discrete import TraceEnum_ELBO, TraceEnumSample_ELBO, infer_discrete
 from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.util import TraceEinsumEvaluator
 from pyro.ops import packed
@@ -22,6 +22,18 @@ from pyro.ops.indexing import Vindex
 
 
 def get_dense_column(data, mask, v):
+    """
+    Extracts the ``v``th colum from ``data,mask`` and selects contiguous subset
+    of ``data`` based on ``mask``.
+
+    :param list data: A minibatch of column-oriented data. Each column should
+        be a :class:`torch.Tensor` .
+    :param list mask: A minibatch of column masks. Each column may be ``True``
+        if fully observed, ``False`` if fully unobserved, or a
+        :class:`torch.ByteTensor` if partially observed.
+    :param int v: The column index.
+    :return: a :class:`torch.Tensor` or ``None``.
+    """
     col_data = data[v]
     col_mask = True if mask is None else mask[v]
     if col_mask is True:
@@ -81,9 +93,12 @@ class TreeCat(object):
         self.features = features
         self.capacity = capacity
 
+        self._feature_model = _FeatureModel(features=features, capacity=capacity,
+                                            annealing_rate=annealing_rate)
         self._feature_guide = AutoDelta(poutine.block(
             self.model, hide_fn=lambda msg: msg["name"].startswith("treecat_")))
-        self._edge_guide = _EdgeGuide(capacity=capacity, edges=edges, annealing_rate=annealing_rate)
+        self._edge_guide = _EdgeGuide(capacity=capacity, edges=edges,
+                                      annealing_rate=annealing_rate)
         self._vertex_prior = torch.full((M,), 1.)
         self._edge_prior = torch.full((M * M,), 1. / M)
         self._saved_z = None
@@ -166,15 +181,9 @@ class TreeCat(object):
             num_rows = batch_size
         V = len(self.features)
         E = len(self.edges)
-        M = self.capacity
 
         # Sample a mixture model for each feature.
-        mixtures = [None] * V
-        components_plate = pyro.plate("components_plate", M, dim=-1)
-        for v, feature in enumerate(self.features):
-            shared = feature.sample_shared()
-            with components_plate:
-                mixtures[v] = feature.sample_group(shared)
+        mixtures = self._feature_model(data, mask, num_rows)
 
         # Sample latent vertex- and edge- distributions from a Dirichlet prior.
         with pyro.plate("vertices_plate", V, dim=-1):
@@ -190,8 +199,7 @@ class TreeCat(object):
             edge_probs = edge_probs.unsqueeze(-3)
 
         # Sample data-local variables.
-        subsample = None if (batch_size == num_rows) else [None] * batch_size
-        with pyro.plate("data", num_rows, subsample=subsample, dim=-1):
+        with pyro.plate("data", batch_size, dim=-1):
 
             # Recursively sample z and x in Markov contexts.
             z = [None] * V
@@ -315,10 +323,10 @@ class TreeCat(object):
 
         # Optionally draw vectorized samples.
         if num_samples is not None:
-            plate = pyro.plate("num_samples_vectorized", num_samples,
-                               dim=first_available_dim)
-            model = plate(model)
-            guide = plate(guide)
+            vectorize = pyro.plate("num_samples_vectorized", num_samples,
+                                   dim=first_available_dim)
+            model = vectorize(model)
+            guide = vectorize(guide)
             first_available_dim -= 1
 
         # Sample global parameters from the guide.
@@ -394,9 +402,9 @@ class TreeCatTrainer(object):
     def __init__(self, model, optim, backend="cpp"):
         assert isinstance(model, TreeCat)
         self.backend = backend
-        self._elbo = TraceEnumSample_ELBO(max_plate_nesting=1)
-        self._svi = SVI(model.model, model.guide, optim, self._elbo)
         self._model = model
+        self._elbo = TraceEnum_ELBO(max_plate_nesting=2)
+        self._svi = SVI(model.model, model.guide, optim, self._elbo)
         self._initialized = False
 
     def init(self, data, mask=None):
@@ -435,13 +443,19 @@ class TreeCatTrainer(object):
         # Perform a gradient optimizer step to learn parameters.
         loss = self._svi.step(data, mask, num_rows=num_rows)
 
-        # Update sufficient statistics in the edge guide.
-        self._elbo.sample_saved()
-        z = torch.stack(self._model._saved_z)
-        self._model._edge_guide.update(num_rows, z)
+        # Sample latent categoricals.
+        model = self._model
+        with torch.no_grad():
+            guide_trace = poutine.trace(model.guide).get_trace(data, mask)
+            infer_discrete(poutine.replay(model.model, guide_trace),
+                           first_available_dim=-3)(data, mask)
+            z = torch.stack(model._saved_z)
+
+        # Update sufficient statistics.
+        model._feature_model.update(data, mask, num_rows, z)
+        model._edge_guide.update(num_rows, z)
 
         # Perform an MCMC step on the tree structure.
-        model = self._model
         edge_logits = model._edge_guide.compute_edge_logits()
         model.edges = sample_tree_mcmc(edge_logits, model.edges, backend=self.backend)
 
@@ -491,7 +505,7 @@ class FeatureTrainerNuts(object):
                 initial_params[name] = self.transforms[name](site["value"])
         self.nuts.initial_params = initial_params
         self.trace_prob_evaluator = TraceEinsumEvaluator(
-            model_trace, True, max_plate_nesting=1)
+            model_trace, True, max_plate_nesting=2)
 
         # Warm up the NUTS kernel.
         diagnostics = []
@@ -552,13 +566,13 @@ class TreeCatTrainerNuts(object):
         assert isinstance(model, TreeCat)
         self.backend = backend
         self._model = model
-        self._elbo = TraceEnumSample_ELBO(max_plate_nesting=1)
+        self._elbo = TraceEnumSample_ELBO(max_plate_nesting=2)
         self._feature_trainers = {
             feature.name: FeatureTrainerNuts(feature, model.capacity, nuts_config)
             for feature in model.features}
         self._initialized = False
 
-    def init(self, data):
+    def init(self, data, mask):
         """
         Initializes shared feature parameters given some or all data.
 
@@ -591,7 +605,7 @@ class TreeCatTrainerNuts(object):
         # Sample latent categoricals.
         model = self._model
         with torch.no_grad():
-            loss = self._elbo.loss(model.model, model.guide, data, mask, num_rows=num_rpws)
+            loss = self._elbo.loss(model.model, model.guide, data, mask, num_rows=num_rows)
             self._elbo.sample_saved()
             z = model._saved_z
 
@@ -615,6 +629,93 @@ class TreeCatTrainerNuts(object):
         return loss
 
 
+class AnnealingSchedule(object):
+    """
+    A two-phase data annealing schedule.
+
+    Early in learning, we limit stats accumulation to slow exponential growth
+    determined by annealing_rate.  Later in learning we exponentially smooth
+    batches to approximate the entire dataset.
+
+    :param float annealing_rate: A portion by which memory size can grow each
+        learning step. Should be positive.
+    """
+    def __init__(self, annealing_rate=0.01, min_memory_size=1):
+        assert annealing_rate > 0
+        self.annealing_rate = annealing_rate
+        self.min_memory_size = 1
+
+    def __call__(self, memory_size, batch_size, complete_size):
+        """
+        :return: A decay factor in ``(0,1)``.
+        :rtype: float
+        """
+        assert batch_size <= complete_size
+        memory_size = max(self.min_memory_size, memory_size)
+        annealing = (1 + self.annealing_rate) * memory_size / (memory_size + batch_size)
+        exponential_smoothing = complete_size / (complete_size + batch_size)
+        decay = min(annealing, exponential_smoothing)
+        return decay
+
+
+class _FeatureModel(object):
+    """
+    Conjugate guide for feature parameters conditioned on categories.
+
+    :param list features: A ``V``-length list of
+        :class:`~pyro.contrib.tabular.features.Feature` objects defining a
+        feature model for each column.
+    :param int capacity: The cardinality of discrete latent variables.
+    :param float annealing_rate: The exponential growth rate limit with which
+        sufficient statistics approach the full dataset early in training.
+        Should be positive.
+    """
+    def __init__(self, features, capacity, annealing_rate):
+        self.features = features
+        self.capacity = capacity
+        self._annealing_schedule = AnnealingSchedule(annealing_rate)
+
+        # Initialize stats.
+        with poutine.block():
+            shared = [f.sample_shared() for f in features]
+            with pyro.plate("components_plate", self.capacity, dim=-1):
+                groups = [f.sample_group(s) for f, s in zip(features, shared)]
+        self._stats = [f.summary(g) for f, g in zip(features, groups)]
+        self._count_stats = 0
+
+    def __call__(self, data, mask, num_rows):
+        shared = [f.sample_shared() for f in self.features]
+        with pyro.plate("components_plate", self.capacity, dim=-1):
+            groups = [f.sample_group(s) for f, s in zip(self.features, shared)]
+
+        # If subsampling, include a pseudodata summary of out-of-minibatch data.
+        batch_size = len(data[0])
+        if batch_size < num_rows and self._count_stats > 0:
+            z = torch.arange(self.capacity, device=data[0].device).unsqueeze(-1)
+            with pyro.plate("z_plate", self.capacity, dim=-2):
+                for v, feature in enumerate(self.features):
+                    pseudo_scale, pseudo_data = self._stats[v].as_scaled_data()
+                with poutine.scale(scale=pseudo_scale):
+                    with pyro.plate("pseudodata_{}".format(v), pseudo_data.size(1), dim=-1):
+                        pyro.sample("treecat_x_pseudo_{}".format(v),
+                                    feature.value_dist(groups[v], component=z),
+                                    obs=pseudo_data)
+        return groups
+
+    @torch.no_grad()
+    def update(self, data, mask, num_rows, z):
+        batch_size = len(data[0])
+        decay = self._annealing_schedule(self._count_stats, batch_size, num_rows)
+        self._count_stats += batch_size
+        self._count_stats *= decay
+        for v, feature in enumerate(self.features):
+            col_data = get_dense_column(data, mask, v)
+            if col_data is not None:
+                component = get_dense_column(z, mask, v)
+                self._stats[v].scatter_update(component, col_data)
+            self._stats[v] *= decay
+
+
 class _EdgeGuide(object):
     """
     Conjugate guide for latent categorical distribution parameters.
@@ -630,14 +731,13 @@ class _EdgeGuide(object):
         Should be positive.
     """
     def __init__(self, capacity, edges, annealing_rate):
-        assert 0 < annealing_rate
         E = len(edges)
         V = E + 1
         K = V * (V - 1) // 2
         M = capacity
         self.capacity = capacity
         self.edges = edges
-        self.annealing_rate = annealing_rate
+        self._annealing_schedule = AnnealingSchedule(annealing_rate)
         self._grid = make_complete_graph(V)
 
         # Use a uniform prior on vertices, forcing a sparse prior on edges.
@@ -664,16 +764,8 @@ class _EdgeGuide(object):
         if num_rows is None:
             num_rows = batch_size
 
-        # Early in learning, we limit stats accumulation to slow exponential
-        # growth determined by annealing_rate. Later in learning we
-        # exponentially smooth batches to approximate the entire dataset.
-        assert batch_size <= num_rows
-        assert self._count_stats > 0
-        annealing = (1 + self.annealing_rate) / (1 + batch_size / self._count_stats)
-        exponential_smoothing = 1 / (1 + batch_size / num_rows)
-        decay = min(annealing, exponential_smoothing)
-
         # Accumulate statistics and decay.
+        decay = self._annealing_schedule(self._count_stats, batch_size, num_rows)
         self._count_stats += batch_size
         self._count_stats *= decay
         one = self._vertex_stats.new_tensor(1.)
