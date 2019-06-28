@@ -88,7 +88,7 @@ class LinearModelLaplaceGuide(nn.Module):
         self.means = {}
         if tau_label is not None:
             w_sizes[tau_label] = 1
-        for l, mu_l in tensor_to_dict(w_sizes, init_value*torch.ones(*d, sum(w_sizes.values()))).items():
+        for l, mu_l in tensor_to_dict(w_sizes, init_value*torch.ones(*(d + (sum(w_sizes.values()), )))).items():
             self.means[l] = nn.Parameter(mu_l)
         self._registered = nn.ParameterList(self.means.values())
         self.scale_trils = {}
