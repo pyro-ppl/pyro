@@ -138,9 +138,8 @@ def test_marginal_likelihood_finite_space_model(finite_space_model, one_point_de
     assert_equal(estimated_eig, true_eig, prec=1e-2)
 
 
-# Xfail because bernoullis are not reparametrizable and current VNMC implementation
-# assumes reparametrization
-@pytest.mark.xfail
+@pytest.mark.xfail(reason="Bernoullis are not reparametrizable and current VNMC implementation "
+                          "assumes reparametrization")
 def test_vnmc_finite_space_model(finite_space_model, one_point_design, true_eig):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()

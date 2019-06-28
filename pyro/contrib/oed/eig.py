@@ -89,6 +89,8 @@ def vi_ape(model, design, observation_labels, target_labels,
 
     """
 
+    warnings.warn("`vi_ape` is deprecated in favour on the amortized version: `posterior_ape`.", DeprecationWarning)
+
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
     if target_labels is not None and isinstance(target_labels, str):
