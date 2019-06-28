@@ -37,7 +37,7 @@ class LinearModelPosteriorGuide(nn.Module):
         if not isinstance(d, (tuple, list, torch.Tensor)):
             d = (d,)
         self.regressor = {l: nn.Parameter(
-                regressor_init * torch.ones(*d, p, sum(y_sizes.values()))) for l, p in w_sizes.items()}
+                regressor_init * torch.ones(*(d + (p, sum(y_sizes.values()))))) for l, p in w_sizes.items()}
         self.scale_tril = {l: nn.Parameter(
                 scale_tril_init * lexpand(torch.eye(p), *d)) for l, p in w_sizes.items()}
         # This registers the dict values in pytorch
