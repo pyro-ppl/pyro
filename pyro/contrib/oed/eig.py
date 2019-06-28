@@ -333,8 +333,7 @@ def marginal_eig(model, design, observation_labels, target_labels,
 
     where :math:`q` is any distribution on :math:`y`.
 
-    .. warning :: this method does **not** estimate the correct quantity in the presence of
-    random effects.
+    .. warning :: this method does **not** estimate the correct quantity in the presence of random effects.
 
     :param function model: A pyro model accepting `design` as only argument.
     :param torch.Tensor design: Tensor representation of design
