@@ -270,13 +270,22 @@ class HMC(MCMCKernel):
         self._potential_energy_last = potential_energy
         self._z_grads_last = z_grads
 
+    def clear_cache(self):
+        self._z_last = None
+        self._potential_energy_last = None
+        self._z_grads_last = None
+
     def _fetch_from_cache(self):
         return self._z_last, self._potential_energy_last, self._z_grads_last
 
     def sample(self, params):
         z, potential_energy, z_grads = self._fetch_from_cache()
+        # recompute PE when cache is cleared
+        if z is None:
+            z = params
+            potential_energy = self.potential_fn(z)
         # return early if no sample sites
-        if not z:
+        elif len(z) == 0:
             self._accept_cnt += 1
             self._t += 1
             return params

@@ -9,6 +9,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
+from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.mcmc import MCMC
 from tests.common import assert_equal
@@ -264,17 +265,31 @@ def test_bernoulli_latent_model(jit):
     assert_equal(posterior, y_prob, prec=0.06)
 
 
+@pytest.mark.parametrize("kernel", [HMC, NUTS])
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-def test_unnormalized_normal(jit):
+def test_unnormalized_normal(kernel, jit):
     true_mean, true_std = torch.tensor(1.), torch.tensor(2.)
 
     def potential_fn(params):
         return 0.5 * torch.sum(((params["z"] - true_mean) / true_std) ** 2)
 
-    hmc_kernel = HMC(model=None, potential_fn=potential_fn, jit_compile=jit,
-                     ignore_jit_warnings=True)
-    hmc_kernel.initial_params = {"z": torch.tensor(0.)}
-    mcmc_run = MCMC(hmc_kernel, num_samples=4000, warmup_steps=500).run()
-    posterior = torch.stack([sample["z"] for sample in mcmc_run.exec_traces])
+    hmc_kernel = kernel(model=None, potential_fn=potential_fn, jit_compile=jit,
+                        ignore_jit_warnings=True)
+
+    samples = {"z": torch.tensor(0.)}
+    warmup_steps = 400
+    hmc_kernel.initial_params = samples
+    hmc_kernel.setup(warmup_steps)
+
+    for i in range(warmup_steps):
+        samples = hmc_kernel(samples)
+
+    posterior = []
+    for i in range(4000):
+        hmc_kernel.clear_cache()
+        samples = hmc_kernel(samples)
+        posterior.append(samples)
+
+    posterior = torch.stack([sample["z"] for sample in posterior])
     assert_equal(torch.mean(posterior), true_mean, prec=0.1)
     assert_equal(torch.std(posterior), true_std, prec=0.1)
