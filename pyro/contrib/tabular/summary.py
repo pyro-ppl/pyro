@@ -51,7 +51,7 @@ class Summary(object):
 
 class BernoulliSummary(Summary):
     """
-    Summary of :class:`~torch.distributions.Bernoulli` data.
+    Summary of :class:`~pyro.distributions.Bernoulli` data.
     """
     def __init__(self, num_components, prototype):
         self.counts = prototype.new_zeros(num_components, 2)
@@ -73,7 +73,7 @@ class BernoulliSummary(Summary):
 
 class CategoricalSummary(Summary):
     """
-    Summary of :class:`~torch.distributions.Categorical` data.
+    Summary of :class:`~pyro.distributions.Categorical` data.
     """
     def __init__(self, num_components, prototype, num_categories):
         self.counts = prototype.new_zeros(num_components, num_categories)
@@ -95,7 +95,7 @@ class CategoricalSummary(Summary):
 
 class NormalSummary(Summary):
     """
-    Summary of :class:`~torch.distributions.Normal` data.
+    Summary of :class:`~pyro.distributions.Normal` data.
     """
     def __init__(self, num_components, prototype):
         self.count = prototype.new_zeros(num_components)

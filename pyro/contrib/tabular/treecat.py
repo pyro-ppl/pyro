@@ -4,17 +4,31 @@ import logging
 import re
 from collections import OrderedDict, deque
 
+import torch
+from torch.distributions import biject_to
+
 import pyro
 import pyro.distributions as dist
-import torch
 from pyro import poutine
-from pyro.contrib.autoguide import AutoDelta
+from pyro.contrib.autoguide import AutoDelta, init_to_sample
 from pyro.distributions.spanning_tree import make_complete_graph, sample_tree_mcmc
 from pyro.infer import SVI
 from pyro.infer.discrete import TraceEnumSample_ELBO, infer_discrete
+from pyro.infer.mcmc import NUTS
+from pyro.infer.mcmc.util import TraceEinsumEvaluator
 from pyro.ops import packed
 from pyro.ops.contract import contract_to_tensor
 from pyro.ops.indexing import Vindex
+
+
+def get_dense_column(data, mask, v):
+    col_data = data[v]
+    col_mask = True if mask is None else mask[v]
+    if col_mask is True:
+        return col_data
+    if col_mask is False or not col_mask.any():
+        return None
+    return col_data[col_mask]
 
 
 class TreeCat(object):
@@ -267,7 +281,7 @@ class TreeCat(object):
             pyro.sample("treecat_edge_probs",
                         dist.Delta(edge_probs.to(device), event_dim=1))
 
-    def trainer(self, optim, backend="cpp"):
+    def trainer(self, optim, backend="cpp", method="map"):
         """
         Creates a :class:`TreeCatTrainer` object for training.
 
@@ -277,7 +291,12 @@ class TreeCat(object):
             "cpp" backend is much faster for data with more than ~10 features.
         :rtype: TreeCatTrainer
         """
-        return TreeCatTrainer(self, optim, backend)
+        if method == "map":
+            return TreeCatTrainer(self, optim, backend)
+        elif method == "nuts":
+            return TreeCatTrainerNuts(self, optim, backend)
+        else:
+            raise ValueError("Unknown trainer method: {}".format(method))
 
     def sample(self, data, mask=None, num_samples=None):
         """
@@ -421,8 +440,175 @@ class TreeCatTrainer(object):
         z = torch.stack(self._model._saved_z)
         self._model._edge_guide.update(num_rows, z)
 
-        # Perform an MCMC step to learn the model.
+        # Perform an MCMC step on the tree structure.
         model = self._model
+        edge_logits = model._edge_guide.compute_edge_logits()
+        model.edges = sample_tree_mcmc(edge_logits, model.edges, backend=self.backend)
+
+        return loss
+
+
+DEFAULT_NUTS_CONFIG = {
+    "warmup_steps": 200,
+    "max_tree_depth": 5,
+    # TODO get jit working for possibly ~4x speedup.
+    # "jit_compile": True,
+    # "ignore_jit_warnings": True,
+}
+
+
+class FeatureTrainerNuts(object):
+    def __init__(self, feature, capacity, nuts_config={}):
+        self.feature = feature
+        self.capacity = capacity
+        self._dynamic_args = (None, None)
+
+        # Create a NUTS kernel.
+        trace = poutine.trace(self._model).get_trace()
+        self.transforms = {}
+        for name, site in trace.nodes.items():
+            if site["type"] == "sample" and name.startswith(feature.name):
+                self.transforms[name] = biject_to(site["fn"].support).inv
+        self.nuts_config = DEFAULT_NUTS_CONFIG.copy()
+        self.nuts_config.update(nuts_config)
+        self.warmup_steps = self.nuts_config.pop("warmup_steps")
+        self.nuts = NUTS(model=None,
+                         potential_fn=self._potential_fn,
+                         transforms=self.transforms,
+                         **self.nuts_config)
+
+    def init(self, data):
+        assert data is not None, "Feature {} has no data".format(self.feature.name)
+
+        # Initialize parameters.
+        self.feature.init(data)  # initializes shared
+        guide = AutoDelta(self._model, init_loc_fn=init_to_sample)
+        guide_trace = poutine.trace(guide).get_trace()  # initializes group
+        model_trace = poutine.trace(poutine.replay(self._model, guide_trace)).get_trace()
+        initial_params = {}
+        for name, site in model_trace.nodes.items():
+            if site["type"] == "sample" and name.startswith(self.feature.name):
+                initial_params[name] = self.transforms[name](site["value"])
+        self.nuts.initial_params = initial_params
+        self.trace_prob_evaluator = TraceEinsumEvaluator(
+            model_trace, True, max_plate_nesting=1)
+
+        # Warm up the NUTS kernel.
+        diagnostics = []
+        adapt_steps = 10**10  # Adapt indefinitely.
+        self.nuts.setup(adapt_steps, data)
+        params = self.nuts.initial_params
+        # Discard the first warmup_steps samples.
+        for t in range(self.warmup_steps):
+            params = self.nuts.sample(params)
+            diagnostics = self.nuts.diagnostics()
+        self.params = params
+        for key in diagnostics[0]:
+            logging.debug(" ".join(["NUTS", self.feature.name, key] +
+                                   [d[key] for d in diagnostics]))
+
+    def step(self, data, z_logits):
+        self._dynamic_args = (data, z_logits)
+        self.params = self.nuts.sample(self.params)
+        self._dynamic_args = (None, None)
+        for name, value in self.params.items():
+            assert not value.requires_grad
+            pyro.param["auto_{}".format(name)] = self.nuts.transforms[name].inv(value)
+        return self.nuts.diagnostics()
+
+    def _model(self, data=None, z_logits=None):
+        shared = self.feature.sample_shared()
+        with pyro.plate("components_plate", self.capacity, dim=-1):
+            group = self.feature.sample_group(shared)
+        if data is not None:
+            with pyro.plate("data", len(data), dim=-1):
+                z = pyro.sample(dist.Categorical(logits=z_logits),
+                                infer={"enumerate": "parallel"})
+                pyro.sample(self.feature.name,
+                            self.feature.value_dist(group, component=z),
+                            obs=data)
+
+    def _potential_fn(self, params):
+        params_constrained = {k: self.nuts.transforms[k].inv(v) for k, v in params.items()}
+        model = poutine.enum(self._model)
+        cond_model = poutine.condition(model, params_constrained)
+        model_trace = poutine.trace(cond_model).get_trace(*self._dynamic_args)
+        log_joint = self.trace_prob_evaluator.log_prob(model_trace)
+        for name, t in self.transforms.items():
+            log_joint = log_joint - torch.sum(
+                t.log_abs_det_jacobian(params_constrained[name], params[name]))
+        return -log_joint
+
+
+class TreeCatTrainerNuts(object):
+    """
+    Maintains state to initialize and train a :class:`TreeCat` model.
+
+    :param TreeCat model: A :class:`TreeCat` model to train.
+    :param str backend: Either "python" or "cpp". Defaults to "cpp". The
+        "cpp" backend is much faster for data with more than ~10 features.
+    """
+    def __init__(self, model, backend="cpp", nuts_config={}):
+        assert isinstance(model, TreeCat)
+        self.backend = backend
+        self._model = model
+        self._elbo = TraceEnumSample_ELBO(max_plate_nesting=1)
+        self._feature_trainers = {
+            feature.name: FeatureTrainerNuts(feature, model.capacity, nuts_config)
+            for feature in model.features}
+        self._initialized = False
+
+    def init(self, data):
+        """
+        Initializes shared feature parameters given some or all data.
+
+        :param list data: A minibatch of column-oriented data. Each column
+            should be a :class:`torch.Tensor` .
+        :param list mask: A minibatch of column masks. Each column may be
+            ``True`` if fully observed, ``False`` if fully unobserved, or a
+            :class:`torch.ByteTensor` if partially observed.
+        """
+        for v, feature in enumerate(self._model.features):
+            col_data = get_dense_column(data, mask, v)
+            self._feature_trainers[feature.name].init(col_data)
+        self._initialized = True
+
+    def step(self, data, mask=None, num_rows=None):
+        """
+        Runs one training step.
+
+        :param list data: A minibatch of column-oriented data. Each column
+            should be a :class:`torch.Tensor` .
+        :param list mask: A minibatch of column masks. Each column may be
+            ``True`` if fully observed, ``False`` if fully unobserved, or a
+            :class:`torch.ByteTensor` if partially observed.
+        :param int num_rows: The total number of rows in the dataset.
+            This is needed only when subsampling data.
+        """
+        if not self._initialized:
+            self.init(data, mask)
+
+        # Sample latent categoricals.
+        model = self._model
+        with torch.no_grad():
+            loss = self._elbo.loss(model.model, model.guide, data, mask, num_rows=num_rpws)
+            self._elbo.sample_saved()
+            z = model._saved_z
+
+        # Perform a NUTS step to learn feature parameters.
+        diagnostics = {}
+        for feature in model.features:
+            z_logits = None  # TODO Compute incoming messages.
+            diagnostics[feature.name] = self._feature_trainers[feature.name].step(data, z_logits)
+        for key in next(diagnostics.values()):
+            logging.debug(" ".join(
+                ["NUTS", key] + [diagnostics[f.name][key] for f in model.features]))
+
+        # Update sufficient statistics in the edge guide.
+        model._edge_guide.update(num_rows, z)
+        # TODO Update summary of collated data for each feature.
+
+        # Perform an MCMC step on the tree structure.
         edge_logits = model._edge_guide.compute_edge_logits()
         model.edges = sample_tree_mcmc(edge_logits, model.edges, backend=self.backend)
 
