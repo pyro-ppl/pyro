@@ -272,6 +272,9 @@ class MCMC(TracePosterior):
         else:
             self.sampler = _SingleSampler(kernel, num_samples, self.warmup_steps, disable_progbar)
         super(MCMC, self).__init__(num_chains=num_chains)
+        warnings.warn("This interface to MCMC is deprecated and will be removed in the "
+                      "next version of Pyro. Please use `pyro.infer.mcmc.api` instead.",
+                      DeprecationWarning)
 
     def _traces(self, *args, **kwargs):
         for sample in self.sampler._traces(*args, **kwargs):
