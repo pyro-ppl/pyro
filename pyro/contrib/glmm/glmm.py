@@ -6,6 +6,7 @@ from functools import partial
 import torch
 from torch.nn.functional import softplus
 from torch.distributions import constraints
+from torch.distributions.transforms import AffineTransform, SigmoidTransform
 
 import pyro
 import pyro.distributions as dist
@@ -250,11 +251,11 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         elif response == "bernoulli":
             return pyro.sample(response_label, dist.Bernoulli(logits=prediction_mean).to_event(1))
         elif response == "sigmoid":
+            base_dist = dist.Normal(prediction_mean, obs_sd).to_event(1)
             # You can add loc via the linear model itself
             k = k.expand(prediction_mean.shape)
-            response_dist = dist.CensoredSigmoidNormal(
-                loc=k * prediction_mean, scale=k * obs_sd, upper_lim=1. - epsilon, lower_lim=epsilon
-            ).to_event(1)
+            transforms = [AffineTransform(loc=torch.tensor(0.), scale=k), SigmoidTransform()]
+            response_dist = dist.TransformedDistribution(base_dist, transforms)
             return pyro.sample(response_label, response_dist)
         else:
             raise ValueError("Unknown response distribution: '{}'".format(response))
