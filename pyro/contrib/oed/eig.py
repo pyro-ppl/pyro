@@ -16,7 +16,21 @@ from pyro.contrib.util import lexpand
 def laplace_vi_ape(model, design, observation_labels, target_labels, guide, loss, optim, num_steps,
                    final_num_samples, y_dist=None):
     """
-    Laplace approximation
+    Estimates the APE (Average Posterior Entropy) by making repeated Laplace approximations to the posterior.
+
+    :param function model: Pyro stochastic function taking `design` as only argument.
+    :param torch.Tensor design: Tensor of possible designs.
+    :param list observation_labels: labels of sample sites to be regarded as observables.
+    :param list target_labels: labels of sample sites to be regarded as latent variables of interest, i.e. the sites
+                               that we wish to gain information about.
+    :param function guide: Pyro stochastic function corresponding to `model`.
+    :param loss: a Pyro loss such as `pyro.infer.Trace_ELBO().differentiable_loss`.
+    :param optim: optimizer for the loss
+    :param int num_steps: Number of gradient steps to take per sampled pseudo-observation.
+    :param int final_num_samples: Number of `y` samples (pseudo-observations) to take.
+    :param y_dist: Distribution to sample `y` from- if `None` we use the Bayesian marginal distribution.
+    :return: APE estimate
+    :rtype: torch.Tensor
     """
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
@@ -296,7 +310,7 @@ def posterior_ape(model, design, observation_labels, target_labels,
         `design`.
     :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
         uses `num_samples`.
-    :return: EIG estimate, optionally includes full optimisatio history
+    :return: APE estimate, optionally includes full optimisation history
     :rtype: `torch.Tensor` or `tuple`
     """
     if isinstance(observation_labels, str):
@@ -311,10 +325,38 @@ def posterior_ape(model, design, observation_labels, target_labels,
 def marginal_eig(model, design, observation_labels, target_labels,
                  num_samples, num_steps, guide, optim, return_history=False,
                  final_design=None, final_num_samples=None):
-    """Estimate EIG by estimating the marginal entropy, that of :math:`p(y|d)`.
+    """Estimate EIG by estimating the marginal entropy :math:`p(y|d)`.
 
-    Warning: this method does **not** estimate the correct quantity in the presence of
+    The marginal representation of EIG is
+
+        :math:`inf_{q}E_{p(y, \\theta | d)}\\left[\\log \\frac{p(y | \\theta, d)}{q(y | d)} \\right]`
+
+    where :math:`q` is any distribution on :math:`y`.
+
+    .. warning :: this method does **not** estimate the correct quantity in the presence of
     random effects.
+
+    :param function model: A pyro model accepting `design` as only argument.
+    :param torch.Tensor design: Tensor representation of design
+    :param list observation_labels: A subset of the sample sites
+        present in `model`. These sites are regarded as future observations
+        and other sites are regarded as latent variables over which a
+        posterior is to be inferred.
+    :param list target_labels: A subset of the sample sites over which the posterior
+        entropy is to be measured.
+    :param int num_samples: Number of samples per iteration.
+    :param int num_steps: Number of optimisation steps.
+    :param function guide: guide family for use in the marginal estimation.
+        The parameters of `guide` are optimised to maximise the log-likelihood objective.
+    :param pyro.optim.Optim optim: Optimiser to use.
+    :param bool return_history: If `True`, also returns a tensor giving the loss function
+        at each step of the optimisation.
+    :param torch.Tensor final_design: The final design tensor to evaluate at. If `None`, uses
+        `design`.
+    :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
+        uses `num_samples`.
+    :return: EIG estimate, optionally includes full optimisation history
+    :rtype: `torch.Tensor` or `tuple`
     """
 
     if isinstance(observation_labels, str):
@@ -329,8 +371,32 @@ def marginal_eig(model, design, observation_labels, target_labels,
 def marginal_likelihood_eig(model, design, observation_labels, target_labels,
                             num_samples, num_steps, marginal_guide, cond_guide, optim,
                             return_history=False, final_design=None, final_num_samples=None):
-    """Estimate EIG by estimating the marginal entropy, that of :math:`p(y|d)`,
+    """Estimates EIG by estimating the marginal entropy, that of :math:`p(y|d)`,
     *and* the conditional entropy, of :math:`p(y|\\theta, d)`, both via Gibbs' Inequality.
+
+    :param function model: A pyro model accepting `design` as only argument.
+    :param torch.Tensor design: Tensor representation of design
+    :param list observation_labels: A subset of the sample sites
+        present in `model`. These sites are regarded as future observations
+        and other sites are regarded as latent variables over which a
+        posterior is to be inferred.
+    :param list target_labels: A subset of the sample sites over which the posterior
+        entropy is to be measured.
+    :param int num_samples: Number of samples per iteration.
+    :param int num_steps: Number of optimisation steps.
+    :param function marginal_guide: guide family for use in the marginal estimation.
+        The parameters of `guide` are optimised to maximise the log-likelihood objective.
+    :param function cond_guide: guide family for use in the likelihood (conditional) estimation.
+        The parameters of `guide` are optimised to maximise the log-likelihood objective.
+    :param pyro.optim.Optim optim: Optimiser to use.
+    :param bool return_history: If `True`, also returns a tensor giving the loss function
+        at each step of the optimisation.
+    :param torch.Tensor final_design: The final design tensor to evaluate at. If `None`, uses
+        `design`.
+    :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
+        uses `num_samples`.
+    :return: EIG estimate, optionally includes full optimisation history
+    :rtype: `torch.Tensor` or `tuple`
     """
 
     if isinstance(observation_labels, str):
@@ -345,6 +411,36 @@ def marginal_likelihood_eig(model, design, observation_labels, target_labels,
 def lfire_eig(model, design, observation_labels, target_labels,
               num_y_samples, num_theta_samples, num_steps, classifier, optim, return_history=False,
               final_design=None, final_num_samples=None):
+    """Estimates the EIG using the method of Likelihood-Free Inference by Ratio Estimation (LFIRE) as in [1].
+    LFIRE is run separately for several samples of :math:`\\theta`.
+
+    [1] Kleinegesse, Steven, and Michael Gutmann. "Efficient Bayesian Experimental Design for Implicit Models."
+    arXiv preprint arXiv:1810.09912 (2018).
+
+    :param function model: A pyro model accepting `design` as only argument.
+    :param torch.Tensor design: Tensor representation of design
+    :param list observation_labels: A subset of the sample sites
+        present in `model`. These sites are regarded as future observations
+        and other sites are regarded as latent variables over which a
+        posterior is to be inferred.
+    :param list target_labels: A subset of the sample sites over which the posterior
+        entropy is to be measured.
+    :param int num_y_samples: Number of samples to take in :math:`y` for each :math:`\\theta`.
+    :param: int num_theta_samples: Number of initial samples in :math:`\\theta` to take. The likelihood ratio
+                                   is estimated by LFIRE for each sample.
+    :param int num_steps: Number of optimisation steps.
+    :param function classifier: a Pytorch or Pyro classifier used to distinguish between samples of :math:`y` under
+                                :math:`p(y|d)` and samples under :math:`p(y|\\theta,d)` for some :math:`\\theta`.
+    :param pyro.optim.Optim optim: Optimiser to use.
+    :param bool return_history: If `True`, also returns a tensor giving the loss function
+        at each step of the optimisation.
+    :param torch.Tensor final_design: The final design tensor to evaluate at. If `None`, uses
+        `design`.
+    :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
+        uses `num_samples`.
+    :return: EIG estimate, optionally includes full optimisation history
+    :rtype: `torch.Tensor` or `tuple`
+    """
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
     if isinstance(target_labels, str):
@@ -369,6 +465,41 @@ def lfire_eig(model, design, observation_labels, target_labels,
 def vnmc_eig(model, design, observation_labels, target_labels,
              num_samples, num_steps, guide, optim, return_history=False,
              final_design=None, final_num_samples=None):
+    """Estimates the EIG using Variational Nested Monte Carlo (VNMC). The VNMC estimate is
+
+    .. math::
+
+        \\frac{1}{N}\\sum_{n=1}^N \\left[ \\log p(y_n | \\theta_n, d) -
+         \\log \\left(\\frac{1}{M}\\sum_{m=1}^M \\frac{p(\\theta_{mn})p(y_n | \\theta_{mn}, d)}
+         {q(\\theta_{mn} | y_n)} \\right) \\right]
+
+    where :math:`q(\\theta | y)` is the learned variational posterior approximation and
+    :math:`\\theta_n, y_n \sim p(\\theta, y | d)`, :math:`\\theta_{mn} \sim q(\\theta|y=y_n)`.
+
+    As :math:`N \\to \\infty` this is an upper bound on EIG. We minimise this upper bound by stochastic gradient.
+
+    :param function model: A pyro model accepting `design` as only argument.
+    :param torch.Tensor design: Tensor representation of design
+    :param list observation_labels: A subset of the sample sites
+        present in `model`. These sites are regarded as future observations
+        and other sites are regarded as latent variables over which a
+        posterior is to be inferred.
+    :param list target_labels: A subset of the sample sites over which the posterior
+        entropy is to be measured.
+    :param tuple num_samples: Number of (:math:`N, M`) samples per iteration.
+    :param int num_steps: Number of optimisation steps.
+    :param function guide: guide family for use in the posterior estimation.
+        The parameters of `guide` are optimised to minimise the VNMC upper bound.
+    :param pyro.optim.Optim optim: Optimiser to use.
+    :param bool return_history: If `True`, also returns a tensor giving the loss function
+        at each step of the optimisation.
+    :param torch.Tensor final_design: The final design tensor to evaluate at. If `None`, uses
+        `design`.
+    :param tuple final_num_samples: The number of (:math:`N, M`) samples to use at the final evaluation, If `None,
+        uses `num_samples`.
+    :return: EIG estimate, optionally includes full optimisation history
+    :rtype: `torch.Tensor` or `tuple`
+    """
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
     if isinstance(target_labels, str):
@@ -471,7 +602,7 @@ def posterior_loss(model, guide, observation_labels, target_labels, analytic_ent
             agg_loss = loss.sum()
         else:
             terms = -sum(cond_trace.nodes[l]["log_prob"] for l in target_labels)
-            agg_loss, loss = safe_mean_terms(terms)
+            agg_loss, loss = _safe_mean_terms(terms)
 
         return agg_loss, loss
 
@@ -501,7 +632,7 @@ def marginal_loss(model, guide, observation_labels, target_labels):
             trace.compute_log_prob()
             terms += sum(trace.nodes[l]["log_prob"] for l in observation_labels)
 
-        return safe_mean_terms(terms)
+        return _safe_mean_terms(terms)
 
     return loss_fn
 
@@ -537,7 +668,7 @@ def marginal_likelihood_loss(model, marginal_guide, likelihood_guide, observatio
         else:
             terms -= sum(cond_trace.nodes[l]["log_prob"] for l in observation_labels)
 
-        return safe_mean_terms(terms)
+        return _safe_mean_terms(terms)
 
     return loss_fn
 
@@ -561,11 +692,11 @@ def lfire_loss(model_marginal, model_conditional, h, observation_labels, target_
             h_independent = h(expanded_design, model_marginal_trace, observation_labels, target_labels)
 
             terms = torch.nn.functional.softplus(-h_joint) + torch.nn.functional.softplus(h_independent)
-            return safe_mean_terms(terms)
+            return _safe_mean_terms(terms)
 
         else:
             h_joint = h(expanded_design, model_conditional_trace, observation_labels, target_labels)
-            return safe_mean_terms(h_joint)
+            return _safe_mean_terms(h_joint)
 
     return loss_fn
 
@@ -604,12 +735,12 @@ def vnmc_eig_loss(model, guide, observation_labels, target_labels):
             trace.compute_log_prob()
             terms += sum(trace.nodes[l]["log_prob"] for l in observation_labels)
 
-        return safe_mean_terms(terms)
+        return _safe_mean_terms(terms)
 
     return loss_fn
 
 
-def safe_mean_terms(terms):
+def _safe_mean_terms(terms):
     mask = torch.isnan(terms) | (terms == float('-inf')) | (terms == float('inf'))
     if terms.dtype is torch.float32:
         nonnan = (~mask).sum(0).float()
@@ -624,13 +755,10 @@ def safe_mean_terms(terms):
 def xexpx(a):
     """Computes `a*exp(a)`.
 
-    This function makes the outputs more stable when the inputs of this function converge to -infinity
+    This function makes the outputs more stable when the inputs of this function converge to :math:`-\\infty`.
 
-    Args:
-        a: torch.Tensor
-
-    Returns:
-        Equivalent of `a*torch.exp(a)`.
+    :param torch.Tensor a:
+    :return: Equivalent of `a*torch.exp(a)`.
     """
     mask = (a == float('-inf'))
     y = a*torch.exp(a)

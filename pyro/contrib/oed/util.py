@@ -62,7 +62,8 @@ def vi_eig_lm(model, design, observation_labels, target_labels, *args, **kwargs)
     :param list target_labels: labels of sample sites regarded as latent variables of interest.
     :param args: passed to `vi_ape`
     :param kwargs: passed to `vi_ape`
-    :return: torch.Tensor
+    :return: EIG estimate
+    :rtype: torch.Tensor
     """
     ape = vi_ape(model, design, observation_labels, target_labels, *args, **kwargs)
     prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
@@ -78,7 +79,8 @@ def vi_eig_mc(model, design, observation_labels, target_labels, *args, **kwargs)
     :param list target_labels: labels of sample sites regarded as latent variables of interest.
     :param args: passed to `vi_ape`
     :param kwargs: passed to `vi_ape`
-    :return: torch.Tensor
+    :return: EIG estimate
+    :rtype: torch.Tensor
     """
     if "num_hprior_samples" in kwargs:
         hprior = mc_H_prior(model, design, observation_labels, target_labels, kwargs["num_hprior_samples"])
@@ -98,7 +100,8 @@ def laplace_vi_eig_mc(model, design, observation_labels, target_labels, *args, *
     :param list target_labels: labels of sample sites regarded as latent variables of interest.
     :param args: passed to `laplace_vi_ape`
     :param kwargs: passed to `laplace_vi_ape`
-    :return: torch.Tensor
+    :return: EIG estimate
+    :rtype: torch.Tensor
     """
     if "num_hprior_samples" in kwargs:
         hprior = mc_H_prior(model, design, observation_labels, target_labels, kwargs["num_hprior_samples"])
@@ -119,7 +122,8 @@ def posterior_eig_lm(model, design, observation_labels, target_labels, *args, **
     :param list target_labels: labels of sample sites regarded as latent variables of interest.
     :param args: passed to `posterior_ape`
     :param kwargs: passed to `posterior_ape`
-    :return: torch.Tensor
+    :return: EIG estimate
+    :rtype: torch.Tensor
     """
     ape = posterior_ape(model, design, observation_labels, target_labels, *args, **kwargs)
     prior_entropy = lm_H_prior(model, design, observation_labels, target_labels)
@@ -139,7 +143,8 @@ def posterior_eig_mc(model, design, observation_labels, target_labels, *args, **
     :param list target_labels: labels of sample sites regarded as latent variables of interest.
     :param args: passed to `posterior_ape`
     :param kwargs: passed to `posterior_ape`
-    :return: torch.Tensor
+    :return: EIG estimate
+    :rtype: torch.Tensor
     """
     if "num_hprior_samples" in kwargs:
         hprior = mc_H_prior(model, design, observation_labels, target_labels, kwargs["num_hprior_samples"])
