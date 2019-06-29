@@ -81,7 +81,13 @@ class AffineAutoregressive(TransformModule):
     event_dim = 1
     autoregressive = True
 
-    def __init__(self, autoregressive_nn, log_scale_min_clip=-5., log_scale_max_clip=3., sigmoid_bias=2.0, stable=False):
+    def __init__(
+            self,
+            autoregressive_nn,
+            log_scale_min_clip=-5.,
+            log_scale_max_clip=3.,
+            sigmoid_bias=2.0,
+            stable=False):
         super(AffineAutoregressive, self).__init__(cache_size=1)
         self.arn = autoregressive_nn
         self._cached_log_scale = None
@@ -143,7 +149,7 @@ class AffineAutoregressive(TransformModule):
         """
         if self._cached_log_scale is not None:
             log_scale = self._cached_log_scale
-        elif not stable:
+        elif not self.stable:
             _, log_scale = self.arn(x)
             log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         else:

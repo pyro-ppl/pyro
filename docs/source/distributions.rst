@@ -185,6 +185,13 @@ VonMises3D
 Transformed Distributions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+AffineAutoregressive
+--------------------
+.. autoclass:: pyro.distributions.transforms.AffineAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 BatchNormTransform
 ------------------
 .. autoclass:: pyro.distributions.transforms.BatchNormTransform
@@ -223,20 +230,6 @@ DeepSigmoidalFlow
 HouseholderFlow
 ---------------
 .. autoclass:: pyro.distributions.HouseholderFlow
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-InverseAutoRegressiveFlow
--------------------------
-.. autoclass:: pyro.distributions.transforms.InverseAutoregressiveFlow
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-InverseAutoRegressiveFlowStable
--------------------------------
-.. autoclass:: pyro.distributions.transforms.InverseAutoregressiveFlowStable
     :members:
     :undoc-members:
     :show-inheritance:
