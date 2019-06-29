@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings, sys
+import warnings
 
 import torch
 import torch.nn as nn
@@ -53,34 +53,22 @@ def create_mask(input_dim, observed_dim, hidden_dims, permutation, output_dim_mu
     # Create the indices that are assigned to the neurons
     input_indices = torch.cat((torch.zeros(observed_dim), 1 + var_index))
     if observed_dim > 0:
-        hidden_indices = [sample_mask_indices(input_dim, h)  for h in hidden_dims]
+        hidden_indices = [sample_mask_indices(input_dim, h) for h in hidden_dims]
     else:
-        hidden_indices = [sample_mask_indices(input_dim-1, h)+1  for h in hidden_dims]
-
-    #hidden_indices = [sample_mask_indices(input_dim, h)+1 for h in hidden_dims]
+        hidden_indices = [sample_mask_indices(input_dim - 1, h) + 1 for h in hidden_dims]
 
     output_indices = (var_index + 1).repeat(output_dim_multiplier)
-
-    #print('input', input_indices)
-    #print('hidden', hidden_indices)
-    #print('output', output_indices)
 
     # Create mask from input to output for the skips connections
     mask_skip = (output_indices.unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(var_index)
 
     # Create mask from input to first hidden layer, and between subsequent hidden layers
-    # NOTE: The masks created follow a slightly different pattern than that given in Germain et al. Figure 1
-    # The output first in the order (e.g. x_2 in the figure) is connected to hidden units rather than being unattached
-    # Tracing a path back through the network, however, this variable will still be unconnected to any input variables
     masks = [(hidden_indices[0].unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(var_index)]
     for i in range(1, len(hidden_dims)):
         masks.append((hidden_indices[i].unsqueeze(-1) >= hidden_indices[i - 1].unsqueeze(0)).type_as(var_index))
 
     # Create mask from last hidden layer to output layer
     masks.append((output_indices.unsqueeze(-1) >= hidden_indices[-1].unsqueeze(0)).type_as(var_index))
-
-    #print(masks[0])
-    #sys.exit()
 
     return masks, mask_skip
 
@@ -113,7 +101,7 @@ class MaskedLinear(nn.Linear):
 
 class ConditionalAutoRegressiveNN(nn.Module):
     """
-    An implementation of a MADE-like auto-regressive neural network that can conditional on an additional input.
+    An implementation of a MADE-like auto-regressive neural network that can condition on an additional input.
 
     Example usage:
 
