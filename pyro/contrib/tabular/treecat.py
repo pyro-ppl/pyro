@@ -677,14 +677,8 @@ class _FeatureModel(object):
         self.features = features
         self.capacity = capacity
         self._annealing_schedule = AnnealingSchedule(annealing_rate)
-
-        # Initialize stats.
-        with poutine.block():
-            shared = [f.sample_shared() for f in features]
-            with pyro.plate("components_plate", self.capacity, dim=-1):
-                groups = [f.sample_group(s) for f, s in zip(features, shared)]
-        self._stats = [f.summary(g) for f, g in zip(features, groups)]
         self._count_stats = 0
+        self._stats = None
 
     def __call__(self, data, mask, num_rows):
         shared = [f.sample_shared() for f in self.features]
@@ -693,7 +687,9 @@ class _FeatureModel(object):
 
         # If subsampling, include a pseudodata summary of out-of-minibatch data.
         batch_size = len(data[0])
-        if batch_size < num_rows and self._count_stats > 0:
+        if self._stats is None:
+            self._stats = [f.summary(g) for f, g in zip(self.features, groups)]
+        elif batch_size < num_rows and self._count_stats > 0:
             z = torch.arange(self.capacity, device=data[0].device).unsqueeze(-1)
             with pyro.plate("z_plate", self.capacity, dim=-2):
                 for v, feature in enumerate(self.features):
