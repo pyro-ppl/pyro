@@ -453,7 +453,7 @@ class TreeCatTrainer(object):
             z = torch.stack(model._saved_z)
 
             # Update sufficient statistics.
-            model._feature_model.update(data, mask, num_rows, z)
+            model._feature_model.update(data, mask, num_rows, z.to(data[0].device))
             model._edge_guide.update(num_rows, z)
 
             # Perform an MCMC step on the tree structure.
@@ -694,11 +694,12 @@ class _FeatureModel(object):
             with pyro.plate("z_plate", self.capacity, dim=-2):
                 for v, feature in enumerate(self.features):
                     pseudo_scale, pseudo_data = self._stats[v].as_scaled_data()
-                with poutine.scale(scale=pseudo_scale):
-                    with pyro.plate("pseudodata_{}".format(v), pseudo_data.size(1), dim=-1):
-                        pyro.sample("treecat_x_pseudo_{}".format(v),
-                                    feature.value_dist(groups[v], component=z),
-                                    obs=pseudo_data)
+                    with poutine.scale(scale=pseudo_scale):
+                        pseudo_dist = feature.value_dist(groups[v], component=z)
+                        pseudo_size = pseudo_data.size(-1 - pseudo_dist.event_dim)
+                        with pyro.plate("pseudo_data_{}".format(v), pseudo_size, dim=-1):
+                            pyro.sample("treecat_x_pseudo_{}".format(v), pseudo_dist,
+                                        obs=pseudo_data)
         return groups
 
     @torch.no_grad()
