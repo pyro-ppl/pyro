@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
+import warnings, sys
 
 import torch
 import torch.nn as nn
@@ -52,8 +52,18 @@ def create_mask(input_dim, observed_dim, hidden_dims, permutation, output_dim_mu
 
     # Create the indices that are assigned to the neurons
     input_indices = torch.cat((torch.zeros(observed_dim), 1 + var_index))
-    hidden_indices = [sample_mask_indices(input_dim, h) for h in hidden_dims]
+    if observed_dim > 0:
+        hidden_indices = [sample_mask_indices(input_dim, h)  for h in hidden_dims]
+    else:
+        hidden_indices = [sample_mask_indices(input_dim-1, h)+1  for h in hidden_dims]
+
+    #hidden_indices = [sample_mask_indices(input_dim, h)+1 for h in hidden_dims]
+
     output_indices = (var_index + 1).repeat(output_dim_multiplier)
+
+    #print('input', input_indices)
+    #print('hidden', hidden_indices)
+    #print('output', output_indices)
 
     # Create mask from input to output for the skips connections
     mask_skip = (output_indices.unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(var_index)
@@ -68,6 +78,9 @@ def create_mask(input_dim, observed_dim, hidden_dims, permutation, output_dim_mu
 
     # Create mask from last hidden layer to output layer
     masks.append((output_indices.unsqueeze(-1) >= hidden_indices[-1].unsqueeze(0)).type_as(var_index))
+
+    #print(masks[0])
+    #sys.exit()
 
     return masks, mask_skip
 
