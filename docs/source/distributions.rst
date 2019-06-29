@@ -199,6 +199,13 @@ BlockAutoregressive
     :undoc-members:
     :show-inheritance:
 
+ELUTransform
+------------
+.. autoclass:: pyro.distributions.transforms.ELUTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 HouseholderFlow
 ---------------
 .. autoclass:: pyro.distributions.transforms.HouseholderFlow
@@ -216,6 +223,13 @@ InverseAutoRegressiveFlow
 InverseAutoRegressiveFlowStable
 -------------------------------
 .. autoclass:: pyro.distributions.transforms.InverseAutoregressiveFlowStable
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+LeakyReLUTransform
+------------------
+.. autoclass:: pyro.distributions.transforms.LeakyReLUTransform
     :members:
     :undoc-members:
     :show-inheritance:
@@ -258,6 +272,13 @@ RadialFlow
 SylvesterFlow
 -------------
 .. autoclass:: pyro.distributions.transforms.SylvesterFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+TanhTransform
+-------------
+.. autoclass:: pyro.distributions.transforms.TanhTransform
     :members:
     :undoc-members:
     :show-inheritance:

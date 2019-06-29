@@ -13,109 +13,74 @@ from pyro.distributions.util import copy_docs_from
 eps = 1e-8
 
 
-class ELUMixin(object):
-    @staticmethod
-    def f(x):
-        """
-        Implements the nonlinearity of NAF, in this case ELU
-        """
+class ELUTransform(torch.distributions.transforms.Transform):
+    r"""
+    Transform via the mapping :math:`y = \text{ELU}(x)`.
+    """
+    domain = constraints.positive
+    codomain = constraints.positive
+    bijective = True
+    sign = +1
+
+    def __eq__(self, other):
+        return isinstance(other, ELUTransform)
+
+    def _call(self, x):
         return F.elu(x)
 
-    @staticmethod
-    def f_inv(x):
-        """
-        Implements the inverse of ELU
-        """
-        return torch.max(x, torch.zeros_like(x)) + torch.min(torch.log1p(x + eps), torch.zeros_like(x))
+    def _inverse(self, y):
+        return torch.max(y, torch.zeros_like(y)) + torch.min(torch.log1p(y + eps), torch.zeros_like(y))
 
-    @staticmethod
-    def log_df_dx(x):
-        """
-        Implements the log derivative of NAF nonlinearity
-        """
+    def log_abs_det_jacobian(self, x, y):
         return -F.relu(-x)
 
-    @staticmethod
-    def log_df_inv_dx(x):
-        """
-        Implements the log derivative of inverse NAF nonlinearity
-        """
-        return F.relu(-torch.log1p(x + eps))
 
+class LeakyReLUTransform(torch.distributions.transforms.Transform):
+    r"""
+    Transform via the mapping :math:`y = \text{LeakyReLU}(x)`.
+    """
+    domain = constraints.positive
+    codomain = constraints.positive
+    bijective = True
+    sign = +1
 
-class LeakyReLUMixin(object):
-    @staticmethod
-    def f(x):
-        """
-        Implements the nonlinearity of NAF, in this case leaky ReLU
-        """
+    def __eq__(self, other):
+        return isinstance(other, LeakyReLUTransform)
+
+    def _call(self, x):
         return F.leaky_relu(x)
 
-    @staticmethod
-    def f_inv(x):
-        """
-        Implements the inverse of leaky ReLU
-        """
-        # slope for negative part is inverse of slope for positive part in f(x)
-        return F.leaky_relu(x, negative_slope=100.0)
+    def _inverse(self, y):
+        return F.leaky_relu(y, negative_slope=100.0)
 
-    @staticmethod
-    def log_df_dx(x):
-        """
-        Implements the log derivative of NAF nonlinearity
-        """
+    def log_abs_det_jacobian(self, x, y):
         return torch.where(x >= 0., torch.zeros_like(x), torch.ones_like(x) * math.log(0.01))
 
-    @staticmethod
-    def log_df_inv_dx(x):
-        """
-        Implements the log derivative of inverse NAF nonlinearity
-        """
-        return torch.where(x >= 0., torch.zeros_like(x), torch.ones_like(x) * math.log(100.0))
 
-
-class SigmoidalMixin(object):
-    @staticmethod
-    def f(x):
-        """
-        Implements the nonlinearity of NAF, in this case sigmoid with scaled output
-        """
-        return torch.sigmoid(x) * (1. - eps) + 0.5 * eps
+class TanhTransform(torch.distributions.transforms.Transform):
+    r"""
+    Transform via the mapping :math:`y = \text{tanh}(x)`.
+    """
+    domain = constraints.positive
+    codomain = constraints.interval(-1., 1.)
+    bijective = True
+    sign = +1
 
     @staticmethod
-    def f_inv(x):
-        """
-        Implements the inverse scaled sigmoid nonlinearity
-        """
-        y = (x - 0.5 * eps) / (1. - eps)
-        return torch.log(y) - torch.log1p(-y)
+    def atanh(x):
+        return 0.5 * (x.log1p() - (-x).log1p())
 
-    @staticmethod
-    def log_df_dx(x):
-        """
-        Implements the log derivative of scaled sigmoid nonlinearity
-        """
-        return F.logsigmoid(x) + F.logsigmoid(-x) + torch.log1p(torch.tensor(-eps))
+    def __eq__(self, other):
+        return isinstance(other, TanhTransform)
 
-    @staticmethod
-    def log_df_inv_dx(x):
-        """
-        Implements the log derivative of inverse scaled sigmoid nonlinearity
-        """
-        y = (x - 0.5 * eps) / (1. - eps)
-        return -torch.log(y + eps) - torch.log(1. - y) - math.log(1. - eps)
-
-
-class TanhMixin(object):
-    @staticmethod
-    def f(x):
-        """
-        The nonlinearity to apply after each masked block linear layer
-        """
+    def _call(self, x):
         return torch.tanh(x)
 
-    @staticmethod
-    def log_df_dx(x):
+    def _inverse(self, y):
+        eps = torch.finfo(y.dtype).eps
+        return self.atanh(y.clamp(min=-1. + eps, max=1. - eps))
+
+    def log_abs_det_jacobian(self, x, y):
         return - 2. * (x - math.log(2.) + F.softplus(- 2. * x))
 
 
@@ -146,7 +111,7 @@ class NeuralAutoregressive(TransformModule):
     :type autoregressive_nn: nn.Module
     :param hidden_units: the number of hidden units to use in the NAF transformation (see Eq (8) in reference)
     :type hidden_units: int
-    :param activation: Activation function to use. One of 'ELU', 'LeakyReLU', or 'sigmoid'.
+    :param activation: Activation function to use. One of 'ELU', 'LeakyReLU', 'sigmoid', or 'tanh'.
     :type activation: string
 
     Reference:
@@ -164,22 +129,23 @@ class NeuralAutoregressive(TransformModule):
     def __init__(self, autoregressive_nn, hidden_units=16, activation='sigmoid'):
         super(NeuralAutoregressive, self).__init__(cache_size=1)
 
-        # Mix in activation function methods
-        name_to_mixin = {'ELU': ELUMixin, 'LeakyReLU': LeakyReLUMixin, 'sigmoid': SigmoidalMixin}
+        # Create the intermediate transform used
+        name_to_mixin = {
+            'ELU': ELUTransform,
+            'LeakyReLU': LeakyReLUTransform,
+            'sigmoid': torch.distributions.transforms.SigmoidTransform,
+            'tanh': TanhTransform}
         if activation not in name_to_mixin:
             raise ValueError('Invalid activation function "{}"'.format(activation))
-        self.f = name_to_mixin[activation].f
-        self.f_inv = name_to_mixin[activation].f_inv
-        self.log_df_dx = name_to_mixin[activation].log_df_dx
-        self.log_df_inv_dx = name_to_mixin[activation].log_df_inv_dx
+        self.T = name_to_mixin[activation]()
 
         self.arn = autoregressive_nn
         self.hidden_units = hidden_units
         self.logsoftmax = nn.LogSoftmax(dim=-2)
+        self._cached_log_df_inv_dx = None
         self._cached_A = None
         self._cached_W_pre = None
         self._cached_C = None
-        self._cached_D = None
 
     def _call(self, x):
         """
@@ -191,18 +157,19 @@ class NeuralAutoregressive(TransformModule):
         """
         # A, W, b ~ batch_shape x hidden_units x event_shape
         A, W_pre, b = self.arn(x)
+        T = self.T
 
         # Divide the autoregressive output into the component activations
         A = F.softplus(A)
         C = A * x.unsqueeze(-2) + b
         W = F.softmax(W_pre, dim=-2)
-        D = (W * self.f(C)).sum(dim=-2)
-        y = self.f_inv(D)
+        D = (W * T._call(C)).sum(dim=-2)
+        y = T._inverse(D)
 
+        self._cached_log_df_inv_dx = -T.log_abs_det_jacobian(y, D)
         self._cached_A = A
         self._cached_W_pre = W_pre
         self._cached_C = C
-        self._cached_D = D
 
         return y
 
@@ -215,9 +182,10 @@ class NeuralAutoregressive(TransformModule):
         A = self._cached_A
         W_pre = self._cached_W_pre
         C = self._cached_C
-        D = self._cached_D
+        T = self.T
 
-        log_dydD = self.log_df_inv_dx(D)
-        log_dDdx = torch.logsumexp(torch.log(A + eps) + self.logsoftmax(W_pre) + self.log_df_dx(C), dim=-2)
+        log_dydD = self._cached_log_df_inv_dx
+        log_dDdx = torch.logsumexp(torch.log(A + eps) + self.logsoftmax(W_pre) +
+                                   T.log_abs_det_jacobian(C, T._call(C)), dim=-2)
         log_det = log_dydD + log_dDdx
         return log_det.sum(-1)
