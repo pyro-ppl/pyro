@@ -694,7 +694,7 @@ class _FeatureModel(object):
             with pyro.plate("z_plate", self.capacity, dim=-2):
                 for v, feature in enumerate(self.features):
                     pseudo_scale, pseudo_data = self._stats[v].as_scaled_data()
-                    with poutine.scale(scale=pseudo_scale):
+                    with poutine.scale(scale=pseudo_scale.clamp(min=1e-20)):
                         pseudo_dist = feature.value_dist(groups[v], component=z)
                         pseudo_size = pseudo_data.size(-1 - pseudo_dist.event_dim)
                         with pyro.plate("pseudo_data_{}".format(v), pseudo_size, dim=-1):
