@@ -6,11 +6,7 @@ from torch.distributions import constraints
 
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
-
-
-def clamp_preserve_gradients(x, min, max):
-    # This helper function clamps gradients but still passes through the gradient in clamped regions
-    return x + (x.clamp(min, max) - x).detach()
+from pyro.distributions.transforms.utils import clamp_preserve_gradients
 
 
 @copy_docs_from(TransformModule)
