@@ -53,9 +53,9 @@ def create_mask(input_dim, observed_dim, hidden_dims, permutation, output_dim_mu
     # Create the indices that are assigned to the neurons
     input_indices = torch.cat((torch.zeros(observed_dim), 1 + var_index))
     if observed_dim > 0:
-        hidden_indices = [sample_mask_indices(input_dim, h) for h in hidden_dims]
+        hidden_indices = [sample_mask_indices(input_dim, h)-1 for h in hidden_dims]
     else:
-        hidden_indices = [sample_mask_indices(input_dim - 1, h) + 1 for h in hidden_dims]
+        hidden_indices = [sample_mask_indices(input_dim - 1, h) for h in hidden_dims]
 
     output_indices = (var_index + 1).repeat(output_dim_multiplier)
 
@@ -63,12 +63,12 @@ def create_mask(input_dim, observed_dim, hidden_dims, permutation, output_dim_mu
     mask_skip = (output_indices.unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(var_index)
 
     # Create mask from input to first hidden layer, and between subsequent hidden layers
-    masks = [(hidden_indices[0].unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(var_index)]
+    masks = [(hidden_indices[0].unsqueeze(-1) >= input_indices.unsqueeze(0)).type_as(var_index)]
     for i in range(1, len(hidden_dims)):
         masks.append((hidden_indices[i].unsqueeze(-1) >= hidden_indices[i - 1].unsqueeze(0)).type_as(var_index))
 
     # Create mask from last hidden layer to output layer
-    masks.append((output_indices.unsqueeze(-1) >= hidden_indices[-1].unsqueeze(0)).type_as(var_index))
+    masks.append((output_indices.unsqueeze(-1) > hidden_indices[-1].unsqueeze(0)).type_as(var_index))
 
     return masks, mask_skip
 
