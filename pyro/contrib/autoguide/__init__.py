@@ -23,7 +23,7 @@ from torch.distributions import biject_to, constraints
 
 import pyro
 import pyro.distributions as dist
-import pyro.distribution.transforms as transforms
+import pyro.distributions.transforms as transforms
 import pyro.poutine as poutine
 from pyro.contrib.autoguide.initialization import (InitMessenger, init_to_feasible, init_to_mean, init_to_median,
                                                    init_to_sample)
