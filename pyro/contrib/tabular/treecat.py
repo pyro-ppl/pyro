@@ -12,6 +12,7 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta, init_to_sample
 from pyro.distributions.spanning_tree import make_complete_graph, sample_tree_mcmc
+from pyro.distributions.util import weakmethod
 from pyro.infer import SVI
 from pyro.infer.discrete import TraceEnumSample_ELBO, infer_discrete
 from pyro.infer.mcmc import NUTS
@@ -275,22 +276,14 @@ class TreeCat(object):
             This is needed only when subsampling data.
         :param bool impute: Whether to impute missing features. This should be
             set to False during training and True when making predictions.
+        :return: A dictionary mapping sample site name to value.
+        :rtype: dict
         """
         data, mask = self._validate_data_mask(data, mask)
-        device = data[0].device
-        V = len(self.features)
-        E = V - 1
-
-        self._feature_guide(data, num_rows=num_rows, impute=impute)
-
-        # This guide uses the posterior mean as a point estimate.
-        vertex_probs, edge_probs = self._edge_guide.get_posterior()
-        with pyro.plate("vertices_plate", V, dim=-1):
-            pyro.sample("treecat_vertex_probs",
-                        dist.Delta(vertex_probs.to(device), event_dim=1))
-        with pyro.plate("edges_plate", E, dim=-1):
-            pyro.sample("treecat_edge_probs",
-                        dist.Delta(edge_probs.to(device), event_dim=1))
+        params = {}
+        params.update(self._feature_guide(data, mask, num_rows=num_rows, impute=impute))
+        params.update(self._edge_guide(device=data[0].device))
+        return params
 
     def trainer(self, optim, backend="cpp", method="map"):
         """
@@ -306,6 +299,8 @@ class TreeCat(object):
             return TreeCatTrainer(self, optim, backend)
         elif method == "nuts":
             return TreeCatTrainerNuts(self, optim, backend)
+        elif method == "pnuts":
+            return TreeCatTrainerPnuts(self, optim, backend)
         else:
             raise ValueError("Unknown trainer method: {}".format(method))
 
@@ -320,25 +315,21 @@ class TreeCat(object):
             :class:`torch.ByteTensor` if partially observed.
         :param int num_samples: Optional number of samples to draw.
         """
-        model = self.model
-        guide = self.guide
-        first_available_dim = -2
+        # Sample global parameters from the guide.
+        guide_params = self.guide(data, mask)
+        model = poutine.condition(self.model, guide_params)
 
-        # Optionally draw vectorized samples.
+        # Optionally vectorize local samples.
+        first_available_dim = -2
         if num_samples is not None:
             vectorize = pyro.plate("num_samples_vectorized", num_samples,
                                    dim=first_available_dim)
             model = vectorize(model)
-            guide = vectorize(guide)
             first_available_dim -= 1
 
-        # Sample global parameters from the guide.
-        guide_trace = poutine.trace(guide).get_trace(data, mask)
-
         # Sample local variables using variable elimination.
-        return infer_discrete(
-            poutine.replay(model, guide_trace),
-            first_available_dim=first_available_dim)(data, mask, impute=True)
+        model = infer_discrete(model, first_available_dim=first_available_dim)
+        return model(data, mask, impute=True)
 
     def log_prob(self, data, mask=None):
         """
@@ -354,9 +345,9 @@ class TreeCat(object):
         :rtype: torch.Tensor
         """
         # Trace the guide and model.
-        guide_trace = poutine.trace(self.guide).get_trace(data, mask)
+        guide_params = self.guide(data, mask)
         model_trace = poutine.trace(
-            poutine.replay(self.model, guide_trace)).get_trace(data, mask)
+            poutine.condition(self.model, guide_params)).get_trace(data, mask)
         model_trace.compute_log_prob()
         model_trace.pack_tensors()
 
@@ -371,25 +362,6 @@ class TreeCat(object):
         log_prob = contract_to_tensor(tensor_tree, sum_dims, ordinal)
         assert log_prob.shape == (len(data[0]),)
         return log_prob
-
-    def __call__(self, data, mask, num_rows=None):
-        """
-        Use a :class:`TreeCat` model as a guide for another Pyro model of
-        tabular data.
-
-        This supports arbitrary column-wise conditioning, but does not support
-        row-wise conditioning, i.e. ``mask`` must be a list of booleans.
-        """
-        if mask is None:
-            mask = [True] * len(data)
-        if any(isinstance(m, torch.Tensor) for m in mask):
-            raise NotImplementedError("Row-wise mask is not supported")
-        expose = ["treecat_x_{}".format(f.name)
-                  for f, m in zip(self.features, mask)
-                  if m is not False]
-        with poutine.block(expose=expose):
-            guide_trace = poutine.trace(self.guide).get_trace(data, mask, num_rows)
-            return poutine.replay(self.model, guide_trace)(data, mask, num_rows, impute=True)
 
 
 class TreeCatTrainer(object):
@@ -472,11 +444,142 @@ DEFAULT_NUTS_CONFIG = {
 }
 
 
+class TreeCatTrainerNuts(object):
+    """
+    Maintains state to initialize and train a :class:`TreeCat` model.
+
+    :param TreeCat model: A :class:`TreeCat` model to train.
+    :param str backend: Either "python" or "cpp". Defaults to "cpp". The
+        "cpp" backend is much faster for data with more than ~10 features.
+    """
+    def __init__(self, model, backend="cpp", nuts_config={}):
+        assert isinstance(model, TreeCat)
+        self.backend = backend
+        self.nuts_config = DEFAULT_NUTS_CONFIG.copy()
+        self.nuts_config.update(nuts_config)
+        self.nuts_config.pop("warmup_steps", None)
+        self._model = model
+        self._initialized = False
+        self._nuts = None
+
+    def init(self, data, mask):
+        """
+        Initializes shared feature parameters given some or all data.
+
+        :param list data: A minibatch of column-oriented data. Each column
+            should be a :class:`torch.Tensor` .
+        :param list mask: A minibatch of column masks. Each column may be
+            ``True`` if fully observed, ``False`` if fully unobserved, or a
+            :class:`torch.ByteTensor` if partially observed.
+        """
+        for v, feature in enumerate(self._model.features):
+            col_data = get_dense_column(data, mask, v)
+            self._feature_trainers[feature.name].init(col_data)
+        self._initialized = True
+
+    def step(self, data, mask=None, num_rows=None):
+        """
+        Runs one training step.
+
+        :param list data: A minibatch of column-oriented data. Each column
+            should be a :class:`torch.Tensor` .
+        :param list mask: A minibatch of column masks. Each column may be
+            ``True`` if fully observed, ``False`` if fully unobserved, or a
+            :class:`torch.ByteTensor` if partially observed.
+        :param int num_rows: The total number of rows in the dataset.
+            This is needed only when subsampling data.
+        """
+        if not self._initialized:
+            self.init(data, mask)
+
+        # Perform a NUTS step to learn feature parameters.
+        loss = self._nuts_step(data, mask, num_rows=num_rows)
+
+        with torch.no_grad():
+            # Sample latent categoricals.
+            model = self._model
+            guide_params = model.guide(data, mask)
+            infer_discrete(poutine.condition(model.model, guide_params),
+                           first_available_dim=-3)(data, mask)
+            z = torch.stack(model._saved_z)
+
+            # Update sufficient statistics.
+            model._feature_model.update(data, mask, num_rows, z.to(data[0].device))
+            model._edge_guide.update(num_rows, z)
+
+            # Perform an MCMC step on the tree structure.
+            edge_logits = model._edge_guide.compute_edge_logits()
+            model.edges = sample_tree_mcmc(edge_logits, model.edges, backend=self.backend)
+
+        return loss
+
+    def _init_nuts(self, data, mask, num_rows=None):
+        with torch.no_grad():
+            guide_params = self._model.guide(data, mask, num_rows=num_rows)
+            model = poutine.condition(self._model.model, guide_params)
+            trace = poutine.trace(model).get_trace(data, mask, num_rows=num_rows, impute=True)
+
+        transforms = {}
+        initial_params = {}
+        for name, site in trace.nodes.items():
+            if site["type"] != "sample":
+                continue
+            if type(site["fn"]).__name__ == "_Subsample":
+                continue
+            if name.startswith("treecat_"):
+                continue
+            if not ("_shared_" in name or "_group_" in name):
+                continue
+            transforms[name] = biject_to(site["fn"].support).inv
+            initial_params[name] = transforms[name](site["value"])
+
+        self._nuts = NUTS(model=None, potential_fn=self._potential_fn,
+                          transforms=transforms, **self.nuts_config)
+        self._nuts.initial_params = initial_params
+        warmup_steps = 10**10  # Adapt indefinitely.
+        self._nuts.setup(warmup_steps)
+        return initial_params
+
+    def _nuts_step(self, data, mask, num_rows):
+        # To run HMC-within-Gibbs, we pass non-HMC state via ._gibbs_* attributes.
+        self._gibbs_params = self._model._edge_guide(device=data[0].device)
+        self._gibbs_args = (data, mask, num_rows)
+        if self._nuts is None:
+            self._nuts_params = self._init_nuts(data, mask, num_rows=num_rows)
+        self._nuts_params = self._nuts.sample(self._nuts_params)
+        self._gibbs_params = None
+        self._gibbs_args = None
+
+        for name, value in self._nuts_params.items():
+            assert not value.requires_grad
+            pyro.param["auto_{}".format(name)] = self._nuts.transforms[name].inv(value)
+        for key, value in self._nuts.diagnostics.items():
+            logging.debug("NUTS {} {}".format(key, value))
+        loss = self._nuts._potential_energy_last
+        self._nuts.clear_cache()
+        return loss
+
+    @weakmethod
+    def _potential_fn(self):
+        # Combine non-HMC parameters with HMC parameters.
+        params = self._gibbs_params.copy()
+        for k, v in self._nuts_params.items():
+            params[k] = self._nuts.transforms[k].inv(v)
+
+        model = poutine.condition(poutine.enum(self._model.model), params)
+        trace = poutine.trace(model).get_trace(*self._gibbs_args)
+        log_joint = self.trace_prob_evaluator.log_prob(trace)
+        for name, t in self.transforms.items():
+            log_joint = log_joint - torch.sum(
+                t.log_abs_det_jacobian(params[name], params[name]))
+        return -log_joint
+
+
 class FeatureTrainerNuts(object):
     def __init__(self, feature, capacity, nuts_config={}):
         self.feature = feature
         self.capacity = capacity
-        self._dynamic_args = (None, None)
+        self._gibbs_args = (None, None)
 
         # Create a NUTS kernel.
         trace = poutine.trace(self._model).get_trace()
@@ -523,9 +626,9 @@ class FeatureTrainerNuts(object):
                                    [d[key] for d in diagnostics]))
 
     def step(self, data, z_logits):
-        self._dynamic_args = (data, z_logits)
+        self._gibbs_args = (data, z_logits)
         self.params = self.nuts.sample(self.params)
-        self._dynamic_args = (None, None)
+        self._gibbs_args = (None, None)
         for name, value in self.params.items():
             assert not value.requires_grad
             pyro.param["auto_{}".format(name)] = self.nuts.transforms[name].inv(value)
@@ -543,11 +646,12 @@ class FeatureTrainerNuts(object):
                             self.feature.value_dist(group, component=z),
                             obs=data)
 
+    @weakmethod
     def _potential_fn(self, params):
         params_constrained = {k: self.nuts.transforms[k].inv(v) for k, v in params.items()}
         model = poutine.enum(self._model)
         cond_model = poutine.condition(model, params_constrained)
-        model_trace = poutine.trace(cond_model).get_trace(*self._dynamic_args)
+        model_trace = poutine.trace(cond_model).get_trace(*self._gibbs_args)
         log_joint = self.trace_prob_evaluator.log_prob(model_trace)
         for name, t in self.transforms.items():
             log_joint = log_joint - torch.sum(
@@ -555,7 +659,7 @@ class FeatureTrainerNuts(object):
         return -log_joint
 
 
-class TreeCatTrainerNuts(object):
+class TreeCatTrainerPnuts(object):
     """
     Maintains state to initialize and train a :class:`TreeCat` model.
 
@@ -749,6 +853,21 @@ class _EdgeGuide(object):
         self._vertex_stats = torch.full((V, M), 1. / M, device="cpu")
         self._complete_stats = torch.full((K, M * M), 1. / M ** 2, device="cpu")
 
+    def __call__(self, device):
+        E = len(self.edges)
+        V = E + 1
+
+        # This guide uses the posterior mean as a point estimate.
+        vertex_probs, edge_probs = self.get_posterior(device)
+        with pyro.plate("vertices_plate", V, dim=-1):
+            pyro.sample("treecat_vertex_probs",
+                        dist.Delta(vertex_probs, event_dim=1))
+        with pyro.plate("edges_plate", E, dim=-1):
+            pyro.sample("treecat_edge_probs",
+                        dist.Delta(edge_probs, event_dim=1))
+        return {"treecat_vertex_probs": vertex_probs,
+                "treecat_edge_probs": edge_probs}
+
     @torch.no_grad()
     def update(self, num_rows, z):
         """
@@ -800,7 +919,7 @@ class _EdgeGuide(object):
             logging.debug(" ".join(["mutual_info:"] + mutual_info))
 
     @torch.no_grad()
-    def get_posterior(self):
+    def get_posterior(self, device):
         """
         Computes posterior mean under a Dirichlet prior.
 
@@ -812,9 +931,9 @@ class _EdgeGuide(object):
         """
         v1, v2 = self.edges.t()
         k = v1 + v2 * (v2 - 1) // 2
-        edge_stats = self._complete_stats[k]
+        edge_stats = self._complete_stats[k].to(device)
 
-        vertex_probs = self._vertex_prior + self._vertex_stats
+        vertex_probs = self._vertex_prior + self._vertex_stats.to(device)
         vertex_probs /= vertex_probs.sum(-1, True)
         edge_probs = self._edge_prior + edge_stats
         edge_probs /= edge_probs.sum(-1, True)
