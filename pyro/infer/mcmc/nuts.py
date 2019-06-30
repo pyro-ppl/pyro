@@ -283,6 +283,7 @@ class NUTS(HMC):
         if z is None:
             z = params
             potential_energy = self.potential_fn(z)
+            self._cache(z, potential_energy)
         # return early if no sample sites
         elif len(z) == 0:
             self._accept_cnt += 1
