@@ -277,10 +277,14 @@ class NUTS(HMC):
                          z_proposal_pe, z_proposal_grads, r_sum, tree_weight, turning, diverging,
                          sum_accept_probs, num_proposals)
 
-    def sample(self, trace):
+    def sample(self, params):
         z, potential_energy, z_grads = self._fetch_from_cache()
+        # recompute PE when cache is cleared
+        if z is None:
+            z = params
+            potential_energy = self.potential_fn(z)
         # return early if no sample sites
-        if not z:
+        elif len(z) == 0:
             self._accept_cnt += 1
             self._t += 1
             return z
