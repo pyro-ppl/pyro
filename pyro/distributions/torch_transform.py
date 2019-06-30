@@ -23,21 +23,27 @@ class Transform(object):
 
     Note that care must be taken with memoized values since the autograd graph
     may be reversed. For example while the following works with or without caching:
-        y = t(x, obs=z)
-        t.log_abs_det_jacobian(x, y, obs=z).backward()  # x will receive gradients.
-    However the following will error when caching due to dependency reversal::
-        y = t(x, obs=z)
-        a = t.inv(y, obs=z)
-        grad(a.sum(), [y])  # error because a is x
+
+    y = t(x, obs=z)
+    t.log_abs_det_jacobian(x, y, obs=z).backward()`  # x will receive gradients.
+
+    However the following will error when caching due to dependency reversal:
+
+    y = t(x, obs=z)
+    a = t.inv(y, obs=z)
+    grad(a.sum(), [y])  # error because a is x
+
     By convention, the observed argument is named for readability, analogously
     to the usage of :meth:`pyro.sample`, although this is not required as any
     keyword argument can be used and will be forward by
     :class:`pyro.distributions.TransformedDistribution`. Derived classes should
     implement one or both of :meth:`_call` or :meth:`_inverse`. Derived classes
     that set `bijective=True` should also implement :meth:`log_abs_det_jacobian`.
+
     Args:
         cache_size (int): Size of cache. If zero, no caching is done. If one,
             the latest single value is cached. Only 0 and 1 are supported.
+
     Attributes:
         domain (:class:`~torch.distributions.constraints.Constraint`):
             The constraint representing valid inputs to this transform.

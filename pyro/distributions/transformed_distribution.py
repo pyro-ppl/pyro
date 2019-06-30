@@ -10,10 +10,12 @@ class TransformedDistribution(Distribution):
     r"""
     Extension of the Distribution class, which applies a sequence of Transforms to a base
     distribution, optionally conditional on an additional variable.  Let f be the composition
-    of transforms applied::
-        X ~ BaseDistribution
-        Y = f(X) ~ TransformedDistribution(BaseDistribution, f)
-        log p(Y | Z=z) = log p(X | Z=z) + log |det (d(X | Z=z)/dY)|
+    of transforms applied:
+
+        :math:`X \\sim \\text{BaseDistribution}`
+        :math:`Y = f(X) \\sim \\text{TransformedDistribution}(\\text{BaseDistribution}, f)`
+        :math:`\\text{log}p(Y | Z=z) = \\text{log}p(X | Z=z) + \\text{log}|\\text{det}(d(X | Z=z)/dY)|`
+
     Note that the ``.event_shape`` of a :class:`TransformedDistribution` is the
     maximum shape of its base distribution and its transforms, since transforms
     can introduce correlations among events.
@@ -23,7 +25,7 @@ class TransformedDistribution(Distribution):
     def __init__(self, base_distribution, transforms, validate_args=None):
         self.base_dist = base_distribution
         if not isinstance(transforms, list):
-            self.transforms = [transforms, ]
+            transforms = [transforms, ]
         if not all([isinstance(t, TorchTransform) or isinstance(t, Transform) for t in transforms]):
             raise ValueError("transforms must be a Transform or a list of Transforms")
         self.transforms = transforms
