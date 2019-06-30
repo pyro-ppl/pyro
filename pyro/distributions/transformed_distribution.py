@@ -8,7 +8,7 @@ from pyro.distributions import Transform
 
 class TransformedDistribution(Distribution):
     r"""
-    Extension of the Distribution class, which applies a sequence of Transforms to a base 
+    Extension of the Distribution class, which applies a sequence of Transforms to a base
     distribution, optionally conditional on an additional variable.  Let f be the composition
     of transforms applied::
         X ~ BaseDistribution
@@ -22,14 +22,12 @@ class TransformedDistribution(Distribution):
 
     def __init__(self, base_distribution, transforms, validate_args=None):
         self.base_dist = base_distribution
-        if isinstance(transforms, Transform):
+        if not isinstance(transforms, list):
             self.transforms = [transforms, ]
-        elif isinstance(transforms, list):
-            if not all([isinstance(t, TorchTransform) or isinstance(t, Transform) for t in transforms]):
-                raise ValueError("transforms must be a Transform or a list of Transforms")
-            self.transforms = transforms
-        else:
-            raise ValueError("transforms must be a Transform or list, but was {}".format(transforms))
+        if not all([isinstance(t, TorchTransform) or isinstance(t, Transform) for t in transforms]):
+            raise ValueError("transforms must be a Transform or a list of Transforms")
+        self.transforms = transforms
+
         shape = self.base_dist.batch_shape + self.base_dist.event_shape
         event_dim = max([len(self.base_dist.event_shape)] + [t.event_dim for t in self.transforms])
         batch_shape = shape[:len(shape) - event_dim]

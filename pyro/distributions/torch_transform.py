@@ -11,15 +11,16 @@ def dictionary_is(x, y):
     """
     return all([k in x and x[k] is y[k] for k in y.keys()])
 
+
 class Transform(object):
     """
     Abstract class for invertable transformations with computable log det jacobians.
     In contrast to :class:`torch.distributions.transforms.Transform` this class is able
     to represents a transformation that optionally conditions on an observed input.
-    
+
     Caching is useful for tranforms whose inverses are either expensive or numerically
     unstable.
-    
+
     Note that care must be taken with memoized values since the autograd graph
     may be reversed. For example while the following works with or without caching:
         y = t(x, obs=z)
@@ -32,7 +33,7 @@ class Transform(object):
     to the usage of :meth:`pyro.sample`, although this is not required as any
     keyword argument can be used and will be forward by
     :class:`pyro.distributions.TransformedDistribution`. Derived classes should
-    implement one or both of :meth:`_call` or :meth:`_inverse`. Derived classes 
+    implement one or both of :meth:`_call` or :meth:`_inverse`. Derived classes
     that set `bijective=True` should also implement :meth:`log_abs_det_jacobian`.
     Args:
         cache_size (int): Size of cache. If zero, no caching is done. If one,

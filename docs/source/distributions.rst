@@ -168,6 +168,13 @@ SpanningTree
     :undoc-members:
     :show-inheritance:
 
+TransformedDistribution
+-----------------------
+.. autoclass:: pyro.distributions.TransformedDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 VonMises
 --------
 .. autoclass:: pyro.distributions.VonMises
@@ -279,6 +286,13 @@ RadialFlow
 SylvesterFlow
 -------------
 .. autoclass:: pyro.distributions.transforms.SylvesterFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Transform
+---------
+.. autoclass:: pyro.distributions.Transform
     :members:
     :undoc-members:
     :show-inheritance:
