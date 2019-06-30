@@ -17,7 +17,7 @@ class ELUTransform(torch.distributions.transforms.Transform):
     r"""
     Transform via the mapping :math:`y = \text{ELU}(x)`.
     """
-    domain = constraints.positive
+    domain = constraints.real
     codomain = constraints.positive
     bijective = True
     sign = +1
@@ -39,7 +39,7 @@ class LeakyReLUTransform(torch.distributions.transforms.Transform):
     r"""
     Transform via the mapping :math:`y = \text{LeakyReLU}(x)`.
     """
-    domain = constraints.positive
+    domain = constraints.real
     codomain = constraints.positive
     bijective = True
     sign = +1
@@ -61,7 +61,7 @@ class TanhTransform(torch.distributions.transforms.Transform):
     r"""
     Transform via the mapping :math:`y = \text{tanh}(x)`.
     """
-    domain = constraints.positive
+    domain = constraints.real
     codomain = constraints.interval(-1., 1.)
     bijective = True
     sign = +1
@@ -146,6 +146,7 @@ class NeuralAutoregressive(TransformModule):
         self._cached_A = None
         self._cached_W_pre = None
         self._cached_C = None
+        self._cached_T_C = None
 
     def _call(self, x):
         """
@@ -163,13 +164,15 @@ class NeuralAutoregressive(TransformModule):
         A = F.softplus(A)
         C = A * x.unsqueeze(-2) + b
         W = F.softmax(W_pre, dim=-2)
-        D = (W * T._call(C)).sum(dim=-2)
-        y = T._inverse(D)
+        T_C = T(C)
+        D = (W * T_C).sum(dim=-2)
+        y = T.inv(D)
 
-        self._cached_log_df_inv_dx = -T.log_abs_det_jacobian(y, D)
+        self._cached_log_df_inv_dx = T.inv().log_abs_det_jacobian(D, y)
         self._cached_A = A
         self._cached_W_pre = W_pre
         self._cached_C = C
+        self._cached_T_C = T_C
 
         return y
 
@@ -182,10 +185,11 @@ class NeuralAutoregressive(TransformModule):
         A = self._cached_A
         W_pre = self._cached_W_pre
         C = self._cached_C
+        T_C = self._cached_T_C
         T = self.T
 
         log_dydD = self._cached_log_df_inv_dx
         log_dDdx = torch.logsumexp(torch.log(A + eps) + self.logsoftmax(W_pre) +
-                                   T.log_abs_det_jacobian(C, T._call(C)), dim=-2)
+                                   T.log_abs_det_jacobian(C, T_C), dim=-2)
         log_det = log_dydD + log_dDdx
         return log_det.sum(-1)
