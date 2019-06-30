@@ -517,19 +517,19 @@ class TreeCatTrainerNuts(TreeCatTrainer):
             model = poutine.condition(self._model.model, guide_params)
             trace = poutine.trace(model).get_trace(data, mask, num_rows=num_rows, impute=True)
 
-        transforms = {}
-        initial_params = {}
-        for name, site in trace.nodes.items():
-            if site["type"] != "sample":
-                continue
-            if type(site["fn"]).__name__ == "_Subsample":
-                continue
-            if name.startswith("treecat_"):
-                continue
-            if not ("_shared_" in name or "_group_" in name):
-                continue
-            transforms[name] = biject_to(site["fn"].support).inv
-            initial_params[name] = transforms[name](site["value"])
+            transforms = {}
+            initial_params = {}
+            for name, site in trace.nodes.items():
+                if site["type"] != "sample":
+                    continue
+                if type(site["fn"]).__name__ == "_Subsample":
+                    continue
+                if name.startswith("treecat_"):
+                    continue
+                if not ("_shared_" in name or "_group_" in name):
+                    continue
+                transforms[name] = biject_to(site["fn"].support).inv
+                initial_params[name] = transforms[name](site["value"]).detach()
 
         self._nuts = NUTS(model=None, potential_fn=self._potential_fn,
                           transforms=transforms, **self.nuts_config)
@@ -549,11 +549,12 @@ class TreeCatTrainerNuts(TreeCatTrainer):
         self._gibbs_params = None
         self._gibbs_args = None
 
+        store = pyro.get_param_store()
         for name, value in self._nuts_params.items():
             assert not value.requires_grad
-            pyro.param["auto_{}".format(name)] = self._nuts.transforms[name].inv(value)
-        for key, value in self._nuts.diagnostics.items():
-            logging.debug("NUTS {} {}".format(key, value))
+            store["auto_{}".format(name)] = self._nuts.transforms[name].inv(value)
+        for key, value in self._nuts.diagnostics().items():
+            logging.debug("nuts {} {}".format(key, value))
         loss = self._nuts._potential_energy_last
         self._nuts.clear_cache()
         self._trace_prob_evaluator = None
@@ -626,7 +627,7 @@ class FeatureTrainerNuts(object):
             diagnostics = self.nuts.diagnostics()
         self.params = params
         for key in diagnostics[0]:
-            logging.debug(" ".join(["NUTS", self.feature.name, key] +
+            logging.debug(" ".join(["nuts", self.feature.name, key] +
                                    [d[key] for d in diagnostics]))
 
     def step(self, data, z_logits):
@@ -714,7 +715,7 @@ class TreeCatTrainerPnuts(TreeCatTrainer):
             diagnostics[feature.name] = self._feature_trainers[feature.name].step(data, z_logits)
         for key in next(diagnostics.values()):
             logging.debug(" ".join(
-                ["NUTS", key] + [diagnostics[f.name][key] for f in model.features]))
+                ["nuts", key] + [diagnostics[f.name][key] for f in model.features]))
 
         # Update sufficient statistics in the edge guide.
         model._edge_guide.update(num_rows, z)
@@ -783,6 +784,8 @@ class _FeatureModel(object):
             groups = [f.sample_group(s) for f, s in zip(self.features, shared)]
 
         # If subsampling, include a pseudodata summary of out-of-minibatch data.
+        # This is only needed when training; when calling .sample() or .log_prob()
+        # we can avoid this computation by setting num_rows=None.
         batch_size = len(data[0])
         if self._stats is None:
             self._stats = [f.summary(g) for f, g in zip(self.features, groups)]

@@ -11,7 +11,7 @@ import pyro.poutine as poutine
 from pyro.contrib.tabular.features import Boolean, Discrete, Real
 from pyro.contrib.tabular.treecat import TreeCat
 from pyro.optim import Adam
-from tests.common import TemporaryDirectory, assert_close, xfail_param
+from tests.common import TemporaryDirectory, assert_close
 
 TINY_DATASETS = [
     {
@@ -59,7 +59,7 @@ def train_model(model, data, mask=None, trainer=None):
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('method,make_options', [
     ("map", lambda: {"optim": Adam({})}),
-    xfail_param("nuts", lambda: {}),
+    ("nuts", lambda: {}),
 ], ids=lambda mm: mm if isinstance(mm, str) else "")
 def test_train_smoke(method, make_options, dataset, capacity, masked):
     features = dataset["features"]
