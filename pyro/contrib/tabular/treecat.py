@@ -641,10 +641,10 @@ class AnnealingSchedule(object):
     :param float annealing_rate: A portion by which memory size can grow each
         learning step. Should be positive.
     """
-    def __init__(self, annealing_rate=0.01, min_memory_size=1):
+    def __init__(self, annealing_rate=0.01, min_memory_size=4):
         assert annealing_rate > 0
         self.annealing_rate = annealing_rate
-        self.min_memory_size = 1
+        self.min_memory_size = min_memory_size
 
     def __call__(self, memory_size, batch_size, complete_size):
         """
