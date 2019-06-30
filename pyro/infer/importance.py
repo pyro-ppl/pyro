@@ -111,6 +111,7 @@ def vectorized_importance_weights(model, guide, *args, **kwargs):
 
     if max_plate_nesting is None:
         raise ValueError("must provide max_plate_nesting")
+    max_plate_nesting += 1
 
     def vectorize(fn):
         def _fn(*args, **kwargs):
