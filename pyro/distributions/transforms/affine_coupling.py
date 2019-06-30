@@ -116,7 +116,7 @@ class AffineCoupling(TransformModule):
         """
         Calculates the elementwise determinant of the log jacobian
         """
-        x_old, y_old = self._cached_x_y
+        x_old, y_old, _ = self._cached_x_y_obs
         if self._cached_log_scale is not None and x is x_old and y is y_old:
             log_scale = self._cached_log_scale
         else:
