@@ -101,7 +101,7 @@ def vectorized_importance_weights(model, guide, *args, **kwargs):
 
         log_weights, model_trace, guide_trace = \\
             vectorized_importance_weights(model, guide, *args,
-                                          num_particles=1000,
+                                          num_samples=1000,
                                           max_plate_nesting=4,
                                           normalized=False)
     """
@@ -111,6 +111,7 @@ def vectorized_importance_weights(model, guide, *args, **kwargs):
 
     if max_plate_nesting is None:
         raise ValueError("must provide max_plate_nesting")
+    max_plate_nesting += 1
 
     def vectorize(fn):
         def _fn(*args, **kwargs):

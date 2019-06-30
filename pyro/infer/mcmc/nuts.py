@@ -6,10 +6,16 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.util import logsumexp, scalar_like
+from pyro.distributions.util import scalar_like
 from pyro.infer.mcmc.hmc import HMC
 from pyro.ops.integrator import velocity_verlet
 from pyro.util import optional, torch_isnan
+
+
+def _logaddexp(x, y):
+    minval, maxval = (x, y) if x < y else (y, x)
+    return (minval - maxval).exp().log1p() + maxval
+
 
 # sum_accept_probs and num_proposals are used to calculate
 # the statistic accept_prob for Dual Averaging scheme;
@@ -219,7 +225,7 @@ class NUTS(HMC):
                                            direction, tree_depth-1, energy_current)
 
         if self.use_multinomial_sampling:
-            tree_weight = logsumexp(torch.stack([half_tree.weight, other_half_tree.weight]), dim=0)
+            tree_weight = _logaddexp(half_tree.weight, other_half_tree.weight)
         else:
             tree_weight = half_tree.weight + other_half_tree.weight
         sum_accept_probs = half_tree.sum_accept_probs + other_half_tree.sum_accept_probs
@@ -271,10 +277,14 @@ class NUTS(HMC):
                          z_proposal_pe, z_proposal_grads, r_sum, tree_weight, turning, diverging,
                          sum_accept_probs, num_proposals)
 
-    def sample(self, trace):
+    def sample(self, params):
         z, potential_energy, z_grads = self._fetch_from_cache()
+        # recompute PE when cache is cleared
+        if z is None:
+            z = params
+            potential_energy = self.potential_fn(z)
         # return early if no sample sites
-        if not z:
+        elif len(z) == 0:
             self._accept_cnt += 1
             self._t += 1
             return z
@@ -363,7 +373,7 @@ class NUTS(HMC):
                     break
                 else:  # update tree_weight
                     if self.use_multinomial_sampling:
-                        tree_weight = logsumexp(torch.stack([tree_weight, new_tree.weight]), dim=0)
+                        tree_weight = _logaddexp(tree_weight, new_tree.weight)
                     else:
                         tree_weight = tree_weight + new_tree.weight
 

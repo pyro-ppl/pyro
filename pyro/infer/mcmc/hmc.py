@@ -149,19 +149,17 @@ class HMC(MCMCKernel):
         self._z_grads_last = None
         self._warmup_steps = None
 
-    def _find_reasonable_step_size(self):
+    def _find_reasonable_step_size(self, z):
         step_size = self.step_size
 
         # We are going to find a step_size which make accept_prob (Metropolis correction)
         # near the target_accept_prob. If accept_prob:=exp(-delta_energy) is small,
         # then we have to decrease step_size; otherwise, increase step_size.
-        z, potential_energy, z_grads = self._fetch_from_cache()
-        if not z:
-            return self.step_size
+        potential_energy = self.potential_fn(z)
         r, _ = self._sample_r(name="r_presample_0")
         energy_current = self._kinetic_energy(r) + potential_energy
         z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
-            z, r, self.potential_fn, self.inverse_mass_matrix, step_size, z_grads=z_grads)
+            z, r, self.potential_fn, self.inverse_mass_matrix, step_size)
         energy_new = self._kinetic_energy(r_new) + potential_energy_new
         delta_energy = energy_new - energy_current
         # direction=1 means keep increasing step_size, otherwise decreasing step_size.
@@ -182,7 +180,7 @@ class HMC(MCMCKernel):
             r, _ = self._sample_r(name="r_presample_{}".format(t))
             energy_current = self._kinetic_energy(r) + potential_energy
             z_new, r_new, z_grads_new, potential_energy_new = velocity_verlet(
-                z, r, self.potential_fn, self.inverse_mass_matrix, step_size, z_grads=z_grads)
+                z, r, self.potential_fn, self.inverse_mass_matrix, step_size)
             energy_new = self._kinetic_energy(r_new) + potential_energy_new
             delta_energy = energy_new - energy_current
             direction_new = 1 if self._direction_threshold < -delta_energy else -1
@@ -251,7 +249,7 @@ class HMC(MCMCKernel):
                                 find_reasonable_step_size_fn=self._find_reasonable_step_size)
 
         if self._adapter.adapt_step_size:
-            self._adapter.reset_step_size_adaptation()
+            self._adapter.reset_step_size_adaptation(self._initial_params)
 
     def setup(self, warmup_steps, *args, **kwargs):
         self._warmup_steps = warmup_steps
@@ -270,13 +268,22 @@ class HMC(MCMCKernel):
         self._potential_energy_last = potential_energy
         self._z_grads_last = z_grads
 
+    def clear_cache(self):
+        self._z_last = None
+        self._potential_energy_last = None
+        self._z_grads_last = None
+
     def _fetch_from_cache(self):
         return self._z_last, self._potential_energy_last, self._z_grads_last
 
     def sample(self, params):
         z, potential_energy, z_grads = self._fetch_from_cache()
+        # recompute PE when cache is cleared
+        if z is None:
+            z = params
+            potential_energy = self.potential_fn(z)
         # return early if no sample sites
-        if not z:
+        elif len(z) == 0:
             self._accept_cnt += 1
             self._t += 1
             return params
