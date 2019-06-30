@@ -185,6 +185,13 @@ VonMises3D
 Transformed Distributions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+AffineCoupling
+--------------
+.. autoclass:: pyro.distributions.transforms.AffineCoupling
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 BatchNormTransform
 ------------------
 .. autoclass:: pyro.distributions.transforms.BatchNormTransform

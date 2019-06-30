@@ -7,7 +7,8 @@ import pytest
 import torch
 
 import pyro.distributions as dist
-from pyro.nn import AutoRegressiveNN
+import pyro.distributions.transforms as transforms
+from pyro.nn import AutoRegressiveNN, DenseNN
 
 pytestmark = pytest.mark.init(rng_seed=123)
 
@@ -86,51 +87,56 @@ class FlowTests(TestCase):
         assert sample.shape == base_shape
 
     def _make_elu(self, input_dim):
-        return dist.transforms.ELUTransform()
+        return transforms.ELUTransform()
 
     def _make_leaky_relu(self, input_dim):
-        return dist.transforms.LeakyReLUTransform()
+        return transforms.LeakyReLUTransform()
 
     def _make_tanh(self, input_dim):
-        return dist.transforms.TanhTransform()
+        return transforms.TanhTransform()
 
     def _make_householder(self, input_dim):
-        return dist.transforms.HouseholderFlow(input_dim, count_transforms=min(1, input_dim // 2))
+        return transforms.HouseholderFlow(input_dim, count_transforms=min(1, input_dim // 2))
 
     def _make_batchnorm(self, input_dim):
         # Create batchnorm transform
-        bn = dist.transforms.BatchNormTransform(input_dim)
+        bn = transforms.BatchNormTransform(input_dim)
         bn._inverse(torch.normal(torch.arange(0., input_dim), torch.arange(1., 1. + input_dim) / input_dim))
         bn.eval()
         return bn
 
     def _make_block_autoregressive(self, input_dim, activation='tanh', residual=None):
-        return dist.transforms.BlockAutoregressive(input_dim, activation=activation, residual=residual)
+        return transforms.BlockAutoregressive(input_dim, activation=activation, residual=residual)
 
     def _make_iaf(self, input_dim):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
-        return dist.transforms.InverseAutoregressiveFlow(arn)
+        return transforms.InverseAutoregressiveFlow(arn)
 
     def _make_iaf_stable(self, input_dim):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
-        return dist.transforms.InverseAutoregressiveFlowStable(arn, sigmoid_bias=0.5)
+        return transforms.InverseAutoregressiveFlowStable(arn, sigmoid_bias=0.5)
 
     def _make_neural_autoregressive(self, input_dim, activation):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1], param_dims=[16] * 3)
-        return dist.transforms.NeuralAutoregressive(arn, hidden_units=16, activation=activation)
+        return transforms.NeuralAutoregressive(arn, hidden_units=16, activation=activation)
 
     def _make_permute(self, input_dim):
         permutation = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
-        return dist.transforms.PermuteTransform(permutation)
+        return transforms.PermuteTransform(permutation)
 
     def _make_planar(self, input_dim):
-        return dist.transforms.PlanarFlow(input_dim)
+        return transforms.PlanarFlow(input_dim)
 
     def _make_poly(self, input_dim):
         count_degree = 4
         count_sum = 3
         arn = AutoRegressiveNN(input_dim, [input_dim*10], param_dims=[(count_degree + 1)*count_sum])
-        return dist.transforms.PolynomialFlow(arn, input_dim=input_dim, count_degree=count_degree, count_sum=count_sum)
+        return transforms.PolynomialFlow(arn, input_dim=input_dim, count_degree=count_degree, count_sum=count_sum)
+
+    def _make_affine_coupling(self, input_dim):
+        split_dim = input_dim // 2
+        hypernet = DenseNN(split_dim, [10*input_dim], [input_dim-split_dim, input_dim-split_dim])
+        return transforms.AffineCoupling(split_dim, hypernet)
 
     def test_batchnorm_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -154,10 +160,10 @@ class FlowTests(TestCase):
                         residual=residual))
 
     def _make_radial(self, input_dim):
-        return dist.transforms.RadialFlow(input_dim)
+        return transforms.RadialFlow(input_dim)
 
     def _make_sylvester(self, input_dim):
-        return dist.transforms.SylvesterFlow(input_dim, count_transforms=input_dim // 2 + 1)
+        return transforms.SylvesterFlow(input_dim, count_transforms=input_dim//2 + 1)
 
     def test_elu_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -180,7 +186,7 @@ class FlowTests(TestCase):
             self._test_jacobian(input_dim, self._make_iaf_stable)
 
     def test_neural_autoregressive_jacobians(self):
-        for activation in ['ELU', 'LeakyReLU', 'sigmoid']:
+        for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
             for input_dim in [2, 3, 5, 7, 9, 11]:
                 self._test_jacobian(input_dim, partial(self._make_neural_autoregressive, activation=activation))
 
@@ -207,6 +213,10 @@ class FlowTests(TestCase):
     def test_sylvester_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_sylvester)
+
+    def test_affine_coupling_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_affine_coupling)
 
     def test_iaf_inverses(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -258,7 +268,7 @@ class FlowTests(TestCase):
             self._test_shape(shape, self._make_iaf_stable)
 
     def test_def_shapes(self):
-        for activation in ['ELU', 'LeakyReLU', 'sigmoid']:
+        for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
             for shape in [(3,), (3, 4), (3, 4, 2)]:
                 self._test_shape(shape, partial(self._make_neural_autoregressive, activation=activation))
 
@@ -277,6 +287,10 @@ class FlowTests(TestCase):
     def test_radial_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_radial)
+
+    def test_affine_coupling_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_affine_coupling)
 
     def test_sylvester_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
