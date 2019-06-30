@@ -56,6 +56,8 @@ long_description = '\n'.join([str(line) for line in long_description.split('\n')
 
 # examples/tutorials
 EXTRAS_REQUIRE = [
+    # TODO: remove once https://github.com/ipython/ipython/issues/11809 is fixed.
+    'ipython<7.6.0',
     'jupyter>=1.0.0',
     'matplotlib>=1.3',
     'pillow',
@@ -95,8 +97,7 @@ setup(
         'extras': EXTRAS_REQUIRE,
         'test': EXTRAS_REQUIRE + [
             'nbval',
-            # pytest 5.0 only supports python 3.5+
-            'pytest>=4.1, <5.0',
+            'pytest>=4.1',
             'pytest-cov',
             # TODO: remove once https://github.com/pyro-ppl/pyro/issues/1871
             # is fixed.
