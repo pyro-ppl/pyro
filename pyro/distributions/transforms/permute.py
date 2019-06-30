@@ -12,21 +12,21 @@ from pyro.distributions.util import copy_docs_from
 class PermuteTransform(Transform):
     """
     A bijection that reorders the input dimensions, that is, multiplies the input by a permutation matrix.
-    This is useful in between :class:`~pyro.distributions.InverseAutoregressiveFlow` transforms to increase the
+    This is useful in between :class:`~pyro.distributions.transforms.AffineAutoregressive` transforms to increase the
     flexibility of the resulting distribution and stabilize learning. Whilst not being an autoregressive transform,
     the log absolute determinate of the Jacobian is easily calculable as 0. Note that reordering the input dimension
-    between two layers of :class:`~pyro.distributions.InverseAutoregressiveFlow` is not equivalent to reordering
+    between two layers of :class:`~pyro.distributions.transforms.AffineAutoregressive` is not equivalent to reordering
     the dimension inside the MADE networks that those IAFs use; using a PermuteTransform results in a distribution
     with more flexibility.
 
     Example usage:
 
     >>> from pyro.nn import AutoRegressiveNN
-    >>> from pyro.distributions import InverseAutoregressiveFlow, PermuteTransform
+    >>> from pyro.distributions.transforms import AffineAutoregressive, PermuteTransform
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> iaf1 = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
+    >>> iaf1 = AffineAutoregressive(AutoRegressiveNN(10, [40]))
     >>> ff = PermuteTransform(torch.randperm(10, dtype=torch.long))
-    >>> iaf2 = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
+    >>> iaf2 = AffineAutoregressive(AutoRegressiveNN(10, [40]))
     >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf1, ff, iaf2])
     >>> iaf_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,

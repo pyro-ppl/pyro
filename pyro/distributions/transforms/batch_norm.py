@@ -36,9 +36,9 @@ class BatchNormTransform(TransformModule):
     Example usage:
 
     >>> from pyro.nn import AutoRegressiveNN
-    >>> from pyro.distributions import InverseAutoregressiveFlow
+    >>> from pyro.distributions.transforms import AffineAutoregressive
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> iafs = [InverseAutoregressiveFlow(AutoRegressiveNN(10, [40])) for _ in range(2)]
+    >>> iafs = [AffineAutoregressive(AutoRegressiveNN(10, [40])) for _ in range(2)]
     >>> bn = BatchNormTransform(10)
     >>> flow_dist = dist.TransformedDistribution(base_dist, [iafs[0], bn, iafs[1]])
     >>> flow_dist.sample()  # doctest: +SKIP
