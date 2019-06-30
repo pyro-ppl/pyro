@@ -185,6 +185,13 @@ VonMises3D
 Transformed Distributions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+AffineCoupling
+--------------
+.. autoclass:: pyro.distributions.transforms.AffineCoupling
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 BatchNormTransform
 ------------------
 .. autoclass:: pyro.distributions.transforms.BatchNormTransform
@@ -222,7 +229,7 @@ DeepSigmoidalFlow
 
 HouseholderFlow
 ---------------
-.. autoclass:: pyro.distributions.HouseholderFlow
+.. autoclass:: pyro.distributions.transforms.HouseholderFlow
     :members:
     :undoc-members:
     :show-inheritance:
@@ -257,7 +264,7 @@ PlanarFlow
 
 PolynomialFlow
 --------------
-.. autoclass:: pyro.distributions.PolynomialFlow
+.. autoclass:: pyro.distributions.transforms.PolynomialFlow
     :members:
     :undoc-members:
     :show-inheritance:
