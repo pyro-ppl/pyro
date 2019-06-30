@@ -11,7 +11,7 @@ import pyro.poutine as poutine
 from pyro.contrib.tabular.features import Boolean, Discrete, Real
 from pyro.contrib.tabular.treecat import TreeCat
 from pyro.optim import Adam
-from tests.common import TemporaryDirectory, assert_close
+from tests.common import TemporaryDirectory, assert_close, xfail_param
 
 TINY_DATASETS = [
     {
@@ -46,8 +46,9 @@ TINY_DATASETS = [
 ]
 
 
-def train_model(model, data, mask=None):
-    trainer = model.trainer(Adam({}))
+def train_model(model, data, mask=None, trainer=None):
+    if trainer is None:
+        trainer = model.trainer("map", optim=Adam({}))
     trainer.init(data, mask)
     for epoch in range(2):
         trainer.step(data, mask)
@@ -56,26 +57,29 @@ def train_model(model, data, mask=None):
 @pytest.mark.parametrize('masked', [False, True])
 @pytest.mark.parametrize('dataset', TINY_DATASETS)
 @pytest.mark.parametrize('capacity', [2, 16])
-@pytest.mark.parametrize('Model', [TreeCat])
-def test_train_smoke(Model, dataset, capacity, masked):
+@pytest.mark.parametrize('method,make_options', [
+    ("map", lambda: {"optim": Adam({})}),
+    xfail_param("nuts", lambda: {}),
+], ids=lambda mm: mm if isinstance(mm, str) else "")
+def test_train_smoke(method, make_options, dataset, capacity, masked):
     features = dataset["features"]
     data = dataset["data"]
     mask = dataset["mask"]
 
-    model = Model(features, capacity)
-    train_model(model, data, mask if masked else None)
+    model = TreeCat(features, capacity)
+    trainer = model.trainer(method, **make_options())
+    train_model(model, data, mask if masked else None, trainer=trainer)
 
 
 @pytest.mark.parametrize('grad_enabled', [True, False])
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('dataset', TINY_DATASETS)
 @pytest.mark.parametrize('num_samples', [None, 8])
-@pytest.mark.parametrize('Model', [TreeCat])
-def test_sample_smoke(dataset, Model, capacity, num_samples, grad_enabled):
+def test_sample_smoke(dataset, capacity, num_samples, grad_enabled):
     features = dataset["features"]
     data = dataset["data"]
     mask = dataset["mask"]
-    model = Model(features, capacity)
+    model = TreeCat(features, capacity)
     train_model(model, data)
 
     with torch.set_grad_enabled(grad_enabled):
@@ -87,11 +91,10 @@ def test_sample_smoke(dataset, Model, capacity, num_samples, grad_enabled):
 @pytest.mark.parametrize('grad_enabled', [True, False])
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('dataset', TINY_DATASETS)
-@pytest.mark.parametrize('Model', [TreeCat])
-def test_log_prob_smoke(dataset, Model, capacity, grad_enabled):
+def test_log_prob_smoke(dataset, capacity, grad_enabled):
     features = dataset["features"]
     data = dataset["data"]
-    model = Model(features, capacity)
+    model = TreeCat(features, capacity)
     train_model(model, data)
 
     for mask in [None, dataset["mask"]]:
@@ -104,16 +107,14 @@ def test_log_prob_smoke(dataset, Model, capacity, grad_enabled):
 
 @pytest.mark.parametrize('dataset', TINY_DATASETS)
 @pytest.mark.parametrize('capacity', [2, 16])
-@pytest.mark.parametrize('Model', [TreeCat])
 @pytest.mark.parametrize('method', ['pickle', 'torch'])
-def test_pickle(method, dataset, Model, capacity):
+def test_pickle(method, dataset, capacity):
     features = dataset["features"]
     data = dataset["data"]
-    model = Model(features, capacity)
+    model = TreeCat(features, capacity)
     train_model(model, data)
 
-    if Model is TreeCat:
-        expected_edges = model.edges
+    expected_edges = model.edges
     expected_trace = poutine.trace(model.guide).get_trace(data)
 
     with TemporaryDirectory() as path:
@@ -137,8 +138,7 @@ def test_pickle(method, dataset, Model, capacity):
             elif method == 'torch':
                 model = torch.load(f, pickle_module=pickle)
 
-    if Model is TreeCat:
-        assert (model.edges == expected_edges).all()
+    assert (model.edges == expected_edges).all()
     actual_trace = poutine.trace(model.guide).get_trace(data)
     assert expected_trace.nodes.keys() == actual_trace.nodes.keys()
     for key, expected_node in expected_trace.nodes.items():

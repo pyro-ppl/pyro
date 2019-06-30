@@ -2,9 +2,11 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 import re
+from abc import ABCMeta, abstractmethod
 from collections import OrderedDict, deque
 
 import torch
+from six import add_metaclass
 from torch.distributions import biject_to
 
 import pyro
@@ -285,22 +287,22 @@ class TreeCat(object):
         params.update(self._edge_guide(device=data[0].device))
         return params
 
-    def trainer(self, optim, backend="cpp", method="map"):
+    def trainer(self, method="map", **options):
         """
-        Creates a :class:`TreeCatTrainer` object for training.
+        Creates a :class:`TreeCatTrainer` object.
 
-        :param pyro.optim.optim.PyroOptim optim: A Pyro optimizer to learn
-            parameters, e.g. :class:`~pyro.optim.pytorch_optimizers.Adam` .
-        :param str backend: Either "python" or "cpp". Defaults to "cpp". The
-            "cpp" backend is much faster for data with more than ~10 features.
-        :rtype: TreeCatTrainer
+        - ``method="map"`` for :class:`TreeCatTainer`
+        - ``method="nuts"`` for :class:`TreeCatTainerNuts`
+        - ``method="pnuts"`` for :class:`TreeCatTainerPnuts`
+
+        :param str method: The type of trainer.
         """
         if method == "map":
-            return TreeCatTrainer(self, optim, backend)
+            return TreeCatTrainerMap(self, **options)
         elif method == "nuts":
-            return TreeCatTrainerNuts(self, optim, backend)
+            return TreeCatTrainerNuts(self, **options)
         elif method == "pnuts":
-            return TreeCatTrainerPnuts(self, optim, backend)
+            return TreeCatTrainerPnuts(self, **options)
         else:
             raise ValueError("Unknown trainer method: {}".format(method))
 
@@ -364,22 +366,15 @@ class TreeCat(object):
         return log_prob
 
 
+@add_metaclass(ABCMeta)
 class TreeCatTrainer(object):
     """
     Maintains state to initialize and train a :class:`TreeCat` model.
-
-    :param TreeCat model: A :class:`TreeCat` model to train.
-    :param pyro.optim.optim.PyroOptim optim: A Pyro optimizer to learn feature
-        parameters, e.g. :class:`~pyro.optim.pytorch_optimizers.Adam` .
-    :param str backend: Either "python" or "cpp". Defaults to "cpp". The
-        "cpp" backend is much faster for data with more than ~10 features.
     """
-    def __init__(self, model, optim, backend="cpp"):
+    def __init__(self, model, backend="cpp"):
         assert isinstance(model, TreeCat)
         self.backend = backend
         self._model = model
-        self._elbo = TraceEnumSample_ELBO(max_plate_nesting=2)
-        self._svi = SVI(model.model, model.guide, optim, self._elbo)
         self._initialized = False
 
     def init(self, data, mask=None):
@@ -399,6 +394,26 @@ class TreeCatTrainer(object):
                     col_data = col_data[col_mask]
                 feature.init(col_data)
         self._initialized = True
+
+    @abstractmethod
+    def step(self, data, mask=None, num_rows=None):
+        raise NotImplementedError
+
+
+class TreeCatTrainerMap(TreeCatTrainer):
+    """
+    Trainer using MAP inference via SGD.
+
+    :param TreeCat model: A :class:`TreeCat` model to train.
+    :param pyro.optim.optim.PyroOptim optim: A Pyro optimizer to learn feature
+        parameters, e.g. :class:`~pyro.optim.pytorch_optimizers.Adam` .
+    :param str backend: Either "python" or "cpp". Defaults to "cpp". The
+        "cpp" backend is much faster for data with more than ~10 features.
+    """
+    def __init__(self, model, optim, backend="cpp"):
+        super(TreeCatTrainerMap, self).__init__(model, backend=backend)
+        self._elbo = TraceEnumSample_ELBO(max_plate_nesting=2)
+        self._svi = SVI(model.model, model.guide, optim, self._elbo)
 
     def step(self, data, mask=None, num_rows=None):
         """
@@ -444,7 +459,7 @@ DEFAULT_NUTS_CONFIG = {
 }
 
 
-class TreeCatTrainerNuts(object):
+class TreeCatTrainerNuts(TreeCatTrainer):
     """
     Maintains state to initialize and train a :class:`TreeCat` model.
 
@@ -453,29 +468,12 @@ class TreeCatTrainerNuts(object):
         "cpp" backend is much faster for data with more than ~10 features.
     """
     def __init__(self, model, backend="cpp", nuts_config={}):
-        assert isinstance(model, TreeCat)
-        self.backend = backend
+        super(TreeCatTrainerNuts, self).__init__(model, backend=backend)
         self.nuts_config = DEFAULT_NUTS_CONFIG.copy()
         self.nuts_config.update(nuts_config)
         self.nuts_config.pop("warmup_steps", None)
         self._model = model
-        self._initialized = False
         self._nuts = None
-
-    def init(self, data, mask):
-        """
-        Initializes shared feature parameters given some or all data.
-
-        :param list data: A minibatch of column-oriented data. Each column
-            should be a :class:`torch.Tensor` .
-        :param list mask: A minibatch of column masks. Each column may be
-            ``True`` if fully observed, ``False`` if fully unobserved, or a
-            :class:`torch.ByteTensor` if partially observed.
-        """
-        for v, feature in enumerate(self._model.features):
-            col_data = get_dense_column(data, mask, v)
-            self._feature_trainers[feature.name].init(col_data)
-        self._initialized = True
 
     def step(self, data, mask=None, num_rows=None):
         """
@@ -537,6 +535,7 @@ class TreeCatTrainerNuts(object):
                           transforms=transforms, **self.nuts_config)
         self._nuts.initial_params = initial_params
         warmup_steps = 10**10  # Adapt indefinitely.
+        self._trace_prob_evaluator = None
         self._nuts.setup(warmup_steps)
         return initial_params
 
@@ -557,21 +556,26 @@ class TreeCatTrainerNuts(object):
             logging.debug("NUTS {} {}".format(key, value))
         loss = self._nuts._potential_energy_last
         self._nuts.clear_cache()
+        self._trace_prob_evaluator = None
         return loss
 
     @weakmethod
-    def _potential_fn(self):
+    def _potential_fn(self, params):
         # Combine non-HMC parameters with HMC parameters.
-        params = self._gibbs_params.copy()
-        for k, v in self._nuts_params.items():
-            params[k] = self._nuts.transforms[k].inv(v)
+        params_constrained = self._gibbs_params.copy()
+        for k, v in params.items():
+            params_constrained[k] = self._nuts.transforms[k].inv(v)
 
-        model = poutine.condition(poutine.enum(self._model.model), params)
+        model = poutine.enum(self._model.model, first_available_dim=-3)
+        model = poutine.condition(model, params_constrained)
         trace = poutine.trace(model).get_trace(*self._gibbs_args)
-        log_joint = self.trace_prob_evaluator.log_prob(trace)
-        for name, t in self.transforms.items():
+        if self._trace_prob_evaluator is None:
+            self._trace_prob_evaluator = TraceEinsumEvaluator(
+                trace, has_enumerable_sites=True, max_plate_nesting=2)
+        log_joint = self._trace_prob_evaluator.log_prob(trace)
+        for name, t in self._nuts.transforms.items():
             log_joint = log_joint - torch.sum(
-                t.log_abs_det_jacobian(params[name], params[name]))
+                t.log_abs_det_jacobian(params_constrained[name], params[name]))
         return -log_joint
 
 
@@ -608,7 +612,7 @@ class FeatureTrainerNuts(object):
             if site["type"] == "sample" and name.startswith(self.feature.name):
                 initial_params[name] = self.transforms[name](site["value"])
         self.nuts.initial_params = initial_params
-        self.trace_prob_evaluator = TraceEinsumEvaluator(
+        self._trace_prob_evaluator = TraceEinsumEvaluator(
             model_trace, True, max_plate_nesting=2)
 
         # Warm up the NUTS kernel.
@@ -652,14 +656,14 @@ class FeatureTrainerNuts(object):
         model = poutine.enum(self._model)
         cond_model = poutine.condition(model, params_constrained)
         model_trace = poutine.trace(cond_model).get_trace(*self._gibbs_args)
-        log_joint = self.trace_prob_evaluator.log_prob(model_trace)
+        log_joint = self._trace_prob_evaluator.log_prob(model_trace)
         for name, t in self.transforms.items():
             log_joint = log_joint - torch.sum(
                 t.log_abs_det_jacobian(params_constrained[name], params[name]))
         return -log_joint
 
 
-class TreeCatTrainerPnuts(object):
+class TreeCatTrainerPnuts(TreeCatTrainer):
     """
     Maintains state to initialize and train a :class:`TreeCat` model.
 
@@ -668,25 +672,14 @@ class TreeCatTrainerPnuts(object):
         "cpp" backend is much faster for data with more than ~10 features.
     """
     def __init__(self, model, backend="cpp", nuts_config={}):
-        assert isinstance(model, TreeCat)
-        self.backend = backend
-        self._model = model
+        super(TreeCatTrainerPnuts, self).__init__(model, backend=backend)
         self._elbo = TraceEnumSample_ELBO(max_plate_nesting=2)
         self._feature_trainers = {
             feature.name: FeatureTrainerNuts(feature, model.capacity, nuts_config)
             for feature in model.features}
-        self._initialized = False
 
+    # TODO Defer to base class for .init()
     def init(self, data, mask):
-        """
-        Initializes shared feature parameters given some or all data.
-
-        :param list data: A minibatch of column-oriented data. Each column
-            should be a :class:`torch.Tensor` .
-        :param list mask: A minibatch of column masks. Each column may be
-            ``True`` if fully observed, ``False`` if fully unobserved, or a
-            :class:`torch.ByteTensor` if partially observed.
-        """
         for v, feature in enumerate(self._model.features):
             col_data = get_dense_column(data, mask, v)
             self._feature_trainers[feature.name].init(col_data)
