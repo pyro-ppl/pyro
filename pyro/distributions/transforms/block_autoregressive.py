@@ -120,7 +120,7 @@ class BlockAutoregressive(TransformModule):
                 logDetJ = dy_dx + J_act
 
             elif idx < len(self.layers) - 1:
-                y = self.T._call(pre_activation)
+                y = self.T(pre_activation)
                 J_act = self.T.log_abs_det_jacobian((pre_activation).view(
                     *(list(x.size()) + [-1, 1])), y.view(*(list(x.size()) + [-1, 1])))
                 logDetJ = log_matrix_product(dy_dx, logDetJ) + J_act

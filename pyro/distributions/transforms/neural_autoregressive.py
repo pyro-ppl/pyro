@@ -168,7 +168,7 @@ class NeuralAutoregressive(TransformModule):
         D = (W * T_C).sum(dim=-2)
         y = T.inv(D)
 
-        self._cached_log_df_inv_dx = T.inv().log_abs_det_jacobian(D, y)
+        self._cached_log_df_inv_dx = T.inv.log_abs_det_jacobian(D, y)
         self._cached_A = A
         self._cached_W_pre = W_pre
         self._cached_C = C
