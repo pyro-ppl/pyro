@@ -181,7 +181,7 @@ def _vi_ape(model, design, observation_labels, target_labels, vi_parameters, is_
 
 
 def nmc_eig(model, design, observation_labels, target_labels=None,
-            N=100, M=10, M_prime=None, independent_priors=False, N_seq=1):
+            N=100, M=10, M_prime=None, independent_priors=False):
     """
    Nested Monte Carlo estimate of the expected information
     gain (EIG). The estimate is, when there are not any random effects,
@@ -216,9 +216,6 @@ def nmc_eig(model, design, observation_labels, target_labels=None,
     :param bool independent_priors: Only used when `M_prime` is not `None`. Indicates whether the prior distributions
         for the target variables and the nuisance variables are independent. In this case, it is not necessary to
         sample the targets conditional on the nuisance variables.
-    :param int N_seq: (experimental) The number of sequential evaluations of the outer expectation. When `N_seq` is
-        greater than 1, the total effective number of outer samples is `N*N_seq`. This allows `nmc_eig` to work with
-        more samples than can be concurrently held in memory.
     :return: EIG estimate
     :rtype: `torch.Tensor`
     """
@@ -228,56 +225,50 @@ def nmc_eig(model, design, observation_labels, target_labels=None,
     if isinstance(target_labels, str):
         target_labels = [target_labels]
 
-    s = 0.
-    if N_seq > 1:
-        warnings.warn("Running nmc_eig with N_seq > 1 known to cause memory issues")
-    for i in range(N_seq):
-        # Take N samples of the model
-        expanded_design = lexpand(design, N)  # N copies of the model
-        trace = poutine.trace(model).get_trace(expanded_design)
-        trace.compute_log_prob()
+    # Take N samples of the model
+    expanded_design = lexpand(design, N)  # N copies of the model
+    trace = poutine.trace(model).get_trace(expanded_design)
+    trace.compute_log_prob()
 
-        if M_prime is not None:
-            y_dict = {l: lexpand(trace.nodes[l]["value"], M_prime) for l in observation_labels}
-            theta_dict = {l: lexpand(trace.nodes[l]["value"], M_prime) for l in target_labels}
-            theta_dict.update(y_dict)
-            # Resample M values of u and compute conditional probabilities
-            # WARNING: currently the use of condition does not actually sample
-            # the conditional distribution!
-            # We need to use some importance weighting
-            conditional_model = pyro.condition(model, data=theta_dict)
-            if independent_priors:
-                reexpanded_design = lexpand(design, M_prime, 1)
-            else:
-                # Not acceptable to use (M_prime, 1) here - other variables may occur after
-                # theta, so need to be sampled conditional upon it
-                reexpanded_design = lexpand(design, M_prime, N)
-            retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
-            retrace.compute_log_prob()
-            conditional_lp = sum(retrace.nodes[l]["log_prob"] for l in observation_labels).logsumexp(0) \
-                - math.log(M_prime)
+    if M_prime is not None:
+        y_dict = {l: lexpand(trace.nodes[l]["value"], M_prime) for l in observation_labels}
+        theta_dict = {l: lexpand(trace.nodes[l]["value"], M_prime) for l in target_labels}
+        theta_dict.update(y_dict)
+        # Resample M values of u and compute conditional probabilities
+        # WARNING: currently the use of condition does not actually sample
+        # the conditional distribution!
+        # We need to use some importance weighting
+        conditional_model = pyro.condition(model, data=theta_dict)
+        if independent_priors:
+            reexpanded_design = lexpand(design, M_prime, 1)
         else:
-            # This assumes that y are independent conditional on theta
-            # Furthermore assume that there are no other variables besides theta
-            conditional_lp = sum(trace.nodes[l]["log_prob"] for l in observation_labels)
-
-        y_dict = {l: lexpand(trace.nodes[l]["value"], M) for l in observation_labels}
-        # Resample M values of theta and compute conditional probabilities
-        conditional_model = pyro.condition(model, data=y_dict)
-        # Using (M, 1) instead of (M, N) - acceptable to re-use thetas between ys because
-        # theta comes before y in graphical model
-        reexpanded_design = lexpand(design, M, 1)  # sample M theta
+            # Not acceptable to use (M_prime, 1) here - other variables may occur after
+            # theta, so need to be sampled conditional upon it
+            reexpanded_design = lexpand(design, M_prime, N)
         retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
         retrace.compute_log_prob()
-        marginal_lp = sum(retrace.nodes[l]["log_prob"] for l in observation_labels).logsumexp(0) \
-            - math.log(M)
+        conditional_lp = sum(retrace.nodes[l]["log_prob"] for l in observation_labels).logsumexp(0) \
+            - math.log(M_prime)
+    else:
+        # This assumes that y are independent conditional on theta
+        # Furthermore assume that there are no other variables besides theta
+        conditional_lp = sum(trace.nodes[l]["log_prob"] for l in observation_labels)
 
-        terms = conditional_lp - marginal_lp
-        nonnan = (~torch.isnan(terms)).sum(0).type_as(terms)
-        terms[torch.isnan(terms)] = 0.
-        s += terms.sum(0)/nonnan
+    y_dict = {l: lexpand(trace.nodes[l]["value"], M) for l in observation_labels}
+    # Resample M values of theta and compute conditional probabilities
+    conditional_model = pyro.condition(model, data=y_dict)
+    # Using (M, 1) instead of (M, N) - acceptable to re-use thetas between ys because
+    # theta comes before y in graphical model
+    reexpanded_design = lexpand(design, M, 1)  # sample M theta
+    retrace = poutine.trace(conditional_model).get_trace(reexpanded_design)
+    retrace.compute_log_prob()
+    marginal_lp = sum(retrace.nodes[l]["log_prob"] for l in observation_labels).logsumexp(0) \
+        - math.log(M)
 
-    return s/N_seq
+    terms = conditional_lp - marginal_lp
+    nonnan = (~torch.isnan(terms)).sum(0).type_as(terms)
+    terms[torch.isnan(terms)] = 0.
+    return terms.sum(0)/nonnan
 
 
 def donsker_varadhan_eig(model, design, observation_labels, target_labels,
