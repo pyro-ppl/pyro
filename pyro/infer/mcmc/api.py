@@ -270,15 +270,15 @@ class MCMC(object):
     :param bool disable_progbar: Disable progress bar and diagnostics update.
     """
     def __init__(self, kernel, num_samples, warmup_steps=None, initial_params=None,
-                 num_chains=1, hook_fn=None, mp_context=None, disable_progbar=False):
+                 num_chains=1, hook_fn=None, mp_context=None, disable_progbar=False, transforms=None):
         self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
         self.kernel = kernel
+        self.transforms = transforms or self.kernel.transforms
         if num_chains > 1:
-            # old API does not work since we need reference to transforms
-            # in the main process.
-            if kernel.transforms is None:
-                raise ValueError("`pyro.infer.mcmc.api` needs explicit reference"
+            # old API does not work since we need transforms in the main process.
+            if self.transforms is None:
+                raise ValueError("`pyro.infer.mcmc.api.MCMC` needs explicit reference"
                                  " to transforms from the real domain to the site's bounded"
                                  " support. Use `initialize_model` utility to convert your model"
                                  " function into a potential function along with the required"
@@ -316,7 +316,7 @@ class MCMC(object):
         z_acc = {k: v[0] if self.num_chains == 1 else torch.stack(v) for k, v in z_acc.items()}
 
         # transform samples back to constrained space
-        if self.kernel.transforms:
-            for name, transform in self.kernel.transforms.items():
+        if self.transforms:
+            for name, transform in self.transforms.items():
                 z_acc[name] = transform.inv(z_acc[name])
         return z_acc

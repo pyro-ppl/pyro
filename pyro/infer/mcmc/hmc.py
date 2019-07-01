@@ -104,7 +104,7 @@ class HMC(MCMCKernel):
                  target_accept_prob=0.8):
         if not ((model is None) ^ (potential_fn is None)):
             raise ValueError("Only one of `model` or `potential_fn` must be specified.")
-        # NB: deprecating args
+        # NB: deprecating args - model, transforms
         self.model = model
         self.transforms = transforms
         self._max_plate_nesting = max_plate_nesting
