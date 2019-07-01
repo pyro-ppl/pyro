@@ -12,6 +12,17 @@ from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.util import torch_isnan, torch_isinf
 from pyro.contrib.util import lexpand
 
+__all__ = [
+    "laplace_vi_ape",
+    "vi_ape",
+    "nmc_eig",
+    "donsker_varadhan_eig",
+    "posterior_ape",
+    "marginal_eig",
+    "lfire_eig",
+    "vnmc_eig"
+]
+
 
 def laplace_vi_ape(model, design, observation_labels, target_labels, guide, loss, optim, num_steps,
                    final_num_samples, y_dist=None):
@@ -270,7 +281,7 @@ def donsker_varadhan_eig(model, design, observation_labels, target_labels,
         observation_labels = [observation_labels]
     if isinstance(target_labels, str):
         target_labels = [target_labels]
-    loss = donsker_varadhan_loss(model, T, observation_labels, target_labels)
+    loss = _donsker_varadhan_loss(model, T, observation_labels, target_labels)
     return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
                             final_design, final_num_samples)
 
@@ -317,7 +328,7 @@ def posterior_ape(model, design, observation_labels, target_labels,
         observation_labels = [observation_labels]
     if isinstance(target_labels, str):
         target_labels = [target_labels]
-    loss = posterior_loss(model, guide, observation_labels, target_labels, *args, **kwargs)
+    loss = _posterior_loss(model, guide, observation_labels, target_labels, *args, **kwargs)
     return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
                             final_design, final_num_samples)
 
@@ -362,7 +373,7 @@ def marginal_eig(model, design, observation_labels, target_labels,
         observation_labels = [observation_labels]
     if isinstance(target_labels, str):
         target_labels = [target_labels]
-    loss = marginal_loss(model, guide, observation_labels, target_labels)
+    loss = _marginal_loss(model, guide, observation_labels, target_labels)
     return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
                             final_design, final_num_samples)
 
@@ -402,7 +413,7 @@ def marginal_likelihood_eig(model, design, observation_labels, target_labels,
         observation_labels = [observation_labels]
     if isinstance(target_labels, str):
         target_labels = [target_labels]
-    loss = marginal_likelihood_loss(model, marginal_guide, cond_guide, observation_labels, target_labels)
+    loss = _marginal_likelihood_loss(model, marginal_guide, cond_guide, observation_labels, target_labels)
     return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
                             final_design, final_num_samples)
 
@@ -452,7 +463,7 @@ def lfire_eig(model, design, observation_labels, target_labels,
     theta_dict = {l: trace.nodes[l]["value"] for l in target_labels}
     cond_model = pyro.condition(model, data=theta_dict)
 
-    loss = lfire_loss(model, cond_model, classifier, observation_labels, target_labels)
+    loss = _lfire_loss(model, cond_model, classifier, observation_labels, target_labels)
     out = opt_eig_ape_loss(expanded_design, loss, num_y_samples, num_steps, optim, return_history,
                            final_design, final_num_samples)
     if return_history:
@@ -503,7 +514,7 @@ def vnmc_eig(model, design, observation_labels, target_labels,
         observation_labels = [observation_labels]
     if isinstance(target_labels, str):
         target_labels = [target_labels]
-    loss = vnmc_eig_loss(model, guide, observation_labels, target_labels)
+    loss = _vnmc_eig_loss(model, guide, observation_labels, target_labels)
     return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
                             final_design, final_num_samples)
 
@@ -539,7 +550,8 @@ def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_hist
         return loss
 
 
-def donsker_varadhan_loss(model, T, observation_labels, target_labels):
+def _donsker_varadhan_loss(model, T, observation_labels, target_labels):
+    """DV loss: to evaluate directly use `donsker_varadhan_eig` setting `num_steps=0`."""
 
     ewma_log = EwmaLog(alpha=0.90)
 
@@ -578,7 +590,8 @@ def donsker_varadhan_loss(model, T, observation_labels, target_labels):
     return loss_fn
 
 
-def posterior_loss(model, guide, observation_labels, target_labels, analytic_entropy=False):
+def _posterior_loss(model, guide, observation_labels, target_labels, analytic_entropy=False):
+    """Posterior loss: to evaluate directly use `posterior_ape` setting `num_steps=0`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
 
@@ -608,7 +621,8 @@ def posterior_loss(model, guide, observation_labels, target_labels, analytic_ent
     return loss_fn
 
 
-def marginal_loss(model, guide, observation_labels, target_labels):
+def _marginal_loss(model, guide, observation_labels, target_labels):
+    """Marginal loss: to evaluate directly use `marginal_eig` setting `num_steps=0`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
 
@@ -636,7 +650,8 @@ def marginal_loss(model, guide, observation_labels, target_labels):
     return loss_fn
 
 
-def marginal_likelihood_loss(model, marginal_guide, likelihood_guide, observation_labels, target_labels):
+def _marginal_likelihood_loss(model, marginal_guide, likelihood_guide, observation_labels, target_labels):
+    """Marginal_likelihood loss: to evaluate directly use `marginal_likelihood_eig` setting `num_steps=0`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
 
@@ -672,7 +687,8 @@ def marginal_likelihood_loss(model, marginal_guide, likelihood_guide, observatio
     return loss_fn
 
 
-def lfire_loss(model_marginal, model_conditional, h, observation_labels, target_labels):
+def _lfire_loss(model_marginal, model_conditional, h, observation_labels, target_labels):
+    """LFIRE loss: to evaluate directly use `lfire_eig` setting `num_steps=0`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
 
@@ -700,7 +716,8 @@ def lfire_loss(model_marginal, model_conditional, h, observation_labels, target_
     return loss_fn
 
 
-def vnmc_eig_loss(model, guide, observation_labels, target_labels):
+def _vnmc_eig_loss(model, guide, observation_labels, target_labels):
+    """VNMC loss: to evaluate directly use `vnmc_eig` setting `num_steps=0`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
         N, M = num_particles
