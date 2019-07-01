@@ -7,7 +7,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 from pyro.contrib.oed.eig import (
-    nmc_eig, posterior_ape, marginal_eig, marginal_likelihood_eig, vnmc_eig, lfire_eig,
+    nmc_eig, posterior_eig, marginal_eig, marginal_likelihood_eig, vnmc_eig, lfire_eig,
     donsker_varadhan_eig)
 from pyro.contrib.util import iter_plates_to_shape
 
@@ -35,11 +35,6 @@ def finite_space_model():
 @pytest.fixture
 def one_point_design():
     return torch.tensor(.5)
-
-
-@pytest.fixture
-def true_ape():
-    return torch.tensor(0.54720799791447639)
 
 
 @pytest.fixture
@@ -96,18 +91,18 @@ def dv_critic(design, trace, observation_labels, target_labels):
 ########################################################################################################################
 
 
-def test_posterior_finite_space_model(finite_space_model, one_point_design, true_ape):
+def test_posterior_finite_space_model(finite_space_model, one_point_design, true_eig):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
     # Pre-train (large learning rate)
-    posterior_ape(finite_space_model, one_point_design, "y", "theta", num_samples=10,
+    posterior_eig(finite_space_model, one_point_design, "y", "theta", num_samples=10,
                   num_steps=250, guide=posterior_guide,
                   optim=optim.Adam({"lr": 0.1}))
     # Finesse (small learning rate)
-    estimated_ape = posterior_ape(finite_space_model, one_point_design, "y", "theta", num_samples=10,
+    estimated_eig = posterior_eig(finite_space_model, one_point_design, "y", "theta", num_samples=10,
                                   num_steps=250, guide=posterior_guide,
                                   optim=optim.Adam({"lr": 0.01}), final_num_samples=1000)
-    assert_equal(estimated_ape, true_ape, prec=1e-2)
+    assert_equal(estimated_eig, true_eig, prec=1e-2)
 
 
 def test_marginal_finite_space_model(finite_space_model, one_point_design, true_eig):

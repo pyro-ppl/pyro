@@ -74,7 +74,7 @@ def group_normal_guide(observation_sd, coef1_shape, coef2_shape,
 
 
 def zero_mean_unit_obs_sd_lm(coef_sd, coef_label="w"):
-    model = known_covariance_linear_model(torch.tensor(0.), coef_sd, torch.tensor(1.), coef_label=coef_label)
+    model = known_covariance_linear_model(torch.tensor(0.), coef_sd, torch.tensor(1.), coef_labels=coef_label)
     guide = normal_guide(torch.tensor(1.), coef_sd.shape, coef_label=coef_label)
     return model, guide
 

@@ -10,7 +10,7 @@ from pyro.infer import Trace_ELBO
 from pyro.contrib.glmm import known_covariance_linear_model
 from pyro.contrib.oed.util import linear_model_ground_truth
 from pyro.contrib.oed.eig import (
-    nmc_eig, posterior_ape, marginal_eig, marginal_likelihood_eig, vnmc_eig, laplace_vi_ape, lfire_eig,
+    nmc_eig, posterior_eig, marginal_eig, marginal_likelihood_eig, vnmc_eig, laplace_vi_eig, lfire_eig,
     donsker_varadhan_eig)
 from pyro.contrib.util import rmv, rvv
 from pyro.contrib.glmm.guides import LinearModelLaplaceGuide
@@ -99,15 +99,15 @@ def test_posterior_linear_model(linear_model, one_point_design):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
     # Pre-train (large learning rate)
-    posterior_ape(linear_model, one_point_design, "y", "w", num_samples=10,
+    posterior_eig(linear_model, one_point_design, "y", "w", num_samples=10,
                   num_steps=250, guide=posterior_guide,
                   optim=optim.Adam({"lr": 0.1}))
     # Finesse (small learning rate)
-    estimated_ape = posterior_ape(linear_model, one_point_design, "y", "w", num_samples=10,
+    estimated_eig = posterior_eig(linear_model, one_point_design, "y", "w", num_samples=10,
                                   num_steps=250, guide=posterior_guide,
                                   optim=optim.Adam({"lr": 0.01}), final_num_samples=500)
-    expected_ape = linear_model_ground_truth(linear_model, one_point_design, "y", "w", eig=False)
-    assert_equal(estimated_ape, expected_ape, prec=5e-2)
+    expected_eig = linear_model_ground_truth(linear_model, one_point_design, "y", "w")
+    assert_equal(estimated_eig, expected_eig, prec=5e-2)
 
 
 def test_marginal_linear_model(linear_model, one_point_design):
@@ -167,12 +167,12 @@ def test_laplace_linear_model(linear_model, one_point_design):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
     # You can use 1 final sample here because linear models have a posterior entropy that is independent of `y`
-    estimated_ape = laplace_vi_ape(linear_model, one_point_design, "y", "w",
+    estimated_eig = laplace_vi_eig(linear_model, one_point_design, "y", "w",
                                    guide=laplace_guide, num_steps=250, final_num_samples=1,
                                    optim=optim.Adam({"lr": 0.05}),
                                    loss=Trace_ELBO().differentiable_loss)
-    expected_ape = linear_model_ground_truth(linear_model, one_point_design, "y", "w", eig=False)
-    assert_equal(estimated_ape, expected_ape, prec=5e-2)
+    expected_eig = linear_model_ground_truth(linear_model, one_point_design, "y", "w")
+    assert_equal(estimated_eig, expected_eig, prec=5e-2)
 
 
 def test_lfire_linear_model(linear_model, one_point_design):

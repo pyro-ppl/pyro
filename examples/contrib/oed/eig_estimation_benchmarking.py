@@ -10,7 +10,7 @@ import pyro
 from pyro import optim
 from pyro.infer import TraceEnum_ELBO
 from pyro.contrib.oed.eig import (
-    vi_ape, naive_rainforth_eig, donsker_varadhan_eig, barber_agakov_ape
+    vi_eig, naive_rainforth_eig, donsker_varadhan_eig, barber_agakov_ape
 )
 from pyro.contrib.oed.util import (
     linear_model_ground_truth, vi_eig_lm, ba_eig_lm, ba_eig_mc
@@ -113,7 +113,7 @@ elbo = TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss
 
 # Makes the plots look pretty
 vi_eig_lm.name = "Variational inference"
-vi_ape.name = "Variational inference"
+vi_eig.name = "Variational inference"
 ba_eig_lm.name = "Barber-Agakov"
 ba_eig_mc.name = "Barber-Agakov"
 barber_agakov_ape.name = "Barber-Agakov"
@@ -175,7 +175,7 @@ CMP_TEST_CASES = [
         ["w", "tau"],
         [
             (naive_rainforth_eig, [2000, 2000]),
-            (vi_ape,
+            (vi_eig,
              [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
                "num_steps": 1000}, {"num_samples": 4}]),
             (barber_agakov_ape,
@@ -195,7 +195,7 @@ CMP_TEST_CASES = [
         ["w", "tau"],
         [
             (naive_rainforth_eig, [2000, 2000]),
-            (vi_ape,
+            (vi_eig,
              [{"guide": nig_2p_guide, "optim": optim.Adam({"lr": 0.05}), "loss": elbo,
                "num_steps": 1000}, {"num_samples": 4}]),
             (barber_agakov_ape,

@@ -13,21 +13,21 @@ from pyro.util import torch_isnan, torch_isinf
 from pyro.contrib.util import lexpand
 
 __all__ = [
-    "laplace_vi_ape",
-    "vi_ape",
+    "laplace_vi_eig",
+    "vi_eig",
     "nmc_eig",
     "donsker_varadhan_eig",
-    "posterior_ape",
+    "posterior_eig",
     "marginal_eig",
     "lfire_eig",
     "vnmc_eig"
 ]
 
 
-def laplace_vi_ape(model, design, observation_labels, target_labels, guide, loss, optim, num_steps,
-                   final_num_samples, y_dist=None):
+def laplace_vi_eig(model, design, observation_labels, target_labels, guide, loss, optim, num_steps,
+                   final_num_samples, y_dist=None, eig=True, **prior_entropy_kwargs):
     """
-    Estimates the APE (Average Posterior Entropy) by making repeated Laplace approximations to the posterior.
+    Estimates the expected information gain (EIG) by making repeated Laplace approximations to the posterior.
 
     :param function model: Pyro stochastic function taking `design` as only argument.
     :param torch.Tensor design: Tensor of possible designs.
@@ -40,13 +40,33 @@ def laplace_vi_ape(model, design, observation_labels, target_labels, guide, loss
     :param int num_steps: Number of gradient steps to take per sampled pseudo-observation.
     :param int final_num_samples: Number of `y` samples (pseudo-observations) to take.
     :param y_dist: Distribution to sample `y` from- if `None` we use the Bayesian marginal distribution.
-    :return: APE estimate
+    :param bool eig: Whether to compute the EIG or the average posterior entropy (APE). The EIG is given by
+                     `EIG = prior entropy - APE`. If `True`, the prior entropy will be estimated analytically,
+                     or by Monte Carlo as appropriate for the `model`. If `False` the APE is returned.
+    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy.
+    :return: EIG estimate
     :rtype: torch.Tensor
     """
+
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
     if target_labels is not None and isinstance(target_labels, str):
         target_labels = [target_labels]
+
+    ape = _laplace_vi_ape(model, design, observation_labels, target_labels, guide, loss, optim, num_steps,
+                          final_num_samples, y_dist=y_dist)
+    if eig:
+        try:
+            prior_entropy = mean_field_guide_entropy(model, [design], whitelist=target_labels)
+        except NotImplemented:
+            prior_entropy = monte_carlo_entropy(model, design, target_labels, **prior_entropy_kwargs)
+        return prior_entropy - ape
+    else:
+        return ape
+
+
+def _laplace_vi_ape(model, design, observation_labels, target_labels, guide, loss, optim, num_steps,
+                    final_num_samples, y_dist=None):
 
     def posterior_entropy(y_dist, design):
         # Important that y_dist is sampled *within* the function
@@ -75,12 +95,11 @@ def laplace_vi_ape(model, design, observation_labels, target_labels, guide, loss
 
 
 # Deprecated
-def vi_ape(model, design, observation_labels, target_labels,
-           vi_parameters, is_parameters, y_dist=None):
-    """Estimates the average posterior entropy (APE) loss function using
-    variational inference (VI).
+def vi_eig(model, design, observation_labels, target_labels, vi_parameters, is_parameters, y_dist=None,
+           eig=True, **prior_entropy_kwargs):
+    """Estimates the expected information gain (EIG) using variational inference (VI).
 
-    The APE loss function estimated by this method is defined as
+    The APE is defined as
 
         :math:`APE(d)=E_{Y\\sim p(y|\\theta, d)}[H(p(\\theta|Y, d))]`
 
@@ -109,17 +128,34 @@ def vi_ape(model, design, observation_labels, target_labels,
         of samples to draw from the marginal.
     :param pyro.distributions.Distribution y_dist: (optional) the distribution
         assumed for the response variable :math:`Y`
-    :return: Loss function estimate
+    :param bool eig: Whether to compute the EIG or the average posterior entropy (APE). The EIG is given by
+                     `EIG = prior entropy - APE`. If `True`, the prior entropy will be estimated analytically,
+                     or by Monte Carlo as appropriate for the `model`. If `False` the APE is returned.
+    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy.
+    :return: EIG estimate
     :rtype: `torch.Tensor`
 
     """
 
-    warnings.warn("`vi_ape` is deprecated in favour on the amortized version: `posterior_ape`.", DeprecationWarning)
+    warnings.warn("`vi_eig` is deprecated in favour on the amortized version: `posterior_eig`.", DeprecationWarning)
 
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
     if target_labels is not None and isinstance(target_labels, str):
         target_labels = [target_labels]
+
+    ape = _vi_ape(model, design, observation_labels, target_labels, vi_parameters, is_parameters, y_dist=y_dist)
+    if eig:
+        try:
+            prior_entropy = mean_field_guide_entropy(model, [design], whitelist=target_labels)
+        except NotImplemented:
+            prior_entropy = monte_carlo_entropy(model, design, target_labels, **prior_entropy_kwargs)
+        return prior_entropy - ape
+    else:
+        return ape
+
+
+def _vi_ape(model, design, observation_labels, target_labels, vi_parameters, is_parameters, y_dist=None):
 
     def posterior_entropy(y_dist, design):
         # Important that y_dist is sampled *within* the function
@@ -286,11 +322,12 @@ def donsker_varadhan_eig(model, design, observation_labels, target_labels,
                             final_design, final_num_samples)
 
 
-def posterior_ape(model, design, observation_labels, target_labels,
-                  num_samples, num_steps, guide, optim, return_history=False,
-                  final_design=None, final_num_samples=None, *args, **kwargs):
+def posterior_eig(model, design, observation_labels, target_labels, num_samples, num_steps, guide, optim,
+                  return_history=False, final_design=None, final_num_samples=None, eig=True, prior_entropy_kwargs={},
+                  *args, **kwargs):
     """
-    Posterior estimate of average posterior entropy (APE).
+    Posterior estimate of expected information gain (EIG) computed from the average posterior entropy (APE)
+    using `EIG = prior entropy - APE`.
 
     The posterior representation of APE is
 
@@ -321,13 +358,35 @@ def posterior_ape(model, design, observation_labels, target_labels,
         `design`.
     :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
         uses `num_samples`.
-    :return: APE estimate, optionally includes full optimisation history
+    :param bool eig: Whether to compute the EIG or the average posterior entropy (APE). The EIG is given by
+                 `EIG = prior entropy - APE`. If `True`, the prior entropy will be estimated analytically,
+                 or by Monte Carlo as appropriate for the `model`. If `False` the APE is returned.
+    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy.
+    :return: EIG estimate, optionally includes full optimisation history
     :rtype: `torch.Tensor` or `tuple`
     """
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
     if isinstance(target_labels, str):
         target_labels = [target_labels]
+
+    ape = _posterior_ape(model, design, observation_labels, target_labels, num_samples, num_steps, guide, optim,
+                         return_history=return_history, final_design=final_design, final_num_samples=final_num_samples,
+                         *args, **kwargs)
+    if eig:
+        try:
+            prior_entropy = mean_field_guide_entropy(model, [design], whitelist=target_labels)
+        except NotImplemented:
+            prior_entropy = monte_carlo_entropy(model, design, target_labels, **prior_entropy_kwargs)
+        return prior_entropy - ape
+    else:
+        return ape
+
+
+def _posterior_ape(model, design, observation_labels, target_labels,
+                   num_samples, num_steps, guide, optim, return_history=False,
+                   final_design=None, final_num_samples=None, *args, **kwargs):
+
     loss = _posterior_loss(model, guide, observation_labels, target_labels, *args, **kwargs)
     return opt_eig_ape_loss(design, loss, num_samples, num_steps, optim, return_history,
                             final_design, final_num_samples)
@@ -550,6 +609,21 @@ def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_hist
         return loss
 
 
+def monte_carlo_entropy(model, design, target_labels, num_samples=1000):
+    """Computes a Monte Carlo estimate of the entropy of `model` assuming that each of sites in `target_labels` is
+    independent and the entropy is to be computed for that subset of sites only.
+    """
+
+    if isinstance(target_labels, str):
+        target_labels = [target_labels]
+
+    expanded_design = lexpand(design, num_samples)
+    trace = pyro.poutine.trace(model).get_trace(expanded_design)
+    trace.compute_log_prob()
+    lp = sum(trace.nodes[l]["log_prob"] for l in target_labels)
+    return -lp.sum(0)/num_samples
+
+
 def _donsker_varadhan_loss(model, T, observation_labels, target_labels):
     """DV loss: to evaluate directly use `donsker_varadhan_eig` setting `num_steps=0`."""
 
@@ -591,7 +665,7 @@ def _donsker_varadhan_loss(model, T, observation_labels, target_labels):
 
 
 def _posterior_loss(model, guide, observation_labels, target_labels, analytic_entropy=False):
-    """Posterior loss: to evaluate directly use `posterior_ape` setting `num_steps=0`."""
+    """Posterior loss: to evaluate directly use `posterior_eig` setting `num_steps=0`, `eig=False`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
 
