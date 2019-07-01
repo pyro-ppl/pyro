@@ -5,7 +5,7 @@ from functools import partial
 from pyro.poutine.messenger import Messenger
 
 
-def _fn(expose, expose_types, hide, hide_types, hide_all, msg):
+def _block_fn(expose, expose_types, hide, hide_types, hide_all, msg):
     # handle observes
     if msg["type"] == "sample" and msg["is_observed"]:
         msg_type = "observe"
@@ -60,7 +60,7 @@ def _make_default_hide_fn(hide_all, expose_all, hide, expose, hide_types, expose
     assert set(hide_types).isdisjoint(set(expose_types)), \
         "cannot hide and expose a site type"
 
-    return partial(_fn, expose, expose_types, hide, hide_types, hide_all)
+    return partial(_block_fn, expose, expose_types, hide, hide_types, hide_all)
 
 
 class BlockMessenger(Messenger):
