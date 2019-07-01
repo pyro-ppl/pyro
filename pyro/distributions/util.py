@@ -77,11 +77,18 @@ def weakmethod(fn):
                                  .format(fn.__name__))
         return fn(self, *args, **kwargs)
 
+    @property
     def weak_binder(self):
         weakself = weakref.ref(self)
         return functools.partial(weak_fn, weakself)
 
-    return property(weak_binder)
+    @weak_binder.setter
+    def weak_binder(self, new):
+        if not (isinstance(new, functools.partial) and new.func is weak_fn and
+                len(new.args) == 1 and new.args[0] is weakref.ref(self)):
+            raise AttributeError("cannot overwrite weakmethod {}".format(fn.__name__))
+
+    return weak_binder
 
 
 def is_identically_zero(x):
