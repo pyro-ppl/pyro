@@ -10,7 +10,7 @@ from pyro.infer import Trace_ELBO
 from pyro.contrib.glmm import known_covariance_linear_model
 from pyro.contrib.oed.util import linear_model_ground_truth
 from pyro.contrib.oed.eig import (
-    nmc_eig, posterior_eig, marginal_eig, marginal_likelihood_eig, vnmc_eig, laplace_vi_eig, lfire_eig,
+    nmc_eig, posterior_eig, marginal_eig, marginal_likelihood_eig, vnmc_eig, laplace_eig, lfire_eig,
     donsker_varadhan_eig)
 from pyro.contrib.util import rmv, rvv
 from pyro.contrib.glmm.guides import LinearModelLaplaceGuide
@@ -167,10 +167,10 @@ def test_laplace_linear_model(linear_model, one_point_design):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
     # You can use 1 final sample here because linear models have a posterior entropy that is independent of `y`
-    estimated_eig = laplace_vi_eig(linear_model, one_point_design, "y", "w",
-                                   guide=laplace_guide, num_steps=250, final_num_samples=1,
-                                   optim=optim.Adam({"lr": 0.05}),
-                                   loss=Trace_ELBO().differentiable_loss)
+    estimated_eig = laplace_eig(linear_model, one_point_design, "y", "w",
+                                guide=laplace_guide, num_steps=250, final_num_samples=1,
+                                optim=optim.Adam({"lr": 0.05}),
+                                loss=Trace_ELBO().differentiable_loss)
     expected_eig = linear_model_ground_truth(linear_model, one_point_design, "y", "w")
     assert_equal(estimated_eig, expected_eig, prec=5e-2)
 

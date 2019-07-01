@@ -13,7 +13,7 @@ from pyro.util import torch_isnan, torch_isinf
 from pyro.contrib.util import lexpand
 
 __all__ = [
-    "laplace_vi_eig",
+    "laplace_eig",
     "vi_eig",
     "nmc_eig",
     "donsker_varadhan_eig",
@@ -24,8 +24,8 @@ __all__ = [
 ]
 
 
-def laplace_vi_eig(model, design, observation_labels, target_labels, guide, loss, optim, num_steps,
-                   final_num_samples, y_dist=None, eig=True, **prior_entropy_kwargs):
+def laplace_eig(model, design, observation_labels, target_labels, guide, loss, optim, num_steps,
+                final_num_samples, y_dist=None, eig=True, **prior_entropy_kwargs):
     """
     Estimates the expected information gain (EIG) by making repeated Laplace approximations to the posterior.
 
@@ -43,7 +43,7 @@ def laplace_vi_eig(model, design, observation_labels, target_labels, guide, loss
     :param bool eig: Whether to compute the EIG or the average posterior entropy (APE). The EIG is given by
                      `EIG = prior entropy - APE`. If `True`, the prior entropy will be estimated analytically,
                      or by Monte Carlo as appropriate for the `model`. If `False` the APE is returned.
-    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy.
+    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy, such as `num_prior_samples`
     :return: EIG estimate
     :rtype: torch.Tensor
     """
@@ -131,13 +131,13 @@ def vi_eig(model, design, observation_labels, target_labels, vi_parameters, is_p
     :param bool eig: Whether to compute the EIG or the average posterior entropy (APE). The EIG is given by
                      `EIG = prior entropy - APE`. If `True`, the prior entropy will be estimated analytically,
                      or by Monte Carlo as appropriate for the `model`. If `False` the APE is returned.
-    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy.
+    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy, such as `num_prior_samples`
     :return: EIG estimate
     :rtype: `torch.Tensor`
 
     """
 
-    warnings.warn("`vi_eig` is deprecated in favour on the amortized version: `posterior_eig`.", DeprecationWarning)
+    warnings.warn("`vi_eig` is deprecated in favour of the amortized version: `posterior_eig`.", DeprecationWarning)
 
     if isinstance(observation_labels, str):
         observation_labels = [observation_labels]
@@ -213,6 +213,12 @@ def nmc_eig(model, design, observation_labels, target_labels=None,
     :param int N: Number of outer expectation samples.
     :param int M: Number of inner expectation samples for `p(y|d)`.
     :param int M_prime: Number of samples for `p(y | theta, d)` if required.
+    :param bool independent_priors: Only used when `M_prime` is not `None`. Indicates whether the prior distributions
+        for the target variables and the nuisance variables are independent. In this case, it is not necessary to
+        sample the targets conditional on the nuisance variables.
+    :param int N_seq: (experimental) The number of sequential evaluations of the outer expectation. When `N_seq` is
+        greater than 1, the total effective number of outer samples is `N*N_seq`. This allows `nmc_eig` to work with
+        more samples than can be concurrently held in memory.
     :return: EIG estimate
     :rtype: `torch.Tensor`
     """
@@ -361,7 +367,7 @@ def posterior_eig(model, design, observation_labels, target_labels, num_samples,
     :param bool eig: Whether to compute the EIG or the average posterior entropy (APE). The EIG is given by
                  `EIG = prior entropy - APE`. If `True`, the prior entropy will be estimated analytically,
                  or by Monte Carlo as appropriate for the `model`. If `False` the APE is returned.
-    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy.
+    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy, such as `num_prior_samples`
     :return: EIG estimate, optionally includes full optimisation history
     :rtype: `torch.Tensor` or `tuple`
     """
@@ -545,7 +551,8 @@ def vnmc_eig(model, design, observation_labels, target_labels,
     where :math:`q(\\theta | y)` is the learned variational posterior approximation and
     :math:`\\theta_n, y_n \\sim p(\\theta, y | d)`, :math:`\\theta_{mn} \\sim q(\\theta|y=y_n)`.
 
-    As :math:`N \\to \\infty` this is an upper bound on EIG. We minimise this upper bound by stochastic gradient.
+    As :math:`N \\to \\infty` this is an upper bound on EIG. We minimise this upper bound by stochastic gradient
+    descent.
 
     :param function model: A pyro model accepting `design` as only argument.
     :param torch.Tensor design: Tensor representation of design
@@ -609,7 +616,7 @@ def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_hist
         return loss
 
 
-def monte_carlo_entropy(model, design, target_labels, num_samples=1000):
+def monte_carlo_entropy(model, design, target_labels, num_prior_samples=1000):
     """Computes a Monte Carlo estimate of the entropy of `model` assuming that each of sites in `target_labels` is
     independent and the entropy is to be computed for that subset of sites only.
     """
@@ -617,11 +624,11 @@ def monte_carlo_entropy(model, design, target_labels, num_samples=1000):
     if isinstance(target_labels, str):
         target_labels = [target_labels]
 
-    expanded_design = lexpand(design, num_samples)
+    expanded_design = lexpand(design, num_prior_samples)
     trace = pyro.poutine.trace(model).get_trace(expanded_design)
     trace.compute_log_prob()
     lp = sum(trace.nodes[l]["log_prob"] for l in target_labels)
-    return -lp.sum(0)/num_samples
+    return -lp.sum(0) / num_prior_samples
 
 
 def _donsker_varadhan_loss(model, T, observation_labels, target_labels):
