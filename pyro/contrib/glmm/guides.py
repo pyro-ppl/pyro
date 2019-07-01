@@ -39,14 +39,10 @@ class LinearModelPosteriorGuide(nn.Module):
         # To avoid this- combine labels
         if not isinstance(d, (tuple, list, torch.Tensor)):
             d = (d,)
-        self.regressor = {l: nn.Parameter(
-                regressor_init * torch.ones(*(d + (p, sum(y_sizes.values()))))) for l, p in w_sizes.items()}
-        self.scale_tril = {l: nn.Parameter(
-                scale_tril_init * lexpand(torch.eye(p), *d)) for l, p in w_sizes.items()}
-        # This registers the dict values in pytorch
-        # Await new version to use nn.ParamterDict
-        self._registered_re = nn.ParameterList(self.regressor.values())
-        self._registered_st = nn.ParameterList(self.scale_tril.values())
+        self.regressor = nn.ParameterDict({l: nn.Parameter(
+                regressor_init * torch.ones(*(d + (p, sum(y_sizes.values()))))) for l, p in w_sizes.items()})
+        self.scale_tril = nn.ParameterDict({l: nn.Parameter(
+                scale_tril_init * lexpand(torch.eye(p), *d)) for l, p in w_sizes.items()})
         self.w_sizes = w_sizes
         self.use_softplus = use_softplus
         self.softplus = nn.Softplus()
@@ -95,12 +91,11 @@ class LinearModelLaplaceGuide(nn.Module):
         self.train()
         if not isinstance(d, (tuple, list, torch.Tensor)):
             d = (d,)
-        self.means = {}
+        self.means = nn.ParameterDict()
         if tau_label is not None:
             w_sizes[tau_label] = 1
         for l, mu_l in tensor_to_dict(w_sizes, init_value*torch.ones(*(d + (sum(w_sizes.values()), )))).items():
             self.means[l] = nn.Parameter(mu_l)
-        self._registered = nn.ParameterList(self.means.values())
         self.scale_trils = {}
         self.w_sizes = w_sizes
 
