@@ -5,7 +5,7 @@ import torch
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.torch import Beta, Dirichlet, Gamma, Normal
-from pyro.distributions.util import copy_docs_from
+from pyro.distributions.util import copy_docs_from, weakmethod
 
 
 @copy_docs_from(Gamma)
@@ -41,6 +41,7 @@ class RejectionStandardGamma(Rejector):
         new._validate_args = self._validate_args
         return new
 
+    @weakmethod
     def propose(self, sample_shape=torch.Size()):
         # Marsaglia & Tsang's x == Naesseth's epsilon`
         x = torch.randn(sample_shape + self.concentration.shape,
@@ -60,6 +61,7 @@ class RejectionStandardGamma(Rejector):
         result += Normal(torch.zeros_like(self.concentration), torch.ones_like(self.concentration)).log_prob(x)
         return result
 
+    @weakmethod
     def log_prob_accept(self, value):
         v = value / self._d
         y = torch.pow(v, 1.0 / 3.0)
