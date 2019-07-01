@@ -333,7 +333,7 @@ def posterior_eig(model, design, observation_labels, target_labels, num_samples,
                   *args, **kwargs):
     """
     Posterior estimate of expected information gain (EIG) computed from the average posterior entropy (APE)
-    using `EIG = prior entropy - APE`.
+    using `EIG = prior entropy - APE`. See [1] for full details.
 
     The posterior representation of APE is
 
@@ -343,6 +343,8 @@ def posterior_eig(model, design, observation_labels, target_labels, num_samples,
 
     This method optimises the loss over a given guide family `guide`
     representing :math:`q`.
+
+    [1] Foster, Adam, et al. "Variational Bayesian Optimal Experimental Design." arXiv preprint arXiv:1903.05480 (2019).
 
     :param function model: A pyro model accepting `design` as only argument.
     :param torch.Tensor design: Tensor representation of design
@@ -401,7 +403,7 @@ def _posterior_ape(model, design, observation_labels, target_labels,
 def marginal_eig(model, design, observation_labels, target_labels,
                  num_samples, num_steps, guide, optim, return_history=False,
                  final_design=None, final_num_samples=None):
-    """Estimate EIG by estimating the marginal entropy :math:`p(y|d)`.
+    """Estimate EIG by estimating the marginal entropy :math:`p(y|d)`. See [1] for full details.
 
     The marginal representation of EIG is
 
@@ -410,6 +412,8 @@ def marginal_eig(model, design, observation_labels, target_labels,
     where :math:`q` is any distribution on :math:`y`.
 
     .. warning :: this method does **not** estimate the correct quantity in the presence of random effects.
+
+    [1] Foster, Adam, et al. "Variational Bayesian Optimal Experimental Design." arXiv preprint arXiv:1903.05480 (2019).
 
     :param function model: A pyro model accepting `design` as only argument.
     :param torch.Tensor design: Tensor representation of design
@@ -447,7 +451,9 @@ def marginal_likelihood_eig(model, design, observation_labels, target_labels,
                             num_samples, num_steps, marginal_guide, cond_guide, optim,
                             return_history=False, final_design=None, final_num_samples=None):
     """Estimates EIG by estimating the marginal entropy, that of :math:`p(y|d)`,
-    *and* the conditional entropy, of :math:`p(y|\\theta, d)`, both via Gibbs' Inequality.
+    *and* the conditional entropy, of :math:`p(y|\\theta, d)`, both via Gibbs' Inequality. See [1] for full details.
+
+    [1] Foster, Adam, et al. "Variational Bayesian Optimal Experimental Design." arXiv preprint arXiv:1903.05480 (2019).
 
     :param function model: A pyro model accepting `design` as only argument.
     :param torch.Tensor design: Tensor representation of design
@@ -540,7 +546,7 @@ def lfire_eig(model, design, observation_labels, target_labels,
 def vnmc_eig(model, design, observation_labels, target_labels,
              num_samples, num_steps, guide, optim, return_history=False,
              final_design=None, final_num_samples=None):
-    """Estimates the EIG using Variational Nested Monte Carlo (VNMC). The VNMC estimate is
+    """Estimates the EIG using Variational Nested Monte Carlo (VNMC). The VNMC estimate [1] is
 
     .. math::
 
@@ -553,6 +559,8 @@ def vnmc_eig(model, design, observation_labels, target_labels,
 
     As :math:`N \\to \\infty` this is an upper bound on EIG. We minimise this upper bound by stochastic gradient
     descent.
+
+    [1] Foster, Adam, et al. "Variational Bayesian Optimal Experimental Design." arXiv preprint arXiv:1903.05480 (2019).
 
     :param function model: A pyro model accepting `design` as only argument.
     :param torch.Tensor design: Tensor representation of design
