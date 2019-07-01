@@ -263,12 +263,13 @@ def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, 
 def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max_plate_nesting=None,
                      jit_compile=False, jit_options=None, skip_jit_warnings=False):
     """
-    Generates models' properties for a Pyro model to be used in HMC/NUTS kernels
-    which contains
-    * initial parameters to be sampled using a HMC kernel,
-    * a potential function whose input is a dict of parameters in unconstrained space,
-    * transforms to transform latent sites of `model` to unconstrained space,
-    * a prototype trace to be used in MCMC to consume traces from sampled parameters.
+    Given a Python callable with Pyro primitives, generates the following model-specific
+    properties needed for inference using HMC/NUTS kernels:
+
+    - initial parameters to be sampled using a HMC kernel,
+    - a potential function whose input is a dict of parameters in unconstrained space,
+    - transforms to transform latent sites of `model` to unconstrained space,
+    - a prototype trace to be used in MCMC to consume traces from sampled parameters.
 
     :param model: a Pyro model which contains Pyro primitives.
     :param tuple model_args: optional args taken by `model`.
