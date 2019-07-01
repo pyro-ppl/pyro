@@ -555,8 +555,7 @@ class TreeCatTrainerNuts(TreeCatTrainer):
             store["auto_{}".format(name)] = self._nuts.transforms[name].inv(value)
         for key, value in self._nuts.diagnostics().items():
             logging.debug("nuts {} {}".format(key, value))
-        loss = self._nuts._potential_energy_last
-        assert loss is not None
+        loss = float(self._nuts._potential_energy_last)
         self._nuts.clear_cache()
         self._trace_prob_evaluator = None
         return loss
