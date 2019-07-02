@@ -909,11 +909,9 @@ class _EdgeGuide(object):
         self._count_stats += batch_size
         self._count_stats *= decay
         one = self._vertex_stats.new_tensor(1.)
-        self._vertex_stats.scatter_add_(-1, z, one.expand_as(z))
-        self._vertex_stats *= decay
+        self._vertex_stats.scatter_add_(-1, z, one.expand_as(z)).mul_(decay)
         zz = (M * z)[self._grid[0]] + z[self._grid[1]]
-        self._complete_stats.scatter_add_(-1, zz, one.expand_as(zz))
-        self._complete_stats *= decay
+        self._complete_stats.scatter_add_(-1, zz, one.expand_as(zz)).mul_(decay)
 
         # Log metrics to diagnose convergence issues.
         if logging.Logger(None).isEnabledFor(logging.DEBUG):
