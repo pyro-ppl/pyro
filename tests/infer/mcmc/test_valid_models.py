@@ -367,4 +367,4 @@ def test_potential_fn_pickling(jit):
     _, potential_fn, _, _ = initialize_model(_beta_bernoulli, (data,), jit_compile=jit,
                                              skip_jit_warnings=True)
     test_data = {'p_latent': torch.tensor([0.2, 0.6])}
-    assert_close(pickle.loads(pickle.dumps(potential_fn, protocol=pickle.HIGHEST_PROTOCOL))(test_data), potential_fn(test_data))
+    assert_close(pickle.loads(pickle.dumps(potential_fn))(test_data), potential_fn(test_data))
