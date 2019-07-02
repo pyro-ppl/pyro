@@ -1,6 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import functools
 import numbers
+import weakref
 from contextlib import contextmanager
 
 import torch
@@ -51,6 +53,42 @@ def copy_docs_from(source_class, full_text=False):
         return destin_class
 
     return decorator
+
+
+def weakmethod(fn):
+    """
+    Decorator to enforce weak binding of a method, so as to avoid reference
+    cycles when passing a bound method as an argument to other functions.
+
+    In the following example, functional behavior is the same with and without
+    the ``@weakmethod`` decorator, but decoration avoids a reference cycle::
+
+        class Foo(object):
+            def __init__(self):
+                self.callback = self._callback
+            @weakmethod
+            def _callback(self, result):
+                print(result)
+    """
+    def weak_fn(weakself, *args, **kwargs):
+        self = weakself()
+        if self is None:
+            raise AttributeError("self was garbage collected when calling self.{}"
+                                 .format(fn.__name__))
+        return fn(self, *args, **kwargs)
+
+    @property
+    def weak_binder(self):
+        weakself = weakref.ref(self)
+        return functools.partial(weak_fn, weakself)
+
+    @weak_binder.setter
+    def weak_binder(self, new):
+        if not (isinstance(new, functools.partial) and new.func is weak_fn and
+                len(new.args) == 1 and new.args[0] is weakref.ref(self)):
+            raise AttributeError("cannot overwrite weakmethod {}".format(fn.__name__))
+
+    return weak_binder
 
 
 def is_identically_zero(x):
