@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import weakref
+
 import torch
 
 assert torch.__version__.startswith('1.')
@@ -12,7 +14,7 @@ def patch_dependency(target, root_module=torch):
     for part in parts[1:-1]:
         module = getattr(module, part)
     name = parts[-1]
-    old_fn = getattr(module, name)
+    old_fn = getattr(module, name, None)
     old_fn = getattr(old_fn, '_pyro_unpatched', old_fn)  # ensure patching is idempotent
 
     def decorator(new_fn):
@@ -44,6 +46,16 @@ def _Transform__init__(self, cache_size=0):
     else:
         raise ValueError('cache_size must be 0 or 1')
     super(torch.distributions.transforms.Transform, self).__init__()
+
+
+# TODO: Move upstream to allow for pickle serialization of transforms
+@patch_dependency('torch.distributions.transforms.Transform.__getstate__')
+def _Transform__getstate__(self):
+    attrs = {}
+    for k, v in self.__dict__.items():
+        if not isinstance(v, weakref.ref):
+            attrs[k] = v
+    return attrs
 
 
 @patch_dependency('torch.linspace')
