@@ -3,13 +3,15 @@ from __future__ import absolute_import, division, print_function
 import functools
 import numbers
 import random
+import types
 import warnings
 from collections import defaultdict
+
 from contextlib2 import contextmanager
 
 import graphviz
 import torch
-from six.moves import zip_longest
+from six.moves import copyreg, zip_longest
 
 from pyro.poutine.util import site_is_subsample
 
@@ -396,12 +398,12 @@ def torch_float(x):
     return x.float() if isinstance(x, torch.Tensor) else float(x)
 
 
-class bound_partial(functools.partial):
-    """
-    Converts a (possibly) bound method into an unbound partial function
-    for serialization via pickle.
-    """
-    def __get__(self, instance, owner):
-        if instance is None:
-            return self
-        return functools.partial(self.func, instance)
+# Ability to serialize methods via pickle.
+def _pickle_method(m):
+    if m.im_self is None:
+        return getattr, (m.im_class, m.im_func.func_name)
+    else:
+        return getattr, (m.im_self, m.im_func.func_name)
+
+
+copyreg.pickle(types.MethodType, _pickle_method)

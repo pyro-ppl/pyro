@@ -12,7 +12,7 @@ from pyro.infer import config_enumerate
 from pyro.infer.util import is_validation_enabled
 from pyro.ops.contract import contract_to_tensor
 from pyro.poutine.subsample_messenger import _Subsample
-from pyro.util import check_site_shape, ignore_jit_warnings, optional, torch_isinf, torch_isnan, bound_partial
+from pyro.util import check_site_shape, ignore_jit_warnings, optional, torch_isinf, torch_isnan
 
 
 class TraceTreeEvaluator(object):
@@ -271,7 +271,7 @@ class _PEMaker(object):
     def get_potential_fn(self, jit_compile=False, skip_jit_warnings=True, jit_options=None):
         if jit_compile:
             jit_options = {"check_trace": False} if jit_options is None else jit_options
-            return bound_partial(partial(self._potential_fn_jit, skip_jit_warnings, jit_options))
+            return partial(self._potential_fn_jit, skip_jit_warnings, jit_options)
         return self._potential_fn
 
 

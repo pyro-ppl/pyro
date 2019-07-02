@@ -2,13 +2,23 @@ from __future__ import absolute_import, division, print_function
 
 from functools import partial
 
-from pyro.util import bound_partial
 from .runtime import _PYRO_STACK
 
 
 def _context_wrap(context, fn, *args, **kwargs):
     with context:
         return fn(*args, **kwargs)
+
+
+class _bound_partial(partial):
+    """
+    Converts a (possibly) bound method into an unbound partial function
+    for serialization via pickle.
+    """
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return partial(self.func, instance)
 
 
 class Messenger(object):
@@ -30,7 +40,7 @@ class Messenger(object):
         pass
 
     def __call__(self, fn):
-        wraps = bound_partial(partial(_context_wrap, self, fn))
+        wraps = _bound_partial(partial(_context_wrap, self, fn))
         return wraps
 
     def __enter__(self):
