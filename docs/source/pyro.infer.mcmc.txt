@@ -26,3 +26,8 @@ NUTS
     :members:
     :undoc-members:
     :show-inheritance:
+
+Utilities
+---------
+
+.. autofunction:: pyro.infer.mcmc.util.initialize_model
