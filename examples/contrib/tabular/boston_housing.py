@@ -44,8 +44,10 @@ def main(args):
     pyro.clear_param_store()
     pyro.enable_validation(__debug__)
     model = TreeCat(features, args.capacity, annealing_rate=args.learning_rate)
-    optim = Adam({"lr": args.learning_rate})
-    trainer = model.trainer(optim, backend=args.backend)
+    options = {"backend": args.backend}
+    if args.method == "map":
+        options["optim"] = Adam({"lr": args.learning_rate})
+    trainer = model.trainer(args.method, **options)
     trainer.init(data)
     num_rows = len(data[0])
     for epoch in range(args.num_epochs):
@@ -59,9 +61,11 @@ def main(args):
     index = {f.name: i for i, f in enumerate(features)}
     nox = data[index["NOX"]]
     nox = torch.linspace(nox.min(), nox.max(), 20)
-    query = [None] * len(features)
+    query = [torch.zeros(20, dtype=f.dtype) for f in features]
+    mask = [False] * len(features)
     query[index["NOX"]] = nox
-    samples = model.sample(query, num_samples=args.num_samples)
+    mask[index["NOX"]] = True
+    samples = model.sample(query, mask, num_samples=args.num_samples)
     price = samples[index["MEDV"]]  # = median housing value / $1000
     assert price.shape == (args.num_samples, 20)
     price_mean = price.mean(dim=0)
@@ -84,6 +88,7 @@ if __name__ == "__main__":
     parser.add_argument("-b", "--batch-size", default=128, type=int)
     parser.add_argument("-n", "--num-epochs", default=100, type=int)
     parser.add_argument("-s", "--num-samples", default=100, type=int)
+    parser.add_argument("--method", default="map", help="one of: map, nuts")
     parser.add_argument("--backend", default="python")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
