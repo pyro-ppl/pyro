@@ -881,7 +881,8 @@ def _model(a=torch.tensor(1.), b=torch.tensor(1.)):
 ])
 def test_pickling(wrapper):
     wrapped = wrapper(_model)
-    deserialized = pickle.loads(pickle.dumps(wrapped))
+    # default protocol cannot serialize torch.Size objects (see https://github.com/pytorch/pytorch/issues/20823)
+    deserialized = pickle.loads(pickle.dumps(wrapped, protocol=pickle.HIGHEST_PROTOCOL))
     obs = torch.tensor(0.5)
     pyro.set_rng_seed(0)
     actual_trace = poutine.trace(deserialized).get_trace(obs)
