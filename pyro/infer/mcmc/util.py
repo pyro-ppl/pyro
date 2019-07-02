@@ -1,5 +1,4 @@
 from collections import OrderedDict, defaultdict
-from functools import partial
 
 import torch
 from torch.distributions import biject_to
