@@ -6,7 +6,7 @@ import warnings
 
 import pyro
 from pyro import poutine
-from pyro.contrib.autoguide import mean_field_guide_entropy
+from pyro.contrib.autoguide import mean_field_entropy
 from pyro.contrib.oed.search import Search
 from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.util import torch_isnan, torch_isinf
@@ -33,7 +33,7 @@ def laplace_eig(model, design, observation_labels, target_labels, guide, loss, o
     :param torch.Tensor design: Tensor of possible designs.
     :param list observation_labels: labels of sample sites to be regarded as observables.
     :param list target_labels: labels of sample sites to be regarded as latent variables of interest, i.e. the sites
-                               that we wish to gain information about.
+        that we wish to gain information about.
     :param function guide: Pyro stochastic function corresponding to `model`.
     :param loss: a Pyro loss such as `pyro.infer.Trace_ELBO().differentiable_loss`.
     :param optim: optimizer for the loss
@@ -41,9 +41,11 @@ def laplace_eig(model, design, observation_labels, target_labels, guide, loss, o
     :param int final_num_samples: Number of `y` samples (pseudo-observations) to take.
     :param y_dist: Distribution to sample `y` from- if `None` we use the Bayesian marginal distribution.
     :param bool eig: Whether to compute the EIG or the average posterior entropy (APE). The EIG is given by
-                     `EIG = prior entropy - APE`. If `True`, the prior entropy will be estimated analytically,
-                     or by Monte Carlo as appropriate for the `model`. If `False` the APE is returned.
-    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy, such as `num_prior_samples`
+        `EIG = prior entropy - APE`. If `True`, the prior entropy will be estimated analytically,
+        or by Monte Carlo as appropriate for the `model`. If `False` the APE is returned.
+    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy: `num_prior_samples` indicating the
+        number of samples for a MC estimate of prior entropy, and `mean_field` indicating if an analytic form for
+        a mean-field prior should be tried.
     :return: EIG estimate
     :rtype: torch.Tensor
     """
@@ -55,10 +57,18 @@ def laplace_eig(model, design, observation_labels, target_labels, guide, loss, o
 
     ape = _laplace_vi_ape(model, design, observation_labels, target_labels, guide, loss, optim, num_steps,
                           final_num_samples, y_dist=y_dist)
+    return _eig_from_ape(model, design, target_labels, ape, eig, prior_entropy_kwargs)
+
+
+def _eig_from_ape(model, design, target_labels, ape, eig, prior_entropy_kwargs):
+    mean_field = prior_entropy_kwargs.get("mean_field", True)
     if eig:
-        try:
-            prior_entropy = mean_field_guide_entropy(model, [design], whitelist=target_labels)
-        except NotImplemented:
+        if mean_field:
+            try:
+                prior_entropy = mean_field_entropy(model, [design], whitelist=target_labels)
+            except NotImplemented:
+                prior_entropy = monte_carlo_entropy(model, design, target_labels, **prior_entropy_kwargs)
+        else:
             prior_entropy = monte_carlo_entropy(model, design, target_labels, **prior_entropy_kwargs)
         return prior_entropy - ape
     else:
@@ -80,7 +90,7 @@ def _laplace_vi_ape(model, design, observation_labels, target_labels, guide, los
         with poutine.block():
             final_loss = loss(conditioned_model, guide, design)
             guide.finalize(final_loss, target_labels)
-            entropy = mean_field_guide_entropy(guide, [design], whitelist=target_labels)
+            entropy = mean_field_entropy(guide, [design], whitelist=target_labels)
         return entropy
 
     if y_dist is None:
@@ -129,9 +139,11 @@ def vi_eig(model, design, observation_labels, target_labels, vi_parameters, is_p
     :param pyro.distributions.Distribution y_dist: (optional) the distribution
         assumed for the response variable :math:`Y`
     :param bool eig: Whether to compute the EIG or the average posterior entropy (APE). The EIG is given by
-                     `EIG = prior entropy - APE`. If `True`, the prior entropy will be estimated analytically,
-                     or by Monte Carlo as appropriate for the `model`. If `False` the APE is returned.
-    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy, such as `num_prior_samples`
+        `EIG = prior entropy - APE`. If `True`, the prior entropy will be estimated analytically,
+        or by Monte Carlo as appropriate for the `model`. If `False` the APE is returned.
+    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy: `num_prior_samples` indicating the
+        number of samples for a MC estimate of prior entropy, and `mean_field` indicating if an analytic form for
+        a mean-field prior should be tried.
     :return: EIG estimate
     :rtype: `torch.Tensor`
 
@@ -145,14 +157,7 @@ def vi_eig(model, design, observation_labels, target_labels, vi_parameters, is_p
         target_labels = [target_labels]
 
     ape = _vi_ape(model, design, observation_labels, target_labels, vi_parameters, is_parameters, y_dist=y_dist)
-    if eig:
-        try:
-            prior_entropy = mean_field_guide_entropy(model, [design], whitelist=target_labels)
-        except NotImplemented:
-            prior_entropy = monte_carlo_entropy(model, design, target_labels, **prior_entropy_kwargs)
-        return prior_entropy - ape
-    else:
-        return ape
+    return _eig_from_ape(model, design, target_labels, ape, eig, prior_entropy_kwargs)
 
 
 def _vi_ape(model, design, observation_labels, target_labels, vi_parameters, is_parameters, y_dist=None):
@@ -166,7 +171,7 @@ def _vi_ape(model, design, observation_labels, target_labels, vi_parameters, is_
         # Recover the entropy
         with poutine.block():
             guide = vi_parameters["guide"]
-            entropy = mean_field_guide_entropy(guide, [design], whitelist=target_labels)
+            entropy = mean_field_entropy(guide, [design], whitelist=target_labels)
         return entropy
 
     if y_dist is None:
@@ -358,9 +363,11 @@ def posterior_eig(model, design, observation_labels, target_labels, num_samples,
     :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
         uses `num_samples`.
     :param bool eig: Whether to compute the EIG or the average posterior entropy (APE). The EIG is given by
-                 `EIG = prior entropy - APE`. If `True`, the prior entropy will be estimated analytically,
-                 or by Monte Carlo as appropriate for the `model`. If `False` the APE is returned.
-    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy, such as `num_prior_samples`
+        `EIG = prior entropy - APE`. If `True`, the prior entropy will be estimated analytically,
+        or by Monte Carlo as appropriate for the `model`. If `False` the APE is returned.
+    :param dict prior_entropy_kwargs: parameters for estimating the prior entropy: `num_prior_samples` indicating the
+        number of samples for a MC estimate of prior entropy, and `mean_field` indicating if an analytic form for
+        a mean-field prior should be tried.
     :return: EIG estimate, optionally includes full optimisation history
     :rtype: `torch.Tensor` or `tuple`
     """
@@ -372,14 +379,7 @@ def posterior_eig(model, design, observation_labels, target_labels, num_samples,
     ape = _posterior_ape(model, design, observation_labels, target_labels, num_samples, num_steps, guide, optim,
                          return_history=return_history, final_design=final_design, final_num_samples=final_num_samples,
                          *args, **kwargs)
-    if eig:
-        try:
-            prior_entropy = mean_field_guide_entropy(model, [design], whitelist=target_labels)
-        except NotImplemented:
-            prior_entropy = monte_carlo_entropy(model, design, target_labels, **prior_entropy_kwargs)
-        return prior_entropy - ape
-    else:
-        return ape
+    return _eig_from_ape(model, design, target_labels, ape, eig, prior_entropy_kwargs)
 
 
 def _posterior_ape(model, design, observation_labels, target_labels,
@@ -688,9 +688,9 @@ def _posterior_loss(model, guide, observation_labels, target_labels, analytic_en
             y_dict, expanded_design, observation_labels, target_labels)
         cond_trace.compute_log_prob()
         if evaluation and analytic_entropy:
-            loss = mean_field_guide_entropy(
+            loss = mean_field_entropy(
                 guide, [y_dict, expanded_design, observation_labels, target_labels],
-                whitelist=target_labels).sum(0)/num_particles
+                whitelist=target_labels).sum(0) / num_particles
             agg_loss = loss.sum()
         else:
             terms = -sum(cond_trace.nodes[l]["log_prob"] for l in target_labels)
