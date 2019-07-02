@@ -291,9 +291,9 @@ class TreeCat(object):
         """
         Creates a :class:`TreeCatTrainer` object.
 
-        - ``method="map"`` for :class:`TreeCatTainer`
-        - ``method="nuts"`` for :class:`TreeCatTainerNuts`
-        - ``method="pnuts"`` for :class:`TreeCatTainerPnuts`
+        - ``method="map"`` for :class:`TreeCatTrainerMap`
+        - ``method="nuts"`` for :class:`TreeCatTrainerNuts`
+        - ``method="pnuts"`` for :class:`TreeCatTrainerPnuts`
 
         :param str method: The type of trainer.
         """
@@ -305,33 +305,6 @@ class TreeCat(object):
             return TreeCatTrainerPnuts(self, **options)
         else:
             raise ValueError("Unknown trainer method: {}".format(method))
-
-    def sample(self, data, mask=None, num_samples=None):
-        """
-        Sample missing data conditioned on observed data.
-
-        :param list data: A minibatch of column-oriented data. Each column
-            should be a :class:`torch.Tensor` .
-        :param list mask: A minibatch of column masks. Each column may be
-            ``True`` if fully observed, ``False`` if fully unobserved, or a
-            :class:`torch.ByteTensor` if partially observed.
-        :param int num_samples: Optional number of samples to draw.
-        """
-        # Sample global parameters from the guide.
-        guide_params = self.guide(data, mask)
-        model = poutine.condition(self.model, guide_params)
-
-        # Optionally vectorize local samples.
-        first_available_dim = -2
-        if num_samples is not None:
-            vectorize = pyro.plate("num_samples_vectorized", num_samples,
-                                   dim=first_available_dim)
-            model = vectorize(model)
-            first_available_dim -= 1
-
-        # Sample local variables using variable elimination.
-        model = infer_discrete(model, first_available_dim=first_available_dim)
-        return model(data, mask, impute=True)
 
     def log_prob(self, data, mask=None):
         """
@@ -364,6 +337,58 @@ class TreeCat(object):
         log_prob = contract_to_tensor(tensor_tree, sum_dims, ordinal)
         assert log_prob.shape == (len(data[0]),)
         return log_prob
+
+    def sample(self, data, mask=None, num_samples=None):
+        """
+        Sample missing data conditioned on observed data.
+
+        :param list data: A minibatch of column-oriented data. Each column
+            should be a :class:`torch.Tensor` .
+        :param list mask: A minibatch of column masks. Each column may be
+            ``True`` if fully observed, ``False`` if fully unobserved, or a
+            :class:`torch.ByteTensor` if partially observed.
+        :param int num_samples: Optional number of samples to draw.
+        """
+        # Sample global parameters from the guide.
+        guide_params = self.guide(data, mask)
+        model = poutine.condition(self.model, guide_params)
+
+        # Optionally vectorize local samples.
+        first_available_dim = -2
+        if num_samples is not None:
+            vectorize = pyro.plate("num_samples_vectorized", num_samples,
+                                   dim=first_available_dim)
+            model = vectorize(model)
+            first_available_dim -= 1
+
+        # Sample local variables using variable elimination.
+        model = infer_discrete(model, first_available_dim=first_available_dim)
+        return model(data, mask, impute=True)
+
+    def median(self, data, mask=None, num_samples=19):
+        """
+        Compute conditional median of missing data given observed data.
+
+        :param list data: A minibatch of column-oriented data. Each column
+            should be a :class:`torch.Tensor` .
+        :param list mask: A minibatch of column masks. Each column may be
+            ``True`` if fully observed, ``False`` if fully unobserved, or a
+            :class:`torch.ByteTensor` if partially observed.
+        :param int num_samples: Number of samples to draw.
+        """
+        # Sample global parameters from the guide.
+        guide_params = self.guide(data, mask)
+        model = poutine.condition(self.model, guide_params)
+
+        # Sample local variables using variable elimination.
+        model = pyro.plate("num_samples_vectorized", num_samples, dim=-2)(model)
+        model = infer_discrete(model, first_available_dim=-3)
+        samples = model(data, mask, impute=True)
+
+        # Compute empirical median.
+        median = [col if col.dim() < 2 + f.event_dim else f.median(col)
+                  for f, col in zip(self.features, samples)]
+        return median
 
 
 @add_metaclass(ABCMeta)

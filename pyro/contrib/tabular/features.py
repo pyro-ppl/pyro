@@ -114,6 +114,17 @@ class Feature(object):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def median(self, samples):
+        """
+        Computes the median over the leftmost dim of a batch of samples.
+
+        :param torch.Tensor samples: A batch of samples.
+        :return: The median
+        :rtype: torch.Tensor
+        """
+        raise NotImplementedError
+
     @torch.no_grad()
     def init(self, data):
         """
@@ -132,6 +143,7 @@ class Feature(object):
 
 class Boolean(Feature):
     dtype = torch.float
+    event_dim = 0
 
     def sample_shared(self):
         loc = pyro.sample("{}_shared_loc".format(self.name),
@@ -156,6 +168,9 @@ class Boolean(Feature):
         logits = group
         return BernoulliSummary(num_components=len(logits), prototype=logits)
 
+    def median(self, samples):
+        return (samples.mean(0) > 0.5).to(samples.dtype)
+
     @torch.no_grad()
     def init(self, data):
         super(Boolean, self).init(data)
@@ -172,6 +187,7 @@ class Boolean(Feature):
 
 class Discrete(Feature):
     dtype = torch.long
+    event_dim = 0
 
     def __init__(self, name, cardinality):
         super(Discrete, self).__init__(name)
@@ -208,6 +224,9 @@ class Discrete(Feature):
         return CategoricalSummary(num_components=num_components, prototype=logits,
                                   num_categories=num_categories)
 
+    def median(self, samples):
+        return samples.mode(0)[0]
+
     @torch.no_grad()
     def init(self, data):
         super(Discrete, self).init(data)
@@ -227,6 +246,7 @@ class Discrete(Feature):
 # This leads to narrow-variance components.
 class Real(Feature):
     dtype = torch.float
+    event_dim = 0
 
     def sample_shared(self):
         scale_loc = pyro.sample("{}_shared_scale_loc".format(self.name),
@@ -260,6 +280,9 @@ class Real(Feature):
     def summary(self, group):
         loc, scale = group
         return NormalSummary(num_components=len(loc), prototype=loc)
+
+    def median(self, samples):
+        return samples.median(0)[0]
 
     @torch.no_grad()
     def init(self, data):
@@ -318,6 +341,9 @@ class RealGamma(Feature):
     def summary(self, group):
         loc, scale = group
         return NormalSummary(num_components=len(loc), prototype=loc)
+
+    def median(self, samples):
+        return samples.median(0)[0]
 
     @torch.no_grad()
     def init(self, data):

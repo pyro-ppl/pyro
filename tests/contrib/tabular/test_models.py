@@ -74,6 +74,23 @@ def test_train_smoke(method, make_options, dataset, capacity, masked):
 @pytest.mark.parametrize('grad_enabled', [True, False])
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('dataset', TINY_DATASETS)
+def test_log_prob_smoke(dataset, capacity, grad_enabled):
+    features = dataset["features"]
+    data = dataset["data"]
+    model = TreeCat(features, capacity)
+    train_model(model, data)
+
+    for mask in [None, dataset["mask"]]:
+        with torch.set_grad_enabled(grad_enabled):
+            loss = model.log_prob(data, mask)
+        assert isinstance(loss, torch.Tensor)
+        num_rows = len(data[0])
+        assert loss.shape == (num_rows,)
+
+
+@pytest.mark.parametrize('grad_enabled', [True, False])
+@pytest.mark.parametrize('capacity', [2, 16])
+@pytest.mark.parametrize('dataset', TINY_DATASETS)
 @pytest.mark.parametrize('num_samples', [None, 8])
 def test_sample_smoke(dataset, capacity, num_samples, grad_enabled):
     features = dataset["features"]
@@ -91,18 +108,28 @@ def test_sample_smoke(dataset, capacity, num_samples, grad_enabled):
 @pytest.mark.parametrize('grad_enabled', [True, False])
 @pytest.mark.parametrize('capacity', [2, 16])
 @pytest.mark.parametrize('dataset', TINY_DATASETS)
-def test_log_prob_smoke(dataset, capacity, grad_enabled):
+def test_median_smoke(dataset, capacity, grad_enabled):
     features = dataset["features"]
     data = dataset["data"]
+    mask = dataset["mask"]
     model = TreeCat(features, capacity)
     train_model(model, data)
 
-    for mask in [None, dataset["mask"]]:
-        with torch.set_grad_enabled(grad_enabled):
-            loss = model.log_prob(data, mask)
-        assert isinstance(loss, torch.Tensor)
-        num_rows = len(data[0])
-        assert loss.shape == (num_rows,)
+    with torch.set_grad_enabled(grad_enabled):
+        median = model.median(data, mask)
+    assert isinstance(median, list)
+    assert len(median) == len(features)
+
+    # Check that median values are correctly shaped and typed.
+    samples = model.sample(data, mask)
+    assert len(median) == len(samples)
+    for m, s in zip(median, samples):
+        assert m.shape == s.shape
+        assert m.dtype == s.dtype
+        assert m.device == s.device
+
+    # Check that median values are valid.
+    model.log_prob(median)
 
 
 @pytest.mark.parametrize('dataset', TINY_DATASETS)
