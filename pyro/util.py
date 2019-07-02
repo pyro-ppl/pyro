@@ -394,3 +394,14 @@ def jit_compatible_arange(end, dtype=None, device=None):
 
 def torch_float(x):
     return x.float() if isinstance(x, torch.Tensor) else float(x)
+
+
+class bound_partial(functools.partial):
+    """
+    Converts a (possibly) bound method into an unbound partial function
+    for serialization via pickle.
+    """
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return functools.partial(self.func, instance)
