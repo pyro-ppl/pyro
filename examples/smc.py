@@ -1,16 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 import argparse
-import logging
 
-import math
-import numpy as onp
+import pyro
+import pyro.poutine as poutine
+import pyro.distributions as dist
 
 import torch
-import torch.distributions as td
-
-import matplotlib
-import matplotlib.pyplot as plt
 
 # A simple harmonic oscillator with each discretized time step t = 1 
 # and mass equal to the spring constant.
@@ -19,51 +15,168 @@ import matplotlib.pyplot as plt
 # 
 # where B = [0,0,1], eps_y = [1, 0, 0], eps_t ~ N(0, sigma_eps^2)
 # and A is chosen based off Newton's eqns. The prior over sigma is IG(3,1).
-def simple_harmonic_model(initial, T):
-	A = torch.tensor([[1., 1., -0.5],
-				  	  [0., 1., 1.],
-				      [-1., 0., 0.]])
 
-	B = torch.tensor([0., 0., 1.])
+class SimpleHarmonicModel:
 
-	prec_eps = torch.distributions.gamma.Gamma(torch.tensor([3.0]),
-											   torch.tensor([1.0]))
-	prec_y = torch.distributions.gamma.Gamma(torch.tensor([3.0]),
-											 torch.tensor([1.0]))
-	var_eps = 1.0/prec_eps
-	var_y = 1.0/prec_y
+    def __init__(self, process_noise, measurement_noise):
+        self.A = torch.tensor([[0., 1.],
+                               [-1., 0.]])
+        self.B = torch.tensor([1e-10, 1])
+        self.sigma_z = torch.tensor(process_noise)
+        self.sigma_y = torch.tensor(measurement_noise)
 
-	z_t = initial
-	y = torch.zeros(T)
-	for t in range(T):
-		z, y[t] = step(z_t, A, B, var_eps, var_y)
+    def init(self, initial):
+        self.t = 0
+        self.z = initial
+        self.y = None
+
+    def step(self, y=None):
+        self.t += 1
+        self.z = pyro.sample("z_{}".format(self.t), 
+                             dist.Normal(self.z.matmul(self.A), self.B*self.sigma_z).to_event(1))
+        self.y = pyro.sample("y_{}".format(self.t), 
+                             dist.Normal(self.z[...,0], self.sigma_y),
+                             obs = y)
+
+        return self.z, self.y
+
+class SimpleHarmonicModel_Guide:
+
+    def __init__(self, model):
+        self.model = model
+
+    def init(self, initial):
+        self.t = 0
+        self.z = initial
+
+    def step(self, y=None):
+        self.t += 1
+
+        # Bad proposal distribution
+        self.z = pyro.sample("z_{}".format(self.t), 
+                             dist.Normal(self.z.matmul(self.model.A), torch.tensor([1e-10, 2.])).to_event(1))
 
 
-def step(z_t, A, B, var_eps, var_y):
-	# Univariate Gaussians
-	eps_t = torch.distributions.normal.Normal(torch.tensor([0]), 
-											 torch.sqrt(var_eps))
-	eps_y = torch.distributions.normal.Normal(torch.tensor([0]), 
-											 torch.sqrt(var_y))
+def _extract_samples(trace):
+    return {name: site["value"]
+            for name, site in trace.nodes.items()
+            if site["type"] == "sample"
+            if not site["is_observed"]}
 
-	z = A*z_t + B*eps_t
-	y = z_t[0] + eps_y
 
-	return z, y
+class SMCFilter:
+    # TODO: Add window kwarg that defaults to float("inf")
+    def __init__(self, model, guide, num_particles, max_plate_nesting):
+        self.model = model
+        self.guide = guide
+        self.num_particles = num_particles
+        self.max_plate_nesting = max_plate_nesting
 
-# Compute the target p(z_{1:t}|y_{1:t}) via SMC
-# An update step in the SMC procedure includes
-# For particle n
-# 	1. Draw z^n_t ~ p(z_t|z_{1:t-1}) [t- distributed with parameters alpha, beta, z_{t-1}]
-# 	2. Weight w^n_t <- w^n_{t-1} * p(y_t|z^n_t) []
-#   3. If effective number of particles(1/ \sum_i (w_i^2)) is below N_thresh
-#      then resample proportional to w and set weights to 1/N.
-# 	4. Update the hyperparameters of p(theta|z^n_{1:t}) [Add sufficient statisttics to get posterior alpha beta ]
-#
-# Downdate:
-#	1. Downdate the hyperparameter [Keep track of suffiicient statistics and remove alpha, beta]
-#   2. Divide by p(y_t|z_t) [Keep track of likelihood values at each time step.] 
-#
-# Online Version: We could use complicated update/downdate schedules
-def inference():
-	pass
+        # Equivalent to an empirical distribution.
+        self._values = {}
+        self._log_weights = torch.zeros(self.num_particles)
+
+    def init(self, *args, **kwargs):
+        self.particle_plate = pyro.plate("particles", self.num_particles, dim=-1-self.max_plate_nesting)
+        with poutine.block(), self.particle_plate:
+            guide_trace = poutine.trace(self.guide.init).get_trace(*args, **kwargs)
+            model = poutine.replay(self.model.init, guide_trace)
+            model_trace = poutine.trace(model).get_trace(*args, **kwargs)
+
+        self._update_weights(model_trace, guide_trace)
+        self._values.update(_extract_samples(model_trace))
+        self._maybe_importance_resample()
+
+    def step(self, *args, **kwargs):
+        with poutine.block(), self.particle_plate:
+            guide_trace = poutine.trace(self.guide.step).get_trace(*args, **kwargs)
+            model = poutine.replay(self.model.step, guide_trace)
+            model_trace = poutine.trace(model).get_trace(*args, **kwargs)
+
+        self._update_weights(model_trace, guide_trace)
+        self._values.update(_extract_samples(model_trace))
+        self._maybe_importance_resample()
+    
+    def get_values_and_log_weights(self):
+        return self._values, self._log_weights
+
+    def get_empirical(self):
+        return {name: dist.Empirical(value, self._log_weights)
+                for name, value in self._values.items()}
+
+    @torch.no_grad()
+    def _update_weights(self, model_trace, guide_trace):
+        # w_t <-w_{t-1}*p(y_t|z_t) * p(z_t|z_t-1)/q(z_t)
+
+        model_trace.compute_log_prob()
+        guide_trace.compute_log_prob()
+
+        for name, guide_site in guide_trace.nodes.items():
+            if guide_site["type"] == "sample":
+                model_site = model_trace.nodes[name]
+                log_p = model_site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                log_q = guide_site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                self._log_weights += log_p - log_q
+
+        for site in model_trace.nodes.values():
+            if site["type"] == "sample" and site["is_observed"]:
+                log_p = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                self._log_weights += log_p
+
+        self._log_weights -= self._log_weights.max()
+
+    def _maybe_importance_resample(self):
+        if True: # TODO check perplexity
+            self._importance_resample()
+
+    def _importance_resample(self):
+        # TODO: Turn quadratic algo -> linear algo by being lazier
+        index = dist.Categorical(logits=self._log_weights).sample(sample_shape=(self.num_particles,))
+        self._values = {name: value[index].contiguous() for name, value in self._values.items()}
+        self._log_weights.fill_(0.)
+
+
+def generate_data(args):
+    model = SimpleHarmonicModel(args.process_noise, args.measurement_noise)
+
+    model.init(initial=torch.zeros(2))
+    zs = []
+    ys = []
+    for t in range(args.num_timesteps):
+        z, y = model.step()
+        zs.append(z)
+        ys.append(y)
+
+    return zs, ys
+
+
+def main(args):
+    pyro.set_rng_seed(args.seed)
+    pyro.enable_validation(__debug__)
+
+    model = SimpleHarmonicModel(args.process_noise, args.measurement_noise)
+    guide = SimpleHarmonicModel_Guide(model)
+
+    smc = SMCFilter(model, guide, num_particles=args.num_particles, max_plate_nesting=0)
+
+    zs, ys = generate_data(args)
+    smc.init(initial=torch.zeros(2))
+    for y in ys:
+        smc.step(y)
+
+    empirical = smc.get_empirical()
+    for t in range(1,args.num_timesteps):
+        z = empirical["z_{}".format(t)]
+        print("{}\t{}\t{}\t{}".format(t, zs[t], z.mean, z.variance))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Simple Harmonic Oscillator w/ SMC")
+    parser.add_argument("-n", "--num-timesteps", default=50, type=int)
+    parser.add_argument("-p", "--num-particles", default=100, type=int)
+    parser.add_argument("--process-noise", default=1., type=float)
+    parser.add_argument("--measurement-noise", default=1., type=float)
+    parser.add_argument("--seed", default=0, type=int)
+    args = parser.parse_args()
+    main(args)
+
