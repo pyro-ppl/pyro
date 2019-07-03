@@ -22,7 +22,9 @@ import torch.multiprocessing as mp
 from six.moves import queue
 
 import pyro
+from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
+from pyro.infer.mcmc.util import initialize_model
 
 MAX_SEED = 2**32 - 1
 
@@ -256,10 +258,10 @@ class MCMC(object):
         half of `num_samples`.
     :param int num_chains: Number of MCMC chains to run in parallel. Depending on
         whether `num_chains` is 1 or more than 1, this class internally dispatches
-        to either `_SingleSampler` or `_ParallelSampler`.
-    :param dict initial_params: dict containing initial tensors to initiate
-        the markov chain. The leading dimension's size must match that of
-        `num_chains`. If not specified, parameter values will be sampled from
+        to either `_UnarySampler` or `_MultiSampler`.
+    :param dict initial_params: dict containing initial tensors in unconstrained
+        space to initiate the markov chain. The leading dimension's size must match
+        that of `num_chains`. If not specified, parameter values will be sampled from
         the prior.
     :param hook_fn: Python callable that takes in `(kernel, samples, stage, i)`
         as arguments. stage is either `sample` or `warmup` and i refers to the
@@ -268,22 +270,17 @@ class MCMC(object):
         Only applicable for Python 3.5 and above. Use `mp_context="spawn"` for
         CUDA.
     :param bool disable_progbar: Disable progress bar and diagnostics update.
+    :param dict transforms: dictionary that specifies a transform for a sample site
+        with constrained support to unconstrained space.
     """
     def __init__(self, kernel, num_samples, warmup_steps=None, initial_params=None,
-                 num_chains=1, hook_fn=None, mp_context=None, disable_progbar=False, transforms=None):
+                 num_chains=1, hook_fn=None, mp_context=None, disable_progbar=False,
+                 transforms=None):
         self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
         self.kernel = kernel
-        self.transforms = transforms or self.kernel.transforms
+        self.transforms = transforms
         if num_chains > 1:
-            # old API does not work since we need transforms in the main process.
-            if self.transforms is None:
-                raise ValueError("`pyro.infer.mcmc.api.MCMC` needs explicit reference"
-                                 " to transforms from the real domain to the site's bounded"
-                                 " support. Use `initialize_model` utility to convert your model"
-                                 " function into a potential function along with the required"
-                                 " transforms.")
-
             # check that initial_params is different for each chain
             if initial_params:
                 for v in initial_params.values():
@@ -315,8 +312,21 @@ class MCMC(object):
         z_acc = {k: [torch.stack(l) for l in v] for k, v in z_acc.items()}
         z_acc = {k: v[0] if self.num_chains == 1 else torch.stack(v) for k, v in z_acc.items()}
 
+        # If transforms is not explicitly provided, infer automatically using
+        # model args, kwargs.
+        if self.transforms is None and isinstance(self.kernel, (HMC, NUTS)):
+            if self.kernel.transforms is not None:
+                self.transforms = self.kernel.transforms
+            elif self.kernel.model:
+                _, _, self.transforms, _ = initialize_model(self.kernel.model,
+                                                            model_args=args,
+                                                            model_kwargs=kwargs)
+            else:
+                raise ValueError("Need to explicitly provide `transforms` from the site's "
+                                 "bounded domain to the unconstrained domain when `potential_fn` "
+                                 "is specified.")
+
         # transform samples back to constrained space
-        if self.transforms:
-            for name, transform in self.transforms.items():
-                z_acc[name] = transform.inv(z_acc[name])
+        for name, transform in self.transforms.items():
+            z_acc[name] = transform.inv(z_acc[name])
         return z_acc
