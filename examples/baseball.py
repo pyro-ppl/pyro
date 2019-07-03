@@ -14,6 +14,7 @@ from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.util import diagnostics, predictive, initialize_model
 from pyro.poutine.util import site_is_subsample
+from pyro.util import ignore_experimental_warning
 
 """
 Example has been adapted from [1]. It demonstrates how to do Bayesian inference using
@@ -207,7 +208,8 @@ def sample_posterior_predictive(model, posterior_samples, baseball_dataset, num_
     logging.info("Hit Rate - Initial 45 At Bats")
     logging.info("-----------------------------")
     # set hits=None to convert it from observation node to sample node
-    train_predict = predictive(model, posterior_samples, at_bats, None, num_chains=num_chains)
+    with ignore_experimental_warning():
+        train_predict = predictive(model, posterior_samples, at_bats, None, num_chains=num_chains)
     train_summary = summary(train_predict,
                             sites=["obs"],
                             player_names=player_names,
@@ -216,7 +218,8 @@ def sample_posterior_predictive(model, posterior_samples, baseball_dataset, num_
     logging.info(train_summary)
     logging.info("\nHit Rate - Season Predictions")
     logging.info("-----------------------------")
-    test_predict = predictive(model, posterior_samples, at_bats_season, None, num_chains=num_chains)
+    with ignore_experimental_warning():
+        test_predict = predictive(model, posterior_samples, at_bats_season, None, num_chains=num_chains)
     test_summary = summary(test_predict,
                            sites=["obs"],
                            player_names=player_names,
@@ -232,8 +235,9 @@ def evaluate_log_posterior_density(model, posterior_samples, baseball_dataset, n
     """
     _, test, player_names = train_test_split(baseball_dataset)
     at_bats_season, hits_season = test[:, 0], test[:, 1]
-    trace = predictive(model, posterior_samples, at_bats_season, hits_season,
-                       num_chains=num_chains, return_trace=True)
+    with ignore_experimental_warning():
+        trace = predictive(model, posterior_samples, at_bats_season, hits_season,
+                           num_chains=num_chains, return_trace=True)
     # Use LogSumExp trick to evaluate $log(1/num_samples \sum_i p(new_data | \theta^{i})) $,
     # where $\theta^{i}$ are parameter samples from the model's posterior.
     trace.compute_log_prob()
@@ -257,12 +261,13 @@ def main(args):
     # (1) Full Pooling Model
     init_params, potential_fn, transforms, _ = initialize_model(fully_pooled, model_args=(at_bats, hits),
                                                                 num_chains=args.num_chains)
-    nuts_kernel = NUTS(potential_fn=potential_fn, transforms=transforms)
+    nuts_kernel = NUTS(potential_fn=potential_fn)
     samples_fully_pooled = MCMC(nuts_kernel,
                                 num_samples=args.num_samples,
                                 warmup_steps=args.warmup_steps,
                                 num_chains=args.num_chains,
-                                initial_params=init_params).run(at_bats, hits)
+                                initial_params=init_params,
+                                transforms=transforms).run(at_bats, hits)
     logging.info("\nModel: Fully Pooled")
     logging.info("===================")
     logging.info("\nphi:")
@@ -276,12 +281,13 @@ def main(args):
     # (2) No Pooling Model
     init_params, potential_fn, transforms, _ = initialize_model(not_pooled, model_args=(at_bats, hits),
                                                                 num_chains=args.num_chains)
-    nuts_kernel = NUTS(potential_fn=potential_fn, transforms=transforms)
+    nuts_kernel = NUTS(potential_fn=potential_fn)
     samples_not_pooled = MCMC(nuts_kernel,
                               num_samples=args.num_samples,
                               warmup_steps=args.warmup_steps,
                               num_chains=args.num_chains,
-                              initial_params=init_params).run(at_bats, hits)
+                              initial_params=init_params,
+                              transforms=transforms).run(at_bats, hits)
     logging.info("\nModel: Not Pooled")
     logging.info("=================")
     logging.info("\nphi:")
@@ -295,7 +301,7 @@ def main(args):
     # (3) Partially Pooled Model
     init_params, potential_fn, transforms, _ = initialize_model(partially_pooled, model_args=(at_bats, hits),
                                                                 num_chains=args.num_chains)
-    nuts_kernel = NUTS(potential_fn=potential_fn, transforms=transforms)
+    nuts_kernel = NUTS(potential_fn=potential_fn)
 
     # TODO: Provide a way to record divergent transitions
     with pyro.validation_enabled(False):
@@ -303,7 +309,8 @@ def main(args):
                                         num_samples=args.num_samples,
                                         warmup_steps=args.warmup_steps,
                                         num_chains=args.num_chains,
-                                        initial_params=init_params).run(at_bats, hits)
+                                        initial_params=init_params,
+                                        transforms=transforms).run(at_bats, hits)
     logging.info("\nModel: Partially Pooled")
     logging.info("=======================")
     logging.info("\nphi:")
@@ -323,7 +330,8 @@ def main(args):
                                           num_samples=args.num_samples,
                                           warmup_steps=args.warmup_steps,
                                           num_chains=args.num_chains,
-                                          initial_params=init_params).run(at_bats, hits)
+                                          initial_params=init_params,
+                                          transforms=transforms).run(at_bats, hits)
     logging.info("\nModel: Partially Pooled with Logit")
     logging.info("==================================")
     logging.info("\nSigmoid(alpha):")

@@ -1,3 +1,4 @@
+import warnings
 from collections import OrderedDict, defaultdict
 from functools import partial
 
@@ -15,7 +16,7 @@ from pyro.ops import stats
 from pyro.ops.contract import contract_to_tensor
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_site_shape, ignore_jit_warnings, optional, torch_isinf, torch_isnan
+from pyro.util import check_site_shape, ignore_jit_warnings, optional, torch_isinf, torch_isnan, ExperimentalWarning
 
 
 class TraceTreeEvaluator(object):
@@ -378,13 +379,20 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
     return init_params, potential_fn, transforms, model_trace
 
 
-def diagnostics(posterior_samples, num_chains=1):
+def diagnostics(samples, num_chains=1):
     """
-    Gets some diagnostics statistics such as effective sample size and
-    split Gelman-Rubin from the sampler.
+    Gets diagnostics statistics such as effective sample size and
+    split Gelman-Rubin using the samples drawn from the posterior
+    distribution.
+
+    :param dict samples: dictionary of samples keyed by site name.
+    :param int num_chains: number of chains. For more than a single chain,
+        the leading dimension of samples in `samples` must match
+        the number of chains.
+    :return: dictionary of diagnostic stats for each sample site.
     """
     diagnostics = {}
-    for site, support in posterior_samples.items():
+    for site, support in samples.items():
         if num_chains == 1:
             support = support.unsqueeze(0)
         site_stats = OrderedDict()
@@ -405,25 +413,32 @@ def predictive(model, posterior_samples, *args, **kwargs):
     `posterior_samples` are returned. This can be modified by changing the `return_sites`
     keyword argument.
 
+    .. warning::
+        The interface for the `predictive` class is experimental, and
+        might change in the future. e.g. a unified interface for predictive
+        with SVI.
+
     :param model: Python callable containing Pyro primitives.
     :param dict posterior_samples: dictionary of samples from the posterior.
     :param args: model arguments.
     :param kwargs: model kwargs; and other keyword arguments (see below).
 
     :Keyword Arguments:
-        * num_chains - number of chains (determines leading dimension of tensors in
+        * **num_chains** - number of chains (determines leading dimension of tensors in
           `posterior_samples`). By default, this is assumed to be 1.
-        * num_samples - number of samples to draw from the predictive distribution.
+        * **num_samples** - number of samples to draw from the predictive distribution.
           By default, the number of sites is equal to the number of posterior
           samples.
-        * return_sites - sites to return; by default only sample sites not present
+        * **return_sites** - sites to return; by default only sample sites not present
           in `posterior_samples` are returned.
-        * return_trace - whether to return the full trace. Note that this is vectorized
+        * **return_trace** - whether to return the full trace. Note that this is vectorized
           over `num_samples`.
 
     :return: dict of samples from the predictive distribution, or a single vectorized
         `trace` (if `return_trace=True`).
     """
+    warnings.warn('This function or its interface might change in the future.',
+                  ExperimentalWarning)
     num_chains = kwargs.pop('num_chains', 1)
     num_samples = kwargs.pop('num_samples', None)
     return_sites = kwargs.pop('return_sites', None)
