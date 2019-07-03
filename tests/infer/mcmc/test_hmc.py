@@ -11,7 +11,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.hmc import HMC
-from pyro.infer.mcmc.mcmc import MCMC
+from pyro.infer.mcmc.api import MCMC
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -136,12 +136,12 @@ def test_hmc_conjugate_gaussian(fixture,
                                 std_tol):
     pyro.get_param_store().clear()
     hmc_kernel = HMC(fixture.model, **hmc_params)
-    mcmc_run = MCMC(hmc_kernel, num_samples, warmup_steps).run(fixture.data)
+    samples = MCMC(hmc_kernel, num_samples, warmup_steps).run(fixture.data)
     for i in range(1, fixture.chain_len + 1):
         param_name = 'loc_' + str(i)
-        marginal = mcmc_run.marginal(param_name).empirical[param_name]
-        latent_loc = marginal.mean
-        latent_std = marginal.variance.sqrt()
+        marginal = samples[param_name]
+        latent_loc = marginal.mean(0)
+        latent_std = marginal.var(0).sqrt()
         expected_mean = torch.ones(fixture.dim) * expected_means[i - 1]
         expected_std = 1 / torch.sqrt(torch.ones(fixture.dim) * expected_precs[i - 1])
 
@@ -187,8 +187,8 @@ def test_logistic_regression(step_size, trajectory_length, num_steps,
                      num_steps=num_steps, adapt_step_size=adapt_step_size,
                      adapt_mass_matrix=adapt_mass_matrix, full_mass=full_mass)
     mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100, disable_progbar=True).run(data)
-    beta_posterior = mcmc_run.marginal(['beta']).empirical['beta']
-    assert_equal(rmse(true_coefs, beta_posterior.mean).item(), 0.0, prec=0.1)
+    samples = mcmc_run['beta']
+    assert_equal(rmse(true_coefs, samples.mean(0)).item(), 0.0, prec=0.1)
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
@@ -202,9 +202,8 @@ def test_dirichlet_categorical(jit):
     true_probs = torch.tensor([0.1, 0.6, 0.3])
     data = dist.Categorical(true_probs).sample(sample_shape=(torch.Size((2000,))))
     hmc_kernel = HMC(model, trajectory_length=1, jit_compile=jit, ignore_jit_warnings=True)
-    mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=100).run(data)
-    posterior = mcmc_run.marginal('p_latent').empirical['p_latent']
-    assert_equal(posterior.mean, true_probs, prec=0.02)
+    samples = MCMC(hmc_kernel, num_samples=200, warmup_steps=100).run(data)
+    assert_equal(samples['p_latent'].mean(0), true_probs, prec=0.02)
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
@@ -221,9 +220,8 @@ def test_beta_bernoulli(jit):
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     hmc_kernel = HMC(model, trajectory_length=1, max_plate_nesting=2,
                      jit_compile=jit, ignore_jit_warnings=True)
-    mcmc_run = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
-    posterior = mcmc_run.marginal(["p_latent"]).empirical["p_latent"]
-    assert_equal(posterior.mean, true_probs, prec=0.05)
+    samples = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
+    assert_equal(samples['p_latent'].mean(0), true_probs, prec=0.05)
 
 
 def test_gamma_normal():
@@ -238,9 +236,8 @@ def test_gamma_normal():
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
     hmc_kernel = HMC(model, trajectory_length=1, step_size=0.03, adapt_step_size=False,
                      jit_compile=True, ignore_jit_warnings=True)
-    mcmc_run = MCMC(hmc_kernel, num_samples=200, warmup_steps=200).run(data)
-    posterior = mcmc_run.marginal(['p_latent']).empirical['p_latent']
-    assert_equal(posterior.mean, true_std, prec=0.05)
+    samples = MCMC(hmc_kernel, num_samples=200, warmup_steps=200).run(data)
+    assert_equal(samples['p_latent'].mean(0), true_std, prec=0.05)
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
@@ -260,9 +257,8 @@ def test_bernoulli_latent_model(jit):
     data = dist.Normal(2. * z, 1.0).sample()
     hmc_kernel = HMC(model, trajectory_length=1, max_plate_nesting=1,
                      jit_compile=jit, ignore_jit_warnings=True)
-    mcmc_run = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
-    posterior = mcmc_run.marginal("y_prob").empirical["y_prob"].mean
-    assert_equal(posterior, y_prob, prec=0.06)
+    samples = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
+    assert_equal(samples['y_prob'].mean(0), y_prob, prec=0.06)
 
 
 @pytest.mark.parametrize("kernel", [HMC, NUTS])

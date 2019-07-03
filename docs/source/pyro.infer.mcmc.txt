@@ -1,12 +1,7 @@
 MCMC
 ----
 
-.. autoclass:: pyro.infer.mcmc.MCMC
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-.. autoclass:: pyro.infer.mcmc.MCMCMarginals
+.. autoclass:: pyro.infer.mcmc.api.MCMC
     :members:
     :undoc-members:
     :show-inheritance:

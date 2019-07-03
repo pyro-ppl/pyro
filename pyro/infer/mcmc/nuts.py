@@ -116,7 +116,7 @@ class NUTS(HMC):
     """
 
     def __init__(self,
-                 model,
+                 model=None,
                  potential_fn=None,
                  step_size=1,
                  adapt_step_size=True,
