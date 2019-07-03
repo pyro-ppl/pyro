@@ -1,6 +1,29 @@
 from __future__ import absolute_import, division, print_function
 
+from functools import partial
+
 from pyro.poutine.messenger import Messenger
+
+
+def _block_fn(expose, expose_types, hide, hide_types, hide_all, msg):
+    # handle observes
+    if msg["type"] == "sample" and msg["is_observed"]:
+        msg_type = "observe"
+    else:
+        msg_type = msg["type"]
+
+    is_not_exposed = (msg["name"] not in expose) and \
+                     (msg_type not in expose_types)
+
+    # decision rule for hiding:
+    if (msg["name"] in hide) or \
+            (msg_type in hide_types) or \
+            (is_not_exposed and hide_all):  # noqa: E129
+
+        return True
+    # otherwise expose
+    else:
+        return False
 
 
 def _make_default_hide_fn(hide_all, expose_all, hide, expose, hide_types, expose_types):
@@ -37,26 +60,7 @@ def _make_default_hide_fn(hide_all, expose_all, hide, expose, hide_types, expose
     assert set(hide_types).isdisjoint(set(expose_types)), \
         "cannot hide and expose a site type"
 
-    def _fn(msg):
-        # handle observes
-        if msg["type"] == "sample" and msg["is_observed"]:
-            msg_type = "observe"
-        else:
-            msg_type = msg["type"]
-
-        is_not_exposed = (msg["name"] not in expose) and \
-                         (msg_type not in expose_types)
-
-        # decision rule for hiding:
-        if (msg["name"] in hide) or \
-        (msg_type in hide_types) or \
-        (is_not_exposed and hide_all):  # noqa: E129
-
-            return True
-        # otherwise expose
-        else:
-            return False
-    return _fn
+    return partial(_block_fn, expose, expose_types, hide, hide_types, hide_all)
 
 
 class BlockMessenger(Messenger):
