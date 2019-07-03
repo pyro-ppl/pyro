@@ -21,9 +21,8 @@ class PriorKernel(MCMCKernel):
     Disregards the value of the current trace (or observed data) and
     samples a value from the model's prior.
     """
-    def __init__(self, model, transforms):
+    def __init__(self, model):
         self.model = model
-        self.transforms = transforms
         self.data = None
         self._initial_params = None
         self._prototype_trace = None
@@ -61,8 +60,9 @@ def normal_normal_model(data):
 def test_mcmc_interface():
     data = torch.tensor([1.0])
     initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,))
-    kernel = PriorKernel(normal_normal_model, transforms=transforms)
-    samples = MCMC(kernel=kernel, num_samples=800, warmup_steps=100, initial_params=initial_params).run(data)
+    kernel = PriorKernel(normal_normal_model)
+    samples = MCMC(kernel=kernel, num_samples=800, warmup_steps=100,
+                   initial_params=initial_params, transforms=transforms).run(data)
     sample_mean = samples['y'].mean()
     sample_std = samples['y'].std()
     assert_close(sample_mean, torch.tensor(0.0), atol=0.05)
@@ -81,10 +81,11 @@ def test_num_chains(num_chains, cpu_count, monkeypatch):
     initial_params, _, transforms, _ = initialize_model(normal_normal_model,
                                                         model_args=(data,),
                                                         num_chains=num_chains)
-    kernel = PriorKernel(normal_normal_model, transforms=transforms)
+    kernel = PriorKernel(normal_normal_model)
     available_cpu = max(1, cpu_count-1)
     with optional(pytest.warns(UserWarning), available_cpu < num_chains):
-        mcmc = MCMC(kernel, num_samples=10, num_chains=num_chains, initial_params=initial_params)
+        mcmc = MCMC(kernel, num_samples=10, num_chains=num_chains,
+                    initial_params=initial_params, transforms=transforms)
     assert mcmc.num_chains == min(num_chains, available_cpu)
     if mcmc.num_chains == 1:
         assert isinstance(mcmc.sampler, _UnarySampler)
