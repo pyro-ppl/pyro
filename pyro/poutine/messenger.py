@@ -12,8 +12,8 @@ def _context_wrap(context, fn, *args, **kwargs):
 
 class _bound_partial(partial):
     """
-    Converts a (possibly) bound method into an unbound partial function
-    for serialization via pickle.
+    Converts a (possibly) bound method into a partial function to
+    support class methods as arguments to handlers.
     """
     def __get__(self, instance, owner):
         if instance is None:

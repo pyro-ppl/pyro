@@ -7,10 +7,10 @@ import types
 import warnings
 from collections import defaultdict
 
-from contextlib2 import contextmanager
-
 import graphviz
+import six
 import torch
+from contextlib2 import contextmanager
 from six.moves import copyreg, zip_longest
 
 from pyro.poutine.util import site_is_subsample
@@ -398,7 +398,8 @@ def torch_float(x):
     return x.float() if isinstance(x, torch.Tensor) else float(x)
 
 
-# Ability to serialize methods via pickle.
+# TODO: Remove when python 2 support is removed.
+# Ability to serialize methods via pickle in Python 2.
 def _pickle_method(m):
     if m.im_self is None:
         return getattr, (m.im_class, m.im_func.func_name)
@@ -406,4 +407,5 @@ def _pickle_method(m):
         return getattr, (m.im_self, m.im_func.func_name)
 
 
-copyreg.pickle(types.MethodType, _pickle_method)
+if six.PY2:
+    copyreg.pickle(types.MethodType, _pickle_method)
