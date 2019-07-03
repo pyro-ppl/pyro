@@ -178,7 +178,7 @@ class Boolean(Feature):
         assert data.dim() == 1
         mean = data.mean() * 0.98 + 0.01
         loc = mean.log() - (-mean).log1p()
-        scale = data.new_tensor(1.)
+        scale = data.new_tensor(2.)
 
         pyro.param("auto_{}_shared_loc".format(self.name), loc)
         pyro.param("auto_{}_shared_scale".format(self.name), scale,
