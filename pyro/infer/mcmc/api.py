@@ -191,7 +191,7 @@ class _MultiSampler(object):
     def init_workers(self, *args, **kwargs):
         self.workers = []
         for i in range(self.num_chains):
-            init_params = {k: v[i] for k, v in self.initial_params.items()}
+            init_params = {k: v[i] for k, v in self.initial_params.items()} if self.initial_params is not None else None
             worker = _Worker(i, self.result_queue, self.log_queue, self.events[i], self.kernel,
                              self.num_samples, self.warmup_steps, initial_params=init_params, hook=self.hook)
             worker.daemon = True
@@ -322,9 +322,7 @@ class MCMC(object):
                                                             model_args=args,
                                                             model_kwargs=kwargs)
             else:
-                raise ValueError("Need to explicitly provide `transforms` from the site's "
-                                 "bounded domain to the unconstrained domain when `potential_fn` "
-                                 "is specified.")
+                self.transforms = {}
 
         # transform samples back to constrained space
         for name, transform in self.transforms.items():
