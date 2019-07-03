@@ -4,7 +4,7 @@ import pytest
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.autoguide import mean_field_guide_entropy
+from pyro.contrib.autoguide import mean_field_entropy
 from tests.common import assert_equal
 
 
@@ -25,4 +25,4 @@ def h(p):
     (mean_field_guide, (torch.eye(2), None), (h(0.2) + h(0.5))*torch.ones(2, 2))
 ])
 def test_guide_entropy(guide, args, expected_entropy):
-    assert_equal(mean_field_guide_entropy(guide, args), expected_entropy)
+    assert_equal(mean_field_entropy(guide, args), expected_entropy)
