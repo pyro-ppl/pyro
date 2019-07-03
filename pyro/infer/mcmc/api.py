@@ -280,6 +280,10 @@ class MCMC(object):
         self.num_samples = num_samples
         self.kernel = kernel
         self.transforms = transforms
+        if isinstance(self.kernel, (HMC, NUTS)) and self.kernel.potential_fn is not None:
+            if initial_params is None:
+                raise ValueError("Must provide valid initial parameters to begin sampling"
+                                 " when using `potential_fn` in HMC/NUTS kernel.")
         if num_chains > 1:
             # check that initial_params is different for each chain
             if initial_params:
