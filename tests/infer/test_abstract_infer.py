@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import pytest
 import torch
 
 import pyro
@@ -10,6 +11,9 @@ from pyro.contrib.autoguide import AutoDelta, AutoDiagonalNormal, AutoLaplaceApp
 from pyro.infer import SVI, TracePredictive, Trace_ELBO
 from pyro.infer.mcmc import MCMC, NUTS
 from tests.common import assert_close, assert_equal
+
+
+pytestmark = pytest.mark.filterwarnings("ignore::PendingDeprecationWarning")
 
 
 def model(num_trials):
@@ -34,6 +38,7 @@ def beta_guide(num_trials):
         pyro.sample("phi", phi_posterior)
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_posterior_predictive_mcmc():
     true_probs = torch.ones(5) * 0.7
     num_trials = torch.ones(5) * 1000

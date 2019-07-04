@@ -350,10 +350,10 @@ if __name__ == "__main__":
     assert pyro.__version__.startswith('0.3.3')
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
     parser.add_argument("-n", "--num-samples", nargs="?", default=200, type=int)
-    parser.add_argument("--num-chains", nargs='?', default=4, type=int)
+    parser.add_argument("--num-chains", nargs='?', default=1, type=int)
     parser.add_argument("--warmup-steps", nargs='?', default=100, type=int)
     parser.add_argument("--rng_seed", nargs='?', default=0, type=int)
-    parser.add_argument("--jit", action="store_true", default=False,
+    parser.add_argument("--jit", action="store_true", default=True,
                         help="use PyTorch jit")
     parser.add_argument("--cuda", action="store_true", default=False,
                         help="run this example in GPU")

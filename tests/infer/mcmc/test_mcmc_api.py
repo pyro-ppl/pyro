@@ -46,8 +46,12 @@ class PriorKernel(MCMCKernel):
         trace = poutine.trace(self.model).get_trace(self.data)
         return {k: v["value"] for k, v in trace.iter_stochastic_nodes()}
 
-    def sample(self, trace):
-        return self.sample_params()
+    def sample(self, params):
+        new_params = self.sample_params()
+        assert params.keys() == new_params.keys()
+        for k, v in params.items():
+            assert new_params[k].shape == v.shape
+        return new_params
 
 
 def normal_normal_model(data):
@@ -84,8 +88,9 @@ def test_num_chains(num_chains, cpu_count, monkeypatch):
     kernel = PriorKernel(normal_normal_model)
     available_cpu = max(1, cpu_count-1)
     with optional(pytest.warns(UserWarning), available_cpu < num_chains):
-        mcmc = MCMC(kernel, num_samples=10, num_chains=num_chains,
+        mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains,
                     initial_params=initial_params, transforms=transforms)
+    mcmc.run(data)
     assert mcmc.num_chains == min(num_chains, available_cpu)
     if mcmc.num_chains == 1:
         assert isinstance(mcmc.sampler, _UnarySampler)

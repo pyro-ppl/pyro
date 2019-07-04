@@ -10,7 +10,8 @@ import data
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer.mcmc import MCMC, NUTS
+from pyro.infer.mcmc import NUTS
+from pyro.infer.mcmc.api import MCMC
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 pyro.enable_validation(True)
@@ -33,12 +34,13 @@ def conditioned_model(model, sigma, y):
 
 def main(args):
     nuts_kernel = NUTS(conditioned_model, jit_compile=args.jit,)
-    posterior = MCMC(nuts_kernel,
-                     num_samples=args.num_samples,
-                     warmup_steps=args.warmup_steps,
-                     num_chains=args.num_chains).run(model, data.sigma, data.y)
-    marginal = posterior.marginal(sites=["mu", "tau", "eta"])
-    marginal = torch.cat(list(marginal.support(flatten=True).values()), dim=-1).cpu().numpy()
+    samples = MCMC(nuts_kernel,
+                   num_samples=args.num_samples,
+                   warmup_steps=args.warmup_steps,
+                   num_chains=args.num_chains).run(model, data.sigma, data.y)
+    if args.num_chains > 1:
+        samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
+    marginal = torch.cat(list(samples.values()), dim=-1).cpu().numpy()
     params = ['mu', 'tau', 'eta[0]', 'eta[1]', 'eta[2]', 'eta[3]', 'eta[4]', 'eta[5]', 'eta[6]', 'eta[7]']
     df = pd.DataFrame(marginal, columns=params).transpose()
     df_summary = df.apply(pd.Series.describe, axis=1)[["mean", "std", "25%", "50%", "75%"]]
@@ -48,11 +50,11 @@ def main(args):
 if __name__ == '__main__':
     assert pyro.__version__.startswith('0.3.3')
     parser = argparse.ArgumentParser(description='Eight Schools MCMC')
-    parser.add_argument('--num-samples', type=int, default=1000,
+    parser.add_argument('--num-samples', type=int, default=100,
                         help='number of MCMC samples (default: 1000)')
     parser.add_argument('--num-chains', type=int, default=1,
                         help='number of parallel MCMC chains (default: 1)')
-    parser.add_argument('--warmup-steps', type=int, default=1000,
+    parser.add_argument('--warmup-steps', type=int, default=100,
                         help='number of MCMC samples for warmup (default: 1000)')
     parser.add_argument('--jit', action='store_true', default=False)
     args = parser.parse_args()
