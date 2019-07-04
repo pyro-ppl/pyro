@@ -311,7 +311,7 @@ class HMC(MCMCKernel):
         delta_energy = scalar_like(delta_energy, float("inf")) if torch_isnan(delta_energy) else delta_energy
         if delta_energy > self._max_sliced_energy and self._t >= self._warmup_steps:
             self._num_diverging += 1
-        # Set accept prob to 0.0 if delta_energy is `NaN` 
+
         accept_prob = (-delta_energy).exp().clamp(max=1.)
         rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(scalar_like(accept_prob, 0.),
                                                                      scalar_like(accept_prob, 1.)))
