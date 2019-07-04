@@ -182,7 +182,10 @@ class _SingleSampler(TracePosterior):
         params = init_params
         for _ in range(num_samples):
             params = self.kernel.sample(params)
-            diagnostics = json.dumps(self.kernel.diagnostics())
+            diagnostics = self.kernel.diagnostics()
+            if diagnostics["diverging"] == "0":
+                diagnostics.pop("diverging")
+            diagnostics = json.dumps(diagnostics)
             self.logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
             yield params
 
