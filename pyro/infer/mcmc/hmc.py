@@ -328,8 +328,10 @@ class HMC(MCMCKernel):
         return z.copy()
 
     def diagnostics(self):
-        return OrderedDict([
-            ("step size", "{:.2e}".format(self.step_size)),
-            ("acc. rate", "{:.3f}".format(self._accept_cnt / self._t)),
-            ("diverging", "{}".format(self._num_diverging)),
+        diagnostics = OrderedDict([
+                ("step size", "{:.2e}".format(self.step_size)),
+                ("acc. rate", "{:.3f}".format(self._accept_cnt / self._t)),
         ])
+        if self._num_diverging > 0:
+            diagnostics['diverging'] = "{}".format(self._num_diverging)
+        return diagnostics
