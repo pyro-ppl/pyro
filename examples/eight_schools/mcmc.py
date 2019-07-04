@@ -50,11 +50,11 @@ def main(args):
 if __name__ == '__main__':
     assert pyro.__version__.startswith('0.3.3')
     parser = argparse.ArgumentParser(description='Eight Schools MCMC')
-    parser.add_argument('--num-samples', type=int, default=100,
+    parser.add_argument('--num-samples', type=int, default=1000,
                         help='number of MCMC samples (default: 1000)')
     parser.add_argument('--num-chains', type=int, default=1,
                         help='number of parallel MCMC chains (default: 1)')
-    parser.add_argument('--warmup-steps', type=int, default=100,
+    parser.add_argument('--warmup-steps', type=int, default=1000,
                         help='number of MCMC samples for warmup (default: 1000)')
     parser.add_argument('--jit', action='store_true', default=False)
     args = parser.parse_args()
