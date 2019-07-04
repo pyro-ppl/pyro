@@ -356,6 +356,7 @@ class NUTS(HMC):
                 if new_tree.diverging:
                     if self._t >= self._warmup_steps:
                         self._num_diverging += 1
+                    break
 
                 if new_tree.turning:
                     break
