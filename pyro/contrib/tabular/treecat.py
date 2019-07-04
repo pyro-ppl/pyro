@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import logging
 import re
 from abc import ABCMeta, abstractmethod
-from collections import OrderedDict, deque
+from collections import OrderedDict, defaultdict, deque
 
 import torch
 from six import add_metaclass
@@ -22,6 +22,7 @@ from pyro.infer.mcmc.util import TraceEinsumEvaluator
 from pyro.ops import packed
 from pyro.ops.contract import contract_to_tensor
 from pyro.ops.indexing import Vindex
+from pyro.util import ignore_jit_warnings, optional
 
 
 def get_dense_column(data, mask, v):
@@ -182,11 +183,11 @@ class TreeCat(object):
         """
         data, mask = self._validate_data_mask(data, mask)
         device = data[0].device
-        batch_size = len(data[0])
+        batch_size = data[0].size(0)
         if num_rows is None:
             num_rows = batch_size
         V = len(self.features)
-        E = len(self.edges)
+        E = self.edges.size(0)
 
         # Sample a mixture model for each feature.
         mixtures = self._feature_model(data, mask, num_rows)
@@ -478,9 +479,9 @@ class TreeCatTrainerMap(TreeCatTrainer):
 DEFAULT_NUTS_CONFIG = {
     "warmup_steps": 200,
     "max_tree_depth": 5,
-    # TODO get jit working for possibly ~4x speedup.
-    # "jit_compile": True,
-    # "ignore_jit_warnings": True,
+    "jit_compile": 1000000000,
+    "ignore_jit_warnings": True,
+    "jit_options": {},
 }
 
 
@@ -499,6 +500,9 @@ class TreeCatTrainerNuts(TreeCatTrainer):
         self.nuts_config.pop("warmup_steps", None)
         self._model = model
         self._nuts = None
+        if self.nuts_config["jit_compile"]:
+            self._key_counts = defaultdict(int)
+            self._compiled = {}
 
     def step(self, data, mask=None, num_rows=None):
         """
@@ -512,6 +516,7 @@ class TreeCatTrainerNuts(TreeCatTrainer):
         :param int num_rows: The total number of rows in the dataset.
             This is needed only when subsampling data.
         """
+        data, mask = self._model._validate_data_mask(data, mask)
         if not self._initialized:
             self.init(data, mask)
 
@@ -556,8 +561,10 @@ class TreeCatTrainerNuts(TreeCatTrainer):
                 transforms[name] = biject_to(site["fn"].support).inv
                 initial_params[name] = transforms[name](site["value"]).detach()
 
-        self._nuts = NUTS(model=None, potential_fn=self._potential_fn,
-                          transforms=transforms, **self.nuts_config)
+        potential_fn = (self._jit_potential_fn if self.nuts_config["jit_compile"] else
+                        self._potential_fn)
+        self._nuts = NUTS(model=None, potential_fn=potential_fn, transforms=transforms,
+                          **self.nuts_config)
         self._nuts.initial_params = initial_params
         warmup_steps = 10**10  # Adapt indefinitely.
         self._trace_prob_evaluator = None
@@ -566,6 +573,7 @@ class TreeCatTrainerNuts(TreeCatTrainer):
 
     def _nuts_step(self, data, mask, num_rows):
         # To run HMC-within-Gibbs, we pass non-HMC state via ._gibbs_* attributes.
+        self._key_counts[hash(tuple(map(tuple, self._model.edges.tolist())))] += 1
         self._gibbs_params = self._model._edge_guide(device=data[0].device)
         self._gibbs_args = (data, mask, num_rows)
         if self._nuts is None:
@@ -603,6 +611,43 @@ class TreeCatTrainerNuts(TreeCatTrainer):
             log_joint = log_joint - torch.sum(
                 t.log_abs_det_jacobian(params_constrained[name], params[name]))
         return -log_joint
+
+    @weakmethod
+    def _jit_potential_fn(self, params):
+        # Only compile after key has been seen at least jit_compile times.
+        key = tuple(map(tuple, self._model.edges.tolist()))
+        if self._key_counts[hash(key)] < self.nuts_config["jit_compile"]:
+            return self._potential_fn(params)
+
+        # Collect all tensor data dependencies into an args list.
+        param_names = list(sorted(params))
+        gibbs_param_names = list(sorted(self._gibbs_params))
+        gibbs_param_values = [self._gibbs_params[name] for name in gibbs_param_names]
+        data, mask, num_rows = self._gibbs_args
+        if num_rows is not None and num_rows != len(data[0]):
+            raise NotImplementedError("jitting subsampled HMC is not supported")
+        data_mask = [col for cols in [data, mask] for col in cols if isinstance(col, torch.Tensor)]
+        args = [params[name] for name in param_names] + gibbs_param_values + data_mask
+
+        # Create a new compiled function for each key.
+        if key not in self._compiled:
+            logging.debug("jit compiling potential_fn")
+
+            def potential_fn(*args):
+                assert len(args) >= len(param_names) + len(gibbs_param_names)
+                param_values, args = args[:len(param_names)], args[len(param_names):]
+                params = dict(zip(param_names, param_values))
+                for name, value in zip(gibbs_param_names, args):
+                    assert value is self._gibbs_params[name]
+                return self._potential_fn(params)
+
+            with optional(ignore_jit_warnings(), self.nuts_config["ignore_jit_warnings"]):
+                with pyro.validation_enabled(False):
+                    jit_options = self.nuts_config["jit_options"].copy()
+                    jit_options.setdefault("check_trace", False)
+                    self._compiled[key] = torch.jit.trace(potential_fn, args, **jit_options)
+
+        return self._compiled[key](*args)
 
 
 class FeatureTrainerNuts(object):
@@ -811,7 +856,7 @@ class _FeatureModel(object):
         # If subsampling, include a pseudodata summary of out-of-minibatch data.
         # This is only needed when training; when calling .sample() or .log_prob()
         # we can avoid this computation by setting num_rows=None.
-        batch_size = len(data[0])
+        batch_size = data[0].size(0)
         if self._stats is None:
             self._stats = [f.summary(g) for f, g in zip(self.features, groups)]
         elif batch_size < num_rows and self._count_stats > 0:
@@ -829,7 +874,7 @@ class _FeatureModel(object):
 
     @torch.no_grad()
     def update(self, data, mask, num_rows, z):
-        batch_size = len(data[0])
+        batch_size = data[0].size(0)
         decay = self._annealing_schedule(self._count_stats, batch_size, num_rows)
         self._count_stats += batch_size
         self._count_stats *= decay
