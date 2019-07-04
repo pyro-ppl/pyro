@@ -118,11 +118,13 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
     if full_cov:
         Kss = kernel(Xnew)
         Qss = W.matmul(W.t())
-        cov = Kss - Qss
+        # Theoretically, Kss - Qss is non-negative; but due to numerical
+        # computation, that might not be the case in practice.
+        cov = (Kss - Qss).clamp(min=0)
     else:
         Kssdiag = kernel(Xnew, diag=True)
         Qssdiag = W.pow(2).sum(dim=-1)
-        var = Kssdiag - Qssdiag
+        var = (Kssdiag - Qssdiag).clamp(min=0)
 
     if f_scale_tril is not None:
         W_S_shape = (Xnew.size(0),) + f_scale_tril.shape[1:]
