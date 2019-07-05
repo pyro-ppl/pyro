@@ -3,8 +3,8 @@ from __future__ import absolute_import, division, print_function
 import torch
 from torch.distributions.utils import lazy_property
 from torch.distributions import constraints
+from torch.distributions.transforms import Transform
 
-from pyro.distributions import Transform
 from pyro.distributions.util import copy_docs_from
 
 
