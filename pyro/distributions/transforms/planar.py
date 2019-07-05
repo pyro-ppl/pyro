@@ -146,8 +146,8 @@ class ConditionalPlanarFlow(ConditionalTransform):
     >>> hypernet = DenseNN(observed_dim, [50, 50], param_dims=[1, input_dim, input_dim])
     >>> plf = ConditionalPlanarFlow(hypernet)
     >>> z = torch.rand(batch_size, observed_dim)
-    >>> plf_dist = dist.ConditionalTransformedDistribution(base_dist, [plf])
-    >>> plf_dist.sample(obs=z, sample_shape=torch.Size([batch_size])) # doctest: +SKIP
+    >>> plf_dist = dist.ConditionalTransformedDistribution(base_dist, [plf]).condition(z)
+    >>> plf_dist.sample(sample_shape=torch.Size([batch_size])) # doctest: +SKIP
     The inverse of this transform does not possess an analytical solution and is left unimplemented. However,
     the inverse is cached when the forward operation is called during sampling, and so samples drawn using
     planar flow can be scored.
