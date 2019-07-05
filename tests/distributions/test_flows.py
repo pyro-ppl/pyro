@@ -126,6 +126,11 @@ class FlowTests(TestCase):
     def _make_planar(self, input_dim):
         return transforms.PlanarFlow(input_dim)
 
+    def _make_cond_planar(self, input_dim, observed_dim):
+        hypernet = DenseNN(observed_dim, [input_dim*10, input_dim*10], param_dims=[1, input_dim, input_dim])
+        z = torch.rand(observed_dim)
+        return transforms.ConditionalPlanarFlow(hypernet).condition(z)
+
     def _make_poly(self, input_dim):
         count_degree = 4
         count_sum = 3
@@ -187,6 +192,10 @@ class FlowTests(TestCase):
     def test_planar_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_planar)
+
+    def test_cond_planar_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, partial(self._make_cond_planar, observed_dim=3))
 
     def test_poly_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -268,6 +277,10 @@ class FlowTests(TestCase):
     def test_planar_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_planar)
+
+    def test_cond_planar_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, partial(self._make_cond_planar, observed_dim=3))
 
     def test_poly_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:

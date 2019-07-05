@@ -63,6 +63,20 @@ BetaBinomial
     :undoc-members:
     :show-inheritance:
 
+ConditionalDistribution
+----------------------------------
+.. autoclass:: pyro.distributions.ConditionalDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalTransformedDistribution
+----------------------------------
+.. autoclass:: pyro.distributions.ConditionalTransformedDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Delta
 -----
 .. autoclass:: pyro.distributions.Delta
@@ -168,13 +182,6 @@ SpanningTree
     :undoc-members:
     :show-inheritance:
 
-TransformedDistribution
------------------------
-.. autoclass:: pyro.distributions.TransformedDistribution
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 VonMises
 --------
 .. autoclass:: pyro.distributions.VonMises
@@ -209,6 +216,13 @@ BatchNormTransform
 BlockAutoregressive
 -------------------
 .. autoclass:: pyro.distributions.transforms.BlockAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalTransform
+--------------------
+.. autoclass:: pyro.distributions.ConditionalTransform
     :members:
     :undoc-members:
     :show-inheritance:
@@ -286,13 +300,6 @@ RadialFlow
 SylvesterFlow
 -------------
 .. autoclass:: pyro.distributions.transforms.SylvesterFlow
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Transform
----------
-.. autoclass:: pyro.distributions.Transform
     :members:
     :undoc-members:
     :show-inheritance:
