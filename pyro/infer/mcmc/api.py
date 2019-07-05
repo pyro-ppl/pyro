@@ -1,3 +1,12 @@
+"""
+This module offers a modified interface for MCMC inference with the following objectives:
+  - making MCMC independent of Pyro specific trace data structure, to facilitate
+    integration with other PyTorch based libraries.
+  - bringing the interface closer to that of NumPyro to make it easier to write
+    code that works with different backends.
+  - minimal memory consumption with multiprocessing and CUDA.
+"""
+
 from __future__ import absolute_import, division, print_function
 
 import json
@@ -5,7 +14,7 @@ import logging
 import signal
 import threading
 import warnings
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import six
 import torch
@@ -13,12 +22,9 @@ import torch.multiprocessing as mp
 from six.moves import queue
 
 import pyro
-import pyro.ops.stats as stats
-from pyro.infer import TracePosterior
-from pyro.infer.abstract_infer import Marginals
+from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
-import pyro.poutine as poutine
-from pyro.util import optional
+from pyro.infer.mcmc.util import initialize_model
 
 MAX_SEED = 2**32 - 1
 
@@ -59,50 +65,109 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
 
 class _Worker(object):
     def __init__(self, chain_id, result_queue, log_queue, event,
-                 kernel, num_samples, warmup_steps=0,
-                 args=None, kwargs=None):
+                 kernel, num_samples, warmup_steps, initial_params=None, hook=None):
         self.chain_id = chain_id
-        self.trace_gen = _SingleSampler(kernel, num_samples=num_samples, warmup_steps=warmup_steps,
-                                        disable_progbar=True)
-        self.args = args if args is not None else []
-        self.kwargs = kwargs if kwargs is not None else {}
+        self.kernel = kernel
+        if initial_params is not None:
+            self.kernel.initial_params = initial_params
+        self.num_samples = num_samples
+        self.warmup_steps = warmup_steps
         self.rng_seed = (torch.initial_seed() + chain_id) % MAX_SEED
         self.log_queue = log_queue
         self.result_queue = result_queue
         self.default_tensor_type = torch.Tensor().type()
+        self.hook = hook
         self.event = event
 
-    def run(self):
+    def run(self, *args, **kwargs):
         pyro.set_rng_seed(self.rng_seed)
         torch.set_default_tensor_type(self.default_tensor_type)
         # XXX we clone CUDA tensor args to resolve the issue "Invalid device pointer"
         # at https://github.com/pytorch/pytorch/issues/10375
-        args = [arg.clone().detach() if (torch.is_tensor(arg) and arg.is_cuda) else arg for arg in self.args]
-        kwargs = self.kwargs
-        kwargs["logger_id"] = "CHAIN:{}".format(self.chain_id)
-        kwargs["log_queue"] = self.log_queue
+        args = [arg.clone().detach() if (torch.is_tensor(arg) and arg.is_cuda) else arg for arg in args]
+        kwargs = kwargs
+        logger = logging.getLogger("pyro.infer.mcmc")
+        logger_id = "CHAIN:{}".format(self.chain_id)
+        log_queue = self.log_queue
+        logger = initialize_logger(logger, logger_id, None, log_queue)
+        logging_hook = _add_logging_hook(logger, None, self.hook)
+
         try:
-            for sample in self.trace_gen._traces(*args, **kwargs):
+            for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, logging_hook,
+                                       *args, **kwargs):
                 self.result_queue.put_nowait((self.chain_id, sample))
                 self.event.wait()
                 self.event.clear()
             self.result_queue.put_nowait((self.chain_id, None))
         except Exception as e:
-            self.trace_gen.logger.exception(e)
+            logger.exception(e)
             self.result_queue.put_nowait((self.chain_id, e))
 
 
-class _ParallelSampler(TracePosterior):
+def _gen_samples(kernel, warmup_steps, num_samples, hook, *args, **kwargs):
+    kernel.setup(warmup_steps, *args, **kwargs)
+    params = kernel.initial_params
+    for i in range(warmup_steps):
+        params = kernel.sample(params)
+        hook(kernel, params, 'warmup', i)
+    for i in range(num_samples):
+        params = kernel.sample(params)
+        hook(kernel, params, 'sample', i)
+        yield params
+    kernel.cleanup()
+
+
+def _add_logging_hook(logger, progress_bar=None, hook=None):
+    def _add_logging(kernel, params, stage, i):
+        diagnostics = json.dumps(kernel.diagnostics())
+        logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
+        if progress_bar:
+            progress_bar.set_description(stage)
+        if hook:
+            hook(kernel, params, stage, i)
+
+    return _add_logging
+
+
+class _UnarySampler(object):
+    """
+    Single process runner class optimized for the case `num_chains=1`.
+    """
+
+    def __init__(self, kernel, num_samples, warmup_steps, disable_progbar, initial_params=None, hook=None):
+        self.kernel = kernel
+        if initial_params is not None:
+            self.kernel.initial_params = initial_params
+        self.warmup_steps = warmup_steps
+        self.num_samples = num_samples
+        self.logger = None
+        self.disable_progbar = disable_progbar
+        self.hook = hook
+        super(_UnarySampler, self).__init__()
+
+    def run(self, *args, **kwargs):
+        logger = logging.getLogger("pyro.infer.mcmc")
+        progress_bar = ProgressBar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
+        logger = initialize_logger(logger, "", progress_bar)
+        hook_w_logging = _add_logging_hook(logger, progress_bar, self.hook)
+        for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, hook_w_logging,
+                                   *args, **kwargs):
+            yield sample, 0  # sample, chain_id (default=0)
+        progress_bar.close()
+
+
+class _MultiSampler(object):
     """
     Parallel runner class for running MCMC chains in parallel. This uses the
     `torch.multiprocessing` module (itself a light wrapper over the python
     `multiprocessing` module) to spin up parallel workers.
     """
-    def __init__(self, kernel, num_samples, warmup_steps, num_chains, mp_context, disable_progbar):
-        super(_ParallelSampler, self).__init__()
+    def __init__(self, kernel, num_samples, warmup_steps, num_chains, mp_context,
+                 disable_progbar, initial_params=None, hook=None):
         self.kernel = kernel
         self.warmup_steps = warmup_steps
         self.num_chains = num_chains
+        self.hook = hook
         self.workers = []
         self.ctx = mp
         if mp_context:
@@ -115,20 +180,23 @@ class _ParallelSampler(TracePosterior):
         self.logger = initialize_logger(logging.getLogger("pyro.infer.mcmc"),
                                         "MAIN", log_queue=self.log_queue)
         self.num_samples = num_samples
+        self.initial_params = initial_params
         self.log_thread = threading.Thread(target=logger_thread,
                                            args=(self.log_queue, self.warmup_steps, self.num_samples,
                                                  self.num_chains, disable_progbar))
         self.log_thread.daemon = True
         self.log_thread.start()
-        self.events = [self.ctx.Event() for i in range(num_chains)]
+        self.events = [self.ctx.Event() for _ in range(num_chains)]
 
     def init_workers(self, *args, **kwargs):
         self.workers = []
         for i in range(self.num_chains):
+            init_params = {k: v[i] for k, v in self.initial_params.items()} if self.initial_params is not None else None
             worker = _Worker(i, self.result_queue, self.log_queue, self.events[i], self.kernel,
-                             self.num_samples, self.warmup_steps, args, kwargs)
+                             self.num_samples, self.warmup_steps, initial_params=init_params, hook=self.hook)
             worker.daemon = True
-            self.workers.append(self.ctx.Process(name=str(i), target=worker.run))
+            self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
+                                                 args=args, kwargs=kwargs))
 
     def terminate(self):
         if self.log_thread.is_alive():
@@ -138,7 +206,7 @@ class _ParallelSampler(TracePosterior):
             if w.is_alive():
                 w.terminate()
 
-    def _traces(self, *args, **kwargs):
+    def run(self, *args, **kwargs):
         # Ignore sigint in worker processes; they will be shut down
         # when the main process terminates.
         sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -159,72 +227,14 @@ class _ParallelSampler(TracePosterior):
                     # Exception trace is already logged by worker.
                     raise val
                 if val is not None:
-                    yield val[0], val[1], chain_id
+                    yield val, chain_id
                 else:
                     active_workers -= 1
         finally:
             self.terminate()
 
 
-class _SingleSampler(TracePosterior):
-    """
-    Single process runner class optimized for the case `num_chains=1`.
-    """
-    def __init__(self, kernel, num_samples, warmup_steps, disable_progbar):
-        self.kernel = kernel
-        self.warmup_steps = warmup_steps
-        self.num_samples = num_samples
-        self.logger = None
-        self.disable_progbar = disable_progbar
-        super(_SingleSampler, self).__init__()
-
-    def _gen_samples(self, num_samples, init_params):
-        params = init_params
-        for _ in range(num_samples):
-            params = self.kernel.sample(params)
-            diagnostics = json.dumps(self.kernel.diagnostics())
-            self.logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
-            yield params
-
-    # TODO: Refactor so that this class directly has access to the trace generator
-    # and transforms needed to do this wrapping. Note that only unconstrained parameters
-    # are passed to `MCMCKernel` classes.
-    def _trace_wrap(self, z, *args, **kwargs):
-        if self.kernel.transforms:
-            for name, transform in self.kernel.transforms.items():
-                z[name] = transform.inv(z[name])
-        if self.kernel.model is None:
-            return z
-        z_trace = self.kernel._prototype_trace
-        for name, value in z.items():
-            z_trace.nodes[name]["value"] = value
-        trace_poutine = poutine.trace(poutine.replay(self.kernel.model, z_trace))
-        trace_poutine(*args, **kwargs)
-        return trace_poutine.trace
-
-    def _traces(self, *args, **kwargs):
-        logger_id = kwargs.pop("logger_id", "")
-        log_queue = kwargs.pop("log_queue", None)
-        self.logger = logging.getLogger("pyro.infer.mcmc")
-        is_multiprocessing = log_queue is not None
-        progress_bar = None
-        if not is_multiprocessing:
-            progress_bar = ProgressBar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
-        self.logger = initialize_logger(self.logger, logger_id, progress_bar, log_queue)
-        self.kernel.setup(self.warmup_steps, *args, **kwargs)
-        params = self.kernel.initial_params
-        with optional(progress_bar, not is_multiprocessing):
-            for params in self._gen_samples(self.warmup_steps, params):
-                continue
-            if progress_bar:
-                progress_bar.set_description("Sample")
-            for params in self._gen_samples(self.num_samples, params):
-                trace = self._trace_wrap(params, *args, **kwargs)
-                yield (trace, 1.0)
-        self.kernel.cleanup()
-
-
-class MCMC(TracePosterior):
+class MCMC(object):
     """
     Wrapper class for Markov Chain Monte Carlo algorithms. Specific MCMC algorithms
     are TraceKernel instances and need to be supplied as a ``kernel`` argument
@@ -248,17 +258,40 @@ class MCMC(TracePosterior):
         half of `num_samples`.
     :param int num_chains: Number of MCMC chains to run in parallel. Depending on
         whether `num_chains` is 1 or more than 1, this class internally dispatches
-        to either `_SingleSampler` or `_ParallelSampler`.
+        to either `_UnarySampler` or `_MultiSampler`.
+    :param dict initial_params: dict containing initial tensors in unconstrained
+        space to initiate the markov chain. The leading dimension's size must match
+        that of `num_chains`. If not specified, parameter values will be sampled from
+        the prior.
+    :param hook_fn: Python callable that takes in `(kernel, samples, stage, i)`
+        as arguments. stage is either `sample` or `warmup` and i refers to the
+        i'th sample for the given stage. This can be
     :param str mp_context: Multiprocessing context to use when `num_chains > 1`.
         Only applicable for Python 3.5 and above. Use `mp_context="spawn"` for
         CUDA.
     :param bool disable_progbar: Disable progress bar and diagnostics update.
+    :param dict transforms: dictionary that specifies a transform for a sample site
+        with constrained support to unconstrained space.
     """
-    def __init__(self, kernel, num_samples, warmup_steps=None,
-                 num_chains=1, mp_context=None, disable_progbar=False):
+    def __init__(self, kernel, num_samples, warmup_steps=None, initial_params=None,
+                 num_chains=1, hook_fn=None, mp_context=None, disable_progbar=False,
+                 transforms=None):
         self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
+        self.kernel = kernel
+        self.transforms = transforms
+        if isinstance(self.kernel, (HMC, NUTS)) and self.kernel.potential_fn is not None:
+            if initial_params is None:
+                raise ValueError("Must provide valid initial parameters to begin sampling"
+                                 " when using `potential_fn` in HMC/NUTS kernel.")
         if num_chains > 1:
+            # check that initial_params is different for each chain
+            if initial_params:
+                for v in initial_params.values():
+                    if v.shape[0] != num_chains:
+                        raise ValueError("The leading dimension of tensors in `initial_params` "
+                                         "must match the number of chains.")
+
             # verify num_chains is compatible with available CPU.
             available_cpu = max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
             if num_chains > available_cpu:
@@ -266,51 +299,36 @@ class MCMC(TracePosterior):
                               "Resetting number of chains to available CPU count."
                               .format(num_chains, available_cpu))
                 num_chains = available_cpu
+        self.num_chains = num_chains
+
         if num_chains > 1:
-            self.sampler = _ParallelSampler(kernel, num_samples, self.warmup_steps,
-                                            num_chains, mp_context, disable_progbar)
+            self.sampler = _MultiSampler(kernel, num_samples, self.warmup_steps, num_chains, mp_context,
+                                         disable_progbar, initial_params=initial_params, hook=hook_fn)
         else:
-            self.sampler = _SingleSampler(kernel, num_samples, self.warmup_steps, disable_progbar)
-        super(MCMC, self).__init__(num_chains=num_chains)
-        warnings.warn("This interface to MCMC is deprecated and will be removed in the "
-                      "next version of Pyro. Please use `pyro.infer.mcmc.api` instead.",
-                      DeprecationWarning)
+            self.sampler = _UnarySampler(kernel, num_samples, self.warmup_steps, disable_progbar,
+                                         initial_params=initial_params, hook=hook_fn)
 
-    def _traces(self, *args, **kwargs):
-        for sample in self.sampler._traces(*args, **kwargs):
-            yield sample
+    def run(self, *args, **kwargs):
+        z_acc = defaultdict(lambda: [[] for _ in range(self.num_chains)])
+        for sample, chain_id in self.sampler.run(*args, **kwargs):
+            for k, v in sample.items():
+                z_acc[k][chain_id].append(v)
+        z_acc = {k: [torch.stack(l) for l in v] for k, v in z_acc.items()}
+        z_acc = {k: v[0] if self.num_chains == 1 else torch.stack(v) for k, v in z_acc.items()}
 
-    def marginal(self, sites=None):
-        """
-        Marginalizes latent sites from the sampler.
+        # If transforms is not explicitly provided, infer automatically using
+        # model args, kwargs.
+        if self.transforms is None and isinstance(self.kernel, (HMC, NUTS)):
+            if self.kernel.transforms is not None:
+                self.transforms = self.kernel.transforms
+            elif self.kernel.model:
+                _, _, self.transforms, _ = initialize_model(self.kernel.model,
+                                                            model_args=args,
+                                                            model_kwargs=kwargs)
+            else:
+                self.transforms = {}
 
-        :param list sites: optional list of sites for which we need to generate
-            the marginal distribution.
-        :returns: A :class:`MCMCMarginals` class instance.
-        :rtype: :class:`MCMCMarginals`.
-        """
-        return MCMCMarginals(self, sites)
-
-
-class MCMCMarginals(Marginals):
-    def diagnostics(self):
-        """
-        Gets some diagnostics statistics such as effective sample size and
-        split Gelman-Rubin from the sampler.
-        """
-        if self._diagnostics:
-            return self._diagnostics
-        support = self.support()
-        for site in self.sites:
-            site_support = support[site]
-            if self._trace_posterior.num_chains == 1:
-                site_support = site_support.unsqueeze(0)
-            site_stats = OrderedDict()
-            try:
-                site_stats["n_eff"] = stats.effective_sample_size(site_support)
-            except NotImplementedError:
-                site_stats["n_eff"] = torch.full(site_support.shape[2:], float("nan"),
-                                                 dtype=site_support.dtype, device=site_support.device)
-            site_stats["r_hat"] = stats.split_gelman_rubin(site_support)
-            self._diagnostics[site] = site_stats
-        return self._diagnostics
+        # transform samples back to constrained space
+        for name, transform in self.transforms.items():
+            z_acc[name] = transform.inv(z_acc[name])
+        return z_acc

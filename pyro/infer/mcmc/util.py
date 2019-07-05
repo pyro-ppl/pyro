@@ -1,4 +1,5 @@
 from collections import OrderedDict, defaultdict
+from functools import partial
 
 import torch
 from torch.distributions import biject_to
@@ -233,42 +234,79 @@ def _guess_max_plate_nesting(model, args, kwargs):
     return max_plate_nesting
 
 
-def _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms):
-    def potential_energy(params):
-        params_constrained = {k: transforms[k].inv(v) for k, v in params.items()}
-        cond_model = poutine.condition(model, params_constrained)
-        model_trace = poutine.trace(cond_model).get_trace(*model_args, **model_kwargs)
-        log_joint = trace_prob_evaluator.log_prob(model_trace)
-        for name, t in transforms.items():
+class _PEMaker(object):
+    def __init__(self, model, model_args, model_kwargs, trace_prob_evaluator, transforms):
+        self.model = model
+        self.model_args = model_args
+        self.model_kwargs = model_kwargs
+        self.trace_prob_evaluator = trace_prob_evaluator
+        self.transforms = transforms
+        self._compiled_fn = None
+
+    def _potential_fn(self, params):
+        params_constrained = {k: self.transforms[k].inv(v) for k, v in params.items()}
+        cond_model = poutine.condition(self.model, params_constrained)
+        model_trace = poutine.trace(cond_model).get_trace(*self.model_args,
+                                                          **self.model_kwargs)
+        log_joint = self.trace_prob_evaluator.log_prob(model_trace)
+        for name, t in self.transforms.items():
             log_joint = log_joint - torch.sum(
                 t.log_abs_det_jacobian(params_constrained[name], params[name]))
         return -log_joint
 
-    return potential_energy
+    def _potential_fn_jit(self, skip_jit_warnings, jit_options, params):
+        if not params:
+            return self._potential_fn(params)
+        names, vals = zip(*sorted(params.items()))
+        if self._compiled_fn:
+            return self._compiled_fn(*vals)
+        with pyro.validation_enabled(False), optional(ignore_jit_warnings(), skip_jit_warnings):
+            def _pe_jit(*zi):
+                params = dict(zip(names, zi))
+                return self._potential_fn(params)
+
+            self._compiled_fn = torch.jit.trace(_pe_jit, vals, **jit_options)
+            return self._compiled_fn(*vals)
+
+    def get_potential_fn(self, jit_compile=False, skip_jit_warnings=True, jit_options=None):
+        if jit_compile:
+            jit_options = {"check_trace": False} if jit_options is None else jit_options
+            return partial(self._potential_fn_jit, skip_jit_warnings, jit_options)
+        return self._potential_fn
 
 
 def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, prototype_params,
-                     max_tries_initial_params=100):
+                     max_tries_initial_params=100, num_chains=1):
     params = prototype_params
+    params_per_chain = defaultdict(list)
+    n = 0
     for i in range(max_tries_initial_params):
-        potential_energy = potential_fn(params)
-        if not torch_isnan(potential_energy) and not torch_isinf(potential_energy):
-            return params
-        trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
-        samples = {name: trace.nodes[name]["value"].detach() for name in params}
-        params = {k: transforms[k](v) for k, v in samples.items()}
+        while n < num_chains:
+            potential_energy = potential_fn(params)
+            if not torch_isnan(potential_energy) and not torch_isinf(potential_energy):
+                for k, v in params.items():
+                    params_per_chain[k].append(v)
+                n += 1
+            trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
+            samples = {name: trace.nodes[name]["value"].detach() for name in params}
+            params = {k: transforms[k](v) for k, v in samples.items()}
+        if num_chains == 1:
+            return {k: v[0] for k, v in params_per_chain.items()}
+        else:
+            return {k: torch.stack(v) for k, v in params_per_chain.items()}
     raise ValueError("Model specification seems incorrect - cannot find valid initial params.")
 
 
 def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max_plate_nesting=None,
-                     jit_compile=False, jit_options=None, skip_jit_warnings=False):
+                     jit_compile=False, jit_options=None, skip_jit_warnings=False, num_chains=1):
     """
-    Generates models' properties for a Pyro model to be used in HMC/NUTS kernels
-    which contains
-    * initial parameters to be sampled using a HMC kernel,
-    * a potential function whose input is a dict of parameters in unconstrained space,
-    * transforms to transform latent sites of `model` to unconstrained space,
-    * a prototype trace to be used in MCMC to consume traces from sampled parameters.
+    Given a Python callable with Pyro primitives, generates the following model-specific
+    properties needed for inference using HMC/NUTS kernels:
+
+    - initial parameters to be sampled using a HMC kernel,
+    - a potential function whose input is a dict of parameters in unconstrained space,
+    - transforms to transform latent sites of `model` to unconstrained space,
+    - a prototype trace to be used in MCMC to consume traces from sampled parameters.
 
     :param model: a Pyro model which contains Pyro primitives.
     :param tuple model_args: optional args taken by `model`.
@@ -289,6 +327,8 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
         :func:`torch.jit.trace` function.
     :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
         tracer when ``jit_compile=True``. Default is False.
+    :param int num_chains: Number of parallel chains. If `num_chains > 1`,
+        the returned `initial_params` will be a list with `num_chains` elements.
     :returns: a tuple of (`initial_params`, `potential_fn`, `transforms`, `prototype_trace`)
     """
     # XXX `transforms` domains are sites' supports
@@ -313,9 +353,9 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
         if node["fn"].has_enumerate_support:
             has_enumerable_sites = True
             continue
-        # we need to detach here because this sample can be a leaf variabl,
+        # we need to detach here because this sample can be a leaf variable,
         # so we can't change its requires_grad flag to calculate its grad in
-        # verlocity_verlet
+        # velocity_verlet
         prototype_samples[name] = node["value"].detach()
         if automatic_transform_enabled:
             transforms[name] = biject_to(node["fn"].support).inv
@@ -325,22 +365,11 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
                                                 max_plate_nesting)
     prototype_params = {k: transforms[k](v) for k, v in prototype_samples.items()}
 
-    potential_fn = _pe_maker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
-    if prototype_params and jit_compile:
-        jit_options = {"check_trace": False} if jit_options is None else jit_options
-        with pyro.validation_enabled(False), optional(ignore_jit_warnings(), skip_jit_warnings):
-            names, vals = zip(*sorted(prototype_params.items()))
+    pe_maker = _PEMaker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
 
-            def _pe_jit(*zi):
-                params = dict(zip(names, zi))
-                return potential_fn(params)
-
-            compiled_pe = torch.jit.trace(_pe_jit, vals, **jit_options)
-
-            def potential_fn(params):
-                _, vals = zip(*sorted(params.items()))
-                return compiled_pe(*vals)
-
+    # Note that we deliberately do not exercise jit compilation here so as to
+    # enable potential_fn to be picklable (a torch._C.Function cannot be pickled).
     init_params = _get_init_params(model, model_args, model_kwargs, transforms,
-                                   potential_fn, prototype_params)
+                                   pe_maker.get_potential_fn(), prototype_params, num_chains=num_chains)
+    potential_fn = pe_maker.get_potential_fn(jit_compile, skip_jit_warnings, jit_options)
     return init_params, potential_fn, transforms, model_trace
