@@ -145,7 +145,7 @@ class HMC(MCMCKernel):
     def _reset(self):
         self._t = 0
         self._accept_cnt = 0
-        self._num_diverging = 0
+        self._divergences = []
         self._prototype_trace = None
         self._initial_params = None
         self._z_last = None
@@ -310,7 +310,7 @@ class HMC(MCMCKernel):
         # when using a large step size.
         delta_energy = scalar_like(delta_energy, float("inf")) if torch_isnan(delta_energy) else delta_energy
         if delta_energy > self._max_sliced_energy and self._t >= self._warmup_steps:
-            self._num_diverging += 1
+            self._divergences.append(self._t - self._warmup_steps)
 
         accept_prob = (-delta_energy).exp().clamp(max=1.)
         rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(scalar_like(accept_prob, 0.),
@@ -332,6 +332,6 @@ class HMC(MCMCKernel):
                 ("step size", "{:.2e}".format(self.step_size)),
                 ("acc. rate", "{:.3f}".format(self._accept_cnt / self._t)),
         ])
-        if self._num_diverging > 0:
-            diagnostics['diverging'] = "{}".format(self._num_diverging)
+        if self._divergences:
+            diagnostics['divergences'] = "{}".format(len(self._divergences))
         return diagnostics

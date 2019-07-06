@@ -200,6 +200,8 @@ class MCMCLoggingHandler(logging.Handler):
             if self.progress_bar and record.msg_type == DIAGNOSTIC_MSG:
                 diagnostics = json.loads(record.getMessage(),
                                          object_pairs_hook=OrderedDict)
+                # TODO: consider set `refresh=False` to prevent tqdm hanging
+                # due to fast change in sampling speed
                 self.progress_bar.set_postfix(diagnostics)
                 self.progress_bar.update()
             else:

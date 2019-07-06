@@ -98,6 +98,11 @@ class _Worker(object):
                 self.result_queue.put_nowait((self.chain_id, sample))
                 self.event.wait()
                 self.event.clear()
+            # TODO: make a general pattern to return useful information at the end of sampling.
+            # For now, we only return divergences info. We should revise this based on user request.
+            self.result_queue.put_nowait((self.chain_id, self.kernel._divergences))
+            self.event.wait()
+            self.event.clear()
             self.result_queue.put_nowait((self.chain_id, None))
         except Exception as e:
             logger.exception(e)
@@ -153,6 +158,7 @@ class _UnarySampler(object):
         for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, hook_w_logging,
                                    *args, **kwargs):
             yield sample, 0  # sample, chain_id (default=0)
+        yield self.kernel._divergences, 0
         progress_bar.close()
 
 
@@ -310,9 +316,19 @@ class MCMC(object):
 
     def run(self, *args, **kwargs):
         z_acc = defaultdict(lambda: [[] for _ in range(self.num_chains)])
+        divergences = [None for _ in range(self.num_chains)]
         for sample, chain_id in self.sampler.run(*args, **kwargs):
-            for k, v in sample.items():
-                z_acc[k][chain_id].append(v)
+            if isinstance(sample, dict):
+                for k, v in sample.items():
+                    z_acc[k][chain_id].append(v)
+            else:  # diverging info
+                divergences[chain_id] = sample
+
+        diverging_mask = torch.zeros((self.num_chains, self.num_samples), dtype=torch.bool)
+        for i in range(self.num_chains):
+            diverging_mask[i][divergences[i]] = True
+        self._diverging_mask = diverging_mask
+
         z_acc = {k: [torch.stack(l) for l in v] for k, v in z_acc.items()}
         z_acc = {k: v[0] if self.num_chains == 1 else torch.stack(v) for k, v in z_acc.items()}
 

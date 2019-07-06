@@ -355,7 +355,7 @@ class NUTS(HMC):
                 # stop doubling
                 if new_tree.diverging:
                     if self._t >= self._warmup_steps:
-                        self._num_diverging += 1
+                        self._divergences.append(self._t - self._warmup_steps)
                     break
 
                 if new_tree.turning:
