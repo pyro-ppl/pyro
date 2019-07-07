@@ -329,8 +329,8 @@ class HMC(MCMCKernel):
 
     def diagnostics(self):
         diagnostics = OrderedDict([
-                ("step size", "{:.2e}".format(self.step_size)),
-                ("acc. rate", "{:.3f}".format(self._accept_cnt / self._t)),
+            ("step size", "{:.2e}".format(self.step_size)),
+            ("acc. rate", "{:.3f}".format(self._accept_cnt / self._t)),
         ])
         if self._divergences:
             diagnostics['divergences'] = "{}".format(len(self._divergences))
