@@ -335,3 +335,6 @@ class HMC(MCMCKernel):
         if self._divergences:
             diagnostics['divergences'] = "{}".format(len(self._divergences))
         return diagnostics
+
+    def post_sampling(self):
+        return self._divergences

@@ -35,6 +35,12 @@ class MCMCKernel(object):
         """
         return None
 
+    def post_sampling(self):
+        """
+        Returns useful information after finishing sampling process.
+        """
+        return None
+
     def end_warmup(self):
         """
         Optional method to tell kernel that warm-up phase has been finished.

@@ -98,11 +98,6 @@ class _Worker(object):
                 self.result_queue.put_nowait((self.chain_id, sample))
                 self.event.wait()
                 self.event.clear()
-            # TODO: make a general pattern to return useful information at the end of sampling.
-            # For now, we only return divergences info. We should revise this based on user request.
-            self.result_queue.put_nowait((self.chain_id, self.kernel._divergences))
-            self.event.wait()
-            self.event.clear()
             self.result_queue.put_nowait((self.chain_id, None))
         except Exception as e:
             logger.exception(e)
@@ -119,6 +114,7 @@ def _gen_samples(kernel, warmup_steps, num_samples, hook, *args, **kwargs):
         params = kernel.sample(params)
         hook(kernel, params, 'sample', i)
         yield params
+    yield kernel.post_sampling()
     kernel.cleanup()
 
 
@@ -160,7 +156,6 @@ class _UnarySampler(object):
         for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, hook_w_logging,
                                    *args, **kwargs):
             yield sample, 0  # sample, chain_id (default=0)
-        yield self.kernel._divergences, 0
         progress_bar.close()
 
 
