@@ -127,7 +127,9 @@ def _add_logging_hook(logger, progress_bar=None, hook=None):
         diagnostics = json.dumps(kernel.diagnostics())
         logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
         if progress_bar:
-            progress_bar.set_description(stage)
+            # TODO: consider set `refresh=False` to prevent tqdm hanging
+            # due to fast change in sampling speed
+            progress_bar.set_description(stage, refresh=True)
         if hook:
             hook(kernel, params, stage, i)
 

@@ -202,7 +202,7 @@ class MCMCLoggingHandler(logging.Handler):
                                          object_pairs_hook=OrderedDict)
                 # TODO: consider set `refresh=False` to prevent tqdm hanging
                 # due to fast change in sampling speed
-                self.progress_bar.set_postfix(diagnostics)
+                self.progress_bar.set_postfix(diagnostics, refresh=True)
                 self.progress_bar.update()
             else:
                 self.log_handler.handle(record)
