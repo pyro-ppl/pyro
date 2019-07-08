@@ -13,7 +13,7 @@ import pyro.poutine as poutine
 from pyro.infer.mcmc import MCMC, NUTS
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
-pyro.enable_validation(True)
+pyro.enable_validation(__debug__)
 pyro.set_rng_seed(0)
 
 

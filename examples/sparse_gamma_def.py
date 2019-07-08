@@ -34,7 +34,7 @@ from pyro.contrib.easyguide import EasyGuide
 
 
 torch.set_default_tensor_type('torch.FloatTensor')
-pyro.enable_validation(True)
+pyro.enable_validation(__debug__)
 pyro.util.set_rng_seed(0)
 
 
