@@ -6,7 +6,16 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-import pyro.infer.smcfilter as smcfilter
+from pyro.infer import SMCFilter
+
+"""
+This file demonstrates how to use the SMCFilter algorithm with
+a simple model of a noisy harmonic oscillator of the form:
+    
+    z[t] ~ N(A*z[t-1], B*sigma_z)
+    y[t] ~ N(z[t][0], sigma_y)
+
+"""
 
 
 class SimpleHarmonicModel:
@@ -73,7 +82,7 @@ def main(args):
     model = SimpleHarmonicModel(args.process_noise, args.measurement_noise)
     guide = SimpleHarmonicModel_Guide(model)
 
-    smc = smcfilter.SMCFilter(model, guide, num_particles=args.num_particles, max_plate_nesting=0)
+    smc = SMCFilter(model, guide, num_particles=args.num_particles, max_plate_nesting=0)
 
     zs, ys = generate_data(args)
     smc.init(initial=torch.tensor([1., 0.]))
