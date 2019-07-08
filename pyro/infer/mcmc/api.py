@@ -122,7 +122,7 @@ def _add_logging_hook(logger, progress_bar=None, hook=None):
         diagnostics = json.dumps(kernel.diagnostics())
         logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
         if progress_bar:
-            progress_bar.set_description(stage)
+            progress_bar.set_description(stage, refresh=False)
         if hook:
             hook(kernel, params, stage, i)
 
