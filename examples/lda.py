@@ -105,7 +105,7 @@ def main(args):
     logging.info('Generating data')
     pyro.set_rng_seed(0)
     pyro.clear_param_store()
-    pyro.enable_validation(True)
+    pyro.enable_validation(__debug__)
 
     # We can generate synthetic data directly by calling the model.
     true_topic_weights, true_topic_words, data = model(args=args)

@@ -14,7 +14,7 @@ from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.api import MCMC
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
-pyro.enable_validation(True)
+pyro.enable_validation(__debug__)
 pyro.set_rng_seed(0)
 
 
