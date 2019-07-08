@@ -54,7 +54,7 @@ class SimpleHarmonicModel_Guide:
 def generate_data(args):
     model = SimpleHarmonicModel(args.process_noise, args.measurement_noise)
 
-    initial = torch.tensor([1.,0.])
+    initial = torch.tensor([1., 0.])
     model.init(initial=initial)
     zs = [initial]
     ys = [None]
@@ -76,7 +76,7 @@ def main(args):
     smc = smcfilter.SMCFilter(model, guide, num_particles=args.num_particles, max_plate_nesting=0)
 
     zs, ys = generate_data(args)
-    smc.init(initial=torch.tensor([1.,0.]))
+    smc.init(initial=torch.tensor([1., 0.]))
     for y in ys[1:]:
         smc.step(y)
 
