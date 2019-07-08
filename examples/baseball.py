@@ -262,21 +262,23 @@ def main(args):
     init_params, potential_fn, transforms, _ = initialize_model(fully_pooled, model_args=(at_bats, hits),
                                                                 num_chains=args.num_chains)
     nuts_kernel = NUTS(potential_fn=potential_fn)
-    samples_fully_pooled = MCMC(nuts_kernel,
-                                num_samples=args.num_samples,
-                                warmup_steps=args.warmup_steps,
-                                num_chains=args.num_chains,
-                                initial_params=init_params,
-                                transforms=transforms).run(at_bats, hits)
+    mcmc = MCMC(nuts_kernel,
+                num_samples=args.num_samples,
+                warmup_steps=args.warmup_steps,
+                num_chains=args.num_chains,
+                initial_params=init_params,
+                transforms=transforms)
+    num_chains = mcmc.num_chains  # Note that this might be less than args.num_chains  when CPU cores are limited.
+    samples_fully_pooled = mcmc.run(at_bats, hits)
     logging.info("\nModel: Fully Pooled")
     logging.info("===================")
     logging.info("\nphi:")
     logging.info(summary(samples_fully_pooled,
                          sites=["phi"],
                          player_names=player_names,
-                         num_chains=args.num_chains)["phi"])
-    sample_posterior_predictive(fully_pooled, samples_fully_pooled, baseball_dataset, args.num_chains)
-    evaluate_log_posterior_density(fully_pooled, samples_fully_pooled, baseball_dataset, args.num_chains)
+                         num_chains=num_chains)["phi"])
+    sample_posterior_predictive(fully_pooled, samples_fully_pooled, baseball_dataset, num_chains)
+    evaluate_log_posterior_density(fully_pooled, samples_fully_pooled, baseball_dataset, num_chains)
 
     # (2) No Pooling Model
     init_params, potential_fn, transforms, _ = initialize_model(not_pooled, model_args=(at_bats, hits),
@@ -294,9 +296,9 @@ def main(args):
     logging.info(summary(samples_not_pooled,
                          sites=["phi"],
                          player_names=player_names,
-                         num_chains=args.num_chains)["phi"])
-    sample_posterior_predictive(not_pooled, samples_not_pooled, baseball_dataset, args.num_chains)
-    evaluate_log_posterior_density(not_pooled, samples_not_pooled, baseball_dataset, args.num_chains)
+                         num_chains=num_chains)["phi"])
+    sample_posterior_predictive(not_pooled, samples_not_pooled, baseball_dataset, num_chains)
+    evaluate_log_posterior_density(not_pooled, samples_not_pooled, baseball_dataset, num_chains)
 
     # (3) Partially Pooled Model
     init_params, potential_fn, transforms, _ = initialize_model(partially_pooled, model_args=(at_bats, hits),
@@ -317,9 +319,9 @@ def main(args):
     logging.info(summary(samples_partially_pooled,
                          sites=["phi"],
                          player_names=player_names,
-                         num_chains=args.num_chains)["phi"])
-    sample_posterior_predictive(partially_pooled, samples_partially_pooled, baseball_dataset, args.num_chains)
-    evaluate_log_posterior_density(partially_pooled, samples_partially_pooled, baseball_dataset, args.num_chains)
+                         num_chains=num_chains)["phi"])
+    sample_posterior_predictive(partially_pooled, samples_partially_pooled, baseball_dataset, num_chains)
+    evaluate_log_posterior_density(partially_pooled, samples_partially_pooled, baseball_dataset, num_chains)
 
     # (4) Partially Pooled with Logit Model
     init_params, potential_fn, transforms, _ = initialize_model(partially_pooled_with_logit,
@@ -339,11 +341,11 @@ def main(args):
                          sites=["alpha"],
                          player_names=player_names,
                          transforms={"alpha": lambda x: 1. / (1 + (-x).exp())},
-                         num_chains=args.num_chains)["alpha"])
+                         num_chains=num_chains)["alpha"])
     sample_posterior_predictive(partially_pooled_with_logit, samples_partially_pooled_logit,
-                                baseball_dataset, args.num_chains)
+                                baseball_dataset, num_chains)
     evaluate_log_posterior_density(partially_pooled_with_logit, samples_partially_pooled_logit,
-                                   baseball_dataset, args.num_chains)
+                                   baseball_dataset, num_chains)
 
 
 if __name__ == "__main__":
