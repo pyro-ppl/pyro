@@ -1,10 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
-import pyro
-import pyro.poutine as poutine
-import pyro.distributions as dist
-
 import torch
+
+import pyro
+import pyro.distributions as dist
+import pyro.poutine as poutine
 
 
 def _extract_samples(trace):

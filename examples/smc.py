@@ -2,11 +2,11 @@ from __future__ import absolute_import, division, print_function
 
 import argparse
 
+import torch
+
 import pyro
 import pyro.distributions as dist
 import pyro.infer.smcfilter as smcfilter
-
-import torch
 
 
 class SimpleHarmonicModel:
