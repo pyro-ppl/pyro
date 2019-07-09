@@ -94,8 +94,6 @@ def test_likelihood_ratio():
     zs_pred = [torch.tensor([1., 0.])]
     zs_pred += [values.get("z_{}".format(t)) for t in range(1, 51)]
 
-    for t in range(51):
-        print("{}\t{}\t{}\t{}".format(t, zs[t], zs_true[t], zs_pred[t]))
     assert(score_latent(zs_true, ys_true) > score_latent(zs, ys_true))
     assert(score_latent(zs_pred, ys_true) > score_latent(zs_pred, ys))
     assert(score_latent(zs_pred, ys_true) > score_latent(zs, ys_true))
