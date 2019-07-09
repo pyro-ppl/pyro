@@ -1,8 +1,7 @@
 import warnings
 from collections import OrderedDict, defaultdict
-from functools import partial
+from functools import partial, reduce
 
-import numpy as np
 import torch
 from torch.distributions import biject_to
 from opt_einsum import shared_intermediates
@@ -424,14 +423,14 @@ def predictive(model, posterior_samples, *args, **kwargs):
     :param kwargs: model kwargs; and other keyword arguments (see below).
 
     :Keyword Arguments:
-        * **num_chains** - number of chains (determines leading dimension of tensors in
+        * **num_chains** (``int``) - number of chains (determines leading dimension of tensors in
           `posterior_samples`). By default, this is assumed to be 1.
-        * **num_samples** - number of samples to draw from the predictive distribution.
-          By default, the number of sites is equal to the number of posterior
-          samples.
-        * **return_sites** - sites to return; by default only sample sites not present
+        * **num_samples** (``int``) - number of samples to draw from the predictive distribution.
+          This argument has no effect if ``posterior_samples`` is non-empty, in which case, the
+          leading dimension size of samples in ``posterior_samples`` is used.
+        * **return_sites** (``list``) - sites to return; by default only sample sites not present
           in `posterior_samples` are returned.
-        * **return_trace** - whether to return the full trace. Note that this is vectorized
+        * **return_trace** (``bool``) - whether to return the full trace. Note that this is vectorized
           over `num_samples`.
 
     :return: dict of samples from the predictive distribution, or a single vectorized
@@ -446,22 +445,25 @@ def predictive(model, posterior_samples, *args, **kwargs):
 
     max_plate_nesting = _guess_max_plate_nesting(model, args, kwargs)
     model_trace = prune_subsample_sites(poutine.trace(model).get_trace(*args, **kwargs))
+    reshaped_samples = {}
 
-    resampled_idxs = None
     for name, sample in posterior_samples.items():
         if num_chains > 1:
             sample = sample.reshape((-1,) + sample.shape[2:])
 
+        batch_size, sample_shape = sample.shape[0], sample.shape[1:]
+
         if num_samples is None:
-            num_samples = sample.shape[0]
+            num_samples = batch_size
 
-        if resampled_idxs is None:
-            resampled_idxs = torch.randint(0, sample.shape[0], size=(num_samples,), device=sample.device)
+        elif num_samples != batch_size:
+            warnings.warn("Sample's leading dimension size {} is different from the "
+                          "provided {} num_samples argument. Defaulting to {}."
+                          .format(batch_size, num_samples, batch_size), UserWarning)
+            num_samples = batch_size
 
-        sample_shape = sample.shape[1:]
-        sample = sample.index_select(0, resampled_idxs)
         sample = sample.reshape((num_samples,) + (1,) * (max_plate_nesting - len(sample_shape)) + sample_shape)
-        posterior_samples[name] = sample
+        reshaped_samples[name] = sample
 
     if num_samples is None:
         raise ValueError("No sample sites in model to infer `num_samples`.")
@@ -473,7 +475,7 @@ def predictive(model, posterior_samples, *args, **kwargs):
             if site in return_sites:
                 return_site_shapes[site] = site_shape
         else:
-            if site not in posterior_samples:
+            if site not in reshaped_samples:
                 return_site_shapes[site] = site_shape
 
     def _vectorized_fn(fn):
@@ -491,7 +493,7 @@ def predictive(model, posterior_samples, *args, **kwargs):
 
         return wrapped_fn
 
-    trace = poutine.trace(poutine.condition(_vectorized_fn(model), posterior_samples))\
+    trace = poutine.trace(poutine.condition(_vectorized_fn(model), reshaped_samples))\
         .get_trace(*args, **kwargs)
 
     if return_trace:
@@ -500,7 +502,7 @@ def predictive(model, posterior_samples, *args, **kwargs):
     predictions = {}
     for site, shape in return_site_shapes.items():
         value = trace.nodes[site]['value']
-        if value.numel() < int(np.product(shape)):
+        if value.numel() < reduce((lambda x, y: x * y), shape):
             predictions[site] = value.expand(shape)
         else:
             predictions[site] = value.reshape(shape)

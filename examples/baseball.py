@@ -244,7 +244,10 @@ def evaluate_log_posterior_density(model, posterior_samples, baseball_dataset, n
     log_joint = 0.
     for name, site in trace.nodes.items():
         if site["type"] == "sample" and not site_is_subsample(site):
-            log_joint += sum_rightmost(site['log_prob'], -1)
+            # We use `sum_rightmost(x, -1)` to take the sum of all rightmost dimensions of `x`
+            # except the first dimension (which corresponding to the number of posterior samples)
+            site_log_prob_sum = sum_rightmost(site['log_prob'], -1)
+            log_joint += site_log_prob_sum
     posterior_pred_density = torch.logsumexp(log_joint, dim=0) - math.log(log_joint.shape[0])
     logging.info("\nLog posterior predictive density")
     logging.info("--------------------------------")
@@ -340,7 +343,7 @@ def main(args):
     logging.info(summary(samples_partially_pooled_logit,
                          sites=["alpha"],
                          player_names=player_names,
-                         transforms={"alpha": lambda x: 1. / (1 + (-x).exp())},
+                         transforms={"alpha": torch.sigmoid},
                          num_chains=num_chains)["alpha"])
     sample_posterior_predictive(partially_pooled_with_logit, samples_partially_pooled_logit,
                                 baseball_dataset, num_chains)

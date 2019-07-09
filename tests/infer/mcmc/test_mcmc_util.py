@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 import pyro
@@ -5,7 +6,7 @@ import pyro.distributions as dist
 from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.util import initialize_model, predictive
-from pyro.util import ignore_experimental_warning
+from pyro.util import ignore_experimental_warning, optional
 from tests.common import assert_close
 
 
@@ -23,7 +24,8 @@ def beta_bernoulli():
     return model, data, true_probs
 
 
-def test_predictive():
+@pytest.mark.parametrize("num_samples", [100, 200, None])
+def test_predictive(num_samples):
     model, data, true_probs = beta_bernoulli()
     init_params, potential_fn, transforms, _ = initialize_model(model,
                                                                 model_args=(data,))
@@ -33,7 +35,13 @@ def test_predictive():
                    initial_params=init_params,
                    warmup_steps=100).run(data)
     with ignore_experimental_warning():
-        predictive_samples = predictive(model, samples,
-                                        return_sites=["beta", "obs"],
-                                        num_samples=200)
+        with optional(pytest.warns(UserWarning), num_samples not in (None, 100)):
+            predictive_samples = predictive(model, samples,
+                                            return_sites=["beta", "obs"])
+
+    # check shapes
+    assert predictive_samples["beta"].shape == (100, 5)
+    assert predictive_samples["obs"].shape == (100, 1000, 5)
+
+    # check sample mean
     assert_close(predictive_samples["obs"].reshape([-1, 5]).mean(0), true_probs, rtol=0.1)
