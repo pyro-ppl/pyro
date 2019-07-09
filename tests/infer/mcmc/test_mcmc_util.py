@@ -37,6 +37,7 @@ def test_predictive(num_samples):
     with ignore_experimental_warning():
         with optional(pytest.warns(UserWarning), num_samples not in (None, 100)):
             predictive_samples = predictive(model, samples,
+                                            num_samples=num_samples,
                                             return_sites=["beta", "obs"])
 
     # check shapes
