@@ -380,6 +380,17 @@ def optional(context_manager, condition):
         yield
 
 
+class ExperimentalWarning(UserWarning):
+    pass
+
+
+@contextmanager
+def ignore_experimental_warning():
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=ExperimentalWarning)
+        yield
+
+
 def deep_getattr(obj, name):
     """
     Python getattr() for arbitrarily deep attributes

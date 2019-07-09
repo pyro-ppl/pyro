@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import pytest
 import torch
 
 import pyro
@@ -10,6 +11,9 @@ from pyro.contrib.autoguide import AutoDelta, AutoDiagonalNormal, AutoLaplaceApp
 from pyro.infer import SVI, TracePredictive, Trace_ELBO
 from pyro.infer.mcmc import MCMC, NUTS
 from tests.common import assert_close, assert_equal
+
+
+pytestmark = pytest.mark.filterwarnings("ignore::PendingDeprecationWarning")
 
 
 def model(num_trials):

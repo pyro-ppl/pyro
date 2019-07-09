@@ -52,7 +52,7 @@ def local_guide(latent, k):
 
 def main(args):
     pyro.set_rng_seed(0)
-    pyro.enable_validation()
+    pyro.enable_validation(__debug__)
 
     optim = Adam({"lr": 0.1})
     elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()

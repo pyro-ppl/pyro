@@ -1,5 +1,6 @@
+import warnings
 from collections import OrderedDict, defaultdict
-from functools import partial
+from functools import partial, reduce
 
 import torch
 from torch.distributions import biject_to
@@ -10,9 +11,11 @@ import pyro.poutine as poutine
 from pyro.distributions.util import broadcast_shape, logsumexp
 from pyro.infer import config_enumerate
 from pyro.infer.util import is_validation_enabled
+from pyro.ops import stats
 from pyro.ops.contract import contract_to_tensor
 from pyro.poutine.subsample_messenger import _Subsample
-from pyro.util import check_site_shape, ignore_jit_warnings, optional, torch_isinf, torch_isnan
+from pyro.poutine.util import prune_subsample_sites
+from pyro.util import check_site_shape, ignore_jit_warnings, optional, torch_isinf, torch_isnan, ExperimentalWarning
 
 
 class TraceTreeEvaluator(object):
@@ -373,3 +376,135 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
                                    pe_maker.get_potential_fn(), prototype_params, num_chains=num_chains)
     potential_fn = pe_maker.get_potential_fn(jit_compile, skip_jit_warnings, jit_options)
     return init_params, potential_fn, transforms, model_trace
+
+
+def diagnostics(samples, num_chains=1):
+    """
+    Gets diagnostics statistics such as effective sample size and
+    split Gelman-Rubin using the samples drawn from the posterior
+    distribution.
+
+    :param dict samples: dictionary of samples keyed by site name.
+    :param int num_chains: number of chains. For more than a single chain,
+        the leading dimension of samples in `samples` must match
+        the number of chains.
+    :return: dictionary of diagnostic stats for each sample site.
+    """
+    diagnostics = {}
+    for site, support in samples.items():
+        if num_chains == 1:
+            support = support.unsqueeze(0)
+        site_stats = OrderedDict()
+        try:
+            site_stats["n_eff"] = stats.effective_sample_size(support)
+        except NotImplementedError:
+            site_stats["n_eff"] = torch.full(support.shape[2:], float("nan"),
+                                             dtype=support.dtype, device=support.device)
+        site_stats["r_hat"] = stats.split_gelman_rubin(support)
+        diagnostics[site] = site_stats
+    return diagnostics
+
+
+def predictive(model, posterior_samples, *args, **kwargs):
+    """
+    Run model by sampling latent parameters from `posterior_samples`, and return
+    values at sample sites from the forward run. By default, only sites not contained in
+    `posterior_samples` are returned. This can be modified by changing the `return_sites`
+    keyword argument.
+
+    .. warning::
+        The interface for the `predictive` class is experimental, and
+        might change in the future. e.g. a unified interface for predictive
+        with SVI.
+
+    :param model: Python callable containing Pyro primitives.
+    :param dict posterior_samples: dictionary of samples from the posterior.
+    :param args: model arguments.
+    :param kwargs: model kwargs; and other keyword arguments (see below).
+
+    :Keyword Arguments:
+        * **num_chains** (``int``) - number of chains (determines leading dimension of tensors in
+          `posterior_samples`). By default, this is assumed to be 1.
+        * **num_samples** (``int``) - number of samples to draw from the predictive distribution.
+          This argument has no effect if ``posterior_samples`` is non-empty, in which case, the
+          leading dimension size of samples in ``posterior_samples`` is used.
+        * **return_sites** (``list``) - sites to return; by default only sample sites not present
+          in `posterior_samples` are returned.
+        * **return_trace** (``bool``) - whether to return the full trace. Note that this is vectorized
+          over `num_samples`.
+
+    :return: dict of samples from the predictive distribution, or a single vectorized
+        `trace` (if `return_trace=True`).
+    """
+    warnings.warn('This function or its interface might change in the future.',
+                  ExperimentalWarning)
+    num_chains = kwargs.pop('num_chains', 1)
+    num_samples = kwargs.pop('num_samples', None)
+    return_sites = kwargs.pop('return_sites', None)
+    return_trace = kwargs.pop('return_trace', False)
+
+    max_plate_nesting = _guess_max_plate_nesting(model, args, kwargs)
+    model_trace = prune_subsample_sites(poutine.trace(model).get_trace(*args, **kwargs))
+    reshaped_samples = {}
+
+    for name, sample in posterior_samples.items():
+        if num_chains > 1:
+            sample = sample.reshape((-1,) + sample.shape[2:])
+
+        batch_size, sample_shape = sample.shape[0], sample.shape[1:]
+
+        if num_samples is None:
+            num_samples = batch_size
+
+        elif num_samples != batch_size:
+            warnings.warn("Sample's leading dimension size {} is different from the "
+                          "provided {} num_samples argument. Defaulting to {}."
+                          .format(batch_size, num_samples, batch_size), UserWarning)
+            num_samples = batch_size
+
+        sample = sample.reshape((num_samples,) + (1,) * (max_plate_nesting - len(sample_shape)) + sample_shape)
+        reshaped_samples[name] = sample
+
+    if num_samples is None:
+        raise ValueError("No sample sites in model to infer `num_samples`.")
+
+    return_site_shapes = {}
+    for site in model_trace.stochastic_nodes + model_trace.observation_nodes:
+        site_shape = (num_samples,) + model_trace.nodes[site]['value'].shape
+        if return_sites:
+            if site in return_sites:
+                return_site_shapes[site] = site_shape
+        else:
+            if site not in reshaped_samples:
+                return_site_shapes[site] = site_shape
+
+    def _vectorized_fn(fn):
+        """
+        Wraps a callable inside an outermost :class:`~pyro.plate` to parallelize
+        sampling from the posterior predictive.
+
+        :param fn: arbitrary callable containing Pyro primitives.
+        :return: wrapped callable.
+        """
+
+        def wrapped_fn(*args, **kwargs):
+            with pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting-1):
+                return fn(*args, **kwargs)
+
+        return wrapped_fn
+
+    trace = poutine.trace(poutine.condition(_vectorized_fn(model), reshaped_samples))\
+        .get_trace(*args, **kwargs)
+
+    if return_trace:
+        return trace
+
+    predictions = {}
+    for site, shape in return_site_shapes.items():
+        value = trace.nodes[site]['value']
+        if value.numel() < reduce((lambda x, y: x * y), shape):
+            predictions[site] = value.expand(shape)
+        else:
+            predictions[site] = value.reshape(shape)
+
+    return predictions

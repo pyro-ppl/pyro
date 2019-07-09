@@ -81,9 +81,8 @@ class HMC(MCMCKernel):
         ...     return y
         >>>
         >>> hmc_kernel = HMC(model, step_size=0.0855, num_steps=4)
-        >>> mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
-        >>> posterior = mcmc_run.marginal('beta').empirical['beta']
-        >>> posterior.mean  # doctest: +SKIP
+        >>> mcmc_samples = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
+        >>> mcmc_samples['beta'].mean(0)  # doctest: +SKIP
         tensor([ 0.9819,  1.9258,  2.9737])
     """
 

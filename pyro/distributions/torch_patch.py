@@ -53,7 +53,9 @@ def _Transform__init__(self, cache_size=0):
 def _Transform__getstate__(self):
     attrs = {}
     for k, v in self.__dict__.items():
-        if not isinstance(v, weakref.ref):
+        if isinstance(v, weakref.ref):
+            attrs[k] = None
+        else:
             attrs[k] = v
     return attrs
 
