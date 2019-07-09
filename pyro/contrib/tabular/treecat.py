@@ -479,9 +479,9 @@ class TreeCatTrainerMap(TreeCatTrainer):
 DEFAULT_NUTS_CONFIG = {
     "warmup_steps": 200,
     "max_tree_depth": 5,
-    "jit_compile": 1000000000,
+    "jit_compile": None,
     "ignore_jit_warnings": True,
-    "jit_options": {},
+    "jit_options": {"optimize": False},
 }
 
 
@@ -497,12 +497,13 @@ class TreeCatTrainerNuts(TreeCatTrainer):
         super(TreeCatTrainerNuts, self).__init__(model, backend=backend)
         self.nuts_config = DEFAULT_NUTS_CONFIG.copy()
         self.nuts_config.update(nuts_config)
+        self.nuts_config["jit_options"] = DEFAULT_NUTS_CONFIG["jit_options"]
+        self.nuts_config["jit_options"].update(nuts_config.get("jit_options", {}))
         self.nuts_config.pop("warmup_steps", None)
         self._model = model
         self._nuts = None
-        if self.nuts_config["jit_compile"]:
-            self._key_counts = defaultdict(int)
-            self._compiled = {}
+        self._key_counts = defaultdict(int)
+        self._compiled = {}
 
     def step(self, data, mask=None, num_rows=None):
         """
@@ -561,8 +562,9 @@ class TreeCatTrainerNuts(TreeCatTrainer):
                 transforms[name] = biject_to(site["fn"].support).inv
                 initial_params[name] = transforms[name](site["value"]).detach()
 
-        potential_fn = (self._jit_potential_fn if self.nuts_config["jit_compile"] else
-                        self._potential_fn)
+        potential_fn = (self._potential_fn
+                        if self.nuts_config["jit_compile"] is None else
+                        self._jit_potential_fn)
         self._nuts = NUTS(model=None, potential_fn=potential_fn, transforms=transforms,
                           **self.nuts_config)
         self._nuts.initial_params = initial_params
