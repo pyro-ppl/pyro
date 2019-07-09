@@ -49,7 +49,7 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
                 if num_samples[pbar_pos] == warmup_steps:
                     progress_bars.set_description("Sample [{}]".format(pbar_pos + 1), pos=pbar_pos)
                 diagnostics = json.loads(msg, object_pairs_hook=OrderedDict)
-                progress_bars.set_postfix(diagnostics, pos=pbar_pos)
+                progress_bars.set_postfix(diagnostics, pos=pbar_pos, refresh=False)
                 progress_bars.update(pos=pbar_pos)
             else:
                 logger.handle(record)
