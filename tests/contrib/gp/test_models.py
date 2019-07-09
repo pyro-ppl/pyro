@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import logging
-from collections import defaultdict, namedtuple
+from collections import namedtuple
 
 import pytest
 import torch
