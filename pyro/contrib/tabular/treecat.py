@@ -485,6 +485,13 @@ DEFAULT_NUTS_CONFIG = {
 }
 
 
+def _recursive_update(destin, source):
+    for key, value in source.items():
+        destin.setdefault(key, value)
+        if isinstance(value, dict):
+            _recursive_update(destin[key], value)
+
+
 class TreeCatTrainerNuts(TreeCatTrainer):
     """
     Maintains state to initialize and train a :class:`TreeCat` model.
@@ -496,9 +503,7 @@ class TreeCatTrainerNuts(TreeCatTrainer):
     def __init__(self, model, backend="cpp", nuts_config={}):
         super(TreeCatTrainerNuts, self).__init__(model, backend=backend)
         self.nuts_config = DEFAULT_NUTS_CONFIG.copy()
-        self.nuts_config.update(nuts_config)
-        self.nuts_config["jit_options"] = DEFAULT_NUTS_CONFIG["jit_options"]
-        self.nuts_config["jit_options"].update(nuts_config.get("jit_options", {}))
+        _recursive_update(self.nuts_config, nuts_config)
         self.nuts_config.pop("warmup_steps", None)
         self._model = model
         self._nuts = None
