@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import numbers
+import warnings
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict, defaultdict
 
@@ -292,6 +293,9 @@ class TracePredictive(TracePosterior):
         self.num_samples = num_samples
         self.keep_sites = keep_sites
         super(TracePredictive, self).__init__()
+        warnings.warn('This class will be deprecated in the next release. For MCMC, '
+                      'please use the `pyro.infer.mcmc.util.predictive` function '
+                      'instead.', PendingDeprecationWarning)
 
     def _traces(self, *args, **kwargs):
         if not self.posterior.exec_traces:

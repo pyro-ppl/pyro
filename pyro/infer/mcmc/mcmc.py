@@ -273,7 +273,7 @@ class MCMC(TracePosterior):
             self.sampler = _SingleSampler(kernel, num_samples, self.warmup_steps, disable_progbar)
         super(MCMC, self).__init__(num_chains=num_chains)
         warnings.warn("This interface to MCMC is deprecated and will be removed in the "
-                      "next version of Pyro. Please use `pyro.infer.mcmc.api` instead.",
+                      "next version of Pyro. Please use `pyro.infer.mcmc.api.MCMC` instead.",
                       DeprecationWarning)
 
     def _traces(self, *args, **kwargs):
@@ -293,6 +293,13 @@ class MCMC(TracePosterior):
 
 
 class MCMCMarginals(Marginals):
+    def __init__(self, trace_posterior, sites=None, validate_args=None):
+        warnings.warn("This class is deprecated and will be removed in the "
+                      "next version of Pyro. Consider using `pyro.infer.util.diagnostics` "
+                      "to get diagnostic stats on posterior samples.",
+                      DeprecationWarning)
+        super(MCMCMarginals, self).__init__(trace_posterior, sites, validate_args)
+
     def diagnostics(self):
         """
         Gets some diagnostics statistics such as effective sample size and

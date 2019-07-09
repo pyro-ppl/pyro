@@ -299,6 +299,12 @@ class MCMC(object):
                               "Resetting number of chains to available CPU count."
                               .format(num_chains, available_cpu))
                 num_chains = available_cpu
+                # adjust initial_params accordingly
+                if num_chains == 1:
+                    initial_params = {k: v[0] for k, v in initial_params.items()}
+                else:
+                    initial_params = {k: v[:num_chains] for k, v in initial_params.items()}
+
         self.num_chains = num_chains
 
         if num_chains > 1:
