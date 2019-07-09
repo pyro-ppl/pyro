@@ -182,7 +182,7 @@ class _SingleSampler(TracePosterior):
         params = init_params
         for _ in range(num_samples):
             params = self.kernel.sample(params)
-            diagnostics = json.dumps(self.kernel.diagnostics())
+            diagnostics = json.dumps(self.kernel.logging())
             self.logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
             yield params
 

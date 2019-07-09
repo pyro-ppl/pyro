@@ -25,9 +25,9 @@ class MCMCKernel(object):
         """
         pass
 
-    def diagnostics(self):
+    def logging(self):
         """
-        Relevant diagnostics (optional) to be printed at regular intervals
+        Relevant logging information to be printed at regular intervals
         of the MCMC run. Returns `None` by default.
 
         :return: String containing the diagnostic summary. e.g. acceptance rate
@@ -35,9 +35,9 @@ class MCMCKernel(object):
         """
         return None
 
-    def post_sampling(self):
+    def diagnostics(self):
         """
-        Returns useful information after finishing sampling process.
+        Returns useful diagnostics after finishing sampling process.
         """
         return None
 

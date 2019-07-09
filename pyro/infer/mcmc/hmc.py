@@ -326,14 +326,11 @@ class HMC(MCMCKernel):
 
         return z.copy()
 
-    def diagnostics(self):
-        diagnostics = OrderedDict([
+    def logging(self):
+        return OrderedDict([
             ("step size", "{:.2e}".format(self.step_size)),
-            ("acc. rate", "{:.3f}".format(self._accept_cnt / self._t)),
+            ("acc. rate", "{:.3f}".format(self._accept_cnt / self._t))
         ])
-        if self._divergences:
-            diagnostics['divergences'] = "{}".format(len(self._divergences))
-        return diagnostics
 
-    def post_sampling(self):
-        return self._divergences
+    def diagnostics(self):
+        return {"divergences": self._divergences}
