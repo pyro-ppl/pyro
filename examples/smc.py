@@ -23,7 +23,7 @@ class SimpleHarmonicModel:
     def __init__(self, process_noise, measurement_noise):
         self.A = torch.tensor([[0., 1.],
                                [-1., 0.]])
-        self.B = torch.tensor([0.5, 1])
+        self.B = torch.tensor([3., 3.])
         self.sigma_z = torch.tensor(process_noise)
         self.sigma_y = torch.tensor(measurement_noise)
 
@@ -90,7 +90,7 @@ def main(args):
         smc.step(y)
 
     empirical = smc.get_empirical()
-    for t in range(1, args.num_timesteps):
+    for t in range(1, 1+args.num_timesteps):
         z = empirical["z_{}".format(t)]
         print("{}\t{}\t{}\t{}".format(t, zs[t], z.mean, z.variance))
 
