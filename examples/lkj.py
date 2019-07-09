@@ -5,7 +5,8 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer.mcmc import MCMC, NUTS
+from pyro.infer.mcmc.api import MCMC
+from pyro.infer.mcmc import NUTS
 
 """
 This simple example is intended to demonstrate how to use an LKJ prior with
