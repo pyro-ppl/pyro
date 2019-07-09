@@ -46,6 +46,7 @@ Welcome to Pyro Examples and Tutorials!
    gp
    gplvm
    bo
+   easyguide
    tracking_1d
    csis
    RSA-implicature

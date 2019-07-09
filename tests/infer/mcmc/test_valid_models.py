@@ -8,7 +8,8 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import config_enumerate
-from pyro.infer.mcmc import HMC, MCMC, NUTS
+from pyro.infer.mcmc.api import MCMC
+from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.util import TraceTreeEvaluator, TraceEinsumEvaluator, initialize_model
 from pyro.poutine.subsample_messenger import _Subsample
 from tests.common import assert_equal, xfail_param, assert_close

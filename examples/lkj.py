@@ -5,7 +5,8 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer.mcmc import MCMC, NUTS
+from pyro.infer.mcmc.api import MCMC
+from pyro.infer.mcmc import NUTS
 
 """
 This simple example is intended to demonstrate how to use an LKJ prior with
@@ -60,7 +61,7 @@ if __name__ == "__main__":
 
     pyro.set_rng_seed(args.rng_seed)
     # Enable validation checks
-    pyro.enable_validation(True)
+    pyro.enable_validation(__debug__)
 
     # work around with the error "RuntimeError: received 0 items of ancdata"
     # see https://discuss.pytorch.org/t/received-0-items-of-ancdata-pytorch-0-4-0/19823

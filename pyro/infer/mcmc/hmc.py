@@ -81,14 +81,13 @@ class HMC(MCMCKernel):
         ...     return y
         >>>
         >>> hmc_kernel = HMC(model, step_size=0.0855, num_steps=4)
-        >>> mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
-        >>> posterior = mcmc_run.marginal('beta').empirical['beta']
-        >>> posterior.mean  # doctest: +SKIP
+        >>> mcmc_samples = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
+        >>> mcmc_samples['beta'].mean(0)  # doctest: +SKIP
         tensor([ 0.9819,  1.9258,  2.9737])
     """
 
     def __init__(self,
-                 model,
+                 model=None,
                  potential_fn=None,
                  step_size=1,
                  trajectory_length=None,
@@ -102,7 +101,9 @@ class HMC(MCMCKernel):
                  jit_options=None,
                  ignore_jit_warnings=False,
                  target_accept_prob=0.8):
-        # NB: deprecating args
+        if not ((model is None) ^ (potential_fn is None)):
+            raise ValueError("Only one of `model` or `potential_fn` must be specified.")
+        # NB: deprecating args - model, transforms
         self.model = model
         self.transforms = transforms
         self._max_plate_nesting = max_plate_nesting
