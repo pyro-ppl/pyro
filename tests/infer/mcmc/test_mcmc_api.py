@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import os
-
 import pytest
 import torch
 
@@ -13,7 +11,7 @@ from pyro.infer.mcmc.api import MCMC, _UnarySampler, _MultiSampler
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model
 from pyro.util import optional
-from tests.common import skipif_param, assert_close
+from tests.common import assert_close
 
 
 class PriorKernel(MCMCKernel):
@@ -112,8 +110,7 @@ def _empty_model():
 @pytest.mark.parametrize("jit", [False, True])
 @pytest.mark.parametrize("num_chains", [
     1,
-    skipif_param(2, condition="CI" in os.environ or "CUDA_TEST" in os.environ,
-                 reason="CI only provides 1 CPU; also see https://github.com/pytorch/pytorch/issues/2517")
+    2,
 ])
 def test_null_model_with_hook(kernel, model, jit, num_chains):
     num_warmup, num_samples = 10, 10

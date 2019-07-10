@@ -17,6 +17,10 @@ def _compute_chain_variance_stats(input):
         chain_mean = input.mean(dim=0)
         var_between = chain_mean.var(dim=0)
         var_estimator = var_estimator + var_between
+    else:
+        # to make rho_k is the same as autocorrelation when num_chains == 1
+        # in computing effective_sample_size
+        var_within = var_estimator
     return var_within, var_estimator
 
 
