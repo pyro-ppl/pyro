@@ -55,7 +55,7 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
                 if num_samples[pbar_pos] == warmup_steps:
                     progress_bars.set_description("Sample [{}]".format(pbar_pos + 1), pos=pbar_pos)
                 diagnostics = json.loads(msg, object_pairs_hook=OrderedDict)
-                progress_bars.set_postfix(diagnostics, pos=pbar_pos)
+                progress_bars.set_postfix(diagnostics, pos=pbar_pos, refresh=False)
                 progress_bars.update(pos=pbar_pos)
             else:
                 logger.handle(record)
@@ -294,7 +294,7 @@ class MCMC(object):
                                          "must match the number of chains.")
 
             # verify num_chains is compatible with available CPU.
-            available_cpu = max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
+            available_cpu = 2#max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
             if num_chains > available_cpu:
                 warnings.warn("num_chains={} is more than available_cpu={}. "
                               "Resetting number of chains to available CPU count."
@@ -317,7 +317,7 @@ class MCMC(object):
                                          initial_params=initial_params, hook=hook_fn)
 
     def run(self, *args, **kwargs):
-        num_samples = [0] * args.num_chains
+        num_samples = [0] * self.num_chains
         z_acc = defaultdict(lambda: [[] for _ in range(self.num_chains)])
         for x, chain_id in self.sampler.run(*args, **kwargs):
             if num_samples[chain_id] == self.num_samples:
