@@ -3,8 +3,8 @@ from collections import OrderedDict, defaultdict
 from functools import partial, reduce
 
 import torch
-from torch.distributions import biject_to
 from opt_einsum import shared_intermediates
+from torch.distributions import biject_to
 
 import pyro
 import pyro.poutine as poutine
@@ -13,9 +13,10 @@ from pyro.infer import config_enumerate
 from pyro.infer.util import is_validation_enabled
 from pyro.ops import stats
 from pyro.ops.contract import contract_to_tensor
+from pyro.ops.rings import LogRing
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_site_shape, ignore_jit_warnings, optional, torch_isinf, torch_isnan, ExperimentalWarning
+from pyro.util import ExperimentalWarning, check_site_shape, ignore_jit_warnings, optional, torch_isinf, torch_isnan
 
 
 class TraceTreeEvaluator(object):
@@ -159,9 +160,11 @@ class TraceEinsumEvaluator(object):
     def __init__(self,
                  model_trace,
                  has_enumerable_sites=False,
-                 max_plate_nesting=None):
+                 max_plate_nesting=None,
+                 jit_compile=False):
         self.has_enumerable_sites = has_enumerable_sites
         self.max_plate_nesting = max_plate_nesting
+        self.jit_compile = jit_compile
         # To be populated using the model trace once.
         self._enum_dims = set()
         self.ordering = {}
@@ -215,7 +218,8 @@ class TraceEinsumEvaluator(object):
             return model_trace.log_prob_sum()
         log_probs = self._get_log_factors(model_trace)
         with shared_intermediates() as cache:
-            return contract_to_tensor(log_probs, self._enum_dims, cache=cache)
+            ring = LogRing(cache=cache, jit=self.jit_compile)
+            return contract_to_tensor(log_probs, self._enum_dims, ring=ring)
 
 
 def _guess_max_plate_nesting(model, args, kwargs):

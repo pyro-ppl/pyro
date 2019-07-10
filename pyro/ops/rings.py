@@ -184,9 +184,11 @@ class LogRing(Ring):
     """
     _backend = 'pyro.ops.einsum.torch_log'
 
-    def __init__(self, cache=None, dim_to_size=None):
+    def __init__(self, cache=None, dim_to_size=None, jit=False):
         super(LogRing, self).__init__(cache=cache)
         self._dim_to_size = {} if dim_to_size is None else dim_to_size
+        if jit:
+            self._backend = 'pyro.ops.einsum.torch_log_jit'
 
     def sumproduct(self, terms, dims):
         inputs = [term._pyro_dims for term in terms]

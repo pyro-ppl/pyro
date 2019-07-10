@@ -34,7 +34,9 @@ from tests.common import assert_equal
     'ab,bc,cd->bc',
     'a,a,ab,b,b,b,b->a',
 ])
-def test_einsum(equation, min_size):
+@pytest.mark.parametrize('jit', [False, True], ids=['nojit', 'jit'])
+def test_einsum(equation, min_size, jit):
+    backend = 'pyro.ops.einsum.torch_log_jit' if jit else 'pyro.ops.einsum.torch_log'
     inputs, output = equation.split('->')
     inputs = inputs.split(',')
     symbols = sorted(set(equation) - set(',->'))
@@ -44,5 +46,5 @@ def test_einsum(equation, min_size):
     operands = [torch.randn(shape) for shape in shapes]
 
     expected = contract(equation, *(torch_exp(x) for x in operands), backend='torch').log()
-    actual = contract(equation, *operands, backend='pyro.ops.einsum.torch_log')
+    actual = contract(equation, *operands, backend=backend)
     assert_equal(actual, expected)
