@@ -123,15 +123,13 @@ class PyroOptim(object):
 
 def AdagradRMSProp(optim_args):
     """
-    A wrapper for an optimizer that is a mash-up of
-    :class:`~torch.optim.Adagrad` and :class:`~torch.optim.RMSprop`.
+    Wraps :class:`pyro.optim.adagrad_rmsprop.AdagradRMSProp` with :class:`~pyro.optim.optim.PyroOptim`.
     """
     return PyroOptim(pt_AdagradRMSProp, optim_args)
 
 
 def ClippedAdam(optim_args):
     """
-    A wrapper for a modification of the :class:`~torch.optim.Adam`
-    optimization algorithm that supports gradient clipping.
+    Wraps :class:`pyro.optim.clipped_adam.ClippedAdam` with :class:`~pyro.optim.optim.PyroOptim`.
     """
     return PyroOptim(pt_ClippedAdam, optim_args)
