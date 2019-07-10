@@ -22,7 +22,6 @@ from pyro.infer.mcmc.util import TraceEinsumEvaluator
 from pyro.ops import packed
 from pyro.ops.contract import contract_to_tensor
 from pyro.ops.indexing import Vindex
-from pyro.util import ignore_jit_warnings, optional
 
 
 def get_dense_column(data, mask, v):
@@ -476,19 +475,8 @@ class TreeCatTrainerMap(TreeCatTrainer):
 
 
 DEFAULT_NUTS_CONFIG = {
-    "warmup_steps": 200,
     "max_tree_depth": 5,
-    "jit_compile": None,
-    "ignore_jit_warnings": True,
-    "jit_options": {"optimize": False},
 }
-
-
-def _recursive_update(destin, source):
-    for key, value in source.items():
-        destin.setdefault(key, value)
-        if isinstance(value, dict):
-            _recursive_update(destin[key], value)
 
 
 class TreeCatTrainerNuts(TreeCatTrainer):
@@ -502,7 +490,7 @@ class TreeCatTrainerNuts(TreeCatTrainer):
     def __init__(self, model, backend="cpp", nuts_config={}):
         super(TreeCatTrainerNuts, self).__init__(model, backend=backend)
         self.nuts_config = DEFAULT_NUTS_CONFIG.copy()
-        _recursive_update(self.nuts_config, nuts_config)
+        self.nuts_config.update(nuts_config)
         self.nuts_config.pop("warmup_steps", None)
         self._model = model
         self._nuts = None
@@ -566,10 +554,7 @@ class TreeCatTrainerNuts(TreeCatTrainer):
                 transforms[name] = biject_to(site["fn"].support).inv
                 initial_params[name] = transforms[name](site["value"]).detach()
 
-        potential_fn = (self._potential_fn
-                        if self.nuts_config["jit_compile"] is None else
-                        self._jit_potential_fn)
-        self._nuts = NUTS(model=None, potential_fn=potential_fn, transforms=transforms,
+        self._nuts = NUTS(model=None, potential_fn=self._potential_fn, transforms=transforms,
                           **self.nuts_config)
         self._nuts.initial_params = initial_params
         warmup_steps = 10**10  # Adapt indefinitely.
@@ -617,43 +602,6 @@ class TreeCatTrainerNuts(TreeCatTrainer):
             log_joint = log_joint - torch.sum(
                 t.log_abs_det_jacobian(params_constrained[name], params[name]))
         return -log_joint
-
-    @weakmethod
-    def _jit_potential_fn(self, params):
-        # Only compile after key has been seen at least jit_compile times.
-        key = tuple(map(tuple, self._model.edges.tolist()))
-        if self._key_counts[hash(key)] < self.nuts_config["jit_compile"]:
-            return self._potential_fn(params)
-
-        # Collect all tensor data dependencies into an args list.
-        param_names = list(sorted(params))
-        gibbs_param_names = list(sorted(self._gibbs_params))
-        gibbs_param_values = [self._gibbs_params[name] for name in gibbs_param_names]
-        data, mask, num_rows = self._gibbs_args
-        if num_rows is not None and num_rows != len(data[0]):
-            raise NotImplementedError("jitting subsampled HMC is not supported")
-        data_mask = [col for cols in [data, mask] for col in cols if isinstance(col, torch.Tensor)]
-        args = [params[name] for name in param_names] + gibbs_param_values + data_mask
-
-        # Create a new compiled function for each key.
-        if key not in self._compiled:
-            logging.debug("jit compiling potential_fn")
-
-            def potential_fn(*args):
-                assert len(args) >= len(param_names) + len(gibbs_param_names)
-                param_values, args = args[:len(param_names)], args[len(param_names):]
-                params = dict(zip(param_names, param_values))
-                for name, value in zip(gibbs_param_names, args):
-                    assert value is self._gibbs_params[name]
-                return self._potential_fn(params)
-
-            with optional(ignore_jit_warnings(), self.nuts_config["ignore_jit_warnings"]):
-                with pyro.validation_enabled(False):
-                    jit_options = self.nuts_config["jit_options"].copy()
-                    jit_options.setdefault("check_trace", False)
-                    self._compiled[key] = torch.jit.trace(potential_fn, args, **jit_options)
-
-        return self._compiled[key](*args)
 
 
 class AnnealingSchedule(object):

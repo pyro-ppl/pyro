@@ -60,8 +60,7 @@ def train_model(model, data, mask=None, trainer=None):
 @pytest.mark.parametrize('method,make_options', [
     ("map", lambda: {"optim": Adam({})}),
     ("nuts", lambda: {}),
-    ("nuts", lambda: {"nuts_config": {"jit_compile": 1}}),
-], ids=["map", "nuts", "nuts_jit"])
+], ids=["map", "nuts"])
 def test_train_smoke(method, make_options, dataset, capacity, masked):
     features = dataset["features"]
     data = dataset["data"]
