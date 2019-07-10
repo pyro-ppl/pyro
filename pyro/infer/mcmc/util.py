@@ -15,7 +15,7 @@ from pyro.ops import stats
 from pyro.ops.contract import contract_to_tensor
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_site_shape, ignore_jit_warnings, optional, torch_isinf, torch_isnan, ExperimentalWarning
+from pyro.util import check_site_shape, ignore_jit_warnings, torch_isinf, torch_isnan, ExperimentalWarning
 
 
 class TraceTreeEvaluator(object):
@@ -263,11 +263,13 @@ class _PEMaker(object):
         names, vals = zip(*sorted(params.items()))
         if self._compiled_fn:
             return self._compiled_fn(*vals)
-        with pyro.validation_enabled(False), optional(ignore_jit_warnings(), skip_jit_warnings):
+        with pyro.validation_enabled(False):
             def _pe_jit(*zi):
                 params = dict(zip(names, zi))
                 return self._potential_fn(params)
 
+            if skip_jit_warnings:
+                _pe_jit = ignore_jit_warnings()(_pe_jit)
             self._compiled_fn = torch.jit.trace(_pe_jit, vals, **jit_options)
             return self._compiled_fn(*vals)
 

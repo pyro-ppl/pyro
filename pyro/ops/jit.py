@@ -8,7 +8,7 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
-from pyro.util import ignore_jit_warnings, optional
+from pyro.util import ignore_jit_warnings
 
 
 def _hash(value, allow_id):
@@ -85,7 +85,9 @@ class CompiledFunction(object):
                     constrained_params[name] = constrained_param
                 return poutine.replay(self.fn, params=constrained_params)(*args, **kwargs)
 
-            with pyro.validation_enabled(False), optional(ignore_jit_warnings(), self.ignore_warnings):
+            if self.ignore_warnings:
+                compiled = ignore_jit_warnings()(compiled)
+            with pyro.validation_enabled(False):
                 self.compiled[key] = torch.jit.trace(compiled, params_and_args, **self.jit_options)
         else:
             unconstrained_params = [pyro.param(name).unconstrained()

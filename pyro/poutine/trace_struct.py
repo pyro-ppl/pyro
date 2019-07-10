@@ -78,9 +78,11 @@ class Trace(object):
         self._succ = OrderedDict()
         self._pred = OrderedDict()
 
+    def __contains__(self, name):
+        return name in self.nodes
+
     def __iter__(self):
-        for node in self.nodes:
-            yield node
+        return iter(self.nodes.keys())
 
     def __len__(self):
         return len(self.nodes)
