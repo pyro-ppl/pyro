@@ -338,9 +338,15 @@ def ignore_jit_warnings(filter=None):
     Ignore JIT tracer warnings with messages that match `filter`. If
     `filter` is not specified all tracer warnings are ignored.
 
+    Note this only installs warning filters if executed within traced code.
+
     :param filter: A list containing either warning message (str),
         or tuple consisting of (warning message (str), Warning class).
     """
+    if not torch._C._get_tracing_state():
+        yield
+        return
+
     with warnings.catch_warnings():
         if filter is None:
             warnings.filterwarnings("ignore",
