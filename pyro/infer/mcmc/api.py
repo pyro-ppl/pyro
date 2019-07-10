@@ -294,7 +294,7 @@ class MCMC(object):
                                          "must match the number of chains.")
 
             # verify num_chains is compatible with available CPU.
-            available_cpu = 2#max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
+            available_cpu = max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
             if num_chains > available_cpu:
                 warnings.warn("num_chains={} is more than available_cpu={}. "
                               "Resetting number of chains to available CPU count."
@@ -354,6 +354,7 @@ class MCMC(object):
         Gelman-Rubin, or divergent transitions from the sampler.
         """
         diag = diagnostics(self.exec_samples, num_chains=self.num_chains)
-        diag['divergences'] = {'chain {}'.format(i): self._diagnostics[i]['divergences']
+        for diag_name in self._diagnostics[0]:
+            diag[diag_name] = {'chain {}'.format(i): self._diagnostics[i][diag_name]
                                for i in range(self.num_chains)}
         return diag

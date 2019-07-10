@@ -12,7 +12,7 @@ from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.mcmc import MCMC, _SingleSampler, _ParallelSampler
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.util import optional
-from tests.common import assert_equal, skipif_param
+from tests.common import assert_equal
 
 
 class PriorKernel(MCMCKernel):
@@ -62,7 +62,7 @@ def test_mcmc_interface():
 
 @pytest.mark.parametrize("num_chains", [
     1,
-    skipif_param(2, condition="CI" in os.environ, reason="CI only provides 1 CPU"),
+    2,
 ])
 def test_mcmc_diagnostics(num_chains):
     data = torch.tensor([2.0]).repeat(3)
@@ -104,8 +104,7 @@ def _empty_model():
 @pytest.mark.parametrize("jit", [False, True])
 @pytest.mark.parametrize("num_chains", [
     1,
-    skipif_param(2, condition="CI" in os.environ or "CUDA_TEST" in os.environ,
-                 reason="CI only provides 1 CPU; also see https://github.com/pytorch/pytorch/issues/2517")
+    2,
 ])
 def test_empty_sample_sites(kernel, kernel_args, jit, num_chains):
     num_warmup, num_samples = 10, 10

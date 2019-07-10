@@ -37,9 +37,10 @@ class MCMCKernel(object):
 
     def diagnostics(self):
         """
-        Returns useful diagnostics after finishing sampling process.
+        Returns a dict of useful diagnostics after finishing sampling process.
         """
-        return None
+        # NB: should be not None for multiprocessing works
+        return {}
 
     def end_warmup(self):
         """
