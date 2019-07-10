@@ -31,6 +31,9 @@ class PriorKernel(MCMCKernel):
         self.data = data
         self._prototype_trace = poutine.trace(self.model).get_trace(data)
 
+    def diagnostics(self):
+        return {'dummy_key': 'dummy_value'}
+
     @property
     def initial_params(self):
         return self._initial_params
@@ -109,8 +112,7 @@ def _empty_model():
 @pytest.mark.parametrize("jit", [False, True])
 @pytest.mark.parametrize("num_chains", [
     1,
-    skipif_param(2, condition="CI" in os.environ or "CUDA_TEST" in os.environ,
-                 reason="CI only provides 1 CPU; also see https://github.com/pytorch/pytorch/issues/2517")
+    skipif_param(2, condition="CI" in os.environ, reason="CI only provides 2-core CPU")
 ])
 def test_null_model_with_hook(kernel, model, jit, num_chains):
     num_warmup, num_samples = 10, 10
@@ -130,3 +132,23 @@ def test_null_model_with_hook(kernel, model, jit, num_chains):
     if num_chains == 1:
         expected = [("warmup", i) for i in range(num_warmup)] + [("sample", i) for i in range(num_samples)]
         assert iters == expected
+
+
+@pytest.mark.parametrize("num_chains", [
+    1,
+    skipif_param(2, condition="CI" in os.environ, reason="CI only provides 2-core CPU")
+])
+def test_mcmc_diagnostics(num_chains):
+    data = torch.tensor([2.0]).repeat(3)
+    initial_params, _, transforms, _ = initialize_model(normal_normal_model,
+                                                        model_args=(data,),
+                                                        num_chains=num_chains)
+    kernel = PriorKernel(normal_normal_model)
+    mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains,
+                initial_params=initial_params, transforms=transforms)
+    mcmc.run(data)
+    diagnostics = mcmc.diagnostics()
+    assert diagnostics["y"]["n_eff"].shape == data.shape
+    assert diagnostics["y"]["r_hat"].shape == data.shape
+    assert diagnostics["dummy_key"] == {'chain {}'.format(i): 'dummy_value'
+                                        for i in range(num_chains)}

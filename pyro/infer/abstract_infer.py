@@ -10,8 +10,8 @@ from six import add_metaclass
 
 import pyro.poutine as poutine
 from pyro.distributions import Categorical, Empirical
+from pyro.infer.util import site_is_subsample
 from pyro.ops.stats import waic
-from .util import site_is_subsample
 
 
 class EmpiricalMarginal(Empirical):
