@@ -407,6 +407,51 @@ def diagnostics(samples, num_chains=1):
     return diagnostics
 
 
+def summary(samples, prob=0.9, num_chains=1):
+    """
+    Prints a summary table displaying diagnostics of ``samples`` from the
+    posterior. The diagnostics displayed are mean, standard deviation, median,
+    the 90% Credibility Interval, :func:`~pyro.ops.stats.effective_sample_size`,
+    :func:`~pyro.ops.stats.split_gelman_rubin`.
+
+    :param dict samples: dictionary of samples keyed by site name.
+    :param float prob: the probability mass of samples within the credibility interval.
+    :param int num_chains: number of chains. For more than a single chain,
+        the leading dimension of samples in `samples` must match
+        the number of chains.
+    """
+    if num_chains == 1:
+        samples = {k: v.unsqueeze(0) for k, v in samples.items()}
+
+    row_names = {k: k + '[' + ','.join(map(lambda x: str(x - 1), v.shape[2:])) + ']'
+                 for k, v in samples.items()}
+    max_len = max(max(map(lambda x: len(x), row_names.values())), 10)
+    name_format = '{:>' + str(max_len) + '}'
+    header_format = name_format + ' {:>9} {:>9} {:>9} {:>9} {:>9} {:>9} {:>9}'
+    columns = ['', 'mean', 'std', 'median', '{:.1f}%'.format(50 * (1 - prob)),
+               '{:.1f}%'.format(50 * (1 + prob)), 'n_eff', 'r_hat']
+    print('\n')
+    print(header_format.format(*columns))
+
+    row_format = name_format + ' {:>9.2f} {:>9.2f} {:>9.2f} {:>9.2f} {:>9.2f} {:>9.2f} {:>9.2f}'
+    for name, value in samples.items():
+        value_flat = torch.reshape(value, (-1,) + value.shape[2:])
+        mean = value_flat.mean(dim=0)
+        sd = value_flat.std(dim=0)
+        median = value_flat.median(dim=0)[0]
+        hpd = stats.hpdi(value_flat, prob=prob)
+        n_eff = stats.effective_sample_size(value)
+        r_hat = stats.split_gelman_rubin(value)
+        shape = value_flat.shape[1:]
+        if len(shape) == 0:
+            print(row_format.format(name, mean, sd, median, hpd[0], hpd[1], n_eff, r_hat))
+        else:
+            for idx in product(*map(range, shape)):
+                idx_str = '[{}]'.format(','.join(map(str, idx)))
+                print(row_format.format(name + idx_str, mean[idx], sd[idx], median[idx],
+                                        hpd[0][idx], hpd[1][idx], n_eff[idx], r_hat[idx]))
+
+
 def predictive(model, posterior_samples, *args, **kwargs):
     """
     Run model by sampling latent parameters from `posterior_samples`, and return
