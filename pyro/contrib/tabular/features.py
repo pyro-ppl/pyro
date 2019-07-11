@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import math
 from abc import ABCMeta, abstractmethod
 
 import torch
@@ -301,66 +300,4 @@ class Real(Feature):
                    constraint=constraints.positive)
         pyro.param("auto_{}_shared_loc_loc".format(self.name), loc_loc)
         pyro.param("auto_{}_shared_loc_scale".format(self.name), loc_scale,
-                   constraint=constraints.positive)
-
-
-# This leads to many large-variance components.
-class RealGamma(Feature):
-    dtype = torch.float
-
-    def sample_shared(self):
-        shape = pyro.sample("{}_shared_shape".format(self.name),
-                            dist.LogNormal(self.new_tensor(0.), self.new_tensor(1.)))
-        rate = pyro.sample("{}_shared_rate".format(self.name),
-                           dist.LogNormal(self.new_tensor(0.), self.new_tensor(30.)))
-        loc = pyro.sample("{}_shared_loc".format(self.name),
-                          dist.Normal(self.new_tensor(0.), self.new_tensor(3.)))
-        scale = pyro.sample("{}_shared_scale".format(self.name),
-                            dist.LogNormal(self.new_tensor(0.), self.new_tensor(3.)))
-        return shape, rate, loc, scale
-
-    def sample_group(self, shared):
-        shared_shape, shared_rate, shared_loc, shared_scale = shared
-        precision = pyro.sample("{}_group_precision".format(self.name),
-                                dist.Gamma(shared_shape, shared_rate))
-        factor = shared_rate.sqrt()
-        loc = pyro.sample("{}_group_loc".format(self.name),
-                          dist.Normal(shared_loc * factor, shared_scale * factor))
-        scale = precision.pow(-0.5)
-        if loc.dim() > 1:
-            loc = loc.unsqueeze(-2)
-            scale = scale.unsqueeze(-2)
-        return loc, scale
-
-    def value_dist(self, group, component):
-        loc, scale = group
-        loc = Vindex(loc)[..., component]
-        scale = Vindex(scale)[..., component]
-        return dist.Normal(loc, scale)
-
-    def summary(self, group):
-        loc, scale = group
-        return NormalSummary(num_components=len(loc), prototype=loc)
-
-    def median(self, samples):
-        return samples.median(0)[0]
-
-    @torch.no_grad()
-    def init(self, data):
-        super(Real, self).init(data)
-
-        assert data.dim() == 1
-        data_scale = data.std(unbiased=False) + 1e-6
-        rate = data_scale.pow(2) / math.exp(4.)
-        shape = data.new_tensor(1.0)
-        loc = data.mean() / data_scale * math.exp(2.)
-        scale = data.new_tensor(4.).exp()
-
-        # TODO add event_dim args for funsor backend
-        pyro.param("auto_{}_shared_shape".format(self.name), shape,
-                   constraint=constraints.positive)
-        pyro.param("auto_{}_shared_rate".format(self.name), rate,
-                   constraint=constraints.positive)
-        pyro.param("auto_{}_shared_loc".format(self.name), loc)
-        pyro.param("auto_{}_shared_scale".format(self.name), scale,
                    constraint=constraints.positive)
