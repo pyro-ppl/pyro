@@ -12,7 +12,7 @@ from pyro.distributions import Beta, Binomial, HalfCauchy, Normal, Pareto, Unifo
 from pyro.distributions.util import scalar_like, sum_rightmost
 from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc import NUTS
-from pyro.infer.mcmc.util import diagnostics, predictive, initialize_model
+from pyro.infer.mcmc.util import predictive, initialize_model
 from pyro.poutine.util import site_is_subsample
 from pyro.util import ignore_experimental_warning
 

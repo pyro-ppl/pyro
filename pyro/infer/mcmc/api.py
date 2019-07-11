@@ -25,7 +25,6 @@ import pyro
 from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
 from pyro.infer.mcmc.util import diagnostics, initialize_model
-from pyro.util import optional
 
 MAX_SEED = 2**32 - 1
 
@@ -377,9 +376,9 @@ class MCMC(object):
                 batch_dim = 0
             else:
                 batch_dim = 1
-            sample_tensor = samples.values()[0]
+            sample_tensor = list(samples.values())[0]
             batch_size, device = sample_tensor.shape[batch_dim], sample_tensor.device
-            idxs = torch.randint(0, batch_size, size=(num_samples,), device=sample_tensor.device)
+            idxs = torch.randint(0, batch_size, size=(num_samples,), device=device)
             samples = {k: v.index_select(batch_dim, idxs) for k, v in samples.items()}
         return samples
 
