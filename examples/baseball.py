@@ -12,7 +12,7 @@ from pyro.distributions import Beta, Binomial, HalfCauchy, Normal, Pareto, Unifo
 from pyro.distributions.util import scalar_like, sum_rightmost
 from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc import NUTS
-from pyro.infer.mcmc.util import diagnostics, predictive, initialize_model
+from pyro.infer.mcmc.util import predictive, initialize_model
 from pyro.poutine.util import site_is_subsample
 from pyro.util import ignore_experimental_warning
 
@@ -150,14 +150,12 @@ def get_site_stats(array, player_names):
     return df.apply(pd.Series.describe, axis=1)[["mean", "std", "25%", "50%", "75%"]]
 
 
-def summary(posterior, sites, player_names, transforms={}, return_diagnostics=True, num_chains=1):
+def summary(posterior, sites, player_names, transforms={}, diagnostics=None):
     """
     Return summarized statistics for each of the ``sites`` in the
     traces corresponding to the approximate posterior.
     """
-    site_stats, diag_stats = {}, {}
-    if return_diagnostics:
-        diag_stats = diagnostics(posterior, num_chains)
+    site_stats, diag_stats = {}, diagnostics
 
     for site_name in sites:
         marginal_site = posterior[site_name]
@@ -165,9 +163,6 @@ def summary(posterior, sites, player_names, transforms={}, return_diagnostics=Tr
         if site_name in transforms:
             marginal_site = transforms[site_name](marginal_site)
 
-        # Flatten samples from multiple chains onto a single axis
-        if num_chains > 1:
-            marginal_site = marginal_site.reshape((-1,) + marginal_site.shape[2:])
         site_stats[site_name] = get_site_stats(marginal_site.cpu().numpy(), player_names)
 
         if diag_stats:
@@ -196,7 +191,7 @@ def train_test_split(pd_dataframe):
 # ===================================
 
 
-def sample_posterior_predictive(model, posterior_samples, baseball_dataset, num_chains):
+def sample_posterior_predictive(model, posterior_samples, baseball_dataset):
     """
     Generate samples from posterior predictive distribution.
     """
@@ -209,26 +204,24 @@ def sample_posterior_predictive(model, posterior_samples, baseball_dataset, num_
     logging.info("-----------------------------")
     # set hits=None to convert it from observation node to sample node
     with ignore_experimental_warning():
-        train_predict = predictive(model, posterior_samples, at_bats, None, num_chains=num_chains)
+        train_predict = predictive(model, posterior_samples, at_bats, None)
     train_summary = summary(train_predict,
                             sites=["obs"],
-                            player_names=player_names,
-                            return_diagnostics=False)["obs"]
+                            player_names=player_names)["obs"]
     train_summary = train_summary.assign(ActualHits=baseball_dataset[["Hits"]].values)
     logging.info(train_summary)
     logging.info("\nHit Rate - Season Predictions")
     logging.info("-----------------------------")
     with ignore_experimental_warning():
-        test_predict = predictive(model, posterior_samples, at_bats_season, None, num_chains=num_chains)
+        test_predict = predictive(model, posterior_samples, at_bats_season, None)
     test_summary = summary(test_predict,
                            sites=["obs"],
-                           player_names=player_names,
-                           return_diagnostics=False)["obs"]
+                           player_names=player_names)["obs"]
     test_summary = test_summary.assign(ActualHits=baseball_dataset[["SeasonHits"]].values)
     logging.info(test_summary)
 
 
-def evaluate_log_posterior_density(model, posterior_samples, baseball_dataset, num_chains):
+def evaluate_log_posterior_density(model, posterior_samples, baseball_dataset):
     """
     Evaluate the log probability density of observing the unseen data (season hits)
     given a model and posterior distribution over the parameters.
@@ -237,7 +230,7 @@ def evaluate_log_posterior_density(model, posterior_samples, baseball_dataset, n
     at_bats_season, hits_season = test[:, 0], test[:, 1]
     with ignore_experimental_warning():
         trace = predictive(model, posterior_samples, at_bats_season, hits_season,
-                           num_chains=num_chains, return_trace=True)
+                           return_trace=True)
     # Use LogSumExp trick to evaluate $log(1/num_samples \sum_i p(new_data | \theta^{i})) $,
     # where $\theta^{i}$ are parameter samples from the model's posterior.
     trace.compute_log_prob()
@@ -271,72 +264,86 @@ def main(args):
                 num_chains=args.num_chains,
                 initial_params=init_params,
                 transforms=transforms)
-    num_chains = mcmc.num_chains  # Note that this might be less than args.num_chains  when CPU cores are limited.
-    samples_fully_pooled = mcmc.run(at_bats, hits)
+    mcmc.run(at_bats, hits)
+    diagnostics = mcmc.diagnostics()
+    samples_fully_pooled = mcmc.get_samples()
     logging.info("\nModel: Fully Pooled")
     logging.info("===================")
     logging.info("\nphi:")
     logging.info(summary(samples_fully_pooled,
                          sites=["phi"],
                          player_names=player_names,
-                         num_chains=num_chains)["phi"])
-    sample_posterior_predictive(fully_pooled, samples_fully_pooled, baseball_dataset, num_chains)
-    evaluate_log_posterior_density(fully_pooled, samples_fully_pooled, baseball_dataset, num_chains)
+                         diagnostics=diagnostics)["phi"])
+    num_divergences = sum(map(len, diagnostics["divergences"].values()))
+    logging.info("\nNumber of divergent transitions: {}\n".format(num_divergences))
+    sample_posterior_predictive(fully_pooled, samples_fully_pooled, baseball_dataset)
+    evaluate_log_posterior_density(fully_pooled, samples_fully_pooled, baseball_dataset)
 
     # (2) No Pooling Model
     init_params, potential_fn, transforms, _ = initialize_model(not_pooled, model_args=(at_bats, hits),
                                                                 num_chains=args.num_chains)
     nuts_kernel = NUTS(potential_fn=potential_fn)
-    samples_not_pooled = MCMC(nuts_kernel,
-                              num_samples=args.num_samples,
-                              warmup_steps=args.warmup_steps,
-                              num_chains=args.num_chains,
-                              initial_params=init_params,
-                              transforms=transforms).run(at_bats, hits)
+    mcmc = MCMC(nuts_kernel,
+                num_samples=args.num_samples,
+                warmup_steps=args.warmup_steps,
+                num_chains=args.num_chains,
+                initial_params=init_params,
+                transforms=transforms)
+    mcmc.run(at_bats, hits)
+    diagnostics = mcmc.diagnostics()
+    samples_not_pooled = mcmc.get_samples()
     logging.info("\nModel: Not Pooled")
     logging.info("=================")
     logging.info("\nphi:")
     logging.info(summary(samples_not_pooled,
                          sites=["phi"],
                          player_names=player_names,
-                         num_chains=num_chains)["phi"])
-    sample_posterior_predictive(not_pooled, samples_not_pooled, baseball_dataset, num_chains)
-    evaluate_log_posterior_density(not_pooled, samples_not_pooled, baseball_dataset, num_chains)
+                         diagnostics=diagnostics)["phi"])
+    num_divergences = sum(map(len, diagnostics["divergences"].values()))
+    logging.info("\nNumber of divergent transitions: {}\n".format(num_divergences))
+    sample_posterior_predictive(not_pooled, samples_not_pooled, baseball_dataset)
+    evaluate_log_posterior_density(not_pooled, samples_not_pooled, baseball_dataset)
 
     # (3) Partially Pooled Model
     init_params, potential_fn, transforms, _ = initialize_model(partially_pooled, model_args=(at_bats, hits),
                                                                 num_chains=args.num_chains)
     nuts_kernel = NUTS(potential_fn=potential_fn)
 
-    # TODO: Provide a way to record divergent transitions
-    with pyro.validation_enabled(False):
-        samples_partially_pooled = MCMC(nuts_kernel,
-                                        num_samples=args.num_samples,
-                                        warmup_steps=args.warmup_steps,
-                                        num_chains=args.num_chains,
-                                        initial_params=init_params,
-                                        transforms=transforms).run(at_bats, hits)
+    mcmc = MCMC(nuts_kernel,
+                num_samples=args.num_samples,
+                warmup_steps=args.warmup_steps,
+                num_chains=args.num_chains,
+                initial_params=init_params,
+                transforms=transforms)
+    mcmc.run(at_bats, hits)
+    diagnostics = mcmc.diagnostics()
+    samples_partially_pooled = mcmc.get_samples()
     logging.info("\nModel: Partially Pooled")
     logging.info("=======================")
     logging.info("\nphi:")
     logging.info(summary(samples_partially_pooled,
                          sites=["phi"],
                          player_names=player_names,
-                         num_chains=num_chains)["phi"])
-    sample_posterior_predictive(partially_pooled, samples_partially_pooled, baseball_dataset, num_chains)
-    evaluate_log_posterior_density(partially_pooled, samples_partially_pooled, baseball_dataset, num_chains)
+                         diagnostics=diagnostics)["phi"])
+    num_divergences = sum(map(len, diagnostics["divergences"].values()))
+    logging.info("\nNumber of divergent transitions: {}\n".format(num_divergences))
+    sample_posterior_predictive(partially_pooled, samples_partially_pooled, baseball_dataset)
+    evaluate_log_posterior_density(partially_pooled, samples_partially_pooled, baseball_dataset)
 
     # (4) Partially Pooled with Logit Model
     init_params, potential_fn, transforms, _ = initialize_model(partially_pooled_with_logit,
                                                                 model_args=(at_bats, hits),
                                                                 num_chains=args.num_chains)
     nuts_kernel = NUTS(potential_fn=potential_fn, transforms=transforms)
-    samples_partially_pooled_logit = MCMC(nuts_kernel,
-                                          num_samples=args.num_samples,
-                                          warmup_steps=args.warmup_steps,
-                                          num_chains=args.num_chains,
-                                          initial_params=init_params,
-                                          transforms=transforms).run(at_bats, hits)
+    mcmc = MCMC(nuts_kernel,
+                num_samples=args.num_samples,
+                warmup_steps=args.warmup_steps,
+                num_chains=args.num_chains,
+                initial_params=init_params,
+                transforms=transforms)
+    mcmc.run(at_bats, hits)
+    diagnostics = mcmc.diagnostics()
+    samples_partially_pooled_logit = mcmc.get_samples()
     logging.info("\nModel: Partially Pooled with Logit")
     logging.info("==================================")
     logging.info("\nSigmoid(alpha):")
@@ -344,11 +351,13 @@ def main(args):
                          sites=["alpha"],
                          player_names=player_names,
                          transforms={"alpha": torch.sigmoid},
-                         num_chains=num_chains)["alpha"])
+                         diagnostics=diagnostics)["alpha"])
+    num_divergences = sum(map(len, diagnostics["divergences"].values()))
+    logging.info("\nNumber of divergent transitions: {}\n".format(num_divergences))
     sample_posterior_predictive(partially_pooled_with_logit, samples_partially_pooled_logit,
-                                baseball_dataset, num_chains)
+                                baseball_dataset)
     evaluate_log_posterior_density(partially_pooled_with_logit, samples_partially_pooled_logit,
-                                   baseball_dataset, num_chains)
+                                   baseball_dataset)
 
 
 if __name__ == "__main__":

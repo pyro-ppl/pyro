@@ -47,9 +47,10 @@ class GPModel(Parameterized):
       get posterior samples for the Gaussian Process's parameters. For example:
 
         >>> hmc_kernel = HMC(gpr.model)
-        >>> mcmc_samples = MCMC(hmc_kernel, num_samples=10).run()
+        >>> mcmc = MCMC(hmc_kernel, num_samples=10)
+        >>> mcmc.run()
         >>> ls_name = "GPR/RBF/lengthscale"
-        >>> posterior_ls = mcmc_samples[ls_name]
+        >>> posterior_ls = mcmc.get_samples()[ls_name]
 
     + Using a variational inference on the pair :meth:`model`, :meth:`guide`:
 

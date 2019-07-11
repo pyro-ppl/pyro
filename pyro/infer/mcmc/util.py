@@ -425,8 +425,6 @@ def predictive(model, posterior_samples, *args, **kwargs):
     :param kwargs: model kwargs; and other keyword arguments (see below).
 
     :Keyword Arguments:
-        * **num_chains** (``int``) - number of chains (determines leading dimension of tensors in
-          `posterior_samples`). By default, this is assumed to be 1.
         * **num_samples** (``int``) - number of samples to draw from the predictive distribution.
           This argument has no effect if ``posterior_samples`` is non-empty, in which case, the
           leading dimension size of samples in ``posterior_samples`` is used.
@@ -440,7 +438,6 @@ def predictive(model, posterior_samples, *args, **kwargs):
     """
     warnings.warn('This function or its interface might change in the future.',
                   ExperimentalWarning)
-    num_chains = kwargs.pop('num_chains', 1)
     num_samples = kwargs.pop('num_samples', None)
     return_sites = kwargs.pop('return_sites', None)
     return_trace = kwargs.pop('return_trace', False)
@@ -450,8 +447,6 @@ def predictive(model, posterior_samples, *args, **kwargs):
     reshaped_samples = {}
 
     for name, sample in posterior_samples.items():
-        if num_chains > 1:
-            sample = sample.reshape((-1,) + sample.shape[2:])
 
         batch_size, sample_shape = sample.shape[0], sample.shape[1:]
 

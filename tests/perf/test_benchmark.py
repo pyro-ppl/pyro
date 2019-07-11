@@ -93,8 +93,9 @@ def bernoulli_beta_hmc(**kwargs):
     kernel = kwargs.pop('kernel')
     num_samples = kwargs.pop('num_samples')
     mcmc_kernel = kernel(model, **kwargs)
-    mcmc_samples = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100).run(data)
-    return mcmc_samples['p_latent']
+    mcmc = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100)
+    mcmc.run(data)
+    return mcmc.get_samples()['p_latent']
 
 
 @register_model(num_steps=2000, whiten=False, id='VSGP::MultiClass_whiten=False')
