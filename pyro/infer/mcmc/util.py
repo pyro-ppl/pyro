@@ -1,6 +1,7 @@
 import warnings
 from collections import OrderedDict, defaultdict
 from functools import partial, reduce
+from itertools import product
 
 import torch
 from torch.distributions import biject_to
@@ -450,6 +451,7 @@ def summary(samples, prob=0.9, num_chains=1):
                 idx_str = '[{}]'.format(','.join(map(str, idx)))
                 print(row_format.format(name + idx_str, mean[idx], sd[idx], median[idx],
                                         hpd[0][idx], hpd[1][idx], n_eff[idx], r_hat[idx]))
+    print('\n')
 
 
 def predictive(model, posterior_samples, *args, **kwargs):
