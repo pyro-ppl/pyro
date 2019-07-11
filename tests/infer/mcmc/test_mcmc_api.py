@@ -64,12 +64,18 @@ def normal_normal_model(data):
     return y
 
 
-def test_mcmc_interface():
+@pytest.mark.parametrize('num_draws', [None, 700, 1000])
+@pytest.mark.parametrize('group_by_chain', [False, True])
+def test_mcmc_interface(num_draws, group_by_chain):
     data = torch.tensor([1.0])
     initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,))
     kernel = PriorKernel(normal_normal_model)
-    samples = MCMC(kernel=kernel, num_samples=800, warmup_steps=100,
-                   initial_params=initial_params, transforms=transforms).run(data)
+    mcmc = MCMC(kernel=kernel, num_samples=800, warmup_steps=100,
+                initial_params=initial_params, transforms=transforms)
+    mcmc.run(data)
+    samples = mcmc.get_samples(num_draws, group_by_chain=group_by_chain)
+    if group_by_chain:
+        samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
     sample_mean = samples['y'].mean()
     sample_std = samples['y'].std()
     assert_close(sample_mean, torch.tensor(0.0), atol=0.05)
@@ -126,8 +132,10 @@ def test_null_model_with_hook(kernel, model, jit, num_chains):
         iters.append((stage, i))
 
     kern = kernel(potential_fn=potential_fn, transforms=transforms, jit_compile=jit)
-    samples = MCMC(kern, num_samples=num_samples, warmup_steps=num_warmup,
-                   num_chains=num_chains, initial_params=initial_params, hook_fn=hook).run()
+    mcmc = MCMC(kern, num_samples=num_samples, warmup_steps=num_warmup,
+                num_chains=num_chains, initial_params=initial_params, hook_fn=hook)
+    mcmc.run()
+    samples = mcmc.get_samples()
     assert samples == {}
     if num_chains == 1:
         expected = [("warmup", i) for i in range(num_warmup)] + [("sample", i) for i in range(num_samples)]

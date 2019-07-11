@@ -30,10 +30,12 @@ def test_predictive(num_samples):
     init_params, potential_fn, transforms, _ = initialize_model(model,
                                                                 model_args=(data,))
     nuts_kernel = NUTS(potential_fn=potential_fn, transforms=transforms)
-    samples = MCMC(nuts_kernel,
-                   100,
-                   initial_params=init_params,
-                   warmup_steps=100).run(data)
+    mcmc = MCMC(nuts_kernel,
+                100,
+                initial_params=init_params,
+                warmup_steps=100)
+    mcmc.run(data)
+    samples = mcmc.get_samples()
     with ignore_experimental_warning():
         with optional(pytest.warns(UserWarning), num_samples not in (None, 100)):
             predictive_samples = predictive(model, samples,

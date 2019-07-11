@@ -25,6 +25,7 @@ import pyro
 from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
 from pyro.infer.mcmc.util import diagnostics, initialize_model
+from pyro.util import optional
 
 MAX_SEED = 2**32 - 1
 
@@ -271,16 +272,21 @@ class MCMC(object):
         Only applicable for Python 3.5 and above. Use `mp_context="spawn"` for
         CUDA.
     :param bool disable_progbar: Disable progress bar and diagnostics update.
+    :param bool disable_validation: Disables distribution validation check. This is
+        disabled by default, since divergent transitions will lead to exceptions.
+        Switch to `True` for debugging purposes.
     :param dict transforms: dictionary that specifies a transform for a sample site
         with constrained support to unconstrained space.
     """
     def __init__(self, kernel, num_samples, warmup_steps=None, initial_params=None,
                  num_chains=1, hook_fn=None, mp_context=None, disable_progbar=False,
-                 transforms=None):
+                 disable_validation=True, transforms=None):
         self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
         self.kernel = kernel
         self.transforms = transforms
+        self.disable_validation = disable_validation
+        self._samples = None
         if isinstance(self.kernel, (HMC, NUTS)) and self.kernel.potential_fn is not None:
             if initial_params is None:
                 raise ValueError("Must provide valid initial parameters to begin sampling"
@@ -319,13 +325,14 @@ class MCMC(object):
     def run(self, *args, **kwargs):
         num_samples = [0] * self.num_chains
         z_acc = defaultdict(lambda: [[] for _ in range(self.num_chains)])
-        for x, chain_id in self.sampler.run(*args, **kwargs):
-            if num_samples[chain_id] == self.num_samples:
-                self._diagnostics[chain_id] = x
-            else:
-                num_samples[chain_id] += 1
-                for k, v in x.items():
-                    z_acc[k][chain_id].append(v)
+        with pyro.validation_enabled(not self.disable_validation):
+            for x, chain_id in self.sampler.run(*args, **kwargs):
+                if num_samples[chain_id] == self.num_samples:
+                    self._diagnostics[chain_id] = x
+                else:
+                    num_samples[chain_id] += 1
+                    for k, v in x.items():
+                        z_acc[k][chain_id].append(v)
 
         z_acc = {k: [torch.stack(l) for l in v] for k, v in z_acc.items()}
         z_acc = {k: v[0] if self.num_chains == 1 else torch.stack(v) for k, v in z_acc.items()}
@@ -345,15 +352,43 @@ class MCMC(object):
         # transform samples back to constrained space
         for name, transform in self.transforms.items():
             z_acc[name] = transform.inv(z_acc[name])
-        self.exec_samples = z_acc
-        return z_acc
+        self._samples = z_acc
+
+    def get_samples(self, num_samples=None, group_by_chain=False):
+        """
+        Get samples from the MCMC run, potentially resampling with replacement.
+
+        :param int num_samples: Number of samples to return. If `None`, all the samples
+            from an MCMC chain are returned in their original ordering.
+        :param bool group_by_chain: Whether to preserve the chain dimension. If True,
+            all samples will have num_chains as the size of their leading dimension.
+        :return: dictionary of samples keyed by site name.
+        """
+        samples = self._samples
+        if num_samples is None:
+            # reshape to collapse chain dim when group_by_chain=False
+            if not group_by_chain and self.num_chains > 1:
+                samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
+        else:
+            if not samples:
+                raise ValueError("No samples found from MCMC run.")
+            if not group_by_chain and self.num_chains > 1:
+                samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
+                batch_dim = 0
+            else:
+                batch_dim = 1
+            sample_tensor = samples.values()[0]
+            batch_size, device = sample_tensor.shape[batch_dim], sample_tensor.device
+            idxs = torch.randint(0, batch_size, size=(num_samples,), device=sample_tensor.device)
+            samples = {k: v.index_select(batch_dim, idxs) for k, v in samples.items()}
+        return samples
 
     def diagnostics(self):
         """
         Gets some diagnostics statistics such as effective sample size, split
         Gelman-Rubin, or divergent transitions from the sampler.
         """
-        diag = diagnostics(self.exec_samples, num_chains=self.num_chains)
+        diag = diagnostics(self._samples, num_chains=self.num_chains)
         for diag_name in self._diagnostics[0]:
             diag[diag_name] = {'chain {}'.format(i): self._diagnostics[i][diag_name]
                                for i in range(self.num_chains)}

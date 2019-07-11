@@ -109,8 +109,9 @@ class NUTS(HMC):
         ...     return y
         >>>
         >>> nuts_kernel = NUTS(model, adapt_step_size=True)
-        >>> mcmc_samples = MCMC(nuts_kernel, num_samples=500, warmup_steps=300).run(data)
-        >>> mcmc_samples['beta'].mean(0)  # doctest: +SKIP
+        >>> mcmc = MCMC(nuts_kernel, num_samples=500, warmup_steps=300)
+        >>> mcmc.run(data)
+        >>> mcmc.get_samples()['beta'].mean(0)  # doctest: +SKIP
         tensor([ 0.9221,  1.9464,  2.9228])
     """
 

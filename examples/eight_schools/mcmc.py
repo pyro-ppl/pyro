@@ -34,10 +34,12 @@ def conditioned_model(model, sigma, y):
 
 def main(args):
     nuts_kernel = NUTS(conditioned_model, jit_compile=args.jit,)
-    samples = MCMC(nuts_kernel,
-                   num_samples=args.num_samples,
-                   warmup_steps=args.warmup_steps,
-                   num_chains=args.num_chains).run(model, data.sigma, data.y)
+    mcmc = MCMC(nuts_kernel,
+                num_samples=args.num_samples,
+                warmup_steps=args.warmup_steps,
+                num_chains=args.num_chains)
+    mcmc.run(model, data.sigma, data.y)
+    samples = mcmc.get_samples()
     if args.num_chains > 1:
         samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
     marginal = torch.cat(list(samples.values()), dim=-1).cpu().numpy()
