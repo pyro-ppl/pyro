@@ -281,9 +281,10 @@ def test_hmc(model_class, X, y, kernel, likelihood):
     kernel.set_prior("lengthscale", dist.Uniform(torch.tensor(1.0), torch.tensor(3.0)))
 
     hmc_kernel = HMC(gp.model, step_size=1)
-    mcmc_samples = MCMC(hmc_kernel, num_samples=10).run()
+    mcmc = MCMC(hmc_kernel, num_samples=10)
+    mcmc.run()
 
-    for name, param in mcmc_samples.items():
+    for name, param in mcmc.get_samples().items():
         param_mean = torch.mean(param, 0)
         logger.info("Posterior mean - {}".format(name))
         logger.info(param_mean)
