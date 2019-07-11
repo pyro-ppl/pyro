@@ -122,6 +122,7 @@ class HMC(MCMCKernel):
         # In NUTS paper, this threshold is set to a fixed log(0.5).
         # After https://github.com/stan-dev/stan/pull/356, it is set to a fixed log(0.8).
         self._direction_threshold = math.log(0.8)  # from Stan
+        self._max_sliced_energy = 1000
         self._reset()
         self._adapter = WarmupAdapter(step_size,
                                       adapt_step_size=adapt_step_size,
@@ -143,6 +144,7 @@ class HMC(MCMCKernel):
     def _reset(self):
         self._t = 0
         self._accept_cnt = 0
+        self._divergences = []
         self._prototype_trace = None
         self._initial_params = None
         self._z_last = None
@@ -303,12 +305,13 @@ class HMC(MCMCKernel):
             # apply Metropolis correction.
             energy_proposal = self._kinetic_energy(r_new) + potential_energy_new
         delta_energy = energy_proposal - energy_current
-        # Set accept prob to 0.0 if delta_energy is `NaN` which may be
-        # the case for a diverging trajectory when using a large step size.
-        if torch_isnan(delta_energy):
-            accept_prob = scalar_like(delta_energy, 0.)
-        else:
-            accept_prob = (-delta_energy).exp().clamp(max=1.)
+        # handle the NaN case which may be the case for a diverging trajectory
+        # when using a large step size.
+        delta_energy = scalar_like(delta_energy, float("inf")) if torch_isnan(delta_energy) else delta_energy
+        if delta_energy > self._max_sliced_energy and self._t >= self._warmup_steps:
+            self._divergences.append(self._t - self._warmup_steps)
+
+        accept_prob = (-delta_energy).exp().clamp(max=1.)
         rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(scalar_like(accept_prob, 0.),
                                                                      scalar_like(accept_prob, 1.)))
         if rand < accept_prob:
@@ -323,8 +326,11 @@ class HMC(MCMCKernel):
 
         return z.copy()
 
-    def diagnostics(self):
+    def logging(self):
         return OrderedDict([
             ("step size", "{:.2e}".format(self.step_size)),
             ("acc. rate", "{:.3f}".format(self._accept_cnt / self._t))
         ])
+
+    def diagnostics(self):
+        return {"divergences": self._divergences}

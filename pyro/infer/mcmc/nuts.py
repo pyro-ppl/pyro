@@ -351,7 +351,13 @@ class NUTS(HMC):
                 sum_accept_probs = sum_accept_probs + new_tree.sum_accept_probs
                 num_proposals = num_proposals + new_tree.num_proposals
 
-                if new_tree.turning or new_tree.diverging:  # stop doubling
+                # stop doubling
+                if new_tree.diverging:
+                    if self._t >= self._warmup_steps:
+                        self._divergences.append(self._t - self._warmup_steps)
+                    break
+
+                if new_tree.turning:
                     break
 
                 tree_depth += 1

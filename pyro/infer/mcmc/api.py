@@ -24,7 +24,7 @@ from six.moves import queue
 import pyro
 from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
-from pyro.infer.mcmc.util import initialize_model
+from pyro.infer.mcmc.util import diagnostics, initialize_model
 
 MAX_SEED = 2**32 - 1
 
@@ -114,12 +114,13 @@ def _gen_samples(kernel, warmup_steps, num_samples, hook, *args, **kwargs):
         params = kernel.sample(params)
         hook(kernel, params, 'sample', i)
         yield params
+    yield kernel.diagnostics()
     kernel.cleanup()
 
 
 def _add_logging_hook(logger, progress_bar=None, hook=None):
     def _add_logging(kernel, params, stage, i):
-        diagnostics = json.dumps(kernel.diagnostics())
+        diagnostics = json.dumps(kernel.logging())
         logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
         if progress_bar:
             progress_bar.set_description(stage, refresh=False)
@@ -306,6 +307,7 @@ class MCMC(object):
                     initial_params = {k: v[:num_chains] for k, v in initial_params.items()}
 
         self.num_chains = num_chains
+        self._diagnostics = [None] * num_chains
 
         if num_chains > 1:
             self.sampler = _MultiSampler(kernel, num_samples, self.warmup_steps, num_chains, mp_context,
@@ -315,10 +317,16 @@ class MCMC(object):
                                          initial_params=initial_params, hook=hook_fn)
 
     def run(self, *args, **kwargs):
+        num_samples = [0] * self.num_chains
         z_acc = defaultdict(lambda: [[] for _ in range(self.num_chains)])
-        for sample, chain_id in self.sampler.run(*args, **kwargs):
-            for k, v in sample.items():
-                z_acc[k][chain_id].append(v)
+        for x, chain_id in self.sampler.run(*args, **kwargs):
+            if num_samples[chain_id] == self.num_samples:
+                self._diagnostics[chain_id] = x
+            else:
+                num_samples[chain_id] += 1
+                for k, v in x.items():
+                    z_acc[k][chain_id].append(v)
+
         z_acc = {k: [torch.stack(l) for l in v] for k, v in z_acc.items()}
         z_acc = {k: v[0] if self.num_chains == 1 else torch.stack(v) for k, v in z_acc.items()}
 
@@ -337,4 +345,16 @@ class MCMC(object):
         # transform samples back to constrained space
         for name, transform in self.transforms.items():
             z_acc[name] = transform.inv(z_acc[name])
+        self.exec_samples = z_acc
         return z_acc
+
+    def diagnostics(self):
+        """
+        Gets some diagnostics statistics such as effective sample size, split
+        Gelman-Rubin, or divergent transitions from the sampler.
+        """
+        diag = diagnostics(self.exec_samples, num_chains=self.num_chains)
+        for diag_name in self._diagnostics[0]:
+            diag[diag_name] = {'chain {}'.format(i): self._diagnostics[i][diag_name]
+                               for i in range(self.num_chains)}
+        return diag
