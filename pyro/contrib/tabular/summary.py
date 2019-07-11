@@ -95,6 +95,29 @@ class CategoricalSummary(Summary):
         return scale, data
 
 
+class MultinomialSummary(Summary):
+    """
+    Summary of :class:`~pyro.distributions.Multinomial` data.
+    """
+    def __init__(self, num_components, prototype, num_categories):
+        self.counts = prototype.new_zeros(num_components, num_categories)
+
+    def scatter_update(self, component, data):
+        assert component.dim() == 1
+        assert component.shape + self.counts.shape[-1:] == data.shape
+        self.counts.scatter_add_(0, component.unsqueeze(-1).expand_as(data), data)
+
+    def __imul__(self, scale):
+        self.counts *= scale
+        return self
+
+    def as_scaled_data(self):
+        # scale = torch.eye(self.counts.size(0), dtype=self.counts.dtype, device=self.counts.device)
+        scale = self.counts.new_tensor(1.)
+        data = self.counts.unsqueeze(-2)
+        return scale, data
+
+
 class NormalSummary(Summary):
     """
     Summary of :class:`~pyro.distributions.Normal` data.

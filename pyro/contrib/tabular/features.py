@@ -8,7 +8,7 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.tabular.summary import BernoulliSummary, CategoricalSummary, NormalSummary
+from pyro.contrib.tabular.summary import BernoulliSummary, CategoricalSummary, MultinomialSummary, NormalSummary
 from pyro.ops.indexing import Vindex
 
 
@@ -233,6 +233,64 @@ class Discrete(Feature):
         assert data.dim() == 1
         counts = torch.zeros(self.cardinality, device=self.device)
         counts = counts.scatter_add(0, data.long(), torch.ones(data.shape, device=self.device))
+        loc = (counts + 0.5).log()
+        loc = loc - loc.logsumexp(-1, True)
+        scale = loc.new_full(loc.shape, 2.)
+
+        pyro.param("auto_{}_shared_loc".format(self.name), loc)
+        pyro.param("auto_{}_shared_scale".format(self.name), scale,
+                   constraint=constraints.positive)
+
+
+class Multinomial(Feature):
+    dtype = torch.long
+    event_dim = 1
+
+    def __init__(self, name, cardinality):
+        super(Multinomial, self).__init__(name)
+        self.cardinality = cardinality
+
+    def __str__(self):
+        return '{}("{}", {})'.format(type(self).__name__, self.name, self.cardinality)
+
+    def sample_shared(self):
+        loc = pyro.sample("{}_shared_loc".format(self.name),
+                          dist.Normal(self.new_tensor(0.), self.new_tensor(2.))
+                              .expand([self.cardinality]).to_event(1))
+        scale = pyro.sample("{}_shared_scale".format(self.name),
+                            dist.LogNormal(self.new_tensor(0.), self.new_tensor(1.))
+                                .expand([self.cardinality]).to_event(1))
+        return loc, scale
+
+    def sample_group(self, shared):
+        loc, scale = shared
+        logits = pyro.sample("{}_group_logits".format(self.name),
+                             dist.Normal(loc, scale).to_event(1))
+        if logits.dim() > 2:
+            logits = logits.unsqueeze(-3)
+        return logits
+
+    def value_dist(self, group, component):
+        logits = group
+        logits = Vindex(logits)[..., component, :]
+        # Avoid validating args because total_count is not known.
+        return dist.Multinomial(logits=logits, validate_args=False)
+
+    def summary(self, group):
+        logits = group
+        num_components, num_categories = logits.shape
+        return MultinomialSummary(num_components=num_components, prototype=logits,
+                                  num_categories=num_categories)
+
+    def median(self, samples):
+        return samples.mode(0)[0]
+
+    @torch.no_grad()
+    def init(self, data):
+        super(Multinomial, self).init(data)
+
+        assert data.dim() == 2
+        counts = data.sum(0)
         loc = (counts + 0.5).log()
         loc = loc - loc.logsumexp(-1, True)
         scale = loc.new_full(loc.shape, 2.)

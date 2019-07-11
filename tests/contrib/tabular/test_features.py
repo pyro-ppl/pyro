@@ -10,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.contrib.autoguide import AutoDelta
-from pyro.contrib.tabular import Boolean, Discrete, Real
+from pyro.contrib.tabular import Boolean, Discrete, Multinomial, Real
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
 from pyro.util import torch_isnan
@@ -22,8 +22,13 @@ class Discrete5(Discrete):
         super(Discrete5, self).__init__(name, 5)
 
 
+class Multinomial3(Multinomial):
+    def __init__(self, name):
+        super(Multinomial3, self).__init__(name, 3)
+
+
 @pytest.mark.parametrize('size', [1, 2, 100])
-@pytest.mark.parametrize('MyFeature', [Boolean, Discrete5, Real])
+@pytest.mark.parametrize('MyFeature', [Boolean, Discrete5, Multinomial3, Real])
 def test_smoke(MyFeature, size):
 
     @poutine.broadcast
@@ -69,7 +74,7 @@ def test_smoke(MyFeature, size):
 
 
 @pytest.mark.parametrize('partitions', [(), (5, 10), (1, 2, 3, 18, 19), (10, 10)])
-@pytest.mark.parametrize('MyFeature', [Boolean, Discrete5, Real])
+@pytest.mark.parametrize('MyFeature', [Boolean, Discrete5, Multinomial3, Real])
 def test_summary(MyFeature, partitions):
     # Sample shared and group parameters.
     num_components = 7
