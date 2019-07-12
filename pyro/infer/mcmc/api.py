@@ -24,7 +24,7 @@ from six.moves import queue
 import pyro
 from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
-from pyro.infer.mcmc.util import diagnostics, initialize_model
+from pyro.infer.mcmc.util import diagnostics, initialize_model, summary
 
 MAX_SEED = 2**32 - 1
 
@@ -403,3 +403,14 @@ class MCMC(object):
             diag[diag_name] = {'chain {}'.format(i): self._diagnostics[i][diag_name]
                                for i in range(self.num_chains)}
         return diag
+
+    def summary(self, prob=0.9):
+        """
+        Prints a summary table displaying diagnostics of samples obtained from
+        posterior. The diagnostics displayed are mean, standard deviation, median,
+        the 90% Credibility Interval, :func:`~pyro.ops.stats.effective_sample_size`,
+        :func:`~pyro.ops.stats.split_gelman_rubin`.
+
+        :param float prob: the probability mass of samples within the credibility interval.
+        """
+        summary(self._samples, prob=prob, num_chains=self.num_chains)

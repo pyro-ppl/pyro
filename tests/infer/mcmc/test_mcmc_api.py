@@ -118,7 +118,8 @@ def _empty_model():
 @pytest.mark.parametrize("jit", [False, True])
 @pytest.mark.parametrize("num_chains", [
     1,
-    skipif_param(2, condition="CI" in os.environ, reason="CI only provides 2-core CPU")
+    skipif_param(2, condition="CI" in os.environ or "CUDA_TEST" in os.environ,
+                 reason="CI only provides 2-core CPU; also see https://github.com/pytorch/pytorch/issues/2517")
 ])
 def test_null_model_with_hook(kernel, model, jit, num_chains):
     num_warmup, num_samples = 10, 10
