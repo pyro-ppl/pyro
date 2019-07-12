@@ -64,8 +64,8 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
 
 
 class _Worker(object):
-    def __init__(self, chain_id, result_queue, log_queue, kernel, num_samples, warmup_steps,
-                 initial_params=None, hook=None):
+    def __init__(self, chain_id, result_queue, log_queue, event, kernel, num_samples,
+                 warmup_steps, initial_params=None, hook=None):
         self.chain_id = chain_id
         self.kernel = kernel
         if initial_params is not None:
@@ -77,6 +77,7 @@ class _Worker(object):
         self.result_queue = result_queue
         self.default_tensor_type = torch.Tensor().type()
         self.hook = hook
+        self.event = event
 
     def run(self, *args, **kwargs):
         pyro.set_rng_seed(self.rng_seed)
@@ -95,6 +96,8 @@ class _Worker(object):
             for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, logging_hook,
                                        *args, **kwargs):
                 self.result_queue.put_nowait((self.chain_id, sample))
+                self.event.wait()
+                self.event.clear()
             self.result_queue.put_nowait((self.chain_id, None))
         except Exception as e:
             logger.exception(e)
@@ -187,13 +190,14 @@ class _MultiSampler(object):
                                                  self.num_chains, disable_progbar))
         self.log_thread.daemon = True
         self.log_thread.start()
+        self.events = [self.ctx.Event() for _ in range(num_chains)]
 
     def init_workers(self, *args, **kwargs):
         self.workers = []
         for i in range(self.num_chains):
             init_params = {k: v[i] for k, v in self.initial_params.items()} if self.initial_params is not None else None
-            worker = _Worker(i, self.result_queue, self.log_queue, self.kernel, self.num_samples, self.warmup_steps,
-                             initial_params=init_params, hook=self.hook)
+            worker = _Worker(i, self.result_queue, self.log_queue, self.events[i], self.kernel,
+                             self.num_samples, self.warmup_steps, initial_params=init_params, hook=self.hook)
             worker.daemon = True
             self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
                                                  args=args, kwargs=kwargs))
@@ -232,6 +236,7 @@ class _MultiSampler(object):
                     raise val
                 if val is not None:
                     yield val, chain_id
+                    self.events[chain_id].set()
                 else:
                     active_workers -= 1
             exc_raised = False
