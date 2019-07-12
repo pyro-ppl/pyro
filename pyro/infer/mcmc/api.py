@@ -270,7 +270,8 @@ class MCMC(object):
         the prior.
     :param hook_fn: Python callable that takes in `(kernel, samples, stage, i)`
         as arguments. stage is either `sample` or `warmup` and i refers to the
-        i'th sample for the given stage. This can be
+        i'th sample for the given stage. This can be used to implement additional
+        logging, or more generally, run arbitrary code per generated sample.
     :param str mp_context: Multiprocessing context to use when `num_chains > 1`.
         Only applicable for Python 3.5 and above. Use `mp_context="spawn"` for
         CUDA.
@@ -382,11 +383,13 @@ class MCMC(object):
         else:
             if not samples:
                 raise ValueError("No samples found from MCMC run.")
-            if not group_by_chain and self.num_chains > 1:
-                samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
-                batch_dim = 0
-            else:
-                batch_dim = 1
+            batch_dim = 0
+            if self.num_chains > 1:
+                if group_by_chain:
+                    batch_dim = 1
+                else:
+                    samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
+                    batch_dim = 0
             sample_tensor = list(samples.values())[0]
             batch_size, device = sample_tensor.shape[batch_dim], sample_tensor.device
             idxs = torch.randint(0, batch_size, size=(num_samples,), device=device)

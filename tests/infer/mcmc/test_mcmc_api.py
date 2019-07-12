@@ -65,17 +65,28 @@ def normal_normal_model(data):
     return y
 
 
-@pytest.mark.parametrize('num_draws', [None, 700, 1000])
+@pytest.mark.parametrize('num_draws', [None, 1800, 2200])
 @pytest.mark.parametrize('group_by_chain', [False, True])
-def test_mcmc_interface(num_draws, group_by_chain):
+@pytest.mark.parametrize('num_chains', [1, 2])
+def test_mcmc_interface(num_draws, group_by_chain, num_chains):
+    num_samples = 2000
     data = torch.tensor([1.0])
     initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,))
     kernel = PriorKernel(normal_normal_model)
-    mcmc = MCMC(kernel=kernel, num_samples=800, warmup_steps=100,
+    mcmc = MCMC(kernel=kernel, num_samples=num_samples, warmup_steps=100,
                 initial_params=initial_params, transforms=transforms)
     mcmc.run(data)
     samples = mcmc.get_samples(num_draws, group_by_chain=group_by_chain)
+    # test sample shape
+    expected_samples = num_draws if num_draws is not None else num_samples
     if group_by_chain:
+        expected_shape = (mcmc.num_chains, expected_samples, 1) if mcmc.num_chains > 1 else (expected_samples, 1)
+    else:
+        expected_shape = (mcmc.num_chains * expected_samples, 1)
+    assert samples['y'].shape == expected_shape
+
+    # test sample stats
+    if group_by_chain and mcmc.num_chains > 1:
         samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
     sample_mean = samples['y'].mean()
     sample_std = samples['y'].std()
