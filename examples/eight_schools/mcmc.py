@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import argparse
 import logging
 
-import pandas as pd
 import torch
 
 import data
@@ -39,14 +38,7 @@ def main(args):
                 warmup_steps=args.warmup_steps,
                 num_chains=args.num_chains)
     mcmc.run(model, data.sigma, data.y)
-    samples = mcmc.get_samples()
-    if args.num_chains > 1:
-        samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
-    marginal = torch.cat(list(samples.values()), dim=-1).cpu().numpy()
-    params = ['mu', 'tau', 'eta[0]', 'eta[1]', 'eta[2]', 'eta[3]', 'eta[4]', 'eta[5]', 'eta[6]', 'eta[7]']
-    df = pd.DataFrame(marginal, columns=params).transpose()
-    df_summary = df.apply(pd.Series.describe, axis=1)[["mean", "std", "25%", "50%", "75%"]]
-    logging.info(df_summary)
+    mcmc.summary(prob=0.5)
 
 
 if __name__ == '__main__':
