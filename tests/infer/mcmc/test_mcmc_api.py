@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import os
+from functools import partial
 
 import pytest
 import torch
@@ -112,6 +113,10 @@ def _empty_model():
     return torch.tensor(1)
 
 
+def _hook(iters, kernel, samples, stage, i):
+    assert samples == {}
+    iters.append((stage, i))
+
 @pytest.mark.parametrize("kernel, model", [
     (HMC, _empty_model),
     (NUTS, _empty_model),
@@ -127,10 +132,7 @@ def test_null_model_with_hook(kernel, model, jit, num_chains):
                                                                    num_chains=num_chains)
 
     iters = []
-
-    def hook(kernel, samples, stage, i):
-        assert samples == {}
-        iters.append((stage, i))
+    hook = partial(_hook, iters)
 
     mp_context = "spawn" if "CUDA_TEST" in os.environ else None
 
