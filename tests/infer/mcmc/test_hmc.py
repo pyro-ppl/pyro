@@ -270,7 +270,7 @@ def test_bernoulli_latent_model(jit):
 
 
 @pytest.mark.parametrize("kernel", [HMC, NUTS])
-@pytest.mark.parametrize("jit", [mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
 @pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/pytorch/pytorch/issues/22811")
 def test_unnormalized_normal(kernel, jit):
     true_mean, true_std = torch.tensor(5.), torch.tensor(1.)

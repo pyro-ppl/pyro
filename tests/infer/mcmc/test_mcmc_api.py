@@ -117,6 +117,7 @@ def _hook(iters, kernel, samples, stage, i):
     assert samples == {}
     iters.append((stage, i))
 
+
 @pytest.mark.parametrize("kernel, model", [
     (HMC, _empty_model),
     (NUTS, _empty_model),
