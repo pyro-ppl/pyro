@@ -104,13 +104,12 @@ def _empty_model():
 @pytest.mark.parametrize("jit", [False, True])
 @pytest.mark.parametrize("num_chains", [
     1,
-    skipif_param(2, condition="CI" in os.environ or "CUDA_TEST" in os.environ,
-                 reason="CI only provides 2-core CPU; also see https://github.com/pytorch/pytorch/issues/2517")
+    skipif_param(2, condition="CI" in os.environ, reason="CI only provides 2-core CPU")
 ])
 def test_empty_sample_sites(kernel, kernel_args, jit, num_chains):
     num_warmup, num_samples = 10, 10
     kern = kernel(kernel_args, jit_compile=jit)
-    mp_context = "spawn" if "TEST_CUDA" in os.environ else None
+    mp_context = "spawn" if "CUDA_TEST" in os.environ else None
     mcmc = MCMC(kern, num_samples=num_samples, warmup_steps=num_warmup, num_chains=num_chains, mp_context=mp_context)\
         .run()
     expected = torch.ones(num_samples) if num_chains <= 1 else torch.ones(num_chains, num_samples)

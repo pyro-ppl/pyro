@@ -96,9 +96,10 @@ def test_num_chains(num_chains, cpu_count, monkeypatch):
                                                         num_chains=num_chains)
     kernel = PriorKernel(normal_normal_model)
     available_cpu = max(1, cpu_count-1)
+    mp_context = "spawn" if "CUDA_TEST" in os.environ else None
     with optional(pytest.warns(UserWarning), available_cpu < num_chains):
         mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains,
-                    initial_params=initial_params, transforms=transforms)
+                    initial_params=initial_params, transforms=transforms, mp_context=mp_context)
     mcmc.run(data)
     assert mcmc.num_chains == min(num_chains, available_cpu)
     if mcmc.num_chains == 1:
@@ -118,8 +119,7 @@ def _empty_model():
 @pytest.mark.parametrize("jit", [False, True])
 @pytest.mark.parametrize("num_chains", [
     1,
-    skipif_param(2, condition="CI" in os.environ or "CUDA_TEST" in os.environ,
-                 reason="CI only provides 2-core CPU; also see https://github.com/pytorch/pytorch/issues/2517")
+    skipif_param(2, condition="CI" in os.environ, reason="CI only provides 2-core CPU")
 ])
 def test_null_model_with_hook(kernel, model, jit, num_chains):
     num_warmup, num_samples = 10, 10
@@ -132,7 +132,7 @@ def test_null_model_with_hook(kernel, model, jit, num_chains):
         assert samples == {}
         iters.append((stage, i))
 
-    mp_context = "spawn" if "TEST_CUDA" in os.environ else None
+    mp_context = "spawn" if "CUDA_TEST" in os.environ else None
 
     kern = kernel(potential_fn=potential_fn, transforms=transforms, jit_compile=jit)
     mcmc = MCMC(kern, num_samples=num_samples, warmup_steps=num_warmup,
