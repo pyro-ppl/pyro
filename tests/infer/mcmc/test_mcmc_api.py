@@ -131,9 +131,11 @@ def test_null_model_with_hook(kernel, model, jit, num_chains):
         assert samples == {}
         iters.append((stage, i))
 
+    mp_context = "spawn" if "TEST_CUDA" in os.environ else None
+
     kern = kernel(potential_fn=potential_fn, transforms=transforms, jit_compile=jit)
     mcmc = MCMC(kern, num_samples=num_samples, warmup_steps=num_warmup,
-                num_chains=num_chains, initial_params=initial_params, hook_fn=hook)
+                num_chains=num_chains, initial_params=initial_params, hook_fn=hook, mp_context=mp_context)
     mcmc.run()
     samples = mcmc.get_samples()
     assert samples == {}

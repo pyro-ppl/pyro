@@ -109,7 +109,9 @@ def _empty_model():
 def test_empty_sample_sites(kernel, kernel_args, jit, num_chains):
     num_warmup, num_samples = 10, 10
     kern = kernel(kernel_args, jit_compile=jit)
-    mcmc = MCMC(kern, num_samples=num_samples, warmup_steps=num_warmup, num_chains=num_chains).run()
+    mp_context = "spawn" if "TEST_CUDA" in os.environ else None
+    mcmc = MCMC(kern, num_samples=num_samples, warmup_steps=num_warmup, num_chains=num_chains, mp_context=mp_context)\
+        .run()
     expected = torch.ones(num_samples) if num_chains <= 1 else torch.ones(num_chains, num_samples)
     assert_equal(mcmc.marginal(["_RETURN"]).empirical["_RETURN"].enumerate_support(),
                  expected)

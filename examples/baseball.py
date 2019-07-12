@@ -383,6 +383,5 @@ if __name__ == "__main__":
 
     if args.cuda:
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
-        torch.multiprocessing.set_start_method("spawn", force=True)
 
     main(args)

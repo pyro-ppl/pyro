@@ -64,8 +64,8 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
 
 
 class _Worker(object):
-    def __init__(self, chain_id, result_queue, log_queue, event,
-                 kernel, num_samples, warmup_steps, initial_params=None, hook=None):
+    def __init__(self, chain_id, result_queue, log_queue, kernel, num_samples, warmup_steps,
+                 initial_params=None, hook=None):
         self.chain_id = chain_id
         self.kernel = kernel
         if initial_params is not None:
@@ -77,7 +77,6 @@ class _Worker(object):
         self.result_queue = result_queue
         self.default_tensor_type = torch.Tensor().type()
         self.hook = hook
-        self.event = event
 
     def run(self, *args, **kwargs):
         pyro.set_rng_seed(self.rng_seed)
@@ -96,8 +95,6 @@ class _Worker(object):
             for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, logging_hook,
                                        *args, **kwargs):
                 self.result_queue.put_nowait((self.chain_id, sample))
-                self.event.wait()
-                self.event.clear()
             self.result_queue.put_nowait((self.chain_id, None))
         except Exception as e:
             logger.exception(e)
@@ -146,6 +143,9 @@ class _UnarySampler(object):
         self.hook = hook
         super(_UnarySampler, self).__init__()
 
+    def terminate(self, *args, **kwargs):
+        pass
+
     def run(self, *args, **kwargs):
         logger = logging.getLogger("pyro.infer.mcmc")
         progress_bar = ProgressBar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
@@ -187,25 +187,28 @@ class _MultiSampler(object):
                                                  self.num_chains, disable_progbar))
         self.log_thread.daemon = True
         self.log_thread.start()
-        self.events = [self.ctx.Event() for _ in range(num_chains)]
 
     def init_workers(self, *args, **kwargs):
         self.workers = []
         for i in range(self.num_chains):
             init_params = {k: v[i] for k, v in self.initial_params.items()} if self.initial_params is not None else None
-            worker = _Worker(i, self.result_queue, self.log_queue, self.events[i], self.kernel,
-                             self.num_samples, self.warmup_steps, initial_params=init_params, hook=self.hook)
+            worker = _Worker(i, self.result_queue, self.log_queue, self.kernel, self.num_samples, self.warmup_steps,
+                             initial_params=init_params, hook=self.hook)
             worker.daemon = True
             self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
                                                  args=args, kwargs=kwargs))
 
-    def terminate(self):
+    def terminate(self, terminate_workers=False):
         if self.log_thread.is_alive():
             self.log_queue.put_nowait(None)
             self.log_thread.join(timeout=1)
-        for w in self.workers:
-            if w.is_alive():
-                w.terminate()
+        # Only kill workers if exception is raised. worker processes are daemon
+        # processes that will otherwise be terminated with the main process.
+        # Note that it is important to not
+        if terminate_workers:
+            for w in self.workers:
+                if w.is_alive():
+                    w.terminate()
 
     def run(self, *args, **kwargs):
         # Ignore sigint in worker processes; they will be shut down
@@ -215,13 +218,13 @@ class _MultiSampler(object):
         # restore original handler
         signal.signal(signal.SIGINT, sigint_handler)
         active_workers = self.num_chains
+        exc_raised = True
         try:
             for w in self.workers:
                 w.start()
             while active_workers:
                 try:
                     chain_id, val = self.result_queue.get(timeout=5)
-                    self.events[chain_id].set()
                 except queue.Empty:
                     continue
                 if isinstance(val, Exception):
@@ -231,8 +234,9 @@ class _MultiSampler(object):
                     yield val, chain_id
                 else:
                     active_workers -= 1
+            exc_raised = False
         finally:
-            self.terminate()
+            self.terminate(terminate_workers=exc_raised)
 
 
 class MCMC(object):
@@ -297,6 +301,10 @@ class MCMC(object):
                     if v.shape[0] != num_chains:
                         raise ValueError("The leading dimension of tensors in `initial_params` "
                                          "must match the number of chains.")
+                if mp_context is None and six.PY3:
+                    # change multiprocessing context to 'spawn' for CUDA tensors.
+                    if list(initial_params.values())[0].is_cuda:
+                        mp_context = "spawn"
 
             # verify num_chains is compatible with available CPU.
             available_cpu = max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
@@ -352,6 +360,9 @@ class MCMC(object):
         for name, transform in self.transforms.items():
             z_acc[name] = transform.inv(z_acc[name])
         self._samples = z_acc
+
+        # terminate the sampler (shut down worker processes)
+        self.sampler.terminate(True)
 
     def get_samples(self, num_samples=None, group_by_chain=False):
         """
