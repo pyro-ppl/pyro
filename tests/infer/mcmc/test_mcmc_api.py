@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import os
+from functools import partial
 
 import pytest
 import torch
@@ -64,17 +65,28 @@ def normal_normal_model(data):
     return y
 
 
-@pytest.mark.parametrize('num_draws', [None, 700, 1000])
+@pytest.mark.parametrize('num_draws', [None, 1800, 2200])
 @pytest.mark.parametrize('group_by_chain', [False, True])
-def test_mcmc_interface(num_draws, group_by_chain):
+@pytest.mark.parametrize('num_chains', [1, 2])
+def test_mcmc_interface(num_draws, group_by_chain, num_chains):
+    num_samples = 2000
     data = torch.tensor([1.0])
     initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,))
     kernel = PriorKernel(normal_normal_model)
-    mcmc = MCMC(kernel=kernel, num_samples=800, warmup_steps=100,
+    mcmc = MCMC(kernel=kernel, num_samples=num_samples, warmup_steps=100,
                 initial_params=initial_params, transforms=transforms)
     mcmc.run(data)
     samples = mcmc.get_samples(num_draws, group_by_chain=group_by_chain)
+    # test sample shape
+    expected_samples = num_draws if num_draws is not None else num_samples
     if group_by_chain:
+        expected_shape = (mcmc.num_chains, expected_samples, 1) if mcmc.num_chains > 1 else (expected_samples, 1)
+    else:
+        expected_shape = (mcmc.num_chains * expected_samples, 1)
+    assert samples['y'].shape == expected_shape
+
+    # test sample stats
+    if group_by_chain and mcmc.num_chains > 1:
         samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
     sample_mean = samples['y'].mean()
     sample_std = samples['y'].std()
@@ -96,9 +108,10 @@ def test_num_chains(num_chains, cpu_count, monkeypatch):
                                                         num_chains=num_chains)
     kernel = PriorKernel(normal_normal_model)
     available_cpu = max(1, cpu_count-1)
+    mp_context = "spawn" if "CUDA_TEST" in os.environ else None
     with optional(pytest.warns(UserWarning), available_cpu < num_chains):
         mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains,
-                    initial_params=initial_params, transforms=transforms)
+                    initial_params=initial_params, transforms=transforms, mp_context=mp_context)
     mcmc.run(data)
     assert mcmc.num_chains == min(num_chains, available_cpu)
     if mcmc.num_chains == 1:
@@ -111,6 +124,11 @@ def _empty_model():
     return torch.tensor(1)
 
 
+def _hook(iters, kernel, samples, stage, i):
+    assert samples == {}
+    iters.append((stage, i))
+
+
 @pytest.mark.parametrize("kernel, model", [
     (HMC, _empty_model),
     (NUTS, _empty_model),
@@ -118,8 +136,7 @@ def _empty_model():
 @pytest.mark.parametrize("jit", [False, True])
 @pytest.mark.parametrize("num_chains", [
     1,
-    skipif_param(2, condition="CI" in os.environ or "CUDA_TEST" in os.environ,
-                 reason="CI only provides 2-core CPU; also see https://github.com/pytorch/pytorch/issues/2517")
+    skipif_param(2, condition="CI" in os.environ, reason="CI only provides 2-core CPU")
 ])
 def test_null_model_with_hook(kernel, model, jit, num_chains):
     num_warmup, num_samples = 10, 10
@@ -127,14 +144,13 @@ def test_null_model_with_hook(kernel, model, jit, num_chains):
                                                                    num_chains=num_chains)
 
     iters = []
+    hook = partial(_hook, iters)
 
-    def hook(kernel, samples, stage, i):
-        assert samples == {}
-        iters.append((stage, i))
+    mp_context = "spawn" if "CUDA_TEST" in os.environ else None
 
     kern = kernel(potential_fn=potential_fn, transforms=transforms, jit_compile=jit)
     mcmc = MCMC(kern, num_samples=num_samples, warmup_steps=num_warmup,
-                num_chains=num_chains, initial_params=initial_params, hook_fn=hook)
+                num_chains=num_chains, initial_params=initial_params, hook_fn=hook, mp_context=mp_context)
     mcmc.run()
     samples = mcmc.get_samples()
     assert samples == {}

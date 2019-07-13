@@ -9,14 +9,16 @@ from opt_einsum import shared_intermediates
 
 import pyro
 import pyro.poutine as poutine
+import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape, logsumexp
 from pyro.infer import config_enumerate
 from pyro.infer.util import is_validation_enabled
 from pyro.ops import stats
 from pyro.ops.contract import contract_to_tensor
+from pyro.ops.integrator import potential_grad
 from pyro.poutine.subsample_messenger import _Subsample
 from pyro.poutine.util import prune_subsample_sites
-from pyro.util import check_site_shape, ignore_jit_warnings, torch_isinf, torch_isnan, ExperimentalWarning
+from pyro.util import check_site_shape, ignore_jit_warnings, ExperimentalWarning
 
 
 class TraceTreeEvaluator(object):
@@ -262,8 +264,10 @@ class _PEMaker(object):
         if not params:
             return self._potential_fn(params)
         names, vals = zip(*sorted(params.items()))
+
         if self._compiled_fn:
             return self._compiled_fn(*vals)
+
         with pyro.validation_enabled(False):
             def _pe_jit(*zi):
                 params = dict(zip(names, zi))
@@ -281,21 +285,32 @@ class _PEMaker(object):
         return self._potential_fn
 
 
+# TODO: expose init_strategy using separate functions.
 def _get_init_params(model, model_args, model_kwargs, transforms, potential_fn, prototype_params,
-                     max_tries_initial_params=100, num_chains=1):
+                     max_tries_initial_params=100, num_chains=1, strategy="uniform"):
     params = prototype_params
     params_per_chain = defaultdict(list)
     n = 0
+
+    # For empty models, exit early
+    if not params:
+        return params
+
     for i in range(max_tries_initial_params):
         while n < num_chains:
-            potential_energy = potential_fn(params)
-            if not torch_isnan(potential_energy) and not torch_isinf(potential_energy):
+            if strategy == "uniform":
+                params = {k: dist.Uniform(v.new_full(v.shape, -2), v.new_full(v.shape, 2)).sample()
+                          for k, v in params.items()}
+            elif strategy == "prior":
+                trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
+                samples = {name: trace.nodes[name]["value"].detach() for name in params}
+                params = {k: transforms[k](v) for k, v in samples.items()}
+            pe_grad, pe = potential_grad(potential_fn, params)
+
+            if torch.isfinite(pe) and all(map(torch.all, map(torch.isfinite, pe_grad.values()))):
                 for k, v in params.items():
                     params_per_chain[k].append(v)
                 n += 1
-            trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
-            samples = {name: trace.nodes[name]["value"].detach() for name in params}
-            params = {k: transforms[k](v) for k, v in samples.items()}
         if num_chains == 1:
             return {k: v[0] for k, v in params_per_chain.items()}
         else:
