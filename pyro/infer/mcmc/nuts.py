@@ -286,8 +286,10 @@ class NUTS(HMC):
             self._cache(z, potential_energy)
         # return early if no sample sites
         elif len(z) == 0:
-            self._accept_cnt += 1
             self._t += 1
+            self._mean_accept_prob = 1.
+            if self._t > self._warmup_steps:
+                self._accept_cnt += 1
             return z
         r, r_flat = self._sample_r(name="r_t={}".format(self._t))
         energy_current = self._kinetic_energy(r) + potential_energy
