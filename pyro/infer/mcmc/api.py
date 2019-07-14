@@ -115,7 +115,7 @@ def _gen_samples(kernel, warmup_steps, num_samples, hook, *args, **kwargs):
     for i in range(num_samples):
         params = kernel.sample(params)
         hook(kernel, params, 'sample', i)
-        yield torch.cat([params[site].reshape(-1) for site in sorted(params)])
+        yield torch.cat([params[site].reshape(-1) for site in sorted(params)]) if params else torch.tensor([])
     yield kernel.diagnostics()
     kernel.cleanup()
 
