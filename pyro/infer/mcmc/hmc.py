@@ -145,6 +145,7 @@ class HMC(MCMCKernel):
     def _reset(self):
         self._t = 0
         self._accept_cnt = 0
+        self._mean_accept_prob = 0.
         self._divergences = []
         self._prototype_trace = None
         self._initial_params = None
@@ -315,23 +316,29 @@ class HMC(MCMCKernel):
         accept_prob = (-delta_energy).exp().clamp(max=1.)
         rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(scalar_like(accept_prob, 0.),
                                                                      scalar_like(accept_prob, 1.)))
+        accepted = False
         if rand < accept_prob:
-            self._accept_cnt += 1
+            accepted = True
             z = z_new
             self._cache(z, potential_energy_new, z_grads_new)
 
-        if self._t < self._warmup_steps:
+        self._t += 1
+        if self._t > self._warmup_steps:
+            n = self._t - self._warmup_steps
+            if accepted:
+                self._accept_cnt += 1
+        else:
+            n = self._t
             self._adapter.step(self._t, z, accept_prob)
 
-        self._t += 1
-
+        self._mean_accept_prob += (accept_prob.item() - self._mean_accept_prob) / n
         return z.copy()
 
     def logging(self):
         return OrderedDict([
             ("step size", "{:.2e}".format(self.step_size)),
-            ("acc. rate", "{:.3f}".format(self._accept_cnt / self._t))
+            ("acc. prob", "{:.3f}".format(self._mean_accept_prob))
         ])
 
     def diagnostics(self):
-        return {"divergences": self._divergences}
+        return {"divergences": self._divergences, "acceptance rate": self._accept_cnt / self._t}
