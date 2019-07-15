@@ -5,6 +5,7 @@ from torch.distributions import constraints
 
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
+from pyro.util import ignore_jit_warnings
 
 
 def _logmatmulexp(x, y):
@@ -17,6 +18,7 @@ def _logmatmulexp(x, y):
     return xy + x_shift + y_shift
 
 
+@ignore_jit_warnings()
 def _sequential_logmatmulexp(logits):
     """
     For a tensor ``x`` whose time dimension is -3, computes::
@@ -42,6 +44,16 @@ def _sequential_logmatmulexp(logits):
 
 class DiscreteHMM(TorchDistribution):
     """
+    Hidden Markov Model with discrete latent state and arbitrary observation
+    distribution. This uses [1] to parallelize over time, achieving
+    O(log(time)) parallel complexity.
+
+    **References:**
+
+    [1] Simo Sarkka, Angel F. Garcia-Fernandez (2019)
+        "Temporal Parallelization of Bayesian Filters and Smoothers"
+        https://arxiv.org/pdf/1905.13002.pdf
+
     :param torch.Tensor initial_logits: A logits tensor for an initial
         categorical distribution over latent states. Should have rightmost size
         ``state_dim`` and be broadcastable to ``batch_shape + (state_dim,)``.
@@ -61,7 +73,7 @@ class DiscreteHMM(TorchDistribution):
     def __init__(self, initial_logits, transition_logits, observation_dist, validate_args=None):
         if initial_logits.dim() < 1:
             raise ValueError
-        if transition_logits.dim() < 3:
+        if transition_logits.dim() < 2:
             raise ValueError
         if len(observation_dist.batch_shape) < 1:
             raise ValueError
@@ -77,6 +89,11 @@ class DiscreteHMM(TorchDistribution):
         self.transition_logits = transition_logits - transition_logits.logsumexp(-1, True)
         self.observation_dist = observation_dist
         super(DiscreteHMM, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+
+    def expand(self, batch_shape, _instance=None):
+        if broadcast_shape(self.batch_shape, batch_shape) == self.batch_shape:
+            return self
+        raise NotImplementedError
 
     def log_prob(self, value):
         # Combine observation and transition factors.
