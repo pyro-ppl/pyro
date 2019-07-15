@@ -286,8 +286,10 @@ class NUTS(HMC):
             self._cache(z, potential_energy)
         # return early if no sample sites
         elif len(z) == 0:
-            self._accept_cnt += 1
             self._t += 1
+            self._mean_accept_prob = 1.
+            if self._t > self._warmup_steps:
+                self._accept_cnt += 1
             return z
         r, r_flat = self._sample_r(name="r_t={}".format(self._t))
         energy_current = self._kinetic_energy(r) + potential_energy
@@ -384,12 +386,16 @@ class NUTS(HMC):
                     else:
                         tree_weight = tree_weight + new_tree.weight
 
-        if self._t < self._warmup_steps:
-            accept_prob = sum_accept_probs / num_proposals
-            self._adapter.step(self._t, z, accept_prob)
-
-        if accepted:
-            self._accept_cnt += 1
+        accept_prob = sum_accept_probs / num_proposals
 
         self._t += 1
+        if self._t > self._warmup_steps:
+            n = self._t - self._warmup_steps
+            if accepted:
+                self._accept_cnt += 1
+        else:
+            n = self._t
+            self._adapter.step(self._t, z, accept_prob)
+        self._mean_accept_prob += (accept_prob.item() - self._mean_accept_prob) / n
+
         return z.copy()
