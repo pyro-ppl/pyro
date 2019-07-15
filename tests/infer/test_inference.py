@@ -10,10 +10,12 @@ from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
+import pyro.contrib.gp.kernels as kernels
+from pyro.infer.util import torch_item
 from pyro.distributions.testing import fakes
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedGamma
 from pyro.infer import (SVI, JitTrace_ELBO, JitTraceEnum_ELBO, JitTraceGraph_ELBO, Trace_ELBO, TraceEnum_ELBO,
-                        TraceGraph_ELBO, RenyiELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO)
+                        TraceGraph_ELBO, RenyiELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO, Trace_MMD)
 from tests.common import assert_equal, xfail_param, xfail_if_not_implemented
 
 
@@ -45,6 +47,7 @@ class NormalNormalTests(TestCase):
         self.analytic_loc_n = self.data_sum * (self.lam / self.analytic_lam_n) +\
             self.loc0 * (self.lam0 / self.analytic_lam_n)
         self.batch_size = 4
+        self.sample_batch_size = 2
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 5000, Trace_ELBO())
@@ -63,6 +66,28 @@ class NormalNormalTests(TestCase):
 
     def test_renyi_nonreparameterized(self):
         self.do_elbo_test(False, 7500, RenyiELBO(num_particles=3))
+
+    def test_mmd_vectorized(self):
+        z_size = self.loc0.shape[0]
+        self.do_fit_prior_test(
+            True, 1000, Trace_MMD(
+                kernel=kernels.RBF(
+                    z_size,
+                    lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
+                ), vectorize_particles=True, num_particles=100
+            )
+        )
+
+    def test_mmd_nonvectorized(self):
+        z_size = self.loc0.shape[0]
+        self.do_fit_prior_test(
+            True, 1000, Trace_MMD(
+                kernel=kernels.RBF(
+                    z_size,
+                    lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
+                ), vectorize_particles=False, num_particles=100
+            )
+        )
 
     def do_elbo_test(self, reparameterized, n_steps, loss):
         pyro.clear_param_store()
@@ -93,6 +118,58 @@ class NormalNormalTests(TestCase):
             loc_error = param_mse("loc_q", self.analytic_loc_n)
             log_sig_error = param_mse("log_sig_q", self.analytic_log_sig_n)
 
+        assert_equal(0.0, loc_error, prec=0.05)
+        assert_equal(0.0, log_sig_error, prec=0.05)
+
+    def do_fit_prior_test(self, reparameterized, n_steps, loss, debug=False):
+        pyro.clear_param_store()
+
+        def model():
+            with pyro.plate('samples', self.sample_batch_size):
+                pyro.sample(
+                    "loc_latent", dist.Normal(
+                        torch.stack([self.loc0]*self.sample_batch_size, dim=0),
+                        torch.stack([torch.pow(self.lam0, -0.5)]*self.sample_batch_size, dim=0)
+                    ).to_event(1)
+                )
+
+        def guide():
+            loc_q = pyro.param("loc_q", self.loc0.detach() + 0.134)
+            log_sig_q = pyro.param("log_sig_q", -0.5*torch.log(self.lam0).data.detach() - 0.14)
+            sig_q = torch.exp(log_sig_q)
+            Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
+            with pyro.plate('samples', self.sample_batch_size):
+                pyro.sample(
+                    "loc_latent", Normal(
+                        torch.stack([loc_q]*self.sample_batch_size, dim=0),
+                        torch.stack([sig_q]*self.sample_batch_size, dim=0)
+                    ).to_event(1)
+                )
+
+        adam = optim.Adam({"lr": .001})
+        svi = SVI(model, guide, adam, loss=loss)
+
+        alpha = 0.99
+        for k in range(n_steps):
+            svi.step()
+            if debug:
+                loc_error = param_mse("loc_q", self.loc0)
+                log_sig_error = param_mse("log_sig_q", -0.5*torch.log(self.lam0))
+                with torch.no_grad():
+                    if k == 0:
+                        avg_loglikelihood, avg_penalty = loss._differentiable_loss_parts(model, guide)
+                        avg_loglikelihood = torch_item(avg_loglikelihood)
+                        avg_penalty = torch_item(avg_penalty)
+                    loglikelihood, penalty = loss._differentiable_loss_parts(model, guide)
+                    avg_loglikelihood = alpha * avg_loglikelihood + (1-alpha) * torch_item(loglikelihood)
+                    avg_penalty = alpha * avg_penalty + (1-alpha) * torch_item(penalty)
+                if k % 100 == 0:
+                    print(loc_error, log_sig_error)
+                    print(avg_loglikelihood, avg_penalty)
+                    print()
+
+        loc_error = param_mse("loc_q", self.loc0)
+        log_sig_error = param_mse("log_sig_q", -0.5 * torch.log(self.lam0))
         assert_equal(0.0, loc_error, prec=0.05)
         assert_equal(0.0, log_sig_error, prec=0.05)
 
@@ -174,6 +251,7 @@ class PoissonGammaTests(TestCase):
         data_sum = self.data.sum(0)
         self.alpha_n = self.alpha0 + data_sum  # posterior alpha
         self.beta_n = self.beta0 + torch.tensor(float(self.n_data))  # posterior beta
+        self.sample_batch_size = 2
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 10000, Trace_ELBO())
@@ -186,6 +264,17 @@ class PoissonGammaTests(TestCase):
 
     def test_renyi_nonreparameterized(self):
         self.do_elbo_test(False, 12500, RenyiELBO(alpha=0.2, num_particles=2))
+
+    def test_mmd_vectorized(self):
+        z_size = 1
+        self.do_fit_prior_test(
+            True, 25000, Trace_MMD(
+                kernel=kernels.RBF(
+                    z_size,
+                    lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
+                ), vectorize_particles=True, num_particles=100
+            ), debug=True
+        )
 
     def do_elbo_test(self, reparameterized, n_steps, loss):
         pyro.clear_param_store()
@@ -214,6 +303,59 @@ class PoissonGammaTests(TestCase):
             pyro.param("alpha_q").detach().cpu().numpy(), self.alpha_n.detach().cpu().numpy()))
         assert_equal(pyro.param("beta_q"), self.beta_n, prec=0.15, msg='{} vs {}'.format(
             pyro.param("beta_q").detach().cpu().numpy(), self.beta_n.detach().cpu().numpy()))
+
+    def do_fit_prior_test(self, reparameterized, n_steps, loss, debug=False):
+        pyro.clear_param_store()
+        Gamma = dist.Gamma if reparameterized else fakes.NonreparameterizedGamma
+
+        def model():
+            with pyro.plate('samples', self.sample_batch_size):
+                pyro.sample(
+                    "lambda_latent", Gamma(
+                        torch.stack([torch.stack([self.alpha0])]*self.sample_batch_size),
+                        torch.stack([torch.stack([self.beta0])]*self.sample_batch_size)
+                    ).to_event(1)
+                )
+
+        def guide():
+            alpha_q = pyro.param("alpha_q", self.alpha0.detach() + math.exp(0.17),
+                                 constraint=constraints.positive)
+            beta_q = pyro.param("beta_q", self.beta0.detach() / math.exp(0.143),
+                                constraint=constraints.positive)
+            with pyro.plate('samples', self.sample_batch_size):
+                pyro.sample(
+                    "lambda_latent", Gamma(
+                        torch.stack([torch.stack([alpha_q])]*self.sample_batch_size),
+                        torch.stack([torch.stack([beta_q])]*self.sample_batch_size)
+                    ).to_event(1)
+                )
+
+        adam = optim.Adam({"lr": .0002, "betas": (0.97, 0.999)})
+        svi = SVI(model, guide, adam, loss)
+
+        alpha = 0.99
+        for k in range(n_steps):
+            svi.step()
+            if debug:
+                alpha_error = param_mse("alpha_q", self.alpha0)
+                beta_error = param_mse("beta_q", self.beta0)
+                with torch.no_grad():
+                    if k == 0:
+                        avg_loglikelihood, avg_penalty = loss._differentiable_loss_parts(model, guide)
+                        avg_loglikelihood = torch_item(avg_loglikelihood)
+                        avg_penalty = torch_item(avg_penalty)
+                    loglikelihood, penalty = loss._differentiable_loss_parts(model, guide)
+                    avg_loglikelihood = alpha * avg_loglikelihood + (1-alpha) * torch_item(loglikelihood)
+                    avg_penalty = alpha * avg_penalty + (1-alpha) * torch_item(penalty)
+                if k % 100 == 0:
+                    print(alpha_error, beta_error)
+                    print(avg_loglikelihood, avg_penalty)
+                    print()
+
+        assert_equal(pyro.param("alpha_q"), self.alpha0, prec=0.2, msg='{} vs {}'.format(
+            pyro.param("alpha_q").detach().cpu().numpy(), self.alpha0.detach().cpu().numpy()))
+        assert_equal(pyro.param("beta_q"), self.beta0, prec=0.15, msg='{} vs {}'.format(
+            pyro.param("beta_q").detach().cpu().numpy(), self.beta0.detach().cpu().numpy()))
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
@@ -288,6 +430,7 @@ class BernoulliBetaTests(TestCase):
         # posterior beta
         self.log_alpha_n = torch.log(self.alpha_n)
         self.log_beta_n = torch.log(self.beta_n)
+        self.sample_batch_size = 2
 
     def test_elbo_reparameterized(self):
         self.do_elbo_test(True, 10000, Trace_ELBO())
@@ -319,6 +462,17 @@ class BernoulliBetaTests(TestCase):
         self.do_elbo_test(False, 5000, RenyiELBO(alpha=0.2, num_particles=2, vectorize_particles=True,
                                                  max_plate_nesting=1))
 
+    def test_mmd_vectorized(self):
+        z_size = 1
+        self.do_fit_prior_test(
+            True, 2500, Trace_MMD(
+                kernel=kernels.RBF(
+                    z_size,
+                    lengthscale=torch.sqrt(torch.tensor(z_size, dtype=torch.float))
+                ), vectorize_particles=True, num_particles=100
+            )
+        )
+
     def do_elbo_test(self, reparameterized, n_steps, loss):
         pyro.clear_param_store()
         Beta = dist.Beta if reparameterized else fakes.NonreparameterizedBeta
@@ -345,6 +499,60 @@ class BernoulliBetaTests(TestCase):
 
         alpha_error = param_abs_error("alpha_q_log", self.log_alpha_n)
         beta_error = param_abs_error("beta_q_log", self.log_beta_n)
+        assert_equal(0.0, alpha_error, prec=0.08)
+        assert_equal(0.0, beta_error, prec=0.08)
+
+    def do_fit_prior_test(self, reparameterized, n_steps, loss, debug=False):
+        pyro.clear_param_store()
+        Beta = dist.Beta if reparameterized else fakes.NonreparameterizedBeta
+
+        def model():
+            with pyro.plate('samples', self.sample_batch_size):
+                pyro.sample(
+                    "p_latent", Beta(
+                        torch.stack([torch.stack([self.alpha0])]*self.sample_batch_size),
+                        torch.stack([torch.stack([self.beta0])]*self.sample_batch_size)
+                    ).to_event(1)
+                )
+
+        def guide():
+            alpha_q_log = pyro.param("alpha_q_log",
+                                     torch.log(self.alpha0) + 0.17)
+            beta_q_log = pyro.param("beta_q_log",
+                                    torch.log(self.beta0) - 0.143)
+            alpha_q, beta_q = torch.exp(alpha_q_log), torch.exp(beta_q_log)
+            with pyro.plate('samples', self.sample_batch_size):
+                pyro.sample(
+                    "p_latent", Beta(
+                        torch.stack([torch.stack([alpha_q])]*self.sample_batch_size),
+                        torch.stack([torch.stack([beta_q])]*self.sample_batch_size)
+                    ).to_event(1)
+                )
+
+        adam = optim.Adam({"lr": .001, "betas": (0.97, 0.999)})
+        svi = SVI(model, guide, adam, loss=loss)
+
+        alpha = 0.99
+        for k in range(n_steps):
+            svi.step()
+            if debug:
+                alpha_error = param_abs_error("alpha_q_log", torch.log(self.alpha0))
+                beta_error = param_abs_error("beta_q_log", torch.log(self.beta0))
+                with torch.no_grad():
+                    if k == 0:
+                        avg_loglikelihood, avg_penalty = loss._differentiable_loss_parts(model, guide)
+                        avg_loglikelihood = torch_item(avg_loglikelihood)
+                        avg_penalty = torch_item(avg_penalty)
+                    loglikelihood, penalty = loss._differentiable_loss_parts(model, guide)
+                    avg_loglikelihood = alpha * avg_loglikelihood + (1-alpha) * torch_item(loglikelihood)
+                    avg_penalty = alpha * avg_penalty + (1-alpha) * torch_item(penalty)
+                if k % 100 == 0:
+                    print(alpha_error, beta_error)
+                    print(avg_loglikelihood, avg_penalty)
+                    print()
+
+        alpha_error = param_abs_error("alpha_q_log", torch.log(self.alpha0))
+        beta_error = param_abs_error("beta_q_log", torch.log(self.beta0))
         assert_equal(0.0, alpha_error, prec=0.08)
         assert_equal(0.0, beta_error, prec=0.08)
 
