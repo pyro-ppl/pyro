@@ -7,43 +7,89 @@ from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 
 
-class DiscreteHMM(TorchDistribution):
-    arg_constraints = {"transition_logits": constraints.simplex,
-                       "emission_logits": constraints.simplex}
+def _logmatmulexp(x, y):
+    """
+    Numerically stable version of ``(x.log() @ y.log()).exp()``.
+    """
+    x_shift = x.max(-1, keepdim=True)[0]
+    y_shift = y.max(-2, keepdim=True)[0]
+    xy = torch.matmul((x - x_shift).exp(), (y - y_shift).exp()).log()
+    return xy + x_shift + y_shift
 
-    def __init__(self, transition_logits, emission_logits, validate_args=None):
+
+def _sequential_logmatmulexp(logits):
+    """
+    For a tensor ``x`` whose time dimension is -3, computes::
+
+        x[..., 0, :, :] @ x[..., 1, :, :] @ ... @ x[..., T-1, :, :]
+
+    but does so numerically stably in log space.
+    """
+    batch_shape = logits.shape[:-3]
+    state_dim = logits.size(-1)
+    while logits.size(-3) > 1:
+        time = logits.size(-3)
+        even_time = time // 2 * 2
+        even_part = logits[..., :even_time, :, :]
+        x_y = even_part.reshape(batch_shape + (even_time // 2, 2, state_dim, state_dim))
+        x, y = x_y.unbind(-3)
+        contracted = _logmatmulexp(x, y)
+        if time > even_time:
+            contracted = torch.cat((contracted, logits[..., -1:, :, :]), dim=-3)
+        logits = contracted
+    return logits.squeeze(-3)
+
+
+class DiscreteHMM(TorchDistribution):
+    """
+    :param torch.Tensor initial_logits: A logits tensor for an initial
+        categorical distribution over latent states. Should have rightmost size
+        ``state_dim`` and be broadcastable to ``batch_shape + (state_dim,)``.
+    :param torch.Tensor transition_logits: A logits tensor for transition
+        conditional distributions between latent states. Should have rightmost
+        shape ``(num_steps, state_dim, state_dim)`` (time, old, new), and be
+        broadcastable to ``batch_shape + (num_steps, state_dim, state_dim)``.
+    :param torch.distriburtions.Distribution observation_dist: A conditional
+        distribution of observed data conditioned on latent state. The
+        ``.batch_shape`` should have rightmost size ``state_dim`` and be
+        broadcastable to ``batch_shape + (num_steps + state_dim)``. The
+        ``.event_shape`` may be arbitrary.
+    """
+    arg_constraints = {"initial_logits": constraints.real,
+                       "transition_logits": constraints.real}
+
+    def __init__(self, initial_logits, transition_logits, observation_dist, validate_args=None):
+        if initial_logits.dim() < 1:
+            raise ValueError
         if transition_logits.dim() < 3:
             raise ValueError
-        if emission_logits.dim() < 2:
+        if len(observation_dist.batch_shape) < 1:
             raise ValueError
-        event_shape = emission_logits.shape[-2:]
-        batch_shape = broadcast_shape(transition_logits.shape[:-3], emission_logits.shape[:-2])
-        self.transition_logits = transition_logits
-        self.emission_logits = emission_logits
+        time_shape = broadcast_shape(transition_logits.shape[-3:-2],
+                                     observation_dist.batch_shape[-2:-1])
+        if not time_shape:
+            raise ValueError
+        event_shape = time_shape + observation_dist.event_shape
+        batch_shape = broadcast_shape(initial_logits.shape[:-1],
+                                      transition_logits.shape[:-3],
+                                      observation_dist.batch_shape[:-2])
+        self.initial_logits = initial_logits - initial_logits.logsumexp(-1, True)
+        self.transition_logits = transition_logits - transition_logits.logsumexp(-1, True)
+        self.observation_dist = observation_dist
         super(DiscreteHMM, self).__init__(batch_shape, event_shape, validate_args=validate_args)
-        if self._validate_args:
-            time, state_dim = event_shape
-            if transition_logits.shape[-3:] != (time - 1, state_dim, state_dim):
-                raise ValueError
 
     def log_prob(self, value):
-        # Combine emission and transition factors.
-        emission_part = self.emission_logits.gather(-1, value)
-        result = self.transition_logits * emission_part[..., :-1, :].unsqueeze(-1)
-        result[..., -1] *= emission_part[..., -1].unsqueeze(-2)
+        # Combine observation and transition factors.
+        value = value.unsqueeze(-1 - self.observation_dist.event_dim)
+        observation_logits = self.observation_dist.log_prob(value)
+        result = self.transition_logits + observation_logits.unsqueeze(-2)
 
-        # Perform contraction.
-        batch_shape = result.shape[:-3]
-        state_dim = result.size(-1)
-        while result.size(-3) > 1:
-            time = result.size(-3)
-            even_time = time // 2 * 2
-            even_part = result[..., :even_time, :, :]
-            batched = even_part.reshape(batch_shape + (even_time // 2, 2, state_dim, state_dim))
-            x, y = batched.unbind(-3)
-            contracted = torch.matmul(x.exp(), y.exp()).log()  # TODO stabilize
-            if time < even_time:
-                contracted = torch.cat(contracted, result[..., -1:, :, :])
-            result = contracted
-        result = result.reshape(batch_shape + (state_dim * state_dim,))
-        return result.logsumexp(-1)
+        # Eliminate time dimension.
+        result = _sequential_logmatmulexp(result)
+
+        # Combine initial factor.
+        result = _logmatmulexp(self.initial_logits.unsqueeze(-2), result).squeeze(-2)
+
+        # Marginalize out final state.
+        result = result.logsumexp(-1)
+        return result
