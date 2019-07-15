@@ -495,8 +495,8 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
 
 # Next we demonstrate how to parallelize the neural HMM above using Pyro's
 # DiscreteHMM distribution. This model is equivalent to model_5 above, but we
-# manually unroll loops and fuse ops, leading to a single sample statement.
-# This is about is about XXX faster when with --cuda --jit.
+# manually unroll loops and fuse ops, leading to a single sample statement and
+# about 10x speedup.
 def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
     with ignore_jit_warnings():
         num_sequences, max_length, data_dim = map(int, sequences.shape)

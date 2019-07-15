@@ -5,7 +5,6 @@ from torch.distributions import constraints
 
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
-from pyro.util import ignore_jit_warnings
 
 
 def _logmatmulexp(x, y):
@@ -18,7 +17,6 @@ def _logmatmulexp(x, y):
     return xy + x_shift + y_shift
 
 
-@ignore_jit_warnings()
 def _sequential_logmatmulexp(logits):
     """
     For a tensor ``x`` whose time dimension is -3, computes::
@@ -72,15 +70,20 @@ class DiscreteHMM(TorchDistribution):
 
     def __init__(self, initial_logits, transition_logits, observation_dist, validate_args=None):
         if initial_logits.dim() < 1:
-            raise ValueError
+            raise ValueError("expected initial_logits to have at least one dim, "
+                             "actual shape = {}".format(initial_logits.shape))
         if transition_logits.dim() < 2:
-            raise ValueError
+            raise ValueError("expected transition_logits to have at least two dims, "
+                             "actual shape = {}".format(transition_logits.shape))
         if len(observation_dist.batch_shape) < 1:
-            raise ValueError
+            raise ValueError("expected observation_dist to have at least one batch dim, "
+                             "actual .batch_shape = {}".format(observation_dist.batch_shape))
         time_shape = broadcast_shape(transition_logits.shape[-3:-2],
                                      observation_dist.batch_shape[-2:-1])
         if not time_shape:
-            raise ValueError
+            raise ValueError("Expected either transition_logits or observation_dist to be time-dependent, "
+                             "actual shapes: {}, {}".format(transition_logits.shape,
+                                                            observation_dist.batch_shape))
         event_shape = time_shape + observation_dist.event_shape
         batch_shape = broadcast_shape(initial_logits.shape[:-1],
                                       transition_logits.shape[:-3],
