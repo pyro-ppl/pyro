@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import argparse
 import logging
 import math
+import six
 
 import pandas as pd
 import torch
@@ -373,6 +374,10 @@ if __name__ == "__main__":
                         help="run this example in GPU")
     args = parser.parse_args()
 
+    # work around the error "CUDA error: initialization error" when arg.cuda is False
+    # see https://github.com/pytorch/pytorch/issues/2517
+    if six.PY3:
+        torch.multiprocessing.set_start_method("spawn")
     pyro.set_rng_seed(args.rng_seed)
     # Enable validation checks
     pyro.enable_validation(__debug__)

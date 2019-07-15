@@ -14,7 +14,7 @@ import logging
 import signal
 import threading
 import warnings
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 
 import six
 import torch
@@ -107,13 +107,15 @@ class _Worker(object):
 def _gen_samples(kernel, warmup_steps, num_samples, hook, *args, **kwargs):
     kernel.setup(warmup_steps, *args, **kwargs)
     params = kernel.initial_params
+    # yield structure (key, value.shape) of params
+    yield {k: v.shape for k, v in params.items()}
     for i in range(warmup_steps):
         params = kernel.sample(params)
         hook(kernel, params, 'warmup', i)
     for i in range(num_samples):
         params = kernel.sample(params)
         hook(kernel, params, 'sample', i)
-        yield params
+        yield torch.cat([params[site].reshape(-1) for site in sorted(params)]) if params else torch.tensor([])
     yield kernel.diagnostics()
     kernel.cleanup()
 
@@ -337,18 +339,36 @@ class MCMC(object):
 
     def run(self, *args, **kwargs):
         num_samples = [0] * self.num_chains
-        z_acc = defaultdict(lambda: [[] for _ in range(self.num_chains)])
+        z_flat_acc = [[] for _ in range(self.num_chains)]
         with pyro.validation_enabled(not self.disable_validation):
             for x, chain_id in self.sampler.run(*args, **kwargs):
-                if num_samples[chain_id] == self.num_samples:
+                if num_samples[chain_id] == 0:
+                    num_samples[chain_id] += 1
+                    z_structure = x
+                elif num_samples[chain_id] == self.num_samples + 1:
                     self._diagnostics[chain_id] = x
                 else:
                     num_samples[chain_id] += 1
-                    for k, v in x.items():
-                        z_acc[k][chain_id].append(v)
+                    if self.num_chains > 1:
+                        x_cloned = x.clone()
+                        del x
+                    else:
+                        x_cloned = x
+                    z_flat_acc[chain_id].append(x_cloned)
 
-        z_acc = {k: [torch.stack(l) for l in v] for k, v in z_acc.items()}
-        z_acc = {k: v[0] if self.num_chains == 1 else torch.stack(v) for k, v in z_acc.items()}
+        z_flat_acc = torch.stack([torch.stack(l) for l in z_flat_acc])
+
+        # unpack latent
+        pos = 0
+        z_acc = z_structure.copy()
+        for k in sorted(z_structure):
+            shape = z_structure[k]
+            next_pos = pos + shape.numel()
+            # NB: squeeze in case num_chains=1
+            z_acc[k] = z_flat_acc[:, :, pos:next_pos].reshape(
+                (self.num_chains, self.num_samples) + shape).squeeze(dim=0)
+            pos = next_pos
+        assert pos == z_flat_acc.shape[-1]
 
         # If transforms is not explicitly provided, infer automatically using
         # model args, kwargs.
