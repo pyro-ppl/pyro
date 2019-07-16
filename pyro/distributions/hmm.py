@@ -94,9 +94,14 @@ class DiscreteHMM(TorchDistribution):
         super(DiscreteHMM, self).__init__(batch_shape, event_shape, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
-        if broadcast_shape(self.batch_shape, batch_shape) == self.batch_shape:
-            return self
-        raise NotImplementedError
+        new = self._get_checked_instance(DiscreteHMM, _instance)
+        batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
+        new.initial_logits = self.initial_logits.expand(batch_shape + (-1,))  # cheapest to expand
+        new.transition_logits = self.transition_logits
+        new.observation_dist = self.observation_dist
+        super(DiscreteHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        validate_args = self.__dict__.get('_validate_args')
+        return new
 
     def log_prob(self, value):
         # Combine observation and transition factors.

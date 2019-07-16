@@ -380,16 +380,11 @@ class TonesGenerator(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x, y):
-        # Check dimension of y so this can be used with and without enumeration.
-        if y.dim() < 2:
-            y = y.unsqueeze(0)
-
         # Hidden units depend on two inputs: a one-hot encoded categorical variable x, and
         # a bernoulli variable y. Whereas x will typically be enumerated, y will be observed.
         # We apply x_to_hidden independently from y_to_hidden, then broadcast the non-enumerated
         # y part up to the enumerated x part in the + operation.
-        x_onehot = (torch.zeros(x.shape[:-1] + (self.args.hidden_dim,), dtype=y.dtype, device=y.device)
-                    .scatter_(-1, x, 1))
+        x_onehot = y.new_zeros(x.shape[:-1] + (self.args.hidden_dim,)).scatter_(-1, x, 1)
         y_conv = self.relu(self.conv(y.reshape(-1, 1, self.data_dim))).reshape(y.shape[:-1] + (-1,))
         h = self.relu(self.x_to_hidden(x_onehot) + self.y_to_hidden(y_conv))
         return self.hidden_to_logits(h)
@@ -495,8 +490,8 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
 
 # Next we demonstrate how to parallelize the neural HMM above using Pyro's
 # DiscreteHMM distribution. This model is equivalent to model_5 above, but we
-# manually unroll loops and fuse ops, leading to a single sample statement and
-# about 10x speedup.
+# manually unroll loops and fuse ops, leading to a single sample statement.
+# DiscreteHMM can lead to over 10x speedup in models where it is applicable.
 def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
     with ignore_jit_warnings():
         num_sequences, max_length, data_dim = map(int, sequences.shape)
@@ -582,7 +577,8 @@ def main(args):
     # All of our models have two plates: "data" and "tones".
     Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
     elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2,
-                strict_enumeration_warning=(model is not model_7))
+                strict_enumeration_warning=(model is not model_7),
+                jit_options={"optimize": model is model_7})
     optim = Adam({'lr': args.learning_rate})
     svi = SVI(model, guide, optim, elbo)
 
