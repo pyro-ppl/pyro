@@ -72,8 +72,7 @@ jobs:
               - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10
               - grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
                   | CI=1 xargs pytest -vx --nbval-lax --current-env
-        - stage: integration test
-          name: integration batch_1
+        - name: integration batch_1
           python: 3.6
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
         - name: integration batch_2
