@@ -1,12 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 import cProfile
+from io import StringIO
 import functools
 import os
 import pstats
 import timeit
 from contextlib import contextmanager
-from cStringIO import StringIO
 
 from prettytable import ALL, PrettyTable
 
