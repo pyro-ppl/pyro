@@ -46,6 +46,20 @@ class DiscreteHMM(TorchDistribution):
     distribution. This uses [1] to parallelize over time, achieving
     O(log(time)) parallel complexity.
 
+    The event_shape of this distribution includes time on the left::
+
+        event_shape = (num_steps,) + observation_dist.event_shape
+
+    This distribution supports any combination of homogeneous/heterogeneous
+    time dependency of ``transition_logits`` and ``observation_dist``. However,
+    because time is included in this distribution's event_shape, the
+    homogeneous+homogeneous case will have a broadcastable event_shape with
+    ``num_steps = 1``, allowing :meth:`log_prob` to work with arbitrary length
+    data::
+
+        # homogeneous + homogeneous case:
+        event_shape = (1,) + observation_dist.event_shape
+
     **References:**
 
     [1] Simo Sarkka, Angel F. Garcia-Fernandez (2019)
@@ -57,12 +71,12 @@ class DiscreteHMM(TorchDistribution):
         ``state_dim`` and be broadcastable to ``batch_shape + (state_dim,)``.
     :param torch.Tensor transition_logits: A logits tensor for transition
         conditional distributions between latent states. Should have rightmost
-        shape ``(num_steps, state_dim, state_dim)`` (time, old, new), and be
-        broadcastable to ``batch_shape + (num_steps, state_dim, state_dim)``.
-    :param torch.distriburtions.Distribution observation_dist: A conditional
+        shape ``(state_dim, state_dim)`` (old, new), and be broadcastable to
+        ``batch_shape + (num_steps, state_dim, state_dim)``.
+    :param torch.distributions.Distribution observation_dist: A conditional
         distribution of observed data conditioned on latent state. The
         ``.batch_shape`` should have rightmost size ``state_dim`` and be
-        broadcastable to ``batch_shape + (num_steps + state_dim)``. The
+        broadcastable to ``batch_shape + (num_steps, state_dim)``. The
         ``.event_shape`` may be arbitrary.
     """
     arg_constraints = {"initial_logits": constraints.real,
@@ -78,12 +92,8 @@ class DiscreteHMM(TorchDistribution):
         if len(observation_dist.batch_shape) < 1:
             raise ValueError("expected observation_dist to have at least one batch dim, "
                              "actual .batch_shape = {}".format(observation_dist.batch_shape))
-        time_shape = broadcast_shape(transition_logits.shape[-3:-2],
+        time_shape = broadcast_shape((1,), transition_logits.shape[-3:-2],
                                      observation_dist.batch_shape[-2:-1])
-        if not time_shape:
-            raise ValueError("Expected either transition_logits or observation_dist to be time-dependent, "
-                             "actual shapes: {}, {}".format(transition_logits.shape,
-                                                            observation_dist.batch_shape))
         event_shape = time_shape + observation_dist.event_shape
         batch_shape = broadcast_shape(initial_logits.shape[:-1],
                                       transition_logits.shape[:-3],
@@ -96,7 +106,11 @@ class DiscreteHMM(TorchDistribution):
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(DiscreteHMM, _instance)
         batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
-        new.initial_logits = self.initial_logits.expand(batch_shape + (-1,))  # cheapest to expand
+        # We only need to expand one of the inputs, since batch_shape is determined
+        # by broadcasting all three. To save computation in _sequential_logmatmulexp(),
+        # we expand only initial_logits, which is applied only after the logmatmulexp.
+        # This is similar to the ._unbroadcasted_* pattern used elsewhere in distributions.
+        new.initial_logits = self.initial_logits.expand(batch_shape + (-1,))
         new.transition_logits = self.transition_logits
         new.observation_dist = self.observation_dist
         super(DiscreteHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)

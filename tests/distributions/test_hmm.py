@@ -50,7 +50,6 @@ def test_sequential_logmatmulexp(batch_shape, state_dim, num_steps):
     (True, (11,), (11, 7), (7,)),
     (True, (11,), (11, 7), (11, 7)),
     (True, (4, 1, 1), (3, 1, 7), (2, 7)),
-    (False, (), (), ()),
     (False, (), (7,), (6,)),
     (False, (3,), (4, 7), (7,)),
     (False, (3,), (7,), (4, 7)),
@@ -71,6 +70,39 @@ def test_shape(ok, init_shape, trans_shape, obs_shape, event_shape, state_dim):
     else:
         with pytest.raises(ValueError):
             dist.DiscreteHMM(init_logits, trans_logits, obs_dist)
+
+
+@pytest.mark.parametrize('event_shape', [(), (5,), (2, 3)], ids=str)
+@pytest.mark.parametrize('state_dim', [2, 3])
+@pytest.mark.parametrize('num_steps', [1, 2, 3])
+@pytest.mark.parametrize('init_shape,trans_shape,obs_shape', [
+    ((), (), ()),
+    ((), (1,), ()),
+    ((), (), (1,)),
+    ((), (1,), (7, 1)),
+    ((), (7, 1), (1,)),
+    ((), (7, 1), (7, 1)),
+    ((7,), (1,), (1,)),
+    ((7,), (1,), (7, 1)),
+    ((7,), (7, 1), (1,)),
+    ((7,), (7, 1), (7, 1)),
+    ((4, 1, 1), (3, 1, 1), (2, 1)),
+], ids=str)
+def test_homogeneous_homogeneous_trick(init_shape, trans_shape, obs_shape, event_shape, state_dim, num_steps):
+    batch_shape = broadcast_shape(init_shape, trans_shape[:-1], obs_shape[:-1])
+    init_logits = torch.randn(init_shape + (state_dim,))
+    trans_logits = torch.randn(trans_shape + (state_dim, state_dim))
+    obs_logits = torch.randn(obs_shape + (state_dim,) + event_shape)
+    obs_dist = dist.Bernoulli(logits=obs_logits).to_event(len(event_shape))
+
+    d = dist.DiscreteHMM(init_logits, trans_logits, obs_dist)
+    assert d.event_shape == (1,) + event_shape
+
+    data = obs_dist.expand(batch_shape + (num_steps, state_dim)).sample()
+    data = data[(slice(None),) * (len(batch_shape) + 1) + (0,)]
+    assert data.shape == batch_shape + (num_steps,) + event_shape
+    actual = d.log_prob(data)
+    assert actual.shape == batch_shape
 
 
 def empty_guide(*args, **kwargs):
