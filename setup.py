@@ -97,8 +97,6 @@ setup(
             'nbval',
             'pytest>=4.1',
             'pytest-cov',
-            # TODO: remove once https://github.com/pyro-ppl/pyro/issues/1871
-            # is fixed.
             'scipy>=1.1',
         ],
         'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
@@ -113,9 +111,7 @@ setup(
             'pypandoc',
             'pytest>=4.1',
             'pytest-xdist',
-            # TODO: remove once https://github.com/pyro-ppl/pyro/issues/1871
-            # is fixed.
-            'scipy>=1.1, < 1.3',
+            'scipy>=1.1',
             'sphinx',
             'sphinx_rtd_theme',
             'yapf',
