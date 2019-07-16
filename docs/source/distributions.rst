@@ -77,6 +77,13 @@ DirichletMultinomial
     :undoc-members:
     :show-inheritance:
 
+DiscreteHMM
+--------------------
+.. autoclass:: pyro.distributions.DiscreteHMM
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 EmpiricalDistribution
 ----------------------
 .. autoclass:: pyro.distributions.Empirical
