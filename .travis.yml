@@ -37,8 +37,8 @@ branches:
 jobs:
     include:
         - stage: lint
-          python: 3.6
           name: lint
+          python: 3.6
           before_install: pip install flake8 nbstripout nbformat
           install:
           script:
