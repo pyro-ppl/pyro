@@ -100,7 +100,7 @@ class DiscreteHMM(TorchDistribution):
         new.transition_logits = self.transition_logits
         new.observation_dist = self.observation_dist
         super(DiscreteHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
-        validate_args = self.__dict__.get('_validate_args')
+        new.validate_args = self.__dict__.get('_validate_args')
         return new
 
     def log_prob(self, value):
