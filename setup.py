@@ -56,8 +56,6 @@ long_description = '\n'.join([str(line) for line in long_description.split('\n')
 
 # examples/tutorials
 EXTRAS_REQUIRE = [
-    # TODO: remove once https://github.com/ipython/ipython/issues/11809 is fixed.
-    'ipython<7.6.0',
     'jupyter>=1.0.0',
     'matplotlib>=1.3',
     'pillow',
@@ -99,9 +97,7 @@ setup(
             'nbval',
             'pytest>=4.1',
             'pytest-cov',
-            # TODO: remove once https://github.com/pyro-ppl/pyro/issues/1871
-            # is fixed.
-            'scipy>=1.1, <1.3',
+            'scipy>=1.1',
         ],
         'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
         'dev': EXTRAS_REQUIRE + [
@@ -115,9 +111,7 @@ setup(
             'pypandoc',
             'pytest>=4.1',
             'pytest-xdist',
-            # TODO: remove once https://github.com/pyro-ppl/pyro/issues/1871
-            # is fixed.
-            'scipy>=1.1, < 1.3',
+            'scipy>=1.1',
             'sphinx',
             'sphinx_rtd_theme',
             'yapf',
