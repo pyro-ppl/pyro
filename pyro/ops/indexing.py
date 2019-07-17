@@ -23,13 +23,14 @@ def _generalized_slice(tensor, args, old_event_dim):
     source = -1
     destin = -1
     for arg in reversed(args):
-        if not _is_scalar(arg):
-            if isinstance(arg, slice):
-                permutation_map[source] = destin
-                destin -= 1
-            else:
-                permutation_map[source] = -arg.dim() - new_event_dim
-            source -= 1
+        if _is_scalar(arg):
+            continue
+        elif isinstance(arg, slice):
+            permutation_map[source] = destin
+            destin -= 1
+        else:
+            permutation_map[source] = -arg.dim() - new_event_dim
+        source -= 1
     if len(set(permutation_map.values())) < len(permutation_map):
         return None  # On collision, fall back to aranges.
     new_dim = -min(permutation_map.values())
@@ -38,7 +39,7 @@ def _generalized_slice(tensor, args, old_event_dim):
     for source, destin in permutation_map.items():
         permutation[destin] = source
         sources.remove(source)
-    sources = sorted(list(sources))
+    sources = sorted(sources)
     for destin, source in enumerate(permutation):
         if source is None:
             permutation[destin] = sources.pop()
