@@ -4,7 +4,6 @@ import weakref
 from abc import ABCMeta, abstractmethod
 
 import torch
-from six import add_metaclass
 
 from pyro.ops import packed
 from pyro.util import jit_iter
@@ -12,8 +11,7 @@ from pyro.util import jit_iter
 SAMPLE_SYMBOL = " "  # must be unique and precede alphanumeric characters
 
 
-@add_metaclass(ABCMeta)
-class Backward(object):
+class Backward(object, metaclass=ABCMeta):
     is_leaf = False
 
     def __call__(self):
