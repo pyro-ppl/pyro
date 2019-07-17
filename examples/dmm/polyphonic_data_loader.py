@@ -15,9 +15,9 @@ und Kognitive Systeme at Universitaet Karlsruhe.
 
 import os
 from collections import namedtuple
-from six.moves.urllib.request import urlopen
+from urllib.request import urlopen
+import pickle
 
-import six.moves.cPickle as pickle
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence

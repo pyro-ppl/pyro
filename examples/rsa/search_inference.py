@@ -8,20 +8,15 @@ from __future__ import absolute_import, division, print_function
 
 import collections
 
-import six
 import torch
-from six.moves import queue
+import queue
+import functools
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.abstract_infer import TracePosterior
 from pyro.poutine.runtime import NonlocalExit
-
-if six.PY3:
-    import functools
-else:
-    import functools32 as functools
 
 
 def memoize(fn=None, **kwargs):

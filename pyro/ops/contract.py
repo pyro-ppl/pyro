@@ -7,7 +7,6 @@ from collections import OrderedDict, defaultdict
 import opt_einsum
 import torch
 from opt_einsum import shared_intermediates
-from six.moves import map
 
 from pyro.ops.rings import BACKEND_TO_RING, LogRing
 from pyro.util import ignore_jit_warnings

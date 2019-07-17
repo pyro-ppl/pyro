@@ -11,15 +11,14 @@ from __future__ import absolute_import, division, print_function
 
 import json
 import logging
+import queue
 import signal
 import threading
 import warnings
 from collections import OrderedDict
 
-import six
 import torch
 import torch.multiprocessing as mp
-from six.moves import queue
 
 import pyro
 from pyro.infer.mcmc import HMC, NUTS
@@ -177,9 +176,6 @@ class _MultiSampler(object):
         self.workers = []
         self.ctx = mp
         if mp_context:
-            if six.PY2:
-                raise ValueError("multiprocessing.get_context() is "
-                                 "not supported in Python 2.")
             self.ctx = mp.get_context(mp_context)
         self.result_queue = self.ctx.Queue()
         self.log_queue = self.ctx.Queue()
@@ -309,7 +305,7 @@ class MCMC(object):
                     if v.shape[0] != num_chains:
                         raise ValueError("The leading dimension of tensors in `initial_params` "
                                          "must match the number of chains.")
-                if mp_context is None and six.PY3:
+                if mp_context is None:
                     # change multiprocessing context to 'spawn' for CUDA tensors.
                     if list(initial_params.values())[0].is_cuda:
                         mp_context = "spawn"

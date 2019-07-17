@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import operator
 
-from six.moves import reduce
+from functools import reduce
 
 import pyro.distributions as dist
 import pyro.ops.einsum.torch_log
