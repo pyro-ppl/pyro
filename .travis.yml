@@ -24,13 +24,8 @@ cache:
 
 install:
     - pip install -U pip
-    - if [[ $TRAVIS_PYTHON_VERSION == 2.7 ]]; then
-          pip install https://download.pytorch.org/whl/cpu/torch-1.1.0-cp27-cp27mu-linux_x86_64.whl;
-          pip install https://download.pytorch.org/whl/cpu/torchvision-0.3.0-cp27-cp27mu-linux_x86_64.whl;
-      else
-          pip install https://download.pytorch.org/whl/cpu/torch-1.1.0-cp36-cp36m-linux_x86_64.whl;
-          pip install https://download.pytorch.org/whl/cpu/torchvision-0.3.0-cp36-cp36m-linux_x86_64.whl;
-      fi
+    - pip install https://download.pytorch.org/whl/cpu/torch-1.1.0-cp36-cp36m-linux_x86_64.whl
+    - pip install https://download.pytorch.org/whl/cpu/torchvision-0.3.0-cp36-cp36m-linux_x86_64.whl
     - pip install .[test]
     - pip freeze
 
@@ -40,10 +35,10 @@ branches:
         - dev
 
 jobs:
-    fast_finish: true
     include:
         - stage: lint
-          python: 2.7
+          name: lint
+          python: 3.6
           before_install: pip install flake8 nbstripout nbformat
           install:
           script:
@@ -51,55 +46,37 @@ jobs:
               #- make scrub;
               #  git diff-index --quiet HEAD
         - stage: auxiliary modules
+          name: docs
           python: 3.6
-          env: STAGE=docs
           script:
               - pip install -r docs/requirements.txt
               - make docs
               - make doctest
-        - stage: perf
-          python: 2.7
-          env: STAGE=perf
+        - name: perf
+          python: 3.6
           script:
               - pip install -e .[profile]
               - pytest -vs --benchmark-disable tests/perf/test_benchmark.py
-        - stage: profiler
-          python: 2.7
-          env: STAGE=profiler
+        - name: profiler
+          python: 3.6
           script:
               - pip install -e .[profile]
               - python -m profiler.distributions
         - stage: unit test
-          python: 2.7
-          env: STAGE=unit
+          name: unit
+          python: 3.6
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
-        - python: 2.7
-          env: STAGE=examples
+        - name: examples
+          python: 3.6
           script:
               - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10
               - grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
                   | CI=1 xargs pytest -vx --nbval-lax --current-env
-        - python: 3.6
-          env: STAGE=unit
-          script: pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
-        - python: 3.6
-          env: STAGE=examples
-          script:
-              - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10
-              - grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
-                  | CI=1 xargs pytest -vx --nbval-lax --current-env
-        - stage: integration test
-          python: 2.7
-          env: STAGE=integration_batch_1
+        - name: integration batch_1
+          python: 3.6
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
-        - python: 2.7
-          env: STAGE=integration_batch_2
-          script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
-        - python: 3.6
-          env: STAGE=integration_batch_1
-          script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
-        - python: 3.6
-          env: STAGE=integration_batch_2
+        - name: integration batch_2
+          python: 3.6
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
 
 after_success:
