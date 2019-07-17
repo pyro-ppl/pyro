@@ -350,13 +350,13 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
         w = x = torch.tensor(0, dtype=torch.long)
         for t in pyro.markov(range(max_length if args.jit else lengths.max())):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
-                w = pyro.sample("w_{}".format(t), dist.Categorical(probs_w[w]),
+                w = pyro.sample("w_{}".format(t), dist.Categorical(Vindex(probs_w)[w]),
                                 infer={"enumerate": "parallel"})
                 x = pyro.sample("x_{}".format(t),
                                 dist.Categorical(Vindex(probs_x)[w, x]),
                                 infer={"enumerate": "parallel"})
                 with tones_plate as tones:
-                    pyro.sample("y_{}".format(t), dist.Bernoulli(probs_y[w, x, tones]),
+                    pyro.sample("y_{}".format(t), dist.Bernoulli(Vindex(probs_y)[w, x, tones]),
                                 obs=sequences[batch, t])
 
 
@@ -419,7 +419,7 @@ def model_5(sequences, lengths, args, batch_size=None, include_prior=True):
         y = torch.zeros(data_dim)
         for t in pyro.markov(range(max_length if args.jit else lengths.max())):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
-                x = pyro.sample("x_{}".format(t), dist.Categorical(probs_x[x]),
+                x = pyro.sample("x_{}".format(t), dist.Categorical(Vindex(probs_x)[x]),
                                 infer={"enumerate": "parallel"})
                 # Note that since each tone depends on all tones at a previous time step
                 # the tones at different time steps now need to live in separate plates.

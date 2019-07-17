@@ -47,6 +47,7 @@ class _Subsample(Distribution):
         subsample_size = self.subsample_size
         if subsample_size is None or subsample_size >= self.size:
             result = jit_compatible_arange(self.size, device=self.device)
+            assert hasattr(result, "_pyro_generalized_slice")
         else:
             result = torch.multinomial(torch.ones(self.size), self.subsample_size,
                                        replacement=False).to(self.device)

@@ -5,6 +5,7 @@ from torch.distributions import constraints, kl_divergence, register_kl
 
 from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistributionMixin
 from pyro.distributions.util import sum_rightmost
+from pyro.ops.indexing import Vindex
 
 
 # This overloads .log_prob() and .enumerate_support() to speed up evaluating
@@ -14,25 +15,14 @@ from pyro.distributions.util import sum_rightmost
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
 
     def log_prob(self, value):
-        if getattr(value, '_pyro_categorical_support', None) == id(self):
-            # Assume value is a reshaped torch.arange(event_shape[0]).
-            # In this case we can call .reshape() rather than torch.gather().
-            if not torch._C._get_tracing_state():
-                if self._validate_args:
-                    self._validate_sample(value)
-                assert value.size(0) == self.logits.size(-1)
-            logits = self.logits
-            if logits.dim() <= value.dim():
-                logits = logits.reshape((1,) * (1 + value.dim() - logits.dim()) + logits.shape)
-            if not torch._C._get_tracing_state():
-                assert logits.size(-1 - value.dim()) == 1
-            return logits.transpose(-1 - value.dim(), -1).squeeze(-1)
-        return super(Categorical, self).log_prob(value)
+        if self._validate_args:
+            self._validate_sample(value)
+        return Vindex(self.logits)[..., value.long()]
 
     def enumerate_support(self, expand=True):
         result = super(Categorical, self).enumerate_support(expand=expand)
         if not expand:
-            result._pyro_categorical_support = id(self)
+            result._pyro_generalized_slice = slice(self._num_events)
         return result
 
 

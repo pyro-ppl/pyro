@@ -7,6 +7,52 @@ def _is_batched(arg):
     return isinstance(arg, torch.Tensor) and arg.dim()
 
 
+def _is_scalar(arg):
+    return isinstance(arg, int) or (isinstance(arg, torch.Tensor) and not arg.dim())
+
+
+def _generalized_slice(tensor, args, old_event_dim):
+    """
+    This generalizes Python slicing to include torch.aranges that have been
+    unsqueezed on the right to accomplish a permutation. These special aranges
+    are indicated by torch.Tensors with an attribute ._pyro_generalized_slice.
+    """
+    # Construct a permutation.
+    new_event_dim = old_event_dim - sum(1 for a in args if not isinstance(a, slice))
+    permutation_map = {}
+    source = -1
+    destin = -1
+    for arg in reversed(args):
+        if not _is_scalar(arg):
+            if isinstance(arg, slice):
+                permutation_map[source] = destin
+                destin -= 1
+            else:
+                permutation_map[source] = -arg.dim() - new_event_dim
+            source -= 1
+    if len(set(permutation_map.values())) < len(permutation_map):
+        return None  # On collision, fall back to aranges.
+    new_dim = -min(permutation_map.values())
+    sources = set(range(-new_dim, 0))
+    permutation = [None] * new_dim
+    for source, destin in permutation_map.items():
+        permutation[destin] = source
+        sources.remove(source)
+    sources = sorted(list(sources))
+    for destin, source in enumerate(permutation):
+        if source is None:
+            permutation[destin] = sources.pop()
+    assert not sources
+
+    # Slice and permute the tensor.
+    tensor = tensor[tuple(getattr(a, "_pyro_generalized_slice", a) for a in args)]
+    missing = new_dim - tensor.dim()
+    assert missing >= 0
+    if missing:
+        tensor = tensor.reshape((1,) * missing + tensor.size())
+    return tensor.permute(permutation)
+
+
 def vindex(tensor, args):
     """
     Vectorized advanced indexing with broadcasting semantics.
@@ -77,9 +123,11 @@ def vindex(tensor, args):
     :rtype: torch.Tensor
     """
     if not isinstance(args, tuple):
+        if not hasattr(args, "_pyro_generalized_slice"):
+            return tensor[args]
+        args = (args,)
+    if not any(_is_batched(a) for a in args):
         return tensor[args]
-    if not args:
-        return tensor
 
     # Compute event dim before and after indexing.
     if args[0] is Ellipsis:
@@ -94,6 +142,12 @@ def vindex(tensor, args):
     assert len(args) == tensor.dim()
     if any(a is Ellipsis for a in args):
         raise NotImplementedError("Non-leading Ellipsis is not supported")
+
+    # If generalized slicing is possible, slice-and-permute to avoid touching data.
+    if all(hasattr(a, "_pyro_generalized_slice") or not _is_batched(a) for a in args):
+        result = _generalized_slice(tensor, args, old_event_dim)
+        if result is not None:
+            return result
 
     # In simple cases, standard advanced indexing broadcasts correctly.
     is_standard = True

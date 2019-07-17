@@ -121,13 +121,47 @@ def test_value(x_shape, i_shape, j_shape, event_shape):
     assert_equal(actual, expected)
 
 
+@pytest.mark.parametrize('optimize_prev', [True, False])
+@pytest.mark.parametrize('optimize_curr', [True, False])
 @pytest.mark.parametrize('prev_enum_dim,curr_enum_dim', [(-3, -4), (-4, -5), (-5, -3)])
-def test_hmm_example(prev_enum_dim, curr_enum_dim):
+def test_hmm_example(prev_enum_dim, curr_enum_dim, optimize_prev, optimize_curr):
     hidden_dim = 8
     probs_x = torch.rand(hidden_dim, hidden_dim, hidden_dim)
     x_prev = torch.arange(hidden_dim).reshape((-1,) + (1,) * (-1 - prev_enum_dim))
     x_curr = torch.arange(hidden_dim).reshape((-1,) + (1,) * (-1 - curr_enum_dim))
+    if optimize_prev:
+        x_prev._pyro_generalized_slice = slice(hidden_dim)
+    if optimize_curr:
+        x_curr._pyro_generalized_slice = slice(hidden_dim)
 
     expected = probs_x[x_prev.unsqueeze(-1), x_curr.unsqueeze(-1), torch.arange(hidden_dim)]
     actual = Vindex(probs_x)[x_prev, x_curr, :]
+    assert_equal(actual, expected)
+
+
+def _generalized_arange(size, target_dim=-1):
+    assert target_dim < 0
+    result = torch.arange(size)
+    result = result.reshape((-1,) + (1,) * (1 - target_dim))
+    result._pyro_generalized_slice = slice(size)
+    return result
+
+
+def _clone(x):
+    return x.clone() if isinstance(x, torch.Tensor) else x
+
+
+@pytest.mark.parametrize('i', [0, torch.tensor(1), slice(None), _generalized_arange(3, -1)])
+@pytest.mark.parametrize('j', [1, torch.tensor(2), slice(None), _generalized_arange(4, -3)])
+@pytest.mark.parametrize('k', [2, torch.tensor(0), slice(None), _generalized_arange(5, -2)])
+def test_generalized_slice(i, j, k):
+    tensor = torch.randn(3, 4, 5)
+    actual = Vindex(tensor)[i, j, k]
+    assert actual.storage().data_ptr() == tensor.storage().data_ptr()
+
+    # Forget ._pyro_generalized_slice attributes and re-execute.
+    i = _clone(i)
+    j = _clone(j)
+    k = _clone(k)
+    expected = Vindex(tensor)[i, j, k]
     assert_equal(actual, expected)
