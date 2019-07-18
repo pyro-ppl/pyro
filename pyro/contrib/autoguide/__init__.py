@@ -13,8 +13,6 @@ Automatic guides can also be combined using :func:`pyro.poutine.block` and
 :class:`AutoGuideList`.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import numbers
 import weakref
 from contextlib import ExitStack  # python 3

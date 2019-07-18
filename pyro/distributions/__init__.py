@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import pyro.distributions.torch_patch  # noqa F403
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
 from pyro.distributions.conjugate import BetaBinomial, DirichletMultinomial, GammaPoisson

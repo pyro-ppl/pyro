@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import pyro.poutine as poutine
 from pyro.logger import log
 from pyro.poutine import condition, do, markov

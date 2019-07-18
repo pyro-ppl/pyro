@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from pyro.contrib.gp.kernels.brownian import Brownian
 from pyro.contrib.gp.kernels.coregionalize import Coregionalize
 from pyro.contrib.gp.kernels.dot_product import DotProduct, Linear, Polynomial

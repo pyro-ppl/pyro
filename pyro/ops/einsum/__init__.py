@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import opt_einsum
 
 from pyro.util import ignore_jit_warnings

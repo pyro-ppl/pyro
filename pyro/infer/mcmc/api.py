@@ -7,8 +7,6 @@ This module offers a modified interface for MCMC inference with the following ob
   - minimal memory consumption with multiprocessing and CUDA.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import json
 import logging
 import queue

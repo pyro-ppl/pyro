@@ -4,8 +4,6 @@ which is a minimal implementation of the Pyro Probabilistic Programming
 Language that was created for didactic purposes.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import argparse
 
 import torch

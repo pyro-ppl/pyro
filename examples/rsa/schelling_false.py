@@ -8,9 +8,6 @@ by recursively reasoning about one another.
 
 Taken from: http://forestdb.org/models/schelling-falsebelief.html
 """
-
-from __future__ import print_function
-
 import argparse
 import torch
 

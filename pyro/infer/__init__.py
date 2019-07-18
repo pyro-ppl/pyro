@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from pyro.infer.abstract_infer import EmpiricalMarginal, TracePosterior, TracePredictive
 from pyro.infer.csis import CSIS
 from pyro.infer.discrete import infer_discrete
