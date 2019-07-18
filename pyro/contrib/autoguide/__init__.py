@@ -17,6 +17,7 @@ from __future__ import absolute_import, division, print_function
 
 import numbers
 import weakref
+from contextlib import ExitStack  # python 3
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -31,11 +32,6 @@ from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
 from pyro.poutine.util import prune_subsample_sites
-
-try:
-    from contextlib import ExitStack  # python 3
-except ImportError:
-    from contextlib2 import ExitStack  # python 2
 
 __all__ = [
     'AutoCallable',

@@ -9,7 +9,7 @@ from itertools import zip_longest
 
 import graphviz
 import torch
-from contextlib2 import contextmanager
+from contextlib import contextmanager
 
 from pyro.poutine.util import site_is_subsample
 

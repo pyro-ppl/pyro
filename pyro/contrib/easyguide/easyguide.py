@@ -5,7 +5,7 @@ import weakref
 from abc import ABCMeta, abstractmethod
 
 import torch
-from contextlib2 import ExitStack
+from contextlib import ExitStack
 from torch.distributions import biject_to
 
 import pyro
