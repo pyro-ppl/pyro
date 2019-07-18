@@ -1,7 +1,6 @@
+import queue
 from pyro.infer.abstract_infer import TracePosterior
 import pyro.poutine as poutine
-
-from six.moves import queue
 
 ###################################
 # Search borrowed from RSA example

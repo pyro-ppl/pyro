@@ -50,8 +50,6 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 
-from six.moves import xrange
-
 from pyro.poutine import util
 
 from .block_messenger import BlockMessenger
@@ -454,7 +452,7 @@ def queue(fn=None, queue=None, max_tries=None,
     def wrapper(wrapped):
         def _fn(*args, **kwargs):
 
-            for i in xrange(max_tries):
+            for i in range(max_tries):
                 assert not queue.empty(), \
                     "trying to get() from an empty queue will deadlock"
 

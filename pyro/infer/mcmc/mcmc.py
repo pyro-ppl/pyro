@@ -6,11 +6,10 @@ import signal
 import threading
 import warnings
 from collections import OrderedDict
+import queue
 
-import six
 import torch
 import torch.multiprocessing as mp
-from six.moves import queue
 
 import pyro
 import pyro.ops.stats as stats
@@ -106,9 +105,6 @@ class _ParallelSampler(TracePosterior):
         self.workers = []
         self.ctx = mp
         if mp_context:
-            if six.PY2:
-                raise ValueError("multiprocessing.get_context() is "
-                                 "not supported in Python 2.")
             self.ctx = mp.get_context(mp_context)
         self.result_queue = self.ctx.Queue()
         self.log_queue = self.ctx.Queue()

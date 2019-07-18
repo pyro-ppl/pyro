@@ -4,15 +4,13 @@ import weakref
 from abc import ABCMeta, abstractmethod
 
 import torch
-from six import add_metaclass
 
 from pyro.ops.einsum import contract
 from pyro.ops.einsum.adjoint import SAMPLE_SYMBOL, Backward
 from pyro.util import ignore_jit_warnings
 
 
-@add_metaclass(ABCMeta)
-class Ring(object):
+class Ring(object, metaclass=ABCMeta):
     """
     Abstract tensor ring class.
 

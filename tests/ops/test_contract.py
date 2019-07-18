@@ -6,7 +6,6 @@ from collections import OrderedDict
 
 import opt_einsum
 import pytest
-import six
 import torch
 
 import pyro.ops.jit
@@ -29,7 +28,7 @@ def deep_copy(x):
         return type(x)(deep_copy(value) for value in x)
     if isinstance(x, (dict, OrderedDict)):
         return type(x)((deep_copy(key), deep_copy(value)) for key, value in x.items())
-    if isinstance(x, six.string_types):
+    if isinstance(x, str):
         return x
     raise TypeError(type(x))
 

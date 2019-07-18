@@ -5,7 +5,6 @@ from abc import ABCMeta, abstractmethod
 
 import torch
 import torch.nn as nn
-from six import add_metaclass
 from torch.nn import functional
 from torchvision.utils import save_image
 
@@ -57,8 +56,7 @@ class Decoder(nn.Module):
         return torch.sigmoid(self.fc4(h3))
 
 
-@add_metaclass(ABCMeta)
-class VAE(object):
+class VAE(object, metaclass=ABCMeta):
     """
     Abstract class for the variational auto-encoder. The abstract method
     for training the network is implemented by subclasses.

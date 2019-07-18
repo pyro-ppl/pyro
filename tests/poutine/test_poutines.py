@@ -9,7 +9,7 @@ from unittest import TestCase
 import pytest
 import torch
 import torch.nn as nn
-from six.moves.queue import Queue
+from queue import Queue
 
 import pyro
 import pyro.distributions as dist
