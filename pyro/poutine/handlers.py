@@ -46,8 +46,6 @@ in just a few lines of code::
     monte_carlo_elbo = model_tr.log_prob_sum() - guide_tr.log_prob_sum()
 """
 
-from __future__ import absolute_import, division, print_function
-
 import functools
 
 from pyro.poutine import util

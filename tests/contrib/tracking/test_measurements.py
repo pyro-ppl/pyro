@@ -1,6 +1,4 @@
 
-from __future__ import absolute_import, division, print_function
-
 import torch
 from pyro.contrib.tracking.measurements import PositionMeasurement
 

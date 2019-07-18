@@ -27,8 +27,6 @@ References
 [7] https://github.com/stan-dev/example-models/tree/master/BPA/Ch.07
 """
 
-from __future__ import absolute_import, division, print_function
-
 import argparse
 import os
 

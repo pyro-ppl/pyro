@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import functools
 import numbers
 import random
@@ -9,7 +7,7 @@ from itertools import zip_longest
 
 import graphviz
 import torch
-from contextlib2 import contextmanager
+from contextlib import contextmanager
 
 from pyro.poutine.util import site_is_subsample
 

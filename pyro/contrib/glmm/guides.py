@@ -1,7 +1,7 @@
-from __future__ import absolute_import, division, print_function
-
 import torch
 from torch import nn
+
+from contextlib import ExitStack
 
 import pyro
 import pyro.distributions as dist
@@ -10,11 +10,6 @@ from pyro.contrib.util import (
     tensor_to_dict, rmv, rvv, rtril, lexpand, iter_plates_to_shape
 )
 from pyro.ops.linalg import rinverse
-
-try:
-    from contextlib import ExitStack  # python 3
-except ImportError:
-    from contextlib2 import ExitStack  # python 2
 
 
 class LinearModelPosteriorGuide(nn.Module):

@@ -11,8 +11,6 @@
 # Compare to Christian Naesseth's implementation here:
 # https://github.com/blei-lab/ars-reparameterization/tree/master/sparse%20gamma%20def
 
-from __future__ import absolute_import, division, print_function
-
 import argparse
 import errno
 import os

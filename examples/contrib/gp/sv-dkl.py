@@ -25,8 +25,6 @@ Reference:
 """
 
 # Code adapted from https://github.com/pytorch/examples/tree/master/mnist
-from __future__ import absolute_import, division, print_function
-
 import argparse
 import time
 
