@@ -551,7 +551,7 @@ def main(args):
         lengths.clamp_(max=args.truncate)
         sequences = sequences[:, :args.truncate]
     num_observations = float(lengths.sum())
-    pyro.set_rng_seed(0)
+    pyro.set_rng_seed(args.seed)
     pyro.clear_param_store()
     pyro.enable_validation(__debug__)
 
@@ -628,6 +628,7 @@ if __name__ == '__main__':
     parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
     parser.add_argument("-t", "--truncate", type=int)
     parser.add_argument("-p", "--print-shapes", action="store_true")
+    parser.add_argument("--seed", default=0, type=int)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
     parser.add_argument('-rp', '--raftery-parameterization', action='store_true')
