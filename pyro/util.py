@@ -1,6 +1,7 @@
 import functools
 import numbers
 import random
+import timeit
 import warnings
 from collections import defaultdict
 from itertools import zip_longest
@@ -370,16 +371,21 @@ def jit_iter(tensor):
         return list(tensor)
 
 
-@contextmanager
-def optional(context_manager, condition):
+class optional(object):
     """
     Optionally wrap inside `context_manager` if condition is `True`.
     """
-    if condition:
-        with context_manager:
-            yield
-    else:
-        yield
+    def __init__(self, context_manager, condition):
+        self.context_manager = context_manager
+        self.condition = condition
+
+    def __enter__(self):
+        if self.condition:
+            return self.context_manager.__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.condition:
+            return self.context_manager.__exit__(exc_type, exc_val, exc_tb)
 
 
 class ExperimentalWarning(UserWarning):
@@ -399,6 +405,17 @@ def deep_getattr(obj, name):
     Throws an AttributeError if bad attribute
     """
     return functools.reduce(getattr, name.split("."), obj)
+
+
+class timed(object):
+    def __enter__(self, timer=timeit.default_timer):
+        self.start = timer()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.end = timeit.default_timer()
+        self.elapsed = self.end - self.start
+        return self.elapsed
 
 
 # work around https://github.com/pytorch/pytorch/issues/11829

@@ -34,6 +34,7 @@ Neeraj Pradhan, Alexander Rush, Noah Goodman. https://arxiv.org/abs/1902.03210
 """
 import argparse
 import logging
+import sys
 
 import torch
 import torch.nn as nn
@@ -49,7 +50,15 @@ from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 from pyro.util import ignore_jit_warnings
 
-logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.DEBUG)
+
+# Add another handler for logging debugging events (e.g. for profiling)
+# in a separate stream that can be captured.
+log = logging.getLogger()
+debug_handler = logging.StreamHandler(sys.stdout)
+debug_handler.setLevel(logging.DEBUG)
+debug_handler.addFilter(filter=lambda record: record.levelno <= logging.DEBUG)
+log.addHandler(debug_handler)
 
 
 # Let's start with a simple Hidden Markov Model.
@@ -576,7 +585,7 @@ def main(args):
     Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
     elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2,
                 strict_enumeration_warning=(model is not model_7),
-                jit_options={"optimize": model is model_7})
+                jit_options={"optimize": model is model_7, "time_compilation": args.time_compilation})
     optim = Adam({'lr': args.learning_rate})
     svi = SVI(model, guide, optim, elbo)
 
@@ -585,6 +594,9 @@ def main(args):
     for step in range(args.num_steps):
         loss = svi.step(sequences, lengths, args=args, batch_size=args.batch_size)
         logging.info('{: >5d}\t{}'.format(step, loss / num_observations))
+
+    if args.jit and args.time_compilation:
+        logging.debug('time to compile: {} s.'.format(elbo._differentiable_loss.compile_time))
 
     # We evaluate on the entire training dataset,
     # excluding the prior term so our results are comparable across models.
@@ -629,6 +641,7 @@ if __name__ == '__main__':
     parser.add_argument("--seed", default=0, type=int)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
+    parser.add_argument('--time-compilation', action='store_true')
     parser.add_argument('-rp', '--raftery-parameterization', action='store_true')
     args = parser.parse_args()
     main(args)
