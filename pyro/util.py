@@ -408,8 +408,8 @@ def deep_getattr(obj, name):
 
 
 class timed(object):
-    def __enter__(self):
-        self.start = timeit.default_timer()
+    def __enter__(self, timer=timeit.default_timer):
+        self.start = timer()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
