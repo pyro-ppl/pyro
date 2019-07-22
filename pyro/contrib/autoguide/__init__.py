@@ -252,7 +252,7 @@ class AutoDelta(AutoGuide):
     construct a MAP guide over the entire latent space. The guide does not
     depend on the model's ``*args, **kwargs``.
 
-    .. note:: This class does MAP inference in constrained space.
+    ..note:: This class does MAP inference in constrained space.
 
     Usage::
 
