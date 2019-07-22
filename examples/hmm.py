@@ -60,6 +60,7 @@ debug_handler.setLevel(logging.DEBUG)
 debug_handler.addFilter(filter=lambda record: record.levelno <= logging.DEBUG)
 log.addHandler(debug_handler)
 
+
 # Let's start with a simple Hidden Markov Model.
 #
 #     x[t-1] --> x[t] --> x[t+1]
