@@ -7,6 +7,7 @@ from pyro.infer.elbo import ELBO
 from pyro.infer.enum import config_enumerate
 from pyro.infer.importance import Importance
 from pyro.infer.renyi_elbo import RenyiELBO
+from pyro.infer.smcfilter import SMCFilter
 from pyro.infer.svi import SVI
 from pyro.infer.trace_elbo import JitTrace_ELBO, Trace_ELBO
 from pyro.infer.trace_mean_field_elbo import JitTraceMeanField_ELBO, TraceMeanField_ELBO
@@ -29,6 +30,7 @@ __all__ = [
     "JitTraceMeanField_ELBO",
     "JitTrace_ELBO",
     "RenyiELBO",
+    "SMCFilter",
     "SVI",
     "TraceEnum_ELBO",
     "TraceGraph_ELBO",
