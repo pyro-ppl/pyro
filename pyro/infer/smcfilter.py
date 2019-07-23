@@ -15,6 +15,17 @@ def _extract_samples(trace):
 
 
 class SMCFilter:
+    """
+    :class:`SMCFilter` is the top-level interface for filtering via sequential
+    monte carlo.
+
+    :param model: probabilistic model defined as a function
+    :param guide: guide used for sampling defined as a function
+    :param int num_particles: The number of particles used to form the
+        distribution.
+    :param int max_plate_nesting: Bound on max number of nested
+        :func:`pyro.plate` contexts.
+    """
     # TODO: Add window kwarg that defaults to float("inf")
     def __init__(self, model, guide, num_particles, max_plate_nesting):
         self.model = model
@@ -27,6 +38,11 @@ class SMCFilter:
         self._log_weights = torch.zeros(self.num_particles)
 
     def init(self, *args, **kwargs):
+        """
+        Take the initial filtering step using sequential importance resampling
+        initializing the particles.
+        Any args or kwargs are passed to the model and guide
+        """
         self.particle_plate = pyro.plate("particles", self.num_particles, dim=-1-self.max_plate_nesting)
         with poutine.block(), self.particle_plate:
             guide_trace = poutine.trace(self.guide.init).get_trace(*args, **kwargs)
@@ -38,6 +54,11 @@ class SMCFilter:
         self._maybe_importance_resample()
 
     def step(self, *args, **kwargs):
+        """
+        Take a filtering step using sequential importance resampling updating the
+        particle weights and values while resampling if desired.
+        Any args or kwargs are passed to the model and guide
+        """
         with poutine.block(), self.particle_plate:
             guide_trace = poutine.trace(self.guide.step).get_trace(*args, **kwargs)
             model = poutine.replay(self.model.step, guide_trace)
@@ -48,9 +69,19 @@ class SMCFilter:
         self._maybe_importance_resample()
 
     def get_values_and_log_weights(self):
+        """
+        :returns: the values and unnormalized log weights.
+        :rtype: tuple of dict and floats where the dict is a key of name of latent to value of latent.
+        Returns the particles and its log weights.
+        """
+        # TODO: Be clear that these are unnormalized weights. May want to normalize later.
         return self._values, self._log_weights
 
     def get_empirical(self):
+        """
+        :returns: a marginal distribution over every latent variable.
+        :rtype: a dictionary with keys which are latent variables and values which are Empirical objects.
+        """
         return {name: dist.Empirical(value, self._log_weights)
                 for name, value in self._values.items()}
 
