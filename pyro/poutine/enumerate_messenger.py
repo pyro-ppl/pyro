@@ -16,21 +16,40 @@ def _tmc_sample(msg):
     batch_shape = tuple(batch_shape)
 
     # sample a batch
-    fat_sample = dist(sample_shape=(num_samples,))  # TODO thin before sampling
-    assert fat_sample.shape == (num_samples,) + dist.batch_shape + dist.event_shape
+    sample_shape = (num_samples,) if batch_shape == dist.batch_shape else ()
+    fat_sample = dist(sample_shape=sample_shape)  # TODO thin before sampling
+    assert fat_sample.shape == sample_shape + dist.batch_shape + dist.event_shape
+
+    fat_sample = fat_sample.unsqueeze(0) if not sample_shape else fat_sample
+    target_shape = (num_samples,) + batch_shape + dist.event_shape
 
     # forget particle IDs for all sample_shape dims
     thin_sample = fat_sample
-    while thin_sample.shape != (num_samples,) + batch_shape + dist.event_shape:
-        for squashed_dim, squashed_size in zip(range(1, len(thin_sample.shape)), thin_sample.shape[1:]):
-            if squashed_size > 1:
+    while thin_sample.shape != target_shape:
+
+        for squashed_dim1, squashed_size1 in enumerate(thin_sample.shape):
+            if squashed_size1 > 1 and (target_shape[squashed_dim1] == 1 or squashed_dim1 == 0):
                 break
-        thin_sample = thin_sample.diagonal(dim1=0, dim2=squashed_dim).unsqueeze(-1)
+
+        for squashed_dim2, squashed_size2 in zip(range(squashed_dim1+1, len(thin_sample.shape)),
+                                                 thin_sample.shape[squashed_dim1+1:]):
+            if squashed_size2 > 1 and target_shape[squashed_dim2] == 1:
+                break
+
+        thin_sample = thin_sample.transpose(0, squashed_dim1)
+
+        if squashed_dim2 >= len(target_shape) - len(dist.event_shape):
+            continue
+
+        # permute dims to left if necessary
+        thin_sample = thin_sample.transpose(1, squashed_dim2)
+
+        thin_sample = thin_sample.diagonal(dim1=0, dim2=1).unsqueeze(-1)
+
+        # move particles to leftmost dim to mimic output shape of enumerate_support
         thin_sample = thin_sample.permute((-2, -1,) + tuple(range(0, len(thin_sample.shape) - 2)))
 
-    # move particles to leftmost dim to mimic output shape of enumerate_support
-    thin_shape = (num_samples,) + batch_shape + dist.event_shape
-    thin_sample = thin_sample.reshape(thin_shape)
+    assert thin_sample.shape == target_shape
     return thin_sample
 
 

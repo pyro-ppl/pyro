@@ -337,7 +337,7 @@ def main(args):
         dmm_guide = config_enumerate(dmm.guide, default="parallel", num_samples=10, expand=False)
         svi = SVI(dmm.model, dmm_guide, adam, loss=elbo)
     else:
-        elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
+        elbo = JitTrace_ELBO() if args.jit else Trace_ELBO(num_particles=1000)
         svi = SVI(dmm.model, dmm.guide, adam, loss=elbo)
 
     # now we're going to define some functions we need to form the main training loop
