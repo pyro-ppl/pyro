@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import torch
 
 import pyro
@@ -14,7 +12,7 @@ def _extract_samples(trace):
             if not site["is_observed"]}
 
 
-class SMCFilter:
+class SMCFilter(object):
     """
     :class:`SMCFilter` is the top-level interface for filtering via sequential
     monte carlo.
