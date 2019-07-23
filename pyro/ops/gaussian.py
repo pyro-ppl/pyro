@@ -43,11 +43,85 @@ class Gaussian(object):
         return result.sum(-1).sum(-1) + self.log_normalizer
 
 
+def gaussian_contract_base(yz, xy, nx):
+    """
+    Computes Gaussian contract of yz, xy assuming `x` disjoint `z`.
+
+    :param yz: Gaussian over y, z
+    :param xy: Gaussian over x, y
+    :param nx: size of x
+    """
+    # TODO: remove these legacy computations if they are unnecessary
+    # p(a,b)q(a,c) = p(a)p(b|a)q(c)q(b|c)
+    # p(b|a) = N(b; mx.b + inv(Px.bb) @ Px.ba @ (a - mx.a), inv(Px.bb))
+    # q(b|c) = N(b; my.b + inv(Py.bb) @ Py.bc @ (c - my.c), inv(Py.bb))
+    # p(b|a)q(b|c) = C * N(b; mb, inv(Pb))
+    # mb = inv(Px.bb + Py.bb) @ (Px.bb @ mx.b + Px.ba @ (a - mx.a)
+    #                                    Py.bb @ my.b + Py.bc @ (c - my.c))
+    # Pb = Px.bb + Py.bb
+    # C = N(0; mx.b - my.b + inv(Px.bb) @ Px.ba @ (a - mx.a) - inv(Py.bb) @ Py.bc @ (c - my.c),
+    #          inv(Px.bb) + inv(Py.bb))
+    # Cp(a)q(c) = ...
+    # It seems complicated to represent in terms of N((a, c); mz.a, mz.c, ...)
+    ny = xy.size(-1) - nx
+    Ayz, byz, Cyz, etayz, Jyz = mean_precision_to_filtering_parameters(yz.mean, yz.precision, ny)
+    Axy, bxy, Cxy, etaxy, Jxy = mean_precision_to_filtering_parameters(xy.mean, xy.precision, nx)
+    # compute inv(I + Jxy @ Cyz)
+    # TODO: merge terms and use a unique triangular_solve
+    tmp = torch.inverse(torch.matmul(Jxy, Cyz) + torch.eye(ny))
+    Axy_tmp = torch.matmul(Axy, tmp)
+    A = torch.matmul(Axy_tmp, Ayz)
+    b = torch.matmul(Axy_tmp, b + torch.matmul(Cyz, etaxy.unsqueeze(-1).squeeze(-1))) + bxy
+    C = torch.matmul(Axy_tmp, torch.matmul(Cyz, torch.transpose(Ayz, -2, -1))) + Cxy
+    Ayzt_tmp = torch.matmul(torch.transpose(Ayz, -2, -1), tmp)
+    eta = torch.matmul(Ayzt_tmp, etaxy - torch.matmul(Jxy, byz)) + etayz
+    J = torch.matmul(Ayzt_tmp, torch.matmul(Jxy, Ayz)) + Jyz
+    mean, precision = filtering_parameters_to_mean_precision(A, b, C, eta, J)
+    return Gaussian(0, mean, precision)
+
+
+def mean_precision_to_filtering_parameters(mean, precision, nx):
+    """
+    Transforms (mean, precision) to (A, b, C, eta, J), where
+
+        p(x, z) = p(x | z) p(z) = N(x; Az + b, C) N(z; inv(J)eta, inv(J))
+
+    :param mean: mean of Gaussian
+    :param precision: precision of Gaussian
+    :param nx: size of x
+    """
+    # TODO: explore precision_tril alternative
+    # TODO: use ellipsis for batching
+    mx, mz = mean[:i], mean[i:]
+    Pxx, Pxz, Pzx, Pzz = precision[:i, :i], precision[:i, i:], precision[i:, :i], precision[i:, i:]
+    # p(x | z) = N(x; mx - inv(Pxx) @ Pxz @ (z - mz), inv(Pxx))
+    C = torch.invert(Pxx)
+    A = -torch.matmul(C, Pxz)
+    b = mx - torch.matmul(A, mz.unsqueeze(-1)).squeeze(-1)
+    # p(z) = N(z; mz, Czz) = N(z; mz, inv(Pzz - Pzx @ inv(Pxx) @ Pxz))
+    J = Pzz + torch.matmul(Pzx, A)
+    eta = torch.matmul(J, mz.unsqueeze(-1)).squeeze(-1)
+    return A, b, C, eta, J
+
+
+def filtering_parameters_to_mean_precision(A, b, C, eta, J):
+    # inverse of `mean_precision_to_filtering_parameters` function
+    Pxx = torch.invert(C)
+    Pxz = -torch.matmul(Pxx, A)
+    Pzx = torch.transpose(Pxz, -2, -1)
+    Pzz = J - torch.matmul(Pzx, A)
+    mz = torch.solve(J, eta.unsqueeze(-1)).squeeze(-1)
+    mx = b + torch.matmul(A, mz.unsqueeze(-1)).squeeze(-1)
+    mean = torch.cat([mx, mz], dim=-1)
+    precision = torch.cat([torch.cat([Pxx, Pxz], dim=-1), torch.cat([Pzx, Pzz], dim=-1)], dim=-2)
+    return mean, precision
+
+
 def gaussian_contract(equation, x, y):
     """
     Compute the integral over two gaussians:
 
-        (x @ y)(a,c) = log(integral(exp(x(a,b) + y(b,c)), c))
+        (x @ y)(a,c) = log(integral(exp(x(a,b) + y(b,c)), b))
 
     where x is a gaussian over variables a,b, y is a gaussian over variables
     b,c, and a,b,c can each be sets of zero or more variables.
