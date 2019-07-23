@@ -88,7 +88,7 @@ class HMC(MCMCKernel):
     """
 
     def __init__(self,
-                 model,
+                 model=None,
                  potential_fn=None,
                  step_size=1,
                  trajectory_length=None,
@@ -102,7 +102,9 @@ class HMC(MCMCKernel):
                  jit_options=None,
                  ignore_jit_warnings=False,
                  target_accept_prob=0.8):
-        # NB: deprecating args
+        if not ((model is None) ^ (potential_fn is None)):
+            raise ValueError("Only one of `model` or `potential_fn` must be specified.")
+        # NB: deprecating args - model, transforms
         self.model = model
         self.transforms = transforms
         self._max_plate_nesting = max_plate_nesting
@@ -263,7 +265,7 @@ class HMC(MCMCKernel):
     def cleanup(self):
         self._reset()
 
-    def _cache(self, z, potential_energy, z_grads):
+    def _cache(self, z, potential_energy, z_grads=None):
         self._z_last = z
         self._potential_energy_last = potential_energy
         self._z_grads_last = z_grads
@@ -282,6 +284,7 @@ class HMC(MCMCKernel):
         if z is None:
             z = params
             potential_energy = self.potential_fn(z)
+            self._cache(z, potential_energy)
         # return early if no sample sites
         elif len(z) == 0:
             self._accept_cnt += 1

@@ -56,6 +56,8 @@ long_description = '\n'.join([str(line) for line in long_description.split('\n')
 
 # examples/tutorials
 EXTRAS_REQUIRE = [
+    # TODO: remove once https://github.com/ipython/ipython/issues/11809 is fixed.
+    'ipython<7.6.0',
     'jupyter>=1.0.0',
     'matplotlib>=1.3',
     'pillow',

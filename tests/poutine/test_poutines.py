@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import functools
 import logging
+import pickle
 import warnings
 from unittest import TestCase
 
@@ -16,7 +17,7 @@ import pyro.poutine as poutine
 from pyro.distributions import Bernoulli, Categorical, Normal
 from pyro.poutine.runtime import _DIM_ALLOCATOR, NonlocalExit
 from pyro.poutine.util import all_escape, discrete_escape
-from tests.common import assert_equal, assert_not_equal
+from tests.common import assert_equal, assert_not_equal, assert_close
 
 logger = logging.getLogger(__name__)
 
@@ -865,3 +866,28 @@ def test_trace_score_parts_err_msg():
               r"The value argument must be within the support"
     with pytest.raises(ValueError, match=exp_msg):
         tr.compute_score_parts()
+
+
+def _model(a=torch.tensor(1.), b=torch.tensor(1.)):
+    latent = pyro.sample("latent", dist.Beta(a, b))
+    return pyro.sample("test_site", dist.Bernoulli(latent), obs=torch.tensor(1))
+
+
+@pytest.mark.parametrize('wrapper', [
+    lambda fn: poutine.block(fn),
+    lambda fn: poutine.condition(fn, {'latent': 0.9}),
+    lambda fn: poutine.enum(fn, -1),
+    lambda fn: poutine.replay(fn, poutine.trace(fn).get_trace()),
+])
+def test_pickling(wrapper):
+    wrapped = wrapper(_model)
+    # default protocol cannot serialize torch.Size objects (see https://github.com/pytorch/pytorch/issues/20823)
+    deserialized = pickle.loads(pickle.dumps(wrapped, protocol=pickle.HIGHEST_PROTOCOL))
+    obs = torch.tensor(0.5)
+    pyro.set_rng_seed(0)
+    actual_trace = poutine.trace(deserialized).get_trace(obs)
+    pyro.set_rng_seed(0)
+    expected_trace = poutine.trace(wrapped).get_trace(obs)
+    assert tuple(actual_trace) == tuple(expected_trace.nodes)
+    assert_close([actual_trace.nodes[site]['value'] for site in actual_trace.stochastic_nodes],
+                 [expected_trace.nodes[site]['value'] for site in expected_trace.stochastic_nodes])
