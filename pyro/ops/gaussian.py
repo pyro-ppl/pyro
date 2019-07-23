@@ -63,6 +63,7 @@ def gaussian_contract_base(yz, xy, nx):
     #          inv(Px.bb) + inv(Py.bb))
     # Cp(a)q(c) = ...
     # It seems complicated to represent in terms of N((a, c); mz.a, mz.c, ...)
+    # We might follow Proposition 8, https://arxiv.org/abs/1905.13002 here.
     ny = xy.size(-1) - nx
     Ayz, byz, Cyz, etayz, Jyz = mean_precision_to_filtering_parameters(yz.mean, yz.precision, ny)
     Axy, bxy, Cxy, etaxy, Jxy = mean_precision_to_filtering_parameters(xy.mean, xy.precision, nx)
