@@ -11,7 +11,7 @@ from pyro.infer import SMCFilter
 """
 This file demonstrates how to use the SMCFilter algorithm with
 a simple model of a noisy harmonic oscillator of the form:
-    
+
     z[t] ~ N(A*z[t-1], B*sigma_z)
     y[t] ~ N(z[t][0], sigma_y)
 
