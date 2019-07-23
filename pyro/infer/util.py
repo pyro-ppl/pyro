@@ -170,7 +170,7 @@ class Dice(object):
             ordinal = ordering[name]
             if site["infer"].get("enumerate"):
                 num_samples = site["infer"].get("num_samples")
-                if num_samples is not None:  # site was multiply sampled
+                if num_samples is not None and site["infer"]["enumerate"] == "parallel":  # site was multiply sampled
                     if not is_identically_zero(log_prob):
                         log_prob = log_prob - log_prob.detach()
                     log_prob = log_prob - math.log(num_samples)
