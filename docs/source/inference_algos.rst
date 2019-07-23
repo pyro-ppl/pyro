@@ -59,6 +59,14 @@ Importance
     :undoc-members:
     :show-inheritance:
 
+Sequential Monte Carlo
+----------------------
+
+.. automodule:: pyro.infer.smcfilter
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Discrete Inference
 ------------------
 
