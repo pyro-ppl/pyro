@@ -1,5 +1,4 @@
-from __future__ import absolute_import, division, print_function
-
+import pytest
 import torch
 
 import pyro
@@ -8,7 +7,76 @@ import pyro.poutine as poutine
 from pyro.infer import SMCFilter
 
 
-class Model:
+class SmokeModel:
+
+    def __init__(self, state_size, plate_size):
+        self.state_size = state_size
+        self.plate_size = plate_size
+
+    def init(self):
+        self.t = 0
+        self.x_mean = pyro.sample("x_mean", dist.Normal(0., 1.))
+        self.y_mean = pyro.sample("y_mean",
+                                  dist.MultivariateNormal(torch.zeros(self.state_size), torch.eye(self.state_size)))
+
+    def step(self, x=None, y=None):
+        v = pyro.sample("v_{}".format(self.t), dist.Normal(0., 1.))
+        with pyro.plate("plate", self.plate_size):
+            w = pyro.sample("w_{}".format(self.t), dist.Normal(v, 1.))
+            x = pyro.sample("x_{}".format(self.t),
+                            dist.Normal(self.x_mean + w, 1), obs=x)
+            y = pyro.sample("y_{}".format(self.t),
+                            dist.MultivariateNormal(self.y_mean + w.unsqueeze(-1), torch.eye(self.state_size)),
+                            obs=y)
+        self.t += 1
+
+        return x, y
+
+
+class SmokeGuide:
+
+    def __init__(self, state_size, plate_size):
+        self.state_size = state_size
+        self.plate_size = plate_size
+
+    def init(self):
+        self.t = 0
+        self.x_mean = pyro.sample("x_mean",
+                                  dist.Normal(0., 2.))
+        self.y_mean = pyro.sample("y_mean",
+                                  dist.MultivariateNormal(torch.zeros(self.state_size), 2.*torch.eye(self.state_size)))
+
+    def step(self, x=None, y=None):
+        v = pyro.sample("v_{}".format(self.t), dist.Normal(0., 2.))
+        with pyro.plate("plate", self.plate_size):
+            pyro.sample("w_{}".format(self.t), dist.Normal(v, 2.))
+
+        self.t += 1
+
+
+@pytest.mark.parametrize("max_plate_nesting", [1, 2])
+@pytest.mark.parametrize("state_size", [2, 5, 1])
+@pytest.mark.parametrize("plate_size", [3, 7, 1])
+@pytest.mark.parametrize("num_steps", [1, 2, 10])
+def test_smoke(max_plate_nesting, state_size, plate_size, num_steps):
+    model = SmokeModel(state_size, plate_size)
+    guide = SmokeGuide(state_size, plate_size)
+
+    smc = SMCFilter(model, guide, num_particles=100, max_plate_nesting=max_plate_nesting)
+
+    true_model = SmokeModel(state_size, plate_size)
+
+    true_model.init()
+    truth = [true_model.step() for t in range(num_steps)]
+
+    smc.init()
+    for xy in truth:
+        smc.step(*xy)
+    smc.get_values_and_log_weights()
+    smc.get_empirical()
+
+
+class HarmonicModel:
 
     def __init__(self):
         self.A = torch.tensor([[0., 1.],
@@ -33,10 +101,10 @@ class Model:
         return self.z, self.y
 
 
-class Guide:
+class HarmonicGuide:
 
     def __init__(self):
-        self.model = Model()
+        self.model = HarmonicModel()
 
     def init(self):
         self.t = 0
@@ -51,7 +119,7 @@ class Guide:
 
 
 def generate_data():
-    model = Model()
+    model = HarmonicModel()
 
     model.init()
     zs = [torch.tensor([1., 0.])]
@@ -65,7 +133,7 @@ def generate_data():
 
 
 def score_latent(zs, ys):
-    model = Model()
+    model = HarmonicModel()
     with poutine.trace() as trace:
         with poutine.condition(data={"z_{}".format(t): z for t, z in enumerate(zs)}):
             model.init()
@@ -77,8 +145,8 @@ def score_latent(zs, ys):
 
 def test_likelihood_ratio():
 
-    model = Model()
-    guide = Guide()
+    model = HarmonicModel()
+    guide = HarmonicGuide()
 
     smc = SMCFilter(model, guide, num_particles=100, max_plate_nesting=0)
 

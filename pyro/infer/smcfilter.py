@@ -3,13 +3,15 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.poutine.util import prune_subsample_sites
 
 
 def _extract_samples(trace):
     return {name: site["value"]
             for name, site in trace.nodes.items()
             if site["type"] == "sample"
-            if not site["is_observed"]}
+            if not site["is_observed"]
+            if type(site["fn"]).__name__ != "_Subsample"}
 
 
 class SMCFilter(object):
@@ -17,9 +19,9 @@ class SMCFilter(object):
     :class:`SMCFilter` is the top-level interface for filtering via sequential
     monte carlo.
 
-    The model and guide should be objects with two methods: ``.init()`` and 
+    The model and guide should be objects with two methods: ``.init()`` and
     ``.step()``. These two methods should have the same signature as :meth:`init`
-    and :meth:`step` of this class. These methods are intended to be called first 
+    and :meth:`step` of this class. These methods are intended to be called first
     with :meth:`init`, then with :meth:`step` repeatedly.
 
     :param object model: probabilistic model defined as a function
@@ -82,7 +84,7 @@ class SMCFilter(object):
     def get_empirical(self):
         """
         :returns: a marginal distribution over every latent variable.
-        :rtype: a dictionary with keys which are latent variables and values 
+        :rtype: a dictionary with keys which are latent variables and values
             which are :class:`~pyro.distributions.Empirical` objects.
         """
         return {name: dist.Empirical(value, self._log_weights)
@@ -91,6 +93,9 @@ class SMCFilter(object):
     @torch.no_grad()
     def _update_weights(self, model_trace, guide_trace):
         # w_t <-w_{t-1}*p(y_t|z_t) * p(z_t|z_t-1)/q(z_t)
+
+        model_trace = prune_subsample_sites(model_trace)
+        guide_trace = prune_subsample_sites(guide_trace)
 
         model_trace.compute_log_prob()
         guide_trace.compute_log_prob()
