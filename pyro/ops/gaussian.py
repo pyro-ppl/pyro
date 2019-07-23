@@ -91,7 +91,7 @@ def mean_precision_to_filtering_parameters(mean, precision, nx):
     :param precision: precision of Gaussian
     :param nx: size of x
     """
-    # TODO: explore precision_tril alternative
+    # TODO: explore prec_factor alternative to resolve rank deficient problem
     # TODO: use ellipsis for batching
     mx, mz = mean[:i], mean[i:]
     Pxx, Pxz, Pzx, Pzz = precision[:i, :i], precision[:i, i:], precision[i:, :i], precision[i:, i:]
