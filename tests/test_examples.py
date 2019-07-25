@@ -56,6 +56,7 @@ CPU_EXAMPLES = [
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide custom',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide auto',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide easy',
+    'sparse_regression.py --num-steps=2 --num-data=50 --num-dimensions 30',
     'vae/ss_vae_M2.py --num-epochs=1',
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel',

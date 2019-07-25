@@ -305,7 +305,6 @@ def main(args):
 if __name__ == '__main__':
     assert pyro.__version__.startswith('0.3.4')
     parser = argparse.ArgumentParser(description='Krylov KIT')
-    parser.add_argument('--inference', type=str, default='map')
     parser.add_argument('--num-data', type=int, default=750)
     parser.add_argument('--num-steps', type=int, default=1000)
     parser.add_argument('--num-dimensions', type=int, default=100)
