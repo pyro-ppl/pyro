@@ -64,6 +64,7 @@ Welcome to Pyro Examples and Tutorials!
    sparse_gamma
    dkl
    einsum
+   smcfilter
 
 
 Indices and tables

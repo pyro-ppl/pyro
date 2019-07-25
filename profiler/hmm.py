@@ -1,12 +1,18 @@
 import argparse
 import os
 import pickle
+import re
 import subprocess
 import sys
-import timeit
 from collections import defaultdict
+from os.path import join, abspath
 
 from numpy import median
+
+from pyro.util import timed
+
+
+EXAMPLES_DIR = join(abspath(__file__), os.pardir, os.pardir, "examples")
 
 
 def main(args):
@@ -20,6 +26,7 @@ def main(args):
                 config.append("--cuda")
             if args.jit:
                 config.append("--jit")
+                config.append("--time-compilation")
             configs.append(tuple(config))
 
     # Run timing experiments serially.
@@ -31,10 +38,15 @@ def main(args):
         except Exception:
             pass
     for config in configs:
-        start_time = timeit.default_timer()
-        subprocess.check_call((sys.executable, "-O", "examples/hmm.py") + config)
-        elapsed = timeit.default_timer() - start_time
-        results[config] = elapsed
+        with timed() as t:
+            out = subprocess.check_output((sys.executable, "-O", abspath(join(EXAMPLES_DIR, "hmm.py"))) + config,
+                                          encoding="utf-8")
+        results[config] = t.elapsed
+        if "--jit" in config:
+            matched = re.search(r"time to compile: (\d+\.\d+)", out)
+            if matched:
+                compilation_time = float(matched.group(1))
+                results[config + ("(compilation time)",)] = compilation_time
         with open(args.filename, "wb") as f:
             pickle.dump(results, f)
 
