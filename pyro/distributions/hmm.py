@@ -1,8 +1,10 @@
 import torch
 from torch.distributions import constraints
 
+from pyro.distributions.torch import MultivariateNormal
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
+from pyro.ops.gaussian import Gaussian, gaussian_tensordot
 
 
 def _logmatmulexp(x, y):
@@ -36,6 +38,39 @@ def _sequential_logmatmulexp(logits):
             contracted = torch.cat((contracted, logits[..., -1:, :, :]), dim=-3)
         logits = contracted
     return logits.squeeze(-3)
+
+
+def _mvn_to_gaussian(mvn):
+    """
+    Convert a MultivaiateNormal distribution to a Gaussian.
+    """
+    assert isinstance(mvn, torch.distributions.MultivariateNormal)
+    precision = mvn.precision
+    info_vec = precision.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
+    log_normalizer = -2 * torch.cholesky(precision).diagonal(dim1=-2, dim2=-1).log().sum(-1)
+    return Gaussian(log_normalizer, info_vec, precision)
+
+
+def _sequential_gaussian_tensordot(gaussian):
+    """
+    Integrates a Gaussian ``x`` whose rightmost batch dimension is time, computes::
+
+        x[..., 0] @ x[..., 1] @ ... @ x[..., T-1]
+    """
+    assert isinstance(gaussian, Gaussian)
+    batch_shape = gaussian.batch_shape[:-1]
+    state_dim = gaussian.precision.size(-1) // 2
+    while gaussian.batch_shape[-1] > 1:
+        time = gaussian.batch_shape[-1]
+        even_time = time // 2 * 2
+        even_part = gaussian[..., :even_time]
+        x_y = even_part.reshape(batch_shape + (even_time // 2, 2))
+        x, y = x_y[..., 0], x_y[..., 1]
+        contracted = gaussian_tensordot(x, y, state_dim)
+        if time > even_time:
+            contracted = Gaussian.cat((contracted, gaussian[..., -1:]), dim=-1)
+        gaussian = contracted
+    return gaussian[..., 0]
 
 
 class DiscreteHMM(TorchDistribution):
@@ -129,4 +164,91 @@ class DiscreteHMM(TorchDistribution):
 
         # Marginalize out final state.
         result = result.logsumexp(-1)
+        return result
+
+
+class GaussianMRF(TorchDistribution):
+    """
+    Temporal Markov Random Field with Gaussian factors for initial, transition,
+    and observation distributions. This adapts [1] to parallelize over time,
+    achieving O(log(time)) parallel complexity. This differs from [1] in that
+    it tracks the log normalizer term to support loss gradients.
+
+    The event_shape of this distribution includes time on the left::
+
+        event_shape = (num_steps,) + observation_dist.event_shape
+
+    This distribution supports any combination of homogeneous/heterogeneous
+    time dependency of ``transition_dist`` and ``observation_dist``. However,
+    because time is included in this distribution's event_shape, the
+    homogeneous+homogeneous case will have a broadcastable event_shape with
+    ``num_steps = 1``, allowing :meth:`log_prob` to work with arbitrary length
+    data::
+
+        event_shape = (1, obs_dim)  # homogeneous + homogeneous case
+
+    **References:**
+
+    [1] Simo Sarkka, Angel F. Garcia-Fernandez (2019)
+        "Temporal Parallelization of Bayesian Filters and Smoothers"
+        https://arxiv.org/pdf/1905.13002.pdf
+
+    :param torch.distributions.MultivariateNormal initial_dist: A distribution
+        over initial states. This should have batch shape broadcastable to
+        ``self.batch_shape``.  This should have event shape ``(hidden_dim,)``.
+    :param torch.distributions.MultivariateNormal transition_dist: A joint
+        distribution factor over a pair of successive time steps. This should
+        have batch shape broadcastable to ``self.batch_shape + (num_steps,)``.
+        This should have event shape ``(2 * hidden_dim,)``.
+    :param torch.distributions.Distribution observation_dist: A joint
+        distribution factor over a hidden and an observed state. This should
+        have batch shape broadcastable to ``self.batch_shape + (num_steps,)``.
+        This should have event shape ``(hidden_dim + obs_dim,)``.
+    """
+    arg_constraints = {}
+
+    def __init__(self, initial_dist, transition_dist, observation_dist, validate_args=None):
+        assert isinstance(initial_dist, MultivariateNormal)
+        assert isinstance(transition_dist, MultivariateNormal)
+        assert isinstance(observation_dist, MultivariateNormal)
+        hidden_dim = initial_dist.event_shape[0]
+        assert transition_dist.event_shape[0] == (hidden_dim, hidden_dim)
+        obs_dim = observation_dist.event_shape[0] - hidden_dim
+
+        shape = broadcast_shape(initial_dist.batch_shape + (1,),
+                                transition_dist.batch_shape,
+                                observation_dist.batch_shape)
+        batch_shape, time_shape = shape[:-1], shape[-1:]
+        event_shape = time_shape + (obs_dim,)
+        super(GaussianMRF, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        self._init = _mvn_to_gaussian(initial_dist)
+        self._trans = _mvn_to_gaussian(transition_dist)
+        self._obs = _mvn_to_gaussian(observation_dist)
+
+    def expand(self, batch_shape, _instance=None):
+        new = self._get_checked_instance(GaussianMRF, _instance)
+        batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
+        # We only need to expand one of the inputs, since batch_shape is determined
+        # by broadcasting all three. To save computation in _sequential_gaussian_tensordot(),
+        # we expand only _init, which is applied only after _sequential_gaussian_tensordot().
+        new._init = self._init.expand(batch_shape)
+        new._trans = self._trans
+        new._obs = self._obs
+        super(GaussianMRF, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        new.validate_args = self.__dict__.get('_validate_args')
+        return new
+
+    def log_prob(self, value):
+        # Combine observation and transition factors.
+        obs = self._obs.condition(value)
+        result = gaussian_tensordot(self._trans, obs, dims=0)
+
+        # Eliminate time dimension.
+        result = _sequential_gaussian_tensordot(result)
+
+        # Combine initial factor.
+        result = gaussian_tensordot(self._init, result, dims=0)
+
+        # Marginalize out final state.
+        result = result.logsumexp()
         return result

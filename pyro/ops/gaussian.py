@@ -1,6 +1,7 @@
 import math
 
 import torch
+from torch.distributions.utils import lazy_property
 from torch.nn.functional import pad
 
 from pyro.distributions.util import broadcast_shape
@@ -34,11 +35,32 @@ class Gaussian(object):
     def dim(self):
         return self.info_vec.size(-1)
 
-    @property
+    @lazy_property
     def batch_shape(self):
         return broadcast_shape(self.log_normalizer.shape,
                                self.info_vec.shape[:-1],
                                self.precision.shape[:-2])
+
+    def expand(self, batch_shape):
+        n = self.info_vec.size(-1)
+        log_normalizer = self.log_normalizer.expand(batch_shape)
+        info_vec = self.info_vec.expand(batch_shape + (n,))
+        precision = self.precision.expand(batch_shape + (n, n))
+        return Gaussian(log_normalizer, info_vec, precision)
+
+    def reshape(self, batch_shape):
+        n = self.info_vec.size(-1)
+        log_normalizer = self.log_normalizer.reshape(batch_shape)
+        info_vec = self.info_vec.reshape(batch_shape + (n,))
+        precision = self.precision.reshape(batch_shape + (n, n))
+        return Gaussian(log_normalizer, info_vec, precision)
+
+    def __getitem__(self, index):
+        assert isinstance(index, tuple)
+        log_normalizer = self.log_normalizer[index]
+        info_vec = self.info_vec[index + (slice(None),)]
+        precision = self.precision[index + (slice(None), slice(None))]
+        return Gaussian(log_normalizer, info_vec, precision)
 
     def log_density(self, value):
         """
@@ -55,6 +77,27 @@ class Gaussian(object):
         result = result + self.info_vec
         result = (value * result).sum(-1)
         return result + self.log_normalizer
+
+    def condition(self, value):
+        """
+        Condition this Gaussian on a trailing subset of its state.
+        """
+        assert isinstance(value, torch.Tensor)
+        assert value.size(-1) <= self.info_vec.size(-1)
+
+        # FIXME this is bogus but has the right type:
+        n = self.info_vec.size(-1) - value.size(-1)
+        info_vec = self.info_vec[..., :n]
+        precision = self.precision[..., :n, :n]
+        return Gaussian(self.log_normalizer, info_vec, precision)
+
+    def logsumexp(self):
+        """
+        Integrates out all latent state.
+        """
+        n = self.info_vec.size(-1)
+        return (self.log_normalizer - 0.5 * n * math.log(2 * math.pi) +
+                self.precision.cholesky().diagonal(dim1=-2, dim2=-1).log().sum(-1))
 
 
 def gaussian_tensordot(x, y, dims=0):
