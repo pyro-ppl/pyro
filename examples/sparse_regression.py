@@ -8,7 +8,6 @@ import math
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro import sample, param
 from pyro.contrib.autoguide import AutoDelta
 from pyro.infer import Trace_ELBO
 from pyro.contrib.autoguide.initialization import init_to_median
@@ -65,28 +64,28 @@ def kernel(X, Z, eta1, eta2, c):
 def model(X, Y, hypers, jitter=1.0e-4):
     S, P, N = hypers['expected_sparsity'], X.size(1), X.size(0)
 
-    sigma = sample("sigma", dist.HalfNormal(hypers['alpha3']))
+    sigma = pyro.sample("sigma", dist.HalfNormal(hypers['alpha3']))
     phi = sigma * (S / math.sqrt(N)) / (P - S)
-    eta1 = sample("eta1", dist.HalfCauchy(phi))
+    eta1 = pyro.sample("eta1", dist.HalfCauchy(phi))
 
-    msq = sample("msq", dist.InverseGamma(hypers['alpha1'], hypers['beta1']))
-    xisq = sample("xisq", dist.InverseGamma(hypers['alpha2'], hypers['beta2']))
+    msq = pyro.sample("msq", dist.InverseGamma(hypers['alpha1'], hypers['beta1']))
+    xisq = pyro.sample("xisq", dist.InverseGamma(hypers['alpha2'], hypers['beta2']))
 
     eta2 = eta1.pow(2.0) * xisq.sqrt() / msq
 
-    lam = sample("lambda", dist.HalfCauchy(torch.ones(P, device=X.device)).to_event(1))
+    lam = pyro.sample("lambda", dist.HalfCauchy(torch.ones(P, device=X.device)).to_event(1))
     kappa = msq.sqrt() * lam / (msq + (eta1 * lam).pow(2.0)).sqrt()
     kX = kappa * X
 
     # sample the observation noise
-    var_obs = sample("var_obs", dist.InverseGamma(hypers['alpha_obs'], hypers['beta_obs']))
+    var_obs = pyro.sample("var_obs", dist.InverseGamma(hypers['alpha_obs'], hypers['beta_obs']))
 
     # compute the kernel for the given hyperparameters
     k = kernel(kX, kX, eta1, eta2, hypers['c']) + (var_obs + jitter) * torch.eye(N, device=X.device)
 
     # observe the outputs Y
-    sample("Y", dist.MultivariateNormal(torch.zeros(N, device=X.device), covariance_matrix=k),
-           obs=Y)
+    pyro.sample("Y", dist.MultivariateNormal(torch.zeros(N, device=X.device), covariance_matrix=k),
+                obs=Y)
 
 
 """
@@ -130,11 +129,14 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, var_obs, jitter=1.0e-
     active_dims = (((mu - 4.0 * std) > 0.0) | ((mu + 4.0 * std) < 0.0)).byte()
     active_dims = active_dims.nonzero().squeeze(-1)
 
-    print("Identified the following active dimensions:", active_dims.data.cpu().numpy().flatten())
-    print("Mean estimate for active singleton weights:\n", mu[active_dims].data.cpu().numpy())
+    print("Identified the following active dimensions:", active_dims.data.numpy().flatten())
+    print("Mean estimate for active singleton weights:\n", mu[active_dims].data.numpy())
 
     # prep for computation of posterior statistics for quadratic weights
     M = len(active_dims)
+    if M < 2:
+        return active_dims.data.numpy(), []
+
     left_dims, right_dims = torch.ones(M, M).triu(1).nonzero().t()
     left_dims, right_dims = active_dims[left_dims], active_dims[right_dims]
 
@@ -164,12 +166,12 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, var_obs, jitter=1.0e-
     active_quad_dims = (((mu - 4.0 * std) > 0.0) | ((mu + 4.0 * std) < 0.0)) & (mu.abs() > 1.0e-4).byte()
     active_quad_dims = active_quad_dims.nonzero()
 
-    active_quadratic_dims = np.stack([left_dims[active_quad_dims].data.cpu().numpy().flatten(),
-                                      right_dims[active_quad_dims].data.cpu().numpy().flatten()], axis=1)
+    active_quadratic_dims = np.stack([left_dims[active_quad_dims].data.numpy().flatten(),
+                                      right_dims[active_quad_dims].data.numpy().flatten()], axis=1)
     active_quadratic_dims = np.split(active_quadratic_dims, active_quadratic_dims.shape[0])
     active_quadratic_dims = [tuple(a.tolist()[0]) for a in active_quadratic_dims]
 
-    return active_dims.data.cpu().numpy(), active_quadratic_dims
+    return active_dims.data.numpy(), active_quadratic_dims
 
 
 # Create an artifical dataset with N datapoints and P feature dimensions. Of the P
@@ -276,10 +278,10 @@ def main(args):
 
     # we do the final computation using double precision
     active_dims, active_quad_dims = \
-        compute_posterior_stats(X.double(), Y.double(), param('auto_msq').double(),
-                                param('auto_lambda').double(), param('auto_eta1').double(),
-                                param('auto_xisq').double(), torch.tensor(hypers['c']).double(),
-                                param('auto_var_obs').double())
+        compute_posterior_stats(X.double(), Y.double(), pyro.param('auto_msq').double(),
+                                pyro.param('auto_lambda').double(), pyro.param('auto_eta1').double(),
+                                pyro.param('auto_xisq').double(), torch.tensor(hypers['c']).double(),
+                                pyro.param('auto_var_obs').double())
 
     expected_active_dims = np.arange(S).tolist()
 
