@@ -125,7 +125,7 @@ class DiscreteHMM(TorchDistribution):
         result = _sequential_logmatmulexp(result)
 
         # Combine initial factor.
-        result = _logmatmulexp(self.initial_logits.unsqueeze(-2), result).squeeze(-2)
+        result = self.initial_logits + result.logsumexp(-1)
 
         # Marginalize out final state.
         result = result.logsumexp(-1)
