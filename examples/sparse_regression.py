@@ -285,22 +285,22 @@ def main(args):
 
     expected_active_dims = np.arange(S).tolist()
 
-    correct_singletons = len(set(active_dims) & set(expected_active_dims))
-    false_singletons = len(set(active_dims) - set(expected_active_dims))
-    missed_singletons = len(set(expected_active_dims) - set(active_dims))
-    singleton_stats = (correct_singletons, false_singletons, missed_singletons)
+    tp_singletons = len(set(active_dims) & set(expected_active_dims))
+    fp_singletons = len(set(active_dims) - set(expected_active_dims))
+    fn_singletons = len(set(expected_active_dims) - set(active_dims))
+    singleton_stats = (tp_singletons, fp_singletons, fn_singletons)
 
-    correct_quads = len(set(active_quad_dims) & set(expected_quad_dims))
-    false_quads = len(set(active_quad_dims) - set(expected_quad_dims))
-    missed_quads = len(set(expected_quad_dims) - set(active_quad_dims))
-    quad_stats = (correct_quads, false_quads, missed_quads)
+    tp_quads = len(set(active_quad_dims) & set(expected_quad_dims))
+    fp_quads = len(set(active_quad_dims) - set(expected_quad_dims))
+    fn_quads = len(set(expected_quad_dims) - set(active_quad_dims))
+    quad_stats = (tp_quads, fp_quads, fn_quads)
 
     # We report how well we did, i.e. did we recover the sparse set of coefficients
     # that we expected for our artificial dataset?
     print("[SUMMARY STATS]")
-    print("Singletons (correct, false positive, false negative): " +
+    print("Singletons (true positive, false positive, false negative): " +
           "(%d, %d, %d)" % singleton_stats)
-    print("Quadratic  (correct, false positive, false negative): " +
+    print("Quadratic  (true positive, false positive, false negative): " +
           "(%d, %d, %d)" % quad_stats)
 
 
