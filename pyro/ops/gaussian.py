@@ -56,6 +56,9 @@ class Gaussian(object):
         return Gaussian(log_normalizer, info_vec, precision)
 
     def __getitem__(self, index):
+        """
+        Index into the batch_shape of a Gaussian.
+        """
         assert isinstance(index, tuple)
         log_normalizer = self.log_normalizer[index]
         info_vec = self.info_vec[index + (slice(None),)]
@@ -84,6 +87,9 @@ class Gaussian(object):
         return Gaussian(log_normalizer, info_vec, precision)
 
     def __add__(self, other):
+        """
+        Adds two Gaussians in log-density space.
+        """
         assert self.dim() == other.dim()
         return Gaussian(self.log_normalizer + other.log_normalizer,
                         self.info_vec + other.info_vec,
@@ -136,7 +142,7 @@ def mvn_to_gaussian(mvn):
 
     :param ~torch.distributions.MultivariateNormal mvn: A multivariate normal distribution.
     :return: An equivalent Gaussian object.
-    :rtype: Gaussian
+    :rtype: ~pyro.ops.gaussian.Gaussian
     """
     assert isinstance(mvn, torch.distributions.MultivariateNormal)
     n = mvn.loc.size(-1)

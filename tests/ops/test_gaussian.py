@@ -54,7 +54,7 @@ def test_reshape(old_shape, new_shape, dim):
     ((4, 7, 6), -1, (2, 1, 3)),
     ((4, 7, 6), -2, (1, 1, 2, 3)),
     ((4, 7, 6), 1, (1, 1, 2, 3)),
-])
+], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_cat(shape, cat_dim, split, dim):
     assert sum(split) == shape[cat_dim]
@@ -77,7 +77,7 @@ def test_cat(shape, cat_dim, split, dim):
     assert_close_gaussian(actual, gaussian)
 
 
-@pytest.mark.parametrize("shape", [(), (4,), (3, 2)])
+@pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
 @pytest.mark.parametrize("left", [0, 1, 2])
 @pytest.mark.parametrize("right", [0, 1, 2])
@@ -91,7 +91,7 @@ def test_pad(shape, left, right, dim):
     assert_close(padded.precision[..., mid, mid], expected.precision)
 
 
-@pytest.mark.parametrize("shape", [(), (4,), (3, 2)])
+@pytest.mark.parametrize("shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_add(shape, dim):
     x = random_gaussian(shape, dim)
@@ -100,22 +100,23 @@ def test_add(shape, dim):
     assert_close((x + y).log_density(value), x.log_density(value) + y.log_density(value))
 
 
-@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)])
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_logsumexp(batch_shape, dim):
     gaussian = random_gaussian(batch_shape, dim)
     gaussian.info_vec.fill_(0)  # centered
+    gaussian.precision += torch.eye(dim) * 0.1
 
-    num_samples = 10000
+    num_samples = 200000
     scale = 10
-    samples = torch.rand((num_samples, dim)) * scale - scale / 2
-    expected = gaussian.log_density(samples).mean() * scale ** dim
+    samples = torch.rand((num_samples,) + (1,) * len(batch_shape) + (dim,)) * scale - scale / 2
+    expected = gaussian.log_density(samples).logsumexp(0) + math.log(scale ** dim / num_samples)
     actual = gaussian.logsumexp()
-    assert_close(actual, expected)
+    assert_close(actual, expected, atol=0.05, rtol=0.05)
 
 
-@pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)])
-@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)])
+@pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_mvn_to_gaussian(sample_shape, batch_shape, dim):
     mvn = random_mvn(batch_shape, dim)

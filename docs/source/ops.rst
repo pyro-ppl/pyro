@@ -64,6 +64,7 @@ Gaussian Contraction
     :undoc-members:
     :show-inheritance:
     :member-order: bysource
+    :special-members: __add__,__getitem__
 
 Statistical Utilities
 ---------------------
