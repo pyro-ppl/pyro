@@ -41,6 +41,9 @@ class Gaussian(object):
         Evaluate the log density of this Gaussian at a point value.
         This is mainly used for testing.
         """
+        if value.size(-1) == 0:
+            batch_shape = broadcast_shape(value.shape[:-1], self.batch_shape)
+            return self.log_normalizer.expand(batch_shape)
         result = (-0.5) * torch.matmul(self.precision, value.unsqueeze(-1)).squeeze(-1)
         result = result + self.info_vec
         result = (value * result).sum(-1)
@@ -92,7 +95,7 @@ def gaussian_tensordot(x, y, dims=0):
         if na + nc > 0:
             info_vec = info_vec - torch.matmul(LinvBt, Linvb).squeeze(-1)
         logdet = torch.diagonal(L, dim1=-2, dim2=-1).log().sum(-1)
-        diff = logdet - 0.5 * dims * math.log(math.pi) - 0.5 * Linvb.squeeze(-1).pow(2).sum(-1)
+        diff = 0.5 * nb * math.log(2 * math.pi) + 0.5 * Linvb.squeeze(-1).pow(2).sum(-1) - logdet
         log_normalizer = log_normalizer + diff
 
     return Gaussian(log_normalizer, info_vec, precision)

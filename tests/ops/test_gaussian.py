@@ -1,3 +1,5 @@
+import math
+
 import pytest
 import torch
 from torch.nn.functional import pad
@@ -58,8 +60,8 @@ def test_gaussian_tensordot(dot_dims,
     assert z.dim() == x_dim + y_dim - 2 * dot_dims
 
     # We make these precision matrices positive definite to test the math
-    x.precision = x.precision + 1e-4 * torch.eye(x.dim())
-    y.precision = y.precision + 1e-4 * torch.eye(y.dim())
+    x.precision = x.precision + 1e-1 * torch.eye(x.dim())
+    y.precision = y.precision + 1e-1 * torch.eye(y.dim())
     z = gaussian_tensordot(x, y, dot_dims)
     # compare against broadcasting, adding, and marginalizing
     precision = pad(x.precision, (0, nc, 0, nc)) + pad(y.precision, (na, 0, na, 0))
@@ -75,7 +77,18 @@ def test_gaussian_tensordot(dot_dims,
     assert_close(covariance[..., x_dim:, :na], z_covariance[..., na:, :na])
     assert_close(covariance[..., x_dim:, x_dim:], z_covariance[..., na:, na:])
 
-    # FIXME: add test for log_normalizer
+    # Assume a = c = 0, integrate out b
+    # FIXME: this might be not a stable way to compute integral
+    num_samples = 200000
+    scale = 20
+    # generate samples in [-10, 10]
+    value_b = torch.rand((num_samples,) + z.batch_shape + (nb,)) * scale - scale / 2
+    value_x = pad(value_b, (na, 0))
+    value_y = pad(value_b, (0, nc))
+    expect = torch.logsumexp(x.log_density(value_x) + y.log_density(value_y), dim=0)
+    expect += math.log(scale ** nb / num_samples)
+    actual = z.log_density(torch.zeros(z.batch_shape + (z.dim(),)))
+    assert_close(actual, expect, atol=0.1, rtol=0.1)
 
 
 @pytest.mark.parametrize("x_batch_shape,y_batch_shape", [
