@@ -1,10 +1,9 @@
 import torch
 from torch.distributions import constraints
 
-from pyro.distributions.torch import MultivariateNormal
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.gaussian import Gaussian, gaussian_tensordot
+from pyro.ops.gaussian import Gaussian, gaussian_tensordot, mvn_to_gaussian
 
 
 def _logmatmulexp(x, y):
@@ -38,17 +37,6 @@ def _sequential_logmatmulexp(logits):
             contracted = torch.cat((contracted, logits[..., -1:, :, :]), dim=-3)
         logits = contracted
     return logits.squeeze(-3)
-
-
-def _mvn_to_gaussian(mvn):
-    """
-    Convert a MultivaiateNormal distribution to a Gaussian.
-    """
-    assert isinstance(mvn, torch.distributions.MultivariateNormal)
-    precision = mvn.precision
-    info_vec = precision.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
-    log_normalizer = -2 * torch.cholesky(precision).diagonal(dim1=-2, dim2=-1).log().sum(-1)
-    return Gaussian(log_normalizer, info_vec, precision)
 
 
 def _sequential_gaussian_tensordot(gaussian):
@@ -99,14 +87,14 @@ class DiscreteHMM(TorchDistribution):
         "Temporal Parallelization of Bayesian Filters and Smoothers"
         https://arxiv.org/pdf/1905.13002.pdf
 
-    :param torch.Tensor initial_logits: A logits tensor for an initial
+    :param ~torch.Tensor initial_logits: A logits tensor for an initial
         categorical distribution over latent states. Should have rightmost size
         ``state_dim`` and be broadcastable to ``batch_shape + (state_dim,)``.
-    :param torch.Tensor transition_logits: A logits tensor for transition
+    :param ~torch.Tensor transition_logits: A logits tensor for transition
         conditional distributions between latent states. Should have rightmost
         shape ``(state_dim, state_dim)`` (old, new), and be broadcastable to
         ``batch_shape + (num_steps, state_dim, state_dim)``.
-    :param torch.distributions.Distribution observation_dist: A conditional
+    :param ~torch.distributions.Distribution observation_dist: A conditional
         distribution of observed data conditioned on latent state. The
         ``.batch_shape`` should have rightmost size ``state_dim`` and be
         broadcastable to ``batch_shape + (num_steps, state_dim)``. The
@@ -125,12 +113,11 @@ class DiscreteHMM(TorchDistribution):
         if len(observation_dist.batch_shape) < 1:
             raise ValueError("expected observation_dist to have at least one batch dim, "
                              "actual .batch_shape = {}".format(observation_dist.batch_shape))
-        time_shape = broadcast_shape((1,), transition_logits.shape[-3:-2],
-                                     observation_dist.batch_shape[-2:-1])
+        shape = broadcast_shape(initial_logits.shape[:-1] + (1,),
+                                transition_logits.shape[:-2],
+                                observation_dist.batch_shape[:-1])
+        batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + observation_dist.event_shape
-        batch_shape = broadcast_shape(initial_logits.shape[:-1],
-                                      transition_logits.shape[:-3],
-                                      observation_dist.batch_shape[:-2])
         self.initial_logits = initial_logits - initial_logits.logsumexp(-1, True)
         self.transition_logits = transition_logits - transition_logits.logsumexp(-1, True)
         self.observation_dist = observation_dist
@@ -170,9 +157,9 @@ class DiscreteHMM(TorchDistribution):
 class GaussianMRF(TorchDistribution):
     """
     Temporal Markov Random Field with Gaussian factors for initial, transition,
-    and observation distributions. This adapts [1] to parallelize over time,
-    achieving O(log(time)) parallel complexity. This differs from [1] in that
-    it tracks the log normalizer term to support loss gradients.
+    and observation distributions. This adapts [1] to parallelize over time to
+    achieve O(log(time)) parallel complexity, however it differs in that it
+    tracks the log normalizer to ensure :meth:`log_prob` is differentiable.
 
     The event_shape of this distribution includes time on the left::
 
@@ -193,24 +180,24 @@ class GaussianMRF(TorchDistribution):
         "Temporal Parallelization of Bayesian Filters and Smoothers"
         https://arxiv.org/pdf/1905.13002.pdf
 
-    :param torch.distributions.MultivariateNormal initial_dist: A distribution
-        over initial states. This should have batch shape broadcastable to
-        ``self.batch_shape``.  This should have event shape ``(hidden_dim,)``.
-    :param torch.distributions.MultivariateNormal transition_dist: A joint
+    :param ~torch.distributions.MultivariateNormal initial_dist: A distribution
+        over initial states. This should have batch_shape broadcastable to
+        ``self.batch_shape``.  This should have event_shape ``(hidden_dim,)``.
+    :param ~torch.distributions.MultivariateNormal transition_dist: A joint
         distribution factor over a pair of successive time steps. This should
-        have batch shape broadcastable to ``self.batch_shape + (num_steps,)``.
-        This should have event shape ``(2 * hidden_dim,)``.
-    :param torch.distributions.Distribution observation_dist: A joint
+        have batch_shape broadcastable to ``self.batch_shape + (num_steps,)``.
+        This should have event_shape ``(hidden_dim + hidden_dim,)`` (old+new).
+    :param ~torch.distributions.MultivariateNormal observation_dist: A joint
         distribution factor over a hidden and an observed state. This should
-        have batch shape broadcastable to ``self.batch_shape + (num_steps,)``.
-        This should have event shape ``(hidden_dim + obs_dim,)``.
+        have batch_shape broadcastable to ``self.batch_shape + (num_steps,)``.
+        This should have event_shape ``(hidden_dim + obs_dim,)``.
     """
     arg_constraints = {}
 
     def __init__(self, initial_dist, transition_dist, observation_dist, validate_args=None):
-        assert isinstance(initial_dist, MultivariateNormal)
-        assert isinstance(transition_dist, MultivariateNormal)
-        assert isinstance(observation_dist, MultivariateNormal)
+        assert isinstance(initial_dist, torch.distributions.MultivariateNormal)
+        assert isinstance(transition_dist, torch.distributions.MultivariateNormal)
+        assert isinstance(observation_dist, torch.distributions.MultivariateNormal)
         hidden_dim = initial_dist.event_shape[0]
         assert transition_dist.event_shape[0] == (hidden_dim, hidden_dim)
         obs_dim = observation_dist.event_shape[0] - hidden_dim
@@ -221,9 +208,9 @@ class GaussianMRF(TorchDistribution):
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + (obs_dim,)
         super(GaussianMRF, self).__init__(batch_shape, event_shape, validate_args=validate_args)
-        self._init = _mvn_to_gaussian(initial_dist)
-        self._trans = _mvn_to_gaussian(transition_dist)
-        self._obs = _mvn_to_gaussian(observation_dist)
+        self._init = mvn_to_gaussian(initial_dist)
+        self._trans = mvn_to_gaussian(transition_dist)
+        self._obs = mvn_to_gaussian(observation_dist)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(GaussianMRF, _instance)

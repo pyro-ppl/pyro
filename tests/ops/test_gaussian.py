@@ -4,7 +4,8 @@ import pytest
 import torch
 from torch.nn.functional import pad
 
-from pyro.ops.gaussian import Gaussian, gaussian_tensordot
+from pyro.distributions.util import broadcast_shape
+from pyro.ops.gaussian import Gaussian, gaussian_tensordot, mvn_to_gaussian
 from tests.common import assert_close
 
 
@@ -21,6 +22,108 @@ def random_gaussian(batch_shape, dim, rank):
     assert result.dim() == dim
     assert result.batch_shape == batch_shape
     return result
+
+
+@pytest.mark.parametrize("extra_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("log_normalizer_shape,info_vec_shape,precision_shape", [
+    ((), (), ()),
+    ((5,), (), ()),
+    ((), (5,), ()),
+    ((), (), (5,)),
+    ((3, 1, 1), (1, 4, 1), (1, 1, 5)),
+], ids=str)
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_expand(extra_shape, log_normalizer_shape, info_vec_shape, precision_shape, dim):
+    rank = dim + dim
+    log_normalizer = torch.randn(log_normalizer_shape)
+    info_vec = torch.randn(info_vec_shape + (dim,))
+    precision = torch.randn(info_vec_shape + (dim, rank))
+    precision = precision.matmul(precision.transpose(-1, -2))
+    gaussian = Gaussian(log_normalizer, info_vec, precision)
+
+    expected_shape = extra_shape + broadcast_shape(
+        log_normalizer_shape, info_vec_shape, precision_shape)
+    actual = gaussian.expand(expected_shape)
+    assert actual.batch_shape == expected_shape
+
+
+@pytest.mark.parametrize("old_shape,new_shape", [
+    ((6,), (3, 2)),
+    ((5, 6), (5, 3, 2)),
+], ids=str)
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_reshape(old_shape, new_shape, dim):
+    gaussian = random_gaussian(old_shape, dim, rank=dim + dim)
+
+    # reshape to new
+    new = gaussian.reshape(new_shape)
+    assert new.batch_shape == new_shape
+
+    # reshape back to old
+    g = new.reshape(old_shape)
+    assert g.batch_shape == gaussian.batch_shape
+    assert_close(g.log_normalizer, gaussian.log_normalizer)
+    assert_close(g.info_vec, gaussian.info_vec)
+    assert_close(g.precision, gaussian.precision)
+
+
+@pytest.mark.parametrize("shape,cat_dim,split", [
+    ((4, 7, 6), -1, (2, 1, 3)),
+    ((4, 7, 6), -2, (1, 1, 2, 3)),
+    ((4, 7, 6), 1, (1, 1, 2, 3)),
+])
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_cat(shape, cat_dim, split, dim):
+    assert sum(split) == shape[cat_dim]
+    gaussian = random_gaussian(shape, dim, rank=dim + dim)
+    parts = []
+    end = 0
+    for size in split:
+        beg, end = end, end + size
+        if cat_dim == -1:
+            part = gaussian[..., beg: end]
+        elif cat_dim == -2:
+            part = gaussian[..., beg: end, :]
+        elif cat_dim == 1:
+            part = gaussian[:, beg: end]
+        else:
+            raise ValueError
+        parts.append(part)
+
+    actual = Gaussian.cat(parts, cat_dim)
+    assert actual.batch_shape == gaussian.batch_shape
+    assert_close(actual.log_normalizer, gaussian.log_normalizer)
+    assert_close(actual.info_vec, gaussian.info_vec)
+    assert_close(actual.precision, gaussian.precision)
+
+
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)])
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_logsumexp(batch_shape, dim):
+    gaussian = random_gaussian(batch_shape, dim, rank=dim + 1)
+    gaussian.info_vec.fill_(0)  # centered
+
+    num_samples = 10000
+    scale = 10
+    samples = torch.rand((num_samples, dim)) * scale - scale / 2
+    expected = gaussian.log_density(samples).mean() * scale ** dim
+    actual = gaussian.logsumexp()
+    assert_close(actual, expected)
+
+
+@pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)])
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)])
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_mvn_to_gaussian(sample_shape, batch_shape, dim):
+    loc = torch.randn(batch_shape + (dim,))
+    cov = torch.randn(batch_shape + (dim, dim))
+    cov = torch.matmul(cov, cov.transpose(-1, -2))
+    mvn = torch.distributions.MultivariateNormal(loc, cov)
+    gaussian = mvn_to_gaussian(mvn)
+    value = mvn.sample(sample_shape)
+    actual_log_prob = gaussian.log_density(value)
+    expected_log_prob = mvn.log_prob(value)
+    assert_close(actual_log_prob, expected_log_prob)
 
 
 @pytest.mark.parametrize("x_batch_shape,y_batch_shape", [

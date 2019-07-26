@@ -62,6 +62,17 @@ class Gaussian(object):
         precision = self.precision[index + (slice(None), slice(None))]
         return Gaussian(log_normalizer, info_vec, precision)
 
+    @staticmethod
+    def cat(parts, dim=0):
+        """
+        Concatenate a list of Gaussians along a given batch dimension.
+        """
+        if dim < 0:
+            dim += len(parts[0].batch_shape)
+        args = [torch.cat([getattr(g, attr) for g in parts], dim=dim)
+                for attr in ["log_normalizer", "info_vec", "precision"]]
+        return Gaussian(*args)
+
     def log_density(self, value):
         """
         Evaluate the log density of this Gaussian at a point value.
@@ -81,6 +92,9 @@ class Gaussian(object):
     def condition(self, value):
         """
         Condition this Gaussian on a trailing subset of its state.
+        This should satisfy::
+
+            x.condition(y).dim() == x.dim() - y.size(-1)
         """
         assert isinstance(value, torch.Tensor)
         assert value.size(-1) <= self.info_vec.size(-1)
@@ -96,8 +110,25 @@ class Gaussian(object):
         Integrates out all latent state.
         """
         n = self.info_vec.size(-1)
-        return (self.log_normalizer - 0.5 * n * math.log(2 * math.pi) +
+        return (self.log_normalizer + 0.5 * n * math.log(2 * math.pi) -
                 self.precision.cholesky().diagonal(dim1=-2, dim2=-1).log().sum(-1))
+
+
+def mvn_to_gaussian(mvn):
+    """
+    Convert a MultivaiateNormal distribution to a Gaussian.
+
+    :param ~torch.distributions.MultivariateNormal mvn: A multivariate normal distribution.
+    :return: An equivalent Gaussian object.
+    :rtype: Gaussian
+    """
+    assert isinstance(mvn, torch.distributions.MultivariateNormal)
+    n = mvn.loc.size(-1)
+    precision = mvn.precision_matrix
+    info_vec = precision.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
+    log_normalizer = (-0.5 * n * math.log(2 * math.pi) +
+                      precision.cholesky().diagonal(dim1=-2, dim2=-1).log().sum(-1))
+    return Gaussian(log_normalizer, info_vec, precision)
 
 
 def gaussian_tensordot(x, y, dims=0):
