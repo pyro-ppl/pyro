@@ -73,6 +73,22 @@ class Gaussian(object):
                 for attr in ["log_normalizer", "info_vec", "precision"]]
         return Gaussian(*args)
 
+    def pad(self, left=0, right=0):
+        """
+        Pad along event dimension.
+        """
+        lr = (left, right)
+        log_normalizer = self.log_normalizer
+        info_vec = pad(self.info_vec, lr)
+        precision = pad(self.precision, lr + lr)
+        return Gaussian(log_normalizer, info_vec, precision)
+
+    def __add__(self, other):
+        assert self.dim() == other.dim()
+        return Gaussian(self.log_normalizer + other.log_normalizer,
+                        self.info_vec + other.info_vec,
+                        self.precision + other.precision)
+
     def log_density(self, value):
         """
         Evaluate the log density of this Gaussian at a point value.
@@ -179,6 +195,4 @@ def gaussian_tensordot(x, y, dims=0):
         diff = 0.5 * nb * math.log(2 * math.pi) + 0.5 * Linvb.squeeze(-1).pow(2).sum(-1) - logdet
         log_normalizer = log_normalizer + diff
 
-    result = Gaussian(log_normalizer, info_vec, precision)
-    assert result.dim() == x.dim() + y.dim() - 2 * dims
-    return result
+    return Gaussian(log_normalizer, info_vec, precision)

@@ -181,6 +181,8 @@ class GaussianMRF(TorchDistribution):
         "Temporal Parallelization of Bayesian Filters and Smoothers"
         https://arxiv.org/pdf/1905.13002.pdf
 
+    :ivar int hidden_dim: The dimension of the hidden state.
+    :ivar int obs_dim: The dimension of the observed state.
     :param ~torch.distributions.MultivariateNormal initial_dist: A distribution
         over initial states. This should have batch_shape broadcastable to
         ``self.batch_shape``.  This should have event_shape ``(hidden_dim,)``.
@@ -209,6 +211,8 @@ class GaussianMRF(TorchDistribution):
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + (obs_dim,)
         super(GaussianMRF, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        self.hidden_dim = hidden_dim
+        self.obs_dim = obs_dim
         self._init = mvn_to_gaussian(initial_dist)
         self._trans = mvn_to_gaussian(transition_dist)
         self._obs = mvn_to_gaussian(observation_dist)
@@ -228,14 +232,14 @@ class GaussianMRF(TorchDistribution):
 
     def log_prob(self, value):
         # Combine observation and transition factors.
-        obs = self._obs.condition(value)
-        result = gaussian_tensordot(self._trans, obs, dims=0)
+        result = self._trans
+        result += self._obs.condition(value).pad(left=self.hidden_dim)
 
         # Eliminate time dimension.
         result = _sequential_gaussian_tensordot(result)
 
         # Combine initial factor.
-        result = gaussian_tensordot(self._init, result, dims=0)
+        result += self._init.pad(right=self.hidden_dim)
 
         # Marginalize out final state.
         result = result.logsumexp()

@@ -77,6 +77,29 @@ def test_cat(shape, cat_dim, split, dim):
     assert_close_gaussian(actual, gaussian)
 
 
+@pytest.mark.parametrize("shape", [(), (4,), (3, 2)])
+@pytest.mark.parametrize("dim", [1, 2, 3])
+@pytest.mark.parametrize("left", [0, 1, 2])
+@pytest.mark.parametrize("right", [0, 1, 2])
+def test_pad(shape, left, right, dim):
+    expected = random_gaussian(shape, dim)
+    padded = expected.pad(left=left, right=right)
+    assert padded.batch_shape == expected.batch_shape
+    assert padded.dim() == left + expected.dim() + right
+    mid = slice(left, padded.dim() - right)
+    assert_close(padded.info_vec[..., mid], expected.info_vec)
+    assert_close(padded.precision[..., mid, mid], expected.precision)
+
+
+@pytest.mark.parametrize("shape", [(), (4,), (3, 2)])
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_add(shape, dim):
+    x = random_gaussian(shape, dim)
+    y = random_gaussian(shape, dim)
+    value = torch.randn(dim)
+    assert_close((x + y).log_density(value), x.log_density(value) + y.log_density(value))
+
+
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)])
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_logsumexp(batch_shape, dim):
