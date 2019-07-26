@@ -14,9 +14,6 @@ class Gaussian(object):
     interpreted as a rank-deficient scaled Gaussian distribution. The precision
     matrix may have zero eigenvalues, thus it may be impossible to work
     directly with the covariance matrix.
-
-    TODO(fehiepsi) Possibly change precision to another more numerically stable
-    representation.
     """
     def __init__(self, log_normalizer, info_vec, precision):
         # NB: using info_vec instead of mean to deal with rank-deficient problem
@@ -99,34 +96,3 @@ def gaussian_tensordot(x, y, dims=0):
         log_normalizer = log_normalizer + diff
 
     return Gaussian(log_normalizer, info_vec, precision)
-
-
-def gaussian_contract(equation, x, y):
-    """
-    Compute the integral over two gaussians:
-
-        (x @ y)(a,c) = log(integral(exp(x(a,b) + y(b,c)), b))
-
-    where x is a gaussian over variables a,b, y is a gaussian over variables
-    b,c, and a,b,c can each be sets of zero or more variables.
-    """
-    assert isinstance(x, Gaussian)
-    assert isinstance(y, Gaussian)
-    inputs, output = equation.split("->")
-    x_input, y_input = inputs.split(",")
-    assert set(output) <= set(x_input + y_input)
-    assert len(x_input) == x.dim()
-    assert len(y_input) == y.dim()
-
-    # TODO(fehiepsi) Compute fused gaussian.
-    raise NotImplementedError("TODO")
-    result = "TODO"
-
-    # Sketch of precision computation:
-    # full_precision = (x.precision.pad(...) + y.precision.pad(...))
-    # full_cov = torch.inv(full_precision)
-    # cov = full_cov[selected_indices, selected_indices]
-    # precision = torch.inv(cov)
-
-    assert len(output) == result.dim()
-    return result
