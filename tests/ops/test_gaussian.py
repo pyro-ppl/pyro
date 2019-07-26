@@ -7,21 +7,7 @@ from torch.nn.functional import pad
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.gaussian import Gaussian, gaussian_tensordot, mvn_to_gaussian
 from tests.common import assert_close
-
-
-def random_gaussian(batch_shape, dim, rank):
-    """
-    Generate a random Gaussian for testing.
-    """
-    log_normalizer = torch.randn(batch_shape)
-    info_vec = torch.randn(batch_shape + (dim,))
-    rank = min(dim, rank)
-    samples = torch.randn(batch_shape + (dim, rank))
-    precision = torch.matmul(samples, samples.transpose(-2, -1))
-    result = Gaussian(log_normalizer, info_vec, precision)
-    assert result.dim() == dim
-    assert result.batch_shape == batch_shape
-    return result
+from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mvn
 
 
 @pytest.mark.parametrize("extra_shape", [(), (4,), (3, 2)], ids=str)
@@ -53,7 +39,7 @@ def test_expand(extra_shape, log_normalizer_shape, info_vec_shape, precision_sha
 ], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_reshape(old_shape, new_shape, dim):
-    gaussian = random_gaussian(old_shape, dim, rank=dim + dim)
+    gaussian = random_gaussian(old_shape, dim)
 
     # reshape to new
     new = gaussian.reshape(new_shape)
@@ -61,10 +47,7 @@ def test_reshape(old_shape, new_shape, dim):
 
     # reshape back to old
     g = new.reshape(old_shape)
-    assert g.batch_shape == gaussian.batch_shape
-    assert_close(g.log_normalizer, gaussian.log_normalizer)
-    assert_close(g.info_vec, gaussian.info_vec)
-    assert_close(g.precision, gaussian.precision)
+    assert_close_gaussian(g, gaussian)
 
 
 @pytest.mark.parametrize("shape,cat_dim,split", [
@@ -75,7 +58,7 @@ def test_reshape(old_shape, new_shape, dim):
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_cat(shape, cat_dim, split, dim):
     assert sum(split) == shape[cat_dim]
-    gaussian = random_gaussian(shape, dim, rank=dim + dim)
+    gaussian = random_gaussian(shape, dim)
     parts = []
     end = 0
     for size in split:
@@ -91,16 +74,13 @@ def test_cat(shape, cat_dim, split, dim):
         parts.append(part)
 
     actual = Gaussian.cat(parts, cat_dim)
-    assert actual.batch_shape == gaussian.batch_shape
-    assert_close(actual.log_normalizer, gaussian.log_normalizer)
-    assert_close(actual.info_vec, gaussian.info_vec)
-    assert_close(actual.precision, gaussian.precision)
+    assert_close_gaussian(actual, gaussian)
 
 
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)])
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_logsumexp(batch_shape, dim):
-    gaussian = random_gaussian(batch_shape, dim, rank=dim + 1)
+    gaussian = random_gaussian(batch_shape, dim)
     gaussian.info_vec.fill_(0)  # centered
 
     num_samples = 10000
@@ -115,10 +95,7 @@ def test_logsumexp(batch_shape, dim):
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)])
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_mvn_to_gaussian(sample_shape, batch_shape, dim):
-    loc = torch.randn(batch_shape + (dim,))
-    cov = torch.randn(batch_shape + (dim, dim))
-    cov = torch.matmul(cov, cov.transpose(-1, -2))
-    mvn = torch.distributions.MultivariateNormal(loc, cov)
+    mvn = random_mvn(batch_shape, dim)
     gaussian = mvn_to_gaussian(mvn)
     value = mvn.sample(sample_shape)
     actual_log_prob = gaussian.log_density(value)
@@ -149,6 +126,8 @@ def test_mvn_to_gaussian(sample_shape, batch_shape, dim):
 def test_gaussian_tensordot(dot_dims,
                             x_batch_shape, x_dim, x_rank,
                             y_batch_shape, y_dim, y_rank):
+    x_rank = min(x_rank, x_dim)
+    y_rank = min(y_rank, y_dim)
     x = random_gaussian(x_batch_shape, x_dim, x_rank)
     y = random_gaussian(y_batch_shape, y_dim, y_rank)
     na = x_dim - dot_dims

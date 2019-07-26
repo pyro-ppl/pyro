@@ -179,4 +179,6 @@ def gaussian_tensordot(x, y, dims=0):
         diff = 0.5 * nb * math.log(2 * math.pi) + 0.5 * Linvb.squeeze(-1).pow(2).sum(-1) - logdet
         log_normalizer = log_normalizer + diff
 
-    return Gaussian(log_normalizer, info_vec, precision)
+    result = Gaussian(log_normalizer, info_vec, precision)
+    assert result.dim() == x.dim() + y.dim() - dims
+    return result

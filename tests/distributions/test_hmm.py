@@ -4,11 +4,13 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.hmm import _sequential_logmatmulexp
+from pyro.distributions.hmm import _sequential_gaussian_tensordot, _sequential_logmatmulexp
 from pyro.distributions.util import broadcast_shape
 from pyro.infer import TraceEnum_ELBO, config_enumerate
+from pyro.ops.gaussian import gaussian_tensordot
 from pyro.ops.indexing import Vindex
 from tests.common import assert_close
+from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mvn
 
 
 @pytest.mark.parametrize('num_steps', list(range(1, 20)))
@@ -29,6 +31,22 @@ def test_sequential_logmatmulexp(batch_shape, state_dim, num_steps):
                 '->' + batch_symbols + state_symbols[0] + state_symbols[-1])
     expected = opt_einsum.contract(equation, *operands, backend='pyro.ops.einsum.torch_log')
     assert_close(actual, expected)
+
+
+@pytest.mark.parametrize('num_steps', list(range(1, 20)))
+@pytest.mark.parametrize('state_dim', [1, 2, 3])
+@pytest.mark.parametrize('batch_shape', [(), (5,), (2, 4)], ids=str)
+def test_sequential_gaussian_tensordot(batch_shape, state_dim, num_steps):
+    g = random_gaussian(batch_shape + (num_steps,), state_dim + state_dim)
+    actual = _sequential_gaussian_tensordot(g)
+    assert actual.dim() == g.dim()
+    assert actual.batch_shape == batch_shape
+
+    # Check against hand computation.
+    expected = g[..., 0]
+    for t in range(1, num_steps):
+        expected = gaussian_tensordot(expected, g[..., t], state_dim)
+    assert_close_gaussian(actual, expected)
 
 
 @pytest.mark.parametrize('state_dim', [2, 3])
@@ -164,3 +182,37 @@ def test_diag_normal(num_steps):
     expected_loss = TraceEnum_ELBO().loss(model, empty_guide, data)
     actual_loss = -float(actual.sum())
     assert_close(actual_loss, expected_loss)
+
+
+@pytest.mark.parametrize('obs_dim', [1, 2, 3])
+@pytest.mark.parametrize('hidden_dim', [1, 2, 3])
+@pytest.mark.parametrize('init_shape,trans_shape,obs_shape', [
+    ((), (7,), ()),
+    ((), (), (7,)),
+    ((), (7,), (1,)),
+    ((), (1,), (7,)),
+    ((), (7,), (11, 7)),
+    ((), (11, 7), (7,)),
+    ((), (11, 7), (11, 7)),
+    ((11,), (7,), (7,)),
+    ((11,), (7,), (11, 7)),
+    ((11,), (11, 7), (7,)),
+    ((11,), (11, 7), (11, 7)),
+    ((4, 1, 1), (3, 1, 7), (2, 7)),
+], ids=str)
+def test_gaussian_mrf_shape(init_shape, trans_shape, obs_shape, hidden_dim, obs_dim):
+    init_dist = random_mvn(init_shape, hidden_dim)
+    trans_dist = random_mvn(trans_shape, hidden_dim + hidden_dim)
+    obs_dist = random_mvn(obs_shape, hidden_dim + obs_dim)
+    d = dist.GaussianMRF(init_dist, trans_dist, obs_dist)
+
+    shape = broadcast_shape(init_shape + (1,), trans_shape, obs_shape)
+    expected_batch_shape, time_shape = shape[:-1], shape[-1:]
+    expected_event_shape = time_shape + (obs_dim,)
+    assert d.batch_shape == expected_batch_shape
+    assert d.event_shape == expected_event_shape
+
+    data = obs_dist.expand(shape).sample()[..., hidden_dim:]
+    assert data.shape == d.shape()
+    actual = d.log_prob(data)
+    assert actual.shape == expected_batch_shape

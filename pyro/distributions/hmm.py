@@ -46,8 +46,9 @@ def _sequential_gaussian_tensordot(gaussian):
         x[..., 0] @ x[..., 1] @ ... @ x[..., T-1]
     """
     assert isinstance(gaussian, Gaussian)
+    assert gaussian.dim() % 2 == 0, "dim is not even"
     batch_shape = gaussian.batch_shape[:-1]
-    state_dim = gaussian.precision.size(-1) // 2
+    state_dim = gaussian.dim() // 2
     while gaussian.batch_shape[-1] > 1:
         time = gaussian.batch_shape[-1]
         even_time = time // 2 * 2
@@ -199,7 +200,7 @@ class GaussianMRF(TorchDistribution):
         assert isinstance(transition_dist, torch.distributions.MultivariateNormal)
         assert isinstance(observation_dist, torch.distributions.MultivariateNormal)
         hidden_dim = initial_dist.event_shape[0]
-        assert transition_dist.event_shape[0] == (hidden_dim, hidden_dim)
+        assert transition_dist.event_shape[0] == hidden_dim + hidden_dim
         obs_dim = observation_dist.event_shape[0] - hidden_dim
 
         shape = broadcast_shape(initial_dist.batch_shape + (1,),
