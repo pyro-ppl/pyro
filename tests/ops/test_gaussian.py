@@ -79,7 +79,7 @@ def test_gaussian_tensordot(dot_dims,
 
     # Assume a = c = 0, integrate out b
     # FIXME: this might be not a stable way to compute integral
-    num_samples = 200000
+    num_samples = 300000
     scale = 20
     # generate samples in [-10, 10]
     value_b = torch.rand((num_samples,) + z.batch_shape + (nb,)) * scale - scale / 2

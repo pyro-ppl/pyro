@@ -14,6 +14,13 @@ class Gaussian(object):
     interpreted as a rank-deficient scaled Gaussian distribution. The precision
     matrix may have zero eigenvalues, thus it may be impossible to work
     directly with the covariance matrix.
+
+    :param torch.Tensor log_normalizer: a normalization constant, which is mainly used to keep
+        track of normalization terms during contractions.
+    :param torch.Tensor info_vec: information vector, which is a scaled version of the mean
+        ``info_vec = precision @ mean``. We use this represention to make gaussian contraction
+        fast and stable.
+    :param torch.Tensor precision: precision matrix of this gaussian.
     """
     def __init__(self, log_normalizer, info_vec, precision):
         # NB: using info_vec instead of mean to deal with rank-deficient problem
@@ -36,6 +43,9 @@ class Gaussian(object):
     def log_density(self, value):
         """
         Evaluate the log density of this Gaussian at a point value.
+
+            `-0.5 * value.T @ precision @ value + value.T @ info_vec + log_normalizer`
+
         This is mainly used for testing.
         """
         if value.size(-1) == 0:
@@ -51,7 +61,7 @@ def gaussian_tensordot(x, y, dims=0):
     """
     Computes the integral over two gaussians:
 
-        (x @ y)(a,c) = log(integral(exp(x(a,b) + y(b,c)), b)),
+        `(x @ y)(a,c) = log(integral(exp(x(a,b) + y(b,c)), b))`,
 
     where `x` is a gaussian over variables (a,b), `y` is a gaussian over variables
     (b,c), (a,b,c) can each be sets of zero or more variables, and `dims` is the size of b.
