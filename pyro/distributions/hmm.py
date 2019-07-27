@@ -236,6 +236,7 @@ class GaussianMRF(TorchDistribution):
         result += self._obs.condition(value).pad(left=self.hidden_dim)
 
         # Eliminate time dimension.
+        result = result.expand(result.batch_shape)  # required by later .reshape()s
         result = _sequential_gaussian_tensordot(result)
 
         # Combine initial factor.
