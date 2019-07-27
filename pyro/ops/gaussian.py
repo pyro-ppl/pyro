@@ -99,15 +99,14 @@ class Gaussian(object):
         """
         Evaluate the log density of this Gaussian at a point value::
 
-            -0.5 * value.T @ precision @ value + value.T @ info_vec
-            -0.5 || chol(precision) \ info_vec ||^2 + log_normalizer
+            -0.5 * value.T @ precision @ value + value.T @ info_vec + log_normalizer
 
         This is mainly used for testing.
         """
         if value.size(-1) == 0:
             batch_shape = broadcast_shape(value.shape[:-1], self.batch_shape)
             return self.log_normalizer.expand(batch_shape)
-        result = (-0.5) * torch.matmul(self.precision, value.unsqueeze(-1)).squeeze(-1)
+        result = (-0.5) * self.precision.matmul(value.unsqueeze(-1)).squeeze(-1)
         result = result + self.info_vec
         result = (value * result).sum(-1)
         return result + self.log_normalizer
@@ -122,11 +121,20 @@ class Gaussian(object):
         assert isinstance(value, torch.Tensor)
         assert value.size(-1) <= self.info_vec.size(-1)
 
-        # FIXME this is bogus but has the right type:
         n = self.info_vec.size(-1) - value.size(-1)
-        info_vec = self.info_vec[..., :n]
-        precision = self.precision[..., :n, :n]
-        return Gaussian(self.log_normalizer, info_vec, precision)
+        info_a = self.info_vec[..., :n]
+        info_b = self.info_vec[..., n:]
+        P_aa = self.precision[..., :n, :n]
+        P_ab = self.precision[..., :n, n:]
+        P_bb = self.precision[..., n:, n:]
+        b = value
+
+        info_vec = info_a - P_ab.matmul(b.unsqueeze(-1)).squeeze(-1)
+        precision = P_aa
+        log_normalizer = (self.log_normalizer +
+                          -0.5 * P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) +
+                          b.mul(info_b).sum(-1))
+        return Gaussian(log_normalizer, info_vec, precision)
 
     def logsumexp(self):
         """

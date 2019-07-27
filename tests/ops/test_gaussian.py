@@ -100,6 +100,26 @@ def test_add(shape, dim):
     assert_close((x + y).log_density(value), x.log_density(value) + y.log_density(value))
 
 
+@pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("left", [1, 2, 3])
+@pytest.mark.parametrize("right", [1, 2, 3])
+def test_condition(sample_shape, batch_shape, left, right):
+    dim = left + right
+    gaussian = random_gaussian(batch_shape, dim)
+    gaussian.precision += torch.eye(dim) * 0.1
+    value = torch.randn(sample_shape + (1,) * len(batch_shape) + (dim,))
+    left_value, right_value = value[..., :left], value[..., left:]
+
+    conditioned = gaussian.condition(right_value)
+    assert conditioned.batch_shape == sample_shape + gaussian.batch_shape
+    assert conditioned.dim() == left
+
+    actual = conditioned.log_density(left_value)
+    expected = gaussian.log_density(value)
+    assert_close(actual, expected)
+
+
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_logsumexp(batch_shape, dim):
