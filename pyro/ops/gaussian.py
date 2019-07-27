@@ -110,12 +110,7 @@ class Gaussian(object):
         result = (-0.5) * torch.matmul(self.precision, value.unsqueeze(-1)).squeeze(-1)
         result = result + self.info_vec
         result = (value * result).sum(-1)
-
-        # FIXME is this correct?
-        sqrt_P = self.precision.cholesky(upper=True)
-        sqrt_P_u = self.info_vec.unsqueeze(-1).triangular_solve(sqrt_P).solution.squeeze(-1)
-        u_P_u = sqrt_P_u.pow(2).sum(-1)
-        return result + self.log_normalizer - 0.5 * u_P_u
+        return result + self.log_normalizer
 
     def condition(self, value):
         """
@@ -138,8 +133,11 @@ class Gaussian(object):
         Integrates out all latent state.
         """
         n = self.info_vec.size(-1)
-        return (self.log_normalizer + 0.5 * n * math.log(2 * math.pi) -
-                self.precision.cholesky().diagonal(dim1=-2, dim2=-1).log().sum(-1))
+        chol_P = self.precision.cholesky(upper=True)
+        chol_P_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P).solution.squeeze(-1)
+        u_P_u = chol_P_u.pow(2).sum(-1)
+        return (self.log_normalizer + 0.5 * n * math.log(2 * math.pi) + 0.5 * u_P_u -
+                chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1))
 
 
 def mvn_to_gaussian(mvn):
@@ -155,6 +153,7 @@ def mvn_to_gaussian(mvn):
     precision = mvn.precision_matrix
     info_vec = precision.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
     log_normalizer = (-0.5 * n * math.log(2 * math.pi) +
+                      -0.5 * (info_vec * mvn.loc).sum(-1) +
                       precision.cholesky().diagonal(dim1=-2, dim2=-1).log().sum(-1))
     return Gaussian(log_normalizer, info_vec, precision)
 

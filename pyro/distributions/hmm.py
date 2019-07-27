@@ -239,7 +239,7 @@ class GaussianMRF(TorchDistribution):
         result = _sequential_gaussian_tensordot(result)
 
         # Combine initial factor.
-        result += self._init.pad(right=self.hidden_dim)
+        result = gaussian_tensordot(self._init, result, dims=self.hidden_dim)
 
         # Marginalize out final state.
         result = result.logsumexp()
