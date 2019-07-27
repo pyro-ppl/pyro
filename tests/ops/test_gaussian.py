@@ -83,7 +83,7 @@ def test_cat(shape, cat_dim, split, dim):
 @pytest.mark.parametrize("right", [0, 1, 2])
 def test_pad(shape, left, right, dim):
     expected = random_gaussian(shape, dim)
-    padded = expected.pad(left=left, right=right)
+    padded = expected.event_pad(left=left, right=right)
     assert padded.batch_shape == expected.batch_shape
     assert padded.dim() == left + expected.dim() + right
     mid = slice(left, padded.dim() - right)
@@ -131,7 +131,7 @@ def test_logsumexp(batch_shape, dim):
     scale = 10
     samples = torch.rand((num_samples,) + (1,) * len(batch_shape) + (dim,)) * scale - scale / 2
     expected = gaussian.log_density(samples).logsumexp(0) + math.log(scale ** dim / num_samples)
-    actual = gaussian.logsumexp()
+    actual = gaussian.event_logsumexp()
     assert_close(actual, expected, atol=0.05, rtol=0.05)
 
 

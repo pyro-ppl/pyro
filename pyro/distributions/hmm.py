@@ -233,7 +233,7 @@ class GaussianMRF(TorchDistribution):
     def log_prob(self, value):
         # Combine observation and transition factors.
         result = self._trans
-        result += self._obs.condition(value).pad(left=self.hidden_dim)
+        result += self._obs.condition(value).event_pad(left=self.hidden_dim)
 
         # Eliminate time dimension.
         result = result.expand(result.batch_shape)  # required by later .reshape()s
@@ -243,5 +243,5 @@ class GaussianMRF(TorchDistribution):
         result = gaussian_tensordot(self._init, result, dims=self.hidden_dim)
 
         # Marginalize out final state.
-        result = result.logsumexp()
+        result = result.event_logsumexp()
         return result

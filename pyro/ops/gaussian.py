@@ -76,7 +76,7 @@ class Gaussian(object):
                 for attr in ["log_normalizer", "info_vec", "precision"]]
         return Gaussian(*args)
 
-    def pad(self, left=0, right=0):
+    def event_pad(self, left=0, right=0):
         """
         Pad along event dimension.
         """
@@ -86,10 +86,21 @@ class Gaussian(object):
         precision = pad(self.precision, lr + lr)
         return Gaussian(log_normalizer, info_vec, precision)
 
+    def event_permute(self, perm):
+        """
+        Permute along event dimension.
+        """
+        assert isinstance(perm, torch.Tensor)
+        assert perm.shape == (self.dim(),)
+        info_vec = self.info_vec[..., perm]
+        precision = self.precision[..., perm][..., perm, :]
+        return Gaussian(self.log_normalizer, info_vec, precision)
+
     def __add__(self, other):
         """
         Adds two Gaussians in log-density space.
         """
+        assert isinstance(other, Gaussian)
         assert self.dim() == other.dim()
         return Gaussian(self.log_normalizer + other.log_normalizer,
                         self.info_vec + other.info_vec,
@@ -136,13 +147,13 @@ class Gaussian(object):
                           b.mul(info_b).sum(-1))
         return Gaussian(log_normalizer, info_vec, precision)
 
-    def logsumexp(self):
+    def event_logsumexp(self):
         """
-        Integrates out all latent state.
+        Integrates out all latent state (i.e. operating on event dimensions).
         """
         n = self.info_vec.size(-1)
-        chol_P = self.precision.cholesky(upper=True)
-        chol_P_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P).solution.squeeze(-1)
+        chol_P = self.precision.cholesky()
+        chol_P_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
         u_P_u = chol_P_u.pow(2).sum(-1)
         return (self.log_normalizer + 0.5 * n * math.log(2 * math.pi) + 0.5 * u_P_u -
                 chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1))
