@@ -97,9 +97,10 @@ class Gaussian(object):
 
     def log_density(self, value):
         """
-        Evaluate the log density of this Gaussian at a point value.
+        Evaluate the log density of this Gaussian at a point value::
 
-            `-0.5 * value.T @ precision @ value + value.T @ info_vec + log_normalizer`
+            -0.5 * value.T @ precision @ value + value.T @ info_vec
+            -0.5 || chol(precision) \ info_vec ||^2 + log_normalizer
 
         This is mainly used for testing.
         """
@@ -109,7 +110,12 @@ class Gaussian(object):
         result = (-0.5) * torch.matmul(self.precision, value.unsqueeze(-1)).squeeze(-1)
         result = result + self.info_vec
         result = (value * result).sum(-1)
-        return result + self.log_normalizer
+
+        # FIXME is this correct?
+        sqrt_P = self.precision.cholesky(upper=True)
+        sqrt_P_u = self.info_vec.unsqueeze(-1).triangular_solve(sqrt_P).solution.squeeze(-1)
+        u_P_u = sqrt_P_u.pow(2).sum(-1)
+        return result + self.log_normalizer - 0.5 * u_P_u
 
     def condition(self, value):
         """
