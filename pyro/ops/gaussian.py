@@ -127,7 +127,15 @@ class Gaussian(object):
         Condition this Gaussian on a trailing subset of its state.
         This should satisfy::
 
-            x.condition(y).dim() == x.dim() - y.size(-1)
+            g.condition(y).dim() == g.dim() - y.size(-1)
+
+        Note that since this is a non-normalized Gaussian, we include the
+        density of ``y`` in the result. Thus :meth:`condition` is similar to a
+        ``functools.partial`` binding of arguments::
+
+            left = x[..., :n]
+            right = x[..., n:]
+            g.log_density(x) == g.condition(right).log_density(left)
         """
         assert isinstance(value, torch.Tensor)
         assert value.size(-1) <= self.info_vec.size(-1)

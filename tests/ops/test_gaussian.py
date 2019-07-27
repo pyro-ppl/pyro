@@ -23,7 +23,7 @@ def test_expand(extra_shape, log_normalizer_shape, info_vec_shape, precision_sha
     rank = dim + dim
     log_normalizer = torch.randn(log_normalizer_shape)
     info_vec = torch.randn(info_vec_shape + (dim,))
-    precision = torch.randn(info_vec_shape + (dim, rank))
+    precision = torch.randn(precision_shape + (dim, rank))
     precision = precision.matmul(precision.transpose(-1, -2))
     gaussian = Gaussian(log_normalizer, info_vec, precision)
 
