@@ -124,7 +124,7 @@ def test_condition(sample_shape, batch_shape, left, right):
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_logsumexp(batch_shape, dim):
     gaussian = random_gaussian(batch_shape, dim)
-    gaussian.info_vec.fill_(0)  # centered
+    gaussian.info_vec *= 0.1  # approximately centered
     gaussian.precision += torch.eye(dim) * 0.1
 
     num_samples = 200000
