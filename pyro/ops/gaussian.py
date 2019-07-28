@@ -191,7 +191,8 @@ class Gaussian(object):
 
         log_normalizer = (self.log_normalizer +
                           0.5 * n_b * math.log(2 * math.pi) -
-                          P_b.diagonal(dim1=-2, dim2=-1).log().sum(-1))
+                          P_b.diagonal(dim1=-2, dim2=-1).log().sum(-1) +
+                          0.5 * b_tmp.squeeze(-1).pow(2).sum(-1))
         return Gaussian(log_normalizer, info_vec, precision)
 
     def event_logsumexp(self):
