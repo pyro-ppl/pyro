@@ -207,7 +207,7 @@ def test_gaussian_mrf_shape(init_shape, trans_shape, obs_shape, hidden_dim, obs_
     init_dist = random_mvn(init_shape, hidden_dim)
     trans_dist = random_mvn(trans_shape, hidden_dim + hidden_dim)
     obs_dist = random_mvn(obs_shape, hidden_dim + obs_dim)
-    d = dist.GaussianGaussianMRF(init_dist, trans_dist, obs_dist)
+    d = dist.GaussianMRF(init_dist, trans_dist, obs_dist)
 
     shape = broadcast_shape(init_shape + (1,), trans_shape, obs_shape)
     expected_batch_shape, time_shape = shape[:-1], shape[-1:]
@@ -230,7 +230,7 @@ def test_gaussian_mrf_log_prob(sample_shape, batch_shape, num_steps, hidden_dim,
     init_dist = random_mvn(batch_shape, hidden_dim)
     trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim + hidden_dim)
     obs_dist = random_mvn(batch_shape + (num_steps,), hidden_dim + obs_dim)
-    d = dist.GaussianGaussianMRF(init_dist, trans_dist, obs_dist)
+    d = dist.GaussianMRF(init_dist, trans_dist, obs_dist)
     data = obs_dist.sample(sample_shape)[..., hidden_dim:]
     assert data.shape == sample_shape + d.shape()
     actual_log_prob = d.log_prob(data)
@@ -290,7 +290,7 @@ def test_gaussian_mrf_log_prob_block_diag(sample_shape, batch_shape, num_steps, 
 
     init_dist = random_mvn(batch_shape, hidden_dim)
     trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim + hidden_dim)
-    d = dist.GaussianGaussianMRF(init_dist, trans_dist, obs_dist)
+    d = dist.GaussianMRF(init_dist, trans_dist, obs_dist)
     data = obs_dist.sample(sample_shape)[..., hidden_dim:]
     assert data.shape == sample_shape + d.shape()
     actual_log_prob = d.log_prob(data)

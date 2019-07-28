@@ -155,7 +155,7 @@ class DiscreteHMM(TorchDistribution):
         return result
 
 
-class GaussianGaussianMRF(TorchDistribution):
+class GaussianMRF(TorchDistribution):
     """
     Temporal Markov Random Field with Gaussian factors for initial, transition,
     and observation distributions. This adapts [1] to parallelize over time to
@@ -210,7 +210,7 @@ class GaussianGaussianMRF(TorchDistribution):
                                 observation_dist.batch_shape)
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + (obs_dim,)
-        super(GaussianGaussianMRF, self).__init__(batch_shape, event_shape, validate_args=validate_args)
+        super(GaussianMRF, self).__init__(batch_shape, event_shape, validate_args=validate_args)
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
         self._init = mvn_to_gaussian(initial_dist)
@@ -218,7 +218,7 @@ class GaussianGaussianMRF(TorchDistribution):
         self._obs = mvn_to_gaussian(observation_dist)
 
     def expand(self, batch_shape, _instance=None):
-        new = self._get_checked_instance(GaussianGaussianMRF, _instance)
+        new = self._get_checked_instance(GaussianMRF, _instance)
         batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
         # We only need to expand one of the inputs, since batch_shape is determined
         # by broadcasting all three. To save computation in _sequential_gaussian_tensordot(),
@@ -226,7 +226,7 @@ class GaussianGaussianMRF(TorchDistribution):
         new._init = self._init.expand(batch_shape)
         new._trans = self._trans
         new._obs = self._obs
-        super(GaussianGaussianMRF, new).__init__(batch_shape, self.event_shape, validate_args=False)
+        super(GaussianMRF, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new.validate_args = self.__dict__.get('_validate_args')
         return new
 
