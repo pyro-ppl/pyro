@@ -265,9 +265,10 @@ def test_gaussian_mrf_log_prob(sample_shape, batch_shape, num_steps, hidden_dim,
     assert init.dim() == hidden_dim
     assert unrolled_trans.dim() == (1 + T) * hidden_dim
     assert unrolled_obs.dim() == T * (hidden_dim + obs_dim)
-    joint = gaussian_tensordot(init, unrolled_trans, hidden_dim)
-    joint = gaussian_tensordot(joint, unrolled_obs, T * hidden_dim)
-    expected_log_prob = joint.log_density(unrolled_data)
+    logp_h = gaussian_tensordot(init, unrolled_trans, hidden_dim)
+    logp_oh = gaussian_tensordot(logp_h, unrolled_obs, T * hidden_dim)
+    logp_h += unrolled_obs.marginalize(slice(T * hidden_dim))
+    expected_log_prob = logp_oh.log_density(unrolled_data) - logp_h.event_logsumexp()
     assert_close(actual_log_prob, expected_log_prob)
 
 
@@ -283,10 +284,7 @@ def test_gaussian_mrf_log_prob_block_diag(sample_shape, batch_shape, num_steps, 
     precision[..., :hidden_dim, hidden_dim:] = 0
     precision[..., hidden_dim:, :hidden_dim] = 0
     obs_dist = dist.MultivariateNormal(obs_dist.loc, precision_matrix=precision)
-    obs_dist_hidden = dist.MultivariateNormal(
-        obs_dist.loc[..., :hidden_dim],
-        precision_matrix=precision[..., :hidden_dim, :hidden_dim])
-    obs_dist_obs = dist.MultivariateNormal(
+    marginal_obs_dist = dist.MultivariateNormal(
         obs_dist.loc[..., hidden_dim:],
         precision_matrix=precision[..., hidden_dim:, hidden_dim:])
 
@@ -296,16 +294,5 @@ def test_gaussian_mrf_log_prob_block_diag(sample_shape, batch_shape, num_steps, 
     data = obs_dist.sample(sample_shape)[..., hidden_dim:]
     assert data.shape == sample_shape + d.shape()
     actual_log_prob = d.log_prob(data)
-
-    # Since obs and hidden are independent, we can compute them separately.
-    init = mvn_to_gaussian(init_dist)
-    trans = mvn_to_gaussian(trans_dist)
-    obs = mvn_to_gaussian(obs_dist_hidden)
-    hidden_part = obs.event_pad(left=hidden_dim)
-    hidden_part += trans
-    hidden_part = _sequential_gaussian_tensordot(hidden_part)
-    hidden_part = gaussian_tensordot(init, hidden_part, hidden_dim)
-    hidden_part = hidden_part.event_logsumexp()
-    obs_part = obs_dist_obs.log_prob(data).sum(-1)
-    expected_log_prob = hidden_part + obs_part
+    expected_log_prob = marginal_obs_dist.log_prob(data).sum(-1)
     assert_close(actual_log_prob, expected_log_prob)

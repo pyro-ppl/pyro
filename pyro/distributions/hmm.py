@@ -231,17 +231,26 @@ class GaussianGaussianMRF(TorchDistribution):
         return new
 
     def log_prob(self, value):
+        # We compute a normalized distribution as p(obs,hidden) / p(hidden).
+        logp_oh = self._trans
+        logp_h = self._trans
+
         # Combine observation and transition factors.
-        result = self._trans
-        result += self._obs.condition(value).event_pad(left=self.hidden_dim)
+        logp_oh += self._obs.condition(value).event_pad(left=self.hidden_dim)
+        logp_h += self._obs.marginalize(slice(self.hidden_dim)) \
+                           .event_pad(left=self.hidden_dim)
+
+        # Concatenate p(obs,hidden) and p(hidden) into a single Gaussian.
+        batch_shape = (1,) + logp_oh.batch_shape
+        logp = Gaussian.cat([logp_oh.expand(batch_shape),
+                             logp_h.expand(batch_shape)])
 
         # Eliminate time dimension.
-        result = result.expand(result.batch_shape)  # required by later .reshape()s
-        result = _sequential_gaussian_tensordot(result)
+        logp = _sequential_gaussian_tensordot(logp)
 
         # Combine initial factor.
-        result = gaussian_tensordot(self._init, result, dims=self.hidden_dim)
+        logp = gaussian_tensordot(self._init, logp, dims=self.hidden_dim)
 
         # Marginalize out final state.
-        result = result.event_logsumexp()
-        return result
+        logp_oh, logp_h = logp.event_logsumexp()
+        return logp_oh - logp_h  # = log( p(obs,hidden) / p(hidden) )

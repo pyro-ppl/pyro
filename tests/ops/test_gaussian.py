@@ -100,6 +100,30 @@ def test_add(shape, dim):
     assert_close((x + y).log_density(value), x.log_density(value) + y.log_density(value))
 
 
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("left", [1, 2, 3])
+@pytest.mark.parametrize("right", [1, 2, 3])
+def test_marginalize(batch_shape, left, right):
+    dim = left + right
+    g = random_gaussian(batch_shape, dim)
+    assert_close(g.marginalize(slice(left)).event_logsumexp(),
+                 g.event_logsumexp())
+    assert_close(g.marginalize(slice(0, left)).event_logsumexp(),
+                 g.event_logsumexp())
+
+
+@pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("left", [1, 2, 3])
+@pytest.mark.parametrize("right", [1, 2, 3])
+def test_marginalize_condition(sample_shape, batch_shape, left, right):
+    dim = left + right
+    g = random_gaussian(batch_shape, dim)
+    x = torch.randn(sample_shape + (1,) * len(batch_shape) + (right,))
+    assert_close(g.marginalize(slice(left)).log_prob(x),
+                 g.condition(x).event_logsumexp())
+
+
 @pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("left", [1, 2, 3])

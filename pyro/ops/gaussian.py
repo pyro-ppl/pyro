@@ -140,7 +140,7 @@ class Gaussian(object):
         assert isinstance(value, torch.Tensor)
         assert value.size(-1) <= self.info_vec.size(-1)
 
-        n = self.info_vec.size(-1) - value.size(-1)
+        n = self.dim() - value.size(-1)
         info_a = self.info_vec[..., :n]
         info_b = self.info_vec[..., n:]
         P_aa = self.precision[..., :n, :n]
@@ -155,11 +155,32 @@ class Gaussian(object):
                           b.mul(info_b).sum(-1))
         return Gaussian(log_normalizer, info_vec, precision)
 
+    def marginalize(self, slice_):
+        """
+        Slice along event dimension, marginalizing out dropped variables.
+        This should satisfy for a slice ``s``::
+
+            g.marginalize(s).event_logsumexp() = g.logsumexp()
+
+        and for data ``x``:
+
+            g.condition(x).event_logsumexp()
+              = g.marginalize(slice(0, x.dim()).log_density(x)
+        """
+        assert isinstance(slice_, slice), "advanced indexing is not supported"
+        info_vec = self.info_vec[..., slice_]  # FIXME is this right?
+        precision = self.precision[..., slice_, slice_]
+        n = info_vec.size(-1)
+        log_normalizer = (self.log_normalizer +
+                          0.5 * (self.dim() - n) * math.log(2 * math.pi) +
+                          0)  # FIXME add missing logdet terms
+        return Gaussian(log_normalizer, info_vec, precision)
+
     def event_logsumexp(self):
         """
         Integrates out all latent state (i.e. operating on event dimensions).
         """
-        n = self.info_vec.size(-1)
+        n = self.dim()
         chol_P = self.precision.cholesky()
         chol_P_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
         u_P_u = chol_P_u.pow(2).sum(-1)
