@@ -155,25 +155,37 @@ class Gaussian(object):
                           b.mul(info_b).sum(-1))
         return Gaussian(log_normalizer, info_vec, precision)
 
-    def marginalize(self, slice_):
+    def marginalize(self, left=0, right=0):
         """
-        Slice along event dimension, marginalizing out dropped variables.
-        This should satisfy for a slice ``s``::
+        Marginalizing out variables on either side of the event dimension::
 
-            g.marginalize(s).event_logsumexp() = g.logsumexp()
+            g.marginalize(left=n).event_logsumexp() = g.logsumexp()
+            g.marginalize(right=n).event_logsumexp() = g.logsumexp()
 
         and for data ``x``:
 
             g.condition(x).event_logsumexp()
-              = g.marginalize(slice(0, x.dim()).log_density(x)
+              = g.marginalize(left=g.dim() - x.size(-1)).log_density(x)
         """
-        assert isinstance(slice_, slice), "advanced indexing is not supported"
-        info_vec = self.info_vec[..., slice_]  # FIXME is this right?
-        precision = self.precision[..., slice_, slice_]
-        n = info_vec.size(-1)
+        if left == 0 and right == 0:
+            return self
+        if left > 0 and right > 0:
+            raise NotImplementedError
+        n = self.dim()
+        n_b = left + right
+        a = slice(left, n - right)  # preserved
+        b = slice(None, left) if left else slice(n - right, None)
+        info_vec = self.info_vec[..., a]  # FIXME
+        P_aa = self.precision[..., a, a]
+        P_ba = self.precision[..., b, a]
+        P_bb = self.precision[..., b, b]
+        P_b = P_bb.cholesky()
+        P_a = P_ba.triangular_solve(P_b, upper=False).solution
+        precision = P_aa - P_a.transpose(-1, -2).matmul(P_a)
+
         log_normalizer = (self.log_normalizer +
-                          0.5 * (self.dim() - n) * math.log(2 * math.pi) +
-                          0)  # FIXME add missing logdet terms
+                          0.5 * n_b * math.log(2 * math.pi) -
+                          P_b.diagonal(dim1=-2, dim2=-1).log().sum(-1))
         return Gaussian(log_normalizer, info_vec, precision)
 
     def event_logsumexp(self):

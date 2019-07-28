@@ -237,8 +237,7 @@ class GaussianGaussianMRF(TorchDistribution):
 
         # Combine observation and transition factors.
         logp_oh += self._obs.condition(value).event_pad(left=self.hidden_dim)
-        logp_h += self._obs.marginalize(slice(self.hidden_dim)) \
-                           .event_pad(left=self.hidden_dim)
+        logp_h += self._obs.marginalize(right=self.obs_dim).event_pad(left=self.hidden_dim)
 
         # Concatenate p(obs,hidden) and p(hidden) into a single Gaussian.
         batch_shape = (1,) + logp_oh.batch_shape
