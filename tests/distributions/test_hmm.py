@@ -267,7 +267,7 @@ def test_gaussian_mrf_log_prob(sample_shape, batch_shape, num_steps, hidden_dim,
     assert unrolled_obs.dim() == T * (hidden_dim + obs_dim)
     logp_h = gaussian_tensordot(init, unrolled_trans, hidden_dim)
     logp_oh = gaussian_tensordot(logp_h, unrolled_obs, T * hidden_dim)
-    logp_h += unrolled_obs.marginalize(slice(T * hidden_dim))
+    logp_h += unrolled_obs.marginalize(right=T * obs_dim)
     expected_log_prob = logp_oh.log_density(unrolled_data) - logp_h.event_logsumexp()
     assert_close(actual_log_prob, expected_log_prob)
 

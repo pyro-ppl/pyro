@@ -175,13 +175,19 @@ class Gaussian(object):
         n_b = left + right
         a = slice(left, n - right)  # preserved
         b = slice(None, left) if left else slice(n - right, None)
-        info_vec = self.info_vec[..., a]  # FIXME
+
         P_aa = self.precision[..., a, a]
         P_ba = self.precision[..., b, a]
         P_bb = self.precision[..., b, b]
         P_b = P_bb.cholesky()
         P_a = P_ba.triangular_solve(P_b, upper=False).solution
-        precision = P_aa - P_a.transpose(-1, -2).matmul(P_a)
+        P_at = P_a.transpose(-1, -2)
+        precision = P_aa - P_at.matmul(P_a)
+
+        info_a = self.info_vec[..., a]
+        info_b = self.info_vec[..., b]
+        b_tmp = info_b.unsqueeze(-1).triangular_solve(P_b, upper=False).solution
+        info_vec = info_a - P_at.matmul(b_tmp).squeeze(-1)
 
         log_normalizer = (self.log_normalizer +
                           0.5 * n_b * math.log(2 * math.pi) -
