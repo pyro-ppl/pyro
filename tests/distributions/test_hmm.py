@@ -207,7 +207,7 @@ def test_gaussian_mrf_shape(init_shape, trans_shape, obs_shape, hidden_dim, obs_
     init_dist = random_mvn(init_shape, hidden_dim)
     trans_dist = random_mvn(trans_shape, hidden_dim + hidden_dim)
     obs_dist = random_mvn(obs_shape, hidden_dim + obs_dim)
-    d = dist.GaussianMRF(init_dist, trans_dist, obs_dist)
+    d = dist.GaussianGaussianMRF(init_dist, trans_dist, obs_dist)
 
     shape = broadcast_shape(init_shape + (1,), trans_shape, obs_shape)
     expected_batch_shape, time_shape = shape[:-1], shape[-1:]
@@ -230,13 +230,19 @@ def test_gaussian_mrf_log_prob(sample_shape, batch_shape, num_steps, hidden_dim,
     init_dist = random_mvn(batch_shape, hidden_dim)
     trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim + hidden_dim)
     obs_dist = random_mvn(batch_shape + (num_steps,), hidden_dim + obs_dim)
-    d = dist.GaussianMRF(init_dist, trans_dist, obs_dist)
+    d = dist.GaussianGaussianMRF(init_dist, trans_dist, obs_dist)
     data = obs_dist.sample(sample_shape)[..., hidden_dim:]
     assert data.shape == sample_shape + d.shape()
     actual_log_prob = d.log_prob(data)
 
     # Compare against hand-computed density.
-    # We will construct enormous unrolled joint gaussians.
+    # We will construct enormous unrolled joint gaussians with shapes:
+    #       t | 0 1 2 3 1 2 3      T = 3 in this example
+    #   ------+-----------------------------------------
+    #    init | H
+    #   trans | H H H H            H = hidden
+    #     obs |   H H H O O O      O = observed
+    # and then combine these using gaussian_tensordot().
     T = num_steps
     init = mvn_to_gaussian(init_dist)
     trans = mvn_to_gaussian(trans_dist)
@@ -250,7 +256,7 @@ def test_gaussian_mrf_log_prob(sample_shape, batch_shape, num_steps, hidden_dim,
         obs[..., t].event_pad(left=t * obs.dim(), right=(T - t - 1) * obs.dim())
         for t in range(T)
     ])
-    # Permute from HOHOHO to HHHOOO.
+    # Permute obs from HOHOHO to HHHOOO.
     perm = torch.cat([torch.arange(hidden_dim) + t * obs.dim() for t in range(T)] +
                      [torch.arange(obs_dim) + hidden_dim + t * obs.dim() for t in range(T)])
     unrolled_obs = unrolled_obs.event_permute(perm)
@@ -262,4 +268,44 @@ def test_gaussian_mrf_log_prob(sample_shape, batch_shape, num_steps, hidden_dim,
     joint = gaussian_tensordot(init, unrolled_trans, hidden_dim)
     joint = gaussian_tensordot(joint, unrolled_obs, T * hidden_dim)
     expected_log_prob = joint.log_density(unrolled_data)
+    assert_close(actual_log_prob, expected_log_prob)
+
+
+@pytest.mark.parametrize('sample_shape', [(), (5,)], ids=str)
+@pytest.mark.parametrize('batch_shape', [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize('obs_dim', [1, 2])
+@pytest.mark.parametrize('hidden_dim', [1, 2])
+@pytest.mark.parametrize('num_steps', [1, 2, 3, 4])
+def test_gaussian_mrf_log_prob_block_diag(sample_shape, batch_shape, num_steps, hidden_dim, obs_dim):
+    # Construct a block-diagonal obs dist, so observations are independent of hidden state.
+    obs_dist = random_mvn(batch_shape + (num_steps,), hidden_dim + obs_dim)
+    precision = obs_dist.precision_matrix
+    precision[..., :hidden_dim, hidden_dim:] = 0
+    precision[..., hidden_dim:, :hidden_dim] = 0
+    obs_dist = dist.MultivariateNormal(obs_dist.loc, precision_matrix=precision)
+    obs_dist_hidden = dist.MultivariateNormal(
+        obs_dist.loc[..., :hidden_dim],
+        precision_matrix=precision[..., :hidden_dim, :hidden_dim])
+    obs_dist_obs = dist.MultivariateNormal(
+        obs_dist.loc[..., hidden_dim:],
+        precision_matrix=precision[..., hidden_dim:, hidden_dim:])
+
+    init_dist = random_mvn(batch_shape, hidden_dim)
+    trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim + hidden_dim)
+    d = dist.GaussianGaussianMRF(init_dist, trans_dist, obs_dist)
+    data = obs_dist.sample(sample_shape)[..., hidden_dim:]
+    assert data.shape == sample_shape + d.shape()
+    actual_log_prob = d.log_prob(data)
+
+    # Since obs and hidden are independent, we can compute them separately.
+    init = mvn_to_gaussian(init_dist)
+    trans = mvn_to_gaussian(trans_dist)
+    obs = mvn_to_gaussian(obs_dist_hidden)
+    hidden_part = obs.event_pad(left=hidden_dim)
+    hidden_part += trans
+    hidden_part = _sequential_gaussian_tensordot(hidden_part)
+    hidden_part = gaussian_tensordot(init, hidden_part, hidden_dim)
+    hidden_part = hidden_part.event_logsumexp()
+    obs_part = obs_dist_obs.log_prob(data).sum(-1)
+    expected_log_prob = hidden_part + obs_part
     assert_close(actual_log_prob, expected_log_prob)

@@ -98,9 +98,9 @@ GammaPoisson
     :undoc-members:
     :show-inheritance:
 
-GaussianMRF
+GaussianGaussianMRF
 --------------------
-.. autoclass:: pyro.distributions.GaussianMRF
+.. autoclass:: pyro.distributions.GaussianGaussianMRF
     :members:
     :undoc-members:
     :show-inheritance:

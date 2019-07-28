@@ -42,14 +42,14 @@ class Gaussian(object):
                                self.precision.shape[:-2])
 
     def expand(self, batch_shape):
-        n = self.info_vec.size(-1)
+        n = self.dim()
         log_normalizer = self.log_normalizer.expand(batch_shape)
         info_vec = self.info_vec.expand(batch_shape + (n,))
         precision = self.precision.expand(batch_shape + (n, n))
         return Gaussian(log_normalizer, info_vec, precision)
 
     def reshape(self, batch_shape):
-        n = self.info_vec.size(-1)
+        n = self.dim()
         log_normalizer = self.log_normalizer.reshape(batch_shape)
         info_vec = self.info_vec.reshape(batch_shape + (n,))
         precision = self.precision.reshape(batch_shape + (n, n))
@@ -180,8 +180,8 @@ def mvn_to_gaussian(mvn):
     precision = mvn.precision_matrix
     info_vec = precision.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
     log_normalizer = (-0.5 * n * math.log(2 * math.pi) +
-                      -0.5 * (info_vec * mvn.loc).sum(-1) +
-                      precision.cholesky().diagonal(dim1=-2, dim2=-1).log().sum(-1))
+                      -0.5 * (info_vec * mvn.loc).sum(-1) -
+                      mvn.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1))
     return Gaussian(log_normalizer, info_vec, precision)
 
 
