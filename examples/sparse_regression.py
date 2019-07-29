@@ -99,9 +99,9 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, var_obs, jitter=1.0e-
     N, P = X.shape
 
     # prepare for computation of posterior statistics for singleton weights
-    probe = torch.zeros((2, P, P), dtype=X.dtype, device=X.device)
-    probe[0, ...] = torch.eye(P, dtype=X.dtype, device=X.device)
-    probe[1, ...] = -torch.eye(P, dtype=X.dtype, device=X.device)
+    probe = torch.zeros((P, 2, P), dtype=X.dtype, device=X.device)
+    probe[:, 0, :] = torch.eye(P, dtype=X.dtype, device=X.device)
+    probe[:, 1, :] = -torch.eye(P, dtype=X.dtype, device=X.device)
 
     eta2 = eta1.pow(2.0) * xisq.sqrt() / msq
     kappa = msq.sqrt() * lam / (msq + (eta1 * lam).pow(2.0)).sqrt()
@@ -117,13 +117,13 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, var_obs, jitter=1.0e-
     k_prbprb = kernel(kprobe, kprobe, eta1, eta2, c)
 
     # compute mean and variance for singleton weights
-    vec = torch.tensor([0.50, -0.50], dtype=X.dtype, device=X.device).unsqueeze(-1)
-    mu = torch.matmul(k_probeX, torch.matmul(k_xx_inv, Y).unsqueeze(-1)).squeeze(-1).reshape(2, P)
-    mu = (mu * vec).sum(0)
+    vec = torch.tensor([0.50, -0.50], dtype=X.dtype, device=X.device)
+    mu = torch.matmul(k_probeX, torch.matmul(k_xx_inv, Y).unsqueeze(-1)).squeeze(-1).reshape(P, 2)
+    mu = (mu * vec).sum(-1)
 
     var = k_prbprb - torch.matmul(k_probeX, torch.matmul(k_xx_inv, k_probeX.t()))
-    var = var.reshape(2, P, 2, P).diagonal(dim1=-3, dim2=-1)  # 2 2 P
-    std = ((var * vec).sum(-2) * vec).sum(0).clamp(min=0.0).sqrt()
+    var = var.reshape(P, 2, P, 2).diagonal(dim1=-4, dim2=-2)  # 2 2 P
+    std = ((var * vec.unsqueeze(-1)).sum(-2) * vec.unsqueeze(-1)).sum(-2).clamp(min=0.0).sqrt()
 
     # select active dimensions (those that are non-zero with sufficient statistical significance)
     active_dims = (((mu - 4.0 * std) > 0.0) | ((mu + 4.0 * std) < 0.0)).byte()
@@ -132,11 +132,12 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, var_obs, jitter=1.0e-
     print("Identified the following active dimensions:", active_dims.data.numpy().flatten())
     print("Mean estimate for active singleton weights:\n", mu[active_dims].data.numpy())
 
-    # prep for computation of posterior statistics for quadratic weights
+    # if there are 0 or 1 active dimensions there are no quadratic weights to be found
     M = len(active_dims)
     if M < 2:
         return active_dims.data.numpy(), []
 
+    # prep for computation of posterior statistics for quadratic weights
     left_dims, right_dims = torch.ones(M, M).triu(1).nonzero().t()
     left_dims, right_dims = active_dims[left_dims], active_dims[right_dims]
 
@@ -179,7 +180,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, var_obs, jitter=1.0e-
 # will have non-zero quadratic weights.
 def get_data(N=20, P=10, S=2, Q=2, sigma_obs=0.15):
     assert S < P and P > 3 and S > 2 and Q > 1 and Q <= S
-    torch.manual_seed(0)
+    torch.manual_seed(1)
 
     X = torch.randn(N, P)
 
