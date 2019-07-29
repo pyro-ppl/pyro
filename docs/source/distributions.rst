@@ -98,6 +98,13 @@ GammaPoisson
     :undoc-members:
     :show-inheritance:
 
+GaussianMRF
+--------------------
+.. autoclass:: pyro.distributions.GaussianMRF
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 GaussianScaleMixture
 ------------------------------------
 .. autoclass:: pyro.distributions.GaussianScaleMixture
