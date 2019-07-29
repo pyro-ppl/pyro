@@ -6,16 +6,21 @@ from pyro.distributions import Bernoulli, Beta, BetaBernoulliSummary, Gamma, Nor
 
 def test_betabern_smoke():
     summary = BetaBernoulliSummary(2., 4.)
+    multiple_batch_summary = BetaBernoulliSummary(torch.ones(3), torch.ones(3))
 
     obs = torch.rand((1, 1))
     batch_obs = torch.rand((5, 1))
+    multiple_batch_obs1 = torch.rand((3, 5, 1))
+    multiple_batch_obs2 = torch.rand((3, 1, 1))
 
     summary.update(obs)
     summary.update(batch_obs)
+    multiple_batch_summary.update(multiple_batch_obs1)
+    multiple_batch_summary.update(multiple_batch_obs2)
 
 
 def test_betabern_asymptotics():
-    summary = BetaBernoulliSummary(2., 4.)
+    summary = BetaBernoulliSummary(torch.Tensor([2.]), torch.Tensor([4.]))
     obs = Bernoulli(probs=0.3).sample(sample_shape=torch.Size([100, 1]))
 
     summary.update(obs)
@@ -33,7 +38,7 @@ def test_nignorm_single_smoke():
     NIGNormalRegressionSummary.convert_to_canonical_form(summary.precision_times_mean,
                                                          summary.precision,
                                                          summary.shape,
-                                                         summary.reparameterized_rate)
+                                                         summary.reparametrized_rate)
 
 
 def test_nignorm_multi_smoke():
@@ -48,7 +53,11 @@ def test_nignorm_multi_smoke():
     NIGNormalRegressionSummary.convert_to_canonical_form(summary.precision_times_mean,
                                                          summary.precision,
                                                          summary.shape,
-                                                         summary.reparameterized_rate)
+                                                         summary.reparametrized_rate)
+
+    multi_batch_features = torch.rand((3, 5, 2))
+    multi_batch_obs = torch.rand((3, 5, 1))
+    summary.update(obs, features)
 
 
 def test_nignorm_prior():
@@ -60,7 +69,7 @@ def test_nignorm_prior():
     mean, cov, shape, rate = NIGNormalRegressionSummary.convert_to_canonical_form(summary.precision_times_mean,
                                                                                   summary.precision,
                                                                                   summary.shape,
-                                                                                  summary.reparameterized_rate)
+                                                                                  summary.reparametrized_rate)
 
     assert_allclose(mean, true_mean)
     assert_allclose(cov, true_cov)
@@ -83,7 +92,7 @@ def test_nignorm_asymptotics():
     mean, cov, shape, rate = NIGNormalRegressionSummary.convert_to_canonical_form(summary.precision_times_mean,
                                                                                   summary.precision,
                                                                                   summary.shape,
-                                                                                  summary.reparameterized_rate)
+                                                                                  summary.reparametrized_rate)
 
     assert_allclose(mean, weights, rtol=0.0, atol=0.1)
     assert_allclose(cov, torch.zeros((2, 2)), rtol=0.0, atol=0.1)
