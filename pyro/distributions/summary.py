@@ -62,10 +62,10 @@ class NIGNormalRegressionSummary(Summary):
     # TODO: Allow for fast Cholesky rank-1 update
     def __init__(self, prior_mean, prior_covariance, prior_shape, prior_rate):
         # TODO: Hack to allow scalar inputs
-        prior_mean += torch.Tensor([0.])
+        prior_mean = prior_mean + torch.Tensor([0.])
         prior_covariance = prior_covariance + torch.Tensor([[0.]])
-        prior_shape += torch.Tensor([0.])
-        prior_rate += torch.Tensor([0.])
+        prior_shape = prior_shape + torch.Tensor([0.])
+        prior_rate = prior_rate + torch.Tensor([0.])
         assert torch.all(prior_covariance.eq(prior_covariance.transpose(-2, -1)))
         try:
             torch.cholesky(prior_covariance)
