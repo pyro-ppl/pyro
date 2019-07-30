@@ -4,8 +4,6 @@ which is a minimal implementation of the Pyro Probabilistic Programming
 Language that was created for didactic purposes.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import argparse
 
 import torch
@@ -65,7 +63,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.3.3')
+    assert pyro.__version__.startswith('0.3.4')
     parser = argparse.ArgumentParser(description="Mini Pyro demo")
     parser.add_argument("-b", "--backend", default="minipyro")
     parser.add_argument("-n", "--num-steps", default=1001, type=int)

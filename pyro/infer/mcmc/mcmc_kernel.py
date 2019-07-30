@@ -1,12 +1,7 @@
-from __future__ import absolute_import, division, print_function
-
 from abc import ABCMeta, abstractmethod
 
-from six import add_metaclass
 
-
-@add_metaclass(ABCMeta)
-class MCMCKernel(object):
+class MCMCKernel(object, metaclass=ABCMeta):
 
     def setup(self, warmup_steps, *args, **kwargs):
         r"""
@@ -25,15 +20,22 @@ class MCMCKernel(object):
         """
         pass
 
-    def diagnostics(self):
+    def logging(self):
         """
-        Relevant diagnostics (optional) to be printed at regular intervals
+        Relevant logging information to be printed at regular intervals
         of the MCMC run. Returns `None` by default.
 
         :return: String containing the diagnostic summary. e.g. acceptance rate
         :rtype: string
         """
         return None
+
+    def diagnostics(self):
+        """
+        Returns a dict of useful diagnostics after finishing sampling process.
+        """
+        # NB: should be not None for multiprocessing works
+        return {}
 
     def end_warmup(self):
         """

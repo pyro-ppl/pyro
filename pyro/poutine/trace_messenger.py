@@ -1,8 +1,4 @@
-from __future__ import absolute_import, division, print_function
-
 import sys
-
-import six
 
 from .messenger import Messenger
 from .trace_struct import Trace
@@ -148,9 +144,7 @@ class TraceHandler(object):
             except (ValueError, RuntimeError):
                 exc_type, exc_value, traceback = sys.exc_info()
                 shapes = self.msngr.trace.format_shapes()
-                six.reraise(exc_type,
-                            exc_type(u"{}\n{}".format(exc_value, shapes)),
-                            traceback)
+                raise exc_type(u"{}\n{}".format(exc_value, shapes)).with_traceback(traceback)
             self.msngr.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
         return ret
 

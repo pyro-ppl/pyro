@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import argparse
 import warnings
 import weakref
@@ -8,7 +6,7 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
-from pyro.util import ignore_jit_warnings, optional
+from pyro.util import ignore_jit_warnings, optional, timed
 
 
 def _hash(value, allow_id):
@@ -56,6 +54,7 @@ class CompiledFunction(object):
         self.ignore_warnings = ignore_warnings
         self.jit_options = {} if jit_options is None else jit_options
         self.jit_options.setdefault('check_trace', False)
+        self.compile_time = None
         self._param_names = None
 
     def __call__(self, *args, **kwargs):
@@ -85,8 +84,14 @@ class CompiledFunction(object):
                     constrained_params[name] = constrained_param
                 return poutine.replay(self.fn, params=constrained_params)(*args, **kwargs)
 
-            with pyro.validation_enabled(False), optional(ignore_jit_warnings(), self.ignore_warnings):
-                self.compiled[key] = torch.jit.trace(compiled, params_and_args, **self.jit_options)
+            if self.ignore_warnings:
+                compiled = ignore_jit_warnings()(compiled)
+            with pyro.validation_enabled(False):
+                time_compilation = self.jit_options.pop("time_compilation", False)
+                with optional(timed(), time_compilation) as t:
+                    self.compiled[key] = torch.jit.trace(compiled, params_and_args, **self.jit_options)
+                if time_compilation:
+                    self.compile_time = t.elapsed
         else:
             unconstrained_params = [pyro.param(name).unconstrained()
                                     for name in self._param_names]

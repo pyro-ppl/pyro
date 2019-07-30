@@ -1,9 +1,6 @@
-from __future__ import absolute_import, division, print_function
-
 import numbers
 from functools import partial
-
-from six.moves.queue import LifoQueue
+from queue import LifoQueue
 
 from pyro import poutine
 from pyro.infer.util import is_validation_enabled

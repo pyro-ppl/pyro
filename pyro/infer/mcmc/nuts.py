@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from collections import namedtuple
 
 import torch
@@ -109,9 +107,9 @@ class NUTS(HMC):
         ...     return y
         >>>
         >>> nuts_kernel = NUTS(model, adapt_step_size=True)
-        >>> mcmc_run = MCMC(nuts_kernel, num_samples=500, warmup_steps=300).run(data)
-        >>> posterior = mcmc_run.marginal('beta').empirical['beta']
-        >>> posterior.mean  # doctest: +SKIP
+        >>> mcmc = MCMC(nuts_kernel, num_samples=500, warmup_steps=300)
+        >>> mcmc.run(data)
+        >>> mcmc.get_samples()['beta'].mean(0)  # doctest: +SKIP
         tensor([ 0.9221,  1.9464,  2.9228])
     """
 
@@ -286,8 +284,10 @@ class NUTS(HMC):
             self._cache(z, potential_energy)
         # return early if no sample sites
         elif len(z) == 0:
-            self._accept_cnt += 1
             self._t += 1
+            self._mean_accept_prob = 1.
+            if self._t > self._warmup_steps:
+                self._accept_cnt += 1
             return z
         r, r_flat = self._sample_r(name="r_t={}".format(self._t))
         energy_current = self._kinetic_energy(r) + potential_energy
@@ -352,7 +352,13 @@ class NUTS(HMC):
                 sum_accept_probs = sum_accept_probs + new_tree.sum_accept_probs
                 num_proposals = num_proposals + new_tree.num_proposals
 
-                if new_tree.turning or new_tree.diverging:  # stop doubling
+                # stop doubling
+                if new_tree.diverging:
+                    if self._t >= self._warmup_steps:
+                        self._divergences.append(self._t - self._warmup_steps)
+                    break
+
+                if new_tree.turning:
                     break
 
                 tree_depth += 1
@@ -378,12 +384,16 @@ class NUTS(HMC):
                     else:
                         tree_weight = tree_weight + new_tree.weight
 
-        if self._t < self._warmup_steps:
-            accept_prob = sum_accept_probs / num_proposals
-            self._adapter.step(self._t, z, accept_prob)
-
-        if accepted:
-            self._accept_cnt += 1
+        accept_prob = sum_accept_probs / num_proposals
 
         self._t += 1
+        if self._t > self._warmup_steps:
+            n = self._t - self._warmup_steps
+            if accepted:
+                self._accept_cnt += 1
+        else:
+            n = self._t
+            self._adapter.step(self._t, z, accept_prob)
+        self._mean_accept_prob += (accept_prob.item() - self._mean_accept_prob) / n
+
         return z.copy()

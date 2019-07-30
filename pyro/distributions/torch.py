@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import torch
 from torch.distributions import constraints, kl_divergence, register_kl
 
@@ -12,6 +10,16 @@ from pyro.distributions.util import sum_rightmost
 # and merely reshape the self.logits tensor. This is especially important for
 # Pyro models that use enumeration.
 class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
+
+    # This fixes a bug in expanded samples, and can be removed after publication of
+    # https://github.com/pytorch/pytorch/pull/23328
+    def sample(self, sample_shape=torch.Size()):
+        sample_shape = self._extended_shape(sample_shape)
+        param_shape = sample_shape + torch.Size((self._num_events,))
+        probs = self.probs.expand(param_shape)
+        probs_2d = probs.reshape(-1, self._num_events)
+        sample_2d = torch.multinomial(probs_2d, 1, True)
+        return sample_2d.contiguous().view(sample_shape)
 
     def log_prob(self, value):
         if getattr(value, '_pyro_categorical_support', None) == id(self):

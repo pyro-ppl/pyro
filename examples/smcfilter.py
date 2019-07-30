@@ -1,12 +1,14 @@
-from __future__ import absolute_import, division, print_function
-
 import argparse
+import logging
 
 import torch
 
 import pyro
 import pyro.distributions as dist
 from pyro.infer import SMCFilter
+
+logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.INFO)
+
 
 """
 This file demonstrates how to use the SMCFilter algorithm with
@@ -84,15 +86,30 @@ def main(args):
 
     smc = SMCFilter(model, guide, num_particles=args.num_particles, max_plate_nesting=0)
 
+<<<<<<< HEAD
     zs, ys = generate_data(args)
+=======
+    logging.info('Generating data')
+    zs, ys = generate_data(args)
+
+    logging.info('Filtering')
+>>>>>>> dev
     smc.init(initial=torch.tensor([1., 0.]))
     for y in ys[1:]:
         smc.step(y)
 
+<<<<<<< HEAD
     empirical = smc.get_empirical()
     for t in range(1, 1+args.num_timesteps):
         z = empirical["z_{}".format(t)]
         print("{}\t{}\t{}\t{}".format(t, zs[t], z.mean, z.variance))
+=======
+    logging.info('Marginals')
+    empirical = smc.get_empirical()
+    for t in range(1, 1+args.num_timesteps):
+        z = empirical["z_{}".format(t)]
+        logging.info("{}\t{}\t{}\t{}".format(t, zs[t], z.mean, z.variance))
+>>>>>>> dev
 
 
 if __name__ == "__main__":

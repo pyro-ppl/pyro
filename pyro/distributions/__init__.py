@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import pyro.distributions.torch_patch  # noqa F403
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
 from pyro.distributions.conjugate import BetaBinomial, DirichletMultinomial, GammaPoisson
@@ -9,6 +7,7 @@ from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNorma
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
+from pyro.distributions.hmm import DiscreteHMM, GaussianMRF
 from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.mixture import MaskedMixture
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
@@ -34,9 +33,11 @@ __all__ = [
     "BetaBinomial",
     "Delta",
     "DirichletMultinomial",
+    "DiscreteHMM",
     "Distribution",
     "Empirical",
     "GammaPoisson",
+    "GaussianMRF",
     "GaussianScaleMixture",
     "InverseGamma",
     "LKJCorrCholesky",

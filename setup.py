@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import os
 import subprocess
 import sys
@@ -56,8 +54,6 @@ long_description = '\n'.join([str(line) for line in long_description.split('\n')
 
 # examples/tutorials
 EXTRAS_REQUIRE = [
-    # TODO: remove once https://github.com/ipython/ipython/issues/11809 is fixed.
-    'ipython<7.6.0',
     'jupyter>=1.0.0',
     'matplotlib>=1.3',
     'pillow',
@@ -84,12 +80,10 @@ setup(
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/requirements.txt`
-        'contextlib2',
         'graphviz>=0.8',
         # numpy is necessary for some functionality of PyTorch
         'numpy>=1.7',
         'opt_einsum>=2.3.2',
-        'six>=1.10.0',
         'torch>=1.1.0',
         'tqdm>=4.31',
     ],
@@ -99,9 +93,7 @@ setup(
             'nbval',
             'pytest>=4.1',
             'pytest-cov',
-            # TODO: remove once https://github.com/pyro-ppl/pyro/issues/1871
-            # is fixed.
-            'scipy>=1.1, <1.3',
+            'scipy>=1.1',
         ],
         'profile': ['prettytable', 'pytest-benchmark', 'snakeviz'],
         'dev': EXTRAS_REQUIRE + [
@@ -115,9 +107,7 @@ setup(
             'pypandoc',
             'pytest>=4.1',
             'pytest-xdist',
-            # TODO: remove once https://github.com/pyro-ppl/pyro/issues/1871
-            # is fixed.
-            'scipy>=1.1, < 1.3',
+            'scipy>=1.1',
             'sphinx',
             'sphinx_rtd_theme',
             'yapf',
@@ -132,7 +122,6 @@ setup(
         'Intended Audience :: Science/Research',
         'Operating System :: POSIX :: Linux',
         'Operating System :: MacOS :: MacOS X',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3.6',
     ],
     # yapf

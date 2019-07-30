@@ -7,24 +7,21 @@ This module offers a modified interface for MCMC inference with the following ob
   - minimal memory consumption with multiprocessing and CUDA.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import json
 import logging
+import queue
 import signal
 import threading
 import warnings
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 
-import six
 import torch
 import torch.multiprocessing as mp
-from six.moves import queue
 
 import pyro
 from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
-from pyro.infer.mcmc.util import initialize_model
+from pyro.infer.mcmc.util import diagnostics, initialize_model, summary
 
 MAX_SEED = 2**32 - 1
 
@@ -55,7 +52,7 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
                 if num_samples[pbar_pos] == warmup_steps:
                     progress_bars.set_description("Sample [{}]".format(pbar_pos + 1), pos=pbar_pos)
                 diagnostics = json.loads(msg, object_pairs_hook=OrderedDict)
-                progress_bars.set_postfix(diagnostics, pos=pbar_pos)
+                progress_bars.set_postfix(diagnostics, pos=pbar_pos, refresh=False)
                 progress_bars.update(pos=pbar_pos)
             else:
                 logger.handle(record)
@@ -64,8 +61,8 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
 
 
 class _Worker(object):
-    def __init__(self, chain_id, result_queue, log_queue, event,
-                 kernel, num_samples, warmup_steps, initial_params=None, hook=None):
+    def __init__(self, chain_id, result_queue, log_queue, event, kernel, num_samples,
+                 warmup_steps, initial_params=None, hook=None):
         self.chain_id = chain_id
         self.kernel = kernel
         if initial_params is not None:
@@ -107,22 +104,25 @@ class _Worker(object):
 def _gen_samples(kernel, warmup_steps, num_samples, hook, *args, **kwargs):
     kernel.setup(warmup_steps, *args, **kwargs)
     params = kernel.initial_params
+    # yield structure (key, value.shape) of params
+    yield {k: v.shape for k, v in params.items()}
     for i in range(warmup_steps):
         params = kernel.sample(params)
         hook(kernel, params, 'warmup', i)
     for i in range(num_samples):
         params = kernel.sample(params)
         hook(kernel, params, 'sample', i)
-        yield params
+        yield torch.cat([params[site].reshape(-1) for site in sorted(params)]) if params else torch.tensor([])
+    yield kernel.diagnostics()
     kernel.cleanup()
 
 
 def _add_logging_hook(logger, progress_bar=None, hook=None):
     def _add_logging(kernel, params, stage, i):
-        diagnostics = json.dumps(kernel.diagnostics())
+        diagnostics = json.dumps(kernel.logging())
         logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
         if progress_bar:
-            progress_bar.set_description(stage)
+            progress_bar.set_description(stage, refresh=False)
         if hook:
             hook(kernel, params, stage, i)
 
@@ -144,6 +144,9 @@ class _UnarySampler(object):
         self.disable_progbar = disable_progbar
         self.hook = hook
         super(_UnarySampler, self).__init__()
+
+    def terminate(self, *args, **kwargs):
+        pass
 
     def run(self, *args, **kwargs):
         logger = logging.getLogger("pyro.infer.mcmc")
@@ -171,9 +174,6 @@ class _MultiSampler(object):
         self.workers = []
         self.ctx = mp
         if mp_context:
-            if six.PY2:
-                raise ValueError("multiprocessing.get_context() is "
-                                 "not supported in Python 2.")
             self.ctx = mp.get_context(mp_context)
         self.result_queue = self.ctx.Queue()
         self.log_queue = self.ctx.Queue()
@@ -198,13 +198,17 @@ class _MultiSampler(object):
             self.workers.append(self.ctx.Process(name=str(i), target=worker.run,
                                                  args=args, kwargs=kwargs))
 
-    def terminate(self):
+    def terminate(self, terminate_workers=False):
         if self.log_thread.is_alive():
             self.log_queue.put_nowait(None)
             self.log_thread.join(timeout=1)
-        for w in self.workers:
-            if w.is_alive():
-                w.terminate()
+        # Only kill workers if exception is raised. worker processes are daemon
+        # processes that will otherwise be terminated with the main process.
+        # Note that it is important to not
+        if terminate_workers:
+            for w in self.workers:
+                if w.is_alive():
+                    w.terminate()
 
     def run(self, *args, **kwargs):
         # Ignore sigint in worker processes; they will be shut down
@@ -214,13 +218,13 @@ class _MultiSampler(object):
         # restore original handler
         signal.signal(signal.SIGINT, sigint_handler)
         active_workers = self.num_chains
+        exc_raised = True
         try:
             for w in self.workers:
                 w.start()
             while active_workers:
                 try:
                     chain_id, val = self.result_queue.get(timeout=5)
-                    self.events[chain_id].set()
                 except queue.Empty:
                     continue
                 if isinstance(val, Exception):
@@ -228,10 +232,12 @@ class _MultiSampler(object):
                     raise val
                 if val is not None:
                     yield val, chain_id
+                    self.events[chain_id].set()
                 else:
                     active_workers -= 1
+            exc_raised = False
         finally:
-            self.terminate()
+            self.terminate(terminate_workers=exc_raised)
 
 
 class MCMC(object):
@@ -265,21 +271,27 @@ class MCMC(object):
         the prior.
     :param hook_fn: Python callable that takes in `(kernel, samples, stage, i)`
         as arguments. stage is either `sample` or `warmup` and i refers to the
-        i'th sample for the given stage. This can be
+        i'th sample for the given stage. This can be used to implement additional
+        logging, or more generally, run arbitrary code per generated sample.
     :param str mp_context: Multiprocessing context to use when `num_chains > 1`.
         Only applicable for Python 3.5 and above. Use `mp_context="spawn"` for
         CUDA.
     :param bool disable_progbar: Disable progress bar and diagnostics update.
+    :param bool disable_validation: Disables distribution validation check. This is
+        disabled by default, since divergent transitions will lead to exceptions.
+        Switch to `True` for debugging purposes.
     :param dict transforms: dictionary that specifies a transform for a sample site
         with constrained support to unconstrained space.
     """
     def __init__(self, kernel, num_samples, warmup_steps=None, initial_params=None,
                  num_chains=1, hook_fn=None, mp_context=None, disable_progbar=False,
-                 transforms=None):
+                 disable_validation=True, transforms=None):
         self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
         self.kernel = kernel
         self.transforms = transforms
+        self.disable_validation = disable_validation
+        self._samples = None
         if isinstance(self.kernel, (HMC, NUTS)) and self.kernel.potential_fn is not None:
             if initial_params is None:
                 raise ValueError("Must provide valid initial parameters to begin sampling"
@@ -291,6 +303,10 @@ class MCMC(object):
                     if v.shape[0] != num_chains:
                         raise ValueError("The leading dimension of tensors in `initial_params` "
                                          "must match the number of chains.")
+                if mp_context is None:
+                    # change multiprocessing context to 'spawn' for CUDA tensors.
+                    if list(initial_params.values())[0].is_cuda:
+                        mp_context = "spawn"
 
             # verify num_chains is compatible with available CPU.
             available_cpu = max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
@@ -299,7 +315,14 @@ class MCMC(object):
                               "Resetting number of chains to available CPU count."
                               .format(num_chains, available_cpu))
                 num_chains = available_cpu
+                # adjust initial_params accordingly
+                if num_chains == 1:
+                    initial_params = {k: v[0] for k, v in initial_params.items()}
+                else:
+                    initial_params = {k: v[:num_chains] for k, v in initial_params.items()}
+
         self.num_chains = num_chains
+        self._diagnostics = [None] * num_chains
 
         if num_chains > 1:
             self.sampler = _MultiSampler(kernel, num_samples, self.warmup_steps, num_chains, mp_context,
@@ -309,12 +332,37 @@ class MCMC(object):
                                          initial_params=initial_params, hook=hook_fn)
 
     def run(self, *args, **kwargs):
-        z_acc = defaultdict(lambda: [[] for _ in range(self.num_chains)])
-        for sample, chain_id in self.sampler.run(*args, **kwargs):
-            for k, v in sample.items():
-                z_acc[k][chain_id].append(v)
-        z_acc = {k: [torch.stack(l) for l in v] for k, v in z_acc.items()}
-        z_acc = {k: v[0] if self.num_chains == 1 else torch.stack(v) for k, v in z_acc.items()}
+        num_samples = [0] * self.num_chains
+        z_flat_acc = [[] for _ in range(self.num_chains)]
+        with pyro.validation_enabled(not self.disable_validation):
+            for x, chain_id in self.sampler.run(*args, **kwargs):
+                if num_samples[chain_id] == 0:
+                    num_samples[chain_id] += 1
+                    z_structure = x
+                elif num_samples[chain_id] == self.num_samples + 1:
+                    self._diagnostics[chain_id] = x
+                else:
+                    num_samples[chain_id] += 1
+                    if self.num_chains > 1:
+                        x_cloned = x.clone()
+                        del x
+                    else:
+                        x_cloned = x
+                    z_flat_acc[chain_id].append(x_cloned)
+
+        z_flat_acc = torch.stack([torch.stack(l) for l in z_flat_acc])
+
+        # unpack latent
+        pos = 0
+        z_acc = z_structure.copy()
+        for k in sorted(z_structure):
+            shape = z_structure[k]
+            next_pos = pos + shape.numel()
+            # NB: squeeze in case num_chains=1
+            z_acc[k] = z_flat_acc[:, :, pos:next_pos].reshape(
+                (self.num_chains, self.num_samples) + shape).squeeze(dim=0)
+            pos = next_pos
+        assert pos == z_flat_acc.shape[-1]
 
         # If transforms is not explicitly provided, infer automatically using
         # model args, kwargs.
@@ -331,4 +379,60 @@ class MCMC(object):
         # transform samples back to constrained space
         for name, transform in self.transforms.items():
             z_acc[name] = transform.inv(z_acc[name])
-        return z_acc
+        self._samples = z_acc
+
+        # terminate the sampler (shut down worker processes)
+        self.sampler.terminate(True)
+
+    def get_samples(self, num_samples=None, group_by_chain=False):
+        """
+        Get samples from the MCMC run, potentially resampling with replacement.
+
+        :param int num_samples: Number of samples to return. If `None`, all the samples
+            from an MCMC chain are returned in their original ordering.
+        :param bool group_by_chain: Whether to preserve the chain dimension. If True,
+            all samples will have num_chains as the size of their leading dimension.
+        :return: dictionary of samples keyed by site name.
+        """
+        samples = self._samples
+        if num_samples is None:
+            # reshape to collapse chain dim when group_by_chain=False
+            if not group_by_chain and self.num_chains > 1:
+                samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
+        else:
+            if not samples:
+                raise ValueError("No samples found from MCMC run.")
+            batch_dim = 0
+            if self.num_chains > 1:
+                if group_by_chain:
+                    batch_dim = 1
+                else:
+                    samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
+                    batch_dim = 0
+            sample_tensor = list(samples.values())[0]
+            batch_size, device = sample_tensor.shape[batch_dim], sample_tensor.device
+            idxs = torch.randint(0, batch_size, size=(num_samples,), device=device)
+            samples = {k: v.index_select(batch_dim, idxs) for k, v in samples.items()}
+        return samples
+
+    def diagnostics(self):
+        """
+        Gets some diagnostics statistics such as effective sample size, split
+        Gelman-Rubin, or divergent transitions from the sampler.
+        """
+        diag = diagnostics(self._samples, num_chains=self.num_chains)
+        for diag_name in self._diagnostics[0]:
+            diag[diag_name] = {'chain {}'.format(i): self._diagnostics[i][diag_name]
+                               for i in range(self.num_chains)}
+        return diag
+
+    def summary(self, prob=0.9):
+        """
+        Prints a summary table displaying diagnostics of samples obtained from
+        posterior. The diagnostics displayed are mean, standard deviation, median,
+        the 90% Credibility Interval, :func:`~pyro.ops.stats.effective_sample_size`,
+        :func:`~pyro.ops.stats.split_gelman_rubin`.
+
+        :param float prob: the probability mass of samples within the credibility interval.
+        """
+        summary(self._samples, prob=prob, num_chains=self.num_chains)

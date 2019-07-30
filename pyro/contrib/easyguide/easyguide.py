@@ -1,12 +1,9 @@
-from __future__ import absolute_import, division, print_function
-
 import re
 import weakref
 from abc import ABCMeta, abstractmethod
 
 import torch
-from contextlib2 import ExitStack
-from six import add_metaclass
+from contextlib import ExitStack
 from torch.distributions import biject_to
 
 import pyro
@@ -18,8 +15,7 @@ from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.poutine.util import prune_subsample_sites
 
 
-@add_metaclass(ABCMeta)
-class EasyGuide(object):
+class EasyGuide(object, metaclass=ABCMeta):
     """
     Base class for "easy guides".
 

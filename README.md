@@ -30,6 +30,8 @@ For more information, check out our [blog post](http://eng.uber.com/pyro).
 
 **Install using pip:**
 
+Pyro supports Python 3.4+.
+
 ```sh
 pip install pyro-ppl
 ```

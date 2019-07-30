@@ -5,7 +5,7 @@ AIR applied to the multi-mnist data set [1].
 understanding with generative models." Advances in Neural Information
 Processing Systems. 2016.
 """
-from __future__ import division
+
 
 import argparse
 import math
@@ -245,7 +245,7 @@ def main(**kwargs):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.3')
+    assert pyro.__version__.startswith('0.3.4')
     parser = argparse.ArgumentParser(description="Pyro AIR example", argument_default=argparse.SUPPRESS)
     parser.add_argument('-n', '--num-steps', type=int, default=int(1e8),
                         help='number of optimization steps to take')

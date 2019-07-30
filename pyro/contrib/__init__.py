@@ -6,8 +6,6 @@ Contributed Code
     This code makes no guarantee about maintaining backwards compatibility.
 """
 
-from __future__ import absolute_import, division, print_function
-
 from pyro.contrib import autoguide, autoname, bnn, easyguide, gp, oed, tracking
 
 __all__ = [
