@@ -225,9 +225,9 @@ class GaussianHMM(TorchDistribution):
         assert transition_dist.event_shape == (hidden_dim,)
         assert observation_dist.event_shape == (obs_dim,)
         shape = broadcast_shape(initial_dist.batch_shape + (1,),
-                                transition_matrix.shape[-2:],
+                                transition_matrix.shape[:-2],
                                 transition_dist.batch_shape,
-                                observation_matrix.shape[-2:],
+                                observation_matrix.shape[:-2],
                                 observation_dist.batch_shape)
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + (obs_dim,)

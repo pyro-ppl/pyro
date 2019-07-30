@@ -233,13 +233,31 @@ def matrix_and_mvn_to_gaussian(matrix, mvn):
 
     :param ~torch.Tensor matrix: A matrix with rightmost shape ``(x_dim, y_dim)``.
     :param ~torch.distributions.MultivariateNormal mvn: A multivariate normal distribution.
+    :return: A Gaussian with broadcasted batch shape and ``.dim() == x_dim + y_dim``.
     :rtype: ~pyro.ops.gaussian.Gaussian
     """
     assert isinstance(mvn, torch.distributions.MultivariateNormal)
     assert isinstance(matrix, torch.Tensor)
     x_dim, y_dim = matrix.shape[-2:]
     assert mvn.event_shape == (y_dim,)
-    raise NotImplementedError("TODO")
+    batch_shape = broadcast_shape(matrix.shape[:-2], mvn.batch_shape)
+    matrix = matrix.expand(batch_shape + (x_dim, y_dim))
+    mvn = mvn.expand(batch_shape)
+
+    x_gaussian = mvn_to_gaussian(mvn)
+    P_xx = matrix.new_zeros(batch_shape + (x_dim, x_dim))
+    P_yy = x_gaussian.precision
+    P_xy = matrix
+    P_yx = matrix.transpose(-1, -2)
+    precision = torch.cat([torch.cat([P_xx, P_xy], -1),
+                           torch.cat([P_yx, P_yy], -1)], -2)
+    info_vec = torch.cat([matrix.new_zeros(batch_shape + (x_dim,)), x_gaussian.info_vec], -1)
+    log_normalizer = x_gaussian.log_normalizer
+
+    result = Gaussian(log_normalizer, info_vec, precision)
+    assert result.batch_shape == batch_shape
+    assert result.dim() == x_dim + y_dim
+    return result
 
 
 def gaussian_tensordot(x, y, dims=0):
