@@ -187,6 +187,49 @@ def test_diag_normal(num_steps):
     assert_close(actual_loss, expected_loss)
 
 
+@pytest.mark.parametrize('obs_dim', [1, 2])
+@pytest.mark.parametrize('hidden_dim', [1, 3])
+@pytest.mark.parametrize('init_shape,trans_mat_shape,trans_mvn_shape,obs_mat_shape,obs_mvn_shape', [
+    ((), (6,), (), (), ()),
+    ((), (), (6,), (), ()),
+    ((), (), (), (6,), ()),
+    ((), (), (), (), (6,)),
+    ((), (6,), (6,), (6,), (6,)),
+    ((5,), (6,), (), (), ()),
+    ((), (5, 1), (6,), (), ()),
+    ((), (), (5, 1), (6,), ()),
+    ((), (), (), (5, 1), (6,)),
+    ((), (6,), (5, 1), (), ()),
+    ((), (), (6,), (5, 1), ()),
+    ((), (), (), (6,), (5, 1)),
+    ((5,), (), (), (), (6,)),
+    ((5,), (5, 6), (5, 6), (5, 6), (5, 6)),
+], ids=str)
+def test_gaussian_hmm_shape(init_shape, trans_mat_shape, trans_mvn_shape,
+                            obs_mat_shape, obs_mvn_shape, hidden_dim, obs_dim):
+    init_dist = random_mvn(init_shape, hidden_dim)
+    trans_mat = torch.randn(trans_mat_shape + (hidden_dim, hidden_dim))
+    trans_dist = random_mvn(trans_mvn_shape, hidden_dim)
+    obs_mat = torch.randn(obs_mat_shape + (hidden_dim, obs_dim))
+    obs_dist = random_mvn(obs_mvn_shape, obs_dim)
+    d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+
+    shape = broadcast_shape(init_shape + (1,),
+                            trans_mat_shape,
+                            trans_mvn_shape,
+                            obs_mat_shape,
+                            obs_mvn_shape)
+    expected_batch_shape, time_shape = shape[:-1], shape[-1:]
+    expected_event_shape = time_shape + (obs_dim,)
+    assert d.batch_shape == expected_batch_shape
+    assert d.event_shape == expected_event_shape
+
+    data = obs_dist.expand(shape).sample()
+    assert data.shape == d.shape()
+    actual = d.log_prob(data)
+    assert actual.shape == expected_batch_shape
+
+
 @pytest.mark.parametrize('obs_dim', [1, 2, 3])
 @pytest.mark.parametrize('hidden_dim', [1, 2, 3])
 @pytest.mark.parametrize('init_shape,trans_shape,obs_shape', [

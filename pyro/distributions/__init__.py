@@ -7,7 +7,7 @@ from pyro.distributions.diag_normal_mixture_shared_cov import MixtureOfDiagNorma
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.empirical import Empirical
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
-from pyro.distributions.hmm import DiscreteHMM, GaussianMRF
+from pyro.distributions.hmm import DiscreteHMM, GaussianHMM, GaussianMRF
 from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.mixture import MaskedMixture
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
@@ -23,8 +23,8 @@ from pyro.distributions.util import enable_validation, is_validation_enabled, va
 from pyro.distributions.von_mises import VonMises
 from pyro.distributions.von_mises_3d import VonMises3D
 from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
-from pyro.distributions.lkj import (LKJCorrCholesky, CorrLCholeskyTransform, corr_cholesky_constraint)
-from pyro.distributions.transforms import * # noqa F403
+from pyro.distributions.lkj import CorrLCholeskyTransform, LKJCorrCholesky, corr_cholesky_constraint
+from pyro.distributions.transforms import *  # noqa F403
 
 __all__ = [
     "AVFMultivariateNormal",
@@ -35,6 +35,7 @@ __all__ = [
     "Distribution",
     "Empirical",
     "GammaPoisson",
+    "GaussianHMM",
     "GaussianMRF",
     "GaussianScaleMixture",
     "InverseGamma",

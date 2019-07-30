@@ -225,6 +225,23 @@ def mvn_to_gaussian(mvn):
     return Gaussian(log_normalizer, info_vec, precision)
 
 
+def matrix_and_mvn_to_gaussian(matrix, mvn):
+    """
+    Convert a noisy affine function to a Gaussian. The noisy affine function is defined as::
+
+        y = x @ matrix + mvn.sample()
+
+    :param ~torch.Tensor matrix: A matrix with rightmost shape ``(x_dim, y_dim)``.
+    :param ~torch.distributions.MultivariateNormal mvn: A multivariate normal distribution.
+    :rtype: ~pyro.ops.gaussian.Gaussian
+    """
+    assert isinstance(mvn, torch.distributions.MultivariateNormal)
+    assert isinstance(matrix, torch.Tensor)
+    x_dim, y_dim = matrix.shape[-2:]
+    assert mvn.event_shape == (y_dim,)
+    raise NotImplementedError("TODO")
+
+
 def gaussian_tensordot(x, y, dims=0):
     """
     Computes the integral over two gaussians:
