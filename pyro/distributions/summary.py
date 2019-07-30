@@ -13,7 +13,9 @@ class Summary(object):
     @abstractmethod
     def update(self, obs, features=None):
         """
-        Add observed data to this summary.
+        Add observed data to this summary. The last batch dimension indicates 
+        a batch update of datapoints.
+        
         :param torch.Tensor obs: The dimensions are batch_dim x obs_dim
         :param torch.Tensor features: The dimensions are batch_dim x features_dim
         """
@@ -28,69 +30,80 @@ class BetaBernoulliSummary(Summary):
     :param float prior_beta: The prior beta parameter for the Beta distribution.
     """
     def __init__(self, prior_alpha, prior_beta):
-        assert prior_alpha > 0.0
-        assert prior_beta > 0.0
+        prior_alpha += torch.tensor([0.]) # TODO: hack to handle scalar and tensor inputs
+        prior_beta += torch.tensor([0.])
+        assert torch.all(prior_alpha > 0.0)
+        assert torch.all(prior_beta > 0.0)
+        assert prior_alpha.shape == prior_beta.shape
         self.alpha = prior_alpha
         self.beta = prior_beta
 
     def update(self, obs, features=None):
         assert features is None
-        assert obs.dim() == 2
-        assert obs.shape[1] == 1
-        total = obs.sum()
+        assert obs.shape[-1] == 1
+        total = obs.sum([-2,-1])
         self.alpha += total
-        self.beta += obs.shape[0] - total
+        self.beta += torch.ones(obs.shape).sum([-2,-1]) - total
 
 
 class NIGNormalRegressionSummary(Summary):
     """
-    Summary of NIG-Normal conjugate family regression data.
+    Summary of NIG-Normal conjugate family regression data. The prior can be broadcasted to a batch of summaries.
 
-    :param torch.tensor prior_mean: The prior mean parameter for the NIG distribution.
-    :param torch.tensor prior_covariance: The prior covariance parameter for the NIG distribution.
-    :param float prior_shape: The prior shape parameter for the NIG distribution.
-    :param float prior_rate: The prior rate parameter for the NIG distribution.
+    :param torch.tensor prior_mean: The prior mean parameter for the NIG distribution. 
+                                    batch_shape == (other_batches, obs_dim or 1); event_shape == (features.dim)
+    :param torch.tensor prior_covariance: The prior covariance parameter for the NIG distribution. 
+                                          batch_shape == (other_batches, obs_dim or 1); event_shape == (features.dim, features.dim)
+    :param float prior_shape: The prior shape parameter for the NIG distribution. 
+                              batch_shape == (other_batches, obs_dim or 1); event_shape is ()
+    :param float prior_rate: The prior rate parameter for the NIG distribution. 
+                             batch_shape == (other_batches, obs_dim or 1); event_shape is ()
     """
     # TODO: Allow for fast Cholesky rank-1 update
     def __init__(self, prior_mean, prior_covariance, prior_shape, prior_rate):
-        # TODO: Modify these assertions to allow for scalar inputs?
-        assert torch.all(prior_covariance.eq(prior_covariance.t()))
-        eig = torch.eig(prior_covariance).eigenvalues
-        assert torch.all(eig[:, 0] >= 0.0)
-        assert torch.all(eig[:, 1] == 0.0)
-        assert prior_shape > 0
-        assert prior_rate > 0
-        params = self.convert_to_reparameterized_form(prior_mean, prior_covariance, prior_shape, prior_rate)
-        (self.precision_times_mean, self.precision, self.shape, self.reparameterized_rate) = params
+        # TODO: Hack to allow scalar inputs
+        prior_mean += torch.Tensor([0.])
+        prior_covariance = prior_covariance + torch.Tensor([[0.]])
+        prior_shape += torch.Tensor([0.])
+        prior_rate += torch.Tensor([0.])
+        assert torch.all(prior_covariance.eq(prior_covariance.transpose(-2, -1)))
+        try:
+            torch.cholesky(prior_covariance)
+        except:
+            raise RuntimeError("Covariance is not PSD.")
+        
+        assert torch.all(prior_shape > 0)
+        assert torch.all(prior_rate > 0)
+        params = self.convert_to_reparametrized_form(prior_mean, prior_covariance, prior_shape, prior_rate)
+        self.precision_times_mean, self.precision, self.shape, self.reparametrized_rate = params
 
     def update(self, obs, features=None):
+        # features batch_shape == (other_batches); event_shape == (update_batch, features_dim)
+        # obs:     batch_shape == (other_batches); event_shape == (update_batch, obs_dim)
         assert features is not None
-        assert obs.dim() == 2
-        assert obs.shape[1] == 1
-        assert features.dim() == 2
-        assert obs.shape[0] == features.shape[0]
-        self.precision_times_mean += features.t().matmul(obs.flatten())
-        self.precision += features.t().matmul(features)
-        self.shape += 0.5 * obs.shape[0]
-        self.reparameterized_rate += 0.5 * obs.flatten().dot(obs.flatten())
+        assert obs.shape[:-1] == features.shape[:-1]
+        self.precision_times_mean = self.precision_times_mean + obs.transpose(-2,-1).matmul(features) 
+        self.precision = self.precision + (features.transpose(-2,-1).matmul(features)).unsqueeze(-3)
+        self.shape = self.shape + 0.5 * obs.shape[-2]
+        self.reparametrized_rate = self.reparametrized_rate + 0.5 * (obs * obs).sum(-2)
 
     @staticmethod
-    def convert_to_reparameterized_form(mean, covariance, shape, rate):
+    def convert_to_reparametrized_form(mean, covariance, shape, rate):
         """
         Converts the NIG parameters to a more convenient form which obviates the
         need for matrix inverses needed for updates.
 
-        :returns: a reparameterization of the parameters for faster updating and sampling.
-        :rtype: a tuple of precision_times_mean, precision, shape, and reparameterized_rate.
+        :returns: a reparametrization of the parameters for faster updating and sampling.
+        :rtype: a tuple of precision_times_mean, precision, shape, and reparametrized_rate.
         """
-        precision = covariance.inverse()
-        precision_times_mean = precision.matmul(mean)
-        reparameterized_rate = rate + 0.5*mean.matmul(precision).matmul(mean)
+        precision = covariance.inverse() # event_shape == (features.dim, features.dim)
+        precision_times_mean = precision.matmul(mean.unsqueeze(-1)).squeeze(-1) # event_shape == (features.dim)
+        reparametrized_rate = rate + 0.5*(mean.unsqueeze(-2)).matmul(precision).matmul(mean.unsqueeze(-1)).squeeze(-1).squeeze(-1) # event_shape == ()
 
-        return precision_times_mean, precision, shape, reparameterized_rate
+        return precision_times_mean, precision, shape, reparametrized_rate
 
     @staticmethod
-    def convert_to_canonical_form(prec_times_mean, precision, shape, reparameterized_rate):
+    def convert_to_canonical_form(prec_times_mean, precision, shape, reparametrized_rate):
         """
         Converts the NIG parameters back to its canonical form.
 
@@ -98,7 +111,7 @@ class NIGNormalRegressionSummary(Summary):
         :rtype: a tuple of mean, covariance, shape, and rate.
         """
         covariance = precision.inverse()
-        mean = covariance.matmul(prec_times_mean)
-        rate = reparameterized_rate - 0.5 * mean.matmul(precision).matmul(mean)
+        mean = covariance.matmul(prec_times_mean.unsqueeze(-1)).squeeze(-1)
+        rate = reparametrized_rate - 0.5*(mean.unsqueeze(-2)).matmul(precision).matmul(mean.unsqueeze(-1)).squeeze(-1).squeeze(-1)
 
         return mean, covariance, shape, rate
