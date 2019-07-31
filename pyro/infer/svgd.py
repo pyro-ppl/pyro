@@ -14,27 +14,41 @@ def vectorize(fn, num_particles, max_plate_nesting):
 
 
 class RBFKernel(object):
-    def root_bandwidth(self, param):
-        return 1.0
+    """
+    A RBF kernel for use in the SVGD inference algorithm. The bandwidth of the kernel is chosen from the data
+    using a simple heuristic as in reference [1].
 
-    def _log_kernel(self, param):
-        n = param.size(0)
-        root_h = self.root_bandwidth(param)
-        norm_param = param / root_h
-        delta_x = norm_param.unsqueeze(0) - norm_param.unsqueeze(1)
-        norm_sq = delta_x.reshape(n, n, -1).pow(2.0).sum(-1)
-        log_kernel = -norm_sq
-        grad_term = (-2.0) * delta / root_h
+    References:
+    [1] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
+        Qiang Liu, Dilin Wang
+    """
+    def _bandwidth(self, norm_sq):
+        """
+        Compute the bandwidth along each dimension using the median pairwise distance between particles.
+        """
+        num_particles = norm_sq.size(0)
+        index = torch.arange(num_particles)
+        norm_sq = norm_sq[index > index.unsqueeze(-1), ...]
+        median = norm_sq.median(dim=0)[0]
+        return median / (num_particles + 1).log()
+
+    def _log_kernel_and_grad(self, param):
+        num_particles = param.size(0)
+        delta_x = param.unsqueeze(0) - param.unsqueeze(1)
+        norm_sq = delta_x.reshape(num_particles, num_particles, -1).pow(2.0)
+        h = self._bandwidth(norm_sq)
+        log_kernel = -norm_sq / h
+        grad_term = (-2.0) * delta_x / h.reshape(param.shape[1:])
         return log_kernel, grad_term
 
     def kernel_and_grads(self, params):
-        kernels, grads = {}, {}
+        log_kernels, grads = {}, {}
         for name, param in params.items():
-            kernel, grad = self._log_kernel(param)
-            kernels[name] = kernel
+            log_kernel, grad = self._log_kernel_and_grad(param)
+            log_kernels[name] = log_kernel
             grads[name] = grad
-        kernel = torch.exp(sum(kernels.values()))
-        grads = self.apply(kernel, grads) #{name: torch.einsum("ab,b...->a...", kernel, grad) for name, grad in grads.items()}
+        kernel = torch.exp(sum(log_kernels.values()))
+        grads = self.apply(kernel, grads)
         return kernel, grads
 
     def apply(self, kernel, grads):
@@ -43,6 +57,18 @@ class RBFKernel(object):
 
 
 class SVGD(object):
+    """
+    A basic implementation of Stein Variational Gradient Descent as described in reference [1].
+
+    :param model: the model (callable containing Pyro primitives). model must be fully vectorized.
+    :param kernel: a SVGD compatible kernel
+    :param int num_particles: the number of particles used in SVGD
+    :param int max_plate_nesting: the max number of nested :func:`pyro.plate` contexts in the model.
+
+    References:
+    [1] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
+        Qiang Liu, Dilin Wang
+    """
     def __init__(self, model, kernel, num_particles, max_plate_nesting):
         self.model = vectorize(model, num_particles, max_plate_nesting)
         self.guide = AutoDelta(model)
@@ -52,6 +78,9 @@ class SVGD(object):
         self.loss = Trace_ELBO().differentiable_loss
 
     def compute_grad(self, *args, **kwargs):
+        """
+        Computes the SVGD gradient, passing *args and **kwargs to the model.
+        """
         loss = self.loss(*args, **kwargs)
         loss.backward()
 
