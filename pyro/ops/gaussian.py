@@ -249,6 +249,7 @@ def matrix_and_mvn_to_gaussian(matrix, mvn):
     P_yy = x_gaussian.precision
     P_xy = matrix
     P_yx = matrix.transpose(-1, -2)
+    # FIXME this math is incorrect:
     precision = torch.cat([torch.cat([P_xx, P_xy], -1),
                            torch.cat([P_yx, P_yy], -1)], -2)
     info_vec = torch.cat([matrix.new_zeros(batch_shape + (x_dim,)), x_gaussian.info_vec], -1)
