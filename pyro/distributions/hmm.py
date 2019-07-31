@@ -256,7 +256,7 @@ class GaussianHMM(TorchDistribution):
         result = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
 
         # Eliminate time dimension.
-        result = _sequential_gaussian_tensordot(result)
+        result = _sequential_gaussian_tensordot(result.expand(result.batch_shape))
 
         # Combine initial factor.
         result = gaussian_tensordot(self._init, result, dims=self.hidden_dim)
