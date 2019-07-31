@@ -13,9 +13,20 @@ class Summary(object):
     @abstractmethod
     def update(self, obs, features=None):
         """
-        Add observed data to this summary. The last batch dimension indicates 
+        Add observed data to this summary. The last batch dimension indicates
         a batch update of datapoints.
-        
+
+        :param torch.Tensor obs: The dimensions are batch_dim x obs_dim
+        :param torch.Tensor features: The dimensions are batch_dim x features_dim
+        """
+        pass
+
+    @abstractmethod
+    def downdate(self, obs, features=None):
+        """
+        Remove observed data to this summary. The last batch dimension indicates
+        a batch update of datapoints.
+
         :param torch.Tensor obs: The dimensions are batch_dim x obs_dim
         :param torch.Tensor features: The dimensions are batch_dim x features_dim
         """
@@ -30,88 +41,162 @@ class BetaBernoulliSummary(Summary):
     :param float prior_beta: The prior beta parameter for the Beta distribution.
     """
     def __init__(self, prior_alpha, prior_beta):
-        prior_alpha += torch.tensor([0.]) # TODO: hack to handle scalar and tensor inputs
-        prior_beta += torch.tensor([0.])
-        assert torch.all(prior_alpha > 0.0)
-        assert torch.all(prior_beta > 0.0)
-        assert prior_alpha.shape == prior_beta.shape
-        self.alpha = prior_alpha
-        self.beta = prior_beta
+        self._alpha = prior_alpha + torch.tensor([0.])   # hack to handle scalar and tensor inputs
+        self._beta = prior_beta + torch.tensor([0.])
+        assert torch.all(self._alpha > 0.0)
+        assert torch.all(self._beta > 0.0)
+
+        self._alpha = prior_alpha
+        self._beta = prior_beta
 
     def update(self, obs, features=None):
         assert features is None
         assert obs.shape[-1] == 1
-        total = obs.sum([-2,-1])
-        self.alpha += total
-        self.beta += torch.ones(obs.shape).sum([-2,-1]) - total
+        total = obs.sum([-2, -1])
+        self._alpha += total
+        self._beta += torch.ones(obs.shape).sum([-2, -1]) - total
+
+    def downdate(self, obs, features=None):
+        assert features is None
+        assert obs.shape[-1] == 1
+        total = obs.sum([-2, -1])
+        self._alpha -= total
+        self._beta -= torch.ones(obs.shape).sum([-2, -1]) - total
+
+    @property
+    def alpha(self):
+        return self._alpha
+
+    @property
+    def beta(self):
+        return self._beta
 
 
 class NIGNormalRegressionSummary(Summary):
     """
     Summary of NIG-Normal conjugate family regression data. The prior can be broadcasted to a batch of summaries.
 
-    :param torch.tensor prior_mean: The prior mean parameter for the NIG distribution. 
+    :param torch.tensor prior_mean: The prior mean parameter for the NIG distribution.
                                     batch_shape == (other_batches, obs_dim or 1); event_shape == (features.dim)
-    :param torch.tensor prior_covariance: The prior covariance parameter for the NIG distribution. 
-                                          batch_shape == (other_batches, obs_dim or 1); event_shape == (features.dim, features.dim)
-    :param float prior_shape: The prior shape parameter for the NIG distribution. 
+    :param torch.tensor prior_covariance: The prior covariance parameter for the NIG distribution.
+                                          batch_shape == (other_batches, obs_dim or 1);
+                                          event_shape == (features.dim, features.dim)
+    :param float prior_shape: The prior shape parameter for the NIG distribution.
                               batch_shape == (other_batches, obs_dim or 1); event_shape is ()
-    :param float prior_rate: The prior rate parameter for the NIG distribution. 
+    :param float prior_rate: The prior rate parameter for the NIG distribution.
                              batch_shape == (other_batches, obs_dim or 1); event_shape is ()
     """
     # TODO: Allow for fast Cholesky rank-1 update
     def __init__(self, prior_mean, prior_covariance, prior_shape, prior_rate):
-        # TODO: Hack to allow scalar inputs
-        prior_mean = prior_mean + torch.Tensor([0.])
-        prior_covariance = prior_covariance + torch.Tensor([[0.]])
-        prior_shape = prior_shape + torch.Tensor([0.])
-        prior_rate = prior_rate + torch.Tensor([0.])
-        assert torch.all(prior_covariance.eq(prior_covariance.transpose(-2, -1)))
-        try:
-            torch.cholesky(prior_covariance)
-        except:
-            raise RuntimeError("Covariance is not PSD.")
+        # Hack to allow scalar inputs
+        self._mean = prior_mean + torch.Tensor([0.])
+        self._covariance = prior_covariance + torch.Tensor([[0.]])
+        self._shape = prior_shape + torch.Tensor([0.])
+        self._rate = prior_rate + torch.Tensor([0.])
+        assert torch.all(self._covariance.eq(self._covariance.transpose(-2, -1)))
+        assert torch.all(self._shape > 0)
+        assert torch.all(self._rate > 0)
 
-        assert torch.all(prior_shape > 0)
-        assert torch.all(prior_rate > 0)
-        params = self.convert_to_reparametrized_form(prior_mean, prior_covariance, prior_shape, prior_rate)
-        self.precision_times_mean, self.precision, self.shape, self.reparametrized_rate = params
+        # Reparametrize
+        self._precision = self._covariance.inverse()
+        self._precision_times_mean = self._precision.matmul(self._mean.unsqueeze(-1)).squeeze(-1)
+        self._reparametrized_rate = self._rate + (0.5*(self._mean.unsqueeze(-2)).matmul(self._precision)
+                                                  .matmul(self._mean.unsqueeze(-1)).squeeze(-1).squeeze(-1))
+
+        self.updated_canonical = True
+        self.obs_dim = None
 
     def update(self, obs, features=None):
         # features batch_shape == (other_batches); event_shape == (update_batch, features_dim)
         # obs:     batch_shape == (other_batches); event_shape == (update_batch, obs_dim)
         assert features is not None
-        assert obs.shape[:-1] == features.shape[:-1]
-        self.precision_times_mean = self.precision_times_mean + obs.transpose(-2,-1).matmul(features) 
-        self.precision = self.precision + (features.transpose(-2,-1).matmul(features)).unsqueeze(-3)
-        self.shape = self.shape + 0.5 * obs.shape[-2]
-        self.reparametrized_rate = self.reparametrized_rate + 0.5 * (obs * obs).sum(-2)
+        assert obs.dim() >= 2
+        assert features.dim() >= 2
+        assert obs.shape[-2] == features.shape[-2]
+        if self.obs_dim is None:
+            self.obs_dim = obs.shape[-1]
+        else:
+            assert self.obs_dim == obs.shape[-1]
 
-    @staticmethod
-    def convert_to_reparametrized_form(mean, covariance, shape, rate):
-        """
-        Converts the NIG parameters to a more convenient form which obviates the
-        need for matrix inverses needed for updates.
+        self._precision_times_mean = self._precision_times_mean + obs.transpose(-2, -1).matmul(features)
+        self._precision = self._precision + (features.transpose(-2, -1).matmul(features)).unsqueeze(-3)
+        self._shape = self._shape + 0.5 * obs.shape[-2]
+        self._reparametrized_rate = self._reparametrized_rate + 0.5 * (obs * obs).sum(-2)
 
-        :returns: a reparametrization of the parameters for faster updating and sampling.
-        :rtype: a tuple of precision_times_mean, precision, shape, and reparametrized_rate.
-        """
-        precision = covariance.inverse() # event_shape == (features.dim, features.dim)
-        precision_times_mean = precision.matmul(mean.unsqueeze(-1)).squeeze(-1) # event_shape == (features.dim)
-        reparametrized_rate = rate + 0.5*(mean.unsqueeze(-2)).matmul(precision).matmul(mean.unsqueeze(-1)).squeeze(-1).squeeze(-1) # event_shape == ()
+        self.updated_canonical = False
 
-        return precision_times_mean, precision, shape, reparametrized_rate
+    def downdate(self, obs, features=None):
+        # features batch_shape == (other_batches); event_shape == (update_batch, features_dim)
+        # obs:     batch_shape == (other_batches); event_shape == (update_batch, obs_dim)
+        assert features is not None
+        assert obs.dim() >= 2
+        assert features.dim() >= 2
+        assert obs.shape[-2] == features.shape[-2]
+        if self.obs_dim is None:
+            self.obs_dim = obs.shape[-1]
+        else:
+            assert self.obs_dim == obs.shape[-1]
 
-    @staticmethod
-    def convert_to_canonical_form(prec_times_mean, precision, shape, reparametrized_rate):
+        self._precision_times_mean = self._precision_times_mean - obs.transpose(-2, -1).matmul(features)
+        self._precision = self._precision - (features.transpose(-2, -1).matmul(features)).unsqueeze(-3)
+        self._shape = self._shape - 0.5 * obs.shape[-2]
+        self._reparametrized_rate = self._reparametrized_rate - 0.5 * (obs * obs).sum(-2)
+
+        self.updated_canonical = False
+
+    @property
+    def mean(self):
+        if self.updated_canonical:
+            return self._mean
+        else:
+            self.updated_canonical = True
+            return self._convert_to_canonical_form()[0]
+
+    @property
+    def covariance(self):
+        if self.updated_canonical:
+            return self._covariance
+        else:
+            self.updated_canonical = True
+            return self._convert_to_canonical_form()[1]
+
+    @property
+    def rate(self):
+        if self.updated_canonical:
+            return self._rate
+        else:
+            self.updated_canonical = True
+            return self._convert_to_canonical_form()[3]
+
+    @property
+    def precision_times_mean(self):
+        return self._precision_times_mean
+
+    @property
+    def precision(self):
+        return self._precision
+
+    @property
+    def shape(self):
+        return self._shape
+
+    @property
+    def reparametrized_rate(self):
+        return self._reparametrized_rate
+
+    def _convert_to_canonical_form(self):
         """
         Converts the NIG parameters back to its canonical form.
 
         :returns: the canonical parameters.
-        :rtype: a tuple of mean, covariance, shape, and rate.
+        :rtype: a tuple of mean (features.dim), covariance (features.dim, features.dim),
+                shape (), and rate ().
         """
-        covariance = precision.inverse()
-        mean = covariance.matmul(prec_times_mean.unsqueeze(-1)).squeeze(-1)
-        rate = reparametrized_rate - 0.5*(mean.unsqueeze(-2)).matmul(precision).matmul(mean.unsqueeze(-1)).squeeze(-1).squeeze(-1)
+        self._covariance = self._precision.inverse()
+        self._mean = self._covariance.matmul(self._precision_times_mean.unsqueeze(-1)).squeeze(-1)
+        self._rate = self._reparametrized_rate - (0.5*(self._mean.unsqueeze(-2)).matmul(self._precision)
+                                                  .matmul(self._mean.unsqueeze(-1)).squeeze(-1).squeeze(-1))
 
-        return mean, covariance, shape, rate
+        self.updated_canonical = True
+
+        return self._mean, self._covariance, self._shape, self._rate
