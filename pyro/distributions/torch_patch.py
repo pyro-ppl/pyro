@@ -87,18 +87,6 @@ def _einsum(equation, *operands):
         # the old interface of passing the operands as one list argument
         operands = operands[0]
 
-    # work around torch.einsum performance issues
-    # see https://github.com/pytorch/pytorch/issues/10661
-    if equation == 'ac,abc->bc':
-        x, y = operands
-        return (x.unsqueeze(1) * y).sum(0)
-    elif equation == 'ac,abc->cb':
-        x, y = operands
-        return (x.unsqueeze(1) * y).sum(0).transpose(0, 1)
-    elif equation == 'abc,ac->cb':
-        y, x = operands
-        return (x.unsqueeze(1) * y).sum(0).transpose(0, 1)
-
     return _einsum._pyro_unpatched(equation, *operands)
 
 
