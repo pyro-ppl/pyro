@@ -239,7 +239,7 @@ class GaussianHMM(TorchDistribution):
         self._obs = matrix_and_mvn_to_gaussian(observation_matrix, observation_dist)
 
     def expand(self, batch_shape, _instance=None):
-        new = self._get_checked_instance(GaussianMRF, _instance)
+        new = self._get_checked_instance(GaussianHMM, _instance)
         batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
         # We only need to expand one of the inputs, since batch_shape is determined
         # by broadcasting all three. To save computation in _sequential_gaussian_tensordot(),
