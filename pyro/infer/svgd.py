@@ -3,7 +3,6 @@ import torch
 import pyro
 import pyro.poutine as poutine
 from pyro.infer import Trace_ELBO
-from pyro.contrib.autoguide import AutoDelta
 
 
 def vectorize(fn, num_particles, max_plate_nesting):
@@ -71,6 +70,8 @@ class SVGD(object):
     """
     def __init__(self, model, kernel, num_particles, max_plate_nesting):
         self.model = vectorize(model, num_particles, max_plate_nesting)
+        # TODO: fix circular import hack
+        from pyro.contrib.autoguide import AutoDelta
         self.guide = AutoDelta(model)
         self.kernel = kernel
         self.num_particles = num_particles
@@ -81,20 +82,11 @@ class SVGD(object):
         """
         Computes the SVGD gradient, passing *args and **kwargs to the model.
         """
-        loss = self.loss(*args, **kwargs)
+        loss = self.loss(self.model, self.guide, *args, **kwargs)
         loss.backward()
 
-        kernel, grads = self.kernel.kernel_and_grads()
+        params = {name: pyro.param('auto_{}'.format(name)) for name, site in self.guide.prototype_trace.iter_stochastic_nodes()}
+        for p, v in params.items():
+            print(p, v.shape)
 
-        for name, site in self.prototype_trace.iter_stochastic_nodes():
-            print(name)
-
-
-if __name__ == '__main__':
-    def model():
-        pyro.sample("z", dist.Normal(torch.zeros(3), 1.0).to_event(1))
-
-    kernel = RBFKernel()
-    svgd = SVGD(model, kernel, 10, 0)
-    svgd.compute_grad()
-
+        kernel, grads = self.kernel.kernel_and_grads(params)
