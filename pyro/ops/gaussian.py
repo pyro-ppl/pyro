@@ -255,7 +255,6 @@ def matrix_and_mvn_to_gaussian(matrix, mvn):
     info_y = y_gaussian.info_vec
     info_x = -matrix.matmul(info_y.unsqueeze(-1)).squeeze(-1)
     info_vec = torch.cat([info_x, info_y], -1)
-    # FIXME this is incorrect:
     log_normalizer = y_gaussian.log_normalizer
 
     result = Gaussian(log_normalizer, info_vec, precision)
