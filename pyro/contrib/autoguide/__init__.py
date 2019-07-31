@@ -13,10 +13,9 @@ Automatic guides can also be combined using :func:`pyro.poutine.block` and
 :class:`AutoGuideList`.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import numbers
 import weakref
+from contextlib import ExitStack  # python 3
 
 import torch
 from torch.distributions import biject_to, constraints
@@ -31,11 +30,6 @@ from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
 from pyro.poutine.util import prune_subsample_sites
-
-try:
-    from contextlib import ExitStack  # python 3
-except ImportError:
-    from contextlib2 import ExitStack  # python 2
 
 __all__ = [
     'AutoCallable',
@@ -258,7 +252,7 @@ class AutoDelta(AutoGuide):
     construct a MAP guide over the entire latent space. The guide does not
     depend on the model's ``*args, **kwargs``.
 
-    ..note:: This class does MAP inference in constrained space.
+    .. note:: This class does MAP inference in constrained space.
 
     Usage::
 
@@ -403,10 +397,12 @@ class AutoContinuous(AutoGuide):
         batch_shape = latent.shape[:-1]  # for plates outside of _setup_prototype, e.g. parallel particles
         pos = 0
         for name, site in self.prototype_trace.iter_stochastic_nodes():
+            constrained_shape = site["value"].shape
             unconstrained_shape = self._unconstrained_shapes[name]
             size = _product(unconstrained_shape)
+            event_dim = site["fn"].event_dim + len(unconstrained_shape) - len(constrained_shape)
             unconstrained_shape = broadcast_shape(unconstrained_shape,
-                                                  batch_shape + (1,) * site["fn"].event_dim)
+                                                  batch_shape + (1,) * event_dim)
             unconstrained_value = latent[..., pos:pos + size].view(unconstrained_shape)
             yield site, unconstrained_value
             pos += size

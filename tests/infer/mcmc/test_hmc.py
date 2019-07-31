@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import logging
 import os
 from collections import namedtuple
@@ -186,8 +184,9 @@ def test_logistic_regression(step_size, trajectory_length, num_steps,
     hmc_kernel = HMC(model, step_size=step_size, trajectory_length=trajectory_length,
                      num_steps=num_steps, adapt_step_size=adapt_step_size,
                      adapt_mass_matrix=adapt_mass_matrix, full_mass=full_mass)
-    mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100, disable_progbar=True).run(data)
-    samples = mcmc_run['beta']
+    mcmc = MCMC(hmc_kernel, num_samples=500, warmup_steps=100, disable_progbar=True)
+    mcmc.run(data)
+    samples = mcmc.get_samples()['beta']
     assert_equal(rmse(true_coefs, samples.mean(0)).item(), 0.0, prec=0.1)
 
 
@@ -202,7 +201,9 @@ def test_dirichlet_categorical(jit):
     true_probs = torch.tensor([0.1, 0.6, 0.3])
     data = dist.Categorical(true_probs).sample(sample_shape=(torch.Size((2000,))))
     hmc_kernel = HMC(model, trajectory_length=1, jit_compile=jit, ignore_jit_warnings=True)
-    samples = MCMC(hmc_kernel, num_samples=200, warmup_steps=100).run(data)
+    mcmc = MCMC(hmc_kernel, num_samples=200, warmup_steps=100)
+    mcmc.run(data)
+    samples = mcmc.get_samples()
     assert_equal(samples['p_latent'].mean(0), true_probs, prec=0.02)
 
 
@@ -220,7 +221,9 @@ def test_beta_bernoulli(jit):
     data = dist.Bernoulli(true_probs).sample(sample_shape=(torch.Size((1000,))))
     hmc_kernel = HMC(model, trajectory_length=1, max_plate_nesting=2,
                      jit_compile=jit, ignore_jit_warnings=True)
-    samples = MCMC(hmc_kernel, num_samples=800, warmup_steps=500).run(data)
+    mcmc = MCMC(hmc_kernel, num_samples=800, warmup_steps=500)
+    mcmc.run(data)
+    samples = mcmc.get_samples()
     assert_equal(samples['p_latent'].mean(0), true_probs, prec=0.05)
 
 
@@ -234,9 +237,10 @@ def test_gamma_normal():
 
     true_std = torch.tensor([0.5, 2])
     data = dist.Normal(3, true_std).sample(sample_shape=(torch.Size((2000,))))
-    hmc_kernel = HMC(model, trajectory_length=1, step_size=0.03, adapt_step_size=False,
-                     jit_compile=True, ignore_jit_warnings=True)
-    samples = MCMC(hmc_kernel, num_samples=200, warmup_steps=200).run(data)
+    hmc_kernel = HMC(model, num_steps=15, step_size=0.01, adapt_step_size=True)
+    mcmc = MCMC(hmc_kernel, num_samples=200, warmup_steps=200)
+    mcmc.run(data)
+    samples = mcmc.get_samples()
     assert_equal(samples['p_latent'].mean(0), true_std, prec=0.05)
 
 
@@ -257,12 +261,15 @@ def test_bernoulli_latent_model(jit):
     data = dist.Normal(2. * z, 1.0).sample()
     hmc_kernel = HMC(model, trajectory_length=1, max_plate_nesting=1,
                      jit_compile=jit, ignore_jit_warnings=True)
-    samples = MCMC(hmc_kernel, num_samples=600, warmup_steps=200).run(data)
+    mcmc = MCMC(hmc_kernel, num_samples=600, warmup_steps=200)
+    mcmc.run(data)
+    samples = mcmc.get_samples()
     assert_equal(samples['y_prob'].mean(0), y_prob, prec=0.06)
 
 
 @pytest.mark.parametrize("kernel", [HMC, NUTS])
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/pytorch/pytorch/issues/22811")
 def test_unnormalized_normal(kernel, jit):
     true_mean, true_std = torch.tensor(5.), torch.tensor(1.)
     init_params = {"z": torch.tensor(0.)}

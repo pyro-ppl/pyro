@@ -1,17 +1,14 @@
-from __future__ import absolute_import, division, print_function
-
 import functools
 import numbers
 import random
-import types
+import timeit
 import warnings
 from collections import defaultdict
+from itertools import zip_longest
 
 import graphviz
-import six
 import torch
-from contextlib2 import contextmanager
-from six.moves import copyreg, zip_longest
+from contextlib import contextmanager
 
 from pyro.poutine.util import site_is_subsample
 
@@ -338,9 +335,15 @@ def ignore_jit_warnings(filter=None):
     Ignore JIT tracer warnings with messages that match `filter`. If
     `filter` is not specified all tracer warnings are ignored.
 
+    Note this only installs warning filters if executed within traced code.
+
     :param filter: A list containing either warning message (str),
         or tuple consisting of (warning message (str), Warning class).
     """
+    if not torch._C._get_tracing_state():
+        yield
+        return
+
     with warnings.catch_warnings():
         if filter is None:
             warnings.filterwarnings("ignore",
@@ -368,15 +371,31 @@ def jit_iter(tensor):
         return list(tensor)
 
 
-@contextmanager
-def optional(context_manager, condition):
+class optional(object):
     """
     Optionally wrap inside `context_manager` if condition is `True`.
     """
-    if condition:
-        with context_manager:
-            yield
-    else:
+    def __init__(self, context_manager, condition):
+        self.context_manager = context_manager
+        self.condition = condition
+
+    def __enter__(self):
+        if self.condition:
+            return self.context_manager.__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.condition:
+            return self.context_manager.__exit__(exc_type, exc_val, exc_tb)
+
+
+class ExperimentalWarning(UserWarning):
+    pass
+
+
+@contextmanager
+def ignore_experimental_warning():
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=ExperimentalWarning)
         yield
 
 
@@ -388,6 +407,17 @@ def deep_getattr(obj, name):
     return functools.reduce(getattr, name.split("."), obj)
 
 
+class timed(object):
+    def __enter__(self, timer=timeit.default_timer):
+        self.start = timer()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.end = timeit.default_timer()
+        self.elapsed = self.end - self.start
+        return self.elapsed
+
+
 # work around https://github.com/pytorch/pytorch/issues/11829
 def jit_compatible_arange(end, dtype=None, device=None):
     dtype = torch.long if dtype is None else dtype
@@ -396,16 +426,3 @@ def jit_compatible_arange(end, dtype=None, device=None):
 
 def torch_float(x):
     return x.float() if isinstance(x, torch.Tensor) else float(x)
-
-
-# TODO: Remove when python 2 support is removed.
-# Ability to serialize methods via pickle in Python 2.
-def _pickle_method(m):
-    if m.im_self is None:
-        return getattr, (m.im_class, m.im_func.func_name)
-    else:
-        return getattr, (m.im_self, m.im_func.func_name)
-
-
-if six.PY2:
-    copyreg.pickle(types.MethodType, _pickle_method)

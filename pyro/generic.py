@@ -1,8 +1,6 @@
-from __future__ import absolute_import, division, print_function
-
 import importlib
 
-from contextlib2 import contextmanager
+from contextlib import contextmanager
 
 
 class GenericModule(object):

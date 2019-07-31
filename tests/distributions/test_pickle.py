@@ -1,9 +1,7 @@
-from __future__ import absolute_import, division, print_function
-
 import inspect
 
 import pytest
-import six.moves.cPickle as pickle
+import pickle
 import torch
 
 import pyro.distributions as dist

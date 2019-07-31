@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import torch
 from torch.distributions.utils import broadcast_all
 

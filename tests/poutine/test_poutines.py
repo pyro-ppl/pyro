@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import functools
 import logging
 import pickle
@@ -9,7 +7,7 @@ from unittest import TestCase
 import pytest
 import torch
 import torch.nn as nn
-from six.moves.queue import Queue
+from queue import Queue
 
 import pyro
 import pyro.distributions as dist

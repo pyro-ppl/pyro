@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import torch
 from torch.optim.optimizer import Optimizer
 
@@ -11,15 +9,16 @@ class AdagradRMSProp(Optimizer):
 
     References:
     [1] 'Automatic Differentiation Variational Inference', Alp Kucukelbir,
-        Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M. Blei
-        URL: https://arxiv.org/abs/1603.00788
+    Dustin Tran, Rajesh Ranganath, Andrew Gelman, David M. Blei
+    URL: https://arxiv.org/abs/1603.00788
     [2] 'Lecture 6.5 RmsProp: Divide the gradient by a running average
-        of its recent magnitude', Tieleman, T. and Hinton, G.,
-        COURSERA: Neural Networks for Machine Learning.
+    of its recent magnitude', Tieleman, T. and Hinton, G.,
+    COURSERA: Neural Networks for Machine Learning.
     [3] 'Adaptive subgradient methods for online learning and stochastic optimization',
-        Duchi, John, Hazan, E and Singer, Y.
+    Duchi, John, Hazan, E and Singer, Y.
 
     Arguments:
+
     :param params: iterable of parameters to optimize or dicts defining parameter groups
     :param eta: sets the step size scale (optional; default: 1.0)
     :type eta: float

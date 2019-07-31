@@ -7,9 +7,6 @@ by recursively reasoning about one another.
 
 Taken from: http://forestdb.org/models/schelling.html
 """
-
-from __future__ import print_function
-
 import argparse
 import torch
 
@@ -76,7 +73,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.3')
+    assert pyro.__version__.startswith('0.3.4')
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-samples', default=10, type=int)
     parser.add_argument('--depth', default=2, type=int)

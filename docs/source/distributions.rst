@@ -77,6 +77,13 @@ DirichletMultinomial
     :undoc-members:
     :show-inheritance:
 
+DiscreteHMM
+--------------------
+.. autoclass:: pyro.distributions.DiscreteHMM
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 EmpiricalDistribution
 ----------------------
 .. autoclass:: pyro.distributions.Empirical
@@ -87,6 +94,13 @@ EmpiricalDistribution
 GammaPoisson
 ------------
 .. autoclass:: pyro.distributions.GammaPoisson
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+GaussianMRF
+--------------------
+.. autoclass:: pyro.distributions.GaussianMRF
     :members:
     :undoc-members:
     :show-inheritance:

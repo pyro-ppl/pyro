@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import pyro.poutine as poutine
 from pyro.logger import log
 from pyro.poutine import condition, do, markov
@@ -7,7 +5,7 @@ from pyro.primitives import (clear_param_store, enable_validation, get_param_sto
                              plate, random_module, sample, validation_enabled)
 from pyro.util import set_rng_seed
 
-version_prefix = '0.3.3'
+version_prefix = '0.3.4'
 
 # Get the __version__ string from the auto-generated _version.py file, if exists.
 try:

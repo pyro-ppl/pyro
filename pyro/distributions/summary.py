@@ -48,36 +48,44 @@ class BetaBernoulliSummary(Summary):
 
 class NIGNormalRegressionSummary(Summary):
     """
-    Summary of NIG-Normal conjugate family regression data.
+    Summary of NIG-Normal conjugate family regression data. The prior can be broadcasted to a batch of summaries.
 
-    :param torch.tensor prior_mean: The prior mean parameter for the NIG distribution. event_shape == features.dim
-    :param torch.tensor prior_covariance: The prior covariance parameter for the NIG distribution. event_shape == features.dim x features.dim
-    :param float prior_shape: The prior shape parameter for the NIG distribution. event_shape is ()
-    :param float prior_rate: The prior rate parameter for the NIG distribution. event_shape is ()
+    :param torch.tensor prior_mean: The prior mean parameter for the NIG distribution. 
+                                    batch_shape == (other_batches, obs_dim or 1); event_shape == (features.dim)
+    :param torch.tensor prior_covariance: The prior covariance parameter for the NIG distribution. 
+                                          batch_shape == (other_batches, obs_dim or 1); event_shape == (features.dim, features.dim)
+    :param float prior_shape: The prior shape parameter for the NIG distribution. 
+                              batch_shape == (other_batches, obs_dim or 1); event_shape is ()
+    :param float prior_rate: The prior rate parameter for the NIG distribution. 
+                             batch_shape == (other_batches, obs_dim or 1); event_shape is ()
     """
     # TODO: Allow for fast Cholesky rank-1 update
     def __init__(self, prior_mean, prior_covariance, prior_shape, prior_rate):
+        # TODO: Hack to allow scalar inputs
+        prior_mean = prior_mean + torch.Tensor([0.])
+        prior_covariance = prior_covariance + torch.Tensor([[0.]])
+        prior_shape = prior_shape + torch.Tensor([0.])
+        prior_rate = prior_rate + torch.Tensor([0.])
         assert torch.all(prior_covariance.eq(prior_covariance.transpose(-2, -1)))
         try:
             torch.cholesky(prior_covariance)
         except:
             raise RuntimeError("Covariance is not PSD.")
-        # TODO: Hack to allow scalar inputs
-        prior_shape += torch.Tensor([0.])
-        prior_rate += torch.Tensor([0.])
+
         assert torch.all(prior_shape > 0)
         assert torch.all(prior_rate > 0)
         params = self.convert_to_reparametrized_form(prior_mean, prior_covariance, prior_shape, prior_rate)
         self.precision_times_mean, self.precision, self.shape, self.reparametrized_rate = params
 
     def update(self, obs, features=None):
+        # features batch_shape == (other_batches); event_shape == (update_batch, features_dim)
+        # obs:     batch_shape == (other_batches); event_shape == (update_batch, obs_dim)
         assert features is not None
-        assert obs.shape[-1] == 1
         assert obs.shape[:-1] == features.shape[:-1]
-        self.precision_times_mean += features.transpose(-2,-1).matmul(obs.squeeze(-1))
-        self.precision += features.transpose(-2,-1).matmul(features)
-        self.shape += 0.5 * obs.shape[-2]
-        self.reparametrized_rate += 0.5 * (obs * obs).sum([-2,-1])
+        self.precision_times_mean = self.precision_times_mean + obs.transpose(-2,-1).matmul(features) 
+        self.precision = self.precision + (features.transpose(-2,-1).matmul(features)).unsqueeze(-3)
+        self.shape = self.shape + 0.5 * obs.shape[-2]
+        self.reparametrized_rate = self.reparametrized_rate + 0.5 * (obs * obs).sum(-2)
 
     @staticmethod
     def convert_to_reparametrized_form(mean, covariance, shape, rate):
@@ -88,9 +96,9 @@ class NIGNormalRegressionSummary(Summary):
         :returns: a reparametrization of the parameters for faster updating and sampling.
         :rtype: a tuple of precision_times_mean, precision, shape, and reparametrized_rate.
         """
-        precision = covariance.inverse()
-        precision_times_mean = precision.matmul(mean)
-        reparametrized_rate = rate + 0.5*mean.matmul(precision).matmul(mean)
+        precision = covariance.inverse() # event_shape == (features.dim, features.dim)
+        precision_times_mean = precision.matmul(mean.unsqueeze(-1)).squeeze(-1) # event_shape == (features.dim)
+        reparametrized_rate = rate + 0.5*(mean.unsqueeze(-2)).matmul(precision).matmul(mean.unsqueeze(-1)).squeeze(-1).squeeze(-1) # event_shape == ()
 
         return precision_times_mean, precision, shape, reparametrized_rate
 
@@ -103,7 +111,7 @@ class NIGNormalRegressionSummary(Summary):
         :rtype: a tuple of mean, covariance, shape, and rate.
         """
         covariance = precision.inverse()
-        mean = covariance.matmul(prec_times_mean)
-        rate = reparametrized_rate - 0.5 * mean.matmul(precision).matmul(mean)
+        mean = covariance.matmul(prec_times_mean.unsqueeze(-1)).squeeze(-1)
+        rate = reparametrized_rate - 0.5*(mean.unsqueeze(-2)).matmul(precision).matmul(mean.unsqueeze(-1)).squeeze(-1).squeeze(-1)
 
         return mean, covariance, shape, rate

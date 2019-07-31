@@ -1,7 +1,5 @@
-from __future__ import absolute_import, division, print_function
-
 import os
-from six.moves.urllib.request import urlopen
+from urllib.request import urlopen
 
 import pandas as pd
 

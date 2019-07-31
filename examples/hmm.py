@@ -32,10 +32,9 @@ References
 Fritz Obermeyer, Eli Bingham, Martin Jankowiak, Justin Chiu,
 Neeraj Pradhan, Alexander Rush, Noah Goodman. https://arxiv.org/abs/1902.03210
 """
-from __future__ import absolute_import, division, print_function
-
 import argparse
 import logging
+import sys
 
 import torch
 import torch.nn as nn
@@ -51,7 +50,15 @@ from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 from pyro.util import ignore_jit_warnings
 
-logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.DEBUG)
+
+# Add another handler for logging debugging events (e.g. for profiling)
+# in a separate stream that can be captured.
+log = logging.getLogger()
+debug_handler = logging.StreamHandler(sys.stdout)
+debug_handler.setLevel(logging.DEBUG)
+debug_handler.addFilter(filter=lambda record: record.levelno <= logging.DEBUG)
+log.addHandler(debug_handler)
 
 
 # Let's start with a simple Hidden Markov Model.
@@ -380,17 +387,12 @@ class TonesGenerator(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x, y):
-        # Check dimension of y so this can be used with and without enumeration.
-        if y.dim() < 2:
-            y = y.unsqueeze(0)
-
         # Hidden units depend on two inputs: a one-hot encoded categorical variable x, and
         # a bernoulli variable y. Whereas x will typically be enumerated, y will be observed.
         # We apply x_to_hidden independently from y_to_hidden, then broadcast the non-enumerated
         # y part up to the enumerated x part in the + operation.
-        x_onehot = (torch.zeros(x.shape[:-1] + (self.args.hidden_dim,), dtype=y.dtype, device=y.device)
-                    .scatter_(-1, x, 1))
-        y_conv = self.relu(self.conv(y.unsqueeze(-2))).reshape(y.shape[:-1] + (-1,))
+        x_onehot = y.new_zeros(x.shape[:-1] + (self.args.hidden_dim,)).scatter_(-1, x, 1)
+        y_conv = self.relu(self.conv(y.reshape(-1, 1, self.data_dim))).reshape(y.shape[:-1] + (-1,))
         h = self.relu(self.x_to_hidden(x_onehot) + self.y_to_hidden(y_conv))
         return self.hidden_to_logits(h)
 
@@ -493,6 +495,41 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
                                 obs=sequences[batch, t])
 
 
+# Next we demonstrate how to parallelize the neural HMM above using Pyro's
+# DiscreteHMM distribution. This model is equivalent to model_5 above, but we
+# manually unroll loops and fuse ops, leading to a single sample statement.
+# DiscreteHMM can lead to over 10x speedup in models where it is applicable.
+def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
+    with ignore_jit_warnings():
+        num_sequences, max_length, data_dim = map(int, sequences.shape)
+        assert lengths.shape == (num_sequences,)
+        assert lengths.max() <= max_length
+
+    # Initialize a global module instance if needed.
+    global tones_generator
+    if tones_generator is None:
+        tones_generator = TonesGenerator(args, data_dim)
+    pyro.module("tones_generator", tones_generator)
+
+    with poutine.mask(mask=include_prior):
+        probs_x = pyro.sample("probs_x",
+                              dist.Dirichlet(0.9 * torch.eye(args.hidden_dim) + 0.1)
+                                  .to_event(1))
+    with pyro.plate("sequences", num_sequences, batch_size, dim=-1) as batch:
+        lengths = lengths[batch]
+        y = sequences[batch] if args.jit else sequences[batch, :lengths.max()]
+        x = torch.arange(args.hidden_dim)
+        t = torch.arange(y.size(1))
+        init_logits = torch.full((args.hidden_dim,), -float('inf'))
+        init_logits[0] = 0
+        trans_logits = probs_x.log()
+        with ignore_jit_warnings():
+            obs_dist = dist.Bernoulli(logits=tones_generator(x, y.unsqueeze(-2))).to_event(1)
+            obs_dist = obs_dist.mask((t < lengths.unsqueeze(-1)).unsqueeze(-1))
+            hmm_dist = dist.DiscreteHMM(init_logits, trans_logits, obs_dist)
+        pyro.sample("y", hmm_dist, obs=y)
+
+
 models = {name[len('model_'):]: model
           for name, model in globals().items()
           if name.startswith('model_')}
@@ -521,7 +558,7 @@ def main(args):
         lengths.clamp_(max=args.truncate)
         sequences = sequences[:, :args.truncate]
     num_observations = float(lengths.sum())
-    pyro.set_rng_seed(0)
+    pyro.set_rng_seed(args.seed)
     pyro.clear_param_store()
     pyro.enable_validation(__debug__)
 
@@ -546,7 +583,9 @@ def main(args):
     # Enumeration requires a TraceEnum elbo and declaring the max_plate_nesting.
     # All of our models have two plates: "data" and "tones".
     Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
-    elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2)
+    elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2,
+                strict_enumeration_warning=(model is not model_7),
+                jit_options={"optimize": model is model_7, "time_compilation": args.time_compilation})
     optim = Adam({'lr': args.learning_rate})
     svi = SVI(model, guide, optim, elbo)
 
@@ -555,6 +594,9 @@ def main(args):
     for step in range(args.num_steps):
         loss = svi.step(sequences, lengths, args=args, batch_size=args.batch_size)
         logging.info('{: >5d}\t{}'.format(step, loss / num_observations))
+
+    if args.jit and args.time_compilation:
+        logging.debug('time to compile: {} s.'.format(elbo._differentiable_loss.compile_time))
 
     # We evaluate on the entire training dataset,
     # excluding the prior term so our results are comparable across models.
@@ -584,7 +626,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.3')
+    assert pyro.__version__.startswith('0.3.4')
     parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))
@@ -596,8 +638,10 @@ if __name__ == '__main__':
     parser.add_argument("-lr", "--learning-rate", default=0.05, type=float)
     parser.add_argument("-t", "--truncate", type=int)
     parser.add_argument("-p", "--print-shapes", action="store_true")
+    parser.add_argument("--seed", default=0, type=int)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
+    parser.add_argument('--time-compilation', action='store_true')
     parser.add_argument('-rp', '--raftery-parameterization', action='store_true')
     args = parser.parse_args()
     main(args)

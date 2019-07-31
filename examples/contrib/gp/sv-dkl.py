@@ -25,8 +25,6 @@ Reference:
 """
 
 # Code adapted from https://github.com/pytorch/examples/tree/master/mnist
-from __future__ import absolute_import, division, print_function
-
 import argparse
 import time
 
@@ -164,7 +162,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.3')
+    assert pyro.__version__.startswith('0.3.4')
     parser = argparse.ArgumentParser(description='Pyro GP MNIST Example')
     parser.add_argument('--data-dir', type=str, default=None, metavar='PATH',
                         help='default directory to cache MNIST data')

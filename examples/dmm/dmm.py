@@ -432,19 +432,19 @@ def main(args):
 
 # parse command-line arguments and execute the main method
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.3')
+    assert pyro.__version__.startswith('0.3.4')
 
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.0003)
     parser.add_argument('-b1', '--beta1', type=float, default=0.96)
     parser.add_argument('-b2', '--beta2', type=float, default=0.999)
-    parser.add_argument('-cn', '--clip-norm', type=float, default=20.0)
+    parser.add_argument('-cn', '--clip-norm', type=float, default=10.0)
     parser.add_argument('-lrd', '--lr-decay', type=float, default=0.99996)
     parser.add_argument('-wd', '--weight-decay', type=float, default=2.0)
     parser.add_argument('-mbs', '--mini-batch-size', type=int, default=20)
     parser.add_argument('-ae', '--annealing-epochs', type=int, default=1000)
-    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.1)
+    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.2)
     parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.1)
     parser.add_argument('-iafs', '--num-iafs', type=int, default=0)
     parser.add_argument('-id', '--iaf-dim', type=int, default=100)

@@ -56,6 +56,16 @@ Tensor Contraction
 
 .. autofunction:: pyro.ops.contract.ubersum
 
+Gaussian Contraction
+--------------------
+
+.. automodule:: pyro.ops.gaussian
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
+    :special-members: __add__,__getitem__
+
 Statistical Utilities
 ---------------------
 

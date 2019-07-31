@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import functools
 
 import numpy as np
@@ -314,3 +312,13 @@ def test_empty_model_error():
     guide = AutoDiagonalNormal(model)
     with pytest.raises(RuntimeError):
         guide()
+
+
+def test_unpack_latent():
+    def model():
+        return pyro.sample('x', dist.LKJCorrCholesky(2, torch.tensor(1.)))
+
+    guide = AutoDiagonalNormal(model)
+    assert guide()['x'].shape == model().shape
+    latent = guide.sample_latent()
+    assert list(guide._unpack_latent(latent))[0][1].shape == (1,)

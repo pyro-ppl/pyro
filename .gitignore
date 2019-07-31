@@ -16,6 +16,7 @@ pyro/contrib/examples/raw
 pyro/_version.py
 processed
 raw
+*.pkl
 
 # Logs
 logs

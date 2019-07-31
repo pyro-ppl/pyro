@@ -1,10 +1,6 @@
-from __future__ import absolute_import, division, print_function
-
 import logging
 import warnings
 from abc import ABCMeta, abstractmethod
-
-from six import add_metaclass
 
 import pyro
 import pyro.poutine as poutine
@@ -13,8 +9,7 @@ from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_site_shape
 
 
-@add_metaclass(ABCMeta)
-class ELBO(object):
+class ELBO(object, metaclass=ABCMeta):
     """
     :class:`ELBO` is the top-level interface for stochastic variational
     inference via optimization of the evidence lower bound.
