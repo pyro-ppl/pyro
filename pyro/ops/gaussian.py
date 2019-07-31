@@ -244,16 +244,19 @@ def matrix_and_mvn_to_gaussian(matrix, mvn):
     matrix = matrix.expand(batch_shape + (x_dim, y_dim))
     mvn = mvn.expand(batch_shape)
 
-    x_gaussian = mvn_to_gaussian(mvn)
-    P_xx = matrix.new_zeros(batch_shape + (x_dim, x_dim))
-    P_yy = x_gaussian.precision
-    P_xy = matrix
-    P_yx = matrix.transpose(-1, -2)
-    # FIXME this math is incorrect:
+    y_gaussian = mvn_to_gaussian(mvn)
+    P_yy = y_gaussian.precision
+    neg_P_xy = matrix.matmul(P_yy)
+    P_xy = -neg_P_xy
+    P_yx = P_xy.transpose(-1, -2)
+    P_xx = neg_P_xy.matmul(matrix.transpose(-1, -2))
     precision = torch.cat([torch.cat([P_xx, P_xy], -1),
                            torch.cat([P_yx, P_yy], -1)], -2)
-    info_vec = torch.cat([matrix.new_zeros(batch_shape + (x_dim,)), x_gaussian.info_vec], -1)
-    log_normalizer = x_gaussian.log_normalizer
+    info_y = y_gaussian.info_vec
+    info_x = -matrix.matmul(info_y.unsqueeze(-1)).squeeze(-1)
+    info_vec = torch.cat([info_x, info_y], -1)
+    # FIXME this is incorrect:
+    log_normalizer = y_gaussian.log_normalizer
 
     result = Gaussian(log_normalizer, info_vec, precision)
     assert result.batch_shape == batch_shape
