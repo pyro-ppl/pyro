@@ -21,9 +21,10 @@ class SVGDRBFKernel(SVGDKernel):
     A RBF kernel for use in the SVGD inference algorithm. The bandwidth of the kernel is chosen from the
     particles using a simple heuristic as in reference [1].
 
-    References:
+    References
+
     [1] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
-        Qiang Liu, Dilin Wang
+    Qiang Liu, Dilin Wang
     """
     def _bandwidth(self, norm_sq):
         """
@@ -83,15 +84,17 @@ class SVGD(object):
 
     >>> from pyro.infer import SVGD, SVGDRBFKernel
     >>> from pyro.optim import Adam
+
     >>> kernel = SVGDRBFKernel()
     >>> adam = Adam({"lr": 0.1})
-    >>> svgd = SVGD(model, kernel, adam, num_particles=50, max_plate_nesting=0)
+    >>> svgd = SVGD(model, kernel, adam, num_particles=50, max_plate_nesting=0)  # doctest: +SKIP
 
     >>> for step in range(500):
-    >>>     svgd.step(model_arg1, model_arg2)
+    >>>     svgd.step(model_arg1, model_arg2)  # doctest: +SKIP
     >>> final_particles = svgd.get_named_particles()
 
-    References:
+    References
+
     [1] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
         Qiang Liu, Dilin Wang
     """
@@ -123,7 +126,7 @@ class SVGD(object):
 
     def step(self, *args, **kwargs):
         """
-        Computes the SVGD gradient, passing *args and **kwargs to the model,
+        Computes the SVGD gradient, passing args and kwargs to the model,
         and takes a gradient step.
 
         :param float bandwidth_factor: optional factor by which to scale the bandwidth
