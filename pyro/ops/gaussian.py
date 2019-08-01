@@ -225,6 +225,44 @@ def mvn_to_gaussian(mvn):
     return Gaussian(log_normalizer, info_vec, precision)
 
 
+def matrix_and_mvn_to_gaussian(matrix, mvn):
+    """
+    Convert a noisy affine function to a Gaussian. The noisy affine function is defined as::
+
+        y = x @ matrix + mvn.sample()
+
+    :param ~torch.Tensor matrix: A matrix with rightmost shape ``(x_dim, y_dim)``.
+    :param ~torch.distributions.MultivariateNormal mvn: A multivariate normal distribution.
+    :return: A Gaussian with broadcasted batch shape and ``.dim() == x_dim + y_dim``.
+    :rtype: ~pyro.ops.gaussian.Gaussian
+    """
+    assert isinstance(mvn, torch.distributions.MultivariateNormal)
+    assert isinstance(matrix, torch.Tensor)
+    x_dim, y_dim = matrix.shape[-2:]
+    assert mvn.event_shape == (y_dim,)
+    batch_shape = broadcast_shape(matrix.shape[:-2], mvn.batch_shape)
+    matrix = matrix.expand(batch_shape + (x_dim, y_dim))
+    mvn = mvn.expand(batch_shape)
+
+    y_gaussian = mvn_to_gaussian(mvn)
+    P_yy = y_gaussian.precision
+    neg_P_xy = matrix.matmul(P_yy)
+    P_xy = -neg_P_xy
+    P_yx = P_xy.transpose(-1, -2)
+    P_xx = neg_P_xy.matmul(matrix.transpose(-1, -2))
+    precision = torch.cat([torch.cat([P_xx, P_xy], -1),
+                           torch.cat([P_yx, P_yy], -1)], -2)
+    info_y = y_gaussian.info_vec
+    info_x = -matrix.matmul(info_y.unsqueeze(-1)).squeeze(-1)
+    info_vec = torch.cat([info_x, info_y], -1)
+    log_normalizer = y_gaussian.log_normalizer
+
+    result = Gaussian(log_normalizer, info_vec, precision)
+    assert result.batch_shape == batch_shape
+    assert result.dim() == x_dim + y_dim
+    return result
+
+
 def gaussian_tensordot(x, y, dims=0):
     """
     Computes the integral over two gaussians:
