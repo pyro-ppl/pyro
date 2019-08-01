@@ -121,7 +121,7 @@ class SVGD(object):
     A basic implementation of Stein Variational Gradient Descent as described in reference [1].
 
     :param model: the model (callable containing Pyro primitives). model must be fully vectorized.
-    :param kernel: a SVGD compatible kernel
+    :param kernel: a SVGD compatible kernel like :class:`RBFSteinKernel`
     :param optim: a wrapper a for a PyTorch optimizer
     :type optim: pyro.optim.PyroOptim
     :param int num_particles: the number of particles used in SVGD
@@ -129,10 +129,10 @@ class SVGD(object):
 
     Example usage:
 
-    >>> from pyro.infer import SVGD, SVGDRBFKernel
+    >>> from pyro.infer import SVGD, RBFSteinKernel
     >>> from pyro.optim import Adam
 
-    >>> kernel = SVGDRBFKernel()
+    >>> kernel = RBFSteinKernel()
     >>> adam = Adam({"lr": 0.1})
     >>> svgd = SVGD(model, kernel, adam, num_particles=50, max_plate_nesting=0)  # doctest: +SKIP
 
