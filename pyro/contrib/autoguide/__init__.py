@@ -310,7 +310,8 @@ class AutoDelta(AutoGuide):
                 unconstrained_value = pyro.param("{}_{}".format(self.prefix, name)).unconstrained()
                 log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
                 log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
-                result[name] = pyro.sample(name, dist.Delta(value, log_density=log_density, event_dim=site["fn"].event_dim))
+                result[name] = pyro.sample(name, dist.Delta(value, log_density=log_density,
+                                           event_dim=site["fn"].event_dim))
         return result
 
     def median(self, *args, **kwargs):

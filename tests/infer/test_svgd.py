@@ -5,7 +5,7 @@ import pyro
 import pyro.distributions as dist
 
 from pyro.infer import SVGD, SVGDRBFKernel
-from pyro.optim import Adam, SGD
+from pyro.optim import Adam
 
 from tests.common import assert_equal
 
