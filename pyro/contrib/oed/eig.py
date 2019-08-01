@@ -4,7 +4,7 @@ import warnings
 
 import pyro
 from pyro import poutine
-from pyro.contrib.autoguide import mean_field_entropy
+from pyro.infer.autoguide.utils import mean_field_entropy
 from pyro.contrib.oed.search import Search
 from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.util import torch_isnan, torch_isinf

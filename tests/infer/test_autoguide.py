@@ -8,10 +8,10 @@ from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
-                                    AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
-                                    AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
-                                    init_to_sample)
+from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
+                                  AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
+                                  AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
+                                  init_to_sample)
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.optim import Adam
 from tests.common import assert_equal

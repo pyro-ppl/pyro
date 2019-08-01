@@ -30,7 +30,6 @@ Pyro Documentation
    :maxdepth: 2
    :caption: Contributed Code:
 
-   contrib.autoguide
    contrib.autoname
    contrib.bnn
    contrib.easyguide

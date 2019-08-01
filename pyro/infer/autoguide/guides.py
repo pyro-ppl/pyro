@@ -1,5 +1,5 @@
 """
-The :mod:`pyro.contrib.autoguide` module provides algorithms to automatically
+The :mod:`pyro.infer.autoguide` module provides algorithms to automatically
 generate guides from simple models, for use in :class:`~pyro.infer.svi.SVI`.
 For example to generate a mean field Gaussian guide::
 
@@ -23,42 +23,13 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.autoguide.initialization import (InitMessenger, init_to_feasible, init_to_mean, init_to_median,
-                                                   init_to_sample)
-from pyro.contrib.util import hessian
+from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
+from pyro.infer.autoguide.utils import _product
+from pyro.ops.hessian import hessian
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
 from pyro.poutine.util import prune_subsample_sites
-
-__all__ = [
-    'AutoCallable',
-    'AutoContinuous',
-    'AutoDelta',
-    'AutoDiagonalNormal',
-    'AutoDiscreteParallel',
-    'AutoGuide',
-    'AutoGuideList',
-    'AutoIAFNormal',
-    'AutoLaplaceApproximation',
-    'AutoLowRankMultivariateNormal',
-    'AutoMultivariateNormal',
-    'init_to_feasible',
-    'init_to_mean',
-    'init_to_median',
-    'init_to_sample',
-    'mean_field_entropy',
-]
-
-
-def _product(shape):
-    """
-    Computes the product of the dimensions of a given shape tensor
-    """
-    result = 1
-    for size in shape:
-        result *= size
-    return result
 
 
 class AutoGuide(object):
@@ -779,24 +750,3 @@ class AutoDiscreteParallel(AutoGuide):
                 result[name] = pyro.sample(name, discrete_dist, infer={"enumerate": "parallel"})
 
         return result
-
-
-def mean_field_entropy(model, args, whitelist=None):
-    """Computes the entropy of a model, assuming
-    that the model is fully mean-field (i.e. all sample sites
-    in the model are independent).
-
-    The entropy is simply the sum of the entropies at the
-    individual sites. If `whitelist` is not `None`, only sites
-    listed in `whitelist` will have their entropies included
-    in the sum. If `whitelist` is `None`, all non-subsample
-    sites are included.
-    """
-    trace = poutine.trace(model).get_trace(*args)
-    entropy = 0.
-    for name, site in trace.nodes.items():
-        if site["type"] == "sample":
-            if not poutine.util.site_is_subsample(site):
-                if whitelist is None or name in whitelist:
-                    entropy += site["fn"].entropy()
-    return entropy

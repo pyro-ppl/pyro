@@ -7,7 +7,7 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.autoguide import AutoDelta
+from pyro.infer.autoguide import AutoDelta
 from pyro.contrib.conjugate.infer import BetaBinomialPair, collapse_conjugate, GammaPoissonPair, posterior_replay
 from pyro.infer import TraceEnum_ELBO, SVI
 from pyro.infer.mcmc.api import MCMC

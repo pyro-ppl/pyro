@@ -5,7 +5,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 import pyro.poutine as poutine
-from pyro.contrib.autoguide import AutoDelta, AutoDiagonalNormal, AutoLaplaceApproximation
+from pyro.infer.autoguide import AutoDelta, AutoDiagonalNormal, AutoLaplaceApproximation
 from pyro.infer import SVI, TracePredictive, Trace_ELBO
 from pyro.infer.mcmc import MCMC, NUTS
 from tests.common import assert_close, assert_equal
