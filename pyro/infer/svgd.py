@@ -79,6 +79,17 @@ class SVGD(object):
     :param int num_particles: the number of particles used in SVGD
     :param int max_plate_nesting: the max number of nested :func:`pyro.plate` contexts in the model.
 
+    Example usage:
+
+    >>> from pyro.infer import SVGD, SVGDRBFKernel
+    >>> from pyro.optim import Adam
+    >>> kernel = SVGDRBFKernel()
+    >>> adam = Adam({"lr": 0.1})
+    >>> svgd = SVGD(model, kernel, adam, num_particles=50, max_plate_nesting=0)
+    >>>
+    >>> for step in range(500):
+    >>>     svgd.step(model_arg1, model_arg2)
+
     References:
     [1] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
         Qiang Liu, Dilin Wang
