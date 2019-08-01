@@ -1,22 +1,64 @@
 import math
 import torch
 
-import pyro
-from pyro.infer import Trace_ELBO
+from pyro.primitives import plate as pyro_plate
+from pyro.infer.trace_elbo import Trace_ELBO
+from pyro.infer.autoguide.guides import AutoDelta
+from pryo.infer.autoguide.initialization import init_to_sample
 
 
 def vectorize(fn, num_particles, max_plate_nesting):
     def _fn(*args, **kwargs):
-        with pyro.plate("num_particles_vectorized", num_particles, dim=-max_plate_nesting - 1):
+        with pyro_plate("num_particles_vectorized", num_particles, dim=-max_plate_nesting - 1):
             return fn(*args, **kwargs)
     return _fn
 
 
-class SVGDKernel(object):
+class _SVGDGuide(AutoDelta):
+    """
+    This modification of :class:`AutoDelta` is used internally in the
+    :class:`SVGD` inference algorithm.
+    """
+    def __init__(self, model):
+        super(_SVGDGuide, self).__init__(model, prefix="svgd", init_loc_fn=init_to_sample)
+
+    def __call__(self, *args, **kwargs):
+        """
+        An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
+
+        :return: A dict mapping sample site name to sampled value.
+        :rtype: dict
+        """
+        # if we've never run the model before, do so now so we can inspect the model structure
+        if self.prototype_trace is None:
+            self._setup_prototype(*args, **kwargs)
+
+        plates = self._create_plates()
+        result = {}
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            with ExitStack() as stack:
+                for frame in site["cond_indep_stack"]:
+                    if frame.vectorized:
+                        stack.enter_context(plates[frame.name])
+                value = pyro.param("{}_{}".format(self.prefix, name),
+                                   site["value"].detach(),
+                                   constraint=site["fn"].support)
+                # The following lines are where this method differs from the AutoDelta version.
+                # For SVGD (but not MAP) we need the log det jacobian terms for correctness.
+                transform = biject_to(site["fn"].support)
+                unconstrained_value = pyro.param("{}_{}".format(self.prefix, name)).unconstrained()
+                log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
+                log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
+                result[name] = pyro.sample(name, dist.Delta(value, log_density=log_density,
+                                           event_dim=site["fn"].event_dim))
+        return result
+
+
+class SteinKernel(object):
     pass
 
 
-class SVGDRBFKernel(SVGDKernel):
+class RBFSteinKernel(SteinKernel):
     """
     A RBF kernel for use in the SVGD inference algorithm. The bandwidth of the kernel is chosen from the
     particles using a simple heuristic as in reference [1].
@@ -100,7 +142,7 @@ class SVGD(object):
     """
     def __init__(self, model, kernel, optim, num_particles, max_plate_nesting):
         assert callable(model)
-        assert isinstance(kernel, SVGDKernel), "Must provide a valid SVGDKernel"
+        assert isinstance(kernel, SteinKernel), "Must provide a valid SteinKernel"
         assert isinstance(optim, pyro.optim.PyroOptim), "Must provide a valid Pyro optimizer"
         assert num_particles > 1, "Must use at least two particles"
         assert max_plate_nesting >= 0
@@ -111,10 +153,7 @@ class SVGD(object):
         self.num_particles = num_particles
         self.max_plate_nesting = max_plate_nesting
         self.loss = Trace_ELBO().differentiable_loss
-
-        # TODO: fix circular import workaround
-        from pyro.contrib.autoguide import AutoDelta, init_to_sample
-        self.guide = AutoDelta(self.model, prefix="svgd", init_loc_fn=init_to_sample)
+        self.guide = _SVGDGuide(self.model)
 
     def get_named_particles(self):
         """

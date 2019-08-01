@@ -4,7 +4,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 
-from pyro.infer import SVGD, SVGDRBFKernel
+from pyro.infer import SVGD, RBFSteinKernel
 from pyro.optim import Adam
 
 from tests.common import assert_equal
@@ -19,7 +19,7 @@ def test_mean_variance(latent_dist):
     def model():
         pyro.sample("z", latent_dist)
 
-    kernel = SVGDRBFKernel()
+    kernel = RBFSteinKernel()
     adam = Adam({"lr": 0.05})
     svgd = SVGD(model, kernel, adam, 200, 0)
 
@@ -49,7 +49,7 @@ def test_shapes(shape):
         pyro.sample("z2", dist.LogNormal(torch.zeros(shape + (5,)), 1.0).to_event(1 + len(shape)))
 
     num_particles = 7
-    svgd = SVGD(model, SVGDRBFKernel(), Adam({"lr": 0.001}), num_particles, 0)
+    svgd = SVGD(model, RBFSteinKernel(), Adam({"lr": 0.001}), num_particles, 0)
 
     for step in range(2):
         svgd.step()
