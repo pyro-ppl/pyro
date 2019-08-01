@@ -10,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 import pyro.poutine.runtime as runtime
-from pyro.contrib.autoguide.initialization import InitMessenger
+from pyro.infer.autoguide.initialization import InitMessenger
 from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.poutine.util import prune_subsample_sites
 
@@ -69,7 +69,7 @@ class EasyGuide(object, metaclass=ABCMeta):
             return site["fn"]()
 
         For other possible initialization functions see
-        http://docs.pyro.ai/en/stable/contrib.autoguide.html#module-pyro.contrib.autoguide.initialization
+        http://docs.pyro.ai/en/stable/infer.autoguide.html#module-pyro.infer.autoguide.initialization
         """
         return site["fn"]()
 

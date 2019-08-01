@@ -44,7 +44,7 @@ import dmm.polyphonic_data_loader as poly
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.contrib.autoguide import AutoDelta
+from pyro.infer.autoguide import AutoDelta
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
