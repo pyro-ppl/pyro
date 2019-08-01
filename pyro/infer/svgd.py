@@ -1,7 +1,7 @@
 import math
 import torch
 
-from pyro.primitives import plate as pyro_plate
+import pyro
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.autoguide.guides import AutoDelta
 from pryo.infer.autoguide.initialization import init_to_sample
@@ -9,7 +9,7 @@ from pryo.infer.autoguide.initialization import init_to_sample
 
 def vectorize(fn, num_particles, max_plate_nesting):
     def _fn(*args, **kwargs):
-        with pyro_plate("num_particles_vectorized", num_particles, dim=-max_plate_nesting - 1):
+        with pyro.plate("num_particles_vectorized", num_particles, dim=-max_plate_nesting - 1):
             return fn(*args, **kwargs)
     return _fn
 
