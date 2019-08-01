@@ -69,7 +69,7 @@ class EasyGuide(object, metaclass=ABCMeta):
             return site["fn"]()
 
         For other possible initialization functions see
-        http://docs.pyro.ai/en/stable/contrib.autoguide.html#module-pyro.contrib.autoguide.initialization
+        http://docs.pyro.ai/en/stable/infer.autoguide.html#module-pyro.infer.autoguide.initialization
         """
         return site["fn"]()
 
