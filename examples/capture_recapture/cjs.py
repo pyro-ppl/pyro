@@ -36,7 +36,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.autoguide import AutoDiagonalNormal
+from pyro.infer.autoguide import AutoDiagonalNormal
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
 

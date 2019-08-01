@@ -10,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 import pyro.poutine.runtime as runtime
-from pyro.contrib.autoguide.initialization import InitMessenger
+from pyro.infer.autoguide.initialization import InitMessenger
 from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.poutine.util import prune_subsample_sites
 

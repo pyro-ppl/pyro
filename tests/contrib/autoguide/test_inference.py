@@ -8,8 +8,8 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
-from pyro.contrib.autoguide import (AutoDiagonalNormal, AutoLaplaceApproximation,
-                                    AutoLowRankMultivariateNormal, AutoMultivariateNormal)
+from pyro.infer.autoguide import (AutoDiagonalNormal, AutoLaplaceApproximation,
+                                  AutoLowRankMultivariateNormal, AutoMultivariateNormal)
 from pyro.infer import SVI, Trace_ELBO, TraceMeanField_ELBO
 from tests.common import assert_equal
 from tests.integration_tests.test_conjugate_gaussian_models import GaussianChain

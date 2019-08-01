@@ -8,9 +8,9 @@ import math
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.contrib.autoguide import AutoDelta
+from pyro.infer.autoguide import AutoDelta
 from pyro.infer import Trace_ELBO
-from pyro.contrib.autoguide.initialization import init_to_median
+from pyro.infer.autoguide import init_to_median
 
 from torch.optim import Adam
 

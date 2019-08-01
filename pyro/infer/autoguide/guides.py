@@ -23,8 +23,7 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer.autoguide.initialization import (InitMessenger, init_to_feasible, init_to_mean, init_to_median,
-                                                 init_to_sample)
+from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
 from pyro.infer.autoguide.utils import mean_field_entropy, _product
 from pyro.contrib.util import hessian
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost

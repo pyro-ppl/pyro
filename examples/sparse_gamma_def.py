@@ -3,7 +3,7 @@
 #
 # To do inference we use one of the following guides:
 # i)   a custom guide (i.e. a hand-designed variational family) or
-# ii)  an 'auto' guide that is automatically constructed using pyro.contrib.autoguide or
+# ii)  an 'auto' guide that is automatically constructed using pyro.infer.autoguide or
 # iii) an 'easy' guide whose construction is facilitated using pyro.contrib.easyguide.
 #
 # The Olivetti faces dataset is originally from http://www.cl.cam.ac.uk/research/dtg/attarchive/facedatabase.html
@@ -26,8 +26,8 @@ import wget
 from pyro.contrib.examples.util import get_data_directory
 from pyro.distributions import Gamma, Poisson, Normal
 from pyro.infer import SVI, TraceMeanField_ELBO
-from pyro.contrib.autoguide import AutoDiagonalNormal
-from pyro.contrib.autoguide.initialization import init_to_feasible
+from pyro.infer.autoguide import AutoDiagonalNormal
+from pyro.infer.autoguide import init_to_feasible
 from pyro.contrib.easyguide import EasyGuide
 
 
