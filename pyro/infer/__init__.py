@@ -14,7 +14,7 @@ from pyro.infer.traceenum_elbo import JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.infer.tracegraph_elbo import JitTraceGraph_ELBO, TraceGraph_ELBO
 from pyro.infer.trace_mmd import Trace_MMD
 from pyro.infer.util import enable_validation, is_validation_enabled
-from pyro.infer.svgd import SVGD, RBFKernel
+from pyro.infer.svgd import SVGD, SVGDRBFKernel
 
 __all__ = [
     "config_enumerate",
@@ -30,9 +30,9 @@ __all__ = [
     "JitTraceMeanField_ELBO",
     "JitTrace_ELBO",
     "RenyiELBO",
-    "RBFKernel",
     "SMCFilter",
     "SVGD",
+    "SVGDRBFKernel",
     "SVI",
     "TraceEnum_ELBO",
     "TraceGraph_ELBO",

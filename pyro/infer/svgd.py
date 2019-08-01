@@ -2,21 +2,24 @@ import math
 import torch
 
 import pyro
-import pyro.poutine as poutine
 from pyro.infer import Trace_ELBO
 
 
 def vectorize(fn, num_particles, max_plate_nesting):
     def _fn(*args, **kwargs):
-        with pyro.plate("num_particles_vectorized", num_particles, dim=-max_plate_nesting):
+        with pyro.plate("num_particles_vectorized", num_particles, dim=-max_plate_nesting - 1):
             return fn(*args, **kwargs)
     return _fn
 
 
-class RBFKernel(object):
+class SVGDKernel(object):
+    pass
+
+
+class SVGDRBFKernel(SVGDKernel):
     """
-    A RBF kernel for use in the SVGD inference algorithm. The bandwidth of the kernel is chosen from the data
-    using a simple heuristic as in reference [1].
+    A RBF kernel for use in the SVGD inference algorithm. The bandwidth of the kernel is chosen from the
+    particles using a simple heuristic as in reference [1].
 
     References:
     [1] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
@@ -24,7 +27,7 @@ class RBFKernel(object):
     """
     def _bandwidth(self, norm_sq):
         """
-        Compute the bandwidth along each dimension using the median pairwise distance between particles.
+        Compute the bandwidth along each dimension using the median pairwise squared distance between particles.
         """
         num_particles = norm_sq.size(0)
         index = torch.arange(num_particles)
@@ -32,31 +35,37 @@ class RBFKernel(object):
         median = norm_sq.median(dim=0)[0]
         return median / math.log(num_particles + 1)
 
-    def _log_kernel_and_grad(self, param):
+    def _log_kernel_and_grad(self, param, bandwidth_factor=None):
         """
-        Compute the kernel and (parts of) its gradient
+        Compute the component kernels and (parts of) their gradients.
+
+        :param float bandwidth_factor: optional factor by which to scale the bandwidth
         """
         num_particles = param.size(0)
         delta_x = param.unsqueeze(0) - param.unsqueeze(1)
         norm_sq = delta_x.reshape(num_particles, num_particles, -1).pow(2.0)
         h = self._bandwidth(norm_sq)
-        log_kernel = -norm_sq / h
+        if bandwidth_factor:
+            h *= bandwidth_factor
+        log_kernel = -(norm_sq / h).sum(-1)
         grad_term = (-2.0) * delta_x / h.reshape(param.shape[1:])
         return log_kernel, grad_term
 
-    def kernel_and_grads(self, params):
+    def kernel_and_grads(self, params, bandwidth_factor=None):
+        """
+        Compute the full kernel and its gradient
+
+        :param dict params: dictionary of (name, parameter) pairs
+        :param float bandwidth_factor: optional factor by which to scale the bandwidth
+        """
         log_kernels, grads = {}, {}
         for name, param in params.items():
-            log_kernel, grad = self._log_kernel_and_grad(param)
+            log_kernel, grad = self._log_kernel_and_grad(param, bandwidth_factor=bandwidth_factor)
             log_kernels[name] = log_kernel
             grads[name] = grad
         kernel = torch.exp(sum(log_kernels.values()))
-        grads = self.apply(kernel, grads)
+        grads = {name: torch.einsum("ji,ji...->i...", kernel, grad) for name, grad in grads.items()}
         return kernel, grads
-
-    def apply(self, kernel, grads):
-        assert isinstance(grads, dict)
-        return {name: torch.einsum("ab,b...->a...", kernel, grad) for name, grad in grads.items()}
 
 
 class SVGD(object):
@@ -65,6 +74,8 @@ class SVGD(object):
 
     :param model: the model (callable containing Pyro primitives). model must be fully vectorized.
     :param kernel: a SVGD compatible kernel
+    :param optim: a wrapper a for a PyTorch optimizer
+    :type optim: pyro.optim.PyroOptim
     :param int num_particles: the number of particles used in SVGD
     :param int max_plate_nesting: the max number of nested :func:`pyro.plate` contexts in the model.
 
@@ -72,34 +83,57 @@ class SVGD(object):
     [1] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
         Qiang Liu, Dilin Wang
     """
-    def __init__(self, model, kernel, num_particles, max_plate_nesting):
+    def __init__(self, model, kernel, optim, num_particles, max_plate_nesting):
+        assert callable(model)
+        assert isinstance(kernel, SVGDKernel), "Must provide a valid SVGDKernel"
+        assert isinstance(optim, pyro.optim.PyroOptim), "Must provide a valid Pyro optimizer"
+        assert num_particles > 1, "Must use at least two particles"
+        assert max_plate_nesting >= 0
+
         self.model = vectorize(model, num_particles, max_plate_nesting)
-        # TODO: fix circular import hack
-        from pyro.contrib.autoguide import AutoDelta
-        self.guide = AutoDelta(self.model, prefix="svgd")
         self.kernel = kernel
+        self.optim = optim
         self.num_particles = num_particles
         self.max_plate_nesting = max_plate_nesting
         self.loss = Trace_ELBO().differentiable_loss
 
+        # TODO: fix circular import workaround
+        from pyro.contrib.autoguide import AutoDelta, init_to_sample
+        self.guide = AutoDelta(self.model, prefix="svgd", init_loc_fn=init_to_sample)
+
     def get_named_particles(self):
-        params = {name: pyro.param('svgd_{}'.format(name)) for name, site in self.guide.prototype_trace.iter_stochastic_nodes()}
+        """
+        Get a dictionary of named particles of the form {name: particle}
+        """
+        params = {name: pyro.param('svgd_{}'.format(name))
+                  for name, site in self.guide.prototype_trace.iter_stochastic_nodes()}
         return params
 
-    def compute_grad(self, *args, **kwargs):
+    def step(self, *args, **kwargs):
         """
-        Computes the SVGD gradient, passing *args and **kwargs to the model.
+        Computes the SVGD gradient, passing *args and **kwargs to the model,
+        and takes a gradient step.
+
+        :param float bandwidth_factor: optional factor by which to scale the bandwidth
         """
+        bandwidth_factor = kwargs.pop('bandwidth_factor', None)
+
+        # compute gradients of log model joint
         loss = self.loss(self.model, self.guide, *args, **kwargs)
         loss.backward()
 
-        params = self.get_named_particles()
-        kernel, kernel_grads = self.kernel.kernel_and_grads(params)
+        # compute the kernel ingredients needed for SVGD
+        params = {name: param.unconstrained() for name, param in self.get_named_particles().items()}
+        kernel, kernel_grads = self.kernel.kernel_and_grads(params, bandwidth_factor=bandwidth_factor)
+        param_grads = {name: torch.einsum("ij,j...->i...", kernel, param.grad) for name, param in params.items()}
 
-        param_grads = {name: param.grad for name, param in params.items()}
-        param_grads = self.kernel.apply(kernel, param_grads)
-
+        # combine the attractive and repulsive terms in the SVGD gradient
         for name, param in params.items():
-            print("param_grads[name]",param_grads[name].shape)
-            print("kernel_grads[name]",kernel_grads[name].shape)
+            assert param_grads[name].shape == kernel_grads[name].shape
             param.grad.data = (param_grads[name] + kernel_grads[name]) / self.num_particles
+
+        # torch.optim objects gets instantiated for any params that haven't been seen yet
+        self.optim(params.values())
+
+        # zero gradients
+        pyro.infer.util.zero_grads(params.values())
