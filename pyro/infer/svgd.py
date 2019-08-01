@@ -1,10 +1,15 @@
 import math
+from contextlib import ExitStack  # python 3
+
 import torch
+from torch.distributions import biject_to
 
 import pyro
+from pyro.distributions import Delta
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.autoguide.guides import AutoDelta
-from pryo.infer.autoguide.initialization import init_to_sample
+from pyro.infer.autoguide.initialization import init_to_sample
+from pyro.distributions.util import sum_rightmost
 
 
 def vectorize(fn, num_particles, max_plate_nesting):
@@ -49,7 +54,7 @@ class _SVGDGuide(AutoDelta):
                 unconstrained_value = pyro.param("{}_{}".format(self.prefix, name)).unconstrained()
                 log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
                 log_density = sum_rightmost(log_density, log_density.dim() - value.dim() + site["fn"].event_dim)
-                result[name] = pyro.sample(name, dist.Delta(value, log_density=log_density,
+                result[name] = pyro.sample(name, Delta(value, log_density=log_density,
                                            event_dim=site["fn"].event_dim))
         return result
 
