@@ -133,6 +133,7 @@ class Trace_ELBO(ELBO):
                 surrogate_loss_particle = surrogate_loss_particle / self.num_particles
                 surrogate_loss_particle.backward(retain_graph=self.retain_graph)
 
+        loss = -loss
         warn_if_nan(loss, "loss")
         return loss
 
