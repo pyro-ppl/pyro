@@ -90,7 +90,7 @@ class SVGD(object):
     >>> svgd = SVGD(model, kernel, adam, num_particles=50, max_plate_nesting=0)  # doctest: +SKIP
 
     >>> for step in range(500):
-    >>>     svgd.step(model_arg1, model_arg2)  # doctest: +SKIP
+    >>>     svgd.step()  # pass in any args, kwargs to model here
     >>> final_particles = svgd.get_named_particles()
 
     References
