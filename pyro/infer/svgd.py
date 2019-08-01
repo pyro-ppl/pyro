@@ -91,7 +91,7 @@ class SVGD(object):
 
     >>> for step in range(500):  # doctest: +SKIP
     >>>     svgd.step(model_arg1, model_arg2)  # doctest: +SKIP
-    >>> final_particles = svgd.get_named_particles()
+    >>> final_particles = svgd.get_named_particles()  # doctest: +SKIP
 
     References
 
