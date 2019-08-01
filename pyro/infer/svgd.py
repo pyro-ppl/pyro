@@ -86,9 +86,10 @@ class SVGD(object):
     >>> kernel = SVGDRBFKernel()
     >>> adam = Adam({"lr": 0.1})
     >>> svgd = SVGD(model, kernel, adam, num_particles=50, max_plate_nesting=0)
-    >>>
+
     >>> for step in range(500):
     >>>     svgd.step(model_arg1, model_arg2)
+    >>> final_particles = svgd.get_named_particles()
 
     References:
     [1] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
