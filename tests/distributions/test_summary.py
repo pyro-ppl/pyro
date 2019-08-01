@@ -81,6 +81,47 @@ def test_nignorm_prior():
     assert_allclose(summary.rate, true_rate)
 
 
+def test_conversion():
+    true_mean = torch.tensor([2., 1., 0.]).expand((4, 2, 3))
+    true_covariance = torch.eye(3).expand((4, 2, 3, 3))
+    true_shape = 3.
+    true_rate = 1.
+    summary = NIGNormalRegressionSummary(true_mean, true_covariance, true_shape, true_rate)
+    assert_allclose(summary.precision_times_mean,
+                    summary.covariance.inverse().matmul(summary.mean.unsqueeze(-1)).squeeze(-1))
+    assert_allclose(summary.precision, summary.covariance.inverse())
+    assert_allclose(summary.reparametrized_rate, summary.rate + 0.5
+                    * summary.mean.unsqueeze(-2).matmul(summary.covariance.inverse())
+                    .matmul(summary.mean.unsqueeze(-1)).squeeze(-1).squeeze(-1))
+    summary.update(torch.rand((100, 2)), torch.rand((100, 3)))
+    assert(summary.updated_canonical is False)
+    assert(summary.mean is not None)
+    assert(summary.updated_canonical is True)
+    assert_allclose(summary.precision_times_mean,
+                    summary.covariance.inverse().matmul(summary.mean.unsqueeze(-1)).squeeze(-1))
+    assert_allclose(summary.precision, summary.covariance.inverse())
+    assert_allclose(summary.reparametrized_rate, summary.rate + 0.5
+                    * summary.mean.unsqueeze(-2).matmul(summary.covariance.inverse())
+                    .matmul(summary.mean.unsqueeze(-1)).squeeze(-1).squeeze(-1))
+
+    features = torch.rand((4, 3))
+    features = features[..., None, None, :]
+    loc = features.matmul(summary.precision.inverse()).matmul(summary.precision_times_mean
+                                                              .unsqueeze(-1)).squeeze(-1).squeeze(-1)
+    term1 = (summary.reparametrized_rate - 0.5*summary.precision_times_mean.unsqueeze(-2)
+             .matmul(summary.precision.inverse())
+             .matmul(summary.precision_times_mean.unsqueeze(-1)).squeeze(-1).squeeze(-1))/summary.shape
+    term2 = 1. + features.matmul(summary.precision.inverse()).matmul(features.transpose(-2, -1)).squeeze(-1).squeeze(-1)
+
+    canonical_loc = features.matmul(summary.mean.unsqueeze(-1)).squeeze(-1).squeeze(-1)
+    canonical_term1 = summary.rate/summary.shape
+    canonical_term2 = 1. + features.matmul(summary.covariance).matmul(features
+                                                                      .transpose(-2, -1)).squeeze(-1).squeeze(-1)
+    assert_allclose(loc, canonical_loc)
+    assert_allclose(term1, canonical_term1)
+    assert_allclose(term2, canonical_term2)
+
+
 def test_nignorm_asymptotics():
     # test the likelihood being correct
     # include conversions between forms

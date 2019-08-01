@@ -149,7 +149,6 @@ class NIGNormalRegressionSummary(Summary):
         if self.updated_canonical:
             return self._mean
         else:
-            self.updated_canonical = True
             return self._convert_to_canonical_form()[0]
 
     @property
@@ -157,7 +156,6 @@ class NIGNormalRegressionSummary(Summary):
         if self.updated_canonical:
             return self._covariance
         else:
-            self.updated_canonical = True
             return self._convert_to_canonical_form()[1]
 
     @property
@@ -165,7 +163,6 @@ class NIGNormalRegressionSummary(Summary):
         if self.updated_canonical:
             return self._rate
         else:
-            self.updated_canonical = True
             return self._convert_to_canonical_form()[3]
 
     @property
