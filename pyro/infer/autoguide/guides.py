@@ -24,13 +24,12 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
-from pyro.infer.autoguide.utils import mean_field_entropy, _product
+from pyro.infer.autoguide.utils import _product
 from pyro.contrib.util import hessian
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
 from pyro.poutine.util import prune_subsample_sites
-
 
 
 class AutoGuide(object):
