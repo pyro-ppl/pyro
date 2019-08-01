@@ -2,7 +2,6 @@ from collections import OrderedDict
 import pytest
 import torch
 
-import pyro.distributions as dist
 from pyro.contrib.util import (
     get_indices, tensor_to_dict, rmv, rvv, lexpand, rexpand, rdiag, rtril
 )

@@ -1,5 +1,3 @@
-from collections import OrderedDict
-import pytest
 import torch
 
 import pyro.distributions as dist
