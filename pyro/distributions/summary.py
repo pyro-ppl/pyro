@@ -112,7 +112,7 @@ class NIGNormalRegressionSummary(Summary):
         assert features is not None
         assert obs.dim() >= 2
         assert features.dim() >= 2
-        assert obs.shape[-2] == features.shape[-2]
+        assert obs.shape[:-2] == features.shape[:-2]
         if self.obs_dim is None:
             self.obs_dim = obs.shape[-1]
         else:
