@@ -68,11 +68,20 @@ class RBFSteinKernel(SteinKernel):
     A RBF kernel for use in the SVGD inference algorithm. The bandwidth of the kernel is chosen from the
     particles using a simple heuristic as in reference [1].
 
+    :param str mode: whether to use a Kernelized Stein Discrepancy that makes use of multivariate
+        test functions (as in [1]) or univariate test functions (as in [2]). defaults to 'univariate'
+
     References
 
     [1] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
-    Qiang Liu, Dilin Wang
+        Qiang Liu, Dilin Wang
+    [2] "Kernelized Complete Conditional Stein Discrepancy,"
+        Raghav Singhal, Saad Lahlou, Rajesh Ranganath
     """
+    def __init__(self, mode='univariate'):
+        assert mode in ['univariate', 'multivariate'], "mode must be one of (univariate, multivariate)"
+        self.mode = mode
+
     def _bandwidth(self, norm_sq):
         """
         Compute the bandwidth along each dimension using the median pairwise squared distance between particles.
@@ -95,7 +104,7 @@ class RBFSteinKernel(SteinKernel):
         h = self._bandwidth(norm_sq)
         if bandwidth_factor:
             h *= bandwidth_factor
-        log_kernel = -(norm_sq / h).sum(-1)
+        log_kernel = -(norm_sq / h)
         grad_term = (-2.0) * delta_x / h.reshape(param.shape[1:])
         return log_kernel, grad_term
 
@@ -111,8 +120,12 @@ class RBFSteinKernel(SteinKernel):
             log_kernel, grad = self._log_kernel_and_grad(param, bandwidth_factor=bandwidth_factor)
             log_kernels[name] = log_kernel
             grads[name] = grad
-        kernel = torch.exp(sum(log_kernels.values()))
-        grads = {name: torch.einsum("ji,ji...->i...", kernel, grad) for name, grad in grads.items()}
+        if self.mode == "multivariate":
+            kernel = torch.exp(sum([lk.sum(-1) for lk in log_kernels.values()]))
+            grads = {name: torch.einsum("ji,ji...->i...", kernel, grad) for name, grad in grads.items()}
+        else:
+            kernel = {name: lk.exp() for name, lk in log_kernels.items()}
+            grads = {name: torch.einsum("j...,j...->...", kernel[name], grad) for name, grad in grads.items()}
         return kernel, grads
 
 
@@ -149,6 +162,8 @@ class SVGD(object):
 
     [1] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
         Qiang Liu, Dilin Wang
+    [2] "Kernelized Complete Conditional Stein Discrepancy,"
+        Raghav Singhal, Saad Lahlou, Rajesh Ranganath
     """
     def __init__(self, model, kernel, optim, num_particles, max_plate_nesting):
         assert callable(model)
@@ -197,7 +212,12 @@ class SVGD(object):
         # compute the kernel ingredients needed for SVGD
         params = {name: param.unconstrained() for name, param in self.get_named_particles().items()}
         kernel, kernel_grads = self.kernel.kernel_and_grads(params, bandwidth_factor=bandwidth_factor)
-        param_grads = {name: torch.einsum("ij,j...->i...", kernel, param.grad) for name, param in params.items()}
+
+        if self.kernel.mode == "multivariate":
+            param_grads = {name: torch.einsum("ij,j...->i...", kernel, param.grad) for name, param in params.items()}
+        else:
+            param_grads = {name: torch.einsum("ji...,i...->j...", kernel[name], param.grad)
+                           for name, param in params.items()}
 
         # combine the attractive and repulsive terms in the SVGD gradient
         for name, param in params.items():
