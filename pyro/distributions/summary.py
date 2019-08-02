@@ -112,11 +112,16 @@ class NIGNormalRegressionSummary(Summary):
         assert features is not None
         assert obs.dim() >= 2
         assert features.dim() >= 2
-        assert obs.shape[:-2] == features.shape[:-2]
+        assert obs.shape[-2] == features.shape[-2]
         if self.obs_dim is None:
             self.obs_dim = obs.shape[-1]
         else:
             assert self.obs_dim == obs.shape[-1]
+
+        # Hack to enforce that features and obs are all the same batch dimension such that the parameters
+        # are all the same dimension
+        features = features + torch.empty(list(obs.shape[:-1]) + list(features.shape[-1]))
+        obs = obs + torch.empty(list(features.shape[:-1]) + list(obs.shape[-1]))
 
         self._precision_times_mean = self._precision_times_mean + obs.transpose(-2, -1).matmul(features)
         self._precision = self._precision + (features.transpose(-2, -1).matmul(features)).unsqueeze(-3)
@@ -136,6 +141,11 @@ class NIGNormalRegressionSummary(Summary):
             self.obs_dim = obs.shape[-1]
         else:
             assert self.obs_dim == obs.shape[-1]
+
+        # Hack to enforce that features and obs are all the same batch dimension such that the parameters
+        # are all the same dimension
+        features = features + torch.empty(list(obs.shape[:-1]) + list(features.shape[-1]))
+        obs = obs + torch.empty(list(features.shape[:-1]) + list(obs.shape[-1]))
 
         self._precision_times_mean = self._precision_times_mean - obs.transpose(-2, -1).matmul(features)
         self._precision = self._precision - (features.transpose(-2, -1).matmul(features)).unsqueeze(-3)
