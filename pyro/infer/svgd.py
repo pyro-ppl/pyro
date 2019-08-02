@@ -129,19 +129,21 @@ class SVGD(object):
 
     Example usage:
 
-    >>> from pyro.infer import SVGD, RBFSteinKernel
-    >>> from pyro.optim import Adam
+    .. code-block:: python
 
-    >>> kernel = RBFSteinKernel()
-    >>> adam = Adam({"lr": 0.1})
-    >>> svgd = SVGD(model, kernel, adam, num_particles=50, max_plate_nesting=0)  # doctest: +SKIP
+        from pyro.infer import SVGD, RBFSteinKernel
+        from pyro.optim import Adam
 
-    >>> def gradient_callback(squared_gradients):
-    >>>     print(squared_gradients)  # this helps us monitor convergence
+        kernel = RBFSteinKernel()
+        adam = Adam({"lr": 0.1})
+        svgd = SVGD(model, kernel, adam, num_particles=50, max_plate_nesting=0)
 
-    >>> for step in range(500):  # doctest: +SKIP
-    >>>     svgd.step(model_arg1, model_arg2, gradient_callback=gradient_callback)  # doctest: +SKIP
-    >>> final_particles = svgd.get_named_particles()  # doctest: +SKIP
+        def gradient_callback(squared_gradients):
+            print(squared_gradients)  # this helps us monitor convergence
+
+        for step in range(500):
+            svgd.step(model_arg1, model_arg2, gradient_callback=gradient_callback)
+        final_particles = svgd.get_named_particles()
 
     References
 
