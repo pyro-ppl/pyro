@@ -69,7 +69,7 @@ class RBFSteinKernel(SteinKernel):
     particles using a simple heuristic as in reference [1].
 
     :param str mode: whether to use a Kernelized Stein Discrepancy that makes use of multivariate
-        test functions (as in [1]) or univariate test functions (as in [2]). defaults to 'univariate'
+        test functions (as in [1]) or univariate test functions (as in [2]). defaults to 'univariate'.
 
     References
 
@@ -123,7 +123,7 @@ class RBFSteinKernel(SteinKernel):
         if self.mode == "multivariate":
             kernel = torch.exp(sum([lk.sum(-1) for lk in log_kernels.values()]))
             grads = {name: torch.einsum("ji,ji...->i...", kernel, grad) for name, grad in grads.items()}
-        else:
+        elif self.mode == "univariate":
             kernel = {name: lk.exp() for name, lk in log_kernels.items()}
             grads = {name: torch.einsum("j...,j...->...", kernel[name], grad) for name, grad in grads.items()}
         return kernel, grads
@@ -215,7 +215,7 @@ class SVGD(object):
 
         if self.kernel.mode == "multivariate":
             param_grads = {name: torch.einsum("ij,j...->i...", kernel, param.grad) for name, param in params.items()}
-        else:
+        elif self.kernel.mode == "univariate":
             param_grads = {name: torch.einsum("ji...,i...->j...", kernel[name], param.grad)
                            for name, param in params.items()}
 
@@ -224,6 +224,7 @@ class SVGD(object):
             assert param_grads[name].shape == kernel_grads[name].shape
             param.grad.data = (param_grads[name] + kernel_grads[name]) / self.num_particles
 
+        # optionally report per-parameter mean squared gradients to user
         if gradient_callback is not None:
             squared_gradients = {name: param.grad.pow(2.0).mean().item() for name, param in params.items()}
             gradient_callback(squared_gradients=squared_gradients)
