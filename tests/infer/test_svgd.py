@@ -1,6 +1,8 @@
 import pytest
 import torch
 
+from functools import partial
+
 import pyro
 import pyro.distributions as dist
 
@@ -19,6 +21,9 @@ def test_mean_variance(latent_dist):
     def model():
         pyro.sample("z", latent_dist)
 
+    def gradient_callback(squared_gradients, step):
+        print("[step %03d] mean squared gradients:" % step, squared_gradients)
+
     kernel = RBFSteinKernel()
     adam = Adam({"lr": 0.05})
     svgd = SVGD(model, kernel, adam, 200, 0)
@@ -34,7 +39,8 @@ def test_mean_variance(latent_dist):
 
     for step in range(n_steps):
         bandwidth = bandwidth_start + (step / n_steps) * (bandwidth_end - bandwidth_start)
-        svgd.step(bandwidth_factor=bandwidth)
+        callback = partial(gradient_callback, step=step) if step % 50 == 0 else None
+        svgd.step(bandwidth_factor=bandwidth, gradient_callback=callback)
 
     assert_equal(pyro.param('svgd_z').mean(0), latent_dist.mean, prec=0.01)
     assert_equal(pyro.param('svgd_z').var(0), latent_dist.variance, prec=0.05)

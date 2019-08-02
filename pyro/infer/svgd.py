@@ -136,8 +136,11 @@ class SVGD(object):
     >>> adam = Adam({"lr": 0.1})
     >>> svgd = SVGD(model, kernel, adam, num_particles=50, max_plate_nesting=0)  # doctest: +SKIP
 
+    >>> def gradient_callback(squared_gradients):
+    >>>     print(squared_gradients)  # this helps us monitor convergence
+
     >>> for step in range(500):  # doctest: +SKIP
-    >>>     svgd.step(model_arg1, model_arg2)  # doctest: +SKIP
+    >>>     svgd.step(model_arg1, model_arg2, gradient_callback=gradient_callback)  # doctest: +SKIP
     >>> final_particles = svgd.get_named_particles()  # doctest: +SKIP
 
     References
@@ -157,6 +160,7 @@ class SVGD(object):
         self.optim = optim
         self.num_particles = num_particles
         self.max_plate_nesting = max_plate_nesting
+
         self.loss = Trace_ELBO().differentiable_loss
         self.guide = _SVGDGuide(self.model)
 
@@ -173,9 +177,16 @@ class SVGD(object):
         Computes the SVGD gradient, passing args and kwargs to the model,
         and takes a gradient step.
 
-        :param float bandwidth_factor: optional factor by which to scale the bandwidth
+        :param float bandwidth_factor: Optional factor by which to scale the bandwidth
+        :param callable gradient_callback: Optional callback that takes a
+            single kwarg `squared_gradients`, which is a dictionary of the form
+            {param_name: float}, where each float is a mean squared gradient.
+            This can be used to monitor the convergence of SVGD.
         """
         bandwidth_factor = kwargs.pop('bandwidth_factor', None)
+        gradient_callback = kwargs.pop('gradient_callback', None)
+        if gradient_callback is not None:
+            assert callable(gradient_callback), "gradient_callback must be a callable"
 
         # compute gradients of log model joint
         loss = self.loss(self.model, self.guide, *args, **kwargs)
@@ -190,6 +201,10 @@ class SVGD(object):
         for name, param in params.items():
             assert param_grads[name].shape == kernel_grads[name].shape
             param.grad.data = (param_grads[name] + kernel_grads[name]) / self.num_particles
+
+        if gradient_callback is not None:
+            squared_gradients = {name: param.grad.pow(2.0).mean().item() for name, param in params.items()}
+            gradient_callback(squared_gradients=squared_gradients)
 
         # torch.optim objects gets instantiated for any params that haven't been seen yet
         self.optim(params.values())
