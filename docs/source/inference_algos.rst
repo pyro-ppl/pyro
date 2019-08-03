@@ -67,6 +67,14 @@ Sequential Monte Carlo
     :undoc-members:
     :show-inheritance:
 
+Stein Methods
+----------------------
+
+.. automodule:: pyro.infer.svgd
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Discrete Inference
 ------------------
 
