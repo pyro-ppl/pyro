@@ -2,6 +2,7 @@ from abc import ABCMeta, abstractmethod
 
 import torch
 from six import add_metaclass
+from torch.testing import assert_allclose
 
 
 @add_metaclass(ABCMeta)
@@ -120,9 +121,8 @@ class NIGNormalRegressionSummary(Summary):
 
         # Hack to enforce that features and obs are all the same batch dimension such that the parameters
         # are all the same dimension
-        features = features + torch.empty(list(obs.shape[:-1]) + [features.shape[-1]])
-        obs = obs + torch.empty(list(features.shape[:-1]) + [obs.shape[-1]])
-
+        features = features + torch.zeros(list(obs.shape[:-1]) + [features.shape[-1]])
+        obs = obs + torch.zeros(list(features.shape[:-1]) + [obs.shape[-1]])
         self._precision_times_mean = self._precision_times_mean + obs.transpose(-2, -1).matmul(features)
         self._precision = self._precision + (features.transpose(-2, -1).matmul(features)).unsqueeze(-3)
         self._shape = self._shape + 0.5 * obs.shape[-2]
@@ -144,8 +144,8 @@ class NIGNormalRegressionSummary(Summary):
 
         # Hack to enforce that features and obs are all the same batch dimension such that the parameters
         # are all the same dimension
-        features = features + torch.empty(list(obs.shape[:-1]) + [features.shape[-1]])
-        obs = obs + torch.empty(list(features.shape[:-1]) + [obs.shape[-1]])
+        features = features + torch.zeros(list(obs.shape[:-1]) + [features.shape[-1]])
+        obs = obs + torch.zeros(list(features.shape[:-1]) + [obs.shape[-1]])
 
         self._precision_times_mean = self._precision_times_mean - obs.transpose(-2, -1).matmul(features)
         self._precision = self._precision - (features.transpose(-2, -1).matmul(features)).unsqueeze(-3)
