@@ -4,8 +4,9 @@ import pytest
 import torch
 from torch.nn.functional import pad
 
+import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.gaussian import Gaussian, gaussian_tensordot, mvn_to_gaussian
+from pyro.ops.gaussian import Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
 from tests.common import assert_close
 from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mvn
 
@@ -179,6 +180,41 @@ def test_mvn_to_gaussian(sample_shape, batch_shape, dim):
     actual_log_prob = gaussian.log_density(value)
     expected_log_prob = mvn.log_prob(value)
     assert_close(actual_log_prob, expected_log_prob)
+
+
+@pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("x_dim", [1, 2, 3])
+@pytest.mark.parametrize("y_dim", [1, 2, 3])
+def test_matrix_and_mvn_to_gaussian(sample_shape, batch_shape, x_dim, y_dim):
+    matrix = torch.randn(batch_shape + (x_dim, y_dim))
+    y_mvn = random_mvn(batch_shape, y_dim)
+    xy_mvn = random_mvn(batch_shape, x_dim + y_dim)
+    gaussian = matrix_and_mvn_to_gaussian(matrix, y_mvn) + mvn_to_gaussian(xy_mvn)
+    xy = torch.randn(sample_shape + (1,) * len(batch_shape) + (x_dim + y_dim,))
+    x, y = xy[..., :x_dim], xy[..., x_dim:]
+    y_pred = x.unsqueeze(-2).matmul(matrix).squeeze(-2)
+    actual_log_prob = gaussian.log_density(xy)
+    expected_log_prob = xy_mvn.log_prob(xy) + y_mvn.log_prob(y - y_pred)
+    assert_close(actual_log_prob, expected_log_prob)
+
+
+@pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("x_dim", [1, 2, 3])
+@pytest.mark.parametrize("y_dim", [1, 2, 3])
+def test_matrix_and_mvn_to_gaussian_2(sample_shape, batch_shape, x_dim, y_dim):
+    matrix = torch.randn(batch_shape + (x_dim, y_dim))
+    y_mvn = random_mvn(batch_shape, y_dim)
+    x_mvn = random_mvn(batch_shape, x_dim)
+    Mx_cov = matrix.transpose(-2, -1).matmul(x_mvn.covariance_matrix).matmul(matrix)
+    Mx_loc = matrix.transpose(-2, -1).matmul(x_mvn.loc.unsqueeze(-1)).squeeze(-1)
+    mvn = dist.MultivariateNormal(Mx_loc + y_mvn.loc, Mx_cov + y_mvn.covariance_matrix)
+    expected = mvn_to_gaussian(mvn)
+
+    actual = gaussian_tensordot(mvn_to_gaussian(x_mvn),
+                                matrix_and_mvn_to_gaussian(matrix, y_mvn), dims=x_dim)
+    assert_close_gaussian(expected, actual)
 
 
 @pytest.mark.parametrize("x_batch_shape,y_batch_shape", [
