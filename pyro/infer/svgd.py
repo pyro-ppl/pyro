@@ -6,11 +6,12 @@ import torch
 from torch.distributions import biject_to
 
 import pyro
+from pyro import poutine
 from pyro.distributions import Delta
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.autoguide.guides import AutoContinuous
 from pyro.infer.autoguide.initialization import init_to_sample
-from pyro.distributions.util import sum_rightmost
+from pyro.distributions.util import sum_rightmost, copy_docs_from
 
 
 def vectorize(fn, num_particles, max_plate_nesting):
@@ -34,11 +35,20 @@ class _SVGDGuide(AutoContinuous):
 
 
 class SteinKernel(object, metaclass=ABCMeta):
+    """
+    Abstract class for kernels used in the :class:`SVGD` inference algorithm.
+    """
 
     @abstractmethod
     def log_kernel_and_grad(self, particles):
         """
-        Compute the component kernels and (parts of) their gradients.
+        Compute the component kernels and their gradients.
+
+        :param particles: a tensor with shape (N, D)
+        :returns: A pair (`log_kernel`, `kernel_grad`) where `log_kernel` is a (N, N, D)-shaped
+            tensor equal to the logarithm of the kernel and `kernel_grad` is a (N, N, D)-shaped
+            tensor where the entry (n, m, d) represents the derivative of `log_kernel` w.r.t.
+            x_{m,d}, where x_{m,d} is the d^th dimension of particle m.
         """
         raise NotImplementedError
 
@@ -53,7 +63,13 @@ class RBFSteinKernel(SteinKernel):
     [1] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
         Qiang Liu, Dilin Wang
     """
-    def _bandwidth(self, norm_sq, bandwidth_factor=None):
+    def __init__(self, bandwidth_factor=None):
+        """
+        :param float bandwidth_factor: Optional factor by which to scale the bandwidth
+        """
+        self._bandwidth_factor = bandwidth_factor
+
+    def _bandwidth(self, norm_sq):
         """
         Compute the bandwidth along each dimension using the median pairwise squared distance between particles.
         """
@@ -61,24 +77,34 @@ class RBFSteinKernel(SteinKernel):
         index = torch.arange(num_particles)
         norm_sq = norm_sq[index > index.unsqueeze(-1), ...]
         median = norm_sq.median(dim=0)[0]
-        if bandwidth_factor is not None:
-            median = bandwidth_factor * median
+        if self.bandwidth_factor is not None:
+            median = self.bandwidth_factor * median
         assert median.shape == norm_sq.shape[-1:]
         return median / math.log(num_particles + 1)
 
-    def log_kernel_and_grad(self, particles, bandwidth_factor=None):
-        """
-        Compute the component kernels and (parts of) their gradients.
-        """
+    @torch.no_grad()
+    @copy_docs_from(SteinKernel.log_kernel_and_grad)
+    def log_kernel_and_grad(self, particles):
         num_particles = particles.size(0)
         delta_x = particles.unsqueeze(0) - particles.unsqueeze(1)  # N N D
         assert delta_x.dim() == 3
         norm_sq = delta_x.pow(2.0)  # N N D
-        h = self._bandwidth(norm_sq, bandwidth_factor=bandwidth_factor)  # D
+        h = self._bandwidth(norm_sq)  # D
         log_kernel = -(norm_sq / h)  # N N D
         grad_term = 2.0 * delta_x / h  # N N D
         assert log_kernel.shape == grad_term.shape
         return log_kernel, grad_term
+
+    @property
+    def bandwidth_factor(self):
+        return self._bandwidth_factor
+
+    @bandwidth_factor.setter
+    def bandwidth_factor(self, bandwidth_factor):
+        """
+        :param float bandwidth_factor: Optional factor by which to scale the bandwidth
+        """
+        self._bandwidth_factor = bandwidth_factor
 
 
 class SVGD(object):
@@ -105,11 +131,9 @@ class SVGD(object):
         adam = Adam({"lr": 0.1})
         svgd = SVGD(model, kernel, adam, num_particles=50, max_plate_nesting=0)
 
-        def gradient_callback(squared_gradients):
-            print(squared_gradients)  # this helps us monitor convergence
-
         for step in range(500):
-            svgd.step(model_arg1, model_arg2, gradient_callback=gradient_callback)
+            svgd.step(model_arg1, model_arg2)
+
         final_particles = svgd.get_named_particles()
 
     References
@@ -150,19 +174,12 @@ class SVGD(object):
         Computes the SVGD gradient, passing args and kwargs to the model,
         and takes a gradient step.
 
-        :param float bandwidth_factor: Optional factor by which to scale the bandwidth
-        :param callable gradient_callback: Optional callback that takes a
-            single kwarg `squared_gradients`, which is a dictionary of the form
-            {param_name: float}, where each float is a mean squared gradient.
-            This can be used to monitor the convergence of SVGD.
+        :return dict: A dictionary of the form {name: float}, where each float
+            is a mean squared gradient. This can be used to monitor the convergence of SVGD.
         """
-        bandwidth_factor = kwargs.pop('bandwidth_factor', None)
-        gradient_callback = kwargs.pop('gradient_callback', None)
-        if gradient_callback is not None:
-            assert callable(gradient_callback), "gradient_callback must be a callable"
-
         # compute gradients of log model joint
-        loss = self.loss(self.model, self.guide, *args, **kwargs)
+        with poutine.trace(param_only=True) as param_capture:
+            loss = self.loss(self.model, self.guide, *args, **kwargs)
         loss.backward()
 
         # get particles used in the _SVGDGuide and reshape to have num_particles leading dimension
@@ -171,7 +188,7 @@ class SVGD(object):
         reshaped_particles_grad = particles.grad.reshape(self.num_particles, -1)
 
         # compute kernel ingredients
-        log_kernel, kernel_grad = self.kernel.log_kernel_and_grad(reshaped_particles, bandwidth_factor=bandwidth_factor)
+        log_kernel, kernel_grad = self.kernel.log_kernel_and_grad(reshaped_particles)
 
         if self.mode == "multivariate":
             kernel = log_kernel.sum(-1).exp()
@@ -188,15 +205,16 @@ class SVGD(object):
         assert attractive_grad.shape == repulsive_grad.shape
         particles.grad = (attractive_grad + repulsive_grad).reshape(particles.shape) / self.num_particles
 
-        # optionally report per-parameter mean squared gradients to user
-        if gradient_callback is not None:
-            squared_gradients = {site["name"]: value.mean().item()
-                                 for site, value in self.guide._unpack_latent(particles.grad.pow(2.0))}
-            gradient_callback(squared_gradients=squared_gradients)
+        # compute per-parameter mean squared gradients
+        squared_gradients = {site["name"]: value.mean().item()
+                             for site, value in self.guide._unpack_latent(particles.grad.pow(2.0))}
 
-        # what about other params???
         # torch.optim objects gets instantiated for any params that haven't been seen yet
-        self.optim([particles])
+        params = set(site["value"].unconstrained() for site in param_capture.trace.nodes.values())
+        self.optim(params)
 
         # zero gradients
-        pyro.infer.util.zero_grads([particles])
+        pyro.infer.util.zero_grads(params)
+
+        # return per-parameter mean squared gradients to user
+        return squared_gradients
