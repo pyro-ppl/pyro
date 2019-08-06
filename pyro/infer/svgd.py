@@ -1,6 +1,5 @@
 from abc import ABCMeta, abstractmethod
 import math
-from contextlib import ExitStack  # python 3
 
 import torch
 from torch.distributions import biject_to
@@ -11,7 +10,7 @@ from pyro.distributions import Delta
 from pyro.infer.trace_elbo import Trace_ELBO
 from pyro.infer.autoguide.guides import AutoContinuous
 from pyro.infer.autoguide.initialization import init_to_sample
-from pyro.distributions.util import sum_rightmost, copy_docs_from
+from pyro.distributions.util import copy_docs_from
 
 
 def vectorize(fn, num_particles, max_plate_nesting):
@@ -85,7 +84,6 @@ class RBFSteinKernel(SteinKernel):
     @torch.no_grad()
     @copy_docs_from(SteinKernel.log_kernel_and_grad)
     def log_kernel_and_grad(self, particles):
-        num_particles = particles.size(0)
         delta_x = particles.unsqueeze(0) - particles.unsqueeze(1)  # N N D
         assert delta_x.dim() == 3
         norm_sq = delta_x.pow(2.0)  # N N D
