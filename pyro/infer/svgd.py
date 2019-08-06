@@ -52,6 +52,7 @@ class SteinKernel(object, metaclass=ABCMeta):
         raise NotImplementedError
 
 
+@copy_docs_from(SteinKernel)
 class RBFSteinKernel(SteinKernel):
     """
     A RBF kernel for use in the SVGD inference algorithm. The bandwidth of the kernel is chosen from the
@@ -82,7 +83,6 @@ class RBFSteinKernel(SteinKernel):
         return median / math.log(num_particles + 1)
 
     @torch.no_grad()
-    @copy_docs_from(SteinKernel.log_kernel_and_grad)
     def log_kernel_and_grad(self, particles):
         delta_x = particles.unsqueeze(0) - particles.unsqueeze(1)  # N N D
         assert delta_x.dim() == 3
@@ -168,6 +168,7 @@ class SVGD(object):
         return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
                 for site, unconstrained_value in self.guide._unpack_latent(pyro.param("svgd_particles"))}
 
+    @torch.no_grad()
     def step(self, *args, **kwargs):
         """
         Computes the SVGD gradient, passing args and kwargs to the model,
@@ -177,9 +178,9 @@ class SVGD(object):
             is a mean squared gradient. This can be used to monitor the convergence of SVGD.
         """
         # compute gradients of log model joint
-        with poutine.trace(param_only=True) as param_capture:
+        with torch.enable_grad(), poutine.trace(param_only=True) as param_capture:
             loss = self.loss(self.model, self.guide, *args, **kwargs)
-        loss.backward()
+            loss.backward()
 
         # get particles used in the _SVGDGuide and reshape to have num_particles leading dimension
         particles = pyro.param("svgd_particles").unconstrained()
