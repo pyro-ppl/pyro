@@ -210,3 +210,11 @@ class NIGNormalRegressionSummary(Summary):
         self._updated_canonical = True
 
         return self._mean, self._covariance, self._shape, self._rate
+
+    def __getitem__(self, index):
+        # Maybe add .contiguous()?
+        mean = self.mean[index]
+        covariance = self.covariance[index]
+        shape = self.shape[index]
+        rate = self.rate[index]
+        return NIGNormalRegressionSummary(self, mean, covariance, shape, rate)
