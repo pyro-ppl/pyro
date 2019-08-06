@@ -111,14 +111,15 @@ class SVGD(object):
     """
     A basic implementation of Stein Variational Gradient Descent as described in reference [1].
 
-    :param model: the model (callable containing Pyro primitives). model must be fully vectorized.
-    :param kernel: a SVGD compatible kernel like :class:`RBFSteinKernel`
-    :param optim: a wrapper a for a PyTorch optimizer
+    :param model: The model (callable containing Pyro primitives). Model must be fully vectorized
+        and may only contain continuous latent variables.
+    :param kernel: a SVGD compatible kernel like :class:`RBFSteinKernel`.
+    :param optim: A wrapper a for a PyTorch optimizer.
     :type optim: pyro.optim.PyroOptim
-    :param int num_particles: the number of particles used in SVGD
-    :param int max_plate_nesting: the max number of nested :func:`pyro.plate` contexts in the model.
-    :param str mode: whether to use a Kernelized Stein Discrepancy that makes use of `multivariate`
-        test functions (as in [1]) or `univariate` test functions (as in [2]). defaults to `univariate`.
+    :param int num_particles: The number of particles used in SVGD.
+    :param int max_plate_nesting: The max number of nested :func:`pyro.plate` contexts in the model.
+    :param str mode: Whether to use a Kernelized Stein Discrepancy that makes use of `multivariate`
+        test functions (as in [1]) or `univariate` test functions (as in [2]). Defaults to `univariate`.
 
     Example usage:
 

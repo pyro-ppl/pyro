@@ -10,12 +10,10 @@ from pyro.optim import Adam
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize("latent_dist", [
-                                         dist.Normal(torch.zeros(2), torch.ones(2)).to_event(1),
+@pytest.mark.parametrize("latent_dist", [dist.Normal(torch.zeros(2), torch.ones(2)).to_event(1),
                                          dist.LogNormal(torch.tensor([-1.0]), torch.tensor([0.7])).to_event(1),
                                          dist.LogNormal(torch.tensor(-1.0), torch.tensor(0.7)),
-                                         dist.Beta(torch.tensor([0.4]), torch.tensor([0.6])).to_event(1)
-                                         ])
+                                         dist.Beta(torch.tensor([0.3]), torch.tensor([0.7])).to_event(1)])
 @pytest.mark.parametrize("mode", ["univariate", "multivariate"])
 def test_mean_variance(latent_dist, mode, verbose=True):
     pyro.clear_param_store()
@@ -37,8 +35,7 @@ def test_mean_variance(latent_dist, mode, verbose=True):
     pyro.param('svgd_particles').unconstrained().data += 0.7
 
     for step in range(n_steps):
-        bandwidth = bandwidth_start + (step / n_steps) * (bandwidth_end - bandwidth_start)
-        kernel.bandwidth_factor = bandwidth
+        kernel.bandwidth_factor = bandwidth_start + (step / n_steps) * (bandwidth_end - bandwidth_start)
         squared_gradients = svgd.step()
         if step % 125 == 0:
             print("[step %03d] " % step, squared_gradients)
