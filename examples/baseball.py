@@ -228,7 +228,7 @@ def evaluate_log_posterior_density(model, posterior_samples, baseball_dataset):
     at_bats_season, hits_season = test[:, 0], test[:, 1]
     with ignore_experimental_warning():
         trace = predictive(model, posterior_samples, at_bats_season, hits_season,
-                           return_trace=True)
+                           parallel=True, return_trace=True)
     # Use LogSumExp trick to evaluate $log(1/num_samples \sum_i p(new_data | \theta^{i})) $,
     # where $\theta^{i}$ are parameter samples from the model's posterior.
     trace.compute_log_prob()
