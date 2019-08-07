@@ -470,17 +470,18 @@ def summary(samples, prob=0.9, num_chains=1):
 
 
 def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
-                           num_samples, return_trace=False, sample_sites=None):
-    traces = []
+                           num_samples, sample_sites, return_trace=False):
+    collected = []
     samples = [{k: v[i] for k, v in posterior_samples.items()} for i in range(num_samples)]
     for i in range(num_samples):
-        traces.append(poutine.trace(poutine.condition(model, samples[i])).get_trace(*model_args, **model_kwargs))
+        trace = poutine.trace(poutine.condition(model, samples[i])).get_trace(*model_args, **model_kwargs)
+        if return_trace:
+            collected.append(trace)
+        else:
+            collected.append({site: trace.nodes[site]['value'] for site in sample_sites})
 
-    if return_trace:
-        return traces
-
-    return {site: torch.stack([t.nodes[site]['value'] for t in traces])
-            for site in sample_sites}
+    return collected if return_trace else {site: torch.stack([s[site] for s in collected])
+                                           for site in sample_sites}
 
 
 def predictive(model, posterior_samples, *args, **kwargs):
@@ -557,7 +558,7 @@ def predictive(model, posterior_samples, *args, **kwargs):
 
     if not parallel:
         return _predictive_sequential(model, posterior_samples, args, kwargs, num_samples,
-                                      return_trace, sample_sites=return_site_shapes.keys())
+                                      return_site_shapes.keys(), return_trace)
 
     def _vectorized_fn(fn):
         """
