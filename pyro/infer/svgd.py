@@ -58,6 +58,10 @@ class RBFSteinKernel(SteinKernel):
     A RBF kernel for use in the SVGD inference algorithm. The bandwidth of the kernel is chosen from the
     particles using a simple heuristic as in reference [1].
 
+    :param float bandwidth_factor: Optional factor by which to scale the bandwidth, defaults to 1.0.
+    :ivar float bandwidth_factor: Property that controls the factor by which to scale the bandwidth
+        at each iteration.
+
     References
 
     [1] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
