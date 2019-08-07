@@ -1,7 +1,9 @@
+import functools
 import warnings
 from collections import OrderedDict, defaultdict
 from functools import partial, reduce
 from itertools import product
+import traceback as tb
 
 import torch
 from torch.distributions import biject_to
@@ -396,6 +398,26 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
     return init_params, potential_fn, transforms, model_trace
 
 
+def _safe(fn):
+    """
+    Safe version of utilities in the :mod:`pyro.ops.stats` module. Wrapped
+    functions return `NaN` tensors instead of throwing exceptions.
+
+    :param fn: stats function from :mod:`pyro.ops.stats` module.
+    """
+    @functools.wraps(fn)
+    def wrapped(sample, *args, **kwargs):
+        try:
+            val = fn(sample, *args, **kwargs)
+        except Exception:
+            warnings.warn(tb.format_exc())
+            val = torch.full(sample.shape[2:], float("nan"),
+                             dtype=sample.dtype, device=sample.device)
+        return val
+
+    return wrapped
+
+
 def diagnostics(samples, num_chains=1):
     """
     Gets diagnostics statistics such as effective sample size and
@@ -413,11 +435,7 @@ def diagnostics(samples, num_chains=1):
         if num_chains == 1:
             support = support.unsqueeze(0)
         site_stats = OrderedDict()
-        try:
-            site_stats["n_eff"] = stats.effective_sample_size(support)
-        except NotImplementedError:
-            site_stats["n_eff"] = torch.full(support.shape[2:], float("nan"),
-                                             dtype=support.dtype, device=support.device)
+        site_stats["n_eff"] = _safe(stats.effective_sample_size)(support)
         site_stats["r_hat"] = stats.split_gelman_rubin(support)
         diagnostics[site] = site_stats
     return diagnostics
@@ -456,7 +474,7 @@ def summary(samples, prob=0.9, num_chains=1):
         sd = value_flat.std(dim=0)
         median = value_flat.median(dim=0)[0]
         hpd = stats.hpdi(value_flat, prob=prob)
-        n_eff = stats.effective_sample_size(value)
+        n_eff = _safe(stats.effective_sample_size)(value)
         r_hat = stats.split_gelman_rubin(value)
         shape = value_flat.shape[1:]
         if len(shape) == 0:
