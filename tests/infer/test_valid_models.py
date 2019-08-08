@@ -28,17 +28,20 @@ def assert_ok(model, guide, elbo, **kwargs):
     inference = SVI(model, guide, Adam({"lr": 1e-6}), elbo)
     inference.step(**kwargs)
     try:
+        pyro.set_rng_seed(0)
         loss = elbo.loss(model, guide, **kwargs)
         if hasattr(elbo, "differentiable_loss"):
             try:
+                pyro.set_rng_seed(0)
                 differentiable_loss = elbo.differentiable_loss(model, guide, **kwargs).detach().cpu().item()
             except ValueError as e:
                 pass # Ignore cases where elbo cannot be differentiated 
             else:
-                assert_close(differentiable_loss, loss)
+                assert_close(differentiable_loss, loss, atol=0.01)
         if hasattr(elbo, "loss_and_grads"):
+            pyro.set_rng_seed(0)
             loss_and_grads = elbo.loss_and_grads(model, guide, **kwargs)
-            assert_close(loss_and_grads, loss)
+            assert_close(loss_and_grads, loss, atol=0.01)
     except NotImplementedError as e:
         pass # Ignore cases where loss isn't implemented, eg. TraceTailAdaptive_ELBO
 
