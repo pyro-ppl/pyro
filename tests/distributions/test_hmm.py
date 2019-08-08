@@ -16,6 +16,20 @@ from tests.common import assert_close
 from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mvn
 
 
+def check_expand(old_dist, old_data):
+    new_batch_shape = (2,) + old_dist.batch_shape
+    new_dist = old_dist.expand(new_batch_shape)
+    assert new_dist.batch_shape == new_batch_shape
+
+    old_log_prob = new_dist.log_prob(old_data)
+    assert old_log_prob.shape == new_batch_shape
+
+    new_data = old_data.expand(new_batch_shape + new_dist.event_shape)
+    new_log_prob = new_dist.log_prob(new_data)
+    assert_close(old_log_prob, new_log_prob)
+    assert new_dist.log_prob(new_data).shape == new_batch_shape
+
+
 @pytest.mark.parametrize('num_steps', list(range(1, 20)))
 @pytest.mark.parametrize('state_dim', [2, 3])
 @pytest.mark.parametrize('batch_shape', [(), (5,), (2, 4)], ids=str)
@@ -74,7 +88,7 @@ def test_sequential_gaussian_tensordot(batch_shape, state_dim, num_steps):
     (False, (3,), (7,), (4, 7)),
     (False, (), (3, 7), (4, 7)),
 ], ids=str)
-def test_shape(ok, init_shape, trans_shape, obs_shape, event_shape, state_dim):
+def test_discrete_hmm_shape(ok, init_shape, trans_shape, obs_shape, event_shape, state_dim):
     init_logits = torch.randn(init_shape + (state_dim,))
     trans_logits = torch.randn(trans_shape + (state_dim, state_dim))
     obs_logits = torch.randn(obs_shape + (state_dim,) + event_shape)
@@ -86,6 +100,7 @@ def test_shape(ok, init_shape, trans_shape, obs_shape, event_shape, state_dim):
         actual = d.log_prob(data)
         expected_shape = broadcast_shape(init_shape, trans_shape[:-1], obs_shape[:-1])
         assert actual.shape == expected_shape
+        check_expand(d, data)
     else:
         with pytest.raises(ValueError):
             dist.DiscreteHMM(init_logits, trans_logits, obs_dist)
@@ -107,7 +122,7 @@ def test_shape(ok, init_shape, trans_shape, obs_shape, event_shape, state_dim):
     ((7,), (7, 1), (7, 1)),
     ((4, 1, 1), (3, 1, 1), (2, 1)),
 ], ids=str)
-def test_homogeneous_homogeneous_trick(init_shape, trans_shape, obs_shape, event_shape, state_dim, num_steps):
+def test_discrete_hmm_homogeneous_trick(init_shape, trans_shape, obs_shape, event_shape, state_dim, num_steps):
     batch_shape = broadcast_shape(init_shape, trans_shape[:-1], obs_shape[:-1])
     init_logits = torch.randn(init_shape + (state_dim,))
     trans_logits = torch.randn(trans_shape + (state_dim, state_dim))
@@ -129,7 +144,7 @@ def empty_guide(*args, **kwargs):
 
 
 @pytest.mark.parametrize('num_steps', list(range(1, 10)))
-def test_categorical(num_steps):
+def test_discrete_hmm_categorical(num_steps):
     state_dim = 3
     obs_dim = 4
     init_logits = torch.randn(state_dim)
@@ -139,6 +154,7 @@ def test_categorical(num_steps):
     data = dist.Categorical(logits=torch.zeros(num_steps, obs_dim)).sample()
     actual = d.log_prob(data)
     assert actual.shape == d.batch_shape
+    check_expand(d, data)
 
     # Check loss against TraceEnum_ELBO.
     @config_enumerate
@@ -157,7 +173,7 @@ def test_categorical(num_steps):
 
 
 @pytest.mark.parametrize('num_steps', list(range(1, 10)))
-def test_diag_normal(num_steps):
+def test_discrete_hmm_diag_normal(num_steps):
     state_dim = 3
     event_size = 2
     init_logits = torch.randn(state_dim)
@@ -169,6 +185,7 @@ def test_diag_normal(num_steps):
     data = obs_dist.sample()[:, 0]
     actual = d.log_prob(data)
     assert actual.shape == d.batch_shape
+    check_expand(d, data)
 
     # Check loss against TraceEnum_ELBO.
     @config_enumerate
@@ -228,6 +245,7 @@ def test_gaussian_hmm_shape(init_shape, trans_mat_shape, trans_mvn_shape,
     assert data.shape == d.shape()
     actual = d.log_prob(data)
     assert actual.shape == expected_batch_shape
+    check_expand(d, data)
 
 
 @pytest.mark.parametrize('sample_shape', [(), (5,)], ids=str)
@@ -314,6 +332,7 @@ def test_gaussian_mrf_shape(init_shape, trans_shape, obs_shape, hidden_dim, obs_
     assert data.shape == d.shape()
     actual = d.log_prob(data)
     assert actual.shape == expected_batch_shape
+    check_expand(d, data)
 
 
 @pytest.mark.parametrize('sample_shape', [(), (5,)], ids=str)

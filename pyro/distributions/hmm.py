@@ -202,7 +202,7 @@ class GaussianHMM(TorchDistribution):
         noise distribution. This should have batch_shape broadcastable to
         ``self.batch_shape + (num_steps,)``.  This should have event_shape
         ``(hidden_dim,)``.
-    :param ~torch.Tensor transition_matrix: A linear transformation from hidden
+    :param ~torch.Tensor observation_matrix: A linear transformation from hidden
         to observed state. This should have shape broadcastable to
         ``self.batch_shape + (num_steps, hidden_dim, obs_dim)``.
     :param ~torch.distributions.MultivariateNormal observation_dist: An
@@ -241,6 +241,8 @@ class GaussianHMM(TorchDistribution):
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(GaussianHMM, _instance)
         batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
+        new.hidden_dim = self.hidden_dim
+        new.obs_dim = self.obs_dim
         # We only need to expand one of the inputs, since batch_shape is determined
         # by broadcasting all three. To save computation in _sequential_gaussian_tensordot(),
         # we expand only _init, which is applied only after _sequential_gaussian_tensordot().
@@ -331,6 +333,8 @@ class GaussianMRF(TorchDistribution):
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(GaussianMRF, _instance)
         batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
+        new.hidden_dim = self.hidden_dim
+        new.obs_dim = self.obs_dim
         # We only need to expand one of the inputs, since batch_shape is determined
         # by broadcasting all three. To save computation in _sequential_gaussian_tensordot(),
         # we expand only _init, which is applied only after _sequential_gaussian_tensordot().
@@ -351,7 +355,8 @@ class GaussianMRF(TorchDistribution):
         logp_h += self._obs.marginalize(right=self.obs_dim).event_pad(left=self.hidden_dim)
 
         # Concatenate p(obs,hidden) and p(hidden) into a single Gaussian.
-        batch_shape = (1,) + logp_oh.batch_shape
+        batch_dim = 1 + max(len(self._init.batch_shape) + 1, len(logp_oh.batch_shape))
+        batch_shape = (1,) * (batch_dim - len(logp_oh.batch_shape)) + logp_oh.batch_shape
         logp = Gaussian.cat([logp_oh.expand(batch_shape),
                              logp_h.expand(batch_shape)])
 
