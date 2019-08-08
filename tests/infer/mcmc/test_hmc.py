@@ -10,7 +10,7 @@ import pyro.distributions as dist
 from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.api import MCMC
-from tests.common import assert_equal
+from tests.common import assert_equal, assert_close
 
 logger = logging.getLogger(__name__)
 
@@ -295,5 +295,5 @@ def test_unnormalized_normal(kernel, jit):
         posterior.append(samples)
 
     posterior = torch.stack([sample["z"] for sample in posterior])
-    assert_equal(torch.mean(posterior), true_mean, prec=0.1)
-    assert_equal(torch.std(posterior), true_std, prec=0.1)
+    assert_close(torch.mean(posterior), true_mean, rtol=0.05)
+    assert_close(torch.std(posterior), true_std, rtol=0.05)

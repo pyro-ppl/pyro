@@ -211,7 +211,7 @@ class MaskedBlockLinear(torch.nn.Module):
         # taking the log gives the right hand side below:
         wpl = self._diag_weight + self._weight - 0.5 * torch.log(w_squared_norm + eps)
 
-        return w, wpl[self.mask_d.byte()].view(self.dim, self.out_features // self.dim, self.in_features // self.dim)
+        return w, wpl[self.mask_d.bool()].view(self.dim, self.out_features // self.dim, self.in_features // self.dim)
 
     def forward(self, x):
         """

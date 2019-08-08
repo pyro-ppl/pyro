@@ -33,7 +33,7 @@ class ZeroInflatedPoisson(TorchDistribution):
     def sample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
         with torch.no_grad():
-            mask = torch.bernoulli(self.gate.expand(shape)).byte()
+            mask = torch.bernoulli(self.gate.expand(shape)).bool()
             samples = torch.poisson(self.rate.expand(shape))
             samples.masked_fill_(mask, 0.)
         return samples

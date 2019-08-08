@@ -239,7 +239,7 @@ class MaskedDistribution(TorchDistribution):
             raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "
                              "actual {} vs {}".format(mask.shape, base_dist.batch_shape))
         self.base_dist = base_dist
-        self._mask = mask.byte()
+        self._mask = mask.bool()
         super(MaskedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
 
     def expand(self, batch_shape, _instance=None):
