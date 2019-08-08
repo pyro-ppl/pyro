@@ -11,6 +11,7 @@ import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.infer import (SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO,
                         config_enumerate)
+from pyro.infer.util import torch_item
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
 from tests.common import assert_close
@@ -33,7 +34,7 @@ def assert_ok(model, guide, elbo, **kwargs):
         if hasattr(elbo, "differentiable_loss"):
             try:
                 pyro.set_rng_seed(0)
-                differentiable_loss = elbo.differentiable_loss(model, guide, **kwargs).detach().cpu().item()
+                differentiable_loss = torch_item(elbo.differentiable_loss(model, guide, **kwargs))
             except ValueError as e:
                 pass # Ignore cases where elbo cannot be differentiated 
             else:

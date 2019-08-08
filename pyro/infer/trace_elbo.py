@@ -108,7 +108,7 @@ class Trace_ELBO(ELBO):
             surrogate_loss += surrogate_loss_particle / self.num_particles
             loss += loss_particle / self.num_particles
         warn_if_nan(surrogate_loss, "loss")
-        return loss + (surrogate_loss - surrogate_loss.detach())
+        return loss + (surrogate_loss - torch_item(surrogate_loss))
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
         """
@@ -133,7 +133,6 @@ class Trace_ELBO(ELBO):
                 surrogate_loss_particle = surrogate_loss_particle / self.num_particles
                 surrogate_loss_particle.backward(retain_graph=self.retain_graph)
 
-        loss = -loss
         warn_if_nan(loss, "loss")
         return loss
 
