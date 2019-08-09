@@ -11,8 +11,10 @@ import pyro.poutine as poutine
 from pyro.distributions.testing import fakes
 from pyro.infer import (SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, TraceMeanField_ELBO, TraceTailAdaptive_ELBO,
                         config_enumerate)
+from pyro.infer.util import torch_item
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
+from tests.common import assert_close
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,23 @@ def assert_ok(model, guide, elbo, **kwargs):
     pyro.clear_param_store()
     inference = SVI(model, guide, Adam({"lr": 1e-6}), elbo)
     inference.step(**kwargs)
+    try:
+        pyro.set_rng_seed(0)
+        loss = elbo.loss(model, guide, **kwargs)
+        if hasattr(elbo, "differentiable_loss"):
+            try:
+                pyro.set_rng_seed(0)
+                differentiable_loss = torch_item(elbo.differentiable_loss(model, guide, **kwargs))
+            except ValueError:
+                pass  # Ignore cases where elbo cannot be differentiated
+            else:
+                assert_close(differentiable_loss, loss, atol=0.01)
+        if hasattr(elbo, "loss_and_grads"):
+            pyro.set_rng_seed(0)
+            loss_and_grads = elbo.loss_and_grads(model, guide, **kwargs)
+            assert_close(loss_and_grads, loss, atol=0.01)
+    except NotImplementedError:
+        pass  # Ignore cases where loss isn't implemented, eg. TraceTailAdaptive_ELBO
 
 
 def assert_error(model, guide, elbo, match=None):

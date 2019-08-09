@@ -249,12 +249,12 @@ class TraceGraph_ELBO(ELBO):
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         If baselines are present, a baseline loss is also constructed and differentiated.
         """
-
-        loss, surrogate_loss = self._loss_and_surrogate_loss(model, guide, *args, **kwargs)
+        elbo, surrogate_loss = self._loss_and_surrogate_loss(model, guide, *args, **kwargs)
 
         torch_backward(surrogate_loss, retain_graph=self.retain_graph)
 
-        loss = torch_item(loss)
+        elbo = torch_item(elbo)
+        loss = -elbo
         warn_if_nan(loss, "loss")
         return loss
 
