@@ -24,14 +24,6 @@ def patch_dependency(target, root_module=torch):
     return decorator
 
 
-@patch_dependency('torch._dirichlet_grad')
-def _torch_dirichlet_grad(x, concentration, total):
-    unpatched_fn = _torch_dirichlet_grad._pyro_unpatched
-    if x.is_cuda:
-        return unpatched_fn(x.cpu(), concentration.cpu(), total.cpu()).cuda(x.get_device())
-    return unpatched_fn(x, concentration, total)
-
-
 # TODO: Move upstream to allow for pickle serialization of transforms
 @patch_dependency('torch.distributions.transforms.Transform.__getstate__')
 def _Transform__getstate__(self):
