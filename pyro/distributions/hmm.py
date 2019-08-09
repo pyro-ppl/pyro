@@ -205,10 +205,12 @@ class GaussianHMM(TorchDistribution):
     :param ~torch.Tensor observation_matrix: A linear transformation from hidden
         to observed state. This should have shape broadcastable to
         ``self.batch_shape + (num_steps, hidden_dim, obs_dim)``.
-    :param ~torch.distributions.MultivariateNormal observation_dist: An
+    :param observation_dist: An
         observation noise distribution. This should have batch_shape
         broadcastable to ``self.batch_shape + (num_steps,)``.  This should have
         event_shape ``(obs_dim,)``.
+    :type observation_dist: ~torch.distributions.MultivariateNormal or
+        ~torch.distributions.Independent of ~torch.distributions.Normal
     """
     arg_constraints = {}
 
@@ -218,7 +220,9 @@ class GaussianHMM(TorchDistribution):
         assert isinstance(transition_matrix, torch.Tensor)
         assert isinstance(transition_dist, torch.distributions.MultivariateNormal)
         assert isinstance(observation_matrix, torch.Tensor)
-        assert isinstance(observation_dist, torch.distributions.MultivariateNormal)
+        assert (isinstance(observation_dist, torch.distributions.MultivariateNormal) or
+                (isinstance(observation_dist, torch.distributions.Independent) and
+                 isinstance(observation_dist.base_dist, torch.distributions.Normal)))
         hidden_dim, obs_dim = observation_matrix.shape[-2:]
         assert initial_dist.event_shape == (hidden_dim,)
         assert transition_matrix.shape[-2:] == (hidden_dim, hidden_dim)

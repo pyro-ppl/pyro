@@ -222,13 +222,17 @@ def test_discrete_hmm_diag_normal(num_steps):
     ((5,), (), (), (), (6,)),
     ((5,), (5, 6), (5, 6), (5, 6), (5, 6)),
 ], ids=str)
-def test_gaussian_hmm_shape(init_shape, trans_mat_shape, trans_mvn_shape,
+@pytest.mark.parametrize("diag", [False, True], ids=["full", "diag"])
+def test_gaussian_hmm_shape(diag, init_shape, trans_mat_shape, trans_mvn_shape,
                             obs_mat_shape, obs_mvn_shape, hidden_dim, obs_dim):
     init_dist = random_mvn(init_shape, hidden_dim)
     trans_mat = torch.randn(trans_mat_shape + (hidden_dim, hidden_dim))
     trans_dist = random_mvn(trans_mvn_shape, hidden_dim)
     obs_mat = torch.randn(obs_mat_shape + (hidden_dim, obs_dim))
     obs_dist = random_mvn(obs_mvn_shape, obs_dim)
+    if diag:
+        scale = obs_dist.scale_tril.diagonal(dim1=-2, dim2=-1)
+        obs_dist = dist.Normal(obs_dist.loc, scale).to_event(1)
     d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
 
     shape = broadcast_shape(init_shape + (1,),
@@ -253,13 +257,22 @@ def test_gaussian_hmm_shape(init_shape, trans_mat_shape, trans_mvn_shape,
 @pytest.mark.parametrize('obs_dim', [1, 2])
 @pytest.mark.parametrize('hidden_dim', [1, 2])
 @pytest.mark.parametrize('num_steps', [1, 2, 3, 4])
-def test_gaussian_hmm_log_prob(sample_shape, batch_shape, num_steps, hidden_dim, obs_dim):
+@pytest.mark.parametrize("diag", [False, True], ids=["full", "diag"])
+def test_gaussian_hmm_log_prob(diag, sample_shape, batch_shape, num_steps, hidden_dim, obs_dim):
     init_dist = random_mvn(batch_shape, hidden_dim)
     trans_mat = torch.randn(batch_shape + (num_steps, hidden_dim, hidden_dim))
     trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim)
     obs_mat = torch.randn(batch_shape + (num_steps, hidden_dim, obs_dim))
     obs_dist = random_mvn(batch_shape + (num_steps,), obs_dim)
+    if diag:
+        scale = obs_dist.scale_tril.diagonal(dim1=-2, dim2=-1)
+        obs_dist = dist.Normal(obs_dist.loc, scale).to_event(1)
     d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+    if diag:
+        obs_mvn = dist.MultivariateNormal(obs_dist.base_dist.loc,
+                                          scale_tril=obs_dist.base_dist.scale.diag_embed())
+    else:
+        obs_mvn = obs_dist
     data = obs_dist.sample(sample_shape)
     assert data.shape == sample_shape + d.shape()
     actual_log_prob = d.log_prob(data)
@@ -275,7 +288,7 @@ def test_gaussian_hmm_log_prob(sample_shape, batch_shape, num_steps, hidden_dim,
     T = num_steps
     init = mvn_to_gaussian(init_dist)
     trans = matrix_and_mvn_to_gaussian(trans_mat, trans_dist)
-    obs = matrix_and_mvn_to_gaussian(obs_mat, obs_dist)
+    obs = matrix_and_mvn_to_gaussian(obs_mat, obs_mvn)
 
     unrolled_trans = reduce(operator.add, [
         trans[..., t].event_pad(left=t * hidden_dim, right=(T - t - 1) * hidden_dim)
