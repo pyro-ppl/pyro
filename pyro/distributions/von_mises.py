@@ -99,7 +99,7 @@ class VonMises(TorchDistribution):
         """
         shape = self._extended_shape(sample_shape)
         x = torch.empty(shape, dtype=self.loc.dtype, device=self.loc.device)
-        done = torch.zeros(shape, dtype=self.loc.dtype, device=self.loc.device).byte()
+        done = torch.zeros(shape, dtype=self.loc.dtype, device=self.loc.device).bool()
         while not done.all():
             u = torch.rand((3,) + shape, dtype=self.loc.dtype, device=self.loc.device)
             u1, u2, u3 = u.unbind()

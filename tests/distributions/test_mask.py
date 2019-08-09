@@ -12,7 +12,7 @@ def checker_mask(shape):
     mask = tensor(0.)
     for size in shape:
         mask = mask.unsqueeze(-1) + torch.arange(float(size))
-    return mask.fmod(2).byte()
+    return mask.fmod(2).bool()
 
 
 @pytest.mark.parametrize('batch_dim,mask_dim',
@@ -65,7 +65,7 @@ def test_mask_invalid_shape(batch_shape, mask_shape):
 
 
 def test_kl_divergence():
-    mask = torch.tensor([[0, 1], [1, 1]]).byte()
+    mask = torch.tensor([[0, 1], [1, 1]]).bool()
     p = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())
     q = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())
     expected = kl_divergence(p.to_event(2), q.to_event(2))

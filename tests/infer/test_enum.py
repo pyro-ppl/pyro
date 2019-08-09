@@ -2867,14 +2867,14 @@ def test_elbo_zip(gate, rate):
         dist1 = dist.Delta(torch.tensor(0.))
         dist0 = dist.Poisson(rate)
         with pyro.plate("data", len(data)):
-            mask = pyro.sample("mask", dist.Bernoulli(gate), infer={"enumerate": "parallel"}).byte()
+            mask = pyro.sample("mask", dist.Bernoulli(gate), infer={"enumerate": "parallel"}).bool()
             pyro.sample("obs", dist.MaskedMixture(mask, dist0, dist1), obs=data)
 
     def guide(data):
         pass
 
-    gate = pyro.param("gate", torch.tensor(gate), constraint=constraints.unit_interval)
-    rate = pyro.param("rate", torch.tensor(rate), constraint=constraints.positive)
+    pyro.param("gate", torch.tensor(gate), constraint=constraints.unit_interval)
+    pyro.param("rate", torch.tensor(rate), constraint=constraints.positive)
 
     data = torch.tensor([0., 1., 2.])
     elbo = TraceEnum_ELBO(max_plate_nesting=1, strict_enumeration_warning=False)

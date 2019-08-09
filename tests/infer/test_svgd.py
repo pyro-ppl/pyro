@@ -80,3 +80,46 @@ def test_shapes(shape):
     for particle in range(num_particles):
         assert_equal(particles['z1'][particle, ...], mean_init1.exp(), prec=1.0e-6)
         assert_equal(particles['z2'][particle, ...], mean_init2, prec=1.0e-6)
+
+
+@pytest.mark.parametrize("mode", ["univariate", "multivariate"])
+def test_conjugate(mode, verbose=False):
+    data = torch.tensor([1.0, 2.0, 3.0, 3.0, 5.0]).unsqueeze(-1).expand(5, 3)
+    alpha0 = torch.tensor([1.0, 1.8, 2.3])
+    beta0 = torch.tensor([2.3, 1.5, 1.2])
+    alpha_n = alpha0 + data.sum(0)  # posterior alpha
+    beta_n = beta0 + data.size(0)   # posterior beta
+
+    def model():
+        with pyro.plate("rates", alpha0.size(0)):
+            latent = pyro.sample("latent",
+                                 dist.Gamma(alpha0, beta0))
+            with pyro.plate("data", data.size(0)):
+                pyro.sample("obs", dist.Poisson(latent), obs=data)
+
+    kernel = RBFSteinKernel()
+    adam = Adam({"lr": 0.05})
+    svgd = SVGD(model, kernel, adam, 200, 2, mode=mode)
+
+    bandwidth_start = 1.0
+    bandwidth_end = 5.0
+    n_steps = 301
+
+    for step in range(n_steps):
+        kernel.bandwidth_factor = bandwidth_start + (step / n_steps) * (bandwidth_end - bandwidth_start)
+        squared_gradients = svgd.step()
+        if step % 150 == 0:
+            print("[step %03d] " % step, squared_gradients)
+
+    final_particles = svgd.get_named_particles()['latent']
+    posterior_dist = dist.Gamma(alpha_n, beta_n)
+
+    if verbose:
+        print("[mean]: actual, expected = ", final_particles.mean(0).data.numpy(),
+              posterior_dist.mean.data.numpy())
+        print("[var]: actual, expected = ", final_particles.var(0).data.numpy(),
+              posterior_dist.variance.data.numpy())
+
+    assert_equal(final_particles.mean(0)[0], posterior_dist.mean, prec=0.01)
+    prec = 0.05 if mode == 'multivariate' else 0.02
+    assert_equal(final_particles.var(0)[0], posterior_dist.variance, prec=prec)

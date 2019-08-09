@@ -41,12 +41,12 @@ class Rejector(TorchDistribution):
         x = self.propose(sample_shape) if sample_shape else self.propose()
         log_prob_accept = self.log_prob_accept(x)
         probs = torch.exp(log_prob_accept).clamp_(0.0, 1.0)
-        done = torch.bernoulli(probs).byte()
+        done = torch.bernoulli(probs).bool()
         while not done.all():
             proposed_x = self.propose(sample_shape) if sample_shape else self.propose()
             log_prob_accept = self.log_prob_accept(proposed_x)
             prob_accept = torch.exp(log_prob_accept).clamp_(0.0, 1.0)
-            accept = torch.bernoulli(prob_accept).byte() & ~done
+            accept = torch.bernoulli(prob_accept).bool() & ~done
             if accept.any():
                 x[accept] = proposed_x[accept]
                 done |= accept

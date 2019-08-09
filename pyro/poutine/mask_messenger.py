@@ -11,13 +11,13 @@ class MaskMessenger(Messenger):
 
     This is typically used for masking out parts of tensors.
 
-    :param torch.ByteTensor mask: a ``{0,1}``-valued masking tensor
+    :param torch.BoolTensor mask: a ``{0,1}``-valued masking tensor
         (1 includes a site, 0 excludes a site)
     """
     def __init__(self, mask):
         if isinstance(mask, torch.Tensor):
-            if mask.dtype != torch.uint8:
-                raise ValueError('Expected mask to be a ByteTensor but got {}'.format(type(mask)))
+            if mask.dtype != torch.bool:
+                raise ValueError('Expected mask to be a BoolTensor but got {}'.format(type(mask)))
         else:
             if mask not in (True, False):
                 raise ValueError('Expected mask to be a boolean but got {}'.format(type(mask)))
