@@ -218,7 +218,7 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
     :param scale: a positive scale
     :type scale: torch.Tensor or number
     :param mask: an optional masking tensor
-    :type mask: torch.ByteTensor or None
+    :type mask: torch.BoolTensor or None
     """
     if is_identically_zero(tensor) or (mask is None and is_identically_one(scale)):
         return tensor

@@ -41,7 +41,7 @@ def test_unconstrained_to_corr_cholesky_transform(y_shape):
     log_det = transform.log_abs_det_jacobian(y, x)
     assert log_det.shape == y_shape[:-1]
     if len(y_shape) == 1:
-        triu_index = x.new_ones(x.shape).triu(diagonal=1).to(torch.uint8)
+        triu_index = x.new_ones(x.shape).triu(diagonal=1).to(torch.bool)
         x_tril_vector = x.t()[triu_index]
         assert_tensors_equal(_autograd_log_det(x_tril_vector, y), log_det, prec=1e-4)
 

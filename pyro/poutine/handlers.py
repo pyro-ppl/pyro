@@ -357,7 +357,7 @@ def mask(fn=None, mask=None):
     masking tensor, mask out some of the sample statements elementwise.
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
-    :param torch.ByteTensor mask: a ``{0,1}``-valued masking tensor
+    :param torch.BoolTensor mask: a ``{0,1}``-valued masking tensor
         (1 includes a site, 0 excludes a site)
     :returns: stochastic function decorated with a :class:`~pyro.poutine.scale_messenger.MaskMessenger`
     """

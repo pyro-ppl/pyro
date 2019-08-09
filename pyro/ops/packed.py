@@ -124,7 +124,7 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
     :param scale: a positive scale
     :type scale: torch.Tensor or number
     :param mask: an optional packed tensor mask
-    :type mask: torch.ByteTensor or None
+    :type mask: torch.BoolTensor or None
     """
     if isinstance(scale, torch.Tensor) and scale.dim():
         raise NotImplementedError('non-scalar scale is not supported')
