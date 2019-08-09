@@ -439,8 +439,7 @@ def test_traceenum_elbo(length):
         pass
 
     expected_loss = TraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(model, guide, data)
-    actual_loss = JitTraceEnum_ELBO(max_plate_nesting=0,
-                                    jit_options={"optimize": False}).differentiable_loss(model, guide, data)
+    actual_loss = JitTraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(model, guide, data)
     assert_equal(expected_loss, actual_loss)
 
     expected_grads = grad(expected_loss, [transition, means], allow_unused=True)
