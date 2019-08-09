@@ -13,4 +13,4 @@ def test_dirichlet_grad_cuda():
 @requires_cuda
 def test_linspace():
     x = torch.linspace(-1., 1., 100, device="cuda")
-    assert x.device == "cuda"
+    assert x.device.type == "cuda"
