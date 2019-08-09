@@ -6,6 +6,7 @@ import pyro.distributions as dist
 
 from pyro.infer import SVGD, RBFSteinKernel
 from pyro.optim import Adam
+from pyro.infer.autoguide.utils import _product
 
 from tests.common import assert_equal
 
@@ -56,20 +57,29 @@ def test_mean_variance(latent_dist, mode, verbose=True):
 @pytest.mark.parametrize("shape", [(1, 1), (2, 1, 3), (4, 2), (1, 2, 1, 3)])
 def test_shapes(shape):
     pyro.clear_param_store()
+    shape1, shape2 = (5,) + shape, shape + (6,)
+
+    mean_init1 = torch.arange(_product(shape1)).double().reshape(shape1) / 100.0
+    mean_init2 = torch.arange(_product(shape2)).double().reshape(shape2)
 
     def model():
-        pyro.sample("z1", dist.Normal(torch.zeros(shape), 1.0).to_event(len(shape)))
-        pyro.sample("z2", dist.LogNormal(torch.zeros(shape + (5,)), 1.0).to_event(1 + len(shape)))
+        pyro.sample("z1", dist.LogNormal(mean_init1, 1.0e-8).to_event(len(shape1)))
+        pyro.sample("scalar", dist.Normal(0.0, 1.0))
+        pyro.sample("z2", dist.Normal(mean_init2, 1.0e-8).to_event(len(shape2)))
 
     num_particles = 7
-    svgd = SVGD(model, RBFSteinKernel(), Adam({"lr": 0.001}), num_particles, 0)
+    svgd = SVGD(model, RBFSteinKernel(), Adam({"lr": 0.0}), num_particles, 0)
 
     for step in range(2):
         svgd.step()
 
     particles = svgd.get_named_particles()
-    assert particles['z1'].shape == (num_particles,) + shape
-    assert particles['z2'].shape == (num_particles,) + shape + (5,)
+    assert particles['z1'].shape == (num_particles,) + shape1
+    assert particles['z2'].shape == (num_particles,) + shape2
+
+    for particle in range(num_particles):
+        assert_equal(particles['z1'][particle, ...], mean_init1.exp(), prec=1.0e-6)
+        assert_equal(particles['z2'][particle, ...], mean_init2, prec=1.0e-6)
 
 
 @pytest.mark.parametrize("mode", ["univariate", "multivariate"])
