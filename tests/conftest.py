@@ -38,10 +38,10 @@ def pytest_addoption(parser):
                      default=[],
                      help="Only run tests matching the stage NAME.")
 
-    parser.addoption("--lax-cuda",
+    parser.addoption("--lax",
                      action="store_true",
                      default=False,
-                     help="Ignore AssertionError when running CUDA tests.")
+                     help="Ignore AssertionError when running tests.")
 
 
 def _get_highest_specificity_marker(stage_marker):
@@ -76,9 +76,9 @@ def pytest_collection_modifyitems(config, items):
     test_stages = set(config.getoption("--stage"))
 
     # add dynamic markers
-    lax_cuda = config.getoption("--lax-cuda")
-    if lax_cuda:
-        _add_marker(pytest.mark.xfail(raises=[AssertionError]), items)
+    lax = config.getoption("--lax")
+    if lax:
+        _add_marker(pytest.mark.xfail(raises=AssertionError), items)
 
     # select / deselect tests based on stage criterion
     if not test_stages or "all" in test_stages:

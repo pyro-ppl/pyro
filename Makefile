@@ -58,7 +58,7 @@ test-cuda: lint FORCE
 	CUDA_TEST=1 pytest -vx tests/test_examples.py::test_cuda
 
 test-cuda-lax: lint FORCE
-	CUDA_TEST=1 PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx --stage unit --lax-cuda
+	CUDA_TEST=1 PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx --stage unit --lax
 	CUDA_TEST=1 pytest -vx tests/test_examples.py::test_cuda
 
 test-jit: FORCE
