@@ -57,7 +57,7 @@ EXTRAS_REQUIRE = [
     'jupyter>=1.0.0',
     'matplotlib>=1.3',
     'pillow',
-    'torchvision>=0.2.2',
+    'torchvision>=0.4.0',
     'visdom>=0.1.4',
     'pandas',
     'seaborn',
