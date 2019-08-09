@@ -36,19 +36,6 @@ def _Transform__getstate__(self):
     return attrs
 
 
-@patch_dependency('torch.linspace')
-def _torch_linspace(*args, **kwargs):
-    unpatched_fn = _torch_linspace._pyro_unpatched
-    template = torch.Tensor()
-    if template.is_cuda:
-        kwargs["device"] = "cpu"
-        ret = unpatched_fn(*args, **kwargs).to(device=template.device)
-        kwargs.pop("device", None)
-    else:
-        ret = unpatched_fn(*args, **kwargs)
-    return ret
-
-
 # Fixes a shape error in Multinomial.support with inhomogeneous .total_count
 @patch_dependency('torch.distributions.Multinomial.support')
 @torch.distributions.constraints.dependent_property
