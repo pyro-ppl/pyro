@@ -7,7 +7,7 @@ from torch.nn.functional import pad
 from pyro.distributions.util import broadcast_shape
 
 
-class Gaussian(object):
+class Gaussian:
     """
     Non-normalized Gaussian distribution.
 
@@ -213,7 +213,7 @@ class AffineNormal:
     variable ``Y`` whose mean is an affine function of a random variable ``X``.
     The likelihood of ``X`` is thus::
 
-        LinearNormal(matrix, loc, scale).condition(y).log_density(x)
+        AffineNormal(matrix, loc, scale).condition(y).log_density(x)
 
     which is equivalent to::
 
