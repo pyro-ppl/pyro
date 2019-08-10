@@ -203,6 +203,13 @@ VonMises3D
     :undoc-members:
     :show-inheritance:
 
+ZeroInflatedPoisson
+-------------------
+.. autoclass:: pyro.distributions.ZeroInflatedPoisson
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Transformed Distributions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
