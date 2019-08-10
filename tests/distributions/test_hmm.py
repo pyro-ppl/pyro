@@ -95,15 +95,22 @@ def test_discrete_hmm_shape(ok, init_shape, trans_shape, obs_shape, event_shape,
     obs_dist = dist.Bernoulli(logits=obs_logits).to_event(len(event_shape))
     data = obs_dist.sample()[(slice(None),) * len(obs_shape) + (0,)]
 
-    if ok:
-        d = dist.DiscreteHMM(init_logits, trans_logits, obs_dist)
-        actual = d.log_prob(data)
-        expected_shape = broadcast_shape(init_shape, trans_shape[:-1], obs_shape[:-1])
-        assert actual.shape == expected_shape
-        check_expand(d, data)
-    else:
+    if not ok:
         with pytest.raises(ValueError):
             dist.DiscreteHMM(init_logits, trans_logits, obs_dist)
+        return
+
+    d = dist.DiscreteHMM(init_logits, trans_logits, obs_dist)
+
+    actual = d.log_prob(data)
+    expected_shape = broadcast_shape(init_shape, trans_shape[:-1], obs_shape[:-1])
+    assert actual.shape == expected_shape
+    check_expand(d, data)
+
+    final = d.filter(data)
+    assert isinstance(final, dist.Categorical)
+    assert final.batch_shape == d.batch_shape
+    assert final.event_shape == ()
 
 
 @pytest.mark.parametrize('event_shape', [(), (5,), (2, 3)], ids=str)
@@ -250,6 +257,11 @@ def test_gaussian_hmm_shape(diag, init_shape, trans_mat_shape, trans_mvn_shape,
     actual = d.log_prob(data)
     assert actual.shape == expected_batch_shape
     check_expand(d, data)
+
+    final = d.filter(data)
+    assert isinstance(final, dist.MultivariateNormal)
+    assert final.batch_shape == d.batch_shape
+    assert final.event_shape == (hidden_dim,)
 
 
 @pytest.mark.parametrize('sample_shape', [(), (5,)], ids=str)
