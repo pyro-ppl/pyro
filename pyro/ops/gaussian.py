@@ -7,7 +7,7 @@ from torch.nn.functional import pad
 from pyro.distributions.util import broadcast_shape
 
 
-class Gaussian(object):
+class Gaussian:
     """
     Non-normalized Gaussian distribution.
 
@@ -207,6 +207,49 @@ class Gaussian(object):
                 chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1))
 
 
+class AffineNormal:
+    """
+    Represents a conditional diagonal normal distribution over a random
+    variable ``Y`` whose mean is an affine function of a random variable ``X``.
+    The likelihood of ``X`` is thus::
+
+        AffineNormal(matrix, loc, scale).condition(y).log_density(x)
+
+    which is equivalent to::
+
+        Normal(x @ matrix + loc, scale).to_event(1).log_prob(y)
+
+    :param torch.Tensor matrix: A transformation from ``X`` to ``Y``.
+        Should have rightmost shape ``(x_dim, y_dim)``.
+    :param torch.Tensor loc: A constant offset for ``Y``'s mean.
+        Should have rightmost shape ``(y_dim,)``.
+    :param torch.Tensor scale: Standard deviation for ``Y``.
+        Should have rightmost shape ``(y_dim,)``.
+    """
+    def __init__(self, matrix, loc, scale):
+        assert loc.shape == scale.shape
+        x_dim, y_dim = matrix.shape[-2:]
+        self.matrix = matrix
+        self.loc = loc
+        self.scale = scale
+
+    def condition(self, value):
+        """
+        Condition on a ``Y`` value.
+
+        :param torch.Tensor value: A value of ``Y``.
+        :return Gaussian: A gaussian likelihood over ``X``.
+        """
+        assert value.size(-1) == self.loc.size(-1)
+        prec_sqrt = self.matrix / self.scale.unsqueeze(-2)
+        precision = prec_sqrt.matmul(prec_sqrt.transpose(-1, -2))
+        delta = (value - self.loc) / self.scale
+        info_vec = prec_sqrt.matmul(delta.unsqueeze(-1)).squeeze(-1)
+        log_normalizer = (-0.5 * self.loc.size(-1) * math.log(2 * math.pi)
+                          - 0.5 * delta.pow(2).sum(-1) - self.scale.log().sum(-1))
+        return Gaussian(log_normalizer, info_vec, precision)
+
+
 def mvn_to_gaussian(mvn):
     """
     Convert a MultivaiateNormal distribution to a Gaussian.
@@ -236,13 +279,19 @@ def matrix_and_mvn_to_gaussian(matrix, mvn):
     :return: A Gaussian with broadcasted batch shape and ``.dim() == x_dim + y_dim``.
     :rtype: ~pyro.ops.gaussian.Gaussian
     """
-    assert isinstance(mvn, torch.distributions.MultivariateNormal)
+    assert (isinstance(mvn, torch.distributions.MultivariateNormal) or
+            (isinstance(mvn, torch.distributions.Independent) and
+             isinstance(mvn.base_dist, torch.distributions.Normal)))
     assert isinstance(matrix, torch.Tensor)
     x_dim, y_dim = matrix.shape[-2:]
     assert mvn.event_shape == (y_dim,)
     batch_shape = broadcast_shape(matrix.shape[:-2], mvn.batch_shape)
     matrix = matrix.expand(batch_shape + (x_dim, y_dim))
     mvn = mvn.expand(batch_shape)
+
+    # Handle diagonal normal distributions as an efficient special case.
+    if isinstance(mvn, torch.distributions.Independent):
+        return AffineNormal(matrix, mvn.base_dist.loc, mvn.base_dist.scale)
 
     y_gaussian = mvn_to_gaussian(mvn)
     P_yy = y_gaussian.precision

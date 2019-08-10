@@ -6,7 +6,7 @@ from torch.nn.functional import pad
 
 import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.gaussian import Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
+from pyro.ops.gaussian import AffineNormal, Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
 from tests.common import assert_close
 from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mvn
 
@@ -168,6 +168,32 @@ def test_logsumexp(batch_shape, dim):
     expected = gaussian.log_density(samples).logsumexp(0) + math.log(scale ** dim / num_samples)
     actual = gaussian.event_logsumexp()
     assert_close(actual, expected, atol=0.05, rtol=0.05)
+
+
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("x_dim", [1, 2, 3])
+@pytest.mark.parametrize("y_dim", [1, 2, 3])
+def test_affine_normal(batch_shape, x_dim, y_dim):
+    matrix = torch.randn(batch_shape + (x_dim, y_dim))
+    loc = torch.randn(batch_shape + (y_dim,))
+    scale = torch.randn(batch_shape + (y_dim,)).exp()
+    y = torch.randn(batch_shape + (y_dim,))
+
+    normal = dist.Normal(loc, scale).to_event(1)
+    actual = matrix_and_mvn_to_gaussian(matrix, normal)
+    assert isinstance(actual, AffineNormal)
+    actual_like = actual.condition(y)
+    assert isinstance(actual_like, Gaussian)
+
+    mvn = dist.MultivariateNormal(loc, scale_tril=scale.diag_embed())
+    expected = matrix_and_mvn_to_gaussian(matrix, mvn)
+    assert isinstance(expected, Gaussian)
+    expected_like = expected.condition(y)
+    assert isinstance(expected_like, Gaussian)
+
+    assert_close(actual_like.log_normalizer, expected_like.log_normalizer)
+    assert_close(actual_like.info_vec, expected_like.info_vec)
+    assert_close(actual_like.precision, expected_like.precision)
 
 
 @pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
