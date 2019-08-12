@@ -111,6 +111,7 @@ def test_discrete_hmm_shape(ok, init_shape, trans_shape, obs_shape, event_shape,
     assert isinstance(final, dist.Categorical)
     assert final.batch_shape == d.batch_shape
     assert final.event_shape == ()
+    assert final.support.upper_bound == state_dim - 1
 
 
 @pytest.mark.parametrize('event_shape', [(), (5,), (2, 3)], ids=str)
