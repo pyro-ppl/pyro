@@ -1,6 +1,7 @@
 import torch
 from torch.distributions import constraints
 
+from pyro.distributions.torch import Categorical, MultivariateNormal
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.gaussian import Gaussian, gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
@@ -135,7 +136,7 @@ class DiscreteHMM(TorchDistribution):
         new.transition_logits = self.transition_logits
         new.observation_dist = self.observation_dist
         super(DiscreteHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
-        new.validate_args = self.__dict__.get('_validate_args')
+        new._validate_args = self.__dict__.get('_validate_args')
         return new
 
     def log_prob(self, value):
@@ -153,6 +154,31 @@ class DiscreteHMM(TorchDistribution):
         # Marginalize out final state.
         result = result.logsumexp(-1)
         return result
+
+    def filter(self, value):
+        """
+        Compute posterior over final state given a sequence of observations.
+
+        :param ~torch.Tensor value: A sequence of observations.
+        :return: A posterior distribution
+            over latent states at the final time step. ``result.logits`` can
+            then be used as ``initial_logits`` in a sequential Pyro model for
+            prediction.
+        :rtype: ~pyro.distributions.Categorical
+        """
+        # Combine observation and transition factors.
+        value = value.unsqueeze(-1 - self.observation_dist.event_dim)
+        observation_logits = self.observation_dist.log_prob(value)
+        logp = self.transition_logits + observation_logits.unsqueeze(-2)
+
+        # Eliminate time dimension.
+        logp = _sequential_logmatmulexp(logp)
+
+        # Combine initial factor.
+        logp = (self.initial_logits.unsqueeze(-1) + logp).logsumexp(-2)
+
+        # Convert to a distribution.
+        return Categorical(logits=logp, validate_args=self._validate_args)
 
 
 class GaussianHMM(TorchDistribution):
@@ -205,10 +231,9 @@ class GaussianHMM(TorchDistribution):
     :param ~torch.Tensor observation_matrix: A linear transformation from hidden
         to observed state. This should have shape broadcastable to
         ``self.batch_shape + (num_steps, hidden_dim, obs_dim)``.
-    :param observation_dist: An
-        observation noise distribution. This should have batch_shape
-        broadcastable to ``self.batch_shape + (num_steps,)``.  This should have
-        event_shape ``(obs_dim,)``.
+    :param observation_dist: An observation noise distribution. This should
+        have batch_shape broadcastable to ``self.batch_shape + (num_steps,)``.
+        This should have event_shape ``(obs_dim,)``.
     :type observation_dist: ~torch.distributions.MultivariateNormal or
         ~torch.distributions.Independent of ~torch.distributions.Normal
     """
@@ -254,7 +279,7 @@ class GaussianHMM(TorchDistribution):
         new._trans = self._trans
         new._obs = self._obs
         super(GaussianHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
-        new.validate_args = self.__dict__.get('_validate_args')
+        new._validate_args = self.__dict__.get('_validate_args')
         return new
 
     def log_prob(self, value):
@@ -270,6 +295,32 @@ class GaussianHMM(TorchDistribution):
         # Marginalize out final state.
         result = result.event_logsumexp()
         return result
+
+    def filter(self, value):
+        """
+        Compute posterior over final state given a sequence of observations.
+
+        :param ~torch.Tensor value: A sequence of observations.
+        :return: A posterior
+            distribution over latent states at the final time step. ``result``
+            can then be used as ``initial_dist`` in a sequential Pyro model for
+            prediction.
+        :rtype: ~pyro.distributions.MultivariateNormal
+        """
+        # Combine observation and transition factors.
+        logp = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
+
+        # Eliminate time dimension.
+        logp = _sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
+
+        # Combine initial factor.
+        logp = gaussian_tensordot(self._init, logp, dims=self.hidden_dim)
+
+        # Convert to a distribution
+        precision = logp.precision
+        loc = logp.info_vec.unsqueeze(-1).cholesky_solve(precision.cholesky()).squeeze(-1)
+        return MultivariateNormal(loc, precision_matrix=precision,
+                                  validate_args=self._validate_args)
 
 
 class GaussianMRF(TorchDistribution):
@@ -346,7 +397,7 @@ class GaussianMRF(TorchDistribution):
         new._trans = self._trans
         new._obs = self._obs
         super(GaussianMRF, new).__init__(batch_shape, self.event_shape, validate_args=False)
-        new.validate_args = self.__dict__.get('_validate_args')
+        new._validate_args = self.__dict__.get('_validate_args')
         return new
 
     def log_prob(self, value):
