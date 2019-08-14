@@ -297,3 +297,19 @@ def test_unnormalized_normal(kernel, jit):
     posterior = torch.stack([sample["z"] for sample in posterior])
     assert_close(torch.mean(posterior), true_mean, rtol=0.05)
     assert_close(torch.std(posterior), true_std, rtol=0.05)
+
+
+@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+def test_singular_matrix_catch(jit):
+    def potential_energy(z):
+        return torch.cholesky(z['cov']).sum()
+
+    init_params = {'cov': torch.eye(3)}
+    potential_fn = potential_energy if not jit else torch.jit.trace(potential_energy, init_params)
+    hmc_kernel = HMC(potential_fn=potential_fn, adapt_step_size=False, step_size=1)
+    hmc_kernel.initial_params = init_params
+    hmc_kernel.setup(warmup_steps=10)
+
+    samples = init_params
+    for i in range(10):
+        samples = hmc_kernel(samples)
