@@ -70,7 +70,16 @@ def potential_grad(potential_fn, z):
     z_keys, z_nodes = zip(*z.items())
     for node in z_nodes:
         node.requires_grad_(True)
-    potential_energy = potential_fn(z)
+    try:
+        potential_energy = potential_fn(z)
+    # deal with singular matrices
+    except RuntimeError as e:
+        if "singular U" in str(e):
+            grads = {k: v.new_zeros(v.shape) for k, v in z.items()}
+            return grads, z_nodes[0].new_tensor(float('nan'))
+        else:
+            raise e
+
     grads = grad(potential_energy, z_nodes)
     for node in z_nodes:
         node.requires_grad_(False)
