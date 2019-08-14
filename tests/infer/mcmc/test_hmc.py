@@ -299,17 +299,21 @@ def test_unnormalized_normal(kernel, jit):
     assert_close(torch.std(posterior), true_std, rtol=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-def test_singular_matrix_catch(jit):
+@pytest.mark.parametrize('jit', [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parametrize('op', [torch.inverse, torch.cholesky])
+def test_singular_matrix_catch(jit, op):
     def potential_energy(z):
-        return torch.cholesky(z['cov']).sum()
+        return op(z['cov']).sum()
 
     init_params = {'cov': torch.eye(3)}
     potential_fn = potential_energy if not jit else torch.jit.trace(potential_energy, init_params)
-    hmc_kernel = HMC(potential_fn=potential_fn, adapt_step_size=False, step_size=1)
+    hmc_kernel = HMC(potential_fn=potential_fn, adapt_step_size=False,
+                     num_steps=10, step_size=1e-20)
     hmc_kernel.initial_params = init_params
-    hmc_kernel.setup(warmup_steps=10)
+    hmc_kernel.setup(warmup_steps=0)
+    # setup an invalid cache to trigger singular error for torch.inverse
+    hmc_kernel._cache({'cov': torch.ones(3, 3)}, torch.tensor(0.), {'cov': torch.zeros(3, 3)})
 
     samples = init_params
     for i in range(10):
-        samples = hmc_kernel(samples)
+        samples = hmc_kernel.sample(samples)
