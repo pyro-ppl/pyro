@@ -7,11 +7,15 @@ from torch.nn.functional import pad
 from pyro.distributions.util import broadcast_shape
 
 
-def triangularize(A):
+def triangularize(A, use_qr=True):
     """
     Transforms a matrix to a lower triangular matrix such that A @ A.T = f(A) @ f(A).T
     """
-    return A.transpose(-1, -2).qr(some=True).R.transpose(-1, -2)
+    # TODO: benchmark two versions
+    if use_qr:
+        return A.transpose(-1, -2).qr(some=True).R.transpose(-1, -2)
+    else:
+        return A.matmul(A.tranpose(-1, -2)).cholesky()
 
 
 class GaussianS:
