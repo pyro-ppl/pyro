@@ -35,13 +35,16 @@ class GaussianS:
         # NB: using info_vec instead of mean to deal with rank-deficient problem
         assert info_vec.dim() >= 1
         assert prec_sqrt.dim() >= 2
-        assert prec_sqrt.shape[-2:] == info_vec.shape[-1:] * 2
+        assert prec_sqrt.size(-2) == info_vec.size(-1)
         self.log_normalizer = log_normalizer
         self.info_vec = info_vec
         self.prec_sqrt = prec_sqrt
 
     def dim(self):
         return self.info_vec.size(-1)
+
+    def rank(self):
+        return self.prec_sqrt.size(-1)
 
     @lazy_property
     def batch_shape(self):
@@ -51,20 +54,23 @@ class GaussianS:
 
     @lazy_property
     def precision(self):
+        if self.rank() == 0:
+            empty = self.prec_sqrt.new_tensor([])
+            return empty.reshape(self.prec_sqrt.shape[:-1] + (self.dim(),))
         return self.prec_sqrt.matmul(self.prec_sqrt.transpose(-2, -1))
 
     def expand(self, batch_shape):
         n = self.dim()
         log_normalizer = self.log_normalizer.expand(batch_shape)
         info_vec = self.info_vec.expand(batch_shape + (n,))
-        prec_sqrt = self.prec_sqrt.expand(batch_shape + (n, n))
+        prec_sqrt = self.prec_sqrt.expand(batch_shape + (n, self.rank()))
         return GaussianS(log_normalizer, info_vec, prec_sqrt)
 
     def reshape(self, batch_shape):
         n = self.dim()
         log_normalizer = self.log_normalizer.reshape(batch_shape)
         info_vec = self.info_vec.reshape(batch_shape + (n,))
-        prec_sqrt = self.prec_sqrt.reshape(batch_shape + (n, n))
+        prec_sqrt = self.prec_sqrt.reshape(batch_shape + (n, self.rank()))
         return GaussianS(log_normalizer, info_vec, prec_sqrt)
 
     def __getitem__(self, index):
@@ -95,14 +101,18 @@ class GaussianS:
         lr = (left, right)
         log_normalizer = self.log_normalizer
         info_vec = pad(self.info_vec, lr)
-        prec_sqrt = pad(self.prec_sqrt, lr + (0, 0))
+        if self.rank() == 0:
+            # deal with empty matrix
+            prec_sqrt = self.prec_sqrt.reshape(
+                self.precision.shape[:-2] + (self.dim() + left + right, 0))
+        else:
+            prec_sqrt = pad(self.prec_sqrt, (0, 0) + lr)
         return GaussianS(log_normalizer, info_vec, prec_sqrt)
 
     def event_permute(self, perm):
         """
         Permute along event dimension.
         """
-        raise NotImplementedError
         assert isinstance(perm, torch.Tensor)
         assert perm.shape == (self.dim(),)
         info_vec = self.info_vec[..., perm]
@@ -117,7 +127,7 @@ class GaussianS:
         assert self.dim() == other.dim()
         return GaussianS(self.log_normalizer + other.log_normalizer,
                          self.info_vec + other.info_vec,
-                         pad(self.prec_sqrt, (0, other.dim())) + pad(other.prec_sqrt, (self.dim(), 0)))
+                         pad(self.prec_sqrt, (0, other.rank())) + pad(other.prec_sqrt, (self.rank(), 0)))
 
     def log_density(self, value):
         """
@@ -130,10 +140,9 @@ class GaussianS:
         if value.size(-1) == 0:
             batch_shape = broadcast_shape(value.shape[:-1], self.batch_shape)
             return self.log_normalizer.expand(batch_shape)
-        result = value.matmul(self.prec_sqrt)
+        result = value.unsqueeze(-2).matmul(self.prec_sqrt).squeeze(-2)
         result = (-0.5) * result.pow(2).sum(-1)
-        result = result + self.info_vec
-        result = (value * result).sum(-1)
+        result = result + value.mul(self.info_vec).sum(-1)
         return result + self.log_normalizer
 
     def condition(self, value):
@@ -161,8 +170,8 @@ class GaussianS:
         Psqrt_b = self.prec_sqrt[..., n:, :]
         b = value
 
-        Psqrt_b_b = b.matmul(Psqrt_b)
-        info_vec = info_a - Psqrt_a.matmul(Psqrt_b_b)
+        Psqrt_b_b = b.unsqueeze(-2).matmul(Psqrt_b).squeeze(-2)
+        info_vec = info_a - Psqrt_a.matmul(Psqrt_b_b.unsqueeze(-1)).squeeze(-1)
         prec_sqrt = Psqrt_a
         log_normalizer = (self.log_normalizer +
                           -0.5 * Psqrt_b_b.pow(2).sum(-1) +
@@ -187,6 +196,7 @@ class GaussianS:
             raise NotImplementedError
         n = self.dim()
         n_b = left + right
+        n_a = n - n_b
         a = slice(left, n - right)  # preserved
         b = slice(None, left) if left else slice(n - right, None)
 
@@ -204,14 +214,17 @@ class GaussianS:
         # but using QR here seems more stable
         Psqrt_b_tril = triangularize(Psqrt_b)
         B_sqrt = Psqrt_b.triangular_solve(Psqrt_b_tril, upper=False).solution
-        B = B_sqrt.transpose(-1, -2).matmul(B_sqrt)
-        Psqrt_a_B = Psqrt_a.matmul(B)
-        prec_sqrt = Psqrt_a - Psqrt_a_B
+        B_sqrt_t = B_sqrt.transpose(-1, -2)
+        B = B_sqrt_t.matmul(B_sqrt)
+        identity = torch.eye(self.rank(), device=B.device, dtype=B.dtype)
+        prec_sqrt = Psqrt_a.matmul(identity - B)
 
         info_a = self.info_vec[..., a]
         info_b = self.info_vec[..., b]
         b_tmp = info_b.unsqueeze(-1).triangular_solve(Psqrt_b_tril, upper=False).solution
-        info_vec = info_a - Psqrt_a_B.matmul(b_tmp).squeeze(-1)
+        info_vec = info_a
+        if n_a > 0:
+            info_vec = info_vec - Psqrt_a.matmul(B_sqrt_t).matmul(b_tmp).squeeze(-1)
 
         log_normalizer = (self.log_normalizer +
                           0.5 * n_b * math.log(2 * math.pi) -
@@ -274,10 +287,10 @@ class AffineNormalS:
 
 
 def _scale_tril_to_prec_sqrt(L):
-    # NB: prec_sqrt here is a upper triangular matrix. We can use torch.flip
+    # NB: Here, prec_sqrt is a upper triangular matrix. We can use torch.flip
     # to create a lower triangular matrix, but it is not necessary.
     identity = torch.eye(L.size(-1), device=L.device, dtype=L.dtype)
-    return identity.triangular_solve(L, upper=False).solution.tranpose(-1, -2)
+    return identity.triangular_solve(L, upper=False).solution.transpose(-1, -2)
 
 
 def mvn_to_gaussianS(mvn):
@@ -357,40 +370,11 @@ def gaussian_tensordotS(x, y, dims=0):
     assert na >= 0
     assert nb >= 0
     assert nc >= 0
+    assert x.rank() + y.rank() >= dims
 
-    # TODO: avoid broadcasting
     device = x.info_vec.device
     perm = torch.cat([
         torch.arange(na, device=device),
         torch.arange(x.dim(), x.dim() + nc, device=device),
         torch.arange(na, x.dim(), device=device)])
     return (x.event_pad(right=nc) + y.event_pad(left=na)).event_permute(perm).marginalize(right=nb)
-    """
-    Paa, Pba, Pbb = x.precision[..., :na, :na], x.precision[..., na:, :na], x.precision[..., na:, na:]
-    Qbb, Qbc, Qcc = y.precision[..., :nb, :nb], y.precision[..., :nb, nb:], y.precision[..., nb:, nb:]
-    xa, xb = x.info_vec[..., :na], x.info_vec[..., na:]  # x.precision @ x.mean
-    yb, yc = y.info_vec[..., :nb], y.info_vec[..., nb:]  # y.precision @ y.mean
-
-    precision = pad(Paa, (0, nc, 0, nc)) + pad(Qcc, (na, 0, na, 0))
-    info_vec = pad(xa, (0, nc)) + pad(yc, (na, 0))
-    log_normalizer = x.log_normalizer + y.log_normalizer
-    if nb > 0:
-        B = pad(Pba, (0, nc)) + pad(Qbc, (na, 0))
-        b = xb + yb
-
-        # Pbb + Qbb needs to be positive definite, so that we can malginalize out `b` (to have a finite integral)
-        L = torch.cholesky(Pbb + Qbb)
-        LinvB = torch.triangular_solve(B, L, upper=False)[0]
-        LinvBt = LinvB.transpose(-2, -1)
-        Linvb = torch.triangular_solve(b.unsqueeze(-1), L, upper=False)[0]
-
-        precision = precision - torch.matmul(LinvBt, LinvB)
-        # NB: precision might not be invertible for getting mean = precision^-1 @ info_vec
-        if na + nc > 0:
-            info_vec = info_vec - torch.matmul(LinvBt, Linvb).squeeze(-1)
-        logdet = torch.diagonal(L, dim1=-2, dim2=-1).log().sum(-1)
-        diff = 0.5 * nb * math.log(2 * math.pi) + 0.5 * Linvb.squeeze(-1).pow(2).sum(-1) - logdet
-        log_normalizer = log_normalizer + diff
-
-    return Gaussian(log_normalizer, info_vec, precision)
-    """
