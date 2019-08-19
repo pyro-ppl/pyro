@@ -95,7 +95,6 @@ class MixtureOfDiagNormalsSharedCovariance(TorchDistribution):
         result = result - eps_sqr_min
         return result
 
-
     def rsample(self, sample_shape=torch.Size()):
         which = self.categorical.sample(sample_shape)
         return _MixDiagNormalSharedCovarianceSample.apply(self.locs, self.coord_scale, self.component_logits,
