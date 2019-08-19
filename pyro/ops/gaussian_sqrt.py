@@ -216,24 +216,22 @@ class GaussianS:
         #           = Psqrt_a @ [I - Psqrt_bt @ inv(Psqrt_b @ Psqrt_bt) @ Psqrt_b] @ Psqrt_at
         #           = Psqrt_a @ (I - B) @ Psqrt_at
         #           = Psqrt_a @ (I - B) @ (I - Bt) @ Psqrt_at  (NB: (I - B) @ (I - Bt) = I - B !!)
-        # Hence, prec_sqrt = Psqrt_a - Psqrt_a @ B
+        # Hence, prec_sqrt = Psqrt_a - Psqrt_a @ Psqrt_bt @ inv(Psqrt_b @ Psqrt_bt) @ Psqrt_b
 
         # compute Psqrt_bt @ inv(Psqrt_b @ Psqrt_bt) @ Psqrt_b
         # XXX: we can use cholesky of (Psqrt_b @ Psqrt_bt) as in Gaussian implementation
         # but using QR here seems more stable
         Psqrt_b_tril = triangularize(Psqrt_b)
         B_sqrt = Psqrt_b.triangular_solve(Psqrt_b_tril, upper=False).solution
-        B_sqrt_t = B_sqrt.transpose(-1, -2)
-        B = B_sqrt_t.matmul(B_sqrt)
-        identity = torch.eye(self.rank(), device=B.device, dtype=B.dtype)
-        prec_sqrt = Psqrt_a.matmul(identity - B)
+        tmp = Psqrt_a.matmul(B_sqrt.transpose(-1, -2))
+        prec_sqrt = Psqrt_a - tmp.matmul(B_sqrt)
 
         info_a = self.info_vec[..., a]
         info_b = self.info_vec[..., b]
         b_tmp = info_b.unsqueeze(-1).triangular_solve(Psqrt_b_tril, upper=False).solution
         info_vec = info_a
         if n_a > 0:
-            info_vec = info_vec - Psqrt_a.matmul(B_sqrt_t).matmul(b_tmp).squeeze(-1)
+            info_vec = info_vec - tmp.matmul(b_tmp).squeeze(-1)
 
         log_normalizer = (self.log_normalizer +
                           0.5 * n_b * math.log(2 * math.pi) -
