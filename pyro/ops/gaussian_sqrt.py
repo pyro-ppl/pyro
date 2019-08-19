@@ -7,6 +7,13 @@ from torch.nn.functional import pad
 from pyro.distributions.util import broadcast_shape
 
 
+def triangularize(A):
+    """
+    Transforms a matrix to a lower triangular matrix such that A @ A.T = f(A) @ f(A).T
+    """
+    return A.transpose(-1, -2).qr(some=True).R.transpose(-1, -2)
+
+
 class GaussianS:
     """
     Non-normalized Gaussian distribution.
@@ -21,7 +28,8 @@ class GaussianS:
     :param torch.Tensor info_vec: information vector, which is a scaled version of the mean
         ``info_vec = precision @ mean``. We use this represention to make gaussian contraction
         fast and stable.
-    :param torch.Tensor prec_sqrt: square root of precision matrix of this gaussian.
+    :param torch.Tensor prec_sqrt: square root of precision matrix of this gaussian. We use this
+        representation to preserve symmetric and reduce condition numbers.
     """
     def __init__(self, log_normalizer, info_vec, prec_sqrt):
         # NB: using info_vec instead of mean to deal with rank-deficient problem
@@ -182,39 +190,48 @@ class GaussianS:
         a = slice(left, n - right)  # preserved
         b = slice(None, left) if left else slice(n - right, None)
 
-        # TODO: transform to square root form
-        P_aa = self.precision[..., a, a]
-        P_ba = self.precision[..., b, a]
-        P_bb = self.precision[..., b, b]
-        P_b = P_bb.cholesky()
-        P_a = P_ba.triangular_solve(P_b, upper=False).solution
-        P_at = P_a.transpose(-1, -2)
-        precision = P_aa - P_at.matmul(P_a)
+        Psqrt_a = self.prec_sqrt[..., a, :]
+        Psqrt_b = self.prec_sqrt[..., b, :]
+        # precision = P_aa - Pab @ inv(Pbb) @ Pba
+        #           = Psqrt_a @ Psqrt_at - Psqrt_a @ Psqrt_bt @ inv(Psqrt_b @ Psqrt_bt) @ Psqrt_b @ Psqrt_at
+        #           = Psqrt_a @ [I - Psqrt_bt @ inv(Psqrt_b @ Psqrt_bt) @ Psqrt_b] @ Psqrt_at
+        #           = Psqrt_a @ (I - B) @ Psqrt_at
+        #           = Psqrt_a @ (I - B) @ (I - Bt) @ Psqrt_at  (NB: (I - B) @ (I - Bt) = I - B !!)
+        # Hence, prec_sqrt = Psqrt_a - Psqrt_a @ B
+
+        # compute Psqrt_bt @ inv(Psqrt_b @ Psqrt_bt) @ Psqrt_b
+        # XXX: we can use cholesky of (Psqrt_b @ Psqrt_bt) as in Gaussian implementation
+        # but using QR here seems more stable
+        Psqrt_b_tril = triangularize(Psqrt_b)
+        B_sqrt = Psqrt_b.triangular_solve(Psqrt_b_tril, upper=False).solution
+        B = B_sqrt.transpose(-1, -2).matmul(B_sqrt)
+        Psqrt_a_B = Psqrt_a.matmul(B)
+        prec_sqrt = Psqrt_a - Psqrt_a_B
 
         info_a = self.info_vec[..., a]
         info_b = self.info_vec[..., b]
-        b_tmp = info_b.unsqueeze(-1).triangular_solve(P_b, upper=False).solution
-        info_vec = info_a - P_at.matmul(b_tmp).squeeze(-1)
+        b_tmp = info_b.unsqueeze(-1).triangular_solve(Psqrt_b_tril, upper=False).solution
+        info_vec = info_a - Psqrt_a_B.matmul(b_tmp).squeeze(-1)
 
         log_normalizer = (self.log_normalizer +
                           0.5 * n_b * math.log(2 * math.pi) -
-                          P_b.diagonal(dim1=-2, dim2=-1).log().sum(-1) +
+                          0.5 * Psqrt_b_tril.diagonal(dim1=-2, dim2=-1).pow(2).log().sum(-1) +
                           0.5 * b_tmp.squeeze(-1).pow(2).sum(-1))
-        return GaussianS(log_normalizer, info_vec, precision)
+        return GaussianS(log_normalizer, info_vec, prec_sqrt)
 
     def event_logsumexp(self):
         """
         Integrates out all latent state (i.e. operating on event dimensions).
         """
         n = self.dim()
-        chol_P = self.precision.cholesky()
-        chol_P_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
-        u_P_u = chol_P_u.pow(2).sum(-1)
+        P_sqrt = triangularize(self.prec_sqrt)
+        P_sqrt_u = self.info_vec.unsqueeze(-1).triangular_solve(P_sqrt, upper=False).solution.squeeze(-1)
+        u_P_u = P_sqrt_u.pow(2).sum(-1)
         return (self.log_normalizer + 0.5 * n * math.log(2 * math.pi) + 0.5 * u_P_u -
-                chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1))
+                0.5 * P_sqrt.diagonal(dim1=-2, dim2=-1).pow(2).log().sum(-1))
 
 
-class AffineNormal:
+class AffineNormalS:
     """
     Represents a conditional diagonal normal distribution over a random
     variable ``Y`` whose mean is an affine function of a random variable ``X``.
@@ -249,15 +266,21 @@ class AffineNormal:
         """
         assert value.size(-1) == self.loc.size(-1)
         prec_sqrt = self.matrix / self.scale.unsqueeze(-2)
-        precision = prec_sqrt.matmul(prec_sqrt.transpose(-1, -2))
         delta = (value - self.loc) / self.scale
         info_vec = prec_sqrt.matmul(delta.unsqueeze(-1)).squeeze(-1)
         log_normalizer = (-0.5 * self.loc.size(-1) * math.log(2 * math.pi)
                           - 0.5 * delta.pow(2).sum(-1) - self.scale.log().sum(-1))
-        return Gaussian(log_normalizer, info_vec, precision)
+        return GaussianS(log_normalizer, info_vec, prec_sqrt)
 
 
-def mvn_to_gaussian(mvn):
+def _scale_tril_to_prec_sqrt(L):
+    # NB: prec_sqrt here is a upper triangular matrix. We can use torch.flip
+    # to create a lower triangular matrix, but it is not necessary.
+    identity = torch.eye(L.size(-1), device=L.device, dtype=L.dtype)
+    return identity.triangular_solve(L, upper=False).solution.tranpose(-1, -2)
+
+
+def mvn_to_gaussianS(mvn):
     """
     Convert a MultivaiateNormal distribution to a Gaussian.
 
@@ -267,15 +290,15 @@ def mvn_to_gaussian(mvn):
     """
     assert isinstance(mvn, torch.distributions.MultivariateNormal)
     n = mvn.loc.size(-1)
-    precision = mvn.precision_matrix
-    info_vec = precision.matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
+    prec_sqrt = _scale_tril_to_prec_sqrt(mvn.scale_tril)
+    info_vec = prec_sqrt.matmul(prec_sqrt.transpose(-2, -1)).matmul(mvn.loc.unsqueeze(-1)).squeeze(-1)
     log_normalizer = (-0.5 * n * math.log(2 * math.pi) +
                       -0.5 * (info_vec * mvn.loc).sum(-1) -
                       mvn.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1))
-    return Gaussian(log_normalizer, info_vec, precision)
+    return GaussianS(log_normalizer, info_vec, prec_sqrt)
 
 
-def matrix_and_mvn_to_gaussian(matrix, mvn):
+def matrix_and_mvn_to_gaussianS(matrix, mvn):
     """
     Convert a noisy affine function to a Gaussian. The noisy affine function is defined as::
 
@@ -298,28 +321,22 @@ def matrix_and_mvn_to_gaussian(matrix, mvn):
 
     # Handle diagonal normal distributions as an efficient special case.
     if isinstance(mvn, torch.distributions.Independent):
-        return AffineNormal(matrix, mvn.base_dist.loc, mvn.base_dist.scale)
+        return AffineNormalS(matrix, mvn.base_dist.loc, mvn.base_dist.scale)
 
-    y_gaussian = mvn_to_gaussian(mvn)
-    P_yy = y_gaussian.precision
-    neg_P_xy = matrix.matmul(P_yy)
-    P_xy = -neg_P_xy
-    P_yx = P_xy.transpose(-1, -2)
-    P_xx = neg_P_xy.matmul(matrix.transpose(-1, -2))
-    precision = torch.cat([torch.cat([P_xx, P_xy], -1),
-                           torch.cat([P_yx, P_yy], -1)], -2)
+    y_gaussian = mvn_to_gaussianS(mvn)
+    prec_sqrt = torch.cat([-matrix.matmul(y_gaussian.prec_sqrt), y_gaussian.prec_sqrt], -2)
     info_y = y_gaussian.info_vec
     info_x = -matrix.matmul(info_y.unsqueeze(-1)).squeeze(-1)
     info_vec = torch.cat([info_x, info_y], -1)
     log_normalizer = y_gaussian.log_normalizer
 
-    result = Gaussian(log_normalizer, info_vec, precision)
+    result = GaussianS(log_normalizer, info_vec, prec_sqrt)
     assert result.batch_shape == batch_shape
     assert result.dim() == x_dim + y_dim
     return result
 
 
-def gaussian_tensordot(x, y, dims=0):
+def gaussian_tensordotS(x, y, dims=0):
     """
     Computes the integral over two gaussians:
 
@@ -332,8 +349,8 @@ def gaussian_tensordot(x, y, dims=0):
     :param y: a Gaussian instance
     :param dims: number of variables to contract
     """
-    assert isinstance(x, Gaussian)
-    assert isinstance(y, Gaussian)
+    assert isinstance(x, GaussianS)
+    assert isinstance(y, GaussianS)
     na = x.dim() - dims
     nb = dims
     nc = y.dim() - dims
@@ -341,6 +358,14 @@ def gaussian_tensordot(x, y, dims=0):
     assert nb >= 0
     assert nc >= 0
 
+    # TODO: avoid broadcasting
+    device = x.info_vec.device
+    perm = torch.cat([
+        torch.arange(na, device=device),
+        torch.arange(x.dim(), x.dim() + nc, device=device),
+        torch.arange(na, x.dim(), device=device)])
+    return (x.event_pad(right=nc) + y.event_pad(left=na)).event_permute(perm).marginalize(right=nb)
+    """
     Paa, Pba, Pbb = x.precision[..., :na, :na], x.precision[..., na:, :na], x.precision[..., na:, na:]
     Qbb, Qbc, Qcc = y.precision[..., :nb, :nb], y.precision[..., :nb, nb:], y.precision[..., nb:, nb:]
     xa, xb = x.info_vec[..., :na], x.info_vec[..., na:]  # x.precision @ x.mean
@@ -368,3 +393,4 @@ def gaussian_tensordot(x, y, dims=0):
         log_normalizer = log_normalizer + diff
 
     return Gaussian(log_normalizer, info_vec, precision)
+    """
