@@ -85,7 +85,7 @@ class GaussianScaleMixture(TorchDistribution):
         component_scale_log_power = self.component_scale.log() * -self.dim
         # logits in Categorical is already normalized
         result = torch.logsumexp(
-            component_scale_log_power + self.categorical.logits + \
+            component_scale_log_power + self.categorical.logits +
             -0.5 * epsilon_sqr / torch.pow(self.component_scale, 2.0), dim=-1)  # K
         result -= 0.5 * math.log(2.0 * math.pi) * float(self.dim)
         result -= self.coord_scale.log().sum()
