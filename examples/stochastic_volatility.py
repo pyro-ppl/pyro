@@ -35,54 +35,53 @@ def model(data):
     :type data: torch.Tensor
     :returns distribution: posterior distribution over states given data
     """
-    obs_dim = data.shape[-1]
-    hidden_dim = obs_dim
+    # TODO put priors over the parms here
+    state_dim = data.shape[-1]
     with pyro.plate(len(data)):
-        mu = pyro.param('mu', torch.zeros(hidden_dim))
-        L = pyro.param('L', 0.1 * torch.eye(hidden_dim), constraint=constraints.lower_cholesky)
+        mu = pyro.param('mu', torch.zeros(state_dim))
+        L = pyro.param('L', 0.1 * torch.eye(state_dim), constraint=constraints.lower_cholesky)
         init_dist = dist.MultivariateNormal(mu, scale_tril=L)
 
-        L_eta = pyro.param('L_eta', 0.4 * torch.eye(hidden_dim), constraint=constraints.lower_cholesky)
-        mu_eta = torch.zeros(hidden_dim)
-        trans_matrix = pyro.param('phi', 0.5 * torch.ones(hidden_dim))
+        L_eta = pyro.param('L_eta', 0.4 * torch.eye(state_dim), constraint=constraints.lower_cholesky)
+        mu_eta = torch.zeros(state_dim)
+        trans_matrix = pyro.param('phi', 0.5 * torch.ones(state_dim))
         # this gives us a zero matrix with phi on the diagonal
-        trans_matrix = trans_matrix.diag()
+        trans_matrix = trans_matrix.diag_embed()
         trans_dist = dist.MultivariateNormal(mu_eta, scale_tril=L_eta)
 
-        mu_gamma = pyro.param('mu_gamma', torch.zeros(obs_dim))
-        L_gamma = pyro.param('L_gamma', 0.5 * torch.eye(obs_dim), constraint=constraints.lower_cholesky)
-        obs_matrix = torch.eye(hidden_dim, obs_dim)
+        mu_gamma = pyro.param('mu_gamma', torch.zeros(state_dim))
+        L_gamma = pyro.param('L_gamma', 0.5 * torch.eye(state_dim), constraint=constraints.lower_cholesky)
+        obs_matrix = torch.eye(state_dim, state_dim)
         # latent state is h_t - mu
         obs_dist = dist.MultivariateNormal(-mu_gamma, scale_tril=L_gamma)
 
         hmm_dist = dist.GaussianHMM(init_dist, trans_matrix, trans_dist, obs_matrix, obs_dist)
         pyro.sample('obs', hmm_dist, obs=data)
 
-        return hmm_dist.filter(data)
 
-
-def sequential_model(num_samples=10, timesteps=500, hidden_dim=2, obs_dim=2, init_dist=None):
+def sequential_model(num_samples=10, timesteps=500, state_dim=2, init_dist=None):
     """
-    Generate data of shape: (samples, timesteps, obs_dim)
+    Generate data of shape: (samples, timesteps, state_dim)
     where the generative model is defined by:
         y = exp(h/2) * eps
         h_{t+1} = mu + Phi (h_t - mu) + eta_t
     where eps and eta are sampled iid from a MVN distribution
     """
     ys = []
-    mu_trans = torch.zeros(hidden_dim)
-    cov_trans = pyro.param('L_eta', 0.2 * torch.eye(hidden_dim, hidden_dim))
-    mu_obs = pyro.param('mu_gamma', torch.zeros(obs_dim))
-    cov_obs = pyro.param('L_gamma', 0.2 * torch.eye(obs_dim, obs_dim))
-    transition = pyro.param('phi', 0.2 * torch.randn(hidden_dim))
+    mu_trans = torch.zeros(state_dim)
+    cov_trans = pyro.param('L_eta', 0.2 * torch.eye(state_dim, state_dim))
+    mu_obs = pyro.param('mu_gamma', torch.zeros(state_dim))
+    cov_obs = pyro.param('L_gamma', 0.2 * torch.eye(state_dim, state_dim))
+    transition = pyro.param('phi', 0.2 * torch.randn(state_dim))
     # this is to generate data as the way model 2 does
     # we would use the entire transition matrix for model 3
-    transition = transition.diag().expand(num_samples, -1, -1)
-    trans_dist = dist.MultivariateNormal(mu_trans, scale_tril=cov_trans).expand((num_samples,))
-    obs_dist = dist.MultivariateNormal(mu_obs, scale_tril=cov_obs).expand((num_samples,))
-    obs = torch.eye(hidden_dim, obs_dim)
+    with pyro.plate('samples', num_samples):
+        transition = transition.diag_embed()
+        trans_dist = dist.MultivariateNormal(mu_trans, scale_tril=cov_trans)
+        obs_dist = dist.MultivariateNormal(mu_obs, scale_tril=cov_obs)
+    obs = torch.eye(state_dim, state_dim)
     if init_dist is None:
-        z = torch.zeros(num_samples, hidden_dim)
+        z = torch.zeros(num_samples, state_dim)
     else:
         z = pyro.sample('z_0', init_dist)
 
@@ -94,7 +93,7 @@ def sequential_model(num_samples=10, timesteps=500, hidden_dim=2, obs_dim=2, ini
         y = z @ obs + obs_noise
         ys.append(y)
     data = torch.stack(ys, 1)
-    assert data.shape == (num_samples, timesteps, obs_dim)
+    assert data.shape == (num_samples, timesteps, state_dim)
     return data
 
 
@@ -118,7 +117,7 @@ def main(args):
     # clear the param store after generating data
     pyro.clear_param_store()
     # MAP estimation
-    guide = AutoDelta(model)
+    guide = AutoMultivariateNormal(model)
     svi = SVI(model, guide, Adam({'lr': args.learning_rate}), Trace_ELBO())
     for i in range(args.num_epochs):
         loss = svi.step(data)
@@ -128,11 +127,12 @@ def main(args):
         print(k, v.detach().cpu().numpy())
     # plot model generated data against observation for one of the stocks
     predictions = sequential_model(init_dist=model(data))
+    # plot the covariance matrix as approximated by a MVN
     plot(data[0].cpu().numpy(), predictions[0].detach().cpu().numpy())
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.4.0')
+    assert pyro.__version__.startswith('0.4.1')
     parser = argparse.ArgumentParser(description="Stochastic volatility")
     parser.add_argument("-n", "--num-epochs", default=200, type=int)
     parser.add_argument("-lr", "--learning-rate", default=1e-2, type=float)
