@@ -14,11 +14,11 @@ def triangularize(A, method='cholesky'):
     :param torch.Tensor A: input matrix
     :param str method: either 'cholesky' or 'qr'
     """
-    # TODO: benchmark two versions, using 'qr' will be more stable but slower
-    if method == 'qr':
-        return A.transpose(-1, -2).qr(some=True).R.transpose(-1, -2)
-    elif method == 'cholesky':
+    # TODO: benchmark two versions in real application, using 'qr' will be more stable but slower
+    if method == 'cholesky':
         return A.matmul(A.transpose(-1, -2)).cholesky()
+    elif method == 'qr':
+        return A.transpose(-1, -2).qr(some=True).R.transpose(-1, -2)
     else:
         raise ValueError("'method' should be either 'cholesky' or 'qr'.")
 
@@ -219,8 +219,6 @@ class GaussianS:
         # Hence, prec_sqrt = Psqrt_a - Psqrt_a @ Psqrt_bt @ inv(Psqrt_b @ Psqrt_bt) @ Psqrt_b
 
         # compute Psqrt_bt @ inv(Psqrt_b @ Psqrt_bt) @ Psqrt_b
-        # XXX: we can use cholesky of (Psqrt_b @ Psqrt_bt) as in Gaussian implementation
-        # but using QR here seems more stable
         Psqrt_b_tril = triangularize(Psqrt_b)
         B_sqrt = Psqrt_b.triangular_solve(Psqrt_b_tril, upper=False).solution
         tmp = Psqrt_a.matmul(B_sqrt.transpose(-1, -2))

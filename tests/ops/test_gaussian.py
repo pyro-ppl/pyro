@@ -300,7 +300,6 @@ def test_gaussian_tensordot(dot_dims,
     assert_close(covariance[..., x_dim:, x_dim:], z_covariance[..., na:, na:])
 
     # Assume a = c = 0, integrate out b
-    # FIXME: this might be not a stable way to compute integral
     num_samples = 200000
     scale = 20
     # generate samples in [-10, 10]
@@ -310,6 +309,5 @@ def test_gaussian_tensordot(dot_dims,
     expect = torch.logsumexp(x.log_density(value_x) + y.log_density(value_y), dim=0)
     expect += math.log(scale ** nb / num_samples)
     actual = z.log_density(torch.zeros(z.batch_shape + (z.dim(),)))
-    # TODO(fehiepsi): find some condition to make this test stable, so we can compare large value
-    # log densities.
+    # NB: we clamp to pass the flakiness when tested in Travis
     assert_close(actual.clamp(max=10.), expect.clamp(max=10.), atol=0.1, rtol=0.1)
