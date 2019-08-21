@@ -31,7 +31,7 @@ class Unit(TorchDistribution):
         return new
 
     def sample(self, sample_shape=torch.Size()):
-        return self.log_factor.new_zeros(sample_shape + self.shape())
+        return self.log_factor.new_empty(sample_shape + self.shape())
 
     def log_prob(self, value):
         shape = broadcast_shape(self.batch_shape, value.shape[:-1])
