@@ -25,10 +25,17 @@ class PriorKernel(MCMCKernel):
         self.data = None
         self._initial_params = None
         self._prototype_trace = None
+        self.transforms = None
 
     def setup(self, warmup_steps, data):
         self.data = data
-        self._prototype_trace = poutine.trace(self.model).get_trace(data)
+        init_params, potential_fn, transforms, model_trace = initialize_model(self.model,
+                                                                              model_args=(data,))
+        if self._initial_params is None:
+            self._initial_params = init_params
+        if self.transforms is None:
+            self.transforms = transforms
+        self._prototype_trace = model_trace
 
     def diagnostics(self):
         return {'dummy_key': 'dummy_value'}
@@ -98,12 +105,16 @@ def test_mcmc_interface(num_draws, group_by_chain, num_chains):
     (2, 2),
     (2, 3),
 ])
-def test_num_chains(num_chains, cpu_count, monkeypatch):
+@pytest.mark.parametrize("default_init_params", [True, False])
+def test_num_chains(num_chains, cpu_count, default_init_params,
+                    monkeypatch):
     monkeypatch.setattr(torch.multiprocessing, 'cpu_count', lambda: cpu_count)
     data = torch.tensor([1.0])
     initial_params, _, transforms, _ = initialize_model(normal_normal_model,
                                                         model_args=(data,),
                                                         num_chains=num_chains)
+    if default_init_params:
+        initial_params = None
     kernel = PriorKernel(normal_normal_model)
     available_cpu = max(1, cpu_count-1)
     mp_context = "spawn" if "CUDA_TEST" in os.environ else None
