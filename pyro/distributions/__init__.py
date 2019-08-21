@@ -20,6 +20,7 @@ from pyro.distributions.torch import __all__ as torch_dists
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
+from pyro.distributions.unit import Unit
 from pyro.distributions.von_mises import VonMises
 from pyro.distributions.von_mises_3d import VonMises3D
 from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
@@ -52,6 +53,7 @@ __all__ = [
     "SpanningTree",
     "TorchDistribution",
     "TransformModule",
+    "Unit",
     "VonMises",
     "VonMises3D",
     "ZeroInflatedPoisson",
