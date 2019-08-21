@@ -13,7 +13,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 
-from search_inference import factor, HashingMarginal, memoize, Search
+from search_inference import HashingMarginal, memoize, Search
 
 torch.set_default_dtype(torch.float64)  # double precision for numerical stability
 
@@ -97,7 +97,7 @@ def utterance_prior():
 def literal_listener(utterance, qud):
     price = price_prior()
     state = State(price=price, valence=valence_prior(price))
-    factor("literal_meaning", 0. if meaning(utterance, price) else -999999.)
+    pyro.factor("literal_meaning", 0. if meaning(utterance, price) else -999999.)
     return qud_fns[qud](state)
 
 
