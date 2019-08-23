@@ -1,8 +1,8 @@
 import pyro.poutine as poutine
 from pyro.logger import log
 from pyro.poutine import condition, do, markov
-from pyro.primitives import (clear_param_store, enable_validation, get_param_store, iarange, irange, module, param,
-                             plate, random_module, sample, validation_enabled)
+from pyro.primitives import (clear_param_store, enable_validation, factor, get_param_store, iarange, irange, module,
+                             param, plate, random_module, sample, validation_enabled)
 from pyro.util import set_rng_seed
 
 version_prefix = '0.4.1'
@@ -19,6 +19,7 @@ __all__ = [
     "condition",
     "do",
     "enable_validation",
+    "factor",
     "get_param_store",
     "iarange",
     "irange",

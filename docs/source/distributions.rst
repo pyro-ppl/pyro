@@ -189,6 +189,13 @@ SpanningTree
     :undoc-members:
     :show-inheritance:
 
+Unit
+----
+.. autoclass:: pyro.distributions.Unit
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 VonMises
 --------
 .. autoclass:: pyro.distributions.VonMises

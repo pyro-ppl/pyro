@@ -16,7 +16,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 
-from search_inference import factor, HashingMarginal, memoize, Search
+from search_inference import HashingMarginal, memoize, Search
 
 torch.set_default_dtype(torch.float64)  # double precision for numerical stability
 
@@ -91,7 +91,7 @@ def meaning(utterance, state, threshold):
 def listener0(utterance, threshold, prior):
     state = pyro.sample("state", prior)
     m = meaning(utterance, state, threshold)
-    factor("listener0_true", 0. if m else -99999.)
+    pyro.factor("listener0_true", 0. if m else -99999.)
     return state
 
 

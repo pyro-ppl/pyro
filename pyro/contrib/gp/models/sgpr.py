@@ -146,10 +146,7 @@ class SparseGPRegression(GPModel):
             return f_loc, f_var
         else:
             if self.approx == "VFE":
-                # inject trace_term to model's log_prob
-                pyro.sample("trace_term",
-                            dist.Delta(v=trace_term.new_tensor(0.), log_density=-trace_term / 2.),
-                            obs=trace_term.new_tensor(0.))
+                pyro.factor("trace_term", -trace_term / 2.)
 
             return pyro.sample("y",
                                dist.LowRankMultivariateNormal(f_loc, W, D)

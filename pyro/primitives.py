@@ -111,6 +111,19 @@ def sample(name, fn, *args, **kwargs):
         return msg["value"]
 
 
+def factor(name, log_factor):
+    """
+    Factor statement to add arbitrary log probability factor to a
+    probabilisitic model.
+
+    :param str name: Name of the trivial sample
+    :param torch.Tensor log_factor: A possibly batched log probability factor.
+    """
+    unit_dist = dist.Unit(log_factor)
+    unit_value = unit_dist.sample()
+    sample(name, unit_dist, obs=unit_value)
+
+
 class plate(PlateMessenger):
     """
     Construct for conditionally independent sequences of variables.
