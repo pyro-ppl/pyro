@@ -11,7 +11,8 @@ class GaussianGamma:
     """
     Non-normalized GaussianGamma distribution:
 
-        GaussianGamma(x, s) ~ (alpha + 0.5 * dim - 1) * log(s) - (beta + info_vec.T @ inv(precision) @ info_vec) * s
+        GaussianGamma(x, s) ~ (alpha + 0.5 * dim - 1) * log(s)
+                              - (beta + 0.5 * info_vec.T @ inv(precision) @ info_vec) * s
                               - 0.5 * s * x.T @ precision @ x + s * x.T @ info_vec,
 
     which will be reparameterized as
@@ -37,7 +38,7 @@ class GaussianGamma:
     :param torch.Tensor beta: reparameterized rate parameter of the marginal Gamma distribution of
         `s`. The rate parameter Gamma.beta is reparameterized by:
 
-            beta = Gamma.beta + info_vec.T @ inv(precision) @ info_vec
+            beta = Gamma.beta + 0.5 * info_vec.T @ inv(precision) @ info_vec
     """
     def __init__(self, log_normalizer, info_vec, precision, alpha, beta):
         # NB: using info_vec instead of mean to deal with rank-deficient problem
