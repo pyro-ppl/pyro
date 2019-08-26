@@ -233,5 +233,14 @@ class GaussianGamma:
         chol_P = self.precision.cholesky()
         chol_P_u = self.info_vec.unsqueeze(-1).triangular_solve(chol_P, upper=False).solution.squeeze(-1)
         u_P_u = chol_P_u.pow(2).sum(-1)
-        return (self.log_normalizer + 0.5 * n * math.log(2 * math.pi) + 0.5 * u_P_u -
-                chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1))
+        # considering GaussianGamma as a Gaussian with precision = s * precision, info_vec = s * info_vec,
+        # marginalize x variable, we get
+        #   logsumexp(s) = alpha' * log(s) - s * beta' + 0.5 n * log(2 pi) + 0.5 s * uPu - 0.5 * |P| - 0.5 n * s
+        # use the original parameterization of Gamma, we get
+        #   logsumexp(s) = (alpha - 1) * log(s) - s * beta + 0.5 n * log(2 pi) - 0.5 * |P|
+        # now, marginalize s variable, we get normalizer term of Gamma distribution
+        #   logsumexp = loggamma(alpha) - alpha * log(beta) + 0.5 n * log(2 pi) - 0.5 * |P|
+        alpha = self.alpha - 0.5 * n + 1
+        beta = self.beta - 0.5 * u_P_u
+        return (self.log_normalizer + torch.lgamma(alpha) - alpha * beta.log() +
+                0.5 * n * math.log(2 * math.pi) - chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1))
