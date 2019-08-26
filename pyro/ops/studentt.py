@@ -151,7 +151,6 @@ class GaussianGamma:
         result = (value * result).sum(-1)
         return self.alpha * s.log() + (result - self.beta) * s + self.log_normalizer
 
-    # TODO: port condition, marginalize, event_logsumexp
     def condition(self, value):
         """
         Condition the Gaussian component on a trailing subset of its state.
@@ -165,7 +164,7 @@ class GaussianGamma:
 
             left = x[..., :n]
             right = x[..., n:]
-            g.log_density(x) == g.condition(right).log_density(left)
+            g.log_density(x, s) == g.condition(right).log_density(left, s)
         """
         assert isinstance(value, torch.Tensor)
         assert value.size(-1) <= self.info_vec.size(-1)
@@ -180,11 +179,13 @@ class GaussianGamma:
 
         info_vec = info_a - P_ab.matmul(b.unsqueeze(-1)).squeeze(-1)
         precision = P_aa
-        log_normalizer = (self.log_normalizer +
-                          -0.5 * P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) +
-                          b.mul(info_b).sum(-1))
-        return GaussianGamma(log_normalizer, info_vec, precision)
 
+        log_normalizer = self.log_normalizer
+        alpha = self.alpha
+        beta = self.beta - 0.5 * P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) + b.mul(info_b).sum(-1)
+        return GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
+
+    # TODO: port marginalize
     def marginalize(self, left=0, right=0):
         """
         Marginalizing out variables on either side of the event dimension::
