@@ -209,7 +209,6 @@ class GaussianGamma:
         beta = self.beta - 0.5 * P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) + b.mul(info_b).sum(-1)
         return GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
 
-    # TODO: port marginalize
     def marginalize(self, left=0, right=0):
         """
         Marginalizing out variables on either side of the event dimension::
