@@ -222,8 +222,8 @@ class GaussianGamma:
             g.condition(x).event_logsumexp().log_density(s)
               = g.marginalize(left=g.dim() - x.size(-1)).log_density(x, s)
         """
-        # NB: the easiest way to think about this process is to consider GaussianGamma as a Gaussian
-        # with precision and info_vec scaled by `s`.
+        # NB: the easiest way to think about this process is to consider GaussianGamma
+        # as a Gaussian with precision and info_vec scaled by `s`.
         if left == 0 and right == 0:
             return self
         if left > 0 and right > 0:
@@ -246,11 +246,12 @@ class GaussianGamma:
         b_tmp = info_b.unsqueeze(-1).triangular_solve(P_b, upper=False).solution
         info_vec = info_a - P_at.matmul(b_tmp).squeeze(-1)
 
+        alpha = self.alpha - 0.5 * n_b
+        beta = self.beta - 0.5 * b_tmp.squeeze(-1).pow(2).sum(-1)
         log_normalizer = (self.log_normalizer +
                           0.5 * n_b * math.log(2 * math.pi) -
-                          P_b.diagonal(dim1=-2, dim2=-1).log().sum(-1) +
-                          0.5 * b_tmp.squeeze(-1).pow(2).sum(-1))
-        return GaussianGamma(log_normalizer, info_vec, precision)
+                          P_b.diagonal(dim1=-2, dim2=-1).log().sum(-1))
+        return GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
 
     def event_logsumexp(self):
         """
@@ -262,7 +263,7 @@ class GaussianGamma:
         u_P_u = chol_P_u.pow(2).sum(-1)
         # considering GaussianGamma as a Gaussian with precision = s * precision, info_vec = s * info_vec,
         # marginalize x variable, we get
-        #   logsumexp(s) = alpha' * log(s) - s * beta' + 0.5 n * log(2 pi) + 0.5 s * uPu - 0.5 * |P| - 0.5 n * s
+        #   logsumexp(s) = alpha' * log(s) - s * beta' + 0.5 n * log(2 pi) + 0.5 s * uPu - 0.5 * log|P| - 0.5 n * log(s)
         # use the original parameterization of Gamma, we get
         #   logsumexp(s) = (alpha - 1) * log(s) - s * beta + 0.5 n * log(2 pi) - 0.5 * |P|
         # Note that `(alpha - 1) * log(s) - s * beta` is unnormalized log_prob of Gamma(alpha, beta)
