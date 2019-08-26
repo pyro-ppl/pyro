@@ -7,6 +7,30 @@ from torch.nn.functional import pad
 from pyro.distributions.util import broadcast_shape
 
 
+class Gamma:
+    """
+    Non-normalized Gamma distribution.
+    """
+    def __init__(self, log_normalizer, alpha, beta):
+        self.log_normalizer = log_normalizer
+        self.alpha = alpha
+        self.beta = beta
+
+    def log_density(self, s):
+        """
+        Non-normalized log probability of Gamma distribution.
+
+        This is mainly used for testing.
+        """
+        return self.log_normalizer + (self.alpha - 1) * s.log() - self.beta * s
+
+    def logsumexp(self):
+        """
+        Integrates out the latent variable.
+        """
+        return self.log_normalizer + torch.lgamma(self.alpha) - self.alpha * self.beta.log()
+
+
 class GaussianGamma:
     """
     Non-normalized GaussianGamma distribution:
@@ -190,14 +214,16 @@ class GaussianGamma:
         """
         Marginalizing out variables on either side of the event dimension::
 
-            g.marginalize(left=n).event_logsumexp() = g.logsumexp()
-            g.marginalize(right=n).event_logsumexp() = g.logsumexp()
+            g.marginalize(left=n).event_logsumexp() = g.event_logsumexp()
+            g.marginalize(right=n).event_logsumexp() = g.event_logsumexp()
 
         and for data ``x``:
 
-            g.condition(x).event_logsumexp()
-              = g.marginalize(left=g.dim() - x.size(-1)).log_density(x)
+            g.condition(x).event_logsumexp().log_density(s)
+              = g.marginalize(left=g.dim() - x.size(-1)).log_density(x, s)
         """
+        # NB: the easiest way to think about this process is to consider GaussianGamma as a Gaussian
+        # with precision and info_vec scaled by `s`.
         if left == 0 and right == 0:
             return self
         if left > 0 and right > 0:
@@ -228,7 +254,7 @@ class GaussianGamma:
 
     def event_logsumexp(self):
         """
-        Integrates out all latent state (i.e. operating on event dimensions).
+        Integrates out all latent state (i.e. operating on event dimensions) of Gaussian component.
         """
         n = self.dim()
         chol_P = self.precision.cholesky()
@@ -239,9 +265,8 @@ class GaussianGamma:
         #   logsumexp(s) = alpha' * log(s) - s * beta' + 0.5 n * log(2 pi) + 0.5 s * uPu - 0.5 * |P| - 0.5 n * s
         # use the original parameterization of Gamma, we get
         #   logsumexp(s) = (alpha - 1) * log(s) - s * beta + 0.5 n * log(2 pi) - 0.5 * |P|
-        # now, marginalize s variable, we get normalizer term of Gamma distribution
-        #   logsumexp = loggamma(alpha) - alpha * log(beta) + 0.5 n * log(2 pi) - 0.5 * |P|
+        # Note that `(alpha - 1) * log(s) - s * beta` is unnormalized log_prob of Gamma(alpha, beta)
         alpha = self.alpha - 0.5 * n + 1
         beta = self.beta - 0.5 * u_P_u
-        return (self.log_normalizer + torch.lgamma(alpha) - alpha * beta.log() +
-                0.5 * n * math.log(2 * math.pi) - chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1))
+        log_normalizer_tmp = 0.5 * n * math.log(2 * math.pi) - chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1)
+        return Gamma(self.log_normalizer + log_normalizer_tmp, alpha, beta)
