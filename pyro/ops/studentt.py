@@ -281,7 +281,7 @@ def mvt_to_gaussian_gamma(loc, precision_tril, dof):
     :param ~torch.Tensor dof: Degree of freedom of MVT.
     :return: A GaussianGamma object which is equivalent to the MVT when marginalized out the
         scale parameter `s`.
-    :rtype: ~pyro.ops.gaussian.GaussianGamma
+    :rtype: ~pyro.ops.studentt.GaussianGamma
     """
     n = loc.size(-1)
     precision = precision_tril.matmul(precision_tril.transpose(-1, -2))
@@ -302,9 +302,11 @@ def matrix_and_mvt_to_gaussian_gamma(matrix, loc, precision_tril, dof):
         y = x @ matrix + mvt.sample()
 
     :param ~torch.Tensor matrix: A matrix with rightmost shape ``(x_dim, y_dim)``.
-    :param ~torch.distributions.MultivariateNormal mvn: A multivariate normal distribution.
-    :return: A Gaussian with broadcasted batch shape and ``.dim() == x_dim + y_dim``.
-    :rtype: ~pyro.ops.gaussian.Gaussian
+    :param ~torch.Tensor loc: Mean of MVT distribution.
+    :param ~torch.Tensor precision_tril: Cholesky of MVT precision.
+    :param ~torch.Tensor dof: Degree of freedom of MVT.
+    :return: A GaussianGamma with broadcasted batch shape and ``.dim() == x_dim + y_dim``.
+    :rtype: ~pyro.ops.studentt.GaussianGamma
     """
     x_dim, y_dim = matrix.shape[-2:]
     assert loc.size(-1) == y_dim
@@ -320,12 +322,14 @@ def matrix_and_mvt_to_gaussian_gamma(matrix, loc, precision_tril, dof):
     P_xx = neg_P_xy.matmul(matrix.transpose(-1, -2))
     precision = torch.cat([torch.cat([P_xx, P_xy], -1),
                            torch.cat([P_yx, P_yy], -1)], -2)
-    info_y = y_gaussian.info_vec
+    info_y = y_gaussian_gamma.info_vec
     info_x = -matrix.matmul(info_y.unsqueeze(-1)).squeeze(-1)
     info_vec = torch.cat([info_x, info_y], -1)
-    log_normalizer = y_gaussian.log_normalizer
+    log_normalizer = y_gaussian_gamma.log_normalizer
+    alpha = y_gaussian_gamma.alpha
+    beta = y_gaussian_gamma.beta
 
-    result = Gaussian(log_normalizer, info_vec, precision)
+    result = GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
     assert result.batch_shape == batch_shape
     assert result.dim() == x_dim + y_dim
     return result
