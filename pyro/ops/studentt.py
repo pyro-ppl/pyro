@@ -4,6 +4,7 @@ import torch
 from torch.distributions.utils import lazy_property
 from torch.nn.functional import pad
 
+from pyro.distributions.multivariate_studentT import MultivariateStudentT
 from pyro.distributions.util import broadcast_shape
 
 
@@ -272,49 +273,47 @@ class GaussianGamma:
         return Gamma(self.log_normalizer + log_normalizer_tmp, alpha, beta)
 
 
-def mvt_to_gaussian_gamma(loc, precision_tril, dof):
+def mvt_to_gaussian_gamma(mvt):
     """
     Convert a MultivariateStudentT (MVT) distribution to a GaussianGamma.
 
-    :param ~torch.Tensor loc: Mean of MVT distribution.
-    :param ~torch.Tensor precision_tril: Cholesky of MVT precision.
-    :param ~torch.Tensor dof: Degree of freedom of MVT.
+    :param ~pyro.distributions.MultivariateStudentT mvt: A multivariate student-t distribution.
     :return: A GaussianGamma object which is equivalent to the MVT when marginalized out the
         scale parameter `s`.
     :rtype: ~pyro.ops.studentt.GaussianGamma
     """
-    n = loc.size(-1)
-    precision = precision_tril.matmul(precision_tril.transpose(-1, -2))
-    info_vec = precision.matmul(loc.unsqueeze(-1)).squeeze(-1)
-    # pre-parameterized: alpha = beta = 0.5 dof
-    pre_alpha = pre_beta = 0.5 * dof
-    alpha = pre_alpha + 0.5 * n - 1
-    beta = pre_beta + 0.5 * (info_vec * loc).sum(-1)
-    logsumexp = 0.5 * n * math.log(2 * math.pi) - precision_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
-    logsumexp = Gamma(logsumexp, pre_alpha, pre_alpha).logsumexp()
+    n = mvt.loc.size(-1)
+    precision = mvt.precision_matrix
+    info_vec = precision.matmul(mvt.loc.unsqueeze(-1)).squeeze(-1)
+    # reparameterized version of alpha = beta = 0.5 dof
+    half_df = 0.5 * mvt.df
+    alpha = half_df + (0.5 * n - 1)
+    beta = half_df + 0.5 * (info_vec * mvt.loc).sum(-1)
+    logsumexp = 0.5 * n * math.log(2 * math.pi) + mvt.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
+    logsumexp = Gamma(logsumexp, half_df, half_df).logsumexp()
     return GaussianGamma(-logsumexp, info_vec, precision, alpha, beta)
 
 
-def matrix_and_mvt_to_gaussian_gamma(matrix, loc, precision_tril, dof):
+def matrix_and_mvt_to_gaussian_gamma(matrix, mvt):
     """
     Convert a noisy affine function to a GaussianGamma. The noisy affine function is defined as::
 
         y = x @ matrix + mvt.sample()
 
     :param ~torch.Tensor matrix: A matrix with rightmost shape ``(x_dim, y_dim)``.
-    :param ~torch.Tensor loc: Mean of MVT distribution.
-    :param ~torch.Tensor precision_tril: Cholesky of MVT precision.
-    :param ~torch.Tensor dof: Degree of freedom of MVT.
+    :param ~pyro.distributions.MultivariateStudentT mvt: A multivariate student-t distribution.
     :return: A GaussianGamma with broadcasted batch shape and ``.dim() == x_dim + y_dim``.
     :rtype: ~pyro.ops.studentt.GaussianGamma
     """
+    assert isinstance(mvt, MultivariateStudentT)
+    assert isinstance(matrix, torch.Tensor)
     x_dim, y_dim = matrix.shape[-2:]
-    assert loc.size(-1) == y_dim
-    y_gaussian_gamma = mvt_to_gaussian_gamma(loc, precision_tril, dof)
-    batch_shape = broadcast_shape(matrix.shape[:-2], y_gaussian_gamma.batch_shape)
+    assert mvt.event_shape == (y_dim,)
+    batch_shape = broadcast_shape(matrix.shape[:-2], mvt.batch_shape)
     matrix = matrix.expand(batch_shape + (x_dim, y_dim))
-    y_gaussian_gamma = y_gaussian_gamma.expand(batch_shape)
+    mvt = mvt.expand(batch_shape)
 
+    y_gaussian_gamma = mvt_to_gaussian_gamma(mvt)
     P_yy = y_gaussian_gamma.precision
     neg_P_xy = matrix.matmul(P_yy)
     P_xy = -neg_P_xy
