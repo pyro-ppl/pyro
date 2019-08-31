@@ -60,14 +60,14 @@ class MultivariateStudentT(TorchDistribution):
         shape = self._extended_shape(sample_shape)
         X = torch.empty(shape, dtype=self.df.dtype, device=self.df.device).normal_()
         Z = self._chi2.rsample(sample_shape)
-        Y = X * torch.rsqrt(Z / self.df)
+        Y = X * torch.rsqrt(Z / self.df).unsqueeze(-1)
         return self.loc + self.scale_tril.matmul(Y.unsqueeze(-1)).squeeze(-1)
 
     def log_prob(self, value):
         if self._validate_args:
             self._validate_sample(value)
         n = self.loc.size(-1)
-        y = (value - self.loc).unsqueeze(-1).triangular_solve(self.scale_tril, upper=False).squeeze(-1)
+        y = (value - self.loc).unsqueeze(-1).triangular_solve(self.scale_tril, upper=False).solution.squeeze(-1)
         Z = (self.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1) +
              0.5 * n * self.df.log() +
              0.5 * n * math.log(math.pi) +

@@ -169,7 +169,7 @@ class GaussianGamma:
         This is mainly used for testing.
         """
         if value.size(-1) == 0:
-            batch_shape = broadcast_shape(value.shape[:-1], self.batch_shape)
+            batch_shape = broadcast_shape(value.shape[:-1], s.shape, self.batch_shape)
             return self.alpha * s.log() - self.beta * s + self.log_normalizer.expand(batch_shape)
         result = (-0.5) * self.precision.matmul(value.unsqueeze(-1)).squeeze(-1)
         result = result + self.info_vec

@@ -182,48 +182,40 @@ def test_logsumexp(batch_shape, dim):
 @pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
-def test_mvn_to_gaussian(sample_shape, batch_shape, dim):
-    mvn = random_mvn(batch_shape, dim)
-    gaussian = mvn_to_gaussian(mvn)
-    value = mvn.sample(sample_shape)
-    actual_log_prob = gaussian.log_density(value)
-    expected_log_prob = mvn.log_prob(value)
-    assert_close(actual_log_prob, expected_log_prob)
+def test_mvt_to_gaussian_gamma(sample_shape, batch_shape, dim):
+    mvt = random_mvt(batch_shape, dim)
+    mvt.scale_tril = (mvt.covariance_matrix + 3 * torch.eye(dim)).cholesky()
+    g = mvt_to_gaussian_gamma(mvt)
+    value = mvt.sample(sample_shape)
+
+    num_samples = 200000
+    scale = 10
+    s = torch.rand((num_samples,) + (1,) * len(sample_shape + batch_shape)) * scale
+    # marginalize s
+    actual_log_prob = g.log_density(value, s).logsumexp(0) + math.log(scale / num_samples)
+    expected_log_prob = mvt.log_prob(value)
+    assert_close(actual_log_prob, expected_log_prob, atol=0.1, rtol=0.1)
 
 
 @pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("x_dim", [1, 2, 3])
 @pytest.mark.parametrize("y_dim", [1, 2, 3])
-def test_matrix_and_mvn_to_gaussian(sample_shape, batch_shape, x_dim, y_dim):
+def test_matrix_and_mvt_to_gaussian_gamma(sample_shape, batch_shape, x_dim, y_dim):
     matrix = torch.randn(batch_shape + (x_dim, y_dim))
-    y_mvn = random_mvn(batch_shape, y_dim)
-    xy_mvn = random_mvn(batch_shape, x_dim + y_dim)
-    gaussian = matrix_and_mvn_to_gaussian(matrix, y_mvn) + mvn_to_gaussian(xy_mvn)
+    y_mvt = random_mvt(batch_shape, y_dim)
+    y_mvt.scale_tril = (y_mvt.covariance_matrix + 3 * torch.eye(y_dim)).cholesky()
+    g = matrix_and_mvt_to_gaussian_gamma(matrix, y_mvt)
     xy = torch.randn(sample_shape + (1,) * len(batch_shape) + (x_dim + y_dim,))
     x, y = xy[..., :x_dim], xy[..., x_dim:]
     y_pred = x.unsqueeze(-2).matmul(matrix).squeeze(-2)
-    actual_log_prob = gaussian.log_density(xy)
-    expected_log_prob = xy_mvn.log_prob(xy) + y_mvn.log_prob(y - y_pred)
-    assert_close(actual_log_prob, expected_log_prob)
 
-
-@pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
-@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
-@pytest.mark.parametrize("x_dim", [1, 2, 3])
-@pytest.mark.parametrize("y_dim", [1, 2, 3])
-def test_matrix_and_mvn_to_gaussian_2(sample_shape, batch_shape, x_dim, y_dim):
-    matrix = torch.randn(batch_shape + (x_dim, y_dim))
-    y_mvn = random_mvn(batch_shape, y_dim)
-    x_mvn = random_mvn(batch_shape, x_dim)
-    Mx_cov = matrix.transpose(-2, -1).matmul(x_mvn.covariance_matrix).matmul(matrix)
-    Mx_loc = matrix.transpose(-2, -1).matmul(x_mvn.loc.unsqueeze(-1)).squeeze(-1)
-    mvn = dist.MultivariateNormal(Mx_loc + y_mvn.loc, Mx_cov + y_mvn.covariance_matrix)
-    expected = mvn_to_gaussian(mvn)
-
-    actual = gaussian_tensordot(mvn_to_gaussian(x_mvn),
-                                matrix_and_mvn_to_gaussian(matrix, y_mvn), dims=x_dim)
-    assert_close_gaussian(expected, actual)
+    num_samples = 200000
+    scale = 10
+    s = torch.rand((num_samples,) + (1,) * len(sample_shape + batch_shape)) * scale
+    actual_log_prob = g.log_density(xy, s).logsumexp(0) + math.log(scale / num_samples)
+    expected_log_prob = y_mvt.log_prob(y - y_pred)
+    assert_close(actual_log_prob, expected_log_prob, atol=0.1, rtol=0.1)
 
 
 @pytest.mark.parametrize("x_batch_shape,y_batch_shape", [
@@ -283,7 +275,6 @@ def test_gaussian_tensordot(dot_dims,
     assert_close(covariance[..., x_dim:, x_dim:], z_covariance[..., na:, na:])
 
     # Assume a = c = 0, integrate out b
-    # FIXME: this might be not a stable way to compute integral
     num_samples = 200000
     scale = 20
     # generate samples in [-10, 10]
@@ -293,6 +284,4 @@ def test_gaussian_tensordot(dot_dims,
     expect = torch.logsumexp(x.log_density(value_x) + y.log_density(value_y), dim=0)
     expect += math.log(scale ** nb / num_samples)
     actual = z.log_density(torch.zeros(z.batch_shape + (z.dim(),)))
-    # TODO(fehiepsi): find some condition to make this test stable, so we can compare large value
-    # log densities.
     assert_close(actual.clamp(max=10.), expect.clamp(max=10.), atol=0.1, rtol=0.1)
