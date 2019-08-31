@@ -4,7 +4,7 @@ import torch
 from torch.distributions.utils import lazy_property
 from torch.nn.functional import pad
 
-from pyro.distributions.multivariate_studentT import MultivariateStudentT
+from pyro.distributions.multivariate_studentt import MultivariateStudentT
 from pyro.distributions.util import broadcast_shape
 
 
@@ -334,7 +334,7 @@ def matrix_and_mvt_to_gaussian_gamma(matrix, mvt):
     return result
 
 
-def gaussian_gamma_tensordotS(x, y, dims=0):
+def gaussian_gamma_tensordot(x, y, dims=0):
     """
     Computes the integral over two gaussians:
 
