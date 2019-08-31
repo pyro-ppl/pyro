@@ -4,9 +4,13 @@ import pytest
 import torch
 from torch.nn.functional import pad
 
-import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.studentt import GaussianGamma, gaussian_gamma_tensordot, matrix_and_mvt_to_gaussian_gamma, mvt_to_gaussian_gamma
+from pyro.ops.studentt import (
+    GaussianGamma,
+    gaussian_gamma_tensordot,
+    matrix_and_mvt_to_gaussian_gamma,
+    mvt_to_gaussian_gamma,
+)
 from tests.common import assert_close
 from tests.ops.studentt import assert_close_gaussian_gamma, random_gaussian_gamma, random_mvt
 
@@ -238,13 +242,13 @@ def test_matrix_and_mvt_to_gaussian_gamma(sample_shape, batch_shape, x_dim, y_di
 @pytest.mark.parametrize("x_rank,y_rank", [
     (1, 1), (4, 1), (1, 4), (4, 4)
 ], ids=str)
-def test_gaussian_tensordot(dot_dims,
-                            x_batch_shape, x_dim, x_rank,
-                            y_batch_shape, y_dim, y_rank):
+def test_gaussian_gamma_tensordot(dot_dims,
+                                  x_batch_shape, x_dim, x_rank,
+                                  y_batch_shape, y_dim, y_rank):
     x_rank = min(x_rank, x_dim)
     y_rank = min(y_rank, y_dim)
-    x = random_gaussian(x_batch_shape, x_dim, x_rank)
-    y = random_gaussian(y_batch_shape, y_dim, y_rank)
+    x = random_gaussian_gamma(x_batch_shape, x_dim, x_rank)
+    y = random_gaussian_gamma(y_batch_shape, y_dim, y_rank)
     na = x_dim - dot_dims
     nb = dot_dims
     nc = y_dim - dot_dims
@@ -253,13 +257,13 @@ def test_gaussian_tensordot(dot_dims,
     except RuntimeError:
         pytest.skip("Cannot marginalize the common variables of two Gaussians.")
 
-    z = gaussian_tensordot(x, y, dot_dims)
+    z = gaussian_gamma_tensordot(x, y, dot_dims)
     assert z.dim() == x_dim + y_dim - 2 * dot_dims
 
     # We make these precision matrices positive definite to test the math
-    x.precision = x.precision + 1e-1 * torch.eye(x.dim())
-    y.precision = y.precision + 1e-1 * torch.eye(y.dim())
-    z = gaussian_tensordot(x, y, dot_dims)
+    x.precision = x.precision + 3 * torch.eye(x.dim())
+    y.precision = y.precision + 3 * torch.eye(y.dim())
+    z = gaussian_gamma_tensordot(x, y, dot_dims)
     # compare against broadcasting, adding, and marginalizing
     precision = pad(x.precision, (0, nc, 0, nc)) + pad(y.precision, (na, 0, na, 0))
     info_vec = pad(x.info_vec, (0, nc)) + pad(y.info_vec, (na, 0))
@@ -274,14 +278,15 @@ def test_gaussian_tensordot(dot_dims,
     assert_close(covariance[..., x_dim:, :na], z_covariance[..., na:, :na])
     assert_close(covariance[..., x_dim:, x_dim:], z_covariance[..., na:, na:])
 
+    s = torch.randn(z.batch_shape).exp()
     # Assume a = c = 0, integrate out b
     num_samples = 200000
-    scale = 20
+    scale = 10
     # generate samples in [-10, 10]
     value_b = torch.rand((num_samples,) + z.batch_shape + (nb,)) * scale - scale / 2
     value_x = pad(value_b, (na, 0))
     value_y = pad(value_b, (0, nc))
-    expect = torch.logsumexp(x.log_density(value_x) + y.log_density(value_y), dim=0)
+    expect = torch.logsumexp(x.log_density(value_x, s) + y.log_density(value_y, s), dim=0)
     expect += math.log(scale ** nb / num_samples)
-    actual = z.log_density(torch.zeros(z.batch_shape + (z.dim(),)))
+    actual = z.log_density(torch.zeros(z.batch_shape + (z.dim(),)), s)
     assert_close(actual.clamp(max=10.), expect.clamp(max=10.), atol=0.1, rtol=0.1)

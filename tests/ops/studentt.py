@@ -15,7 +15,10 @@ def random_gaussian_gamma(batch_shape, dim, rank=None):
     loc = torch.randn(batch_shape + (dim,))
     samples = torch.randn(batch_shape + (dim, rank))
     precision = torch.matmul(samples, samples.transpose(-2, -1))
-    info_vec = precision.matmul(loc.unsqueeze(-1)).squeeze(-1)
+    if dim > 0:
+        info_vec = precision.matmul(loc.unsqueeze(-1)).squeeze(-1)
+    else:
+        info_vec = loc
     alpha = torch.randn(batch_shape).exp() + 0.5 * dim - 1
     beta = torch.randn(batch_shape).exp() + 0.5 * (info_vec * loc).sum(-1)
     result = GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)

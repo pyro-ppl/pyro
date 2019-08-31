@@ -244,7 +244,9 @@ class GaussianGamma:
         info_a = self.info_vec[..., a]
         info_b = self.info_vec[..., b]
         b_tmp = info_b.unsqueeze(-1).triangular_solve(P_b, upper=False).solution
-        info_vec = info_a - P_at.matmul(b_tmp).squeeze(-1)
+        info_vec = info_a
+        if n_b < n:
+            info_vec = info_vec - P_at.matmul(b_tmp).squeeze(-1)
 
         alpha = self.alpha - 0.5 * n_b
         beta = self.beta - 0.5 * b_tmp.squeeze(-1).pow(2).sum(-1)
