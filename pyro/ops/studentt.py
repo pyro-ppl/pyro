@@ -332,3 +332,33 @@ def matrix_and_mvt_to_gaussian_gamma(matrix, mvt):
     assert result.batch_shape == batch_shape
     assert result.dim() == x_dim + y_dim
     return result
+
+
+def gaussian_gamma_tensordotS(x, y, dims=0):
+    """
+    Computes the integral over two gaussians:
+
+        `(x @ y)(a,c) = log(integral(exp(x(a,b) + y(b,c)), b))`,
+
+    where `x` is a gaussian over variables (a,b), `y` is a gaussian over variables
+    (b,c), (a,b,c) can each be sets of zero or more variables, and `dims` is the size of b.
+
+    :param x: a GaussianGamma instance
+    :param y: a GaussianGamma instance
+    :param dims: number of variables to contract
+    """
+    assert isinstance(x, GaussianGamma)
+    assert isinstance(y, GaussianGamma)
+    na = x.dim() - dims
+    nb = dims
+    nc = y.dim() - dims
+    assert na >= 0
+    assert nb >= 0
+    assert nc >= 0
+
+    device = x.info_vec.device
+    perm = torch.cat([
+        torch.arange(na, device=device),
+        torch.arange(x.dim(), x.dim() + nc, device=device),
+        torch.arange(na, x.dim(), device=device)])
+    return (x.event_pad(right=nc) + y.event_pad(left=na)).event_permute(perm).marginalize(right=nb)
