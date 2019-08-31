@@ -207,7 +207,7 @@ class GaussianGamma:
 
         log_normalizer = self.log_normalizer
         alpha = self.alpha
-        beta = self.beta - 0.5 * P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) + b.mul(info_b).sum(-1)
+        beta = self.beta + 0.5 * P_bb.matmul(b.unsqueeze(-1)).squeeze(-1).mul(b).sum(-1) - b.mul(info_b).sum(-1)
         return GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
 
     def marginalize(self, left=0, right=0):
