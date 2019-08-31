@@ -338,9 +338,9 @@ def matrix_and_mvt_to_gaussian_gamma(matrix, mvt):
 
 def gaussian_gamma_tensordot(x, y, dims=0):
     """
-    Computes the integral over two gaussians:
+    Computes the integral over two GaussianGammas:
 
-        `(x @ y)(a,c) = log(integral(exp(x(a,b) + y(b,c)), b))`,
+        `(x @ y)((a,c),s) = log(integral(exp(x((a,b),s) + y((b,c),s)), b))`,
 
     where `x` is a gaussian over variables (a,b), `y` is a gaussian over variables
     (b,c), (a,b,c) can each be sets of zero or more variables, and `dims` is the size of b.

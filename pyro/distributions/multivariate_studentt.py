@@ -10,6 +10,14 @@ from pyro.distributions.util import broadcast_shape
 
 
 class MultivariateStudentT(TorchDistribution):
+    """
+    Creates a multivariate Student's t-distribution parameterized by degree of
+    freedom :attr:`df`, mean :attr:`loc` and scale :attr:`scale_tril`.
+
+    :param ~torch.Tensor df: degrees of freedom
+    :param ~torch.Tensor loc: mean of the distribution
+    :param ~torch.Tensor scale_tril: scale of the distribution
+    """
     arg_constraints = {'df': constraints.positive,
                        'loc': constraints.real_vector,
                        'scale_tril': constraints.lower_cholesky}
