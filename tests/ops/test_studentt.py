@@ -166,15 +166,16 @@ def test_condition(sample_shape, batch_shape, left, right):
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_logsumexp(batch_shape, dim):
-    gaussian = random_gaussian(batch_shape, dim)
-    gaussian.info_vec *= 0.1  # approximately centered
-    gaussian.precision += torch.eye(dim) * 0.1
+    g = random_gaussian_gamma(batch_shape, dim)
+    g.info_vec *= 0.1  # approximately centered
+    g.precision += torch.eye(dim) * 0.1
+    s = torch.randn(batch_shape).exp() + 0.2
 
     num_samples = 200000
     scale = 10
     samples = torch.rand((num_samples,) + (1,) * len(batch_shape) + (dim,)) * scale - scale / 2
-    expected = gaussian.log_density(samples).logsumexp(0) + math.log(scale ** dim / num_samples)
-    actual = gaussian.event_logsumexp()
+    expected = g.log_density(samples, s).logsumexp(0) + math.log(scale ** dim / num_samples)
+    actual = g.event_logsumexp().log_density(s)
     assert_close(actual, expected, atol=0.05, rtol=0.05)
 
 
