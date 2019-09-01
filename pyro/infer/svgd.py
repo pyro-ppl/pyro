@@ -132,8 +132,7 @@ class IMQSteinKernel(SteinKernel):
     References
 
     [1] "Stein Points," Wilson Ye Chen, Lester Mackey, Jackson Gorham, Francois-Xavier Briol, Chris. J. Oates.
-    [2] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
-        Qiang Liu, Dilin Wang
+    [2] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm," Qiang Liu, Dilin Wang
     """
     def __init__(self, alpha=0.5, beta=-0.5, bandwidth_factor=None):
         """
