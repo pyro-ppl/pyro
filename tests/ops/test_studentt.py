@@ -4,6 +4,7 @@ import pytest
 import torch
 from torch.nn.functional import pad
 
+import pyro.distributions as dist
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.studentt import (
     GaussianGamma,
@@ -199,6 +200,26 @@ def test_mvt_to_gaussian_gamma(sample_shape, batch_shape, dim):
     actual_log_prob = g.log_density(value, s).logsumexp(0) + math.log(scale / num_samples)
     expected_log_prob = mvt.log_prob(value)
     assert_close(actual_log_prob, expected_log_prob, atol=0.1, rtol=0.1)
+
+
+@pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_mvt_to_gaussian_gamma_skip_multiplier_prior(sample_shape, batch_shape, dim):
+    mvt = random_mvt(batch_shape, dim)
+    mvt.scale_tril = (mvt.covariance_matrix + 7 * torch.eye(dim)).cholesky()
+    g = mvt_to_gaussian_gamma(mvt, skip_multiplier_prior=True)
+    value = mvt.sample(sample_shape)
+    s = torch.rand(sample_shape + batch_shape)
+
+    actual_log_density = g.log_density(value, s)
+    # p(x | s) = MVN(loc, precision=s * mvt.precision)
+    gaussian = dist.MultivariateNormal(
+        loc=mvt.loc,
+        scale_tril=(mvt.scale_tril / s.sqrt().unsqueeze(-1).unsqueeze(-1)))
+    expected_log_density = gaussian.log_prob(value)
+    print(torch.max(((expected_log_density - actual_log_density) / actual_log_density).abs()))
+    assert_close(actual_log_density, expected_log_density, atol=0.1, rtol=0.1)
 
 
 @pytest.mark.parametrize("sample_shape", [(), (7,), (6, 5)], ids=str)

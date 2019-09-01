@@ -47,7 +47,9 @@ class GaussianGamma:
     This represents an arbitrary semidefinite quadratic function, which can be
     interpreted as a rank-deficient scaled Gaussian distribution. The precision
     matrix may have zero eigenvalues, thus it may be impossible to work
-    directly with the covariance matrix.
+    directly with the covariance matrix. The `s` variable plays the role of a multiplier such that
+
+        p(x | s) ~ Gaussian(s * info_vec, s * precision).
 
     :param torch.Tensor log_normalizer: a normalization constant, which is mainly used to keep
         track of normalization terms during contractions.
@@ -275,28 +277,45 @@ class GaussianGamma:
         return Gamma(self.log_normalizer + log_normalizer_tmp, alpha, beta)
 
 
-def mvt_to_gaussian_gamma(mvt):
+def mvt_to_gaussian_gamma(mvt, skip_multiplier_prior=False):
     """
     Convert a MultivariateStudentT (MVT) distribution to a GaussianGamma.
 
+        p(x) ~ MVT(df, info_vec, precision)
+        p(x | s) ~ Gaussian(s * info_vec, s * precision)
+        p(s) ~ Gamma(df / 2, df / 2)
+        p(x, s) ~ GaussianGamma(info_vec, precison, df / 2, df / 2)
+
     :param ~pyro.distributions.MultivariateStudentT mvt: A multivariate student-t distribution.
+    :param bool skip_multiplier_prior: whether to skip the prior of `s`. If True, we return
+        p(x | s). Otherwise, we return p(x, s).
     :return: A GaussianGamma object which is equivalent to the MVT when marginalized out the
-        scale parameter `s`.
+        multiplier `s`.
     :rtype: ~pyro.ops.studentt.GaussianGamma
     """
     n = mvt.loc.size(-1)
     precision = mvt.precision_matrix
     info_vec = precision.matmul(mvt.loc.unsqueeze(-1)).squeeze(-1)
-    # reparameterized version of alpha = beta = 0.5 dof
-    half_df = 0.5 * mvt.df
-    alpha = half_df + (0.5 * n - 1)
-    beta = half_df + 0.5 * (info_vec * mvt.loc).sum(-1)
-    logsumexp = 0.5 * n * math.log(2 * math.pi) + mvt.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
-    logsumexp = Gamma(logsumexp, half_df, half_df).logsumexp()
-    return GaussianGamma(-logsumexp, info_vec, precision, alpha, beta)
+
+    # First, we model p(x | s).
+    # Here, we use reparameterized versions of alpha = 1, beta = 0
+    # Note that Gamma(1, 0).log_density is a constant function. In other works, with these values of
+    # alpha, beta, we say that there is no prior for `s`. This is similar to Gaussian with zero
+    # info_vec and zero precision.
+    alpha = 0.5 * n
+    beta = 0.5 * (info_vec * mvt.loc).sum(-1)
+    log_normalizer = -0.5 * n * math.log(2 * math.pi) - mvt.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
+
+    if not skip_multiplier_prior:
+        # reparameterized version of alpha = beta = 0.5 dof
+        half_df = 0.5 * mvt.df
+        alpha = alpha - 1 + half_df
+        beta = beta + half_df
+        log_normalizer = log_normalizer - Gamma(0., half_df, half_df).logsumexp()
+    return GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
 
 
-def matrix_and_mvt_to_gaussian_gamma(matrix, mvt):
+def matrix_and_mvt_to_gaussian_gamma(matrix, mvt, skip_multiplier_prior=True):
     """
     Convert a noisy affine function to a GaussianGamma. The noisy affine function is defined as::
 
@@ -304,6 +323,8 @@ def matrix_and_mvt_to_gaussian_gamma(matrix, mvt):
 
     :param ~torch.Tensor matrix: A matrix with rightmost shape ``(x_dim, y_dim)``.
     :param ~pyro.distributions.MultivariateStudentT mvt: A multivariate student-t distribution.
+    :param bool skip_multiplier_prior: whether to skip the prior of `s`. If True, we return
+        p(x | s). Otherwise, we return p(x, s).
     :return: A GaussianGamma with broadcasted batch shape and ``.dim() == x_dim + y_dim``.
     :rtype: ~pyro.ops.studentt.GaussianGamma
     """
@@ -315,7 +336,7 @@ def matrix_and_mvt_to_gaussian_gamma(matrix, mvt):
     matrix = matrix.expand(batch_shape + (x_dim, y_dim))
     mvt = mvt.expand(batch_shape)
 
-    y_gaussian_gamma = mvt_to_gaussian_gamma(mvt)
+    y_gaussian_gamma = mvt_to_gaussian_gamma(mvt, skip_multiplier_prior=skip_multiplier_prior)
     P_yy = y_gaussian_gamma.precision
     neg_P_xy = matrix.matmul(P_yy)
     P_xy = -neg_P_xy
