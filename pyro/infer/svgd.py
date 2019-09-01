@@ -71,6 +71,8 @@ class RBFSteinKernel(SteinKernel):
         """
         :param float bandwidth_factor: Optional factor by which to scale the bandwidth
         """
+        if bandwidth_factor is not None:
+            assert bandwidth_factor > 0.0, "bandwidth_factor must be positive."
         self._bandwidth_factor = bandwidth_factor
 
     def _bandwidth(self, norm_sq):
@@ -94,6 +96,82 @@ class RBFSteinKernel(SteinKernel):
         h = self._bandwidth(norm_sq)  # D
         log_kernel = -(norm_sq / h)  # N N D
         grad_term = 2.0 * delta_x / h  # N N D
+        assert log_kernel.shape == grad_term.shape
+        return log_kernel, grad_term
+
+    @property
+    def bandwidth_factor(self):
+        return self._bandwidth_factor
+
+    @bandwidth_factor.setter
+    def bandwidth_factor(self, bandwidth_factor):
+        """
+        :param float bandwidth_factor: Optional factor by which to scale the bandwidth
+        """
+        if bandwidth_factor is not None:
+            assert bandwidth_factor > 0.0, "bandwidth_factor must be positive."
+        self._bandwidth_factor = bandwidth_factor
+
+
+@copy_docs_from(SteinKernel)
+class IMQSteinKernel(SteinKernel):
+    """
+    An IMQ (inverse multi-quadratic) kernel for use in the SVGD inference algorithm [1]. The bandwidth of the kernel
+    is chosen from the particles using a simple heuristic as in reference [2]. The kernel takes the form
+
+    :math:`K(x, y) = (\alpha + ||x-y||^2/h)^{\beta}`
+
+    where :math:`\alpha` and :math:`\beta` are user-specified parameters and :math:`h` is the bandwidth.
+
+    :param float alpha: Kernel hyperparameter, defaults to 0.5.
+    :param float beta: Kernel hyperparameter, defaults to -0.5.
+    :param float bandwidth_factor: Optional factor by which to scale the bandwidth, defaults to 1.0.
+    :ivar float bandwidth_factor: Property that controls the factor by which to scale the bandwidth
+        at each iteration.
+
+    References
+
+    [1] "Stein Points," Wilson Ye Chen, Lester Mackey, Jackson Gorham, Francois-Xavier Briol, Chris. J. Oates.
+    [2] "Stein Variational Gradient Descent: A General Purpose Bayesian Inference Algorithm,"
+        Qiang Liu, Dilin Wang
+    """
+    def __init__(self, alpha=0.5, beta=-0.5, bandwidth_factor=None):
+        """
+        :param float alpha: Kernel hyperparameter, defaults to 0.5.
+        :param float beta: Kernel hyperparameter, defaults to -0.5.
+        :param float bandwidth_factor: Optional factor by which to scale the bandwidth
+        """
+        assert alpha > 0.0, "alpha must be positive."
+        assert beta < 0.0, "beta must be negative."
+        if bandwidth_factor is not None:
+            assert bandwidth_factor > 0.0, "bandwidth_factor must be positive."
+        self.alpha = alpha
+        self.beta = beta
+        self._bandwidth_factor = bandwidth_factor
+
+    def _bandwidth(self, norm_sq):
+        """
+        Compute the bandwidth along each dimension using the median pairwise squared distance between particles.
+        """
+        num_particles = norm_sq.size(0)
+        index = torch.arange(num_particles)
+        norm_sq = norm_sq[index > index.unsqueeze(-1), ...]
+        median = norm_sq.median(dim=0)[0]
+        if self.bandwidth_factor is not None:
+            median = self.bandwidth_factor * median
+        assert median.shape == norm_sq.shape[-1:]
+        return median / math.log(num_particles + 1)
+
+    @torch.no_grad()
+    def log_kernel_and_grad(self, particles):
+        delta_x = particles.unsqueeze(0) - particles.unsqueeze(1)  # N N D
+        assert delta_x.dim() == 3
+        norm_sq = delta_x.pow(2.0)  # N N D
+        h = self._bandwidth(norm_sq)  # D
+        base_term = self.alpha + norm_sq / h
+        log_kernel = self.beta * torch.log(base_term)  # N N D
+        grad_term = (-2.0 * self.beta) * delta_x / h  # N N D
+        grad_term = grad_term / base_term
         assert log_kernel.shape == grad_term.shape
         return log_kernel, grad_term
 
