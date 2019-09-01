@@ -302,7 +302,7 @@ def mvt_to_gaussian_gamma(mvt, skip_multiplier_prior=False):
     # Note that Gamma(1, 0).log_density is a constant function. In other works, with these values of
     # alpha, beta, we say that there is no prior for `s`. This is similar to Gaussian with zero
     # info_vec and zero precision.
-    alpha = 0.5 * n
+    alpha = 0.5 * torch.tensor(n, device=info_vec.device, dtype=info_vec.dtype)
     beta = 0.5 * (info_vec * mvt.loc).sum(-1)
     log_normalizer = -0.5 * n * math.log(2 * math.pi) - mvt.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
 
@@ -315,7 +315,7 @@ def mvt_to_gaussian_gamma(mvt, skip_multiplier_prior=False):
     return GaussianGamma(log_normalizer, info_vec, precision, alpha, beta)
 
 
-def matrix_and_mvt_to_gaussian_gamma(matrix, mvt, skip_multiplier_prior=True):
+def matrix_and_mvt_to_gaussian_gamma(matrix, mvt, skip_multiplier_prior=False):
     """
     Convert a noisy affine function to a GaussianGamma. The noisy affine function is defined as::
 
