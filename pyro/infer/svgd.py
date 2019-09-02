@@ -59,7 +59,7 @@ class RBFSteinKernel(SteinKernel):
     particles using a simple heuristic as in reference [1].
 
     :param float bandwidth_factor: Optional factor by which to scale the bandwidth, defaults to 1.0.
-    :ivar float bandwidth_factor: Property that controls the factor by which to scale the bandwidth
+    :ivar float ~.bandwidth_factor: Property that controls the factor by which to scale the bandwidth
         at each iteration.
 
     References
@@ -124,7 +124,7 @@ class IMQSteinKernel(SteinKernel):
     :param float alpha: Kernel hyperparameter, defaults to 0.5.
     :param float beta: Kernel hyperparameter, defaults to -0.5.
     :param float bandwidth_factor: Optional factor by which to scale the bandwidth, defaults to 1.0.
-    :ivar float bandwidth_factor: Property that controls the factor by which to scale the bandwidth
+    :ivar float ~.bandwidth_factor: Property that controls the factor by which to scale the bandwidth
         at each iteration.
 
     References
