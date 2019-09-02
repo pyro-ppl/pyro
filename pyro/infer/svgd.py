@@ -71,9 +71,7 @@ class RBFSteinKernel(SteinKernel):
         """
         :param float bandwidth_factor: Optional factor by which to scale the bandwidth
         """
-        if bandwidth_factor is not None:
-            assert bandwidth_factor > 0.0, "bandwidth_factor must be positive."
-        self._bandwidth_factor = bandwidth_factor
+        self.bandwidth_factor = bandwidth_factor
 
     def _bandwidth(self, norm_sq):
         """
@@ -142,11 +140,9 @@ class IMQSteinKernel(SteinKernel):
         """
         assert alpha > 0.0, "alpha must be positive."
         assert beta < 0.0, "beta must be negative."
-        if bandwidth_factor is not None:
-            assert bandwidth_factor > 0.0, "bandwidth_factor must be positive."
         self.alpha = alpha
         self.beta = beta
-        self._bandwidth_factor = bandwidth_factor
+        self.bandwidth_factor = bandwidth_factor
 
     def _bandwidth(self, norm_sq):
         """
@@ -183,6 +179,8 @@ class IMQSteinKernel(SteinKernel):
         """
         :param float bandwidth_factor: Optional factor by which to scale the bandwidth
         """
+        if bandwidth_factor is not None:
+            assert bandwidth_factor > 0.0, "bandwidth_factor must be positive."
         self._bandwidth_factor = bandwidth_factor
 
 
