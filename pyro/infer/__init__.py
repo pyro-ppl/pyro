@@ -14,7 +14,7 @@ from pyro.infer.traceenum_elbo import JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.infer.tracegraph_elbo import JitTraceGraph_ELBO, TraceGraph_ELBO
 from pyro.infer.trace_mmd import Trace_MMD
 from pyro.infer.util import enable_validation, is_validation_enabled
-from pyro.infer.svgd import SVGD, RBFSteinKernel
+from pyro.infer.svgd import SVGD, RBFSteinKernel, IMQSteinKernel
 
 __all__ = [
     "config_enumerate",
@@ -24,6 +24,7 @@ __all__ = [
     "ELBO",
     "EmpiricalMarginal",
     "Importance",
+    "IMQSteinKernel",
     "infer_discrete",
     "JitTraceEnum_ELBO",
     "JitTraceGraph_ELBO",
