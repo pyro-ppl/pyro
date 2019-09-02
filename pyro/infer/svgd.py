@@ -115,7 +115,7 @@ class RBFSteinKernel(SteinKernel):
 
 @copy_docs_from(SteinKernel)
 class IMQSteinKernel(SteinKernel):
-    """
+    r"""
     An IMQ (inverse multi-quadratic) kernel for use in the SVGD inference algorithm [1]. The bandwidth of the kernel
     is chosen from the particles using a simple heuristic as in reference [2]. The kernel takes the form
 
