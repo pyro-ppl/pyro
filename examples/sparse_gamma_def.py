@@ -186,7 +186,7 @@ def main(args):
             if e.errno != errno.EEXIST:
                 raise
             pass
-        wget.download('https://d2fefpcigoriu7.cloudfront.net/datasets/faces_training.csv', dataset_path)
+        wget.download('https://d2hg8soec8ck9v.cloudfront.net/datasets/faces_training.csv', dataset_path)
     data = torch.tensor(np.loadtxt(dataset_path, delimiter=',')).float()
 
     sparse_gamma_def = SparseGammaDEF()
