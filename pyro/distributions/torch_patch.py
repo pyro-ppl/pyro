@@ -19,7 +19,7 @@ def patch_dependency(target, root_module=torch):
     def decorator(new_fn):
         try:
             functools.update_wrapper(new_fn, old_fn)
-        except:
+        except Exception:
             for attr in functools.WRAPPER_ASSIGNMENTS:
                 if hasattr(old_fn, attr):
                     setattr(new_fn, attr, getattr(old_fn, attr))
