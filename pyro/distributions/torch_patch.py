@@ -17,7 +17,12 @@ def patch_dependency(target, root_module=torch):
     old_fn = getattr(old_fn, '_pyro_unpatched', old_fn)  # ensure patching is idempotent
 
     def decorator(new_fn):
-        functools.update_wrapper(new_fn, old_fn)
+        try:
+            functools.update_wrapper(new_fn, old_fn)
+        except:
+            for attr in functools.WRAPPER_ASSIGNMENTS:
+                if hasattr(old_fn, attr):
+                    setattr(new_fn, attr, getattr(old_fn, attr))
         new_fn._pyro_unpatched = old_fn
         setattr(module, name, new_fn)
         return new_fn
