@@ -28,7 +28,7 @@ from pyro.contrib.examples.util import get_data_directory
 dset = namedtuple("dset", ["name", "url", "filename"])
 
 JSB_CHORALES = dset("jsb_chorales",
-                    "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/jsb_chorales.p",
+                    "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/jsb_chorales.pickle",
                     "jsb_chorales.pkl")
 
 PIANO_MIDI = dset("piano_midi",
