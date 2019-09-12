@@ -1,7 +1,7 @@
 import copy
 import warnings
 from collections import OrderedDict
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from inspect import isclass
 
 import pyro.distributions as dist
@@ -241,6 +241,18 @@ class irange(SubsampleMessenger):
     def __init__(self, *args, **kwargs):
         warnings.warn("pyro.irange is deprecated; use pyro.plate instead", DeprecationWarning)
         super(irange, self).__init__(*args, **kwargs)
+
+
+@contextmanager
+def plate_stack(prefix, sizes, rightmost_dim=None):
+    if rightmost_dim is not None:
+        assert rightmost_dim < 0
+    with ExitStack() as stack:
+        for i, size in enumerate(reversed(sizes)):
+            plate_dim = rightmost_dim - i if rightmost_dim is not None else None
+            p = plate("{}_{}".format(prefix, i), size, dim=plate_dim)
+            stack.enter_context(p)
+        yield
 
 
 def module(name, nn_module, update_module_params=False):
