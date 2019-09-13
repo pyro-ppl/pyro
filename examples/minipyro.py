@@ -8,10 +8,9 @@ import argparse
 
 import torch
 
-# We use the pyro.generic interface to support dynamic choice of backend.
-from pyro.generic import pyro_backend
 from pyro.generic import distributions as dist
-from pyro.generic import infer, optim, pyro, ops
+# We use the pyro.generic interface to support dynamic choice of backend.
+from pyro.generic import infer, ops, optim, pyro, pyro_backend
 
 
 def main(args):
