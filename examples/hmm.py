@@ -585,7 +585,7 @@ def main(args):
     Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
     elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2,
                 strict_enumeration_warning=(model is not model_7),
-                jit_options={"optimize": model is model_7, "time_compilation": args.time_compilation})
+                jit_options={"time_compilation": args.time_compilation})
     optim = Adam({'lr': args.learning_rate})
     svi = SVI(model, guide, optim, elbo)
 
