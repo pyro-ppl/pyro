@@ -17,6 +17,7 @@ def _logmatmulexp(x, y):
     return xy + x_shift + y_shift
 
 
+@torch.jit.script
 def _sequential_logmatmulexp(logits):
     """
     For a tensor ``x`` whose time dimension is -3, computes::
@@ -61,6 +62,80 @@ def _sequential_gaussian_tensordot(gaussian):
             contracted = Gaussian.cat((contracted, gaussian[..., -1:]), dim=-1)
         gaussian = contracted
     return gaussian[..., 0]
+
+
+# This is uses Gaussian internally but can be jit traced.
+def _sgt_inner(log_normalizer, info_vec, precision,
+               state_dim, x_y_empty, time, even_time):
+    state_dim = int(state_dim)
+    time = int(time)
+    even_time = int(even_time)
+    print("even_time {}".format(even_time))
+
+    gaussian = Gaussian(log_normalizer, info_vec, precision)
+    even_part = gaussian[..., :even_time]
+    x_y = even_part.reshape(x_y_empty.shape)
+    x, y = x_y[..., 0], x_y[..., 1]
+    gaussian = gaussian_tensordot(x, y, state_dim)
+    return gaussian.log_normalizer, gaussian.info_vec, gaussian.precision
+
+
+_jit_sgt_inner = torch.jit.trace(_sgt_inner, (
+    torch.zeros(5, 3),
+    torch.zeros(5, 3, 2),
+    torch.eye(2).expand(5, 3, 2, 2),
+    torch.tensor(2),
+    torch.empty(5, 1, 2),
+    torch.tensor(3),
+    torch.tensor(2),
+))
+
+
+@torch.jit.script
+def _jit_sgt_outer(log_normalizer, info_vec, precision):
+    while log_normalizer.size(-1) > 1:
+        state_dim = info_vec.size(-1) // 2
+        batch_shape = log_normalizer.shape[:-1]
+        time = log_normalizer.size(-1)
+        even_time = time // 2 * 2
+        x_y_shape = batch_shape + (even_time // 2, 2)
+
+        state_dim = torch.tensor(state_dim)
+        time = torch.tensor(time)
+        x_y_empty = torch.empty(()).expand(x_y_shape)
+        even_time = torch.tensor(even_time)
+
+        l2, i2, p2 = _jit_sgt_inner(
+            log_normalizer, info_vec, precision,
+            state_dim, x_y_empty, time, even_time)
+
+        if l2.size(-1) * 2 == log_normalizer.size(-1):
+            log_normalizer = l2
+            info_vec = i2
+            precision = p2
+        else:
+            log_normalizer = torch.cat((l2, log_normalizer[..., -1:]), dim=-1)
+            info_vec = torch.cat((i2, info_vec[..., -1:, :]), dim=-2)
+            precision = torch.cat((p2, precision[..., -1:, :, :]), dim=-3)
+
+    log_normalizer = log_normalizer[..., 0]
+    info_vec = info_vec[..., 0, :]
+    precision = precision[..., 0, :, :]
+    return log_normalizer, info_vec, precision
+
+
+def _jit_sequential_gaussian_tensordot(gaussian):
+    """
+    Integrates a Gaussian ``x`` whose rightmost batch dimension is time, computes::
+
+        x[..., 0] @ x[..., 1] @ ... @ x[..., T-1]
+    """
+    assert isinstance(gaussian, Gaussian)
+    assert gaussian.dim() % 2 == 0, "dim is not even"
+    args = _jit_sgt_outer(gaussian.log_normalizer,
+                          gaussian.info_vec,
+                          gaussian.precision)
+    return Gaussian(*args)
 
 
 class DiscreteHMM(TorchDistribution):
@@ -287,7 +362,7 @@ class GaussianHMM(TorchDistribution):
         result = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
 
         # Eliminate time dimension.
-        result = _sequential_gaussian_tensordot(result.expand(result.batch_shape))
+        result = _jit_sequential_gaussian_tensordot(result.expand(result.batch_shape))
 
         # Combine initial factor.
         result = gaussian_tensordot(self._init, result, dims=self.hidden_dim)
@@ -311,7 +386,7 @@ class GaussianHMM(TorchDistribution):
         logp = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
 
         # Eliminate time dimension.
-        logp = _sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
+        logp = _jit_sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
 
         # Combine initial factor.
         logp = gaussian_tensordot(self._init, logp, dims=self.hidden_dim)

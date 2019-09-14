@@ -7,6 +7,12 @@ from torch.nn.functional import pad
 from pyro.distributions.util import broadcast_shape
 
 
+@torch.jit.script
+def print_fn(x):
+    print("DEBUG")
+    print(x)
+
+
 class Gaussian:
     """
     Non-normalized Gaussian distribution.
@@ -60,6 +66,12 @@ class Gaussian:
         Index into the batch_shape of a Gaussian.
         """
         assert isinstance(index, tuple)
+        with open("debug.txt", "a") as f:
+            f.write("\n\n{}\n{}\n{}\n{}\n".format(
+                repr(index),
+                repr(self.log_normalizer.shape),
+                repr(self.info_vec.shape),
+                repr(self.precision.shape)))
         log_normalizer = self.log_normalizer[index]
         info_vec = self.info_vec[index + (slice(None),)]
         precision = self.precision[index + (slice(None), slice(None))]

@@ -7,7 +7,8 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.distributions.hmm import _sequential_gaussian_tensordot, _sequential_logmatmulexp
+from pyro.distributions.hmm import (_jit_sequential_gaussian_tensordot, _sequential_gaussian_tensordot,
+                                    _sequential_logmatmulexp)
 from pyro.distributions.util import broadcast_shape
 from pyro.infer import TraceEnum_ELBO, config_enumerate
 from pyro.ops.gaussian import gaussian_tensordot, matrix_and_mvn_to_gaussian, mvn_to_gaussian
@@ -53,9 +54,13 @@ def test_sequential_logmatmulexp(batch_shape, state_dim, num_steps):
 @pytest.mark.parametrize('num_steps', list(range(1, 20)))
 @pytest.mark.parametrize('state_dim', [1, 2, 3])
 @pytest.mark.parametrize('batch_shape', [(), (5,), (2, 4)], ids=str)
-def test_sequential_gaussian_tensordot(batch_shape, state_dim, num_steps):
+@pytest.mark.parametrize('jit', [False, True], ids=["script", "python"])
+def test_sequential_gaussian_tensordot(batch_shape, state_dim, num_steps, jit):
     g = random_gaussian(batch_shape + (num_steps,), state_dim + state_dim)
-    actual = _sequential_gaussian_tensordot(g)
+    if jit:
+        actual = _sequential_gaussian_tensordot(g)
+    else:
+        actual = _jit_sequential_gaussian_tensordot(g)
     assert actual.dim() == g.dim()
     assert actual.batch_shape == batch_shape
 

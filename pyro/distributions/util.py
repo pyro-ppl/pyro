@@ -2,6 +2,7 @@ import functools
 import numbers
 import weakref
 from contextlib import contextmanager
+from typing import List
 
 import torch
 import torch.distributions as torch_dist
@@ -138,6 +139,23 @@ def broadcast_shape(*shapes, **kwargs):
                 raise ValueError('shape mismatch: objects cannot be broadcast to a single shape: {}'.format(
                     ' vs '.join(map(str, shapes))))
     return tuple(reversed(reversed_shape))
+
+
+@torch.jit.script
+def jit_broadcast_shape(shapes : List[List[int]]):
+    result : List[int] = []
+    for shape in shapes:
+        reversed_shape = shape
+        reversed_shape.reverse()
+        for i, size in enumerate(reversed_shape):
+            if i >= len(result):
+                result.append(size)
+            elif result[i] == 1:
+                result[i] = size
+            elif result[i] != size and size != 1:
+                raise ValueError('shape mismatch')
+    result.reverse()
+    return result
 
 
 def gather(value, index, dim):
