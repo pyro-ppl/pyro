@@ -8,10 +8,9 @@ import argparse
 
 import torch
 
-# We use the pyro.generic interface to support dynamic choice of backend.
-from pyro.generic import pyro_backend
 from pyro.generic import distributions as dist
-from pyro.generic import infer, optim, pyro
+# We use the pyro.generic interface to support dynamic choice of backend.
+from pyro.generic import infer, ops, optim, pyro, pyro_backend
 
 
 def main(args):
@@ -26,7 +25,7 @@ def main(args):
     # distribution over the latent random variable `loc`.
     def guide(data):
         guide_loc = pyro.param("guide_loc", torch.tensor(0.))
-        guide_scale = pyro.param("guide_scale_log", torch.tensor(0.)).exp()
+        guide_scale = ops.exp(pyro.param("guide_scale_log", torch.tensor(0.)))
         pyro.sample("loc", dist.Normal(guide_loc, guide_scale))
 
     # Generate some data.
