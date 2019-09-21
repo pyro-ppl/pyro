@@ -128,15 +128,20 @@ class PlanarFlow(ConditionedPlanarFlow, TransformModule):
 class ConditionalPlanarFlow(ConditionalTransformModule):
     """
     A conditional 'planar' normalizing flow that uses the transformation
+
         :math:`\\mathbf{y} = \\mathbf{x} + \\mathbf{u}\\tanh(\\mathbf{w}^T\\mathbf{z}+b)`
+
     where :math:`\\mathbf{x}` are the inputs with dimension :math:`D`, :math:`\\mathbf{y}` are the outputs,
     and the pseudo-parameters :math:`b\\in\\mathbb{R}`, :math:`\\mathbf{u}\\in\\mathbb{R}^D`, and
     :math:`\\mathbf{w}\\in\\mathbb{R}^D` are the output of a function, e.g. a NN, with input
     :math:`z\\in\\mathbb{R}^{M}` representing the observed variable to condition on. For this to be an
     invertible transformation, the condition :math:`\\mathbf{w}^T\\mathbf{u}>-1` is enforced.
+
     Together with `ConditionalTransformedDistribution` this provides a way to create richer variational
     approximations.
+
     Example usage:
+
     >>> from pyro.nn.dense_nn import DenseNN
     >>> input_dim = 10
     >>> observed_dim = 5
@@ -147,12 +152,15 @@ class ConditionalPlanarFlow(ConditionalTransformModule):
     >>> z = torch.rand(batch_size, observed_dim)
     >>> plf_dist = dist.ConditionalTransformedDistribution(base_dist, [plf]).condition(z)
     >>> plf_dist.sample(sample_shape=torch.Size([batch_size])) # doctest: +SKIP
+
     The inverse of this transform does not possess an analytical solution and is left unimplemented. However,
     the inverse is cached when the forward operation is called during sampling, and so samples drawn using
     planar flow can be scored.
+
     :param nn: a function inputting the observed variable and outputting a triplet of real-valued parameters
         of dimensions :math:`(1, D, D)`.
     :type nn: callable
+
     References:
     Variational Inference with Normalizing Flows [arXiv:1505.05770]
     Danilo Jimenez Rezende, Shakir Mohamed
