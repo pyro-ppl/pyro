@@ -11,7 +11,22 @@ Pyro Optimizers
 .. automodule:: pyro.optim.lr_scheduler
     :members:
     :undoc-members:
+    :special-members: __call__
     :show-inheritance:
+
+.. automodule:: pyro.optim.adagrad_rmsprop
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+    :member-order: bysource
+
+.. automodule:: pyro.optim.clipped_adam
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+    :member-order: bysource
 
 PyTorch Optimizers
 ------------------

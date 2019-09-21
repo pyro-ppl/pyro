@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import math
 
 import torch
@@ -129,9 +127,14 @@ class LKJCorrCholesky(TorchDistribution):
 
     Note that the `event_shape` of this distribution is `[d, d]`
 
-    Important note: When using this distribution with HMC/NUTS, it is important to
-    use a `step_size` such as 1e-4. If not, you are likely to experience LAPACK
-    errors regarding positive-definiteness.
+    .. note::
+
+       When using this distribution with HMC/NUTS, it is important to
+       use a `step_size` such as 1e-4. If not, you are likely to experience LAPACK
+       errors regarding positive-definiteness.
+
+    For example usage, refer to
+    `pyro/examples/lkj.py <https://github.com/pyro-ppl/pyro/blob/dev/examples/lkj.py>`_.
 
     :param int d: Dimensionality of the matrix
     :param torch.Tensor eta: A single positive number parameterizing the distribution.

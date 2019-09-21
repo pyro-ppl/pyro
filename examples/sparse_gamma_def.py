@@ -3,15 +3,13 @@
 #
 # To do inference we use one of the following guides:
 # i)   a custom guide (i.e. a hand-designed variational family) or
-# ii)  an 'auto' guide that is automatically constructed using pyro.contrib.autoguide or
+# ii)  an 'auto' guide that is automatically constructed using pyro.infer.autoguide or
 # iii) an 'easy' guide whose construction is facilitated using pyro.contrib.easyguide.
 #
 # The Olivetti faces dataset is originally from http://www.cl.cam.ac.uk/research/dtg/attarchive/facedatabase.html
 #
 # Compare to Christian Naesseth's implementation here:
 # https://github.com/blei-lab/ars-reparameterization/tree/master/sparse%20gamma%20def
-
-from __future__ import absolute_import, division, print_function
 
 import argparse
 import errno
@@ -28,13 +26,13 @@ import wget
 from pyro.contrib.examples.util import get_data_directory
 from pyro.distributions import Gamma, Poisson, Normal
 from pyro.infer import SVI, TraceMeanField_ELBO
-from pyro.contrib.autoguide import AutoDiagonalNormal
-from pyro.contrib.autoguide.initialization import init_to_feasible
+from pyro.infer.autoguide import AutoDiagonalNormal
+from pyro.infer.autoguide import init_to_feasible
 from pyro.contrib.easyguide import EasyGuide
 
 
 torch.set_default_tensor_type('torch.FloatTensor')
-pyro.enable_validation(True)
+pyro.enable_validation(__debug__)
 pyro.util.set_rng_seed(0)
 
 
@@ -188,7 +186,7 @@ def main(args):
             if e.errno != errno.EEXIST:
                 raise
             pass
-        wget.download('https://d2fefpcigoriu7.cloudfront.net/datasets/faces_training.csv', dataset_path)
+        wget.download('https://d2hg8soec8ck9v.cloudfront.net/datasets/faces_training.csv', dataset_path)
     data = torch.tensor(np.loadtxt(dataset_path, delimiter=',')).float()
 
     sparse_gamma_def = SparseGammaDEF()
@@ -233,7 +231,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.3')
+    assert pyro.__version__.startswith('0.4.1')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=1500, type=int, help='number of training epochs')

@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import pytest
 import torch
 from torch.distributions.transforms import AffineTransform, SigmoidTransform
@@ -96,7 +94,7 @@ def sigmoid_example(design):
         torch.tensor([[-1.5, 0.5], [1.5, 0.]])
     ),
     (
-        known_covariance_linear_model(torch.tensor([1., -1.]), torch.tensor(10.), torch.tensor(1.)),
+        known_covariance_linear_model(torch.tensor([1., -1.]), torch.tensor([10., 10.]), torch.tensor(1.)),
         nz_lm_2p_10_10_1,
         torch.tensor([[-1., 0.5], [2.5, -2.]])
     ),

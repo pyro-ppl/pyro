@@ -1,13 +1,7 @@
-from __future__ import absolute_import, division, print_function
-
 from collections import Counter
+from contextlib import ExitStack  # python 3
 
 from .reentrant_messenger import ReentrantMessenger
-
-try:
-    from contextlib import ExitStack  # python 3
-except ImportError:
-    from contextlib2 import ExitStack  # python 2
 
 
 class MarkovMessenger(ReentrantMessenger):

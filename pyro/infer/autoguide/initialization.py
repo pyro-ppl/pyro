@@ -1,13 +1,11 @@
 r"""
-The pyro.contrib.autoguide module contains initialization functions for
+The pyro.infer.autoguide.initialization module contains initialization functions for
 automatic guides.
 
 The standard interface for initialization is a function that inputs a Pyro
 trace ``site`` dict and returns an appropriately sized ``value`` to serve
 as an initial constrained value for a guide estimate.
 """
-from __future__ import absolute_import, division, print_function
-
 import torch
 from torch.distributions import transform_to
 

@@ -11,8 +11,6 @@ module.
 An accompanying example that makes use of this implementation can be
 found at examples/minipyro.py.
 """
-from __future__ import absolute_import, division, print_function
-
 import warnings
 import weakref
 from collections import OrderedDict

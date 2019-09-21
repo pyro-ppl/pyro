@@ -1,8 +1,6 @@
-from __future__ import absolute_import, division, print_function
-
 import importlib
 
-from contextlib2 import contextmanager
+from contextlib import contextmanager
 
 
 class GenericModule(object):
@@ -60,23 +58,27 @@ _ALIASES = {
         'distributions': 'pyro.distributions',
         'infer': 'pyro.infer',
         'optim': 'pyro.optim',
+        'ops': 'torch',
     },
     'minipyro': {
         'pyro': 'pyro.contrib.minipyro',
         'infer': 'pyro.contrib.minipyro',
         'optim': 'pyro.contrib.minipyro',
+        'ops': 'torch',
     },
     'funsor': {
         'pyro': 'funsor.minipyro',
         'infer': 'funsor.minipyro',
         'optim': 'funsor.minipyro',
         'distributions': 'funsor.distributions',
+        'ops': 'funsor.ops',
     },
     'numpy': {
         'pyro': 'numpyro.compat.pyro',
         'distributions': 'numpyro.compat.distributions',
         'infer': 'numpyro.compat.infer',
         'optim': 'numpyro.compat.optim',
+        'ops': 'numpy',
     },
 }
 
@@ -85,3 +87,4 @@ pyro = GenericModule('pyro', 'pyro')
 distributions = GenericModule('distributions', 'pyro.distributions')
 infer = GenericModule('infer', 'pyro.infer')
 optim = GenericModule('optim', 'pyro.optim')
+ops = GenericModule('ops', 'torch')

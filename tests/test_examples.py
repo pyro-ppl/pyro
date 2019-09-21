@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import logging
 import os
 import sys
@@ -30,8 +28,6 @@ CPU_EXAMPLES = [
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --batch-size=1000',
     'contrib/gp/sv-dkl.py --binary --epochs=1 --num-inducing=4 --batch-size=1000',
     'contrib/oed/ab_test.py --num-vi-steps=10 --num-bo-steps=2',
-    'contrib/oed/item_response.py -N=1000 -M=1000',
-    'contrib/oed/sequential_oed_sigmoid_lm.py --num-experiments=2 --num-runs=2 --no-plot',
     'dmm/dmm.py --num-epochs=1',
     'dmm/dmm.py --num-epochs=1 --num-iafs=1',
     'eight_schools/mcmc.py --num-samples=500 --warmup-steps=100',
@@ -45,6 +41,7 @@ CPU_EXAMPLES = [
     'hmm.py --num-steps=1 --truncate=10 --model=5',
     'hmm.py --num-steps=1 --truncate=10 --model=6',
     'hmm.py --num-steps=1 --truncate=10 --model=6 --raftery-parameterization',
+    'hmm.py --num-steps=1 --truncate=10 --model=7',
     'inclined_plane.py --num-samples=1',
     'lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8',
     'minipyro.py --backend=pyro',
@@ -55,9 +52,11 @@ CPU_EXAMPLES = [
     'rsa/schelling.py --num-samples=10',
     'rsa/schelling_false.py --num-samples=10',
     'rsa/semantic_parsing.py --num-samples=10',
+    'smcfilter.py --num-timesteps=3 --num-particles=10',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide custom',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide auto',
     'sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide easy',
+    'sparse_regression.py --num-steps=2 --num-data=50 --num-dimensions 30',
     'vae/ss_vae_M2.py --num-epochs=1',
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss',
     'vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=parallel',
@@ -83,6 +82,7 @@ CUDA_EXAMPLES = [
     'hmm.py --num-steps=1 --truncate=10 --model=5 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=6 --cuda',
     'hmm.py --num-steps=1 --truncate=10 --model=6 --cuda --raftery-parameterization',
+    'hmm.py --num-steps=1 --truncate=10 --model=7 --cuda',
     'vae/vae.py --num-epochs=1 --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --cuda',
     'vae/ss_vae_M2.py --num-epochs=1 --aux-loss --cuda',
@@ -112,6 +112,7 @@ JIT_EXAMPLES = [
     'hmm.py --num-steps=1 --truncate=10 --model=3 --jit',
     'hmm.py --num-steps=1 --truncate=10 --model=4 --jit',
     'hmm.py --num-steps=1 --truncate=10 --model=5 --jit',
+    'hmm.py --num-steps=1 --truncate=10 --model=7 --jit',
     'lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8 --jit',
     'minipyro.py --backend=pyro --jit',
     'minipyro.py --jit',

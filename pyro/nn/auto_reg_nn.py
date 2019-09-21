@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import warnings
 
 import torch
@@ -29,14 +27,14 @@ def sample_mask_indices(input_dim, hidden_dim, simple=True):
         return ints
 
 
-def create_mask(input_dim, observed_dim, hidden_dims, permutation, output_dim_multiplier):
+def create_mask(input_dim, context_dim, hidden_dims, permutation, output_dim_multiplier):
     """
     Creates MADE masks for a conditional distribution
 
     :param input_dim: the dimensionality of the input variable
     :type input_dim: int
-    :param observed_dim: the dimensionality of the variable that is conditioned on (for conditional densities)
-    :type observed_dim: int
+    :param context_dim: the dimensionality of the variable that is conditioned on (for conditional densities)
+    :type context_dim: int
     :param hidden_dims: the dimensionality of the hidden layers(s)
     :type hidden_dims: list[int]
     :param permutation: the order of the input variables
@@ -51,8 +49,8 @@ def create_mask(input_dim, observed_dim, hidden_dims, permutation, output_dim_mu
     var_index[permutation] = torch.arange(input_dim, dtype=torch.get_default_dtype())
 
     # Create the indices that are assigned to the neurons
-    input_indices = torch.cat((torch.zeros(observed_dim), 1 + var_index))
-    if observed_dim > 0:
+    input_indices = torch.cat((torch.zeros(context_dim), 1 + var_index))
+    if context_dim > 0:
         hidden_indices = [sample_mask_indices(input_dim, h)-1 for h in hidden_dims]
     else:
         hidden_indices = [sample_mask_indices(input_dim - 1, h) for h in hidden_dims]
@@ -108,16 +106,16 @@ class ConditionalAutoRegressiveNN(nn.Module):
     >>> x = torch.randn(100, 10)
     >>> y = torch.randn(100, 5)
     >>> arn = ConditionalAutoRegressiveNN(10, 5, [50], param_dims=[1])
-    >>> p = arn(x, obs=y)  # 1 parameters of size (100, 10)
+    >>> p = arn(x, context=y)  # 1 parameters of size (100, 10)
     >>> arn = ConditionalAutoRegressiveNN(10, 5, [50], param_dims=[1, 1])
-    >>> m, s = arn(x, obs=y) # 2 parameters of size (100, 10)
+    >>> m, s = arn(x, context=y) # 2 parameters of size (100, 10)
     >>> arn = ConditionalAutoRegressiveNN(10, 5, [50], param_dims=[1, 5, 3])
-    >>> a, b, c = arn(x, obs=y) # 3 parameters of sizes, (100, 1, 10), (100, 5, 10), (100, 3, 10)
+    >>> a, b, c = arn(x, context=y) # 3 parameters of sizes, (100, 1, 10), (100, 5, 10), (100, 3, 10)
 
     :param input_dim: the dimensionality of the input variable
     :type input_dim: int
-    :param observed_dim: the dimensionality of the observed variable
-    :type observed_dim: int
+    :param context_dim: the dimensionality of the context variable
+    :type context_dim: int
     :param hidden_dims: the dimensionality of the hidden units per layer
     :type hidden_dims: list[int]
     :param param_dims: shape the output into parameters of dimension (p_n, input_dim) for p_n in param_dims
@@ -144,7 +142,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
     def __init__(
             self,
             input_dim,
-            observed_dim,
+            context_dim,
             hidden_dims,
             param_dims=[1, 1],
             permutation=None,
@@ -154,7 +152,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
         if input_dim == 1:
             warnings.warn('ConditionalAutoRegressiveNN input_dim = 1. Consider using an affine transformation instead.')
         self.input_dim = input_dim
-        self.observed_dim = observed_dim
+        self.context_dim = context_dim
         self.hidden_dims = hidden_dims
         self.param_dims = param_dims
         self.count_params = len(param_dims)
@@ -181,11 +179,11 @@ class ConditionalAutoRegressiveNN(nn.Module):
 
         # Create masks
         self.masks, self.mask_skip = create_mask(
-            input_dim=input_dim, observed_dim=observed_dim, hidden_dims=hidden_dims, permutation=self.permutation,
+            input_dim=input_dim, context_dim=context_dim, hidden_dims=hidden_dims, permutation=self.permutation,
             output_dim_multiplier=self.output_multiplier)
 
         # Create masked layers
-        layers = [MaskedLinear(input_dim + observed_dim, hidden_dims[0], self.masks[0])]
+        layers = [MaskedLinear(input_dim + context_dim, hidden_dims[0], self.masks[0])]
         for i in range(1, len(hidden_dims)):
             layers.append(MaskedLinear(hidden_dims[i - 1], hidden_dims[i], self.masks[i]))
         layers.append(MaskedLinear(hidden_dims[-1], input_dim * self.output_multiplier, self.masks[-1]))
@@ -194,7 +192,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
         if skip_connections:
             self.skip_layer = MaskedLinear(
                 input_dim +
-                observed_dim,
+                context_dim,
                 input_dim *
                 self.output_multiplier,
                 self.mask_skip,
@@ -211,11 +209,11 @@ class ConditionalAutoRegressiveNN(nn.Module):
         """
         return self.permutation
 
-    def forward(self, x, obs):
+    def forward(self, x, context):
         """
         The forward method
         """
-        x = torch.cat([obs, x], dim=-1)
+        x = torch.cat([context, x], dim=-1)
         return self._forward(x)
 
     def _forward(self, x):
