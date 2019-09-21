@@ -156,6 +156,7 @@ class ConditionalPlanarFlow(ConditionalTransformModule):
     References:
     Variational Inference with Normalizing Flows [arXiv:1505.05770]
     Danilo Jimenez Rezende, Shakir Mohamed
+
     """
 
     domain = constraints.real
