@@ -8,7 +8,8 @@ import pyro.contrib.autoname.named as named
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import EmpiricalMarginal
-from pyro.infer.mcmc import HMC, MCMC, NUTS
+from pyro.infer.mcmc.api import MCMC
+from pyro.infer.mcmc import HMC, NUTS
 from pyro.params import param_with_module_name
 
 

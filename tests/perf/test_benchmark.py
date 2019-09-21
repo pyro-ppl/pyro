@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import argparse
 import cProfile
 import os
@@ -16,7 +14,7 @@ import pyro.optim as optim
 from pyro.distributions.testing import fakes
 from pyro.infer import SVI, Trace_ELBO, TraceGraph_ELBO
 from pyro.infer.mcmc.hmc import HMC
-from pyro.infer.mcmc.mcmc import MCMC
+from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.nuts import NUTS
 
 Model = namedtuple('TestModel', ['model', 'model_args', 'model_id'])
@@ -93,8 +91,9 @@ def bernoulli_beta_hmc(**kwargs):
     kernel = kwargs.pop('kernel')
     num_samples = kwargs.pop('num_samples')
     mcmc_kernel = kernel(model, **kwargs)
-    mcmc_run = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100).run(data)
-    return mcmc_run.marginal('p_latent').empirical
+    mcmc = MCMC(mcmc_kernel, num_samples=num_samples, warmup_steps=100)
+    mcmc.run(data)
+    return mcmc.get_samples()['p_latent']
 
 
 @register_model(num_steps=2000, whiten=False, id='VSGP::MultiClass_whiten=False')

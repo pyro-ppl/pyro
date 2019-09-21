@@ -1,12 +1,10 @@
-from __future__ import absolute_import, division, print_function
-
 import warnings
 import weakref
 from collections import OrderedDict
+import queue
 
 import torch
 from opt_einsum import shared_intermediates
-from six.moves import queue
 
 import pyro
 import pyro.distributions as dist

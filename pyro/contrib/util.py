@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from collections import OrderedDict
 import torch
 import pyro
@@ -66,17 +64,6 @@ def rtril(M, diagonal=0, upper=False):
     if upper:
         return rtril(M, diagonal=diagonal, upper=False).transpose(-1, -2)
     return M*torch.tril(torch.ones(M.shape[-2], M.shape[-1]), diagonal=diagonal)
-
-
-def hessian(y, xs):
-    dys = torch.autograd.grad(y, xs, create_graph=True)
-    flat_dy = torch.cat([dy.reshape(-1) for dy in dys])
-    H = []
-    for dyi in flat_dy:
-        Hi = torch.cat([Hij.reshape(-1) for Hij in torch.autograd.grad(dyi, xs, retain_graph=True)])
-        H.append(Hi)
-    H = torch.stack(H)
-    return H
 
 
 def iter_plates_to_shape(shape):

@@ -1,12 +1,10 @@
-from __future__ import absolute_import, division, print_function
-
 import torch
 import math
 import warnings
 
 import pyro
 from pyro import poutine
-from pyro.contrib.autoguide import mean_field_entropy
+from pyro.infer.autoguide.utils import mean_field_entropy
 from pyro.contrib.oed.search import Search
 from pyro.infer import EmpiricalMarginal, Importance, SVI
 from pyro.util import torch_isnan, torch_isinf
@@ -607,6 +605,10 @@ def opt_eig_ape_loss(design, loss_fn, num_samples, num_steps, optim, return_hist
         if return_history:
             history.append(loss)
         optim(params)
+        try:
+            optim.step()
+        except AttributeError:
+            pass
 
     _, loss = loss_fn(final_design, final_num_samples, evaluation=True)
     if return_history:

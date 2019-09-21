@@ -1,12 +1,10 @@
-from __future__ import absolute_import, division, print_function
-
 import pytest
 import torch
 from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.autoguide.initialization import init_to_mean, init_to_median
+from pyro.infer.autoguide.initialization import init_to_mean, init_to_median
 from pyro.contrib.easyguide import easy_guide
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam

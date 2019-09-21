@@ -1,16 +1,13 @@
-from __future__ import absolute_import, division, print_function
-
 import json
 import logging
 import signal
 import threading
 import warnings
 from collections import OrderedDict
+import queue
 
-import six
 import torch
 import torch.multiprocessing as mp
-from six.moves import queue
 
 import pyro
 import pyro.ops.stats as stats
@@ -49,7 +46,7 @@ def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_prog
                 if num_samples[pbar_pos] == warmup_steps:
                     progress_bars.set_description("Sample [{}]".format(pbar_pos + 1), pos=pbar_pos)
                 diagnostics = json.loads(msg, object_pairs_hook=OrderedDict)
-                progress_bars.set_postfix(diagnostics, pos=pbar_pos)
+                progress_bars.set_postfix(diagnostics, pos=pbar_pos, refresh=False)
                 progress_bars.update(pos=pbar_pos)
             else:
                 logger.handle(record)
@@ -106,9 +103,6 @@ class _ParallelSampler(TracePosterior):
         self.workers = []
         self.ctx = mp
         if mp_context:
-            if six.PY2:
-                raise ValueError("multiprocessing.get_context() is "
-                                 "not supported in Python 2.")
             self.ctx = mp.get_context(mp_context)
         self.result_queue = self.ctx.Queue()
         self.log_queue = self.ctx.Queue()
@@ -182,7 +176,7 @@ class _SingleSampler(TracePosterior):
         params = init_params
         for _ in range(num_samples):
             params = self.kernel.sample(params)
-            diagnostics = json.dumps(self.kernel.diagnostics())
+            diagnostics = json.dumps(self.kernel.logging())
             self.logger.info(diagnostics, extra={"msg_type": DIAGNOSTIC_MSG})
             yield params
 
@@ -273,7 +267,7 @@ class MCMC(TracePosterior):
             self.sampler = _SingleSampler(kernel, num_samples, self.warmup_steps, disable_progbar)
         super(MCMC, self).__init__(num_chains=num_chains)
         warnings.warn("This interface to MCMC is deprecated and will be removed in the "
-                      "next version of Pyro. Please use `pyro.infer.mcmc.api` instead.",
+                      "next version of Pyro. Please use `pyro.infer.mcmc.api.MCMC` instead.",
                       DeprecationWarning)
 
     def _traces(self, *args, **kwargs):
@@ -293,6 +287,13 @@ class MCMC(TracePosterior):
 
 
 class MCMCMarginals(Marginals):
+    def __init__(self, trace_posterior, sites=None, validate_args=None):
+        warnings.warn("This class is deprecated and will be removed in the "
+                      "next version of Pyro. Consider using `pyro.infer.util.diagnostics` "
+                      "to get diagnostic stats on posterior samples.",
+                      DeprecationWarning)
+        super(MCMCMarginals, self).__init__(trace_posterior, sites, validate_args)
+
     def diagnostics(self):
         """
         Gets some diagnostics statistics such as effective sample size and

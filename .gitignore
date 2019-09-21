@@ -16,6 +16,7 @@ pyro/contrib/examples/raw
 pyro/_version.py
 processed
 raw
+*.pkl
 
 # Logs
 logs
@@ -125,6 +126,7 @@ ENV/
 # IDE settings
 .spyderproject
 .idea
+.vscode
 
 # Rope project settings
 .ropeproject

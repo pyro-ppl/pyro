@@ -4,39 +4,22 @@ Inference algorithms and utilities used in the RSA example models.
 Adapted from: http://dippl.org/chapters/03-enumeration.html
 """
 
-from __future__ import absolute_import, division, print_function
-
 import collections
 
-import six
 import torch
-from six.moves import queue
+import queue
+import functools
 
-import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer.abstract_infer import TracePosterior
 from pyro.poutine.runtime import NonlocalExit
-
-if six.PY3:
-    import functools
-else:
-    import functools32 as functools
 
 
 def memoize(fn=None, **kwargs):
     if fn is None:
         return lambda _fn: memoize(_fn, **kwargs)
     return functools.lru_cache(**kwargs)(fn)
-
-
-def factor(name, value):
-    """
-    Like factor in webPPL, adds a scalar weight to the log-probability of the trace
-    """
-    value = value if torch.is_tensor(value) else torch.tensor(value)
-    d = dist.Bernoulli(logits=value)
-    pyro.sample(name, d, obs=torch.ones(value.size()))
 
 
 class HashingMarginal(dist.Distribution):

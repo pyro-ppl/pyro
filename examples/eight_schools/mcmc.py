@@ -1,19 +1,17 @@
-from __future__ import absolute_import, division, print_function
-
 import argparse
 import logging
 
-import pandas as pd
 import torch
 
 import data
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.infer.mcmc import MCMC, NUTS
+from pyro.infer.mcmc import NUTS
+from pyro.infer.mcmc.api import MCMC
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
-pyro.enable_validation(True)
+pyro.enable_validation(__debug__)
 pyro.set_rng_seed(0)
 
 
@@ -33,20 +31,16 @@ def conditioned_model(model, sigma, y):
 
 def main(args):
     nuts_kernel = NUTS(conditioned_model, jit_compile=args.jit,)
-    posterior = MCMC(nuts_kernel,
-                     num_samples=args.num_samples,
-                     warmup_steps=args.warmup_steps,
-                     num_chains=args.num_chains).run(model, data.sigma, data.y)
-    marginal = posterior.marginal(sites=["mu", "tau", "eta"])
-    marginal = torch.cat(list(marginal.support(flatten=True).values()), dim=-1).cpu().numpy()
-    params = ['mu', 'tau', 'eta[0]', 'eta[1]', 'eta[2]', 'eta[3]', 'eta[4]', 'eta[5]', 'eta[6]', 'eta[7]']
-    df = pd.DataFrame(marginal, columns=params).transpose()
-    df_summary = df.apply(pd.Series.describe, axis=1)[["mean", "std", "25%", "50%", "75%"]]
-    logging.info(df_summary)
+    mcmc = MCMC(nuts_kernel,
+                num_samples=args.num_samples,
+                warmup_steps=args.warmup_steps,
+                num_chains=args.num_chains)
+    mcmc.run(model, data.sigma, data.y)
+    mcmc.summary(prob=0.5)
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.3')
+    assert pyro.__version__.startswith('0.4.1')
     parser = argparse.ArgumentParser(description='Eight Schools MCMC')
     parser.add_argument('--num-samples', type=int, default=1000,
                         help='number of MCMC samples (default: 1000)')

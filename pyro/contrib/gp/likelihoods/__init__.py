@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from pyro.contrib.gp.likelihoods.binary import Binary
 from pyro.contrib.gp.likelihoods.gaussian import Gaussian
 from pyro.contrib.gp.likelihoods.likelihood import Likelihood

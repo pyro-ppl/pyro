@@ -1,11 +1,9 @@
-from __future__ import absolute_import, division, print_function
-
 import math
 import torch
 
 from pyro.contrib.util import get_indices
 from pyro.contrib.glmm import analytic_posterior_cov
-from pyro.contrib.autoguide import mean_field_entropy
+from pyro.infer.autoguide.utils import mean_field_entropy
 
 
 def linear_model_ground_truth(model, design, observation_labels, target_labels, eig=True):

@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import math
 from collections import OrderedDict
 
@@ -81,9 +79,9 @@ class HMC(MCMCKernel):
         ...     return y
         >>>
         >>> hmc_kernel = HMC(model, step_size=0.0855, num_steps=4)
-        >>> mcmc_run = MCMC(hmc_kernel, num_samples=500, warmup_steps=100).run(data)
-        >>> posterior = mcmc_run.marginal('beta').empirical['beta']
-        >>> posterior.mean  # doctest: +SKIP
+        >>> mcmc = MCMC(hmc_kernel, num_samples=500, warmup_steps=100)
+        >>> mcmc.run(data)
+        >>> mcmc.get_samples()['beta'].mean(0)  # doctest: +SKIP
         tensor([ 0.9819,  1.9258,  2.9737])
     """
 
@@ -123,6 +121,7 @@ class HMC(MCMCKernel):
         # In NUTS paper, this threshold is set to a fixed log(0.5).
         # After https://github.com/stan-dev/stan/pull/356, it is set to a fixed log(0.8).
         self._direction_threshold = math.log(0.8)  # from Stan
+        self._max_sliced_energy = 1000
         self._reset()
         self._adapter = WarmupAdapter(step_size,
                                       adapt_step_size=adapt_step_size,
@@ -144,6 +143,8 @@ class HMC(MCMCKernel):
     def _reset(self):
         self._t = 0
         self._accept_cnt = 0
+        self._mean_accept_prob = 0.
+        self._divergences = []
         self._prototype_trace = None
         self._initial_params = None
         self._z_last = None
@@ -287,8 +288,10 @@ class HMC(MCMCKernel):
             self._cache(z, potential_energy)
         # return early if no sample sites
         elif len(z) == 0:
-            self._accept_cnt += 1
             self._t += 1
+            self._mean_accept_prob = 1.
+            if self._t > self._warmup_steps:
+                self._accept_cnt += 1
             return params
         r, _ = self._sample_r(name="r_t={}".format(self._t))
         energy_current = self._kinetic_energy(r) + potential_energy
@@ -304,28 +307,39 @@ class HMC(MCMCKernel):
             # apply Metropolis correction.
             energy_proposal = self._kinetic_energy(r_new) + potential_energy_new
         delta_energy = energy_proposal - energy_current
-        # Set accept prob to 0.0 if delta_energy is `NaN` which may be
-        # the case for a diverging trajectory when using a large step size.
-        if torch_isnan(delta_energy):
-            accept_prob = scalar_like(delta_energy, 0.)
-        else:
-            accept_prob = (-delta_energy).exp().clamp(max=1.)
+        # handle the NaN case which may be the case for a diverging trajectory
+        # when using a large step size.
+        delta_energy = scalar_like(delta_energy, float("inf")) if torch_isnan(delta_energy) else delta_energy
+        if delta_energy > self._max_sliced_energy and self._t >= self._warmup_steps:
+            self._divergences.append(self._t - self._warmup_steps)
+
+        accept_prob = (-delta_energy).exp().clamp(max=1.)
         rand = pyro.sample("rand_t={}".format(self._t), dist.Uniform(scalar_like(accept_prob, 0.),
                                                                      scalar_like(accept_prob, 1.)))
+        accepted = False
         if rand < accept_prob:
-            self._accept_cnt += 1
+            accepted = True
             z = z_new
             self._cache(z, potential_energy_new, z_grads_new)
 
-        if self._t < self._warmup_steps:
+        self._t += 1
+        if self._t > self._warmup_steps:
+            n = self._t - self._warmup_steps
+            if accepted:
+                self._accept_cnt += 1
+        else:
+            n = self._t
             self._adapter.step(self._t, z, accept_prob)
 
-        self._t += 1
-
+        self._mean_accept_prob += (accept_prob.item() - self._mean_accept_prob) / n
         return z.copy()
 
-    def diagnostics(self):
+    def logging(self):
         return OrderedDict([
             ("step size", "{:.2e}".format(self.step_size)),
-            ("acc. rate", "{:.3f}".format(self._accept_cnt / self._t))
+            ("acc. prob", "{:.3f}".format(self._mean_accept_prob))
         ])
+
+    def diagnostics(self):
+        return {"divergences": self._divergences,
+                "acceptance rate": self._accept_cnt / (self._t - self._warmup_steps)}
