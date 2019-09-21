@@ -220,9 +220,23 @@ BlockAutoregressive
     :undoc-members:
     :show-inheritance:
 
+ConditionalPlanarFlow
+---------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalPlanarFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ConditionalTransform
 --------------------
 .. autoclass:: pyro.distributions.ConditionalTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalTransformModule
+--------------------------
+.. autoclass:: pyro.distributions.ConditionalTransformModule
     :members:
     :undoc-members:
     :show-inheritance:
