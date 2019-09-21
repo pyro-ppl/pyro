@@ -7,13 +7,14 @@ import torch.nn as nn
 from torch.distributions import constraints
 import torch.nn.functional as F
 
-from pyro.distributions.conditional import ConditionalTransform
+from torch.distributions import Transform
+from pyro.distributions.conditional import ConditionalTransformModule
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 
 
-@copy_docs_from(TransformModule)
-class ConditionedPlanarFlow(TransformModule):
+@copy_docs_from(Transform)
+class ConditionedPlanarFlow(Transform):
     def __init__(self, bias=None, u=None, w=None):
         super(ConditionedPlanarFlow, self).__init__(cache_size=1)
         self.bias = bias
@@ -38,7 +39,7 @@ class ConditionedPlanarFlow(TransformModule):
         # x ~ (batch_size, dim_size, 1)
         # w ~ (batch_size, 1, dim_size)
         # bias ~ (batch_size, 1)
-        act = torch.tanh(torch.matmul(self.w.unsqueeze(-2), x.unsqueeze(-1)).squeeze(-1) + self.bias)  # .squeeze(-1)))
+        act = torch.tanh(torch.matmul(self.w.unsqueeze(-2), x.unsqueeze(-1)).squeeze(-1) + self.bias)
         u_hat = self.u_hat(self.u, self.w)
         y = x + u_hat * act
 
@@ -67,7 +68,7 @@ class ConditionedPlanarFlow(TransformModule):
 
 
 @copy_docs_from(ConditionedPlanarFlow)
-class PlanarFlow(ConditionedPlanarFlow):
+class PlanarFlow(ConditionedPlanarFlow, TransformModule):
     """
     A 'planar' normalizing flow that uses the transformation
 
@@ -125,8 +126,8 @@ class PlanarFlow(ConditionedPlanarFlow):
         self.bias.data.uniform_(-stdv, stdv)
 
 
-@copy_docs_from(TransformModule)
-class ConditionalPlanarFlow(ConditionalTransform):
+@copy_docs_from(ConditionalTransformModule)
+class ConditionalPlanarFlow(ConditionalTransformModule):
     """
     A conditional 'planar' normalizing flow that uses the transformation
         :math:`\\mathbf{y} = \\mathbf{x} + \\mathbf{u}\\tanh(\\mathbf{w}^T\\mathbf{z}+b)`

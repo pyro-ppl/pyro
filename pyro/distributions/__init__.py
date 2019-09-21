@@ -20,7 +20,7 @@ from pyro.distributions.torch import *  # noqa F403
 from pyro.distributions.torch import __all__ as torch_dists
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.conditional import (ConditionalDistribution, ConditionalTransform,
+from pyro.distributions.conditional import (ConditionalDistribution, ConditionalTransform, ConditionalTransformModule,
                                             ConditionalTransformedDistribution)
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
 from pyro.distributions.von_mises import VonMises
@@ -34,6 +34,7 @@ __all__ = [
     "BetaBinomial",
     "ConditionalDistribution",
     "ConditionalTransform",
+    "ConditionalTransformModule",
     "ConditionalTransformedDistribution",
     "Delta",
     "DirichletMultinomial",

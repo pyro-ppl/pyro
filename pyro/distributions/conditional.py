@@ -1,6 +1,7 @@
 from abc import abstractmethod
 
 import torch
+import torch.nn
 
 
 class ConditionalDistribution(object):
@@ -15,6 +16,20 @@ class ConditionalTransform(object):
     def condition(self, context):
         """:rtype: torch.distributions.Transform"""
         raise NotImplementedError
+
+
+class ConditionalTransformModule(ConditionalTransform, torch.nn.Module):
+    """
+    Conditional transforms with learnable parameters such as normalizing flows should inherit from this class rather
+    than `ConditionalTransform` so they are also a subclass of `nn.Module` and inherit all the useful methods of that
+    class.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(ConditionalTransformModule, self).__init__(*args, **kwargs)
+
+    def __hash__(self):
+        return super(torch.nn.Module, self).__hash__()
 
 
 class ConstantConditionalDistribution(ConditionalDistribution):
