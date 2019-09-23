@@ -18,8 +18,8 @@ def _kl_independent_independent(p, q):
     shared_ndims = min(p.reinterpreted_batch_ndims, q.reinterpreted_batch_ndims)
     p_ndims = p.reinterpreted_batch_ndims - shared_ndims
     q_ndims = q.reinterpreted_batch_ndims - shared_ndims
-    p = Independent(p, p_ndims) if p_ndims else p
-    q = Independent(q, q_ndims) if q_ndims else q
+    p = Independent(p.base_dist, p_ndims) if p_ndims else p.base_dist
+    q = Independent(q.base_dist, q_ndims) if q_ndims else q.base_dist
     kl = kl_divergence(p, q)
     if shared_ndims:
         kl = sum_rightmost(kl, shared_ndims)

@@ -3,6 +3,7 @@ import torch
 from torch.distributions import kl_divergence
 
 import pyro.distributions as dist
+from pyro.distributions.util import sum_rightmost
 from tests.common import assert_close
 
 
@@ -27,6 +28,18 @@ def test_kl_delta_mvn_shape(batch_shape, size):
     cov = cov @ cov.transpose(-1, -2) + 0.01 * torch.eye(size)
     q = dist.MultivariateNormal(loc, covariance_matrix=cov)
     assert kl_divergence(p, q).shape == batch_shape
+
+
+@pytest.mark.parametrize('batch_shape', [(), (4,), (2, 3)], ids=str)
+@pytest.mark.parametrize('event_shape', [(), (4,), (2, 3)], ids=str)
+def test_kl_independent_normal(batch_shape, event_shape):
+    shape = batch_shape + event_shape
+    p = dist.Normal(torch.randn(shape), torch.randn(shape).exp())
+    q = dist.Normal(torch.randn(shape), torch.randn(shape).exp())
+    actual = kl_divergence(dist.Independent(p, len(event_shape)),
+                           dist.Independent(q, len(event_shape)))
+    expected = sum_rightmost(kl_divergence(p, q), len(event_shape))
+    assert_close(actual, expected)
 
 
 @pytest.mark.parametrize('batch_shape', [(), (4,), (2, 3)], ids=str)
