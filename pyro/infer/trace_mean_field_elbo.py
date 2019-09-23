@@ -100,9 +100,7 @@ class TraceMeanField_ELBO(Trace_ELBO):
                         kl_qp = scale_and_mask(kl_qp, scale=guide_site["scale"], mask=guide_site["mask"])
                         assert kl_qp.shape == guide_site["fn"].batch_shape
                         elbo_particle = elbo_particle - kl_qp.sum()
-                        print('EXACT: {} {}'.format(type(guide_site["fn"]), type(model_site["fn"])))
                     except NotImplementedError:
-                        print('APPROX: {} {}'.format(type(guide_site["fn"]), type(model_site["fn"])))
                         entropy_term = guide_site["score_parts"].entropy_term
                         elbo_particle = elbo_particle + model_site["log_prob_sum"] - entropy_term.sum()
 
