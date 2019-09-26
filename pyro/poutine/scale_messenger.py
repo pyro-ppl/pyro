@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import torch
 
 from pyro.poutine.util import is_validation_enabled

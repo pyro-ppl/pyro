@@ -46,11 +46,7 @@ in just a few lines of code::
     monte_carlo_elbo = model_tr.log_prob_sum() - guide_tr.log_prob_sum()
 """
 
-from __future__ import absolute_import, division, print_function
-
 import functools
-
-from six.moves import xrange
 
 from pyro.poutine import util
 
@@ -361,7 +357,7 @@ def mask(fn=None, mask=None):
     masking tensor, mask out some of the sample statements elementwise.
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
-    :param torch.ByteTensor mask: a ``{0,1}``-valued masking tensor
+    :param torch.BoolTensor mask: a ``{0,1}``-valued masking tensor
         (1 includes a site, 0 excludes a site)
     :returns: stochastic function decorated with a :class:`~pyro.poutine.scale_messenger.MaskMessenger`
     """
@@ -454,7 +450,7 @@ def queue(fn=None, queue=None, max_tries=None,
     def wrapper(wrapped):
         def _fn(*args, **kwargs):
 
-            for i in xrange(max_tries):
+            for i in range(max_tries):
                 assert not queue.empty(), \
                     "trying to get() from an empty queue will deadlock"
 

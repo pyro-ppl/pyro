@@ -1,10 +1,10 @@
-from __future__ import absolute_import, division, print_function
+import weakref
 
 import numpy as np
 import pytest
 import torch
 
-from pyro.distributions.util import broadcast_shape, sum_leftmost, sum_rightmost
+from pyro.distributions.util import broadcast_shape, sum_leftmost, sum_rightmost, weakmethod
 
 INF = float('inf')
 
@@ -95,3 +95,23 @@ def test_sum_leftmost():
     assert sum_leftmost(x, -1).shape == (4,)
     assert sum_leftmost(x, -2).shape == (3, 4)
     assert sum_leftmost(x, INF).shape == ()
+
+
+def test_weakmethod():
+
+    class Foo(object):
+        def __init__(self, state):
+            self.state = state
+            self.method = self._method
+
+        @weakmethod
+        def _method(self, *args, **kwargs):
+            return self.state, args, kwargs
+
+    foo = Foo(42)
+    assert foo.method(1, 2, 3, x=0) == (42, (1, 2, 3), {"x": 0})
+
+    foo_ref = weakref.ref(foo)
+    assert foo_ref() is foo
+    del foo
+    assert foo_ref() is None

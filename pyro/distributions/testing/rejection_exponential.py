@@ -1,11 +1,9 @@
-from __future__ import absolute_import, division, print_function
-
 import torch
 from torch.distributions.utils import broadcast_all
 
 from pyro.distributions.rejector import Rejector
 from pyro.distributions.torch import Exponential
-from pyro.distributions.util import copy_docs_from
+from pyro.distributions.util import copy_docs_from, weakmethod
 
 
 @copy_docs_from(Exponential)
@@ -17,6 +15,7 @@ class RejectionExponential(Rejector):
         log_scale = self.factor.log()
         super(RejectionExponential, self).__init__(propose, self.log_prob_accept, log_scale)
 
+    @weakmethod
     def log_prob_accept(self, x):
         result = (self.factor - 1) * self.rate * x
         assert result.max() <= 0, result.max()

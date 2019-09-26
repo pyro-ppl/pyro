@@ -63,6 +63,20 @@ BetaBinomial
     :undoc-members:
     :show-inheritance:
 
+ConditionalDistribution
+----------------------------------
+.. autoclass:: pyro.distributions.ConditionalDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalTransformedDistribution
+----------------------------------
+.. autoclass:: pyro.distributions.ConditionalTransformedDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Delta
 -----
 .. autoclass:: pyro.distributions.Delta
@@ -77,6 +91,13 @@ DirichletMultinomial
     :undoc-members:
     :show-inheritance:
 
+DiscreteHMM
+--------------------
+.. autoclass:: pyro.distributions.DiscreteHMM
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 EmpiricalDistribution
 ----------------------
 .. autoclass:: pyro.distributions.Empirical
@@ -87,6 +108,20 @@ EmpiricalDistribution
 GammaPoisson
 ------------
 .. autoclass:: pyro.distributions.GammaPoisson
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+GaussianHMM
+--------------------
+.. autoclass:: pyro.distributions.GaussianHMM
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+GaussianMRF
+--------------------
+.. autoclass:: pyro.distributions.GaussianMRF
     :members:
     :undoc-members:
     :show-inheritance:
@@ -168,6 +203,13 @@ SpanningTree
     :undoc-members:
     :show-inheritance:
 
+Unit
+----
+.. autoclass:: pyro.distributions.Unit
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 VonMises
 --------
 .. autoclass:: pyro.distributions.VonMises
@@ -178,6 +220,13 @@ VonMises
 VonMises3D
 ----------
 .. autoclass:: pyro.distributions.VonMises3D
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ZeroInflatedPoisson
+-------------------
+.. autoclass:: pyro.distributions.ZeroInflatedPoisson
     :members:
     :undoc-members:
     :show-inheritance:
@@ -209,6 +258,27 @@ BatchNormTransform
 BlockAutoregressive
 -------------------
 .. autoclass:: pyro.distributions.transforms.BlockAutoregressive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalPlanarFlow
+---------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalPlanarFlow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalTransform
+--------------------
+.. autoclass:: pyro.distributions.ConditionalTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalTransformModule
+--------------------------
+.. autoclass:: pyro.distributions.ConditionalTransformModule
     :members:
     :undoc-members:
     :show-inheritance:

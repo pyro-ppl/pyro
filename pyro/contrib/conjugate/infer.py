@@ -1,7 +1,12 @@
+from collections import defaultdict
+
+import torch
+
 import pyro.distributions as dist
 from pyro.distributions.util import sum_leftmost
+from pyro import poutine
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.replay_messenger import ReplayMessenger
+from pyro.poutine.util import site_is_subsample
 
 
 def _make_cls(base, static_attrs, instance_attrs, parent_linkage=None):
@@ -104,17 +109,28 @@ class GammaPoissonPair(object):
                                                          rate=self._latent.rate)
 
 
-class UncollapseConjugateMessenger(ReplayMessenger):
+class UncollapseConjugateMessenger(Messenger):
     r"""
-    Extends `~pyro.poutine.replay_messenger.ReplayMessenger` to uncollapse
-    compound distributions.
+    Replay regular sample sites in addition to uncollapsing any collapsed
+    conjugate sites.
     """
+    def __init__(self, trace):
+        """
+        :param trace: a trace whose values should be reused
+
+        Constructor.
+        Stores trace in an attribute.
+        """
+        self.trace = trace
+        super(UncollapseConjugateMessenger, self).__init__()
+
     def _pyro_sample(self, msg):
         is_collapsible = getattr(msg["fn"], "collapsible", False)
+        # uncollapse conjugate sites.
         if is_collapsible:
             conj_node, parent = None, None
             for site_name in self.trace.observation_nodes + self.trace.stochastic_nodes:
-                parent = getattr(self.trace.nodes[site_name]["fn"], "parent")
+                parent = getattr(self.trace.nodes[site_name]["fn"], "parent", None)
                 if parent is not None and parent._latent.site_name == msg["name"]:
                     conj_node = self.trace.nodes[site_name]
                     break
@@ -122,20 +138,30 @@ class UncollapseConjugateMessenger(ReplayMessenger):
                 .format(msg["name"])
             msg["fn"] = parent.posterior(conj_node["value"])
             msg["value"] = msg["fn"].sample()
+        # regular replay behavior.
         else:
-            return super(UncollapseConjugateMessenger, self)._pyro_sample(msg)
+            name = msg["name"]
+            if name in self.trace:
+                guide_msg = self.trace.nodes[name]
+                if msg["is_observed"]:
+                    return None
+                if guide_msg["type"] != "sample":
+                    raise RuntimeError("site {} must be sample in trace".format(name))
+                msg["done"] = True
+                msg["value"] = guide_msg["value"]
+                msg["infer"] = guide_msg["infer"]
 
 
-def uncollapse_conjugate(fn=None, trace=None, params=None):
+def uncollapse_conjugate(fn=None, trace=None):
     r"""
-    This extends the behavior of :function:`~pyro.poutine.replay` poutine, so that in
-    addition to replaying the values at sample sites from the ``trace`` in the
-    original callable ``fn`` when the same sites are sampled, this also "uncollapses"
-    any observed compound distributions (defined in :module:`pyro.distributions.conjugate`)
+    This is similar to :function:`~pyro.poutine.replay` poutine, but in addition to
+    replaying the values at sample sites from the ``trace`` in the original callable
+    ``fn`` when the same sites are sampled, this also "uncollapses" any observed
+    compound distributions (defined in :module:`pyro.distributions.conjugate`)
     by sampling the originally collapsed parameter values from its posterior distribution
     followed by observing the data with the sampled parameter values.
     """
-    msngr = UncollapseConjugateMessenger(trace, params)
+    msngr = UncollapseConjugateMessenger(trace)
     return msngr(fn) if fn is not None else msngr
 
 
@@ -162,3 +188,35 @@ def collapse_conjugate(fn=None):
     """
     msngr = CollapseConjugateMessenger()
     return msngr(fn) if fn is not None else msngr
+
+
+def posterior_replay(model, posterior_samples, *args, **kwargs):
+    r"""
+    Given a model and samples from the posterior (potentially with conjugate sites
+    collapsed), return a `dict` of samples from the posterior with conjugate sites
+    uncollapsed. Note that this can also be used to generate samples from the
+    posterior predictive distribution.
+
+    :param model: Python callable.
+    :param dict posterior_samples: posterior samples keyed by site name.
+    :param args: arguments to `model`.
+    :param kwargs: keyword arguments to `model`.
+    :return: `dict` of samples from the posterior.
+    """
+    posterior_samples = posterior_samples.copy()
+    num_samples = kwargs.pop("num_samples", None)
+    assert posterior_samples or num_samples, "`num_samples` must be provided if `posterior_samples` is empty."
+    if num_samples is None:
+        num_samples = list(posterior_samples.values())[0].shape[0]
+
+    return_samples = defaultdict(list)
+    for i in range(num_samples):
+        conditioned_nodes = {k: v[i] for k, v in posterior_samples.items()}
+        collapsed_trace = poutine.trace(poutine.condition(collapse_conjugate(model), conditioned_nodes))\
+            .get_trace(*args, **kwargs)
+        trace = poutine.trace(uncollapse_conjugate(model, collapsed_trace)).get_trace(*args, **kwargs)
+        for name, site in trace.iter_stochastic_nodes():
+            if not site_is_subsample(site):
+                return_samples[name].append(site["value"])
+
+    return {k: torch.stack(v) for k, v in return_samples.items()}

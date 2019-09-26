@@ -1,12 +1,10 @@
-from __future__ import absolute_import, division, print_function
-
 import warnings
 import weakref
 from collections import OrderedDict
+import queue
 
 import torch
 from opt_einsum import shared_intermediates
-from six.moves import queue
 
 import pyro
 import pyro.distributions as dist
@@ -186,7 +184,7 @@ def _compute_marginals(model_trace, guide_trace):
             logits = packed.unpack(logits, model_trace.symbol_to_dim)
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
             while logits.shape[0] == 1:
-                logits.squeeze_(0)
+                logits = logits.squeeze(0)
             marginal_dists[name] = _make_dist(site["fn"], logits)
     return marginal_dists
 
@@ -227,7 +225,7 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
             logits = packed.unpack(logits, self.enum_trace.symbol_to_dim)
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
             while logits.shape[0] == 1:
-                logits.squeeze_(0)
+                logits = logits.squeeze(0)
         msg["fn"] = _make_dist(msg["fn"], logits)
 
     def _pyro_post_sample(self, msg):

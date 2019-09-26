@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import math
 import numbers
 from collections import Counter, defaultdict
@@ -122,7 +120,7 @@ class MultiFrameTensor(dict):
                 if f not in target_frames and value.shape[f.dim] != 1:
                     value = value.sum(f.dim, True)
             while value.shape and value.shape[0] == 1:
-                value.squeeze_(0)
+                value = value.squeeze(0)
             total = value if total is None else total + value
         return total
 

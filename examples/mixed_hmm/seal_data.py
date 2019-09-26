@@ -1,7 +1,5 @@
-from __future__ import absolute_import, division, print_function
-
 import os
-from six.moves.urllib.request import urlopen
+from urllib.request import urlopen
 
 import pandas as pd
 
@@ -13,7 +11,7 @@ MISSING = 1e-6
 
 def download_seal_data(filename):
     """download the preprocessed seal data and save it to filename"""
-    url = "https://d2fefpcigoriu7.cloudfront.net/datasets/prep_seal_data.csv"
+    url = "https://d2hg8soec8ck9v.cloudfront.net/datasets/prep_seal_data.csv"
     with open(filename, "wb") as f:
         f.write(urlopen(url).read())
 
