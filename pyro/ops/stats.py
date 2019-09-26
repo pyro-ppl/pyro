@@ -419,7 +419,7 @@ def crps_empirical(pred, truth):
 
     :param torch.Tensor pred: A set of sample predictions batched on rightmost dim.
         This should have shape ``(num_samples,) + truth.shape``.
-    :param torch.Tensor truth: A true tensor.
+    :param torch.Tensor truth: A tensor of true observations.
     :return: A tensor of shape ``truth.shape``.
     :rtype: torch.Tensor
     """
