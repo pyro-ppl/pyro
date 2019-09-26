@@ -257,7 +257,10 @@ def test_fit_generalized_pareto(k, sigma, n_samples=5000):
 def test_crps_empirical(num_samples, event_shape):
     truth = torch.randn(event_shape)
     pred = truth + 0.1 * torch.randn((num_samples,) + event_shape)
+
     actual = crps_empirical(pred, truth)
+    assert actual.shape == truth.shape
+
     expected = ((pred - truth).abs().mean(0)
                 - 0.5 * (pred - pred.unsqueeze(1)).abs().mean([0, 1]))
     assert_close(actual, expected)
