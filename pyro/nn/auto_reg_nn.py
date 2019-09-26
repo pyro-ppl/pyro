@@ -50,6 +50,9 @@ def create_mask(input_dim, context_dim, hidden_dims, permutation, output_dim_mul
 
     # Create the indices that are assigned to the neurons
     input_indices = torch.cat((torch.zeros(context_dim), 1 + var_index))
+
+    # For conditional MADE, introduce a 0 index that all the conditioned variables are connected to
+    # as per Paige and Wood (2016) (see below)
     if context_dim > 0:
         hidden_indices = [sample_mask_indices(input_dim, h)-1 for h in hidden_dims]
     else:
@@ -99,7 +102,8 @@ class MaskedLinear(nn.Linear):
 
 class ConditionalAutoRegressiveNN(nn.Module):
     """
-    An implementation of a MADE-like auto-regressive neural network that can condition on an additional input.
+    An implementation of a MADE-like auto-regressive neural network that can input an additional context variable.
+    (See Reference [2] Section 3.3 for an explanation of how the conditional MADE architecture works.)
 
     Example usage:
 
@@ -134,8 +138,11 @@ class ConditionalAutoRegressiveNN(nn.Module):
 
     Reference:
 
-    MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]
+    1. MADE: Masked Autoencoder for Distribution Estimation [arXiv:1502.03509]
     Mathieu Germain, Karol Gregor, Iain Murray, Hugo Larochelle
+
+    2. Inference Networks for Sequential Monte Carlo in Graphical Models [arXiv:1602.06701]
+    Brooks Paige, Frank Wood
 
     """
 
