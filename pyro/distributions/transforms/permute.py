@@ -1,7 +1,7 @@
 import torch
-from torch.distributions.transforms import Transform
 from torch.distributions.utils import lazy_property
 from torch.distributions import constraints
+from torch.distributions.transforms import Transform
 
 from pyro.distributions.util import copy_docs_from
 

@@ -19,12 +19,14 @@ from pyro.distributions.torch import *  # noqa F403
 from pyro.distributions.torch import __all__ as torch_dists
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.torch_transform import TransformModule
+from pyro.distributions.conditional import (ConditionalDistribution, ConditionalTransform, ConditionalTransformModule,
+                                            ConditionalTransformedDistribution)
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
 from pyro.distributions.unit import Unit
 from pyro.distributions.von_mises import VonMises
 from pyro.distributions.von_mises_3d import VonMises3D
 from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
-from pyro.distributions.lkj import CorrLCholeskyTransform, LKJCorrCholesky, corr_cholesky_constraint
+from pyro.distributions.lkj import (LKJCorrCholesky, CorrLCholeskyTransform, corr_cholesky_constraint)
 from pyro.distributions.transforms import *  # noqa F403
 
 import pyro.distributions.kl  # noqa F403 isort:skip
@@ -32,6 +34,10 @@ import pyro.distributions.kl  # noqa F403 isort:skip
 __all__ = [
     "AVFMultivariateNormal",
     "BetaBinomial",
+    "ConditionalDistribution",
+    "ConditionalTransform",
+    "ConditionalTransformedDistribution",
+    "ConditionalTransformModule",
     "Delta",
     "DirichletMultinomial",
     "DiscreteHMM",
@@ -69,4 +75,4 @@ __all__.extend(torch_dists)
 del torch_dists
 
 # For backwards compatibility, import all transforms into distributions module
-__all__.extend(transforms.__all__) # noqa
+__all__.extend(transforms.__all__)  # noqa
