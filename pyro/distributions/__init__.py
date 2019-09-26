@@ -29,6 +29,8 @@ from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
 from pyro.distributions.lkj import (LKJCorrCholesky, CorrLCholeskyTransform, corr_cholesky_constraint)
 from pyro.distributions.transforms import *  # noqa F403
 
+import pyro.distributions.kl  # noqa F403 isort:skip
+
 __all__ = [
     "AVFMultivariateNormal",
     "BetaBinomial",

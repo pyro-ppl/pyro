@@ -224,10 +224,7 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
         return tensor
     if mask is None:
         return tensor * scale
-    tensor, mask = broadcast_all(tensor, mask)
-    tensor = tensor * scale  # triggers a copy, avoiding in-place op errors
-    tensor.masked_fill_(mask == 0, 0.)
-    return tensor
+    return torch.where(mask, tensor * scale, tensor.new_zeros(()))
 
 
 def scalar_like(prototype, fill_value):

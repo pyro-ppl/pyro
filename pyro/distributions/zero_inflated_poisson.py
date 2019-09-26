@@ -26,8 +26,7 @@ class ZeroInflatedPoisson(TorchDistribution):
             self._validate_sample(value)
         gate, rate, value = broadcast_all(self.gate, self.rate, value)
         log_prob = (-gate).log1p() + (rate.log() * value) - rate - (value + 1).lgamma()
-        zeros = value == 0
-        log_prob = torch.where(zeros, (gate + log_prob.exp()).log(), log_prob)
+        log_prob = torch.where(value == 0, (gate + log_prob.exp()).log(), log_prob)
         return log_prob
 
     def sample(self, sample_shape=torch.Size()):
@@ -35,7 +34,7 @@ class ZeroInflatedPoisson(TorchDistribution):
         with torch.no_grad():
             mask = torch.bernoulli(self.gate.expand(shape)).bool()
             samples = torch.poisson(self.rate.expand(shape))
-            samples.masked_fill_(mask, 0.)
+            samples = torch.where(mask, samples.new_zeros(()), samples)
         return samples
 
     @lazy_property
