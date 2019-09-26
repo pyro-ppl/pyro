@@ -30,7 +30,7 @@ class ConditionedPlanarFlow(Transform):
         """
         :param x: the input into the bijection
         :type x: torch.Tensor
-        Invokes the bijection x | Z=obs => y; in the prototypical context of a TransformedDistribution `x` is a
+        Invokes the bijection x => y; in the prototypical context of a TransformedDistribution `x` is a
         sample from the base distribution (or the output of a previous flow)
         """
 
@@ -51,7 +51,7 @@ class ConditionedPlanarFlow(Transform):
         """
         :param y: the output of the bijection
         :type y: torch.Tensor
-        Inverts y | Z=obs => x. As noted above, this implementation is incapable of inverting arbitrary values
+        Inverts y => x. As noted above, this implementation is incapable of inverting arbitrary values
         `y`; rather it assumes `y` is the result of a previously computed application of the bijector
         to some `x` (which was cached on the forward call)
         """
@@ -134,7 +134,7 @@ class ConditionalPlanarFlow(ConditionalTransformModule):
     where :math:`\\mathbf{x}` are the inputs with dimension :math:`D`, :math:`\\mathbf{y}` are the outputs,
     and the pseudo-parameters :math:`b\\in\\mathbb{R}`, :math:`\\mathbf{u}\\in\\mathbb{R}^D`, and
     :math:`\\mathbf{w}\\in\\mathbb{R}^D` are the output of a function, e.g. a NN, with input
-    :math:`z\\in\\mathbb{R}^{M}` representing the observed variable to condition on. For this to be an
+    :math:`z\\in\\mathbb{R}^{M}` representing the context variable to condition on. For this to be an
     invertible transformation, the condition :math:`\\mathbf{w}^T\\mathbf{u}>-1` is enforced.
 
     Together with `ConditionalTransformedDistribution` this provides a way to create richer variational
@@ -144,12 +144,12 @@ class ConditionalPlanarFlow(ConditionalTransformModule):
 
     >>> from pyro.nn.dense_nn import DenseNN
     >>> input_dim = 10
-    >>> observed_dim = 5
+    >>> context_dim = 5
     >>> batch_size = 3
     >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
-    >>> hypernet = DenseNN(observed_dim, [50, 50], param_dims=[1, input_dim, input_dim])
+    >>> hypernet = DenseNN(context_dim, [50, 50], param_dims=[1, input_dim, input_dim])
     >>> plf = ConditionalPlanarFlow(hypernet)
-    >>> z = torch.rand(batch_size, observed_dim)
+    >>> z = torch.rand(batch_size, context_dim)
     >>> plf_dist = dist.ConditionalTransformedDistribution(base_dist, [plf]).condition(z)
     >>> plf_dist.sample(sample_shape=torch.Size([batch_size])) # doctest: +SKIP
 
@@ -157,7 +157,7 @@ class ConditionalPlanarFlow(ConditionalTransformModule):
     the inverse is cached when the forward operation is called during sampling, and so samples drawn using
     planar flow can be scored.
 
-    :param nn: a function inputting the observed variable and outputting a triplet of real-valued parameters
+    :param nn: a function inputting the context variable and outputting a triplet of real-valued parameters
         of dimensions :math:`(1, D, D)`.
     :type nn: callable
 

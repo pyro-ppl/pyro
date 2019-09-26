@@ -21,8 +21,8 @@ class ConditionalTransform(ABC):
 class ConditionalTransformModule(ConditionalTransform, torch.nn.Module):
     """
     Conditional transforms with learnable parameters such as normalizing flows should inherit from this class rather
-    than :class:`ConditionalTransform` so they are also a subclass of :class:`nn.Module` and inherit all the useful
-    methods of that class.
+    than :class:`~pyro.distributions.conditional.ConditionalTransform` so they are also a subclass of
+    :class:`~torch.nn.Module` and inherit all the useful methods of that class.
     """
 
     def __init__(self, *args, **kwargs):
