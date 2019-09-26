@@ -258,6 +258,7 @@ BlockAutoregressive
 ELUTransform
 ------------
 .. autoclass:: pyro.distributions.transforms.ELUTransform
+
 ConditionalPlanarFlow
 ---------------------
 .. autoclass:: pyro.distributions.transforms.ConditionalPlanarFlow
