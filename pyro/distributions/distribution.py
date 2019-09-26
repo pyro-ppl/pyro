@@ -1,14 +1,9 @@
-from __future__ import absolute_import, division, print_function
-
 from abc import ABCMeta, abstractmethod
-
-from six import add_metaclass
 
 from pyro.distributions.score_parts import ScoreParts
 
 
-@add_metaclass(ABCMeta)
-class Distribution(object):
+class Distribution(object, metaclass=ABCMeta):
     """
     Base class for parameterized probability distributions.
 

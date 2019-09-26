@@ -1,16 +1,14 @@
-from __future__ import absolute_import, division, print_function
-
 import numbers
+import warnings
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict, defaultdict
 
 import torch
-from six import add_metaclass
 
 import pyro.poutine as poutine
 from pyro.distributions import Categorical, Empirical
+from pyro.infer.util import site_is_subsample
 from pyro.ops.stats import waic
-from .util import site_is_subsample
 
 
 class EmpiricalMarginal(Empirical):
@@ -158,8 +156,7 @@ class Marginals(object):
         return self._marginals
 
 
-@add_metaclass(ABCMeta)
-class TracePosterior(object):
+class TracePosterior(object, metaclass=ABCMeta):
     """
     Abstract TracePosterior object from which posterior inference algorithms inherit.
     When run, collects a bag of execution traces from the approximate posterior.
@@ -292,6 +289,9 @@ class TracePredictive(TracePosterior):
         self.num_samples = num_samples
         self.keep_sites = keep_sites
         super(TracePredictive, self).__init__()
+        warnings.warn('This class will be deprecated in the next release. For MCMC, '
+                      'please use the `pyro.infer.mcmc.util.predictive` function '
+                      'instead.', PendingDeprecationWarning)
 
     def _traces(self, *args, **kwargs):
         if not self.posterior.exec_traces:

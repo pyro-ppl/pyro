@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from pyro.optim.optim import PyroOptim
 
 
@@ -16,7 +14,7 @@ class PyroLRScheduler(PyroOptim):
 
         optimizer = torch.optim.SGD
         scheduler = pyro.optim.ExponentialLR({'optimizer': optimizer, 'optim_args': {'lr': 0.01}, 'gamma': 0.1})
-        svi = SVI(model, guide, pyro_scheduler, loss=TraceGraph_ELBO())
+        svi = SVI(model, guide, scheduler, loss=TraceGraph_ELBO())
         for i in range(epochs):
             for minibatch in DataLoader(dataset, batch_size):
                 svi.step(minibatch)

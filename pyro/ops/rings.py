@@ -1,18 +1,14 @@
-from __future__ import absolute_import, division, print_function
-
 import weakref
 from abc import ABCMeta, abstractmethod
 
 import torch
-from six import add_metaclass
 
 from pyro.ops.einsum import contract
 from pyro.ops.einsum.adjoint import SAMPLE_SYMBOL, Backward
 from pyro.util import ignore_jit_warnings
 
 
-@add_metaclass(ABCMeta)
-class Ring(object):
+class Ring(object, metaclass=ABCMeta):
     """
     Abstract tensor ring class.
 
@@ -166,7 +162,7 @@ class LinearRing(Ring):
             return self._cache[key]
 
         result = term.reciprocal()
-        result.clamp_(max=torch.finfo(result.dtype).max)  # avoid nan due to inf / inf
+        result = result.clamp(max=torch.finfo(result.dtype).max)  # avoid nan due to inf / inf
         result._pyro_dims = term._pyro_dims
         self._cache[key] = result
         return result
@@ -217,7 +213,7 @@ class LogRing(Ring):
             return self._cache[key]
 
         result = -term
-        result.clamp_(max=torch.finfo(result.dtype).max)  # avoid nan due to inf - inf
+        result = result.clamp(max=torch.finfo(result.dtype).max)  # avoid nan due to inf - inf
         result._pyro_dims = term._pyro_dims
         self._cache[key] = result
         return result

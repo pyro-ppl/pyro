@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from pyro.util import ignore_jit_warnings
 from .messenger import Messenger
 

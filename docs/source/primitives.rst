@@ -5,6 +5,7 @@ Primitives
 .. autofunction:: pyro.param
 .. autofunction:: pyro.module
 .. autofunction:: pyro.random_module
+.. autofunction:: pyro.factor
 
 .. autoclass:: pyro.plate
     :members:

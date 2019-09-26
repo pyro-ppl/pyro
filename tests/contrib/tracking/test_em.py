@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import logging
 import math
 
@@ -46,7 +44,7 @@ def model(detections, args):
     p_exists = args.expected_num_objects / max_num_objects
     with pyro.plate('objects_plate', max_num_objects):
         exists = pyro.sample('exists', dist.Bernoulli(p_exists))
-        with poutine.mask(mask=exists.byte()):
+        with poutine.mask(mask=exists.bool()):
             pyro.sample('objects', dist.Normal(0., 1.), obs=objects)
 
     # Assignment part.

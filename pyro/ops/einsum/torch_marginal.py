@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import pyro.ops.einsum.torch_log
 from pyro.ops.einsum.adjoint import Backward, transpose
 from pyro.ops.einsum.util import Tensordot

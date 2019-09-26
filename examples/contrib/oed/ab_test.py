@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import argparse
 from functools import partial
 import torch
@@ -9,7 +7,7 @@ import numpy as np
 import pyro
 from pyro import optim
 from pyro.infer import TraceEnum_ELBO
-from pyro.contrib.oed.eig import vi_ape
+from pyro.contrib.oed.eig import vi_eig
 import pyro.contrib.gp as gp
 from pyro.contrib.glmm import (
     zero_mean_unit_obs_sd_lm, group_assignment_matrix, analytic_posterior_cov
@@ -29,7 +27,7 @@ allocation of participants to the two groups to maximise the expected gain in
 information from actually performing the experiment.
 
 For details of the implementation of average posterior entropy estimation, see
-the docs for :func:`pyro.contrib.oed.eig.vi_ape`.
+the docs for :func:`pyro.contrib.oed.eig.vi_eig`.
 
 We recommend the technical report from Long Ouyang et al [2] as an introduction
 to optimal experiment design within probabilistic programs.
@@ -57,7 +55,7 @@ model, guide = zero_mean_unit_obs_sd_lm(prior_sds)
 def estimated_ape(ns, num_vi_steps):
     designs = [group_assignment_matrix(torch.tensor([n1, N-n1])) for n1 in ns]
     X = torch.stack(designs)
-    est_ape = vi_ape(
+    est_ape = vi_eig(
         model,
         X,
         observation_labels="y",
@@ -67,7 +65,8 @@ def estimated_ape(ns, num_vi_steps):
             "optim": optim.Adam({"lr": 0.05}),
             "loss": TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
             "num_steps": num_vi_steps},
-        is_parameters={"num_samples": 1}
+        is_parameters={"num_samples": 1},
+        eig=False
     )
     return est_ape
 
@@ -113,7 +112,7 @@ def main(num_vi_steps, num_bo_steps, seed):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.3.3')
+    assert pyro.__version__.startswith('0.4.1')
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
     parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
     parser.add_argument('--num-bo-steps', nargs="?", default=5, type=int)

@@ -3,7 +3,7 @@ Installation
 
 Install from Source
 -------------------
-Pyro supports Python 2.7.* and Python 3.  To setup, install `PyTorch <http://pytorch.org>`_ then run::
+Pyro supports 3.4+.  To setup, install `PyTorch <http://pytorch.org>`_ then run::
 
    pip install pyro-ppl
 

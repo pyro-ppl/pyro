@@ -1,11 +1,11 @@
 Automatic Guide Generation
 ==========================
 
-.. automodule:: pyro.contrib.autoguide
+.. automodule:: pyro.infer.autoguide
 
 AutoGuide
 ---------
-.. autoclass:: pyro.contrib.autoguide.AutoGuide
+.. autoclass:: pyro.infer.autoguide.AutoGuide
     :members:
     :undoc-members:
     :special-members: __call__
@@ -13,7 +13,7 @@ AutoGuide
 
 AutoGuideList
 -------------
-.. autoclass:: pyro.contrib.autoguide.AutoGuideList
+.. autoclass:: pyro.infer.autoguide.AutoGuideList
     :members:
     :undoc-members:
     :special-members: __call__
@@ -21,7 +21,7 @@ AutoGuideList
 
 AutoCallable
 ------------
-.. autoclass:: pyro.contrib.autoguide.AutoCallable
+.. autoclass:: pyro.infer.autoguide.AutoCallable
     :members:
     :undoc-members:
     :special-members: __call__
@@ -29,7 +29,7 @@ AutoCallable
 
 AutoDelta
 ---------
-.. autoclass:: pyro.contrib.autoguide.AutoDelta
+.. autoclass:: pyro.infer.autoguide.AutoDelta
     :members:
     :undoc-members:
     :special-members: __call__
@@ -37,7 +37,7 @@ AutoDelta
 
 AutoContinuous
 --------------
-.. autoclass:: pyro.contrib.autoguide.AutoContinuous
+.. autoclass:: pyro.infer.autoguide.AutoContinuous
     :members:
     :undoc-members:
     :special-members: __call__
@@ -45,7 +45,7 @@ AutoContinuous
 
 AutoMultivariateNormal
 ----------------------
-.. autoclass:: pyro.contrib.autoguide.AutoMultivariateNormal
+.. autoclass:: pyro.infer.autoguide.AutoMultivariateNormal
     :members:
     :undoc-members:
     :special-members: __call__
@@ -53,7 +53,7 @@ AutoMultivariateNormal
 
 AutoDiagonalNormal
 ------------------
-.. autoclass:: pyro.contrib.autoguide.AutoDiagonalNormal
+.. autoclass:: pyro.infer.autoguide.AutoDiagonalNormal
     :members:
     :undoc-members:
     :special-members: __call__
@@ -61,7 +61,7 @@ AutoDiagonalNormal
 
 AutoLowRankMultivariateNormal
 -----------------------------
-.. autoclass:: pyro.contrib.autoguide.AutoLowRankMultivariateNormal
+.. autoclass:: pyro.infer.autoguide.AutoLowRankMultivariateNormal
     :members:
     :undoc-members:
     :special-members: __call__
@@ -69,7 +69,7 @@ AutoLowRankMultivariateNormal
 
 AutoIAFNormal
 -----------------------------
-.. autoclass:: pyro.contrib.autoguide.AutoIAFNormal
+.. autoclass:: pyro.infer.autoguide.AutoIAFNormal
     :members:
     :undoc-members:
     :special-members: __call__
@@ -77,7 +77,7 @@ AutoIAFNormal
 
 AutoLaplaceApproximation
 -----------------------------
-.. autoclass:: pyro.contrib.autoguide.AutoLaplaceApproximation
+.. autoclass:: pyro.infer.autoguide.AutoLaplaceApproximation
     :members:
     :undoc-members:
     :special-members: __call__
@@ -85,7 +85,7 @@ AutoLaplaceApproximation
 
 AutoDiscreteParallel
 --------------------
-.. autoclass:: pyro.contrib.autoguide.AutoDiscreteParallel
+.. autoclass:: pyro.infer.autoguide.AutoDiscreteParallel
     :members:
     :undoc-members:
     :special-members: __call__
@@ -95,7 +95,7 @@ AutoDiscreteParallel
 
 Initialization
 --------------
-.. automodule:: pyro.contrib.autoguide.initialization
+.. automodule:: pyro.infer.autoguide.initialization
     :members:
     :undoc-members:
     :special-members: __call__

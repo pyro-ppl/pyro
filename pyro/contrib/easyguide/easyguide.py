@@ -1,25 +1,21 @@
-from __future__ import absolute_import, division, print_function
-
 import re
 import weakref
 from abc import ABCMeta, abstractmethod
 
 import torch
-from contextlib2 import ExitStack
-from six import add_metaclass
+from contextlib import ExitStack
 from torch.distributions import biject_to
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 import pyro.poutine.runtime as runtime
-from pyro.contrib.autoguide.initialization import InitMessenger
+from pyro.infer.autoguide.initialization import InitMessenger
 from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.poutine.util import prune_subsample_sites
 
 
-@add_metaclass(ABCMeta)
-class EasyGuide(object):
+class EasyGuide(object, metaclass=ABCMeta):
     """
     Base class for "easy guides".
 
@@ -73,7 +69,7 @@ class EasyGuide(object):
             return site["fn"]()
 
         For other possible initialization functions see
-        http://docs.pyro.ai/en/stable/contrib.autoguide.html#module-pyro.contrib.autoguide.initialization
+        http://docs.pyro.ai/en/stable/infer.autoguide.html#module-pyro.infer.autoguide.initialization
         """
         return site["fn"]()
 

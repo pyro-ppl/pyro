@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 from .handlers import (block, broadcast, condition, do, enum, escape, infer_config, lift, markov, mask, queue, replay,
                        scale, trace, uncondition)
 from .runtime import NonlocalExit

@@ -1,7 +1,5 @@
-from __future__ import absolute_import, division, print_function
-
 import logging
-from collections import defaultdict, namedtuple
+from collections import namedtuple
 
 import pytest
 import torch
@@ -13,7 +11,7 @@ from pyro.contrib.gp.models import (GPLVM, GPRegression, SparseGPRegression,
                                     VariationalGP, VariationalSparseGP)
 from pyro.contrib.gp.util import train
 from pyro.infer.mcmc.hmc import HMC
-from pyro.infer.mcmc.mcmc import MCMC
+from pyro.infer.mcmc.api import MCMC
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -277,37 +275,16 @@ def test_hmc(model_class, X, y, kernel, likelihood):
     else:
         gp = model_class(X, y, kernel, likelihood)
 
-    if model_class is GPRegression:
-        model_name = "GPR"
-    elif model_class is SparseGPRegression:
-        model_name = "SGPR"
-    elif model_class is VariationalGP:
-        model_name = "VGP"
-    else:
-        model_name = "VSGP"
-
     kernel.set_prior("variance", dist.Uniform(torch.tensor(0.5), torch.tensor(1.5)))
     kernel.set_prior("lengthscale", dist.Uniform(torch.tensor(1.0), torch.tensor(3.0)))
 
     hmc_kernel = HMC(gp.model, step_size=1)
-    mcmc_run = MCMC(hmc_kernel, num_samples=10)
+    mcmc = MCMC(hmc_kernel, num_samples=10)
+    mcmc.run()
 
-    post_trace = defaultdict(list)
-    for trace, _ in mcmc_run._traces():
-        variance_name = "{}/RBF/variance".format(model_name)
-        post_trace["variance"].append(trace.nodes[variance_name]["value"])
-        lengthscale_name = "{}/RBF/lengthscale".format(model_name)
-        post_trace["lengthscale"].append(trace.nodes[lengthscale_name]["value"])
-        if model_class is VariationalGP:
-            f_name = "VGP/f"
-            post_trace["f"].append(trace.nodes[f_name]["value"])
-        if model_class is VariationalSparseGP:
-            u_name = "VSGP/u"
-            post_trace["u"].append(trace.nodes[u_name]["value"])
-
-    for param in post_trace:
-        param_mean = torch.mean(torch.stack(post_trace[param]), 0)
-        logger.info("Posterior mean - {}".format(param))
+    for name, param in mcmc.get_samples().items():
+        param_mean = torch.mean(param, 0)
+        logger.info("Posterior mean - {}".format(name))
         logger.info(param_mean)
 
 

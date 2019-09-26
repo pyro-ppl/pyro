@@ -1,8 +1,8 @@
-from __future__ import absolute_import, division, print_function
-
 import warnings
 from collections import OrderedDict
 from functools import partial
+from contextlib import ExitStack
+
 import torch
 from torch.nn.functional import softplus
 from torch.distributions import constraints
@@ -10,24 +10,34 @@ from torch.distributions.transforms import AffineTransform, SigmoidTransform
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.util import rmv
+from pyro.contrib.util import rmv, iter_plates_to_shape
 
-try:
-    from contextlib import ExitStack  # python 3
-except ImportError:
-    from contextlib2 import ExitStack  # python 2
+# TODO read from torch float spec
+epsilon = torch.tensor(2**-24)
 
 
-def known_covariance_linear_model(coef_mean, coef_sd, observation_sd,
-                                  coef_label="w", observation_label="y"):
+def known_covariance_linear_model(coef_means, coef_sds, observation_sd,
+                                  coef_labels="w", observation_label="y"):
+
+    if not isinstance(coef_means, list):
+        coef_means = [coef_means]
+    if not isinstance(coef_sds, list):
+        coef_sds = [coef_sds]
+    if not isinstance(coef_labels, list):
+        coef_labels = [coef_labels]
+
     model = partial(bayesian_linear_model,
-                    w_means={coef_label: coef_mean},
-                    w_sqrtlambdas={coef_label: 1./(observation_sd*coef_sd)},
+                    w_means=OrderedDict([(label, mean) for label, mean in zip(coef_labels, coef_means)]),
+                    w_sqrtlambdas=OrderedDict([
+                        (label, 1./(observation_sd*sd)) for label, sd in zip(coef_labels, coef_sds)]),
                     obs_sd=observation_sd,
                     response_label=observation_label)
-    # For testing, add these
+    # For computing the true EIG
     model.obs_sd = observation_sd
-    model.w_sds = {coef_label: coef_sd}
+    model.w_sds = OrderedDict([(label, sd) for label, sd in zip(coef_labels, coef_sds)])
+    model.w_sizes = OrderedDict([(label, sd.shape[-1]) for label, sd in zip(coef_labels, coef_sds)])
+    model.observation_label = observation_label
+    model.coef_labels = coef_labels
     return model
 
 
@@ -59,7 +69,7 @@ def group_normal_guide(observation_sd, coef1_shape, coef2_shape,
 
 
 def zero_mean_unit_obs_sd_lm(coef_sd, coef_label="w"):
-    model = known_covariance_linear_model(torch.tensor(0.), coef_sd, torch.tensor(1.), coef_label=coef_label)
+    model = known_covariance_linear_model(torch.tensor(0.), coef_sd, torch.tensor(1.), coef_labels=coef_label)
     guide = normal_guide(torch.tensor(1.), coef_sd.shape, coef_label=coef_label)
     return model, guide
 
@@ -186,15 +196,15 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
     """
     # design is size batch x n x p
     # tau is size batch
-    tau_shape = design.shape[:-2]
+    batch_shape = design.shape[:-2]
     with ExitStack() as stack:
-        for plate in iter_plates_to_shape(tau_shape):
+        for plate in iter_plates_to_shape(batch_shape):
             stack.enter_context(plate)
 
         if obs_sd is None:
             # First, sample tau (observation precision)
-            tau_prior = dist.Gamma(alpha_0.expand(tau_shape),
-                                   beta_0.expand(tau_shape))
+            tau_prior = dist.Gamma(alpha_0.unsqueeze(-1),
+                                   beta_0.unsqueeze(-1)).to_event(1)
             tau = pyro.sample("tau", tau_prior)
             obs_sd = 1./torch.sqrt(tau)
 
@@ -202,8 +212,7 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
             warnings.warn("Values of `alpha_0` and `beta_0` unused becased"
                           "`obs_sd` was specified already.")
 
-        # response will be shape batch x n
-        obs_sd = obs_sd.expand(tau_shape).unsqueeze(-1)
+        obs_sd = obs_sd.expand(batch_shape + (1,))
 
         # Build the regression coefficient
         w = []
@@ -218,16 +227,14 @@ def bayesian_linear_model(design, w_means={}, w_sqrtlambdas={}, re_group_sizes={
         for name, group_size in re_group_sizes.items():
             # Sample `G` once for this group
             alpha, beta = re_alphas[name], re_betas[name]
-            group_p = alpha.shape[-1]
-            G_prior = dist.Gamma(alpha.expand(tau_shape + (group_p,)),
-                                 beta.expand(tau_shape + (group_p,))).to_event(1)
+            G_prior = dist.Gamma(alpha, beta).to_event(1)
             G = 1./torch.sqrt(pyro.sample("G_" + name, G_prior))
             # Repeat `G` for each group
-            repeat_shape = tuple(1 for _ in tau_shape) + (group_size,)
+            repeat_shape = tuple(1 for _ in batch_shape) + (group_size,)
             u_prior = dist.Normal(torch.tensor(0.), G.repeat(repeat_shape)).to_event(1)
             w.append(pyro.sample(name, u_prior))
         # Regression coefficient `w` is batch x p
-        w = torch.cat(w, dim=-1)
+        w = broadcast_cat(w)
 
         # Run the regressor forward conditioned on inputs
         prediction_mean = rmv(design, w)
@@ -358,7 +365,7 @@ def analytic_posterior_cov(prior_cov, x, obs_sd):
     return posterior_cov
 
 
-def iter_plates_to_shape(shape):
-    # Go backwards (right to left)
-    for i, s in enumerate(shape[::-1]):
-        yield pyro.plate("plate_" + str(i), s)
+def broadcast_cat(ws):
+    target = torch.broadcast_tensors(*(w[..., 0] for w in ws))[0].shape
+    expanded = [w.expand(target + (w.shape[-1],)) for w in ws]
+    return torch.cat(expanded, dim=-1)

@@ -14,7 +14,7 @@ DOCKER_WORK_DIR=/home/${USER}/workspace/shared
 pyro_git_url=https://github.com/pyro-ppl/pyro.git
 
 # Optional args
-python_version?=2.7
+python_version?=3.6
 pytorch_branch?=release
 pyro_branch?=release
 cmd?=bash
@@ -41,7 +41,7 @@ build: ##
 	## Build a docker image for running Pyro on a CPU.
 	## Requires nvidia-docker (https://github.com/NVIDIA/nvidia-docker).
 	## Args:
-	##   python_version: version of python to use. default - python 2.7
+	##   python_version: version of python to use. default - python 3.6
 	##   pytorch_branch: whether to build PyTorch from conda or from source
 	##   (git branch specified by pytorch_branch)
 	##     default - latest pytorch version on conda
@@ -62,7 +62,7 @@ build-gpu: ##
 	## Build a docker image for running Pyro on a GPU.
 	## Requires nvidia-docker (https://github.com/NVIDIA/nvidia-docker).
 	## Args:
-	##   python_version: version of python to use. default - python 2.7
+	##   python_version: version of python to use. default - python 3.6
 	##   pytorch_branch: whether to build PyTorch from conda or from source
 	##   (git branch specified by pytorch_branch)
 	##     default - latest pytorch version on conda

@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import torch
 from torch.autograd import grad
 
@@ -42,7 +40,7 @@ def _single_step_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, z_gr
     Single step velocity verlet that modifies the `z`, `r` dicts in place.
     """
 
-    z_grads = _potential_grad(potential_fn, z)[0] if z_grads is None else z_grads
+    z_grads = potential_grad(potential_fn, z)[0] if z_grads is None else z_grads
 
     for site_name in r:
         r[site_name] = r[site_name] + 0.5 * step_size * (-z_grads[site_name])  # r(n+1/2)
@@ -51,18 +49,37 @@ def _single_step_verlet(z, r, potential_fn, inverse_mass_matrix, step_size, z_gr
     for site_name in z:
         z[site_name] = z[site_name] + step_size * r_grads[site_name]  # z(n+1)
 
-    z_grads, potential_energy = _potential_grad(potential_fn, z)
+    z_grads, potential_energy = potential_grad(potential_fn, z)
     for site_name in r:
         r[site_name] = r[site_name] + 0.5 * step_size * (-z_grads[site_name])  # r(n+1)
 
     return z, r, z_grads, potential_energy
 
 
-def _potential_grad(potential_fn, z):
+def potential_grad(potential_fn, z):
+    """
+    Gradient of `potential_fn` w.r.t. parameters z.
+
+    :param potential_fn: python callable that takes in a dictionary of parameters
+        and returns the potential energy.
+    :param dict z: dictionary of parameter values keyed by site name.
+    :return: tuple of `(z_grads, potential_energy)`, where `z_grads` is a dictionary
+        with the same keys as `z` containing gradients and potential_energy is a
+        torch scalar.
+    """
     z_keys, z_nodes = zip(*z.items())
     for node in z_nodes:
         node.requires_grad_(True)
-    potential_energy = potential_fn(z)
+    try:
+        potential_energy = potential_fn(z)
+    # deal with singular matrices
+    except RuntimeError as e:
+        if "singular U" in str(e):
+            grads = {k: v.new_zeros(v.shape) for k, v in z.items()}
+            return grads, z_nodes[0].new_tensor(float('nan'))
+        else:
+            raise e
+
     grads = grad(potential_energy, z_nodes)
     for node in z_nodes:
         node.requires_grad_(False)

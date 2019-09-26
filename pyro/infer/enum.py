@@ -1,8 +1,6 @@
-from __future__ import absolute_import, division, print_function
-
 import numbers
-
-from six.moves.queue import LifoQueue
+from functools import partial
+from queue import LifoQueue
 
 from pyro import poutine
 from pyro.infer.util import is_validation_enabled
@@ -84,22 +82,22 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
         yield traced_fn.get_trace(*args, **kwargs)
 
 
-def _config_enumerate(default, expand, num_samples):
-
-    def config_fn(site):
-        if site["type"] != "sample" or site["is_observed"]:
-            return {}
-        if type(site["fn"]).__name__ == "_Subsample":
-            return {}
-        if num_samples is not None:
-            return {"enumerate": site["infer"].get("enumerate", default),
-                    "num_samples": site["infer"].get("num_samples", num_samples)}
-        if getattr(site["fn"], "has_enumerate_support", False):
-            return {"enumerate": site["infer"].get("enumerate", default),
-                    "expand": site["infer"].get("expand", expand)}
+def _config_fn(default, expand, num_samples, site):
+    if site["type"] != "sample" or site["is_observed"]:
         return {}
+    if type(site["fn"]).__name__ == "_Subsample":
+        return {}
+    if num_samples is not None:
+        return {"enumerate": site["infer"].get("enumerate", default),
+                "num_samples": site["infer"].get("num_samples", num_samples)}
+    if getattr(site["fn"], "has_enumerate_support", False):
+        return {"enumerate": site["infer"].get("enumerate", default),
+                "expand": site["infer"].get("expand", expand)}
+    return {}
 
-    return config_fn
+
+def _config_enumerate(default, expand, num_samples):
+    return partial(_config_fn, default, expand, num_samples)
 
 
 def config_enumerate(guide=None, default="parallel", expand=False, num_samples=None):

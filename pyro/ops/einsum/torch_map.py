@@ -1,8 +1,6 @@
-from __future__ import absolute_import, division, print_function
-
 import operator
 
-from six.moves import reduce
+from functools import reduce
 
 from pyro.ops import packed
 from pyro.ops.einsum.adjoint import Backward, einsum_backward_sample, transpose, unflatten

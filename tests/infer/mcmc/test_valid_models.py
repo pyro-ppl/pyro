@@ -1,4 +1,5 @@
 import logging
+import pickle
 
 import pytest
 import torch
@@ -7,10 +8,11 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import config_enumerate
-from pyro.infer.mcmc import HMC, MCMC, NUTS
-from pyro.infer.mcmc.util import TraceTreeEvaluator, TraceEinsumEvaluator
+from pyro.infer.mcmc.api import MCMC
+from pyro.infer.mcmc import HMC, NUTS
+from pyro.infer.mcmc.util import TraceTreeEvaluator, TraceEinsumEvaluator, initialize_model
 from pyro.poutine.subsample_messenger import _Subsample
-from tests.common import assert_equal, xfail_param
+from tests.common import assert_equal, xfail_param, assert_close
 
 logger = logging.getLogger(__name__)
 
@@ -349,3 +351,21 @@ def test_enum_log_prob_nested_plate(data, expected_log_prob, Eval):
     assert_equal(trace_prob_evaluator.log_prob(model_trace),
                  expected_log_prob,
                  prec=1e-3)
+
+
+def _beta_bernoulli(data):
+    alpha = torch.tensor([1.1, 1.1])
+    beta = torch.tensor([1.1, 1.1])
+    p_latent = pyro.sample('p_latent', dist.Beta(alpha, beta))
+    with pyro.plate('data', data.shape[0], dim=-2):
+        pyro.sample('obs', dist.Bernoulli(p_latent), obs=data)
+    return p_latent
+
+
+@pytest.mark.parametrize('jit', [False, True])
+def test_potential_fn_pickling(jit):
+    data = dist.Bernoulli(torch.tensor([0.8, 0.2])).sample(sample_shape=(torch.Size((1000,))))
+    _, potential_fn, _, _ = initialize_model(_beta_bernoulli, (data,), jit_compile=jit,
+                                             skip_jit_warnings=True)
+    test_data = {'p_latent': torch.tensor([0.2, 0.6])}
+    assert_close(pickle.loads(pickle.dumps(potential_fn))(test_data), potential_fn(test_data))

@@ -1,5 +1,4 @@
 from abc import ABCMeta, abstractmethod
-from six import add_metaclass
 
 import torch
 from torch import nn
@@ -8,8 +7,7 @@ import pyro.distributions as dist
 from pyro.distributions.util import eye_like
 
 
-@add_metaclass(ABCMeta)
-class DynamicModel(nn.Module):
+class DynamicModel(nn.Module, metaclass=ABCMeta):
     '''
     Dynamic model interface.
 
