@@ -84,6 +84,15 @@ class FlowTests(TestCase):
         sample = dist.TransformedDistribution(base_dist, [flow]).sample()
         assert sample.shape == base_shape
 
+    def _make_elu(self, input_dim):
+        return transforms.ELUTransform()
+
+    def _make_leaky_relu(self, input_dim):
+        return transforms.LeakyReLUTransform()
+
+    def _make_tanh(self, input_dim):
+        return transforms.TanhTransform()
+
     def _make_householder(self, input_dim):
         return transforms.HouseholderFlow(input_dim, count_transforms=min(1, input_dim // 2))
 
@@ -95,7 +104,7 @@ class FlowTests(TestCase):
         return bn
 
     def _make_block_autoregressive(self, input_dim, activation='tanh', residual=None):
-        return dist.BlockAutoregressive(input_dim, activation=activation, residual=residual)
+        return transforms.BlockAutoregressive(input_dim, activation=activation, residual=residual)
 
     def _make_iaf(self, input_dim):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
@@ -105,17 +114,9 @@ class FlowTests(TestCase):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1])
         return transforms.InverseAutoregressiveFlowStable(arn, sigmoid_bias=0.5)
 
-    def _make_def(self, input_dim):
-        arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1], param_dims=[16]*3)
-        return transforms.DeepELUFlow(arn, hidden_units=16)
-
-    def _make_dlrf(self, input_dim):
-        arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1], param_dims=[16]*3)
-        return transforms.DeepLeakyReLUFlow(arn, hidden_units=16)
-
-    def _make_dsf(self, input_dim):
+    def _make_neural_autoregressive(self, input_dim, activation):
         arn = AutoRegressiveNN(input_dim, [3 * input_dim + 1], param_dims=[16] * 3)
-        return transforms.DeepSigmoidalFlow(arn, hidden_units=16)
+        return transforms.NeuralAutoregressive(arn, hidden_units=16, activation=activation)
 
     def _make_permute(self, input_dim):
         permutation = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
@@ -167,6 +168,18 @@ class FlowTests(TestCase):
     def _make_sylvester(self, input_dim):
         return transforms.SylvesterFlow(input_dim, count_transforms=input_dim//2 + 1)
 
+    def test_elu_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_elu)
+
+    def test_leaky_relu_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_leaky_relu)
+
+    def test_tanh_jacobians(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_jacobian(input_dim, self._make_tanh)
+
     def test_iaf_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_iaf)
@@ -175,17 +188,10 @@ class FlowTests(TestCase):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_jacobian(input_dim, self._make_iaf_stable)
 
-    def test_def_jacobians(self):
-        for input_dim in [2, 3, 5, 7, 9, 11]:
-            self._test_jacobian(input_dim, self._make_def)
-
-    def test_dlrf_jacobians(self):
-        for input_dim in [2, 3, 5, 7, 9, 11]:
-            self._test_jacobian(input_dim, self._make_dlrf)
-
-    def test_dsf_jacobians(self):
-        for input_dim in [2, 3, 5, 7, 9, 11]:
-            self._test_jacobian(input_dim, self._make_dsf)
+    def test_neural_autoregressive_jacobians(self):
+        for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
+            for input_dim in [2, 3, 5, 7, 9, 11]:
+                self._test_jacobian(input_dim, partial(self._make_neural_autoregressive, activation=activation))
 
     def test_planar_jacobians(self):
         for input_dim in [2, 3, 5, 7, 9, 11]:
@@ -231,6 +237,18 @@ class FlowTests(TestCase):
         for input_dim in [2, 3, 5, 7, 9, 11]:
             self._test_inverse(input_dim, self._make_permute)
 
+    def test_elu_inverses(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_inverse(input_dim, self._make_elu)
+
+    def test_leaky_relu_inverses(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_inverse(input_dim, self._make_leaky_relu)
+
+    def test_tanh_inverses(self):
+        for input_dim in [2, 3, 5, 7, 9, 11]:
+            self._test_inverse(input_dim, self._make_tanh)
+
     def test_householder_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_householder)
@@ -257,16 +275,9 @@ class FlowTests(TestCase):
             self._test_shape(shape, self._make_iaf_stable)
 
     def test_def_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            self._test_shape(shape, self._make_def)
-
-    def test_dlrf_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            self._test_shape(shape, self._make_dlrf)
-
-    def test_dsf_shapes(self):
-        for shape in [(3,), (3, 4), (3, 4, 2)]:
-            self._test_shape(shape, self._make_dsf)
+        for activation in ['ELU', 'LeakyReLU', 'sigmoid', 'tanh']:
+            for shape in [(3,), (3, 4), (3, 4, 2)]:
+                self._test_shape(shape, partial(self._make_neural_autoregressive, activation=activation))
 
     def test_permute_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
@@ -295,3 +306,15 @@ class FlowTests(TestCase):
     def test_sylvester_shapes(self):
         for shape in [(3,), (3, 4), (3, 4, 2)]:
             self._test_shape(shape, self._make_sylvester)
+
+    def test_elu_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_elu)
+
+    def test_leaky_relu_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_leaky_relu)
+
+    def test_tanh_shapes(self):
+        for shape in [(3,), (3, 4), (3, 4, 2)]:
+            self._test_shape(shape, self._make_tanh)
