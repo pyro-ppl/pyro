@@ -255,9 +255,9 @@ LeakyReLUTransform
     :undoc-members:
     :show-inheritance:
 
-PermuteTransform
-----------------
-.. autoclass:: pyro.distributions.transforms.PermuteTransform
+Permute
+-------
+.. autoclass:: pyro.distributions.transforms.Permute
     :members:
     :undoc-members:
     :show-inheritance:
@@ -320,10 +320,6 @@ Householder
     :members:
     :undoc-members:
     :show-inheritance:
-
-PermuteTransform
-----------------
-.. autoclass:: pyro.distributions.transforms.PermuteTransform
 
 NeuralAutoregressive
 --------------------
