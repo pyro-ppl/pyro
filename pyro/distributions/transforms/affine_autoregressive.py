@@ -5,13 +5,14 @@ from torch.distributions import constraints
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 from pyro.distributions.transforms.utils import clamp_preserve_gradients
+from pyro.nn import AutoRegressiveNN
 
 
 @copy_docs_from(TransformModule)
 class AffineAutoregressive(TransformModule):
     """
-    An implementation of the transformation of Inverse Autoregressive Flow, using by default Eq (10) from
-    Kingma Et Al., 2016,
+    An implementation of the bijective transform of Inverse Autoregressive Flow (IAF), using by default Eq (10)
+    from Kingma Et Al., 2016,
 
         :math:`\\mathbf{y} = \\mu_t + \\sigma_t\\odot\\mathbf{x}`
 
@@ -33,10 +34,10 @@ class AffineAutoregressive(TransformModule):
 
     >>> from pyro.nn import AutoRegressiveNN
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> iaf = AffineAutoregressive(AutoRegressiveNN(10, [40]))
-    >>> pyro.module("my_iaf", iaf)  # doctest: +SKIP
-    >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf])
-    >>> iaf_dist.sample()  # doctest: +SKIP
+    >>> transform = AffineAutoregressive(AutoRegressiveNN(10, [40]))
+    >>> pyro.module("my_transform", transform)  # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
+    >>> flow_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
 
@@ -55,6 +56,10 @@ class AffineAutoregressive(TransformModule):
     :type log_scale_min_clip: float
     :param log_scale_max_clip: The maximum value for clipping the log(scale) from the autoregressive NN
     :type log_scale_max_clip: float
+    :param sigmoid_bias: A term to add the logit of the input when using the stable tranform.
+    :type sigmoid_bias: float
+    :param stable: When true, uses the alternative "stable" version of the transform (see above).
+    :type stable: bool
 
     References:
 
@@ -80,7 +85,8 @@ class AffineAutoregressive(TransformModule):
             log_scale_min_clip=-5.,
             log_scale_max_clip=3.,
             sigmoid_bias=2.0,
-            stable=False):
+            stable=False
+    ):
         super(AffineAutoregressive, self).__init__(cache_size=1)
         self.arn = autoregressive_nn
         self._cached_log_scale = None
@@ -101,7 +107,7 @@ class AffineAutoregressive(TransformModule):
         :type x: torch.Tensor
 
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous flow)
+        sample from the base distribution (or the output of a previous transform)
         """
         mean, log_scale = self.arn(x)
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
@@ -156,7 +162,7 @@ class AffineAutoregressive(TransformModule):
         :type x: torch.Tensor
 
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous flow)
+        sample from the base distribution (or the output of a previous transform)
         """
         mean, logit_scale = self.arn(x)
         logit_scale = logit_scale + self.sigmoid_bias
@@ -188,3 +194,30 @@ class AffineAutoregressive(TransformModule):
 
         x = torch.stack(x, dim=-1)
         return x
+
+
+def affine_autoregressive(input_dim, hidden_dims=None, **kwargs):
+    """
+    A helper function to create an AffineAutoregressive object that takes care of constructing
+    an autoregressive network with the correct input/output dimensions.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+    :param hidden_dims: The desired hidden dimensions of of the autoregressive network. Defaults
+        to using [3*input_dim + 1]
+    :type hidden_dims: list[int]
+    :param log_scale_min_clip: The minimum value for clipping the log(scale) from the autoregressive NN
+    :type log_scale_min_clip: float
+    :param log_scale_max_clip: The maximum value for clipping the log(scale) from the autoregressive NN
+    :type log_scale_max_clip: float
+    :param sigmoid_bias: A term to add the logit of the input when using the stable tranform.
+    :type sigmoid_bias: float
+    :param stable: When true, uses the alternative "stable" version of the transform (see above).
+    :type stable: bool
+
+    """
+
+    if hidden_dims is None:
+        hidden_dims = [3 * input_dim + 1]
+    arn = AutoRegressiveNN(input_dim, hidden_dims)
+    return AffineAutoregressive(arn, **kwargs)

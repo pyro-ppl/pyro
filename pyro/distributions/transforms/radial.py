@@ -10,9 +10,9 @@ from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(TransformModule)
-class RadialFlow(TransformModule):
+class Radial(TransformModule):
     """
-    A 'radial' normalizing flow that uses the transformation
+    A 'radial' bijective transform using the equation,
 
         :math:`\\mathbf{y} = \\mathbf{x} + \\beta h(\\alpha,r)(\\mathbf{x} - \\mathbf{x}_0)`
 
@@ -26,16 +26,16 @@ class RadialFlow(TransformModule):
     Example usage:
 
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
-    >>> flow = RadialFlow(10)
-    >>> pyro.module("my_flow", flow)  # doctest: +SKIP
-    >>> flow_dist = dist.TransformedDistribution(base_dist, [flow])
+    >>> transform = Radial(10)
+    >>> pyro.module("my_transform", transform)  # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
     >>> flow_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
 
     The inverse of this transform does not possess an analytical solution and is left unimplemented. However,
     the inverse is cached when the forward operation is called during sampling, and so samples drawn using
-    radial flow can be scored.
+    the radial transform can be scored.
 
     :param input_dim: the dimension of the input (and output) variable.
     :type input_dim: int
@@ -53,7 +53,7 @@ class RadialFlow(TransformModule):
     event_dim = 1
 
     def __init__(self, input_dim):
-        super(RadialFlow, self).__init__(cache_size=1)
+        super(Radial, self).__init__(cache_size=1)
 
         self.input_dim = input_dim
         self._cached_logDetJ = None
@@ -76,7 +76,7 @@ class RadialFlow(TransformModule):
         :type x: torch.Tensor
 
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous flow)
+        sample from the base distribution (or the output of a previous transform)
         """
         # Ensure invertibility using approach in appendix A.2
         alpha = F.softplus(self.alpha_prime)
@@ -103,7 +103,7 @@ class RadialFlow(TransformModule):
         to some `x` (which was cached on the forward call)
         """
 
-        raise KeyError("RadialFlow expected to find key in intermediates cache but didn't")
+        raise KeyError("Radial object expected to find key in intermediates cache but didn't")
 
     def log_abs_det_jacobian(self, x, y):
         """
@@ -111,3 +111,15 @@ class RadialFlow(TransformModule):
         """
 
         return self._cached_logDetJ
+
+
+def radial(input_dim):
+    """
+    A helper function to create a Radial object for consistency with other helpers.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+
+    """
+
+    return Radial(input_dim)

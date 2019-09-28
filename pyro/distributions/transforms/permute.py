@@ -7,7 +7,7 @@ from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(Transform)
-class PermuteTransform(Transform):
+class Permute(Transform):
     """
     A bijection that reorders the input dimensions, that is, multiplies the input by a permutation matrix.
     This is useful in between :class:`~pyro.distributions.transforms.AffineAutoregressive` transforms to increase the
@@ -20,13 +20,13 @@ class PermuteTransform(Transform):
     Example usage:
 
     >>> from pyro.nn import AutoRegressiveNN
-    >>> from pyro.distributions.transforms import AffineAutoregressive, PermuteTransform
+    >>> from pyro.distributions.transforms import AffineAutoregressive, Permute
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> iaf1 = AffineAutoregressive(AutoRegressiveNN(10, [40]))
-    >>> ff = PermuteTransform(torch.randperm(10, dtype=torch.long))
+    >>> ff = Permute(torch.randperm(10, dtype=torch.long))
     >>> iaf2 = AffineAutoregressive(AutoRegressiveNN(10, [40]))
-    >>> iaf_dist = dist.TransformedDistribution(base_dist, [iaf1, ff, iaf2])
-    >>> iaf_dist.sample()  # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [iaf1, ff, iaf2])
+    >>> flow_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
 
@@ -41,7 +41,7 @@ class PermuteTransform(Transform):
     volume_preserving = True
 
     def __init__(self, permutation):
-        super(PermuteTransform, self).__init__(cache_size=1)
+        super(Permute, self).__init__(cache_size=1)
 
         self.permutation = permutation
 
@@ -83,3 +83,20 @@ class PermuteTransform(Transform):
         """
 
         return torch.zeros(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device)
+
+
+def permute(input_dim, permutation=None):
+    """
+    A helper function to create a Permute object for consistency with other helpers.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+    :param permutation: Torch tensor of integer indices representing permutation. Defaults
+        to a random permutation.
+    :type permutation: torch.LongTensor
+
+    """
+
+    if permutation is None:
+        permutation = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
+    return Permute(permutation)

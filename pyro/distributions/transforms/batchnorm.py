@@ -8,7 +8,7 @@ from pyro.distributions.util import copy_docs_from
 
 
 @copy_docs_from(TransformModule)
-class BatchNormTransform(TransformModule):
+class BatchNorm(TransformModule):
     """
     A type of batch normalization that can be used to stabilize training in normalizing flows. The inverse operation
     is defined as
@@ -37,7 +37,7 @@ class BatchNormTransform(TransformModule):
     >>> from pyro.distributions.transforms import AffineAutoregressive
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> iafs = [AffineAutoregressive(AutoRegressiveNN(10, [40])) for _ in range(2)]
-    >>> bn = BatchNormTransform(10)
+    >>> bn = BatchNorm(10)
     >>> flow_dist = dist.TransformedDistribution(base_dist, [iafs[0], bn, iafs[1]])
     >>> flow_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
@@ -69,7 +69,7 @@ class BatchNormTransform(TransformModule):
     event_dim = 0
 
     def __init__(self, input_dim, momentum=0.1, epsilon=1e-5):
-        super(BatchNormTransform, self).__init__()
+        super(BatchNorm, self).__init__()
 
         self.input_dim = input_dim
         self.gamma = nn.Parameter(torch.zeros(input_dim))
@@ -90,7 +90,7 @@ class BatchNormTransform(TransformModule):
         :type x: torch.Tensor
 
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous flow)
+        sample from the base distribution (or the output of a previous transform)
         """
         # Enforcing the constraint that gamma is positive
         return (x - self.beta) / self.constrained_gamma * \
@@ -127,3 +127,19 @@ class BatchNormTransform(TransformModule):
             # NOTE: You wouldn't typically run this function in eval mode, but included for gradient tests
             var = self.moving_variance
         return (-self.constrained_gamma.log() + 0.5 * torch.log(var + self.epsilon))
+
+
+def batchnorm(input_dim, **kwargs):
+    """
+    A helper function to create a BatchNorm object for consistency with other helpers.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+    :param momentum: momentum parameter for updating moving averages
+    :type momentum: float
+    :param epsilon: small number to add to variances to ensure numerical stability
+    :type epsilon: float
+
+    """
+    bn = BatchNorm(input_dim, **kwargs)
+    return bn

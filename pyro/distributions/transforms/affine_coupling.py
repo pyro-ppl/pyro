@@ -4,12 +4,13 @@ from torch.distributions import constraints
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.util import copy_docs_from
 from pyro.distributions.transforms.utils import clamp_preserve_gradients
+from pyro.nn import DenseNN
 
 
 @copy_docs_from(TransformModule)
 class AffineCoupling(TransformModule):
     """
-    An implementation of the affine coupling layer of RealNVP (Dinh et al., 2017) that uses the transformation,
+    An implementation of the affine coupling layer of RealNVP (Dinh et al., 2017) that uses the bijective transform,
 
         :math:`\\mathbf{y}_{1:d} = \\mathbf{x}_{1:d}`
         :math:`\\mathbf{y}_{(d+1):D} = \\mu + \\sigma\\odot\\mathbf{x}_{(d+1):D}`
@@ -30,9 +31,9 @@ class AffineCoupling(TransformModule):
     >>> split_dim = 6
     >>> base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
     >>> hypernet = DenseNN(split_dim, [10*input_dim], [input_dim-split_dim, input_dim-split_dim])
-    >>> flow = AffineCoupling(split_dim, hypernet)
-    >>> pyro.module("my_flow", flow)  # doctest: +SKIP
-    >>> flow_dist = dist.TransformedDistribution(base_dist, [flow])
+    >>> transform = AffineCoupling(split_dim, hypernet)
+    >>> pyro.module("my_transform", transform)  # doctest: +SKIP
+    >>> flow_dist = dist.TransformedDistribution(base_dist, [transform])
     >>> flow_dist.sample()  # doctest: +SKIP
         tensor([-0.4071, -0.5030,  0.7924, -0.2366, -0.2387, -0.1417,  0.0868,
                 0.1389, -0.4629,  0.0986])
@@ -82,7 +83,7 @@ class AffineCoupling(TransformModule):
         :type x: torch.Tensor
 
         Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous flow)
+        sample from the base distribution (or the output of a previous transform)
         """
         x1, x2 = x[..., :self.split_dim], x[..., self.split_dim:]
 
@@ -122,3 +123,30 @@ class AffineCoupling(TransformModule):
             _, log_scale = self.hypernet(x1)
             log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         return log_scale.sum(-1)
+
+
+def affine_coupling(input_dim, hidden_dims=None, split_dim=None, **kwargs):
+    """
+    A helper function to create an AffineCoupling object that takes care of constructing
+    a dense network with the correct input/output dimensions.
+
+    :param input_dim: Dimension of input variable
+    :type input_dim: int
+    :param hidden_dims: The desired hidden dimensions of the dense network. Defaults
+        to using [10*input_dim]
+    :type hidden_dims: list[int]
+    :param split_dim: The dimension to split the input on for the coupling transform. Defaults
+        to using input_dim // 2
+    :type split_dim: int
+    :param log_scale_min_clip: The minimum value for clipping the log(scale) from the autoregressive NN
+    :type log_scale_min_clip: float
+    :param log_scale_max_clip: The maximum value for clipping the log(scale) from the autoregressive NN
+    :type log_scale_max_clip: float
+
+    """
+    if split_dim is None:
+        split_dim = input_dim // 2
+    if hidden_dims is None:
+        hidden_dims = [10 * input_dim]
+    hypernet = DenseNN(split_dim, hidden_dims, [input_dim - split_dim, input_dim - split_dim])
+    return AffineCoupling(split_dim, hypernet, **kwargs)

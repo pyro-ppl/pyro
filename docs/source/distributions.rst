@@ -64,7 +64,7 @@ BetaBinomial
     :show-inheritance:
 
 ConditionalDistribution
-----------------------------------
+-----------------------
 .. autoclass:: pyro.distributions.ConditionalDistribution
     :members:
     :undoc-members:
@@ -92,14 +92,14 @@ DirichletMultinomial
     :show-inheritance:
 
 DiscreteHMM
---------------------
+-----------
 .. autoclass:: pyro.distributions.DiscreteHMM
     :members:
     :undoc-members:
     :show-inheritance:
 
 EmpiricalDistribution
-----------------------
+---------------------
 .. autoclass:: pyro.distributions.Empirical
     :members:
     :undoc-members:
@@ -113,21 +113,21 @@ GammaPoisson
     :show-inheritance:
 
 GaussianHMM
---------------------
+-----------
 .. autoclass:: pyro.distributions.GaussianHMM
     :members:
     :undoc-members:
     :show-inheritance:
 
 GaussianMRF
---------------------
+-----------
 .. autoclass:: pyro.distributions.GaussianMRF
     :members:
     :undoc-members:
     :show-inheritance:
 
 GaussianScaleMixture
-------------------------------------
+--------------------
 .. autoclass:: pyro.distributions.GaussianScaleMixture
     :members:
     :undoc-members:
@@ -155,7 +155,7 @@ MaskedMixture
     :show-inheritance:
 
 MixtureOfDiagNormals
-------------------------------------
+--------------------
 .. autoclass:: pyro.distributions.MixtureOfDiagNormals
     :members:
     :undoc-members:
@@ -231,8 +231,46 @@ ZeroInflatedPoisson
     :undoc-members:
     :show-inheritance:
 
-Transformed Distributions
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Transforms
+~~~~~~~~~~
+
+ConditionalTransform
+--------------------
+.. autoclass:: pyro.distributions.ConditionalTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ELUTransform
+------------
+.. autoclass:: pyro.distributions.transforms.ELUTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+LeakyReLUTransform
+------------------
+.. autoclass:: pyro.distributions.transforms.LeakyReLUTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+PermuteTransform
+----------------
+.. autoclass:: pyro.distributions.transforms.PermuteTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+TanhTransform
+-------------
+.. autoclass:: pyro.distributions.transforms.TanhTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+TransformModules
+~~~~~~~~~~~~~~~~
 
 AffineAutoregressive
 --------------------
@@ -248,9 +286,9 @@ AffineCoupling
     :undoc-members:
     :show-inheritance:
 
-BatchNormTransform
-------------------
-.. autoclass:: pyro.distributions.transforms.BatchNormTransform
+BatchNorm
+---------
+.. autoclass:: pyro.distributions.transforms.BatchNorm
     :members:
     :undoc-members:
     :show-inheritance:
@@ -262,16 +300,9 @@ BlockAutoregressive
     :undoc-members:
     :show-inheritance:
 
-ConditionalPlanarFlow
----------------------
-.. autoclass:: pyro.distributions.transforms.ConditionalPlanarFlow
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-ConditionalTransform
---------------------
-.. autoclass:: pyro.distributions.ConditionalTransform
+ConditionalPlanar
+-----------------
+.. autoclass:: pyro.distributions.transforms.ConditionalPlanar
     :members:
     :undoc-members:
     :show-inheritance:
@@ -283,30 +314,9 @@ ConditionalTransformModule
     :undoc-members:
     :show-inheritance:
 
-DeepELUFlow
+Householder
 -----------
-.. autoclass:: pyro.distributions.transforms.DeepELUFlow
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-DeepLeakyReLUFlow
------------------
-.. autoclass:: pyro.distributions.transforms.DeepLeakyReLUFlow
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-DeepSigmoidalFlow
------------------
-.. autoclass:: pyro.distributions.transforms.DeepSigmoidalFlow
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-HouseholderFlow
----------------
-.. autoclass:: pyro.distributions.transforms.HouseholderFlow
+.. autoclass:: pyro.distributions.transforms.Householder
     :members:
     :undoc-members:
     :show-inheritance:
@@ -314,34 +324,38 @@ HouseholderFlow
 PermuteTransform
 ----------------
 .. autoclass:: pyro.distributions.transforms.PermuteTransform
+
+NeuralAutoregressive
+--------------------
+.. autoclass:: pyro.distributions.transforms.NeuralAutoregressive
     :members:
     :undoc-members:
     :show-inheritance:
 
-PlanarFlow
+Planar
+------
+.. autoclass:: pyro.distributions.transforms.Planar
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+Polynomial
 ----------
-.. autoclass:: pyro.distributions.transforms.PlanarFlow
+.. autoclass:: pyro.distributions.transforms.Polynomial
     :members:
     :undoc-members:
     :show-inheritance:
 
-PolynomialFlow
---------------
-.. autoclass:: pyro.distributions.transforms.PolynomialFlow
+Radial
+------
+.. autoclass:: pyro.distributions.transforms.Radial
     :members:
     :undoc-members:
     :show-inheritance:
 
-RadialFlow
-----------
-.. autoclass:: pyro.distributions.transforms.RadialFlow
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-SylvesterFlow
--------------
-.. autoclass:: pyro.distributions.transforms.SylvesterFlow
+Sylvester
+---------
+.. autoclass:: pyro.distributions.transforms.Sylvester
     :members:
     :undoc-members:
     :show-inheritance:
