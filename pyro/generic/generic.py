@@ -31,15 +31,30 @@ class GenericModule(object):
         return getattr(module, name)
 
 
-@contextmanager
-def model(rng_seed=None):
-    if _BACKEND == 'numpy':
-        if rng_seed is None:
-            rng_seed = random.randint()
-        with handlers.seed(rng_seed):
-            yield
-    else:
-        yield
+def seed(fn=None, rng_seed=None):
+    seed_ctx = _SeedCtx(rng_seed=rng_seed)
+    return seed_ctx if fn is None else seed_ctx(fn)
+
+
+class _SeedCtx(object):
+    def __init__(self, rng_seed=None):
+        self.rng_seed = rng_seed if rng_seed is not None else random.randint()
+        self.seed_ctx = None
+
+    def __enter__(self):
+        if _BACKEND == 'numpy':
+            self.seed_ctx = handlers.seed(rng=self.rng_seed)
+            self.seed_ctx.__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if _BACKEND == 'numpy':
+            self.seed_ctx.__exit__()
+
+    def __call__(self, fn):
+        def _fn(*args, **kwargs):
+            with self:
+                return fn(*args, **kwargs)
+        return _fn
 
 
 @contextmanager
@@ -78,6 +93,7 @@ _ALIASES = {
     'pyro': {
         'constraints': 'torch.distributions.constraints',
         'distributions': 'pyro.distributions',
+        'generic': 'pyro.generic',
         'handlers': 'pyro.poutine',
         'infer': 'pyro.infer',
         'ops': 'torch',
@@ -88,6 +104,7 @@ _ALIASES = {
     'minipyro': {
         'constraints': 'torch.distributions.constraints',
         'distributions': 'pyro.distributions',
+        'generic': 'pyro.generic',
         'handlers': 'pyro.poutine',
         'infer': 'pyro.contrib.minipyro',
         'ops': 'torch',
@@ -98,6 +115,7 @@ _ALIASES = {
     'funsor': {
         'constraints': 'torch.distributions.constraints',
         'distributions': 'funsor.distributions',
+        'generic': 'pyro.generic',
         'handlers': 'pyro.poutine',
         'infer': 'funsor.minipyro',
         'ops': 'funsor.ops',
@@ -108,6 +126,7 @@ _ALIASES = {
     'numpy': {
         'constraints': 'numpyro.compat.distributions',
         'distributions': 'numpyro.compat.distributions',
+        'generic': 'pyro.generic',
         'handlers': 'numpyro.compat.handlers',
         'infer': 'numpyro.compat.infer',
         'ops': 'numpyro.compat.ops',
@@ -120,6 +139,7 @@ _ALIASES = {
 # These modules can be overridden.
 constraints = GenericModule('constraints', 'torch.distributions.constraints')
 pyro = GenericModule('pyro', 'pyro')
+generic = GenericModule('generic', 'pyro.generic')
 distributions = GenericModule('distributions', 'pyro.distributions')
 handlers = GenericModule('handlers', 'pyro.handlers')
 infer = GenericModule('infer', 'pyro.infer')
