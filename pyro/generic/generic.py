@@ -28,6 +28,12 @@ class GenericModule(object):
 
 
 @contextmanager
+def model(rng):
+    with handlers.seed(rng=rng):
+        yield
+
+
+@contextmanager
 def pyro_backend(*aliases, **new_backends):
     """
     Context manager to set a custom backend for Pyro models.
@@ -55,36 +61,42 @@ def pyro_backend(*aliases, **new_backends):
 _ALIASES = {
     'pyro': {
         'pyro': 'pyro',
-        'distributions': 'pyro.distributions',
+        'distributions': 'pyro.generic.distributions',
         'infer': 'pyro.infer',
-        'optim': 'pyro.optim',
         'ops': 'torch',
+        'optim': 'pyro.optim',
+        'handlers': 'pyro.generic.poutine',
     },
     'minipyro': {
         'pyro': 'pyro.contrib.minipyro',
+        'distributions': 'pyro.generic.distributions',
         'infer': 'pyro.contrib.minipyro',
-        'optim': 'pyro.contrib.minipyro',
         'ops': 'torch',
+        'optim': 'pyro.contrib.minipyro',
+        'handlers': 'pyro.generic.poutine',
     },
     'funsor': {
         'pyro': 'funsor.minipyro',
-        'infer': 'funsor.minipyro',
-        'optim': 'funsor.minipyro',
         'distributions': 'funsor.distributions',
+        'infer': 'funsor.minipyro',
         'ops': 'funsor.ops',
+        'optim': 'funsor.minipyro',
+        'handlers': 'pyro.generic.poutine',
     },
     'numpy': {
         'pyro': 'numpyro.compat.pyro',
         'distributions': 'numpyro.compat.distributions',
         'infer': 'numpyro.compat.infer',
+        'ops': 'numpyro.compat.ops',
         'optim': 'numpyro.compat.optim',
-        'ops': 'numpy',
+        'handlers': 'numpyro.compat.handlers',
     },
 }
 
 # These modules can be overridden.
 pyro = GenericModule('pyro', 'pyro')
 distributions = GenericModule('distributions', 'pyro.distributions')
+handlers = GenericModule('handlers', 'pyro.handlers')
 infer = GenericModule('infer', 'pyro.infer')
 optim = GenericModule('optim', 'pyro.optim')
 ops = GenericModule('ops', 'torch')
