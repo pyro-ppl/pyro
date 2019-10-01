@@ -4,6 +4,9 @@ from pyro.generic import infer, pyro_backend, seed
 from pyro.generic.testing import MODELS
 
 
+pytestmark = pytest.mark.stage('unit')
+
+
 @pytest.mark.parametrize('model', MODELS)
 @pytest.mark.parametrize('backend', ['pyro', 'numpy'])
 def test_mcmc_interface(model, backend):
