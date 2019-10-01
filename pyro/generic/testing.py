@@ -1,20 +1,25 @@
 import argparse
+import functools
 from collections import OrderedDict
 
-from pyro.generic import distributions as dist, handlers
-from pyro.generic import infer, ops, pyro, pyro_backend
-
+from pyro.generic import distributions as dist
+from pyro.generic import handlers, ops, pyro, pyro_backend, transforms
 
 MODELS = OrderedDict()
 
 
-def register(name):
-    def _append(fn):
-        MODELS[name] = fn
-    return _append
+def register(rng_seed=None):
+    def _register_fn(fn):
+        @functools.wraps(fn)
+        def _fn():
+            with pyro.generic.model(rng_seed):
+                return fn()
+        MODELS[fn.__name__] = _fn
+
+    return _register_fn
 
 
-@register('logistic_regression')
+@register(rng_seed=1)
 def logistic_regression():
     N, dim = 3000, 3
     # generic way to sample from distributions
@@ -29,20 +34,20 @@ def logistic_regression():
         logits = ops.sum(coefs * x, axis=-1) + intercept
         return pyro.sample('obs', dist.Bernoulli(logits=logits), obs=y)
 
-    return model, (data, labels), {}
+    return {'model': model, 'model_args': (data, labels)}
 
 
-@register('neals_funnel')
+@register(rng_seed=1)
 def neals_funnel():
     def model(dim):
         y = pyro.sample('y', dist.Normal(0, 3))
         pyro.sample('x', dist.TransformedDistribution(
-            dist.Normal(ops.zeros(dim - 1), 1), dist.AffineTransform(0, ops.exp(y / 2))))
+            dist.Normal(ops.zeros(dim - 1), 1), transforms.AffineTransform(0, ops.exp(y / 2))))
 
-    return model, (10,), {}
+    return {'model': model, 'model_args': (10,)}
 
 
-@register('eight_schools')
+@register(rng_seed=1)
 def eight_schools():
     data = {
         "J": 8,
@@ -57,10 +62,10 @@ def eight_schools():
             theta = pyro.sample('theta', dist.Normal(mu, tau))
             pyro.sample('obs', dist.Normal(theta, sigma), obs=y)
 
-    return model, (), data
+    return {'model': model, 'model_kwargs': data}
 
 
-@register('beta_binomial')
+@register(rng_seed=1)
 def beta_binomial():
     true_probs = ops.tensor([[0.7, 0.4], [0.6, 0.4]])
     total_count = ops.tensor([[1000, 600], [400, 800]])
@@ -76,25 +81,30 @@ def beta_binomial():
                 with pyro.plate("data", data.shape[0]):
                     pyro.sample("binomial", dist.Binomial(probs=probs, total_count=total_count), obs=data)
 
-    return model, (data,), {}
+    return {'model': model, 'model_args': (data,)}
+
+
+def check_model(backend, name):
+    get_model = MODELS[name]
+    print('Running model "{}" on backend "{}".'.format(name, args.backend))
+    with pyro_backend(backend):
+        f = get_model()
+        model, model_args, model_kwargs = f['model'], f.get('model_args', ()), f.get('model_kwargs', {})
+        print('Sample from prior...')
+        model(*model_args, **model_kwargs)
+        print('Trace model...')
+        handlers.trace(model).get_trace(*model_args, **model_kwargs)
 
 
 def main(args):
-    with pyro_backend(args.backend):
-        for name, get_model in MODELS.items():
-            print('Running model "{}" on backend "{}".'.format(name, args.backend))
-            with handlers.seed(rng=1):
-                model, model_args, model_kwargs = get_model()
-                print('Sample from prior...')
-                model(*model_args, **model_kwargs)
-                print('Trace model...')
-                handlers.trace(model).get_trace(*model_args, **model_kwargs)
-                if args.run_mcmc:
-                    print('Run inference using MCMC...')
-                    nuts_kernel = infer.NUTS(model=model)
-                    mcmc = infer.MCMC(nuts_kernel, num_samples=100, warmup_steps=100)
-                    mcmc.run(*model_args, **model_kwargs)
-                    mcmc.summary()
+    for name in MODELS:
+        check_model(args.backend, name)
+        # if args.run_mcmc:
+        #     print('Run inference using MCMC...')
+        #     nuts_kernel = infer.NUTS(model=model)
+        #     mcmc = infer.MCMC(nuts_kernel, num_samples=100, warmup_steps=100)
+        #     mcmc.run(*model_args, **model_kwargs)
+        #     mcmc.summary()
 
 
 if __name__ == '__main__':
