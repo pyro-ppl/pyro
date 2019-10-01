@@ -100,7 +100,7 @@ def main(args):
 if __name__ == '__main__':
     assert pyro.__version__.startswith('0.4.1')
     parser = argparse.ArgumentParser(description="Mini Pyro demo")
-    parser.add_argument("-b", "--backend", default="numpy")
+    parser.add_argument("-b", "--backend", default="pyro")
     parser.add_argument("--run-mcmc", default=True, action="store_true")
     args = parser.parse_args()
     main(args)
