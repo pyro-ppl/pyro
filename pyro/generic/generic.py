@@ -31,19 +31,26 @@ class GenericModule(object):
         return getattr(module, name)
 
 
-def seed(fn=None, rng_seed=None):
-    seed_ctx = _SeedCtx(rng_seed=rng_seed)
+def seed(fn=None, rng_key=None):
+    """
+    Seed the callable with the given `rng_key`. Currently, only affects the
+    numpy backend. This can be used as a decorator or context manager.
+
+    :param fn: Python callable. Not required when used as a context manager.
+    :param int rng_key: random number generator seed.
+    """
+    seed_ctx = _SeedCtx(rng_key=rng_key)
     return seed_ctx if fn is None else seed_ctx(fn)
 
 
 class _SeedCtx(object):
-    def __init__(self, rng_seed=None):
-        self.rng_seed = rng_seed if rng_seed is not None else random.randint()
+    def __init__(self, rng_key=None):
+        self.rng_key = rng_key if rng_key is not None else random.randint()
         self.seed_ctx = None
 
     def __enter__(self):
         if _BACKEND == 'numpy':
-            self.seed_ctx = handlers.seed(rng=self.rng_seed)
+            self.seed_ctx = handlers.seed(rng=self.rng_key)
             self.seed_ctx.__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -141,7 +148,7 @@ constraints = GenericModule('constraints', 'torch.distributions.constraints')
 pyro = GenericModule('pyro', 'pyro')
 generic = GenericModule('generic', 'pyro.generic')
 distributions = GenericModule('distributions', 'pyro.distributions')
-handlers = GenericModule('handlers', 'pyro.handlers')
+handlers = GenericModule('handlers', 'pyro.poutine')
 infer = GenericModule('infer', 'pyro.infer')
 optim = GenericModule('optim', 'pyro.optim')
 ops = GenericModule('ops', 'torch')

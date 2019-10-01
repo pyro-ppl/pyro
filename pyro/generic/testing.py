@@ -9,7 +9,7 @@ observed data.
 import argparse
 from collections import OrderedDict
 
-from pyro.generic import distributions as dist, generic, handlers, ops, pyro, pyro_backend, transforms
+from pyro.generic import distributions as dist, generic, handlers, ops, pyro, pyro_backend, seed, transforms
 
 MODELS = OrderedDict()
 
@@ -30,7 +30,6 @@ def logistic_regression():
     logits = ops.sum(true_coefs * data, axis=-1)
     labels = pyro.sample('labels', dist.Bernoulli(logits=logits))
 
-    @generic.seed(rng_seed=2)
     def model(x, y=None):
         coefs = pyro.sample('coefs', dist.Normal(ops.zeros(dim), ops.ones(dim)))
         intercept = pyro.sample('intercept', dist.Normal(0., 1.))
@@ -42,7 +41,6 @@ def logistic_regression():
 
 @register(rng_seed=1)
 def neals_funnel():
-    @generic.seed(rng_seed=2)
     def model(dim):
         y = pyro.sample('y', dist.Normal(0, 3))
         pyro.sample('x', dist.TransformedDistribution(
@@ -57,7 +55,6 @@ def eight_schools():
     y = ops.tensor([28.0, 8.0, -3.0, 7.0, -1.0, 1.0, 18.0, 12.0])
     sigma = ops.tensor([15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0])
 
-    @generic.seed(rng_seed=2)
     def model(J, sigma, y=None):
         mu = pyro.sample('mu', dist.Normal(0, 5))
         tau = pyro.sample('tau', dist.HalfCauchy(5))
@@ -77,7 +74,6 @@ def beta_binomial():
     data = pyro.sample('data', dist.Binomial(total_count=total_count, probs=true_probs),
                        sample_shape=(N,))
 
-    @generic.seed(rng_seed=2)
     def model(N, D1, D2, data=None):
         with pyro.plate("plate_0", D1):
             alpha = pyro.sample("alpha", dist.HalfCauchy(1.))
@@ -93,7 +89,7 @@ def beta_binomial():
 def check_model(backend, name):
     get_model = MODELS[name]
     print('Running model "{}" on backend "{}".'.format(name, args.backend))
-    with pyro_backend(backend):
+    with pyro_backend(backend), seed(rng_key=2):
         f = get_model()
         model, model_args, model_kwargs = f['model'], f.get('model_args', ()), f.get('model_kwargs', {})
         print('Sample from prior...')
