@@ -8,7 +8,7 @@ pytestmark = pytest.mark.stage('unit')
 
 
 @pytest.mark.parametrize('model', MODELS)
-@pytest.mark.parametrize('backend', ['pyro', 'numpy'])
+@pytest.mark.parametrize('backend', ['pyro'])
 def test_mcmc_interface(model, backend):
     with pyro_backend(backend), seed(rng_key=20):
         f = MODELS[model]()
