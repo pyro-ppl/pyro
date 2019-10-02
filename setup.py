@@ -52,6 +52,11 @@ except Exception as e:
 # This assumes the first 10 lines contain badge info.
 long_description = '\n'.join([str(line) for line in long_description.split('\n')[10:]])
 
+install_requires = []
+with open("./requirements.txt") as f:
+    install_requires = f.read().splitlines()
+install_requires = [x for x in install_requires if not x.startswith('#')]
+
 # examples/tutorials
 EXTRAS_REQUIRE = [
     'jupyter>=1.0.0',
@@ -77,16 +82,7 @@ setup(
     url='http://pyro.ai',
     author='Uber AI Labs',
     author_email='pyro@uber.com',
-    install_requires=[
-        # if you add any additional libraries, please also
-        # add them to `docs/requirements.txt`
-        'graphviz>=0.8',
-        # numpy is necessary for some functionality of PyTorch
-        'numpy>=1.7',
-        'opt_einsum>=2.3.2',
-        'torch>=1.2.0',
-        'tqdm>=4.31',
-    ],
+    install_requires=install_requires,
     extras_require={
         'extras': EXTRAS_REQUIRE,
         'test': EXTRAS_REQUIRE + [
