@@ -369,3 +369,11 @@ TransformModule
     :members:
     :undoc-members:
     :show-inheritance:
+
+Constraints
+~~~~~~~~~~~
+.. automodule:: pyro.distributions.constraints
+    :members:
+    :member-order: bysource
+    :undoc-members:
+    :show-inheritance:
