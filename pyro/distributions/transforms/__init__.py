@@ -2,7 +2,7 @@ from torch.distributions import biject_to, transform_to
 from torch.distributions.transforms import *  # noqa F403
 from torch.distributions.transforms import __all__ as torch_transforms
 
-import pyro.distributions.constraints as constraints
+from pyro.distributions.constraints import IndependentConstraint, corr_cholesky_constraint
 from pyro.distributions.transforms.affine_coupling import AffineCoupling
 from pyro.distributions.transforms.batch_norm import BatchNormTransform
 from pyro.distributions.transforms.block_autoregressive import BlockAutoregressive
@@ -20,14 +20,12 @@ from pyro.distributions.transforms.sylvester import SylvesterFlow
 ########################################
 # register transforms
 
-biject_to.register(constraints.IndependentConstraint,
-                   lambda c: biject_to(c.base_constraint))
-transform_to.register(constraints.IndependentConstraint,
-                      lambda c: transform_to(c.base_constraint))
+biject_to.register(IndependentConstraint, lambda c: biject_to(c.base_constraint))
+transform_to.register(IndependentConstraint, lambda c: transform_to(c.base_constraint))
 
 
-@biject_to.register(constraints.corr_cholesky_constraint)
-@transform_to.register(constraints.corr_cholesky_constraint)
+@biject_to.register(corr_cholesky_constraint)
+@transform_to.register(corr_cholesky_constraint)
 def _transform_to_corr_cholesky(constraint):
     return CorrLCholeskyTransform()
 

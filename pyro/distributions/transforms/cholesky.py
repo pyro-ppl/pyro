@@ -1,8 +1,10 @@
 import math
 
 import torch
+from torch.distributions import constraints
 from torch.distributions.transforms import Transform
-import pyro.distributions.constraints as constraints
+
+from pyro.distributions.constraints import corr_cholesky_constraint
 
 
 def _vector_to_l_cholesky(z):
@@ -37,7 +39,7 @@ class CorrLCholeskyTransform(Transform):
     [1] `Cholesky Factors of Correlation Matrices`, Stan Reference Manual v2.18, Section 10.12
     """
     domain = constraints.real
-    codomain = constraints.corr_cholesky_constraint
+    codomain = corr_cholesky_constraint
     bijective = True
     sign = +1
     event_dim = 1

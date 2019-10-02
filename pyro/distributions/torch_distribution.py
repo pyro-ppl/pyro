@@ -1,9 +1,9 @@
 import warnings
 
 import torch
+from torch.distributions import constraints
 from torch.distributions.kl import kl_divergence, register_kl
 
-import pyro.distributions.constraints as constraints
 import pyro.distributions.torch
 from pyro.distributions.distribution import Distribution
 from pyro.distributions.util import broadcast_shape, scale_and_mask
