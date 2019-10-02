@@ -22,8 +22,6 @@ from pyro.distributions.torch import *  # noqa F403
 from pyro.distributions.torch import __all__ as torch_dists
 from pyro.distributions.torch_distribution import TorchDistribution
 from pyro.distributions.torch_transform import TransformModule
-from pyro.distributions.transforms import *  # noqa F403
-from pyro.distributions.transforms import __all__ as pyro_transforms
 from pyro.distributions.unit import Unit
 from pyro.distributions.util import enable_validation, is_validation_enabled, validation_enabled
 from pyro.distributions.von_mises import VonMises
@@ -72,7 +70,3 @@ __all__ = [
 # Import all torch distributions from `pyro.distributions.torch_distribution`
 __all__.extend(torch_dists)
 del torch_dists
-
-# For backwards compatibility, import all transforms into distributions module
-__all__.extend(pyro_transforms)  # noqa
-del pyro_transforms
