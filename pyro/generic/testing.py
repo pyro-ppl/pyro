@@ -9,14 +9,14 @@ observed data.
 import argparse
 from collections import OrderedDict
 
-from pyro.generic import distributions as dist, generic, handlers, ops, pyro, pyro_backend, seed, transforms
+from pyro.generic import distributions as dist, handlers, ops, pyro, pyro_backend
 
 MODELS = OrderedDict()
 
 
 def register(rng_seed=None):
     def _register_fn(fn):
-        MODELS[fn.__name__] = generic.seed(fn, rng_seed)
+        MODELS[fn.__name__] = handlers.seed(fn, rng_seed)
 
     return _register_fn
 
@@ -44,7 +44,7 @@ def neals_funnel():
     def model(dim):
         y = pyro.sample('y', dist.Normal(0, 3))
         pyro.sample('x', dist.TransformedDistribution(
-            dist.Normal(ops.zeros(dim - 1), 1), transforms.AffineTransform(0, ops.exp(y / 2))))
+            dist.Normal(ops.zeros(dim - 1), 1), dist.transforms.AffineTransform(0, ops.exp(y / 2))))
 
     return {'model': model, 'model_args': (10,)}
 
@@ -89,7 +89,7 @@ def beta_binomial():
 def check_model(backend, name):
     get_model = MODELS[name]
     print('Running model "{}" on backend "{}".'.format(name, args.backend))
-    with pyro_backend(backend), seed(rng_key=2):
+    with pyro_backend(backend), handlers.seed(rng_seed=2):
         f = get_model()
         model, model_args, model_kwargs = f['model'], f.get('model_args', ()), f.get('model_kwargs', {})
         print('Sample from prior...')

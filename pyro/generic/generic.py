@@ -1,5 +1,4 @@
 import importlib
-import random
 from contextlib import contextmanager
 
 
@@ -29,39 +28,6 @@ class GenericModule(object):
             module = importlib.import_module(backend)
             GenericModule._modules[backend] = module
         return getattr(module, name)
-
-
-def seed(fn=None, rng_key=None):
-    """
-    Seed the callable with the given `rng_key`. Currently, only affects the
-    numpy backend. This can be used as a decorator or context manager.
-
-    :param fn: Python callable. Not required when used as a context manager.
-    :param int rng_key: random number generator seed.
-    """
-    seed_ctx = _SeedCtx(rng_key=rng_key)
-    return seed_ctx if fn is None else seed_ctx(fn)
-
-
-class _SeedCtx(object):
-    def __init__(self, rng_key=None):
-        self.rng_key = rng_key if rng_key is not None else random.randint()
-        self.seed_ctx = None
-
-    def __enter__(self):
-        if _BACKEND == 'numpy':
-            self.seed_ctx = handlers.seed(rng=self.rng_key)
-            self.seed_ctx.__enter__()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if _BACKEND == 'numpy':
-            self.seed_ctx.__exit__()
-
-    def __call__(self, fn):
-        def _fn(*args, **kwargs):
-            with self:
-                return fn(*args, **kwargs)
-        return _fn
 
 
 @contextmanager
@@ -98,58 +64,43 @@ def pyro_backend(*aliases, **new_backends):
 
 _ALIASES = {
     'pyro': {
-        'constraints': 'torch.distributions.constraints',
         'distributions': 'pyro.distributions',
-        'generic': 'pyro.generic',
         'handlers': 'pyro.poutine',
         'infer': 'pyro.infer',
         'ops': 'torch',
         'optim': 'pyro.optim',
         'pyro': 'pyro',
-        'transforms': 'torch.distributions.transforms',
     },
     'minipyro': {
-        'constraints': 'torch.distributions.constraints',
         'distributions': 'pyro.distributions',
-        'generic': 'pyro.generic',
         'handlers': 'pyro.poutine',
         'infer': 'pyro.contrib.minipyro',
         'ops': 'torch',
         'optim': 'pyro.contrib.minipyro',
         'pyro': 'pyro.contrib.minipyro',
-        'transforms': 'torch.distributions.transforms',
     },
     'funsor': {
-        'constraints': 'torch.distributions.constraints',
         'distributions': 'funsor.distributions',
-        'generic': 'pyro.generic',
         'handlers': 'pyro.poutine',
         'infer': 'funsor.minipyro',
         'ops': 'funsor.ops',
         'optim': 'funsor.minipyro',
         'pyro': 'funsor.minipyro',
-        'transforms': 'torch.distributions.transforms',
     },
     'numpy': {
-        'constraints': 'numpyro.compat.distributions',
         'distributions': 'numpyro.compat.distributions',
-        'generic': 'pyro.generic',
         'handlers': 'numpyro.compat.handlers',
         'infer': 'numpyro.compat.infer',
         'ops': 'numpyro.compat.ops',
         'optim': 'numpyro.compat.optim',
         'pyro': 'numpyro.compat.pyro',
-        'transforms': 'numpyro.compat.distributions',
     },
 }
 
 # These modules can be overridden.
-constraints = GenericModule('constraints', 'torch.distributions.constraints')
 pyro = GenericModule('pyro', 'pyro')
-generic = GenericModule('generic', 'pyro.generic')
 distributions = GenericModule('distributions', 'pyro.distributions')
 handlers = GenericModule('handlers', 'pyro.poutine')
 infer = GenericModule('infer', 'pyro.infer')
 optim = GenericModule('optim', 'pyro.optim')
 ops = GenericModule('ops', 'torch')
-transforms = GenericModule('transforms', 'torch.distributions.transforms')

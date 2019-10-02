@@ -1,3 +1,5 @@
+import torch.distributions.constraints as constraints
+
 import pyro.distributions.torch_patch  # noqa F403
 from pyro.distributions.avf_mvn import AVFMultivariateNormal
 from pyro.distributions.conjugate import BetaBinomial, DirichletMultinomial, GammaPoisson
@@ -28,6 +30,7 @@ from pyro.distributions.lkj import CorrLCholeskyTransform, LKJCorrCholesky, corr
 from pyro.distributions.transforms import *  # noqa F403
 
 __all__ = [
+    "constraints",
     "AVFMultivariateNormal",
     "BetaBinomial",
     "Delta",
