@@ -28,15 +28,15 @@ from pyro.distributions.von_mises import VonMises
 from pyro.distributions.von_mises_3d import VonMises3D
 from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
 
-import pyro.distributions.kl  # noqa F403 isort:skip
+from . import constraints, kl, transforms
 
 __all__ = [
     "AVFMultivariateNormal",
     "BetaBinomial",
     "ConditionalDistribution",
     "ConditionalTransform",
-    "ConditionalTransformedDistribution",
     "ConditionalTransformModule",
+    "ConditionalTransformedDistribution",
     "Delta",
     "DirichletMultinomial",
     "DiscreteHMM",
@@ -62,8 +62,11 @@ __all__ = [
     "VonMises",
     "VonMises3D",
     "ZeroInflatedPoisson",
+    "constraints",
     "enable_validation",
     "is_validation_enabled",
+    "kl",
+    "transforms",
     "validation_enabled",
 ]
 
