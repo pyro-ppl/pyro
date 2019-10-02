@@ -1,7 +1,8 @@
 import torch
 from torch.distributions import constraints
 
-from pyro.distributions.torch_distribution import IndependentConstraint, TorchDistributionMixin
+from pyro.distributions.constraints import IndependentConstraint
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 
 
 # This overloads .log_prob() and .enumerate_support() to speed up evaluating
