@@ -181,6 +181,8 @@ def test_mcmc_diagnostics(num_chains):
     mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains,
                 initial_params=initial_params, transforms=transforms)
     mcmc.run(data)
+    if not torch.backends.mkl.is_available():
+        pytest.skip()
     diagnostics = mcmc.diagnostics()
     assert diagnostics["y"]["n_eff"].shape == data.shape
     assert diagnostics["y"]["r_hat"].shape == data.shape
