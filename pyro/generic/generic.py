@@ -2,9 +2,6 @@ import importlib
 from contextlib import contextmanager
 
 
-_BACKEND = 'pyro'
-
-
 class GenericModule(object):
     """
     Wrapper for a module that can be dynamically routed to a custom backend.
