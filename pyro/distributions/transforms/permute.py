@@ -20,7 +20,7 @@ class PermuteTransform(Transform):
     Example usage:
 
     >>> from pyro.nn import AutoRegressiveNN
-    >>> from pyro.distributions import InverseAutoregressiveFlow, PermuteTransform
+    >>> from pyro.distributions.transforms import InverseAutoregressiveFlow, PermuteTransform
     >>> base_dist = dist.Normal(torch.zeros(10), torch.ones(10))
     >>> iaf1 = InverseAutoregressiveFlow(AutoRegressiveNN(10, [40]))
     >>> ff = PermuteTransform(torch.randperm(10, dtype=torch.long))
