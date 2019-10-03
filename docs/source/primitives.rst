@@ -18,3 +18,5 @@ Primitives
 .. autofunction:: pyro.enable_validation
 
 .. autofunction:: pyro.ops.jit.trace
+
+.. autofunction:: pyro.set_rng_seed

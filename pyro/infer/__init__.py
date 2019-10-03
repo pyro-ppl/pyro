@@ -4,6 +4,9 @@ from pyro.infer.discrete import infer_discrete
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import config_enumerate
 from pyro.infer.importance import Importance
+from pyro.infer.mcmc.api import MCMC
+from pyro.infer.mcmc.hmc import HMC
+from pyro.infer.mcmc.nuts import NUTS
 from pyro.infer.renyi_elbo import RenyiELBO
 from pyro.infer.smcfilter import SMCFilter
 from pyro.infer.svi import SVI
@@ -23,6 +26,7 @@ __all__ = [
     "is_validation_enabled",
     "ELBO",
     "EmpiricalMarginal",
+    "HMC",
     "Importance",
     "IMQSteinKernel",
     "infer_discrete",
@@ -30,6 +34,8 @@ __all__ = [
     "JitTraceGraph_ELBO",
     "JitTraceMeanField_ELBO",
     "JitTrace_ELBO",
+    "MCMC",
+    "NUTS",
     "RBFSteinKernel",
     "RenyiELBO",
     "SMCFilter",
