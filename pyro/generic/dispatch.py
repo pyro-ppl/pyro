@@ -70,7 +70,7 @@ _ALIASES = {
     },
     'funsor': {
         'distributions': 'funsor.distributions',
-        'handlers': 'pyro.poutine',
+        'handlers': 'funsor.minipyro',
         'infer': 'funsor.minipyro',
         'ops': 'funsor.ops',
         'optim': 'funsor.minipyro',
