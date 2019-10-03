@@ -31,7 +31,6 @@ from pyro.distributions.zero_inflated_poisson import ZeroInflatedPoisson
 from . import constraints, kl, transforms
 
 __all__ = [
-    "constraints",
     "AVFMultivariateNormal",
     "BetaBinomial",
     "ConditionalDistribution",
