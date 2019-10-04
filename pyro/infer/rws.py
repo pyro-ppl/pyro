@@ -12,24 +12,15 @@ from pyro.util import check_if_enumerated, warn_if_nan
 
 class ReweightedWakeSleep(ELBO):
     r"""
-    An implementation of Renyi's :math:`\alpha`-divergence variational inference
-    following reference [1].
+    An implementation of Reweighted Wake Sleep following reference [1].
 
-    In order for the objective to be a strict lower bound, we require
-    :math:`\alpha \ge 0`. Note, however, that according to reference [1], depending
-    on the dataset :math:`\alpha < 0` might give better results. In the special case
-    :math:`\alpha = 0`, the objective function is that of the important weighted
-    autoencoder derived in reference [2].
+    .. note:: This is particularly useful for models with stochastic branching,
+        as described in [2].
 
-    .. note:: Setting :math:`\alpha < 1` gives a better bound than the usual ELBO.
-        For :math:`\alpha = 1`, it is better to use
-        :class:`~pyro.infer.trace_elbo.Trace_ELBO` class because it helps reduce
-        variances of gradient estimations.
+    .. note:: This returns _two_ losses, one each for the model and the guide.
 
     .. warning:: Mini-batch training is not supported yet.
 
-    :param float alpha: The order of :math:`\alpha`-divergence. Here
-        :math:`\alpha \neq 1`. Default is 0.
     :param num_particles: The number of particles/samples used to form the objective
         (gradient) estimator. Default is 2.
     :param int max_plate_nesting: Bound on max number of nested
@@ -41,11 +32,11 @@ class ReweightedWakeSleep(ELBO):
 
     References:
 
-    [1] `Renyi Divergence Variational Inference`,
-        Yingzhen Li, Richard E. Turner
+    [1] `Reweighted Wake-Sleep`,
+        Jörg Bornschein, Yoshua Bengio
 
-    [2] `Importance Weighted Autoencoders`,
-        Yuri Burda, Roger Grosse, Ruslan Salakhutdinov
+    [2] `Revisiting Reweighted Wake-Sleep for Models with Stochastic Control Flow`,
+        Tuan Anh Le, Adam R. Kosiorek, N. Siddharth, Yee Whye Teh, Frank Wood
     """
 
     def __init__(self,
