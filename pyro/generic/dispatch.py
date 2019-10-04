@@ -23,7 +23,10 @@ class GenericModule(object):
         except KeyError:
             module = importlib.import_module(backend)
             GenericModule._modules[backend] = module
-        return getattr(module, name)
+        try:
+            return getattr(module, name)
+        except AttributeError:
+            raise NotImplementedError(f'This Pyro backend does not implement {module_name}.{name}')
 
 
 @contextmanager
