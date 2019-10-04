@@ -40,7 +40,6 @@ class ReweightedWakeSleep(ELBO):
     """
 
     def __init__(self,
-                 alpha=0,
                  num_particles=2,
                  max_plate_nesting=float('inf'),
                  max_iarange_nesting=None,  # DEPRECATED
@@ -51,10 +50,6 @@ class ReweightedWakeSleep(ELBO):
                           DeprecationWarning)
             max_plate_nesting = max_iarange_nesting
 
-        if alpha == 1:
-            raise ValueError("The order alpha should not be equal to 1. Please use Trace_ELBO class"
-                             "for the case alpha = 1.")
-        self.alpha = alpha
         super(ReweightedWakeSleep, self).__init__(num_particles=num_particles,
                                                   max_plate_nesting=max_plate_nesting,
                                                   vectorize_particles=vectorize_particles,
@@ -112,9 +107,9 @@ class ReweightedWakeSleep(ELBO):
         else:
             elbo_particles = torch.tensor(elbo_particles)  # no need to use .new*() here
 
-        log_weights = (1. - self.alpha) * elbo_particles
+        log_weights = elbo_particles
         log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(self.num_particles)
-        elbo = log_mean_weight.sum().item() / (1. - self.alpha)
+        elbo = log_mean_weight.sum().item()
 
         loss = -elbo
         warn_if_nan(loss, "loss")
@@ -166,8 +161,8 @@ class ReweightedWakeSleep(ELBO):
                             raise NotImplementedError
 
                     if not is_identically_zero(score_function_term):
-                        surrogate_elbo_particle = (surrogate_elbo_particle +
-                                                   (self.alpha / (1. - self.alpha)) * log_prob_sum)
+                        surrogate_elbo_particle = surrogate_elbo_particle
+
 
             if is_identically_zero(elbo_particle):
                 if tensor_holder is not None:
@@ -194,9 +189,9 @@ class ReweightedWakeSleep(ELBO):
             elbo_particles = torch.stack(elbo_particles)
             surrogate_elbo_particles = torch.stack(surrogate_elbo_particles)
 
-        log_weights = (1. - self.alpha) * elbo_particles
+        log_weights = elbo_particles
         log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(self.num_particles)
-        elbo = log_mean_weight.sum().item() / (1. - self.alpha)
+        elbo = log_mean_weight.sum().item()
 
         # TODO:
         # z_k ~ q
