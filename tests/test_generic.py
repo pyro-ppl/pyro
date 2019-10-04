@@ -1,5 +1,4 @@
 import pytest
-import torch
 
 from pyro.generic import handlers, infer, pyro, pyro_backend
 from pyro.generic.testing import MODELS
@@ -7,6 +6,7 @@ from pyro.generic.testing import MODELS
 pytestmark = pytest.mark.stage('unit')
 
 
+@pytest.mark.filterwarnings("ignore", category=UserWarning)
 @pytest.mark.parametrize('model', MODELS)
 @pytest.mark.parametrize('backend', ['pyro'])
 def test_mcmc_interface(model, backend):
@@ -16,8 +16,7 @@ def test_mcmc_interface(model, backend):
         nuts_kernel = infer.NUTS(model=model)
         mcmc = infer.MCMC(nuts_kernel, num_samples=10, warmup_steps=10)
         mcmc.run(*args, **kwargs)
-        if torch.backends.mkl.is_available():
-            mcmc.summary()
+        mcmc.summary()
 
 
 @pytest.mark.parametrize('backend', ['pyro', 'minipyro'])
@@ -26,4 +25,4 @@ def test_not_implemented(backend):
         pyro.sample  # should be implemented
         pyro.param  # should be implemented
         with pytest.raises(NotImplementedError):
-            pyro.nonexistant_primitive
+            pyro.nonexistent_primitive
