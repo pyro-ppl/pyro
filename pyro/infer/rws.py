@@ -43,12 +43,16 @@ class ReweightedWakeSleep(ELBO):
                  num_particles=2,
                  max_plate_nesting=float('inf'),
                  max_iarange_nesting=None,  # DEPRECATED
-                 vectorize_particles=False,
+                 vectorize_particles=True,
                  strict_enumeration_warning=True):
         if max_iarange_nesting is not None:
             warnings.warn("max_iarange_nesting is deprecated; use max_plate_nesting instead",
                           DeprecationWarning)
             max_plate_nesting = max_iarange_nesting
+
+        # force K > 1 and that everything is/can be vectorised
+        assert((num_particles > 1) and vectorize_particles), \
+            "Reweighted Wake Sleep needs to be run with more than one particle and vectorized"
 
         super(ReweightedWakeSleep, self).__init__(num_particles=num_particles,
                                                   max_plate_nesting=max_plate_nesting,
@@ -74,7 +78,6 @@ class ReweightedWakeSleep(ELBO):
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
         elbo_particles = []
-        is_vectorized = self.vectorize_particles and self.num_particles > 1
 
         # grab a vectorized trace from the generator
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
@@ -83,31 +86,18 @@ class ReweightedWakeSleep(ELBO):
             # compute elbo
             for name, site in model_trace.nodes.items():
                 if site["type"] == "sample":
-                    if is_vectorized:
-                        log_prob_sum = site["log_prob"].detach().reshape(self.num_particles, -1).sum(-1)
-                    else:
-                        log_prob_sum = torch_item(site["log_prob_sum"])
-
+                    log_prob_sum = site["log_prob"].detach().reshape(self.num_particles, -1).sum(-1)
                     elbo_particle = elbo_particle + log_prob_sum
 
             for name, site in guide_trace.nodes.items():
                 if site["type"] == "sample":
                     log_prob, score_function_term, entropy_term = site["score_parts"]
-                    if is_vectorized:
-                        log_prob_sum = log_prob.detach().reshape(self.num_particles, -1).sum(-1)
-                    else:
-                        log_prob_sum = torch_item(site["log_prob_sum"])
-
+                    log_prob_sum = log_prob.detach().reshape(self.num_particles, -1).sum(-1)
                     elbo_particle = elbo_particle - log_prob_sum
 
             elbo_particles.append(elbo_particle)
 
-        if is_vectorized:
-            elbo_particles = elbo_particles[0]
-        else:
-            elbo_particles = torch.tensor(elbo_particles)  # no need to use .new*() here
-
-        log_weights = elbo_particles
+        log_weights = elbo_particles[0]
         log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(self.num_particles)
         elbo = log_mean_weight.sum().item()
 
@@ -125,7 +115,6 @@ class ReweightedWakeSleep(ELBO):
         """
         elbo_particles = []
         surrogate_elbo_particles = []
-        is_vectorized = self.vectorize_particles and self.num_particles > 1
         tensor_holder = None
 
         # grab a vectorized trace from the generator
@@ -136,21 +125,14 @@ class ReweightedWakeSleep(ELBO):
             # compute elbo and surrogate elbo
             for name, site in model_trace.nodes.items():
                 if site["type"] == "sample":
-                    if is_vectorized:
-                        log_prob_sum = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
-                    else:
-                        log_prob_sum = site["log_prob_sum"]
+                    log_prob_sum = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
                     elbo_particle = elbo_particle + log_prob_sum.detach()
                     surrogate_elbo_particle = surrogate_elbo_particle + log_prob_sum
 
             for name, site in guide_trace.nodes.items():
                 if site["type"] == "sample":
                     log_prob, score_function_term, entropy_term = site["score_parts"]
-                    if is_vectorized:
-                        log_prob_sum = log_prob.reshape(self.num_particles, -1).sum(-1)
-                    else:
-                        log_prob_sum = site["log_prob_sum"]
-
+                    log_prob_sum = log_prob.reshape(self.num_particles, -1).sum(-1)
                     elbo_particle = elbo_particle - log_prob_sum.detach()
 
                     if not is_identically_zero(entropy_term):
@@ -182,14 +164,8 @@ class ReweightedWakeSleep(ELBO):
         if tensor_holder is None:
             return 0.
 
-        if is_vectorized:
-            elbo_particles = elbo_particles[0]
-            surrogate_elbo_particles = surrogate_elbo_particles[0]
-        else:
-            elbo_particles = torch.stack(elbo_particles)
-            surrogate_elbo_particles = torch.stack(surrogate_elbo_particles)
-
-        log_weights = elbo_particles
+        surrogate_elbo_particles = surrogate_elbo_particles[0]
+        log_weights = elbo_particles[0]
         log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(self.num_particles)
         elbo = log_mean_weight.sum().item()
 
