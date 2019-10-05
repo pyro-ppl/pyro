@@ -1,12 +1,12 @@
 import pytest
 
-from pyro.generic import infer, pyro_backend, handlers
+from pyro.generic import handlers, infer, pyro, pyro_backend
 from pyro.generic.testing import MODELS
-
 
 pytestmark = pytest.mark.stage('unit')
 
 
+@pytest.mark.filterwarnings("ignore", category=UserWarning)
 @pytest.mark.parametrize('model', MODELS)
 @pytest.mark.parametrize('backend', ['pyro'])
 def test_mcmc_interface(model, backend):
@@ -17,3 +17,12 @@ def test_mcmc_interface(model, backend):
         mcmc = infer.MCMC(nuts_kernel, num_samples=10, warmup_steps=10)
         mcmc.run(*args, **kwargs)
         mcmc.summary()
+
+
+@pytest.mark.parametrize('backend', ['pyro', 'minipyro'])
+def test_not_implemented(backend):
+    with pyro_backend(backend):
+        pyro.sample  # should be implemented
+        pyro.param  # should be implemented
+        with pytest.raises(NotImplementedError):
+            pyro.nonexistent_primitive
