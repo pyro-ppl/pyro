@@ -145,7 +145,6 @@ class ReweightedWakeSleep(ELBO):
                     if not is_identically_zero(score_function_term):
                         surrogate_elbo_particle = surrogate_elbo_particle
 
-
             if is_identically_zero(elbo_particle):
                 if tensor_holder is not None:
                     elbo_particle = torch.zeros_like(tensor_holder)
@@ -168,6 +167,17 @@ class ReweightedWakeSleep(ELBO):
         log_weights = elbo_particles[0]
         log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(self.num_particles)
         elbo = log_mean_weight.sum().item()
+
+        # Top Level Questions:
+        # 1. How to generate a trace with samples that don't propogate grads (w/o rsample)
+        #    Is there a way to `detach` a trace?
+        # 2. What are the terms that score_parts returns?
+        #    Do we need this if not relying on gradients wrt sampling dist?
+
+        # Specific code choice questions?
+        # What's blocking mini-batching? Is it the reshape on l128 & l135
+        # What's the deal with tensor_holder (l118)?
+        #  * Where is it modified---else use in l163 always returns 0?
 
         # TODO:
         # z_k ~ q
