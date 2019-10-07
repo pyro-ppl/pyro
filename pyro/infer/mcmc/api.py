@@ -434,4 +434,4 @@ class MCMC(object):
 
         :param float prob: the probability mass of samples within the credibility interval.
         """
-        summary(self._samples, prob=prob, num_chains=self.num_chains)
+        summary(self._samples, prob=prob)
