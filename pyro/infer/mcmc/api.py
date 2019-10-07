@@ -360,7 +360,6 @@ class MCMC(object):
         for k in sorted(z_structure):
             shape = z_structure[k]
             next_pos = pos + shape.numel()
-            # NB: squeeze in case num_chains=1
             z_acc[k] = z_flat_acc[:, :, pos:next_pos].reshape(
                 (self.num_chains, self.num_samples) + shape)
             pos = next_pos
