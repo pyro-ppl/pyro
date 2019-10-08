@@ -33,7 +33,7 @@ def test_not_implemented(backend):
 def test_model_sample(model, backend):
     with pyro_backend(backend), handlers.seed(rng_seed=2):
         f = MODELS[model]()
-        model, model_args, model_kwargs = f['model'], f.get('model_args', ()), f.get('model_kwargs', {})
+        model, model_args = f['model'], f.get('model_args', ())
         model(*model_args)
 
 
