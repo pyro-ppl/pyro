@@ -19,9 +19,11 @@ import torch
 import torch.multiprocessing as mp
 
 import pyro
-from pyro.infer.mcmc import HMC, NUTS
+from pyro.infer.mcmc.hmc import HMC
+from pyro.infer.mcmc.nuts import NUTS
 from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
 from pyro.infer.mcmc.util import diagnostics, initialize_model, summary
+import pyro.poutine as poutine
 
 MAX_SEED = 2**32 - 1
 
@@ -332,6 +334,7 @@ class MCMC(object):
             self.sampler = _UnarySampler(kernel, num_samples, self.warmup_steps, disable_progbar,
                                          initial_params=initial_params, hook=hook_fn)
 
+    @poutine.block
     def run(self, *args, **kwargs):
         num_samples = [0] * self.num_chains
         z_flat_acc = [[] for _ in range(self.num_chains)]
@@ -359,9 +362,8 @@ class MCMC(object):
         for k in sorted(z_structure):
             shape = z_structure[k]
             next_pos = pos + shape.numel()
-            # NB: squeeze in case num_chains=1
             z_acc[k] = z_flat_acc[:, :, pos:next_pos].reshape(
-                (self.num_chains, self.num_samples) + shape).squeeze(dim=0)
+                (self.num_chains, self.num_samples) + shape)
             pos = next_pos
         assert pos == z_flat_acc.shape[-1]
 
@@ -398,18 +400,16 @@ class MCMC(object):
         samples = self._samples
         if num_samples is None:
             # reshape to collapse chain dim when group_by_chain=False
-            if not group_by_chain and self.num_chains > 1:
+            if not group_by_chain:
                 samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
         else:
             if not samples:
                 raise ValueError("No samples found from MCMC run.")
-            batch_dim = 0
-            if self.num_chains > 1:
-                if group_by_chain:
-                    batch_dim = 1
-                else:
-                    samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
-                    batch_dim = 0
+            if group_by_chain:
+                batch_dim = 1
+            else:
+                samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
+                batch_dim = 0
             sample_tensor = list(samples.values())[0]
             batch_size, device = sample_tensor.shape[batch_dim], sample_tensor.device
             idxs = torch.randint(0, batch_size, size=(num_samples,), device=device)
@@ -421,7 +421,7 @@ class MCMC(object):
         Gets some diagnostics statistics such as effective sample size, split
         Gelman-Rubin, or divergent transitions from the sampler.
         """
-        diag = diagnostics(self._samples, num_chains=self.num_chains)
+        diag = diagnostics(self._samples)
         for diag_name in self._diagnostics[0]:
             diag[diag_name] = {'chain {}'.format(i): self._diagnostics[i][diag_name]
                                for i in range(self.num_chains)}
@@ -436,4 +436,4 @@ class MCMC(object):
 
         :param float prob: the probability mass of samples within the credibility interval.
         """
-        summary(self._samples, prob=prob, num_chains=self.num_chains)
+        summary(self._samples, prob=prob)
