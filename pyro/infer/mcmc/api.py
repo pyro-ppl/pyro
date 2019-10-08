@@ -23,6 +23,7 @@ from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.nuts import NUTS
 from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
 from pyro.infer.mcmc.util import diagnostics, initialize_model, summary
+import pyro.poutine as poutine
 
 MAX_SEED = 2**32 - 1
 
@@ -333,6 +334,7 @@ class MCMC(object):
             self.sampler = _UnarySampler(kernel, num_samples, self.warmup_steps, disable_progbar,
                                          initial_params=initial_params, hook=hook_fn)
 
+    @poutine.block
     def run(self, *args, **kwargs):
         num_samples = [0] * self.num_chains
         z_flat_acc = [[] for _ in range(self.num_chains)]
