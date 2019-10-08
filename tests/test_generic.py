@@ -26,3 +26,24 @@ def test_not_implemented(backend):
         pyro.param  # should be implemented
         with pytest.raises(NotImplementedError):
             pyro.nonexistent_primitive
+
+
+@pytest.mark.parametrize('model', MODELS)
+@pytest.mark.parametrize('backend', ['minipyro', 'pyro'])
+@pytest.mark.xfail(reason='Not supported by backend.')
+def test_model_sample(model, backend):
+    with pyro_backend(backend), handlers.seed(rng_seed=2):
+        f = MODELS[model]()
+        model, model_args = f['model'], f.get('model_args', ())
+        model(*model_args)
+
+
+@pytest.mark.parametrize('model', MODELS)
+@pytest.mark.parametrize('backend', ['minipyro', 'pyro'])
+@pytest.mark.xfail(reason='Not supported by backend.')
+def test_trace_handler(model, backend):
+    with pyro_backend(backend), handlers.seed(rng_seed=2):
+        f = MODELS[model]()
+        model, model_args, model_kwargs = f['model'], f.get('model_args', ()), f.get('model_kwargs', {})
+        # should be implemented
+        handlers.trace(model).get_trace(*model_args, **model_kwargs)

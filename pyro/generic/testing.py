@@ -6,10 +6,9 @@ that positional arguments are inputs to the model and keyword arguments denote
 observed data.
 """
 
-import argparse
 from collections import OrderedDict
 
-from pyro.generic import distributions as dist, handlers, ops, pyro, pyro_backend
+from pyro.generic import distributions as dist, handlers, ops, pyro
 
 MODELS = OrderedDict()
 
@@ -84,28 +83,3 @@ def beta_binomial():
                     pyro.sample("binomial", dist.Binomial(probs=probs, total_count=total_count), obs=data)
 
     return {'model': model, 'model_args': (N, D1, D2), 'model_kwargs': {'data': data}}
-
-
-def check_model(backend, name):
-    get_model = MODELS[name]
-    print('Running model "{}" on backend "{}".'.format(name, args.backend))
-    with pyro_backend(backend), handlers.seed(rng_seed=2):
-        f = get_model()
-        model, model_args, model_kwargs = f['model'], f.get('model_args', ()), f.get('model_kwargs', {})
-        print('Sample from prior...')
-        model(*model_args)
-        print('Trace model...')
-        handlers.trace(model).get_trace(*model_args, **model_kwargs)
-
-
-def main(args):
-    for name in MODELS:
-        check_model(args.backend, name)
-
-
-if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.4.1')
-    parser = argparse.ArgumentParser(description="Mini Pyro demo")
-    parser.add_argument("-b", "--backend", default="pyro")
-    args = parser.parse_args()
-    main(args)
