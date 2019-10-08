@@ -8,7 +8,7 @@ pytestmark = pytest.mark.stage('unit')
 
 @pytest.mark.filterwarnings("ignore", category=UserWarning)
 @pytest.mark.parametrize('model', MODELS)
-@pytest.mark.parametrize('backend', ['pyro'])
+@pytest.mark.parametrize('backend', ['pyro', 'numpy'])
 def test_mcmc_interface(model, backend):
     with pyro_backend(backend), handlers.seed(rng_seed=20):
         f = MODELS[model]()
@@ -26,3 +26,22 @@ def test_not_implemented(backend):
         pyro.param  # should be implemented
         with pytest.raises(NotImplementedError):
             pyro.nonexistent_primitive
+
+
+@pytest.mark.parametrize('model', MODELS)
+@pytest.mark.parametrize('backend', ['minipyro', 'pyro'])
+def test_model_sample(model, backend):
+    with pyro_backend(backend), handlers.seed(rng_seed=2):
+        f = MODELS[model]()
+        model, model_args, model_kwargs = f['model'], f.get('model_args', ()), f.get('model_kwargs', {})
+        model(*model_args)
+
+
+@pytest.mark.parametrize('model', MODELS)
+@pytest.mark.parametrize('backend', ['minipyro', 'pyro'])
+def test_trace_handler(model, backend):
+    with pyro_backend(backend), handlers.seed(rng_seed=2):
+        f = MODELS[model]()
+        model, model_args, model_kwargs = f['model'], f.get('model_args', ()), f.get('model_kwargs', {})
+        # should be implemented
+        handlers.trace(model).get_trace(*model_args, **model_kwargs)
