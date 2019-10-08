@@ -8,7 +8,7 @@ pytestmark = pytest.mark.stage('unit')
 
 @pytest.mark.filterwarnings("ignore", category=UserWarning)
 @pytest.mark.parametrize('model', MODELS)
-@pytest.mark.parametrize('backend', ['pyro', 'numpy'])
+@pytest.mark.parametrize('backend', ['pyro'])
 def test_mcmc_interface(model, backend):
     with pyro_backend(backend), handlers.seed(rng_seed=20):
         f = MODELS[model]()
@@ -30,6 +30,7 @@ def test_not_implemented(backend):
 
 @pytest.mark.parametrize('model', MODELS)
 @pytest.mark.parametrize('backend', ['minipyro', 'pyro'])
+@pytest.mark.xfail(reason='Not supported by backend.')
 def test_model_sample(model, backend):
     with pyro_backend(backend), handlers.seed(rng_seed=2):
         f = MODELS[model]()
@@ -39,6 +40,7 @@ def test_model_sample(model, backend):
 
 @pytest.mark.parametrize('model', MODELS)
 @pytest.mark.parametrize('backend', ['minipyro', 'pyro'])
+@pytest.mark.xfail(reason='Not supported by backend.')
 def test_trace_handler(model, backend):
     with pyro_backend(backend), handlers.seed(rng_seed=2):
         f = MODELS[model]()
