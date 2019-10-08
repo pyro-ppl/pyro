@@ -6,10 +6,9 @@ that positional arguments are inputs to the model and keyword arguments denote
 observed data.
 """
 
-import argparse
 from collections import OrderedDict
 
-from pyro.generic import distributions as dist, handlers, ops, pyro, pyro_backend
+from pyro.generic import distributions as dist, handlers, ops, pyro
 
 MODELS = OrderedDict()
 
