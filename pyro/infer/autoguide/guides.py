@@ -23,12 +23,13 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.distributions import transforms
+from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
 from pyro.infer.autoguide.utils import _product
-from pyro.ops.hessian import hessian
-from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
+from pyro.ops.hessian import hessian
 from pyro.poutine.util import prune_subsample_sites
 
 
@@ -585,9 +586,10 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 class AutoIAFNormal(AutoContinuous):
     """
     This implementation of :class:`AutoContinuous` uses a Diagonal Normal
-    distribution transformed via a :class:`~pyro.distributions.iaf.InverseAutoregressiveFlow`
-    to construct a guide over the entire latent space. The guide does not depend on the model's
-    ``*args, **kwargs``.
+    distribution transformed via a
+    :class:`~pyro.distributions.transforms.iaf.InverseAutoregressiveFlow`
+    to construct a guide over the entire latent space. The guide does not
+    depend on the model's ``*args, **kwargs``.
 
     Usage::
 
@@ -609,7 +611,7 @@ class AutoIAFNormal(AutoContinuous):
     def get_posterior(self, *args, **kwargs):
         """
         Returns a diagonal Normal posterior distribution transformed by
-        :class:`~pyro.distributions.iaf.InverseAutoregressiveFlow`.
+        :class:`~pyro.distributions.transforms.iaf.InverseAutoregressiveFlow`.
         """
         if self.latent_dim == 1:
             raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
@@ -618,7 +620,7 @@ class AutoIAFNormal(AutoContinuous):
         if self.arn is None:
             self.arn = AutoRegressiveNN(self.latent_dim, [self.hidden_dim])
 
-        iaf = dist.InverseAutoregressiveFlow(self.arn)
+        iaf = transforms.InverseAutoregressiveFlow(self.arn)
         pyro.module("{}_iaf".format(self.prefix), iaf)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
         return iaf_dist

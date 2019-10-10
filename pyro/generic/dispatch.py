@@ -1,5 +1,4 @@
 import importlib
-
 from contextlib import contextmanager
 
 
@@ -24,7 +23,12 @@ class GenericModule(object):
         except KeyError:
             module = importlib.import_module(backend)
             GenericModule._modules[backend] = module
-        return getattr(module, name)
+        if name.startswith('__'):
+            return getattr(module, name)  # allow magic attributes to return AttributeError
+        try:
+            return getattr(module, name)
+        except AttributeError:
+            raise NotImplementedError(f'This Pyro backend does not implement {module_name}.{name}')
 
 
 @contextmanager
@@ -54,37 +58,43 @@ def pyro_backend(*aliases, **new_backends):
 
 _ALIASES = {
     'pyro': {
-        'pyro': 'pyro',
         'distributions': 'pyro.distributions',
+        'handlers': 'pyro.poutine',
         'infer': 'pyro.infer',
-        'optim': 'pyro.optim',
         'ops': 'torch',
+        'optim': 'pyro.optim',
+        'pyro': 'pyro',
     },
     'minipyro': {
-        'pyro': 'pyro.contrib.minipyro',
+        'distributions': 'pyro.distributions',
+        'handlers': 'pyro.poutine',
         'infer': 'pyro.contrib.minipyro',
-        'optim': 'pyro.contrib.minipyro',
         'ops': 'torch',
+        'optim': 'pyro.contrib.minipyro',
+        'pyro': 'pyro.contrib.minipyro',
     },
     'funsor': {
-        'pyro': 'funsor.minipyro',
-        'infer': 'funsor.minipyro',
-        'optim': 'funsor.minipyro',
         'distributions': 'funsor.distributions',
+        'handlers': 'funsor.minipyro',
+        'infer': 'funsor.minipyro',
         'ops': 'funsor.ops',
+        'optim': 'funsor.minipyro',
+        'pyro': 'funsor.minipyro',
     },
     'numpy': {
-        'pyro': 'numpyro.compat.pyro',
         'distributions': 'numpyro.compat.distributions',
+        'handlers': 'numpyro.compat.handlers',
         'infer': 'numpyro.compat.infer',
+        'ops': 'numpyro.compat.ops',
         'optim': 'numpyro.compat.optim',
-        'ops': 'numpy',
+        'pyro': 'numpyro.compat.pyro',
     },
 }
 
 # These modules can be overridden.
 pyro = GenericModule('pyro', 'pyro')
 distributions = GenericModule('distributions', 'pyro.distributions')
+handlers = GenericModule('handlers', 'pyro.poutine')
 infer = GenericModule('infer', 'pyro.infer')
 optim = GenericModule('optim', 'pyro.optim')
 ops = GenericModule('ops', 'torch')

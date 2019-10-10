@@ -49,7 +49,8 @@ in just a few lines of code::
 import functools
 
 from pyro.poutine import util
-
+from pyro.poutine.messenger import Messenger
+from pyro.util import set_rng_seed
 from .block_messenger import BlockMessenger
 from .broadcast_messenger import BroadcastMessenger
 from .condition_messenger import ConditionMessenger
@@ -65,6 +66,7 @@ from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
 from .trace_messenger import TraceMessenger
 from .uncondition_messenger import UnconditionMessenger
+
 
 ############################################
 # Begin primitive operations
@@ -497,3 +499,29 @@ def markov(fn=None, history=1, keep=False):
         return MarkovMessenger(history=history, keep=keep).generator(iterable=fn)
     # Used as a decorator with bound args
     return MarkovMessenger(history=history, keep=keep)(fn)
+
+
+class _SeedMessenger(Messenger):
+    def __init__(self, rng_seed):
+        assert isinstance(rng_seed, int)
+        self.rng_seed = rng_seed
+        super(_SeedMessenger, self).__init__()
+
+    def __enter__(self):
+        set_rng_seed(self.rng_seed)
+        super(_SeedMessenger, self).__enter__()
+
+
+def seed(fn=None, rng_seed=None):
+    """
+    Handler to set the random number generator to a pre-defined state by setting its
+    seed. This is the same as calling :func:`pyro.set_rng_seed` before the
+    call to `fn`. This handler has no additional effect on primitive statements on the
+    standard Pyro backend, but it might intercept ``pyro.sample`` calls in other
+    backends. e.g. the NumPy backend.
+
+    :param fn: a stochastic function (callable containing Pyro primitive calls).
+    :param int rng_seed: rng seed.
+    """
+    msngr = _SeedMessenger(rng_seed)
+    return msngr(fn) if fn is not None else msngr

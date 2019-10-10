@@ -162,7 +162,7 @@ class LinearRing(Ring):
             return self._cache[key]
 
         result = term.reciprocal()
-        result.clamp_(max=torch.finfo(result.dtype).max)  # avoid nan due to inf / inf
+        result = result.clamp(max=torch.finfo(result.dtype).max)  # avoid nan due to inf / inf
         result._pyro_dims = term._pyro_dims
         self._cache[key] = result
         return result
@@ -213,7 +213,7 @@ class LogRing(Ring):
             return self._cache[key]
 
         result = -term
-        result.clamp_(max=torch.finfo(result.dtype).max)  # avoid nan due to inf - inf
+        result = result.clamp(max=torch.finfo(result.dtype).max)  # avoid nan due to inf - inf
         result._pyro_dims = term._pyro_dims
         self._cache[key] = result
         return result

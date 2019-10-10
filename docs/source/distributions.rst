@@ -63,6 +63,20 @@ BetaBinomial
     :undoc-members:
     :show-inheritance:
 
+ConditionalDistribution
+-----------------------
+.. autoclass:: pyro.distributions.ConditionalDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalTransformedDistribution
+----------------------------------
+.. autoclass:: pyro.distributions.ConditionalTransformedDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Delta
 -----
 .. autoclass:: pyro.distributions.Delta
@@ -78,14 +92,14 @@ DirichletMultinomial
     :show-inheritance:
 
 DiscreteHMM
---------------------
+-----------
 .. autoclass:: pyro.distributions.DiscreteHMM
     :members:
     :undoc-members:
     :show-inheritance:
 
 EmpiricalDistribution
-----------------------
+---------------------
 .. autoclass:: pyro.distributions.Empirical
     :members:
     :undoc-members:
@@ -99,21 +113,21 @@ GammaPoisson
     :show-inheritance:
 
 GaussianHMM
---------------------
+-----------
 .. autoclass:: pyro.distributions.GaussianHMM
     :members:
     :undoc-members:
     :show-inheritance:
 
 GaussianMRF
---------------------
+-----------
 .. autoclass:: pyro.distributions.GaussianMRF
     :members:
     :undoc-members:
     :show-inheritance:
 
 GaussianScaleMixture
-------------------------------------
+--------------------
 .. autoclass:: pyro.distributions.GaussianScaleMixture
     :members:
     :undoc-members:
@@ -141,7 +155,7 @@ MaskedMixture
     :show-inheritance:
 
 MixtureOfDiagNormals
-------------------------------------
+--------------------
 .. autoclass:: pyro.distributions.MixtureOfDiagNormals
     :members:
     :undoc-members:
@@ -217,8 +231,46 @@ ZeroInflatedPoisson
     :undoc-members:
     :show-inheritance:
 
-Transformed Distributions
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Transforms
+~~~~~~~~~~
+
+ConditionalTransform
+--------------------
+.. autoclass:: pyro.distributions.ConditionalTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ELUTransform
+------------
+.. autoclass:: pyro.distributions.transforms.ELUTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+LeakyReLUTransform
+------------------
+.. autoclass:: pyro.distributions.transforms.LeakyReLUTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+PermuteTransform
+----------------
+.. autoclass:: pyro.distributions.transforms.PermuteTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+TanhTransform
+-------------
+.. autoclass:: pyro.distributions.transforms.TanhTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+TransformModules
+~~~~~~~~~~~~~~~~
 
 AffineCoupling
 --------------
@@ -241,23 +293,16 @@ BlockAutoregressive
     :undoc-members:
     :show-inheritance:
 
-DeepELUFlow
------------
-.. autoclass:: pyro.distributions.transforms.DeepELUFlow
+ConditionalPlanarFlow
+---------------------
+.. autoclass:: pyro.distributions.transforms.ConditionalPlanarFlow
     :members:
     :undoc-members:
     :show-inheritance:
 
-DeepLeakyReLUFlow
------------------
-.. autoclass:: pyro.distributions.transforms.DeepLeakyReLUFlow
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-DeepSigmoidalFlow
------------------
-.. autoclass:: pyro.distributions.transforms.DeepSigmoidalFlow
+ConditionalTransformModule
+--------------------------
+.. autoclass:: pyro.distributions.ConditionalTransformModule
     :members:
     :undoc-members:
     :show-inheritance:
@@ -283,9 +328,9 @@ InverseAutoRegressiveFlowStable
     :undoc-members:
     :show-inheritance:
 
-PermuteTransform
-----------------
-.. autoclass:: pyro.distributions.transforms.PermuteTransform
+NeuralAutoregressive
+--------------------
+.. autoclass:: pyro.distributions.transforms.NeuralAutoregressive
     :members:
     :undoc-members:
     :show-inheritance:
@@ -322,5 +367,13 @@ TransformModule
 ---------------
 .. autoclass:: pyro.distributions.TransformModule
     :members:
+    :undoc-members:
+    :show-inheritance:
+
+Constraints
+~~~~~~~~~~~
+.. automodule:: pyro.distributions.constraints
+    :members:
+    :member-order: bysource
     :undoc-members:
     :show-inheritance:

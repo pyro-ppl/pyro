@@ -85,13 +85,13 @@ def test_mcmc_interface(num_draws, group_by_chain, num_chains):
     # test sample shape
     expected_samples = num_draws if num_draws is not None else num_samples
     if group_by_chain:
-        expected_shape = (mcmc.num_chains, expected_samples, 1) if mcmc.num_chains > 1 else (expected_samples, 1)
+        expected_shape = (mcmc.num_chains, expected_samples, 1)
     else:
         expected_shape = (mcmc.num_chains * expected_samples, 1)
     assert samples['y'].shape == expected_shape
 
     # test sample stats
-    if group_by_chain and mcmc.num_chains > 1:
+    if group_by_chain:
         samples = {k: v.reshape((-1,) + v.shape[2:]) for k, v in samples.items()}
     sample_mean = samples['y'].mean()
     sample_std = samples['y'].std()
@@ -181,6 +181,8 @@ def test_mcmc_diagnostics(num_chains):
     mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains,
                 initial_params=initial_params, transforms=transforms)
     mcmc.run(data)
+    if not torch.backends.mkl.is_available():
+        pytest.skip()
     diagnostics = mcmc.diagnostics()
     assert diagnostics["y"]["n_eff"].shape == data.shape
     assert diagnostics["y"]["r_hat"].shape == data.shape
