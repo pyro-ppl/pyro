@@ -116,13 +116,22 @@ class seed(Messenger):
         super(seed, self).__init__(fn)
 
     def __enter__(self):
+        self.old_state = {'torch': torch.get_rng_state(), 'random': random.getstate()}
         torch.manual_seed(self.rng_seed)
         random.seed(self.rng_seed)
         try:
             import numpy as np
             np.random.seed(self.rng_seed)
+            self.old_state['numpy'] = np.random.get_state()
         except ImportError:
             pass
+
+    def __exit__(self, type, value, traceback):
+        torch.set_rng_state(self.old_state['torch'])
+        random.setstate(self.old_state['random'])
+        if 'numpy' in self.old_state:
+            import numpy as np
+            np.random.set_state(self.old_state['numpy'])
 
 
 # This limited implementation of PlateMessenger only implements broadcasting.
@@ -229,7 +238,9 @@ def param(name, init_value=None, constraint=torch.distributions.constraints.real
 
 
 # boilerplate to match the syntax of actual pyro.plate:
-def plate(name, size, dim):
+def plate(name, size, dim=None):
+    if dim is None:
+        raise NotImplementedError("minipyro.plate requires a dim arg")
     return PlateMessenger(fn=None, size=size, dim=dim)
 
 
