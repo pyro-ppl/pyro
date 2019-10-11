@@ -28,6 +28,24 @@ def set_rng_seed(rng_seed):
         pass
 
 
+def get_rng_state():
+    state = {'torch': torch.get_rng_state(), 'random': random.getstate()}
+    try:
+        import numpy as np
+        state['numpy'] = np.random.get_state()
+    except ImportError:
+        pass
+    return state
+
+
+def set_rng_state(state):
+    torch.set_rng_state(state['torch'])
+    random.setstate(state['random'])
+    if 'numpy' in state:
+        import numpy as np
+        np.random.set_state(state['numpy'])
+
+
 def torch_isnan(x):
     """
     A convenient function to check if a Tensor contains any nan; also works with numbers

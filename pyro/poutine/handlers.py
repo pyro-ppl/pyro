@@ -50,7 +50,8 @@ import functools
 
 from pyro.poutine import util
 from pyro.poutine.messenger import Messenger
-from pyro.util import set_rng_seed
+from pyro.util import get_rng_state, set_rng_seed, set_rng_state
+
 from .block_messenger import BlockMessenger
 from .broadcast_messenger import BroadcastMessenger
 from .condition_messenger import ConditionMessenger
@@ -66,7 +67,6 @@ from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
 from .trace_messenger import TraceMessenger
 from .uncondition_messenger import UnconditionMessenger
-
 
 ############################################
 # Begin primitive operations
@@ -508,10 +508,11 @@ class _SeedMessenger(Messenger):
         super(_SeedMessenger, self).__init__()
 
     def __enter__(self):
+        self.old_state = get_rng_state()
         set_rng_seed(self.rng_seed)
 
     def __exit__(self, type, value, traceback):
-        pass
+        set_rng_state(self.old_state)
 
 
 def seed(fn=None, rng_seed=None):
