@@ -200,7 +200,9 @@ def sample(name, fn, *args, **kwargs):
 
 # param is an effectful version of PARAM_STORE.setdefault that also handles constraints.
 # When any effect handlers are active, it constructs an initial message and calls apply_stack.
-def param(name, init_value=None, constraint=torch.distributions.constraints.real):
+def param(name, init_value=None, constraint=torch.distributions.constraints.real, event_dim=None):
+    if event_dim is not None:
+        raise NotImplementedError("minipyro.plate does not support the event_dim arg")
 
     def fn(init_value, constraint):
         if name in PARAM_STORE:
