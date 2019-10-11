@@ -1,7 +1,8 @@
 import pytest
-
 from pyro.generic import handlers, infer, pyro, pyro_backend
 from pyro.generic.testing import MODELS
+
+from tests.common import xfail_if_not_implemented
 
 pytestmark = pytest.mark.stage('unit')
 
@@ -30,9 +31,8 @@ def test_not_implemented(backend):
 
 @pytest.mark.parametrize('model', MODELS)
 @pytest.mark.parametrize('backend', ['minipyro', 'pyro'])
-@pytest.mark.xfail(reason='Not supported by backend.')
 def test_model_sample(model, backend):
-    with pyro_backend(backend), handlers.seed(rng_seed=2):
+    with pyro_backend(backend), handlers.seed(rng_seed=2), xfail_if_not_implemented():
         f = MODELS[model]()
         model, model_args = f['model'], f.get('model_args', ())
         model(*model_args)
@@ -40,9 +40,8 @@ def test_model_sample(model, backend):
 
 @pytest.mark.parametrize('model', MODELS)
 @pytest.mark.parametrize('backend', ['minipyro', 'pyro'])
-@pytest.mark.xfail(reason='Not supported by backend.')
 def test_trace_handler(model, backend):
-    with pyro_backend(backend), handlers.seed(rng_seed=2):
+    with pyro_backend(backend), handlers.seed(rng_seed=2), xfail_if_not_implemented():
         f = MODELS[model]()
         model, model_args, model_kwargs = f['model'], f.get('model_args', ()), f.get('model_kwargs', {})
         # should be implemented

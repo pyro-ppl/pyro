@@ -124,6 +124,9 @@ class seed(Messenger):
         except ImportError:
             pass
 
+    def __exit__(self, type, value, traceback):
+        pass
+
 
 # This limited implementation of PlateMessenger only implements broadcasting.
 class PlateMessenger(Messenger):
@@ -229,7 +232,9 @@ def param(name, init_value=None, constraint=torch.distributions.constraints.real
 
 
 # boilerplate to match the syntax of actual pyro.plate:
-def plate(name, size, dim):
+def plate(name, size, dim=None):
+    if dim is None:
+        raise NotImplementedError("minipyro.plate requires a dim arg")
     return PlateMessenger(fn=None, size=size, dim=dim)
 
 

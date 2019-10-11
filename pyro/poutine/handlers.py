@@ -509,7 +509,9 @@ class _SeedMessenger(Messenger):
 
     def __enter__(self):
         set_rng_seed(self.rng_seed)
-        super(_SeedMessenger, self).__enter__()
+
+    def __exit__(self, type, value, traceback):
+        pass
 
 
 def seed(fn=None, rng_seed=None):
