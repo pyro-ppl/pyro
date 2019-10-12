@@ -84,6 +84,7 @@ setup(
         # numpy is necessary for some functionality of PyTorch
         'numpy>=1.7',
         'opt_einsum>=2.3.2',
+        'pyro-api@https://api.github.com/repos/pyro-ppl/pyro-api/tarball/master',
         'torch>=1.2.0',
         'tqdm>=4.31',
     ],

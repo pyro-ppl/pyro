@@ -1,8 +1,8 @@
 import pytest
 
-from pyro.generic import handlers, infer, pyro, pyro_backend
-from pyro.generic.testing import MODELS
-from tests.common import assert_close, xfail_if_not_implemented
+from pyro.generic import handlers, infer, pyro, pyro_backend, ops
+from pyroapi.testing import MODELS
+from tests.common import xfail_if_not_implemented
 
 pytestmark = pytest.mark.stage('unit')
 
@@ -46,9 +46,11 @@ def test_rng_seed(model, backend):
         model, model_args = f['model'], f.get('model_args', ())
         with handlers.seed(rng_seed=0):
             expected = model(*model_args)
+        if expected is None:
+            pytest.skip()
         with handlers.seed(rng_seed=0):
             actual = model(*model_args)
-        assert_close(actual, expected)
+        assert ops.allclose(actual, expected)
 
 
 @pytest.mark.parametrize('model', MODELS)
@@ -60,12 +62,14 @@ def test_rng_state(model, backend):
         with handlers.seed(rng_seed=0):
             model(*model_args)
             expected = model(*model_args)
+        if expected is None:
+            pytest.skip()
         with handlers.seed(rng_seed=0):
             model(*model_args)
             with handlers.seed(rng_seed=0):
                 model(*model_args)
             actual = model(*model_args)
-        assert_close(actual, expected)
+        assert ops.allclose(actual, expected)
 
 
 @pytest.mark.parametrize('model', MODELS)
