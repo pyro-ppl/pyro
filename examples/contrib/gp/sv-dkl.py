@@ -143,7 +143,7 @@ def main(args):
     # Turns on "whiten" flag will help optimization for variational models.
     gpmodule = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=deep_kernel, Xu=Xu,
                                              likelihood=likelihood, latent_shape=latent_shape,
-                                             num_data=60000, whiten=True)
+                                             num_data=60000, whiten=True, jitter=2e-6)
     if args.cuda:
         gpmodule.cuda()
 
