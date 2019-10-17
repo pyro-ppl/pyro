@@ -5,7 +5,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 import pyro.poutine as poutine
-from pyro.contrib.autoguide import AutoDelta, AutoDiagonalNormal, AutoLaplaceApproximation
+from pyro.infer.autoguide import AutoDelta, AutoDiagonalNormal, AutoLaplaceApproximation
 from pyro.infer import SVI, TracePredictive, Trace_ELBO
 from pyro.infer.mcmc import MCMC, NUTS
 from tests.common import assert_close, assert_equal
@@ -34,18 +34,6 @@ def beta_guide(num_trials):
     with pyro.plate("data", num_trials.size(0)):
         phi_posterior = dist.Beta(concentration0=phi_c0, concentration1=phi_c1)
         pyro.sample("phi", phi_posterior)
-
-
-def test_posterior_predictive_mcmc():
-    true_probs = torch.ones(5) * 0.7
-    num_trials = torch.ones(5) * 1000
-    num_success = dist.Binomial(num_trials, true_probs).sample()
-    conditioned_model = poutine.condition(model, data={"obs": num_success})
-    nuts_kernel = NUTS(conditioned_model, adapt_step_size=True)
-    mcmc_run = MCMC(nuts_kernel, num_samples=1000, warmup_steps=200).run(num_trials)
-    posterior_predictive = TracePredictive(model, mcmc_run, num_samples=10000).run(num_trials)
-    marginal_return_vals = posterior_predictive.marginal().empirical["_RETURN"]
-    assert_close(marginal_return_vals.mean, torch.ones(5) * 700, rtol=0.05)
 
 
 def test_posterior_predictive_svi_manual_guide():

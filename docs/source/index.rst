@@ -23,14 +23,12 @@ Pyro Documentation
    optimization
    poutine
    ops
-   pyro.generic
 
 .. toctree::
    :glob:
    :maxdepth: 2
    :caption: Contributed Code:
 
-   contrib.autoguide
    contrib.autoname
    contrib.bnn
    contrib.easyguide

@@ -47,7 +47,7 @@ def vindex(tensor, args):
 
     1.  Each arg is either ``Ellipsis``, ``slice(None)``, an integer, or a
         batched ``torch.LongTensor`` (i.e. with empty event shape). This
-        function does not support Nontrivial slices or ``torch.ByteTensor``
+        function does not support Nontrivial slices or ``torch.BoolTensor``
         masks. ``Ellipsis`` can only appear on the left as ``args[0]``.
     2.  If ``args[0] is not Ellipsis`` then ``tensor`` is not
         batched, and its event dim is equal to ``len(args)``.

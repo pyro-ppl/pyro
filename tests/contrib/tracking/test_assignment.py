@@ -265,7 +265,7 @@ def test_persistent_exact_5_4_3(e1, e2, e3, bp_iters, bp_momentum):
                          [[1, 0, 0], [0, 1, 1], [0, 0, 1], [1, 0, 0]],
                          [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0]],
                          [[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 1, 0]],
-                         [[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 1]]], dtype=torch.uint8)
+                         [[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 1]]], dtype=torch.bool)
     assign_logits[~mask] = -INF
     expected = MarginalAssignmentPersistent(exists_logits, assign_logits, None)
     actual = MarginalAssignmentPersistent(exists_logits, assign_logits, bp_iters, bp_momentum)

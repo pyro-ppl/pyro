@@ -40,7 +40,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.4')
+    assert pyro.__version__.startswith('0.4.1')
     parser = argparse.ArgumentParser(description='Eight Schools MCMC')
     parser.add_argument('--num-samples', type=int, default=1000,
                         help='number of MCMC samples (default: 1000)')

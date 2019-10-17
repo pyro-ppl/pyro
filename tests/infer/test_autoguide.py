@@ -8,13 +8,13 @@ from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
-                                    AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
-                                    AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
-                                    init_to_sample)
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
+from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
+                                  AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
+                                  AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
+                                  init_to_sample)
 from pyro.optim import Adam
-from tests.common import assert_equal
+from tests.common import assert_close, assert_equal
 
 
 @pytest.mark.parametrize("auto_class", [
@@ -41,6 +41,36 @@ def test_scores(auto_class):
     assert model_trace.nodes['z']['log_prob_sum'].item() != 0.0
     assert guide_trace.nodes['_auto_latent']['log_prob_sum'].item() != 0.0
     assert guide_trace.nodes['z']['log_prob_sum'].item() == 0.0
+
+
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+    AutoIAFNormal,
+    AutoLaplaceApproximation,
+])
+def test_factor(auto_class, Elbo):
+
+    def model(log_factor):
+        pyro.sample("z1", dist.Normal(0.0, 1.0))
+        pyro.factor("f1", log_factor)
+        pyro.sample("z2", dist.Normal(torch.zeros(2), torch.ones(2)).to_event(1))
+        with pyro.plate("plate", 3):
+            pyro.factor("f2", log_factor)
+            pyro.sample("z3", dist.Normal(torch.zeros(3), torch.ones(3)))
+
+    guide = auto_class(model)
+    elbo = Elbo(strict_enumeration_warning=False)
+    elbo.loss(model, guide, torch.tensor(0.))  # initialize param store
+
+    pyro.set_rng_seed(123)
+    loss_5 = elbo.loss(model, guide, torch.tensor(5.))
+    pyro.set_rng_seed(123)
+    loss_4 = elbo.loss(model, guide, torch.tensor(4.))
+    assert_close(loss_5 - loss_4, -1 - 3)
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])

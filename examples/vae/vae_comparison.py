@@ -243,7 +243,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.4')
+    assert pyro.__version__.startswith('0.4.1')
     parser = argparse.ArgumentParser(description='VAE using MNIST dataset')
     parser.add_argument('-n', '--num-epochs', nargs='?', default=10, type=int)
     parser.add_argument('--batch_size', nargs='?', default=128, type=int)

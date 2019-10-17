@@ -52,6 +52,7 @@ Welcome to Pyro Examples and Tutorials!
    RSA-implicature
    RSA-hyperbole
    ekf
+   working_memory
 
 .. toctree::
    :maxdepth: 2
@@ -64,6 +65,7 @@ Welcome to Pyro Examples and Tutorials!
    sparse_gamma
    dkl
    einsum
+   smcfilter
 
 
 Indices and tables

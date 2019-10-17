@@ -289,7 +289,7 @@ def _sample_tree_mcmc(edge_logits, edges):
     # This maps each vertex to the set of its neighboring vertices.
     neighbors = {v: set() for v in range(V)}
     # This maps each vertex to its connected component id (0 or 1).
-    components = torch.zeros(V, dtype=torch.uint8)
+    components = torch.zeros(V, dtype=torch.bool)
     for e in range(E):
         v1, v2 = map(int, edges[e])
         assert v1 < v2
@@ -368,7 +368,7 @@ def _sample_tree_approx(edge_logits):
     # the complete graph. The id of an edge (v1,v2) is k = v1+v2*(v2-1)/2.
     edge_ids = torch.empty((E,), dtype=torch.long)
     # This maps each vertex to whether it is a member of the cumulative tree.
-    components = torch.zeros(V, dtype=torch.uint8)
+    components = torch.zeros(V, dtype=torch.bool)
 
     # Sample the first edge at random.
     probs = (edge_logits - edge_logits.max()).exp()

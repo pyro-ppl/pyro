@@ -44,7 +44,7 @@ import dmm.polyphonic_data_loader as poly
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
-from pyro.contrib.autoguide import AutoDelta
+from pyro.infer.autoguide import AutoDelta
 from pyro.infer import SVI, JitTraceEnum_ELBO, TraceEnum_ELBO
 from pyro.ops.indexing import Vindex
 from pyro.optim import Adam
@@ -555,7 +555,7 @@ def main(args):
     sequences = sequences[..., present_notes]
 
     if args.truncate:
-        lengths.clamp_(max=args.truncate)
+        lengths = lengths.clamp(max=args.truncate)
         sequences = sequences[:, :args.truncate]
     num_observations = float(lengths.sum())
     pyro.set_rng_seed(args.seed)
@@ -585,7 +585,7 @@ def main(args):
     Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
     elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2,
                 strict_enumeration_warning=(model is not model_7),
-                jit_options={"optimize": model is model_7, "time_compilation": args.time_compilation})
+                jit_options={"time_compilation": args.time_compilation})
     optim = Adam({'lr': args.learning_rate})
     svi = SVI(model, guide, optim, elbo)
 
@@ -609,7 +609,7 @@ def main(args):
     sequences = data['test']['sequences'][..., present_notes]
     lengths = data['test']['sequence_lengths']
     if args.truncate:
-        lengths.clamp_(max=args.truncate)
+        lengths = lengths.clamp(max=args.truncate)
     num_observations = float(lengths.sum())
 
     # note that since we removed unseen notes above (to make the problem a bit easier and for
@@ -626,7 +626,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.4')
+    assert pyro.__version__.startswith('0.4.1')
     parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
     parser.add_argument("-m", "--model", default="1", type=str,
                         help="one of: {}".format(", ".join(sorted(models.keys()))))

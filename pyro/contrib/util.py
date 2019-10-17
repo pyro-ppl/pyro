@@ -66,17 +66,6 @@ def rtril(M, diagonal=0, upper=False):
     return M*torch.tril(torch.ones(M.shape[-2], M.shape[-1]), diagonal=diagonal)
 
 
-def hessian(y, xs):
-    dys = torch.autograd.grad(y, xs, create_graph=True)
-    flat_dy = torch.cat([dy.reshape(-1) for dy in dys])
-    H = []
-    for dyi in flat_dy:
-        Hi = torch.cat([Hij.reshape(-1) for Hij in torch.autograd.grad(dyi, xs, retain_graph=True)])
-        H.append(Hi)
-    H = torch.stack(H)
-    return H
-
-
 def iter_plates_to_shape(shape):
     # Go backwards (right to left)
     for i, s in enumerate(shape[::-1]):

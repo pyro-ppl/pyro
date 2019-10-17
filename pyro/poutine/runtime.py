@@ -194,7 +194,7 @@ def apply_stack(initial_msg):
 
     default_process_message(msg)
 
-    for frame in stack[-pointer:]:  # reversed(stack[0:pointer])
+    for frame in stack[-pointer:]:
         frame._postprocess_message(msg)
 
     cont = msg["continuation"]

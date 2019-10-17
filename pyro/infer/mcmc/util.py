@@ -1,7 +1,9 @@
+import functools
 import warnings
 from collections import OrderedDict, defaultdict
 from functools import partial, reduce
 from itertools import product
+import traceback as tb
 
 import torch
 from torch.distributions import biject_to
@@ -396,34 +398,51 @@ def initialize_model(model, model_args=(), model_kwargs={}, transforms=None, max
     return init_params, potential_fn, transforms, model_trace
 
 
-def diagnostics(samples, num_chains=1):
+def _safe(fn):
+    """
+    Safe version of utilities in the :mod:`pyro.ops.stats` module. Wrapped
+    functions return `NaN` tensors instead of throwing exceptions.
+
+    :param fn: stats function from :mod:`pyro.ops.stats` module.
+    """
+    @functools.wraps(fn)
+    def wrapped(sample, *args, **kwargs):
+        try:
+            val = fn(sample, *args, **kwargs)
+        except Exception:
+            warnings.warn(tb.format_exc())
+            val = torch.full(sample.shape[2:], float("nan"),
+                             dtype=sample.dtype, device=sample.device)
+        return val
+
+    return wrapped
+
+
+def diagnostics(samples, group_by_chain=True):
     """
     Gets diagnostics statistics such as effective sample size and
     split Gelman-Rubin using the samples drawn from the posterior
     distribution.
 
     :param dict samples: dictionary of samples keyed by site name.
-    :param int num_chains: number of chains. For more than a single chain,
-        the leading dimension of samples in `samples` must match
-        the number of chains.
+    :param bool group_by_chain: If True, each variable in `samples`
+        will be treated as having shape `num_chains x num_samples x sample_shape`.
+        Otherwise, the corresponding shape will be `num_samples x sample_shape`
+        (i.e. without chain dimension).
     :return: dictionary of diagnostic stats for each sample site.
     """
     diagnostics = {}
     for site, support in samples.items():
-        if num_chains == 1:
+        if not group_by_chain:
             support = support.unsqueeze(0)
         site_stats = OrderedDict()
-        try:
-            site_stats["n_eff"] = stats.effective_sample_size(support)
-        except NotImplementedError:
-            site_stats["n_eff"] = torch.full(support.shape[2:], float("nan"),
-                                             dtype=support.dtype, device=support.device)
+        site_stats["n_eff"] = _safe(stats.effective_sample_size)(support)
         site_stats["r_hat"] = stats.split_gelman_rubin(support)
         diagnostics[site] = site_stats
     return diagnostics
 
 
-def summary(samples, prob=0.9, num_chains=1):
+def summary(samples, prob=0.9, group_by_chain=True):
     """
     Prints a summary table displaying diagnostics of ``samples`` from the
     posterior. The diagnostics displayed are mean, standard deviation, median,
@@ -432,11 +451,12 @@ def summary(samples, prob=0.9, num_chains=1):
 
     :param dict samples: dictionary of samples keyed by site name.
     :param float prob: the probability mass of samples within the credibility interval.
-    :param int num_chains: number of chains. For more than a single chain,
-        the leading dimension of samples in `samples` must match
-        the number of chains.
+    :param bool group_by_chain: If True, each variable in `samples`
+        will be treated as having shape `num_chains x num_samples x sample_shape`.
+        Otherwise, the corresponding shape will be `num_samples x sample_shape`
+        (i.e. without chain dimension).
     """
-    if num_chains == 1:
+    if not group_by_chain:
         samples = {k: v.unsqueeze(0) for k, v in samples.items()}
 
     row_names = {k: k + '[' + ','.join(map(lambda x: str(x - 1), v.shape[2:])) + ']'
@@ -456,7 +476,7 @@ def summary(samples, prob=0.9, num_chains=1):
         sd = value_flat.std(dim=0)
         median = value_flat.median(dim=0)[0]
         hpd = stats.hpdi(value_flat, prob=prob)
-        n_eff = stats.effective_sample_size(value)
+        n_eff = _safe(stats.effective_sample_size)(value)
         r_hat = stats.split_gelman_rubin(value)
         shape = value_flat.shape[1:]
         if len(shape) == 0:
@@ -467,6 +487,21 @@ def summary(samples, prob=0.9, num_chains=1):
                 print(row_format.format(name + idx_str, mean[idx], sd[idx], median[idx],
                                         hpd[0][idx], hpd[1][idx], n_eff[idx], r_hat[idx]))
     print('\n')
+
+
+def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
+                           num_samples, sample_sites, return_trace=False):
+    collected = []
+    samples = [{k: v[i] for k, v in posterior_samples.items()} for i in range(num_samples)]
+    for i in range(num_samples):
+        trace = poutine.trace(poutine.condition(model, samples[i])).get_trace(*model_args, **model_kwargs)
+        if return_trace:
+            collected.append(trace)
+        else:
+            collected.append({site: trace.nodes[site]['value'] for site in sample_sites})
+
+    return collected if return_trace else {site: torch.stack([s[site] for s in collected])
+                                           for site in sample_sites}
 
 
 def predictive(model, posterior_samples, *args, **kwargs):
@@ -494,6 +529,9 @@ def predictive(model, posterior_samples, *args, **kwargs):
           in `posterior_samples` are returned.
         * **return_trace** (``bool``) - whether to return the full trace. Note that this is vectorized
           over `num_samples`.
+        * **parallel** (``bool``) - predict in parallel by wrapping the existing model
+          in an outermost `plate` messenger. Note that this requires that the model has
+          all batch dims correctly annotated via :class:`~pyro.plate`. Default is `False`.
 
     :return: dict of samples from the predictive distribution, or a single vectorized
         `trace` (if `return_trace=True`).
@@ -503,6 +541,7 @@ def predictive(model, posterior_samples, *args, **kwargs):
     num_samples = kwargs.pop('num_samples', None)
     return_sites = kwargs.pop('return_sites', None)
     return_trace = kwargs.pop('return_trace', False)
+    parallel = kwargs.pop('parallel', False)
 
     max_plate_nesting = _guess_max_plate_nesting(model, args, kwargs)
     model_trace = prune_subsample_sites(poutine.trace(model).get_trace(*args, **kwargs))
@@ -536,6 +575,10 @@ def predictive(model, posterior_samples, *args, **kwargs):
         else:
             if site not in reshaped_samples:
                 return_site_shapes[site] = site_shape
+
+    if not parallel:
+        return _predictive_sequential(model, posterior_samples, args, kwargs, num_samples,
+                                      return_site_shapes.keys(), return_trace)
 
     def _vectorized_fn(fn):
         """

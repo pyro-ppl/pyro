@@ -36,7 +36,7 @@ ARGS = {
     dist.Geometric: [0.5],
     dist.Independent: [dist.Normal(torch.zeros(2), torch.ones(2)), 1],
     dist.LowRankMultivariateNormal: [torch.zeros(2), torch.ones(2, 2), torch.ones(2)],
-    dist.MaskedMixture: [torch.tensor([1, 0]).byte(), dist.Normal(0, 1), dist.Normal(0, 2)],
+    dist.MaskedMixture: [torch.tensor([1, 0]).bool(), dist.Normal(0, 1), dist.Normal(0, 2)],
     dist.MixtureOfDiagNormals: [torch.ones(2, 3), torch.ones(2, 3), torch.ones(2)],
     dist.MixtureOfDiagNormalsSharedCovariance: [torch.ones(2, 3), torch.ones(3), torch.ones(2)],
     dist.Multinomial: [2, torch.ones(2)],

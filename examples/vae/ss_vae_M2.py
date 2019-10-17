@@ -380,7 +380,7 @@ EXAMPLE_RUN = "example run: python ss_vae_M2.py --seed 0 --cuda -n 2 --aux-loss 
               "-sup 3000 -zd 50 -hl 500 -lr 0.00042 -b1 0.95 -bs 200 -log ./tmp.log"
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.3.4')
+    assert pyro.__version__.startswith('0.4.1')
 
     parser = argparse.ArgumentParser(description="SS-VAE\n{}".format(EXAMPLE_RUN))
 

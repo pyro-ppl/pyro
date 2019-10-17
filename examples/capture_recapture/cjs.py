@@ -36,7 +36,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.autoguide import AutoDiagonalNormal
+from pyro.infer.autoguide import AutoDiagonalNormal
 from pyro.infer import SVI, TraceEnum_ELBO
 from pyro.optim import Adam
 
@@ -58,7 +58,7 @@ def model_1(capture_history, sex):
         z = torch.ones(N)
         # we use this mask to eliminate extraneous log probabilities
         # that arise for a given individual before its first capture.
-        first_capture_mask = torch.zeros(N).byte()
+        first_capture_mask = torch.zeros(N).bool()
         for t in pyro.markov(range(T)):
             with poutine.mask(mask=first_capture_mask):
                 mu_z_t = first_capture_mask.float() * phi * z + (1 - first_capture_mask.float())
@@ -69,7 +69,7 @@ def model_1(capture_history, sex):
                 mu_y_t = rho * z
                 pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
                             obs=capture_history[:, t])
-            first_capture_mask |= capture_history[:, t].byte()
+            first_capture_mask |= capture_history[:, t].bool()
 
 
 """
@@ -83,7 +83,7 @@ def model_2(capture_history, sex):
     rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
 
     z = torch.ones(N)
-    first_capture_mask = torch.zeros(N).byte()
+    first_capture_mask = torch.zeros(N).bool()
     # we create the plate once, outside of the loop over t
     animals_plate = pyro.plate("animals", N, dim=-1)
     for t in pyro.markov(range(T)):
@@ -100,7 +100,7 @@ def model_2(capture_history, sex):
             mu_y_t = rho * z
             pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
                         obs=capture_history[:, t])
-        first_capture_mask |= capture_history[:, t].byte()
+        first_capture_mask |= capture_history[:, t].bool()
 
 
 """
@@ -121,7 +121,7 @@ def model_3(capture_history, sex):
     rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
 
     z = torch.ones(N)
-    first_capture_mask = torch.zeros(N).byte()
+    first_capture_mask = torch.zeros(N).bool()
     # we create the plate once, outside of the loop over t
     animals_plate = pyro.plate("animals", N, dim=-1)
     for t in pyro.markov(range(T)):
@@ -138,7 +138,7 @@ def model_3(capture_history, sex):
             mu_y_t = rho * z
             pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
                         obs=capture_history[:, t])
-        first_capture_mask |= capture_history[:, t].byte()
+        first_capture_mask |= capture_history[:, t].bool()
 
 
 """
@@ -161,7 +161,7 @@ def model_4(capture_history, sex):
         z = torch.ones(N)
         # we use this mask to eliminate extraneous log probabilities
         # that arise for a given individual before its first capture.
-        first_capture_mask = torch.zeros(N).byte()
+        first_capture_mask = torch.zeros(N).bool()
         for t in pyro.markov(range(T)):
             with poutine.mask(mask=first_capture_mask):
                 mu_z_t = first_capture_mask.float() * phi * z + (1 - first_capture_mask.float())
@@ -172,7 +172,7 @@ def model_4(capture_history, sex):
                 mu_y_t = rho * z
                 pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
                             obs=capture_history[:, t])
-            first_capture_mask |= capture_history[:, t].byte()
+            first_capture_mask |= capture_history[:, t].bool()
 
 
 """
@@ -197,7 +197,7 @@ def model_5(capture_history, sex):
     rho = pyro.sample("rho", dist.Uniform(0.0, 1.0))  # recapture probability
 
     z = torch.ones(N)
-    first_capture_mask = torch.zeros(N).byte()
+    first_capture_mask = torch.zeros(N).bool()
     # we create the plate once, outside of the loop over t
     animals_plate = pyro.plate("animals", N, dim=-1)
     for t in pyro.markov(range(T)):
@@ -213,7 +213,7 @@ def model_5(capture_history, sex):
             mu_y_t = rho * z
             pyro.sample("y_{}".format(t), dist.Bernoulli(mu_y_t),
                         obs=capture_history[:, t])
-        first_capture_mask |= capture_history[:, t].byte()
+        first_capture_mask |= capture_history[:, t].bool()
 
 
 models = {name[len('model_'):]: model

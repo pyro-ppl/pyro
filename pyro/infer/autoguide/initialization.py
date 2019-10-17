@@ -1,5 +1,5 @@
 r"""
-The pyro.contrib.autoguide module contains initialization functions for
+The pyro.infer.autoguide.initialization module contains initialization functions for
 automatic guides.
 
 The standard interface for initialization is a function that inputs a Pyro

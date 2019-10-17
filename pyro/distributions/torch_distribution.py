@@ -1,7 +1,7 @@
 import warnings
 
 import torch
-from torch.distributions import biject_to, constraints, transform_to
+from torch.distributions import constraints
 from torch.distributions.kl import kl_divergence, register_kl
 
 import pyro.distributions.torch
@@ -198,33 +198,6 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
     pass
 
 
-# TODO move this upstream to torch.distributions
-class IndependentConstraint(constraints.Constraint):
-    """
-    Wraps a constraint by aggregating over ``reinterpreted_batch_ndims``-many
-    dims in :meth:`check`, so that an event is valid only if all its
-    independent entries are valid.
-
-    :param torch.distributions.constraints.Constraint base_constraint: A base
-        constraint whose entries are incidentally indepenent.
-    :param int reinterpreted_batch_ndims: The number of extra event dimensions that will
-        be considered dependent.
-    """
-    def __init__(self, base_constraint, reinterpreted_batch_ndims):
-        self.base_constraint = base_constraint
-        self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
-
-    def check(self, value):
-        result = self.base_constraint.check(value)
-        result = result.reshape(result.shape[:result.dim() - self.reinterpreted_batch_ndims] + (-1,))
-        result = result.min(-1)[0]
-        return result
-
-
-biject_to.register(IndependentConstraint, lambda c: biject_to(c.base_constraint))
-transform_to.register(IndependentConstraint, lambda c: transform_to(c.base_constraint))
-
-
 class MaskedDistribution(TorchDistribution):
     """
     Masks a distribution by a zero-one tensor that is broadcastable to the
@@ -239,7 +212,7 @@ class MaskedDistribution(TorchDistribution):
             raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "
                              "actual {} vs {}".format(mask.shape, base_dist.batch_shape))
         self.base_dist = base_dist
-        self._mask = mask.byte()
+        self._mask = mask.bool()
         super(MaskedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
 
     def expand(self, batch_shape, _instance=None):

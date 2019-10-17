@@ -8,7 +8,7 @@ from torch.distributions import constraints
 import torch.nn.functional as F
 
 from pyro.distributions.util import copy_docs_from
-from pyro.distributions.transforms.naf import ELUMixin, LeakyReLUMixin, TanhMixin, SigmoidalMixin
+from pyro.distributions.transforms.neural_autoregressive import ELUTransform, LeakyReLUTransform, TanhTransform
 
 eps = 1e-8
 
@@ -77,11 +77,14 @@ class BlockAutoregressive(TransformModule):
             raise ValueError('Invalid value {} for keyword argument "residual"'.format(residual))
 
         # Mix in activation function methods
-        name_to_mixin = {'ELU': ELUMixin, 'LeakyReLU': LeakyReLUMixin, 'sigmoid': SigmoidalMixin, 'tanh': TanhMixin}
+        name_to_mixin = {
+            'ELU': ELUTransform,
+            'LeakyReLU': LeakyReLUTransform,
+            'sigmoid': torch.distributions.transforms.SigmoidTransform,
+            'tanh': TanhTransform}
         if activation not in name_to_mixin:
             raise ValueError('Invalid activation function "{}"'.format(activation))
-        self.f = name_to_mixin[activation].f
-        self.log_df_dx = name_to_mixin[activation].log_df_dx
+        self.T = name_to_mixin[activation]()
 
         # Initialize modules for each layer in flow
         self.residual = residual
@@ -107,17 +110,22 @@ class BlockAutoregressive(TransformModule):
         y = x
         for idx in range(len(self.layers)):
             pre_activation, dy_dx = self.layers[idx](y.unsqueeze(-1))
-            J_act = self.log_df_dx(pre_activation).view(*(list(x.size()) + [-1, 1]))
 
             if idx == 0:
+                y = self.T(pre_activation)
+                J_act = self.T.log_abs_det_jacobian((pre_activation).view(
+                    *(list(x.size()) + [-1, 1])), y.view(*(list(x.size()) + [-1, 1])))
                 logDetJ = dy_dx + J_act
-                y = self.f(pre_activation)
+
             elif idx < len(self.layers) - 1:
+                y = self.T(pre_activation)
+                J_act = self.T.log_abs_det_jacobian((pre_activation).view(
+                    *(list(x.size()) + [-1, 1])), y.view(*(list(x.size()) + [-1, 1])))
                 logDetJ = log_matrix_product(dy_dx, logDetJ) + J_act
-                y = self.f(pre_activation)
+
             else:
-                logDetJ = log_matrix_product(dy_dx, logDetJ)
                 y = pre_activation
+                logDetJ = log_matrix_product(dy_dx, logDetJ)
 
         self._cached_logDetJ = logDetJ.squeeze(-1).squeeze(-1)
 
@@ -211,7 +219,7 @@ class MaskedBlockLinear(torch.nn.Module):
         # taking the log gives the right hand side below:
         wpl = self._diag_weight + self._weight - 0.5 * torch.log(w_squared_norm + eps)
 
-        return w, wpl[self.mask_d.byte()].view(self.dim, self.out_features // self.dim, self.in_features // self.dim)
+        return w, wpl[self.mask_d.bool()].view(self.dim, self.out_features // self.dim, self.in_features // self.dim)
 
     def forward(self, x):
         """

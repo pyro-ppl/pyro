@@ -1,3 +1,4 @@
+import functools
 import weakref
 
 import torch
@@ -16,34 +17,17 @@ def patch_dependency(target, root_module=torch):
     old_fn = getattr(old_fn, '_pyro_unpatched', old_fn)  # ensure patching is idempotent
 
     def decorator(new_fn):
-        new_fn.__name__ = name
+        try:
+            functools.update_wrapper(new_fn, old_fn)
+        except Exception:
+            for attr in functools.WRAPPER_ASSIGNMENTS:
+                if hasattr(old_fn, attr):
+                    setattr(new_fn, attr, getattr(old_fn, attr))
         new_fn._pyro_unpatched = old_fn
         setattr(module, name, new_fn)
         return new_fn
 
     return decorator
-
-
-@patch_dependency('torch._dirichlet_grad')
-def _torch_dirichlet_grad(x, concentration, total):
-    unpatched_fn = _torch_dirichlet_grad._pyro_unpatched
-    if x.is_cuda:
-        return unpatched_fn(x.cpu(), concentration.cpu(), total.cpu()).cuda(x.get_device())
-    return unpatched_fn(x, concentration, total)
-
-
-# This can be removed when super(...).__init__() is added upstream
-@patch_dependency('torch.distributions.transforms.Transform.__init__')
-def _Transform__init__(self, cache_size=0):
-    self._cache_size = cache_size
-    self._inv = None
-    if cache_size == 0:
-        pass  # default behavior
-    elif cache_size == 1:
-        self._cached_x_y = None, None
-    else:
-        raise ValueError('cache_size must be 0 or 1')
-    super(torch.distributions.transforms.Transform, self).__init__()
 
 
 # TODO: Move upstream to allow for pickle serialization of transforms
@@ -58,17 +42,16 @@ def _Transform__getstate__(self):
     return attrs
 
 
-@patch_dependency('torch.linspace')
-def _torch_linspace(*args, **kwargs):
-    unpatched_fn = _torch_linspace._pyro_unpatched
-    template = torch.Tensor()
-    if template.is_cuda:
-        kwargs["device"] = "cpu"
-        ret = unpatched_fn(*args, **kwargs).to(device=template.device)
-        kwargs.pop("device", None)
-    else:
-        ret = unpatched_fn(*args, **kwargs)
-    return ret
+# This can be removed after release of https://github.com/pytorch/pytorch/pull/24131
+@patch_dependency('torch.distributions.LowerCholeskyTransform._call')
+def _LowerCholeskyTransform_call(self, x):
+    return x.tril(-1) + x.diagonal(dim1=-2, dim2=-1).exp().diag_embed()
+
+
+# This can be removed after release of https://github.com/pytorch/pytorch/pull/24131
+@patch_dependency('torch.distributions.LowerCholeskyTransform._inverse')
+def _LowerCholeskyTransform_inverse(self, y):
+    return y.tril(-1) + y.diagonal(dim1=-2, dim2=-1).log().diag_embed()
 
 
 # Fixes a shape error in Multinomial.support with inhomogeneous .total_count
@@ -86,18 +69,6 @@ def _einsum(equation, *operands):
     if len(operands) == 1 and isinstance(operands[0], (list, tuple)):
         # the old interface of passing the operands as one list argument
         operands = operands[0]
-
-    # work around torch.einsum performance issues
-    # see https://github.com/pytorch/pytorch/issues/10661
-    if equation == 'ac,abc->bc':
-        x, y = operands
-        return (x.unsqueeze(1) * y).sum(0)
-    elif equation == 'ac,abc->cb':
-        x, y = operands
-        return (x.unsqueeze(1) * y).sum(0).transpose(0, 1)
-    elif equation == 'abc,ac->cb':
-        y, x = operands
-        return (x.unsqueeze(1) * y).sum(0).transpose(0, 1)
 
     return _einsum._pyro_unpatched(equation, *operands)
 

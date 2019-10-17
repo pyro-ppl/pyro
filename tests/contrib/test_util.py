@@ -2,9 +2,8 @@ from collections import OrderedDict
 import pytest
 import torch
 
-import pyro.distributions as dist
 from pyro.contrib.util import (
-    get_indices, tensor_to_dict, rmv, rvv, lexpand, rexpand, rdiag, rtril, hessian
+    get_indices, tensor_to_dict, rmv, rvv, lexpand, rexpand, rdiag, rtril
 )
 from tests.common import assert_equal
 
@@ -78,26 +77,3 @@ def test_rdiag():
     expanded = lexpand(v, 5, 4)
     expeceted = lexpand(torch.diag(v), 5, 4)
     assert_equal(rdiag(expanded), expeceted, prec=1e-8)
-
-
-def test_hessian_mvn():
-    tmp = torch.randn(3, 10)
-    cov = torch.matmul(tmp, tmp.t())
-    mvn = dist.MultivariateNormal(cov.new_zeros(3), cov)
-
-    x = torch.randn(3, requires_grad=True)
-    y = mvn.log_prob(x)
-    assert_equal(hessian(y, x), -mvn.precision_matrix)
-
-
-def test_hessian_multi_variables():
-    x = torch.randn(3, requires_grad=True)
-    z = torch.randn(3, requires_grad=True)
-    y = (x ** 2 * z + z ** 3).sum()
-
-    H = hessian(y, (x, z))
-    Hxx = (2 * z).diag()
-    Hxz = (2 * x).diag()
-    Hzz = (6 * z).diag()
-    target_H = torch.cat([torch.cat([Hxx, Hxz]), torch.cat([Hxz, Hzz])], dim=1)
-    assert_equal(H, target_H)

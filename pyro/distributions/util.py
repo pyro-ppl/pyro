@@ -218,16 +218,13 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
     :param scale: a positive scale
     :type scale: torch.Tensor or number
     :param mask: an optional masking tensor
-    :type mask: torch.ByteTensor or None
+    :type mask: torch.BoolTensor or None
     """
     if is_identically_zero(tensor) or (mask is None and is_identically_one(scale)):
         return tensor
     if mask is None:
         return tensor * scale
-    tensor, mask = broadcast_all(tensor, mask)
-    tensor = tensor * scale  # triggers a copy, avoiding in-place op errors
-    tensor.masked_fill_(mask == 0, 0.)
-    return tensor
+    return torch.where(mask, tensor * scale, tensor.new_zeros(()))
 
 
 def scalar_like(prototype, fill_value):

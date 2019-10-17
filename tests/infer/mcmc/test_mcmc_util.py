@@ -25,7 +25,8 @@ def beta_bernoulli():
 
 
 @pytest.mark.parametrize("num_samples", [100, 200, None])
-def test_predictive(num_samples):
+@pytest.mark.parametrize("parallel", [False, True])
+def test_predictive(num_samples, parallel):
     model, data, true_probs = beta_bernoulli()
     init_params, potential_fn, transforms, _ = initialize_model(model,
                                                                 model_args=(data,))
@@ -40,7 +41,8 @@ def test_predictive(num_samples):
         with optional(pytest.warns(UserWarning), num_samples not in (None, 100)):
             predictive_samples = predictive(model, samples,
                                             num_samples=num_samples,
-                                            return_sites=["beta", "obs"])
+                                            return_sites=["beta", "obs"],
+                                            parallel=parallel)
 
     # check shapes
     assert predictive_samples["beta"].shape == (100, 5)

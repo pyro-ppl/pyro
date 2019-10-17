@@ -245,7 +245,7 @@ def main(**kwargs):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.3.4')
+    assert pyro.__version__.startswith('0.4.1')
     parser = argparse.ArgumentParser(description="Pyro AIR example", argument_default=argparse.SUPPRESS)
     parser.add_argument('-n', '--num-steps', type=int, default=int(1e8),
                         help='number of optimization steps to take')

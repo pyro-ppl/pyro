@@ -1,5 +1,5 @@
 """
-The :mod:`pyro.contrib.autoguide` module provides algorithms to automatically
+The :mod:`pyro.infer.autoguide` module provides algorithms to automatically
 generate guides from simple models, for use in :class:`~pyro.infer.svi.SVI`.
 For example to generate a mean field Gaussian guide::
 
@@ -23,42 +23,14 @@ from torch.distributions import biject_to, constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib.autoguide.initialization import (InitMessenger, init_to_feasible, init_to_mean, init_to_median,
-                                                   init_to_sample)
-from pyro.contrib.util import hessian
+from pyro.distributions import transforms
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
+from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
+from pyro.infer.autoguide.utils import _product
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
+from pyro.ops.hessian import hessian
 from pyro.poutine.util import prune_subsample_sites
-
-__all__ = [
-    'AutoCallable',
-    'AutoContinuous',
-    'AutoDelta',
-    'AutoDiagonalNormal',
-    'AutoDiscreteParallel',
-    'AutoGuide',
-    'AutoGuideList',
-    'AutoIAFNormal',
-    'AutoLaplaceApproximation',
-    'AutoLowRankMultivariateNormal',
-    'AutoMultivariateNormal',
-    'init_to_feasible',
-    'init_to_mean',
-    'init_to_median',
-    'init_to_sample',
-    'mean_field_entropy',
-]
-
-
-def _product(shape):
-    """
-    Computes the product of the dimensions of a given shape tensor
-    """
-    result = 1
-    for size in shape:
-        result *= size
-    return result
 
 
 class AutoGuide(object):
@@ -614,9 +586,10 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 class AutoIAFNormal(AutoContinuous):
     """
     This implementation of :class:`AutoContinuous` uses a Diagonal Normal
-    distribution transformed via a :class:`~pyro.distributions.iaf.InverseAutoregressiveFlow`
-    to construct a guide over the entire latent space. The guide does not depend on the model's
-    ``*args, **kwargs``.
+    distribution transformed via a
+    :class:`~pyro.distributions.transforms.iaf.InverseAutoregressiveFlow`
+    to construct a guide over the entire latent space. The guide does not
+    depend on the model's ``*args, **kwargs``.
 
     Usage::
 
@@ -638,7 +611,7 @@ class AutoIAFNormal(AutoContinuous):
     def get_posterior(self, *args, **kwargs):
         """
         Returns a diagonal Normal posterior distribution transformed by
-        :class:`~pyro.distributions.iaf.InverseAutoregressiveFlow`.
+        :class:`~pyro.distributions.transforms.iaf.InverseAutoregressiveFlow`.
         """
         if self.latent_dim == 1:
             raise ValueError('latent dim = 1. Consider using AutoDiagonalNormal instead')
@@ -647,7 +620,7 @@ class AutoIAFNormal(AutoContinuous):
         if self.arn is None:
             self.arn = AutoRegressiveNN(self.latent_dim, [self.hidden_dim])
 
-        iaf = dist.InverseAutoregressiveFlow(self.arn)
+        iaf = transforms.InverseAutoregressiveFlow(self.arn)
         pyro.module("{}_iaf".format(self.prefix), iaf)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
         return iaf_dist
@@ -779,24 +752,3 @@ class AutoDiscreteParallel(AutoGuide):
                 result[name] = pyro.sample(name, discrete_dist, infer={"enumerate": "parallel"})
 
         return result
-
-
-def mean_field_entropy(model, args, whitelist=None):
-    """Computes the entropy of a model, assuming
-    that the model is fully mean-field (i.e. all sample sites
-    in the model are independent).
-
-    The entropy is simply the sum of the entropies at the
-    individual sites. If `whitelist` is not `None`, only sites
-    listed in `whitelist` will have their entropies included
-    in the sum. If `whitelist` is `None`, all non-subsample
-    sites are included.
-    """
-    trace = poutine.trace(model).get_trace(*args)
-    entropy = 0.
-    for name, site in trace.nodes.items():
-        if site["type"] == "sample":
-            if not poutine.util.site_is_subsample(site):
-                if whitelist is None or name in whitelist:
-                    entropy += site["fn"].entropy()
-    return entropy

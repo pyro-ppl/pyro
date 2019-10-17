@@ -46,7 +46,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.3.4')
+    assert pyro.__version__.startswith('0.4.1')
     parser = argparse.ArgumentParser(description="Demonstrate the use of an LKJ Prior")
     parser.add_argument("--num-samples", nargs="?", default=200, type=int)
     parser.add_argument("--n", nargs="?", default=500, type=int)

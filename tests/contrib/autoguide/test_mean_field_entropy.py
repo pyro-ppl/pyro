@@ -4,7 +4,7 @@ import pytest
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib.autoguide import mean_field_entropy
+from pyro.infer.autoguide.utils import mean_field_entropy
 from tests.common import assert_equal
 
 

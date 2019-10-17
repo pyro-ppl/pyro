@@ -126,6 +126,7 @@ ENV/
 # IDE settings
 .spyderproject
 .idea
+.vscode
 
 # Rope project settings
 .ropeproject
