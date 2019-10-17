@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 import pyro
@@ -5,7 +6,7 @@ import pyro.distributions as dist
 import pyro.optim as optim
 import pyro.poutine as poutine
 from pyro.infer.autoguide import AutoDelta, AutoDiagonalNormal
-from pyro.infer import SVI, TracePredictive, Trace_ELBO, predictive
+from pyro.infer import SVI, Trace_ELBO, predictive
 from tests.common import assert_close
 
 
@@ -31,7 +32,8 @@ def beta_guide(num_trials):
         pyro.sample("phi", phi_posterior)
 
 
-def test_posterior_predictive_svi_manual_guide():
+@pytest.mark.parametrize("parallel", [False, True])
+def test_posterior_predictive_svi_manual_guide(parallel):
     true_probs = torch.ones(5) * 0.7
     num_trials = torch.ones(5) * 1000
     num_success = dist.Binomial(num_trials, true_probs).sample()
@@ -39,16 +41,14 @@ def test_posterior_predictive_svi_manual_guide():
     svi = SVI(conditioned_model, beta_guide, optim.Adam(dict(lr=1.0)), Trace_ELBO())
     for i in range(1000):
         svi.step(num_trials)
-    posterior_samples = predictive(beta_guide, {}, num_trials[:3], num_samples=100)
-    posterior_predictive = predictive(model, posterior_samples, num_trials[:3], num_samples=10000)
-    #     svi.step(num_trials[:3])
-    # posterior_samples = predictive(beta_guide, {}, num_trials, num_samples=100)
-    # posterior_predictive = predictive(model, posterior_samples, num_trials, num_samples=10000)
+    posterior_predictive = predictive(model, {}, num_trials, guide=beta_guide, num_samples=10000,
+                                      parallel=parallel, return_sites=["_RETURN"])
     marginal_return_vals = posterior_predictive["_RETURN"]
-    assert_close(marginal_return_vals.mean, torch.ones(3) * 700, rtol=0.05)
+    assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 700, rtol=0.05)
 
 
-def test_posterior_predictive_svi_auto_delta_guide():
+@pytest.mark.parametrize("parallel", [False, True])
+def test_posterior_predictive_svi_auto_delta_guide(parallel):
     true_probs = torch.ones(5) * 0.7
     num_trials = torch.ones(5) * 1000
     num_success = dist.Binomial(num_trials, true_probs).sample()
@@ -57,24 +57,28 @@ def test_posterior_predictive_svi_auto_delta_guide():
     svi = SVI(conditioned_model, guide, optim.Adam(dict(lr=1.0)), Trace_ELBO())
     for i in range(1000):
         svi.step(num_trials)
-    posterior_samples = predictive(guide, {}, num_trials, num_samples=10000)
-    posterior_predictive = predictive(model, posterior_samples, num_trials)
+    posterior_predictive = predictive(model, {}, num_trials, guide=guide, num_samples=10000,
+                                      parallel=parallel)
     marginal_return_vals = posterior_predictive["obs"]
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 700, rtol=0.05)
 
 
-def test_posterior_predictive_svi_auto_diag_normal_guide():
+@pytest.mark.parametrize("return_trace", [False, True])
+def test_posterior_predictive_svi_auto_diag_normal_guide(return_trace):
     true_probs = torch.ones(5) * 0.7
     num_trials = torch.ones(5) * 1000
     num_success = dist.Binomial(num_trials, true_probs).sample()
     conditioned_model = poutine.condition(model, data={"obs": num_success})
     guide = AutoDiagonalNormal(conditioned_model)
-    svi = SVI(conditioned_model, guide, optim.Adam(dict(lr=1.0)), Trace_ELBO())
+    svi = SVI(conditioned_model, guide, optim.Adam(dict(lr=0.1)), Trace_ELBO())
     for i in range(1000):
         svi.step(num_trials)
-    posterior_samples = predictive(guide, {}, num_trials, num_samples=10000)
-    posterior_predictive = predictive(model, posterior_samples, num_trials)
-    marginal_return_vals = posterior_predictive["obs"]
+    posterior_predictive = predictive(model, {}, num_trials, num_samples=10000, guide=guide,
+                                      parallel=True, return_trace=return_trace)
+    if return_trace:
+        marginal_return_vals = posterior_predictive.nodes["obs"]["value"]
+    else:
+        marginal_return_vals = posterior_predictive["obs"]
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 700, rtol=0.05)
 
 
