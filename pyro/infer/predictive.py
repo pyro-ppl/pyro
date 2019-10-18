@@ -42,34 +42,36 @@ def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
                                            for site in sample_sites}
 
 
-def _predictive(model, posterior_samples, *args, **kwargs):
-    num_samples = kwargs.pop('num_samples', None)
-    return_sites = kwargs.pop('return_sites', None)
-    return_trace = kwargs.pop('return_trace', False)
-    parallel = kwargs.pop('parallel', False)
-
-    max_plate_nesting = _guess_max_plate_nesting(model, args, kwargs)
-    model_trace = prune_subsample_sites(poutine.trace(model).get_trace(*args, **kwargs))
+def _predictive(model, posterior_samples, num_samples, return_sites=None,
+                return_trace=False, parallel=False, model_args=(), model_kwargs={}):
+    max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
+    model_trace = prune_subsample_sites(poutine.trace(model).get_trace(*model_args, **model_kwargs))
     reshaped_samples = {}
 
     for name, sample in posterior_samples.items():
-
-        batch_size, sample_shape = sample.shape[0], sample.shape[1:]
-
-        if num_samples is None:
-            num_samples = batch_size
-
-        elif num_samples != batch_size:
-            warnings.warn("Sample's leading dimension size {} is different from the "
-                          "provided {} num_samples argument. Defaulting to {}."
-                          .format(batch_size, num_samples, batch_size), UserWarning)
-            num_samples = batch_size
-
+        sample_shape = sample.shape[1:]
         sample = sample.reshape((num_samples,) + (1,) * (max_plate_nesting - len(sample_shape)) + sample_shape)
         reshaped_samples[name] = sample
 
-    if num_samples is None:
-        raise ValueError("No sample sites in model to infer `num_samples`.")
+    def _vectorized_fn(fn):
+        """
+        Wraps a callable inside an outermost :class:`~pyro.plate` to parallelize
+        sampling from the posterior predictive.
+
+        :param fn: arbitrary callable containing Pyro primitives.
+        :return: wrapped callable.
+        """
+
+        def wrapped_fn(*args, **kwargs):
+            with pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting-1):
+                return fn(*args, **kwargs)
+
+        return wrapped_fn
+
+    if return_trace:
+        trace = poutine.trace(poutine.condition(_vectorized_fn(model), reshaped_samples))\
+            .get_trace(*model_args, **model_kwargs)
+        return trace
 
     return_site_shapes = {}
     for site in model_trace.stochastic_nodes + model_trace.observation_nodes:
@@ -88,30 +90,11 @@ def _predictive(model, posterior_samples, *args, **kwargs):
         return_site_shapes['_RETURN'] = shape
 
     if not parallel:
-        return _predictive_sequential(model, posterior_samples, args, kwargs, num_samples,
-                                      return_site_shapes.keys(), return_trace)
-
-    def _vectorized_fn(fn):
-        """
-        Wraps a callable inside an outermost :class:`~pyro.plate` to parallelize
-        sampling from the posterior predictive.
-
-        :param fn: arbitrary callable containing Pyro primitives.
-        :return: wrapped callable.
-        """
-
-        def wrapped_fn(*args, **kwargs):
-            with pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting-1):
-                return fn(*args, **kwargs)
-
-        return wrapped_fn
+        return _predictive_sequential(model, posterior_samples, model_args, model_kwargs, num_samples,
+                                      return_site_shapes.keys(), return_trace=False)
 
     trace = poutine.trace(poutine.condition(_vectorized_fn(model), reshaped_samples))\
-        .get_trace(*args, **kwargs)
-
-    if return_trace:
-        return trace
-
+        .get_trace(*model_args, **model_kwargs)
     predictions = {}
     for site, shape in return_site_shapes.items():
         value = trace.nodes[site]['value']
@@ -126,45 +109,91 @@ def _predictive(model, posterior_samples, *args, **kwargs):
     return predictions
 
 
-def predictive(model, posterior_samples, *args, **kwargs):
+class Predictive(object):
     """
-    Run model by sampling latent parameters from `posterior_samples`, and return
-    values at sample sites from the forward run. By default, only sample sites not contained in
-    `posterior_samples` are returned. This can be modified by changing the `return_sites`
-    keyword argument.
+    This class is used to construct predictive distribution. The predictive distribution is obtained
+    by running model conditioned on latent samples from `posterior_samples`.
 
     .. warning::
-        The interface for the `predictive` class is experimental, and
+        The interface for the :class:`Predictive` class is experimental, and
         might change in the future.
 
     :param model: Python callable containing Pyro primitives.
     :param dict posterior_samples: dictionary of samples from the posterior.
-    :param args: model arguments.
-    :param kwargs: model kwargs; and other keyword arguments (see below).
-
-    :Keyword Arguments:
-        * **num_samples** (``int``) - number of samples to draw from the predictive distribution.
-          This argument has no effect if ``posterior_samples`` is non-empty, in which case, the
-          leading dimension size of samples in ``posterior_samples`` is used.
-        * **guide** (``callable``) - guide to get posterior samples of sites not present
-          in `posterior_samples`.
-        * **return_sites** (``list``) - sites to return; by default only sample sites not present
-          in `posterior_samples` are returned.
-        * **return_trace** (``bool``) - whether to return the full trace. Note that this is
-          vectorized over `num_samples`.
-        * **parallel** (``bool``) - predict in parallel by wrapping the existing model
-          in an outermost `plate` messenger. Note that this requires that the model has
-          all batch dims correctly annotated via :class:`~pyro.plate`. Default is `False`.
-
-    :return: dict of samples from the predictive distribution, or a single vectorized
-        `trace` (if `return_trace=True`).
+    :param callable guide: optional guide to get posterior samples of sites not present
+        in `posterior_samples`.
+    :param int num_samples: number of samples to draw from the predictive distribution.
+        This argument has no effect if ``posterior_samples`` is non-empty, in which case,
+        the leading dimension size of samples in ``posterior_samples`` is used.
+    :param return_sites: sites to return; by default only sample sites not present
+        in `posterior_samples` are returned.
+    :type return_sites: list, tuple, or set
+    :param bool parallel: predict in parallel by wrapping the existing model
+        in an outermost `plate` messenger. Note that this requires that the model has
+        all batch dims correctly annotated via :class:`~pyro.plate`. Default is `False`.
     """
-    guide = kwargs.pop('guide', None)
-    return_trace = kwargs.pop('return_trace', False)
-    return_sites = kwargs.pop('return_sites', None)
-    if return_sites is not None:
-        assert isinstance(return_sites, (list, tuple, set))
-    if guide is not None:
-        # use return_sites='' as a special signal to return all sites
-        posterior_samples = _predictive(guide, posterior_samples, *args, return_trace=False, return_sites='', **kwargs)
-    return _predictive(model, posterior_samples, *args, return_trace=return_trace, return_sites=return_sites, **kwargs)
+    def __init__(self, model, posterior_samples=None, guide=None, num_samples=None,
+                 return_sites=None, parallel=False):
+        if posterior_samples is None and num_samples is None:
+            raise ValueError("Either posterior_samples or num_samples must be specified.")
+
+        posterior_samples = {} if posterior_samples is None else posterior_samples
+
+        for name, sample in posterior_samples.items():
+            batch_size = sample.shape[0]
+            if num_samples is None:
+                num_samples = batch_size
+            elif num_samples != batch_size:
+                warnings.warn("Sample's leading dimension size {} is different from the "
+                              "provided {} num_samples argument. Defaulting to {}."
+                              .format(batch_size, num_samples, batch_size), UserWarning)
+                num_samples = batch_size
+
+        if num_samples is None:
+            raise ValueError("No sample sites in posterior samples to infer `num_samples`.")
+
+        if return_sites is not None:
+            assert isinstance(return_sites, (list, tuple, set))
+
+        self.model = model
+        self.posterior_samples = {} if posterior_samples is None else posterior_samples
+        self.num_samples = num_samples
+        self.guide = guide
+        self.return_sites = return_sites
+        self.parallel = parallel
+
+    def get_samples(self, *args, **kwargs):
+        """
+        Returns dict of samples from the predictive distribution. By default, only sample sites not
+        contained in `posterior_samples` are returned. This can be modified by changing the
+        `return_sites` keyword argument of this :class:`Predictive` instance.
+
+        :param args: model arguments.
+        :param kwargs: model keyword arguments.
+        """
+        posterior_samples = self.posterior_samples
+        if self.guide is not None:
+            # use return_sites='' as a special signal to return all sites
+            posterior_samples = _predictive(self.guide, posterior_samples, self.num_samples,
+                                            return_sites='', parallel=self.parallel,
+                                            model_args=args, model_kwargs=kwargs)
+        return _predictive(self.model, posterior_samples, self.num_samples,
+                           return_sites=self.return_sites, parallel=self.parallel,
+                           model_args=args, model_kwargs=kwargs)
+
+    def get_vectorized_trace(self, *args, **kwargs):
+        """
+        Returns a single vectorized `trace` from the predictive distribution. Note that this
+        requires that the model has all batch dims correctly annotated via :class:`~pyro.plate`.
+
+        :param args: model arguments.
+        :param kwargs: model keyword arguments.
+        """
+        posterior_samples = self.posterior_samples
+        if self.guide is not None:
+            # use return_sites='' as a special signal to return all sites
+            posterior_samples = _predictive(self.guide, posterior_samples, self.num_samples,
+                                            return_sites='', parallel=self.parallel,
+                                            model_args=args, model_kwargs=kwargs)
+        return _predictive(self.model, posterior_samples, self.num_samples,
+                           return_trace=True, model_args=args, model_kwargs=kwargs)
