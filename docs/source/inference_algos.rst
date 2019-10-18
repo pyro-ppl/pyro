@@ -86,6 +86,11 @@ Discrete Inference
 Inference Utilities
 -------------------
 
+.. automodule:: pyro.infer.predictive
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 .. automodule:: pyro.infer.abstract_infer
     :members:
     :undoc-members:

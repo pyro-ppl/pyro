@@ -7,6 +7,7 @@ from pyro.infer.importance import Importance
 from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.nuts import NUTS
+from pyro.infer.predictive import Predictive
 from pyro.infer.renyi_elbo import RenyiELBO
 from pyro.infer.smcfilter import SMCFilter
 from pyro.infer.svi import SVI
@@ -36,6 +37,7 @@ __all__ = [
     "JitTrace_ELBO",
     "MCMC",
     "NUTS",
+    "Predictive",
     "RBFSteinKernel",
     "RenyiELBO",
     "SMCFilter",
