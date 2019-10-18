@@ -10,6 +10,14 @@ from pyro.infer.util import is_validation_enabled, torch_item
 from pyro.util import check_if_enumerated, warn_if_nan
 
 
+def get_wake_theta_loss_from_log_weights(log_weights):
+    pass
+
+
+def get_wake_phi_loss_from_log_weights_and_log_qs(log_weights, log_qs):
+    pass
+
+
 class ReweightedWakeSleep(ELBO):
     r"""
     An implementation of Reweighted Wake Sleep following reference [1].
@@ -201,3 +209,49 @@ class ReweightedWakeSleep(ELBO):
         loss = -elbo
         warn_if_nan(loss, "loss")
         return loss
+
+    def losses_and_grads(self, model, guide, *args, **kwargs):
+        """
+        :returns: returns model loss and guide loss
+        :rtype: float
+
+        Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
+        Performs backward on the latter. Num_particle many samples are used to form the estimators.
+        """
+        log_weights = []
+        log_qs = []
+
+        # grab a vectorized trace from the generator
+        # TODO: make _get_traces detach zs
+        for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
+            log_weight = 0
+            log_q = 0
+
+            # compute log_weight and log_q
+            for name, site in model_trace.nodes.items():
+                if site["type"] == "sample":
+                    log_p_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                    log_weight = log_weight + log_p_site
+
+            for name, site in guide_trace.nodes.items():
+                if site["type"] == "sample":
+                    log_q_site, _, _ = site["score_parts"]
+                    log_q_site = log_q_site.reshape(self.num_particles, -1).sum(-1)
+                    log_weight = log_weight - log_q_site
+                    log_q = log_q + log_q_site
+            log_weights.append(log_weight)
+            log_qs.append(log_q)
+
+        # TODO: zero model and guide grads
+        wake_theta_loss, elbo = get_wake_theta_loss_from_log_weights(
+            log_weights)
+        wake_theta_loss.backward(retain_graph=True)
+
+        # TODO: zero guide grads
+        wake_phi_loss = get_wake_phi_loss_from_log_weights_and_log_qs(
+            log_weights, log_qs)
+        wake_phi_loss.backward()
+
+        warn_if_nan(wake_theta_loss, "loss")
+        warn_if_nan(wake_phi_loss, "loss")
+        return wake_theta_loss, wake_phi_loss
