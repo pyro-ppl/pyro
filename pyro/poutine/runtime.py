@@ -153,6 +153,7 @@ def default_process_message(msg):
         msg["done"] = True
         return msg
 
+    # RWS: sampling is happening here!
     msg["value"] = msg["fn"](*msg["args"], **msg["kwargs"])
 
     # after fn has been called, update msg to prevent it from being called again.

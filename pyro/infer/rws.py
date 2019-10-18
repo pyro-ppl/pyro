@@ -73,7 +73,7 @@ class ReweightedWakeSleep(ELBO):
         against it.
         """
         model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)
+            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)  # RWS: possibly pass *args to detach
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
@@ -190,7 +190,8 @@ class ReweightedWakeSleep(ELBO):
         log_qs = []
 
         # grab a vectorized trace from the generator
-        # TODO: make _get_traces detach zs
+        # RWS: make _get_traces detach zs
+        # RWS: this loops num_particles times
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             log_weight = 0
             log_q = 0
@@ -203,8 +204,7 @@ class ReweightedWakeSleep(ELBO):
 
             for name, site in guide_trace.nodes.items():
                 if site["type"] == "sample":
-                    log_q_site, _, _ = site["score_parts"]
-                    log_q_site = log_q_site.reshape(self.num_particles, -1).sum(-1)
+                    log_q_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
                     log_weight = log_weight - log_q_site
                     log_q = log_q + log_q_site
             log_weights.append(log_weight)
@@ -222,4 +222,4 @@ class ReweightedWakeSleep(ELBO):
 
         warn_if_nan(wake_theta_loss, "loss")
         warn_if_nan(wake_phi_loss, "loss")
-        return wake_theta_loss, wake_phi_loss
+        return wake_theta_loss.detach(), wake_phi_loss.detach()
