@@ -102,6 +102,7 @@ class TraceMessenger(Messenger):
 
     def _pyro_post_sample(self, msg):
         if not self.param_only:
+            # RWS: could change msg here
             self.trace.add_node(msg["name"], **msg.copy())
 
     def _pyro_post_param(self, msg):
@@ -140,6 +141,7 @@ class TraceHandler(object):
                                       name="_INPUT", type="args",
                                       args=args, kwargs=kwargs)
             try:
+                # RWS: fn is actually the guide/model
                 ret = self.fn(*args, **kwargs)
             except (ValueError, RuntimeError):
                 exc_type, exc_value, traceback = sys.exc_info()

@@ -133,6 +133,7 @@ class Messenger(object):
         return None
 
     def _postprocess_message(self, msg):
+        # RWS: this calls _pyro_post_sample
         method_name = "_pyro_post_{}".format(msg["type"])
         if hasattr(self, method_name):
             return getattr(self, method_name)(msg)
