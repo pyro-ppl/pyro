@@ -122,8 +122,6 @@ class ReweightedWakeSleep(ELBO):
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         """
         elbo_particles = []
-        surrogate_elbo_particles = []
-        tensor_holder = None
 
         # grab a vectorized trace from the generator
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
@@ -134,47 +132,17 @@ class ReweightedWakeSleep(ELBO):
             for name, site in model_trace.nodes.items():
                 if site["type"] == "sample":
                     log_prob_sum = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
-                    elbo_particle = elbo_particle + log_prob_sum.detach()
-                    surrogate_elbo_particle = surrogate_elbo_particle + log_prob_sum
+                    elbo_particle = elbo_particle + log_prob_sum
 
             for name, site in guide_trace.nodes.items():
                 if site["type"] == "sample":
-                    log_prob, score_function_term, entropy_term = site["score_parts"]
-                    log_prob_sum = log_prob.reshape(self.num_particles, -1).sum(-1)
-                    elbo_particle = elbo_particle - log_prob_sum.detach()
-
-                    if not is_identically_zero(entropy_term):
-                        surrogate_elbo_particle = surrogate_elbo_particle - log_prob_sum
-
-                        if not is_identically_zero(score_function_term):
-                            # link to the issue: https://github.com/uber/pyro/issues/1222
-                            raise NotImplementedError
-
-                    if not is_identically_zero(score_function_term):
-                        surrogate_elbo_particle = surrogate_elbo_particle
-
-            if is_identically_zero(elbo_particle):
-                if tensor_holder is not None:
-                    elbo_particle = torch.zeros_like(tensor_holder)
-                    surrogate_elbo_particle = torch.zeros_like(tensor_holder)
-            else:  # elbo_particle is not None
-                if tensor_holder is None:
-                    tensor_holder = torch.zeros_like(elbo_particle)
-                    # change types of previous `elbo_particle`s
-                    for i in range(len(elbo_particles)):
-                        elbo_particles[i] = torch.zeros_like(tensor_holder)
-                        surrogate_elbo_particles[i] = torch.zeros_like(tensor_holder)
+                    log_prob_sum = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                    elbo_particle = elbo_particle - log_prob_sum
 
             elbo_particles.append(elbo_particle)
-            surrogate_elbo_particles.append(surrogate_elbo_particle)
 
-        if tensor_holder is None:
-            return 0.
-
-        surrogate_elbo_particles = surrogate_elbo_particles[0]
         log_weights = elbo_particles[0]
         log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(self.num_particles)
-        elbo = log_mean_weight.sum().item()
 
         # Top Level Questions:
         # 1. How to generate a trace with samples that don't propogate grads (w/o rsample)
@@ -200,15 +168,15 @@ class ReweightedWakeSleep(ELBO):
                                for trace in (model_trace, guide_trace)
                                for site in trace.nodes.values())
 
-        if trainable_params and getattr(surrogate_elbo_particles, 'requires_grad', False):
+        if trainable_params and getattr(elbo_particles, 'requires_grad', False):
             normalized_weights = (log_weights - log_mean_weight).exp()
-            surrogate_elbo = (normalized_weights * surrogate_elbo_particles).sum() / self.num_particles
-            surrogate_loss = -surrogate_elbo
-            surrogate_loss.backward()
+            elbo = (normalized_weights * elbo_particles).sum() / self.num_particles
+            loss = -elbo
+            loss.backward()
 
-        loss = -elbo
-        warn_if_nan(loss, "loss")
-        return loss
+        _loss = loss.item()
+        warn_if_nan(_loss, "loss")
+        return _loss
 
     def losses_and_grads(self, model, guide, *args, **kwargs):
         """
