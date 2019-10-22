@@ -1,3 +1,5 @@
+import torch
+
 from .messenger import Messenger
 
 
@@ -46,8 +48,9 @@ class ReplayMessenger(Messenger):
     def _pyro_param(self, msg):
         name = msg["name"]
         if self.params is not None and name in self.params:
-            assert hasattr(self.params[name], "unconstrained"), \
-                "param {} must be constrained value".format(name)
+            if not torch._C._get_tracing_state():
+                assert hasattr(self.params[name], "unconstrained"), \
+                    "param {} must be constrained value".format(name)
             msg["done"] = True
             msg["value"] = self.params[name]
         return None
