@@ -1,8 +1,11 @@
 """
-This example demonstrates using torch.jit.ModuleScript for model deployment.
-The Bayesian Regression model is taken from http://pyro.ai/examples/bayesian_regression.html.
+This example demonstrates using `torch.jit.ModuleScript
+<https://pytorch.org/docs/stable/jit.html#torch.jit.ScriptModule>`_ for
+model deployment. The regression model is taken from the tutorial on
+`Bayesian Regression <http://pyro.ai/examples/bayesian_regression.html>`_.
 
-In particular, the prediction function can be saved as a `torch.jit.ModuleScript`, and
+In particular, the prediction function can be saved as a `torch.jit.ModuleScript
+<https://pytorch.org/docs/stable/jit.html#torch.jit.ScriptModule>`_, and
 be run separately as a C++ program without a Python runtime. To do so, we recommend the
 following approach:
 
@@ -11,14 +14,17 @@ following approach:
    `nn.Module`, and do this initialization in `__init__`.
  - Likewise, have a separate prediction function that derives from `nn.Module`.
    This allows us to store parameters as `nn.Parameter` attributes that can be
-   serialized by `torch.jit.save`. For SVI, we can also simply store the learned
-   parameter values as constants in the trace. Note that we use `torch.jit.trace_module`
+   serialized by `torch.jit.save <https://pytorch.org/docs/stable/jit.html#torch.jit.save>`_.
+   For SVI, we can also simply store the learned parameter values as constants in the trace.
+   Note that we use `torch.jit.trace_module
+   <https://pytorch.org/docs/stable/jit.html#torch.jit.trace_module>`_
    (instead of scripting), which supports many of the constructs needed for running
-   doing predictions with Pyro models, like context managers and higher order functions.
+   and doing predictions with Pyro models, like context managers and higher order functions.
 
 **References:**
 
-  - TorchScript FAQs, https://pytorch.org/docs/stable/jit.html#frequently-asked-questions
+  [1] Bayesian Regression - Introduction (Part 1), http://pyro.ai/examples/bayesian_regression.html
+  [2] TorchScript FAQs, https://pytorch.org/docs/stable/jit.html#frequently-asked-questions
  """
 
 import argparse
@@ -79,11 +85,10 @@ class Predictor(nn.Module):
         super(Predictor, self).__init__()
         self.model = model
         self.guide = guide
-        self.params = {}
 
     def forward(self, x, y):
         # Replay using saved guide parameters
-        guide_trace = poutine.trace(poutine.replay(self.guide, params=self.params)).get_trace(x, y=y)
+        guide_trace = poutine.trace(self.guide).get_trace(x, y=y)
         return poutine.replay(self.model, guide_trace)(x)
 
 
@@ -140,6 +145,6 @@ def main(args):
 if __name__ == "__main__":
     assert pyro.__version__.startswith('0.4.1')
     parser = argparse.ArgumentParser(description="Model serving demo.")
-    parser.add_argument("-n", "--num-iter", default=600, type=int)
+    parser.add_argument("-n", "--num-iter", default=6000, type=int)
     parser.add_argument('--jit', action='store_true')
     main(parser.parse_args())
