@@ -6,6 +6,9 @@ AutoRegressiveNN
     :undoc-members:
     :show-inheritance:
 
+ConditionalAutoRegressiveNN
+---------------------------
+
 .. autoclass:: pyro.nn.auto_reg_nn.ConditionalAutoRegressiveNN
     :members:
     :undoc-members:
