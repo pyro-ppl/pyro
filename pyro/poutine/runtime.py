@@ -8,6 +8,8 @@ _PYRO_STACK = []
 # the global ParamStore
 _PYRO_PARAM_STORE = ParamStoreDict()
 
+param_no_grad = _PYRO_PARAM_STORE.no_grad
+
 
 class _DimAllocator(object):
     """

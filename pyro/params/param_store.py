@@ -1,6 +1,7 @@
 import re
 import warnings
 import weakref
+from contextlib import contextmanager
 
 import torch
 from torch.distributions import constraints, transform_to
@@ -39,6 +40,8 @@ class ParamStoreDict(object):
         self._params = {}  # dictionary from param name to param
         self._param_to_name = {}  # dictionary from unconstrained param to param name
         self._constraints = {}  # dictionary from param name to constraint object
+        self._no_grad_fetched = set()  # tensors fetched when self._no_grad is True
+        self._no_grad = False  # Fetch all tensors with requires_grad = False
 
     def clear(self):
         """
@@ -68,6 +71,26 @@ class ParamStoreDict(object):
         for name, constrained_param in self.items():
             yield constrained_param
 
+    @contextmanager
+    def no_grad(self):
+        """
+        Context manager to fetch parameters with ``requires_grad=False``.
+        """
+        try:
+            self._no_grad = True
+            yield
+        finally:
+            self._no_grad = False
+            for t in self._no_grad_fetched:
+                t.requires_grad_(True)
+            self._no_grad_fetched = set()
+
+    def _fetch_no_grad(self, param):
+        assert self._no_grad
+        param = param.requires_grad_(False)
+        self._no_grad_fetched.add(param)
+        return param
+
     def __bool__(self):
         return bool(self._params)
 
@@ -96,6 +119,8 @@ class ParamStoreDict(object):
         Get the constrained value of a named parameter.
         """
         unconstrained_value = self._params[name]
+        if self._no_grad:
+            unconstrained_value = self._fetch_no_grad(unconstrained_value)
 
         # compute the constrained value
         constraint = self._constraints[name]

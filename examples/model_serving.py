@@ -10,11 +10,11 @@ following approach:
    e.g. initializing NNs. An easy way to ensure this is to inherit from
    `nn.Module`, and do this initialization in `__init__`.
  - Likewise, have a separate prediction function that derives from `nn.Module`.
-   This lets us capture parameters from Pyro's global parameter store after training,
-   and store as `nn.Parameter` attributes that can be serialized by `torch.jit.save`.
-   Note that we use `torch.jit.trace_module` (instead of scripting), which supports
-   many of the constructs needed for running doing predictions with Pyro models, like
-   context managers and higher order functions.
+   This allows us to store parameters as `nn.Parameter` attributes that can be
+   serialized by `torch.jit.save`. For SVI, we can also simply store the learned
+   parameter values as constants in the trace. Note that we use `torch.jit.trace_module`
+   (instead of scripting), which supports many of the constructs needed for running
+   doing predictions with Pyro models, like context managers and higher order functions.
 
 **References:**
 
@@ -37,7 +37,7 @@ from torch import nn
 import pyro
 import pyro.distributions as dist
 from pyro.infer.autoguide import AutoDiagonalNormal
-
+from pyro.poutine.runtime import param_no_grad
 
 DATA_URL = "https://d2hg8soec8ck9v.cloudfront.net/datasets/rugged_data.csv"
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.data')
@@ -80,15 +80,6 @@ class Predictor(nn.Module):
         self.model = model
         self.guide = guide
         self.params = {}
-
-    def save_params(self, x):
-        """
-        Capture parameters from the param store and store as `nn.Parameter` attributes.
-        """
-        with poutine.trace(param_only=True) as param_capture:
-            self.guide(x)
-        for name, site in param_capture.trace.nodes.items():
-            self.params[name] = nn.Parameter(site["value"], requires_grad=False)
 
     def forward(self, x, y):
         # Replay using saved guide parameters
@@ -134,10 +125,11 @@ def main(args):
 
     print_mse(predict_fn, x_data, y_data, "after training")
 
-    # Store parameters from the param store for jit.save
-    predict_fn.save_params(x_data)
-    predict_module = torch.jit.trace_module(predict_fn, {"forward": (x_data, y_data)}, check_trace=False)
-    torch.jit.save(predict_module, os.path.join(DATA_DIR, 'reg_predict.pt'))
+    # Turn requires_grad=False on parameter values so that these are
+    # stored as constants during tracing.
+    with param_no_grad():
+        predict_module = torch.jit.trace_module(predict_fn, {"forward": (x_data, y_data)}, check_trace=False)
+        torch.jit.save(predict_module, os.path.join(DATA_DIR, 'reg_predict.pt'))
 
     # Test model load
     pyro.clear_param_store()
@@ -148,6 +140,6 @@ def main(args):
 if __name__ == "__main__":
     assert pyro.__version__.startswith('0.4.1')
     parser = argparse.ArgumentParser(description="Model serving demo.")
-    parser.add_argument("-n", "--num-iter", default=6000, type=int)
+    parser.add_argument("-n", "--num-iter", default=600, type=int)
     parser.add_argument('--jit', action='store_true')
     main(parser.parse_args())
