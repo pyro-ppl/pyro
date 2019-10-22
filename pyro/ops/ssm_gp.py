@@ -55,7 +55,7 @@ class MaternKernel(nn.Module):
         """
         Compute the (exponentiated) transition matrix of the GP latent space.
         The resulting matrix has layout (num_gps, old_state, new_state), i.e. this
-        matrix multiplied states from the right.
+        matrix multiplies states from the right.
 
         See section 5 in reference [1] for details.
 
