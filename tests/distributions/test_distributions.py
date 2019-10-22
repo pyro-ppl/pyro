@@ -111,12 +111,12 @@ def test_enumerate_support_shape(dist):
             assert (support_expanded == support_unexpanded).all()
 
 
-@pytest.mark.parametrize("dist_class, args", [
+@pytest.mark.parameterize("dist_class, args", [
     (dist.Normal, {"loc": torch.tensor(0.0), "scale": torch.tensor(-1.0)}),
     (dist.Gamma, {"concentration": -1.0, "rate": 1.0}),
     (dist.Exponential, {"rate": -2})
 ])
-@pytest.mark.parametrize("validate_args", [True, False])
+@pytest.mark.parameterize("validate_args", [True, False])
 def test_distribution_validate_args(dist_class, args, validate_args):
     with pyro.validation_enabled(validate_args):
         if not validate_args:
@@ -138,8 +138,8 @@ def check_sample_shapes(small, large):
     assert_equal(small.log_prob(x), large.log_prob(x))
 
 
-@pytest.mark.parametrize('sample_shape', [(), (2,), (2, 3)])
-@pytest.mark.parametrize('shape_type', [torch.Size, tuple, list])
+@pytest.mark.parameterize('sample_shape', [(), (2,), (2, 3)])
+@pytest.mark.parameterize('shape_type', [torch.Size, tuple, list])
 def test_expand_by(dist, sample_shape, shape_type):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
@@ -149,8 +149,8 @@ def test_expand_by(dist, sample_shape, shape_type):
             check_sample_shapes(small, large)
 
 
-@pytest.mark.parametrize('sample_shape', [(), (2,), (2, 3)])
-@pytest.mark.parametrize('shape_type', [torch.Size, tuple, list])
+@pytest.mark.parameterize('sample_shape', [(), (2,), (2, 3)])
+@pytest.mark.parameterize('shape_type', [torch.Size, tuple, list])
 def test_expand_new_dim(dist, sample_shape, shape_type):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
@@ -160,7 +160,7 @@ def test_expand_new_dim(dist, sample_shape, shape_type):
             check_sample_shapes(small, large)
 
 
-@pytest.mark.parametrize('shape_type', [torch.Size, tuple, list])
+@pytest.mark.parameterize('shape_type', [torch.Size, tuple, list])
 def test_expand_existing_dim(dist, shape_type):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
@@ -176,7 +176,7 @@ def test_expand_existing_dim(dist, shape_type):
                 check_sample_shapes(small, large)
 
 
-@pytest.mark.parametrize("sample_shapes", [
+@pytest.mark.parameterize("sample_shapes", [
     [(2, 1), (2, 3)],
     [(2, 1, 1), (2, 1, 3), (2, 5, 3)],
 ])
@@ -193,7 +193,7 @@ def test_subsequent_expands_ok(dist, sample_shapes):
             d = n
 
 
-@pytest.mark.parametrize("initial_shape, proposed_shape", [
+@pytest.mark.parameterize("initial_shape, proposed_shape", [
     [(2, 1), (4, 3)],
     [(2, 4), (2, 2, 1)],
     [(1, 2, 1), (2, 1)],
@@ -211,7 +211,7 @@ def test_expand_error(dist, initial_shape, proposed_shape):
                 large.expand(proposed_batch_shape)
 
 
-@pytest.mark.parametrize("extra_event_dims,expand_shape", [
+@pytest.mark.parameterize("extra_event_dims,expand_shape", [
     (0, [4, 3, 2, 1]),
     (0, [4, 3, 2, 2]),
     (1, [5, 4, 3, 2]),

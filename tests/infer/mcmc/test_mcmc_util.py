@@ -24,8 +24,8 @@ def beta_bernoulli():
     return model, data, true_probs
 
 
-@pytest.mark.parametrize("num_samples", [100, 200, None])
-@pytest.mark.parametrize("parallel", [False, True])
+@pytest.mark.parameterize("num_samples", [100, 200, None])
+@pytest.mark.parameterize("parallel", [False, True])
 def test_predictive(num_samples, parallel):
     model, data, true_probs = beta_bernoulli()
     init_params, potential_fn, transforms, _ = initialize_model(model,

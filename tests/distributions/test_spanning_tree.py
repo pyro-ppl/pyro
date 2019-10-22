@@ -13,12 +13,12 @@ pytestmark = pytest.mark.skipif("CUDA_TEST" in os.environ, reason="spanning_tree
 
 
 @pytest.mark.filterwarnings("always")
-@pytest.mark.parametrize('num_vertices,expected_grid', [
+@pytest.mark.parameterize('num_vertices,expected_grid', [
     (2, [[0], [1]]),
     (3, [[0, 0, 1], [1, 2, 2]]),
     (4, [[0, 0, 1, 0, 1, 2], [1, 2, 2, 3, 3, 3]]),
 ])
-@pytest.mark.parametrize('backend', ["python", "cpp"])
+@pytest.mark.parameterize('backend', ["python", "cpp"])
 def test_make_complete_graph(num_vertices, expected_grid, backend):
     V = num_vertices
     K = V * (V - 1) // 2
@@ -29,8 +29,8 @@ def test_make_complete_graph(num_vertices, expected_grid, backend):
 
 
 @pytest.mark.filterwarnings("always")
-@pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
-@pytest.mark.parametrize('backend', ["python", "cpp"])
+@pytest.mark.parameterize('num_edges', [1, 3, 10, 30, 100])
+@pytest.mark.parameterize('backend', ["python", "cpp"])
 def test_sample_tree_mcmc_smoke(num_edges, backend):
     pyro.set_rng_seed(num_edges)
     E = num_edges
@@ -43,8 +43,8 @@ def test_sample_tree_mcmc_smoke(num_edges, backend):
 
 
 @pytest.mark.filterwarnings("always")
-@pytest.mark.parametrize('num_edges', [1, 3, 10, 30, 100])
-@pytest.mark.parametrize('backend', ["python", "cpp"])
+@pytest.mark.parameterize('num_edges', [1, 3, 10, 30, 100])
+@pytest.mark.parameterize('backend', ["python", "cpp"])
 def test_sample_tree_approx_smoke(num_edges, backend):
     pyro.set_rng_seed(num_edges)
     E = num_edges
@@ -55,7 +55,7 @@ def test_sample_tree_approx_smoke(num_edges, backend):
         sample_tree(edge_logits, backend=backend)
 
 
-@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6])
+@pytest.mark.parameterize('num_edges', [1, 2, 3, 4, 5, 6])
 def test_enumerate_support(num_edges):
     pyro.set_rng_seed(2 ** 32 - num_edges)
     E = num_edges
@@ -70,7 +70,7 @@ def test_enumerate_support(num_edges):
     assert support.size(0) == NUM_SPANNING_TREES[V]
 
 
-@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6])
+@pytest.mark.parameterize('num_edges', [1, 2, 3, 4, 5, 6])
 def test_partition_function(num_edges):
     pyro.set_rng_seed(2 ** 32 - num_edges)
     E = num_edges
@@ -88,7 +88,7 @@ def test_partition_function(num_edges):
     assert (actual - expected).abs() < 1e-6, (actual, expected)
 
 
-@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6])
+@pytest.mark.parameterize('num_edges', [1, 2, 3, 4, 5, 6])
 def test_log_prob(num_edges):
     pyro.set_rng_seed(2 ** 32 - num_edges)
     E = num_edges
@@ -105,10 +105,10 @@ def test_log_prob(num_edges):
 
 
 @pytest.mark.filterwarnings("always")
-@pytest.mark.parametrize('pattern', ["uniform", "random", "sparse"])
-@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
-@pytest.mark.parametrize('backend', ["python", "cpp"])
-@pytest.mark.parametrize('method', ["mcmc", "approx"])
+@pytest.mark.parameterize('pattern', ["uniform", "random", "sparse"])
+@pytest.mark.parameterize('num_edges', [1, 2, 3, 4, 5])
+@pytest.mark.parameterize('backend', ["python", "cpp"])
+@pytest.mark.parameterize('method', ["mcmc", "approx"])
 def test_sample_tree_gof(method, backend, num_edges, pattern):
     goftests = pytest.importorskip('goftests')
     pyro.set_rng_seed(2 ** 32 - num_edges)

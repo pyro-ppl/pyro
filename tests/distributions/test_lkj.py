@@ -9,7 +9,7 @@ from pyro.distributions.lkj import LKJCorrCholesky
 from tests.common import assert_equal, assert_tensors_equal
 
 
-@pytest.mark.parametrize("value_shape", [(1, 1), (3, 3), (5, 5)])
+@pytest.mark.parameterize("value_shape", [(1, 1), (3, 3), (5, 5)])
 def test_constraint(value_shape):
     value = torch.randn(value_shape).clamp(-2, 2).tril()
     value.diagonal(dim1=-2, dim2=-1).exp_()
@@ -24,7 +24,7 @@ def _autograd_log_det(ys, x):
                         for y in ys]).det().abs().log()
 
 
-@pytest.mark.parametrize("y_shape", [(1,), (3, 1), (6,), (1, 6), (2, 6)])
+@pytest.mark.parameterize("y_shape", [(1,), (3, 1), (6,), (1, 6), (2, 6)])
 def test_unconstrained_to_corr_cholesky_transform(y_shape):
     transform = transforms.CorrLCholeskyTransform()
     y = torch.empty(y_shape).uniform_(-4, 4).requires_grad_()
@@ -56,8 +56,8 @@ def test_unconstrained_to_corr_cholesky_transform(y_shape):
         assert_tensors_equal(_autograd_log_det(z, x_tril_vector), -log_det, prec=1e-4)
 
 
-@pytest.mark.parametrize("x_shape", [(1,), (3, 1), (6,), (1, 6), (5, 6)])
-@pytest.mark.parametrize("mapping", [biject_to, transform_to])
+@pytest.mark.parameterize("x_shape", [(1,), (3, 1), (6,), (1, 6), (5, 6)])
+@pytest.mark.parameterize("mapping", [biject_to, transform_to])
 def test_corr_cholesky_transform(x_shape, mapping):
     transform = mapping(constraints.corr_cholesky_constraint)
     x = torch.randn(x_shape, requires_grad=True).clamp(-2, 2)
@@ -78,7 +78,7 @@ def test_corr_cholesky_transform(x_shape, mapping):
     assert log_det.shape == x_shape[:-1]
 
 
-@pytest.mark.parametrize("d", [2, 3, 4, 10])
+@pytest.mark.parameterize("d", [2, 3, 4, 10])
 def test_log_prob_eta1(d):
     dist = LKJCorrCholesky(d, torch.tensor([1.]))
 
@@ -95,7 +95,7 @@ def test_log_prob_eta1(d):
         assert (lps_less_ladj - lps_less_ladj.min()).abs().sum() < 1e-4
 
 
-@pytest.mark.parametrize("eta", [.1, .5, 1., 2., 5.])
+@pytest.mark.parameterize("eta", [.1, .5, 1., 2., 5.])
 def test_log_prob_d2(eta):
     dist = LKJCorrCholesky(2, torch.tensor([eta]))
     test_dist = TransformedDistribution(Beta(eta, eta), AffineTransform(loc=-1., scale=2.0))

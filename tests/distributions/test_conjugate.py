@@ -8,7 +8,7 @@ from pyro.distributions import BetaBinomial, DirichletMultinomial, GammaPoisson
 from tests.common import assert_close
 
 
-@pytest.mark.parametrize("dist", [
+@pytest.mark.parameterize("dist", [
     BetaBinomial(2., 5., 10.),
     BetaBinomial(torch.tensor([2., 4.]), torch.tensor([5., 8.]), torch.tensor([10., 12.])),
     DirichletMultinomial(torch.tensor([0.5, 1.0, 2.0]), 5),
@@ -23,7 +23,7 @@ def test_mean(dist):
     assert_close(sample_mean, analytic_mean, atol=0.01)
 
 
-@pytest.mark.parametrize("dist", [
+@pytest.mark.parameterize("dist", [
     BetaBinomial(2., 5., 10.),
     BetaBinomial(torch.tensor([2., 4.]), torch.tensor([5., 8.]), torch.tensor([10., 12.])),
     DirichletMultinomial(torch.tensor([0.5, 1.0, 2.0]), 5),
@@ -38,7 +38,7 @@ def test_variance(dist):
     assert_close(sample_var, analytic_var, rtol=0.01)
 
 
-@pytest.mark.parametrize("dist, values", [
+@pytest.mark.parameterize("dist, values", [
     (BetaBinomial(2., 5., 10), None),
     (BetaBinomial(2., 5., 10), None),
     (GammaPoisson(2., 2.), torch.arange(10.)),
@@ -51,8 +51,8 @@ def test_log_prob_support(dist, values):
     assert_close(log_probs.logsumexp(0), torch.tensor(0.), atol=0.01)
 
 
-@pytest.mark.parametrize("total_count", [1, 2, 3, 10])
-@pytest.mark.parametrize("shape", [(1,), (3, 1), (2, 3, 1)])
+@pytest.mark.parameterize("total_count", [1, 2, 3, 10])
+@pytest.mark.parameterize("shape", [(1,), (3, 1), (2, 3, 1)])
 def test_beta_binomial_log_prob(total_count, shape):
     concentration0 = torch.randn(shape).exp()
     concentration1 = torch.randn(shape).exp()
@@ -67,9 +67,9 @@ def test_beta_binomial_log_prob(total_count, shape):
     assert_close(actual, expected, rtol=0.02)
 
 
-@pytest.mark.parametrize("total_count", [1, 2, 3, 10])
-@pytest.mark.parametrize("batch_shape", [(1,), (3, 1), (2, 3, 1)])
-@pytest.mark.parametrize("is_sparse", [False, True], ids=["dense", "sparse"])
+@pytest.mark.parameterize("total_count", [1, 2, 3, 10])
+@pytest.mark.parameterize("batch_shape", [(1,), (3, 1), (2, 3, 1)])
+@pytest.mark.parameterize("is_sparse", [False, True], ids=["dense", "sparse"])
 def test_dirichlet_multinomial_log_prob(total_count, batch_shape, is_sparse):
     event_shape = (3,)
     concentration = torch.rand(batch_shape + event_shape).exp()
@@ -86,7 +86,7 @@ def test_dirichlet_multinomial_log_prob(total_count, batch_shape, is_sparse):
     assert_close(actual, expected, atol=0.05)
 
 
-@pytest.mark.parametrize("shape", [(1,), (3, 1), (2, 3, 1)])
+@pytest.mark.parameterize("shape", [(1,), (3, 1), (2, 3, 1)])
 def test_gamma_poisson_log_prob(shape):
     gamma_conc = torch.randn(shape).exp()
     gamma_rate = torch.randn(shape).exp()

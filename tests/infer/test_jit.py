@@ -187,8 +187,8 @@ def test_scatter_workaround():
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize('expand', [False, True])
-@pytest.mark.parametrize('shape', [(), (4,), (5, 4)])
+@pytest.mark.parameterize('expand', [False, True])
+@pytest.mark.parameterize('shape', [(), (4,), (5, 4)])
 @pytest.mark.filterwarnings('ignore:Converting a tensor to a Python boolean')
 def test_bernoulli_enumerate(shape, expand):
     shape = torch.Size(shape)
@@ -204,8 +204,8 @@ def test_bernoulli_enumerate(shape, expand):
     assert log_prob.shape == (2,) + shape
 
 
-@pytest.mark.parametrize('expand', [False, True])
-@pytest.mark.parametrize('shape', [(3,), (4, 3), (5, 4, 3)])
+@pytest.mark.parameterize('expand', [False, True])
+@pytest.mark.parameterize('shape', [(3,), (4, 3), (5, 4, 3)])
 def test_categorical_enumerate(shape, expand):
     shape = torch.Size(shape)
     probs = torch.ones(shape)
@@ -221,8 +221,8 @@ def test_categorical_enumerate(shape, expand):
     assert log_prob.shape == shape[-1:] + batch_shape
 
 
-@pytest.mark.parametrize('expand', [False, True])
-@pytest.mark.parametrize('shape', [(3,), (4, 3), (5, 4, 3)])
+@pytest.mark.parameterize('expand', [False, True])
+@pytest.mark.parameterize('shape', [(3,), (4, 3), (5, 4, 3)])
 @pytest.mark.filterwarnings('ignore:Converting a tensor to a Python integer')
 def test_one_hot_categorical_enumerate(shape, expand):
     shape = torch.Size(shape)
@@ -239,8 +239,8 @@ def test_one_hot_categorical_enumerate(shape, expand):
     assert log_prob.shape == shape[-1:] + batch_shape
 
 
-@pytest.mark.parametrize('num_particles', [1, 10])
-@pytest.mark.parametrize('Elbo', [
+@pytest.mark.parameterize('num_particles', [1, 10])
+@pytest.mark.parameterize('Elbo', [
     Trace_ELBO,
     JitTrace_ELBO,
     TraceGraph_ELBO,
@@ -268,9 +268,9 @@ def test_svi(Elbo, num_particles):
         inference.step(data)
 
 
-@pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
-@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
-@pytest.mark.parametrize("plate_dim", [1, 2])
+@pytest.mark.parameterize("enumerate2", ["sequential", "parallel"])
+@pytest.mark.parameterize("enumerate1", ["sequential", "parallel"])
+@pytest.mark.parameterize("plate_dim", [1, 2])
 def test_svi_enum(plate_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
     num_particles = 10
@@ -312,8 +312,8 @@ def test_svi_enum(plate_dim, enumerate1, enumerate2):
     ]))
 
 
-@pytest.mark.parametrize('vectorized', [False, True])
-@pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
+@pytest.mark.parameterize('vectorized', [False, True])
+@pytest.mark.parameterize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
 def test_beta_bernoulli(Elbo, vectorized):
     pyro.clear_param_store()
     data = torch.tensor([1.0] * 6 + [0.0] * 4)
@@ -348,7 +348,7 @@ def test_beta_bernoulli(Elbo, vectorized):
         svi.step(data)
 
 
-@pytest.mark.parametrize('Elbo', [
+@pytest.mark.parameterize('Elbo', [
     Trace_ELBO,
     JitTrace_ELBO,
     TraceGraph_ELBO,
@@ -380,8 +380,8 @@ def test_svi_irregular_batch_size(Elbo):
     inference.step(torch.ones(3))
 
 
-@pytest.mark.parametrize('vectorized', [False, True])
-@pytest.mark.parametrize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
+@pytest.mark.parameterize('vectorized', [False, True])
+@pytest.mark.parameterize('Elbo', [TraceEnum_ELBO, JitTraceEnum_ELBO])
 def test_dirichlet_bernoulli(Elbo, vectorized):
     pyro.clear_param_store()
     data = torch.tensor([1.0] * 6 + [0.0] * 4)
@@ -412,7 +412,7 @@ def test_dirichlet_bernoulli(Elbo, vectorized):
         svi.step(data)
 
 
-@pytest.mark.parametrize('length', [1, 2, 10])
+@pytest.mark.parameterize('length', [1, 2, 10])
 def test_traceenum_elbo(length):
     hidden_dim = 10
     transition = pyro.param("transition",
@@ -448,8 +448,8 @@ def test_traceenum_elbo(length):
         assert_equal(e, a, msg="bad gradient for {}".format(name))
 
 
-@pytest.mark.parametrize('length', [1, 2, 10])
-@pytest.mark.parametrize('temperature', [0, 1], ids=['map', 'sample'])
+@pytest.mark.parameterize('length', [1, 2, 10])
+@pytest.mark.parameterize('temperature', [0, 1], ids=['map', 'sample'])
 def test_infer_discrete(temperature, length):
 
     @ignore_jit_warnings()
@@ -481,7 +481,7 @@ def test_infer_discrete(temperature, length):
             assert_equal(state, jit_state)
 
 
-@pytest.mark.parametrize("x,y", [
+@pytest.mark.parameterize("x,y", [
     (CondIndepStackFrame("a", -1, torch.tensor(2000), 2), CondIndepStackFrame("a", -1, 2000, 2)),
     (CondIndepStackFrame("a", -1, 1, 2), CondIndepStackFrame("a", -1, torch.tensor(1), 2)),
 ])

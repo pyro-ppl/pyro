@@ -48,7 +48,7 @@ TEST_CASES = [
 TEST_IDS = [str(i) for i in range(len(TEST_CASES))]
 
 
-@pytest.mark.parametrize("Xnew, X, kernel, f_loc, f_scale_tril, loc, cov",
+@pytest.mark.parameterize("Xnew, X, kernel, f_loc, f_scale_tril, loc, cov",
                          TEST_CASES, ids=TEST_IDS)
 def test_conditional(Xnew, X, kernel, f_loc, f_scale_tril, loc, cov):
     loc0, cov0 = conditional(Xnew, X, kernel, f_loc, f_scale_tril, full_cov=True)
@@ -64,7 +64,7 @@ def test_conditional(Xnew, X, kernel, f_loc, f_scale_tril, loc, cov):
         assert_equal(cov0, cov)
 
 
-@pytest.mark.parametrize("Xnew, X, kernel, f_loc, f_scale_tril, loc, cov",
+@pytest.mark.parameterize("Xnew, X, kernel, f_loc, f_scale_tril, loc, cov",
                          TEST_CASES, ids=TEST_IDS)
 def test_conditional_whiten(Xnew, X, kernel, f_loc, f_scale_tril, loc, cov):
     if f_scale_tril is None:

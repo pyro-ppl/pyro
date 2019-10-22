@@ -3,7 +3,7 @@ import warnings
 import torch
 
 from pyro.infer.trace_elbo import Trace_ELBO
-from pyro.infer.util import is_validation_enabled, check_fully_reparametrized
+from pyro.infer.util import is_validation_enabled, check_fully_reparameterized
 
 
 class TraceTailAdaptive_ELBO(Trace_ELBO):
@@ -56,7 +56,7 @@ class TraceTailAdaptive_ELBO(Trace_ELBO):
                 site_log_q = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
                 log_q = log_q + site_log_q
                 if is_validation_enabled():
-                    check_fully_reparametrized(site)
+                    check_fully_reparameterized(site)
 
         # rank the particles according to p/q
         log_pq = log_p - log_q

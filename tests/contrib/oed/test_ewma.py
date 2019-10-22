@@ -7,7 +7,7 @@ from pyro.contrib.oed.eig import EwmaLog
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize("alpha", [0.5, 0.9, 0.99])
+@pytest.mark.parameterize("alpha", [0.5, 0.9, 0.99])
 def test_ewma(alpha, NS=10000, D=1):
     ewma_log = EwmaLog(alpha=alpha)
     sigma = torch.tensor(1.0, requires_grad=True)

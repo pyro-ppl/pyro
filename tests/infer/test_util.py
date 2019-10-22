@@ -48,10 +48,10 @@ def test_multi_frame_tensor():
         assert_equal(actual_sum, expected_sum, msg=name)
 
 
-@pytest.mark.parametrize('max_particles', [250 * 1000, 500 * 1000])
-@pytest.mark.parametrize('scale,krange', [(0.5, (0.7, 0.9)),
+@pytest.mark.parameterize('max_particles', [250 * 1000, 500 * 1000])
+@pytest.mark.parameterize('scale,krange', [(0.5, (0.7, 0.9)),
                                           (0.95, (0.05, 0.2))])
-@pytest.mark.parametrize('zdim', [1, 5])
+@pytest.mark.parameterize('zdim', [1, 5])
 def test_psis_diagnostic(scale, krange, zdim, max_particles, num_particles=500 * 1000):
 
     def model(zdim=1, scale=1.0):

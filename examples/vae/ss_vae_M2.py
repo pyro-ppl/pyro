@@ -117,7 +117,7 @@ class SSVAE(nn.Module):
 
             # finally, score the image (x) using the handwriting style (z) and
             # the class label y (which digit to write) against the
-            # parametrized distribution p(x|y,z) = bernoulli(decoder(y,z))
+            # parameterized distribution p(x|y,z) = bernoulli(decoder(y,z))
             # where `decoder` is a neural network
             loc = self.decoder.forward([zs, ys])
             pyro.sample("x", dist.Bernoulli(loc).to_event(1), obs=xs)

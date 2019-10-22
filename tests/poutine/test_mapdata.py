@@ -65,8 +65,8 @@ def nested_iplate_model(subsample_size):
     return result
 
 
-@pytest.mark.parametrize('subsample_size', [5, 20])
-@pytest.mark.parametrize('model', [plate_model, iplate_model, nested_iplate_model],
+@pytest.mark.parameterize('subsample_size', [5, 20])
+@pytest.mark.parameterize('model', [plate_model, iplate_model, nested_iplate_model],
                          ids=['plate', 'iplate', 'nested_iplate'])
 def test_cond_indep_stack(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
@@ -75,8 +75,8 @@ def test_cond_indep_stack(model, subsample_size):
             assert node["cond_indep_stack"], "missing cond_indep_stack at node {}".format(name)
 
 
-@pytest.mark.parametrize('subsample_size', [5, 20])
-@pytest.mark.parametrize('model', [plate_model, iplate_model, nested_iplate_model],
+@pytest.mark.parameterize('subsample_size', [5, 20])
+@pytest.mark.parameterize('model', [plate_model, iplate_model, nested_iplate_model],
                          ids=['plate', 'iplate', 'nested_iplate'])
 def test_replay(model, subsample_size):
     pyro.set_rng_seed(0)
@@ -105,7 +105,7 @@ def iplate_custom_model(subsample):
     return result
 
 
-@pytest.mark.parametrize('model', [plate_custom_model, iplate_custom_model],
+@pytest.mark.parameterize('model', [plate_custom_model, iplate_custom_model],
                          ids=['plate', 'iplate'])
 def test_custom_subsample(model):
     pyro.set_rng_seed(0)
@@ -130,15 +130,15 @@ def iplate_cuda_model(subsample_size):
 
 
 @requires_cuda
-@pytest.mark.parametrize('subsample_size', [5, 20])
-@pytest.mark.parametrize('model', [plate_cuda_model, iplate_cuda_model], ids=["plate", "iplate"])
+@pytest.mark.parameterize('subsample_size', [5, 20])
+@pytest.mark.parameterize('model', [plate_cuda_model, iplate_cuda_model], ids=["plate", "iplate"])
 def test_cuda(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
     assert tr.log_prob_sum().is_cuda
 
 
-@pytest.mark.parametrize('model', [plate_model, iplate_model], ids=['plate', 'iplate'])
-@pytest.mark.parametrize("behavior,model_size,guide_size", [
+@pytest.mark.parameterize('model', [plate_model, iplate_model], ids=['plate', 'iplate'])
+@pytest.mark.parameterize("behavior,model_size,guide_size", [
     ("error", 20, 5),
     ("error", 5, 20),
     ("error", 5, None),

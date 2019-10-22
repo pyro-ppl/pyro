@@ -39,7 +39,7 @@ def print_debug_info(model_trace):
             logger.debug("prob( {} ):\n {}".format(name, site["log_prob"].exp()))
 
 
-@pytest.mark.parametrize("kernel, kwargs", [
+@pytest.mark.parameterize("kernel, kwargs", [
     (HMC, {"adapt_step_size": True, "num_steps": 3}),
     (NUTS, {"adapt_step_size": True}),
 ])
@@ -62,7 +62,7 @@ def test_model_error_stray_batch_dims(kernel, kwargs):
     assert_error(mcmc_kernel)
 
 
-@pytest.mark.parametrize("kernel, kwargs", [
+@pytest.mark.parameterize("kernel, kwargs", [
     (HMC, {"adapt_step_size": True, "num_steps": 3}),
     (NUTS, {"adapt_step_size": True}),
 ])
@@ -121,7 +121,7 @@ def test_log_prob_eval_iterates_in_correct_order():
     assert enum_dims, [[-8], [-9, -6], [-7], [-5]]
 
 
-@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+@pytest.mark.parameterize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
 def test_all_discrete_sites_log_prob(Eval):
     p = 0.3
 
@@ -147,7 +147,7 @@ def test_all_discrete_sites_log_prob(Eval):
     assert_equal(trace_prob_evaluator.log_prob(model_trace), torch.tensor(0.))
 
 
-@pytest.mark.parametrize("Eval", [TraceTreeEvaluator,
+@pytest.mark.parameterize("Eval", [TraceTreeEvaluator,
                                   xfail_param(TraceEinsumEvaluator, reason="TODO: Debug this failure case.")])
 def test_enumeration_in_tree(Eval):
     @poutine.enum(first_available_dim=-5)
@@ -184,7 +184,7 @@ def test_enumeration_in_tree(Eval):
 
 
 @pytest.mark.xfail(reason="Enumeration currently does not work for general DAGs")
-@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+@pytest.mark.parameterize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
 def test_enumeration_in_dag(Eval):
     p = 0.3
 
@@ -211,12 +211,12 @@ def test_enumeration_in_dag(Eval):
     assert_equal(trace_prob_evaluator.log_prob(model_trace), torch.tensor(0.16196))  # p_beta(0.3)^3
 
 
-@pytest.mark.parametrize("data, expected_log_prob", [
+@pytest.mark.parameterize("data, expected_log_prob", [
     (torch.tensor([1.]), torch.tensor(-1.3434)),
     (torch.tensor([0.]), torch.tensor(-1.4189)),
     (torch.tensor([1., 0., 0.]), torch.tensor(-4.1813)),
 ])
-@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+@pytest.mark.parameterize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
 def test_enum_log_prob_continuous_observed(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-2)
@@ -239,13 +239,13 @@ def test_enum_log_prob_continuous_observed(data, expected_log_prob, Eval):
                  prec=1e-3)
 
 
-@pytest.mark.parametrize("data, expected_log_prob", [
+@pytest.mark.parameterize("data, expected_log_prob", [
     (torch.tensor([1.]), torch.tensor(-3.5237)),
     (torch.tensor([0.]), torch.tensor(-3.7091)),
     (torch.tensor([1., 1.]), torch.tensor(-3.9699)),
     (torch.tensor([1., 0., 0.]), torch.tensor(-5.3357)),
 ])
-@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+@pytest.mark.parameterize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
 def test_enum_log_prob_continuous_sampled(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-2)
@@ -268,12 +268,12 @@ def test_enum_log_prob_continuous_sampled(data, expected_log_prob, Eval):
                  prec=1e-3)
 
 
-@pytest.mark.parametrize("data, expected_log_prob", [
+@pytest.mark.parameterize("data, expected_log_prob", [
     (torch.tensor([1.]), torch.tensor(-0.5108)),
     (torch.tensor([1., 1.]), torch.tensor(-0.9808)),
     (torch.tensor([1., 0., 0.]), torch.tensor(-2.3671)),
 ])
-@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+@pytest.mark.parameterize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
 def test_enum_log_prob_discrete_observed(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-2)
@@ -294,12 +294,12 @@ def test_enum_log_prob_discrete_observed(data, expected_log_prob, Eval):
                  prec=1e-3)
 
 
-@pytest.mark.parametrize("data, expected_log_prob", [
+@pytest.mark.parameterize("data, expected_log_prob", [
     (torch.tensor([1.]), torch.tensor(-1.15)),
     (torch.tensor([0.]), torch.tensor(-1.46)),
     (torch.tensor([1., 1.]), torch.tensor(-2.1998)),
 ])
-@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+@pytest.mark.parameterize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
 def test_enum_log_prob_multiple_plate(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-2)
@@ -323,12 +323,12 @@ def test_enum_log_prob_multiple_plate(data, expected_log_prob, Eval):
                  prec=1e-3)
 
 
-@pytest.mark.parametrize("data, expected_log_prob", [
+@pytest.mark.parameterize("data, expected_log_prob", [
     (torch.tensor([1.]), torch.tensor(-1.5478)),
     (torch.tensor([0.]), torch.tensor(-1.4189)),
     (torch.tensor([1., 0., 0.]), torch.tensor(-4.3857)),
 ])
-@pytest.mark.parametrize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
+@pytest.mark.parameterize("Eval", [TraceTreeEvaluator, TraceEinsumEvaluator])
 def test_enum_log_prob_nested_plate(data, expected_log_prob, Eval):
 
     @poutine.enum(first_available_dim=-3)
@@ -362,7 +362,7 @@ def _beta_bernoulli(data):
     return p_latent
 
 
-@pytest.mark.parametrize('jit', [False, True])
+@pytest.mark.parameterize('jit', [False, True])
 def test_potential_fn_pickling(jit):
     data = dist.Bernoulli(torch.tensor([0.8, 0.2])).sample(sample_shape=(torch.Size((1000,))))
     _, potential_fn, _, _ = initialize_model(_beta_bernoulli, (data,), jit_compile=jit,

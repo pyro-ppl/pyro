@@ -50,7 +50,7 @@ def assert_warning(model, guide, elbo):
             print(warning)
 
 
-@pytest.mark.parametrize("backend", ["pyro", "minipyro"])
+@pytest.mark.parameterize("backend", ["pyro", "minipyro"])
 def test_generate_data(backend):
 
     def model(data=None):
@@ -64,7 +64,7 @@ def test_generate_data(backend):
         assert data.shape == ()
 
 
-@pytest.mark.parametrize("backend", ["pyro", "minipyro"])
+@pytest.mark.parameterize("backend", ["pyro", "minipyro"])
 def test_generate_data_plate(backend):
     num_points = 1000
 
@@ -82,8 +82,8 @@ def test_generate_data_plate(backend):
         assert 1.9 <= mean <= 2.1
 
 
-@pytest.mark.parametrize("jit", [False, True], ids=["py", "jit"])
-@pytest.mark.parametrize("backend", ["pyro", "minipyro"])
+@pytest.mark.parameterize("jit", [False, True], ids=["py", "jit"])
+@pytest.mark.parameterize("backend", ["pyro", "minipyro"])
 def test_nonempty_model_empty_guide_ok(backend, jit):
 
     def model(data):
@@ -100,8 +100,8 @@ def test_nonempty_model_empty_guide_ok(backend, jit):
         assert_ok(model, guide, elbo, data)
 
 
-@pytest.mark.parametrize("jit", [False, True], ids=["py", "jit"])
-@pytest.mark.parametrize("backend", ["pyro", "minipyro"])
+@pytest.mark.parameterize("jit", [False, True], ids=["py", "jit"])
+@pytest.mark.parameterize("backend", ["pyro", "minipyro"])
 def test_plate_ok(backend, jit):
     data = torch.randn(10)
 
@@ -123,8 +123,8 @@ def test_plate_ok(backend, jit):
         assert_ok(model, guide, elbo)
 
 
-@pytest.mark.parametrize("jit", [False, True], ids=["py", "jit"])
-@pytest.mark.parametrize("backend", ["pyro", "minipyro"])
+@pytest.mark.parameterize("jit", [False, True], ids=["py", "jit"])
+@pytest.mark.parameterize("backend", ["pyro", "minipyro"])
 def test_nested_plate_plate_ok(backend, jit):
     data = torch.randn(2, 3)
 
@@ -147,8 +147,8 @@ def test_nested_plate_plate_ok(backend, jit):
         assert_ok(model, guide, elbo)
 
 
-@pytest.mark.parametrize("jit", [False, True], ids=["py", "jit"])
-@pytest.mark.parametrize("backend", [
+@pytest.mark.parameterize("jit", [False, True], ids=["py", "jit"])
+@pytest.mark.parameterize("backend", [
     "pyro",
     xfail_param("minipyro", reason="not implemented"),
 ])
@@ -178,8 +178,8 @@ def test_local_param_ok(backend, jit):
         assert_close(actual, expected)
 
 
-@pytest.mark.parametrize("jit", [False, True], ids=["py", "jit"])
-@pytest.mark.parametrize("backend", ["pyro", "minipyro"])
+@pytest.mark.parameterize("jit", [False, True], ids=["py", "jit"])
+@pytest.mark.parameterize("backend", ["pyro", "minipyro"])
 def test_constraints(backend, jit):
     data = torch.tensor(0.5)
 

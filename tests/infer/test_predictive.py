@@ -32,7 +32,7 @@ def beta_guide(num_trials):
         pyro.sample("phi", phi_posterior)
 
 
-@pytest.mark.parametrize("parallel", [False, True])
+@pytest.mark.parameterize("parallel", [False, True])
 def test_posterior_predictive_svi_manual_guide(parallel):
     true_probs = torch.ones(5) * 0.7
     num_trials = torch.ones(5) * 1000
@@ -47,7 +47,7 @@ def test_posterior_predictive_svi_manual_guide(parallel):
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 700, rtol=0.05)
 
 
-@pytest.mark.parametrize("parallel", [False, True])
+@pytest.mark.parameterize("parallel", [False, True])
 def test_posterior_predictive_svi_auto_delta_guide(parallel):
     true_probs = torch.ones(5) * 0.7
     num_trials = torch.ones(5) * 1000
@@ -62,7 +62,7 @@ def test_posterior_predictive_svi_auto_delta_guide(parallel):
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 700, rtol=0.05)
 
 
-@pytest.mark.parametrize("return_trace", [False, True])
+@pytest.mark.parameterize("return_trace", [False, True])
 def test_posterior_predictive_svi_auto_diag_normal_guide(return_trace):
     true_probs = torch.ones(5) * 0.7
     num_trials = torch.ones(5) * 1000

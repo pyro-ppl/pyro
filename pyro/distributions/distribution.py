@@ -94,7 +94,7 @@ class Distribution(object, metaclass=ABCMeta):
 
     def enumerate_support(self, expand=True):
         """
-        Returns a representation of the parametrized distribution's support,
+        Returns a representation of the parameterized distribution's support,
         along the first dimension. This is implemented only by discrete
         distributions.
 

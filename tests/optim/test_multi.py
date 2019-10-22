@@ -20,7 +20,7 @@ FACTORIES = [
 ]
 
 
-@pytest.mark.parametrize('factory', FACTORIES)
+@pytest.mark.parameterize('factory', FACTORIES)
 def test_optimizers(factory):
     optim = factory()
 

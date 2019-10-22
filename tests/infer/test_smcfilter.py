@@ -54,10 +54,10 @@ class SmokeGuide:
         self.t += 1
 
 
-@pytest.mark.parametrize("max_plate_nesting", [1, 2])
-@pytest.mark.parametrize("state_size", [2, 5, 1])
-@pytest.mark.parametrize("plate_size", [3, 7, 1])
-@pytest.mark.parametrize("num_steps", [1, 2, 10])
+@pytest.mark.parameterize("max_plate_nesting", [1, 2])
+@pytest.mark.parameterize("state_size", [2, 5, 1])
+@pytest.mark.parameterize("plate_size", [3, 7, 1])
+@pytest.mark.parameterize("num_steps", [1, 2, 10])
 def test_smoke(max_plate_nesting, state_size, plate_size, num_steps):
     model = SmokeModel(state_size, plate_size)
     guide = SmokeGuide(state_size, plate_size)

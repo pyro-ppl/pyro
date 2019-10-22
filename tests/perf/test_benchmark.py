@@ -122,7 +122,7 @@ def vsgp_multiclass(num_steps, whiten):
     gp.util.train(gpmodule, optimizer, num_steps=num_steps)
 
 
-@pytest.mark.parametrize('model, model_args, id', TEST_MODELS, ids=MODEL_IDS)
+@pytest.mark.parameterize('model, model_args, id', TEST_MODELS, ids=MODEL_IDS)
 @pytest.mark.benchmark(
     min_rounds=5,
     disable_gc=True,

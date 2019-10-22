@@ -5,8 +5,8 @@ from pyro.distributions.empirical import Empirical
 from tests.common import assert_equal, assert_close
 
 
-@pytest.mark.parametrize("size", [[], [1], [2, 3]])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parameterize("size", [[], [1], [2, 3]])
+@pytest.mark.parameterize("dtype", [torch.float32, torch.float64])
 def test_unweighted_mean_and_var(size, dtype):
     samples = []
     for i in range(5):
@@ -19,15 +19,15 @@ def test_unweighted_mean_and_var(size, dtype):
     assert_equal(empirical_dist.variance, true_var)
 
 
-@pytest.mark.parametrize("batch_shape, event_shape", [
+@pytest.mark.parameterize("batch_shape, event_shape", [
     ([], []),
     ([2], []),
     ([2], [5]),
     ([2], [5, 3]),
     ([2, 5], [3]),
 ])
-@pytest.mark.parametrize("sample_shape", [[], [20], [20, 3, 4]])
-@pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
+@pytest.mark.parameterize("sample_shape", [[], [20], [20, 3, 4]])
+@pytest.mark.parameterize("dtype", [torch.long, torch.float32, torch.float64])
 def test_unweighted_samples(batch_shape, event_shape, sample_shape, dtype):
     agg_dim_size = 5
     # empirical samples with desired shape
@@ -43,7 +43,7 @@ def test_unweighted_samples(batch_shape, event_shape, sample_shape, dtype):
     assert_equal(samples.size(), torch.Size(sample_shape + batch_shape + event_shape))
 
 
-@pytest.mark.parametrize("sample, weights, expected_mean, expected_var", [(
+@pytest.mark.parameterize("sample, weights, expected_mean, expected_var", [(
         torch.tensor([[0., 0., 0.], [1., 1., 1.]]),
         torch.ones(2),
         torch.tensor([0.5, 0.5, 0.5]),
@@ -65,14 +65,14 @@ def test_sample_examples(sample, weights, expected_mean, expected_var):
     assert_close(emp_samples.var(0), emp_dist.variance, rtol=1e-2)
 
 
-@pytest.mark.parametrize("batch_shape, event_shape", [
+@pytest.mark.parameterize("batch_shape, event_shape", [
     ([], []),
     ([1], []),
     ([10], []),
     ([10, 8], [3]),
     ([10, 8], [3, 4]),
 ])
-@pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
+@pytest.mark.parameterize("dtype", [torch.long, torch.float32, torch.float64])
 def test_log_prob(batch_shape, event_shape, dtype):
     samples = []
     for i in range(5):
@@ -96,8 +96,8 @@ def test_log_prob(batch_shape, event_shape, dtype):
         empirical_dist.log_prob(sample_to_score)
 
 
-@pytest.mark.parametrize("event_shape", [[], [1], [2, 3]])
-@pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
+@pytest.mark.parameterize("event_shape", [[], [1], [2, 3]])
+@pytest.mark.parameterize("dtype", [torch.long, torch.float32, torch.float64])
 def test_weighted_sample_coherence(event_shape, dtype):
     data = [(1.0, 0.5), (0.0, 1.5), (1.0, 0.5), (0.0, 1.5)]
     samples, weights = [], []
@@ -119,9 +119,9 @@ def test_weighted_sample_coherence(event_shape, dtype):
     assert_equal(num_ones.item() / 1000, 0.25, prec=0.02)
 
 
-@pytest.mark.parametrize("batch_shape", [[], [1], [2], [2, 3]])
-@pytest.mark.parametrize("event_shape", [[], [1], [2, 3]])
-@pytest.mark.parametrize("dtype", [torch.long, torch.float32, torch.float64])
+@pytest.mark.parameterize("batch_shape", [[], [1], [2], [2, 3]])
+@pytest.mark.parameterize("event_shape", [[], [1], [2, 3]])
+@pytest.mark.parameterize("dtype", [torch.long, torch.float32, torch.float64])
 def test_weighted_mean_var(event_shape, dtype, batch_shape):
     data = [(1.0, 0.5), (0.0, 1.5), (1.0, 0.5), (0.0, 1.5)]
     samples, weights = [], []

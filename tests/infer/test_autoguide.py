@@ -17,7 +17,7 @@ from pyro.optim import Adam
 from tests.common import assert_close, assert_equal
 
 
-@pytest.mark.parametrize("auto_class", [
+@pytest.mark.parameterize("auto_class", [
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
@@ -43,8 +43,8 @@ def test_scores(auto_class):
     assert guide_trace.nodes['z']['log_prob_sum'].item() == 0.0
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-@pytest.mark.parametrize("auto_class", [
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
@@ -73,14 +73,14 @@ def test_factor(auto_class, Elbo):
     assert_close(loss_5 - loss_4, -1 - 3)
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-@pytest.mark.parametrize("init_loc_fn", [
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("init_loc_fn", [
     init_to_feasible,
     init_to_mean,
     init_to_median,
     init_to_sample,
 ])
-@pytest.mark.parametrize("auto_class", [
+@pytest.mark.parameterize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
@@ -103,7 +103,7 @@ def test_shapes(auto_class, init_loc_fn, Elbo):
 
 
 @pytest.mark.xfail(reason="sequential plate is not yet supported")
-@pytest.mark.parametrize('auto_class', [
+@pytest.mark.parameterize('auto_class', [
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
@@ -111,7 +111,7 @@ def test_shapes(auto_class, init_loc_fn, Elbo):
     AutoIAFNormal,
     AutoLaplaceApproximation,
 ])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO])
 def test_iplate_smoke(auto_class, Elbo):
 
     def model():
@@ -154,7 +154,7 @@ def auto_guide_callable(model):
     return guide
 
 
-@pytest.mark.parametrize("auto_class", [
+@pytest.mark.parameterize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
@@ -167,7 +167,7 @@ def auto_guide_callable(model):
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
 ])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_median(auto_class, Elbo):
 
     def model():
@@ -192,13 +192,13 @@ def test_median(auto_class, Elbo):
     assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
 
 
-@pytest.mark.parametrize("auto_class", [
+@pytest.mark.parameterize("auto_class", [
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
     AutoLaplaceApproximation,
 ])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_quantiles(auto_class, Elbo):
 
     def model():
@@ -236,7 +236,7 @@ def test_quantiles(auto_class, Elbo):
     assert quantiles["z"][2] < 0.99
 
 
-@pytest.mark.parametrize("continuous_class", [
+@pytest.mark.parameterize("continuous_class", [
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
@@ -267,7 +267,7 @@ def test_discrete_parallel(continuous_class):
     assert np.isfinite(loss), loss
 
 
-@pytest.mark.parametrize("auto_class", [
+@pytest.mark.parameterize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
@@ -287,7 +287,7 @@ def test_guide_list(auto_class):
     guide()
 
 
-@pytest.mark.parametrize("auto_class", [
+@pytest.mark.parameterize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,
@@ -311,7 +311,7 @@ def test_callable(auto_class):
     assert set(values) == set(["y"])
 
 
-@pytest.mark.parametrize("auto_class", [
+@pytest.mark.parameterize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
     AutoMultivariateNormal,

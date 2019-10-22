@@ -49,7 +49,7 @@ sequential = nn.Sequential(
           )
 
 
-@pytest.mark.parametrize("nn_module", [outest, outer])
+@pytest.mark.parameterize("nn_module", [outest, outer])
 def test_module_nn(nn_module):
     pyro.clear_param_store()
     nn_module = nn_module()
@@ -59,7 +59,7 @@ def test_module_nn(nn_module):
         assert pyro.params.user_param_name(name) in nn_module.state_dict().keys()
 
 
-@pytest.mark.parametrize("nn_module", [outest, outer])
+@pytest.mark.parameterize("nn_module", [outest, outer])
 def test_param_no_grad(nn_module):
     class net(torch.nn.Module):
         def __init__(self):
@@ -76,7 +76,7 @@ def test_param_no_grad(nn_module):
     assert 'net$$$y' not in pyro.get_param_store().keys()
 
 
-@pytest.mark.parametrize("nn_module", [sequential])
+@pytest.mark.parameterize("nn_module", [sequential])
 def test_module_sequential(nn_module):
     pyro.clear_param_store()
     assert pyro.get_param_store()._params == {}
@@ -85,7 +85,7 @@ def test_module_sequential(nn_module):
         assert pyro.params.user_param_name(name) in nn_module.state_dict().keys()
 
 
-@pytest.mark.parametrize("nn_module", [outest, outer])
+@pytest.mark.parameterize("nn_module", [outest, outer])
 def test_random_module(nn_module):
     pyro.clear_param_store()
     nn_module = nn_module()

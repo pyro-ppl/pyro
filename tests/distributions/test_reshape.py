@@ -17,8 +17,8 @@ def test_sample_shape_order():
     assert actual.batch_shape == expected.batch_shape
 
 
-@pytest.mark.parametrize('batch_dim', [0, 1, 2])
-@pytest.mark.parametrize('event_dim', [0, 1, 2])
+@pytest.mark.parameterize('batch_dim', [0, 1, 2])
+@pytest.mark.parameterize('event_dim', [0, 1, 2])
 def test_idempotent(batch_dim, event_dim):
     shape = torch.Size((1, 2, 3, 4))[:batch_dim + event_dim]
     batch_shape = shape[:batch_dim]
@@ -35,7 +35,7 @@ def test_idempotent(batch_dim, event_dim):
     assert dist.event_shape == dist0.event_shape
 
 
-@pytest.mark.parametrize('sample_dim,extra_event_dims',
+@pytest.mark.parameterize('sample_dim,extra_event_dims',
                          [(s, e) for s in range(4) for e in range(4 + s)])
 def test_reshape(sample_dim, extra_event_dims):
     batch_dim = 3
@@ -70,7 +70,7 @@ def test_reshape(sample_dim, extra_event_dims):
         assert dist.enumerate_support(expand=False).shape == (2,) + (1,) * len(sample_shape + batch_shape) + event_shape
 
 
-@pytest.mark.parametrize('sample_dim,extra_event_dims',
+@pytest.mark.parameterize('sample_dim,extra_event_dims',
                          [(s, e) for s in range(3) for e in range(3 + s)])
 def test_reshape_reshape(sample_dim, extra_event_dims):
     batch_dim = 2
@@ -106,9 +106,9 @@ def test_reshape_reshape(sample_dim, extra_event_dims):
         assert dist.enumerate_support(expand=False).shape == (2,) + (1,) * len(sample_shape + batch_shape) + event_shape
 
 
-@pytest.mark.parametrize('sample_dim', [0, 1, 2])
-@pytest.mark.parametrize('batch_dim', [0, 1, 2])
-@pytest.mark.parametrize('event_dim', [0, 1, 2])
+@pytest.mark.parameterize('sample_dim', [0, 1, 2])
+@pytest.mark.parameterize('batch_dim', [0, 1, 2])
+@pytest.mark.parameterize('event_dim', [0, 1, 2])
 def test_extra_event_dim_overflow(sample_dim, batch_dim, event_dim):
     shape = torch.Size(range(sample_dim + batch_dim + event_dim))
     sample_shape = shape[:sample_dim]

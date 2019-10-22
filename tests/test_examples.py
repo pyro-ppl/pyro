@@ -146,7 +146,7 @@ def test_coverage():
                     pytest.fail('Example: {} not covered by JIT_EXAMPLES.'.format(example))
 
 
-@pytest.mark.parametrize('example', CPU_EXAMPLES)
+@pytest.mark.parameterize('example', CPU_EXAMPLES)
 def test_cpu(example):
     logger.info('Running:\npython examples/{}'.format(example))
     example = example.split()
@@ -156,7 +156,7 @@ def test_cpu(example):
 
 
 @requires_cuda
-@pytest.mark.parametrize('example', CUDA_EXAMPLES)
+@pytest.mark.parameterize('example', CUDA_EXAMPLES)
 def test_cuda(example):
     logger.info('Running:\npython examples/{}'.format(example))
     example = example.split()
@@ -165,7 +165,7 @@ def test_cuda(example):
     check_call([sys.executable, filename] + args)
 
 
-@pytest.mark.parametrize('example', JIT_EXAMPLES)
+@pytest.mark.parameterize('example', JIT_EXAMPLES)
 def test_jit(example):
     logger.info('Running:\npython examples/{}'.format(example))
     example = example.split()

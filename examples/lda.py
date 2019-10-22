@@ -3,7 +3,7 @@ This example implements amortized Latent Dirichlet Allocation [1],
 demonstrating how to marginalize out discrete assignment variables in a Pyro
 model. This model and inference algorithm treat documents as vectors of
 categorical variables (vectors of word ids), and collapses word-topic
-assignments using Pyro's enumeration. We use PyTorch's reparametrized Gamma and
+assignments using Pyro's enumeration. We use PyTorch's reparameterized Gamma and
 Dirichlet distributions [2], avoiding the need for Laplace approximations as in
 [1]. Following [1] we use the Adam optimizer and clip gradients.
 
@@ -81,7 +81,7 @@ def make_predictor(args):
     return nn.Sequential(*layers)
 
 
-def parametrized_guide(predictor, data, args, batch_size=None):
+def parameterized_guide(predictor, data, args, batch_size=None):
     # Use a conjugate guide for global variables.
     topic_weights_posterior = pyro.param(
             "topic_weights_posterior",
@@ -120,7 +120,7 @@ def main(args):
     logging.info('-' * 40)
     logging.info('Training on {} documents'.format(args.num_docs))
     predictor = make_predictor(args)
-    guide = functools.partial(parametrized_guide, predictor)
+    guide = functools.partial(parameterized_guide, predictor)
     Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
     elbo = Elbo(max_plate_nesting=2)
     optim = ClippedAdam({'lr': args.learning_rate})

@@ -15,7 +15,7 @@ EXAMPLE_DIMS = [
 ]
 
 
-@pytest.mark.parametrize('dims', EXAMPLE_DIMS)
+@pytest.mark.parameterize('dims', EXAMPLE_DIMS)
 def test_unpack_pack(dims):
     dim_to_symbol = {}
     symbol_to_dim = {}
@@ -59,7 +59,7 @@ def make_inputs(shapes, num_numbers=0):
     return inputs, dim_to_symbol, symbol_to_dim
 
 
-@pytest.mark.parametrize('shapes', EXAMPLE_SHAPES)
+@pytest.mark.parameterize('shapes', EXAMPLE_SHAPES)
 def test_broadcast_all(shapes):
     inputs, dim_to_symbol, symbol_to_dim = make_inputs(shapes)
     packed_inputs = [packed.pack(x, dim_to_symbol) for x in inputs]

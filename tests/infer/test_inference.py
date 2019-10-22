@@ -357,7 +357,7 @@ class PoissonGammaTests(TestCase):
 
 
 @pytest.mark.stage("integration", "integration_batch_1")
-@pytest.mark.parametrize('elbo_impl', [
+@pytest.mark.parameterize('elbo_impl', [
     xfail_param(JitTrace_ELBO, reason="incorrect gradients", run=False),
     xfail_param(JitTraceGraph_ELBO, reason="incorrect gradients", run=False),
     xfail_param(JitTraceEnum_ELBO, reason="incorrect gradients", run=False),
@@ -366,7 +366,7 @@ class PoissonGammaTests(TestCase):
     TraceEnum_ELBO,
     RenyiELBO,
 ])
-@pytest.mark.parametrize('gamma_dist,n_steps', [
+@pytest.mark.parameterize('gamma_dist,n_steps', [
     (dist.Gamma, 5000),
     (fakes.NonreparameterizedGamma, 10000),
     (ShapeAugmentedGamma, 5000),

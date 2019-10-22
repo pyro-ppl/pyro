@@ -15,9 +15,9 @@ def checker_mask(shape):
     return mask.fmod(2).bool()
 
 
-@pytest.mark.parametrize('batch_dim,mask_dim',
+@pytest.mark.parameterize('batch_dim,mask_dim',
                          [(b, m) for b in range(3) for m in range(1 + b)])
-@pytest.mark.parametrize('event_dim', [0, 1, 2])
+@pytest.mark.parameterize('event_dim', [0, 1, 2])
 def test_mask(batch_dim, event_dim, mask_dim):
     # Construct base distribution.
     shape = torch.Size([2, 3, 4, 5, 6][:batch_dim + event_dim])
@@ -49,7 +49,7 @@ def test_mask(batch_dim, event_dim, mask_dim):
         assert_equal(dist.enumerate_support(expand=False), base_dist.enumerate_support(expand=False))
 
 
-@pytest.mark.parametrize('batch_shape,mask_shape', [
+@pytest.mark.parameterize('batch_shape,mask_shape', [
     ([], [1]),
     ([], [2]),
     ([1], [2]),

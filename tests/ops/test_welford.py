@@ -7,7 +7,7 @@ from pyro.util import optional
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize('n_samples,dim_size', [(1000, 1),
+@pytest.mark.parameterize('n_samples,dim_size', [(1000, 1),
                                                 (1000, 7),
                                                 (1, 1)])
 @pytest.mark.init(rng_seed=7)
@@ -29,7 +29,7 @@ def test_welford_diagonal(n_samples, dim_size):
         assert_equal(estimates, sample_variance)
 
 
-@pytest.mark.parametrize('n_samples,dim_size', [(1000, 1),
+@pytest.mark.parameterize('n_samples,dim_size', [(1000, 1),
                                                 (1000, 7),
                                                 (1, 1)])
 @pytest.mark.init(rng_seed=7)

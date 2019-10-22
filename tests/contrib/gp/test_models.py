@@ -75,7 +75,7 @@ TEST_IDS = [t[0].__name__ + "_y{}D".format(str(t[2].dim()))
             for t in _TEST_CASES()]
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
+@pytest.mark.parameterize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
 def test_model(model_class, X, y, kernel, likelihood):
     if model_class is SparseGPRegression or model_class is VariationalSparseGP:
         gp = model_class(X, None, kernel, X, likelihood)
@@ -91,7 +91,7 @@ def test_model(model_class, X, y, kernel, likelihood):
         assert_equal(var, kernel(X).diag())
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
+@pytest.mark.parameterize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
 def test_forward(model_class, X, y, kernel, likelihood):
     if model_class is SparseGPRegression or model_class is VariationalSparseGP:
         gp = model_class(X, y, kernel, X, likelihood)
@@ -138,7 +138,7 @@ def test_forward(model_class, X, y, kernel, likelihood):
     assert_equal(cov, torch.eye(cov.shape[-1]).expand(cov.shape) * 10)
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
+@pytest.mark.parameterize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
 def test_forward_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
     # regression models don't use latent_shape, no need for test
     if model_class is GPRegression or model_class is SparseGPRegression:
@@ -162,7 +162,7 @@ def test_forward_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
     assert_equal(cov0.diag(), var1)
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
+@pytest.mark.parameterize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
 @pytest.mark.init(rng_seed=0)
 def test_inference(model_class, X, y, kernel, likelihood):
     # skip variational GP models because variance/lengthscale highly
@@ -242,7 +242,7 @@ def test_inference_whiten_vsgp():
     assert_equal((loc - target).abs().mean().item(), 0, prec=0.07)
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
+@pytest.mark.parameterize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
 def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
     # regression models don't use latent_shape (default=torch.Size([]))
     if model_class is GPRegression or model_class is SparseGPRegression:
@@ -255,7 +255,7 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
     train(gp, num_steps=1)
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
+@pytest.mark.parameterize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
 def test_inference_with_whiten(model_class, X, y, kernel, likelihood):
     # regression models don't use whiten
     if model_class is GPRegression or model_class is SparseGPRegression:
@@ -268,7 +268,7 @@ def test_inference_with_whiten(model_class, X, y, kernel, likelihood):
     train(gp, num_steps=1)
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
+@pytest.mark.parameterize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
 def test_hmc(model_class, X, y, kernel, likelihood):
     if model_class is SparseGPRegression or model_class is VariationalSparseGP:
         gp = model_class(X, y, kernel, X.clone(), likelihood)
@@ -314,7 +314,7 @@ def test_inference_deepGP():
     train(deepgp, num_steps=1)
 
 
-@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
+@pytest.mark.parameterize("model_class, X, y, kernel, likelihood", _TEST_CASES(), ids=TEST_IDS)
 def test_gplvm(model_class, X, y, kernel, likelihood):
     if model_class is SparseGPRegression or model_class is VariationalSparseGP:
         gp = model_class(X, y, kernel, X.clone(), likelihood)

@@ -6,9 +6,9 @@ from pyro.contrib.tracking.dynamic_models import NcpContinuous, NcvContinuous
 import pytest
 
 
-@pytest.mark.parametrize('Model', [NcpContinuous, NcvContinuous])
-@pytest.mark.parametrize('dim', [2, 3])
-@pytest.mark.parametrize('time', [2, 3])
+@pytest.mark.parameterize('Model', [NcpContinuous, NcvContinuous])
+@pytest.mark.parameterize('dim', [2, 3])
+@pytest.mark.parameterize('time', [2, 3])
 def test_EKFDistribution_smoke(Model, dim, time):
     x0 = torch.rand(2*dim)
     ys = torch.randn(time, dim)

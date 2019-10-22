@@ -46,9 +46,9 @@ class TestDelta(TestCase):
         assert_equal(torch_var, self.analytic_var)
 
 
-@pytest.mark.parametrize('batch_dim,event_dim',
+@pytest.mark.parameterize('batch_dim,event_dim',
                          [(b, e) for b in range(4) for e in range(1+b)])
-@pytest.mark.parametrize('has_log_density', [False, True])
+@pytest.mark.parameterize('has_log_density', [False, True])
 def test_shapes(batch_dim, event_dim, has_log_density):
     shape = tuple(range(2, 2 + batch_dim + event_dim))
     batch_shape = shape[:batch_dim]
@@ -61,7 +61,7 @@ def test_shapes(batch_dim, event_dim, has_log_density):
     assert (d.log_prob(x) == log_density).all()
 
 
-@pytest.mark.parametrize('batch_shape', [(), [], (2,), [2], torch.Size([2]), [2, 3]])
+@pytest.mark.parameterize('batch_shape', [(), [], (2,), [2], torch.Size([2]), [2, 3]])
 def test_expand(batch_shape):
     d1 = dist.Delta(torch.tensor(1.234))
     d2 = d1.expand(batch_shape)

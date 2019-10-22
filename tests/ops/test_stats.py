@@ -10,7 +10,7 @@ from pyro.ops.stats import (_cummin, _fft_next_good_size, autocorrelation, autoc
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented
 
 
-@pytest.mark.parametrize('replacement', [True, False])
+@pytest.mark.parameterize('replacement', [True, False])
 def test_resample(replacement):
     x = torch.empty(10000, 2)
     x[:, 0].normal_(3, 4)
@@ -67,8 +67,8 @@ def _hpdi(x, dim=0):
     return hpdi(x, prob=0.8, dim=dim)
 
 
-@pytest.mark.parametrize('statistics', [_quantile, _pi, _hpdi])
-@pytest.mark.parametrize('sample_shape', [(), (3,), (2, 3)])
+@pytest.mark.parameterize('statistics', [_quantile, _pi, _hpdi])
+@pytest.mark.parameterize('sample_shape', [(), (3,), (2, 3)])
 def test_statistics_A_ok_with_sample_shape(statistics, sample_shape):
     xs = torch.rand((10,) + torch.Size(sample_shape))
     y = statistics(xs)
@@ -115,8 +115,8 @@ def test_cummin():
     assert_equal(_cummin(x), y)
 
 
-@pytest.mark.parametrize('statistics', [autocorrelation, autocovariance, _cummin])
-@pytest.mark.parametrize('sample_shape', [(), (3,), (2, 3)])
+@pytest.mark.parameterize('statistics', [autocorrelation, autocovariance, _cummin])
+@pytest.mark.parameterize('sample_shape', [(), (3,), (2, 3)])
 def test_statistics_B_ok_with_sample_shape(statistics, sample_shape):
     xs = torch.rand((10,) + torch.Size(sample_shape))
     with xfail_if_not_implemented():
@@ -166,8 +166,8 @@ def test_effective_sample_size():
         assert_equal(effective_sample_size(x).item(), 52.64, prec=0.01)
 
 
-@pytest.mark.parametrize('diagnostics', [gelman_rubin, split_gelman_rubin, effective_sample_size])
-@pytest.mark.parametrize('sample_shape', [(), (3,), (2, 3)])
+@pytest.mark.parameterize('diagnostics', [gelman_rubin, split_gelman_rubin, effective_sample_size])
+@pytest.mark.parameterize('sample_shape', [(), (3,), (2, 3)])
 def test_diagnostics_ok_with_sample_shape(diagnostics, sample_shape):
     sample_shape = torch.Size(sample_shape)
     xs = torch.rand((4, 100) + sample_shape)
@@ -239,8 +239,8 @@ def test_weighted_waic():
     assert_equal(p1, p3)
 
 
-@pytest.mark.parametrize('k', [0.2, 0.5])
-@pytest.mark.parametrize('sigma', [0.8, 1.3])
+@pytest.mark.parameterize('k', [0.2, 0.5])
+@pytest.mark.parameterize('sigma', [0.8, 1.3])
 def test_fit_generalized_pareto(k, sigma, n_samples=5000):
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -252,8 +252,8 @@ def test_fit_generalized_pareto(k, sigma, n_samples=5000):
     assert_equal(sigma, fit_sigma, prec=0.02)
 
 
-@pytest.mark.parametrize('event_shape', [(), (4,), (3, 2)])
-@pytest.mark.parametrize('num_samples', [1, 2, 3, 4, 10])
+@pytest.mark.parameterize('event_shape', [(), (4,), (3, 2)])
+@pytest.mark.parameterize('num_samples', [1, 2, 3, 4, 10])
 def test_crps_empirical(num_samples, event_shape):
     truth = torch.randn(event_shape)
     pred = truth + 0.1 * torch.randn((num_samples,) + event_shape)

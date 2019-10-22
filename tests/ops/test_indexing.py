@@ -90,16 +90,16 @@ SHAPE_EXAMPLES = [
 ]
 
 
-@pytest.mark.parametrize('expression,expected_shape', SHAPE_EXAMPLES, ids=str)
+@pytest.mark.parameterize('expression,expected_shape', SHAPE_EXAMPLES, ids=str)
 def test_shape(expression, expected_shape):
     result = eval(expression)
     assert result.shape == expected_shape
 
 
-@pytest.mark.parametrize('event_shape', [(), (7,)], ids=str)
-@pytest.mark.parametrize('j_shape', [(), (2,), (3, 1), (4, 1, 1), (4, 3, 2)], ids=str)
-@pytest.mark.parametrize('i_shape', [(), (2,), (3, 1), (4, 1, 1), (4, 3, 2)], ids=str)
-@pytest.mark.parametrize('x_shape', [(), (2,), (3, 1), (4, 1, 1), (4, 3, 2)], ids=str)
+@pytest.mark.parameterize('event_shape', [(), (7,)], ids=str)
+@pytest.mark.parameterize('j_shape', [(), (2,), (3, 1), (4, 1, 1), (4, 3, 2)], ids=str)
+@pytest.mark.parameterize('i_shape', [(), (2,), (3, 1), (4, 1, 1), (4, 3, 2)], ids=str)
+@pytest.mark.parameterize('x_shape', [(), (2,), (3, 1), (4, 1, 1), (4, 3, 2)], ids=str)
 def test_value(x_shape, i_shape, j_shape, event_shape):
     x = torch.rand(x_shape + (5, 6) + event_shape)
     i = dist.Categorical(torch.ones(5)).sample(i_shape)
@@ -119,7 +119,7 @@ def test_value(x_shape, i_shape, j_shape, event_shape):
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize('prev_enum_dim,curr_enum_dim', [(-3, -4), (-4, -5), (-5, -3)])
+@pytest.mark.parameterize('prev_enum_dim,curr_enum_dim', [(-3, -4), (-4, -5), (-5, -3)])
 def test_hmm_example(prev_enum_dim, curr_enum_dim):
     hidden_dim = 8
     probs_x = torch.rand(hidden_dim, hidden_dim, hidden_dim)

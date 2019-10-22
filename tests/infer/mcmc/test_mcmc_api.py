@@ -70,9 +70,9 @@ def normal_normal_model(data):
     return y
 
 
-@pytest.mark.parametrize('num_draws', [None, 1800, 2200])
-@pytest.mark.parametrize('group_by_chain', [False, True])
-@pytest.mark.parametrize('num_chains', [1, 2])
+@pytest.mark.parameterize('num_draws', [None, 1800, 2200])
+@pytest.mark.parameterize('group_by_chain', [False, True])
+@pytest.mark.parameterize('num_chains', [1, 2])
 def test_mcmc_interface(num_draws, group_by_chain, num_chains):
     num_samples = 2000
     data = torch.tensor([1.0])
@@ -99,13 +99,13 @@ def test_mcmc_interface(num_draws, group_by_chain, num_chains):
     assert_close(sample_std, torch.tensor(1.0), atol=0.05)
 
 
-@pytest.mark.parametrize("num_chains, cpu_count", [
+@pytest.mark.parameterize("num_chains, cpu_count", [
     (1, 2),
     (2, 1),
     (2, 2),
     (2, 3),
 ])
-@pytest.mark.parametrize("default_init_params", [True, False])
+@pytest.mark.parameterize("default_init_params", [True, False])
 def test_num_chains(num_chains, cpu_count, default_init_params,
                     monkeypatch):
     monkeypatch.setattr(torch.multiprocessing, 'cpu_count', lambda: cpu_count)
@@ -138,12 +138,12 @@ def _hook(iters, kernel, samples, stage, i):
     iters.append((stage, i))
 
 
-@pytest.mark.parametrize("kernel, model", [
+@pytest.mark.parameterize("kernel, model", [
     (HMC, _empty_model),
     (NUTS, _empty_model),
 ])
-@pytest.mark.parametrize("jit", [False, True])
-@pytest.mark.parametrize("num_chains", [
+@pytest.mark.parameterize("jit", [False, True])
+@pytest.mark.parameterize("num_chains", [
     1,
     skipif_param(2, condition="CI" in os.environ, reason="CI only provides 2-core CPU")
 ])
@@ -168,7 +168,7 @@ def test_null_model_with_hook(kernel, model, jit, num_chains):
         assert iters == expected
 
 
-@pytest.mark.parametrize("num_chains", [
+@pytest.mark.parameterize("num_chains", [
     1,
     skipif_param(2, condition="CI" in os.environ, reason="CI only provides 2-core CPU")
 ])

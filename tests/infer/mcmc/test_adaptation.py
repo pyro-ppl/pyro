@@ -5,7 +5,7 @@ from pyro.infer.mcmc.adaptation import WarmupAdapter, adapt_window
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize("adapt_step_size, adapt_mass, warmup_steps, expected", [
+@pytest.mark.parameterize("adapt_step_size, adapt_mass, warmup_steps, expected", [
     (False, False, 100, []),
     (False, True, 50, [(0, 6), (7, 44), (45, 49)]),
     (True, False, 150, [(0, 74), (75, 99), (100, 149)]),

@@ -27,7 +27,7 @@ def test_tensor_to_dict():
                  {"b": torch.tensor([3., 4.])})
 
 
-@pytest.mark.parametrize("A,b", [
+@pytest.mark.parameterize("A,b", [
     (torch.tensor([[1., 2.], [2., -3.]]), torch.tensor([-1., 2.]))
     ])
 def test_rmv(A, b):
@@ -38,7 +38,7 @@ def test_rmv(A, b):
     assert_equal(rmv(batched_A, batched_b), expected_Ab, prec=1e-8)
 
 
-@pytest.mark.parametrize("a,b", [
+@pytest.mark.parameterize("a,b", [
     (torch.tensor([1., 2.]), torch.tensor([-1., 2.]))
     ])
 def test_rvv(a, b):

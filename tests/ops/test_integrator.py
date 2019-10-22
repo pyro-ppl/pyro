@@ -100,7 +100,7 @@ class QuarticOscillator(object):
         return 0.25 * torch.pow(q['x'], 4.0)
 
 
-@pytest.mark.parametrize('example', TEST_EXAMPLES, ids=EXAMPLE_IDS)
+@pytest.mark.parameterize('example', TEST_EXAMPLES, ids=EXAMPLE_IDS)
 def test_trajectory(example):
     model, args = example
     q_f, p_f, _, _ = velocity_verlet(args.q_i,
@@ -115,7 +115,7 @@ def test_trajectory(example):
     assert_equal(p_f, args.p_f, args.prec)
 
 
-@pytest.mark.parametrize('example', TEST_EXAMPLES, ids=EXAMPLE_IDS)
+@pytest.mark.parameterize('example', TEST_EXAMPLES, ids=EXAMPLE_IDS)
 def test_energy_conservation(example):
     model, args = example
     q_f, p_f, _, _ = velocity_verlet(args.q_i,
@@ -131,7 +131,7 @@ def test_energy_conservation(example):
     assert_equal(energy_final, energy_initial)
 
 
-@pytest.mark.parametrize('example', TEST_EXAMPLES, ids=EXAMPLE_IDS)
+@pytest.mark.parameterize('example', TEST_EXAMPLES, ids=EXAMPLE_IDS)
 def test_time_reversibility(example):
     model, args = example
     q_forward, p_forward, _, _ = velocity_verlet(args.q_i,

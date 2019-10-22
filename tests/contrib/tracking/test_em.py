@@ -119,7 +119,7 @@ def generate_data(args):
     return detections
 
 
-@pytest.mark.parametrize('assignment_grad', [False, True])
+@pytest.mark.parameterize('assignment_grad', [False, True])
 def test_em(assignment_grad):
     args = make_args()
     args.assignment_grad = assignment_grad
@@ -141,7 +141,7 @@ def test_em(assignment_grad):
         logger.debug('step {}, loss = {}'.format(step, loss.item()))
 
 
-@pytest.mark.parametrize('assignment_grad', [False, True])
+@pytest.mark.parameterize('assignment_grad', [False, True])
 def test_em_nested_in_svi(assignment_grad):
     args = make_args()
     args.assignment_grad = assignment_grad

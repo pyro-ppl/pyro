@@ -130,7 +130,7 @@ def test_sparse_grid_smoke():
     assert isinstance(assign.assign_dist, dist.Categorical)
 
 
-@pytest.mark.parametrize('bp_iters', [None, 10], ids=['enum', 'bp'])
+@pytest.mark.parameterize('bp_iters', [None, 10], ids=['enum', 'bp'])
 def test_persistent_smoke(bp_iters):
     exists_logits = torch.tensor([-1., -1., -2.], requires_grad=True)
     assign_logits = torch.tensor([[[-1., -INF, -INF],
@@ -165,8 +165,8 @@ def test_persistent_smoke(bp_iters):
         assert_finite(a_grad, 'dassign_probs/dassign_logits')
 
 
-@pytest.mark.parametrize('e', [-1., 0., 1.])
-@pytest.mark.parametrize('a', [-1., 0., 1.])
+@pytest.mark.parameterize('e', [-1., 0., 1.])
+@pytest.mark.parameterize('a', [-1., 0., 1.])
 def test_flat_exact_1_1(e, a):
     exists_logits = torch.tensor([e])
     assign_logits = torch.tensor([[a]])
@@ -176,9 +176,9 @@ def test_flat_exact_1_1(e, a):
     assert_equal(expected.assign_dist.probs, actual.assign_dist.probs)
 
 
-@pytest.mark.parametrize('e', [-1., 0., 1.])
-@pytest.mark.parametrize('a11', [-1., 0., 1.])
-@pytest.mark.parametrize('a21', [-1., 0., 1.])
+@pytest.mark.parameterize('e', [-1., 0., 1.])
+@pytest.mark.parameterize('a11', [-1., 0., 1.])
+@pytest.mark.parameterize('a21', [-1., 0., 1.])
 def test_flat_exact_2_1(e, a11, a21):
     exists_logits = torch.tensor([e])
     assign_logits = torch.tensor([[a11], [a21]])
@@ -188,10 +188,10 @@ def test_flat_exact_2_1(e, a11, a21):
     assert_equal(expected.assign_dist.probs, actual.assign_dist.probs)
 
 
-@pytest.mark.parametrize('e1', [-1., 0., 1.])
-@pytest.mark.parametrize('e2', [-1., 0., 1.])
-@pytest.mark.parametrize('a11', [-1., 0., 1.])
-@pytest.mark.parametrize('a12', [-1., 0., 1.])
+@pytest.mark.parameterize('e1', [-1., 0., 1.])
+@pytest.mark.parameterize('e2', [-1., 0., 1.])
+@pytest.mark.parameterize('a11', [-1., 0., 1.])
+@pytest.mark.parameterize('a12', [-1., 0., 1.])
 def test_flat_exact_1_2(e1, e2, a11, a12):
     exists_logits = torch.tensor([e1, e2])
     assign_logits = torch.tensor([[a11, a12]])
@@ -201,11 +201,11 @@ def test_flat_exact_1_2(e1, e2, a11, a12):
     assert_equal(expected.assign_dist.probs, actual.assign_dist.probs)
 
 
-@pytest.mark.parametrize('e1', [-1., 1.])
-@pytest.mark.parametrize('e2', [-1., 1.])
-@pytest.mark.parametrize('a11', [-1., 1.])
-@pytest.mark.parametrize('a12', [-1., 1.])
-@pytest.mark.parametrize('a22', [-1., 1.])
+@pytest.mark.parameterize('e1', [-1., 1.])
+@pytest.mark.parameterize('e2', [-1., 1.])
+@pytest.mark.parameterize('a11', [-1., 1.])
+@pytest.mark.parameterize('a12', [-1., 1.])
+@pytest.mark.parameterize('a22', [-1., 1.])
 def test_flat_exact_2_2(e1, e2, a11, a12, a22):
     a21 = -INF
     exists_logits = torch.tensor([e1, e2])
@@ -216,8 +216,8 @@ def test_flat_exact_2_2(e1, e2, a11, a12, a22):
     assert_equal(expected.assign_dist.probs, actual.assign_dist.probs)
 
 
-@pytest.mark.parametrize('num_detections', [1, 2, 3, 4])
-@pytest.mark.parametrize('num_objects', [1, 2, 3, 4])
+@pytest.mark.parameterize('num_detections', [1, 2, 3, 4])
+@pytest.mark.parameterize('num_objects', [1, 2, 3, 4])
 def test_flat_bp_vs_exact(num_objects, num_detections):
     exists_logits = -2 * torch.rand(num_objects)
     assign_logits = -2 * torch.rand(num_detections, num_objects)
@@ -228,9 +228,9 @@ def test_flat_bp_vs_exact(num_objects, num_detections):
     assert_equal(expected.assign_dist.probs, actual.assign_dist.probs, prec=0.01)
 
 
-@pytest.mark.parametrize('num_frames', [1, 2, 3, 4])
-@pytest.mark.parametrize('num_objects', [1, 2, 3, 4])
-@pytest.mark.parametrize('bp_iters', [None, 30], ids=['enum', 'bp'])
+@pytest.mark.parameterize('num_frames', [1, 2, 3, 4])
+@pytest.mark.parameterize('num_objects', [1, 2, 3, 4])
+@pytest.mark.parameterize('bp_iters', [None, 30], ids=['enum', 'bp'])
 def test_flat_vs_persistent(num_objects, num_frames, bp_iters):
     exists_logits = -2 * torch.rand(num_objects)
     assign_logits = -2 * torch.rand(num_frames, num_objects)
@@ -240,9 +240,9 @@ def test_flat_vs_persistent(num_objects, num_frames, bp_iters):
     assert_equal(flat.assign_dist.probs, full.assign_dist.probs.squeeze(1))
 
 
-@pytest.mark.parametrize('num_detections', [1, 2, 3, 4])
-@pytest.mark.parametrize('num_frames', [1, 2, 3, 4])
-@pytest.mark.parametrize('num_objects', [1, 2, 3, 4])
+@pytest.mark.parameterize('num_detections', [1, 2, 3, 4])
+@pytest.mark.parameterize('num_frames', [1, 2, 3, 4])
+@pytest.mark.parameterize('num_objects', [1, 2, 3, 4])
 def test_persistent_bp_vs_exact(num_objects, num_frames, num_detections):
     exists_logits = -2 * torch.rand(num_objects)
     assign_logits = 2 * torch.rand(num_frames, num_detections, num_objects) - 1
@@ -253,10 +253,10 @@ def test_persistent_bp_vs_exact(num_objects, num_frames, num_detections):
     assert_equal(expected.assign_dist.probs, actual.assign_dist.probs, prec=0.05)
 
 
-@pytest.mark.parametrize('e1', [-1., 1.])
-@pytest.mark.parametrize('e2', [-1., 1.])
-@pytest.mark.parametrize('e3', [-1., 1.])
-@pytest.mark.parametrize('bp_iters, bp_momentum', [(3, 0.), (30, 0.5)], ids=['momentum', 'none'])
+@pytest.mark.parameterize('e1', [-1., 1.])
+@pytest.mark.parameterize('e2', [-1., 1.])
+@pytest.mark.parameterize('e3', [-1., 1.])
+@pytest.mark.parameterize('bp_iters, bp_momentum', [(3, 0.), (30, 0.5)], ids=['momentum', 'none'])
 def test_persistent_exact_5_4_3(e1, e2, e3, bp_iters, bp_momentum):
     exists_logits = torch.tensor([e1, e2, e3])
     assign_logits = 2 * torch.rand(5, 4, 3) - 1
@@ -275,10 +275,10 @@ def test_persistent_exact_5_4_3(e1, e2, e3, bp_iters, bp_momentum):
     logger.debug(actual.assign_dist.probs)
 
 
-@pytest.mark.parametrize('num_detections', [1, 2, 3])
-@pytest.mark.parametrize('num_frames', [1, 2, 3])
-@pytest.mark.parametrize('num_objects', [1, 2])
-@pytest.mark.parametrize('bp_iters', [None, 30], ids=['enum', 'bp'])
+@pytest.mark.parameterize('num_detections', [1, 2, 3])
+@pytest.mark.parameterize('num_frames', [1, 2, 3])
+@pytest.mark.parameterize('num_objects', [1, 2])
+@pytest.mark.parameterize('bp_iters', [None, 30], ids=['enum', 'bp'])
 def test_persistent_independent_subproblems(num_objects, num_frames, num_detections, bp_iters):
     # solve a random assignment problem
     exists_logits_1 = -2 * torch.rand(num_objects)

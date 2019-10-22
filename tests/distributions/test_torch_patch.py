@@ -17,8 +17,8 @@ def test_linspace():
     assert x.device.type == "cuda"
 
 
-@pytest.mark.parametrize("batch_shape", [(), (5,), (2, 3)], ids=str)
-@pytest.mark.parametrize("dim", [1, 2, 3, 4])
+@pytest.mark.parameterize("batch_shape", [(), (5,), (2, 3)], ids=str)
+@pytest.mark.parameterize("dim", [1, 2, 3, 4])
 def test_lower_cholesky_transform(batch_shape, dim):
     t = torch.distributions.transform_to(torch.distributions.constraints.lower_cholesky)
     x = torch.randn(batch_shape + (dim, dim))

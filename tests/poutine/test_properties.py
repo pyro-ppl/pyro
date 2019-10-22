@@ -101,8 +101,8 @@ def get_trace(fn, *args, **kwargs):
     return poutine.trace(fn).get_trace(*args, **kwargs)
 
 
-@pytest.mark.parametrize('model', EXAMPLE_MODELS, ids=EXAMPLE_MODEL_IDS)
-@pytest.mark.parametrize('poutine_name', [
+@pytest.mark.parameterize('model', EXAMPLE_MODELS, ids=EXAMPLE_MODEL_IDS)
+@pytest.mark.parameterize('poutine_name', [
     'block',
     'do',
     'replay',
@@ -115,8 +115,8 @@ def test_idempotent(poutine_name, model):
     assert_equal(actual_trace, expected_trace, prec=0)
 
 
-@pytest.mark.parametrize('model', EXAMPLE_MODELS, ids=EXAMPLE_MODEL_IDS)
-@pytest.mark.parametrize('p1_name,p2_name', [
+@pytest.mark.parameterize('model', EXAMPLE_MODELS, ids=EXAMPLE_MODEL_IDS)
+@pytest.mark.parameterize('p1_name,p2_name', [
     ('trace', 'condition'),
     ('trace', 'do'),
     ('trace', 'replay'),

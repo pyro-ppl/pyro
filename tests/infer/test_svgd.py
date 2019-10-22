@@ -11,12 +11,12 @@ from pyro.infer.autoguide.utils import _product
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize("latent_dist", [dist.Normal(torch.zeros(2), torch.ones(2)).to_event(1),
+@pytest.mark.parameterize("latent_dist", [dist.Normal(torch.zeros(2), torch.ones(2)).to_event(1),
                                          dist.LogNormal(torch.tensor([-1.0]), torch.tensor([0.7])).to_event(1),
                                          dist.LogNormal(torch.tensor(-1.0), torch.tensor(0.7)),
                                          dist.Beta(torch.tensor([0.3]), torch.tensor([0.7])).to_event(1)])
-@pytest.mark.parametrize("mode", ["univariate", "multivariate"])
-@pytest.mark.parametrize("stein_kernel", [RBFSteinKernel, IMQSteinKernel])
+@pytest.mark.parameterize("mode", ["univariate", "multivariate"])
+@pytest.mark.parameterize("stein_kernel", [RBFSteinKernel, IMQSteinKernel])
 def test_mean_variance(latent_dist, mode, stein_kernel, verbose=True):
     pyro.clear_param_store()
 
@@ -55,8 +55,8 @@ def test_mean_variance(latent_dist, mode, stein_kernel, verbose=True):
     assert_equal(final_particles.var(0), latent_dist.variance, prec=prec)
 
 
-@pytest.mark.parametrize("shape", [(1, 1), (2, 1, 3), (4, 2), (1, 2, 1, 3)])
-@pytest.mark.parametrize("stein_kernel", [RBFSteinKernel, IMQSteinKernel])
+@pytest.mark.parameterize("shape", [(1, 1), (2, 1, 3), (4, 2), (1, 2, 1, 3)])
+@pytest.mark.parameterize("stein_kernel", [RBFSteinKernel, IMQSteinKernel])
 def test_shapes(shape, stein_kernel):
     pyro.clear_param_store()
     shape1, shape2 = (5,) + shape, shape + (6,)
@@ -84,8 +84,8 @@ def test_shapes(shape, stein_kernel):
         assert_equal(particles['z2'][particle, ...], mean_init2, prec=1.0e-6)
 
 
-@pytest.mark.parametrize("mode", ["univariate", "multivariate"])
-@pytest.mark.parametrize("stein_kernel", [RBFSteinKernel, IMQSteinKernel])
+@pytest.mark.parameterize("mode", ["univariate", "multivariate"])
+@pytest.mark.parameterize("stein_kernel", [RBFSteinKernel, IMQSteinKernel])
 def test_conjugate(mode, stein_kernel, verbose=False):
     data = torch.tensor([1.0, 2.0, 3.0, 3.0, 5.0]).unsqueeze(-1).expand(5, 3)
     alpha0 = torch.tensor([1.0, 1.8, 2.3])

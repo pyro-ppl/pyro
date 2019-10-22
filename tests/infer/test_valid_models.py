@@ -72,8 +72,8 @@ def assert_warning(model, guide, elbo):
             logger.info(warning)
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-@pytest.mark.parametrize("strict_enumeration_warning", [True, False])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("strict_enumeration_warning", [True, False])
 def test_nonempty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
 
     def model():
@@ -91,8 +91,8 @@ def test_nonempty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
         assert_ok(model, guide, elbo)
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-@pytest.mark.parametrize("strict_enumeration_warning", [True, False])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("strict_enumeration_warning", [True, False])
 def test_empty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
 
     def model():
@@ -108,7 +108,7 @@ def test_empty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
         assert_ok(model, guide, elbo)
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_variable_clash_in_model_error(Elbo):
 
     def model():
@@ -123,7 +123,7 @@ def test_variable_clash_in_model_error(Elbo):
     assert_error(model, guide, Elbo(), match='Multiple sample sites named')
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_model_guide_dim_mismatch_error(Elbo):
 
     def model():
@@ -140,7 +140,7 @@ def test_model_guide_dim_mismatch_error(Elbo):
                  match='invalid log_prob shape|Model and guide event_dims disagree')
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_model_guide_shape_mismatch_error(Elbo):
 
     def model():
@@ -157,7 +157,7 @@ def test_model_guide_shape_mismatch_error(Elbo):
                  match='Model and guide shapes disagree')
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_variable_clash_in_guide_error(Elbo):
 
     def model():
@@ -172,8 +172,8 @@ def test_variable_clash_in_guide_error(Elbo):
     assert_error(model, guide, Elbo(), match='Multiple sample sites named')
 
 
-@pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("subsample_size", [None, 2], ids=["full", "subsample"])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_iplate_ok(subsample_size, Elbo):
 
     def model():
@@ -192,7 +192,7 @@ def test_iplate_ok(subsample_size, Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_iplate_variable_clash_error(Elbo):
 
     def model():
@@ -213,8 +213,8 @@ def test_iplate_variable_clash_error(Elbo):
     assert_error(model, guide, Elbo(), match='Multiple sample sites named')
 
 
-@pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("subsample_size", [None, 5], ids=["full", "subsample"])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_plate_ok(subsample_size, Elbo):
 
     def model():
@@ -233,8 +233,8 @@ def test_plate_ok(subsample_size, Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("subsample_size", [None, 5], ids=["full", "subsample"])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_plate_subsample_param_ok(subsample_size, Elbo):
 
     def model():
@@ -256,9 +256,9 @@ def test_plate_subsample_param_ok(subsample_size, Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-@pytest.mark.parametrize("shape,ok", [
+@pytest.mark.parameterize("subsample_size", [None, 5], ids=["full", "subsample"])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("shape,ok", [
     ((), True),
     ((1,), True),
     ((10,), True),
@@ -289,7 +289,7 @@ def test_plate_param_size_mismatch_error(subsample_size, Elbo, shape, ok):
         assert_error(model, guide, Elbo(), match="invalid shape of pyro.param")
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_plate_no_size_ok(Elbo):
 
     def model():
@@ -308,9 +308,9 @@ def test_plate_no_size_ok(Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("max_plate_nesting", [0, float('inf')])
-@pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("max_plate_nesting", [0, float('inf')])
+@pytest.mark.parameterize("subsample_size", [None, 2], ids=["full", "subsample"])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_iplate_iplate_ok(subsample_size, Elbo, max_plate_nesting):
 
     def model():
@@ -335,9 +335,9 @@ def test_iplate_iplate_ok(subsample_size, Elbo, max_plate_nesting):
     assert_ok(model, guide, Elbo(max_plate_nesting=max_plate_nesting))
 
 
-@pytest.mark.parametrize("max_plate_nesting", [0, float('inf')])
-@pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("max_plate_nesting", [0, float('inf')])
+@pytest.mark.parameterize("subsample_size", [None, 2], ids=["full", "subsample"])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_iplate_iplate_swap_ok(subsample_size, Elbo, max_plate_nesting):
 
     def model():
@@ -362,8 +362,8 @@ def test_iplate_iplate_swap_ok(subsample_size, Elbo, max_plate_nesting):
     assert_ok(model, guide, Elbo(max_plate_nesting=max_plate_nesting))
 
 
-@pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("subsample_size", [None, 5], ids=["full", "subsample"])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_iplate_in_model_not_guide_ok(subsample_size, Elbo):
 
     def model():
@@ -382,9 +382,9 @@ def test_iplate_in_model_not_guide_ok(subsample_size, Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-@pytest.mark.parametrize("is_validate", [True, False])
+@pytest.mark.parameterize("subsample_size", [None, 5], ids=["full", "subsample"])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("is_validate", [True, False])
 def test_iplate_in_guide_not_model_error(subsample_size, Elbo, is_validate):
 
     def model():
@@ -405,7 +405,7 @@ def test_iplate_in_guide_not_model_error(subsample_size, Elbo, is_validate):
             assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_plate_broadcast_error(Elbo):
 
     def model():
@@ -416,7 +416,7 @@ def test_plate_broadcast_error(Elbo):
     assert_error(model, model, Elbo(), match='Shape mismatch inside plate')
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_plate_iplate_ok(Elbo):
 
     def model():
@@ -437,7 +437,7 @@ def test_plate_iplate_ok(Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_iplate_plate_ok(Elbo):
 
     def model():
@@ -460,8 +460,8 @@ def test_iplate_plate_ok(Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-@pytest.mark.parametrize("sizes", [(3,), (3, 4), (3, 4, 5)])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("sizes", [(3,), (3, 4), (3, 4, 5)])
 def test_plate_stack_ok(Elbo, sizes):
 
     def model():
@@ -480,8 +480,8 @@ def test_plate_stack_ok(Elbo, sizes):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-@pytest.mark.parametrize("sizes", [(3,), (3, 4), (3, 4, 5)])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("sizes", [(3,), (3, 4), (3, 4, 5)])
 def test_plate_stack_and_plate_ok(Elbo, sizes):
 
     def model():
@@ -502,7 +502,7 @@ def test_plate_stack_and_plate_ok(Elbo, sizes):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("sizes", [(3,), (3, 4), (3, 4, 5)])
+@pytest.mark.parameterize("sizes", [(3,), (3, 4), (3, 4, 5)])
 def test_plate_stack_sizes(sizes):
 
     def model():
@@ -514,7 +514,7 @@ def test_plate_stack_sizes(sizes):
     model()
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_nested_plate_plate_ok(Elbo):
 
     def model():
@@ -528,7 +528,7 @@ def test_nested_plate_plate_ok(Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_plate_reuse_ok(Elbo):
 
     def model():
@@ -546,7 +546,7 @@ def test_plate_reuse_ok(Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_nested_plate_plate_dim_error_1(Elbo):
 
     def model():
@@ -561,7 +561,7 @@ def test_nested_plate_plate_dim_error_1(Elbo):
     assert_error(model, guide, Elbo(), match='invalid log_prob shape')
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_nested_plate_plate_dim_error_2(Elbo):
 
     def model():
@@ -576,7 +576,7 @@ def test_nested_plate_plate_dim_error_2(Elbo):
     assert_error(model, guide, Elbo(), match='Shape mismatch inside plate')
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_nested_plate_plate_dim_error_3(Elbo):
 
     def model():
@@ -591,7 +591,7 @@ def test_nested_plate_plate_dim_error_3(Elbo):
     assert_error(model, guide, Elbo(), match='invalid log_prob shape|shape mismatch')
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_nested_plate_plate_dim_error_4(Elbo):
 
     def model():
@@ -606,7 +606,7 @@ def test_nested_plate_plate_dim_error_4(Elbo):
     assert_error(model, guide, Elbo(), match='hape mismatch inside plate')
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_nested_plate_plate_subsample_param_ok(Elbo):
 
     def model():
@@ -634,7 +634,7 @@ def test_nested_plate_plate_subsample_param_ok(Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_nonnested_plate_plate_ok(Elbo):
 
     def model():
@@ -698,8 +698,8 @@ def test_plate_wrong_size_error():
     assert_error(model, guide, TraceGraph_ELBO(), match='Shape mismatch inside plate')
 
 
-@pytest.mark.parametrize("enumerate_", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("enumerate_", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_enum_discrete_misuse_warning(Elbo, enumerate_):
 
     def model():
@@ -729,7 +729,7 @@ def test_enum_discrete_single_ok():
     assert_ok(model, config_enumerate(guide), TraceEnum_ELBO())
 
 
-@pytest.mark.parametrize("strict_enumeration_warning", [False, True])
+@pytest.mark.parameterize("strict_enumeration_warning", [False, True])
 def test_enum_discrete_missing_config_warning(strict_enumeration_warning):
 
     def model():
@@ -792,7 +792,7 @@ def test_plate_enum_discrete_batch_ok():
     assert_ok(model, config_enumerate(guide), TraceEnum_ELBO())
 
 
-@pytest.mark.parametrize("strict_enumeration_warning", [False, True])
+@pytest.mark.parameterize("strict_enumeration_warning", [False, True])
 def test_plate_enum_discrete_no_discrete_vars_warning(strict_enumeration_warning):
 
     def model():
@@ -829,7 +829,7 @@ def test_no_plate_enum_discrete_batch_error():
                  match='invalid log_prob shape')
 
 
-@pytest.mark.parametrize('max_plate_nesting', [0, 1, 2, float('inf')])
+@pytest.mark.parameterize('max_plate_nesting', [0, 1, 2, float('inf')])
 def test_enum_discrete_parallel_ok(max_plate_nesting):
     guessed_nesting = 0 if max_plate_nesting == float('inf') else max_plate_nesting
     plate_shape = torch.Size([1] * guessed_nesting)
@@ -850,7 +850,7 @@ def test_enum_discrete_parallel_ok(max_plate_nesting):
               TraceEnum_ELBO(max_plate_nesting=max_plate_nesting))
 
 
-@pytest.mark.parametrize('max_plate_nesting', [0, 1, 2, float('inf')])
+@pytest.mark.parameterize('max_plate_nesting', [0, 1, 2, float('inf')])
 def test_enum_discrete_parallel_nested_ok(max_plate_nesting):
     guessed_nesting = 0 if max_plate_nesting == float('inf') else max_plate_nesting
     plate_shape = torch.Size([1] * guessed_nesting)
@@ -868,7 +868,7 @@ def test_enum_discrete_parallel_nested_ok(max_plate_nesting):
               TraceEnum_ELBO(max_plate_nesting=max_plate_nesting))
 
 
-@pytest.mark.parametrize('enumerate_,expand,num_samples', [
+@pytest.mark.parameterize('enumerate_,expand,num_samples', [
     (None, False, None),
     ("sequential", False, None),
     ("sequential", True, None),
@@ -929,9 +929,9 @@ def test_enumerate_parallel_plate_ok(enumerate_, expand, num_samples):
     assert_ok(model, guide, elbo)
 
 
-@pytest.mark.parametrize('max_plate_nesting', [1, float('inf')])
-@pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
-@pytest.mark.parametrize('is_validate', [True, False])
+@pytest.mark.parameterize('max_plate_nesting', [1, float('inf')])
+@pytest.mark.parameterize('enumerate_', [None, "sequential", "parallel"])
+@pytest.mark.parameterize('is_validate', [True, False])
 def test_enum_discrete_plate_dependency_warning(enumerate_, is_validate, max_plate_nesting):
 
     def model():
@@ -949,8 +949,8 @@ def test_enum_discrete_plate_dependency_warning(enumerate_, is_validate, max_pla
             assert_ok(model, model, elbo)
 
 
-@pytest.mark.parametrize('max_plate_nesting', [1, float('inf')])
-@pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
+@pytest.mark.parameterize('max_plate_nesting', [1, float('inf')])
+@pytest.mark.parameterize('enumerate_', [None, "sequential", "parallel"])
 def test_enum_discrete_iplate_plate_dependency_ok(enumerate_, max_plate_nesting):
 
     def model():
@@ -965,9 +965,9 @@ def test_enum_discrete_iplate_plate_dependency_ok(enumerate_, max_plate_nesting)
     assert_ok(model, model, TraceEnum_ELBO(max_plate_nesting=max_plate_nesting))
 
 
-@pytest.mark.parametrize('max_plate_nesting', [1, float('inf')])
-@pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
-@pytest.mark.parametrize('is_validate', [True, False])
+@pytest.mark.parameterize('max_plate_nesting', [1, float('inf')])
+@pytest.mark.parameterize('enumerate_', [None, "sequential", "parallel"])
+@pytest.mark.parameterize('is_validate', [True, False])
 def test_enum_discrete_iplates_plate_dependency_warning(enumerate_, is_validate, max_plate_nesting):
 
     def model():
@@ -990,7 +990,7 @@ def test_enum_discrete_iplates_plate_dependency_warning(enumerate_, is_validate,
             assert_ok(model, model, elbo)
 
 
-@pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
+@pytest.mark.parameterize('enumerate_', [None, "sequential", "parallel"])
 def test_enum_discrete_plates_dependency_ok(enumerate_):
 
     def model():
@@ -1009,7 +1009,7 @@ def test_enum_discrete_plates_dependency_ok(enumerate_):
     assert_ok(model, model, TraceEnum_ELBO(max_plate_nesting=2))
 
 
-@pytest.mark.parametrize('enumerate_', [None, "sequential", "parallel"])
+@pytest.mark.parameterize('enumerate_', [None, "sequential", "parallel"])
 def test_enum_discrete_non_enumerated_plate_ok(enumerate_):
 
     def model():
@@ -1048,7 +1048,7 @@ def test_plate_shape_broadcasting():
     assert_ok(model, guide, Trace_ELBO())
 
 
-@pytest.mark.parametrize('enumerate_,expand,num_samples', [
+@pytest.mark.parameterize('enumerate_,expand,num_samples', [
     (None, True, None),
     ("sequential", True, None),
     ("sequential", False, None),
@@ -1103,7 +1103,7 @@ def test_enum_discrete_plate_shape_broadcasting_ok(enumerate_, expand, num_sampl
     assert_ok(model, guide, elbo)
 
 
-@pytest.mark.parametrize("Elbo,expand", [
+@pytest.mark.parameterize("Elbo,expand", [
     (Trace_ELBO, False),
     (TraceGraph_ELBO, False),
     (TraceEnum_ELBO, False),
@@ -1142,7 +1142,7 @@ def test_dim_allocation_ok(Elbo, expand):
     assert_ok(model, guide, Elbo(max_plate_nesting=4))
 
 
-@pytest.mark.parametrize("Elbo,expand", [
+@pytest.mark.parameterize("Elbo,expand", [
     (Trace_ELBO, False),
     (TraceGraph_ELBO, False),
     (TraceEnum_ELBO, False),
@@ -1299,7 +1299,7 @@ def test_enum_in_model_multi_scale_error():
                  match='Expected all enumerated sample sites to share a common poutine.scale')
 
 
-@pytest.mark.parametrize('use_vindex', [False, True])
+@pytest.mark.parameterize('use_vindex', [False, True])
 def test_enum_in_model_diamond_error(use_vindex):
     data = torch.tensor([[0, 1], [0, 0]])
 
@@ -1336,7 +1336,7 @@ def test_enum_in_model_diamond_error(use_vindex):
                  match='Expected tree-structured plate nesting')
 
 
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_vectorized_num_particles(Elbo):
     data = torch.ones(1000, 2)
 
@@ -1359,7 +1359,7 @@ def test_vectorized_num_particles(Elbo):
                                  strict_enumeration_warning=False))
 
 
-@pytest.mark.parametrize('enumerate_,expand,num_samples', [
+@pytest.mark.parameterize('enumerate_,expand,num_samples', [
     (None, False, None),
     ("sequential", False, None),
     ("sequential", True, None),
@@ -1367,7 +1367,7 @@ def test_vectorized_num_particles(Elbo):
     ("parallel", True, None),
     ("parallel", True, 3),
 ])
-@pytest.mark.parametrize('num_particles', [1, 50])
+@pytest.mark.parameterize('num_particles', [1, 50])
 def test_enum_discrete_vectorized_num_particles(enumerate_, expand, num_samples, num_particles):
 
     @config_enumerate(default=enumerate_, expand=expand, num_samples=num_samples)
@@ -1460,8 +1460,8 @@ def test_enum_recycling_chain():
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
 
 
-@pytest.mark.parametrize('use_vindex', [False, True])
-@pytest.mark.parametrize('markov', [False, True])
+@pytest.mark.parameterize('use_vindex', [False, True])
+@pytest.mark.parameterize('markov', [False, True])
 def test_enum_recycling_dbn(markov, use_vindex):
     #    x --> x --> x  enum "state"
     # y  |  y  |  y  |  enum "occlusion"
@@ -1537,7 +1537,7 @@ def test_enum_recycling_nested():
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
 
 
-@pytest.mark.parametrize('use_vindex', [False, True])
+@pytest.mark.parameterize('use_vindex', [False, True])
 def test_enum_recycling_grid(use_vindex):
     #  x---x---x---x    -----> i
     #  |   |   |   |   |
@@ -1595,7 +1595,7 @@ def test_enum_recycling_reentrant():
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0), data=data)
 
 
-@pytest.mark.parametrize('history', [1, 2])
+@pytest.mark.parameterize('history', [1, 2])
 def test_enum_recycling_reentrant_history(history):
     data = (True, False)
     for i in range(5):
@@ -1726,7 +1726,7 @@ def test_enum_recycling_plate():
     assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=2))
 
 
-@pytest.mark.parametrize('history', [0, 1, 2, 3])
+@pytest.mark.parameterize('history', [0, 1, 2, 3])
 def test_markov_history(history):
 
     @config_enumerate

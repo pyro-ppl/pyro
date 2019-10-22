@@ -669,8 +669,8 @@ class InferConfigHandlerTests(TestCase):
         assert tr.nodes["p"]["infer"] == {}
 
 
-@pytest.mark.parametrize('first_available_dim', [-1, -2, -3])
-@pytest.mark.parametrize('depth', [0, 1, 2])
+@pytest.mark.parameterize('first_available_dim', [-1, -2, -3])
+@pytest.mark.parameterize('depth', [0, 1, 2])
 def test_enumerate_poutine(depth, first_available_dim):
     num_particles = 2
 
@@ -693,8 +693,8 @@ def test_enumerate_poutine(depth, first_available_dim):
         assert actual_shape == expected_shape, 'error on iteration {}'.format(i)
 
 
-@pytest.mark.parametrize('first_available_dim', [-1, -2, -3])
-@pytest.mark.parametrize('depth', [0, 1, 2])
+@pytest.mark.parameterize('first_available_dim', [-1, -2, -3])
+@pytest.mark.parameterize('depth', [0, 1, 2])
 def test_replay_enumerate_poutine(depth, first_available_dim):
     num_particles = 2
     y_dist = Categorical(torch.tensor([0.5, 0.25, 0.25]))
@@ -871,7 +871,7 @@ def _model(a=torch.tensor(1.), b=torch.tensor(1.)):
     return pyro.sample("test_site", dist.Bernoulli(latent), obs=torch.tensor(1))
 
 
-@pytest.mark.parametrize('wrapper', [
+@pytest.mark.parameterize('wrapper', [
     lambda fn: poutine.block(fn),
     lambda fn: poutine.condition(fn, {'latent': 0.9}),
     lambda fn: poutine.enum(fn, -1),

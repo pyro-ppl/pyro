@@ -8,8 +8,8 @@ from pyro.ops.einsum import contract
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize('min_size', [1, 2])
-@pytest.mark.parametrize('equation', [
+@pytest.mark.parameterize('min_size', [1, 2])
+@pytest.mark.parameterize('equation', [
     ',ab->ab',
     'ab,,bc->a',
     'ab,,bc->b',
@@ -32,7 +32,7 @@ from tests.common import assert_equal
     'ab,bc,cd->bc',
     'a,a,ab,b,b,b,b->a',
 ])
-@pytest.mark.parametrize('infinite', [False, True], ids=['finite', 'infinite'])
+@pytest.mark.parameterize('infinite', [False, True], ids=['finite', 'infinite'])
 def test_einsum(equation, min_size, infinite):
     inputs, output = equation.split('->')
     inputs = inputs.split(',')

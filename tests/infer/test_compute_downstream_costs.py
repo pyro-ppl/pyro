@@ -91,11 +91,11 @@ def big_model_guide(include_obs=True, include_single=False, include_inner_1=Fals
                             obs=torch.ones(d2.size()))
 
 
-@pytest.mark.parametrize("include_inner_1", [True, False])
-@pytest.mark.parametrize("include_single", [True, False])
-@pytest.mark.parametrize("flip_c23", [True, False])
-@pytest.mark.parametrize("include_triple", [True, False])
-@pytest.mark.parametrize("include_z1", [True, False])
+@pytest.mark.parameterize("include_inner_1", [True, False])
+@pytest.mark.parameterize("include_single", [True, False])
+@pytest.mark.parameterize("flip_c23", [True, False])
+@pytest.mark.parameterize("include_triple", [True, False])
+@pytest.mark.parameterize("include_z1", [True, False])
 def test_compute_downstream_costs_big_model_guide_pair(include_inner_1, include_single, flip_c23,
                                                        include_triple, include_z1):
     guide_trace = poutine.trace(big_model_guide,
@@ -219,7 +219,7 @@ def diamond_guide(dim):
     pyro.sample("c1", dist.Bernoulli(p0))
 
 
-@pytest.mark.parametrize("dim", [2, 3, 7, 11])
+@pytest.mark.parameterize("dim", [2, 3, 7, 11])
 def test_compute_downstream_costs_duplicates(dim):
     guide_trace = poutine.trace(diamond_guide,
                                 graph_type="dense").get_trace(dim=dim)
@@ -281,7 +281,7 @@ def nested_model_guide(include_obs=True, dim1=11, dim2=7):
                 assert obs_i.shape == (dim2 + i,)
 
 
-@pytest.mark.parametrize("dim1", [2, 5, 9])
+@pytest.mark.parameterize("dim1", [2, 5, 9])
 def test_compute_downstream_costs_plate_in_iplate(dim1):
     guide_trace = poutine.trace(nested_model_guide,
                                 graph_type="dense").get_trace(include_obs=False, dim1=dim1)
@@ -341,8 +341,8 @@ def nested_model_guide2(include_obs=True, dim1=3, dim2=2):
                 assert obs_i.shape == (dim1,)
 
 
-@pytest.mark.parametrize("dim1", [2, 5])
-@pytest.mark.parametrize("dim2", [3, 4])
+@pytest.mark.parameterize("dim1", [2, 5])
+@pytest.mark.parameterize("dim2", [3, 4])
 def test_compute_downstream_costs_iplate_in_plate(dim1, dim2):
     guide_trace = poutine.trace(nested_model_guide2,
                                 graph_type="dense").get_trace(include_obs=False, dim1=dim1, dim2=dim2)
@@ -397,8 +397,8 @@ def plate_reuse_model_guide(include_obs=True, dim1=3, dim2=2):
                 pyro.sample("obs", dist.Bernoulli(c2), obs=torch.ones(c2.size()))
 
 
-@pytest.mark.parametrize("dim1", [2, 5])
-@pytest.mark.parametrize("dim2", [3, 4])
+@pytest.mark.parameterize("dim1", [2, 5])
+@pytest.mark.parameterize("dim2", [3, 4])
 def test_compute_downstream_costs_plate_reuse(dim1, dim2):
     guide_trace = poutine.trace(plate_reuse_model_guide,
                                 graph_type="dense").get_trace(include_obs=False, dim1=dim1, dim2=dim2)

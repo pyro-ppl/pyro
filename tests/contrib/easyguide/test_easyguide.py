@@ -48,7 +48,7 @@ def check_guide(guide):
             svi.step(batch, subsample, full_size=full_size)
 
 
-@pytest.mark.parametrize("init_fn", [None, init_to_mean, init_to_median])
+@pytest.mark.parameterize("init_fn", [None, init_to_mean, init_to_median])
 def test_delta_smoke(init_fn):
 
     @easy_guide(model)
@@ -63,7 +63,7 @@ def test_delta_smoke(init_fn):
     check_guide(guide)
 
 
-@pytest.mark.parametrize("init_fn", [None, init_to_mean, init_to_median])
+@pytest.mark.parameterize("init_fn", [None, init_to_mean, init_to_median])
 def test_subsample_smoke(init_fn):
     rank = 2
 
@@ -88,7 +88,7 @@ def test_subsample_smoke(init_fn):
     check_guide(guide)
 
 
-@pytest.mark.parametrize("init_fn", [None, init_to_mean, init_to_median])
+@pytest.mark.parameterize("init_fn", [None, init_to_mean, init_to_median])
 def test_amortized_smoke(init_fn):
     rank = 2
 

@@ -5,7 +5,7 @@ from pyro.distributions import ZeroInflatedPoisson, Poisson, Delta
 from tests.common import assert_close
 
 
-@pytest.mark.parametrize('rate', [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
+@pytest.mark.parameterize('rate', [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
 def test_zip_0_gate(rate):
     # if gate is 0 ZIP is Poisson
     zip_ = ZeroInflatedPoisson(torch.zeros(1), torch.tensor(rate))
@@ -16,7 +16,7 @@ def test_zip_0_gate(rate):
     assert_close(zip_prob, pois_prob)
 
 
-@pytest.mark.parametrize('rate', [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
+@pytest.mark.parameterize('rate', [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
 def test_zip_1_gate(rate):
     # if gate is 1 ZIP is Delta(0)
     zip_ = ZeroInflatedPoisson(torch.ones(1), torch.tensor(rate))
@@ -27,8 +27,8 @@ def test_zip_1_gate(rate):
     assert_close(zip_prob, delta_prob)
 
 
-@pytest.mark.parametrize('gate', [0.0, 0.25, 0.5, 0.75, 1.0])
-@pytest.mark.parametrize('rate', [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
+@pytest.mark.parameterize('gate', [0.0, 0.25, 0.5, 0.75, 1.0])
+@pytest.mark.parameterize('rate', [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
 def test_zip_mean_variance(gate, rate):
     num_samples = 1000000
     zip_ = ZeroInflatedPoisson(torch.tensor(gate), torch.tensor(rate))

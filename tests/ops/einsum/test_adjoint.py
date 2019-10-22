@@ -43,8 +43,8 @@ EQUATIONS = [
 ]
 
 
-@pytest.mark.parametrize('equation', EQUATIONS)
-@pytest.mark.parametrize('backend', ['map', 'sample', 'marginal'])
+@pytest.mark.parameterize('equation', EQUATIONS)
+@pytest.mark.parameterize('backend', ['map', 'sample', 'marginal'])
 def test_shape(backend, equation):
     backend = 'pyro.ops.einsum.torch_{}'.format(backend)
     inputs, output = equation.split('->')
@@ -86,7 +86,7 @@ def test_shape(backend, equation):
                 assert backward_result is None
 
 
-@pytest.mark.parametrize('equation', EQUATIONS)
+@pytest.mark.parameterize('equation', EQUATIONS)
 def test_marginal(equation):
     inputs, output = equation.split('->')
     inputs = inputs.split(',')

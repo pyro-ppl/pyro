@@ -21,10 +21,10 @@ def DiffTrace_ELBO(*args, **kwargs):
     return Trace_ELBO(*args, **kwargs).differentiable_loss
 
 
-@pytest.mark.parametrize("scale", [1., 2.], ids=["unscaled", "scaled"])
-@pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
-@pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo,local_samples", [
+@pytest.mark.parameterize("scale", [1., 2.], ids=["unscaled", "scaled"])
+@pytest.mark.parameterize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
+@pytest.mark.parameterize("subsample", [False, True], ids=["full", "subsample"])
+@pytest.mark.parameterize("Elbo,local_samples", [
     (Trace_ELBO, False),
     (DiffTrace_ELBO, False),
     (TraceGraph_ELBO, False),
@@ -83,8 +83,8 @@ def test_subsample_gradient(Elbo, reparameterized, subsample, local_samples, sca
     assert_equal(actual_grads, expected_grads, prec=precision)
 
 
-@pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, DiffTrace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, DiffTrace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_plate(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
@@ -130,8 +130,8 @@ def test_plate(Elbo, reparameterized):
     assert_equal(actual_grads, expected_grads, prec=precision)
 
 
-@pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
-@pytest.mark.parametrize("Elbo", [Trace_ELBO, DiffTrace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parameterize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
+@pytest.mark.parameterize("Elbo", [Trace_ELBO, DiffTrace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_plate_elbo_vectorized_particles(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
@@ -177,9 +177,9 @@ def test_plate_elbo_vectorized_particles(Elbo, reparameterized):
     assert_equal(actual_grads, expected_grads, prec=precision)
 
 
-@pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
-@pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
-@pytest.mark.parametrize("Elbo", [
+@pytest.mark.parameterize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
+@pytest.mark.parameterize("subsample", [False, True], ids=["full", "subsample"])
+@pytest.mark.parameterize("Elbo", [
     Trace_ELBO,
     TraceGraph_ELBO,
     TraceEnum_ELBO,

@@ -39,8 +39,8 @@ def _skip_cuda(*args):
                         reason="https://github.com/uber/pyro/issues/1380")
 
 
-@pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
-@pytest.mark.parametrize("graph_type", ["flat", "dense"])
+@pytest.mark.parameterize("depth", [1, 2, 3, 4, 5])
+@pytest.mark.parameterize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_order(depth, graph_type):
 
     @config_enumerate(default="sequential")
@@ -56,7 +56,7 @@ def test_iter_discrete_traces_order(depth, graph_type):
         assert sites == ["x{}".format(i) for i in range(depth)]
 
 
-@pytest.mark.parametrize("graph_type", ["flat", "dense"])
+@pytest.mark.parameterize("graph_type", ["flat", "dense"])
 def test_iter_discrete_traces_scalar(graph_type):
     pyro.clear_param_store()
 
@@ -74,8 +74,8 @@ def test_iter_discrete_traces_scalar(graph_type):
     assert len(traces) == 2 * len(probs)
 
 
-@pytest.mark.parametrize("graph_type", ["flat", "dense"])
-@pytest.mark.parametrize("expand", [False, True])
+@pytest.mark.parameterize("graph_type", ["flat", "dense"])
+@pytest.mark.parameterize("expand", [False, True])
 def test_iter_discrete_traces_vector(expand, graph_type):
     pyro.clear_param_store()
 
@@ -110,7 +110,7 @@ class UnsafeBernoulli(dist.Bernoulli):
         return torch.stack([(-self.probs).log1p(), self.probs.log()])[i, j]
 
 
-@pytest.mark.parametrize('sample_shape', [(), (2,), (3, 4)])
+@pytest.mark.parameterize('sample_shape', [(), (2,), (3, 4)])
 def test_unsafe_bernoulli(sample_shape):
     logits = torch.randn(10)
     p = dist.Bernoulli(logits=logits)
@@ -119,7 +119,7 @@ def test_unsafe_bernoulli(sample_shape):
     assert_equal(p.log_prob(x), q.log_prob(x))
 
 
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
 def test_avoid_nan(enumerate1):
     pyro.clear_param_store()
 
@@ -165,9 +165,9 @@ def gmm_guide(data, verbose=False):
             logger.debug("G{} z_{} = {}".format("  " * int(i), int(i), z.cpu().numpy()))
 
 
-@pytest.mark.parametrize("data_size", [1, 2, 3])
-@pytest.mark.parametrize("graph_type", ["flat", "dense"])
-@pytest.mark.parametrize("model", [gmm_model, gmm_guide])
+@pytest.mark.parameterize("data_size", [1, 2, 3])
+@pytest.mark.parameterize("graph_type", ["flat", "dense"])
+@pytest.mark.parameterize("model", [gmm_model, gmm_guide])
 def test_gmm_iter_discrete_traces(data_size, graph_type, model):
     pyro.clear_param_store()
     data = torch.arange(0., float(data_size))
@@ -200,9 +200,9 @@ def gmm_batch_guide(data):
         assert z.shape[-1] == 2
 
 
-@pytest.mark.parametrize("data_size", [1, 2, 3])
-@pytest.mark.parametrize("graph_type", ["flat", "dense"])
-@pytest.mark.parametrize("model", [gmm_batch_model, gmm_batch_guide])
+@pytest.mark.parameterize("data_size", [1, 2, 3])
+@pytest.mark.parameterize("graph_type", ["flat", "dense"])
+@pytest.mark.parameterize("model", [gmm_batch_model, gmm_batch_guide])
 def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     pyro.clear_param_store()
     data = torch.arange(0., float(data_size))
@@ -212,11 +212,11 @@ def test_gmm_batch_iter_discrete_traces(model, data_size, graph_type):
     assert len(traces) == 2
 
 
-@pytest.mark.parametrize("model,guide", [
+@pytest.mark.parameterize("model,guide", [
     (gmm_model, gmm_guide),
     (gmm_batch_model, gmm_batch_guide),
 ], ids=["single", "batch"])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
 def test_svi_step_smoke(model, guide, enumerate1):
     pyro.clear_param_store()
     data = torch.tensor([0.0, 1.0, 9.0])
@@ -228,11 +228,11 @@ def test_svi_step_smoke(model, guide, enumerate1):
     inference.step(data)
 
 
-@pytest.mark.parametrize("model,guide", [
+@pytest.mark.parameterize("model,guide", [
     (gmm_model, gmm_guide),
     (gmm_batch_model, gmm_batch_guide),
 ], ids=["single", "batch"])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
 def test_differentiable_loss(model, guide, enumerate1):
     pyro.clear_param_store()
     data = torch.tensor([0.0, 1.0, 9.0])
@@ -257,7 +257,7 @@ def test_differentiable_loss(model, guide, enumerate1):
             name, expected_grad, actual_grad))
 
 
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
 def test_svi_step_guide_uses_grad(enumerate1):
     data = torch.tensor([0., 1., 3.])
 
@@ -289,9 +289,9 @@ def test_svi_step_guide_uses_grad(enumerate1):
     inference.step()
 
 
-@pytest.mark.parametrize('scale', [1, 10])
-@pytest.mark.parametrize("method", ["loss", "differentiable_loss", "loss_and_grads"])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize('scale', [1, 10])
+@pytest.mark.parameterize("method", ["loss", "differentiable_loss", "loss_and_grads"])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
 def test_elbo_bern(method, enumerate1, scale):
     pyro.clear_param_store()
     num_particles = 1 if enumerate1 else 10000
@@ -334,8 +334,8 @@ def test_elbo_bern(method, enumerate1, scale):
         ]))
 
 
-@pytest.mark.parametrize("method", ["loss", "differentiable_loss", "loss_and_grads"])
-@pytest.mark.parametrize("enumerate1", [None, "parallel"])
+@pytest.mark.parameterize("method", ["loss", "differentiable_loss", "loss_and_grads"])
+@pytest.mark.parameterize("enumerate1", [None, "parallel"])
 def test_elbo_normal(method, enumerate1):
     pyro.clear_param_store()
     num_particles = 1 if enumerate1 else 10000
@@ -376,19 +376,19 @@ def test_elbo_normal(method, enumerate1):
         ]))
 
 
-@pytest.mark.parametrize("enumerate1,num_samples1", [
+@pytest.mark.parameterize("enumerate1,num_samples1", [
     (None, None),
     ("sequential", None),
     ("parallel", None),
     ("parallel", 300),
 ])
-@pytest.mark.parametrize("enumerate2,num_samples2", [
+@pytest.mark.parameterize("enumerate2,num_samples2", [
     (None, None),
     ("sequential", None),
     ("parallel", None),
     ("parallel", 300),
 ])
-@pytest.mark.parametrize("method", ["differentiable_loss", "loss_and_grads"])
+@pytest.mark.parameterize("method", ["differentiable_loss", "loss_and_grads"])
 def test_elbo_bern_bern(method, enumerate1, enumerate2, num_samples1, num_samples2):
     pyro.clear_param_store()
     if enumerate1 and enumerate2 and num_samples1 is None and num_samples2 is None:
@@ -437,10 +437,10 @@ def test_elbo_bern_bern(method, enumerate1, enumerate2, num_samples1, num_sample
     ]))
 
 
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("method", ["differentiable_loss", "loss_and_grads"])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate2", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate3", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("method", ["differentiable_loss", "loss_and_grads"])
 def test_elbo_berns(method, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
     num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 10000
@@ -483,10 +483,10 @@ def test_elbo_berns(method, enumerate1, enumerate2, enumerate3):
     ]))
 
 
-@pytest.mark.parametrize("max_plate_nesting", [0, 1])
-@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", ["sequential", "parallel"])
-@pytest.mark.parametrize("enumerate3", ["sequential", "parallel"])
+@pytest.mark.parameterize("max_plate_nesting", [0, 1])
+@pytest.mark.parameterize("enumerate1", ["sequential", "parallel"])
+@pytest.mark.parameterize("enumerate2", ["sequential", "parallel"])
+@pytest.mark.parameterize("enumerate3", ["sequential", "parallel"])
 def test_elbo_categoricals(enumerate1, enumerate2, enumerate3, max_plate_nesting):
     pyro.clear_param_store()
     p1 = torch.tensor([0.6, 0.4])
@@ -528,10 +528,10 @@ def test_elbo_categoricals(enumerate1, enumerate2, enumerate3, max_plate_nesting
         ]))
 
 
-@pytest.mark.parametrize("enumerate1", [None, "parallel"])
-@pytest.mark.parametrize("enumerate2", [None, "parallel"])
-@pytest.mark.parametrize("enumerate3", [None, "parallel"])
-@pytest.mark.parametrize("method", ["differentiable_loss", "loss_and_grads"])
+@pytest.mark.parameterize("enumerate1", [None, "parallel"])
+@pytest.mark.parameterize("enumerate2", [None, "parallel"])
+@pytest.mark.parameterize("enumerate3", [None, "parallel"])
+@pytest.mark.parameterize("method", ["differentiable_loss", "loss_and_grads"])
 def test_elbo_normals(method, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
     num_particles = 100 * 10 ** sum(1 for e in [enumerate1, enumerate2, enumerate3] if not e)
@@ -574,9 +574,9 @@ def test_elbo_normals(method, enumerate1, enumerate2, enumerate3):
     ]))
 
 
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("plate_dim", [1, 2])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate2", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("plate_dim", [1, 2])
 def test_elbo_plate(plate_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
     num_particles = 1 if all([enumerate1, enumerate2]) else 10000
@@ -616,9 +616,9 @@ def test_elbo_plate(plate_dim, enumerate1, enumerate2):
     ]))
 
 
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("plate_dim", [1, 2])
+@pytest.mark.parameterize("enumerate2", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("plate_dim", [1, 2])
 def test_elbo_iplate(plate_dim, enumerate1, enumerate2):
     pyro.clear_param_store()
     num_particles = 1 if all([enumerate1, enumerate2]) else 20000
@@ -658,12 +658,12 @@ def test_elbo_iplate(plate_dim, enumerate1, enumerate2):
     ]))
 
 
-@pytest.mark.parametrize("enumerate4", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("inner_dim", [2])
-@pytest.mark.parametrize("outer_dim", [2])
+@pytest.mark.parameterize("enumerate4", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate3", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate2", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("inner_dim", [2])
+@pytest.mark.parameterize("outer_dim", [2])
 def test_elbo_plate_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3, enumerate4):
     pyro.clear_param_store()
     num_particles = 1 if all([enumerate1, enumerate2, enumerate3, enumerate4]) else 100000
@@ -715,11 +715,11 @@ def test_elbo_plate_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumerat
     ]))
 
 
-@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("inner_dim", [2])
-@pytest.mark.parametrize("outer_dim", [3])
+@pytest.mark.parameterize("enumerate3", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate2", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("inner_dim", [2])
+@pytest.mark.parameterize("outer_dim", [3])
 def test_elbo_plate_iplate(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
     num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 100000
@@ -764,11 +764,11 @@ def test_elbo_plate_iplate(outer_dim, inner_dim, enumerate1, enumerate2, enumera
     ]))
 
 
-@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("inner_dim", [2])
-@pytest.mark.parametrize("outer_dim", [2])
+@pytest.mark.parameterize("enumerate3", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate2", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("inner_dim", [2])
+@pytest.mark.parameterize("outer_dim", [2])
 def test_elbo_iplate_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
     num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 50000
@@ -815,11 +815,11 @@ def test_elbo_iplate_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumera
     ]))
 
 
-@pytest.mark.parametrize("enumerate3", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate2", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
-@pytest.mark.parametrize("inner_dim", [2])
-@pytest.mark.parametrize("outer_dim", [2])
+@pytest.mark.parameterize("enumerate3", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate2", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("inner_dim", [2])
+@pytest.mark.parameterize("outer_dim", [2])
 def test_elbo_iplate_iplate(outer_dim, inner_dim, enumerate1, enumerate2, enumerate3):
     pyro.clear_param_store()
     num_particles = 1 if all([enumerate1, enumerate2, enumerate3]) else 150000
@@ -866,9 +866,9 @@ def test_elbo_iplate_iplate(outer_dim, inner_dim, enumerate1, enumerate2, enumer
     ]))
 
 
-@pytest.mark.parametrize("pi1", [0.33, 0.43])
-@pytest.mark.parametrize("pi2", [0.55, 0.27])
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("pi1", [0.33, 0.43])
+@pytest.mark.parameterize("pi2", [0.55, 0.27])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
 def test_non_mean_field_bern_bern_elbo_gradient(enumerate1, pi1, pi2):
     pyro.clear_param_store()
     num_particles = 1 if enumerate1 else 20000
@@ -911,10 +911,10 @@ def test_non_mean_field_bern_bern_elbo_gradient(enumerate1, pi1, pi2):
     ]))
 
 
-@pytest.mark.parametrize("pi1", [0.33, 0.44])
-@pytest.mark.parametrize("pi2", [0.55, 0.39])
-@pytest.mark.parametrize("pi3", [0.22, 0.29])
-@pytest.mark.parametrize("enumerate1,num_samples", [
+@pytest.mark.parameterize("pi1", [0.33, 0.44])
+@pytest.mark.parameterize("pi2", [0.55, 0.39])
+@pytest.mark.parameterize("pi3", [0.22, 0.29])
+@pytest.mark.parameterize("enumerate1,num_samples", [
     (None, None),
     ("sequential", None),
     ("parallel", None),
@@ -977,9 +977,9 @@ def test_non_mean_field_bern_normal_elbo_gradient(enumerate1, pi1, pi2, pi3, num
     ]))
 
 
-@pytest.mark.parametrize("pi1", [0.33, 0.41])
-@pytest.mark.parametrize("pi2", [0.44, 0.17])
-@pytest.mark.parametrize("pi3", [0.22, 0.29])
+@pytest.mark.parameterize("pi1", [0.33, 0.41])
+@pytest.mark.parameterize("pi2", [0.44, 0.17])
+@pytest.mark.parameterize("pi3", [0.22, 0.29])
 def test_non_mean_field_normal_bern_elbo_gradient(pi1, pi2, pi3):
 
     def model(num_particles):
@@ -1021,7 +1021,7 @@ def test_non_mean_field_normal_bern_elbo_gradient(pi1, pi2, pi3):
                          ]))
 
 
-@pytest.mark.parametrize("enumerate1", [None, "sequential", "parallel"])
+@pytest.mark.parameterize("enumerate1", [None, "sequential", "parallel"])
 def test_elbo_rsvi(enumerate1):
     pyro.clear_param_store()
     num_particles = 40000
@@ -1061,7 +1061,7 @@ def test_elbo_rsvi(enumerate1):
     ]))
 
 
-@pytest.mark.parametrize("enumerate1,num_steps,expand", [
+@pytest.mark.parameterize("enumerate1,num_steps,expand", [
     ("sequential", 2, True),
     ("sequential", 2, False),
     ("sequential", 3, True),
@@ -1119,7 +1119,7 @@ def test_elbo_hmm_in_model(enumerate1, num_steps, expand):
         ]))
 
 
-@pytest.mark.parametrize("enumerate1,num_steps,expand", [
+@pytest.mark.parameterize("enumerate1,num_steps,expand", [
     ("sequential", 2, True),
     ("sequential", 2, False),
     ("sequential", 3, True),
@@ -1204,7 +1204,7 @@ def test_elbo_hmm_in_guide(enumerate1, num_steps, expand):
         ]))
 
 
-@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, _skip_cuda(30)])
+@pytest.mark.parameterize('num_steps', [2, 3, 4, 5, 10, 20, _skip_cuda(30)])
 def test_hmm_enumerate_model(num_steps):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
 
@@ -1229,7 +1229,7 @@ def test_hmm_enumerate_model(num_steps):
     elbo.differentiable_loss(model, guide, data)
 
 
-@pytest.mark.parametrize('num_steps', [2, 3, 4, 5, 10, 20, _skip_cuda(30)])
+@pytest.mark.parameterize('num_steps', [2, 3, 4, 5, 10, 20, _skip_cuda(30)])
 def test_hmm_enumerate_model_and_guide(num_steps):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
 
@@ -1277,7 +1277,7 @@ def _check_loss_and_grads(expected_loss, actual_loss):
                                                                  actual_grad.detach().cpu().numpy()))
 
 
-@pytest.mark.parametrize('scale', [1, 10])
+@pytest.mark.parameterize('scale', [1, 10])
 def test_elbo_enumerate_1(scale):
     pyro.param("guide_probs_x",
                torch.tensor([0.1, 0.9]),
@@ -1321,7 +1321,7 @@ def test_elbo_enumerate_1(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
+@pytest.mark.parameterize('scale', [1, 10])
 def test_elbo_enumerate_2(scale):
     pyro.param("guide_probs_x",
                torch.tensor([0.1, 0.9]),
@@ -1367,7 +1367,7 @@ def test_elbo_enumerate_2(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
+@pytest.mark.parameterize('scale', [1, 10])
 def test_elbo_enumerate_3(scale):
     pyro.param("guide_probs_x",
                torch.tensor([0.1, 0.9]),
@@ -1412,8 +1412,8 @@ def test_elbo_enumerate_3(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
-@pytest.mark.parametrize('num_samples,num_masked',
+@pytest.mark.parameterize('scale', [1, 10])
+@pytest.mark.parameterize('num_samples,num_masked',
                          [(1, 1), (2, 2), (3, 2)],
                          ids=["single", "batch", "masked"])
 def test_elbo_enumerate_plate_1(num_samples, num_masked, scale):
@@ -1474,8 +1474,8 @@ def test_elbo_enumerate_plate_1(num_samples, num_masked, scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
-@pytest.mark.parametrize('num_samples,num_masked',
+@pytest.mark.parameterize('scale', [1, 10])
+@pytest.mark.parameterize('num_samples,num_masked',
                          [(1, 1), (2, 2), (3, 2)],
                          ids=["single", "batch", "masked"])
 def test_elbo_enumerate_plate_2(num_samples, num_masked, scale):
@@ -1536,8 +1536,8 @@ def test_elbo_enumerate_plate_2(num_samples, num_masked, scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
-@pytest.mark.parametrize('num_samples,num_masked',
+@pytest.mark.parameterize('scale', [1, 10])
+@pytest.mark.parameterize('num_samples,num_masked',
                          [(1, 1), (2, 2), (3, 2)],
                          ids=["single", "batch", "masked"])
 def test_elbo_enumerate_plate_3(num_samples, num_masked, scale):
@@ -1613,8 +1613,8 @@ def test_elbo_enumerate_plate_3(num_samples, num_masked, scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
-@pytest.mark.parametrize('outer_obs,inner_obs',
+@pytest.mark.parameterize('scale', [1, 10])
+@pytest.mark.parameterize('outer_obs,inner_obs',
                          [(False, True), (True, False), (True, True)])
 def test_elbo_enumerate_plate_4(outer_obs, inner_obs, scale):
     #    a ---> outer_obs
@@ -1743,7 +1743,7 @@ def test_elbo_enumerate_plate_5():
         _check_loss_and_grads(expected_loss, actual_loss)
 
 
-@pytest.mark.parametrize('enumerate1', ['parallel', 'sequential'])
+@pytest.mark.parameterize('enumerate1', ['parallel', 'sequential'])
 def test_elbo_enumerate_plate_6(enumerate1):
     #     Guide           Model
     #           +-------+
@@ -1802,7 +1802,7 @@ def test_elbo_enumerate_plate_6(enumerate1):
     _check_loss_and_grads(expected_loss, actual_loss)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
+@pytest.mark.parameterize('scale', [1, 10])
 def test_elbo_enumerate_plate_7(scale):
     #  Guide    Model
     #    a -----> b
@@ -1893,7 +1893,7 @@ def test_elbo_enumerate_plate_7(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
+@pytest.mark.parameterize('scale', [1, 10])
 def test_elbo_enumerate_plates_1(scale):
     #  +-----------------+
     #  | a ----> b   M=2 |
@@ -1956,7 +1956,7 @@ def test_elbo_enumerate_plates_1(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
+@pytest.mark.parameterize('scale', [1, 10])
 def test_elbo_enumerate_plates_2(scale):
     #  +---------+       +---------+
     #  |     b <---- a ----> c     |
@@ -2013,7 +2013,7 @@ def test_elbo_enumerate_plates_2(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
+@pytest.mark.parameterize('scale', [1, 10])
 def test_elbo_enumerate_plates_3(scale):
     #      +--------------------+
     #      |  +----------+      |
@@ -2064,7 +2064,7 @@ def test_elbo_enumerate_plates_3(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
+@pytest.mark.parameterize('scale', [1, 10])
 def test_elbo_enumerate_plates_4(scale):
     #      +--------------------+
     #      |       +----------+ |
@@ -2119,7 +2119,7 @@ def test_elbo_enumerate_plates_4(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
+@pytest.mark.parameterize('scale', [1, 10])
 def test_elbo_enumerate_plates_5(scale):
     #     a
     #     | \
@@ -2179,7 +2179,7 @@ def test_elbo_enumerate_plates_5(scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
+@pytest.mark.parameterize('scale', [1, 10])
 def test_elbo_enumerate_plates_6(scale):
     #         +----------+
     #         |      M=2 |
@@ -2300,7 +2300,7 @@ def test_elbo_enumerate_plates_6(scale):
         elbo.differentiable_loss(model_plate_plate, guide, data)
 
 
-@pytest.mark.parametrize('scale', [1, 10])
+@pytest.mark.parameterize('scale', [1, 10])
 def test_elbo_enumerate_plates_7(scale):
     #         +-------------+
     #         |         N=2 |
@@ -2429,9 +2429,9 @@ def test_elbo_enumerate_plates_7(scale):
     _check_loss_and_grads(loss_iplate_iplate, loss_plate_plate)
 
 
-@pytest.mark.parametrize('guide_scale', [1])
-@pytest.mark.parametrize('model_scale', [1])
-@pytest.mark.parametrize('outer_vectorized,inner_vectorized,xfail',
+@pytest.mark.parameterize('guide_scale', [1])
+@pytest.mark.parameterize('model_scale', [1])
+@pytest.mark.parameterize('outer_vectorized,inner_vectorized,xfail',
                          [(False, True, False), (True, False, True), (True, True, True)],
                          ids=['iplate-plate', 'plate-iplate', 'plate-plate'])
 def test_elbo_enumerate_plates_8(model_scale, guide_scale, inner_vectorized, outer_vectorized, xfail):
@@ -2707,13 +2707,13 @@ def test_elbo_dbn_growth():
     ]))
 
 
-@pytest.mark.parametrize("pi_a", [0.33])
-@pytest.mark.parametrize("pi_b", [0.51, 0.77])
-@pytest.mark.parametrize("pi_c", [0.37])
-@pytest.mark.parametrize("N_b", [3, 4])
-@pytest.mark.parametrize("N_c", [5, 6])
-@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
-@pytest.mark.parametrize("expand", [True, False])
+@pytest.mark.parameterize("pi_a", [0.33])
+@pytest.mark.parameterize("pi_b", [0.51, 0.77])
+@pytest.mark.parameterize("pi_c", [0.37])
+@pytest.mark.parameterize("N_b", [3, 4])
+@pytest.mark.parameterize("N_c", [5, 6])
+@pytest.mark.parameterize("enumerate1", ["sequential", "parallel"])
+@pytest.mark.parameterize("expand", [True, False])
 def test_bernoulli_pyramid_elbo_gradient(enumerate1, N_b, N_c, pi_a, pi_b, pi_c, expand):
     pyro.clear_param_store()
 
@@ -2771,15 +2771,15 @@ def test_bernoulli_pyramid_elbo_gradient(enumerate1, N_b, N_c, pi_a, pi_b, pi_c,
     ]))
 
 
-@pytest.mark.parametrize("pi_a", [0.33])
-@pytest.mark.parametrize("pi_b", [0.51])
-@pytest.mark.parametrize("pi_c", [0.37])
-@pytest.mark.parametrize("pi_d", [0.29])
-@pytest.mark.parametrize("b_factor", [0.03, 0.04])
-@pytest.mark.parametrize("c_factor", [0.04, 0.06])
-@pytest.mark.parametrize("d_offset", [0.32])
-@pytest.mark.parametrize("enumerate1", ["sequential", "parallel"])
-@pytest.mark.parametrize("expand", [True, False])
+@pytest.mark.parameterize("pi_a", [0.33])
+@pytest.mark.parameterize("pi_b", [0.51])
+@pytest.mark.parameterize("pi_c", [0.37])
+@pytest.mark.parameterize("pi_d", [0.29])
+@pytest.mark.parameterize("b_factor", [0.03, 0.04])
+@pytest.mark.parameterize("c_factor", [0.04, 0.06])
+@pytest.mark.parameterize("d_offset", [0.32])
+@pytest.mark.parameterize("enumerate1", ["sequential", "parallel"])
+@pytest.mark.parameterize("expand", [True, False])
 def test_bernoulli_non_tree_elbo_gradient(enumerate1, b_factor, c_factor, pi_a, pi_b, pi_c, pi_d,
                                           expand, d_offset, N_b=2, N_c=2):
     pyro.clear_param_store()
@@ -2851,8 +2851,8 @@ def test_bernoulli_non_tree_elbo_gradient(enumerate1, b_factor, c_factor, pi_a, 
     ]))
 
 
-@pytest.mark.parametrize("gate", [0.1, 0.25, 0.5, 0.75, 0.9])
-@pytest.mark.parametrize("rate", [0.1, 1., 3.])
+@pytest.mark.parameterize("gate", [0.1, 0.25, 0.5, 0.75, 0.9])
+@pytest.mark.parameterize("rate", [0.1, 1., 3.])
 def test_elbo_zip(gate, rate):
     # test for ZIP distribution
     def zip_model(data):
@@ -2883,7 +2883,7 @@ def test_elbo_zip(gate, rate):
     _check_loss_and_grads(zip_loss, composite_loss)
 
 
-@pytest.mark.parametrize("mixture,scale", [
+@pytest.mark.parameterize("mixture,scale", [
     (dist.MixtureOfDiagNormals, [[2., 1.], [1., 2], [4., 4.]]),
     (dist.MixtureOfDiagNormalsSharedCovariance, [2., 1.]),
 ])
@@ -2922,7 +2922,7 @@ def test_mixture_of_diag_normals(mixture, scale):
     _check_loss_and_grads(hand_loss, auto_loss)
 
 
-@pytest.mark.parametrize("Dist, prior", [
+@pytest.mark.parameterize("Dist, prior", [
     (dist.Bernoulli, 0.2),
     (dist.Categorical, [0.2, 0.8]),
     (dist.Categorical, [0.2, 0.3, 0.5]),
@@ -2970,7 +2970,7 @@ def test_compute_marginals_single(Dist, prior):
     assert_equal(grad(loss, [pyro.param("probs")])[0], torch.zeros_like(probs))
 
 
-@pytest.mark.parametrize('ok,enumerate_guide,num_particles,vectorize_particles', [
+@pytest.mark.parameterize('ok,enumerate_guide,num_particles,vectorize_particles', [
     (True, None, 1, False),
     (False, "sequential", 1, False),
     (False, "parallel", 1, False),
@@ -3007,7 +3007,7 @@ def test_compute_marginals_restrictions(ok, enumerate_guide, num_particles, vect
             elbo.compute_marginals(model, guide)
 
 
-@pytest.mark.parametrize('size', [1, 2, 3, 4, 10, 20, _skip_cuda(30)])
+@pytest.mark.parameterize('size', [1, 2, 3, 4, 10, 20, _skip_cuda(30)])
 def test_compute_marginals_hmm(size):
 
     @config_enumerate
@@ -3043,7 +3043,7 @@ def test_compute_marginals_hmm(size):
         assert d1.probs[1] < d2.probs[1]
 
 
-@pytest.mark.parametrize("data", [
+@pytest.mark.parameterize("data", [
     [None, None],
     [torch.tensor(0.), None],
     [None, torch.tensor(0.)],
@@ -3133,7 +3133,7 @@ def test_backwardsample_posterior_3():
     assert abs(expected - actual) < 0.05
 
 
-@pytest.mark.parametrize('ok,enumerate_guide,num_particles,vectorize_particles', [
+@pytest.mark.parameterize('ok,enumerate_guide,num_particles,vectorize_particles', [
     (True, None, 1, False),
     (False, "sequential", 1, False),
     (False, "parallel", 1, False),
@@ -3174,7 +3174,7 @@ def test_backwardsample_posterior_restrictions(ok, enumerate_guide, num_particle
             elbo.sample_posterior(model, guide)
 
 
-@pytest.mark.parametrize("num_samples", [10000, 100000])
+@pytest.mark.parameterize("num_samples", [10000, 100000])
 def test_vectorized_importance(num_samples):
 
     pyro.param("model_probs_a",

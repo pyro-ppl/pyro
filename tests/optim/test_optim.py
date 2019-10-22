@@ -75,7 +75,7 @@ class OptimTests(TestCase):
         assert fixed_param_unchanged and not free_param_unchanged
 
 
-@pytest.mark.parametrize('scheduler', [optim.LambdaLR({'optimizer': torch.optim.SGD, 'optim_args': {'lr': 0.01},
+@pytest.mark.parameterize('scheduler', [optim.LambdaLR({'optimizer': torch.optim.SGD, 'optim_args': {'lr': 0.01},
                                                        'lr_lambda': lambda epoch: 2. ** epoch}),
                                        optim.StepLR({'optimizer': torch.optim.SGD, 'optim_args': {'lr': 0.01},
                                                      'gamma': 2, 'step_size': 1}),
@@ -125,13 +125,13 @@ def test_dynamic_lr(scheduler):
             assert opt_scale.state_dict()['param_groups'][0]['lr'] == 0.04
 
 
-@pytest.mark.parametrize('factory', [optim.Adam, optim.ClippedAdam, optim.RMSprop, optim.SGD])
+@pytest.mark.parameterize('factory', [optim.Adam, optim.ClippedAdam, optim.RMSprop, optim.SGD])
 def test_autowrap(factory):
     instance = factory({})
     assert instance.pt_optim_constructor.__name__ == factory.__name__
 
 
-@pytest.mark.parametrize('clip_norm', [1., 3., 5.])
+@pytest.mark.parameterize('clip_norm', [1., 3., 5.])
 def test_clippedadam_clip(clip_norm):
     x1 = torch.tensor(0., requires_grad=True)
     x2 = torch.tensor(0., requires_grad=True)
@@ -147,7 +147,7 @@ def test_clippedadam_clip(clip_norm):
         assert_equal(x1, x2)
 
 
-@pytest.mark.parametrize('clip_norm', [1., 3., 5.])
+@pytest.mark.parameterize('clip_norm', [1., 3., 5.])
 def test_clippedadam_pass(clip_norm):
     x1 = torch.tensor(0., requires_grad=True)
     x2 = torch.tensor(0., requires_grad=True)
@@ -164,7 +164,7 @@ def test_clippedadam_pass(clip_norm):
         assert_equal(x1, x2)
 
 
-@pytest.mark.parametrize('lrd', [1., 3., 5.])
+@pytest.mark.parameterize('lrd', [1., 3., 5.])
 def test_clippedadam_lrd(lrd):
     x1 = torch.tensor(0., requires_grad=True)
     orig_lr = 1.0

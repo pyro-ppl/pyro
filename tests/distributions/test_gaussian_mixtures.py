@@ -12,12 +12,12 @@ from tests.common import assert_equal
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize('mix_dist', [MixtureOfDiagNormals, MixtureOfDiagNormalsSharedCovariance, GaussianScaleMixture])
-@pytest.mark.parametrize('K', [3])
-@pytest.mark.parametrize('D', [2, 4])
-@pytest.mark.parametrize('batch_mode', [True, False])
-@pytest.mark.parametrize('flat_logits', [True, False])
-@pytest.mark.parametrize('cost_function', ['quadratic'])
+@pytest.mark.parameterize('mix_dist', [MixtureOfDiagNormals, MixtureOfDiagNormalsSharedCovariance, GaussianScaleMixture])
+@pytest.mark.parameterize('K', [3])
+@pytest.mark.parameterize('D', [2, 4])
+@pytest.mark.parameterize('batch_mode', [True, False])
+@pytest.mark.parameterize('flat_logits', [True, False])
+@pytest.mark.parameterize('cost_function', ['quadratic'])
 def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
     n_samples = 200000
     if batch_mode:
@@ -120,7 +120,7 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
                          param_name, mix_dist.__name__, analytic_grads[param_name], param.grad))
 
 
-@pytest.mark.parametrize('batch_size', [1, 3])
+@pytest.mark.parameterize('batch_size', [1, 3])
 def test_mix_of_diag_normals_shared_cov_log_prob(batch_size):
     locs = torch.tensor([[-1.0, -1.0], [1.0, 1.0]])
     sigmas = torch.tensor([2.0, 2.0])
@@ -157,7 +157,7 @@ def test_gsm_log_prob():
     assert_equal(log_prob, correct_log_prob, msg='bad log prob for GaussianScaleMixture')
 
 
-@pytest.mark.parametrize('batch_size', [1, 3])
+@pytest.mark.parameterize('batch_size', [1, 3])
 def test_mix_of_diag_normals_log_prob(batch_size):
     sigmas = torch.tensor([[2.0, 1.5], [1.5, 2.0]])
     locs = torch.tensor([[0.0, 1.0], [-1.0, 0.0]])

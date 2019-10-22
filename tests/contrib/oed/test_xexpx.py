@@ -11,7 +11,7 @@ import torch
 from pyro.contrib.oed.eig import xexpx
 
 
-@pytest.mark.parametrize("argument,output", [
+@pytest.mark.parameterize("argument,output", [
     (torch.tensor([float('-inf')]), torch.tensor([0.])),
     (torch.tensor([0.]), torch.tensor([0.])),
     (torch.tensor([1.]), torch.exp(torch.tensor([1.])))

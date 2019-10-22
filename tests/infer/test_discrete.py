@@ -55,12 +55,12 @@ def log_mean_prob(trace, particle_dim):
     return total.logsumexp(0) - math.log(num_particles)
 
 
-@pytest.mark.parametrize('infer,temperature', [
+@pytest.mark.parameterize('infer,temperature', [
     (infer_discrete, 0),
     (infer_discrete, 1),
     (elbo_infer_discrete, 1),
 ], ids=['map', 'sample', 'sample-elbo'])
-@pytest.mark.parametrize('plate_size', [2])
+@pytest.mark.parameterize('plate_size', [2])
 def test_plate_smoke(infer, temperature, plate_size):
     #       +-----------------+
     #  z1 --|--> z2 ---> x2   |
@@ -81,7 +81,7 @@ def test_plate_smoke(infer, temperature, plate_size):
     infer(model, first_available_dim, temperature)()
 
 
-@pytest.mark.parametrize('infer,temperature', [
+@pytest.mark.parameterize('infer,temperature', [
     (infer_discrete, 0),
     (infer_discrete, 1),
     (elbo_infer_discrete, 1),
@@ -118,7 +118,7 @@ def test_distribution_1(infer, temperature):
     assert_equal(actual_z_mean, expected_z_mean, prec=1e-2)
 
 
-@pytest.mark.parametrize('infer,temperature', [
+@pytest.mark.parameterize('infer,temperature', [
     (infer_discrete, 0),
     (infer_discrete, 1),
     (elbo_infer_discrete, 1),
@@ -170,7 +170,7 @@ def test_distribution_2(infer, temperature):
     assert_equal(expected_probs, actual_probs, prec=1e-2)
 
 
-@pytest.mark.parametrize('infer,temperature', [
+@pytest.mark.parameterize('infer,temperature', [
     (infer_discrete, 0),
     (infer_discrete, 1),
     (elbo_infer_discrete, 1),
@@ -220,7 +220,7 @@ def test_distribution_3(infer, temperature):
     assert_equal(expected_probs.reshape(-1), actual_probs.reshape(-1), prec=1e-2)
 
 
-@pytest.mark.parametrize('infer,temperature', [
+@pytest.mark.parameterize('infer,temperature', [
     (infer_discrete, 0),
     (infer_discrete, 1),
     (elbo_infer_discrete, 1),
@@ -258,8 +258,8 @@ def test_distribution_masked(infer, temperature):
     assert_equal(actual_z_mean, expected_z_mean, prec=1e-2)
 
 
-@pytest.mark.parametrize('length', [1, 2, 10, 100])
-@pytest.mark.parametrize('infer,temperature', [
+@pytest.mark.parameterize('length', [1, 2, 10, 100])
+@pytest.mark.parameterize('infer,temperature', [
     (infer_discrete, 0),
     (infer_discrete, 1),
     (elbo_infer_discrete, 1),
@@ -293,7 +293,7 @@ def test_hmm_smoke(infer, temperature, length):
 
 
 @pytest.mark.xfail(reason='infer_discrete log_prob is incorrect')
-@pytest.mark.parametrize('nderivs', [0, 1], ids=['value', 'grad'])
+@pytest.mark.parameterize('nderivs', [0, 1], ids=['value', 'grad'])
 def test_prob(nderivs):
     #      +-------+
     #  z --|--> x  |

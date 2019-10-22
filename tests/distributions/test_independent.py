@@ -7,10 +7,10 @@ from pyro.util import torch_isnan
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize('sample_shape', [(), (6,), (4, 2)])
-@pytest.mark.parametrize('batch_shape', [(), (7,), (5, 3), (5, 3, 2)])
-@pytest.mark.parametrize('reinterpreted_batch_ndims', [0, 1, 2, 3])
-@pytest.mark.parametrize('base_dist',
+@pytest.mark.parameterize('sample_shape', [(), (6,), (4, 2)])
+@pytest.mark.parameterize('batch_shape', [(), (7,), (5, 3), (5, 3, 2)])
+@pytest.mark.parameterize('reinterpreted_batch_ndims', [0, 1, 2, 3])
+@pytest.mark.parameterize('base_dist',
                          [dist.Normal(1., 2.), dist.Exponential(2.),
                           dist.MultivariateNormal(torch.zeros(2), torch.eye(2))],
                          ids=['normal', 'exponential', 'mvn'])
@@ -38,9 +38,9 @@ def test_independent(base_dist, sample_shape, batch_shape, reinterpreted_batch_n
         assert_equal(log_prob, _sum_rightmost(log_prob_0, reinterpreted_batch_ndims))
 
 
-@pytest.mark.parametrize('event_shape', [(), (2,), (2, 3)])
-@pytest.mark.parametrize('batch_shape', [(), (3,), (5, 3)])
-@pytest.mark.parametrize('sample_shape', [(), (2,), (4, 2)])
+@pytest.mark.parameterize('event_shape', [(), (2,), (2, 3)])
+@pytest.mark.parameterize('batch_shape', [(), (3,), (5, 3)])
+@pytest.mark.parameterize('sample_shape', [(), (2,), (4, 2)])
 def test_expand(sample_shape, batch_shape, event_shape):
     ones_shape = torch.Size((1,) * len(batch_shape))
     zero = torch.zeros(ones_shape + event_shape)

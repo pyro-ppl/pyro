@@ -107,7 +107,7 @@ TEST_CASES = [
 TEST_IDS = [t[0].__class__.__name__ for t in TEST_CASES]
 
 
-@pytest.mark.parametrize("kernel, X, Z, K_sum", TEST_CASES, ids=TEST_IDS)
+@pytest.mark.parameterize("kernel, X, Z, K_sum", TEST_CASES, ids=TEST_IDS)
 def test_kernel_forward(kernel, X, Z, K_sum):
     K = kernel(X, Z)
     assert K.shape == (X.shape[0], (X if Z is None else Z).shape[0])

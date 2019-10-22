@@ -76,7 +76,7 @@ def sigmoid_example(design):
     return y
 
 
-@pytest.mark.parametrize("model1,model2,design", [
+@pytest.mark.parameterize("model1,model2,design", [
     (
         zero_mean_unit_obs_sd_lm(torch.tensor([10., 10.]))[0],
         lm_2p_10_10_1,

@@ -9,13 +9,13 @@ from tests.common import assert_equal
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize('scale', [-1., 0., -1 * torch.ones(2, 2)])
+@pytest.mark.parameterize('scale', [-1., 0., -1 * torch.ones(2, 2)])
 def test_lsh_init(scale):
     with pytest.raises(ValueError):
         LSH(scale)
 
 
-@pytest.mark.parametrize('scale', [0.1, 1, 10, 100])
+@pytest.mark.parameterize('scale', [0.1, 1, 10, 100])
 def test_lsh_add(scale):
     lsh = LSH(scale)
     a = torch.rand(10)
@@ -23,7 +23,7 @@ def test_lsh_add(scale):
     assert lsh._hash_to_key[lsh._key_to_hash['a']] == {'a'}
 
 
-@pytest.mark.parametrize('scale', [0.1, 1, 10, 100])
+@pytest.mark.parameterize('scale', [0.1, 1, 10, 100])
 def test_lsh_hash_nearby(scale):
     k = 5
     lsh = LSH(scale)
@@ -79,13 +79,13 @@ def test_lsh_remove():
     assert lsh.nearby('a') == set()
 
 
-@pytest.mark.parametrize('scale', [-1., 0., -1 * torch.ones(2, 2)])
+@pytest.mark.parameterize('scale', [-1., 0., -1 * torch.ones(2, 2)])
 def test_aps_init(scale):
     with pytest.raises(ValueError):
         ApproxSet(scale)
 
 
-@pytest.mark.parametrize('scale', [0.1, 1, 10, 100])
+@pytest.mark.parameterize('scale', [0.1, 1, 10, 100])
 def test_aps_hash(scale):
     k = 10
     aps = ApproxSet(scale)
@@ -104,7 +104,7 @@ def test_aps_hash(scale):
     assert_equal(aps._hash(f), (4,) * k)
 
 
-@pytest.mark.parametrize('scale', [0.1, 1, 10, 100])
+@pytest.mark.parameterize('scale', [0.1, 1, 10, 100])
 def test_aps_try_add(scale):
     k = 10
     aps = ApproxSet(scale)
@@ -137,8 +137,8 @@ def test_merge_points_small():
     assert 0.325 <= merged_points[2, 1] <= 0.625
 
 
-@pytest.mark.parametrize('radius', [0.01, 0.1, 1., 10., 100.])
-@pytest.mark.parametrize('dim', [1, 2, 3])
+@pytest.mark.parameterize('radius', [0.01, 0.1, 1., 10., 100.])
+@pytest.mark.parameterize('dim', [1, 2, 3])
 def test_merge_points_large(dim, radius):
     points = 10 * torch.randn(200, dim)
     merged_points, groups = merge_points(points, radius)

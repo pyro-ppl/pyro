@@ -20,7 +20,7 @@ def h(p):
     return -(sc.xlogy(p, p) + sc.xlog1py(1 - p, -p))
 
 
-@pytest.mark.parametrize("guide,args,expected_entropy", [
+@pytest.mark.parameterize("guide,args,expected_entropy", [
     (mean_field_guide, (torch.Tensor([0.]), None), torch.Tensor([h(0.2) + h(0.5)])),
     (mean_field_guide, (torch.eye(2), None), (h(0.2) + h(0.5))*torch.ones(2, 2))
 ])

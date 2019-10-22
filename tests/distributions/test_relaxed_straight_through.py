@@ -24,7 +24,7 @@ BERN_PROBS = [
 ]
 
 
-@pytest.mark.parametrize('probs', ONEHOT_PROBS)
+@pytest.mark.parameterize('probs', ONEHOT_PROBS)
 def test_onehot_shapes(probs):
     temperature = torch.tensor(0.5)
     probs = torch.tensor(probs, requires_grad=True)
@@ -35,7 +35,7 @@ def test_onehot_shapes(probs):
     assert grad_probs.shape == probs.shape
 
 
-@pytest.mark.parametrize('temp', [0.3, 0.5, 1.0])
+@pytest.mark.parameterize('temp', [0.3, 0.5, 1.0])
 def test_onehot_entropy_grad(temp):
     num_samples = 2000000
     q = torch.tensor([0.1, 0.2, 0.3, 0.4], requires_grad=True)
@@ -75,7 +75,7 @@ def test_onehot_svi_usage():
                  msg='test svi usage of RelaxedOneHotCategoricalStraightThrough failed')
 
 
-@pytest.mark.parametrize('probs', BERN_PROBS)
+@pytest.mark.parameterize('probs', BERN_PROBS)
 def test_bernoulli_shapes(probs):
     temperature = torch.tensor(0.5)
     probs = torch.tensor(probs, requires_grad=True)
@@ -86,7 +86,7 @@ def test_bernoulli_shapes(probs):
     assert grad_probs.shape == probs.shape
 
 
-@pytest.mark.parametrize('temp', [0.5, 1.0])
+@pytest.mark.parameterize('temp', [0.5, 1.0])
 def test_bernoulli_entropy_grad(temp):
     num_samples = 1500000
     q = torch.tensor([0.1, 0.2, 0.3, 0.4], requires_grad=True)

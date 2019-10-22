@@ -118,7 +118,7 @@ TEST_IDS = [t[0].id_fn() if type(t).__name__ == 'TestExample'
             else t[0][0].id_fn() for t in TEST_CASES]
 
 
-@pytest.mark.parametrize(
+@pytest.mark.parameterize(
     'fixture, num_samples, warmup_steps, hmc_params, expected_means, expected_precs, mean_tol, std_tol',
     TEST_CASES,
     ids=TEST_IDS)
@@ -158,7 +158,7 @@ def test_hmc_conjugate_gaussian(fixture,
         assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 
-@pytest.mark.parametrize(
+@pytest.mark.parameterize(
     "step_size, trajectory_length, num_steps, adapt_step_size, adapt_mass_matrix, full_mass",
     [
         (0.0855, None, 4, False, False, False),
@@ -190,7 +190,7 @@ def test_logistic_regression(step_size, trajectory_length, num_steps,
     assert_equal(rmse(true_coefs, samples.mean(0)).item(), 0.0, prec=0.1)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parameterize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_dirichlet_categorical(jit):
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
@@ -207,7 +207,7 @@ def test_dirichlet_categorical(jit):
     assert_equal(samples['p_latent'].mean(0), true_probs, prec=0.02)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parameterize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_beta_bernoulli(jit):
     def model(data):
         alpha = torch.tensor([1.1, 1.1])
@@ -244,7 +244,7 @@ def test_gamma_normal():
     assert_equal(samples['p_latent'].mean(0), true_std, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parameterize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_bernoulli_latent_model(jit):
     def model(data):
         y_prob = pyro.sample("y_prob", dist.Beta(1.0, 1.0))
@@ -267,8 +267,8 @@ def test_bernoulli_latent_model(jit):
     assert_equal(samples['y_prob'].mean(0), y_prob, prec=0.06)
 
 
-@pytest.mark.parametrize("kernel", [HMC, NUTS])
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parameterize("kernel", [HMC, NUTS])
+@pytest.mark.parameterize("jit", [False, mark_jit(True)], ids=jit_idfn)
 @pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/pytorch/pytorch/issues/22811")
 def test_unnormalized_normal(kernel, jit):
     true_mean, true_std = torch.tensor(5.), torch.tensor(1.)
@@ -299,8 +299,8 @@ def test_unnormalized_normal(kernel, jit):
     assert_close(torch.std(posterior), true_std, rtol=0.05)
 
 
-@pytest.mark.parametrize('jit', [False, mark_jit(True)], ids=jit_idfn)
-@pytest.mark.parametrize('op', [torch.inverse, torch.cholesky])
+@pytest.mark.parameterize('jit', [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parameterize('op', [torch.inverse, torch.cholesky])
 def test_singular_matrix_catch(jit, op):
     def potential_energy(z):
         return op(z['cov']).sum()

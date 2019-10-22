@@ -89,7 +89,7 @@ def jit_idfn(param):
     return "JIT={}".format(param)
 
 
-@pytest.mark.parametrize(
+@pytest.mark.parameterize(
     'fixture, num_samples, warmup_steps, expected_means, expected_precs, mean_tol, std_tol',
     TEST_CASES,
     ids=TEST_IDS)
@@ -130,8 +130,8 @@ def test_nuts_conjugate_gaussian(fixture,
         assert_equal(rmse(latent_std, expected_std).item(), 0.0, prec=std_tol)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-@pytest.mark.parametrize("use_multinomial_sampling", [True, False])
+@pytest.mark.parameterize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parameterize("use_multinomial_sampling", [True, False])
 def test_logistic_regression(jit, use_multinomial_sampling):
     dim = 3
     data = torch.randn(2000, dim)
@@ -154,7 +154,7 @@ def test_logistic_regression(jit, use_multinomial_sampling):
     assert_equal(rmse(true_coefs, samples["beta"].mean(0)).item(), 0.0, prec=0.1)
 
 
-@pytest.mark.parametrize(
+@pytest.mark.parameterize(
     "step_size, adapt_step_size, adapt_mass_matrix, full_mass",
     [
         (0.1, False, False, False),
@@ -182,8 +182,8 @@ def test_beta_bernoulli(step_size, adapt_step_size, adapt_mass_matrix, full_mass
     assert_equal(samples["p_latent"].mean(0), true_probs, prec=0.02)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-@pytest.mark.parametrize("use_multinomial_sampling", [True, False])
+@pytest.mark.parameterize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parameterize("use_multinomial_sampling", [True, False])
 def test_gamma_normal(jit, use_multinomial_sampling):
     def model(data):
         rate = torch.tensor([1.0, 1.0])
@@ -204,7 +204,7 @@ def test_gamma_normal(jit, use_multinomial_sampling):
     assert_equal(samples["p_latent"].mean(0), true_std, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parameterize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_dirichlet_categorical(jit):
     def model(data):
         concentration = torch.tensor([1.0, 1.0, 1.0])
@@ -222,7 +222,7 @@ def test_dirichlet_categorical(jit):
     assert_equal(posterior.mean(0), true_probs, prec=0.02)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parameterize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_gamma_beta(jit):
     def model(data):
         alpha_prior = pyro.sample('alpha', dist.Gamma(concentration=1., rate=1.))
@@ -240,7 +240,7 @@ def test_gamma_beta(jit):
     assert_equal(samples["beta"].mean(0), true_beta, prec=0.05)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parameterize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_gaussian_mixture_model(jit):
     K, N = 3, 1000
 
@@ -265,7 +265,7 @@ def test_gaussian_mixture_model(jit):
     assert_equal(samples["cluster_means"].mean(0).sort()[0], true_cluster_means, prec=0.2)
 
 
-@pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
+@pytest.mark.parameterize("jit", [False, mark_jit(True)], ids=jit_idfn)
 def test_bernoulli_latent_model(jit):
     @poutine.broadcast
     def model(data):
@@ -287,7 +287,7 @@ def test_bernoulli_latent_model(jit):
     assert_equal(samples["y_prob"].mean(0), y_prob, prec=0.05)
 
 
-@pytest.mark.parametrize("num_steps", [2, 3, 30])
+@pytest.mark.parameterize("num_steps", [2, 3, 30])
 def test_gaussian_hmm(num_steps):
     dim = 4
 
@@ -331,7 +331,7 @@ def test_gaussian_hmm(num_steps):
     mcmc.run(data)
 
 
-@pytest.mark.parametrize("hyperpriors", [False, True])
+@pytest.mark.parameterize("hyperpriors", [False, True])
 def test_beta_binomial(hyperpriors):
     def model(data):
         with pyro.plate("plate_0", data.shape[-1]):
@@ -355,7 +355,7 @@ def test_beta_binomial(hyperpriors):
     assert_equal(posterior["probs"].mean(0), true_probs, prec=0.05)
 
 
-@pytest.mark.parametrize("hyperpriors", [False, True])
+@pytest.mark.parameterize("hyperpriors", [False, True])
 def test_gamma_poisson(hyperpriors):
     def model(data):
         with pyro.plate("latent_dim", data.shape[1]):

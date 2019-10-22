@@ -7,8 +7,8 @@ from pyro.contrib.bnn import HiddenLayer
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize("non_linearity", [F.relu])
-@pytest.mark.parametrize("include_hidden_bias", [False, True])
+@pytest.mark.parameterize("non_linearity", [F.relu])
+@pytest.mark.parameterize("include_hidden_bias", [False, True])
 def test_hidden_layer_rsample(non_linearity, include_hidden_bias, B=2, D=3, H=4, N=900000):
     X = torch.randn(B, D)
     A_mean = torch.rand(D, H)
@@ -30,8 +30,8 @@ def test_hidden_layer_rsample(non_linearity, include_hidden_bias, B=2, D=3, H=4,
     return
 
 
-@pytest.mark.parametrize("non_linearity", [F.relu])
-@pytest.mark.parametrize("include_hidden_bias", [True, False])
+@pytest.mark.parameterize("non_linearity", [F.relu])
+@pytest.mark.parameterize("include_hidden_bias", [True, False])
 def test_hidden_layer_log_prob(non_linearity, include_hidden_bias, B=2, D=3, H=2):
     X = torch.randn(B, D)
     A_mean = torch.rand(D, H)

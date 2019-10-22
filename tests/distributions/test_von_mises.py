@@ -41,8 +41,8 @@ def _fit_params_from_samples(samples, n_iter):
     return mu, kappa.detach()
 
 
-@pytest.mark.parametrize('loc', [-math.pi/2.0, 0.0, math.pi/2.0])
-@pytest.mark.parametrize('concentration', [skipif_param(0.01, condition='CUDA_TEST' in os.environ,
+@pytest.mark.parameterize('loc', [-math.pi/2.0, 0.0, math.pi/2.0])
+@pytest.mark.parameterize('concentration', [skipif_param(0.01, condition='CUDA_TEST' in os.environ,
                                                         reason='low precision.'),
                                            0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0])
 def test_sample(loc, concentration, n_samples=int(1e6), n_iter=50):
@@ -53,7 +53,7 @@ def test_sample(loc, concentration, n_samples=int(1e6), n_iter=50):
     assert abs(concentration - kappa) < concentration * 0.1
 
 
-@pytest.mark.parametrize('concentration', [0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0])
+@pytest.mark.parameterize('concentration', [0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0])
 def test_log_prob_normalized(concentration):
     grid = torch.arange(0., 2 * math.pi, 1e-4)
     prob = VonMises(0.0, concentration).log_prob(grid).exp()
@@ -61,7 +61,7 @@ def test_log_prob_normalized(concentration):
     assert abs(norm - 1) < 1e-3, norm
 
 
-@pytest.mark.parametrize('scale', [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
+@pytest.mark.parameterize('scale', [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
 def test_von_mises_3d(scale):
     concentration = torch.randn(3)
     concentration = concentration * (scale / concentration.norm(2))

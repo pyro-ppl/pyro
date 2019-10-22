@@ -79,7 +79,7 @@ def _normalize(tensor, dims, plates):
     return tensor - total
 
 
-@pytest.mark.parametrize('inputs,dims,expected_num_components', [
+@pytest.mark.parameterize('inputs,dims,expected_num_components', [
     ([''], set(), 1),
     (['a'], set(), 1),
     (['a'], set('a'), 1),
@@ -237,7 +237,7 @@ EXAMPLES = [
 ]
 
 
-@pytest.mark.parametrize('example', EXAMPLES)
+@pytest.mark.parameterize('example', EXAMPLES)
 def test_contract_to_tensor(example):
     symbol_to_size = dict(zip('abcdij', [4, 5, 6, 7, 2, 3]))
     tensor_tree = OrderedDict()
@@ -255,7 +255,7 @@ def test_contract_to_tensor(example):
     assert set(actual._pyro_dims) == set(expected_dims)
 
 
-@pytest.mark.parametrize('example', EXAMPLES)
+@pytest.mark.parameterize('example', EXAMPLES)
 def test_contract_tensor_tree(example):
     symbol_to_size = dict(zip('abcdij', [4, 5, 6, 7, 2, 3]))
     tensor_tree = OrderedDict()
@@ -359,7 +359,7 @@ def make_example(equation, fill=None, sizes=(2, 3)):
     return inputs, outputs, operands, sizes
 
 
-@pytest.mark.parametrize('equation,plates', UBERSUM_EXAMPLES)
+@pytest.mark.parameterize('equation,plates', UBERSUM_EXAMPLES)
 def test_naive_ubersum(equation, plates):
     inputs, outputs, operands, sizes = make_example(equation)
 
@@ -379,7 +379,7 @@ def test_naive_ubersum(equation, plates):
                              output, expected_part.detach().cpu(), actual_part.detach().cpu()))
 
 
-@pytest.mark.parametrize('equation,plates', UBERSUM_EXAMPLES)
+@pytest.mark.parameterize('equation,plates', UBERSUM_EXAMPLES)
 def test_ubersum(equation, plates):
     inputs, outputs, operands, sizes = make_example(equation)
 
@@ -399,7 +399,7 @@ def test_ubersum(equation, plates):
                          output, expected_part.detach().cpu(), actual_part.detach().cpu()))
 
 
-@pytest.mark.parametrize('equation,plates', UBERSUM_EXAMPLES)
+@pytest.mark.parameterize('equation,plates', UBERSUM_EXAMPLES)
 def test_einsum_linear(equation, plates):
     inputs, outputs, log_operands, sizes = make_example(equation)
     operands = [x.exp() for x in log_operands]
@@ -420,7 +420,7 @@ def test_einsum_linear(equation, plates):
                          output, expected_part.detach().cpu(), actual_part.detach().cpu()))
 
 
-@pytest.mark.parametrize('equation,plates', UBERSUM_EXAMPLES)
+@pytest.mark.parameterize('equation,plates', UBERSUM_EXAMPLES)
 def test_ubersum_jit(equation, plates):
     inputs, outputs, operands, sizes = make_example(equation)
 
@@ -442,7 +442,7 @@ def test_ubersum_jit(equation, plates):
         assert_equal(e, a)
 
 
-@pytest.mark.parametrize('equation,plates', [
+@pytest.mark.parameterize('equation,plates', [
     ('i->', 'i'),
     ('i->i', 'i'),
     (',i->', 'i'),
@@ -472,11 +472,11 @@ def test_ubersum_total(equation, plates):
                      expected.detach().cpu(), actual.detach().cpu()))
 
 
-@pytest.mark.parametrize('a', [2, 1])
-@pytest.mark.parametrize('b', [3, 1])
-@pytest.mark.parametrize('c', [3, 1])
-@pytest.mark.parametrize('d', [4, 1])
-@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+@pytest.mark.parameterize('a', [2, 1])
+@pytest.mark.parameterize('b', [3, 1])
+@pytest.mark.parameterize('c', [3, 1])
+@pytest.mark.parameterize('d', [4, 1])
+@pytest.mark.parameterize('impl', [naive_ubersum, ubersum])
 def test_ubersum_sizes(impl, a, b, c, d):
     X = torch.randn(a, b)
     Y = torch.randn(b, c)
@@ -489,7 +489,7 @@ def test_ubersum_sizes(impl, a, b, c, d):
     assert actual_d.shape == (d,)
 
 
-@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+@pytest.mark.parameterize('impl', [naive_ubersum, ubersum])
 def test_ubersum_1(impl):
     # y {a}   z {b}
     #      \  /
@@ -503,7 +503,7 @@ def test_ubersum_1(impl):
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+@pytest.mark.parameterize('impl', [naive_ubersum, ubersum])
 def test_ubersum_2(impl):
     # y {a}   z {b}  <--- target
     #      \  /
@@ -518,7 +518,7 @@ def test_ubersum_2(impl):
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+@pytest.mark.parameterize('impl', [naive_ubersum, ubersum])
 def test_ubersum_3(impl):
     #       z {b,c}
     #           |
@@ -543,7 +543,7 @@ def test_ubersum_3(impl):
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+@pytest.mark.parameterize('impl', [naive_ubersum, ubersum])
 def test_ubersum_4(impl):
     # x,y {b}  <--- target
     #      |
@@ -564,7 +564,7 @@ def test_ubersum_4(impl):
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+@pytest.mark.parameterize('impl', [naive_ubersum, ubersum])
 def test_ubersum_5(impl):
     # z {ij}  <--- target
     #     |
@@ -600,7 +600,7 @@ def test_ubersum_5(impl):
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize('impl,implemented', [(naive_ubersum, True), (ubersum, False)])
+@pytest.mark.parameterize('impl,implemented', [(naive_ubersum, True), (ubersum, False)])
 def test_ubersum_collide_implemented(impl, implemented):
     # Non-tree plates cause exponential blowup,
     # so ubersum() refuses to evaluate them.
@@ -619,7 +619,7 @@ def test_ubersum_collide_implemented(impl, implemented):
         impl('ac,bd,abcd->', x, y, z, plates='ab', modulo_total=True)
 
 
-@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+@pytest.mark.parameterize('impl', [naive_ubersum, ubersum])
 def test_ubersum_collide_ok_1(impl):
     # The following is ok because it splits into connected components
     # {x,z1} and {y,z2}, thereby avoiding exponential blowup.
@@ -637,7 +637,7 @@ def test_ubersum_collide_ok_1(impl):
     impl('ac,bd,abc,abd->', x, y, z1, z2, plates='ab', modulo_total=True)
 
 
-@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+@pytest.mark.parameterize('impl', [naive_ubersum, ubersum])
 def test_ubersum_collide_ok_2(impl):
     # The following is ok because z1 can be contracted to x and
     # z2 can be contracted to y.
@@ -656,7 +656,7 @@ def test_ubersum_collide_ok_2(impl):
     impl('cd,ac,bd,abc,abd->', w, x, y, z1, z2, plates='ab', modulo_total=True)
 
 
-@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+@pytest.mark.parameterize('impl', [naive_ubersum, ubersum])
 def test_ubersum_collide_ok_3(impl):
     # The following is ok because x, y, and z can be independently contracted to w.
     #
@@ -679,8 +679,8 @@ UBERSUM_SHAPE_ERRORS = [
 ]
 
 
-@pytest.mark.parametrize('equation,shapes,plates', UBERSUM_SHAPE_ERRORS)
-@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+@pytest.mark.parameterize('equation,shapes,plates', UBERSUM_SHAPE_ERRORS)
+@pytest.mark.parameterize('impl', [naive_ubersum, ubersum])
 def test_ubersum_size_error(impl, equation, shapes, plates):
     operands = [torch.randn(shape) for shape in shapes]
     with pytest.raises(ValueError, match='Dimension size mismatch|Size of label'):
@@ -697,8 +697,8 @@ UBERSUM_BATCH_ERRORS = [
 ]
 
 
-@pytest.mark.parametrize('equation,plates', UBERSUM_BATCH_ERRORS)
-@pytest.mark.parametrize('impl', [naive_ubersum, ubersum])
+@pytest.mark.parameterize('equation,plates', UBERSUM_BATCH_ERRORS)
+@pytest.mark.parameterize('impl', [naive_ubersum, ubersum])
 def test_ubersum_plate_error(impl, equation, plates):
     inputs, outputs = equation.split('->')
     operands = [torch.randn(torch.Size((2,) * len(input_)))
@@ -720,8 +720,8 @@ ADJOINT_EXAMPLES = [
 ]
 
 
-@pytest.mark.parametrize('equation,plates', ADJOINT_EXAMPLES)
-@pytest.mark.parametrize('backend', ['map', 'sample', 'marginal'])
+@pytest.mark.parameterize('equation,plates', ADJOINT_EXAMPLES)
+@pytest.mark.parameterize('backend', ['map', 'sample', 'marginal'])
 def test_adjoint_shape(backend, equation, plates):
     backend = 'pyro.ops.einsum.torch_{}'.format(backend)
     inputs, output = equation.split('->')
@@ -747,7 +747,7 @@ def test_adjoint_shape(backend, equation, plates):
             assert backward_result is None
 
 
-@pytest.mark.parametrize('equation,plates', ADJOINT_EXAMPLES)
+@pytest.mark.parameterize('equation,plates', ADJOINT_EXAMPLES)
 def test_adjoint_marginal(equation, plates):
     inputs, output = equation.split('->')
     inputs = inputs.split(',')

@@ -52,7 +52,7 @@ ARGS = {
 }
 
 
-@pytest.mark.parametrize('Dist', DISTRIBUTIONS)
+@pytest.mark.parameterize('Dist', DISTRIBUTIONS)
 def test_pickle(Dist):
     if Dist in ARGS:
         args = ARGS[Dist]

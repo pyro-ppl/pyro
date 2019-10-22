@@ -8,8 +8,8 @@ pytestmark = pytest.mark.stage('unit')
 
 
 @pytest.mark.filterwarnings("ignore", category=UserWarning)
-@pytest.mark.parametrize('model', MODELS)
-@pytest.mark.parametrize('backend', ['pyro'])
+@pytest.mark.parameterize('model', MODELS)
+@pytest.mark.parameterize('backend', ['pyro'])
 def test_mcmc_interface(model, backend):
     with pyro_backend(backend), handlers.seed(rng_seed=20):
         f = MODELS[model]()
@@ -20,7 +20,7 @@ def test_mcmc_interface(model, backend):
         mcmc.summary()
 
 
-@pytest.mark.parametrize('backend', ['pyro', 'minipyro'])
+@pytest.mark.parameterize('backend', ['pyro', 'minipyro'])
 def test_not_implemented(backend):
     with pyro_backend(backend):
         pyro.sample  # should be implemented
@@ -29,8 +29,8 @@ def test_not_implemented(backend):
             pyro.nonexistent_primitive
 
 
-@pytest.mark.parametrize('model', MODELS)
-@pytest.mark.parametrize('backend', ['minipyro', 'pyro'])
+@pytest.mark.parameterize('model', MODELS)
+@pytest.mark.parameterize('backend', ['minipyro', 'pyro'])
 def test_model_sample(model, backend):
     with pyro_backend(backend), handlers.seed(rng_seed=2), xfail_if_not_implemented():
         f = MODELS[model]()
@@ -38,8 +38,8 @@ def test_model_sample(model, backend):
         model(*model_args)
 
 
-@pytest.mark.parametrize('model', MODELS)
-@pytest.mark.parametrize('backend', ['minipyro', 'pyro'])
+@pytest.mark.parameterize('model', MODELS)
+@pytest.mark.parameterize('backend', ['minipyro', 'pyro'])
 def test_rng_seed(model, backend):
     with pyro_backend(backend), handlers.seed(rng_seed=2), xfail_if_not_implemented():
         f = MODELS[model]()
@@ -53,8 +53,8 @@ def test_rng_seed(model, backend):
         assert ops.allclose(actual, expected)
 
 
-@pytest.mark.parametrize('model', MODELS)
-@pytest.mark.parametrize('backend', ['minipyro', 'pyro'])
+@pytest.mark.parameterize('model', MODELS)
+@pytest.mark.parameterize('backend', ['minipyro', 'pyro'])
 def test_rng_state(model, backend):
     with pyro_backend(backend), handlers.seed(rng_seed=2), xfail_if_not_implemented():
         f = MODELS[model]()
@@ -72,8 +72,8 @@ def test_rng_state(model, backend):
         assert ops.allclose(actual, expected)
 
 
-@pytest.mark.parametrize('model', MODELS)
-@pytest.mark.parametrize('backend', ['minipyro', 'pyro'])
+@pytest.mark.parameterize('model', MODELS)
+@pytest.mark.parameterize('backend', ['minipyro', 'pyro'])
 def test_trace_handler(model, backend):
     with pyro_backend(backend), handlers.seed(rng_seed=2), xfail_if_not_implemented():
         f = MODELS[model]()

@@ -70,9 +70,9 @@ class AutoGaussianChain(GaussianChain):
                      msg="guide covariance off")
 
 
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
+@pytest.mark.parameterize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
                                         AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
-@pytest.mark.parametrize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
+@pytest.mark.parameterize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
 def test_auto_diagonal_gaussians(auto_class, Elbo):
     n_steps = 3501 if auto_class == AutoDiagonalNormal else 6001
 
@@ -110,7 +110,7 @@ def test_auto_diagonal_gaussians(auto_class, Elbo):
                                 str(scale.detach().cpu().numpy())]))
 
 
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
+@pytest.mark.parameterize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
                                         AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
 def test_auto_transform(auto_class):
     n_steps = 3500
@@ -139,9 +139,9 @@ def test_auto_transform(auto_class):
                  msg="guide covariance off")
 
 
-@pytest.mark.parametrize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
+@pytest.mark.parameterize('auto_class', [AutoDiagonalNormal, AutoMultivariateNormal,
                                         AutoLowRankMultivariateNormal, AutoLaplaceApproximation])
-@pytest.mark.parametrize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
+@pytest.mark.parameterize('Elbo', [Trace_ELBO, TraceMeanField_ELBO])
 def test_auto_dirichlet(auto_class, Elbo):
     num_steps = 2000
     prior = torch.tensor([0.5, 1.0, 1.5, 3.0])

@@ -9,7 +9,7 @@ from pyro.distributions.util import broadcast_shape, sum_leftmost, sum_rightmost
 INF = float('inf')
 
 
-@pytest.mark.parametrize('shapes', [
+@pytest.mark.parameterize('shapes', [
     ([],),
     ([1],),
     ([2],),
@@ -31,7 +31,7 @@ def test_broadcast_shape(shapes):
     assert broadcast_shape(*shapes) == np.broadcast(*map(np.empty, shapes)).shape
 
 
-@pytest.mark.parametrize('shapes', [
+@pytest.mark.parameterize('shapes', [
     ([3], [4]),
     ([2, 1], [1, 3, 1]),
 ])
@@ -40,7 +40,7 @@ def test_broadcast_shape_error(shapes):
         broadcast_shape(*shapes)
 
 
-@pytest.mark.parametrize('shapes', [
+@pytest.mark.parameterize('shapes', [
     ([],),
     ([1],),
     ([2],),
@@ -61,7 +61,7 @@ def test_broadcast_shape_strict(shapes):
     assert broadcast_shape(*shapes, strict=True) == np.broadcast(*map(np.empty, shapes)).shape
 
 
-@pytest.mark.parametrize('shapes', [
+@pytest.mark.parameterize('shapes', [
     ([1], [2]),
     ([2], [1]),
     ([3], [4]),
