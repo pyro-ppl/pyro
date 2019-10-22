@@ -5,7 +5,7 @@ from pyro.primitives import (clear_param_store, enable_validation, factor, get_p
                              param, plate, plate_stack, random_module, sample, validation_enabled)
 from pyro.util import set_rng_seed
 
-version_prefix = '0.4.1'
+version_prefix = '0.5.0'
 
 # Get the __version__ string from the auto-generated _version.py file, if exists.
 try:
