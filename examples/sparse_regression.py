@@ -1,5 +1,4 @@
 import argparse
-import functools
 
 import numpy as np
 import torch
@@ -10,7 +9,7 @@ import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer.autoguide import AutoDelta
 from pyro.infer import Trace_ELBO
-from pyro.infer.autoguide import init_to_median
+from pyro.infer.autoguide import init_to_mean
 
 from torch.optim import Adam
 
@@ -237,13 +236,13 @@ def main(args):
     for restart in range(args.num_restarts):
         pyro.clear_param_store()
         pyro.set_rng_seed(restart)
-        guide = AutoDelta(model, init_loc_fn=functools.partial(init_to_median, num_samples=50))
+        guide = AutoDelta(model, init_loc_fn=init_to_mean)
         with torch.no_grad():
             init_losses.append(loss_fn(model, guide, X, Y, hypers).item())
 
     pyro.set_rng_seed(np.argmin(init_losses))
     pyro.clear_param_store()
-    guide = AutoDelta(model, init_loc_fn=functools.partial(init_to_median, num_samples=50))
+    guide = AutoDelta(model, init_loc_fn=init_to_mean)
     with torch.no_grad():
         loss_fn(model, guide, X, Y, hypers)
     # we also make sure the initial observation noise is not too large
@@ -308,9 +307,9 @@ def main(args):
 if __name__ == '__main__':
     assert pyro.__version__.startswith('0.4.1')
     parser = argparse.ArgumentParser(description='Krylov KIT')
-    parser.add_argument('--num-data', type=int, default=750)
-    parser.add_argument('--num-steps', type=int, default=1000)
-    parser.add_argument('--num-dimensions', type=int, default=100)
+    parser.add_argument('--num-data', type=int, default=50)
+    parser.add_argument('--num-steps', type=int, default=2)
+    parser.add_argument('--num-dimensions', type=int, default=50)
     parser.add_argument('--num-restarts', type=int, default=10)
     parser.add_argument('--sigma', type=float, default=0.05)
     parser.add_argument('--active-dimensions', type=int, default=10)
