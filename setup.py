@@ -108,7 +108,7 @@ setup(
             'yapf',
         ],
     },
-    python_requires='>=3.4',
+    python_requires='>=3.5',
     keywords='machine learning statistics probabilistic programming bayesian modeling pytorch',
     license='MIT License',
     classifiers=[
