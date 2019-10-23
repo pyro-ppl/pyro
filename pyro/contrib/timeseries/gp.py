@@ -1,14 +1,9 @@
-import numpy as np
 import torch
 import torch.nn as nn
 from torch.distributions import MultivariateNormal
-import math
 
-import pyro
 import pyro.distributions as dist
-
 from pyro.ops.ssm_gp import MaternKernel
-from pyro.ops.tensor_utils import block_diag
 
 
 class TimeSeriesModel(nn.Module):
@@ -41,7 +36,6 @@ class TimeSeriesModel(nn.Module):
             predictive distributions do not encode correlations between distinct times in `dts`.
         """
         raise NotImplementedError
-
 
 
 class IndependentMaternGP(TimeSeriesModel):

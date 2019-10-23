@@ -28,7 +28,7 @@ def test_independent_matern_gp(nu, obs_dim, T):
         variance = (2.0 * gp.kernel.log_kernel_scale).exp()[dim]
         obs_noise = (2.0 * gp.log_obs_noise_scale).exp()[dim]
 
-        kernel = pyro.contrib.gp.kernels.Matern32 if nu==1.5 else pyro.contrib.gp.kernels.Matern52
+        kernel = pyro.contrib.gp.kernels.Matern32 if nu == 1.5 else pyro.contrib.gp.kernels.Matern52
         kernel = kernel(input_dim=1, lengthscale=lengthscale, variance=variance)
         kernel = kernel(times) + obs_noise * torch.eye(T)
 
