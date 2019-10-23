@@ -38,13 +38,13 @@ def test_independent_matern_gp(nu, obs_dim, T):
 
     for S in [1, 3]:
         dts = torch.rand(S)
-        predictive = gp.predict(targets, dts)
+        predictive = gp.forecast(targets, dts)
         assert predictive.loc.shape == (S, obs_dim)
         assert predictive.scale.shape == (S, obs_dim)
 
     # the distant future
     dts = torch.tensor([500.0])
-    predictive = gp.predict(targets, dts)
+    predictive = gp.forecast(targets, dts)
     # assert mean reverting
     assert_equal(predictive.loc, torch.zeros(1, obs_dim))
     # assert large time covariance

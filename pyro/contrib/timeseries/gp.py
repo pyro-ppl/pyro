@@ -4,7 +4,7 @@ from torch.distributions import MultivariateNormal
 
 import pyro.distributions as dist
 from pyro.ops.ssm_gp import MaternKernel
-from base import TimeSeriesModel
+from pyro.contrib.timeseries.base import TimeSeriesModel
 
 
 class IndependentMaternGP(TimeSeriesModel):
