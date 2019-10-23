@@ -1,7 +1,15 @@
 AutoRegressiveNN
 ----------------
 
-.. automodule:: pyro.nn.auto_reg_nn
+.. autoclass:: pyro.nn.auto_reg_nn.AutoRegressiveNN
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+ConditionalAutoRegressiveNN
+---------------------------
+
+.. autoclass:: pyro.nn.auto_reg_nn.ConditionalAutoRegressiveNN
     :members:
     :undoc-members:
     :show-inheritance:

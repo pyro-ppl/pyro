@@ -231,7 +231,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.4.1')
+    assert pyro.__version__.startswith('0.5.0')
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', default=1500, type=int, help='number of training epochs')
