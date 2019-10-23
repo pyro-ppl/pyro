@@ -48,6 +48,10 @@ except Exception as e:
     sys.stderr.flush()
     long_description = ''
 
+# Remove badges since they will always be obsolete.
+# This assumes the first 12 lines contain badge info.
+long_description = '\n'.join([str(line) for line in long_description.split('\n')[12:]])
+
 # examples/tutorials
 EXTRAS_REQUIRE = [
     'jupyter>=1.0.0',
@@ -120,7 +124,6 @@ setup(
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
     ],
     # yapf
 )
