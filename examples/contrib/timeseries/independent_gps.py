@@ -16,6 +16,8 @@ def download_data():
 
 
 def main(args):
+    assert pyro.__version__.startswith('0.5.0')
+
     # download and pre-process EEG data if not in test mode
     if not args.test:
         download_data()

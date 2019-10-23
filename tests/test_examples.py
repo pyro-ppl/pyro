@@ -28,6 +28,7 @@ CPU_EXAMPLES = [
     'contrib/gp/sv-dkl.py --epochs=1 --num-inducing=4 --batch-size=1000',
     'contrib/gp/sv-dkl.py --binary --epochs=1 --num-inducing=4 --batch-size=1000',
     'contrib/oed/ab_test.py --num-vi-steps=10 --num-bo-steps=2',
+    'contrib/timeseries/independent_gps.py --test --num-steps=2',
     'dmm/dmm.py --num-epochs=1',
     'dmm/dmm.py --num-epochs=1 --num-iafs=1',
     'eight_schools/mcmc.py --num-samples=500 --warmup-steps=100',
