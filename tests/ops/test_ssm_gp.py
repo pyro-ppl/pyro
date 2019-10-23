@@ -16,9 +16,13 @@ def test_matern_kernel(num_gps, nu):
     forward_backward = torch.matmul(forward, backward)
 
     # going forward dt in time and then backward dt in time should bring us back to the identity
-    assert_equal(forward_backward,
-                 torch.eye(mk.state_dim).unsqueeze(0).expand(num_gps, mk.state_dim, mk.state_dim))
+    eye = torch.eye(mk.state_dim).unsqueeze(0).expand(num_gps, mk.state_dim, mk.state_dim)
+    assert_equal(forward_backward, eye)
 
     # let's just check that these are PSD
     mk.stationary_covariance().cholesky()
     mk.process_covariance(forward).cholesky()
+
+    # evolving forward infinitesimally should yield the identity
+    nudge = mk.transition_matrix(torch.tensor([1.0e-9]))
+    assert_equal(nudge, eye)
