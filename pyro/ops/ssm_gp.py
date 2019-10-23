@@ -71,9 +71,9 @@ class MaternKernel(nn.Module):
             rho = self.log_length_scale.exp().unsqueeze(-1).unsqueeze(-1)
             dt_rho = dt / rho
             trans = (1.0 + root_three * dt_rho) * self.mask00 + \
-                    (-3.0 * dt_rho / rho) * self.mask01 + \
-                    dt * self.mask10 + \
-                    (1.0 - root_three * dt_rho) * self.mask11
+                (-3.0 * dt_rho / rho) * self.mask01 + \
+                dt * self.mask10 + \
+                (1.0 - root_three * dt_rho) * self.mask11
             return torch.exp(-root_three * dt_rho) * trans
         elif self.nu == 2.5:
             rho = self.log_length_scale.exp().unsqueeze(-1).unsqueeze(-1)
@@ -83,14 +83,14 @@ class MaternKernel(nn.Module):
             dt_rho_qu = dt_rho.pow(4.0)
             dt_sq = dt ** 2.0
             trans = (1.0 + dt_rho + 0.5 * dt_rho_sq) * self.mask00 + \
-                    (-0.5 * dt_rho_cu / dt) * self.mask01 + \
-                    ((0.5 * dt_rho_qu - dt_rho_cu) / dt_sq) * self.mask02 + \
-                    ((dt_rho + 1.0) * dt) * self.mask10 + \
-                    (1.0 + dt_rho - dt_rho_sq) * self.mask11 + \
-                    ((dt_rho_cu - 3.0 * dt_rho_sq) / dt) * self.mask12 + \
-                    (0.5 * dt_sq) * self.mask20 + \
-                    ((1.0 - 0.5 * dt_rho) * dt) * self.mask21 + \
-                    (1.0 - 2.0 * dt_rho + 0.5 * dt_rho_sq) * self.mask22
+                (-0.5 * dt_rho_cu / dt) * self.mask01 + \
+                ((0.5 * dt_rho_qu - dt_rho_cu) / dt_sq) * self.mask02 + \
+                ((dt_rho + 1.0) * dt) * self.mask10 + \
+                (1.0 + dt_rho - dt_rho_sq) * self.mask11 + \
+                ((dt_rho_cu - 3.0 * dt_rho_sq) / dt) * self.mask12 + \
+                (0.5 * dt_sq) * self.mask20 + \
+                ((1.0 - 0.5 * dt_rho) * dt) * self.mask21 + \
+                (1.0 - 2.0 * dt_rho + 0.5 * dt_rho_sq) * self.mask22
             return torch.exp(-dt_rho) * trans
 
     def stationary_covariance(self):
@@ -109,8 +109,8 @@ class MaternKernel(nn.Module):
             sigmasq = (2.0 * self.log_kernel_scale).exp().unsqueeze(-1).unsqueeze(-1)
             rhosq = (2.0 * self.log_length_scale).exp().unsqueeze(-1).unsqueeze(-1)
             p_infinity = self.mask00 + \
-                         (five_thirds / rhosq) * (self.mask11 - self.mask02 - self.mask20) + \
-                         (25.0 / rhosq.pow(2.0)) * self.mask22
+                five_thirds / rhosq) * (self.mask11 - self.mask02 - self.mask20) + \
+                (25.0 / rhosq.pow(2.0)) * self.mask22
             return sigmasq * p_infinity
 
     def process_covariance(self, A):
