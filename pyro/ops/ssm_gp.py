@@ -5,6 +5,8 @@ import torch.nn as nn
 
 
 root_three = math.sqrt(3.0)
+root_five = math.sqrt(5.0)
+five_thirds = 5.0 / 3.0
 
 
 class MaternKernel(nn.Module):
@@ -72,7 +74,22 @@ class MaternKernel(nn.Module):
                     (1.0 - root_three * dt_rho) * self.mask11
             return torch.exp(-root_three * dt_rho) * trans
         else:
-            raise NotImplementedError
+            rho = self.log_length_scale.exp().unsqueeze(-1).unsqueeze(-1)
+            dt_rho = root_five * dt / rho
+            dt_rho_sq = dt_rho.pow(2.0)
+            dt_rho_cu = dt_rho.pow(3.0)
+            dt_rho_qu = dt_rho.pow(4.0)
+            dt_sq = dt ** 2.0
+            trans = (1.0 + dt_rho + 0.5 * dt_rho_sq) * self.mask00 + \
+                    (-0.5 * dt_rho_cu / dt) * self.mask10 + \
+                    ((0.5 * dt_rho_qu - dt_rho_cu) / dt_sq) * self.mask20 + \
+                    ((dt_rho + 1.0) * dt) * self.mask01 + \
+                    (1.0 + dt_rho - dt_rho_sq) * self.mask11 + \
+                    ((dt_rho_cu - 3.0 * dt_rho_sq) / dt) * self.mask21 + \
+                    (0.5 * dt_sq) * self.mask02 + \
+                    ((1.0 - 0.5 * dt_rho) * dt) * self.mask12 + \
+                    (1.0 - 2.0 * dt_rho + 0.5 * dt_rho_sq) * self.mask22
+            return torch.exp(-dt_rho) * trans
 
     def stationary_covariance(self):
         """
@@ -86,6 +103,13 @@ class MaternKernel(nn.Module):
             rhosq = (2.0 * self.log_length_scale).exp().unsqueeze(-1).unsqueeze(-1)
             p_infinity = sigmasq * self.mask00 + \
                          (3.0 * sigmasq / rhosq) * self.mask11
+            return p_infinity
+        elif self.nu == 2.5:
+            sigmasq = (2.0 * self.log_kernel_scale).exp().unsqueeze(-1).unsqueeze(-1)
+            rhosq = (2.0 * self.log_length_scale).exp().unsqueeze(-1).unsqueeze(-1)
+            p_infinity = sigmasq * self.mask00 + \
+                         five_thirds * sigmasq / rhosq * (self.mask11 - self.mask02 - self.mask20) + \
+                         25.0 * sigmasq / rhosq.pow(2.0)
             return p_infinity
 
     def process_covariance(self, A):
