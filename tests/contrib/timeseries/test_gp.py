@@ -37,7 +37,7 @@ def test_independent_matern_gp(nu, obs_dim, T):
         assert_equal(mvn_log_prob, gp_log_prob[dim])
 
     for S in [1, 3]:
-        dts = torch.randn(S)
+        dts = torch.rand(S)
         predictive = gp.predict(targets, dts)
         assert predictive.loc.shape == (S, obs_dim)
         assert predictive.scale.shape == (S, obs_dim)
