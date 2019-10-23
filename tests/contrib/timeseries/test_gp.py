@@ -35,3 +35,18 @@ def test_independent_matern_gp(nu, obs_dim, T):
         mvn = torch.distributions.MultivariateNormal(torch.zeros(T), kernel)
         mvn_log_prob = mvn.log_prob(targets[:, dim])
         assert_equal(mvn_log_prob, gp_log_prob[dim])
+
+    for S in [1, 3]:
+        dts = torch.randn(S)
+        predictive = gp.predict(targets, dts)
+        assert predictive.loc.shape == (S, obs_dim)
+        assert predictive.scale.shape == (S, obs_dim)
+
+    # the distant future
+    dts = torch.tensor([500.0])
+    predictive = gp.predict(targets, dts)
+    # assert mean reverting
+    assert_equal(predictive.loc, torch.zeros(1, obs_dim))
+    # assert large time covariance
+    expected_scale = gp._get_obs_noise_scale().unsqueeze(0)
+    assert_equal(predictive.scale, expected_scale)

@@ -36,7 +36,7 @@ class TimeSeriesModel(nn.Module):
             forecasts.
         :param torch.Tensor dts: A 1-dimensional tensor of times to forecast into the future,
             with zero corresponding to the time of the final target `targets[-1]`.
-        :returns tuple: Returns a predictive distribution with batch shape `(S,)` and
+        :returns torch.distributions.Distribution: Returns a predictive distribution with batch shape `(S,)` and
             event shape `(obs_dim,)`, where `S` is the size of `dts`. That is, the resulting
             predictive distributions do not encode correlations between distinct times in `dts`.
         """
@@ -115,18 +115,36 @@ class IndependentMaternGP(TimeSeriesModel):
         Return the filtering state for the associated state space model.
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
-        return self._get_dist().filter(value.t().unsqueeze(-1))
+        return self._get_dist().filter(targets.t().unsqueeze(-1))
 
-    def _predict(self, dt, filtering_state, include_observation_noise=True):
+    def _predict(self, dts, filtering_state, include_observation_noise=True):
         """
         Internal helper for prediction.
         """
-        trans_mat = self.transition_matrix(dt).squeeze(-3)
+        assert dts.dim() == 1
+        dts = dts.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+        trans_mat = self.kernel.transition_matrix(dts)
         predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), trans_mat).squeeze(-2)[..., 0]
         predicted_function_covar = torch.matmul(trans_mat.transpose(-1, -2),
                                                 torch.matmul(filtering_state.covariance_matrix,
                                                 trans_mat))[..., 0, 0]
 
         if include_observation_noise:
-            predicted_function_covar = predicted_function_covar + self.get_sigma_obs() ** 2
+            predicted_function_covar = predicted_function_covar + self._get_obs_noise_scale().pow(2.0)
         return predicted_mean, predicted_function_covar
+
+    def predict(self, targets, dts):
+        """
+        :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
+            of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
+            is the dimension of the real-valued targets at each time step. These
+            represent the training data that are conditioned on for the purpose of making
+            forecasts.
+        :param torch.Tensor dts: A 1-dimensional tensor of times to forecast into the future,
+            with zero corresponding to the time of the final target `targets[-1]`.
+        :returns torch.distributions.Normal: Returns a predictive Normal distribution with batch shape `(S,)` and
+            event shape `(obs_dim,)`, where `S` is the size of `dts`.
+        """
+        filtering_state = self._filter(targets)
+        predicted_mean, predicted_covar = self._predict(dts, filtering_state)
+        return torch.distributions.Normal(predicted_mean, predicted_covar.sqrt())
