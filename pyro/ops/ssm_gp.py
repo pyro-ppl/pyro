@@ -16,9 +16,9 @@ class MaternKernel(nn.Module):
 
     :param float nu: The order of the Matern kernel (1.5 or 2.5)
     :param int num_gps: the number of GPs
-    :param torch.tensor log_length_scale_init: optional `num_gps`-dimensional vector of initializers
+    :param torch.Tensor log_length_scale_init: optional `num_gps`-dimensional vector of initializers
         for the length scale
-    :param torch.tensor log_kernel_scale_init: optional `num_gps`-dimensional vector of initializers
+    :param torch.Tensor log_kernel_scale_init: optional `num_gps`-dimensional vector of initializers
         for the kernel scale
 
     **References**
@@ -29,20 +29,19 @@ class MaternKernel(nn.Module):
         Arno Solin.
     """
     def __init__(self, nu=1.5, num_gps=1, log_length_scale_init=None, log_kernel_scale_init=None):
-        assert nu in [1.5, 2.5], "The only supported values of nu are 1.5 and 2.5"
+        if nu not in [1.5, 2.5]:
+            raise NotImplementedError("The only supported values of nu are 1.5 and 2.5")
         self.nu = nu
         self.state_dim = {1.5: 2, 2.5: 3}[nu]
         self.num_gps = num_gps
 
-        if log_length_scale_init is not None:
-            assert log_length_scale_init.shape == (num_gps,)
-        else:
+        if log_length_scale_init is None:
             log_length_scale_init = torch.zeros(num_gps)
+        assert log_length_scale_init.shape == (num_gps,)
 
-        if log_kernel_scale_init is not None:
-            assert log_kernel_scale_init.shape == (num_gps,)
-        else:
+        if log_kernel_scale_init is None:
             log_kernel_scale_init = torch.zeros(num_gps)
+        assert log_kernel_scale_init.shape == (num_gps,)
 
         super(MaternKernel, self).__init__()
 
