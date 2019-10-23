@@ -84,7 +84,7 @@ setup(
         # numpy is necessary for some functionality of PyTorch
         'numpy>=1.7',
         'opt_einsum>=2.3.2',
-        'pyro-api@https://api.github.com/repos/pyro-ppl/pyro-api/tarball/master',
+        'pyro-api>=0.1.0',
         'torch>=1.2.0',
         'tqdm>=4.31',
     ],
@@ -114,7 +114,6 @@ setup(
             'yapf',
         ],
     },
-    tests_require=['flake8', 'pytest>=4.1'],
     keywords='machine learning statistics probabilistic programming bayesian modeling pytorch',
     license='MIT License',
     classifiers=[

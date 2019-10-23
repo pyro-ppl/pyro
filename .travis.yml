@@ -24,7 +24,9 @@ cache:
 
 install:
     - pip install -U pip
-    - pip install torch==1.2.0+cpu torchvision==0.4.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+    # Keep track of pyro-api master branch
+    - pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
+    - pip install torch==1.3.0+cpu torchvision==0.4.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
     - pip install .[test]
     - pip freeze
 

@@ -9,8 +9,16 @@ as an initial constrained value for a guide estimate.
 import torch
 from torch.distributions import transform_to
 
+from pyro.distributions.torch import Independent
+from pyro.distributions.torch_distribution import MaskedDistribution
 from pyro.poutine.messenger import Messenger
 from pyro.util import torch_isnan
+
+
+def _is_multivariate(d):
+    while isinstance(d, (Independent, MaskedDistribution)):
+        d = d.base_dist
+    return any(size > 1 for size in d.event_shape)
 
 
 def init_to_feasible(site):
@@ -35,6 +43,9 @@ def init_to_median(site, num_samples=15):
     Initialize to the prior median; fallback to a feasible point if median is
     undefined.
     """
+    # The median undefined for multivariate distributions.
+    if _is_multivariate(site["fn"]):
+        return init_to_feasible(site)
     try:
         # Try to compute empirical median.
         samples = site["fn"].sample(sample_shape=(num_samples,))
