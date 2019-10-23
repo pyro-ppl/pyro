@@ -84,7 +84,7 @@ setup(
         'opt_einsum>=2.3.2',
         'pyro-api>=0.1.0',
         'torch>=1.3.0',
-        'tqdm>=4.31',
+        'tqdm>=4.36',
     ],
     extras_require={
         'extras': EXTRAS_REQUIRE,
