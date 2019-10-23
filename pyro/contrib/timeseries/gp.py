@@ -76,11 +76,15 @@ class IndependentMaternGP(TimeSeriesModel):
         return self.log_obs_noise_scale.exp()
 
     def _get_init_dist(self):
-        return torch.distributions.MultivariateNormal(torch.zeros(self.obs_dim, self.kernel.state_dim),
+        return torch.distributions.MultivariateNormal(torch.zeros(self.obs_dim, self.kernel.state_dim,
+                                                                  dtype=self.obs_matrix.dtype,
+                                                                  device=self.obs_matrix.device),
                                                       self.kernel.stationary_covariance().squeeze(-3))
 
     def _get_obs_dist(self):
-        return dist.Normal(torch.zeros(self.obs_dim, 1, 1),
+        return dist.Normal(torch.zeros(self.obs_dim, 1, 1,
+                                       dtype=self.obs_matrix.dtype,
+                                       device=self.obs_matrix.device),
                            self._get_obs_noise_scale().unsqueeze(-1).unsqueeze(-1)).to_event(1)
 
     def _get_dist(self):
@@ -88,7 +92,9 @@ class IndependentMaternGP(TimeSeriesModel):
         Get the `GaussianHMM` distribution that corresponds to `obs_dim`-many independent Matern GPs.
         """
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
-        trans_dist = MultivariateNormal(torch.zeros(self.obs_dim, 1, self.kernel.state_dim),
+        trans_dist = MultivariateNormal(torch.zeros(self.obs_dim, 1, self.kernel.state_dim,
+                                                    dtype=self.obs_matrix.dtype,
+                                                    device=self.obs_matrix.device),
                                         process_covar.unsqueeze(-3))
         trans_matrix = trans_matrix.unsqueeze(-3)
         return dist.GaussianHMM(self._get_init_dist(), trans_matrix, trans_dist,
