@@ -36,6 +36,7 @@ Pyro Documentation
    contrib.gp
    contrib.minipyro
    contrib.oed
+   contrib.timeseries
    contrib.tracking
 
 
