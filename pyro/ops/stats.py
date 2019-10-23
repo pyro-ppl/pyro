@@ -424,8 +424,8 @@ def crps_empirical(pred, truth):
     :rtype: torch.Tensor
     """
     if pred.dim() != 1 + truth.dim() or pred.shape[1:] != truth.shape:
-        raise ValueError(f"Expected pred to have one extra sample dim on left. "
-                         f"Actual shapes: {pred.shape} versus {truth.shape}")
+        raise ValueError("Expected pred to have one extra sample dim on left. "
+                         "Actual shapes: {} versus {}".format(pred.shape, truth.shape))
     opts = dict(device=pred.device, dtype=pred.dtype)
     num_samples = pred.size(0)
     if num_samples == 1:
