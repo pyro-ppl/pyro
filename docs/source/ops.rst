@@ -77,7 +77,7 @@ Statistical Utilities
 
  
 State Space Model and GP Utilities
----------------------------
+----------------------------------
 
 .. automodule:: pyro.ops.ssm_gp
     :members:
