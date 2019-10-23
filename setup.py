@@ -35,17 +35,18 @@ if commit_sha:
 with open(os.path.join(PROJECT_PATH, 'pyro', '_version.py'), 'w') as f:
     f.write(VERSION.format(version))
 
-# Populate long description from README.md
+
+# READ README.md for long description on PyPi.
+# This requires uploading via twine, e.g.:
+# $ python setup.py sdist bdist_wheel
+# $ twine upload --repository-url https://test.pypi.org/legacy/ dist/*  # test version
+# $ twine upload dist/*
 try:
     long_description = open('README.md', encoding='utf-8').read()
 except Exception as e:
     sys.stderr.write('Failed to read README.md\n'.format(e))
     sys.stderr.flush()
     long_description = ''
-
-# Remove badges since they will always be obsolete.
-# This assumes the first 10 lines contain badge info.
-long_description = '\n'.join([str(line) for line in long_description.split('\n')[10:]])
 
 # examples/tutorials
 EXTRAS_REQUIRE = [
@@ -58,9 +59,6 @@ EXTRAS_REQUIRE = [
     'seaborn',
     'wget',
 ]
-
-if sys.version_info[0] == 2:
-    EXTRAS_REQUIRE.append('functools32')
 
 setup(
     name='pyro-ppl',
@@ -122,6 +120,7 @@ setup(
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
     ],
     # yapf
 )
