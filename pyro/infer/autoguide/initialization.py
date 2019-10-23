@@ -35,9 +35,6 @@ def init_to_median(site, num_samples=15):
     Initialize to the prior median; fallback to a feasible point if median is
     undefined.
     """
-    # median undefined for site with event shape
-    if site["fn"].event_shape:
-        return init_to_feasible(site)
     try:
         # Try to compute empirical median.
         samples = site["fn"].sample(sample_shape=(num_samples,))
