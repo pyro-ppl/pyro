@@ -95,6 +95,9 @@ def test_shapes(auto_class, init_loc_fn, Elbo):
         pyro.sample("z2", dist.Normal(torch.zeros(2), torch.ones(2)).to_event(1))
         with pyro.plate("plate", 3):
             pyro.sample("z3", dist.Normal(torch.zeros(3), torch.ones(3)))
+        pyro.sample("z4", dist.MultivariateNormal(torch.zeros(2), torch.eye(2)))
+        pyro.sample("z5", dist.Dirichlet(torch.ones(3)))
+        pyro.sample("z6", dist.Normal(0, 1).expand((2,)).mask(torch.arange(2) > 0).to_event(1))
 
     guide = auto_class(model, init_loc_fn=init_loc_fn)
     elbo = Elbo(strict_enumeration_warning=False)
