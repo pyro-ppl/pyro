@@ -4,38 +4,7 @@ from torch.distributions import MultivariateNormal
 
 import pyro.distributions as dist
 from pyro.ops.ssm_gp import MaternKernel
-
-
-class TimeSeriesModel(nn.Module):
-    """
-    Base class for univariate and multivariate time series models.
-    """
-    def log_prob(self, targets):
-        """
-        :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
-            of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
-            is the dimension of the real-valued `targets` at each time step
-        :returns torch.Tensor: A 0-dimensional log probability for the case of properly
-            multivariate time series models in which the output dimensions are correlated;
-            otherwise returns a 1-dimensional tensor of log probabilities for batched
-            univariate time series models.
-        """
-        raise NotImplementedError
-
-    def predict(self, targets, dts):
-        """
-        :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
-            of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
-            is the dimension of the real-valued targets at each time step. These
-            represent the training data that are conditioned on for the purpose of making
-            forecasts.
-        :param torch.Tensor dts: A 1-dimensional tensor of times to forecast into the future,
-            with zero corresponding to the time of the final target `targets[-1]`.
-        :returns torch.distributions.Distribution: Returns a predictive distribution with batch shape `(S,)` and
-            event shape `(obs_dim,)`, where `S` is the size of `dts`. That is, the resulting
-            predictive distributions do not encode correlations between distinct times in `dts`.
-        """
-        raise NotImplementedError
+from base import TimeSeriesModel
 
 
 class IndependentMaternGP(TimeSeriesModel):
@@ -111,9 +80,9 @@ class IndependentMaternGP(TimeSeriesModel):
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
         return self._get_dist().filter(targets.t().unsqueeze(-1))
 
-    def _predict(self, dts, filtering_state, include_observation_noise=True):
+    def _forecast(self, dts, filtering_state, include_observation_noise=True):
         """
-        Internal helper for prediction.
+        Internal helper for forecasting.
         """
         assert dts.dim() == 1
         dts = dts.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
@@ -127,7 +96,7 @@ class IndependentMaternGP(TimeSeriesModel):
             predicted_function_covar = predicted_function_covar + self._get_obs_noise_scale().pow(2.0)
         return predicted_mean, predicted_function_covar
 
-    def predict(self, targets, dts):
+    def forecast(self, targets, dts):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
             of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
@@ -140,5 +109,5 @@ class IndependentMaternGP(TimeSeriesModel):
             event shape `(obs_dim,)`, where `S` is the size of `dts`.
         """
         filtering_state = self._filter(targets)
-        predicted_mean, predicted_covar = self._predict(dts, filtering_state)
+        predicted_mean, predicted_covar = self._forecast(dts, filtering_state)
         return torch.distributions.Normal(predicted_mean, predicted_covar.sqrt())
