@@ -112,7 +112,7 @@ def main(num_vi_steps, num_bo_steps, seed):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.5.0')
+    assert pyro.__version__.startswith('0.5.1')
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
     parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
     parser.add_argument('--num-bo-steps', nargs="?", default=5, type=int)
