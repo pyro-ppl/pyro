@@ -22,4 +22,4 @@ def test_matern_kernel(num_gps, nu):
 
     # let's just check that these are PSD
     mk.stationary_covariance().cholesky()
-    # mk.process_covariance(forward).cholesky()
+    mk.process_covariance(forward).cholesky()

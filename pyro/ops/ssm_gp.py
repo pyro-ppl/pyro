@@ -16,8 +16,10 @@ class MaternKernel(nn.Module):
 
     :param float nu: The order of the Matern kernel (1.5 or 2.5)
     :param int num_gps: the number of GPs
-    :param torch.tensor log_length_scale_init: optional `num_gps`-dimensional vector of initializers for the length scale
-    :param torch.tensor log_kernel_scale_init: optional `num_gps`-dimensional vector of initializers for the kernel scale
+    :param torch.tensor log_length_scale_init: optional `num_gps`-dimensional vector of initializers
+        for the length scale
+    :param torch.tensor log_kernel_scale_init: optional `num_gps`-dimensional vector of initializers
+        for the kernel scale
 
     **References**
 
@@ -35,12 +37,12 @@ class MaternKernel(nn.Module):
         if log_length_scale_init is not None:
             assert log_length_scale_init.shape == (num_gps,)
         else:
-            log_length_scale_init = 0.01 * torch.randn(num_gps)
+            log_length_scale_init = torch.zeros(num_gps)
 
         if log_kernel_scale_init is not None:
             assert log_kernel_scale_init.shape == (num_gps,)
         else:
-            log_kernel_scale_init = 0.01 * torch.randn(num_gps)
+            log_kernel_scale_init = torch.zeros(num_gps)
 
         super(MaternKernel, self).__init__()
 
@@ -73,7 +75,7 @@ class MaternKernel(nn.Module):
                     dt * self.mask10 + \
                     (1.0 - root_three * dt_rho) * self.mask11
             return torch.exp(-root_three * dt_rho) * trans
-        else:
+        elif self.nu == 2.5:
             rho = self.log_length_scale.exp().unsqueeze(-1).unsqueeze(-1)
             dt_rho = root_five * dt / rho
             dt_rho_sq = dt_rho.pow(2.0)
@@ -81,13 +83,13 @@ class MaternKernel(nn.Module):
             dt_rho_qu = dt_rho.pow(4.0)
             dt_sq = dt ** 2.0
             trans = (1.0 + dt_rho + 0.5 * dt_rho_sq) * self.mask00 + \
-                    (-0.5 * dt_rho_cu / dt) * self.mask10 + \
-                    ((0.5 * dt_rho_qu - dt_rho_cu) / dt_sq) * self.mask20 + \
-                    ((dt_rho + 1.0) * dt) * self.mask01 + \
+                    (-0.5 * dt_rho_cu / dt) * self.mask01 + \
+                    ((0.5 * dt_rho_qu - dt_rho_cu) / dt_sq) * self.mask02 + \
+                    ((dt_rho + 1.0) * dt) * self.mask10 + \
                     (1.0 + dt_rho - dt_rho_sq) * self.mask11 + \
-                    ((dt_rho_cu - 3.0 * dt_rho_sq) / dt) * self.mask21 + \
-                    (0.5 * dt_sq) * self.mask02 + \
-                    ((1.0 - 0.5 * dt_rho) * dt) * self.mask12 + \
+                    ((dt_rho_cu - 3.0 * dt_rho_sq) / dt) * self.mask12 + \
+                    (0.5 * dt_sq) * self.mask20 + \
+                    ((1.0 - 0.5 * dt_rho) * dt) * self.mask21 + \
                     (1.0 - 2.0 * dt_rho + 0.5 * dt_rho_sq) * self.mask22
             return torch.exp(-dt_rho) * trans
 
@@ -101,16 +103,15 @@ class MaternKernel(nn.Module):
         if self.nu == 1.5:
             sigmasq = (2.0 * self.log_kernel_scale).exp().unsqueeze(-1).unsqueeze(-1)
             rhosq = (2.0 * self.log_length_scale).exp().unsqueeze(-1).unsqueeze(-1)
-            p_infinity = sigmasq * self.mask00 + \
-                         (3.0 * sigmasq / rhosq) * self.mask11
-            return p_infinity
+            p_infinity = self.mask00 + (3.0 / rhosq) * self.mask11
+            return sigmasq * p_infinity
         elif self.nu == 2.5:
             sigmasq = (2.0 * self.log_kernel_scale).exp().unsqueeze(-1).unsqueeze(-1)
             rhosq = (2.0 * self.log_length_scale).exp().unsqueeze(-1).unsqueeze(-1)
-            p_infinity = sigmasq * self.mask00 + \
-                         five_thirds * sigmasq / rhosq * (self.mask11 - self.mask02 - self.mask20) + \
-                         25.0 * sigmasq / rhosq.pow(2.0)
-            return p_infinity
+            p_infinity = self.mask00 + \
+                         (five_thirds / rhosq) * (self.mask11 - self.mask02 - self.mask20) + \
+                         (25.0 / rhosq.pow(2.0)) * self.mask22
+            return sigmasq * p_infinity
 
     def process_covariance(self, A):
         """
