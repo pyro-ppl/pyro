@@ -108,8 +108,9 @@ class MaternKernel(nn.Module):
         elif self.nu == 2.5:
             sigmasq = (2.0 * self.log_kernel_scale).exp().unsqueeze(-1).unsqueeze(-1)
             rhosq = (2.0 * self.log_length_scale).exp().unsqueeze(-1).unsqueeze(-1)
+            p_infinity = 0.0
             p_infinity = self.mask00 + \
-                five_thirds / rhosq) * (self.mask11 - self.mask02 - self.mask20) + \
+                (five_thirds / rhosq) * (self.mask11 - self.mask02 - self.mask20) + \
                 (25.0 / rhosq.pow(2.0)) * self.mask22
             return sigmasq * p_infinity
 
