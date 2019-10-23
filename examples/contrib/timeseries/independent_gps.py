@@ -1,5 +1,7 @@
 import numpy as np
 import torch
+
+import pyro
 from pyro.contrib.timeseries import IndependentMaternGP
 
 import argparse
