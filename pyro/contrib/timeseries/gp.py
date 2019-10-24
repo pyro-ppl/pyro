@@ -220,7 +220,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         assert dts.dim() == 1
         dts = dts.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
         trans_mat = self.kernel.transition_matrix(dts)
-        trans_mat = block_diag(trans_mat)
+        trans_mat = block_diag(trans_mat)  # S x full_state_dim x full_state_dim
         trans_obs = torch.matmul(trans_mat, self._get_obs_matrix())  # S x full_state_dim x O
         predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), trans_obs).squeeze(-2)
         predicted_function_covar = torch.matmul(trans_obs.transpose(-1, -2),
