@@ -35,9 +35,8 @@ def test_independent_matern_gp(model, nu, obs_dim, T):
     else:
         assert gp_log_prob.dim() == 0
 
-    times = dt * torch.arange(T).double()
-
     if model == 'imgp':
+        times = dt * torch.arange(T).double()
         for dim in range(obs_dim):
             lengthscale = gp.kernel.log_length_scale.exp()[dim]
             variance = (2.0 * gp.kernel.log_kernel_scale).exp()[dim]
