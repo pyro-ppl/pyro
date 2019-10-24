@@ -54,9 +54,9 @@ def convolve(signal, kernel, mode='full'):
     padded_size = m + n - 1
     # Round up to next power of 2 for cheaper fft.
     padded_size = 2 ** int(math.ceil(math.log2(padded_size)))
-    f_signal = torch.rfft(torch.nn.functional.pad(signal, (0, padded_size - m)), 1)
-    f_kernel = torch.rfft(torch.nn.functional.pad(kernel, (0, padded_size - n)), 1)
+    f_signal = torch.rfft(torch.nn.functional.pad(signal, (0, padded_size - m)), 1, onesided=False)
+    f_kernel = torch.rfft(torch.nn.functional.pad(kernel, (0, padded_size - n)), 1, onesided=False)
     f_result = _complex_mul(f_signal, f_kernel)
-    result = torch.irfft(f_result, 1)
+    result = torch.irfft(f_result, 1, onesided=False)
 
     return result[..., :truncate]
