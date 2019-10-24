@@ -38,9 +38,7 @@ def test_convolve_shape(m, n, mode):
 @pytest.mark.parametrize('m', [2, 3, 4, 5, 6, 10])
 @pytest.mark.parametrize('n', [2, 3, 4, 5, 6, 10])
 @pytest.mark.parametrize('batch_shape', [(), (4,), (2, 3)], ids=str)
-@pytest.mark.parametrize('mode', ['full', 
-    #'valid',
-    'same'])
+@pytest.mark.parametrize('mode', ['full', 'valid', 'same'])
 def test_convolve(batch_shape, m, n, mode):
     signal = torch.randn(*batch_shape, m)
     kernel = torch.randn(*batch_shape, n)
