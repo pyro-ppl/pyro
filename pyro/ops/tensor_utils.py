@@ -36,7 +36,7 @@ def convolve(signal, kernel, mode='full'):
         and ``n = kernel.size(-1)``, the rightmost size of the result will be:
         ``m + n - 1`` if mode is 'full';
         ``max(m, n) - min(m, n) + 1`` if mode is 'valid'; or
-        ``m`` if mode is 'same'.
+        ``max(m, n)`` if mode is 'same'.
     :rtype torch.Tensor:
     """
     m = signal.size(-1)
@@ -46,7 +46,7 @@ def convolve(signal, kernel, mode='full'):
     elif mode == 'valid':
         truncate = max(m, n) - min(m, n) + 1
     elif mode == 'same':
-        truncate = m
+        truncate = max(m, n)
     else:
         raise ValueError('Unknown mode: {}'.format(mode))
 

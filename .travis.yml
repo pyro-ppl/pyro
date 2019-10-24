@@ -37,6 +37,14 @@ branches:
 
 jobs:
     include:
+        # TODO remove these before merging
+        - stage: debug
+          python: 3.6
+          script:
+              - pytest -vs tests/ops/test_tensor_utils.py
+        - stage: fail
+          script: test ''  # will fail
+
         - stage: lint
           name: lint
           python: 3.5

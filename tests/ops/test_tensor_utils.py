@@ -1,5 +1,5 @@
 import pytest
-import scipy.signal
+import numpy as np
 import torch
 
 from pyro.ops.tensor_utils import block_diag, convolve
@@ -31,7 +31,7 @@ def test_convolve_shape(m, n, mode):
     signal = torch.randn(m)
     kernel = torch.randn(n)
     actual = convolve(signal, kernel, mode)
-    expected = scipy.signal.convolve(signal, kernel, mode=mode)
+    expected = np.convolve(signal, kernel, mode=mode)
     assert actual.shape == expected.shape
 
 
@@ -44,7 +44,7 @@ def test_convolve(batch_shape, m, n, mode):
     kernel = torch.randn(*batch_shape, n)
     actual = convolve(signal, kernel, mode)
     expected = torch.stack([
-        torch.tensor(scipy.signal.convolve(s, k, mode=mode))
+        torch.tensor(np.convolve(s, k, mode=mode))
         for s, k in zip(signal.reshape(-1, m), kernel.reshape(-1, n))
     ]).reshape(*batch_shape, -1)
     assert_close(actual, expected)
