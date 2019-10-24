@@ -26,6 +26,17 @@ def test_block_diag(batch_size, block_size):
 
 @pytest.mark.parametrize('m', [2, 3, 4, 5, 6, 10])
 @pytest.mark.parametrize('n', [2, 3, 4, 5, 6, 10])
+@pytest.mark.parametrize('mode', ['full', 'valid', 'same'])
+def test_convolve_shape(m, n, mode):
+    signal = torch.randn(m)
+    kernel = torch.randn(n)
+    actual = convolve(signal, kernel, mode)
+    expected = scipy.signal.convolve(signal, kernel, mode=mode)
+    assert actual.shape == expected.shape
+
+
+@pytest.mark.parametrize('m', [2, 3, 4, 5, 6, 10])
+@pytest.mark.parametrize('n', [2, 3, 4, 5, 6, 10])
 @pytest.mark.parametrize('batch_shape', [(), (4,), (2, 3)], ids=str)
 @pytest.mark.parametrize('mode', ['full', 'valid', 'same'])
 def test_convolve(batch_shape, m, n, mode):
