@@ -119,7 +119,7 @@ class IndependentMaternGP(TimeSeriesModel):
         return torch.distributions.Normal(predicted_mean, predicted_covar.sqrt())
 
 
-class CoupledMaternGP(TimeSeriesModel):
+class LinearlyCoupledMaternGP(TimeSeriesModel):
     """
     A time series model in which each output dimension is modeled as a linear combination
     of shared univariate Gaussian Processes with Matern kernels.
@@ -154,7 +154,7 @@ class CoupledMaternGP(TimeSeriesModel):
         self.obs_dim = obs_dim
         self.num_gps = num_gps
 
-        super(CoupledMaternGP, self).__init__()
+        super(LinearlyCoupledMaternGP, self).__init__()
 
         self.kernel = MaternKernel(nu=nu, num_gps=num_gps,
                                    log_length_scale_init=log_length_scale_init,
@@ -186,7 +186,7 @@ class CoupledMaternGP(TimeSeriesModel):
 
     def _get_dist(self):
         """
-        Get the `GaussianHMM` distribution that corresponds to a `CoupledMaternGP`.
+        Get the `GaussianHMM` distribution that corresponds to a `LinearlyCoupledMaternGP`.
         """
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
         trans_matrix = block_diag(trans_matrix)

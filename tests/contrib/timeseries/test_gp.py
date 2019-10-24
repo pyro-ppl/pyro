@@ -2,11 +2,11 @@ import torch
 
 from tests.common import assert_equal
 import pyro
-from pyro.contrib.timeseries import IndependentMaternGP, CoupledMaternGP
+from pyro.contrib.timeseries import IndependentMaternGP, LinearlyCoupledMaternGP
 import pytest
 
 
-@pytest.mark.parametrize('model', ['cmgp', 'imgp'])
+@pytest.mark.parametrize('model', ['lcmgp', 'imgp'])
 @pytest.mark.parametrize('nu', [1.5, 2.5])
 @pytest.mark.parametrize('obs_dim', [1, 3])
 @pytest.mark.parametrize('T', [11, 37])
@@ -14,11 +14,11 @@ def test_independent_matern_gp(model, nu, obs_dim, T):
     torch.set_default_tensor_type('torch.DoubleTensor')
     dt = 0.1 + torch.rand(1).item()
 
-    if model == 'cmgp':
+    if model == 'lcmgp':
         if obs_dim == 1:
             return
         num_gps = 2
-        gp = CoupledMaternGP(nu=nu, obs_dim=obs_dim, dt=dt, num_gps=num_gps,
+        gp = LinearlyCoupledMaternGP(nu=nu, obs_dim=obs_dim, dt=dt, num_gps=num_gps,
                              log_length_scale_init=torch.randn(num_gps),
                              log_kernel_scale_init=torch.randn(num_gps),
                              log_obs_noise_scale_init=torch.randn(obs_dim))
