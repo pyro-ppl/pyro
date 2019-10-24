@@ -53,7 +53,7 @@ def convolve(signal, kernel, mode='full'):
         raise ValueError('Unknown mode: {}'.format(mode))
 
     # Compute convolution using fft.
-    padded_size = m + n
+    padded_size = m + n - 1
     # Round up to next power of 2 for cheaper fft.
     padded_size = 2 ** int(math.ceil(math.log2(padded_size)))
     f_signal = torch.rfft(torch.nn.functional.pad(signal, (0, padded_size - m)), 1)
