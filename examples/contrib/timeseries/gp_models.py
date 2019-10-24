@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 import pyro
-from pyro.contrib.timeseries import IndependentMaternGP
+from pyro.contrib.timeseries import IndependentMaternGP, CoupledMaternGP
 
 import argparse
 from os.path import exists
@@ -43,11 +43,17 @@ def main(args):
     torch.manual_seed(args.seed)
 
     # set up model
-    gp = IndependentMaternGP(nu=1.5, obs_dim=obs_dim,
-                             log_length_scale_init=0.5 * torch.ones(obs_dim)).double()
+    if args.model == "imgp":
+        gp = IndependentMaternGP(nu=1.5, obs_dim=obs_dim,
+                                 log_length_scale_init=0.5 * torch.ones(obs_dim)).double()
+    elif args.model == "cmgp":
+        num_gps = 11
+        gp = CoupledMaternGP(nu=1.5, obs_dim=obs_dim, num_gps=num_gps,
+                             log_length_scale_init=0.5 * torch.ones(num_gps)).double()
 
     # set up optimizer
-    adam = torch.optim.Adam(gp.parameters(), lr=args.init_learning_rate, betas=(args.beta1, 0.999), amsgrad=True)
+    adam = torch.optim.Adam(gp.parameters(), lr=args.init_learning_rate,
+                            betas=(args.beta1, 0.999), amsgrad=True)
     gamma = (args.final_learning_rate / args.init_learning_rate) ** (1.0 / args.num_steps)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(adam, gamma=gamma)
 
@@ -68,12 +74,16 @@ def main(args):
         assert not args.test
 
         # do rolling prediction
+        print("doing one-step-ahead forecasting...")
         pred_means, pred_stds = np.zeros((N_test, obs_dim)), np.zeros((N_test, obs_dim))
         for t in range(N_test):
             # predict one step into the future, conditioning on all previous data
-            pred_dist = gp.predict(data[0:N_train + t, :], torch.tensor([1.0]).double())
+            pred_dist = gp.forecast(data[0:N_train + t, :], torch.tensor([1.0]).double())
             pred_means[t, :] = pred_dist.loc.data.numpy()
-            pred_stds[t, :] = pred_dist.scale.data.numpy()
+            if args.model == "imgp":
+                pred_stds[t, :] = pred_dist.scale.data.numpy()
+            elif args.model == "cmgp":
+                pred_stds[t, :] = pred_dist.covariance_matrix.diagonal(dim1=-1, dim2=-2).data.numpy()
 
         import matplotlib
         matplotlib.use('Agg')  # noqa: E402
@@ -97,16 +107,17 @@ def main(args):
             ax.tick_params(axis='both', which='major', labelsize=14)
 
         plt.tight_layout(pad=0.7)
-        plt.savefig('eeg.pdf')
+        plt.savefig('eeg.{}.pdf'.format(args.model))
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.5.1')
+    #assert pyro.__version__.startswith('0.5.1')
     parser = argparse.ArgumentParser(description="contrib.timeseries example usage")
     parser.add_argument("-n", "--num-steps", default=500, type=int)
     parser.add_argument("-s", "--seed", default=0, type=int)
+    parser.add_argument("-m", "--model", default="imgp", type=str, choices=["imgp", "cmgp"])
     parser.add_argument("-ilr", "--init-learning-rate", default=0.01, type=float)
-    parser.add_argument("-flr", "--final-learning-rate", default=0.001, type=float)
+    parser.add_argument("-flr", "--final-learning-rate", default=0.0003, type=float)
     parser.add_argument("-b1", "--beta1", default=0.50, type=float)
     parser.add_argument("--test", action='store_true')
     parser.add_argument("--plot", action='store_true')
