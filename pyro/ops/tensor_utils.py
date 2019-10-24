@@ -20,8 +20,6 @@ def block_diag(m):
 def _complex_mul(a, b):
     ar, ai = a.unbind(-1)
     br, bi = b.unbind(-1)
-    # FIXME should b be conjugated?
-    # bi = -bi  # Conjugates b.
     return torch.stack([ar * br - ai * bi, ar * bi + ai * br], dim=-1)
 
 
