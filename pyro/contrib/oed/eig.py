@@ -316,7 +316,7 @@ def donsker_varadhan_eig(model, design, observation_labels, target_labels,
         `design`.
     :param int final_num_samples: The number of samples to use at the final evaluation, If `None,
         uses `num_samples`.
-    :return: EIG estimate, optionally includes full optimisatio history
+    :return: EIG estimate, optionally includes full optimization history
     :rtype: torch.Tensor or tuple
     """
     if isinstance(observation_labels, str):
