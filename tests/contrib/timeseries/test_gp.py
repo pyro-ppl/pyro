@@ -19,9 +19,9 @@ def test_independent_matern_gp(model, nu, obs_dim, T):
             return
         num_gps = 2
         gp = LinearlyCoupledMaternGP(nu=nu, obs_dim=obs_dim, dt=dt, num_gps=num_gps,
-                             log_length_scale_init=torch.randn(num_gps),
-                             log_kernel_scale_init=torch.randn(num_gps),
-                             log_obs_noise_scale_init=torch.randn(obs_dim))
+                                     log_length_scale_init=torch.randn(num_gps),
+                                     log_kernel_scale_init=torch.randn(num_gps),
+                                     log_obs_noise_scale_init=torch.randn(obs_dim))
     elif model == 'imgp':
         gp = IndependentMaternGP(nu=nu, obs_dim=obs_dim, dt=dt,
                                  log_length_scale_init=torch.randn(obs_dim),

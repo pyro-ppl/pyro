@@ -112,7 +112,7 @@ def main(args):
         for k, ax in enumerate(axes):
             which = [0, 4, 10][k]
 
-            #plot raw data
+            # plot raw data
             ax.plot(to_seconds * np.arange(T), data[:, which], 'ko', markersize=2, label='Data')
 
             # plot mean predictions for one-step-ahead forecasts
@@ -135,7 +135,7 @@ def main(args):
 
             ax.set_ylabel("$y_{%d}$" % (which + 1), fontsize=20)
             ax.tick_params(axis='both', which='major', labelsize=14)
-            if k==1:
+            if k == 1:
                 ax.legend(loc='upper left', fontsize=16)
 
         plt.tight_layout(pad=0.7)
