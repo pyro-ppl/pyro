@@ -1,9 +1,9 @@
 import pytest
-from tests.common import assert_equal
-
+import scipy.signal
 import torch
-from pyro.ops.tensor_utils import block_diag, conv1d_fft
 
+from pyro.ops.tensor_utils import block_diag, convolve
+from tests.common import assert_equal, assert_close
 
 pytestmark = pytest.mark.stage('unit')
 
@@ -24,16 +24,16 @@ def test_block_diag(batch_size, block_size):
         assert_equal(b[bottom:top, left:right], m[k])
 
 
-@pytest.mark.parametrize('T', [2, 3, 4, 5, 10])
+@pytest.mark.parametrize('m', [2, 3, 4, 5, 6, 10])
+@pytest.mark.parametrize('n', [2, 3, 4, 5, 6, 10])
 @pytest.mark.parametrize('batch_shape', [(), (4,), (2, 3)], ids=str)
-def test_conv1d_fft(batch_shape, T):
-    signal = torch.randn(T)  # not batched
-    kernel = torch.randn(*batch_shape, T).exp()  # batched
-    actual = conv1d_fft(signal, kernel)
-
-    # FIXME is this correct?
-    padded = torch.cat([torch.zeros_like(signal), signal])
-    expected = torch.stack([kernel @ padded[t:t+T]
-                            for t in range(1, 1+T)], dim=-1)
-    assert actual.shape == expected.shape
-    assert torch.allclose(actual, expected), (actual, expected)
+@pytest.mark.parametrize('mode', ['full', 'valid', 'same'])
+def test_convolve(batch_shape, m, n, mode):
+    signal = torch.randn(*batch_shape, m)
+    kernel = torch.randn(*batch_shape, n)
+    actual = convolve(signal, kernel, mode)
+    expected = torch.stack([
+        torch.tensor(scipy.signal.convolve(s, k, mode=mode))
+        for s, k in zip(signal.reshape(-1, m), kernel.reshape(-1, n))
+    ]).reshape(*batch_shape, -1)
+    assert_close(actual, expected)
