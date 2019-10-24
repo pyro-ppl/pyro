@@ -53,12 +53,11 @@ def convolve(signal, kernel, mode='full'):
     # Compute convolution using fft.
     padded_size = m + n - 1
     # Round up to next power of 2 for cheaper fft.
-    fast_ftt_size = 2 ** int(math.ceil(math.log2(padded_size)))
+    fast_ftt_size = 2 ** math.ceil(math.log2(padded_size))
     f_signal = torch.rfft(torch.nn.functional.pad(signal, (0, fast_ftt_size - m)), 1, onesided=False)
     f_kernel = torch.rfft(torch.nn.functional.pad(kernel, (0, fast_ftt_size - n)), 1, onesided=False)
     f_result = _complex_mul(f_signal, f_kernel)
     result = torch.irfft(f_result, 1, onesided=False)
 
-    result = result[..., :padded_size]
     start_idx = (padded_size - truncate) // 2
     return result[..., start_idx: start_idx + truncate]
