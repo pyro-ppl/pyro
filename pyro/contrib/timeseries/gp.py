@@ -222,14 +222,14 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         trans_mat, process_covar = self.kernel.transition_matrix_and_covariance(dt=dts)
         trans_mat = block_diag(trans_mat)  # S x full_state_dim x full_state_dim
         process_covar = block_diag(process_covar)  # S x full_state_dim x full_state_dim
-        obs_matrix = self._get_obs_matrix()  #  full_state_dim x obs_dim
+        obs_matrix = self._get_obs_matrix()  # full_state_dim x obs_dim
         trans_obs = torch.matmul(trans_mat, obs_matrix)  # S x full_state_dim x obs_dim
         predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), trans_obs).squeeze(-2)
         predicted_function_covar = torch.matmul(trans_obs.transpose(-1, -2),
                                                 torch.matmul(filtering_state.covariance_matrix,
-                                                trans_obs)) + \
-                                   torch.matmul(obs_matrix.transpose(-1, -2),
-                                                torch.matmul(process_covar, obs_matrix))
+                                                trans_obs))
+        predicted_function_covar = predicted_function_covar + \
+            torch.matmul(obs_matrix.transpose(-1, -2), torch.matmul(process_covar, obs_matrix))
 
         if include_observation_noise:
             eye = torch.eye(self.obs_dim, dtype=self.A.dtype, device=self.A.device)
