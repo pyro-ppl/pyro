@@ -50,25 +50,26 @@ def test_independent_matern_gp(model, nu, obs_dim, T):
             mvn_log_prob = mvn.log_prob(targets[:, dim])
             assert_equal(mvn_log_prob, gp_log_prob[dim])
 
-    for S in [1, 3]:
-        dts = torch.rand(S)
+    for S in [1, 5]:
+        dts = torch.rand(S).cumsum(dim=-1)
         predictive = gp.forecast(targets, dts)
         assert predictive.loc.shape == (S, obs_dim)
         if model == 'imgp':
             assert predictive.scale.shape == (S, obs_dim)
+            # assert monotonic increase of predictive noise
+            if S > 1:
+                delta = predictive.scale[1:S, :] - predictive.scale[0:S-1, :]
+                assert (delta > 0.0).sum() == (S - 1) * obs_dim
         else:
             assert predictive.covariance_matrix.shape == (S, obs_dim, obs_dim)
+            # assert monotonic increase of predictive noise
+            if S > 1:
+                dets = predictive.covariance_matrix.det()
+                delta = dets[1:S] - dets[0:S-1]
+                assert (delta > 0.0).sum() == (S - 1)
 
     # the distant future
     dts = torch.tensor([500.0])
     predictive = gp.forecast(targets, dts)
     # assert mean reverting
     assert_equal(predictive.loc, torch.zeros(1, obs_dim))
-    # assert large time covariance
-    if model == 'imgp':
-        expected_scale = gp._get_obs_noise_scale().unsqueeze(0)
-        assert_equal(predictive.scale, expected_scale)
-    else:
-        expected_cov = torch.eye(obs_dim) * gp._get_obs_noise_scale().pow(2.0)
-        expected_cov = expected_cov.unsqueeze(0)
-        assert_equal(predictive.covariance_matrix, expected_cov)
