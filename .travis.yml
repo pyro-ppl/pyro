@@ -39,7 +39,7 @@ jobs:
     include:
         - stage: lint
           name: lint
-          python: 3.6
+          python: 3.5
           before_install: pip install flake8 nbstripout nbformat
           install:
           script:
@@ -48,36 +48,36 @@ jobs:
               #  git diff-index --quiet HEAD
         - stage: auxiliary modules
           name: docs
-          python: 3.6
+          python: 3.5
           script:
               - pip install -r docs/requirements.txt
               - make docs
               - make doctest
         - name: perf
-          python: 3.6
+          python: 3.5
           script:
               - pip install -e .[profile]
               - pytest -vs --benchmark-disable tests/perf/test_benchmark.py
         - name: profiler
-          python: 3.6
+          python: 3.5
           script:
               - pip install -e .[profile]
               - python -m profiler.distributions
         - stage: unit test
           name: unit
-          python: 3.6
+          python: 3.5
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage unit --durations 20
         - name: examples
-          python: 3.6
+          python: 3.5
           script:
               - CI=1 pytest -vs --cov=pyro --cov-config .coveragerc --stage test_examples --durations 10
               - grep -l smoke_test tutorial/source/*.ipynb | xargs grep -L 'smoke_test = False' \
                   | CI=1 xargs pytest -vx --nbval-lax --current-env
         - name: integration batch_1
-          python: 3.6
+          python: 3.5
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_1 --durations 10
         - name: integration batch_2
-          python: 3.6
+          python: 3.5
           script: pytest -vs --cov=pyro --cov-config .coveragerc --stage integration_batch_2 --durations 10
 
 after_success:

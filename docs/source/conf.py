@@ -204,4 +204,4 @@ def setup(app):
 
 # @jpchen's hack to get rtd builder to install latest pytorch
 if 'READTHEDOCS' in os.environ:
-    os.system('pip install torch==1.2.0+cpu -f https://download.pytorch.org/whl/torch_stable.html')
+    os.system('pip install torch==1.3.0+cpu -f https://download.pytorch.org/whl/torch_stable.html')
