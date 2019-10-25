@@ -266,13 +266,21 @@ class ReweightedWakeSleep(ELBO):
         # this is not necessary since svi.py:108 does this
         wake_theta_loss, elbo = get_wake_theta_loss_from_log_weights(
             log_weights_detached_log_q)
-        wake_theta_loss.backward(retain_graph=True)
+        try:
+            wake_theta_loss.backward(retain_graph=True)
+        except:
+            pass
+            # print('no theta params')
 
         # RWS TODO: zero guide grads
         # this is necessary
         wake_phi_loss = get_wake_phi_loss_from_log_weights_and_log_qs(
             log_weights_detached_log_q, log_qs)
-        wake_phi_loss.backward()
+        try:
+            wake_phi_loss.backward()
+        except:
+            pass
+            print('no phi params')
 
         warn_if_nan(wake_theta_loss, "loss")
         warn_if_nan(wake_phi_loss, "loss")
