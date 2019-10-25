@@ -73,7 +73,7 @@ def get_importance_trace_detached(graph_type, max_plate_nesting, model, guide, *
     # RWS: detaching happens here
     for site in guide_trace.nodes.values():
         if site["type"] == "sample":
-            site["value"].detach()
+            site["value"] = site["value"].detach()
 
     model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                 graph_type=graph_type).get_trace(*args, **kwargs)
