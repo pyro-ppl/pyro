@@ -61,3 +61,38 @@ def convolve(signal, kernel, mode='full'):
 
     start_idx = (padded_size - truncate) // 2
     return result[..., start_idx: start_idx + truncate]
+
+
+def _double(M):
+    """
+    Internal helper function for parallel_scan_repeated_matmul
+    """
+    eye = torch.eye(M.size(-1), dtype=M.dtype, device=M.device)
+    eye = eye.expand(M[-1, ...].shape)
+    doubler = torch.stack([eye, M[-1, ...]]).unsqueeze(1)
+    doubled = torch.matmul(doubler, M).reshape(-1, *M.shape[1:])
+    return doubled
+
+
+def parallel_scan_repeated_matmul(M, n):
+    """
+    Takes a batch of matrices `M` as input and returns the stacked result of doing the
+    `n`-many matrix multiplications :math:`M`, :math:`M^2`, ..., :math:`M^n`.
+    Parallel cost is logarithmic in `n`.
+
+    :param torch.Tensor M: A batch of square tensors of shape (..., N, N).
+    :param int n: The order of the largest product :math:`M^n`
+    :returns torch.Tensor: A batch of square tensors of shape (n, ..., N, N)
+    """
+    assert M.size(-1) == M.size(-2), "Input tensors must satisfy M.size(-1) == M.size(-2)."
+    assert n > 0, "argument n to parallel_scan_repeated_matmul must be 1 or larger"
+
+    doubling_rounds = math.ceil(math.log(n, 2))
+
+    Msq = torch.matmul(M, M)
+    result = torch.stack([M, Msq])
+
+    for i in range(doubling_rounds):
+        result = _double(result)
+
+    return result[0:n, ...]

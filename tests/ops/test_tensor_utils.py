@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 import torch
 
-from pyro.ops.tensor_utils import block_diag, convolve
+from pyro.ops.tensor_utils import block_diag, convolve, parallel_scan_repeated_matmul
 from tests.common import assert_equal, assert_close
 
 pytestmark = pytest.mark.stage('unit')
@@ -48,3 +48,16 @@ def test_convolve(batch_shape, m, n, mode):
         for s, k in zip(signal.reshape(-1, m), kernel.reshape(-1, n))
     ]).reshape(*batch_shape, -1)
     assert_close(actual, expected)
+
+
+@pytest.mark.parametrize('size', [torch.Size([2, 2]), torch.Size([4, 3, 3]), torch.Size([4, 1, 2, 2])])
+@pytest.mark.parametrize('n', [1, 2, 3, 7, 8])
+def test_parallel_scan_repeated_matmul(size, n):
+    M = torch.randn(size)
+    result = parallel_scan_repeated_matmul(M, n)
+    assert result.shape == ((n,) + size)
+
+    serial_result = M
+    for i in range(n):
+        assert_equal(result[i, ...], serial_result)
+        serial_result = torch.matmul(serial_result, M)
