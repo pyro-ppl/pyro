@@ -39,13 +39,41 @@ def get_importance_trace(graph_type, max_plate_nesting, model, guide, *args, **k
     against it.
     """
 
-    # RWS: get a detached guide_trace
+    guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
+    model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
+                                graph_type=graph_type).get_trace(*args, **kwargs)
+    if is_validation_enabled():
+        check_model_guide_match(model_trace, guide_trace, max_plate_nesting)
+
+    guide_trace = prune_subsample_sites(guide_trace)
+    model_trace = prune_subsample_sites(model_trace)
+
+    model_trace.compute_log_prob()
+    guide_trace.compute_score_parts()
+    if is_validation_enabled():
+        for site in model_trace.nodes.values():
+            if site["type"] == "sample":
+                check_site_shape(site, max_plate_nesting)
+        for site in guide_trace.nodes.values():
+            if site["type"] == "sample":
+                check_site_shape(site, max_plate_nesting)
+
+    return model_trace, guide_trace
+
+
+# RWS: this is used to sample detached zs
+def get_importance_trace_detached(graph_type, max_plate_nesting, model, guide, *args, **kwargs):
+    """
+    Returns a single trace from the guide, and the model that is run
+    against it. Detaches all samples from the guide.
+    """
+
     guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
 
-    # RWS: detach zs, maybe like this
-    # for site in guide_trace.nodes.values():
-    #     if site["type"] == "sample":
-    #         site["value"].detach()
+    # RWS: detaching happens here
+    for site in guide_trace.nodes.values():
+        if site["type"] == "sample":
+            site["value"].detach()
 
     model_trace = poutine.trace(poutine.replay(model, trace=guide_trace),
                                 graph_type=graph_type).get_trace(*args, **kwargs)
