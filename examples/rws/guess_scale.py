@@ -35,11 +35,11 @@ if __name__ == '__main__':
     pyro.clear_param_store()
     svi = pyro.infer.SVI(model=scale,
                          guide=scale_parametrized_guide,
-                         optim=pyro.optim.SGD({'lr': 0.001, 'momentum': 0.1}),
+                         optim=pyro.optim.SGD({'lr': 0.01, 'momentum': 0.1}),
                          loss=pyro.infer.ReweightedWakeSleep(num_particles=num_particles))
 
     theta_losses, phi_losses, guesses, q_loc, q_log_scale = [], [], [], [], []
-    num_steps = 50000
+    num_steps = 10000
     for t in range(num_steps):
         theta_loss, phi_loss = svi.step(guess_init, guess_scale, obs_scale, obs)
         theta_losses.append(theta_loss)
