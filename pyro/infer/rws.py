@@ -6,7 +6,7 @@ import numpy as np
 
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
-from pyro.infer.enum import get_importance_trace
+from pyro.infer.enum import get_importance_trace_detached
 from pyro.infer.util import is_validation_enabled, torch_item
 from pyro.util import check_if_enumerated, warn_if_nan
 
@@ -118,8 +118,10 @@ class ReweightedWakeSleep(ELBO):
         Returns a single trace from the guide, and the model that is run
         against it.
         """
-        model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)  # RWS: possibly pass *args to detach
+
+        # RWS: this samples detached zs
+        model_trace, guide_trace = get_importance_trace_detached(
+            "flat", self.max_plate_nesting, model, guide, *args, **kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
@@ -236,7 +238,6 @@ class ReweightedWakeSleep(ELBO):
         log_qs = []
 
         # grab a vectorized trace from the generator
-        # RWS: make _get_traces detach zs
         # RWS: this loops once (check how to make this loop num_particles times)
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             log_weight = 0
