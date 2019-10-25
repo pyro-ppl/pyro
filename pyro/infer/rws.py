@@ -257,12 +257,12 @@ class ReweightedWakeSleep(ELBO):
             log_weights.append(log_weight)
             log_qs.append(log_q)
 
-        # TODO: zero model and guide grads
+        # RWS TODO: zero model and guide grads
         wake_theta_loss, elbo = get_wake_theta_loss_from_log_weights(
             log_weights)
         wake_theta_loss.backward(retain_graph=True)
 
-        # TODO: zero guide grads
+        # RWS TODO: zero guide grads
         wake_phi_loss = get_wake_phi_loss_from_log_weights_and_log_qs(
             log_weights, log_qs)
         wake_phi_loss.backward()
