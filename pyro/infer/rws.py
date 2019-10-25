@@ -50,9 +50,9 @@ class ReweightedWakeSleep(ELBO):
                           DeprecationWarning)
             max_plate_nesting = max_iarange_nesting
 
-        # force K > 1 and that everything is/can be vectorised
-        assert((num_particles > 1) and vectorize_particles), \
-            "Reweighted Wake Sleep needs to be run with more than one particle and vectorized"
+        # force K > 1 otherwise SNIS not possible
+        assert(num_particles > 1), \
+            "Reweighted Wake Sleep needs to be run with more than one particle"
 
         super(ReweightedWakeSleep, self).__init__(num_particles=num_particles,
                                                   max_plate_nesting=max_plate_nesting,
@@ -125,19 +125,25 @@ class ReweightedWakeSleep(ELBO):
             # compute log_weight and log_q
             for name, site in model_trace.nodes.items():
                 if site["type"] == "sample":
-                    log_p_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                    if self.vectorize_particles:
+                        log_p_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                    else:
+                        log_p_site = site["log_prob_sum"]
                     log_joint = log_joint + log_p_site
 
             for name, site in guide_trace.nodes.items():
                 if site["type"] == "sample":
-                    log_q_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                    if self.vectorize_particles:
+                        log_q_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
+                    else:
+                        log_q_site = site["log_prob_sum"]
                     log_q = log_q + log_q_site
 
             log_joints.append(log_joint)
             log_qs.append(log_q)
 
-        log_joints = log_joints[0] if self.vectorize_particles else torch.cat(log_joints)
-        log_qs = log_qs[0] if self.vectorize_particles else torch.cat(log_qs)
+        log_joints = log_joints[0] if self.vectorize_particles else torch.stack(log_joints)
+        log_qs = log_qs[0] if self.vectorize_particles else torch.stack(log_qs)
         log_weights = log_joints - log_qs.detach()
 
         # wake theta = iwae:
