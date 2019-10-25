@@ -63,17 +63,6 @@ def convolve(signal, kernel, mode='full'):
     return result[..., start_idx: start_idx + truncate]
 
 
-def _double(M):
-    """
-    Internal helper function for parallel_scan_repeated_matmul
-    """
-    eye = torch.eye(M.size(-1), dtype=M.dtype, device=M.device)
-    eye = eye.expand(M[-1, ...].shape)
-    doubler = torch.stack([eye, M[-1, ...]]).unsqueeze(1)
-    doubled = torch.matmul(doubler, M).reshape(-1, *M.shape[1:])
-    return doubled
-
-
 def parallel_scan_repeated_matmul(M, n):
     """
     Takes a batch of matrices `M` as input and returns the stacked result of doing the
@@ -92,6 +81,7 @@ def parallel_scan_repeated_matmul(M, n):
     result = torch.stack([M, torch.matmul(M, M)])
 
     for i in range(doubling_rounds):
-        result = _double(result)
+        doubled = torch.matmul(result[-1, ...].unsqueeze(0), result)
+        result = torch.stack([result, doubled]).reshape(-1, *result.shape[1:])
 
     return result[0:n, ...]
