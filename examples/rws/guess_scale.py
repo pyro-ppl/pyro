@@ -10,24 +10,25 @@ import pyro.distributions as dist
 pyro.set_rng_seed(101)
 
 
-def scale(guess, guess_scale, obs_scale, obs):
-    weight = pyro.sample('weight', dist.Normal(guess, guess_scale))
+def scale(guess_init, guess_scale, obs_scale, obs):
+    weight = pyro.sample('weight', dist.Normal(pyro.param('guess', torch.tensor(guess_init)), guess_scale))
     return pyro.sample('measurement', dist.Normal(weight, obs_scale), obs=obs)
 
 
-def scale_parametrized_guide(guess, guess_scale, obs_scale, obs):
+def scale_parametrized_guide(guess_init, guess_scale, obs_scale, obs):
     loc = pyro.param('loc', torch.tensor(0.))
     log_scale = pyro.param('log_scale', torch.tensor(0.))
     return pyro.sample('weight', dist.Normal(loc, torch.exp(log_scale)))
 
 
 if __name__ == '__main__':
-    guess = 8.5
+    guess_init = 8.5
     guess_scale = 1
     obs_scale = 0.75
     obs = 9.5
+    true_guess = obs
     true_q_scale = np.sqrt(1 / (1 / guess_scale**2 + 1 / obs_scale**2))
-    true_q_loc = true_q_scale**2 * (guess / guess_scale**2 + obs / obs_scale**2)
+    true_q_loc = true_q_scale**2 * (true_guess / guess_scale**2 + obs / obs_scale**2)
 
     num_particles = 7
 
@@ -37,19 +38,20 @@ if __name__ == '__main__':
                          optim=pyro.optim.SGD({'lr': 0.001, 'momentum': 0.1}),
                          loss=pyro.infer.ReweightedWakeSleep(num_particles=num_particles))
 
-    theta_losses, phi_losses, q_loc, q_log_scale = [], [], [], []
-    num_steps = 10000
+    theta_losses, phi_losses, guesses, q_loc, q_log_scale = [], [], [], [], []
+    num_steps = 10
     for t in range(num_steps):
-        theta_loss, phi_loss = svi.step(guess, guess_scale, obs_scale, obs)
+        theta_loss, phi_loss = svi.step(guess_init, guess_scale, obs_scale, obs)
         theta_losses.append(theta_loss)
         phi_losses.append(phi_loss)
+        guesses.append(pyro.param('guess').item())
         q_loc.append(pyro.param('loc').item())
         q_log_scale.append(pyro.param('log_scale').item())
         if t % 100 == 0:
             print('Iteration {}: theta loss = {}, phi loss = {}'.format(
                 t, theta_loss, phi_loss))
 
-    fig, axs = plt.subplots(4, 1, dpi=200, sharex=True)
+    fig, axs = plt.subplots(5, 1, dpi=200, sharex=True, figsize=(6, 10))
     axs[0].plot(theta_losses)
     axs[0].set_ylabel(r'$\theta$ loss')
     axs[1].plot(phi_losses)
@@ -60,6 +62,9 @@ if __name__ == '__main__':
     axs[3].plot(np.exp(q_log_scale))
     axs[3].set_ylabel('q scale')
     axs[3].axhline(true_q_scale, color='black')
+    axs[4].plot(guesses)
+    axs[4].set_ylabel('guess')
+    axs[4].axhline(true_guess, color='black')
     fig.tight_layout()
     filename = 'guess_scale.pdf'
     fig.savefig(filename, bbox_inches='tight')
