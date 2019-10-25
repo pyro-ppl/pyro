@@ -2,6 +2,7 @@ import math
 import warnings
 
 import torch
+import numpy as np
 
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
@@ -10,12 +11,57 @@ from pyro.infer.util import is_validation_enabled, torch_item
 from pyro.util import check_if_enumerated, warn_if_nan
 
 
+# RWS TODO: can we reuse these two functions from somewhere in the pyro codebase?
+def lognormexp(values, dim=0):
+    """Exponentiates, normalizes and takes log of a tensor.
+    Args:
+        values: tensor [dim_1, ..., dim_N]
+        dim: n
+    Returns:
+        result: tensor [dim_1, ..., dim_N]
+            where result[i_1, ..., i_N] =
+                                 exp(values[i_1, ..., i_N])
+            log( ------------------------------------------------------------ )
+                    sum_{j = 1}^{dim_n} exp(values[i_1, ..., j, ..., i_N])
+    """
+
+    log_denominator = torch.logsumexp(values, dim=dim, keepdim=True)
+    # log_numerator = values
+    return values - log_denominator
+
+
+def exponentiate_and_normalize(values, dim=0):
+    """Exponentiates and normalizes a tensor.
+    Args:
+        values: tensor [dim_1, ..., dim_N]
+        dim: n
+    Returns:
+        result: tensor [dim_1, ..., dim_N]
+            where result[i_1, ..., i_N] =
+                            exp(values[i_1, ..., i_N])
+            ------------------------------------------------------------
+             sum_{j = 1}^{dim_n} exp(values[i_1, ..., j, ..., i_N])
+    """
+
+    return torch.exp(lognormexp(values, dim=dim))
+
+
 def get_wake_theta_loss_from_log_weights(log_weights):
-    pass
+    # RWS TODO: check this and do it properly
+    log_weights = torch.cat(log_weights).view(-1)
+    num_particles = len(log_weights)
+    iwae_elbo = torch.logsumexp(log_weights, dim=0) - np.log(num_particles)
+    loss = -iwae_elbo
+    elbo = torch.mean(log_weights).detach()
+    return loss, elbo
 
 
 def get_wake_phi_loss_from_log_weights_and_log_qs(log_weights, log_qs):
-    pass
+    # RWS TODO: check this and do it properly
+    log_weights = torch.cat(log_weights).view(-1)
+    log_qs = torch.cat(log_qs).view(-1)
+    normalized_weights = exponentiate_and_normalize(log_weights)
+    return torch.mean(-torch.sum(normalized_weights.detach() * log_qs))
 
 
 class ReweightedWakeSleep(ELBO):
@@ -113,7 +159,7 @@ class ReweightedWakeSleep(ELBO):
         warn_if_nan(loss, "loss")
         return loss
 
-    def loss_and_grads(self, model, guide, *args, **kwargs):
+    def loss_and_grads_old(self, model, guide, *args, **kwargs):
         """
         :returns: returns an estimate of the ELBO
         :rtype: float
@@ -178,7 +224,7 @@ class ReweightedWakeSleep(ELBO):
         warn_if_nan(_loss, "loss")
         return _loss
 
-    def losses_and_grads(self, model, guide, *args, **kwargs):
+    def loss_and_grads(self, model, guide, *args, **kwargs):
         """
         :returns: returns model loss and guide loss
         :rtype: float
@@ -191,7 +237,7 @@ class ReweightedWakeSleep(ELBO):
 
         # grab a vectorized trace from the generator
         # RWS: make _get_traces detach zs
-        # RWS: this loops num_particles times
+        # RWS: this loops once (check how to make this loop num_particles times)
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             log_weight = 0
             log_q = 0
