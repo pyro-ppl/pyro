@@ -14,10 +14,10 @@ class ReflectedDistribution(TransformedDistribution):
     """
     support = constraints.positive
 
-    def __init__(self, base_dist):
+    def __init__(self, base_dist, validate_args=None):
         if base_dist.event_shape:
             raise ValueError("Only univariate distributions can be reflected.")
-        super().__init__(base_dist, AbsTransform())
+        super().__init__(base_dist, AbsTransform(), validate_args)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(type(self), _instance)
