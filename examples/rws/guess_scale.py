@@ -31,13 +31,15 @@ if __name__ == '__main__':
     true_q_scale = np.sqrt(1 / (1 / guess_scale**2 + 1 / obs_scale**2))
     true_q_loc = true_q_scale**2 * (true_guess / guess_scale**2 + obs / obs_scale**2)
 
-    num_particles = 7
+    num_particles = 10
+    vectorize=True
 
     pyro.clear_param_store()
     svi = pyro.infer.SVI(model=scale,
                          guide=scale_parametrized_guide,
                          optim=pyro.optim.SGD({'lr': 0.01, 'momentum': 0.1}),
-                         loss=pyro.infer.ReweightedWakeSleep(num_particles=num_particles))
+                         loss=pyro.infer.ReweightedWakeSleep(num_particles=num_particles,
+                                                             vectorize_particles=vectorize))
 
     theta_losses, phi_losses, guesses, q_loc, q_log_scale = [], [], [], [], []
     num_steps = 2000
