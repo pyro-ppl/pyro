@@ -61,4 +61,6 @@ if __name__ == '__main__':
     axs[3].set_ylabel('q scale')
     axs[3].axhline(true_q_scale, color='black')
     fig.tight_layout()
-    plt.show()
+    filename = 'guess_scale.pdf'
+    fig.savefig(filename, bbox_inches='tight')
+    print('Saved to {}'.format(filename))
