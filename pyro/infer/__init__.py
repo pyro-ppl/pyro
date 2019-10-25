@@ -5,6 +5,7 @@ from pyro.infer.elbo import ELBO
 from pyro.infer.enum import config_enumerate
 from pyro.infer.importance import Importance
 from pyro.infer.renyi_elbo import RenyiELBO
+from pyro.infer.rws import ReweightedWakeSleep
 from pyro.infer.smcfilter import SMCFilter
 from pyro.infer.svi import SVI
 from pyro.infer.trace_elbo import JitTrace_ELBO, Trace_ELBO
@@ -32,6 +33,7 @@ __all__ = [
     "JitTrace_ELBO",
     "RBFSteinKernel",
     "RenyiELBO",
+    "ReweightedWakeSleep",
     "SMCFilter",
     "SVGD",
     "SVI",
