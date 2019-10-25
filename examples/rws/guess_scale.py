@@ -39,7 +39,7 @@ if __name__ == '__main__':
                          loss=pyro.infer.ReweightedWakeSleep(num_particles=num_particles))
 
     theta_losses, phi_losses, guesses, q_loc, q_log_scale = [], [], [], [], []
-    num_steps = 10000
+    num_steps = 50000
     for t in range(num_steps):
         theta_loss, phi_loss = svi.step(guess_init, guess_scale, obs_scale, obs)
         theta_losses.append(theta_loss)
@@ -48,8 +48,8 @@ if __name__ == '__main__':
         q_loc.append(pyro.param('loc').item())
         q_log_scale.append(pyro.param('log_scale').item())
         if t % 100 == 0:
-            print('Iteration {}: theta loss = {}, phi loss = {}'.format(
-                t, theta_loss, phi_loss))
+            print('Iteration {}: theta loss = {}, phi loss = {}, q_log_scale = {}'.format(
+                t, theta_loss, phi_loss, q_log_scale[-1]))
 
     fig, axs = plt.subplots(5, 1, dpi=200, sharex=True, figsize=(6, 10))
     axs[0].plot(theta_losses)
