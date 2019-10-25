@@ -63,7 +63,7 @@ def convolve(signal, kernel, mode='full'):
     return result[..., start_idx: start_idx + truncate]
 
 
-def parallel_scan_repeated_matmul(M, n):
+def repeated_matmul(M, n):
     """
     Takes a batch of matrices `M` as input and returns the stacked result of doing the
     `n`-many matrix multiplications :math:`M`, :math:`M^2`, ..., :math:`M^n`.
@@ -81,7 +81,7 @@ def parallel_scan_repeated_matmul(M, n):
     result = torch.stack([M, torch.matmul(M, M)])
 
     for i in range(doubling_rounds):
-        doubled = torch.matmul(result[-1, ...].unsqueeze(0), result)
+        doubled = torch.matmul(result[-1].unsqueeze(0), result)
         result = torch.stack([result, doubled]).reshape(-1, *result.shape[1:])
 
-    return result[0:n, ...]
+    return result[0:n]
