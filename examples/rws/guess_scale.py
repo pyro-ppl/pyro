@@ -39,7 +39,7 @@ if __name__ == '__main__':
                          loss=pyro.infer.ReweightedWakeSleep(num_particles=num_particles))
 
     theta_losses, phi_losses, guesses, q_loc, q_log_scale = [], [], [], [], []
-    num_steps = 10
+    num_steps = 10000
     for t in range(num_steps):
         theta_loss, phi_loss = svi.step(guess_init, guess_scale, obs_scale, obs)
         theta_losses.append(theta_loss)
