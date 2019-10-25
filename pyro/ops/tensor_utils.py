@@ -89,8 +89,7 @@ def parallel_scan_repeated_matmul(M, n):
 
     doubling_rounds = 0 if n <= 2 else math.ceil(math.log(n, 2)) - 1
 
-    Msq = torch.matmul(M, M)
-    result = torch.stack([M, Msq])
+    result = torch.stack([M, torch.matmul(M, M)])
 
     for i in range(doubling_rounds):
         result = _double(result)
