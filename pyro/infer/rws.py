@@ -235,36 +235,43 @@ class ReweightedWakeSleep(ELBO):
         Performs backward on the latter. Num_particle many samples are used to form the estimators.
         """
         log_weights = []
+        log_weights_detached_log_q = []
         log_qs = []
 
         # grab a vectorized trace from the generator
         # RWS: this loops once (check how to make this loop num_particles times)
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
             log_weight = 0
+            log_weight_detached_log_q = 0
             log_q = 0
 
             # compute log_weight and log_q
             for name, site in model_trace.nodes.items():
                 if site["type"] == "sample":
                     log_p_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
-                    log_weight = log_weight + log_p_site
+                    # log_weight = log_weight + log_p_site
+                    log_weight_detached_log_q = log_weight_detached_log_q + log_p_site
 
             for name, site in guide_trace.nodes.items():
                 if site["type"] == "sample":
                     log_q_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
-                    log_weight = log_weight - log_q_site
+                    # log_weight = log_weight - log_q_site
+                    log_weight_detached_log_q = log_weight_detached_log_q - log_q_site.detach()
                     log_q = log_q + log_q_site
+            log_weights_detached_log_q.append(log_weight_detached_log_q)
             log_weights.append(log_weight)
             log_qs.append(log_q)
 
         # RWS TODO: zero model and guide grads
+        # this is not necessary since svi.py:108 does this
         wake_theta_loss, elbo = get_wake_theta_loss_from_log_weights(
-            log_weights)
+            log_weights_detached_log_q)
         wake_theta_loss.backward(retain_graph=True)
 
         # RWS TODO: zero guide grads
+        # this is necessary
         wake_phi_loss = get_wake_phi_loss_from_log_weights_and_log_qs(
-            log_weights, log_qs)
+            log_weights_detached_log_q, log_qs)
         wake_phi_loss.backward()
 
         warn_if_nan(wake_theta_loss, "loss")
