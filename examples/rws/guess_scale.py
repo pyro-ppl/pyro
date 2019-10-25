@@ -11,7 +11,8 @@ pyro.set_rng_seed(101)
 
 
 def scale(guess_init, guess_scale, obs_scale, obs):
-    weight = pyro.sample('weight', dist.Normal(pyro.param('guess', torch.tensor(guess_init)), guess_scale))
+    guess_loc = pyro.param('guess', torch.tensor(guess_init))
+    weight = pyro.sample('weight', dist.Normal(guess_loc, guess_scale))
     return pyro.sample('measurement', dist.Normal(weight, obs_scale), obs=obs)
 
 
@@ -23,7 +24,7 @@ def scale_parametrized_guide(guess_init, guess_scale, obs_scale, obs):
 
 if __name__ == '__main__':
     guess_init = 8.5
-    guess_scale = 1
+    guess_scale = 1.0
     obs_scale = 0.75
     obs = 9.5
     true_guess = obs
@@ -39,7 +40,7 @@ if __name__ == '__main__':
                          loss=pyro.infer.ReweightedWakeSleep(num_particles=num_particles))
 
     theta_losses, phi_losses, guesses, q_loc, q_log_scale = [], [], [], [], []
-    num_steps = 10000
+    num_steps = 2000
     for t in range(num_steps):
         theta_loss, phi_loss = svi.step(guess_init, guess_scale, obs_scale, obs)
         theta_losses.append(theta_loss)
@@ -48,8 +49,8 @@ if __name__ == '__main__':
         q_loc.append(pyro.param('loc').item())
         q_log_scale.append(pyro.param('log_scale').item())
         if t % 100 == 0:
-            print('Iteration {}: theta loss = {}, phi loss = {}, q_log_scale = {}'.format(
-                t, theta_loss, phi_loss, q_log_scale[-1]))
+            print('Iteration {}: theta loss = {}, phi loss = {}'.format(
+                t, theta_loss, phi_loss))
 
     fig, axs = plt.subplots(5, 1, dpi=200, sharex=True, figsize=(6, 10))
     axs[0].plot(theta_losses)
