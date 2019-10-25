@@ -49,7 +49,7 @@ if __name__ == '__main__':
         q_loc.append(pyro.param('loc').item())
         q_log_scale.append(pyro.param('log_scale').item())
         if t % 100 == 0:
-            print('Iteration {}: theta loss = {}, phi loss = {}'.format(
+            print('Iteration {:<5}: theta loss = {}, phi loss = {}'.format(
                 t, theta_loss, phi_loss))
 
     fig, axs = plt.subplots(5, 1, dpi=200, sharex=True, figsize=(6, 10))

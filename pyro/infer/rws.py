@@ -140,12 +140,12 @@ class ReweightedWakeSleep(ELBO):
         log_qs = log_qs[0] if self.vectorize_particles else torch.cat(log_qs)
         log_weights = log_joints - log_qs.detach()
 
-        # wake theta == iwae:
+        # wake theta = iwae:
         log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(self.num_particles)
         wake_theta_loss = -log_mean_weight
         wake_theta_loss.backward(retain_graph=True)
 
-        # wake phi == reweighted csis
+        # wake phi = reweighted csis:
         normalised_weights = (log_weights - log_mean_weight).exp().detach()
         wake_phi_loss = -(normalised_weights * log_qs).sum()
         wake_phi_loss.backward()
