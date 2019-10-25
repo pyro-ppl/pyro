@@ -24,6 +24,8 @@ class ReflectedDistribution(TransformedDistribution):
         return super().expand(batch_shape, _instance=new)
 
     def log_prob(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
         dim = max(len(self.batch_shape), value.dim())
         plus_minus = value.new_tensor([1., -1.]).reshape((2,) + (1,) * dim)
         return self.base_dist.log_prob(plus_minus * value).logsumexp(0)
