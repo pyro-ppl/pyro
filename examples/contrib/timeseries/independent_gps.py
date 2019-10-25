@@ -9,6 +9,9 @@ from os.path import exists
 from urllib.request import urlopen
 
 
+pyro.enable_validation(__debug__)
+
+
 # download dataset from UCI archive
 def download_data():
     if not exists("eeg.dat"):
