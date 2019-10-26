@@ -120,7 +120,7 @@ class MaternKernel(nn.Module):
 
         :returns torch.Tensor: a batched covariance matrix of shape (num_gps, state_dim, state_dim)
         """
-        assert A.shape == (self.num_gps, self.state_dim, self.state_dim)
+        assert A.shape[-3:] == (self.num_gps, self.state_dim, self.state_dim)
         p = self.stationary_covariance()
         q = p - torch.matmul(A.transpose(-1, -2), torch.matmul(p, A))
         return q
