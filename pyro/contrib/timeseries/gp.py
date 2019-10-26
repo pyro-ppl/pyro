@@ -89,8 +89,8 @@ class IndependentMaternGP(TimeSeriesModel):
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=dts)
         predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), trans_matrix).squeeze(-2)[..., 0]
         predicted_function_covar = torch.matmul(trans_matrix.transpose(-1, -2), torch.matmul(
-                                                filtering_state.covariance_matrix, trans_matrix))[..., 0, 0] \
-                                                + process_covar[..., 0, 0]
+                                                filtering_state.covariance_matrix, trans_matrix))[..., 0, 0] + \
+            process_covar[..., 0, 0]
 
         if include_observation_noise:
             predicted_function_covar = predicted_function_covar + self._get_obs_noise_scale().pow(2.0)
