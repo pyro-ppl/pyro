@@ -88,4 +88,3 @@ def repeated_matmul(M, n):
         result = torch.stack([result, doubled]).reshape(-1, *result.shape[1:])
 
     return result[0:n]
->>>>>>> dev
