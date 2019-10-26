@@ -175,6 +175,13 @@ OMTMultivariateNormal
     :undoc-members:
     :show-inheritance:
 
+ReflectedDistribution
+---------------------
+.. autoclass:: pyro.distributions.ReflectedDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 RelaxedBernoulliStraightThrough
 -------------------------------
 .. autoclass:: pyro.distributions.RelaxedBernoulliStraightThrough

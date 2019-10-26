@@ -45,6 +45,7 @@ class IndependentMaternGP(TimeSeriesModel):
         return self.log_obs_noise_scale.exp()
 
     def _get_init_dist(self):
+<<<<<<< HEAD
         return torch.distributions.MultivariateNormal(torch.zeros(self.obs_dim, self.kernel.state_dim,
                                                                   dtype=self.obs_matrix.dtype,
                                                                   device=self.obs_matrix.device),
@@ -54,6 +55,13 @@ class IndependentMaternGP(TimeSeriesModel):
         return dist.Normal(torch.zeros(self.obs_dim, 1, 1,
                                        dtype=self.obs_matrix.dtype,
                                        device=self.obs_matrix.device),
+=======
+        return torch.distributions.MultivariateNormal(self.obs_matrix.new_zeros(self.obs_dim, self.kernel.state_dim),
+                                                      self.kernel.stationary_covariance().squeeze(-3))
+
+    def _get_obs_dist(self):
+        return dist.Normal(self.obs_matrix.new_zeros(self.obs_dim, 1, 1),
+>>>>>>> dev
                            self._get_obs_noise_scale().unsqueeze(-1).unsqueeze(-1)).to_event(1)
 
     def _get_dist(self):
@@ -61,9 +69,13 @@ class IndependentMaternGP(TimeSeriesModel):
         Get the `GaussianHMM` distribution that corresponds to `obs_dim`-many independent Matern GPs.
         """
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
+<<<<<<< HEAD
         trans_dist = MultivariateNormal(torch.zeros(self.obs_dim, 1, self.kernel.state_dim,
                                                     dtype=self.obs_matrix.dtype,
                                                     device=self.obs_matrix.device),
+=======
+        trans_dist = MultivariateNormal(self.obs_matrix.new_zeros(self.obs_dim, 1, self.kernel.state_dim),
+>>>>>>> dev
                                         process_covar.unsqueeze(-3))
         trans_matrix = trans_matrix.unsqueeze(-3)
         return dist.GaussianHMM(self._get_init_dist(), trans_matrix, trans_dist,
@@ -94,9 +106,15 @@ class IndependentMaternGP(TimeSeriesModel):
         dts = dts.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=dts)
         predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), trans_matrix).squeeze(-2)[..., 0]
+<<<<<<< HEAD
         predicted_function_covar = torch.matmul(trans_matrix.transpose(-1, -2),
                                                 torch.matmul(filtering_state.covariance_matrix,
                                                 trans_matrix))[..., 0, 0] + process_covar[..., 0, 0]
+=======
+        predicted_function_covar = torch.matmul(trans_matrix.transpose(-1, -2), torch.matmul(
+                                                filtering_state.covariance_matrix, trans_matrix))[..., 0, 0] + \
+            process_covar[..., 0, 0]
+>>>>>>> dev
 
         if include_observation_noise:
             predicted_function_covar = predicted_function_covar + self._get_obs_noise_scale().pow(2.0)
@@ -167,8 +185,12 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
     def _get_obs_matrix(self):
         # (num_gps, obs_dim) => (state_dim * num_gps, obs_dim)
         return self.A.repeat_interleave(self.kernel.state_dim, dim=0) * \
+<<<<<<< HEAD
             torch.tensor([1.0] + [0.0] * (self.kernel.state_dim - 1),
                          dtype=self.A.dtype, device=self.A.device).repeat(self.num_gps).unsqueeze(-1)
+=======
+            self.A.new_tensor([1.0] + [0.0] * (self.kernel.state_dim - 1)).repeat(self.num_gps).unsqueeze(-1)
+>>>>>>> dev
 
     def _get_obs_noise_scale(self):
         return self.log_obs_noise_scale.exp()
@@ -177,11 +199,19 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         return block_diag(self.kernel.stationary_covariance())
 
     def _get_init_dist(self):
+<<<<<<< HEAD
         loc = torch.zeros(self.full_state_dim, device=self.A.device, dtype=self.A.dtype)
         return MultivariateNormal(loc, self._stationary_covariance())
 
     def _get_obs_dist(self):
         loc = torch.zeros(self.obs_dim, device=self.A.device, dtype=self.A.dtype)
+=======
+        loc = self.A.new_zeros(self.full_state_dim)
+        return MultivariateNormal(loc, self._stationary_covariance())
+
+    def _get_obs_dist(self):
+        loc = self.A.new_zeros(self.obs_dim)
+>>>>>>> dev
         return dist.Normal(loc, self._get_obs_noise_scale()).to_event(1)
 
     def _get_dist(self):
@@ -191,7 +221,11 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
         trans_matrix = block_diag(trans_matrix)
         process_covar = block_diag(process_covar)
+<<<<<<< HEAD
         loc = torch.zeros(self.full_state_dim, dtype=self.A.dtype, device=self.A.device)
+=======
+        loc = self.A.new_zeros(self.full_state_dim)
+>>>>>>> dev
         trans_dist = MultivariateNormal(loc, process_covar)
         return dist.GaussianHMM(self._get_init_dist(), trans_matrix, trans_dist,
                                 self._get_obs_matrix(), self._get_obs_dist())
