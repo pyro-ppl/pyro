@@ -78,6 +78,9 @@ def repeated_matmul(M, n):
 
     doubling_rounds = 0 if n <= 2 else math.ceil(math.log(n, 2)) - 1
 
+    if n == 1:
+        return M.unsqueeze(0)
+
     result = torch.stack([M, torch.matmul(M, M)])
 
     for i in range(doubling_rounds):
