@@ -61,3 +61,30 @@ def convolve(signal, kernel, mode='full'):
 
     start_idx = (padded_size - truncate) // 2
     return result[..., start_idx: start_idx + truncate]
+
+
+def repeated_matmul(M, n):
+    """
+    Takes a batch of matrices `M` as input and returns the stacked result of doing the
+    `n`-many matrix multiplications :math:`M`, :math:`M^2`, ..., :math:`M^n`.
+    Parallel cost is logarithmic in `n`.
+
+    :param torch.Tensor M: A batch of square tensors of shape (..., N, N).
+    :param int n: The order of the largest product :math:`M^n`
+    :returns torch.Tensor: A batch of square tensors of shape (n, ..., N, N)
+    """
+    assert M.size(-1) == M.size(-2), "Input tensors must satisfy M.size(-1) == M.size(-2)."
+    assert n > 0, "argument n to parallel_scan_repeated_matmul must be 1 or larger"
+
+    doubling_rounds = 0 if n <= 2 else math.ceil(math.log(n, 2)) - 1
+
+    if n == 1:
+        return M.unsqueeze(0)
+
+    result = torch.stack([M, torch.matmul(M, M)])
+
+    for i in range(doubling_rounds):
+        doubled = torch.matmul(result[-1].unsqueeze(0), result)
+        result = torch.stack([result, doubled]).reshape(-1, *result.shape[1:])
+
+    return result[0:n]
