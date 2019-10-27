@@ -58,6 +58,8 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
             gp_obs_matrix[self.kernel.state_dim * i, i] = 1.0
         self.register_buffer("gp_obs_matrix", gp_obs_matrix)
 
+        self.obs_selector = torch.LongTensor([self.kernel.state_dim * d for d in range(obs_dim)])
+
     def _get_obs_matrix(self):
         # (obs_dim + state_dim, obs_dim) => (gp_state_dim * obs_dim + state_dim, obs_dim)
         return torch.cat([self.gp_obs_matrix, self.z_obs_matrix], dim=0)
@@ -117,26 +119,45 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         """
         Internal helper for forecasting.
         """
-        N_trans_matrix = repeated_matmul(self.z_trans_matrix, N_timesteps)
-        N_trans_obs = torch.matmul(N_trans_matrix, self.obs_matrix)
-        predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), N_trans_obs).squeeze(-2)
+        dts = torch.arange(N_timesteps, dtype=self.z_trans_matrix.dtype, device=self.z_trans_matrix.device) + 1.0
+        dts = dts.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
 
-        # first compute the contribution from filtering_state.covariance_matrix
-        predicted_covar1 = torch.matmul(N_trans_obs.transpose(-1, -2),
-                                        torch.matmul(filtering_state.covariance_matrix,
-                                        N_trans_obs))  # N O O
+        gp_trans_matrix, gp_process_covar = self.kernel.transition_matrix_and_covariance(dt=dts)
+        gp_trans_matrix = block_diag(gp_trans_matrix)
+        gp_process_covar = block_diag(gp_process_covar)
+
+        N_trans_matrix = repeated_matmul(self.z_trans_matrix, N_timesteps)
+        N_trans_obs = torch.matmul(N_trans_matrix, self.z_obs_matrix)
+
+        # z-state contribution + gp contribution
+        predicted_mean1 = torch.matmul(filtering_state.loc[-self.state_dim:].unsqueeze(-2), N_trans_obs).squeeze(-2)
+        predicted_mean2 = torch.matmul(filtering_state.loc[:self.full_gp_state_dim].unsqueeze(-2),
+                                       gp_trans_matrix).squeeze(-2)
+        predicted_mean = predicted_mean1 + predicted_mean2[..., self.obs_selector]
+
+        # first compute the contributions from filtering_state.covariance_matrix: z-space and gp
+        fs_cov = filtering_state.covariance_matrix
+        predicted_covar1z = torch.matmul(N_trans_obs.transpose(-1, -2),
+                                         torch.matmul(fs_cov[self.full_gp_state_dim:, self.full_gp_state_dim:],
+                                         N_trans_obs))  # N O O
+        predicted_covar1gp = torch.matmul(gp_trans_matrix.transpose(-1, -2),
+                                          torch.matmul(fs_cov[:self.full_gp_state_dim:, :self.full_gp_state_dim],
+                                          gp_trans_matrix))[..., self.obs_selector][..., self.obs_selector, :]
 
         # next compute the contribution from process noise that is injected at each timestep.
-        # (we need to do a cumulative sum to integrate across time)
-        process_covar = self._get_trans_dist().covariance_matrix
-        N_trans_obs_shift = torch.cat([self.obs_matrix.unsqueeze(0), N_trans_obs[0:-1]])
-        predicted_covar2 = torch.matmul(N_trans_obs_shift.transpose(-1, -2),
-                                        torch.matmul(process_covar, N_trans_obs_shift))  # N O O
+        # (we need to do a cumulative sum to integrate across time for the z-state contribution)
+        eye = torch.eye(self.state_dim, device=fs_cov.device, dtype=fs_cov.dtype)
+        z_process_covar = self.log_trans_noise_scale_sq.exp() * eye
+        N_trans_obs_shift = torch.cat([self.z_obs_matrix.unsqueeze(0), N_trans_obs[0:-1]])
+        predicted_covar2z = torch.matmul(N_trans_obs_shift.transpose(-1, -2),
+                                         torch.matmul(z_process_covar, N_trans_obs_shift))  # N O O
+        predicted_covar2gp = gp_process_covar[..., self.obs_selector][..., self.obs_selector, :]
 
-        predicted_covar = predicted_covar1 + torch.cumsum(predicted_covar2, dim=0)
+        predicted_covar = predicted_covar1z + predicted_covar1gp + \
+            predicted_covar2gp + torch.cumsum(predicted_covar2z, dim=0)
 
         if include_observation_noise:
-            eye = torch.eye(self.obs_dim, device=self.obs_matrix.device, dtype=self.obs_matrix.dtype)
+            eye = torch.eye(self.obs_dim, device=self.z_obs_matrix.device, dtype=self.z_obs_matrix.dtype)
             predicted_covar = predicted_covar + self._get_obs_noise_scale().pow(2.0) * eye
 
         return predicted_mean, predicted_covar
@@ -155,4 +176,4 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         """
         filtering_state = self._filter(targets)
         predicted_mean, predicted_covar = self._forecast(N_timesteps, filtering_state)
-        return torch.distributions.MultivariateNormal(predicted_mean, predicted_covar)
+        return MultivariateNormal(predicted_mean, predicted_covar)
