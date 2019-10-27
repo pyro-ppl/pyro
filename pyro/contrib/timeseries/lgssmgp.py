@@ -1,0 +1,158 @@
+import torch
+import torch.nn as nn
+from torch.distributions import MultivariateNormal
+
+import pyro.distributions as dist
+from pyro.contrib.timeseries.base import TimeSeriesModel
+from pyro.ops.tensor_utils import repeated_matmul, block_diag
+from pyro.ops.ssm_gp import MaternKernel
+
+
+class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
+    """
+    A generic Linear Gaussian State Space Model parameterized with arbitrary time invariant
+    transition and observation dynamics together with separate Gaussian Process noise models
+    for each output dimension. In more detail, the generative process is:
+
+        :math:`y_i(t) = \\sum_j A_{ij} z_j(t) + f_i(t) + \\epsilon_i(t)`
+
+    where the latent variables :math`{\\bf z}(t)` follow generic time invariant Linear Gaussian dynamics
+    and the math:`f_i(t)` are Gaussian Processes with Matern kernels.
+
+    The targets are (implicitly) assumed to be evenly spaced in time. In particular a timestep of
+    :math:`dt=1.0` for the continuous-time GP dynamics corresponds to a single discrete step of
+    the :math:`{\\bf z}`-space dynamics. Training and inference are logarithmic in the length of
+    the time series T.
+
+    :param int obs_dim: The dimension of the targets at each time step.
+    :param int state_dim: The dimension of the :math:`{\\bf z}` latent state at each time step.
+    :param float nu: The order of the Matern kernel; either 1.5 or 2.5.
+    """
+    def __init__(self, obs_dim=1, state_dim=2, nu=1.5, log_obs_noise_scale_init=None,
+                 log_length_scale_init=None, log_kernel_scale_init=None):
+        self.obs_dim = obs_dim
+        self.state_dim = state_dim
+        self.nu = nu
+
+        if log_obs_noise_scale_init is None:
+            log_obs_noise_scale_init = -2.0 * torch.ones(obs_dim)
+        assert log_obs_noise_scale_init.shape == (obs_dim,)
+
+        super(GenericLGSSMWithGPNoiseModel, self).__init__()
+
+        self.kernel = MaternKernel(nu=nu, num_gps=obs_dim,
+                                   log_length_scale_init=log_length_scale_init,
+                                   log_kernel_scale_init=log_kernel_scale_init)
+        self.dt = 1.0
+        self.full_state_dim = self.kernel.state_dim * obs_dim + state_dim
+        self.full_gp_state_dim = self.kernel.state_dim * obs_dim
+
+        self.log_obs_noise_scale = nn.Parameter(log_obs_noise_scale_init)
+        self.log_trans_noise_scale_sq = nn.Parameter(torch.zeros(state_dim))
+        self.z_trans_matrix = nn.Parameter(torch.eye(state_dim) + 0.03 * torch.randn(state_dim, state_dim))
+        self.z_obs_matrix = nn.Parameter(0.3 * torch.randn(state_dim, obs_dim))
+        self.log_init_noise_scale_sq = nn.Parameter(torch.zeros(state_dim))
+
+        gp_obs_matrix = torch.zeros(self.kernel.state_dim * obs_dim, obs_dim)
+        for i in range(obs_dim):
+            gp_obs_matrix[self.kernel.state_dim * i, i] = 1.0
+        self.register_buffer("gp_obs_matrix", gp_obs_matrix)
+
+    def _get_obs_matrix(self):
+        # (obs_dim + state_dim, obs_dim) => (gp_state_dim * obs_dim + state_dim, obs_dim)
+        return torch.cat([self.gp_obs_matrix, self.z_obs_matrix], dim=0)
+
+    def _get_obs_noise_scale(self):
+        return self.log_obs_noise_scale.exp()
+
+    def _get_init_dist(self):
+        loc = self.z_trans_matrix.new_zeros(self.full_state_dim)
+        covar = self.z_trans_matrix.new_zeros(self.full_state_dim, self.full_state_dim)
+        covar[:self.full_gp_state_dim, :self.full_gp_state_dim] = block_diag(self.kernel.stationary_covariance())
+        eye = torch.eye(self.state_dim, device=loc.device, dtype=loc.dtype)
+        covar[self.full_gp_state_dim:, self.full_gp_state_dim:] = self.log_init_noise_scale_sq.exp() * eye
+        return MultivariateNormal(loc, covar)
+
+    def _get_obs_dist(self):
+        loc = self.z_trans_matrix.new_zeros(self.obs_dim)
+        return dist.Normal(loc, self._get_obs_noise_scale()).to_event(1)
+
+    def _get_dist(self):
+        """
+        Get the `GaussianHMM` distribution that corresponds to `GenericLGSSMWithGPNoiseModel`.
+        """
+        gp_trans_matrix, gp_process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
+
+        trans_covar = self.z_trans_matrix.new_zeros(self.full_state_dim, self.full_state_dim)
+        trans_covar[:self.full_gp_state_dim, :self.full_gp_state_dim] = block_diag(gp_process_covar)
+        eye = torch.eye(self.state_dim, device=trans_covar.device, dtype=trans_covar.dtype)
+        trans_covar[self.full_gp_state_dim:, self.full_gp_state_dim:] = self.log_trans_noise_scale_sq.exp() * eye
+        trans_dist = MultivariateNormal(trans_covar.new_zeros(self.full_state_dim), trans_covar)
+
+        full_trans_mat = trans_covar.new_zeros(self.full_state_dim, self.full_state_dim)
+        full_trans_mat[:self.full_gp_state_dim, :self.full_gp_state_dim] = block_diag(gp_trans_matrix)
+        full_trans_mat[self.full_gp_state_dim:, self.full_gp_state_dim:] = self.z_trans_matrix
+
+        return dist.GaussianHMM(self._get_init_dist(), full_trans_mat, trans_dist,
+                                self._get_obs_matrix(), self._get_obs_dist())
+
+    def log_prob(self, targets):
+        """
+        :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
+            of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
+            is the dimension of the real-valued `targets` at each time step
+        :returns torch.Tensor: A (scalar) log probability.
+        """
+        assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
+        return self._get_dist().log_prob(targets)
+
+    def _filter(self, targets):
+        """
+        Return the filtering state for the associated state space model.
+        """
+        assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
+        return self._get_dist().filter(targets)
+
+    def _forecast(self, N_timesteps, filtering_state, include_observation_noise=True):
+        """
+        Internal helper for forecasting.
+        """
+        N_trans_matrix = repeated_matmul(self.z_trans_matrix, N_timesteps)
+        N_trans_obs = torch.matmul(N_trans_matrix, self.obs_matrix)
+        predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), N_trans_obs).squeeze(-2)
+
+        # first compute the contribution from filtering_state.covariance_matrix
+        predicted_covar1 = torch.matmul(N_trans_obs.transpose(-1, -2),
+                                        torch.matmul(filtering_state.covariance_matrix,
+                                        N_trans_obs))  # N O O
+
+        # next compute the contribution from process noise that is injected at each timestep.
+        # (we need to do a cumulative sum to integrate across time)
+        process_covar = self._get_trans_dist().covariance_matrix
+        N_trans_obs_shift = torch.cat([self.obs_matrix.unsqueeze(0), N_trans_obs[0:-1]])
+        predicted_covar2 = torch.matmul(N_trans_obs_shift.transpose(-1, -2),
+                                        torch.matmul(process_covar, N_trans_obs_shift))  # N O O
+
+        predicted_covar = predicted_covar1 + torch.cumsum(predicted_covar2, dim=0)
+
+        if include_observation_noise:
+            eye = torch.eye(self.obs_dim, device=self.obs_matrix.device, dtype=self.obs_matrix.dtype)
+            predicted_covar = predicted_covar + self._get_obs_noise_scale().pow(2.0) * eye
+
+        return predicted_mean, predicted_covar
+
+    def forecast(self, targets, N_timesteps):
+        """
+        :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
+            of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
+            is the dimension of the real-valued targets at each time step. These
+            represent the training data that are conditioned on for the purpose of making
+            forecasts.
+        :param int N_timesteps: The number of timesteps to forecast into the future from
+            the final target `targets[-1]`.
+        :returns torch.distributions.MultivariateNormal: Returns a predictive MultivariateNormal distribution
+            with batch shape `(N_timesteps,)` and event shape `(obs_dim,)`
+        """
+        filtering_state = self._filter(targets)
+        predicted_mean, predicted_covar = self._forecast(N_timesteps, filtering_state)
+        return torch.distributions.MultivariateNormal(predicted_mean, predicted_covar)
