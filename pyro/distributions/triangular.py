@@ -17,7 +17,7 @@ class Triangular(TorchDistribution):
     """
     arg_constraints = {'low': constraints.real, 'high': constraints.dependent, 'peak': constraints.dependent}
     support = constraints.dependent
-    has_rsample = False
+    has_rsample = True
 
     @property
     def mean(self):
@@ -47,14 +47,13 @@ class Triangular(TorchDistribution):
             if not torch.le(self.peak, self.high).all():
                 raise ValueError("Triangle is not defined when peak > high")
 
-    def sample(self, sample_shape=torch.Size()):
+    def rsample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
         interval_length = self.high - self.low
-        with torch.no_grad():
-            samples = self._uniform.sample(shape)
-            return torch.where(samples < (self.peak - self.low) / interval_length,
-                               self.low + torch.sqrt(samples * interval_length * (self.peak - self.low)),
-                               self.high - torch.sqrt((1. - samples) * interval_length * (self.high - self.peak)))
+        samples = self._uniform.rsample(shape)
+        return torch.where(samples < (self.peak - self.low) / interval_length,
+                           self.low + torch.sqrt(samples * interval_length * (self.peak - self.low)),
+                           self.high - torch.sqrt((1. - samples) * interval_length * (self.high - self.peak)))
 
     def log_prob(self, value):
         interval_length = self.high - self.low
