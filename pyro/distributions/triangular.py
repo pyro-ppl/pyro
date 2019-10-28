@@ -9,7 +9,8 @@ from pyro.distributions import TorchDistribution, Uniform
 
 class Triangular(TorchDistribution):
     """
-     A Triangular distribution.
+     A Triangular distribution with a probability density function shaped like a triangle.
+     The shape of the triangle is defined by the lower limit (low), upper limit (high) and the peak (mode).
 
     :param torch.Tensor low: lower range (inclusive).
     :param torch.Tensor high: upper range (inclusive).
