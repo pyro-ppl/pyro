@@ -32,7 +32,6 @@ def test_block_diag(batch_shape, mat_size, block_size):
     mat = torch.randn(batch_shape + (block_size,) + mat_size)
     mat_embed = block_diag_embed(mat)
     mat_embed_diag = block_diagonal(mat_embed, block_size)
-    assert mat_embed_diag.shape == mat.shape
     assert_equal(mat_embed_diag, mat)
 
 
