@@ -108,6 +108,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
         return self._get_dist().log_prob(targets)
 
+    @torch.no_grad()
     def _filter(self, targets):
         """
         Return the filtering state for the associated state space model.
@@ -115,6 +116,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
         return self._get_dist().filter(targets)
 
+    @torch.no_grad()
     def _forecast(self, N_timesteps, filtering_state, include_observation_noise=True):
         """
         Internal helper for forecasting.
@@ -124,7 +126,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
 
         gp_trans_matrix, gp_process_covar = self.kernel.transition_matrix_and_covariance(dt=dts)
         gp_trans_matrix = block_diag(gp_trans_matrix)
-        gp_process_covar = block_diag(gp_process_covar)
+        gp_process_covar = block_diag(gp_process_covar[..., 0:1, 0:1])
 
         N_trans_matrix = repeated_matmul(self.z_trans_matrix, N_timesteps)
         N_trans_obs = torch.matmul(N_trans_matrix, self.z_obs_matrix)
@@ -152,10 +154,9 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         N_trans_obs_shift = torch.cat([self.z_obs_matrix.unsqueeze(0), N_trans_obs[0:-1]])
         predicted_covar2z = torch.matmul(N_trans_obs_shift.transpose(-1, -2),
                                          torch.matmul(z_process_covar, N_trans_obs_shift))  # N O O
-        predicted_covar2gp = gp_process_covar[..., self.obs_selector][..., self.obs_selector, :]
 
-        predicted_covar = predicted_covar1z + predicted_covar1gp + \
-            predicted_covar2gp + torch.cumsum(predicted_covar2z, dim=0)
+        predicted_covar = predicted_covar1z + predicted_covar1gp + gp_process_covar + \
+            torch.cumsum(predicted_covar2z, dim=0)
 
         if include_observation_noise:
             eye = torch.eye(self.obs_dim, device=self.z_obs_matrix.device, dtype=self.z_obs_matrix.dtype)
