@@ -142,7 +142,8 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
                                          N_trans_obs))  # N O O
         gp_trans = gp_trans_matrix[..., self.obs_selector]
         predicted_covar1gp = torch.matmul(gp_trans.transpose(-1, -2),
-                                          torch.matmul(fs_cov[:self.full_gp_state_dim:, :self.full_gp_state_dim], gp_trans))
+                                          torch.matmul(fs_cov[:self.full_gp_state_dim:, :self.full_gp_state_dim],
+                                          gp_trans))
 
         # next compute the contribution from process noise that is injected at each timestep.
         # (we need to do a cumulative sum to integrate across time for the z-state contribution)
