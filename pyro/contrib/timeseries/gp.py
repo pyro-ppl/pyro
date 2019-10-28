@@ -5,7 +5,7 @@ from torch.distributions import MultivariateNormal
 import pyro.distributions as dist
 from pyro.ops.ssm_gp import MaternKernel
 from pyro.contrib.timeseries.base import TimeSeriesModel
-from pyro.ops.tensor_utils import block_diag
+from pyro.ops.tensor_utils import block_diag_embed
 
 
 class IndependentMaternGP(TimeSeriesModel):
@@ -167,7 +167,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         return self.log_obs_noise_scale.exp()
 
     def _stationary_covariance(self):
-        return block_diag(self.kernel.stationary_covariance())
+        return block_diag_embed(self.kernel.stationary_covariance())
 
     def _get_init_dist(self):
         loc = self.A.new_zeros(self.full_state_dim)
@@ -182,8 +182,8 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         Get the `GaussianHMM` distribution that corresponds to a `LinearlyCoupledMaternGP`.
         """
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
-        trans_matrix = block_diag(trans_matrix)
-        process_covar = block_diag(process_covar)
+        trans_matrix = block_diag_embed(trans_matrix)
+        process_covar = block_diag_embed(process_covar)
         loc = self.A.new_zeros(self.full_state_dim)
         trans_dist = MultivariateNormal(loc, process_covar)
         return dist.GaussianHMM(self._get_init_dist(), trans_matrix, trans_dist,
@@ -213,8 +213,8 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         assert dts.dim() == 1
         dts = dts.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
         trans_mat, process_covar = self.kernel.transition_matrix_and_covariance(dt=dts)
-        trans_mat = block_diag(trans_mat)  # S x full_state_dim x full_state_dim
-        process_covar = block_diag(process_covar)  # S x full_state_dim x full_state_dim
+        trans_mat = block_diag_embed(trans_mat)  # S x full_state_dim x full_state_dim
+        process_covar = block_diag_embed(process_covar)  # S x full_state_dim x full_state_dim
         obs_matrix = self._get_obs_matrix()  # full_state_dim x obs_dim
         trans_obs = torch.matmul(trans_mat, obs_matrix)  # S x full_state_dim x obs_dim
         predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), trans_obs).squeeze(-2)

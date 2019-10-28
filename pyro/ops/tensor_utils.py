@@ -3,18 +3,37 @@ import math
 import torch
 
 
-def block_diag(m):
+def block_diag_embed(mat):
     """
     Takes a tensor of shape (..., B, M, N) and returns a block diagonal tensor
     of shape (..., B x M, B x N).
 
-    :param torch.Tensor m: an input tensor with 3 or more dimensions
+    :param torch.Tensor mat: an input tensor with 3 or more dimensions
     :returns torch.Tensor: a block diagonal tensor with dimension `m.dim() - 1`
     """
-    assert m.dim() > 2, "Input to block_diag() must be of dimension 3 or higher"
-    B, M, N = m.shape[-3:]
-    eye = torch.eye(B, dtype=m.dtype, device=m.device).reshape(B, 1, B, 1)
-    return (m.unsqueeze(-2) * eye).reshape(m.shape[:-3] + (B * M, B * N))
+    assert mat.dim() > 2, "Input to block_diag() must be of dimension 3 or higher"
+    B, M, N = mat.shape[-3:]
+    eye = torch.eye(B, dtype=mat.dtype, device=mat.device).reshape(B, 1, B, 1)
+    return (mat.unsqueeze(-2) * eye).reshape(mat.shape[:-3] + (B * M, B * N))
+
+
+def block_diagonal(mat, block_size):
+    """
+    Takes a block diagonal tensor of shape (..., B x M, B x N) and returns a tensor
+    of shape (..., B, M, N).
+
+    :param torch.Tensor mat: an input tensor with 2 or more dimensions
+    :param int block_size: the number of blocks B.
+    :returns torch.Tensor: a tensor with dimension `mat.dim() + 1`
+    """
+    B = block_size
+    M = mat.size(-2) // B
+    N = mat.size(-1) // B
+    assert mat.shape[-2:] == (B * M, B * N)
+    mat = mat.reshape(mat.shape[:-2] + (B, M, B, N))
+    mat = mat.transpose(-2, -3)
+    mat = mat.reshape(mat.shape[:-4] + (B * B, M, N))
+    return mat[..., ::B + 1, :, :]
 
 
 def _complex_mul(a, b):
