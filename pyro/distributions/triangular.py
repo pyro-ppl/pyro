@@ -28,6 +28,10 @@ class Triangular(TorchDistribution):
         return (self.low**2 + self.high**2 + self.peak**2 - self.low * self.high - self.low * self.peak -
                 self.high * self.peak) / 18
 
+    @lazy_property
+    def entropy(self):
+        return 0.5 - torch.log(2.) + torch.log(self.high - self.low)
+
     def __init__(self, low, high, peak, validate_args=None):
         self.low, self.high, self.peak = broadcast_all(low, high, peak)
         self._uniform = Uniform(0, 1)
