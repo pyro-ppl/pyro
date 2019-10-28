@@ -4,7 +4,7 @@ from torch.distributions import MultivariateNormal
 
 import pyro.distributions as dist
 from pyro.contrib.timeseries.base import TimeSeriesModel
-from pyro.ops.tensor_utils import repeated_matmul, block_diag
+from pyro.ops.tensor_utils import repeated_matmul, block_diag_embed
 from pyro.ops.ssm_gp import MaternKernel
 
 
@@ -70,7 +70,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
     def _get_init_dist(self):
         loc = self.z_trans_matrix.new_zeros(self.full_state_dim)
         covar = self.z_trans_matrix.new_zeros(self.full_state_dim, self.full_state_dim)
-        covar[:self.full_gp_state_dim, :self.full_gp_state_dim] = block_diag(self.kernel.stationary_covariance())
+        covar[:self.full_gp_state_dim, :self.full_gp_state_dim] = block_diag_embed(self.kernel.stationary_covariance())
         eye = torch.eye(self.state_dim, device=loc.device, dtype=loc.dtype)
         covar[self.full_gp_state_dim:, self.full_gp_state_dim:] = self.log_init_noise_scale_sq.exp() * eye
         return MultivariateNormal(loc, covar)
@@ -86,13 +86,13 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         gp_trans_matrix, gp_process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
 
         trans_covar = self.z_trans_matrix.new_zeros(self.full_state_dim, self.full_state_dim)
-        trans_covar[:self.full_gp_state_dim, :self.full_gp_state_dim] = block_diag(gp_process_covar)
+        trans_covar[:self.full_gp_state_dim, :self.full_gp_state_dim] = block_diag_embed(gp_process_covar)
         eye = torch.eye(self.state_dim, device=trans_covar.device, dtype=trans_covar.dtype)
         trans_covar[self.full_gp_state_dim:, self.full_gp_state_dim:] = self.log_trans_noise_scale_sq.exp() * eye
         trans_dist = MultivariateNormal(trans_covar.new_zeros(self.full_state_dim), trans_covar)
 
         full_trans_mat = trans_covar.new_zeros(self.full_state_dim, self.full_state_dim)
-        full_trans_mat[:self.full_gp_state_dim, :self.full_gp_state_dim] = block_diag(gp_trans_matrix)
+        full_trans_mat[:self.full_gp_state_dim, :self.full_gp_state_dim] = block_diag_embed(gp_trans_matrix)
         full_trans_mat[self.full_gp_state_dim:, self.full_gp_state_dim:] = self.z_trans_matrix
 
         return dist.GaussianHMM(self._get_init_dist(), full_trans_mat, trans_dist,
@@ -125,8 +125,8 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         dts = dts.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
 
         gp_trans_matrix, gp_process_covar = self.kernel.transition_matrix_and_covariance(dt=dts)
-        gp_trans_matrix = block_diag(gp_trans_matrix)
-        gp_process_covar = block_diag(gp_process_covar[..., 0:1, 0:1])
+        gp_trans_matrix = block_diag_embed(gp_trans_matrix)
+        gp_process_covar = block_diag_embed(gp_process_covar[..., 0:1, 0:1])
 
         N_trans_matrix = repeated_matmul(self.z_trans_matrix, N_timesteps)
         N_trans_obs = torch.matmul(N_trans_matrix, self.z_obs_matrix)
