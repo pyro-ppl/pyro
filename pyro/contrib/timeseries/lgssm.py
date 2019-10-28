@@ -37,8 +37,8 @@ class GenericLGSSM(TimeSeriesModel):
 
     def _get_init_dist(self):
         loc = self.obs_matrix.new_zeros(self.state_dim)
-        eye = torch.eye(self.state_dim, device=self.obs_matrix.device, dtype=self.obs_matrix.dtype)
-        return MultivariateNormal(loc, self.log_trans_noise_scale_sq.exp() * eye)
+        eye = torch.eye(self.state_dim, device=loc.device, dtype=loc.dtype)
+        return MultivariateNormal(loc, self.log_init_noise_scale_sq.exp() * eye)
 
     def _get_obs_dist(self):
         loc = self.obs_matrix.new_zeros(self.obs_dim)
@@ -46,7 +46,7 @@ class GenericLGSSM(TimeSeriesModel):
 
     def _get_trans_dist(self):
         loc = self.obs_matrix.new_zeros(self.state_dim)
-        eye = torch.eye(self.state_dim, device=self.obs_matrix.device, dtype=self.obs_matrix.dtype)
+        eye = torch.eye(self.state_dim, device=loc.device, dtype=loc.dtype)
         return MultivariateNormal(loc, self.log_trans_noise_scale_sq.exp() * eye)
 
     def _get_dist(self):
@@ -89,7 +89,7 @@ class GenericLGSSM(TimeSeriesModel):
         # next compute the contribution from process noise that is injected at each timestep.
         # (we need to do a cumulative sum to integrate across time)
         process_covar = self._get_trans_dist().covariance_matrix
-        N_trans_obs_shift = torch.cat([self.obs_matrix.unsqueeze(0), N_trans_obs[0:-1]])
+        N_trans_obs_shift = torch.cat([self.obs_matrix.unsqueeze(0), N_trans_obs[:-1]])
         predicted_covar2 = torch.matmul(N_trans_obs_shift.transpose(-1, -2),
                                         torch.matmul(process_covar, N_trans_obs_shift))  # N O O
 
