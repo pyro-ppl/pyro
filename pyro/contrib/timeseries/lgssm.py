@@ -38,7 +38,7 @@ class GenericLGSSM(TimeSeriesModel):
     def _get_init_dist(self):
         loc = self.obs_matrix.new_zeros(self.state_dim)
         eye = torch.eye(self.state_dim, device=self.obs_matrix.device, dtype=self.obs_matrix.dtype)
-        return MultivariateNormal(loc, self.log_trans_noise_scale_sq.exp() * eye)
+        return MultivariateNormal(loc, self.log_init_noise_scale_sq.exp() * eye)
 
     def _get_obs_dist(self):
         loc = self.obs_matrix.new_zeros(self.obs_dim)
