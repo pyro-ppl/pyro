@@ -24,7 +24,8 @@ import polyphonic_data_loader as poly
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.distributions import InverseAutoregressiveFlow, TransformedDistribution
+from pyro.distributions import TransformedDistribution
+from pyro.distributions.transforms import InverseAutoregressiveFlow
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.nn import AutoRegressiveNN
 from pyro.optim import ClippedAdam
@@ -432,7 +433,7 @@ def main(args):
 
 # parse command-line arguments and execute the main method
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.4.0')
+    assert pyro.__version__.startswith('0.5.1')
 
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)

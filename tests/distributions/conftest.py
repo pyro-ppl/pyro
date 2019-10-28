@@ -10,6 +10,12 @@ from pyro.distributions.testing.rejection_exponential import RejectionExponentia
 from pyro.distributions.testing.rejection_gamma import ShapeAugmentedBeta, ShapeAugmentedDirichlet, ShapeAugmentedGamma
 from tests.distributions.dist_fixture import Fixture
 
+
+class ReflectedNormal(dist.ReflectedDistribution):
+    def __init__(self, loc, scale):
+        super().__init__(dist.Normal(loc, scale))
+
+
 continuous_dists = [
     Fixture(pyro_dist=dist.Uniform,
             scipy_dist=sp.uniform,
@@ -158,6 +164,17 @@ continuous_dists = [
                 ((), {"mean": np.array(loc), "cov": np.array([[1.5, 0.5], [0.5, 0.75]])}),
             prec=0.01,
             min_samples=500000),
+    Fixture(pyro_dist=ReflectedNormal,
+            examples=[
+                {'loc': [2.0], 'scale': [4.0],
+                 'test_data': [2.0]},
+                {'loc': [[2.0]], 'scale': [[4.0]],
+                 'test_data': [[2.0]]},
+                {'loc': [[[2.0]]], 'scale': [[[4.0]]],
+                 'test_data': [[[2.0]]]},
+                {'loc': [2.0, 50.0], 'scale': [4.0, 100.0],
+                 'test_data': [[2.0, 50.0], [2.0, 50.0]]},
+            ]),
     Fixture(pyro_dist=dist.Dirichlet,
             scipy_dist=sp.dirichlet,
             examples=[

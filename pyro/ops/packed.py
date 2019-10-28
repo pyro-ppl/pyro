@@ -135,8 +135,7 @@ def scale_and_mask(tensor, scale=1.0, mask=None):
         result._pyro_dims = tensor._pyro_dims
         return result
     tensor, mask = broadcast_all(tensor, mask)
-    result = tensor * scale  # triggers a copy, avoiding in-place op errors
-    result.masked_fill_(mask == 0, 0.)
+    result = torch.where(mask, tensor, tensor.new_zeros(()))
     result._pyro_dims = tensor._pyro_dims
     return result
 

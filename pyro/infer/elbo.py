@@ -39,7 +39,7 @@ class ELBO(object, metaclass=ABCMeta):
         tracer. When this is True, all :class:`torch.jit.TracerWarning` will
         be ignored. Defaults to False.
     :param bool jit_options: Optional dict of options to pass to
-        :func:`torch.jit.trace` , e.g. ``{"optimize": False}``.
+        :func:`torch.jit.trace` , e.g. ``{"check_trace": True}``.
     :param bool retain_graph: Whether to retain autograd graph during an SVI
         step. Defaults to None (False).
     :param float tail_adaptive_beta: Exponent beta with ``-1.0 <= beta < 0.0`` for

@@ -52,6 +52,7 @@ Welcome to Pyro Examples and Tutorials!
    RSA-implicature
    RSA-hyperbole
    ekf
+   working_memory
 
 .. toctree::
    :maxdepth: 2

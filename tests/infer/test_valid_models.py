@@ -461,6 +461,60 @@ def test_iplate_plate_ok(Elbo):
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("sizes", [(3,), (3, 4), (3, 4, 5)])
+def test_plate_stack_ok(Elbo, sizes):
+
+    def model():
+        p = torch.tensor(0.5)
+        with pyro.plate_stack("plate_stack", sizes):
+            pyro.sample("x", dist.Bernoulli(p))
+
+    def guide():
+        p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
+        with pyro.plate_stack("plate_stack", sizes):
+            pyro.sample("x", dist.Bernoulli(p))
+
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
+
+    assert_ok(model, guide, Elbo())
+
+
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.parametrize("sizes", [(3,), (3, 4), (3, 4, 5)])
+def test_plate_stack_and_plate_ok(Elbo, sizes):
+
+    def model():
+        p = torch.tensor(0.5)
+        with pyro.plate_stack("plate_stack", sizes):
+            with pyro.plate("plate", 7):
+                pyro.sample("x", dist.Bernoulli(p))
+
+    def guide():
+        p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
+        with pyro.plate_stack("plate_stack", sizes):
+            with pyro.plate("plate", 7):
+                pyro.sample("x", dist.Bernoulli(p))
+
+    if Elbo is TraceEnum_ELBO:
+        guide = config_enumerate(guide)
+
+    assert_ok(model, guide, Elbo())
+
+
+@pytest.mark.parametrize("sizes", [(3,), (3, 4), (3, 4, 5)])
+def test_plate_stack_sizes(sizes):
+
+    def model():
+        p = 0.5 * torch.ones(3)
+        with pyro.plate_stack("plate_stack", sizes):
+            x = pyro.sample("x", dist.Bernoulli(p).to_event(1))
+            assert x.shape == sizes + (3,)
+
+    model()
+
+
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_nested_plate_plate_ok(Elbo):
 
     def model():

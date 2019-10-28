@@ -1,7 +1,7 @@
 import copy
 import warnings
 from collections import OrderedDict
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from inspect import isclass
 
 import pyro.distributions as dist
@@ -109,6 +109,19 @@ def sample(name, fn, *args, **kwargs):
         # apply the stack and return its return value
         apply_stack(msg)
         return msg["value"]
+
+
+def factor(name, log_factor):
+    """
+    Factor statement to add arbitrary log probability factor to a
+    probabilisitic model.
+
+    :param str name: Name of the trivial sample
+    :param torch.Tensor log_factor: A possibly batched log probability factor.
+    """
+    unit_dist = dist.Unit(log_factor)
+    unit_value = unit_dist.sample()
+    sample(name, unit_dist, obs=unit_value)
 
 
 class plate(PlateMessenger):
@@ -228,6 +241,25 @@ class irange(SubsampleMessenger):
     def __init__(self, *args, **kwargs):
         warnings.warn("pyro.irange is deprecated; use pyro.plate instead", DeprecationWarning)
         super(irange, self).__init__(*args, **kwargs)
+
+
+@contextmanager
+def plate_stack(prefix, sizes, rightmost_dim=-1):
+    """
+    Create a contiguous stack of :class:`plate` s with dimensions::
+
+        rightmost_dim - len(sizes), ..., rightmost_dim
+
+    :param str prefix: Name prefix for plates.
+    :param iterable sizes: An iterable of plate sizes.
+    :param int rightmost_dim: The rightmost dim, counting from the right.
+    """
+    assert rightmost_dim < 0
+    with ExitStack() as stack:
+        for i, size in enumerate(reversed(sizes)):
+            plate_i = plate("{}_{}".format(prefix, i), size, dim=rightmost_dim - i)
+            stack.enter_context(plate_i)
+        yield
 
 
 def module(name, nn_module, update_module_params=False):

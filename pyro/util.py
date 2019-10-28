@@ -15,7 +15,8 @@ from pyro.poutine.util import site_is_subsample
 
 def set_rng_seed(rng_seed):
     """
-    Sets seeds of torch and torch.cuda (if available).
+    Sets seeds of `torch` and `torch.cuda` (if available).
+
     :param int rng_seed: The seed value.
     """
     torch.manual_seed(rng_seed)
@@ -25,6 +26,24 @@ def set_rng_seed(rng_seed):
         np.random.seed(rng_seed)
     except ImportError:
         pass
+
+
+def get_rng_state():
+    state = {'torch': torch.get_rng_state(), 'random': random.getstate()}
+    try:
+        import numpy as np
+        state['numpy'] = np.random.get_state()
+    except ImportError:
+        pass
+    return state
+
+
+def set_rng_state(state):
+    torch.set_rng_state(state['torch'])
+    random.setstate(state['random'])
+    if 'numpy' in state:
+        import numpy as np
+        np.random.set_state(state['numpy'])
 
 
 def torch_isnan(x):
