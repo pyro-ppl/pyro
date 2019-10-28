@@ -70,8 +70,9 @@ class Triangular(TorchDistribution):
         try:
             return super(Triangular, self).expand(batch_shape)
         except NotImplementedError:
-            validate_args = self.__dict__.get('_validate_args')
             low = self.low.expand(batch_shape)
             high = self.high.expand(batch_shape)
             peak = self.peak.expand(batch_shape)
-            return type(self)(low, high, peak, validate_args=validate_args)
+            result = type(self)(low, high, peak, validate_args=False)
+            result._validate_args = self.__dict__.get('_validate_args')
+            return result
