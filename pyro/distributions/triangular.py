@@ -2,7 +2,7 @@ from numbers import Number
 
 import torch
 from torch.distributions import constraints
-from torch.distributions.utils import broadcast_all
+from torch.distributions.utils import broadcast_all, lazy_property
 
 from pyro.distributions import TorchDistribution, Uniform
 
@@ -19,11 +19,11 @@ class Triangular(TorchDistribution):
     support = constraints.dependent
     has_rsample = True
 
-    @property
+    @lazy_property
     def mean(self):
         return (self.low + self.high + self.peak) / 3
 
-    @property
+    @lazy_property
     def variance(self):
         return (self.low**2 + self.high**2 + self.peak**2 - self.low * self.high - self.low * self.peak -
                 self.high * self.peak) / 18
