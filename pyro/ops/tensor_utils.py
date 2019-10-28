@@ -23,6 +23,7 @@ def block_diagonal(mat, block_size):
     of shape (..., B, M, N).
 
     :param torch.Tensor mat: an input tensor with 2 or more dimensions
+    :param int block_size: the number of blocks B.
     :returns torch.Tensor: a tensor with dimension `mat.dim() + 1`
     """
     B = block_size
