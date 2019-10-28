@@ -159,7 +159,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
             torch.cumsum(predicted_covar2z, dim=0)
 
         if include_observation_noise:
-            eye = torch.eye(self.obs_dim, device=self.z_obs_matrix.device, dtype=self.z_obs_matrix.dtype)
+            eye = torch.eye(self.obs_dim, device=fs_cov.device, dtype=fs_cov.dtype)
             predicted_covar = predicted_covar + self._get_obs_noise_scale().pow(2.0) * eye
 
         return predicted_mean, predicted_covar
