@@ -2,17 +2,18 @@ import pytest
 import numpy as np
 import torch
 
-from pyro.ops.tensor_utils import block_diag, convolve, repeated_matmul
+from pyro.ops.tensor_utils import block_diag_embed, convolve, repeated_matmul, block_diagonal
 from tests.common import assert_equal, assert_close
+
 
 pytestmark = pytest.mark.stage('unit')
 
 
 @pytest.mark.parametrize('batch_size', [1, 2, 3])
 @pytest.mark.parametrize('block_size', [torch.Size([2, 2]), torch.Size([3, 1]), torch.Size([4, 2])])
-def test_block_diag(batch_size, block_size):
+def test_block_diag_embed(batch_size, block_size):
     m = torch.randn(block_size).unsqueeze(0).expand((batch_size,) + block_size)
-    b = block_diag(m)
+    b = block_diag_embed(m)
 
     assert b.shape == (batch_size * block_size[0], batch_size * block_size[1])
 
@@ -22,6 +23,16 @@ def test_block_diag(batch_size, block_size):
         bottom, top = k * block_size[0], (k + 1) * block_size[0]
         left, right = k * block_size[1], (k + 1) * block_size[1]
         assert_equal(b[bottom:top, left:right], m[k])
+
+
+@pytest.mark.parametrize('batch_shape', [torch.Size([]), torch.Size([7])])
+@pytest.mark.parametrize('mat_size,block_size', [(torch.Size([2, 2]), 2), (torch.Size([3, 1]), 1),
+                                                 (torch.Size([6, 3]), 3)])
+def test_block_diag(batch_shape, mat_size, block_size):
+    mat = torch.randn(batch_shape + (block_size,) + mat_size)
+    mat_embed = block_diag_embed(mat)
+    mat_embed_diag = block_diagonal(mat_embed, block_size)
+    assert_equal(mat_embed_diag, mat)
 
 
 @pytest.mark.parametrize('m', [2, 3, 4, 5, 6, 10])
