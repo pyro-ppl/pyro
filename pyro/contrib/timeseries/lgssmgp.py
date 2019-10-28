@@ -132,17 +132,17 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         # z-state contribution + gp contribution
         predicted_mean1 = torch.matmul(filtering_state.loc[-self.state_dim:].unsqueeze(-2), N_trans_obs).squeeze(-2)
         predicted_mean2 = torch.matmul(filtering_state.loc[:self.full_gp_state_dim].unsqueeze(-2),
-                                       gp_trans_matrix).squeeze(-2)
-        predicted_mean = predicted_mean1 + predicted_mean2[..., self.obs_selector]
+                                       gp_trans_matrix[..., self.obs_selector]).squeeze(-2)
+        predicted_mean = predicted_mean1 + predicted_mean2
 
         # first compute the contributions from filtering_state.covariance_matrix: z-space and gp
         fs_cov = filtering_state.covariance_matrix
         predicted_covar1z = torch.matmul(N_trans_obs.transpose(-1, -2),
                                          torch.matmul(fs_cov[self.full_gp_state_dim:, self.full_gp_state_dim:],
                                          N_trans_obs))  # N O O
-        predicted_covar1gp = torch.matmul(gp_trans_matrix.transpose(-1, -2),
-                                          torch.matmul(fs_cov[:self.full_gp_state_dim:, :self.full_gp_state_dim],
-                                          gp_trans_matrix))[..., self.obs_selector][..., self.obs_selector, :]
+        gp_trans = gp_trans_matrix[..., self.obs_selector]
+        predicted_covar1gp = torch.matmul(gp_trans.transpose(-1, -2),
+                                          torch.matmul(fs_cov[:self.full_gp_state_dim:, :self.full_gp_state_dim], gp_trans))
 
         # next compute the contribution from process noise that is injected at each timestep.
         # (we need to do a cumulative sum to integrate across time for the z-state contribution)
