@@ -16,8 +16,8 @@ ParamStore
     :show-inheritance:
     :member-order: bysource
 
-ConstrainedParameter
---------------------
+Constraints
+-----------
 
 .. automodule:: pyro.params.constrained_parameter
     :members:
