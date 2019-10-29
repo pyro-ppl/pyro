@@ -15,8 +15,11 @@ class GenericLGSSM(TimeSeriesModel):
 
     :param int obs_dim: The dimension of the targets at each time step.
     :param int state_dim: The dimension of latent state at each time step.
+    :param bool learnable_observation_loc: whether the mean of the observation model should be learned or not;
+        defaults to False.
     """
-    def __init__(self, obs_dim=1, state_dim=2, log_obs_noise_scale_init=None):
+    def __init__(self, obs_dim=1, state_dim=2, log_obs_noise_scale_init=None,
+                 learnable_observation_loc=False):
         self.obs_dim = obs_dim
         self.state_dim = state_dim
 
@@ -32,6 +35,11 @@ class GenericLGSSM(TimeSeriesModel):
         self.obs_matrix = nn.Parameter(0.3 * torch.randn(state_dim, obs_dim))
         self.log_init_noise_scale_sq = nn.Parameter(torch.zeros(state_dim))
 
+        if learnable_observation_loc:
+            self.obs_loc = nn.Parameter(torch.zeros(obs_dim))
+        else:
+            self.register_buffer('obs_loc', torch.zeros(obs_dim))
+
     def _get_obs_noise_scale(self):
         return self.log_obs_noise_scale.exp()
 
@@ -41,8 +49,7 @@ class GenericLGSSM(TimeSeriesModel):
         return MultivariateNormal(loc, self.log_init_noise_scale_sq.exp() * eye)
 
     def _get_obs_dist(self):
-        loc = self.obs_matrix.new_zeros(self.obs_dim)
-        return dist.Normal(loc, self._get_obs_noise_scale()).to_event(1)
+        return dist.Normal(self.obs_loc, self._get_obs_noise_scale()).to_event(1)
 
     def _get_trans_dist(self):
         loc = self.obs_matrix.new_zeros(self.state_dim)
@@ -79,7 +86,7 @@ class GenericLGSSM(TimeSeriesModel):
         """
         N_trans_matrix = repeated_matmul(self.trans_matrix, N_timesteps)
         N_trans_obs = torch.matmul(N_trans_matrix, self.obs_matrix)
-        predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), N_trans_obs).squeeze(-2)
+        predicted_mean = torch.matmul(filtering_state.loc, N_trans_obs)
 
         # first compute the contribution from filtering_state.covariance_matrix
         predicted_covar1 = torch.matmul(N_trans_obs.transpose(-1, -2),
