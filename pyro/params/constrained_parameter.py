@@ -1,3 +1,5 @@
+import weakref
+
 import torch
 from torch.distributions import transform_to
 
@@ -65,6 +67,7 @@ class ConstrainedParameter:
         constraint = self._constraint_fn(obj)
         unconstrained_value = getattr(obj, self._unconstrained_name)
         constrained_value = transform_to(constraint)(unconstrained_value)
+        constrained_value.unconstrained() = weakref.ref(unconstrained_value)
         return constrained_value
 
     def __set__(self, obj, constrained_value):
