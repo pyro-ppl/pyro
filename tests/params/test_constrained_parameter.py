@@ -5,7 +5,8 @@ import torch
 from torch.autograd import grad
 from torch.distributions import constraints, transform_to
 
-from pyro.params.constrained_parameter import ConstrainedModule, ConstrainedParameter, ConstraintDescriptor, constraint
+from pyro.params import ConstrainedModule, ConstrainedParameter, constraint
+from pyro.params.constrained_parameter import ConstraintDescriptor
 from tests.common import assert_equal
 
 SHAPE_CONSTRAINT = [

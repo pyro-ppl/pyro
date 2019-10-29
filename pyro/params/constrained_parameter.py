@@ -82,7 +82,6 @@ class ConstrainedModule(torch.nn.Module):
         delattr(self, name + "_unconstrained")
         del _constraints[name]
 
-
     def constraints(self):
         """
         Returns an iterator over parameter (name,constraint) pairs.
