@@ -27,9 +27,12 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
     :param int obs_dim: The dimension of the targets at each time step.
     :param int state_dim: The dimension of the :math:`{\\bf z}` latent state at each time step.
     :param float nu: The order of the Matern kernel; either 1.5 or 2.5.
+    :param bool learnable_observation_loc: whether the mean of the observation model should be learned or not;
+            defaults to False.
     """
     def __init__(self, obs_dim=1, state_dim=2, nu=1.5, log_obs_noise_scale_init=None,
-                 log_length_scale_init=None, log_kernel_scale_init=None):
+                 log_length_scale_init=None, log_kernel_scale_init=None,
+                 learnable_observation_loc=False):
         self.obs_dim = obs_dim
         self.state_dim = state_dim
         self.nu = nu
@@ -60,6 +63,11 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
 
         self.obs_selector = torch.LongTensor([self.kernel.state_dim * d for d in range(obs_dim)])
 
+        if learnable_observation_loc:
+            self.obs_loc = nn.Parameter(torch.zeros(obs_dim))
+        else:
+            self.register_buffer('obs_loc', torch.zeros(obs_dim))
+
     def _get_obs_matrix(self):
         # (obs_dim + state_dim, obs_dim) => (gp_state_dim * obs_dim + state_dim, obs_dim)
         return torch.cat([self.gp_obs_matrix, self.z_obs_matrix], dim=0)
@@ -76,8 +84,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         return MultivariateNormal(loc, covar)
 
     def _get_obs_dist(self):
-        loc = self.z_trans_matrix.new_zeros(self.obs_dim)
-        return dist.Normal(loc, self._get_obs_noise_scale()).to_event(1)
+        return dist.Normal(self.obs_loc, self._get_obs_noise_scale()).to_event(1)
 
     def _get_dist(self):
         """
