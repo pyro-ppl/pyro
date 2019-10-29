@@ -4,7 +4,7 @@ from torch.distributions import transform_to
 
 class ConstrainedParameter:
     """
-    Descriptor to add a constraint to a
+    Descriptor to add a
     :class:`~torch.distributions.constraints.Constraint` to a
     :class:`~torch.nn.Parameter` of a :class:`~torch.nn.Module` .
     These are typically created via the :func:`constraint` decorator.
@@ -17,6 +17,7 @@ class ConstrainedParameter:
 
         class MyModule(nn.Module):
             def __init__(self, x):
+                super().__init__()
                 self.x = x
 
             @constraint
@@ -30,6 +31,19 @@ class ConstrainedParameter:
 
         # XXX Wrong way to initialize XXX
         # my_module.x.data.normal_()  # has no effect.
+
+    Constraints may depend on other parameters (of course not cyclically), for
+    example::
+
+        class Interval(nn.Module):
+            def __init__(self, lb, ub):
+                super().__init__()
+                self.lb = lb
+                self.ub = ub
+
+            @constraint
+            def ub(self):
+                return constraints.greater_than(self.lb)
 
     :param str name: The name of the constrained parameter.
     :param callable constraint: A function that inputs a
