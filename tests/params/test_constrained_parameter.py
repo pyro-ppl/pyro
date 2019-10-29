@@ -1,9 +1,12 @@
+import warnings
+
 import pytest
 import torch
-from torch.distributions import constraints
+from torch.autograd import grad
+from torch.distributions import constraints, transform_to
 
-from pyro.params import ConstrainedParameter
-
+from pyro.params import ConstrainedParameter, constraint
+from tests.common import assert_equal
 
 SHAPE_CONSTRAINT = [
     ((), constraints.real),
@@ -37,59 +40,77 @@ SHAPE_CONSTRAINT = [
 ]
 
 
-@pytest.mark.parametrize('shape,constraint', SHAPE_CONSTRAINT)
-def test_attr_of_object(shape, constraint):
-    obj = type("Foo", (), {})
-    p = ConstrainedParameter(torch.full(shape, 1e-4), constraint)
-    obj.x = p
+@pytest.mark.parametrize('shape,constraint_', SHAPE_CONSTRAINT)
+def test_constrained_parameter(shape, constraint_):
 
-    assert isinstance(obj.__dict__['x'], ConstrainedParameter)
-    assert isinstance(obj.x, torch.Tensor)
-    assert obj.x.shape == shape
-    assert constraint.check(obj.x).all()
+    class MyModule(torch.nn.Module):
+        @constraint
+        def x(self):
+            return constraint_
 
-    p.set(torch.randn(shape).exp() * 1e-6)
-    assert isinstance(obj.__dict__['x'], ConstrainedParameter)
-    assert isinstance(obj.x, torch.Tensor)
-    assert obj.x.shape == shape
-    assert constraint.check(obj.x).all()
+    module = MyModule()
+    module.x = torch.full(shape, 1e-4)
 
-    assert isinstance(obj.x.unconstrained(), torch.Tensor)
-    obj.x.unconstrained().data.normal_()
-    assert constraint.check(obj.x).all()
-
-
-@pytest.mark.parametrize('shape,constraint', SHAPE_CONSTRAINT)
-def test_attr_of_module(shape, constraint):
-    module = type("Foo", (), {})
-    p = ConstrainedParameter(torch.full(shape, 1e-4), constraint)
-    module.x = p
-
-    assert isinstance(module.__dict__['x'], ConstrainedParameter)
+    assert isinstance(MyModule.x, ConstrainedParameter)
     assert isinstance(module.x, torch.Tensor)
     assert module.x.shape == shape
-    assert constraint.check(module.x).all()
+    assert constraint_.check(module.x).all()
 
-    p.set(torch.randn(shape).exp() * 1e-6)
-    assert isinstance(module.__dict__['x'], ConstrainedParameter)
+    module.x = torch.randn(shape).exp() * 1e-6
+    assert isinstance(MyModule.x, ConstrainedParameter)
     assert isinstance(module.x, torch.Tensor)
     assert module.x.shape == shape
-    assert constraint.check(module.x).all()
+    assert constraint_.check(module.x).all()
 
-    assert isinstance(module.x.unconstrained(), torch.Tensor)
-    module.x.unconstrained().data.normal_()
-    assert constraint.check(module.x).all()
+    assert isinstance(module.x_unconstrained, torch.Tensor)
+    y = module.x_unconstrained.data.normal_()
+    assert_equal(module.x.data, transform_to(constraint_)(y))
+    assert constraint_.check(module.x).all()
 
 
-@pytest.mark.parametrize('shape,constraint', SHAPE_CONSTRAINT)
-def test_free_object(shape, constraint):
-    p = ConstrainedParameter(torch.full(shape, 1e-4), constraint)
+def test_chaining():
 
-    p.set(torch.randn(shape).exp() * 1e-6)
-    assert isinstance(p.get(), torch.Tensor)
-    assert p.get().shape == shape
-    assert constraint.check(p.get()).all()
+    class ChainedModule(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.x = torch.randn(()).exp().requires_grad_()
+            self.y = self.x + torch.randn(()).exp()
+            self.z = self.y + torch.randn(()).exp()
 
-    assert isinstance(p.unconstrained(), torch.Tensor)
-    p.unconstrained().data.normal_()
-    assert constraint.check(p.get()).all()
+        @constraint
+        def y(self):
+            return constraints.greater_than(self.x)
+
+        @constraint
+        def z(self):
+            return constraints.greater_than(self.y)
+
+    module = ChainedModule()
+
+    dy_dx, = grad(module.y, [module.x])
+    assert (dy_dx > 0).all()
+
+    dz_dy, = grad(module.z, [module.y_unconstrained])
+    assert (dz_dy > 0).all()
+
+    dz_dx, = grad(module.z, [module.x])
+    assert (dz_dx > 0).all()
+
+
+class PositiveModule(torch.nn.Module):
+    @constraint
+    def x(self):
+        return constraints.positive
+
+
+def test_serialization():
+
+    module = PositiveModule()
+    module.x = torch.tensor(1.234)
+    assert isinstance(module.x, torch.Tensor)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        torch.save(module, "/tmp/test_constrained_parameter.pkl")
+        actual = torch.load("/tmp/test_constrained_parameter.pkl")
+    assert_equal(actual.x, module.x)

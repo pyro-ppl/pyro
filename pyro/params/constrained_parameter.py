@@ -1,106 +1,84 @@
-import weakref
-
 import torch
 from torch.distributions import transform_to
-from torch.distributions.constraints import Constraint
 
 
 class ConstrainedParameter:
     """
-    Constrained wrapper around a :class:`~torch.nn.Parameter` that obeys a
-    :class:`~torch.distributions.constraints.Constraint` .
+    Descriptor to add a constraint to a
+    :class:`~torch.distributions.constraints.Constraint` to a
+    :class:`~torch.nn.Parameter` of a :class:`~torch.nn.Module` .
+    These are typically created via the :func:`constraint` decorator.
 
-    Like :class:`~torch.nn.Parameter` , this can be accessed directly as an
+    Like :class:`~torch.nn.Parameter` , these can be accessed directly as an
     attribute of an enclosing :class:`~torch.nn.Module` . Unlike a
     :class:`~torch.nn.Parameter` , the ``.data`` attribute cannot be set
-    directly; instead set data via the :meth:`unconstrained` method::
+    directly; instead set data of the correspondingly named parameter appended
+    with the string "_unconstrained"::
 
-        my_module.scale = ConstrainedParameter(torch.ones(2,3,4),
-                                               constraint=constraints.positive)
-        assert isinstance(my_module.scale, torch.Tensor)
-        my_module.scale.unconstrained().data.normal_()
+        class MyModule(nn.Module):
+            def __init__(self, x):
+                self.x = x
 
-    ConstrainedParameters can be owned by only one object.
+            @constraint
+            def x(self):
+                return contraints.positive
 
-    :param torch.Tensor constrained_data: Initial data in constrained space.
-    :param ~torch.distributions.constraints.Constraint constraint: A
-        constraint.
+        my_module = MyModule(torch.randn(3,4))
+
+        # Correct way to initialze:
+        my_module.x_unconstrained.data.normal_()
+
+        # XXX Wrong way to initialize XXX
+        # my_module.x.data.normal_()  # has no effect.
+
+    :param str name: The name of the constrained parameter.
+    :param callable constraint: A function that inputs a
+        :class:`~torch.nn.Module` and returns a
+        :class:`~torch.distributions.constraints.Constraint` object.
     """
 
-    def __init__(self, constrained_data, constraint):
-        assert isinstance(constrained_data, torch.Tensor)
-        assert isinstance(constraint, Constraint)
-        self.constraint = constraint
-        self._owner = None
-        self._name = None
+    def __init__(self, name, constraint_fn):
+        assert isinstance(name, str)
+        assert callable(constraint_fn)
+        self.name = name
+        self._unconstrained_name = name + "_unconstrained"
+        self._constraint_fn = constraint_fn
 
-        super().__init__()
-        self.set(constrained_data)
+    def __get__(self, obj, obj_type=None):
+        if obj is None:
+            return self
 
-    def unconstrained(self):
-        """
-        Provides access to the underlying unconstrained data.
-
-        :rtype: torch.Tensor
-        """
-        if self._owner is not None:
-            self._unconstrained_value = getattr(self._owner, self._name)
-        return self._unconstrained_value
-
-    def get(self):
-        """
-        Gets the current constrained value.
-
-        :rtype: torch.Tensor
-        """
-        return self.__get__(None)
-
-    def set(self, constrained_data):
-        """
-        Sets a new constrained value.
-
-        :param torch.Tensor constrained_data: A new constrained value.
-        """
-        with torch.no_grad():
-            constrained_data = constrained_data.detach()
-            unconstrained_data = transform_to(self.constraint).inv(constrained_data)
-            unconstrained_data = unconstrained_data.contiguous()
-        self._unconstrained_value = torch.nn.Parameter(unconstrained_data)
-        if self._owner is not None:
-            setattr(owner, self._name, self._unconstrained_value)
-
-    def _update_owner(self, owner):
-        if owner is not self._owner:
-            self._owner = owner
-            for name, attr in owner.__dict__.items():
-                if attr is self:
-                    self._name = name + "_unconstrained"
-                    return
-        raise ValueError("ConstrainedParameter is not owned by {}".format(owner))
-
-    def __get__(self, owner, obj_type=None):
-        if owner is not None:
-            self._update_owner(owner)
-        unconstrained_value = self.unconstrained()
-        constrained_value = transform_to(self.constraint)(unconstrained_value)
-
-        # We add a weakref to the constrained result to provide uniform access
-        # to the underlying data:
-        # 1. When called on a free-standing instance, .unconstrained() will
-        #    call the above unconstrained() method.
-        # 2. When called on an attribute of an enclosing object, that object's
-        #    getattr will trigger, __get__, returning a constrained
-        #    torch.Tensor (not a ConsterainedParameter), and .unconstrained()
-        #    will dereference the following weakref:
-        constrained_value.unconstrained = weakref.ref(unconstrained_value)
-
+        constraint = self._constraint_fn(obj)
+        unconstrained_value = getattr(obj, self._unconstrained_name)
+        constrained_value = transform_to(constraint)(unconstrained_value)
         return constrained_value
 
-    # These must be defined to ensure this is a data attribute,
-    # but cannot be implemented because torch.nn.Module implements
-    # custom .__setattr__() and .__delattr__() methods.
-    def __set__(self, owner, constrained_data):
-        raise AttributeError('Not Implemented')
+    def __set__(self, obj, constrained_value):
+        with torch.no_grad():
+            constraint = self._constraint_fn(obj)
+            constrained_value = constrained_value.detach()
+            unconstrained_value = transform_to(constraint).inv(constrained_value)
+            unconstrained_value = unconstrained_value.contiguous()
+        setattr(obj, self._unconstrained_name, torch.nn.Parameter(unconstrained_value))
 
-    def __delete__(self, owner):
-        raise AttributeError('Not Implemented')
+    def __delete__(self, obj):
+        delattr(obj, self._unconstrained_name)
+
+
+def constraint(constraint_fn):
+    """
+    Decorator for constrained parameters. For example::
+
+        class Normal(nn.Module):
+            def __init__(self, loc, scale):
+                super().__init__()
+                self.loc = loc
+                self.scale = scale
+
+            @constraint
+            def scale(self):
+                return constraints.positive
+    """
+    assert callable(constraint_fn)
+    name = constraint_fn.__name__
+    return ConstrainedParameter(name, constraint_fn)
