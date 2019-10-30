@@ -16,8 +16,8 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
 
         :math:`y_i(t) = \\sum_j A_{ij} z_j(t) + f_i(t) + \\epsilon_i(t)`
 
-    where the latent variables :math`{\\bf z}(t)` follow generic time invariant Linear Gaussian dynamics
-    and the math:`f_i(t)` are Gaussian Processes with Matern kernels.
+    where the latent variables :math:`{\\bf z}(t)` follow generic time invariant Linear Gaussian dynamics
+    and the :math:`f_i(t)` are Gaussian Processes with Matern kernels.
 
     The targets are (implicitly) assumed to be evenly spaced in time. In particular a timestep of
     :math:`dt=1.0` for the continuous-time GP dynamics corresponds to a single discrete step of
@@ -41,7 +41,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
             log_obs_noise_scale_init = -2.0 * torch.ones(obs_dim)
         assert log_obs_noise_scale_init.shape == (obs_dim,)
 
-        super(GenericLGSSMWithGPNoiseModel, self).__init__()
+        super().__init__()
 
         self.kernel = MaternKernel(nu=nu, num_gps=obs_dim,
                                    log_length_scale_init=log_length_scale_init,
@@ -61,7 +61,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
             gp_obs_matrix[self.kernel.state_dim * i, i] = 1.0
         self.register_buffer("gp_obs_matrix", gp_obs_matrix)
 
-        self.obs_selector = torch.LongTensor([self.kernel.state_dim * d for d in range(obs_dim)])
+        self.obs_selector = torch.tensor([self.kernel.state_dim * d for d in range(obs_dim)], dtype=torch.long)
 
         if learnable_observation_loc:
             self.obs_loc = nn.Parameter(torch.zeros(obs_dim))
