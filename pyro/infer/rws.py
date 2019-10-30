@@ -78,33 +78,49 @@ class ReweightedWakeSleep(ELBO):
 
         Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
         """
-        elbo_particles = []
+        log_joints = []
+        log_qs = []
 
         # grab a vectorized trace from the generator
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            elbo_particle = 0.
+            log_joint = 0
+            log_q = 0
 
-            # compute elbo
-            for name, site in model_trace.nodes.items():
+            # compute log weights
+            for _, site in model_trace.nodes.items():
                 if site["type"] == "sample":
-                    log_prob_sum = site["log_prob"].detach().reshape(self.num_particles, -1).sum(-1)
-                    elbo_particle = elbo_particle + log_prob_sum
+                    if self.vectorize_particles:
+                        log_p_site = site["log_prob"].detach().reshape(self.num_particles, -1).sum(-1)
+                    else:
+                        log_p_site = torch_item(site["log_prob_sum"])
+                    log_joint = log_joint + log_p_site
 
             for name, site in guide_trace.nodes.items():
                 if site["type"] == "sample":
-                    log_prob, score_function_term, entropy_term = site["score_parts"]
-                    log_prob_sum = log_prob.detach().reshape(self.num_particles, -1).sum(-1)
-                    elbo_particle = elbo_particle - log_prob_sum
+                    if self.vectorize_particles:
+                        log_q_site = site["log_prob"].detach().reshape(self.num_particles, -1).sum(-1)
+                    else:
+                        log_q_site = torch_item(site["log_prob_sum"])
+                    log_q = log_q + log_q_site
 
-            elbo_particles.append(elbo_particle)
+            log_joints.append(log_joint)
+            log_qs.append(log_q)
 
-        log_weights = elbo_particles[0]
+        log_joints = log_joints[0] if self.vectorize_particles else torch.stack(log_joints)
+        log_qs = log_qs[0] if self.vectorize_particles else torch.stack(log_qs)
+        log_weights = log_joints - log_qs
+
+        # wake theta = iwae:
         log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(self.num_particles)
-        elbo = log_mean_weight.sum().item()
+        wake_theta_loss = -log_mean_weight
 
-        loss = -elbo
-        warn_if_nan(loss, "loss")
-        return loss
+        # wake phi = reweighted csis:
+        normalised_weights = (log_weights - log_mean_weight).exp()
+        wake_phi_loss = -(normalised_weights * log_qs).sum()
+
+        warn_if_nan(wake_theta_loss, "loss")
+        warn_if_nan(wake_phi_loss, "loss")
+        return wake_theta_loss, wake_phi_loss
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
         """
