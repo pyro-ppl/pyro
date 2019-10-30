@@ -103,7 +103,11 @@ class SVI(TracePosterior):
         Evaluate the loss function. Any args or kwargs are passed to the model and guide.
         """
         with torch.no_grad():
-            return torch_item(self.loss(self.model, self.guide, *args, **kwargs))
+            loss = self.loss(self.model, self.guide, *args, **kwargs)
+            if isinstance(loss, tuple):
+                return torch_item(loss[0]), torch_item(loss[1])
+            else:
+                return torch_item(loss)
 
     def step(self, *args, **kwargs):
         """
