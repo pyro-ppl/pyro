@@ -3,7 +3,6 @@ import warnings
 
 import torch
 
-from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace_detached
 from pyro.infer.util import is_validation_enabled, torch_item
