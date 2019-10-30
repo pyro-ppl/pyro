@@ -32,7 +32,7 @@ if __name__ == '__main__':
     true_q_loc = true_q_scale**2 * (true_guess / guess_scale**2 + obs / obs_scale**2)
 
     num_particles = 10
-    vectorize=True
+    vectorize = True
 
     pyro.clear_param_store()
     svi = pyro.infer.SVI(model=scale,
