@@ -5,9 +5,11 @@ models useful for forecasting applications.
 from pyro.contrib.timeseries.base import TimeSeriesModel
 from pyro.contrib.timeseries.gp import IndependentMaternGP, LinearlyCoupledMaternGP
 from pyro.contrib.timeseries.lgssm import GenericLGSSM
+from pyro.contrib.timeseries.lgssmgp import GenericLGSSMWithGPNoiseModel
 
 __all__ = [
     "GenericLGSSM",
+    "GenericLGSSMWithGPNoiseModel",
     "IndependentMaternGP",
     "LinearlyCoupledMaternGP",
     "TimeSeriesModel",

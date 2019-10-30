@@ -26,3 +26,9 @@ Linear Gaussian State Space Models
     :undoc-members:
     :show-inheritance:
     :member-order: bysource
+
+.. automodule:: pyro.contrib.timeseries.lgssmgp
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :member-order: bysource
