@@ -2,11 +2,13 @@ import torch
 
 from tests.common import assert_equal
 import pyro
-from pyro.contrib.timeseries import IndependentMaternGP, LinearlyCoupledMaternGP, GenericLGSSM
+from pyro.contrib.timeseries import (IndependentMaternGP, LinearlyCoupledMaternGP, GenericLGSSM,
+                                     GenericLGSSMWithGPNoiseModel)
 import pytest
 
 
-@pytest.mark.parametrize('model,obs_dim,nu_statedim', [('lcmgp', 3, 1.5), ('lcmgp', 3, 2.5),
+@pytest.mark.parametrize('model,obs_dim,nu_statedim', [('ssmgp', 3, 1.5), ('ssmgp', 3, 2.5),
+                                                       ('lcmgp', 3, 1.5), ('lcmgp', 3, 2.5),
                                                        ('imgp', 1, 1.5), ('imgp', 3, 1.5),
                                                        ('imgp', 1, 2.5), ('imgp', 3, 2.5),
                                                        ('glgssm', 1, 3), ('glgssm', 3, 1)])
@@ -29,6 +31,10 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
     elif model == 'glgssm':
         gp = GenericLGSSM(state_dim=nu_statedim, obs_dim=obs_dim,
                           log_obs_noise_scale_init=torch.randn(obs_dim))
+    elif model == 'ssmgp':
+        state_dim = 2 if nu_statedim == 1.5 else 4
+        gp = GenericLGSSMWithGPNoiseModel(nu=nu_statedim, state_dim=state_dim, obs_dim=obs_dim,
+                                          log_obs_noise_scale_init=torch.randn(obs_dim))
 
     targets = torch.randn(T, obs_dim)
     gp_log_prob = gp.log_prob(targets)
