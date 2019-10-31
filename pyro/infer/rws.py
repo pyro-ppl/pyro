@@ -151,11 +151,13 @@ class ReweightedWakeSleep(ELBO):
 
         # wake theta = iwae:
         log_sum_weight = torch.logsumexp(log_weights, dim=0)
+        # TODO: check whether grad est should sum or mean over batch dim (currently sum)
         wake_theta_loss = -(log_sum_weight - math.log(self.num_particles)).sum()
         wake_theta_loss.backward(retain_graph=True)
 
         # wake phi = reweighted csis:
         normalised_weights = (log_weights - log_sum_weight).exp().detach()
+        # TODO: check whether grad est should sum or mean over batch dim (currently sum)
         wake_phi_loss = -(normalised_weights * log_qs).sum(0).sum(0)
         wake_phi_loss.backward()
 
