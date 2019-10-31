@@ -6,7 +6,7 @@ from tests.common import assert_equal
 
 
 @pytest.mark.parametrize('num_gps', [1, 2, 3])
-@pytest.mark.parametrize('nu', [1.5, 2.5])
+@pytest.mark.parametrize('nu', [0.5, 1.5, 2.5])
 def test_matern_kernel(num_gps, nu):
     mk = MaternKernel(nu=nu, num_gps=num_gps, log_length_scale_init=0.1 * torch.randn(num_gps))
 

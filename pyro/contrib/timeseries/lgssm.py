@@ -73,6 +73,7 @@ class GenericLGSSM(TimeSeriesModel):
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
         return self._get_dist().log_prob(targets)
 
+    @torch.no_grad()
     def _filter(self, targets):
         """
         Return the filtering state for the associated state space model.
@@ -80,6 +81,7 @@ class GenericLGSSM(TimeSeriesModel):
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
         return self._get_dist().filter(targets)
 
+    @torch.no_grad()
     def _forecast(self, N_timesteps, filtering_state, include_observation_noise=True):
         """
         Internal helper for forecasting.

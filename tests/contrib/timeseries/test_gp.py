@@ -7,8 +7,9 @@ from pyro.contrib.timeseries import (IndependentMaternGP, LinearlyCoupledMaternG
 import pytest
 
 
-@pytest.mark.parametrize('model,obs_dim,nu_statedim', [('ssmgp', 3, 1.5), ('ssmgp', 3, 2.5),
-                                                       ('lcmgp', 3, 1.5), ('lcmgp', 3, 2.5),
+@pytest.mark.parametrize('model,obs_dim,nu_statedim', [('ssmgp', 3, 1.5), ('ssmgp', 2, 2.5),
+                                                       ('lcmgp', 3, 1.5), ('lcmgp', 2, 2.5),
+                                                       ('imgp', 1, 0.5), ('imgp', 2, 0.5),
                                                        ('imgp', 1, 1.5), ('imgp', 3, 1.5),
                                                        ('imgp', 1, 2.5), ('imgp', 3, 2.5),
                                                        ('glgssm', 1, 3), ('glgssm', 3, 1)])
@@ -32,7 +33,7 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
         gp = GenericLGSSM(state_dim=nu_statedim, obs_dim=obs_dim,
                           log_obs_noise_scale_init=torch.randn(obs_dim))
     elif model == 'ssmgp':
-        state_dim = 2 if nu_statedim == 1.5 else 4
+        state_dim = {0.5: 4, 1.5: 3, 2.5: 2}[nu_statedim]
         gp = GenericLGSSMWithGPNoiseModel(nu=nu_statedim, state_dim=state_dim, obs_dim=obs_dim,
                                           log_obs_noise_scale_init=torch.randn(obs_dim))
 
@@ -51,13 +52,15 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
             variance = (2.0 * gp.kernel.log_kernel_scale).exp()[dim]
             obs_noise = (2.0 * gp.log_obs_noise_scale).exp()[dim]
 
-            kernel = pyro.contrib.gp.kernels.Matern32 if nu_statedim == 1.5 else pyro.contrib.gp.kernels.Matern52
+            kernel = {0.5: pyro.contrib.gp.kernels.Exponential,
+                      1.5: pyro.contrib.gp.kernels.Matern32,
+                      2.5: pyro.contrib.gp.kernels.Matern52}[nu_statedim]
             kernel = kernel(input_dim=1, lengthscale=lengthscale, variance=variance)
             kernel = kernel(times) + obs_noise * torch.eye(T)
 
             mvn = torch.distributions.MultivariateNormal(torch.zeros(T), kernel)
             mvn_log_prob = mvn.log_prob(targets[:, dim])
-            assert_equal(mvn_log_prob, gp_log_prob[dim])
+            assert_equal(mvn_log_prob, gp_log_prob[dim], prec=1e-4)
 
     for S in [1, 5]:
         if model in ['imgp', 'lcmgp']:

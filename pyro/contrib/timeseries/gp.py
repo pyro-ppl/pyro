@@ -15,7 +15,7 @@ class IndependentMaternGP(TimeSeriesModel):
     to be evenly spaced in time. Training and inference are logarithmic in the length
     of the time series T.
 
-    :param float nu: The order of the Matern kernel; either 1.5 or 2.5.
+    :param float nu: The order of the Matern kernel; one of 0.5, 1.5 or 2.5.
     :param float dt: The time spacing between neighboring observations of the time series.
     :param int obs_dim: The dimension of the targets at each time step.
     """
@@ -73,6 +73,7 @@ class IndependentMaternGP(TimeSeriesModel):
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
         return self._get_dist().log_prob(targets.t().unsqueeze(-1))
 
+    @torch.no_grad()
     def _filter(self, targets):
         """
         Return the filtering state for the associated state space model.
@@ -80,6 +81,7 @@ class IndependentMaternGP(TimeSeriesModel):
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
         return self._get_dist().filter(targets.t().unsqueeze(-1))
 
+    @torch.no_grad()
     def _forecast(self, dts, filtering_state, include_observation_noise=True):
         """
         Internal helper for forecasting.
@@ -125,7 +127,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
     The targets :math:`y_i` are assumed to be evenly spaced in time. Training and inference
     are logarithmic in the length of the time series T.
 
-    :param float nu: The order of the Matern kernel; either 1.5 or 2.5.
+    :param float nu: The order of the Matern kernel; one of 0.5, 1.5 or 2.5.
     :param float dt: The time spacing between neighboring observations of the time series.
     :param int obs_dim: The dimension of the targets at each time step.
     :param int num_gps: The number of independent GPs that are mixed to model the time series.
@@ -199,6 +201,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
         return self._get_dist().log_prob(targets)
 
+    @torch.no_grad()
     def _filter(self, targets):
         """
         Return the filtering state for the associated state space model.
@@ -206,6 +209,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
         return self._get_dist().filter(targets)
 
+    @torch.no_grad()
     def _forecast(self, dts, filtering_state, include_observation_noise=True, full_covar=True):
         """
         Internal helper for forecasting.
