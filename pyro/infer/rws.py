@@ -111,11 +111,11 @@ class ReweightedWakeSleep(ELBO):
         log_weights = log_joints - log_qs
 
         # wake theta = iwae:
-        log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(self.num_particles)
-        wake_theta_loss = -log_mean_weight
+        log_sum_weight = torch.logsumexp(log_weights, dim=0)
+        wake_theta_loss = -(log_sum_weight  - math.log(self.num_particles))
 
         # wake phi = reweighted csis:
-        normalised_weights = (log_weights - log_mean_weight).exp()
+        normalised_weights = (log_weights - log_sum_weight).exp()
         wake_phi_loss = -(normalised_weights * log_qs).sum()
 
         warn_if_nan(wake_theta_loss, "loss")
@@ -162,12 +162,12 @@ class ReweightedWakeSleep(ELBO):
         log_weights = log_joints - log_qs.detach()
 
         # wake theta = iwae:
-        log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(self.num_particles)
-        wake_theta_loss = -log_mean_weight
+        log_sum_weight = torch.logsumexp(log_weights, dim=0)
+        wake_theta_loss = -(log_sum_weight - math.log(self.num_particles))
         wake_theta_loss.backward(retain_graph=True)
 
         # wake phi = reweighted csis:
-        normalised_weights = (log_weights - log_mean_weight).exp().detach()
+        normalised_weights = (log_weights - log_sum_weight).exp().detach()
         wake_phi_loss = -(normalised_weights * log_qs).sum()
         wake_phi_loss.backward()
 
