@@ -140,18 +140,13 @@ class ReweightedWakeSleep(ELBO):
             # compute log_weight and log_q
             for name, site in model_trace.nodes.items():
                 if site["type"] == "sample":
-                    if self.vectorize_particles:
-                        log_p_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
-                    else:
-                        log_p_site = site["log_prob_sum"]
+                    log_p_site = site["log_prob"]
                     log_joint = log_joint + log_p_site
+
 
             for name, site in guide_trace.nodes.items():
                 if site["type"] == "sample":
-                    if self.vectorize_particles:
-                        log_q_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
-                    else:
-                        log_q_site = site["log_prob_sum"]
+                    log_q_site = site["log_prob"]
                     log_q = log_q + log_q_site
 
             log_joints.append(log_joint)
@@ -163,12 +158,12 @@ class ReweightedWakeSleep(ELBO):
 
         # wake theta = iwae:
         log_sum_weight = torch.logsumexp(log_weights, dim=0)
-        wake_theta_loss = -(log_sum_weight - math.log(self.num_particles))
+        wake_theta_loss = -(log_sum_weight - math.log(self.num_particles)).sum()
         wake_theta_loss.backward(retain_graph=True)
 
         # wake phi = reweighted csis:
         normalised_weights = (log_weights - log_sum_weight).exp().detach()
-        wake_phi_loss = -(normalised_weights * log_qs).sum()
+        wake_phi_loss = -(normalised_weights * log_qs).sum(0).sum(0)
         wake_phi_loss.backward()
 
         warn_if_nan(wake_theta_loss, "loss")
