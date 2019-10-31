@@ -160,6 +160,8 @@ class ReweightedWakeSleep(ELBO):
         wake_phi_loss = -(normalised_weights * log_qs).sum(0).sum(0)
         wake_phi_loss.backward()
 
+        # TODO: incorporate sleep/csis?
+
         warn_if_nan(wake_theta_loss, "loss")
         warn_if_nan(wake_phi_loss, "loss")
         return wake_theta_loss.detach(), wake_phi_loss.detach()
