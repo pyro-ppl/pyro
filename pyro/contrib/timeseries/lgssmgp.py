@@ -26,7 +26,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
 
     :param int obs_dim: The dimension of the targets at each time step.
     :param int state_dim: The dimension of the :math:`{\\bf z}` latent state at each time step.
-    :param float nu: The order of the Matern kernel; either 1.5 or 2.5.
+    :param float nu: The order of the Matern kernel; one of 0.5, 1.5 or 2.5.
     :param bool learnable_observation_loc: whether the mean of the observation model should be learned or not;
             defaults to False.
     """

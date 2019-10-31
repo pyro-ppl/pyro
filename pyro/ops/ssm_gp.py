@@ -14,7 +14,7 @@ class MaternKernel(nn.Module):
     Provides the building blocks for representing univariate Gaussian Processes (GPs)
     with Matern kernels as state space models.
 
-    :param float nu: The order of the Matern kernel (1.5 or 2.5)
+    :param float nu: The order of the Matern kernel (one of 0.5, 1.5 or 2.5)
     :param int num_gps: the number of GPs
     :param torch.Tensor log_length_scale_init: optional `num_gps`-dimensional vector of initializers
         for the length scale
@@ -29,10 +29,10 @@ class MaternKernel(nn.Module):
         Arno Solin.
     """
     def __init__(self, nu=1.5, num_gps=1, log_length_scale_init=None, log_kernel_scale_init=None):
-        if nu not in [1.5, 2.5]:
-            raise NotImplementedError("The only supported values of nu are 1.5 and 2.5")
+        if nu not in [0.5, 1.5, 2.5]:
+            raise NotImplementedError("The only supported values of nu are 0.5, 1.5 and 2.5")
         self.nu = nu
-        self.state_dim = {1.5: 2, 2.5: 3}[nu]
+        self.state_dim = {0.5: 1, 1.5: 2, 2.5: 3}[nu]
         self.num_gps = num_gps
 
         if log_length_scale_init is None:
@@ -48,11 +48,12 @@ class MaternKernel(nn.Module):
         self.log_length_scale = nn.Parameter(log_length_scale_init)
         self.log_kernel_scale = nn.Parameter(log_kernel_scale_init)
 
-        for x in range(self.state_dim):
-            for y in range(self.state_dim):
-                mask = torch.zeros(self.state_dim, self.state_dim)
-                mask[x, y] = 1.0
-                self.register_buffer("mask{}{}".format(x, y), mask)
+        if self.state_dim > 1:
+            for x in range(self.state_dim):
+                for y in range(self.state_dim):
+                    mask = torch.zeros(self.state_dim, self.state_dim)
+                    mask[x, y] = 1.0
+                    self.register_buffer("mask{}{}".format(x, y), mask)
 
     def transition_matrix(self, dt):
         """
@@ -66,7 +67,10 @@ class MaternKernel(nn.Module):
         :returns torch.Tensor: a 3-dimensional tensor of transition matrices of shape
             (num_gps, state_dim, state_dim).
         """
-        if self.nu == 1.5:
+        if self.nu == 0.5:
+            rho = self.log_length_scale.exp().unsqueeze(-1).unsqueeze(-1)
+            return torch.exp(-dt / rho)
+        elif self.nu == 1.5:
             rho = self.log_length_scale.exp().unsqueeze(-1).unsqueeze(-1)
             dt_rho = dt / rho
             trans = (1.0 + root_three * dt_rho) * self.mask00 + \
@@ -99,7 +103,10 @@ class MaternKernel(nn.Module):
         :returns torch.Tensor: a 3-dimensional tensor of covariance matrices of shape
             (num_gps, state_dim, state_dim).
         """
-        if self.nu == 1.5:
+        if self.nu == 0.5:
+            sigmasq = (2.0 * self.log_kernel_scale).exp().unsqueeze(-1).unsqueeze(-1)
+            return sigmasq
+        elif self.nu == 1.5:
             sigmasq = (2.0 * self.log_kernel_scale).exp().unsqueeze(-1).unsqueeze(-1)
             rhosq = (2.0 * self.log_length_scale).exp().unsqueeze(-1).unsqueeze(-1)
             p_infinity = self.mask00 + (3.0 / rhosq) * self.mask11
