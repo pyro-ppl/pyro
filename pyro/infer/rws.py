@@ -83,8 +83,8 @@ class ReweightedWakeSleep(ELBO):
 
         # grab a vectorized trace from the generator
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            log_joint = 0
-            log_q = 0
+            log_joint = 0.
+            log_q = 0.
 
             # compute log weights
             for _, site in model_trace.nodes.items():
@@ -106,7 +106,7 @@ class ReweightedWakeSleep(ELBO):
 
         # wake theta = iwae:
         log_sum_weight = torch.logsumexp(log_weights, dim=0)
-        wake_theta_loss = -(log_sum_weight  - math.log(self.num_particles)).sum()
+        wake_theta_loss = -(log_sum_weight - math.log(self.num_particles)).sum()
 
         # wake phi = reweighted csis:
         normalised_weights = (log_weights - log_sum_weight).exp()
@@ -128,8 +128,8 @@ class ReweightedWakeSleep(ELBO):
         log_qs = []
 
         for model_trace, guide_trace in self._get_traces(model, guide, *args, **kwargs):
-            log_joint = 0
-            log_q = 0
+            log_joint = 0.
+            log_q = 0.
 
             # compute log_weight and log_q
             for name, site in model_trace.nodes.items():
