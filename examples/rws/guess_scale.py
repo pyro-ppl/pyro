@@ -42,7 +42,7 @@ if __name__ == '__main__':
                                                              vectorize_particles=vectorize))
 
     theta_losses, phi_losses, guesses, q_loc, q_log_scale = [], [], [], [], []
-    num_steps = 2000
+    num_steps = 5000
     for t in range(num_steps):
         theta_loss, phi_loss = svi.step(guess_init, guess_scale, obs_scale, obs)
         theta_losses.append(theta_loss)
