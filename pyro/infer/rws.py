@@ -60,8 +60,7 @@ class ReweightedWakeSleep(ELBO):
 
     def _get_trace(self, model, guide, *args, **kwargs):
         """
-        Returns a single trace from the guide, and the model that is run
-        against it.
+        Returns a single trace from the guide, and the model that is run against it.
         """
 
         # RWS: this samples detached zs
@@ -76,7 +75,7 @@ class ReweightedWakeSleep(ELBO):
         :returns: returns an estimate of the ELBO
         :rtype: float
 
-        Evaluates the ELBO with an estimator that uses num_particles many samples/particles.
+        Evaluates RWS with estimators that uses num_particles many samples/particles.
         """
         log_joints = []
         log_qs = []
@@ -121,8 +120,8 @@ class ReweightedWakeSleep(ELBO):
         :returns: returns model loss and guide loss
         :rtype: float
 
-        Computes the ELBO as well as the surrogate ELBO that is used to form the gradient estimator.
-        Performs backward on the latter. Num_particle many samples are used to form the estimators.
+        Computes the RWS estimators for the model (wake-theta) and the guide (wake-phi).
+        Performs backward as appropriate on both, using num_particle many samples/particles.
         """
         log_joints = []
         log_qs = []
