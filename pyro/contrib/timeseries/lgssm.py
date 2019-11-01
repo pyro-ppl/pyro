@@ -27,7 +27,7 @@ class GenericLGSSM(TimeSeriesModel):
             log_obs_noise_scale_init = -2.0 * torch.ones(obs_dim)
         assert log_obs_noise_scale_init.shape == (obs_dim,)
 
-        super(GenericLGSSM, self).__init__()
+        super().__init__()
 
         self.log_obs_noise_scale = nn.Parameter(log_obs_noise_scale_init)
         self.log_trans_noise_scale_sq = nn.Parameter(torch.zeros(state_dim))

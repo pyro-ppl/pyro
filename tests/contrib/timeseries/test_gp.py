@@ -1,9 +1,11 @@
+import math
 import torch
 
 from tests.common import assert_equal
 import pyro
 from pyro.contrib.timeseries import (IndependentMaternGP, LinearlyCoupledMaternGP, GenericLGSSM,
-                                     GenericLGSSMWithGPNoiseModel)
+                                     GenericLGSSMWithGPNoiseModel, DependentMaternGP)
+from pyro.ops.tensor_utils import block_diag_embed
 import pytest
 
 
@@ -12,6 +14,7 @@ import pytest
                                                        ('imgp', 1, 0.5), ('imgp', 2, 0.5),
                                                        ('imgp', 1, 1.5), ('imgp', 3, 1.5),
                                                        ('imgp', 1, 2.5), ('imgp', 3, 2.5),
+                                                       ('dmgp', 1, 1.5), ('dmgp', 2, 1.5),
                                                        ('glgssm', 1, 3), ('glgssm', 3, 1)])
 @pytest.mark.parametrize('T', [11, 37])
 def test_timeseries_models(model, nu_statedim, obs_dim, T):
@@ -36,6 +39,9 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
         state_dim = {0.5: 4, 1.5: 3, 2.5: 2}[nu_statedim]
         gp = GenericLGSSMWithGPNoiseModel(nu=nu_statedim, state_dim=state_dim, obs_dim=obs_dim,
                                           log_obs_noise_scale_init=torch.randn(obs_dim))
+    elif model == 'dmgp':
+        gp = DependentMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt,
+                               log_length_scale_init=torch.randn(obs_dim))
 
     targets = torch.randn(T, obs_dim)
     gp_log_prob = gp.log_prob(targets)
@@ -63,7 +69,7 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
             assert_equal(mvn_log_prob, gp_log_prob[dim], prec=1e-4)
 
     for S in [1, 5]:
-        if model in ['imgp', 'lcmgp']:
+        if model in ['imgp', 'lcmgp', 'dmgp']:
             dts = torch.rand(S).cumsum(dim=-1)
             predictive = gp.forecast(targets, dts)
         else:
@@ -83,9 +89,31 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
                 delta = dets[1:S] - dets[0:S-1]
                 assert (delta > 0.0).sum() == (S - 1)
 
-    if model in ['imgp', 'lcmgp']:
+    if model in ['imgp', 'lcmgp', 'dmgp']:
         # the distant future
         dts = torch.tensor([500.0])
         predictive = gp.forecast(targets, dts)
         # assert mean reverting behavior for GP models
         assert_equal(predictive.loc, torch.zeros(1, obs_dim))
+
+
+@pytest.mark.parametrize('obs_dim', [1, 3])
+def test_dependent_matern_gp(obs_dim):
+    dt = 0.5 + torch.rand(1).item()
+    gp = DependentMaternGP(nu=1.5, obs_dim=obs_dim, dt=dt,
+                           log_length_scale_init=torch.randn(obs_dim))
+
+    # make sure stationary covariance matrix satisfies the relevant
+    # matrix riccati equation
+    lengthscale = gp.kernel.log_length_scale.exp().unsqueeze(-1).unsqueeze(-1)
+    F = torch.tensor([[0.0, 1.0], [0.0, 0.0]])
+    mask1 = torch.tensor([[0.0, 0.0], [-3.0, 0.0]])
+    mask2 = torch.tensor([[0.0, 0.0], [0.0, -math.sqrt(12.0)]])
+    F = block_diag_embed(F + mask1 / lengthscale.pow(2.0) + mask2 / lengthscale)
+
+    stat_cov = gp._stationary_covariance()
+    wiener_cov = gp._get_wiener_cov()
+    wiener_cov *= torch.tensor([[0.0, 0.0], [0.0, 1.0]]).repeat(obs_dim, obs_dim)
+
+    expected_zero = torch.matmul(F, stat_cov) + torch.matmul(stat_cov, F.transpose(-1, -2)) + wiener_cov
+    assert_equal(expected_zero, torch.zeros(gp.full_state_dim, gp.full_state_dim))
