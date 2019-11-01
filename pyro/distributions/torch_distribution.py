@@ -206,7 +206,7 @@ class MaskedDistribution(TorchDistribution):
     distribution's :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
 
     :param mask: A boolean or boolean-valued tensor.
-    :type mask: torch.Tensor or book
+    :type mask: torch.Tensor or bool
     """
     arg_constraints = {}
 
