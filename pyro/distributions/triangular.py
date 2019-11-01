@@ -46,11 +46,11 @@ class Triangular(TorchDistribution):
 
         if self._validate_args:
             if not torch.lt(self.low, self.high).all():
-                raise ValueError("Triangle is not defined when low >= high")
+                raise ValueError("Triangular is not defined when low >= high")
             if not torch.le(self.low, self.peak).all():
-                raise ValueError("Triangle is not defined when peak < low")
+                raise ValueError("Triangular is not defined when peak < low")
             if not torch.le(self.peak, self.high).all():
-                raise ValueError("Triangle is not defined when peak > high")
+                raise ValueError("Triangular is not defined when peak > high")
 
     def rsample(self, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
