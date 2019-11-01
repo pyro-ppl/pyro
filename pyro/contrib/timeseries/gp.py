@@ -20,6 +20,12 @@ class IndependentMaternGP(TimeSeriesModel):
     :param float nu: The order of the Matern kernel; one of 0.5, 1.5 or 2.5.
     :param float dt: The time spacing between neighboring observations of the time series.
     :param int obs_dim: The dimension of the targets at each time step.
+    :param torch.Tensor log_length_scale_init: optional initial values for the kernel length scale
+        given as a `obs_dim`-dimensional tensor
+    :param torch.Tensor log_kernel_scale_init: optional initial values for the kernel scale
+        given as a `obs_dim`-dimensional tensor
+    :param torch.Tensor log_obs_noise_scale_init: optional initial values for the observation noise scale
+        given as a `obs_dim`-dimensional tensor
     """
     def __init__(self, nu=1.5, dt=1.0, obs_dim=1,
                  log_length_scale_init=None, log_kernel_scale_init=None,
@@ -134,6 +140,12 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
     :param int obs_dim: The dimension of the targets at each time step.
     :param int num_gps: The number of independent GPs that are mixed to model the time series.
         Typical values might be :math:`\\N_{\\rm gp} \\in [\\D_{\\rm obs} / 2, \\D_{\\rm obs}]`
+    :param torch.Tensor log_length_scale_init: optional initial values for the kernel length scale
+        given as a `num_gps`-dimensional tensor
+    :param torch.Tensor log_kernel_scale_init: optional initial values for the kernel scale
+        given as a `num_gps`-dimensional tensor
+    :param torch.Tensor log_obs_noise_scale_init: optional initial values for the observation noise scale
+        given as a `obs_dim`-dimensional tensor
     """
     def __init__(self, nu=1.5, dt=1.0, obs_dim=2, num_gps=1,
                  log_length_scale_init=None, log_kernel_scale_init=None,
@@ -268,6 +280,10 @@ class DependentMaternGP(TimeSeriesModel):
     :param float nu: The order of the Matern kernel; must be 1.5.
     :param float dt: The time spacing between neighboring observations of the time series.
     :param int obs_dim: The dimension of the targets at each time step.
+    :param torch.Tensor log_length_scale_init: optional initial values for the kernel length scale
+        given as a `obs_dim`-dimensional tensor
+    :param torch.Tensor log_obs_noise_scale_init: optional initial values for the observation noise scale
+        given as a `obs_dim`-dimensional tensor
 
     References
     [1] "Dependent Matern Processes for Multivariate Time Series,"
@@ -317,23 +333,22 @@ class DependentMaternGP(TimeSeriesModel):
         return dist.Normal(self.obs_matrix.new_zeros(self.obs_dim),
                            self._get_obs_noise_scale()).to_event(1)
 
-    def _get_wiener_noise(self):
+    def _get_wiener_cov(self):
         eye = torch.eye(self.obs_dim, device=self.obs_matrix.device, dtype=self.obs_matrix.dtype)
         chol = eye * self.log_diag_wiener_noise.exp() + self.off_diag_wiener_noise.tril(-1)
-        return torch.mm(chol, chol.t())
+        wiener_cov = torch.mm(chol, chol.t()).reshape(self.obs_dim, 1, self.obs_dim, 1)
+        wiener_cov = wiener_cov * wiener_cov.new_ones(self.kernel.state_dim, 1, self.kernel.state_dim)
+        return wiener_cov.reshape(self.full_state_dim, self.full_state_dim)
 
     def _stationary_covariance(self):
         rho_j = math.sqrt(3.0) * (-self.kernel.log_length_scale).exp().unsqueeze(-1).unsqueeze(-1)
         rho_i = rho_j.unsqueeze(-1)
-        wiener_cov = self._get_wiener_noise().reshape(self.obs_dim, 1, self.obs_dim, 1)
-        wiener_cov = wiener_cov * wiener_cov.new_ones(self.kernel.state_dim, 1, self.kernel.state_dim)
-        wiener_cov = wiener_cov.reshape(self.full_state_dim, self.full_state_dim)
         block = 2.0 * self.kernel.mask00 + \
             (rho_i - rho_j) * (self.kernel.mask01 - self.kernel.mask10) + \
             (2.0 * rho_i * rho_j) * self.kernel.mask11
         block = block / (rho_i + rho_j).pow(3.0)
         block = block.transpose(-2, -3).reshape(self.full_state_dim, self.full_state_dim)
-        return wiener_cov * block
+        return self._get_wiener_cov() * block
 
     def _get_trans_dist(self, trans_matrix, stationary_covariance):
         covar = stationary_covariance - torch.matmul(trans_matrix.transpose(-1, -2),
