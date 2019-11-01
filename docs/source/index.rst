@@ -23,7 +23,6 @@ Pyro Documentation
    optimization
    poutine
    ops
-   pyro.generic
 
 .. toctree::
    :glob:
@@ -37,6 +36,7 @@ Pyro Documentation
    contrib.gp
    contrib.minipyro
    contrib.oed
+   contrib.timeseries
    contrib.tracking
 
 

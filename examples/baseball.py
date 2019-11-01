@@ -51,7 +51,7 @@ hyper-parameters) of running HMC on different problems.
 """
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
-DATA_URL = "https://d2fefpcigoriu7.cloudfront.net/datasets/EfronMorrisBB.txt"
+DATA_URL = "https://d2hg8soec8ck9v.cloudfront.net/datasets/EfronMorrisBB.txt"
 
 
 # ===================================
@@ -359,7 +359,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith('0.4.0')
+    assert pyro.__version__.startswith('0.5.1')
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
     parser.add_argument("-n", "--num-samples", nargs="?", default=200, type=int)
     parser.add_argument("--num-chains", nargs='?', default=4, type=int)
