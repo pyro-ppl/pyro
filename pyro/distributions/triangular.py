@@ -10,11 +10,11 @@ from pyro.distributions import TorchDistribution, Uniform
 class Triangular(TorchDistribution):
     """
      A Triangular distribution with a probability density function shaped like a triangle.
-     The shape of the triangle is defined by the lower limit (low), upper limit (high) and the peak (mode).
+     The shape of the triangle is defined by the lower limit `low`, upper limit `high` and the mode `peak`.
 
-    :param torch.Tensor low: lower range (inclusive).
-    :param torch.Tensor high: upper range (inclusive).
-    :param torch.Tensor peak: mode of range.
+    :param torch.Tensor low: lower limit (inclusive).
+    :param torch.Tensor high: upper limit (inclusive).
+    :param torch.Tensor peak: mode of range between upper and lower limit.
     """
     arg_constraints = {'low': constraints.real, 'high': constraints.dependent, 'peak': constraints.dependent}
     support = constraints.dependent
@@ -62,13 +62,22 @@ class Triangular(TorchDistribution):
 
     def log_prob(self, value):
         interval_length = self.high - self.low
-        result_inside_interval = torch.where((value >= self.low) & (value <= self.peak),
-                                             torch.tensor(2.0).log() + torch.log(value - self.low) -
-                                             torch.log(interval_length) - torch.log(self.peak - self.low),
-                                             torch.tensor(2.0).log() + torch.log(self.high - value) -
-                                             torch.log(interval_length) - torch.log(self.high - self.peak))
+        inside_interval = torch.where((value >= self.low) & (value <= self.peak),
+                                      torch.tensor(2.0).log() + torch.log(value - self.low) -
+                                      torch.log(interval_length) - torch.log(self.peak - self.low),
+                                      torch.tensor(2.0).log() + torch.log(self.high - value) -
+                                      torch.log(interval_length) - torch.log(self.high - self.peak))
         return torch.where((value < self.low) | (value > self.high), torch.log(torch.ones_like(value) * 1e-6),
-                           result_inside_interval)
+                           inside_interval)
+
+    def cdf(self, value):
+        interval_length = self.high - self.low
+        inside_interval = torch.where((value > self.low) & (value <= self.peak),
+                                      (value - self.low) ** 2 / (interval_length * (self.peak - self.low)),
+                                      torch.tensor(1.0) - (self.high - value) ** 2 /
+                                      (interval_length * (self.high - self.peak)))
+        below_low = torch.where(value <= self.low, torch.zeros_like(value), inside_interval)
+        return torch.where(value >= self.high, torch.ones_like(value), below_low)
 
     def expand(self, batch_shape):
         try:
