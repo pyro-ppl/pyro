@@ -205,6 +205,10 @@ class MaskedDistribution(TorchDistribution):
     Masks a distribution by a boolean tensor that is broadcastable to the
     distribution's :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
 
+    In the special case ``mask is False``, computation of :meth:`log_prob` ,
+    :meth:`score_parts` , and ``kl_divergence()`` is skipped, and constant zero
+    values are returned instead.
+
     :param mask: A boolean or boolean-valued tensor.
     :type mask: torch.Tensor or bool
     """
