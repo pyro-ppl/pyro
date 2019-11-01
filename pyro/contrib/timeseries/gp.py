@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 from torch.distributions import MultivariateNormal
@@ -299,15 +301,17 @@ class DependentMaternGP(TimeSeriesModel):
         self.log_diag_wiener_noise = nn.Parameter(-2.0 * torch.ones(obs_dim))
         self.off_diag_wiener_noise = nn.Parameter(0.03 * torch.randn(obs_dim, obs_dim))
 
-        obs_matrix = [1.0] + [0.0] * (self.kernel.state_dim - 1)
-        self.register_buffer("obs_matrix", torch.tensor(obs_matrix).unsqueeze(-1))
+        obs_matrix = torch.zeros(self.full_state_dim, obs_dim)
+        for i in range(obs_dim):
+            obs_matrix[self.kernel.state_dim * i, i] = 1.0
+        self.register_buffer("obs_matrix", obs_matrix)
 
     def _get_obs_noise_scale(self):
         return self.log_obs_noise_scale.exp()
 
-    def _get_init_dist(self):
+    def _get_init_dist(self, stationary_covariance):
         return torch.distributions.MultivariateNormal(self.obs_matrix.new_zeros(self.full_state_dim),
-                                                      self._stationary_covariance())
+                                                      stationary_covariance)
 
     def _get_obs_dist(self):
         return dist.Normal(self.obs_matrix.new_zeros(self.obs_dim),
@@ -331,22 +335,25 @@ class DependentMaternGP(TimeSeriesModel):
         block = block.transpose(-2, -3).reshape(self.full_state_dim, self.full_state_dim)
         return wiener_cov * block
 
-    def _get_trans_dist(self, trans_matrix):
-        p = self._stationary_covariance()
-        covar = p - torch.matmul(trans_matrix.transpose(-1, -2), torch.matmul(p, trans_matrix))
+    def _get_trans_dist(self, trans_matrix, stationary_covariance):
+        covar = stationary_covariance - torch.matmul(trans_matrix.transpose(-1, -2),
+                                                     torch.matmul(stationary_covariance, trans_matrix))
         return MultivariateNormal(covar.new_zeros(self.full_state_dim), covar)
+
+    def _trans_matrix_distribution_stat_covar(self, dts):
+        stationary_covariance = self._stationary_covariance()
+        trans_matrix = self.kernel.transition_matrix(dt=dts)
+        trans_matrix = block_diag_embed(trans_matrix)
+        trans_dist = self._get_trans_dist(trans_matrix, stationary_covariance)
+        return trans_matrix, trans_dist, stationary_covariance
 
     def _get_dist(self):
         """
         Get the `GaussianHMM` distribution that corresponds to a `DependentMaternGP`
         """
-        trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
-        trans_matrix = block_diag_embed(trans_matrix)
-        trans_dist = MultivariateNormal(self.obs_matrix.new_zeros(self.obs_dim, 1, self.kernel.state_dim),
-                                        process_covar.unsqueeze(-3))
-        trans_matrix = trans_matrix.unsqueeze(-3)
-        return dist.GaussianHMM(self._get_init_dist(), trans_matrix, trans_dist,
-                                self.obs_matrix, self._get_obs_dist())
+        trans_matrix, trans_dist, stat_covar = self._trans_matrix_distribution_stat_covar(self.dt)
+        return dist.GaussianHMM(self._get_init_dist(stat_covar), trans_matrix,
+                                trans_dist, self.obs_matrix, self._get_obs_dist())
 
     def log_prob(self, targets):
         """
@@ -373,14 +380,17 @@ class DependentMaternGP(TimeSeriesModel):
         """
         assert dts.dim() == 1
         dts = dts.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-        trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=dts)
-        predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), trans_matrix).squeeze(-2)[..., 0]
-        predicted_function_covar = torch.matmul(trans_matrix.transpose(-1, -2), torch.matmul(
-                                                filtering_state.covariance_matrix, trans_matrix))[..., 0, 0] + \
-            process_covar[..., 0, 0]
+        trans_matrix, trans_dist, _ = self._trans_matrix_distribution_stat_covar(dts)
+        trans_obs = torch.matmul(trans_matrix, self.obs_matrix)
+
+        predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), trans_obs).squeeze(-2)
+        predicted_function_covar = torch.matmul(trans_obs.transpose(-1, -2),
+                                                torch.matmul(filtering_state.covariance_matrix, trans_obs)) + \
+            torch.matmul(self.obs_matrix.t(), torch.matmul(trans_dist.covariance_matrix, self.obs_matrix))
 
         if include_observation_noise:
             predicted_function_covar = predicted_function_covar + self._get_obs_noise_scale().pow(2.0)
+
         return predicted_mean, predicted_function_covar
 
     def forecast(self, targets, dts):
@@ -392,8 +402,9 @@ class DependentMaternGP(TimeSeriesModel):
             forecasts.
         :param torch.Tensor dts: A 1-dimensional tensor of times to forecast into the future,
             with zero corresponding to the time of the final target `targets[-1]`.
-        :returns torch.distributions.Normal: Returns a predictive Normal distribution with batch shape `(S,)` and
-            event shape `(obs_dim,)`, where `S` is the size of `dts`.
+        :returns torch.distributions.MultivariateNormal: Returns a predictive MultivariateNormal
+            distribution with batch shape `(S,)` and event shape `(obs_dim,)`, where `S` is the size of `dts`.
         """
         filtering_state = self._filter(targets)
         predicted_mean, predicted_covar = self._forecast(dts, filtering_state)
+        return MultivariateNormal(predicted_mean, predicted_covar)
