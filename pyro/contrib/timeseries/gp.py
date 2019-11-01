@@ -314,7 +314,7 @@ class DependentMaternGP(TimeSeriesModel):
         self.kernel.register_buffer("log_kernel_scale", torch.zeros(obs_dim))
 
         self.log_obs_noise_scale = nn.Parameter(log_obs_noise_scale_init)
-        self.log_diag_wiener_noise = nn.Parameter(-2.0 * torch.ones(obs_dim))
+        self.log_diag_wiener_noise = nn.Parameter(torch.zeros(obs_dim))
         self.off_diag_wiener_noise = nn.Parameter(0.03 * torch.randn(obs_dim, obs_dim))
 
         obs_matrix = torch.zeros(self.full_state_dim, obs_dim)
