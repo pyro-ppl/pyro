@@ -211,13 +211,13 @@ class MaskedDistribution(TorchDistribution):
     arg_constraints = {}
 
     def __init__(self, base_dist, mask):
+        self.base_dist = base_dist
         if isinstance(mask, bool):
             self._mask = mask
         else:
             if broadcast_shape(mask.shape, base_dist.batch_shape) != base_dist.batch_shape:
                 raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "
                                  "actual {} vs {}".format(mask.shape, base_dist.batch_shape))
-            self.base_dist = base_dist
             self._mask = mask.bool()
         super(MaskedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
 
@@ -261,7 +261,7 @@ class MaskedDistribution(TorchDistribution):
 
     def score_parts(self, value):
         if isinstance(self._mask, bool):
-            return super().score_parts(self, value)  # calls self.log_prob()
+            return super().score_parts(value)  # calls self.log_prob(value)
         return self.base_dist.score_parts(value).scale_and_mask(mask=self._mask)
 
     def enumerate_support(self, expand=True):
@@ -290,7 +290,7 @@ def _kl_masked_masked(p, q):
         mask = p._mask & q._mask
 
     if mask is False:
-        return 0.  # We cannot generically determine device, so we return a float.
+        return 0.  # Return a float, since we cannot determine device.
     if mask is True:
         return kl_divergence(p.base_dist, q.base_dist)
     kl = kl_divergence(p.base_dist, q.base_dist)
