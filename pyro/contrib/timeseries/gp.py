@@ -286,8 +286,7 @@ class DependentMaternGP(TimeSeriesModel):
         given as a `obs_dim`-dimensional tensor
 
     References
-    [1] "Dependent Matern Processes for Multivariate Time Series,"
-        Alexander Vandenberg-Rodes, Babak Shahbaba
+    [1] "Dependent Matern Processes for Multivariate Time Series," Alexander Vandenberg-Rodes, Babak Shahbaba.
     """
     def __init__(self, nu=1.5, dt=1.0, obs_dim=1,
                  log_length_scale_init=None, log_obs_noise_scale_init=None):
