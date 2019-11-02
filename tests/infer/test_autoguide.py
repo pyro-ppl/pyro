@@ -11,16 +11,32 @@ import pyro.poutine as poutine
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
                                   AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
-                                  AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
-                                  init_to_sample)
+                                  AutoMultivariateNormal, AutoProgressive, init_to_feasible, init_to_mean,
+                                  init_to_median, init_to_sample)
 from pyro.optim import Adam
 from tests.common import assert_close, assert_equal
+
+
+class AutoProgressive2(AutoProgressive):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.init_scale()
+
+
+class AutoProgressive3(AutoProgressive):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.init_scale()
+        self.init_cov()
 
 
 @pytest.mark.parametrize("auto_class", [
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoProgressive,
+    AutoProgressive2,
+    AutoProgressive3,
     AutoIAFNormal,
 ])
 def test_scores(auto_class):
@@ -39,7 +55,8 @@ def test_scores(auto_class):
 
     assert '_auto_latent' not in model_trace.nodes
     assert model_trace.nodes['z']['log_prob_sum'].item() != 0.0
-    assert guide_trace.nodes['_auto_latent']['log_prob_sum'].item() != 0.0
+    if auto_class is not AutoProgressive:  # for which log_prob_sum is indeed 0
+        assert guide_trace.nodes['_auto_latent']['log_prob_sum'].item() != 0.0
     assert guide_trace.nodes['z']['log_prob_sum'].item() == 0.0
 
 
@@ -49,6 +66,9 @@ def test_scores(auto_class):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoProgressive,
+    AutoProgressive2,
+    AutoProgressive3,
     AutoIAFNormal,
     AutoLaplaceApproximation,
 ])
@@ -85,6 +105,9 @@ def test_factor(auto_class, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoProgressive,
+    AutoProgressive2,
+    AutoProgressive3,
     AutoIAFNormal,
     AutoLaplaceApproximation,
 ])
@@ -111,6 +134,9 @@ def test_shapes(auto_class, init_loc_fn, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoProgressive,
+    AutoProgressive2,
+    AutoProgressive3,
     AutoIAFNormal,
     AutoLaplaceApproximation,
 ])
@@ -162,6 +188,9 @@ def auto_guide_callable(model):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoProgressive,
+    AutoProgressive2,
+    AutoProgressive3,
     AutoLaplaceApproximation,
     auto_guide_list_x,
     auto_guide_callable,
@@ -199,6 +228,8 @@ def test_median(auto_class, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoProgressive2,
+    AutoProgressive3,
     AutoLaplaceApproximation,
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
@@ -210,7 +241,7 @@ def test_quantiles(auto_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = auto_class(model)
-    infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo(strict_enumeration_warning=False))
+    infer = SVI(model, guide, Adam({'lr': 0.05}), Elbo(strict_enumeration_warning=False))
     for _ in range(100):
         infer.step()
 
@@ -244,6 +275,9 @@ def test_quantiles(auto_class, Elbo):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoProgressive,
+    AutoProgressive2,
+    AutoProgressive3,
     AutoIAFNormal,
     AutoLaplaceApproximation,
 ])
@@ -275,6 +309,9 @@ def test_discrete_parallel(continuous_class):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoProgressive,
+    AutoProgressive2,
+    AutoProgressive3,
     AutoIAFNormal,
     AutoLaplaceApproximation,
 ])
@@ -295,6 +332,9 @@ def test_guide_list(auto_class):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoProgressive,
+    AutoProgressive2,
+    AutoProgressive3,
     AutoLaplaceApproximation,
 ])
 def test_callable(auto_class):
@@ -319,6 +359,9 @@ def test_callable(auto_class):
     AutoDiagonalNormal,
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
+    AutoProgressive,
+    AutoProgressive2,
+    AutoProgressive3,
     AutoLaplaceApproximation,
 ])
 def test_callable_return_dict(auto_class):
@@ -355,3 +398,27 @@ def test_unpack_latent():
     assert guide()['x'].shape == model().shape
     latent = guide.sample_latent()
     assert list(guide._unpack_latent(latent))[0][1].shape == (1,)
+
+
+@pytest.mark.parametrize("rank", [1, 2, 3])
+def test_auto_progressive(rank):
+    data = torch.randn(2)
+
+    def model(data):
+        x = pyro.sample("x", dist.Normal(0, 1))
+        with pyro.plate("data", len(data)):
+            y = pyro.sample("y", dist.Normal(x, 1))
+            pyro.sample("z", dist.Normal(y, 1), obs=data)
+
+    guide = AutoProgressive(model)
+    svi = SVI(model, guide, Adam({"lr": 0.1, "betas": (0.5, 0.9)}), Trace_ELBO())
+    for i in range(2):
+        svi.step(data)
+
+    guide.init_scale()
+    for i in range(2):
+        svi.step(data)
+
+    guide.init_cov()
+    for i in range(2):
+        svi.step(data)
