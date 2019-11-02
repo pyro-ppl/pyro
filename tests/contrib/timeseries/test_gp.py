@@ -4,7 +4,7 @@ import torch
 from tests.common import assert_equal
 import pyro
 from pyro.contrib.timeseries import (IndependentMaternGP, LinearlyCoupledMaternGP, GenericLGSSM,
-                                     GenericLGSSMWithGPNoiseModel, DependentMaternGP)
+                                     GenericLGSSMWithGPNoiseModel, DependentMaternGP, LinearlyCoupledDependentMaternGP)
 from pyro.ops.tensor_utils import block_diag_embed
 import pytest
 
@@ -15,6 +15,7 @@ import pytest
                                                        ('imgp', 1, 1.5), ('imgp', 3, 1.5),
                                                        ('imgp', 1, 2.5), ('imgp', 3, 2.5),
                                                        ('dmgp', 1, 1.5), ('dmgp', 2, 1.5),
+                                                       ('lcdgp', 1, 1.5), ('lcdgp', 3, 1.5),
                                                        ('glgssm', 1, 3), ('glgssm', 3, 1)])
 @pytest.mark.parametrize('T', [11, 37])
 def test_timeseries_models(model, nu_statedim, obs_dim, T):
@@ -42,6 +43,9 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
     elif model == 'dmgp':
         gp = DependentMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt,
                                log_length_scale_init=torch.randn(obs_dim))
+    elif model == 'lcdgp':
+        gp = LinearlyCoupledDependentMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt,
+                                              log_length_scale_init=torch.randn(obs_dim))
 
     targets = torch.randn(T, obs_dim)
     gp_log_prob = gp.log_prob(targets)
@@ -69,7 +73,7 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
             assert_equal(mvn_log_prob, gp_log_prob[dim], prec=1e-4)
 
     for S in [1, 5]:
-        if model in ['imgp', 'lcmgp', 'dmgp']:
+        if model in ['imgp', 'lcmgp', 'dmgp', 'lcdgp']:
             dts = torch.rand(S).cumsum(dim=-1)
             predictive = gp.forecast(targets, dts)
         else:
@@ -89,7 +93,7 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
                 delta = dets[1:S] - dets[0:S-1]
                 assert (delta > 0.0).sum() == (S - 1)
 
-    if model in ['imgp', 'lcmgp', 'dmgp']:
+    if model in ['imgp', 'lcmgp', 'dmgp', 'lcdgp']:
         # the distant future
         dts = torch.tensor([500.0])
         predictive = gp.forecast(targets, dts)
