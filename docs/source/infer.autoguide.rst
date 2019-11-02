@@ -67,6 +67,14 @@ AutoLowRankMultivariateNormal
     :special-members: __call__
     :show-inheritance:
 
+AutoProgressive
+---------------
+.. autoclass:: pyro.infer.autoguide.AutoProgressive
+    :members:
+    :undoc-members:
+    :special-members: __call__
+    :show-inheritance:
+
 AutoIAFNormal
 -----------------------------
 .. autoclass:: pyro.infer.autoguide.AutoIAFNormal

@@ -583,6 +583,133 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         return loc, scale
 
 
+class AutoProgressive(AutoContinuous):
+    """
+    This implementation of :class:`AutoContinuous` progressively increases
+    model complexity through three stages:
+
+    1.  This starts with a point estimate, equivalent to :class:`AutoDelta` .
+    2.  Next, after :meth:`init_scale` is called, this additionally learns
+        a diagonal noise scale, equivalent to :class:`AutoDiagonalNormal` .
+    3.  Finally, after :meth:`init_cov` is called, this additionally learns a
+        low-rank covariance structure among latent variables, equivalent to
+        :class:`AutoLowRankMultivariateNormal` .
+
+    Usage::
+
+        # Begin stage 1.
+        guide = AutoProgressive(model, rank=10)
+        svi = SVI(model, guide, ...)
+        for _ in range(100):
+            svi.step(data)
+
+        # Move to stage 2.
+        guide.init_scale()
+        for _ in range(100):
+            svi.step(data)
+
+        # Move to stage 3.
+        guide.init_cov()
+        for _ in range(100):
+            svi.step(data)
+
+    The guide does not depend on the model's ``*args, **kwargs``.
+
+    Note that when jitting, you must create a new ``Jit*_ELBO` and ``SVI``
+    instance for each of the three stages, since the computation differs.
+
+    :param callable model: A generative model.
+    :param int rank: The rank of the low-rank part of the covariance matrix.
+    :param str prefix: A prefix for all internal param sites.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    """
+
+    def __init__(self, model, rank=1, prefix="auto", init_loc_fn=init_to_median):
+        if not isinstance(rank, int) or not rank > 0:
+            raise ValueError("Expected rank > 0 but got {}".format(rank))
+        self.rank = rank
+        self._init_scale = 0.
+        self._init_cov_factor = 0.
+        super(AutoProgressive, self).__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
+
+    def init_scale(self, scale=0.1):
+        """
+        Initialize diagonal uncertainty scale to a fixed scale.
+        This is typically called after a point estimate has been learned.
+
+        :param float scale: An initial uncertainty scale. Must be postive.
+            Values less than 1 are recommended.
+        """
+        if not isinstance(scale, float) or not scale > 0.:
+            raise ValueError("Expected positive init_scale but got {}".format(scale))
+        if self._init_scale > 0.:
+            raise ValueError("Cannot initialize scale a second time.")
+        self._init_scale = scale
+
+    def init_cov(self, scale=0.1):
+        """
+        Initialize low rank covariance factor to scaled random noise.
+        This is typically called after both point estimates and noise scales
+        have been learned; the low rank ``cov_factor`` size combines the
+        ``scale`` arg with the current learned noise scales.
+
+        :param float scale: A noise scale. Must be positive.
+            Values less than 1 are recommended.
+        """
+        if not isinstance(scale, float) or not scale > 0.:
+            raise ValueError("Expected positive init_cov but got {}".format(scale))
+        if self._init_cov_factor > 0.:
+            raise ValueError("Cannot initialize cov_factor a second time.")
+        if self._init_scale == 0.:
+            self._init_scale = scale  # Jump from Stage 1 to Stage 3.
+        self._init_cov_factor = scale
+
+    def get_posterior(self, *args, **kwargs):
+        """
+        Returns a posterior distribution over the latent unconstrained value.
+        """
+        loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
+        if self.init_scale == 0.:
+            return dist.Delta(loc)  # Stage 1.
+        assert self.init_scale > 0.
+
+        @torch.no_grad()
+        def init_scale_fn():
+            # This heuristic aims to add proportional noise to values near 1 and
+            # to huge values, but will add overly large noise to tiny values.
+            data_scale = 1. + loc * loc
+            return data_scale * self.init_scale
+
+        scale = pyro.param("{}_scale".format(self.prefix), init_scale_fn,
+                           constraint=constraints.positive)
+        if self.init_cov_factor == 0.:
+            return dist.Normal(loc, scale).to_event(1)  # Stage 2.
+        assert self.init_cov_factor > 0.
+
+        @torch.no_grad()
+        def init_cov_factor_fn():
+            # This heuristic aims to add about 1% noise to the covariance matrix.
+            cov_factor = loc.new_empty(self.latent_dim, self.rank)
+            cov_factor.normal_(0, self.init_cov_factor / self.rank ** 2)
+            cov_factor *= scale.unsqueeze(-1)
+            return cov_factor
+
+        factor = pyro.param("{}_cov_factor".format(self.prefix), init_cov_factor_fn)
+        return dist.LowRankMultivariateNormal(loc, factor, scale * scale)  # Stage 3.
+
+    def _loc_scale(self, *args, **kwargs):
+        loc = pyro.param("{}_loc".format(self.prefix))
+        if self.init_scale == 0:
+            scale = loc.new_zeros(loc.shape)
+            return loc, scale
+        scale = pyro.param("{}_scale".format(self.prefix))
+        if self.rank > 0:
+            factor = pyro.param("{}_cov_factor".format(self.prefix))
+            scale = (scale * scale + (factor * factor).sum(-1)).sqrt()
+        return loc, scale
+
+
 class AutoIAFNormal(AutoContinuous):
     """
     This implementation of :class:`AutoContinuous` uses a Diagonal Normal
