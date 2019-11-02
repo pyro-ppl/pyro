@@ -73,6 +73,7 @@ AutoProgressive
     :members:
     :undoc-members:
     :special-members: __call__
+    :member-order: bysource
     :show-inheritance:
 
 AutoIAFNormal

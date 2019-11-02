@@ -588,12 +588,15 @@ class AutoProgressive(AutoContinuous):
     This implementation of :class:`AutoContinuous` progressively increases
     guide complexity through three stages of training:
 
-    1.  This starts with a point estimate, equivalent to :class:`AutoDelta` .
+    1.  This guide starts learning a point estimate, equivalent to
+        :class:`AutoDelta` .
     2.  Next, after :meth:`init_scale` is called, this additionally learns
         a diagonal noise scale, equivalent to :class:`AutoDiagonalNormal` .
+        During this stage the location parameter continues to be learned.
     3.  Finally, after :meth:`init_cov` is called, this additionally learns a
         low-rank covariance structure among latent variables, equivalent to
-        :class:`AutoLowRankMultivariateNormal` .
+        :class:`AutoLowRankMultivariateNormal` . During this stage the location
+        and diagonal noise scale parameters continue to be learned.
 
     Usage::
 
@@ -615,9 +618,6 @@ class AutoProgressive(AutoContinuous):
 
     The guide does not depend on the model's ``*args, **kwargs``.
 
-    Note that when jitting, you must create a new ``Jit*_ELBO` and ``SVI``
-    instance for each of the three stages, since the computation differs.
-
     :param callable model: A generative model.
     :param int rank: The rank of the low-rank part of the covariance matrix.
     :param str prefix: A prefix for all internal param sites.
@@ -625,7 +625,7 @@ class AutoProgressive(AutoContinuous):
         See :ref:`autoguide-initialization` section for available functions.
     """
 
-    def __init__(self, model, rank=1, prefix="auto", init_loc_fn=init_to_median):
+    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median, rank=1):
         if not isinstance(rank, int) or not rank > 0:
             raise ValueError("Expected rank > 0 but got {}".format(rank))
         self.rank = rank
@@ -635,7 +635,7 @@ class AutoProgressive(AutoContinuous):
 
     def init_scale(self, scale=0.1):
         """
-        Initialize diagonal uncertainty scale to a fixed scale.
+        Initialize diagonal uncertainty scale.
         This is typically called after a point estimate has been learned.
 
         :param float scale: An initial uncertainty scale. Must be postive.
@@ -651,8 +651,8 @@ class AutoProgressive(AutoContinuous):
         """
         Initialize low rank covariance factor to scaled random noise.
         This is typically called after both point estimates and noise scales
-        have been learned; the low rank ``cov_factor`` size combines the
-        ``scale`` arg with the current learned noise scales.
+        have been learned; the initial low rank ``cov_factor`` scale combines
+        the ``scale`` arg with the current learned diagonal noise scales.
 
         :param float scale: A noise scale. Must be positive.
             Values less than 1 are recommended.
