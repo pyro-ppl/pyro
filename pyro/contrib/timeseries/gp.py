@@ -79,7 +79,10 @@ class IndependentMaternGP(TimeSeriesModel):
         :returns torch.Tensor: A 1-dimensional tensor of log probabilities of shape `(obs_dim,)`
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
-        return self._get_dist().log_prob(targets.t().unsqueeze(-1))
+        lp = self._get_dist().log_prob(targets.t().unsqueeze(-1))
+        print("length scales", self.kernel.log_length_scale)
+        print("lp", lp.shape, lp.data.numpy())
+        return lp
 
     @torch.no_grad()
     def _filter(self, targets):

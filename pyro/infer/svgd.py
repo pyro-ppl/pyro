@@ -191,7 +191,7 @@ class SVGD(object):
     :param model: The model (callable containing Pyro primitives). Model must be fully vectorized
         and may only contain continuous latent variables.
     :param kernel: a SVGD compatible kernel like :class:`RBFSteinKernel`.
-    :param optim: A wrapper a for a PyTorch optimizer.
+    :param optim: A wrapper for a PyTorch optimizer.
     :type optim: pyro.optim.PyroOptim
     :param int num_particles: The number of particles used in SVGD.
     :param int max_plate_nesting: The max number of nested :func:`pyro.plate` contexts in the model.
