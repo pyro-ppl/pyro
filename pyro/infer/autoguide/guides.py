@@ -638,7 +638,8 @@ class AutoProgressive(AutoContinuous):
     @property
     def rank(self):
         if self._rank is None:
-            self._rank = int(round(self.latent_dim))
+            # This heuristic chooses rank close to sqrt(latent_dim).
+            self._rank = int(round(self.latent_dim ** 0.5))
         return self._rank
 
     def init_scale(self, scale=0.1):
