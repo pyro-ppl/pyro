@@ -14,7 +14,7 @@ class PyroOptim(object):
     :param optim_constructor: a torch.optim.Optimizer
     :param optim_args: a dictionary of learning arguments for the optimizer or a callable that returns
         such dictionaries
-    :param clip_args: a dictionary of clip_norm and/or clip_value args or a callable that return
+    :param clip_args: a dictionary of clip_norm and/or clip_value args or a callable that returns
         such dictionaries
     """
     def __init__(self, optim_constructor, optim_args, clip_args=None):
@@ -66,10 +66,12 @@ class PyroOptim(object):
             if isinstance(self.optim_objs[p], torch.optim.lr_scheduler._LRScheduler) or \
                     isinstance(self.optim_objs[p], torch.optim.lr_scheduler.ReduceLROnPlateau):
                 # if optim object was a scheduler, perform an optimizer step
-                self.grad_clip[p](p)
+                if self.grad_clip[p] is not None:
+                    self.grad_clip[p](p)
                 self.optim_objs[p].optimizer.step(*args, **kwargs)
             else:
-                self.grad_clip[p](p)
+                if self.grad_clip[p] is not None:
+                    self.grad_clip[p](p)
                 self.optim_objs[p].step(*args, **kwargs)
 
     def get_state(self):
@@ -136,6 +138,9 @@ class PyroOptim(object):
 
     def _get_grad_clip(self, param):
         grad_clip_args = self._get_grad_clip_args(param)
+
+        if not grad_clip_args:
+            return None
 
         def _clip_grad(params):
             self._clip_grad(params, **grad_clip_args)

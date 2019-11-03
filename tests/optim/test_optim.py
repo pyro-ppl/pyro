@@ -144,6 +144,8 @@ def test_clip_norm(pyro_optim, clip, value):
         x2.backward(torch.tensor(value))
         opt_c([x1])
         opt([x2])
+        assert_equal(x1.grad, torch.tensor(value))
+        assert_equal(x2.grad, torch.tensor(value))
         assert_equal(x1, x2)
         opt_c.optim_objs[x1].zero_grad()
         opt.optim_objs[x2].zero_grad()

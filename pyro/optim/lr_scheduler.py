@@ -9,6 +9,8 @@ class PyroLRScheduler(PyroOptim):
     :param scheduler_constructor: a :class:`~torch.optim.lr_scheduler`
     :param optim_args: a dictionary of learning arguments for the optimizer or a callable that returns
         such dictionaries. must contain the key 'optimizer' with pytorch optimizer value
+    :param clip_args: a dictionary of clip_norm and/or clip_value args or a callable that returns
+        such dictionaries.
 
     Example::
 
