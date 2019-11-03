@@ -601,7 +601,7 @@ class AutoProgressive(AutoContinuous):
     Usage::
 
         # Begin stage 1.
-        guide = AutoProgressive(model, rank=10)
+        guide = AutoProgressive(model)
         svi = SVI(model, guide, ...)
         for _ in range(100):
             svi.step(data)
@@ -616,22 +616,30 @@ class AutoProgressive(AutoContinuous):
         for _ in range(100):
             svi.step(data)
 
+    The guide is usable at any stage; learning need not progress to Stage 3.
     The guide does not depend on the model's ``*args, **kwargs``.
 
     :param callable model: A generative model.
-    :param int rank: The rank of the low-rank part of the covariance matrix.
     :param str prefix: A prefix for all internal param sites.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
+    :param int rank: The rank of the low-rank part of the covariance matrix.
+        Defaults to approximately ``sqrt(latent_dim)``.
     """
 
-    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median, rank=1):
-        if not isinstance(rank, int) or not rank > 0:
+    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median, rank=None):
+        if rank is not None and not (isinstance(rank, int) and rank > 0):
             raise ValueError("Expected rank > 0 but got {}".format(rank))
-        self.rank = rank
+        self._rank = rank
         self._init_scale = 0.
         self._init_cov = 0.
         super(AutoProgressive, self).__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
+
+    @property
+    def rank(self):
+        if self._rank is None:
+            self._rank = int(round(self.latent_dim))
+        return self._rank
 
     def init_scale(self, scale=0.1):
         """
@@ -678,8 +686,8 @@ class AutoProgressive(AutoContinuous):
         def init_scale_fn():
             # This heuristic aims to add proportional noise to values near 1 and
             # to huge values, but will add overly large noise to tiny values.
-            data_scale = 1. + loc * loc
-            return data_scale * self._init_scale
+            data_scale = (1 + loc * loc).mul(0.5).sqrt()
+            return self._init_scale * data_scale
 
         scale = pyro.param("{}_scale".format(self.prefix), init_scale_fn,
                            constraint=constraints.positive)
@@ -690,8 +698,11 @@ class AutoProgressive(AutoContinuous):
         @torch.no_grad()
         def init_cov_factor_fn():
             # This heuristic aims to add about 1% noise to the covariance matrix.
+            # We scale by self._init_cov which defaults to 0.1, by 1/sqrt(rank)
+            # since covariance adds independently for each of rank-many vectors,
+            # and by the diagonal noise scale as a sort of preconditioner.
             cov_factor = loc.new_empty(self.latent_dim, self.rank)
-            cov_factor.normal_(0, self._init_cov / self.rank ** 2)
+            cov_factor.normal_(0, self._init_cov / self.rank ** 0.5)
             cov_factor *= scale.unsqueeze(-1)
             return cov_factor
 

@@ -17,17 +17,19 @@ from pyro.optim import Adam
 from tests.common import assert_close, assert_equal
 
 
+# Test helper to test stage 2 of AutoProgressive.
 class AutoProgressive2(AutoProgressive):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.init_scale()
+        self.init_scale()  # Advance to stage 2.
 
 
+# Test helper to test stage 3 of AutoProgressive.
 class AutoProgressive3(AutoProgressive):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.init_scale()
-        self.init_cov()
+        self.init_scale()  # Advance to stage 2.
+        self.init_cov()  # Advance to stage 3.
 
 
 @pytest.mark.parametrize("auto_class", [
