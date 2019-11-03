@@ -63,15 +63,14 @@ class PyroOptim(object):
                     state = self._state_waiting_to_be_consumed.pop(param_name)
                     self.optim_objs[p].load_state_dict(state)
 
+            if self.grad_clip[p] is not None:
+                self.grad_clip[p](p)
+
             if isinstance(self.optim_objs[p], torch.optim.lr_scheduler._LRScheduler) or \
                     isinstance(self.optim_objs[p], torch.optim.lr_scheduler.ReduceLROnPlateau):
                 # if optim object was a scheduler, perform an optimizer step
-                if self.grad_clip[p] is not None:
-                    self.grad_clip[p](p)
                 self.optim_objs[p].optimizer.step(*args, **kwargs)
             else:
-                if self.grad_clip[p] is not None:
-                    self.grad_clip[p](p)
                 self.optim_objs[p].step(*args, **kwargs)
 
     def get_state(self):
