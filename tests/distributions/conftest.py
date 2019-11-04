@@ -11,7 +11,7 @@ from pyro.distributions.testing.rejection_gamma import ShapeAugmentedBeta, Shape
 from tests.distributions.dist_fixture import Fixture
 
 
-class ReflectedNormal(dist.ReflectedDistribution):
+class FoldedNormal(dist.FoldedDistribution):
     def __init__(self, loc, scale):
         super().__init__(dist.Normal(loc, scale))
 
@@ -164,7 +164,7 @@ continuous_dists = [
                 ((), {"mean": np.array(loc), "cov": np.array([[1.5, 0.5], [0.5, 0.75]])}),
             prec=0.01,
             min_samples=500000),
-    Fixture(pyro_dist=ReflectedNormal,
+    Fixture(pyro_dist=FoldedNormal,
             examples=[
                 {'loc': [2.0], 'scale': [4.0],
                  'test_data': [2.0]},
