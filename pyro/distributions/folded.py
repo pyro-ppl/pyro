@@ -4,7 +4,7 @@ from torch.distributions.transforms import AbsTransform
 from pyro.distributions.torch import TransformedDistribution
 
 
-class ReflectedDistribution(TransformedDistribution):
+class FoldedDistribution(TransformedDistribution):
     """
     Equivalent to ``TransformedDistribution(base_dist, AbsTransform())``,
     but additionally supports :meth:`log_prob` .
@@ -16,7 +16,7 @@ class ReflectedDistribution(TransformedDistribution):
 
     def __init__(self, base_dist, validate_args=None):
         if base_dist.event_shape:
-            raise ValueError("Only univariate distributions can be reflected.")
+            raise ValueError("Only univariate distributions can be folded.")
         super().__init__(base_dist, AbsTransform(), validate_args)
 
     def expand(self, batch_shape, _instance=None):

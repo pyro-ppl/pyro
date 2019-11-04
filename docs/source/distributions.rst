@@ -105,6 +105,13 @@ EmpiricalDistribution
     :undoc-members:
     :show-inheritance:
 
+FoldedDistribution
+---------------------
+.. autoclass:: pyro.distributions.FoldedDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 GammaPoisson
 ------------
 .. autoclass:: pyro.distributions.GammaPoisson
@@ -171,13 +178,6 @@ MixtureOfDiagNormalsSharedCovariance
 OMTMultivariateNormal
 ---------------------
 .. autoclass:: pyro.distributions.OMTMultivariateNormal
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-ReflectedDistribution
----------------------
-.. autoclass:: pyro.distributions.ReflectedDistribution
     :members:
     :undoc-members:
     :show-inheritance:
