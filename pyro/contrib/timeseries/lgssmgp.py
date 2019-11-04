@@ -94,7 +94,8 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
 
     def _get_dist(self):
         """
-        Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds to :class:`GenericLGSSMWithGPNoiseModel`.
+        Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds
+        to :class:`GenericLGSSMWithGPNoiseModel`.
         """
         gp_trans_matrix, gp_process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
 
