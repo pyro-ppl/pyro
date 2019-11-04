@@ -124,10 +124,12 @@ class TorchDistributionMixin(Distribution):
 
     def mask(self, mask):
         """
-        Masks a distribution by a zero-one tensor that is broadcastable to the
-        distributions :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
+        Masks a distribution by a boolean or boolean-valued tensor that is
+        broadcastable to the distributions
+        :attr:`~torch.distributions.distribution.Distribution.batch_shape` .
 
-        :param torch.Tensor mask: A zero-one valued float tensor.
+        :param mask: A boolean or boolean valued tensor.
+        :type mask: bool or torch.Tensor
         :return: A masked copy of this distribution.
         :rtype: :class:`MaskedDistribution`
         """
@@ -200,26 +202,36 @@ class TorchDistribution(torch.distributions.Distribution, TorchDistributionMixin
 
 class MaskedDistribution(TorchDistribution):
     """
-    Masks a distribution by a zero-one tensor that is broadcastable to the
+    Masks a distribution by a boolean tensor that is broadcastable to the
     distribution's :attr:`~torch.distributions.distribution.Distribution.batch_shape`.
 
-    :param torch.Tensor mask: A zero-one valued tensor.
+    In the special case ``mask is False``, computation of :meth:`log_prob` ,
+    :meth:`score_parts` , and ``kl_divergence()`` is skipped, and constant zero
+    values are returned instead.
+
+    :param mask: A boolean or boolean-valued tensor.
+    :type mask: torch.Tensor or bool
     """
     arg_constraints = {}
 
     def __init__(self, base_dist, mask):
-        if broadcast_shape(mask.shape, base_dist.batch_shape) != base_dist.batch_shape:
-            raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "
-                             "actual {} vs {}".format(mask.shape, base_dist.batch_shape))
         self.base_dist = base_dist
-        self._mask = mask.bool()
+        if isinstance(mask, bool):
+            self._mask = mask
+        else:
+            if broadcast_shape(mask.shape, base_dist.batch_shape) != base_dist.batch_shape:
+                raise ValueError("Expected mask.shape to be broadcastable to base_dist.batch_shape, "
+                                 "actual {} vs {}".format(mask.shape, base_dist.batch_shape))
+            self._mask = mask.bool()
         super(MaskedDistribution, self).__init__(base_dist.batch_shape, base_dist.event_shape)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(MaskedDistribution, _instance)
         batch_shape = torch.Size(batch_shape)
         new.base_dist = self.base_dist.expand(batch_shape)
-        new._mask = self._mask.expand(batch_shape)
+        new._mask = self._mask
+        if isinstance(new._mask, torch.Tensor):
+            new._mask = new._mask.expand(batch_shape)
         super(MaskedDistribution, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
@@ -243,9 +255,17 @@ class MaskedDistribution(TorchDistribution):
         return self.base_dist.rsample(sample_shape)
 
     def log_prob(self, value):
+        if self._mask is False:
+            shape = broadcast_shape(self.base_dist.batch_shape,
+                                    value.shape[:value.dim() - self.event_dim])
+            return torch.zeros((), device=value.device).expand(shape)
+        if self._mask is True:
+            return self.base_dist.log_prob(value)
         return scale_and_mask(self.base_dist.log_prob(value), mask=self._mask)
 
     def score_parts(self, value):
+        if isinstance(self._mask, bool):
+            return super().score_parts(value)  # calls self.log_prob(value)
         return self.base_dist.score_parts(value).scale_and_mask(mask=self._mask)
 
     def enumerate_support(self, expand=True):
@@ -262,6 +282,20 @@ class MaskedDistribution(TorchDistribution):
 
 @register_kl(MaskedDistribution, MaskedDistribution)
 def _kl_masked_masked(p, q):
-    mask = p._mask if p._mask is q._mask else p._mask & q._mask
+    if p._mask is False or q._mask is False:
+        mask = False
+    elif p._mask is True:
+        mask = q._mask
+    elif q._mask is True:
+        mask = p._mask
+    elif p._mask is q._mask:
+        mask = p._mask
+    else:
+        mask = p._mask & q._mask
+
+    if mask is False:
+        return 0.  # Return a float, since we cannot determine device.
+    if mask is True:
+        return kl_divergence(p.base_dist, q.base_dist)
     kl = kl_divergence(p.base_dist, q.base_dist)
     return scale_and_mask(kl, mask=mask)
