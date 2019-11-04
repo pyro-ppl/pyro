@@ -9,6 +9,8 @@ class PyroLRScheduler(PyroOptim):
     :param scheduler_constructor: a :class:`~torch.optim.lr_scheduler`
     :param optim_args: a dictionary of learning arguments for the optimizer or a callable that returns
         such dictionaries. must contain the key 'optimizer' with pytorch optimizer value
+    :param clip_args: a dictionary of clip_norm and/or clip_value args or a callable that returns
+        such dictionaries.
 
     Example::
 
@@ -20,7 +22,7 @@ class PyroLRScheduler(PyroOptim):
                 svi.step(minibatch)
             scheduler.step(epoch=i)
     """
-    def __init__(self, scheduler_constructor, optim_args):
+    def __init__(self, scheduler_constructor, optim_args, clip_args=None):
         # pytorch scheduler
         self.pt_scheduler_constructor = scheduler_constructor
         # torch optimizer
@@ -28,7 +30,7 @@ class PyroLRScheduler(PyroOptim):
         # kwargs for the torch optimizer
         optim_kwargs = optim_args.pop('optim_args')
         self.kwargs = optim_args
-        super(PyroLRScheduler, self).__init__(pt_optim_constructor, optim_kwargs)
+        super(PyroLRScheduler, self).__init__(pt_optim_constructor, optim_kwargs, clip_args)
 
     def __call__(self, params, *args, **kwargs):
         super(PyroLRScheduler, self).__call__(params, *args, **kwargs)
