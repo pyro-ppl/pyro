@@ -62,7 +62,7 @@ class IndependentMaternGP(TimeSeriesModel):
 
     def _get_dist(self):
         """
-        Get the :class:`GaussianHMM` distribution that corresponds to ``obs_dim``-many independent Matern GPs.
+        Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds to ``obs_dim``-many independent Matern GPs.
         """
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
         trans_dist = MultivariateNormal(self.obs_matrix.new_zeros(self.obs_dim, 1, self.kernel.state_dim),
@@ -196,7 +196,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
 
     def _get_dist(self):
         """
-        Get the :class:`GaussianHMM` distribution that corresponds to a :class:`LinearlyCoupledMaternGP`.
+        Get the :class:`pyro.distributions.GaussianHMM` distribution that corresponds to a :class:`LinearlyCoupledMaternGP`.
         """
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
         trans_matrix = block_diag_embed(trans_matrix)
@@ -367,7 +367,7 @@ class DependentMaternGP(TimeSeriesModel):
 
     def _get_dist(self):
         """
-        Get the :class:`GaussianHMM` distribution that corresponds to a :class:`DependentMaternGP`
+        Get the :class:`pyro.distributions.GaussianHMM` distribution that corresponds to a :class:`DependentMaternGP`
         """
         trans_matrix, trans_dist, stat_covar = self._trans_matrix_distribution_stat_covar(self.dt)
         return dist.GaussianHMM(self._get_init_dist(stat_covar), trans_matrix,

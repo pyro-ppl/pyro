@@ -58,7 +58,7 @@ class GenericLGSSM(TimeSeriesModel):
 
     def _get_dist(self):
         """
-        Get the :class:`GaussianHMM` distribution that corresponds to :class:`GenericLGSSM`.
+        Get the :class:`pyro.distributions.GaussianHMM` distribution that corresponds to :class:`GenericLGSSM`.
         """
         return dist.GaussianHMM(self._get_init_dist(), self.trans_matrix, self._get_trans_dist(),
                                 self.obs_matrix, self._get_obs_dist())
