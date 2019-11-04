@@ -21,11 +21,11 @@ class IndependentMaternGP(TimeSeriesModel):
     :param float dt: The time spacing between neighboring observations of the time series.
     :param int obs_dim: The dimension of the targets at each time step.
     :param torch.Tensor log_length_scale_init: optional initial values for the kernel length scale
-        given as a `obs_dim`-dimensional tensor
+        given as a ``obs_dim``-dimensional tensor
     :param torch.Tensor log_kernel_scale_init: optional initial values for the kernel scale
-        given as a `obs_dim`-dimensional tensor
+        given as a ``obs_dim``-dimensional tensor
     :param torch.Tensor log_obs_noise_scale_init: optional initial values for the observation noise scale
-        given as a `obs_dim`-dimensional tensor
+        given as a ``obs_dim``-dimensional tensor
     """
     def __init__(self, nu=1.5, dt=1.0, obs_dim=1,
                  log_length_scale_init=None, log_kernel_scale_init=None,
@@ -62,7 +62,7 @@ class IndependentMaternGP(TimeSeriesModel):
 
     def _get_dist(self):
         """
-        Get the `GaussianHMM` distribution that corresponds to `obs_dim`-many independent Matern GPs.
+        Get the :class:`GaussianHMM` distribution that corresponds to ``obs_dim``-many independent Matern GPs.
         """
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
         trans_dist = MultivariateNormal(self.obs_matrix.new_zeros(self.obs_dim, 1, self.kernel.state_dim),
@@ -74,9 +74,9 @@ class IndependentMaternGP(TimeSeriesModel):
     def log_prob(self, targets):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
-            of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
-            is the dimension of the real-valued `targets` at each time step
-        :returns torch.Tensor: A 1-dimensional tensor of log probabilities of shape `(obs_dim,)`
+            of shape ``(T, obs_dim)``, where ``T`` is the length of the time series and ``obs_dim``
+            is the dimension of the real-valued ``targets`` at each time step
+        :returns torch.Tensor: A 1-dimensional tensor of log probabilities of shape ``(obs_dim,)``
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
         return self._get_dist().log_prob(targets.t().unsqueeze(-1))
@@ -109,14 +109,14 @@ class IndependentMaternGP(TimeSeriesModel):
     def forecast(self, targets, dts):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
-            of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
+            of shape ``(T, obs_dim)``, where ``T`` is the length of the time series and ``obs_dim``
             is the dimension of the real-valued targets at each time step. These
             represent the training data that are conditioned on for the purpose of making
             forecasts.
         :param torch.Tensor dts: A 1-dimensional tensor of times to forecast into the future,
-            with zero corresponding to the time of the final target `targets[-1]`.
-        :returns torch.distributions.Normal: Returns a predictive Normal distribution with batch shape `(S,)` and
-            event shape `(obs_dim,)`, where `S` is the size of `dts`.
+            with zero corresponding to the time of the final target ``targets[-1]``.
+        :returns torch.distributions.Normal: Returns a predictive Normal distribution with batch shape ``(S,)`` and
+            event shape ``(obs_dim,)``, where ``S`` is the size of ``dts``.
         """
         filtering_state = self._filter(targets)
         predicted_mean, predicted_covar = self._forecast(dts, filtering_state)
@@ -130,7 +130,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
 
     In more detail, the generative process is:
 
-        :math:`y_i(t) = \\sum_j A_{ij} f_j(t) + \\epsilon_i`
+        :math:`y_i(t) = \\sum_j A_{ij} f_j(t) + \\epsilon_i(t)`
 
     The targets :math:`y_i` are assumed to be evenly spaced in time. Training and inference
     are logarithmic in the length of the time series T.
@@ -141,11 +141,11 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
     :param int num_gps: The number of independent GPs that are mixed to model the time series.
         Typical values might be :math:`\\N_{\\rm gp} \\in [\\D_{\\rm obs} / 2, \\D_{\\rm obs}]`
     :param torch.Tensor log_length_scale_init: optional initial values for the kernel length scale
-        given as a `num_gps`-dimensional tensor
+        given as a ``num_gps``-dimensional tensor
     :param torch.Tensor log_kernel_scale_init: optional initial values for the kernel scale
-        given as a `num_gps`-dimensional tensor
+        given as a ``num_gps``-dimensional tensor
     :param torch.Tensor log_obs_noise_scale_init: optional initial values for the observation noise scale
-        given as a `obs_dim`-dimensional tensor
+        given as a ``obs_dim``-dimensional tensor
     """
     def __init__(self, nu=1.5, dt=1.0, obs_dim=2, num_gps=1,
                  log_length_scale_init=None, log_kernel_scale_init=None,
@@ -195,7 +195,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
 
     def _get_dist(self):
         """
-        Get the `GaussianHMM` distribution that corresponds to a `LinearlyCoupledMaternGP`.
+        Get the :class:`GaussianHMM` distribution that corresponds to a :class:`LinearlyCoupledMaternGP`.
         """
         trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
         trans_matrix = block_diag_embed(trans_matrix)
@@ -208,8 +208,8 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
     def log_prob(self, targets):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
-            of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
-            is the dimension of the real-valued `targets` at each time step
+            of shape ``(T, obs_dim)``, where ``T`` is the length of the time series and ``obs_dim``
+            is the dimension of the real-valued ``targets`` at each time step
         :returns torch.Tensor: a (scalar) log probability
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
@@ -254,15 +254,15 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
     def forecast(self, targets, dts):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
-            of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
+            of shape ``(T, obs_dim)``, where ``T`` is the length of the time series and ``obs_dim``
             is the dimension of the real-valued targets at each time step. These
             represent the training data that are conditioned on for the purpose of making
             forecasts.
         :param torch.Tensor dts: A 1-dimensional tensor of times to forecast into the future,
-            with zero corresponding to the time of the final target `targets[-1]`.
+            with zero corresponding to the time of the final target ``targets[-1]``.
         :returns torch.distributions.MultivariateNormal: Returns a predictive MultivariateNormal
-            distribution with batch shape `(S,)` and event shape `(obs_dim,)`,
-            where `S` is the size of `dts`.
+            distribution with batch shape ``(S,)`` and event shape ``(obs_dim,)``,
+            where ``S`` is the size of ``dts``.
         """
         filtering_state = self._filter(targets)
         predicted_mean, predicted_covar = self._forecast(dts, filtering_state)
@@ -281,9 +281,9 @@ class DependentMaternGP(TimeSeriesModel):
     :param float dt: The time spacing between neighboring observations of the time series.
     :param int obs_dim: The dimension of the targets at each time step.
     :param torch.Tensor log_length_scale_init: optional initial values for the kernel length scale
-        given as a `obs_dim`-dimensional tensor
+        given as a ``obs_dim``-dimensional tensor
     :param torch.Tensor log_obs_noise_scale_init: optional initial values for the observation noise scale
-        given as a `obs_dim`-dimensional tensor
+        given as a ``obs_dim``-dimensional tensor
 
     References
     [1] "Dependent Matern Processes for Multivariate Time Series," Alexander Vandenberg-Rodes, Babak Shahbaba.
@@ -366,7 +366,7 @@ class DependentMaternGP(TimeSeriesModel):
 
     def _get_dist(self):
         """
-        Get the `GaussianHMM` distribution that corresponds to a `DependentMaternGP`
+        Get the :class:`GaussianHMM` distribution that corresponds to a :class:`DependentMaternGP`
         """
         trans_matrix, trans_dist, stat_covar = self._trans_matrix_distribution_stat_covar(self.dt)
         return dist.GaussianHMM(self._get_init_dist(stat_covar), trans_matrix,
@@ -375,8 +375,8 @@ class DependentMaternGP(TimeSeriesModel):
     def log_prob(self, targets):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
-            of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
-            is the dimension of the real-valued `targets` at each time step
+            of shape ``(T, obs_dim)``, where ``T`` is the length of the time series and ``obs_dim``
+            is the dimension of the real-valued ``targets`` at each time step
         :returns torch.Tensor: A (scalar) log probability
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
@@ -414,14 +414,14 @@ class DependentMaternGP(TimeSeriesModel):
     def forecast(self, targets, dts):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
-            of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
+            of shape ``(T, obs_dim)``, where ``T`` is the length of the time series and ``obs_dim``
             is the dimension of the real-valued targets at each time step. These
             represent the training data that are conditioned on for the purpose of making
             forecasts.
         :param torch.Tensor dts: A 1-dimensional tensor of times to forecast into the future,
-            with zero corresponding to the time of the final target `targets[-1]`.
+            with zero corresponding to the time of the final target ``targets[-1]``.
         :returns torch.distributions.MultivariateNormal: Returns a predictive MultivariateNormal
-            distribution with batch shape `(S,)` and event shape `(obs_dim,)`, where `S` is the size of `dts`.
+            distribution with batch shape ``(S,)`` and event shape ``(obs_dim,)``, where ``S`` is the size of ``dts``.
         """
         filtering_state = self._filter(targets)
         predicted_mean, predicted_covar = self._forecast(dts, filtering_state)
@@ -434,17 +434,17 @@ class LinearlyCoupledDependentMaternGP(DependentMaternGP):
     of univariate Gaussian Processes with Matern kernels. The different output dimensions
     are additionally correlated because the Gaussian Processes are driven by a correlated
     Wiener process. That is, this time series model combines the structure of the
-    `LinearlyCoupledMaternGP` (with `num_gps` equal to `obs_dim`) with that of the
-    `DependentMaternGP`. The targets are assumed to be evenly spaced in time. Training
+    :class:`LinearlyCoupledMaternGP` (with ``num_gps`` equal to ``obs_dim``) with that of the
+    :class:`DependentMaternGP`. The targets are assumed to be evenly spaced in time. Training
     and inference are logarithmic in the length of the time series T.
 
     :param float nu: The order of the Matern kernel; must be 1.5.
     :param float dt: The time spacing between neighboring observations of the time series.
     :param int obs_dim: The dimension of the targets at each time step.
     :param torch.Tensor log_length_scale_init: optional initial values for the kernel length scale
-        given as a `obs_dim`-dimensional tensor
+        given as a ``obs_dim``-dimensional tensor
     :param torch.Tensor log_obs_noise_scale_init: optional initial values for the observation noise scale
-        given as a `obs_dim`-dimensional tensor
+        given as a ``obs_dim``-dimensional tensor
     """
     def __init__(self, nu=1.5, dt=1.0, obs_dim=1,
                  log_length_scale_init=None, log_obs_noise_scale_init=None):
