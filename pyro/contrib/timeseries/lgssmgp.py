@@ -27,6 +27,12 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
     :param int obs_dim: The dimension of the targets at each time step.
     :param int state_dim: The dimension of the :math:`{\\bf z}` latent state at each time step.
     :param float nu: The order of the Matern kernel; one of 0.5, 1.5 or 2.5.
+    :param torch.Tensor log_length_scale_init: optional initial values for the kernel length scale
+        given as a ``obs_dim``-dimensional tensor
+    :param torch.Tensor log_kernel_scale_init: optional initial values for the kernel scale
+        given as a ``obs_dim``-dimensional tensor
+    :param torch.Tensor log_obs_noise_scale_init: optional initial values for the observation noise scale
+        given as a ``obs_dim``-dimensional tensor
     :param bool learnable_observation_loc: whether the mean of the observation model should be learned or not;
             defaults to False.
     """
@@ -88,7 +94,8 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
 
     def _get_dist(self):
         """
-        Get the `GaussianHMM` distribution that corresponds to `GenericLGSSMWithGPNoiseModel`.
+        Get the :class:`~pyro.distributions.GaussianHMM` distribution that corresponds
+        to :class:`GenericLGSSMWithGPNoiseModel`.
         """
         gp_trans_matrix, gp_process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
 
@@ -108,8 +115,8 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
     def log_prob(self, targets):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
-            of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
-            is the dimension of the real-valued `targets` at each time step
+            of shape ``(T, obs_dim)``, where ``T`` is the length of the time series and ``obs_dim``
+            is the dimension of the real-valued ``targets`` at each time step
         :returns torch.Tensor: A (scalar) log probability.
         """
         assert targets.dim() == 2 and targets.size(-1) == self.obs_dim
@@ -174,14 +181,14 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
     def forecast(self, targets, N_timesteps):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
-            of shape `(T, obs_dim)`, where `T` is the length of the time series and `obs_dim`
+            of shape ``(T, obs_dim)``, where ``T`` is the length of the time series and ``obs_dim``
             is the dimension of the real-valued targets at each time step. These
             represent the training data that are conditioned on for the purpose of making
             forecasts.
         :param int N_timesteps: The number of timesteps to forecast into the future from
-            the final target `targets[-1]`.
+            the final target ``targets[-1]``.
         :returns torch.distributions.MultivariateNormal: Returns a predictive MultivariateNormal distribution
-            with batch shape `(N_timesteps,)` and event shape `(obs_dim,)`
+            with batch shape ``(N_timesteps,)`` and event shape ``(obs_dim,)``
         """
         filtering_state = self._filter(targets)
         predicted_mean, predicted_covar = self._forecast(N_timesteps, filtering_state)
