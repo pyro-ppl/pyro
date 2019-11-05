@@ -13,7 +13,6 @@ Automatic guides can also be combined using :func:`pyro.poutine.block` and
 :class:`AutoGuideList`.
 """
 
-import numbers
 import weakref
 from contextlib import ExitStack  # python 3
 
@@ -469,20 +468,15 @@ class AutoMultivariateNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the mean vector is initialized by ``init_loc_fn()`` and the
-    Cholesky factor is initialized to the identity. To customize this default
-    behavior the user
-    should call :func:`pyro.param` before beginning inference, e.g.::
-
-        latent_dim = 10
-        pyro.param("auto_loc", torch.randn(latent_dim))
-        pyro.param("auto_scale_tril", torch.tril(torch.rand(latent_dim)),
-                   constraint=constraints.lower_cholesky)
+    Cholesky factor is initialized to the identity.
     """
+
     def __init__(self, model, prefix="auto", init_loc_fn=init_to_median,
                  init_scale=1.0):
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+        self._init_scale = init_scale
         super().__init__(model, prefix=prefix, init_loc_fn=init_to_median)
-        assert isinstance(init_scale, float)
-        self._init_scale
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -512,14 +506,15 @@ class AutoDiagonalNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the mean vector is initialized to zero and the scale is
-    initialized to the identity.  To change this default behavior the user
-    should call :func:`pyro.param` before beginning inference, e.g.::
-
-        latent_dim = 10
-        pyro.param("auto_loc", torch.randn(latent_dim))
-        pyro.param("auto_scale", torch.ones(latent_dim),
-                   constraint=constraints.positive)
+    initialized to the identity.
     """
+
+    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median,
+                 init_scale=1.0):
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+        self._init_scale = init_scale
+        super().__init__(model, prefix=prefix, init_loc_fn=init_to_median)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -527,7 +522,7 @@ class AutoDiagonalNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
         scale = pyro.param("{}_scale".format(self.prefix),
-                           lambda: loc.new_ones(self.latent_dim),
+                           lambda: loc.new_full((self.latent_dim,), self._init_scale),
                            constraint=constraints.positive)
         return dist.Normal(loc, scale).to_event(1)
 
@@ -551,14 +546,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 
     By default the ``cov_diag`` is initialized to 1/2 and the ``cov_factor`` is
     intialized randomly such that ``cov_factor.matmul(cov_factor.t())`` is half the
-    identity matrix. To change this default behavior the user
-    should call :func:`pyro.param` before beginning inference, e.g.::
-
-        latent_dim = 10
-        pyro.param("auto_loc", torch.randn(latent_dim))
-        pyro.param("auto_cov_factor", torch.randn(latent_dim, rank)))
-        pyro.param("auto_cov_diag", torch.randn(latent_dim).exp()),
-                   constraint=constraints.positive)
+    identity matrix.
 
     :param callable model: a generative model
     :param int rank: the rank of the low-rank part of the covariance matrix
@@ -567,9 +555,12 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
     :param str prefix: a prefix that will be prefixed to all param internal sites
     """
 
-    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median, rank=1):
-        if not isinstance(rank, numbers.Number) or not rank > 0:
+    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median, init_scale=1.0, rank=1):
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+        if not isinstance(rank, int) or not rank > 0:
             raise ValueError("Expected rank > 0 but got {}".format(rank))
+        self._init_scale = init_scale
         self.rank = rank
         super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
@@ -579,9 +570,10 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
         factor = pyro.param("{}_cov_factor".format(self.prefix),
-                            lambda: loc.new_empty(self.latent_dim, self.rank).normal_(0, (0.5 / self.rank) ** 0.5))
+                            lambda: loc.new_empty(self.latent_dim, self.rank).normal_(
+                                0, self._init_scale * (0.5 / self.rank) ** 0.5))
         diagonal = pyro.param("{}_cov_diag".format(self.prefix),
-                              lambda: loc.new_full((self.latent_dim,), 0.5),
+                              lambda: loc.new_full((self.latent_dim,), self._init_scale * 0.5),
                               constraint=constraints.positive)
         return dist.LowRankMultivariateNormal(loc, factor, diagonal)
 

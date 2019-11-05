@@ -96,12 +96,12 @@ class InitMessenger(Messenger):
             return
         with torch.no_grad():
             value = self.init_fn(msg)
-        if is_validation_enabled():
-            if type(init_value) is not type(msg["value"]):
+        if is_validation_enabled() and msg["value"] is not None:
+            if not isinstance(value, type(msg["value"])):
                 raise ValueError(
                     "{} provided invalid type for site {}:\nexpected {}\nactual {}"
                     .format(self.init_fn, msg["name"], type(msg["value"]), type(value)))
-            if init_value.shape != msg["value"].shape:
+            if value.shape != msg["value"].shape:
                 raise ValueError(
                     "{} provided invalid shape for site {}:\nexpected {}\nactual {}"
                     .format(self.init_fn, msg["name"], msg["value"].shape, value.shape))
