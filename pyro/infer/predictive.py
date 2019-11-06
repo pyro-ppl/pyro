@@ -28,7 +28,7 @@ def _guess_max_plate_nesting(model, args, kwargs):
 
 
 def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
-                           num_samples, sample_sites, return_trace=False):
+                           num_samples, return_site_shapes, return_trace=False):
     collected = []
     samples = [{k: v[i] for k, v in posterior_samples.items()} for i in range(num_samples)]
     for i in range(num_samples):
@@ -36,15 +36,19 @@ def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
         if return_trace:
             collected.append(trace)
         else:
-            collected.append({site: trace.nodes[site]['value'] for site in sample_sites})
+            collected.append({site: trace.nodes[site]['value'] for site in return_site_shapes})
 
-    return collected if return_trace else {site: torch.stack([s[site] for s in collected])
-                                           for site in sample_sites}
+    if return_trace:
+        return collected
+    else:
+        return {site: torch.stack([s[site] for s in collected]).reshape(shape)
+                for site, shape in return_site_shapes.items()}
 
 
 def _predictive(model, posterior_samples, num_samples, return_sites=None,
                 return_trace=False, parallel=False, model_args=(), model_kwargs={}):
     max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
+    vectorize = pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting-1)
     model_trace = prune_subsample_sites(poutine.trace(model).get_trace(*model_args, **model_kwargs))
     reshaped_samples = {}
 
@@ -53,29 +57,15 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
         sample = sample.reshape((num_samples,) + (1,) * (max_plate_nesting - len(sample_shape)) + sample_shape)
         reshaped_samples[name] = sample
 
-    def _vectorized_fn(fn):
-        """
-        Wraps a callable inside an outermost :class:`~pyro.plate` to parallelize
-        sampling from the posterior predictive.
-
-        :param fn: arbitrary callable containing Pyro primitives.
-        :return: wrapped callable.
-        """
-
-        def wrapped_fn(*args, **kwargs):
-            with pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting-1):
-                return fn(*args, **kwargs)
-
-        return wrapped_fn
-
     if return_trace:
-        trace = poutine.trace(poutine.condition(_vectorized_fn(model), reshaped_samples))\
+        trace = poutine.trace(poutine.condition(vectorize(model), reshaped_samples))\
             .get_trace(*model_args, **model_kwargs)
         return trace
 
     return_site_shapes = {}
     for site in model_trace.stochastic_nodes + model_trace.observation_nodes:
-        site_shape = (num_samples,) + model_trace.nodes[site]['value'].shape
+        append_ndim = max_plate_nesting - len(model_trace.nodes[site]["fn"].batch_shape)
+        site_shape = (num_samples,) + (1,) * append_ndim + model_trace.nodes[site]['value'].shape
         if isinstance(return_sites, (list, tuple, set)):
             if site in return_sites:
                 return_site_shapes[site] = site_shape
@@ -91,9 +81,9 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
 
     if not parallel:
         return _predictive_sequential(model, posterior_samples, model_args, model_kwargs, num_samples,
-                                      return_site_shapes.keys(), return_trace=False)
+                                      return_site_shapes, return_trace=False)
 
-    trace = poutine.trace(poutine.condition(_vectorized_fn(model), reshaped_samples))\
+    trace = poutine.trace(poutine.condition(vectorize(model), reshaped_samples))\
         .get_trace(*model_args, **model_kwargs)
     predictions = {}
     for site, shape in return_site_shapes.items():
@@ -109,7 +99,7 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
     return predictions
 
 
-class Predictive(object):
+class Predictive:
     """
     This class is used to construct predictive distribution. The predictive distribution is obtained
     by running model conditioned on latent samples from `posterior_samples`.

@@ -92,3 +92,30 @@ def test_posterior_predictive_svi_one_hot():
     posterior_predictive = Predictive(one_hot_model, posterior_samples)
     marginal_return_vals = posterior_predictive.get_samples(pseudocounts)["obs"]
     assert_close(marginal_return_vals.mean(dim=0), true_probs.unsqueeze(0), rtol=0.1)
+
+
+@pytest.mark.parametrize("parallel", [False, True])
+def test_shapes(parallel):
+    num_samples = 10
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0, 1).expand([2]).to_event(1))
+        with pyro.plate("plate", 5):
+            loc, log_scale = x.unbind(-1)
+            y = pyro.sample("y", dist.Normal(loc, log_scale.exp()))
+        return dict(x=x, y=y)
+
+    guide = AutoDiagonalNormal(model)
+
+    # Compute by hand.
+    vectorize = pyro.plate("_vectorize", num_samples, dim=-2)
+    trace = poutine.trace(vectorize(guide)).get_trace()
+    expected = poutine.replay(vectorize(model), trace)()
+
+    # Use Predictive.
+    predictive = Predictive(model, guide=guide, return_sites=["x", "y"],
+                            num_samples=num_samples, parallel=parallel)
+    actual = predictive.get_samples()
+    assert set(actual) == set(expected)
+    assert actual["x"].shape == expected["x"].shape
+    assert actual["y"].shape == expected["y"].shape
