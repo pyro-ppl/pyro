@@ -644,11 +644,12 @@ class AutoLaplaceApproximation(AutoContinuous):
         # ...then train the delta_guide...
         guide = delta_guide.laplace_approximation()
 
-    By default the mean vector is initialized to zero. To change this default behavior
-    the user should call :func:`pyro.param` before beginning inference, e.g.::
+    By default the mean vector is initialized to an empirical median.
 
-        latent_dim = 10
-        pyro.param("auto_loc", torch.randn(latent_dim))
+    :param callable model: a generative model
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    :param str prefix: a prefix that will be prefixed to all param internal sites
     """
 
     def get_posterior(self, *args, **kwargs):
