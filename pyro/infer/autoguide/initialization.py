@@ -11,6 +11,7 @@ from torch.distributions import transform_to
 
 from pyro.distributions.torch import Independent
 from pyro.distributions.torch_distribution import MaskedDistribution
+from pyro.infer.util import is_validation_enabled
 from pyro.poutine.messenger import Messenger
 from pyro.util import torch_isnan
 
@@ -94,5 +95,15 @@ class InitMessenger(Messenger):
         if msg["done"] or msg["is_observed"] or type(msg["fn"]).__name__ == "_Subsample":
             return
         with torch.no_grad():
-            msg["value"] = self.init_fn(msg)
+            value = self.init_fn(msg)
+        if is_validation_enabled() and msg["value"] is not None:
+            if not isinstance(value, type(msg["value"])):
+                raise ValueError(
+                    "{} provided invalid type for site {}:\nexpected {}\nactual {}"
+                    .format(self.init_fn, msg["name"], type(msg["value"]), type(value)))
+            if value.shape != msg["value"].shape:
+                raise ValueError(
+                    "{} provided invalid shape for site {}:\nexpected {}\nactual {}"
+                    .format(self.init_fn, msg["name"], msg["value"].shape, value.shape))
+        msg["value"] = value
         msg["done"] = True

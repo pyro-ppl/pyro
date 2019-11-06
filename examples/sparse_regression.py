@@ -1,5 +1,4 @@
 import argparse
-import functools
 
 import numpy as np
 import torch
@@ -214,6 +213,15 @@ def get_data(N=20, P=10, S=2, Q=2, sigma_obs=0.15):
     return X, Y, singleton_weights / (Y_std1 * Y_std2), expected_quad_dims
 
 
+def init_loc_fn(site):
+    value = init_to_median(site, num_samples=50)
+    # we also make sure the initial observation noise is not too large
+    # (otherwise we run the danger of getting stuck in bad local optima during optimization).
+    if site["name"] == "var_obs":
+        value = 0.2 * value
+    return value
+
+
 def main(args):
     # setup hyperparameters for the model
     hypers = {'expected_sparsity': max(1.0, args.num_dimensions / 10),
@@ -237,24 +245,18 @@ def main(args):
     for restart in range(args.num_restarts):
         pyro.clear_param_store()
         pyro.set_rng_seed(restart)
-        guide = AutoDelta(model, init_loc_fn=functools.partial(init_to_median, num_samples=50))
+        guide = AutoDelta(model, init_loc_fn=init_loc_fn)
         with torch.no_grad():
             init_losses.append(loss_fn(model, guide, X, Y, hypers).item())
 
     pyro.set_rng_seed(np.argmin(init_losses))
     pyro.clear_param_store()
-    guide = AutoDelta(model, init_loc_fn=functools.partial(init_to_median, num_samples=50))
-    with torch.no_grad():
-        loss_fn(model, guide, X, Y, hypers)
-    # we also make sure the initial observation noise is not too large
-    # (otherwise we run the danger of getting stuck in bad local optima during optimization).
-    pyro.param('auto_var_obs').unconstrained().data -= 2.0
-
-    with poutine.block(), poutine.trace(param_only=True) as param_capture:
-        guide(X, Y, hypers)
+    guide = AutoDelta(model, init_loc_fn=init_loc_fn)
 
     # Instead of using pyro.infer.SVI and pyro.optim we instead construct our own PyTorch
     # optimizer and take charge of gradient-based optimization ourselves.
+    with poutine.block(), poutine.trace(param_only=True) as param_capture:
+        guide(X, Y, hypers)
     params = list([pyro.param(name).unconstrained() for name in param_capture.trace])
     adam = Adam(params, lr=args.lr)
 
@@ -278,11 +280,12 @@ def main(args):
     print("Expected singleton thetas:\n", expected_thetas.data.numpy())
 
     # we do the final computation using double precision
+    median = guide.median()  # == mode for MAP inference
     active_dims, active_quad_dims = \
-        compute_posterior_stats(X.double(), Y.double(), pyro.param('auto_msq').double(),
-                                pyro.param('auto_lambda').double(), pyro.param('auto_eta1').double(),
-                                pyro.param('auto_xisq').double(), torch.tensor(hypers['c']).double(),
-                                pyro.param('auto_var_obs').double())
+        compute_posterior_stats(X.double(), Y.double(), median['msq'].double(),
+                                median['lambda'].double(), median['eta1'].double(),
+                                median['xisq'].double(), torch.tensor(hypers['c']).double(),
+                                median['var_obs'].double())
 
     expected_active_dims = np.arange(S).tolist()
 

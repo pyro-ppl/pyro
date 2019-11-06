@@ -13,7 +13,6 @@ Automatic guides can also be combined using :func:`pyro.poutine.block` and
 :class:`AutoGuideList`.
 """
 
-import numbers
 import weakref
 from contextlib import ExitStack  # python 3
 
@@ -116,7 +115,7 @@ class AutoGuideList(AutoGuide):
     """
 
     def __init__(self, model, prefix="auto"):
-        super(AutoGuideList, self).__init__(model, prefix)
+        super().__init__(model, prefix)
         self.parts = []
         self.plates = {}
 
@@ -209,7 +208,7 @@ class AutoCallable(AutoGuide):
     """
 
     def __init__(self, model, guide, median=lambda *args, **kwargs: {}):
-        super(AutoCallable, self).__init__(model, prefix="")
+        super().__init__(model, prefix="")
         self._guide = guide
         self.median = median
 
@@ -231,15 +230,16 @@ class AutoDelta(AutoGuide):
         guide = AutoDelta(model)
         svi = SVI(model, guide, ...)
 
-    By default latent variables are initialized using ``init_loc_fn()``. To
-    change this default behavior the user should call :func:`pyro.param` before
-    beginning inference, with ``"auto_"`` prefixed to the targeted sample site
-    names e.g. for sample sites named "level" and "concentration", initialize
-    via::
+    Latent variables are initialized using ``init_loc_fn()``. To change the
+    default behavior, create a custom ``init_loc_fn()`` as described in
+    :ref:`autoguide-initialization` , for example::
 
-        pyro.param("auto_level", torch.tensor([-1., 0., 1.]))
-        pyro.param("auto_concentration", torch.ones(k),
-                   constraint=constraints.positive)
+        def my_init_fn(site):
+            if site["name"] == "level":
+                return torch.tensor([-1., 0., 1.])
+            if site["name"] == "concentration":
+                return torch.ones(k)
+            return init_to_sample(site)
 
     :param callable model: A Pyro model.
     :param callable init_loc_fn: A per-site initialization function.
@@ -248,7 +248,7 @@ class AutoDelta(AutoGuide):
     def __init__(self, model, prefix="auto", init_loc_fn=init_to_median):
         self.init_loc_fn = init_loc_fn
         model = InitMessenger(self._init_loc_fn)(model)
-        super(AutoDelta, self).__init__(model, prefix=prefix)
+        super().__init__(model, prefix=prefix)
 
     def _init_loc_fn(self, site):
         name = "{}_{}".format(self.prefix, site["name"])
@@ -296,7 +296,11 @@ class AutoContinuous(AutoGuide):
     Base class for implementations of continuous-valued Automatic
     Differentiation Variational Inference [1].
 
-    Each derived class implements its own :meth:`get_posterior` method.
+    This uses :mod:`torch.distributions.transforms` to transform each
+    constrained latent variable to an unconstrained space, then concatenate all
+    variables into a single unconstrained latent variable.  Each derived class
+    implements a :meth:`get_posterior` method returning a distribution over
+    this single unconstrained latent variable.
 
     Assumes model structure and latent dimension are fixed, and all latent
     variables are continuous.
@@ -315,10 +319,10 @@ class AutoContinuous(AutoGuide):
     """
     def __init__(self, model, prefix="auto", init_loc_fn=init_to_median):
         model = InitMessenger(init_loc_fn)(model)
-        super(AutoContinuous, self).__init__(model, prefix=prefix)
+        super().__init__(model, prefix=prefix)
 
     def _setup_prototype(self, *args, **kwargs):
-        super(AutoContinuous, self)._setup_prototype(*args, **kwargs)
+        super()._setup_prototype(*args, **kwargs)
         self._unconstrained_shapes = {}
         self._cond_indep_stacks = {}
         for name, site in self.prototype_trace.iter_stochastic_nodes():
@@ -463,15 +467,24 @@ class AutoMultivariateNormal(AutoContinuous):
         guide = AutoMultivariateNormal(model)
         svi = SVI(model, guide, ...)
 
-    By default the mean vector is initialized to zero and the Cholesky factor
-    is initialized to the identity.  To change this default behavior the user
-    should call :func:`pyro.param` before beginning inference, e.g.::
+    By default the mean vector is initialized by ``init_loc_fn()`` and the
+    Cholesky factor is initialized to the identity.
 
-        latent_dim = 10
-        pyro.param("auto_loc", torch.randn(latent_dim))
-        pyro.param("auto_scale_tril", torch.tril(torch.rand(latent_dim)),
-                   constraint=constraints.lower_cholesky)
+    :param callable model: A generative model.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    :param float init_scale: Initial scale for the standard deviation of each
+        (unconstrained transformed) latent variable.
+    :param str prefix: A prefix that will be prefixed to all param internal
+        sites.
     """
+
+    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median,
+                 init_scale=1.0):
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+        self._init_scale = init_scale
+        super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -479,7 +492,7 @@ class AutoMultivariateNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
         scale_tril = pyro.param("{}_scale_tril".format(self.prefix),
-                                lambda: eye_like(loc, self.latent_dim),
+                                lambda: eye_like(loc, self.latent_dim) * self._init_scale,
                                 constraint=constraints.lower_cholesky)
         return dist.MultivariateNormal(loc, scale_tril=scale_tril)
 
@@ -501,14 +514,23 @@ class AutoDiagonalNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the mean vector is initialized to zero and the scale is
-    initialized to the identity.  To change this default behavior the user
-    should call :func:`pyro.param` before beginning inference, e.g.::
+    initialized to the identity.
 
-        latent_dim = 10
-        pyro.param("auto_loc", torch.randn(latent_dim))
-        pyro.param("auto_scale", torch.ones(latent_dim),
-                   constraint=constraints.positive)
+    :param callable model: A generative model.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    :param float init_scale: Initial scale for the standard deviation of each
+        (unconstrained transformed) latent variable.
+    :param str prefix: A prefix that will be prefixed to all param internal
+        sites.
     """
+
+    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median,
+                 init_scale=1.0):
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+        self._init_scale = init_scale
+        super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -516,7 +538,7 @@ class AutoDiagonalNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
         scale = pyro.param("{}_scale".format(self.prefix),
-                           lambda: loc.new_ones(self.latent_dim),
+                           lambda: loc.new_full((self.latent_dim,), self._init_scale),
                            constraint=constraints.positive)
         return dist.Normal(loc, scale).to_event(1)
 
@@ -540,28 +562,26 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
 
     By default the ``cov_diag`` is initialized to 1/2 and the ``cov_factor`` is
     intialized randomly such that ``cov_factor.matmul(cov_factor.t())`` is half the
-    identity matrix. To change this default behavior the user
-    should call :func:`pyro.param` before beginning inference, e.g.::
+    identity matrix.
 
-        latent_dim = 10
-        pyro.param("auto_loc", torch.randn(latent_dim))
-        pyro.param("auto_cov_factor", torch.randn(latent_dim, rank)))
-        pyro.param("auto_cov_diag", torch.randn(latent_dim).exp()),
-                   constraint=constraints.positive)
-
-    :param callable model: a generative model
-    :param int rank: the rank of the low-rank part of the covariance matrix
+    :param callable model: A generative model.
+    :param int rank: The rank of the low-rank part of the covariance matrix.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
-    :param str prefix: a prefix that will be prefixed to all param internal sites
+    :param float init_scale: Approximate initial scale for the standard
+        deviation of each (unconstrained transformed) latent variable.
+    :param str prefix: A prefix that will be prefixed to all param internal
+        sites.
     """
 
-    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median, rank=1):
-        if not isinstance(rank, numbers.Number) or not rank > 0:
+    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median, init_scale=1.0, rank=1):
+        if not isinstance(init_scale, float) or not (init_scale > 0):
+            raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
+        if not isinstance(rank, int) or not rank > 0:
             raise ValueError("Expected rank > 0 but got {}".format(rank))
+        self._init_scale = init_scale
         self.rank = rank
-        super(AutoLowRankMultivariateNormal, self).__init__(
-            model, prefix=prefix, init_loc_fn=init_loc_fn)
+        super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -569,9 +589,10 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
         factor = pyro.param("{}_cov_factor".format(self.prefix),
-                            lambda: loc.new_empty(self.latent_dim, self.rank).normal_(0, (0.5 / self.rank) ** 0.5))
+                            lambda: loc.new_empty(self.latent_dim, self.rank).normal_(
+                                0, self._init_scale * (0.5 / self.rank) ** 0.5))
         diagonal = pyro.param("{}_cov_diag".format(self.prefix),
-                              lambda: loc.new_full((self.latent_dim,), 0.5),
+                              lambda: loc.new_full((self.latent_dim,), 0.5 * self._init_scale ** 2),
                               constraint=constraints.positive)
         return dist.LowRankMultivariateNormal(loc, factor, diagonal)
 
@@ -606,7 +627,7 @@ class AutoIAFNormal(AutoContinuous):
     def __init__(self, model, hidden_dim=None, prefix="auto", init_loc_fn=init_to_median):
         self.hidden_dim = hidden_dim
         self.arn = None
-        super(AutoIAFNormal, self).__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
+        super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -642,11 +663,12 @@ class AutoLaplaceApproximation(AutoContinuous):
         # ...then train the delta_guide...
         guide = delta_guide.laplace_approximation()
 
-    By default the mean vector is initialized to zero. To change this default behavior
-    the user should call :func:`pyro.param` before beginning inference, e.g.::
+    By default the mean vector is initialized to an empirical prior median.
 
-        latent_dim = 10
-        pyro.param("auto_loc", torch.randn(latent_dim))
+    :param callable model: a generative model
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    :param str prefix: a prefix that will be prefixed to all param internal sites
     """
 
     def get_posterior(self, *args, **kwargs):
