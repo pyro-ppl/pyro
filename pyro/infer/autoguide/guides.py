@@ -18,6 +18,7 @@ from contextlib import ExitStack  # python 3
 
 import torch
 from torch.distributions import biject_to, constraints
+from torch import nn
 
 import pyro
 import pyro.distributions as dist
@@ -29,10 +30,11 @@ from pyro.infer.autoguide.utils import _product
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
 from pyro.ops.hessian import hessian
+from pyro.params import constraint, ConstrainedModule, ConstrainedParameter
 from pyro.poutine.util import prune_subsample_sites
 
 
-class AutoGuide(object):
+class AutoGuide(nn.Module):
     """
     Base class for automatic guides.
 
@@ -46,6 +48,7 @@ class AutoGuide(object):
     """
 
     def __init__(self, model, prefix="auto"):
+        super().__init__()
         self.master = None
         self.model = model
         self.prefix = prefix
@@ -60,6 +63,20 @@ class AutoGuide(object):
         :rtype: dict
         """
         raise NotImplementedError
+
+    def call(self, *args, **kwargs):
+        """
+        Method that returns parameter values of the guide as a `tuple` instead
+        of a `dict`, which is a requirement for JIT tracing. Unlike `__call__`,
+        this method can be traced by :func:`torch.jit.trace_module`.
+
+        .. warning::
+            This method may be removed once PyTorch JIT tracer starts accepting
+            `dict` as valid return types. See
+            `issue <https://github.com/pytorch/pytorch/issues/27743>_`.
+        """
+        result = self(*args, **kwargs)
+        return tuple(result.values())
 
     def sample_latent(*args, **kwargs):
         """
@@ -217,7 +234,7 @@ class AutoCallable(AutoGuide):
         return {} if result is None else result
 
 
-class AutoDelta(AutoGuide):
+class AutoDelta(AutoGuide, ConstrainedModule):
     """
     This implementation of :class:`AutoGuide` uses Delta distributions to
     construct a MAP guide over the entire latent space. The guide does not
@@ -250,6 +267,12 @@ class AutoDelta(AutoGuide):
         model = InitMessenger(self._init_loc_fn)(model)
         super().__init__(model, prefix=prefix)
 
+    def _init_params(self):
+        for name, site in self.prototype_trace.iter_stochastic_nodes():
+            param_name = "{}_{}".format(self.prefix, name)
+            value = ConstrainedParameter(site["value"].detach(), constraint=site["fn"].support)
+            setattr(self, param_name, value)
+
     def _init_loc_fn(self, site):
         name = "{}_{}".format(self.prefix, site["name"])
         store = pyro.get_param_store()
@@ -267,6 +290,11 @@ class AutoDelta(AutoGuide):
         # if we've never run the model before, do so now so we can inspect the model structure
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
+            self._init_params()
+
+        # Needed to capture autoguide parameters as pyro.param statements in the
+        # guide trace
+        pyro.module(self.prefix, self)
 
         plates = self._create_plates()
         result = {}
@@ -275,10 +303,9 @@ class AutoDelta(AutoGuide):
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
                         stack.enter_context(plates[frame.name])
-                value = pyro.param("{}_{}".format(self.prefix, name),
-                                   site["value"].detach(),
-                                   constraint=site["fn"].support)
-                result[name] = pyro.sample(name, dist.Delta(value, event_dim=site["fn"].event_dim))
+                param_name = "{}_{}".format(self.prefix, name)
+                result[name] = pyro.sample(name, dist.Delta(getattr(self, param_name),
+                                                            event_dim=site["fn"].event_dim))
         return result
 
     def median(self, *args, **kwargs):
@@ -320,6 +347,13 @@ class AutoContinuous(AutoGuide):
     def __init__(self, model, prefix="auto", init_loc_fn=init_to_median):
         model = InitMessenger(init_loc_fn)(model)
         super().__init__(model, prefix=prefix)
+
+    def _init_params(self):
+        self.loc = self._init_loc()
+
+    @constraint
+    def loc(self):
+        return constraints.real
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
@@ -395,6 +429,11 @@ class AutoContinuous(AutoGuide):
         # if we've never run the model before, do so now so we can inspect the model structure
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
+            self._init_params()
+
+        # Needed to capture autoguide parameters as pyro.param statements in the
+        # guide trace
+        pyro.module(self.prefix, self)
 
         latent = self.sample_latent(*args, **kwargs)
         plates = self._create_plates()
@@ -430,9 +469,8 @@ class AutoContinuous(AutoGuide):
         :return: A dict mapping sample site name to median tensor.
         :rtype: dict
         """
-        loc, _ = self._loc_scale(*args, **kwargs)
         return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
-                for site, unconstrained_value in self._unpack_latent(loc)}
+                for site, unconstrained_value in self._unpack_latent(self.loc)}
 
     def quantiles(self, quantiles, *args, **kwargs):
         """
@@ -486,20 +524,22 @@ class AutoMultivariateNormal(AutoContinuous):
         self._init_scale = init_scale
         super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
+    def _init_params(self):
+        super()._init_params()
+        self.scale_tril = eye_like(self.loc, self.latent_dim) * self._init_scale
+
+    @constraint
+    def scale_tril(self):
+        return constraints.lower_cholesky
+
     def get_posterior(self, *args, **kwargs):
         """
         Returns a MultivariateNormal posterior distribution.
         """
-        loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
-        scale_tril = pyro.param("{}_scale_tril".format(self.prefix),
-                                lambda: eye_like(loc, self.latent_dim) * self._init_scale,
-                                constraint=constraints.lower_cholesky)
-        return dist.MultivariateNormal(loc, scale_tril=scale_tril)
+        return dist.MultivariateNormal(self.loc, scale_tril=self.scale_tril)
 
     def _loc_scale(self, *args, **kwargs):
-        loc = pyro.param("{}_loc".format(self.prefix))
-        scale = pyro.param("{}_scale_tril".format(self.prefix)).diag()
-        return loc, scale
+        return self.loc, self.scale_tril.diag()
 
 
 class AutoDiagonalNormal(AutoContinuous):
@@ -532,20 +572,22 @@ class AutoDiagonalNormal(AutoContinuous):
         self._init_scale = init_scale
         super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
+    def _init_params(self):
+        super()._init_params()
+        self.scale = self.loc.new_full((self.latent_dim,), self._init_scale)
+
+    @constraint
+    def scale(self):
+        return constraints.positive
+
     def get_posterior(self, *args, **kwargs):
         """
         Returns a diagonal Normal posterior distribution.
         """
-        loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
-        scale = pyro.param("{}_scale".format(self.prefix),
-                           lambda: loc.new_full((self.latent_dim,), self._init_scale),
-                           constraint=constraints.positive)
-        return dist.Normal(loc, scale).to_event(1)
+        return dist.Normal(self.loc, self.scale).to_event(1)
 
     def _loc_scale(self, *args, **kwargs):
-        loc = pyro.param("{}_loc".format(self.prefix))
-        scale = pyro.param("{}_scale".format(self.prefix))
-        return loc, scale
+        return self.loc, self.scale
 
 
 class AutoLowRankMultivariateNormal(AutoContinuous):
@@ -583,25 +625,29 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         self.rank = rank
         super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
+    def _init_params(self):
+        super()._init_params()
+        self.cov_factor = self.loc.new_empty(self.latent_dim, self.rank).normal_(
+            0, self._init_scale * (0.5 / self.rank) ** 0.5)
+        self.cov_diagonal = self.loc.new_full((self.latent_dim,), 0.5 * self._init_scale ** 2)
+
+    @constraint
+    def cov_factor(self):
+        return constraints.real
+
+    @constraint
+    def cov_diagonal(self):
+        return constraints.positive
+
     def get_posterior(self, *args, **kwargs):
         """
         Returns a LowRankMultivariateNormal posterior distribution.
         """
-        loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
-        factor = pyro.param("{}_cov_factor".format(self.prefix),
-                            lambda: loc.new_empty(self.latent_dim, self.rank).normal_(
-                                0, self._init_scale * (0.5 / self.rank) ** 0.5))
-        diagonal = pyro.param("{}_cov_diag".format(self.prefix),
-                              lambda: loc.new_full((self.latent_dim,), 0.5 * self._init_scale ** 2),
-                              constraint=constraints.positive)
-        return dist.LowRankMultivariateNormal(loc, factor, diagonal)
+        return dist.LowRankMultivariateNormal(self.loc, self.cov_factor, self.cov_diagonal)
 
     def _loc_scale(self, *args, **kwargs):
-        loc = pyro.param("{}_loc".format(self.prefix))
-        factor = pyro.param("{}_cov_factor".format(self.prefix))
-        diagonal = pyro.param("{}_cov_diag".format(self.prefix))
-        scale = (factor.pow(2).sum(-1) + diagonal).sqrt()
-        return loc, scale
+        scale = (self.cov_factor.pow(2).sum(-1) + self.cov_diagonal).sqrt()
+        return self.loc, scale
 
 
 class AutoIAFNormal(AutoContinuous):
@@ -675,8 +721,7 @@ class AutoLaplaceApproximation(AutoContinuous):
         """
         Returns a Delta posterior distribution for MAP inference.
         """
-        loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
-        return dist.Delta(loc).to_event(1)
+        return dist.Delta(self.loc).to_event(1)
 
     def laplace_approximation(self, *args, **kwargs):
         """
@@ -688,28 +733,31 @@ class AutoLaplaceApproximation(AutoContinuous):
             poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
         loss = guide_trace.log_prob_sum() - model_trace.log_prob_sum()
 
-        loc = pyro.param("{}_loc".format(self.prefix))
-        H = hessian(loss, loc.unconstrained())
+        H = hessian(loss, self.loc)
         cov = H.inverse()
+        loc = self.loc
         scale_tril = cov.cholesky()
-
-        # calculate scale_tril from self.guide()
-        scale_tril_name = "{}_scale_tril".format(self.prefix)
-        pyro.param(scale_tril_name, scale_tril,
-                   constraint=constraints.lower_cholesky)
-        # force an update to scale_tril even if it already exists
-        pyro.get_param_store()[scale_tril_name] = scale_tril
 
         gaussian_guide = AutoMultivariateNormal(self.model, prefix=self.prefix)
         gaussian_guide._setup_prototype(*args, **kwargs)
+        # Set loc, scale_tril parameters as computed above.
+        gaussian_guide.loc = loc
+        gaussian_guide.scale_tril = scale_tril
         return gaussian_guide
 
 
-class AutoDiscreteParallel(AutoGuide):
+class AutoDiscreteParallel(AutoGuide, ConstrainedModule):
     """
     A discrete mean-field guide that learns a latent discrete distribution for
     each discrete site in the model.
     """
+
+    def _init_params(self):
+        for site, Dist, param_spec in self._discrete_sites:
+            name = site["name"]
+            for param_name, param_init, param_constraint in param_spec:
+                setattr(self, "{}_{}_{}".format(self.prefix, name, param_name),
+                        ConstrainedParameter(param_init, constraint=param_constraint))
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
@@ -754,6 +802,11 @@ class AutoDiscreteParallel(AutoGuide):
         # if we've never run the model before, do so now so we can inspect the model structure
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
+            self._init_params()
+
+        # Needed to capture autoguide parameters as pyro.param statements in the
+        # guide trace
+        pyro.module(self.prefix, self)
 
         plates = self._create_plates()
 
@@ -762,8 +815,7 @@ class AutoDiscreteParallel(AutoGuide):
         for site, Dist, param_spec in self._discrete_sites:
             name = site["name"]
             dist_params = {
-                param_name: pyro.param("{}_{}_{}".format(self.prefix, name, param_name), param_init,
-                                       constraint=param_constraint)
+                param_name: getattr(self, "{}_{}_{}".format(self.prefix, name, param_name))
                 for param_name, param_init, param_constraint in param_spec
             }
             discrete_dist = Dist(**dist_params)

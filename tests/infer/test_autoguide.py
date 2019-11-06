@@ -1,4 +1,5 @@
 import functools
+import warnings
 
 import numpy as np
 import pytest
@@ -193,6 +194,44 @@ def test_median(auto_class, Elbo):
     else:
         assert_equal(median["y"], torch.tensor(1.0), prec=0.1)
     assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+    auto_guide_list_x,
+    auto_guide_callable,
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_feasible),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
+])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+@pytest.mark.xfail(reason="FIXME: auto_laplace, auto_guide_list and auto_guide_callable fail.")
+def test_autoguide_serialization(auto_class, Elbo):
+    def model():
+        pyro.sample("x", dist.Normal(0.0, 1.0))
+        pyro.sample("y", dist.LogNormal(0.0, 1.0))
+        pyro.sample("z", dist.Beta(2.0, 2.0))
+    guide = auto_class(model)
+    guide()
+    if auto_class is AutoLaplaceApproximation:
+        guide = guide.laplace_approximation()
+
+    # Ignore tracer warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+        traced_guide = torch.jit.trace_module(guide, {"call": ()})
+    torch.jit.save(traced_guide, "/tmp/test_guide_serialization.pt")
+    guide_deser = torch.jit.load("/tmp/test_guide_serialization.pt")
+    expected_names = {name for name, _ in guide.named_parameters()}
+    actual_names = {name for name, _ in guide_deser.named_parameters()}
+    assert actual_names == expected_names
+    for name in actual_names:
+        assert_equal(getattr(guide_deser, name), getattr(guide, name).data)
 
 
 @pytest.mark.parametrize("auto_class", [
