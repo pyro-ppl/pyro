@@ -473,8 +473,8 @@ class AutoMultivariateNormal(AutoContinuous):
     :param callable model: A generative model.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
-    :param float init_scale: Approximate initial scale for the standard
-        deviation of each (unconstrained transformed) latent variable.
+    :param float init_scale: Initial scale for the standard deviation of each
+        (unconstrained transformed) latent variable.
     :param str prefix: A prefix that will be prefixed to all param internal
         sites.
     """
@@ -519,8 +519,8 @@ class AutoDiagonalNormal(AutoContinuous):
     :param callable model: A generative model.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
-    :param float init_scale: Approximate initial scale for the standard
-        deviation of each (unconstrained transformed) latent variable.
+    :param float init_scale: Initial scale for the standard deviation of each
+        (unconstrained transformed) latent variable.
     :param str prefix: A prefix that will be prefixed to all param internal
         sites.
     """
@@ -663,7 +663,7 @@ class AutoLaplaceApproximation(AutoContinuous):
         # ...then train the delta_guide...
         guide = delta_guide.laplace_approximation()
 
-    By default the mean vector is initialized to an empirical median.
+    By default the mean vector is initialized to an empirical prior median.
 
     :param callable model: a generative model
     :param callable init_loc_fn: A per-site initialization function.
