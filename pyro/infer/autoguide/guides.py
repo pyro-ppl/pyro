@@ -476,7 +476,7 @@ class AutoMultivariateNormal(AutoContinuous):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
         self._init_scale = init_scale
-        super().__init__(model, prefix=prefix, init_loc_fn=init_to_median)
+        super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -514,7 +514,7 @@ class AutoDiagonalNormal(AutoContinuous):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
         self._init_scale = init_scale
-        super().__init__(model, prefix=prefix, init_loc_fn=init_to_median)
+        super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -573,7 +573,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
                             lambda: loc.new_empty(self.latent_dim, self.rank).normal_(
                                 0, self._init_scale * (0.5 / self.rank) ** 0.5))
         diagonal = pyro.param("{}_cov_diag".format(self.prefix),
-                              lambda: loc.new_full((self.latent_dim,), self._init_scale * 0.5),
+                              lambda: loc.new_full((self.latent_dim,), 0.5 * self._init_scale ** 2),
                               constraint=constraints.positive)
         return dist.LowRankMultivariateNormal(loc, factor, diagonal)
 

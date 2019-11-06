@@ -355,3 +355,55 @@ def test_unpack_latent():
     assert guide()['x'].shape == model().shape
     latent = guide.sample_latent()
     assert list(guide._unpack_latent(latent))[0][1].shape == (1,)
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+])
+def test_init_loc_fn(auto_class):
+
+    def model():
+        pyro.sample("x", dist.Normal(0., 1.))
+        pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
+
+    inits = {"x": torch.randn(()), "y": torch.randn(5)}
+
+    def init_loc_fn(site):
+        return inits[site["name"]]
+
+    guide = auto_class(model, init_loc_fn=init_loc_fn)
+    guide()
+    median = guide.median()
+    assert_equal(median["x"], inits["x"])
+    assert_equal(median["y"], inits["y"])
+
+
+# testing helper
+class AutoLowRankMultivariateNormal_100(AutoLowRankMultivariateNormal):
+    def __init__(self, *args, **kwargs):
+        return super().__init__(*args, **kwargs, rank=100)
+
+
+@pytest.mark.parametrize("init_scale", [1e-1, 1e-4, 1e-8])
+@pytest.mark.parametrize("auto_class", [
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLowRankMultivariateNormal_100,
+])
+def test_init_scale(auto_class, init_scale):
+
+    def model():
+        pyro.sample("x", dist.Normal(0., 1.))
+        pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
+        with pyro.plate("plate", 100):
+            pyro.sample("z", dist.Normal(0., 1.))
+
+    guide = auto_class(model, init_scale=init_scale)
+    guide()
+    loc, scale = guide._loc_scale()
+    scale_rms = scale.pow(2).mean().sqrt().item()
+    assert init_scale * 0.5 < scale_rms < 2.0 * init_scale
