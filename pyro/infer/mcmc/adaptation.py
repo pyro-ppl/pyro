@@ -45,7 +45,6 @@ class WarmupAdapter(object):
         self._adapt_start_buffer = 75  # from Stan
         self._adapt_end_buffer = 50  # from Stan
         self._adapt_initial_window = 25  # from Stan
-        self._current_window = 0  # starting window index
 
         # configured later on setup
         self._warmup_steps = None
@@ -141,6 +140,11 @@ class WarmupAdapter(object):
                              "need to be initialized.")
         if not self._adaptation_disabled:
             self._adaptation_schedule = self._build_adaptation_schedule()
+        self._current_window = 0  # starting window index
+        if self.adapt_step_size:
+            self._step_size_adapt_scheme.reset()
+        if self.adapt_mass_matrix:
+            self._mass_matrix_adapt_scheme.reset()
 
     def step(self, t, z, accept_prob):
         r"""
