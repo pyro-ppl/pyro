@@ -281,11 +281,12 @@ def main(args):
     print("Expected singleton thetas:\n", expected_thetas.data.numpy())
 
     # we do the final computation using double precision
+    median = guide.median()  # == mode for MAP inference
     active_dims, active_quad_dims = \
-        compute_posterior_stats(X.double(), Y.double(), pyro.param('auto_msq').double(),
-                                pyro.param('auto_lambda').double(), pyro.param('auto_eta1').double(),
-                                pyro.param('auto_xisq').double(), torch.tensor(hypers['c']).double(),
-                                pyro.param('auto_var_obs').double())
+        compute_posterior_stats(X.double(), Y.double(), median['msq'].double(),
+                                median['lambda'].double(), median['eta1'].double(),
+                                median['xisq'].double(), torch.tensor(hypers['c']).double(),
+                                median['var_obs'].double())
 
     expected_active_dims = np.arange(S).tolist()
 
