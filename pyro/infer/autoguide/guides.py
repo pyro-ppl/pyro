@@ -45,6 +45,7 @@ class AutoGuide(nn.Module):
 
     :param callable model: a pyro model
     :param str prefix: a prefix that will be prefixed to all param internal sites
+        as part of the module name.
     """
 
     def __init__(self, model, prefix="auto"):
@@ -129,6 +130,7 @@ class AutoGuideList(AutoGuide):
 
     :param callable model: a Pyro model
     :param str prefix: a prefix that will be prefixed to all param internal sites
+        as part of the module name.
     """
 
     def __init__(self, model, prefix="auto"):
@@ -513,8 +515,8 @@ class AutoMultivariateNormal(AutoContinuous):
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Initial scale for the standard deviation of each
         (unconstrained transformed) latent variable.
-    :param str prefix: A prefix that will be prefixed to all param internal
-        sites.
+    :param str prefix: a prefix that will be prefixed to all param internal sites
+        as part of the module name.
     """
 
     def __init__(self, model, prefix="auto", init_loc_fn=init_to_median,
@@ -561,8 +563,8 @@ class AutoDiagonalNormal(AutoContinuous):
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Initial scale for the standard deviation of each
         (unconstrained transformed) latent variable.
-    :param str prefix: A prefix that will be prefixed to all param internal
-        sites.
+    :param str prefix: a prefix that will be prefixed to all param internal sites
+        as part of the module name.
     """
 
     def __init__(self, model, prefix="auto", init_loc_fn=init_to_median,
@@ -612,8 +614,8 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Approximate initial scale for the standard
         deviation of each (unconstrained transformed) latent variable.
-    :param str prefix: A prefix that will be prefixed to all param internal
-        sites.
+    :param str prefix: a prefix that will be prefixed to all param internal sites
+        as part of the module name.
     """
 
     def __init__(self, model, prefix="auto", init_loc_fn=init_to_median, init_scale=1.0, rank=1):
@@ -668,6 +670,7 @@ class AutoIAFNormal(AutoContinuous):
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
     :param str prefix: a prefix that will be prefixed to all param internal sites
+        as part of the module name.
     """
 
     def __init__(self, model, hidden_dim=None, prefix="auto", init_loc_fn=init_to_median):
@@ -715,6 +718,7 @@ class AutoLaplaceApproximation(AutoContinuous):
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
     :param str prefix: a prefix that will be prefixed to all param internal sites
+        as part of the module name.
     """
 
     def get_posterior(self, *args, **kwargs):
