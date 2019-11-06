@@ -469,6 +469,14 @@ class AutoMultivariateNormal(AutoContinuous):
 
     By default the mean vector is initialized by ``init_loc_fn()`` and the
     Cholesky factor is initialized to the identity.
+
+    :param callable model: A generative model.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    :param float init_scale: Approximate initial scale for the standard
+        deviation of each (unconstrained transformed) latent variable.
+    :param str prefix: A prefix that will be prefixed to all param internal
+        sites.
     """
 
     def __init__(self, model, prefix="auto", init_loc_fn=init_to_median,
@@ -507,6 +515,14 @@ class AutoDiagonalNormal(AutoContinuous):
 
     By default the mean vector is initialized to zero and the scale is
     initialized to the identity.
+
+    :param callable model: A generative model.
+    :param callable init_loc_fn: A per-site initialization function.
+        See :ref:`autoguide-initialization` section for available functions.
+    :param float init_scale: Approximate initial scale for the standard
+        deviation of each (unconstrained transformed) latent variable.
+    :param str prefix: A prefix that will be prefixed to all param internal
+        sites.
     """
 
     def __init__(self, model, prefix="auto", init_loc_fn=init_to_median,
@@ -548,11 +564,14 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
     intialized randomly such that ``cov_factor.matmul(cov_factor.t())`` is half the
     identity matrix.
 
-    :param callable model: a generative model
-    :param int rank: the rank of the low-rank part of the covariance matrix
+    :param callable model: A generative model.
+    :param int rank: The rank of the low-rank part of the covariance matrix.
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
-    :param str prefix: a prefix that will be prefixed to all param internal sites
+    :param float init_scale: Approximate initial scale for the standard
+        deviation of each (unconstrained transformed) latent variable.
+    :param str prefix: A prefix that will be prefixed to all param internal
+        sites.
     """
 
     def __init__(self, model, prefix="auto", init_loc_fn=init_to_median, init_scale=1.0, rank=1):
