@@ -94,7 +94,8 @@ def test_posterior_predictive_svi_one_hot():
     assert_close(marginal_return_vals.mean(dim=0), true_probs.unsqueeze(0), rtol=0.1)
 
 
-def test_shapes():
+@pytest.mark.parametrize("parallel", [False, True])
+def test_shapes(parallel):
     num_samples = 10
 
     def model():
@@ -113,7 +114,7 @@ def test_shapes():
 
     # Use Predictive.
     predictive = Predictive(model, guide=guide, return_sites=["x", "y"],
-                            num_samples=num_samples, parallel=True)
+                            num_samples=num_samples, parallel=parallel)
     actual = predictive.get_samples()
     assert set(actual) == set(expected)
     assert actual["x"].shape == expected["x"].shape
