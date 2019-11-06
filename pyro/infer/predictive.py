@@ -45,6 +45,7 @@ def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
 def _predictive(model, posterior_samples, num_samples, return_sites=None,
                 return_trace=False, parallel=False, model_args=(), model_kwargs={}):
     max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
+    vectorize = pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting-1)
     model_trace = prune_subsample_sites(poutine.trace(model).get_trace(*model_args, **model_kwargs))
     reshaped_samples = {}
 
@@ -53,23 +54,8 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
         sample = sample.reshape((num_samples,) + (1,) * (max_plate_nesting - len(sample_shape)) + sample_shape)
         reshaped_samples[name] = sample
 
-    def _vectorized_fn(fn):
-        """
-        Wraps a callable inside an outermost :class:`~pyro.plate` to parallelize
-        sampling from the posterior predictive.
-
-        :param fn: arbitrary callable containing Pyro primitives.
-        :return: wrapped callable.
-        """
-
-        def wrapped_fn(*args, **kwargs):
-            with pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting-1):
-                return fn(*args, **kwargs)
-
-        return wrapped_fn
-
     if return_trace:
-        trace = poutine.trace(poutine.condition(_vectorized_fn(model), reshaped_samples))\
+        trace = poutine.trace(poutine.condition(vectorize(model), reshaped_samples))\
             .get_trace(*model_args, **model_kwargs)
         return trace
 
@@ -93,7 +79,7 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
         return _predictive_sequential(model, posterior_samples, model_args, model_kwargs, num_samples,
                                       return_site_shapes.keys(), return_trace=False)
 
-    trace = poutine.trace(poutine.condition(_vectorized_fn(model), reshaped_samples))\
+    trace = poutine.trace(poutine.condition(vectorize(model), reshaped_samples))\
         .get_trace(*model_args, **model_kwargs)
     predictions = {}
     for site, shape in return_site_shapes.items():
@@ -109,7 +95,7 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
     return predictions
 
 
-class Predictive(object):
+class Predictive:
     """
     This class is used to construct predictive distribution. The predictive distribution is obtained
     by running model conditioned on latent samples from `posterior_samples`.
