@@ -34,7 +34,7 @@ from pyro.params import constraint, ConstrainedModule, ConstrainedParameter
 from pyro.poutine.util import prune_subsample_sites
 
 
-class AutoGuide(nn.Module):
+class AutoGuide(object):
     """
     Base class for automatic guides.
 
@@ -117,7 +117,7 @@ class AutoGuide(nn.Module):
         raise NotImplementedError
 
 
-class AutoGuideList(AutoGuide):
+class AutoGuideList(AutoGuide, nn.Module):
     """
     Container class to combine multiple automatic guides.
 
@@ -320,7 +320,7 @@ class AutoDelta(AutoGuide, ConstrainedModule):
         return self(*args, **kwargs)
 
 
-class AutoContinuous(AutoGuide):
+class AutoContinuous(AutoGuide, nn.Module):
     """
     Base class for implementations of continuous-valued Automatic
     Differentiation Variational Inference [1].
