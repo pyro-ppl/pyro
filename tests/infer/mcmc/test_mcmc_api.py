@@ -216,12 +216,12 @@ def test_sequential_consistent(monkeypatch):
 
     data = torch.tensor([1.0])
     kernel = FirstKernel(normal_normal_model)
-    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2, mp_context="spawn")
+    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2)
     mcmc.run(data)
     samples1 = mcmc.get_samples(group_by_chain=True)
 
     kernel = SecondKernel(normal_normal_model)
-    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2, mp_context="spawn")
+    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2)
     mcmc.run(data)
     samples2 = mcmc.get_samples(group_by_chain=True)
 
