@@ -203,9 +203,9 @@ def sample_posterior_predictive(model, posterior_samples, baseball_dataset):
     # set hits=None to convert it from observation node to sample node
     with ignore_experimental_warning():
         train_predict = predictive(model, posterior_samples, at_bats, None)
-    train_summary = summary(train_predict,
-                            sites=["obs"],
-                            player_names=player_names)["obs"]
+    train_summary = get_summary_df(train_predict,
+                                   sites=["obs"],
+                                   player_names=player_names)["obs"]
     train_summary = train_summary.assign(ActualHits=baseball_dataset[["Hits"]].values)
     logging.info(train_summary)
     logging.info("\nHit Rate - Season Predictions")
@@ -253,6 +253,7 @@ def main(args):
     logging.info(baseball_dataset)
 
     # (1) Full Pooling Model
+    # In this model, we illustrate how to use MCMC with general potential_fn.
     init_params, potential_fn, transforms, _ = initialize_model(fully_pooled, model_args=(at_bats, hits),
                                                                 num_chains=args.num_chains)
     nuts_kernel = NUTS(potential_fn=potential_fn)
@@ -278,15 +279,11 @@ def main(args):
     evaluate_log_posterior_density(fully_pooled, samples_fully_pooled, baseball_dataset)
 
     # (2) No Pooling Model
-    init_params, potential_fn, transforms, _ = initialize_model(not_pooled, model_args=(at_bats, hits),
-                                                                num_chains=args.num_chains)
-    nuts_kernel = NUTS(potential_fn=potential_fn)
+    nuts_kernel = NUTS(not_pooled)
     mcmc = MCMC(nuts_kernel,
                 num_samples=args.num_samples,
                 warmup_steps=args.warmup_steps,
-                num_chains=args.num_chains,
-                initial_params=init_params,
-                transforms=transforms)
+                num_chains=args.num_chains)
     mcmc.run(at_bats, hits)
     diagnostics = mcmc.diagnostics()
     samples_not_pooled = mcmc.get_samples()
@@ -303,16 +300,11 @@ def main(args):
     evaluate_log_posterior_density(not_pooled, samples_not_pooled, baseball_dataset)
 
     # (3) Partially Pooled Model
-    init_params, potential_fn, transforms, _ = initialize_model(partially_pooled, model_args=(at_bats, hits),
-                                                                num_chains=args.num_chains)
-    nuts_kernel = NUTS(potential_fn=potential_fn)
-
+    nuts_kernel = NUTS(partially_pooled)
     mcmc = MCMC(nuts_kernel,
                 num_samples=args.num_samples,
                 warmup_steps=args.warmup_steps,
-                num_chains=args.num_chains,
-                initial_params=init_params,
-                transforms=transforms)
+                num_chains=args.num_chains)
     mcmc.run(at_bats, hits)
     diagnostics = mcmc.diagnostics()
     samples_partially_pooled = mcmc.get_samples()
@@ -329,16 +321,11 @@ def main(args):
     evaluate_log_posterior_density(partially_pooled, samples_partially_pooled, baseball_dataset)
 
     # (4) Partially Pooled with Logit Model
-    init_params, potential_fn, transforms, _ = initialize_model(partially_pooled_with_logit,
-                                                                model_args=(at_bats, hits),
-                                                                num_chains=args.num_chains)
-    nuts_kernel = NUTS(potential_fn=potential_fn, transforms=transforms)
+    nuts_kernel = NUTS(partially_pooled_with_logit)
     mcmc = MCMC(nuts_kernel,
                 num_samples=args.num_samples,
                 warmup_steps=args.warmup_steps,
-                num_chains=args.num_chains,
-                initial_params=init_params,
-                transforms=transforms)
+                num_chains=args.num_chains)
     mcmc.run(at_bats, hits)
     diagnostics = mcmc.diagnostics()
     samples_partially_pooled_logit = mcmc.get_samples()
