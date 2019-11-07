@@ -603,7 +603,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         scale = pyro.param("{}_scale".format(self.prefix))
         factor = pyro.param("{}_cov_factor".format(self.prefix))
         scale = scale * (factor.pow(2).sum(-1) + 1).sqrt()
-        return loc, scale * 2
+        return loc, scale
 
 
 class AutoIAFNormal(AutoContinuous):
