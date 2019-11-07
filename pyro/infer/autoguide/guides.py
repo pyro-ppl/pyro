@@ -17,7 +17,7 @@ import weakref
 from contextlib import ExitStack  # python 3
 
 import torch
-from torch.distributions import biject_to, constraints
+from torch.distributions import biject_to, constraints, transform_to
 from torch import nn
 
 import pyro
@@ -751,7 +751,7 @@ class AutoLaplaceApproximation(AutoContinuous):
         gaussian_guide._setup_prototype(*args, **kwargs)
         # Set loc, scale_tril parameters as computed above.
         gaussian_guide.loc.data = loc
-        gaussian_guide.scale_tril.data = scale_tril
+        gaussian_guide.scale_tril_unconstrained.data = transform_to(constraints.lower_cholesky).inv(scale_tril)
         return gaussian_guide
 
 
