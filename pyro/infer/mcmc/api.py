@@ -110,10 +110,10 @@ def _gen_samples(kernel, warmup_steps, num_samples, hook, chain_id, *args, **kwa
     yield {k: v.shape for k, v in params.items()}
     for i in range(warmup_steps):
         params = kernel.sample(params)
-        hook(kernel, params, 'Warmup [{}]'.format(chain_id), i)
+        hook(kernel, params, 'Warmup [{}]'.format(chain_id) if chain_id is not None else 'Warmup', i)
     for i in range(num_samples):
         params = kernel.sample(params)
-        hook(kernel, params, 'Sample [{}]'.format(chain_id), i)
+        hook(kernel, params, 'Sample [{}]'.format(chain_id) if chain_id is not None else 'Sample', i)
         yield torch.cat([params[site].reshape(-1) for site in sorted(params)]) if params else torch.tensor([])
     yield kernel.diagnostics()
     kernel.cleanup()
@@ -133,7 +133,7 @@ def _add_logging_hook(logger, progress_bar=None, hook=None):
 
 class _UnarySampler(object):
     """
-    Single process runner class optimized for the case `num_chains=1`.
+    Single process runner class optimized for the case chains are drawn sequentially.
     """
 
     def __init__(self, kernel, num_samples, warmup_steps, num_chains, disable_progbar, initial_params=None, hook=None):
@@ -153,16 +153,17 @@ class _UnarySampler(object):
     def run(self, *args, **kwargs):
         logger = logging.getLogger("pyro.infer.mcmc")
         for i in range(self.num_chains):
-            if self.initial_params:
+            if self.initial_params is not None:
                 initial_params = {k: v[i] for k, v in self.initial_params.items()}
                 self.kernel.initial_params = initial_params
 
             progress_bar = ProgressBar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
             logger = initialize_logger(logger, "", progress_bar)
             hook_w_logging = _add_logging_hook(logger, progress_bar, self.hook)
-            for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, hook_w_logging, i,
+            for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, hook_w_logging,
+                                       i if self.num_chains > 1 else None,
                                        *args, **kwargs):
-                yield sample, i  # sample, chain_id (default=0)
+                yield sample, i  # sample, chain_id
             self.kernel.cleanup()
             progress_bar.close()
 

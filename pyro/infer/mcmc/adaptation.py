@@ -28,7 +28,7 @@ class WarmupAdapter(object):
         self.adapt_mass_matrix = adapt_mass_matrix
         self.target_accept_prob = target_accept_prob
         self.is_diag_mass = is_diag_mass
-        self.step_size = 1 if step_size is None else step_size
+        self._init_step_size = 1 if step_size is None else step_size
         self._adaptation_disabled = not (adapt_step_size or adapt_mass_matrix)
         if adapt_step_size:
             self._step_size_adapt_scheme = DualAveraging()
@@ -129,12 +129,10 @@ class WarmupAdapter(object):
             mass matrix is changed.
         """
         self._warmup_steps = warmup_steps
-        if initial_step_size is not None:
-            self.step_size = initial_step_size
+        self.step_size = initial_step_size if initial_step_size is not None else self._init_step_size
         if find_reasonable_step_size_fn is not None:
             self._find_reasonable_step_size = find_reasonable_step_size_fn
-        if inv_mass_matrix is not None:
-            self.inverse_mass_matrix = inv_mass_matrix
+        self.inverse_mass_matrix = inv_mass_matrix
         if self.inverse_mass_matrix is None or self.step_size is None:
             raise ValueError("Incomplete configuration - step size and inverse mass matrix "
                              "need to be initialized.")

@@ -12,7 +12,7 @@ from pyro.infer.mcmc.api import MCMC, _UnarySampler, _MultiSampler
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model
 from pyro.util import optional
-from tests.common import skipif_param, assert_close
+from tests.common import assert_close
 
 
 class PriorKernel(MCMCKernel):
@@ -122,8 +122,8 @@ def test_num_chains(num_chains, cpu_count, default_init_params,
         mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains,
                     initial_params=initial_params, transforms=transforms, mp_context=mp_context)
     mcmc.run(data)
-    assert mcmc.num_chains == min(num_chains, available_cpu)
-    if mcmc.num_chains == 1:
+    assert mcmc.num_chains == num_chains
+    if mcmc.num_chains == 1 or available_cpu < num_chains:
         assert isinstance(mcmc.sampler, _UnarySampler)
     else:
         assert isinstance(mcmc.sampler, _MultiSampler)
@@ -145,8 +145,9 @@ def _hook(iters, kernel, samples, stage, i):
 @pytest.mark.parametrize("jit", [False, True])
 @pytest.mark.parametrize("num_chains", [
     1,
-    skipif_param(2, condition="CI" in os.environ, reason="CI only provides 2-core CPU")
+    2
 ])
+@pytest.mark.filterwarnings("ignore:num_chains")
 def test_null_model_with_hook(kernel, model, jit, num_chains):
     num_warmup, num_samples = 10, 10
     initial_params, potential_fn, transforms, _ = initialize_model(model,
@@ -164,14 +165,15 @@ def test_null_model_with_hook(kernel, model, jit, num_chains):
     samples = mcmc.get_samples()
     assert samples == {}
     if num_chains == 1:
-        expected = [("warmup", i) for i in range(num_warmup)] + [("sample", i) for i in range(num_samples)]
+        expected = [("Warmup", i) for i in range(num_warmup)] + [("Sample", i) for i in range(num_samples)]
         assert iters == expected
 
 
 @pytest.mark.parametrize("num_chains", [
     1,
-    skipif_param(2, condition="CI" in os.environ, reason="CI only provides 2-core CPU")
+    2
 ])
+@pytest.mark.filterwarnings("ignore:num_chains")
 def test_mcmc_diagnostics(num_chains):
     data = torch.tensor([2.0]).repeat(3)
     initial_params, _, transforms, _ = initialize_model(normal_normal_model,
@@ -188,3 +190,35 @@ def test_mcmc_diagnostics(num_chains):
     assert diagnostics["y"]["r_hat"].shape == data.shape
     assert diagnostics["dummy_key"] == {'chain {}'.format(i): 'dummy_value'
                                         for i in range(num_chains)}
+
+
+@pytest.mark.filterwarnings("ignore:num_chains")
+def test_sequential_consistent(monkeypatch):
+    # test if there is no stuff left from the previous chain
+    monkeypatch.setattr(torch.multiprocessing, 'cpu_count', lambda: 1)
+
+    class FirstKernel(NUTS):
+        def setup(self, warmup_steps, *args, **kwargs):
+            self._chain_id = 0 if '_chain_id' not in self.__dict__ else 1
+            pyro.set_rng_seed(self._chain_id)
+            super(FirstKernel, self).setup(warmup_steps, *args, **kwargs)
+
+    class SecondKernel(NUTS):
+        def setup(self, warmup_steps, *args, **kwargs):
+            self._chain_id = 1 if '_chain_id' not in self.__dict__ else 0
+            pyro.set_rng_seed(self._chain_id)
+            super(SecondKernel, self).setup(warmup_steps, *args, **kwargs)
+
+    data = torch.tensor([1.0])
+    kernel = FirstKernel(normal_normal_model)
+    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2)
+    mcmc.run(data)
+    samples1 = mcmc.get_samples(group_by_chain=True)
+
+    kernel = SecondKernel(normal_normal_model)
+    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2)
+    mcmc.run(data)
+    samples2 = mcmc.get_samples(group_by_chain=True)
+
+    assert_close(samples1["y"][0], samples2["y"][1])
+    assert_close(samples1["y"][1], samples2["y"][0])
