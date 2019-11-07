@@ -162,6 +162,15 @@ class AutoGuideList(AutoGuide, nn.Module):
         assert part.master is None
         part.master = weakref.ref(self)
 
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+        # Initialize all module parameters
+        for part in self.parts:
+            part._setup_prototype(*args, **kwargs)
+            if isinstance(part, nn.Module):
+                for param, value in part.named_parameters():
+                    setattr(self, param, value)
+
     def __call__(self, *args, **kwargs):
         """
         A composite guide with the same ``*args, **kwargs`` as the base ``model``.
@@ -269,7 +278,10 @@ class AutoDelta(AutoGuide, ConstrainedModule):
         model = InitMessenger(self._init_loc_fn)(model)
         super().__init__(model, prefix=prefix)
 
-    def _init_params(self):
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+
+        # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             param_name = "{}_{}".format(self.prefix, name)
             value = ConstrainedParameter(site["value"].detach(), constraint=site["fn"].support)
@@ -292,7 +304,6 @@ class AutoDelta(AutoGuide, ConstrainedModule):
         # if we've never run the model before, do so now so we can inspect the model structure
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
-            self._init_params()
 
         # Needed to capture autoguide parameters as pyro.param statements in the
         # guide trace
@@ -350,13 +361,6 @@ class AutoContinuous(AutoGuide, nn.Module):
         model = InitMessenger(init_loc_fn)(model)
         super().__init__(model, prefix=prefix)
 
-    def _init_params(self):
-        self.loc = self._init_loc()
-
-    @constraint
-    def loc(self):
-        return constraints.real
-
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
         self._unconstrained_shapes = {}
@@ -372,6 +376,9 @@ class AutoContinuous(AutoGuide, nn.Module):
         self.latent_dim = sum(_product(shape) for shape in self._unconstrained_shapes.values())
         if self.latent_dim == 0:
             raise RuntimeError('{} found no latent variables; Use an empty guide instead'.format(type(self).__name__))
+
+        # Initialize guide params
+        self.loc = nn.Parameter(self._init_loc())
 
     def _init_loc(self):
         """
@@ -431,7 +438,6 @@ class AutoContinuous(AutoGuide, nn.Module):
         # if we've never run the model before, do so now so we can inspect the model structure
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
-            self._init_params()
 
         # Needed to capture autoguide parameters as pyro.param statements in the
         # guide trace
@@ -526,8 +532,9 @@ class AutoMultivariateNormal(AutoContinuous):
         self._init_scale = init_scale
         super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
-    def _init_params(self):
-        super()._init_params()
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+        # Initialize guide params
         self.scale_tril = eye_like(self.loc, self.latent_dim) * self._init_scale
 
     @constraint
@@ -574,8 +581,9 @@ class AutoDiagonalNormal(AutoContinuous):
         self._init_scale = init_scale
         super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
-    def _init_params(self):
-        super()._init_params()
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+        # Initialize guide params
         self.scale = self.loc.new_full((self.latent_dim,), self._init_scale)
 
     @constraint
@@ -627,15 +635,12 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         self.rank = rank
         super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
 
-    def _init_params(self):
-        super()._init_params()
-        self.cov_factor = self.loc.new_empty(self.latent_dim, self.rank).normal_(
-            0, self._init_scale * (0.5 / self.rank) ** 0.5)
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+        # Initialize guide params
+        self.cov_factor = nn.Parameter(self.loc.new_empty(self.latent_dim, self.rank).normal_(
+            0, self._init_scale * (0.5 / self.rank) ** 0.5))
         self.cov_diagonal = self.loc.new_full((self.latent_dim,), 0.5 * self._init_scale ** 2)
-
-    @constraint
-    def cov_factor(self):
-        return constraints.real
 
     @constraint
     def cov_diagonal(self):
@@ -745,8 +750,8 @@ class AutoLaplaceApproximation(AutoContinuous):
         gaussian_guide = AutoMultivariateNormal(self.model, prefix=self.prefix)
         gaussian_guide._setup_prototype(*args, **kwargs)
         # Set loc, scale_tril parameters as computed above.
-        gaussian_guide.loc = loc
-        gaussian_guide.scale_tril = scale_tril
+        gaussian_guide.loc.data = loc
+        gaussian_guide.scale_tril.data = scale_tril
         return gaussian_guide
 
 
@@ -755,14 +760,6 @@ class AutoDiscreteParallel(AutoGuide, ConstrainedModule):
     A discrete mean-field guide that learns a latent discrete distribution for
     each discrete site in the model.
     """
-
-    def _init_params(self):
-        for site, Dist, param_spec in self._discrete_sites:
-            name = site["name"]
-            for param_name, param_init, param_constraint in param_spec:
-                setattr(self, "{}_{}_{}".format(self.prefix, name, param_name),
-                        ConstrainedParameter(param_init, constraint=param_constraint))
-
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
         model = config_enumerate(self.model)
@@ -795,6 +792,12 @@ class AutoDiscreteParallel(AutoGuide, ConstrainedModule):
                     self._plates[frame.name] = frame
                 else:
                     raise NotImplementedError("AutoDiscreteParallel does not support sequential pyro.plate")
+        # Initialize guide params
+        for site, Dist, param_spec in self._discrete_sites:
+            name = site["name"]
+            for param_name, param_init, param_constraint in param_spec:
+                setattr(self, "{}_{}_{}".format(self.prefix, name, param_name),
+                        ConstrainedParameter(param_init, constraint=param_constraint))
 
     def __call__(self, *args, **kwargs):
         """
@@ -806,7 +809,6 @@ class AutoDiscreteParallel(AutoGuide, ConstrainedModule):
         # if we've never run the model before, do so now so we can inspect the model structure
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
-            self._init_params()
 
         # Needed to capture autoguide parameters as pyro.param statements in the
         # guide trace

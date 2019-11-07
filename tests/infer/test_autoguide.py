@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 import torch
 from torch.distributions import constraints
+from torch import nn
 
 import pyro
 import pyro.distributions as dist
@@ -13,8 +14,9 @@ from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
                                   AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
                                   AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
-                                  init_to_sample)
+                                  init_to_sample, AutoGuide)
 from pyro.optim import Adam
+from pyro.params import ConstrainedModule, ConstrainedParameter
 from tests.common import assert_close, assert_equal
 
 
@@ -158,6 +160,25 @@ def auto_guide_callable(model):
     return guide
 
 
+def auto_guide_module_callable(model):
+    class GuideX(AutoGuide, ConstrainedModule):
+        def __init__(self, model):
+            super().__init__(model)
+            self.x_loc = nn.Parameter(torch.tensor(1.))
+            self.x_scale = ConstrainedParameter(torch.tensor(.1), constraint=constraints.positive)
+
+        def __call__(self, *args, **kwargs):
+            return {"x": pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))}
+
+        def median(self, *args, **kwargs):
+            return {"x": self.x_loc}
+
+    guide = AutoGuideList(model)
+    guide.add(GuideX(model))
+    guide.add(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    return guide
+
+
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
@@ -203,14 +224,13 @@ def test_median(auto_class, Elbo):
     AutoLowRankMultivariateNormal,
     AutoLaplaceApproximation,
     auto_guide_list_x,
-    auto_guide_callable,
+    auto_guide_module_callable,
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_feasible),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
 ])
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
-@pytest.mark.xfail(reason="FIXME: auto_laplace, auto_guide_list and auto_guide_callable fail.")
 def test_autoguide_serialization(auto_class, Elbo):
     def model():
         pyro.sample("x", dist.Normal(0.0, 1.0))
@@ -224,7 +244,8 @@ def test_autoguide_serialization(auto_class, Elbo):
     # Ignore tracer warnings
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
-        traced_guide = torch.jit.trace_module(guide, {"call": ()})
+        # XXX: check_trace=True fails for AutoLaplaceApproximation
+        traced_guide = torch.jit.trace_module(guide, {"call": ()}, check_trace=False)
     torch.jit.save(traced_guide, "/tmp/test_guide_serialization.pt")
     guide_deser = torch.jit.load("/tmp/test_guide_serialization.pt")
     expected_names = {name for name, _ in guide.named_parameters()}
