@@ -313,6 +313,9 @@ class MCMC(object):
                     if v.shape[0] != num_chains:
                         raise ValueError("The leading dimension of tensors in `initial_params` "
                                          "must match the number of chains.")
+                # FIXME: probably we want to use "spawn" method by default to avoid the error
+                # CUDA initialization error https://github.com/pytorch/pytorch/issues/2517
+                # even that we run MCMC in CPU.
                 if mp_context is None:
                     # change multiprocessing context to 'spawn' for CUDA tensors.
                     if list(initial_params.values())[0].is_cuda:

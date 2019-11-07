@@ -81,13 +81,16 @@ def test_mcmc_interface(num_draws, group_by_chain, num_chains):
                                                         num_chains=num_chains)
     kernel = PriorKernel(normal_normal_model)
     mcmc = MCMC(kernel=kernel, num_samples=num_samples, warmup_steps=100, num_chains=num_chains,
-                initial_params=initial_params, transforms=transforms)
+                mp_context="spawn", initial_params=initial_params, transforms=transforms)
     mcmc.run(data)
     samples = mcmc.get_samples(num_draws, group_by_chain=group_by_chain)
     # test sample shape
     expected_samples = num_draws if num_draws is not None else num_samples
     if group_by_chain:
         expected_shape = (mcmc.num_chains, expected_samples, 1)
+    elif num_draws is not None:
+        # FIXME: what is the expected behavior of num_draw is not None and group_by_chain=False?
+        expected_shape = (expected_samples, 1)
     else:
         expected_shape = (mcmc.num_chains * expected_samples, 1)
     assert samples['y'].shape == expected_shape
@@ -119,7 +122,7 @@ def test_num_chains(num_chains, cpu_count, default_init_params,
         initial_params = None
     kernel = PriorKernel(normal_normal_model)
     available_cpu = max(1, cpu_count-1)
-    mp_context = "spawn" if "CUDA_TEST" in os.environ else None
+    mp_context = "spawn"
     with optional(pytest.warns(UserWarning), available_cpu < num_chains):
         mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains,
                     initial_params=initial_params, transforms=transforms, mp_context=mp_context)
@@ -182,7 +185,7 @@ def test_mcmc_diagnostics(num_chains):
                                                         model_args=(data,),
                                                         num_chains=num_chains)
     kernel = PriorKernel(normal_normal_model)
-    mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains,
+    mcmc = MCMC(kernel, num_samples=10, warmup_steps=10, num_chains=num_chains, mp_context="spawn",
                 initial_params=initial_params, transforms=transforms)
     mcmc.run(data)
     if not torch.backends.mkl.is_available():
@@ -213,12 +216,12 @@ def test_sequential_consistent(monkeypatch):
 
     data = torch.tensor([1.0])
     kernel = FirstKernel(normal_normal_model)
-    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2)
+    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2, mp_context="spawn")
     mcmc.run(data)
     samples1 = mcmc.get_samples(group_by_chain=True)
 
     kernel = SecondKernel(normal_normal_model)
-    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2)
+    mcmc = MCMC(kernel, num_samples=100, warmup_steps=100, num_chains=2, mp_context="spawn")
     mcmc.run(data)
     samples2 = mcmc.get_samples(group_by_chain=True)
 
