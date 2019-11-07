@@ -73,12 +73,14 @@ def normal_normal_model(data):
 @pytest.mark.parametrize('num_draws', [None, 1800, 2200])
 @pytest.mark.parametrize('group_by_chain', [False, True])
 @pytest.mark.parametrize('num_chains', [1, 2])
+@pytest.mark.filterwarnings("ignore:num_chains")
 def test_mcmc_interface(num_draws, group_by_chain, num_chains):
     num_samples = 2000
     data = torch.tensor([1.0])
-    initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,))
+    initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,),
+                                                        num_chains=num_chains)
     kernel = PriorKernel(normal_normal_model)
-    mcmc = MCMC(kernel=kernel, num_samples=num_samples, warmup_steps=100,
+    mcmc = MCMC(kernel=kernel, num_samples=num_samples, warmup_steps=100, num_chains=num_chains,
                 initial_params=initial_params, transforms=transforms)
     mcmc.run(data)
     samples = mcmc.get_samples(num_draws, group_by_chain=group_by_chain)

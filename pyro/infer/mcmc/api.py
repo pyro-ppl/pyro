@@ -93,7 +93,7 @@ class _Worker(object):
 
         try:
             for sample in _gen_samples(self.kernel, self.warmup_steps, self.num_samples, logging_hook,
-                                       *args, **kwargs):
+                                       None, *args, **kwargs):
                 self.result_queue.put_nowait((self.chain_id, sample))
                 self.event.wait()
                 self.event.clear()
@@ -305,6 +305,7 @@ class MCMC(object):
             if initial_params is None:
                 raise ValueError("Must provide valid initial parameters to begin sampling"
                                  " when using `potential_fn` in HMC/NUTS kernel.")
+        parallel = False
         if num_chains > 1:
             # check that initial_params is different for each chain
             if initial_params:
@@ -319,12 +320,12 @@ class MCMC(object):
 
             # verify num_chains is compatible with available CPU.
             available_cpu = max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
-            sequential = False
-            if num_chains > available_cpu:
+            if num_chains <= available_cpu:
+                parallel = True
+            else:
                 warnings.warn("num_chains={} is more than available_cpu={}. "
                               "Chains will be drawn sequentially."
                               .format(num_chains, available_cpu))
-                sequential = True
         else:
             if initial_params:
                 initial_params = {k: v.unsqueeze(0) for k, v in initial_params.items()}
@@ -332,8 +333,7 @@ class MCMC(object):
         self.num_chains = num_chains
         self._diagnostics = [None] * num_chains
 
-        sequential = True
-        if num_chains > 1 and not sequential:
+        if parallel:
             self.sampler = _MultiSampler(kernel, num_samples, self.warmup_steps, num_chains, mp_context,
                                          disable_progbar, initial_params=initial_params, hook=hook_fn)
         else:
