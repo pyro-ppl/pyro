@@ -3,10 +3,13 @@ import warnings
 
 import torch
 
+import pyro
+import pyro.poutine as poutine
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace_detached
-from pyro.infer.util import is_validation_enabled, torch_item
-from pyro.util import check_if_enumerated, warn_if_nan
+from pyro.infer.util import is_validation_enabled
+from pyro.poutine.util import prune_subsample_sites
+from pyro.util import check_if_enumerated, warn_if_nan, check_model_guide_match
 
 
 class ReweightedWakeSleep(ELBO):
@@ -40,6 +43,7 @@ class ReweightedWakeSleep(ELBO):
 
     def __init__(self,
                  num_particles=2,
+                 gamma=0.,
                  max_plate_nesting=float('inf'),
                  max_iarange_nesting=None,  # DEPRECATED
                  vectorize_particles=True,
@@ -57,6 +61,9 @@ class ReweightedWakeSleep(ELBO):
                                                   max_plate_nesting=max_plate_nesting,
                                                   vectorize_particles=vectorize_particles,
                                                   strict_enumeration_warning=strict_enumeration_warning)
+        self.gamma = gamma
+        assert(gamma >= 0 and gamma <= 1), \
+            "gamma should be in [0, 1]"
 
     def _get_trace(self, model, guide, *args, **kwargs):
         """
@@ -153,15 +160,49 @@ class ReweightedWakeSleep(ELBO):
         # TODO: check whether grad est should sum or mean over batch dim (currently sum)
         wake_theta_loss = -(log_sum_weight - math.log(self.num_particles)).sum()
         wake_theta_loss.backward(retain_graph=True)
+        warn_if_nan(wake_theta_loss, "wake theta loss")
 
-        # wake phi = reweighted csis:
-        normalised_weights = (log_weights - log_sum_weight).exp().detach()
-        # TODO: check whether grad est should sum or mean over batch dim (currently sum)
-        wake_phi_loss = -(normalised_weights * log_qs).sum(0).sum(0)
-        wake_phi_loss.backward()
+        if self.gamma > 0:
+            # wake phi = reweighted csis:
+            normalised_weights = (log_weights - log_sum_weight).exp().detach()
+            # TODO: check whether grad est should sum or mean over batch dim (currently sum)
+            wake_phi_loss = -(normalised_weights * log_qs).sum(0).sum(0)
+            wake_phi_loss.backward(torch.full_like(wake_phi_loss, self.gamma))
+            warn_if_nan(wake_phi_loss, "wake phi loss")
 
-        # TODO: incorporate sleep/csis?
+        if self.gamma < 1:
+            _model = pyro.poutine.uncondition(model)
+            _log_q = 0.
+            # TODO: parallelise this?
+            # for _ in range(log_sum_weight.size(0)):  # batch size
+            for _ in range(100):  # batch size
+                _model_trace = poutine.trace(_model).get_trace(*args, **kwargs)
+                for site in _model_trace.nodes.values():
+                    if site["type"] == "sample":
+                        site["value"] = site["value"].detach()
+                _guide_trace = self._get_matched_trace(_model_trace, guide, *args, **kwargs)
+                _log_q += _guide_trace.log_prob_sum()
 
-        warn_if_nan(wake_theta_loss, "loss")
-        warn_if_nan(wake_phi_loss, "loss")
-        return wake_theta_loss.detach(), wake_phi_loss.detach()
+            sleep_phi_loss = -_log_q
+            sleep_phi_loss.backward(torch.full_like(sleep_phi_loss, 1. - self.gamma))
+            warn_if_nan(sleep_phi_loss, "sleep phi loss")
+
+        phi_loss = sleep_phi_loss if self.gamma == 0 \
+            else wake_phi_loss if self.gamma == 1 \
+            else self.gamma * wake_phi_loss + (1. - self.gamma) * sleep_phi_loss
+
+        return wake_theta_loss.detach(), phi_loss.detach()
+
+    @staticmethod
+    def _get_matched_trace(model_trace, guide, *args, **kwargs):
+        # TODO: hardcoded kwarg 'observations'?
+        kwargs["observations"] = {}
+        for node in model_trace.stochastic_nodes + model_trace.observation_nodes:
+            if "was_observed" in model_trace.nodes[node]["infer"]:
+                model_trace.nodes[node]["is_observed"] = True
+                kwargs["observations"][node] = model_trace.nodes[node]["value"]
+
+        guide_trace = poutine.trace(poutine.replay(guide, model_trace)).get_trace(*args, **kwargs)
+        check_model_guide_match(model_trace, guide_trace)
+        guide_trace = prune_subsample_sites(guide_trace)
+        return guide_trace

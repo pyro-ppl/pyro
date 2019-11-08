@@ -78,9 +78,10 @@ class VAE(nn.Module):
         self.z_dim = z_dim
 
     # define the model p(x|z)p(z)
-    def model(self, x):
+    def model(self, observations=None):
         # register PyTorch module `decoder` with Pyro
         pyro.module("decoder", self.decoder)
+        x = observations['obs']
         with pyro.plate("data", x.shape[0]):
             # setup hyperparameters for prior p(z)
             z_loc = torch.zeros(x.shape[0], self.z_dim, dtype=x.dtype, device=x.device)
@@ -95,9 +96,10 @@ class VAE(nn.Module):
             return loc_img
 
     # define the guide (i.e. variational distribution) q(z|x)
-    def guide(self, x):
+    def guide(self, observations=None):
         # register PyTorch module `encoder` with Pyro
         pyro.module("encoder", self.encoder)
+        x = observations['obs']
         with pyro.plate("data", x.shape[0]):
             # use the encoder to get the parameters used to define q(z|x)
             z_loc, z_scale = self.encoder.forward(x)
@@ -105,9 +107,9 @@ class VAE(nn.Module):
             pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
 
     # define a helper function for reconstructing images
-    def reconstruct_img(self, x):
+    def reconstruct_img(self, observations):
         # encode image x
-        z_loc, z_scale = self.encoder(x)
+        z_loc, z_scale = self.encoder(observations['obs'])
         # sample in latent space
         z = dist.Normal(z_loc, z_scale).sample()
         # decode the image (note we don't sample in image space)
@@ -132,7 +134,7 @@ def main(args):
 
     # setup the inference algorithm
     use_rws = True
-    rws = pyro.infer.ReweightedWakeSleep(num_particles=10, vectorize_particles=True)
+    rws = pyro.infer.ReweightedWakeSleep(num_particles=10, vectorize_particles=True, gamma=0.)
     iwae = pyro.infer.RenyiELBO(alpha=0, num_particles=10, vectorize_particles=True)
     elbo = rws if use_rws else iwae
     print(elbo)
@@ -158,7 +160,7 @@ def main(args):
             if args.cuda:
                 x = x.cuda()
             # do ELBO gradient and accumulate loss
-            epoch_loss += get_loss(svi.step(x))
+            epoch_loss += get_loss(svi.step(observations={'obs': x}))
 
         # report training diagnostics
         normalizer_train = len(train_loader.dataset)
@@ -175,7 +177,7 @@ def main(args):
                 if args.cuda:
                     x = x.cuda()
                 # compute ELBO estimate and accumulate loss
-                test_loss += get_loss(svi.evaluate_loss(x))
+                test_loss += get_loss(svi.evaluate_loss(observations={'obs': x}))
 
                 # pick three random test images from the first mini-batch and
                 # visualize how well we're reconstructing them
