@@ -21,11 +21,11 @@ class ReweightedWakeSleep(ELBO):
 
     .. note:: This returns _two_ losses, one each for the model and the guide.
 
-    .. warning:: Mini-batch training is not supported yet.
+    .. warning:: Mini-batch training might have issues.
 
     :param num_particles: The number of particles/samples used to form the objective
         (gradient) estimator. Default is 2.
-    :param gamma: The scaling between the wake-phi and sleep-phi terms. Default is 1.0 [wake-phi]
+    :param insomnia: The scaling between the wake-phi and sleep-phi terms. Default is 1.0 [wake-phi]
     :param num_sleep_samples: The number of particles/samples used to form the sleep-phi estimator.
         Default is 1 [matching the batch size].
     :param int max_plate_nesting: Bound on max number of nested
@@ -46,7 +46,7 @@ class ReweightedWakeSleep(ELBO):
 
     def __init__(self,
                  num_particles=2,
-                 gamma=1.,
+                 insomnia=1.,
                  num_sleep_samples=1,
                  max_plate_nesting=float('inf'),
                  max_iarange_nesting=None,  # DEPRECATED
@@ -65,10 +65,10 @@ class ReweightedWakeSleep(ELBO):
                                                   max_plate_nesting=max_plate_nesting,
                                                   vectorize_particles=vectorize_particles,
                                                   strict_enumeration_warning=strict_enumeration_warning)
-        self.gamma = gamma
+        self.insomnia = insomnia
         self.num_sleep_samples = num_sleep_samples
-        assert(gamma >= 0 and gamma <= 1), \
-            "gamma should be in [0, 1]"
+        assert(insomnia >= 0 and insomnia <= 1), \
+            "insomnia should be in [0, 1]"
 
     def _get_trace(self, model, guide, *args, **kwargs):
         """
@@ -165,14 +165,14 @@ class ReweightedWakeSleep(ELBO):
         wake_theta_loss.backward(retain_graph=True)
         warn_if_nan(wake_theta_loss, "wake theta loss")
 
-        if self.gamma > 0:
+        if self.insomnia > 0:
             # wake phi = reweighted csis:
             normalised_weights = (log_weights - log_sum_weight).exp().detach()
             # TODO: check whether grad est should sum or mean over batch dim (currently sum)
             wake_phi_loss = -(normalised_weights * log_qs).sum(0).sum(0)
             warn_if_nan(wake_phi_loss, "wake phi loss")
 
-        if self.gamma < 1:
+        if self.insomnia < 1:
             _model = pyro.poutine.uncondition(model)
             _guide = guide
             _log_q = 0.
@@ -195,9 +195,9 @@ class ReweightedWakeSleep(ELBO):
             sleep_phi_loss = -_log_q
             warn_if_nan(sleep_phi_loss, "sleep phi loss")
 
-        phi_loss = sleep_phi_loss if self.gamma == 0 \
-            else wake_phi_loss if self.gamma == 1 \
-            else self.gamma * wake_phi_loss + (1. - self.gamma) * sleep_phi_loss
+        phi_loss = sleep_phi_loss if self.insomnia == 0 \
+            else wake_phi_loss if self.insomnia == 1 \
+            else self.insomnia * wake_phi_loss + (1. - self.insomnia) * sleep_phi_loss
         phi_loss.backward()
 
         return wake_theta_loss.detach(), phi_loss.detach()
