@@ -41,7 +41,7 @@ if __name__ == '__main__':
                          loss=pyro.infer.ReweightedWakeSleep(num_particles=num_particles,
                                                              vectorize_particles=vectorize,
                                                              insomnia=1.,
-                                                             num_sleep_samples=256))
+                                                             num_sleep_particles=256))
 
     theta_losses, phi_losses, guesses, q_loc, q_log_scale = [], [], [], [], []
     num_steps = 20000
