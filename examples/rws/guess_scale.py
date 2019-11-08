@@ -10,13 +10,13 @@ import pyro.distributions as dist
 pyro.set_rng_seed(101)
 
 
-def scale(guess_init, guess_scale, obs_scale, obs):
+def scale(guess_init, guess_scale, obs_scale, observations=None):
     guess_loc = pyro.param('guess', torch.tensor(guess_init))
     weight = pyro.sample('weight', dist.Normal(guess_loc, guess_scale))
-    return pyro.sample('measurement', dist.Normal(weight, obs_scale), obs=obs)
+    return pyro.sample('measurement', dist.Normal(weight, obs_scale), obs=observations['obs'])
 
 
-def scale_parametrized_guide(guess_init, guess_scale, obs_scale, obs):
+def scale_parametrized_guide(guess_init, guess_scale, obs_scale, observations=None):
     loc = pyro.param('loc', torch.tensor(0.))
     log_scale = pyro.param('log_scale', torch.tensor(0.))
     return pyro.sample('weight', dist.Normal(loc, torch.exp(log_scale)))
@@ -37,14 +37,15 @@ if __name__ == '__main__':
     pyro.clear_param_store()
     svi = pyro.infer.SVI(model=scale,
                          guide=scale_parametrized_guide,
-                         optim=pyro.optim.SGD({'lr': 0.01, 'momentum': 0.1}),
+                         optim=pyro.optim.SGD({'lr': 0.001, 'momentum': 0.1}),
                          loss=pyro.infer.ReweightedWakeSleep(num_particles=num_particles,
-                                                             vectorize_particles=vectorize))
+                                                             vectorize_particles=vectorize,
+                                                             gamma=0.))
 
     theta_losses, phi_losses, guesses, q_loc, q_log_scale = [], [], [], [], []
     num_steps = 5000
     for t in range(num_steps):
-        theta_loss, phi_loss = svi.step(guess_init, guess_scale, obs_scale, obs)
+        theta_loss, phi_loss = svi.step(guess_init, guess_scale, obs_scale, observations={'obs': obs})
         theta_losses.append(theta_loss)
         phi_losses.append(phi_loss)
         guesses.append(pyro.param('guess').item())
