@@ -25,6 +25,9 @@ class ReweightedWakeSleep(ELBO):
 
     :param num_particles: The number of particles/samples used to form the objective
         (gradient) estimator. Default is 2.
+    :param gamma: The scaling between the wake-phi and sleep-phi terms. Default is 1.0 [wake-phi]
+    :param num_sleep_samples: The number of particles/samples used to form the sleep-phi estimator.
+        Default is 1 [matching the batch size].
     :param int max_plate_nesting: Bound on max number of nested
         :func:`pyro.plate` contexts. Default is infinity.
     :param bool strict_enumeration_warning: Whether to warn about possible
@@ -43,7 +46,8 @@ class ReweightedWakeSleep(ELBO):
 
     def __init__(self,
                  num_particles=2,
-                 gamma=0.,
+                 gamma=1.,
+                 num_sleep_samples=1,
                  max_plate_nesting=float('inf'),
                  max_iarange_nesting=None,  # DEPRECATED
                  vectorize_particles=True,
@@ -62,6 +66,7 @@ class ReweightedWakeSleep(ELBO):
                                                   vectorize_particles=vectorize_particles,
                                                   strict_enumeration_warning=strict_enumeration_warning)
         self.gamma = gamma
+        self.num_sleep_samples = num_sleep_samples
         assert(gamma >= 0 and gamma <= 1), \
             "gamma should be in [0, 1]"
 
@@ -69,8 +74,6 @@ class ReweightedWakeSleep(ELBO):
         """
         Returns a single trace from the guide, and the model that is run against it.
         """
-
-        # RWS: this samples detached zs
         model_trace, guide_trace = get_importance_trace_detached(
             "flat", self.max_plate_nesting, model, guide, *args, **kwargs)
         if is_validation_enabled():
@@ -167,29 +170,35 @@ class ReweightedWakeSleep(ELBO):
             normalised_weights = (log_weights - log_sum_weight).exp().detach()
             # TODO: check whether grad est should sum or mean over batch dim (currently sum)
             wake_phi_loss = -(normalised_weights * log_qs).sum(0).sum(0)
-            wake_phi_loss.backward(torch.full_like(wake_phi_loss, self.gamma))
             warn_if_nan(wake_phi_loss, "wake phi loss")
 
         if self.gamma < 1:
             _model = pyro.poutine.uncondition(model)
+            _guide = guide
             _log_q = 0.
-            # TODO: parallelise this?
-            # for _ in range(log_sum_weight.size(0)):  # batch size
-            for _ in range(100):  # batch size
+            if self.vectorize_particles:
+                old_num_particles = self.num_particles
+                self.num_particles = self.num_sleep_samples
+                _model = self._vectorized_num_particles(_model)
+                _guide = self._vectorized_num_particles(guide)
+            for _ in range(1 if self.vectorize_particles else self.num_sleep_samples):
                 _model_trace = poutine.trace(_model).get_trace(*args, **kwargs)
                 for site in _model_trace.nodes.values():
                     if site["type"] == "sample":
                         site["value"] = site["value"].detach()
-                _guide_trace = self._get_matched_trace(_model_trace, guide, *args, **kwargs)
+                _guide_trace = self._get_matched_trace(_model_trace, _guide, *args, **kwargs)
+                # TODO: mean is probably the more sensible thing here
                 _log_q += _guide_trace.log_prob_sum()
+            if self.vectorize_particles:
+                self.num_particles = old_num_particles
 
             sleep_phi_loss = -_log_q
-            sleep_phi_loss.backward(torch.full_like(sleep_phi_loss, 1. - self.gamma))
             warn_if_nan(sleep_phi_loss, "sleep phi loss")
 
         phi_loss = sleep_phi_loss if self.gamma == 0 \
             else wake_phi_loss if self.gamma == 1 \
             else self.gamma * wake_phi_loss + (1. - self.gamma) * sleep_phi_loss
+        phi_loss.backward()
 
         return wake_theta_loss.detach(), phi_loss.detach()
 
