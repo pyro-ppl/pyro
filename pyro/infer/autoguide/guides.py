@@ -29,15 +29,16 @@ from pyro.infer.autoguide.utils import _product
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
 from pyro.ops.hessian import hessian
-from pyro.params import constraint, ConstrainedModule, ConstrainedParameter
+from pyro.params import ConstrainedModule, ConstrainedParameter
 from pyro.poutine.util import prune_subsample_sites
 
 
-class AutoGuide(object):
+class AutoGuide(ConstrainedModule):
     """
     Base class for automatic guides.
 
-    Derived classes must implement the :meth:`__call__` method.
+    Derived classes must implement the :meth:`forward` method, with the
+    same ``*args, **kwargs`` as the base ``model``.
 
     Auto guides can be used individually or combined in an
     :class:`AutoGuideList` object.
@@ -55,20 +56,12 @@ class AutoGuide(object):
         self.prototype_trace = None
         self._plates = {}
 
-    def __call__(self, *args, **kwargs):
-        """
-        A guide with the same ``*args, **kwargs`` as the base ``model``.
-
-        :return: A dict mapping sample site name to sampled value.
-        :rtype: dict
-        """
-        raise NotImplementedError
-
     def call(self, *args, **kwargs):
         """
-        Method that returns parameter values of the guide as a `tuple` instead
-        of a `dict`, which is a requirement for JIT tracing. Unlike `__call__`,
-        this method can be traced by :func:`torch.jit.trace_module`.
+        Method that calls :meth:`forward` and returns parameter values of the
+        guide as a `tuple` instead of a `dict`, which is a requirement for
+        JIT tracing. Unlike :meth:`forward`, this method can be traced by
+        :func:`torch.jit.trace_module`.
 
         .. warning::
             This method may be removed once PyTorch JIT tracer starts accepting
@@ -116,7 +109,7 @@ class AutoGuide(object):
         raise NotImplementedError
 
 
-class AutoGuideList(AutoGuide, nn.Module):
+class AutoGuideList(AutoGuide):
     """
     Container class to combine multiple automatic guides.
 
@@ -166,11 +159,10 @@ class AutoGuideList(AutoGuide, nn.Module):
         # Initialize all module parameters
         for part in self.parts:
             part._setup_prototype(*args, **kwargs)
-            if isinstance(part, nn.Module):
-                for param, value in part.named_parameters():
-                    setattr(self, param, value)
+            for param, value in part.named_parameters():
+                setattr(self, param, value)
 
-    def __call__(self, *args, **kwargs):
+    def forward(self, *args, **kwargs):
         """
         A composite guide with the same ``*args, **kwargs`` as the base ``model``.
 
@@ -239,12 +231,12 @@ class AutoCallable(AutoGuide):
         self._guide = guide
         self.median = median
 
-    def __call__(self, *args, **kwargs):
+    def forward(self, *args, **kwargs):
         result = self._guide(*args, **kwargs)
         return {} if result is None else result
 
 
-class AutoDelta(AutoGuide, ConstrainedModule):
+class AutoDelta(AutoGuide):
     """
     This implementation of :class:`AutoGuide` uses Delta distributions to
     construct a MAP guide over the entire latent space. The guide does not
@@ -293,7 +285,7 @@ class AutoDelta(AutoGuide, ConstrainedModule):
             return store[name]
         return self.init_loc_fn(site)
 
-    def __call__(self, *args, **kwargs):
+    def forward(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
 
@@ -330,7 +322,7 @@ class AutoDelta(AutoGuide, ConstrainedModule):
         return self(*args, **kwargs)
 
 
-class AutoContinuous(AutoGuide, nn.Module):
+class AutoContinuous(AutoGuide):
     """
     Base class for implementations of continuous-valued Automatic
     Differentiation Variational Inference [1].
@@ -424,7 +416,7 @@ class AutoContinuous(AutoGuide, nn.Module):
         if not torch._C._get_tracing_state():
             assert pos == latent.size(-1)
 
-    def __call__(self, *args, **kwargs):
+    def forward(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
 
@@ -533,11 +525,8 @@ class AutoMultivariateNormal(AutoContinuous):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
-        self.scale_tril = eye_like(self.loc, self.latent_dim) * self._init_scale
-
-    @constraint
-    def scale_tril(self):
-        return constraints.lower_cholesky
+        self.scale_tril = ConstrainedParameter(eye_like(self.loc, self.latent_dim) * self._init_scale,
+                                               constraints.lower_cholesky)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -583,11 +572,8 @@ class AutoDiagonalNormal(AutoContinuous):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
-        self.scale = self.loc.new_full((self.latent_dim,), self._init_scale)
-
-    @constraint
-    def scale(self):
-        return constraints.positive
+        self.scale = ConstrainedParameter(self.loc.new_full((self.latent_dim,), self._init_scale),
+                                          constraints.positive)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -640,11 +626,8 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         self.loc = nn.Parameter(self._init_loc())
         self.cov_factor = nn.Parameter(self.loc.new_empty(self.latent_dim, self.rank).normal_(
             0, self._init_scale * (0.5 / self.rank) ** 0.5))
-        self.cov_diagonal = self.loc.new_full((self.latent_dim,), 0.5 * self._init_scale ** 2)
-
-    @constraint
-    def cov_diagonal(self):
-        return constraints.positive
+        self.cov_diagonal = ConstrainedParameter(self.loc.new_full((self.latent_dim,), 0.5 * self._init_scale ** 2),
+                                                 constraints.positive)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -754,12 +737,12 @@ class AutoLaplaceApproximation(AutoContinuous):
         gaussian_guide = AutoMultivariateNormal(self.model, prefix=self.prefix)
         gaussian_guide._setup_prototype(*args, **kwargs)
         # Set loc, scale_tril parameters as computed above.
-        gaussian_guide.loc.data = loc
-        gaussian_guide.scale_tril_unconstrained.data = transform_to(constraints.lower_cholesky).inv(scale_tril)
+        gaussian_guide.loc = loc
+        gaussian_guide.scale_tril = scale_tril
         return gaussian_guide
 
 
-class AutoDiscreteParallel(AutoGuide, ConstrainedModule):
+class AutoDiscreteParallel(AutoGuide):
     """
     A discrete mean-field guide that learns a latent discrete distribution for
     each discrete site in the model.
@@ -803,7 +786,7 @@ class AutoDiscreteParallel(AutoGuide, ConstrainedModule):
                 setattr(self, "{}_{}_{}".format(self.prefix, name, param_name),
                         ConstrainedParameter(param_init, constraint=param_constraint))
 
-    def __call__(self, *args, **kwargs):
+    def forward(self, *args, **kwargs):
         """
         An automatic guide with the same ``*args, **kwargs`` as the base ``model``.
 
