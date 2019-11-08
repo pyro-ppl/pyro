@@ -589,11 +589,11 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         """
         loc = pyro.param("{}_loc".format(self.prefix), self._init_loc)
         scale = pyro.param("{}_scale".format(self.prefix),
-                           lambda: loc.new_full((self.latent_dim,), self._init_scale),
+                           lambda: loc.new_full((self.latent_dim,), 0.5 ** 0.5 * self._init_scale),
                            constraint=constraints.positive)
         factor = pyro.param("{}_cov_factor".format(self.prefix),
                             lambda: loc.new_empty(self.latent_dim, self.rank).normal_(
-                                0, self._init_scale / self.rank ** 0.5))
+                                0, 1 / self.rank ** 0.5))
         factor = factor * scale.unsqueeze(-1)
         diagonal = scale * scale
         return dist.LowRankMultivariateNormal(loc, factor, diagonal)
