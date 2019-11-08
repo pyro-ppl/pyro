@@ -13,7 +13,7 @@ pyro.set_rng_seed(101)
 def scale(guess_init, guess_scale, obs_scale, observations=None):
     guess_loc = pyro.param('guess', torch.tensor(guess_init))
     weight = pyro.sample('weight', dist.Normal(guess_loc, guess_scale))
-    return pyro.sample('measurement', dist.Normal(weight, obs_scale), obs=observations['obs'])
+    return pyro.sample('measurement', dist.Normal(weight, obs_scale), obs=observations['measurement'])
 
 
 def scale_parametrized_guide(guess_init, guess_scale, obs_scale, observations=None):
@@ -46,7 +46,8 @@ if __name__ == '__main__':
     theta_losses, phi_losses, guesses, q_loc, q_log_scale = [], [], [], [], []
     num_steps = 20000
     for t in range(num_steps):
-        theta_loss, phi_loss = svi.step(guess_init, guess_scale, obs_scale, observations={'obs': obs})
+        theta_loss, phi_loss = svi.step(guess_init, guess_scale, obs_scale,
+                                        observations={'measurement': obs})
         theta_losses.append(theta_loss)
         phi_losses.append(phi_loss)
         guesses.append(pyro.param('guess').item())
