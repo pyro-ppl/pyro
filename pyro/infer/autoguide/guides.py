@@ -165,7 +165,7 @@ class AutoGuideList(AutoGuide):
         for part in self.parts:
             part._setup_prototype(*args, **kwargs)
             for param, value in part.named_parameters():
-                setattr(self, param, value)
+                setattr(self, '{}_{}'.format(part.prefix, param), value)
 
     def forward(self, *args, **kwargs):
         """
