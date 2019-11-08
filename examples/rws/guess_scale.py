@@ -70,6 +70,7 @@ if __name__ == '__main__':
     axs[4].plot(guesses)
     axs[4].set_ylabel('guess')
     axs[4].axhline(true_guess, color='black')
+    axs[4].set_xlabel('iteration')
     fig.tight_layout()
     filename = 'guess_scale.pdf'
     fig.savefig(filename, bbox_inches='tight')

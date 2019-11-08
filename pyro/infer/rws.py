@@ -162,7 +162,10 @@ class ReweightedWakeSleep(ELBO):
         log_sum_weight = torch.logsumexp(log_weights, dim=0)
         # TODO: check whether grad est should sum or mean over batch dim (currently sum)
         wake_theta_loss = -(log_sum_weight - math.log(self.num_particles)).sum()
-        wake_theta_loss.backward(retain_graph=True)
+        try:
+            wake_theta_loss.backward(retain_graph=True)
+        except RuntimeError:
+            pass                # only learning q
         warn_if_nan(wake_theta_loss, "wake theta loss")
 
         if self.insomnia > 0:
