@@ -12,7 +12,6 @@ For example to generate a mean field Gaussian guide::
 Automatic guides can also be combined using :func:`pyro.poutine.block` and
 :class:`AutoGuideList`.
 """
-
 import weakref
 from contextlib import ExitStack  # python 3
 
@@ -377,9 +376,6 @@ class AutoContinuous(AutoGuide, nn.Module):
         if self.latent_dim == 0:
             raise RuntimeError('{} found no latent variables; Use an empty guide instead'.format(type(self).__name__))
 
-        # Initialize guide params
-        self.loc = nn.Parameter(self._init_loc())
-
     def _init_loc(self):
         """
         Creates an initial latent vector using a per-site init function.
@@ -477,8 +473,9 @@ class AutoContinuous(AutoGuide, nn.Module):
         :return: A dict mapping sample site name to median tensor.
         :rtype: dict
         """
+        loc, _ = self._loc_scale(*args, **kwargs)
         return {site["name"]: biject_to(site["fn"].support)(unconstrained_value)
-                for site, unconstrained_value in self._unpack_latent(self.loc)}
+                for site, unconstrained_value in self._unpack_latent(loc)}
 
     def quantiles(self, quantiles, *args, **kwargs):
         """
@@ -535,6 +532,7 @@ class AutoMultivariateNormal(AutoContinuous):
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
+        self.loc = nn.Parameter(self._init_loc())
         self.scale_tril = eye_like(self.loc, self.latent_dim) * self._init_scale
 
     @constraint
@@ -584,6 +582,7 @@ class AutoDiagonalNormal(AutoContinuous):
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
+        self.loc = nn.Parameter(self._init_loc())
         self.scale = self.loc.new_full((self.latent_dim,), self._init_scale)
 
     @constraint
@@ -638,6 +637,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
+        self.loc = nn.Parameter(self._init_loc())
         self.cov_factor = nn.Parameter(self.loc.new_empty(self.latent_dim, self.rank).normal_(
             0, self._init_scale * (0.5 / self.rank) ** 0.5))
         self.cov_diagonal = self.loc.new_full((self.latent_dim,), 0.5 * self._init_scale ** 2)
@@ -725,6 +725,10 @@ class AutoLaplaceApproximation(AutoContinuous):
     :param str prefix: a prefix that will be prefixed to all param internal sites
         as part of the module name.
     """
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+        # Initialize guide params
+        self.loc = nn.Parameter(self._init_loc())
 
     def get_posterior(self, *args, **kwargs):
         """
