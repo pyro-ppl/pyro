@@ -35,7 +35,7 @@ def main(args):
 
     gp = IndependentMaternGP(nu=1.5, obs_dim=obs_dim).double()
 
-    def model(*args):
+    def model():
         del gp.kernel.log_length_scale
         del gp.kernel.log_kernel_scale
         del gp.log_obs_noise_scale
@@ -52,7 +52,7 @@ def main(args):
 
     nuts_kernel = NUTS(model, max_tree_depth=4)
     mcmc = MCMC(nuts_kernel, num_samples=100, warmup_steps=100, num_chains=1)
-    mcmc.run(model)
+    mcmc.run()
     mcmc.summary(prob=0.5)
 
 
