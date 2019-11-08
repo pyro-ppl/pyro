@@ -163,3 +163,26 @@ def test_constraint_descriptor_serialization():
     actual_names = {name for name, _ in actual.named_parameters()}
     expected_names = {name for name, _ in module.named_parameters()}
     assert actual_names == expected_names
+
+
+def test_repair():
+
+    class MyModule(torch.nn.Module):
+        @constraint
+        def x(self):
+            return constraints.positive
+
+    module = MyModule()
+
+    # Setting an nn.Parameter will bypass __set__ and instead call __setattr__.
+    module.x = torch.nn.Parameter(torch.ones(3))
+    assert not hasattr(module, "x_unconstrained")
+    assert "x" in module._parameters
+
+    # However on the first read of .x, ConstraintDescriptor will attempt to
+    # repair the situation.
+    module.x  # triggers repair.
+    assert not isinstance(module.x, torch.nn.Parameter)
+    assert hasattr(module, "x_unconstrained")
+    assert isinstance(module.x_unconstrained, torch.nn.Parameter)
+    assert "x" not in module._parameters
