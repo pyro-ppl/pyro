@@ -134,7 +134,7 @@ def main(args):
 
     # setup the inference algorithm
     use_rws = True
-    rws = pyro.infer.ReweightedWakeSleep(num_particles=10, vectorize_particles=True)
+    rws = pyro.infer.ReweightedWakeSleep(num_particles=10, vectorize_particles=True, insomnia=1.)
     iwae = pyro.infer.RenyiELBO(alpha=0, num_particles=10, vectorize_particles=True)
     elbo = rws if use_rws else iwae
     print(elbo)
