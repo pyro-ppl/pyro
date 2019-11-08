@@ -178,6 +178,10 @@ class AutoGuideList(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
+        # Needed to capture autoguide parameters as pyro.param statements in the
+        # guide trace
+        if self.master is None:
+            pyro.module(self.prefix, self)
         # create all plates
         self.plates = {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
                        for frame in sorted(self._plates.values())}
@@ -303,7 +307,8 @@ class AutoDelta(AutoGuide):
 
         # Needed to capture autoguide parameters as pyro.param statements in the
         # guide trace
-        pyro.module(self.prefix, self)
+        if self.master is None:
+            pyro.module(self.prefix, self)
 
         plates = self._create_plates()
         result = {}
@@ -434,7 +439,8 @@ class AutoContinuous(AutoGuide):
 
         # Needed to capture autoguide parameters as pyro.param statements in the
         # guide trace
-        pyro.module(self.prefix, self)
+        if self.master is None:
+            pyro.module(self.prefix, self)
 
         latent = self.sample_latent(*args, **kwargs)
         plates = self._create_plates()
@@ -804,7 +810,8 @@ class AutoDiscreteParallel(AutoGuide):
 
         # Needed to capture autoguide parameters as pyro.param statements in the
         # guide trace
-        pyro.module(self.prefix, self)
+        if self.master is None:
+            pyro.module(self.prefix, self)
 
         plates = self._create_plates()
 
