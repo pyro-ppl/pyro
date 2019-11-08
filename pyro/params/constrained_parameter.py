@@ -152,8 +152,23 @@ class ConstraintDescriptor:
         if obj is None:
             return self
 
+        # In case setattr(obj, self.name, constrained_value) accidentally
+        # bypassed self.__set__(obj, constrained_value), attempt to repair
+        # the situation.
+        try:
+            unconstrained_value = getattr(obj, self._unconstrained_name)
+        except AttributeError:
+            # The following may safely raise another AttributeError.
+            constrained_value = obj.__getattr__(self.name)
+            # But further AttributeErrors indicate a real problem.
+            try:
+                delattr(obj, self.name)
+                self.__set__(obj, constrained_value)
+                unconstrained_value = getattr(obj, self._unconstrained_name)
+            except AttributeError:
+                raise RuntimeError("Failed to lazily constrain {}.{}".format(obj, self.name))
+
         constraint = self._constraint_fn(obj)
-        unconstrained_value = getattr(obj, self._unconstrained_name)
         constrained_value = transform_to(constraint)(unconstrained_value)
         return constrained_value
 
