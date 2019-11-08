@@ -10,19 +10,20 @@ import pyro.distributions as dist
 pyro.set_rng_seed(101)
 
 
-def scale(guess_init, guess_scale, obs_scale, obss):
+def scale(guess_init, guess_scale, obs_scale, observations=None):
     guess_loc = pyro.param('guess', torch.tensor(guess_init))
     with pyro.plate('obss'):
         weight = pyro.sample('weight', dist.Normal(guess_loc.expand(len(obss)), guess_scale))
-        return pyro.sample('measurement', dist.Normal(weight, obs_scale), obs=torch.tensor(obss))
+        return pyro.sample('measurement', dist.Normal(weight, obs_scale),
+                           obs=torch.tensor(observations['measurement']))
 
 
-def scale_parametrized_guide(guess_init, guess_scale, obs_scale, obss):
+def scale_parametrized_guide(guess_init, guess_scale, obs_scale, observations=None):
     loc_mult = pyro.param('loc_mult', torch.tensor(1.))
     loc_add = pyro.param('loc_add', torch.tensor(0.))
     log_scale = pyro.param('log_scale', torch.tensor(0.))
     with pyro.plate('obss'):
-        obss_tensor = torch.tensor(obss)
+        obss_tensor = torch.tensor(observations['measurement'])
         return pyro.sample('weight', dist.Normal(loc_mult * obss_tensor + loc_add,
                                                  torch.exp(log_scale)))
 
@@ -45,12 +46,14 @@ if __name__ == '__main__':
                          guide=scale_parametrized_guide,
                          optim=pyro.optim.Adam({'lr': 0.1}),
                          loss=pyro.infer.ReweightedWakeSleep(num_particles=num_particles,
-                                                             vectorize_particles=vectorize))
+                                                             vectorize_particles=vectorize,
+                                                             insomnia=1.))
 
     theta_losses, phi_losses, guesses, q_loc_mult, q_loc_add, q_log_scale = [], [], [], [], [], []
     num_steps = 10000
     for t in range(num_steps):
-        theta_loss, phi_loss = svi.step(guess_init, guess_scale, obs_scale, obss)
+        theta_loss, phi_loss = svi.step(guess_init, guess_scale, obs_scale,
+                                        observations={'measurement': obss})
         theta_losses.append(theta_loss)
         phi_losses.append(phi_loss)
         guesses.append(pyro.param('guess').item())
