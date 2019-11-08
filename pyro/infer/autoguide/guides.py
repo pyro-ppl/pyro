@@ -16,7 +16,7 @@ import weakref
 from contextlib import ExitStack  # python 3
 
 import torch
-from torch.distributions import biject_to, constraints, transform_to
+from torch.distributions import biject_to, constraints
 from torch import nn
 
 import pyro
@@ -51,10 +51,15 @@ class AutoGuide(ConstrainedModule):
     def __init__(self, model, prefix="auto"):
         super().__init__()
         self.master = None
-        self.model = model
+        # Do not register model as submodule
+        self._model = (model,)
         self.prefix = prefix
         self.prototype_trace = None
         self._plates = {}
+
+    @property
+    def model(self):
+        return self._model[0]
 
     def call(self, *args, **kwargs):
         """
@@ -69,7 +74,7 @@ class AutoGuide(ConstrainedModule):
             `issue <https://github.com/pytorch/pytorch/issues/27743>_`.
         """
         result = self(*args, **kwargs)
-        return tuple(result.values())
+        return tuple(v for _, v in sorted(result.items()))
 
     def sample_latent(*args, **kwargs):
         """
