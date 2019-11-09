@@ -81,7 +81,7 @@ SHAPE_CONSTRAINT = [
 
 
 @pytest.mark.parametrize('shape,constraint_', SHAPE_CONSTRAINT)
-def test_module_constraint(shape, constraint_):
+def test_constraints(shape, constraint_):
     module = PyroModule()
     module.x = PyroParam(torch.full(shape, 1e-4), constraint_)
 
@@ -107,7 +107,38 @@ def test_module_constraint(shape, constraint_):
     assert not hasattr(module, 'x_unconstrained')
 
 
-def test_pyro_module_serialization():
+def test_sample():
+
+    class Model(torch.nn.Linear, PyroModule):
+        def __init__(self, in_features, out_features):
+            super().__init__(in_features, out_features)
+            self.weight = PyroSample(
+                lambda self: dist.Normal(0, 1)
+                                 .expand([self.out_features,
+                                          self.in_features])
+                                 .to_event(2))
+
+    class Guide(torch.nn.Linear, PyroModule):
+        def __init__(self, in_features, out_features):
+            super().__init__(in_features, out_features)
+            self.loc = PyroParam(torch.zeros_like(self.weight))
+            self.scale = PyroParam(torch.ones_like(self.weight),
+                                   constraint=constraints.positive)
+            self.weight = PyroSample(
+                lambda self: dist.Normal(self.loc, self.scale)
+                                 .to_event(2))
+
+    data = torch.randn(8)
+    model = Model(8, 2)
+    guide = Guide(8, 2)
+
+    optim = Adam({"lr": 0.01})
+    svi = SVI(model, guide, optim, Trace_ELBO())
+    for step in range(3):
+        svi.step(data)
+
+
+def test_serialization():
 
     module = PyroModule()
     module.x = PyroParam(torch.tensor(1.234), constraints.positive)

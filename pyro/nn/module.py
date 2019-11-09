@@ -36,6 +36,52 @@ class PyroModule(torch.nn.Module):
     """
     Subclass of :class:`torch.nn.Module` that supports setting of
     :class:`PyroParam` and :class:`PyroSample`.
+
+    To create a Pyro-managed parameter attribute, set that attribute using the
+    :class:`PyroParam` helper. Reading that attribute will then trigger a
+    :func:`pyro.param` statement. For example::
+
+        # Create Pyro-managed parameter attributes.
+        my_module = PyroModule()
+        my_module.loc = PyroParam(torch.tensor(0.))
+        my_module.scale = PyroParam(torch.tensor(1.),
+                                    constraint=constraints.positive)
+        # Read the attributes.
+        loc = my_module.loc  # Triggers a pyro.param statement.
+        scale = my_module.scale  # Triggers another pyro.param statement.
+
+    Note that, unlike normal :class:`torch.nn.Module`s, :class:`PyroModule`s
+    should note be registered with :func:`pyro.module` statements.
+    :class:`PyroModule`s can contain normal :class:`torch.nn.Module`s, but not
+    vice versa. Accessing a normal :class:`torch.nn.Module` attribute of
+    a :class:`PyroModule` triggers a :func:`pyro.module` statement.
+
+    To create a Pyro-managed random attribute, set that attribute using the
+    :class:`PyroSample` helper, specifying a prior distribution. Reading that
+    attribute will then trigger a :func:`pyro.sample` statement. For example::
+
+        # Create Pyro-managed random attributes.
+        my_module.x = PyroSample(dist.Normal(0, 1))
+        my_module.y = PyroSample(lambda self: dist.Normal(self.loc, self.scale))
+
+        # Sample the attributes.
+        x = my_module.x  # Triggers a pyro.sample statement.
+        y = my_module.y  # Triggers one pyro.sample + two pyro.param statements.
+
+    Note that, because sample statements can appear only once in a trace, you
+    can read the value of a random attribute only once per inference step.
+
+    To make an existing module probabilistic, you can create a subclass and
+    overwrite some parameters with :class:`PyroSample`s::
+
+        class RandomLinear(nn.Linear, PyroModule):
+            def __init__(in_features, out_features):
+                super().__init__(self, in_features, out_features)
+                self.weight = PyroSample(
+                    lambda self: dist.Normal(0, 1)
+                                     .expand([self.out_features,
+                                              self.in_features])
+                                     .to_event(2))
     """
     def __init__(self):
         self._pyro_name = ""
@@ -43,28 +89,25 @@ class PyroModule(torch.nn.Module):
         self._pyro_samples = OrderedDict()
         super().__init__()
 
-    @property
-    def pyro_name(self):
-        return self._pyro_name
-
-    @pyro_name.setter
-    def pyro_name(self, name):
+    def _pyro_set_name(self, name):
         self._pyro_name = name
         for key, value in self._modules.items():
             assert isinstance(value, PyroModule)
-            value.pyro_name = _make_name(name, key)
+            value._pyro_set_name(_make_name(name, key))
 
     def __setattr__(self, name, value):
         if isinstance(value, PyroModule):
+            # Create a new sub PyroModule, overwriting any old value.
             try:
                 delattr(self, name)
             except AttributeError:
                 pass
-            value.pyro_name = _make_name(self._pyro_name, name)
+            value._pyro_set_name(_make_name(self._pyro_name, name))
             super().__setattr__(name, value)
             return
 
         if isinstance(value, PyroParam):
+            # Create a new PyroParam, overwriting any old value.
             try:
                 delattr(self, name)
             except AttributeError:
@@ -82,6 +125,7 @@ class PyroModule(torch.nn.Module):
             return
 
         if isinstance(value, PyroSample):
+            # Create a new PyroSample, overwriting any old value.
             try:
                 delattr(self, name)
             except AttributeError:
@@ -94,6 +138,7 @@ class PyroModule(torch.nn.Module):
             if '_pyro_params' in self.__dict__:
                 _pyro_params = self.__dict__['_pyro_params']
                 if name in _pyro_params:
+                    # Update value of an existing PyroParam.
                     constraint, event_dim = _pyro_params[name]
                     unconstrained_value = getattr(self, name + "_unconstrained")
                     with torch.no_grad():
@@ -103,6 +148,7 @@ class PyroModule(torch.nn.Module):
         super().__setattr__(name, value)
 
     def __getattr__(self, name):
+        # PyroParams trigger pyro.param statements.
         if '_pyro_params' in self.__dict__:
             _pyro_params = self.__dict__['_pyro_params']
             if name in _pyro_params:
@@ -114,6 +160,7 @@ class PyroModule(torch.nn.Module):
                 value = transform_to(constraint)(unconstrained_value)
                 return value
 
+        # PyroSample trigger pyro.sample statements.
         if '_pyro_samples' in self.__dict__:
             _pyro_samples = self.__dict__['_pyro_samples']
             if name in _pyro_samples:
@@ -124,6 +171,7 @@ class PyroModule(torch.nn.Module):
 
         result = super().__getattr__(name)
 
+        # Regular nn.Modules trigger pyro.module statements.
         if isinstance(result, torch.nn.Module) and not isinstance(result, PyroModule):
             pyro.module(_make_name(self._pyro_name, name), result)
 
