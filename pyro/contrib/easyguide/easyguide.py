@@ -1,21 +1,23 @@
 import re
 import weakref
 from abc import ABCMeta, abstractmethod
+from contextlib import ExitStack
 
 import torch
-from contextlib import ExitStack
 from torch.distributions import biject_to
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 import pyro.poutine.runtime as runtime
-from pyro.infer.autoguide.initialization import InitMessenger
 from pyro.distributions.util import broadcast_shape, sum_rightmost
+from pyro.infer.autoguide.initialization import InitMessenger
+from pyro.params.constrained_parameter import ConstrainedModule
+from pyro.poutine.runtime import _MODULE_NAMESPACE_DIVIDER
 from pyro.poutine.util import prune_subsample_sites
 
 
-class EasyGuide(object, metaclass=ABCMeta):
+class EasyGuide(ConstrainedModule, metaclass=ABCMeta):
     """
     Base class for "easy guides".
 
@@ -34,11 +36,16 @@ class EasyGuide(object, metaclass=ABCMeta):
     :param callable model: A Pyro model.
     """
     def __init__(self, model):
-        self.model = model
+        super().__init__()
+        self._model = (model,)
         self.prototype_trace = None
         self.frames = {}
         self.groups = {}
         self.plates = {}
+
+    @property
+    def model(self):
+        return self._model[0]
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
@@ -73,12 +80,13 @@ class EasyGuide(object, metaclass=ABCMeta):
         """
         return site["fn"]()
 
-    def __call__(self, *args, **kwargs):
+    def forward(self, *args, **kwargs):
         """
         Runs the guide. This is typically used by inference algorithms.
         """
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
+        pyro.module("easyguide", self)
         result = self.guide(*args, **kwargs)
         self.plates.clear()
         return result
@@ -122,8 +130,10 @@ class EasyGuide(object, metaclass=ABCMeta):
         site = self.prototype_trace.nodes[name]
         fn = site["fn"]
         param_name = "auto_{}".format(name)
+        param_name_unconstrained = "auto_{}_unconstrained".format(name)
         init_value = None
-        if param_name not in pyro.get_param_store():
+        init_value_unconstrained = None
+        if not hasattr(self, param_name):
             init_value = site["value"].detach()
         with ExitStack() as stack:
             for frame in site["cond_indep_stack"]:
@@ -137,12 +147,19 @@ class EasyGuide(object, metaclass=ABCMeta):
                     ind = torch.arange(plate.size, device=init_value.device)
                     ind = ind % plate.subsample_size
                     init_value = init_value.index_select(dim, ind)
+
+            if init_value is not None:
+                init_value_unconstrained = transform_to(fn.support).inv(init_value)
+                setattr(self, param_name_unconstrained, ConstrainedParameter(init_value, fn.support))
+            full_name = "easyguide{}{}".format(_MODULE_NAMESPACE_DIVIDER, param_name_unconstrained)
+            value_unconstrained = pyro.param(full_name, init_value_unconstrained)
+            event_dim = fn.event_dim + value_unconstrained.dim() - value.dim
             value = pyro.param(param_name, init_value,
                                constraint=fn.support, event_dim=fn.event_dim)
             return pyro.sample(name, dist.Delta(value, event_dim=fn.event_dim))
 
 
-class Group(object):
+class Group:
     """
     An autoguide helper to match a group of model sites.
 
