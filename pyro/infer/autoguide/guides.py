@@ -17,7 +17,6 @@ from contextlib import ExitStack  # python 3
 
 import torch
 from torch.distributions import biject_to, constraints
-from torch import nn
 
 import pyro
 import pyro.distributions as dist
@@ -29,11 +28,11 @@ from pyro.infer.autoguide.utils import _product
 from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN
 from pyro.ops.hessian import hessian
-from pyro.params import ConstrainedModule, ConstrainedParameter
+from pyro.nn.module import PyroModule, PyroParam
 from pyro.poutine.util import prune_subsample_sites
 
 
-class AutoGuide(ConstrainedModule):
+class AutoGuide(PyroModule):
     """
     Base class for automatic guides.
 
@@ -178,10 +177,6 @@ class AutoGuideList(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        # Needed to capture autoguide parameters as pyro.param statements in the
-        # guide trace
-        if self.master is None:
-            pyro.module(self.prefix, self)
         # create all plates
         self.plates = {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
                        for frame in sorted(self._plates.values())}
@@ -284,7 +279,7 @@ class AutoDelta(AutoGuide):
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             param_name = "{}_{}".format(self.prefix, name)
-            value = ConstrainedParameter(site["value"].detach(), constraint=site["fn"].support)
+            value = PyroParam(site["value"].detach(), constraint=site["fn"].support)
             setattr(self, param_name, value)
 
     def _init_loc_fn(self, site):
@@ -304,11 +299,6 @@ class AutoDelta(AutoGuide):
         # if we've never run the model before, do so now so we can inspect the model structure
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
-
-        # Needed to capture autoguide parameters as pyro.param statements in the
-        # guide trace
-        if self.master is None:
-            pyro.module(self.prefix, self)
 
         plates = self._create_plates()
         result = {}
@@ -437,11 +427,6 @@ class AutoContinuous(AutoGuide):
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
 
-        # Needed to capture autoguide parameters as pyro.param statements in the
-        # guide trace
-        if self.master is None:
-            pyro.module(self.prefix, self)
-
         latent = self.sample_latent(*args, **kwargs)
         plates = self._create_plates()
 
@@ -535,9 +520,9 @@ class AutoMultivariateNormal(AutoContinuous):
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
-        self.loc = nn.Parameter(self._init_loc())
-        self.scale_tril = ConstrainedParameter(eye_like(self.loc, self.latent_dim) * self._init_scale,
-                                               constraints.lower_cholesky)
+        self.loc = PyroParam(self._init_loc())
+        self.scale_tril = PyroParam(eye_like(self.loc, self.latent_dim) * self._init_scale,
+                                    constraints.lower_cholesky)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -582,9 +567,9 @@ class AutoDiagonalNormal(AutoContinuous):
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
-        self.loc = nn.Parameter(self._init_loc())
-        self.scale = ConstrainedParameter(self.loc.new_full((self.latent_dim,), self._init_scale),
-                                          constraints.positive)
+        self.loc = PyroParam(self._init_loc())
+        self.scale = PyroParam(self.loc.new_full((self.latent_dim,), self._init_scale),
+                               constraints.positive)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -634,11 +619,11 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
-        self.loc = nn.Parameter(self._init_loc())
-        self.cov_factor = nn.Parameter(self.loc.new_empty(self.latent_dim, self.rank).normal_(
+        self.loc = PyroParam(self._init_loc())
+        self.cov_factor = PyroParam(self.loc.new_empty(self.latent_dim, self.rank).normal_(
             0, self._init_scale * (0.5 / self.rank) ** 0.5))
-        self.cov_diagonal = ConstrainedParameter(self.loc.new_full((self.latent_dim,), 0.5 * self._init_scale ** 2),
-                                                 constraints.positive)
+        self.cov_diagonal = PyroParam(self.loc.new_full((self.latent_dim,), 0.5 * self._init_scale ** 2),
+                                      constraints.positive)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -688,8 +673,6 @@ class AutoIAFNormal(AutoContinuous):
             self.hidden_dim = self.latent_dim
         if self.arn is None:
             self.arn = AutoRegressiveNN(self.latent_dim, [self.hidden_dim])
-        if self.master is None:
-            pyro.module(self.prefix, self)
 
         iaf = transforms.InverseAutoregressiveFlow(self.arn)
         iaf_dist = dist.TransformedDistribution(dist.Normal(0., 1.).expand([self.latent_dim]), [iaf])
@@ -723,7 +706,7 @@ class AutoLaplaceApproximation(AutoContinuous):
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
-        self.loc = nn.Parameter(self._init_loc())
+        self.loc = PyroParam(self._init_loc())
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -796,7 +779,7 @@ class AutoDiscreteParallel(AutoGuide):
             name = site["name"]
             for param_name, param_init, param_constraint in param_spec:
                 setattr(self, "{}_{}_{}".format(self.prefix, name, param_name),
-                        ConstrainedParameter(param_init, constraint=param_constraint))
+                        PyroParam(param_init, constraint=param_constraint))
 
     def forward(self, *args, **kwargs):
         """
@@ -808,11 +791,6 @@ class AutoDiscreteParallel(AutoGuide):
         # if we've never run the model before, do so now so we can inspect the model structure
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
-
-        # Needed to capture autoguide parameters as pyro.param statements in the
-        # guide trace
-        if self.master is None:
-            pyro.module(self.prefix, self)
 
         plates = self._create_plates()
 
