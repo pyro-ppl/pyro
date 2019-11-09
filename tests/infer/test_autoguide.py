@@ -546,7 +546,7 @@ def test_nested_autoguide(Elbo):
         infer.step()
 
     tr = poutine.trace(guide).get_trace()
-    assert all(p.startswith("AutoGuideList$$$x") or p.startswith("AutoGuideList$$$y") for p in tr.param_nodes)
+    assert all(p.startswith("AutoGuideList$$$x") or p.startswith("AutoGuideList$$$y.z") for p in tr.param_nodes)
     assert "x" in tr
     assert "y" in tr
     # Only latent sampled is for the IAF.
