@@ -120,6 +120,7 @@ class PyroModule(torch.nn.Module):
                 unconstrained_value = transform_to(constraint).inv(constrained_value)
                 unconstrained_value = unconstrained_value.contiguous()
             unconstrained_value = torch.nn.Parameter(unconstrained_value)
+            unconstrained_value._pyro_event_dim = event_dim
             unconstrained_name = name + "_unconstrained"
             setattr(self, unconstrained_name, unconstrained_value)
             return
@@ -153,12 +154,8 @@ class PyroModule(torch.nn.Module):
             _pyro_params = self.__dict__['_pyro_params']
             if name in _pyro_params:
                 constraint, event_dim = _pyro_params[name]
-                unconstrained_value = pyro.param(
-                    _make_name(self._pyro_name, name + "_unconstrained"),
-                    super().__getattr__(name + "_unconstrained"),
-                    event_dim=event_dim)
-                value = transform_to(constraint)(unconstrained_value)
-                return value
+                unconstrained_value = getattr(self, name + "_unconstrained")
+                return transform_to(constraint)(unconstrained_value)
 
         # PyroSample trigger pyro.sample statements.
         if '_pyro_samples' in self.__dict__:
@@ -170,6 +167,11 @@ class PyroModule(torch.nn.Module):
                 return pyro.sample(_make_name(self._pyro_name, name), prior)
 
         result = super().__getattr__(name)
+
+        # Regular nn.Parameters trigger pyro.param statements.
+        if isinstance(result, torch.nn.Parameter):
+            pyro.param(_make_name(self._pyro_name, name), result,
+                       event_dim=getattr(result, "_pyro_event_dim", None))
 
         # Regular nn.Modules trigger pyro.module statements.
         if isinstance(result, torch.nn.Module) and not isinstance(result, PyroModule):

@@ -16,6 +16,7 @@ import weakref
 from contextlib import ExitStack  # python 3
 
 import torch
+from torch import nn
 from torch.distributions import biject_to, constraints
 
 import pyro
@@ -519,7 +520,7 @@ class AutoMultivariateNormal(AutoContinuous):
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
-        self.loc = PyroParam(self._init_loc())
+        self.loc = nn.Parameter(self._init_loc())
         self.scale_tril = PyroParam(eye_like(self.loc, self.latent_dim) * self._init_scale,
                                     constraints.lower_cholesky)
 
@@ -566,7 +567,7 @@ class AutoDiagonalNormal(AutoContinuous):
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
-        self.loc = PyroParam(self._init_loc())
+        self.loc = nn.Parameter(self._init_loc())
         self.scale = PyroParam(self.loc.new_full((self.latent_dim,), self._init_scale),
                                constraints.positive)
 
@@ -618,8 +619,8 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
-        self.loc = PyroParam(self._init_loc())
-        self.cov_factor = PyroParam(self.loc.new_empty(self.latent_dim, self.rank).normal_(
+        self.loc = nn.Parameter(self._init_loc())
+        self.cov_factor = nn.Parameter(self.loc.new_empty(self.latent_dim, self.rank).normal_(
             0, self._init_scale * (0.5 / self.rank) ** 0.5))
         self.cov_diagonal = PyroParam(self.loc.new_full((self.latent_dim,), 0.5 * self._init_scale ** 2),
                                       constraints.positive)
@@ -705,7 +706,7 @@ class AutoLaplaceApproximation(AutoContinuous):
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
-        self.loc = PyroParam(self._init_loc())
+        self.loc = nn.Parameter(self._init_loc())
 
     def get_posterior(self, *args, **kwargs):
         """

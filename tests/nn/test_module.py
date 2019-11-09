@@ -6,6 +6,7 @@ from torch.distributions import constraints, transform_to
 
 import pyro
 import pyro.distributions as dist
+from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
 from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.optim import Adam
@@ -15,7 +16,7 @@ from tests.common import assert_equal
 class Model(PyroModule):
     def __init__(self):
         super().__init__()
-        self.loc = PyroParam(torch.zeros(2))
+        self.loc = torch.nn.Parameter(torch.zeros(2))
         self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
         self.z = PyroSample(lambda self: dist.Normal(self.loc, self.scale).to_event(1))
 
@@ -29,7 +30,7 @@ class Model(PyroModule):
 class Guide(PyroModule):
     def __init__(self):
         super().__init__()
-        self.loc = PyroParam(torch.zeros(2))
+        self.loc = torch.nn.Parameter(torch.zeros(2))
         self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
         self.z = PyroSample(lambda self: dist.Normal(self.loc, self.scale).to_event(1))
 
@@ -39,8 +40,20 @@ class Guide(PyroModule):
 
 def test_svi_smoke():
     data = torch.randn(5)
+
     model = Model()
+    trace = poutine.trace(model).get_trace(data)
+    assert "loc" in trace.nodes.keys()
+    assert trace.nodes["loc"]["type"] == "param"
+    assert "scale_unconstrained" in trace.nodes
+    assert trace.nodes["scale_unconstrained"]["type"] == "param"
+
     guide = Guide()
+    trace = poutine.trace(guide).get_trace(data)
+    assert "loc" in trace.nodes.keys()
+    assert trace.nodes["loc"]["type"] == "param"
+    assert "scale_unconstrained" in trace.nodes
+    assert trace.nodes["scale_unconstrained"]["type"] == "param"
 
     optim = Adam({"lr": 0.01})
     svi = SVI(model, guide, optim, Trace_ELBO())
