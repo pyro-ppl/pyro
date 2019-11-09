@@ -191,6 +191,15 @@ class Group(object):
             self._site_sizes[site["name"]] = site_batch_shape.numel() * site_event_numel
         self.event_shape = torch.Size([sum(self._site_sizes.values())])
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['_guide'] = state['_guide']()  # weakref -> ref
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._guide = weakref.ref(self._guide)  # ref -> weakref
+
     @property
     def guide(self):
         return self._guide()
@@ -274,6 +283,9 @@ def easy_guide(model):
             def guide(self, foo, bar):
                 return my_guide(foo, bar)
         guide = Guide(model)
+
+    Note ``@easy_guide`` wrappers cannot be pickled; to build a guide that can
+    be pickled, instead subclass from :class:`EasyGuide`.
 
     :param callable model: a Pyro model.
     """
