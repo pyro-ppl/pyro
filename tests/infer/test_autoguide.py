@@ -1,5 +1,6 @@
 import functools
 import warnings
+from operator import attrgetter
 
 import numpy as np
 import pytest
@@ -140,8 +141,8 @@ def test_iplate_smoke(auto_class, Elbo):
 
 def auto_guide_list_x(model):
     guide = AutoGuideList(model)
-    guide.add(AutoDelta(poutine.block(model, expose=["x"])))
-    guide.add(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    guide.delta = AutoDelta(poutine.block(model, expose=["x"]))
+    guide.diagnormal = AutoDiagonalNormal(poutine.block(model, hide=["x"]))
     return guide
 
 
@@ -155,13 +156,22 @@ def auto_guide_callable(model):
         return {"x": pyro.param("x_loc", torch.tensor(1.))}
 
     guide = AutoGuideList(model)
-    guide.add(AutoCallable(model, guide_x, median_x))
-    guide.add(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    guide.callable = AutoCallable(model, guide_x, median_x)
+    guide.diagnormal = AutoDiagonalNormal(poutine.block(model, hide=["x"]))
+    return guide
+
+
+def nested_auto_guide_callable(model):
+    guide = AutoGuideList(model)
+    guide.x = AutoDelta(poutine.block(model, expose=['x']))
+    guide_y = AutoGuideList(poutine.block(model, expose=['y']))
+    guide_y.z = AutoIAFNormal(poutine.block(model, expose=['y']))
+    guide.y = guide_y
     return guide
 
 
 def auto_guide_module_callable(model):
-    class GuideX(AutoGuide, ConstrainedModule):
+    class GuideX(AutoGuide):
         def __init__(self, model):
             super().__init__(model)
             self.x_loc = nn.Parameter(torch.tensor(1.))
@@ -175,8 +185,8 @@ def auto_guide_module_callable(model):
             return {"x": self.x_loc.detach()}
 
     guide = AutoGuideList(model)
-    guide.add(GuideX(model))
-    guide.add(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    guide.custom = GuideX(model)
+    guide.diagnormal = AutoDiagonalNormal(poutine.block(model, hide=["x"]))
     return guide
 
 
@@ -227,6 +237,7 @@ def test_median(auto_class, Elbo):
     AutoLaplaceApproximation,
     auto_guide_list_x,
     auto_guide_module_callable,
+    nested_auto_guide_callable,
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_feasible),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
@@ -236,8 +247,10 @@ def test_median(auto_class, Elbo):
 def test_autoguide_serialization(auto_class, Elbo):
     def model():
         pyro.sample("x", dist.Normal(0.0, 1.0))
-        pyro.sample("y", dist.LogNormal(0.0, 1.0))
-        pyro.sample("z", dist.Beta(2.0, 2.0))
+        with pyro.plate("plate", 2):
+            pyro.sample("y", dist.LogNormal(0.0, 1.0))
+            pyro.sample("z", dist.Beta(2.0, 2.0))
+
     guide = auto_class(model)
     guide()
     if auto_class is AutoLaplaceApproximation:
@@ -254,7 +267,9 @@ def test_autoguide_serialization(auto_class, Elbo):
     actual_names = {name for name, _ in guide_deser.named_parameters()}
     assert actual_names == expected_names
     for name in actual_names:
-        assert_equal(getattr(guide_deser, name), getattr(guide, name).data)
+        # for autoguide list we need to do a nested attribute check
+        attr_getter = attrgetter(name)
+        assert_equal(attr_getter(guide_deser), attr_getter(guide).data)
 
 
 @pytest.mark.parametrize("auto_class", [
@@ -347,8 +362,8 @@ def test_guide_list(auto_class):
         pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
 
     guide = AutoGuideList(model)
-    guide.add(auto_class(poutine.block(model, expose=["x"]), prefix="auto_x"))
-    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide.add(auto_class(poutine.block(model, expose=["x"])))
+    guide.add(auto_class(poutine.block(model, expose=["y"])))
     guide()
 
 
@@ -371,7 +386,7 @@ def test_callable(auto_class):
 
     guide = AutoGuideList(model)
     guide.add(guide_x)
-    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide.add(auto_class(poutine.block(model, expose=["y"])))
     values = guide()
     assert set(values) == set(["y"])
 
@@ -395,8 +410,8 @@ def test_callable_return_dict(auto_class):
         return {"x": x}
 
     guide = AutoGuideList(model)
-    guide.add(guide_x)
-    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide.x = AutoCallable(model, guide_x)
+    guide.y = auto_class(poutine.block(model, expose=["y"]))
     values = guide()
     assert set(values) == set(["x", "y"])
 
@@ -508,3 +523,31 @@ def test_median_module(auto_class, Elbo):
     median = guide.median()
     assert_equal(median["x"], torch.tensor(1.0), prec=0.1)
     assert_equal(median["y"], torch.tensor(2.0), prec=0.1)
+
+
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_nested_autoguide(Elbo):
+
+    class Model(ConstrainedModule):
+        def __init__(self):
+            super().__init__()
+            self.x_loc = nn.Parameter(torch.tensor(1.))
+            self.x_scale = ConstrainedParameter(torch.tensor(0.1), constraints.positive)
+
+        def forward(self):
+            pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))
+            with pyro.plate("plate", 2):
+                pyro.sample("y", dist.Normal(2., 0.1))
+
+    model = Model()
+    guide = nested_auto_guide_callable(model)
+    infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
+    for _ in range(20):
+        infer.step()
+
+    tr = poutine.trace(guide).get_trace()
+    assert all(p.startswith("AutoGuideList$$$x") or p.startswith("AutoGuideList$$$y") for p in tr.param_nodes)
+    assert "x" in tr
+    assert "y" in tr
+    # Only latent sampled is for the IAF.
+    assert "_auto_z_latent" in tr
