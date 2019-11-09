@@ -35,7 +35,7 @@ def _make_name(prefix, name):
 class PyroModule(torch.nn.Module):
     """
     Subclass of :class:`torch.nn.Module` that supports setting of
-    :class:`PyroParam` and :class:`PyroSample`.
+    :class:`PyroParam` and :class:`PyroSample` .
 
     To create a Pyro-managed parameter attribute, set that attribute using the
     :class:`PyroParam` helper. Reading that attribute will then trigger a
@@ -50,9 +50,9 @@ class PyroModule(torch.nn.Module):
         loc = my_module.loc  # Triggers a pyro.param statement.
         scale = my_module.scale  # Triggers another pyro.param statement.
 
-    Note that, unlike normal :class:`torch.nn.Module`s, :class:`PyroModule`s
+    Note that, unlike normal :class:`torch.nn.Module` s, :class:`PyroModule` s
     should note be registered with :func:`pyro.module` statements.
-    :class:`PyroModule`s can contain normal :class:`torch.nn.Module`s, but not
+    :class:`PyroModule` s can contain normal :class:`torch.nn.Module` s, but not
     vice versa. Accessing a normal :class:`torch.nn.Module` attribute of
     a :class:`PyroModule` triggers a :func:`pyro.module` statement.
 
@@ -72,7 +72,7 @@ class PyroModule(torch.nn.Module):
     can read the value of a random attribute only once per inference step.
 
     To make an existing module probabilistic, you can create a subclass and
-    overwrite some parameters with :class:`PyroSample`s::
+    overwrite some parameters with :class:`PyroSample` s::
 
         class RandomLinear(nn.Linear, PyroModule):
             def __init__(in_features, out_features):
