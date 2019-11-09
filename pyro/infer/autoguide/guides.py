@@ -26,9 +26,8 @@ from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
 from pyro.infer.autoguide.utils import _product
 from pyro.infer.enum import config_enumerate
-from pyro.nn import AutoRegressiveNN
+from pyro.nn import AutoRegressiveNN, PyroModule, PyroParam
 from pyro.ops.hessian import hessian
-from pyro.nn.module import PyroModule, PyroParam
 from pyro.poutine.util import prune_subsample_sites
 
 
