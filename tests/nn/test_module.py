@@ -2,6 +2,7 @@ import warnings
 
 import pytest
 import torch
+from torch import nn
 from torch.distributions import constraints, transform_to
 
 import pyro
@@ -13,34 +14,32 @@ from pyro.optim import Adam
 from tests.common import assert_equal
 
 
-class Model(PyroModule):
-    def __init__(self):
-        super().__init__()
-        self.loc = torch.nn.Parameter(torch.zeros(2))
-        self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
-        self.z = PyroSample(lambda self: dist.Normal(self.loc, self.scale).to_event(1))
-
-    def forward(self, data):
-        loc, log_scale = self.z.unbind(-1)
-        with pyro.plate("data"):
-            pyro.sample("obs", dist.Cauchy(loc, log_scale.exp()),
-                        obs=data)
-
-
-class Guide(PyroModule):
-    def __init__(self):
-        super().__init__()
-        self.loc = torch.nn.Parameter(torch.zeros(2))
-        self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
-        self.z = PyroSample(lambda self: dist.Normal(self.loc, self.scale).to_event(1))
-
-    def forward(self, *args, **kwargs):
-        return self.z
-
-
 def test_svi_smoke():
-    data = torch.randn(5)
 
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.loc = nn.Parameter(torch.zeros(2))
+            self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
+            self.z = PyroSample(lambda self: dist.Normal(self.loc, self.scale).to_event(1))
+
+        def forward(self, data):
+            loc, log_scale = self.z.unbind(-1)
+            with pyro.plate("data"):
+                pyro.sample("obs", dist.Cauchy(loc, log_scale.exp()),
+                            obs=data)
+
+    class Guide(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.loc = nn.Parameter(torch.zeros(2))
+            self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
+            self.z = PyroSample(lambda self: dist.Normal(self.loc, self.scale).to_event(1))
+
+        def forward(self, *args, **kwargs):
+            return self.z
+
+    data = torch.randn(5)
     model = Model()
     trace = poutine.trace(model).get_trace(data)
     assert "loc" in trace.nodes.keys()
@@ -59,6 +58,47 @@ def test_svi_smoke():
     svi = SVI(model, guide, optim, Trace_ELBO())
     for step in range(3):
         svi.step(data)
+
+
+def test_names():
+    root = PyroModule()
+    root.x = nn.Parameter(torch.tensor(0.))
+    root.y = PyroParam(torch.tensor(1.), constraint=constraints.positive)
+    root.m = nn.Module()
+    root.m.u = nn.Parameter(torch.tensor(2.0))
+    root.p = PyroModule()
+    root.p.v = nn.Parameter(torch.tensor(3.))
+    root.p.w = PyroParam(torch.tensor(4.), constraint=constraints.positive)
+
+    # Check named_parameters.
+    expected = {
+        "x",
+        "y_unconstrained",
+        "m.u",
+        "p.v",
+        "p.w_unconstrained",
+    }
+    actual = set(name for name, _ in root.named_parameters())
+    assert actual == expected
+
+    # Check pyro.param names.
+    expected = {
+        "x",
+        "y_unconstrained",
+        "m$$$u",
+        "p.v",
+        "p.w_unconstrained",
+    }
+    with poutine.trace(param_only=True) as param_capture:
+        # trigger .__getattr__()
+        root.x
+        root.y
+        root.m
+        root.p.v
+        root.p.w
+    actual = {name for name, site in param_capture.trace.nodes.items()
+              if site["type"] == "param"}
+    assert actual == expected
 
 
 SHAPE_CONSTRAINT = [
@@ -99,12 +139,12 @@ def test_constraints(shape, constraint_):
     module.x = PyroParam(torch.full(shape, 1e-4), constraint_)
 
     assert isinstance(module.x, torch.Tensor)
-    assert isinstance(module.x_unconstrained, torch.nn.Parameter)
+    assert isinstance(module.x_unconstrained, nn.Parameter)
     assert module.x.shape == shape
     assert constraint_.check(module.x).all()
 
     module.x = torch.randn(shape).exp() * 1e-6
-    assert isinstance(module.x_unconstrained, torch.nn.Parameter)
+    assert isinstance(module.x_unconstrained, nn.Parameter)
     assert isinstance(module.x, torch.Tensor)
     assert module.x.shape == shape
     assert constraint_.check(module.x).all()
@@ -122,7 +162,7 @@ def test_constraints(shape, constraint_):
 
 def test_sample():
 
-    class Model(torch.nn.Linear, PyroModule):
+    class Model(nn.Linear, PyroModule):
         def __init__(self, in_features, out_features):
             super().__init__(in_features, out_features)
             self.weight = PyroSample(
@@ -131,7 +171,7 @@ def test_sample():
                                           self.in_features])
                                  .to_event(2))
 
-    class Guide(torch.nn.Linear, PyroModule):
+    class Guide(nn.Linear, PyroModule):
         def __init__(self, in_features, out_features):
             super().__init__(in_features, out_features)
             self.loc = PyroParam(torch.zeros_like(self.weight))
