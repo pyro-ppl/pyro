@@ -620,19 +620,23 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
-        self.cov_factor = nn.Parameter(self.loc.new_empty(self.latent_dim, self.rank).normal_(
-            0, self._init_scale * (0.5 / self.rank) ** 0.5))
-        self.cov_diagonal = PyroParam(self.loc.new_full((self.latent_dim,), 0.5 * self._init_scale ** 2),
-                                      constraints.positive)
+        self.scale = PyroParam(
+            self.loc.new_full((self.latent_dim,), 0.5 ** 0.5 * self._init_scale),
+            constraint=constraints.positive)
+        self.cov_factor = nn.Parameter(
+            self.loc.new_empty(self.latent_dim, self.rank).normal_(0, 1 / self.rank ** 0.5))
 
     def get_posterior(self, *args, **kwargs):
         """
         Returns a LowRankMultivariateNormal posterior distribution.
         """
-        return dist.LowRankMultivariateNormal(self.loc, self.cov_factor, self.cov_diagonal)
+        scale = self.scale
+        cov_factor = self.cov_factor * scale.unsqueeze(-1)
+        cov_diag = scale * scale
+        return dist.LowRankMultivariateNormal(self.loc, cov_factor, cov_diag)
 
     def _loc_scale(self, *args, **kwargs):
-        scale = (self.cov_factor.pow(2).sum(-1) + self.cov_diagonal).sqrt()
+        scale = self.scale * (self.cov_factor.pow(2).sum(-1) + 1).sqrt()
         return self.loc, scale
 
 
