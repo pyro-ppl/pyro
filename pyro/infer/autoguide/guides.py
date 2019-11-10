@@ -52,9 +52,13 @@ class AutoGuide(PyroModule):
         self.master = None
         # Do not register model as submodule
         self._model = (model,)
-        self.prefix = prefix
+        self._pyro_name = prefix
         self.prototype_trace = None
         self._plates = {}
+
+    @property
+    def prefix(self):
+        return self._pyro_name
 
     @property
     def model(self):
