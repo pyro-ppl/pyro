@@ -121,5 +121,18 @@ class SMCFilter(object):
     def _importance_resample(self):
         # TODO: Turn quadratic algo -> linear algo by being lazier
         index = dist.Categorical(logits=self._log_weights).sample(sample_shape=(self.num_particles,))
+        old_values = self._values
         self._values = {name: value[index].contiguous() for name, value in self._values.items()}
         self._log_weights.fill_(0.)
+
+        # Update model and guide in case they store tensors in self._values.
+        old_to_new = {id(old_value): self._values[name] for name, old_value in old_values.items()}
+        for context in [self.model, self.guide]:
+            if isinstance(context, object):
+                context = context.__dict__
+            if not isinstance(context, dict):
+                continue
+            for name, old_value in context.items():
+                new_value = old_to_new.get(id(old_value))
+                if new_value is not None:
+                    context[name] = new_value
