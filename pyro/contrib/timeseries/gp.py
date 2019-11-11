@@ -27,6 +27,8 @@ class IndependentMaternGP(TimeSeriesModel):
     :param torch.Tensor log_obs_noise_scale_init: optional initial values for the observation noise scale
         given as a ``obs_dim``-dimensional tensor
     """
+    Kernel = MaternKernel
+
     def __init__(self, nu=1.5, dt=1.0, obs_dim=1,
                  log_length_scale_init=None, log_kernel_scale_init=None,
                  log_obs_noise_scale_init=None):
@@ -40,9 +42,9 @@ class IndependentMaternGP(TimeSeriesModel):
 
         super().__init__()
 
-        self.kernel = MaternKernel(nu=nu, num_gps=obs_dim,
-                                   log_length_scale_init=log_length_scale_init,
-                                   log_kernel_scale_init=log_kernel_scale_init)
+        self.kernel = self.Kernel(nu=nu, num_gps=obs_dim,
+                                  log_length_scale_init=log_length_scale_init,
+                                  log_kernel_scale_init=log_kernel_scale_init)
 
         self.log_obs_noise_scale = nn.Parameter(log_obs_noise_scale_init)
 
