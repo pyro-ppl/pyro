@@ -4,7 +4,7 @@ attributes can be modified by Pyro effects. To create one of these attributes,
 use either the :class:`PyroParam` struct or the :class:`PyroSample` struct::
 
     my_module = PyroModule()
-    my_module.x = PyroParameter(torch.tensor(1.), constraint=constraints.positive)
+    my_module.x = PyroParam(torch.tensor(1.), constraint=constraints.positive)
     my_module.y = PyroSample(dist.Normal(0, 1))
 
 """
