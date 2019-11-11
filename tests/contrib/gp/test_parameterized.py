@@ -20,7 +20,7 @@ def test_parameterized():
             self.d = PyroSample(dist.Normal(0, 4).expand([1]).to_event())
 
         def forward(self, x):
-            return self.a * x + self.b + self.c + self.d
+            return self.a * x + self.b + self.c + self.d + self.c
 
     linear = Linear()
     linear.autoguide("c", dist.Normal)
@@ -69,6 +69,7 @@ def test_nested_parameterized():
     class Quadratic(Parameterized):
         def __init__(self, linear1, linear2, a):
             super(Quadratic, self).__init__()
+            self._pyro_name = "Quadratic"
             self.linear1 = linear1
             self.linear2 = linear2
             self.a = Parameter(a)
@@ -77,20 +78,20 @@ def test_nested_parameterized():
             return self.linear1(x) * x + self.linear2(self.a)
 
     linear1 = Linear(torch.tensor(1.))
-    linear1.set_prior("a", dist.Normal(0, 1))
+    linear1.a = PyroSample(dist.Normal(0, 1))
     linear2 = Linear(torch.tensor(1.))
-    linear2.set_prior("a", dist.Normal(0, 1))
+    linear2.a = PyroSample(dist.Normal(0, 1))
     q = Quadratic(linear1, linear2, torch.tensor(2.))
-    q.set_prior("a", dist.Cauchy(0, 1))
+    q.a = PyroSample(dist.Cauchy(0, 1))
 
     def model(x):
         q.set_mode("model")
         return q(x)
 
     trace = pyro.poutine.trace(model).get_trace(torch.tensor(5.))
-    assert "Quadratic/a" in trace.nodes
-    assert "Linear/a" in trace.nodes
-    assert "Linear__1/a" in trace.nodes
+    assert "Quadratic.a" in trace.nodes
+    assert "Quadratic.linear1.a" in trace.nodes
+    assert "Quadratic.linear2.a" in trace.nodes
 
 
 def test_inference():
@@ -106,7 +107,7 @@ def test_inference():
     x_train = torch.rand(100)
     y_train = target_a * x_train + torch.rand(100) * 0.001
     linear = Linear(torch.tensor(1.))
-    linear.set_prior("a", dist.Normal(0, 10))
+    linear.a = PyroSample(dist.Normal(0, 10))
     linear.autoguide("a", dist.Normal)
 
     def model(x, y):
@@ -117,9 +118,10 @@ def test_inference():
 
     def guide(x, y):
         linear.set_mode("guide")
+        linear(x)
 
     loss_fn = pyro.infer.Trace_ELBO().differentiable_loss
-    optimizer = torch.optim.Adam(linear.parameters(), lr=0.1)
+    optimizer = torch.optim.Adam(linear.parameters(), lr=0.5)
 
     def closure():
         optimizer.zero_grad()
