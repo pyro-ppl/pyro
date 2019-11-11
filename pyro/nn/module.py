@@ -121,8 +121,8 @@ class PyroModule(torch.nn.Module):
         self._pyro_name = name
         self._pyro_cache = cache
         for key, value in self._modules.items():
-            assert isinstance(value, PyroModule)
-            value._pyro_set_supermodule(_make_name(name, key), cache)
+            if isinstance(value, PyroModule):
+                value._pyro_set_supermodule(_make_name(name, key), cache)
 
     def __call__(self, *args, **kwargs):
         with self._pyro_cache:

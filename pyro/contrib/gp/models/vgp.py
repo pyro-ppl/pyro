@@ -75,7 +75,6 @@ class VariationalGP(GPModel):
 
         self.whiten = whiten
         self._sample_latent = True
-        self._pyro_name = "VGP"
 
     def model(self):
         with self.set_mode("model"):

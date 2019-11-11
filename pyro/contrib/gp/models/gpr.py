@@ -67,7 +67,6 @@ class GPRegression(GPModel):
 
         noise = self.X.new_tensor(1.) if noise is None else noise
         self.noise = PyroParam(noise, constraints.positive)
-        self._pyro_name = "GPR"
 
     def model(self):
         with self.set_mode("model"):

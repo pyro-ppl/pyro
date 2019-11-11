@@ -96,7 +96,6 @@ class VariationalSparseGP(GPModel):
         self.num_data = num_data if num_data is not None else self.X.size(0)
         self.whiten = whiten
         self._sample_latent = True
-        self._pyro_name = "VSGP"
 
     def model(self):
         with self.set_mode("model"):

@@ -106,7 +106,6 @@ class SparseGPRegression(GPModel):
         else:
             raise ValueError("The sparse approximation method should be one of "
                              "'DTC', 'FITC', 'VFE'.")
-        self._pyro_name = "SGPR"
 
     def model(self):
         with self.set_mode("model"):
