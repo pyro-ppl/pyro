@@ -16,8 +16,8 @@ from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, A
                                   AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
                                   AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
                                   init_to_sample, AutoGuide)
+from pyro.nn import PyroParam, PyroModule
 from pyro.optim import Adam
-from pyro.params import ConstrainedModule, ConstrainedParameter
 from tests.common import assert_close, assert_equal
 
 
@@ -162,7 +162,7 @@ def auto_guide_callable(model):
 
 
 def auto_guide_module_callable(model):
-    class GuideX(AutoGuide, ConstrainedModule):
+    class GuideX(AutoGuide):
         def __init__(self, model):
             super().__init__(model)
             self.x_loc = nn.Parameter(torch.tensor(1.))
@@ -500,11 +500,11 @@ def test_init_scale(auto_class, init_scale):
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_median_module(auto_class, Elbo):
 
-    class Model(ConstrainedModule):
+    class Model(AutoGuide):
         def __init__(self):
             super().__init__()
             self.x_loc = nn.Parameter(torch.tensor(1.))
-            self.x_scale = ConstrainedParameter(torch.tensor(0.1), constraints.positive)
+            self.x_scale = PyroParam(torch.tensor(0.1), constraints.positive)
 
         def forward(self):
             pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))
@@ -527,11 +527,11 @@ def test_median_module(auto_class, Elbo):
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_nested_autoguide(Elbo):
 
-    class Model(ConstrainedModule):
+    class Model(PyroModule):
         def __init__(self):
             super().__init__()
             self.x_loc = nn.Parameter(torch.tensor(1.))
-            self.x_scale = ConstrainedParameter(torch.tensor(0.1), constraints.positive)
+            self.x_scale = PyroParam(torch.tensor(0.1), constraints.positive)
 
         def forward(self):
             pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))
