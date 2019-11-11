@@ -1,9 +1,9 @@
 import numbers
 
-from pyro.contrib.gp.parameterized import Parameterized
+from pyro.nn.module import PyroModule
 
 
-class Kernel(Parameterized):
+class Kernel(PyroModule):
     """
     Base class for kernels used in this Gaussian Process module.
 
