@@ -28,9 +28,10 @@ class RandomGP(IndependentMaternGP, PyroModule):
         prior_dist = dist.Normal(0.0, 2 * torch.ones(self.obs_dim)).to_event(1)
         self.kernel.log_length_scale = PyroSample(prior_dist)
         self.kernel.log_kernel_scale = PyroSample(prior_dist)
-        self.kernel.log_obs_noise_scale = PyroSample(prior_dist)
+        self.log_obs_noise_scale = PyroSample(prior_dist)
 
-
+    def forward(self, data):
+        return self.log_prob(data).sum(-1)
 
 def main(args):
     download_data()
@@ -53,10 +54,10 @@ def main(args):
     gp = RandomGP(nu=1.5, obs_dim=obs_dim).double()
 
     def model():
-        pyro.factor("y", gp.log_prob(data).sum(-1))
+        pyro.factor("y", gp(data))
 
-    nuts_kernel = NUTS(model, max_tree_depth=4)
-    mcmc = MCMC(nuts_kernel, num_samples=100, warmup_steps=100, num_chains=1)
+    nuts_kernel = NUTS(model, max_tree_depth=6)
+    mcmc = MCMC(nuts_kernel, num_samples=250, warmup_steps=250, num_chains=1)
     mcmc.run()
     mcmc.summary(prob=0.5)
 
