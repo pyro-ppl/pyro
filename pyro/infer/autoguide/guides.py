@@ -812,7 +812,7 @@ class AutoDiscreteParallel(AutoGuide):
         for site, Dist, param_spec in self._discrete_sites:
             name = site["name"]
             dist_params = {
-                param_name: getattr(self, "{}_{}_{}".format(self.prefix, name, param_name))
+                param_name: getattr(self, "{}_{}".format(name, param_name))
                 for param_name, param_init, param_constraint in param_spec
             }
             discrete_dist = Dist(**dist_params)
