@@ -140,8 +140,8 @@ def test_iplate_smoke(auto_class, Elbo):
 
 def auto_guide_list_x(model):
     guide = AutoGuideList(model)
-    guide.add(AutoDelta(poutine.block(model, expose=["x"])))
-    guide.add(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    guide.append(AutoDelta(poutine.block(model, expose=["x"])))
+    guide.append(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
     return guide
 
 
@@ -155,8 +155,8 @@ def auto_guide_callable(model):
         return {"x": pyro.param("x_loc", torch.tensor(1.))}
 
     guide = AutoGuideList(model)
-    guide.add(AutoCallable(model, guide_x, median_x))
-    guide.add(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    guide.append(AutoCallable(model, guide_x, median_x))
+    guide.append(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
     return guide
 
 
@@ -167,7 +167,7 @@ def auto_guide_module_callable(model):
             self.x_loc = nn.Parameter(torch.tensor(1.))
             self.x_scale = ConstrainedParameter(torch.tensor(.1), constraint=constraints.positive)
 
-        def __call__(self, *args, **kwargs):
+        def forward(self, *args, **kwargs):
             pyro.module("", self)
             return {"x": pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))}
 
@@ -175,8 +175,17 @@ def auto_guide_module_callable(model):
             return {"x": self.x_loc.detach()}
 
     guide = AutoGuideList(model)
-    guide.add(GuideX(model))
-    guide.add(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    guide.custom = GuideX(model)
+    guide.diagnorm = AutoDiagonalNormal(poutine.block(model, hide=["x"]))
+    return guide
+
+
+def nested_auto_guide_callable(model):
+    guide = AutoGuideList(model)
+    guide.x = AutoDelta(poutine.block(model, expose=['x']))
+    guide_y = AutoGuideList(poutine.block(model, expose=['y']))
+    guide_y.z = AutoIAFNormal(poutine.block(model, expose=['y']))
+    guide.y = guide_y
     return guide
 
 
@@ -227,6 +236,7 @@ def test_median(auto_class, Elbo):
     AutoLaplaceApproximation,
     auto_guide_list_x,
     auto_guide_module_callable,
+    nested_auto_guide_callable,
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_feasible),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
@@ -237,7 +247,8 @@ def test_autoguide_serialization(auto_class, Elbo):
     def model():
         pyro.sample("x", dist.Normal(0.0, 1.0))
         pyro.sample("y", dist.LogNormal(0.0, 1.0))
-        pyro.sample("z", dist.Beta(2.0, 2.0))
+        with pyro.plate("plate", 2):
+            pyro.sample("z", dist.Beta(2.0, 2.0))
     guide = auto_class(model)
     guide()
     if auto_class is AutoLaplaceApproximation:
@@ -324,8 +335,8 @@ def test_discrete_parallel(continuous_class):
             pyro.sample('obs', dist.Normal(locs[assignment], scale), obs=data)
 
     guide = AutoGuideList(model)
-    guide.add(continuous_class(poutine.block(model, hide=["assignment"])))
-    guide.add(AutoDiscreteParallel(poutine.block(model, expose=["assignment"])))
+    guide.append(continuous_class(poutine.block(model, hide=["assignment"])))
+    guide.append(AutoDiscreteParallel(poutine.block(model, expose=["assignment"])))
 
     elbo = TraceEnum_ELBO(max_plate_nesting=1)
     loss = elbo.loss_and_grads(model, guide, data)
@@ -347,8 +358,8 @@ def test_guide_list(auto_class):
         pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
 
     guide = AutoGuideList(model)
-    guide.add(auto_class(poutine.block(model, expose=["x"]), prefix="auto_x"))
-    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide.append(auto_class(poutine.block(model, expose=["x"]), prefix="auto_x"))
+    guide.append(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
     guide()
 
 
@@ -370,8 +381,8 @@ def test_callable(auto_class):
         pyro.sample("x", dist.Delta(x_loc))
 
     guide = AutoGuideList(model)
-    guide.add(guide_x)
-    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide.append(guide_x)
+    guide.append(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
     values = guide()
     assert set(values) == set(["y"])
 
@@ -395,8 +406,8 @@ def test_callable_return_dict(auto_class):
         return {"x": x}
 
     guide = AutoGuideList(model)
-    guide.add(guide_x)
-    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide.append(guide_x)
+    guide.append(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
     values = guide()
     assert set(values) == set(["x", "y"])
 

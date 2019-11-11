@@ -12,6 +12,7 @@ For example to generate a mean field Gaussian guide::
 Automatic guides can also be combined using :func:`pyro.poutine.block` and
 :class:`AutoGuideList`.
 """
+import warnings
 import weakref
 from contextlib import ExitStack  # python 3
 
@@ -105,7 +106,7 @@ class AutoGuide(PyroModule):
                 if frame.vectorized:
                     self._plates[frame.name] = frame
                 else:
-                    raise NotImplementedError("AutoGuideList does not support sequential pyro.plate")
+                    raise NotImplementedError("AutoGuide does not support sequential pyro.plate")
 
     def median(self, *args, **kwargs):
         """
@@ -117,7 +118,7 @@ class AutoGuide(PyroModule):
         raise NotImplementedError
 
 
-class AutoGuideList(AutoGuide):
+class AutoGuideList(AutoGuide, nn.ModuleList):
     """
     Container class to combine multiple automatic guides.
 
@@ -135,7 +136,6 @@ class AutoGuideList(AutoGuide):
 
     def __init__(self, model, prefix="auto"):
         super().__init__(model, prefix)
-        self.parts = []
         self.plates = {}
 
     def _check_prototype(self, part_trace):
@@ -147,7 +147,7 @@ class AutoGuideList(AutoGuide):
             assert part_site["fn"].event_shape == self_site["fn"].event_shape
             assert part_site["value"].shape == self_site["value"].shape
 
-    def add(self, part):
+    def append(self, part):
         """
         Add an automatic guide for part of the model. The guide should
         have been created by blocking the model to restrict to a subset of
@@ -158,17 +158,13 @@ class AutoGuideList(AutoGuide):
         """
         if not isinstance(part, AutoGuide):
             part = AutoCallable(self.model, part)
-        self.parts.append(part)
-        assert part.master is None
+        super().append(part)
         part.master = weakref.ref(self)
 
-    def _setup_prototype(self, *args, **kwargs):
-        super()._setup_prototype(*args, **kwargs)
-        # Initialize all module parameters
-        for part in self.parts:
-            part._setup_prototype(*args, **kwargs)
-            for param, value in part.named_parameters():
-                setattr(self, '{}_{}'.format(part.prefix, param), value)
+    def add(self, part):
+        """Deprecated alias for :meth:`append`."""
+        warnings.warn("The method `.add` has been deprecated in favor of `.append`.", DeprecationWarning)
+        self.append(part)
 
     def forward(self, *args, **kwargs):
         """
@@ -182,12 +178,15 @@ class AutoGuideList(AutoGuide):
             self._setup_prototype(*args, **kwargs)
 
         # create all plates
-        self.plates = {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
-                       for frame in sorted(self._plates.values())}
+        with poutine.block():
+            self.plates = {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
+                           for frame in sorted(self._plates.values())}
 
         # run slave guides
         result = {}
-        for part in self.parts:
+        for _, part in self.named_modules():
+            if part is self:
+                continue
             result.update(part(*args, **kwargs))
         return result
 
@@ -199,7 +198,9 @@ class AutoGuideList(AutoGuide):
         :rtype: dict
         """
         result = {}
-        for part in self.parts:
+        for _, part in self.named_modules():
+            if part is self:
+                continue
             result.update(part.median(*args, **kwargs))
         return result
 
