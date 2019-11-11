@@ -3,7 +3,7 @@ import math
 import torch
 from torch.distributions import constraints
 
-from pryo.contrib.gp.kernels.isotropic import Isotropy
+from pyro.contrib.gp.kernels.isotropic import Isotropy
 from pyro.contrib.gp.kernels.kernel import Kernel
 from pyro.nn.module import PyroParam
 
