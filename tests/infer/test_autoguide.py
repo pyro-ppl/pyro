@@ -1,5 +1,6 @@
 import functools
 import warnings
+from operator import attrgetter
 
 import numpy as np
 import pytest
@@ -265,7 +266,9 @@ def test_autoguide_serialization(auto_class, Elbo):
     actual_names = {name for name, _ in guide_deser.named_parameters()}
     assert actual_names == expected_names
     for name in actual_names:
-        assert_equal(getattr(guide_deser, name), getattr(guide, name).data)
+        # Get nested attributes.
+        attr_get = attrgetter(name)
+        assert_equal(attr_get(guide_deser), attr_get(guide).data)
 
 
 @pytest.mark.parametrize("auto_class", [
@@ -358,8 +361,8 @@ def test_guide_list(auto_class):
         pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
 
     guide = AutoGuideList(model)
-    guide.append(auto_class(poutine.block(model, expose=["x"]), prefix="auto_x"))
-    guide.append(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide.append(auto_class(poutine.block(model, expose=["x"])))
+    guide.append(auto_class(poutine.block(model, expose=["y"])))
     guide()
 
 
@@ -382,7 +385,7 @@ def test_callable(auto_class):
 
     guide = AutoGuideList(model)
     guide.append(guide_x)
-    guide.append(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide.append(auto_class(poutine.block(model, expose=["y"])))
     values = guide()
     assert set(values) == set(["y"])
 
@@ -407,7 +410,7 @@ def test_callable_return_dict(auto_class):
 
     guide = AutoGuideList(model)
     guide.append(guide_x)
-    guide.append(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide.append(auto_class(poutine.block(model, expose=["y"])))
     values = guide()
     assert set(values) == set(["x", "y"])
 
@@ -519,3 +522,32 @@ def test_median_module(auto_class, Elbo):
     median = guide.median()
     assert_equal(median["x"], torch.tensor(1.0), prec=0.1)
     assert_equal(median["y"], torch.tensor(2.0), prec=0.1)
+
+
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_nested_autoguide(Elbo):
+
+    class Model(ConstrainedModule):
+        def __init__(self):
+            super().__init__()
+            self.x_loc = nn.Parameter(torch.tensor(1.))
+            self.x_scale = ConstrainedParameter(torch.tensor(0.1), constraints.positive)
+
+        def forward(self):
+            pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))
+            with pyro.plate("plate", 2):
+                pyro.sample("y", dist.Normal(2., 0.1))
+
+    model = Model()
+    guide = nested_auto_guide_callable(model)
+    infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
+    for _ in range(20):
+        infer.step()
+
+    tr = poutine.trace(guide).get_trace()
+    assert all(p.startswith("auto.x") or p.startswith("auto.y.z") for p in tr.param_nodes)
+    stochastic_nodes = set(tr.stochastic_nodes)
+    assert "x" in stochastic_nodes
+    assert "y" in stochastic_nodes
+    # Only latent sampled is for the IAF.
+    assert "_auto.y.z_latent" in stochastic_nodes
