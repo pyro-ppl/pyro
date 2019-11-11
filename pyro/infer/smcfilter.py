@@ -127,12 +127,8 @@ class SMCFilter(object):
 
         # Update model and guide in case they store tensors in self._values.
         old_to_new = {id(old_value): self._values[name] for name, old_value in old_values.items()}
-        for context in [self.model, self.guide]:
-            if isinstance(context, object):
-                context = context.__dict__
-            if not isinstance(context, dict):
-                continue
-            for name, old_value in context.items():
+        for context in (self.model, self.guide):
+            for name, old_value in context.__dict__.items():
                 new_value = old_to_new.get(id(old_value))
                 if new_value is not None:
-                    context[name] = new_value
+                    setattr(context, name, new_value)
