@@ -191,6 +191,44 @@ def test_sample():
         svi.step(data)
 
 
+def test_cache():
+    class MyModule(PyroModule):
+        def forward(self):
+            return [self.gather(), self.gather()]
+
+        def gather(self):
+            return {
+                "a": self.a,
+                "b": self.b,
+                "c": self.c,
+                "p.d": self.p.d,
+                "p.e": self.p.e,
+                "p.f": self.p.f,
+            }
+
+    module = MyModule()
+    module.a = nn.Parameter(torch.tensor(0.))
+    module.b = PyroParam(torch.tensor(1.), constraint=constraints.positive)
+    module.c = PyroSample(dist.Normal(0, 1))
+    module.p = PyroModule()
+    module.p.d = nn.Parameter(torch.tensor(3.))
+    module.p.e = PyroParam(torch.tensor(4.), constraint=constraints.positive)
+    module.p.f = PyroSample(dist.Normal(0, 1))
+
+    assert module._pyro_cache is module.p._pyro_cache
+
+    # Check that results are cached with an invocation of .__call__().
+    result1 = module()
+    actual, expected = result1
+    for key in ["a", "c", "p.d", "p.f"]:
+        assert actual[key] is expected[key], key
+
+    # Check that results are not cached across invocations of .__call__().
+    result2 = module()
+    for key in ["b", "c", "p.e", "p.f"]:
+        assert result1[0] is not result2[0], key
+
+
 def test_serialization():
 
     module = PyroModule()

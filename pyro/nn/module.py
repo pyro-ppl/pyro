@@ -32,6 +32,31 @@ def _make_name(prefix, name):
     return "{}.{}".format(prefix, name) if prefix else name
 
 
+class _Cache:
+    """
+    Sometimes-active cache for ``PyroModule.__call__()`` contexts.
+    """
+    def __init__(self):
+        self.active = 0
+        self.cache = {}
+
+    def __enter__(self):
+        self.active += 1
+
+    def __exit__(self, type, value, traceback):
+        self.active -= 1
+        if not self.active:
+            self.cache.clear()
+
+    def get(self, name):
+        if self.active:
+            return self.cache.get(name)
+
+    def set(self, name, value):
+        if self.active:
+            self.cache[name] = value
+
+
 class PyroModule(torch.nn.Module):
     """
     Subclass of :class:`torch.nn.Module` that supports setting of
@@ -68,8 +93,10 @@ class PyroModule(torch.nn.Module):
         x = my_module.x  # Triggers a pyro.sample statement.
         y = my_module.y  # Triggers one pyro.sample + two pyro.param statements.
 
-    Note that, because sample statements can appear only once in a trace, you
-    can read the value of a random attribute only once per inference step.
+    Note that param and sample attribute access is cached within each
+    invocation of ``.__call__()``. Because sample statements can appear only
+    once in a Pyro trace, you should ensure that traced access to sample
+    attributes is wrapped in a single invocation of ``.__call__()``.
 
     To make an existing module probabilistic, you can create a subclass and
     overwrite some parameters with :class:`PyroSample` s::
@@ -85,15 +112,60 @@ class PyroModule(torch.nn.Module):
     """
     def __init__(self):
         self._pyro_name = ""
+        self._pyro_cache = _Cache()  # shared among sub-PyroModules
         self._pyro_params = OrderedDict()
         self._pyro_samples = OrderedDict()
         super().__init__()
 
-    def _pyro_set_name(self, name):
+    def _pyro_set_supermodule(self, name, cache):
         self._pyro_name = name
+        self._pyro_cache = cache
         for key, value in self._modules.items():
             assert isinstance(value, PyroModule)
-            value._pyro_set_name(_make_name(name, key))
+            value._pyro_set_supermodule(_make_name(name, key), cache)
+
+    def __call__(self, *args, **kwargs):
+        with self._pyro_cache:
+            return super().__call__(*args, **kwargs)
+
+    def _pyro_sample(self, name, fn):
+        cache = self.__dict__['_pyro_cache']
+        value = cache.get(name)
+        if value is None:
+            value = pyro.sample(name, fn)
+            cache.set(name, value)
+        return value
+
+    def __getattr__(self, name):
+        # PyroParams trigger pyro.param statements.
+        if '_pyro_params' in self.__dict__:
+            _pyro_params = self.__dict__['_pyro_params']
+            if name in _pyro_params:
+                constraint, event_dim = _pyro_params[name]
+                unconstrained_value = getattr(self, name + "_unconstrained")
+                return transform_to(constraint)(unconstrained_value)
+
+        # PyroSample trigger pyro.sample statements.
+        if '_pyro_samples' in self.__dict__:
+            _pyro_samples = self.__dict__['_pyro_samples']
+            if name in _pyro_samples:
+                prior = _pyro_samples[name]
+                if not isinstance(prior, (dist.Distribution, torch.distributions.Distribution)):
+                    prior = prior(self)
+                return self._pyro_sample(_make_name(self._pyro_name, name), prior)
+
+        result = super().__getattr__(name)
+
+        # Regular nn.Parameters trigger pyro.param statements.
+        if isinstance(result, torch.nn.Parameter):
+            pyro.param(_make_name(self._pyro_name, name), result,
+                       event_dim=getattr(result, "_pyro_event_dim", None))
+
+        # Regular nn.Modules trigger pyro.module statements.
+        if isinstance(result, torch.nn.Module) and not isinstance(result, PyroModule):
+            pyro.module(_make_name(self._pyro_name, name), result)
+
+        return result
 
     def __setattr__(self, name, value):
         if isinstance(value, PyroModule):
@@ -102,7 +174,7 @@ class PyroModule(torch.nn.Module):
                 delattr(self, name)
             except AttributeError:
                 pass
-            value._pyro_set_name(_make_name(self._pyro_name, name))
+            value._pyro_set_supermodule(_make_name(self._pyro_name, name), self._pyro_cache)
             super().__setattr__(name, value)
             return
 
@@ -147,37 +219,6 @@ class PyroModule(torch.nn.Module):
                     return
 
         super().__setattr__(name, value)
-
-    def __getattr__(self, name):
-        # PyroParams trigger pyro.param statements.
-        if '_pyro_params' in self.__dict__:
-            _pyro_params = self.__dict__['_pyro_params']
-            if name in _pyro_params:
-                constraint, event_dim = _pyro_params[name]
-                unconstrained_value = getattr(self, name + "_unconstrained")
-                return transform_to(constraint)(unconstrained_value)
-
-        # PyroSample trigger pyro.sample statements.
-        if '_pyro_samples' in self.__dict__:
-            _pyro_samples = self.__dict__['_pyro_samples']
-            if name in _pyro_samples:
-                prior = _pyro_samples[name]
-                if not isinstance(prior, (dist.Distribution, torch.distributions.Distribution)):
-                    prior = prior(self)
-                return pyro.sample(_make_name(self._pyro_name, name), prior)
-
-        result = super().__getattr__(name)
-
-        # Regular nn.Parameters trigger pyro.param statements.
-        if isinstance(result, torch.nn.Parameter):
-            pyro.param(_make_name(self._pyro_name, name), result,
-                       event_dim=getattr(result, "_pyro_event_dim", None))
-
-        # Regular nn.Modules trigger pyro.module statements.
-        if isinstance(result, torch.nn.Module) and not isinstance(result, PyroModule):
-            pyro.module(_make_name(self._pyro_name, name), result)
-
-        return result
 
     def __delattr__(self, name):
         if '_pyro_params' in self.__dict__:
