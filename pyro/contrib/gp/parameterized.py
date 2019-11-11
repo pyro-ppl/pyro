@@ -30,8 +30,10 @@ class _Mode:
 
     def __enter__(self):
         self.fn._pyro_cache.__enter__()
-        for name in self.fn._pyro_samples:
-            getattr(self.fn, name)
+        for m in self.fn.modules():
+            if "_pyro_samples" in m.__dict__:
+                for name in m._pyro_samples:
+                    getattr(m, name)
 
     def __exit__(self, type, value, traceback):
         self.fn._pyro_cache.__exit__(type, value, traceback)
