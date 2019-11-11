@@ -12,6 +12,7 @@ from pyro.contrib.gp.models import (GPLVM, GPRegression, SparseGPRegression,
 from pyro.contrib.gp.util import train
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.api import MCMC
+from pyro.nn.module import PyroSample
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
@@ -275,8 +276,8 @@ def test_hmc(model_class, X, y, kernel, likelihood):
     else:
         gp = model_class(X, y, kernel, likelihood)
 
-    kernel.set_prior("variance", dist.Uniform(torch.tensor(0.5), torch.tensor(1.5)))
-    kernel.set_prior("lengthscale", dist.Uniform(torch.tensor(1.0), torch.tensor(3.0)))
+    kernel.variance = PyroSample(dist.Uniform(torch.tensor(0.5), torch.tensor(1.5)))
+    kernel.lengthscale = PyroSample(dist.Uniform(torch.tensor(1.0), torch.tensor(3.0)))
 
     hmc_kernel = HMC(gp.model, step_size=1)
     mcmc = MCMC(hmc_kernel, num_samples=10)

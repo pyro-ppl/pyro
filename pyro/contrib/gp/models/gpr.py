@@ -4,7 +4,6 @@ from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
 from pyro.nn.module import PyroParam
@@ -71,27 +70,27 @@ class GPRegression(GPModel):
         self._pyro_name = "GPR"
 
     def model(self):
-        self.set_mode("model")
+        with self.set_mode("model"):
+            N = self.X.size(0)
+            Kff = self.kernel(self.X)
+            Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to diagonal
+            Lff = Kff.cholesky()
 
-        N = self.X.size(0)
-        Kff = self.kernel(self.X)
-        Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to diagonal
-        Lff = Kff.cholesky()
-
-        zero_loc = self.X.new_zeros(self.X.size(0))
-        f_loc = zero_loc + self.mean_function(self.X)
-        if self.y is None:
-            f_var = Lff.pow(2).sum(dim=-1)
-            return f_loc, f_var
-        else:
-            return pyro.sample("y",
-                               dist.MultivariateNormal(f_loc, scale_tril=Lff)
-                                   .expand_by(self.y.shape[:-1])
-                                   .to_event(self.y.dim() - 1),
-                               obs=self.y)
+            zero_loc = self.X.new_zeros(self.X.size(0))
+            f_loc = zero_loc + self.mean_function(self.X)
+            if self.y is None:
+                f_var = Lff.pow(2).sum(dim=-1)
+                return f_loc, f_var
+            else:
+                return pyro.sample("y",
+                                   dist.MultivariateNormal(f_loc, scale_tril=Lff)
+                                       .expand_by(self.y.shape[:-1])
+                                       .to_event(self.y.dim() - 1),
+                                   obs=self.y)
 
     def guide(self):
-        self.set_mode("guide")
+        with self.set_mode("guide"):
+            pass
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""

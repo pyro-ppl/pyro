@@ -4,7 +4,6 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.nn.module import PyroParam
 
@@ -107,56 +106,55 @@ class SparseGPRegression(GPModel):
         else:
             raise ValueError("The sparse approximation method should be one of "
                              "'DTC', 'FITC', 'VFE'.")
+        self._pyro_name = "SGPR"
 
-    @autoname.scope(prefix="SGPR")
     def model(self):
-        self.set_mode("model")
+        with self.set_mode("model"):
+            # W = (inv(Luu) @ Kuf).T
+            # Qff = Kfu @ inv(Kuu) @ Kuf = W @ W.T
+            # Fomulas for each approximation method are
+            # DTC:  y_cov = Qff + noise,                   trace_term = 0
+            # FITC: y_cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
+            # VFE:  y_cov = Qff + noise,                   trace_term = tr(Kff-Qff) / noise
+            # y_cov = W @ W.T + D
+            # trace_term is added into log_prob
 
-        # W = (inv(Luu) @ Kuf).T
-        # Qff = Kfu @ inv(Kuu) @ Kuf = W @ W.T
-        # Fomulas for each approximation method are
-        # DTC:  y_cov = Qff + noise,                   trace_term = 0
-        # FITC: y_cov = Qff + diag(Kff - Qff) + noise, trace_term = 0
-        # VFE:  y_cov = Qff + noise,                   trace_term = tr(Kff-Qff) / noise
-        # y_cov = W @ W.T + D
-        # trace_term is added into log_prob
+            N = self.X.size(0)
+            M = self.Xu.size(0)
+            Kuu = self.kernel(self.Xu).contiguous()
+            Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
+            Luu = Kuu.cholesky()
+            Kuf = self.kernel(self.Xu, self.X)
+            W = Kuf.triangular_solve(Luu, upper=False)[0].t()
 
-        N = self.X.size(0)
-        M = self.Xu.size(0)
-        Kuu = self.kernel(self.Xu).contiguous()
-        Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
-        Luu = Kuu.cholesky()
-        Kuf = self.kernel(self.Xu, self.X)
-        W = Kuf.triangular_solve(Luu, upper=False)[0].t()
+            D = self.noise.expand(N)
+            if self.approx == "FITC" or self.approx == "VFE":
+                Kffdiag = self.kernel(self.X, diag=True)
+                Qffdiag = W.pow(2).sum(dim=-1)
+                if self.approx == "FITC":
+                    D = D + Kffdiag - Qffdiag
+                else:  # approx = "VFE"
+                    trace_term = (Kffdiag - Qffdiag).sum() / self.noise
+                    trace_term = trace_term.clamp(min=0)
 
-        D = self.noise.expand(N)
-        if self.approx == "FITC" or self.approx == "VFE":
-            Kffdiag = self.kernel(self.X, diag=True)
-            Qffdiag = W.pow(2).sum(dim=-1)
-            if self.approx == "FITC":
-                D = D + Kffdiag - Qffdiag
-            else:  # approx = "VFE"
-                trace_term = (Kffdiag - Qffdiag).sum() / self.noise
-                trace_term = trace_term.clamp(min=0)
+            zero_loc = self.X.new_zeros(N)
+            f_loc = zero_loc + self.mean_function(self.X)
+            if self.y is None:
+                f_var = D + W.pow(2).sum(dim=-1)
+                return f_loc, f_var
+            else:
+                if self.approx == "VFE":
+                    pyro.factor("trace_term", -trace_term / 2.)
 
-        zero_loc = self.X.new_zeros(N)
-        f_loc = zero_loc + self.mean_function(self.X)
-        if self.y is None:
-            f_var = D + W.pow(2).sum(dim=-1)
-            return f_loc, f_var
-        else:
-            if self.approx == "VFE":
-                pyro.factor("trace_term", -trace_term / 2.)
+                return pyro.sample("y",
+                                   dist.LowRankMultivariateNormal(f_loc, W, D)
+                                       .expand_by(self.y.shape[:-1])
+                                       .to_event(self.y.dim() - 1),
+                                   obs=self.y)
 
-            return pyro.sample("y",
-                               dist.LowRankMultivariateNormal(f_loc, W, D)
-                                   .expand_by(self.y.shape[:-1])
-                                   .to_event(self.y.dim() - 1),
-                               obs=self.y)
-
-    @autoname.scope(prefix="SGPR")
     def guide(self):
-        self.set_mode("guide")
+        with self.set_mode("guide"):
+            pass
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""

@@ -5,7 +5,6 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
 from pyro.distributions.util import eye_like
@@ -97,40 +96,39 @@ class VariationalSparseGP(GPModel):
         self.num_data = num_data if num_data is not None else self.X.size(0)
         self.whiten = whiten
         self._sample_latent = True
+        self._pyro_name = "VSGP"
 
-    @autoname.scope(prefix="VSGP")
     def model(self):
-        self.set_mode("model")
+        with self.set_mode("model"):
+            M = self.Xu.size(0)
+            Kuu = self.kernel(self.Xu).contiguous()
+            Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
+            Luu = Kuu.cholesky()
 
-        M = self.Xu.size(0)
-        Kuu = self.kernel(self.Xu).contiguous()
-        Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
-        Luu = Kuu.cholesky()
+            zero_loc = self.Xu.new_zeros(self.u_loc.shape)
+            if self.whiten:
+                identity = eye_like(self.Xu, M)
+                pyro.sample("u",
+                            dist.MultivariateNormal(zero_loc, scale_tril=identity)
+                                .to_event(zero_loc.dim() - 1))
+            else:
+                pyro.sample("u",
+                            dist.MultivariateNormal(zero_loc, scale_tril=Luu)
+                                .to_event(zero_loc.dim() - 1))
 
-        zero_loc = self.Xu.new_zeros(self.u_loc.shape)
-        if self.whiten:
-            identity = eye_like(self.Xu, M)
-            pyro.sample("u",
-                        dist.MultivariateNormal(zero_loc, scale_tril=identity)
-                            .to_event(zero_loc.dim() - 1))
-        else:
-            pyro.sample("u",
-                        dist.MultivariateNormal(zero_loc, scale_tril=Luu)
-                            .to_event(zero_loc.dim() - 1))
+            f_loc, f_var = conditional(self.X, self.Xu, self.kernel, self.u_loc, self.u_scale_tril,
+                                       Luu, full_cov=False, whiten=self.whiten, jitter=self.jitter)
 
-        f_loc, f_var = conditional(self.X, self.Xu, self.kernel, self.u_loc, self.u_scale_tril,
-                                   Luu, full_cov=False, whiten=self.whiten, jitter=self.jitter)
+            f_loc = f_loc + self.mean_function(self.X)
+            if self.y is None:
+                return f_loc, f_var
+            else:
+                with poutine.scale(scale=self.num_data / self.X.size(0)):
+                    return self.likelihood(f_loc, f_var, self.y)
 
-        f_loc = f_loc + self.mean_function(self.X)
-        if self.y is None:
-            return f_loc, f_var
-        else:
-            with poutine.scale(scale=self.num_data / self.X.size(0)):
-                return self.likelihood(f_loc, f_var, self.y)
-
-    @autoname.scope(prefix="VSGP")
     def guide(self):
-        self.set_mode("guide")
+        with self.set_mode("guide"):
+            pass
 
         pyro.sample("u",
                     dist.MultivariateNormal(self.u_loc, scale_tril=self.u_scale_tril)

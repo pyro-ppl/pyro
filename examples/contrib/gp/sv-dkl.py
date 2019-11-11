@@ -37,6 +37,7 @@ import pyro
 import pyro.contrib.gp as gp
 import pyro.infer as infer
 from pyro.contrib.examples.util import get_data_loader, get_data_directory
+from pyro.nn.module import PyroModule
 
 
 class CNN(nn.Module):

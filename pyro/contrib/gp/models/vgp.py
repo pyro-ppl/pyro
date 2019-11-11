@@ -4,7 +4,6 @@ from torch.nn import Parameter
 
 import pyro
 import pyro.distributions as dist
-from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
 from pyro.distributions.util import eye_like
@@ -76,41 +75,40 @@ class VariationalGP(GPModel):
 
         self.whiten = whiten
         self._sample_latent = True
+        self._pyro_name = "VGP"
 
-    @autoname.scope(prefix="VGP")
     def model(self):
-        self.set_mode("model")
+        with self.set_mode("model"):
+            N = self.X.size(0)
+            Kff = self.kernel(self.X).contiguous()
+            Kff.view(-1)[::N + 1] += self.jitter  # add jitter to the diagonal
+            Lff = Kff.cholesky()
 
-        N = self.X.size(0)
-        Kff = self.kernel(self.X).contiguous()
-        Kff.view(-1)[::N + 1] += self.jitter  # add jitter to the diagonal
-        Lff = Kff.cholesky()
+            zero_loc = self.X.new_zeros(self.f_loc.shape)
+            if self.whiten:
+                identity = eye_like(self.X, N)
+                pyro.sample("f",
+                            dist.MultivariateNormal(zero_loc, scale_tril=identity)
+                                .to_event(zero_loc.dim() - 1))
+                f_scale_tril = Lff.matmul(self.f_scale_tril)
+                f_loc = Lff.matmul(self.f_loc.unsqueeze(-1)).squeeze(-1)
+            else:
+                pyro.sample("f",
+                            dist.MultivariateNormal(zero_loc, scale_tril=Lff)
+                                .to_event(zero_loc.dim() - 1))
+                f_scale_tril = self.f_scale_tril
+                f_loc = self.f_loc
 
-        zero_loc = self.X.new_zeros(self.f_loc.shape)
-        if self.whiten:
-            identity = eye_like(self.X, N)
-            pyro.sample("f",
-                        dist.MultivariateNormal(zero_loc, scale_tril=identity)
-                            .to_event(zero_loc.dim() - 1))
-            f_scale_tril = Lff.matmul(self.f_scale_tril)
-            f_loc = Lff.matmul(self.f_loc.unsqueeze(-1)).squeeze(-1)
-        else:
-            pyro.sample("f",
-                        dist.MultivariateNormal(zero_loc, scale_tril=Lff)
-                            .to_event(zero_loc.dim() - 1))
-            f_scale_tril = self.f_scale_tril
-            f_loc = self.f_loc
+            f_loc = f_loc + self.mean_function(self.X)
+            f_var = f_scale_tril.pow(2).sum(dim=-1)
+            if self.y is None:
+                return f_loc, f_var
+            else:
+                return self.likelihood(f_loc, f_var, self.y)
 
-        f_loc = f_loc + self.mean_function(self.X)
-        f_var = f_scale_tril.pow(2).sum(dim=-1)
-        if self.y is None:
-            return f_loc, f_var
-        else:
-            return self.likelihood(f_loc, f_var, self.y)
-
-    @autoname.scope(prefix="VGP")
     def guide(self):
-        self.set_mode("guide")
+        with self.set_mode("guide"):
+            pass
 
         pyro.sample("f",
                     dist.MultivariateNormal(self.f_loc, scale_tril=self.f_scale_tril)

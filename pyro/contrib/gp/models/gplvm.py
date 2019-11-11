@@ -1,7 +1,6 @@
-from torch.nn import Parameter
-
 import pyro.distributions as dist
 from pyro.contrib.gp.parameterized import Parameterized
+from pyro.nn.module import PyroSample
 
 
 class GPLVM(Parameterized):
@@ -60,9 +59,9 @@ class GPLVM(Parameterized):
                              "X.dim() = {}.".format(base_model.X.dim()))
         self.base_model = base_model
 
-        self.X = Parameter(self.base_model.X)
-        self.set_prior("X", dist.Normal(self.X.new_zeros(self.X.shape), 1.).to_event())
+        self.X = PyroSample(dist.Normal(base_model.X.new_zeros(base_model.X.shape), 1.).to_event())
         self.autoguide("X", dist.Normal)
+        self.X_loc.data = base_model.X
 
     def model(self):
         self.mode = "model"

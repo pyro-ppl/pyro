@@ -23,22 +23,21 @@ class _Mode:
     """
     def __init__(self, fn, mode):
         self.fn = fn
-        self.current_mode = fn._mode
-        self.mode = mode
+        self.current_mode = fn.mode
+        for m in self.fn.modules():
+            if isinstance(m, Parameterized):
+                m.mode = mode
 
     def __enter__(self):
         self.fn._pyro_cache.__enter__()
-        for m in self.fn.modules():
-            if isinstance(m, Parameterized):
-                m._mode = self.mode
         for name in self.fn._pyro_samples:
             getattr(self.fn, name)
 
     def __exit__(self, type, value, traceback):
+        self.fn._pyro_cache.__exit__(type, value, traceback)
         for m in self.fn.modules():
             if isinstance(m, Parameterized):
-                m._mode = self.current_mode
-        self.fn._pyro_cache.__exit__(type, value, traceback)
+                m.mode = self.current_mode
 
 
 class Parameterized(PyroModule):
@@ -90,7 +89,7 @@ class Parameterized(PyroModule):
         super(Parameterized, self).__init__()
         self._priors = OrderedDict()
         self._guides = OrderedDict()
-        self._mode = None
+        self._mode = "model"
         self.set_mode = partial(_Mode, self)
 
     def __setattr__(self, name, value):
@@ -99,7 +98,7 @@ class Parameterized(PyroModule):
             prior = value.prior
             self._priors[name] = prior
             self.autoguide(name, dist.Delta)
-            value = PyroSample(lambda self: prior if self._mode != "guide" else
+            value = PyroSample(lambda self: prior if self.mode == "model" else
                                self._get_guide(name, _make_name(self._pyro_name, name)))
             super().__setattr__(name, value)
 
@@ -184,3 +183,11 @@ class Parameterized(PyroModule):
         value = transform(unconstrained_value)
         log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
         return dist.Delta(value, log_density.sum(), event_dim=value.dim())
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @mode.setter
+    def mode(self, mode):
+        self._mode = mode
