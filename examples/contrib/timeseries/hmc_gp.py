@@ -8,11 +8,28 @@ import pyro.distributions as dist
 from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.api import MCMC
 from pyro.contrib.timeseries import IndependentMaternGP
+from pyro.ops.ssm_gp import MaternKernel
+from pyro.nn.module import PyroModule, PyroSample
 
 from gp_models import download_data
 
 
 pyro.enable_validation(__debug__)
+
+
+class RandomMaternKernel(MaternKernel, PyroModule):
+    pass
+
+
+class RandomGP(IndependentMaternGP, PyroModule):
+    Kernel = RandomMaternKernel
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        prior_dist = dist.Normal(0.0, 2 * torch.ones(self.obs_dim)).to_event(1)
+        self.kernel.log_length_scale = PyroSample(prior_dist)
+        self.kernel.log_kernel_scale = PyroSample(prior_dist)
+        self.kernel.log_obs_noise_scale = PyroSample(prior_dist)
+
 
 
 def main(args):
@@ -33,22 +50,10 @@ def main(args):
 
     torch.manual_seed(args.seed)
 
-    gp = IndependentMaternGP(nu=1.5, obs_dim=obs_dim).double()
+    gp = RandomGP(nu=1.5, obs_dim=obs_dim).double()
 
     def model():
-        del gp.kernel.log_length_scale
-        del gp.kernel.log_kernel_scale
-        del gp.log_obs_noise_scale
-        prior_dist = dist.Normal(0.0, 2 * torch.ones(obs_dim)).to_event(1)
-        setattr(gp.kernel, "log_length_scale",
-                pyro.sample("log_length_scale", prior_dist))
-        setattr(gp.kernel, "log_kernel_scale",
-                pyro.sample("log_kernel_scale", prior_dist))
-        setattr(gp, "log_obs_noise_scale",
-                pyro.sample("log_obs_noise_scale", prior_dist))
-
-        factor = gp.log_prob(data).sum(-1)
-        pyro.factor("y", factor)
+        pyro.factor("y", gp.log_prob(data).sum(-1))
 
     nuts_kernel = NUTS(model, max_tree_depth=4)
     mcmc = MCMC(nuts_kernel, num_samples=100, warmup_steps=100, num_chains=1)
