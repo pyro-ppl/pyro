@@ -1,11 +1,11 @@
-from pyro.nn.module import PyroModule
+from pyro.contrib.gp.parameterized import Parameterized
 
 
 def _zero_mean_function(x):
     return 0
 
 
-class GPModel(PyroModule):
+class GPModel(Parameterized):
     r"""
     Base class for Gaussian Process models.
 

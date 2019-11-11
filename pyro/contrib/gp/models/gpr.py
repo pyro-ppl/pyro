@@ -68,8 +68,8 @@ class GPRegression(GPModel):
 
         noise = self.X.new_tensor(1.) if noise is None else noise
         self.noise = PyroParam(noise, constraints.positive)
+        self._pyro_name = "GPR"
 
-    @autoname.scope(prefix="GPR")
     def model(self):
         self.set_mode("model")
 
@@ -90,7 +90,6 @@ class GPRegression(GPModel):
                                    .to_event(self.y.dim() - 1),
                                obs=self.y)
 
-    @autoname.scope(prefix="GPR")
     def guide(self):
         self.set_mode("guide")
 

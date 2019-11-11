@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from functools import partial
 
 from torch.distributions import biject_to, constraints
 from torch.nn import Parameter
@@ -6,7 +7,7 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import eye_like
-from pyro.nn.module import PyroModule, PyroParam, PyroSample
+from pyro.nn.module import PyroModule, PyroParam, PyroSample, _make_name
 
 
 def _get_independent_support(dist_instance):
@@ -14,6 +15,30 @@ def _get_independent_support(dist_instance):
         return _get_independent_support(dist_instance.base_dist)
     else:
         return dist_instance.support
+
+
+class _Mode:
+    """
+    Sometimes-active cache for ``Parameterized.set_mode(mode)`` contexts.
+    """
+    def __init__(self, fn, mode):
+        self.fn = fn
+        self.current_mode = fn._mode
+        self.mode = mode
+
+    def __enter__(self):
+        self.fn._pyro_cache.__enter__()
+        for m in self.fn.modules():
+            if isinstance(m, Parameterized):
+                m._mode = self.mode
+        for name in self.fn._pyro_samples:
+            getattr(self.fn, name)
+
+    def __exit__(self, type, value, traceback):
+        for m in self.fn.modules():
+            if isinstance(m, Parameterized):
+                m._mode = self.current_mode
+        self.fn._pyro_cache.__exit__(type, value, traceback)
 
 
 class Parameterized(PyroModule):
@@ -66,12 +91,17 @@ class Parameterized(PyroModule):
         self._priors = OrderedDict()
         self._guides = OrderedDict()
         self._mode = None
+        self.set_mode = partial(_Mode, self)
 
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
         if isinstance(value, PyroSample):
-            self._priors[name] = value.prior
+            prior = value.prior
+            self._priors[name] = prior
             self.autoguide(name, dist.Delta)
+            value = PyroSample(lambda self: prior if self._mode != "guide" else
+                               self._get_guide(name, _make_name(self._pyro_name, name)))
+            super().__setattr__(name, value)
 
     def autoguide(self, name, dist_constructor):
         """
@@ -95,13 +125,14 @@ class Parameterized(PyroModule):
             raise NotImplementedError("Unsupported distribution type: {}"
                                       .format(dist_constructor))
 
+        p = getattr(self, name)
+
         # delete old guide
         if name in self._guides:
             dist_args = self._guides[name][1]
             for arg in dist_args:
                 delattr(self, "{}_{}".format(name, arg))
 
-        p = getattr(self, name)
         if dist_constructor is dist.Delta:
             support = _get_independent_support(self._priors[name])
             if support is constraints.real:
@@ -128,40 +159,6 @@ class Parameterized(PyroModule):
             raise NotImplementedError
 
         self._guides[name] = (dist_constructor, dist_args)
-
-    def set_mode(self, mode):
-        """
-        Sets ``mode`` of this object to be able to use its parameters in
-        stochastic functions. If ``mode="model"``, a parameter will get its
-        value from its prior. If ``mode="guide"``, the value will be drawn from
-        its guide.
-
-        .. note:: This method automatically sets ``mode`` for submodules which
-            belong to :class:`Parameterized` class.
-
-        :param str mode: Either "model" or "guide".
-        """
-        for module in self.modules():
-            if isinstance(module, Parameterized):
-                module.mode = mode
-
-    @property
-    def mode(self):
-        return self._mode
-
-    @mode.setter
-    def mode(self, mode):
-        self._mode = mode
-
-    def _pyro_sample(self, name, fn):
-        cache = self.__dict__['_pyro_cache']
-        value = cache.get(name)
-        if value is None:
-            if self.mode == "guide":
-                fn = self._get_guide(name.split(".")[-1], name)
-            value = pyro.sample(name, fn)
-            cache.set(name, value)
-        return value
 
     def _get_guide(self, name, full_name):
         dist_constructor, dist_args = self._guides[name]
