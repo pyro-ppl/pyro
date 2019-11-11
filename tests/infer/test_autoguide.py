@@ -246,8 +246,8 @@ def test_median(auto_class, Elbo):
 def test_autoguide_serialization(auto_class, Elbo):
     def model():
         pyro.sample("x", dist.Normal(0.0, 1.0))
-        pyro.sample("y", dist.LogNormal(0.0, 1.0))
         with pyro.plate("plate", 2):
+            pyro.sample("y", dist.LogNormal(0.0, 1.0))
             pyro.sample("z", dist.Beta(2.0, 2.0))
     guide = auto_class(model)
     guide()

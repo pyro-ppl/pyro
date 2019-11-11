@@ -185,7 +185,7 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
         # run slave guides
         result = {}
         for _, part in self.named_modules():
-            if part is self:
+            if part is self or not isinstance(part, AutoGuide):
                 continue
             result.update(part(*args, **kwargs))
         return result
@@ -283,9 +283,8 @@ class AutoDelta(AutoGuide):
 
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
-            param_name = "{}_{}".format(self.prefix, name)
             value = PyroParam(site["value"].detach(), constraint=site["fn"].support)
-            setattr(self, param_name, value)
+            setattr(self, name, value)
 
     def _init_loc_fn(self, site):
         name = "{}_{}".format(self.prefix, site["name"])
@@ -312,8 +311,7 @@ class AutoDelta(AutoGuide):
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
                         stack.enter_context(plates[frame.name])
-                param_name = "{}_{}".format(self.prefix, name)
-                result[name] = pyro.sample(name, dist.Delta(getattr(self, param_name),
+                result[name] = pyro.sample(name, dist.Delta(getattr(self, name),
                                                             event_dim=site["fn"].event_dim))
         return result
 
