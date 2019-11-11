@@ -8,6 +8,7 @@ from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
 from pyro.distributions.util import eye_like
+from pyro.nn.module import PyroParam
 
 
 class VariationalGP(GPModel):
@@ -71,8 +72,7 @@ class VariationalGP(GPModel):
 
         identity = eye_like(self.X, N)
         f_scale_tril = identity.repeat(self.latent_shape + (1, 1))
-        self.f_scale_tril = Parameter(f_scale_tril)
-        self.set_constraint("f_scale_tril", constraints.lower_cholesky)
+        self.f_scale_tril = PyroParam(f_scale_tril, constraints.lower_cholesky)
 
         self.whiten = whiten
         self._sample_latent = True

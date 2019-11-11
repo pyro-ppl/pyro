@@ -6,6 +6,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
+from pyro.nn.module import PyroParam
 
 
 class SparseGPRegression(GPModel):
@@ -97,8 +98,7 @@ class SparseGPRegression(GPModel):
         self.Xu = Parameter(Xu)
 
         noise = self.X.new_tensor(1.) if noise is None else noise
-        self.noise = Parameter(noise)
-        self.set_constraint("noise", constraints.positive)
+        self.noise = PyroParam(noise, constraints.positive)
 
         if approx is None:
             self.approx = "VFE"

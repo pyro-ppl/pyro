@@ -1,12 +1,13 @@
 import torch
 import torch.distributions as torchdist
-from torch.nn import Parameter
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
 from pyro.contrib import autoname
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
+from pyro.nn.module import PyroParam
 from pyro.util import warn_if_nan
 
 
@@ -66,8 +67,7 @@ class GPRegression(GPModel):
         super(GPRegression, self).__init__(X, y, kernel, mean_function, jitter)
 
         noise = self.X.new_tensor(1.) if noise is None else noise
-        self.noise = Parameter(noise)
-        self.set_constraint("noise", torchdist.constraints.positive)
+        self.noise = PyroParam(noise, constraints.positive)
 
     @autoname.scope(prefix="GPR")
     def model(self):

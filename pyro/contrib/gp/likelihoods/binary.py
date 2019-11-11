@@ -3,7 +3,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 
-from .likelihood import Likelihood
+from pyro.contrib.gp.likelihoods.likelihood import Likelihood
 
 
 class Binary(Likelihood):

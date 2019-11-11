@@ -1,7 +1,7 @@
-from pyro.contrib.gp.parameterized import Parameterized
+from pyro.nn.module import PyroModule
 
 
-class Likelihood(Parameterized):
+class Likelihood(PyroModule):
     """
     Base class for likelihoods used in Gaussian Process.
 
