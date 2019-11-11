@@ -5,18 +5,18 @@ from operator import attrgetter
 import numpy as np
 import pytest
 import torch
-from torch.distributions import constraints
 from torch import nn
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
-from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
-                                  AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
+from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuide,
+                                  AutoGuideList, AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
                                   AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
-                                  init_to_sample, AutoGuide)
-from pyro.nn import PyroParam, PyroModule
+                                  init_to_sample)
+from pyro.nn.module import PyroModule, PyroParam
 from pyro.optim import Adam
 from tests.common import assert_close, assert_equal
 
@@ -166,7 +166,7 @@ def auto_guide_module_callable(model):
         def __init__(self, model):
             super().__init__(model)
             self.x_loc = nn.Parameter(torch.tensor(1.))
-            self.x_scale = ConstrainedParameter(torch.tensor(.1), constraint=constraints.positive)
+            self.x_scale = PyroParam(torch.tensor(.1), constraint=constraints.positive)
 
         def forward(self, *args, **kwargs):
             pyro.module("", self)
@@ -500,7 +500,7 @@ def test_init_scale(auto_class, init_scale):
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_median_module(auto_class, Elbo):
 
-    class Model(AutoGuide):
+    class Model(PyroModule):
         def __init__(self):
             super().__init__()
             self.x_loc = nn.Parameter(torch.tensor(1.))
@@ -520,8 +520,8 @@ def test_median_module(auto_class, Elbo):
         guide = guide.laplace_approximation()
 
     median = guide.median()
-    assert_equal(median["x"], torch.tensor(1.0), prec=0.1)
-    assert_equal(median["y"], torch.tensor(2.0), prec=0.1)
+    assert_equal(median["x"].detach(), torch.tensor(1.0), prec=0.1)
+    assert_equal(median["y"].detach(), torch.tensor(2.0), prec=0.1)
 
 
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
