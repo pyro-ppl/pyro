@@ -5,43 +5,37 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.gp.parameterized import Parameterized
+from pyro.nn.module import PyroParam, PyroSample
 from tests.common import assert_equal
 
 
 def test_parameterized():
     class Linear(Parameterized):
-        def __init__(self, a, b, c, d):
+        def __init__(self):
             super(Linear, self).__init__()
-            self.a = Parameter(a)
-            self.b = Parameter(b)
-            self.c = Parameter(c)
-            self.d = Parameter(d)
+            self._pyro_name = "Linear"
+            self.a = PyroParam(torch.tensor(1.), constraints.positive)
+            self.b = PyroSample(dist.Normal(0, 1))
+            self.c = PyroSample(dist.Normal(0, 1))
+            self.d = PyroSample(dist.Normal(0, 4).expand([1]).to_event())
 
         def forward(self, x):
             return self.a * x + self.b + self.c + self.d
 
-    linear = Linear(torch.tensor(1.), torch.tensor(2.), torch.tensor(3.), torch.tensor([4.]))
-    linear.set_constraint("a", constraints.positive)
-    linear.set_prior("b", dist.Normal(0, 1))
-    linear.set_prior("c", dist.Normal(0, 1))
-    linear.set_prior("d", dist.Normal(0, 1))
+    linear = Linear()
     linear.autoguide("c", dist.Normal)
     linear.autoguide("d", dist.MultivariateNormal)
 
     parameters = dict(linear.named_parameters())
-    buffers = dict(linear.named_buffers())
 
     assert "a_unconstrained" in parameters
-    for p in ["b", "c", "d"]:
+    for p in ["a", "b", "c", "d"]:
         assert p not in parameters
-        assert p in buffers
 
     assert "b_map" in parameters
     assert "c_loc" in parameters
-    assert "c_scale" in buffers
     assert "c_scale_unconstrained" in parameters
     assert "d_loc" in parameters
-    assert "d_scale_tril" in buffers
     assert "d_scale_tril_unconstrained" in parameters
 
     def model(x):
@@ -55,12 +49,12 @@ def test_parameterized():
     model_trace = pyro.poutine.trace(model).get_trace(torch.tensor(5.))
     guide_trace = pyro.poutine.trace(guide).get_trace(torch.tensor(5.))
     for p in ["b", "c", "d"]:
-        assert "Linear/{}".format(p) in model_trace.nodes
-        assert "Linear/{}".format(p) in guide_trace.nodes
+        assert "Linear.{}".format(p) in model_trace.nodes
+        assert "Linear.{}".format(p) in guide_trace.nodes
 
-    assert isinstance(guide_trace.nodes["Linear/b"]["fn"], dist.Delta)
-    assert isinstance(guide_trace.nodes["Linear/c"]["fn"].base_dist, dist.Normal)
-    assert isinstance(guide_trace.nodes["Linear/d"]["fn"].base_dist, dist.MultivariateNormal)
+    assert isinstance(guide_trace.nodes["Linear.b"]["fn"], dist.Delta)
+    assert isinstance(guide_trace.nodes["Linear.c"]["fn"].base_dist, dist.Normal)
+    assert isinstance(guide_trace.nodes["Linear.d"]["fn"].base_dist, dist.MultivariateNormal)
 
 
 def test_nested_parameterized():

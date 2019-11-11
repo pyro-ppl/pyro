@@ -1,6 +1,6 @@
 from collections import OrderedDict
 
-from torch.distributions import biject_to, constraints, transform_to
+from torch.distributions import biject_to, constraints
 from torch.nn import Parameter
 
 import pyro
@@ -68,9 +68,10 @@ class Parameterized(PyroModule):
         self._mode = None
 
     def __setattr__(self, name, value):
-        if isinstance(value, PyroSample):
-            self._priors[name] = value
         super().__setattr__(name, value)
+        if isinstance(value, PyroSample):
+            self._priors[name] = value.prior
+            self.autoguide(name, dist.Delta)
 
     def autoguide(self, name, dist_constructor):
         """
@@ -94,12 +95,21 @@ class Parameterized(PyroModule):
             raise NotImplementedError("Unsupported distribution type: {}"
                                       .format(dist_constructor))
 
+        # delete old guide
+        if name in self._guides:
+            dist_args = self._guides[name][1]
+            for arg in dist_args:
+                delattr(self, "{}_{}".format(name, arg))
+
         p = getattr(self, name)
         if dist_constructor is dist.Delta:
-            p_map = PyroParam(p.detach(),
-                              transform_to(_get_independent_support(self._priors[name])))
+            support = _get_independent_support(self._priors[name])
+            if support is constraints.real:
+                p_map = Parameter(p.detach())
+            else:
+                p_map = PyroParam(p.detach(), support)
             setattr(self, "{}_map".format(name), p_map)
-            dist_args = ()
+            dist_args = ("map",)
         elif dist_constructor is dist.Normal:
             loc = Parameter(biject_to(self._priors[name].support).inv(p).detach())
             scale = PyroParam(loc.new_ones(loc.shape), constraints.positive)
@@ -147,7 +157,7 @@ class Parameterized(PyroModule):
         cache = self.__dict__['_pyro_cache']
         value = cache.get(name)
         if value is None:
-            if self.model == "guide":
+            if self.mode == "guide":
                 fn = self._get_guide(name.split(".")[-1], name)
             value = pyro.sample(name, fn)
             cache.set(name, value)
