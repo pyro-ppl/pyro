@@ -500,7 +500,7 @@ def print_summary(samples, prob=0.9, group_by_chain=True):
 
     row_format = name_format + ' {:>9.2f}' * 7
     for name, stats_dict in summary_dict.items():
-        shape = stats_dict["mean"]
+        shape = stats_dict["mean"].shape
         if len(shape) == 0:
             print(row_format.format(name, stats_dict["mean"],
                                     stats_dict["std"], stats_dict["median"],

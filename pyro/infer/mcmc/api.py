@@ -448,4 +448,4 @@ class MCMC(object):
         print_summary(self._samples, prob=prob)
         if 'divergences' in self._diagnostics[0]:
             print("Number of divergences: {}".format(
-                sum([self._diagnostics[i]['divergences'] for i in range(self.num_chains)])))
+                sum([len(self._diagnostics[i]['divergences']) for i in range(self.num_chains)])))
