@@ -25,27 +25,27 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
     if model == 'lcmgp':
         num_gps = 2
         gp = LinearlyCoupledMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt, num_gps=num_gps,
-                                     length_scale_init=0.1 + torch.rand(num_gps),
-                                     kernel_scale_init=0.1 + torch.rand(num_gps),
-                                     obs_noise_scale_init=0.1 + torch.rand(obs_dim))
+                                     length_scale_init=0.5 + torch.rand(num_gps),
+                                     kernel_scale_init=0.5 + torch.rand(num_gps),
+                                     obs_noise_scale_init=0.5 + torch.rand(obs_dim))
     elif model == 'imgp':
         gp = IndependentMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt,
-                                 length_scale_init=0.1 + torch.rand(obs_dim),
-                                 kernel_scale_init=0.1 + torch.rand(obs_dim),
-                                 obs_noise_scale_init=0.1 + torch.rand(obs_dim))
+                                 length_scale_init=0.5 + torch.rand(obs_dim),
+                                 kernel_scale_init=0.5 + torch.rand(obs_dim),
+                                 obs_noise_scale_init=0.5 + torch.rand(obs_dim))
     elif model == 'glgssm':
         gp = GenericLGSSM(state_dim=nu_statedim, obs_dim=obs_dim,
-                          obs_noise_scale_init=0.1 + torch.rand(obs_dim))
+                          obs_noise_scale_init=0.5 + torch.rand(obs_dim))
     elif model == 'ssmgp':
         state_dim = {0.5: 4, 1.5: 3, 2.5: 2}[nu_statedim]
         gp = GenericLGSSMWithGPNoiseModel(nu=nu_statedim, state_dim=state_dim, obs_dim=obs_dim,
-                                          obs_noise_scale_init=0.1 + torch.rand(obs_dim))
+                                          obs_noise_scale_init=0.5 + torch.rand(obs_dim))
     elif model == 'dmgp':
         gp = DependentMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt,
-                               length_scale_init=0.1 + torch.rand(obs_dim))
+                               length_scale_init=0.5 + torch.rand(obs_dim))
     elif model == 'lcdgp':
         gp = LinearlyCoupledDependentMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt,
-                                              length_scale_init=0.1 + torch.rand(obs_dim))
+                                              length_scale_init=0.5 + torch.rand(obs_dim))
 
     targets = torch.randn(T, obs_dim)
     gp_log_prob = gp.log_prob(targets)
@@ -105,7 +105,7 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
 def test_dependent_matern_gp(obs_dim):
     dt = 0.5 + torch.rand(1).item()
     gp = DependentMaternGP(nu=1.5, obs_dim=obs_dim, dt=dt,
-                           length_scale_init=0.1 + torch.rand(obs_dim))
+                           length_scale_init=0.5 + torch.rand(obs_dim))
 
     # make sure stationary covariance matrix satisfies the relevant
     # matrix riccati equation
