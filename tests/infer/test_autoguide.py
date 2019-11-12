@@ -143,8 +143,8 @@ def test_iplate_smoke(auto_class, Elbo):
 
 def auto_guide_list_x(model):
     guide = AutoGuideList(model)
-    guide.append(AutoDelta(poutine.block(model, expose=["x"])))
-    guide.append(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    guide.x = AutoDelta(poutine.block(model, expose=["x"]))
+    guide.y = AutoDiagonalNormal(poutine.block(model, hide=["x"]))
     return guide
 
 
@@ -187,7 +187,7 @@ def nested_auto_guide_callable(model):
     guide = AutoGuideList(model)
     guide.append(AutoDelta(poutine.block(model, expose=['x'])))
     guide_y = AutoGuideList(poutine.block(model, expose=['y']))
-    guide_y.append(AutoIAFNormal(poutine.block(model, expose=['y'])))
+    guide_y.z = AutoIAFNormal(poutine.block(model, expose=['y']))
     guide.append(guide_y)
     return guide
 
@@ -554,9 +554,9 @@ def test_nested_autoguide(Elbo):
         infer.step()
 
     tr = poutine.trace(guide).get_trace()
-    assert all(p.startswith("AutoGuideList.0") or p.startswith("AutoGuideList.1.0") for p in tr.param_nodes)
+    assert all(p.startswith("AutoGuideList.0") or p.startswith("AutoGuideList.1.z") for p in tr.param_nodes)
     stochastic_nodes = set(tr.stochastic_nodes)
     assert "x" in stochastic_nodes
     assert "y" in stochastic_nodes
     # Only latent sampled is for the IAF.
-    assert "_AutoGuideList.1.0_latent" in stochastic_nodes
+    assert "_AutoGuideList.1.z_latent" in stochastic_nodes
