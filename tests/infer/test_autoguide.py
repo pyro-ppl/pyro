@@ -219,7 +219,6 @@ def test_median(auto_class, Elbo):
     assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
 
 
-@pytest.mark.xfail(reason="forward is not serialized")
 @pytest.mark.parametrize("auto_class", [
     AutoDelta,
     AutoDiagonalNormal,
@@ -243,7 +242,8 @@ def test_autoguide_serialization(auto_class, Elbo):
     guide()
     if auto_class is AutoLaplaceApproximation:
         guide = guide.laplace_approximation()
-    expected = guide()
+    expected = guide.call()
+    names = sorted(guide())
 
     # Ignore tracer warnings
     with warnings.catch_warnings():
@@ -253,10 +253,10 @@ def test_autoguide_serialization(auto_class, Elbo):
     torch.jit.save(traced_guide, "/tmp/test_guide_serialization.pt")
     guide_deser = torch.jit.load("/tmp/test_guide_serialization.pt")
 
-    actual = guide_deser()
-    assert set(actual) == set(expected)
-    for name in actual:
-        assert_equal(actual[name], expected[name])
+    actual = guide_deser.call()
+    assert len(actual) == len(expected)
+    for name, a, e in zip(names, actual, expected):
+        assert_equal(a, e, msg="{}: {} vs {}".format(name, a, e))
 
 
 @pytest.mark.parametrize("auto_class", [
