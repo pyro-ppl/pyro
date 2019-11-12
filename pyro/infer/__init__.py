@@ -11,6 +11,7 @@ from pyro.infer.predictive import Predictive
 from pyro.infer.renyi_elbo import RenyiELBO
 from pyro.infer.smcfilter import SMCFilter
 from pyro.infer.svi import SVI
+from pyro.infer.tmc import TensorMonteCarlo
 from pyro.infer.trace_elbo import JitTrace_ELBO, Trace_ELBO
 from pyro.infer.trace_mean_field_elbo import JitTraceMeanField_ELBO, TraceMeanField_ELBO
 from pyro.infer.trace_tail_adaptive_elbo import TraceTailAdaptive_ELBO
@@ -43,6 +44,7 @@ __all__ = [
     "SMCFilter",
     "SVGD",
     "SVI",
+    "TensorMonteCarlo",
     "TraceEnum_ELBO",
     "TraceGraph_ELBO",
     "TraceMeanField_ELBO",

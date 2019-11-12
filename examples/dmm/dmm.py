@@ -333,7 +333,12 @@ def main(args):
     adam = ClippedAdam(adam_params)
 
     # setup inference algorithm
-    if args.tmcelbo:
+    if args.tmc:
+        from pyro.infer.tmc import JitTensorMonteCarlo, TensorMonteCarlo
+        tmc_loss = JitTensorMonteCarlo() if args.jit else TensorMonteCarlo()
+        dmm_guide = config_enumerate(dmm.guide, default="parallel", num_samples=args.tmc_num_samples, expand=False)
+        svi = SVI(dmm.model, dmm_guide, adam, loss=tmc_loss)
+    elif args.tmcelbo:
         elbo = JitTraceEnum_ELBO() if args.jit else TraceEnum_ELBO()
         dmm_guide = config_enumerate(dmm.guide, default="parallel", num_samples=args.tmc_num_samples, expand=False)
         svi = SVI(dmm.model, dmm_guide, adam, loss=elbo)
@@ -461,6 +466,7 @@ if __name__ == '__main__':
     parser.add_argument('-smod', '--save-model', type=str, default='')
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--jit', action='store_true')
+    parser.add_argument('--tmc', action='store_true')
     parser.add_argument('--tmcelbo', action='store_true')
     parser.add_argument('--tmc-num-samples', default=10, type=int)
     parser.add_argument('-l', '--log', type=str, default='dmm.log')
