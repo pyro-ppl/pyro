@@ -84,6 +84,12 @@ class AutoGuide(PyroModule):
         """
         pass
 
+    def __setattr__(self, name, value):
+        if isinstance(value, AutoGuide):
+            master_ref = self if self.master is None else self.master
+            value._update_master(weakref.ref(master_ref))
+        super().__setattr__(name, value)
+
     def _create_plates(self):
         if self.master is None:
             self.plates = {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
@@ -145,12 +151,6 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
         for submodule in self:
             submodule._update_master(master_ref)
 
-    def __setattr__(self, name, value):
-        if isinstance(value, AutoGuide):
-            master_ref = self if self.master is None else self.master
-            value._update_master(weakref.ref(master_ref))
-        super().__setattr__(name, value)
-
     def append(self, part):
         """
         Add an automatic guide for part of the model. The guide should
@@ -164,7 +164,7 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
             part = AutoCallable(self.model, part)
         if part.master is not None:
             raise RuntimeError("The module `{}` is already added.".format(self._pyro_name))
-        self.__setattr__(str(len(self)), part)
+        setattr(self, str(len(self)), part)
 
     def add(self, part):
         """Deprecated alias for :meth:`append`."""
