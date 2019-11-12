@@ -71,7 +71,13 @@ def test_names():
     root.p.w = PyroParam(torch.tensor(4.), constraint=constraints.positive)
 
     # Check named_parameters.
-    expected = {"x", "y", "m.u", "p.v", "p.w"}
+    expected = {
+        "x",
+        "y_unconstrained",
+        "m.u",
+        "p.v",
+        "p.w_unconstrained",
+    }
     actual = set(name for name, _ in root.named_parameters())
     assert actual == expected
 
@@ -127,24 +133,25 @@ def test_constraints(shape, constraint_):
     module.x = PyroParam(torch.full(shape, 1e-4), constraint_)
 
     assert isinstance(module.x, torch.Tensor)
-    assert isinstance(module._parameters['x'], nn.Parameter)
+    assert isinstance(module.x_unconstrained, nn.Parameter)
     assert module.x.shape == shape
     assert constraint_.check(module.x).all()
 
     module.x = torch.randn(shape).exp() * 1e-6
-    assert isinstance(module._parameters['x'], nn.Parameter)
+    assert isinstance(module.x_unconstrained, nn.Parameter)
     assert isinstance(module.x, torch.Tensor)
     assert module.x.shape == shape
     assert constraint_.check(module.x).all()
 
-    assert isinstance(module._parameters['x'], torch.Tensor)
-    y = module._parameters['x'].data.normal_()
+    assert isinstance(module.x_unconstrained, torch.Tensor)
+    y = module.x_unconstrained.data.normal_()
     assert_equal(module.x.data, transform_to(constraint_)(y))
     assert constraint_.check(module.x).all()
 
     del module.x
     assert 'x' not in module._pyro_params
     assert not hasattr(module, 'x')
+    assert not hasattr(module, 'x_unconstrained')
 
 
 def test_sample():
