@@ -105,18 +105,19 @@ def test_delete():
 
 
 def test_nested():
-    class Child(pyro.nn.PyroModule):
+    class Child(PyroModule):
         def __init__(self, a):
             super().__init__()
-            self.a = pyro.nn.PyroParam(a, torch.distributions.constraints.positive)
+            self.a = PyroParam(a, constraints.positive)
 
-    class Family(pyro.nn.PyroModule):
+    class Family(PyroModule):
         def __init__(self):
             super().__init__()
             self.child1 = Child(torch.tensor(1.))
             self.child2 = Child(torch.tensor(2.))
 
     f = Family()
+    assert_equal(f.child1.a.detach(), torch.tensor(1.))
     assert_equal(f.child2.a.detach(), torch.tensor(2.))
 
 
