@@ -1,3 +1,4 @@
+import io
 import warnings
 
 import pytest
@@ -83,10 +84,14 @@ def test_serialize():
     # Work around https://github.com/pytorch/pytorch/issues/27972
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning)
-        torch.save(guide, "/tmp/test_easyguide.pkl")
-        actual = torch.load("/tmp/test_easyguide.pkl")
+        f = io.BytesIO()
+        torch.save(guide, f)
+        f.seek(0)
+        actual = torch.load(f)
 
     assert type(actual) == type(guide)
+    assert dir(actual) == dir(guide)
+    check_guide(guide)
     check_guide(actual)
 
 
