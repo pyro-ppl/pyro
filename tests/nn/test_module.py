@@ -96,6 +96,30 @@ def test_names():
     assert actual == expected
 
 
+def test_delete():
+    m = PyroModule()
+    m.a = PyroParam(torch.tensor(1.))
+    del m.a
+    m.a = PyroParam(torch.tensor(0.1))
+    assert_equal(m.a.detach(), torch.tensor(0.1))
+
+
+def test_nested():
+    class Child(pyro.nn.PyroModule):
+        def __init__(self, a):
+            super().__init__()
+            self.a = pyro.nn.PyroParam(a, torch.distributions.constraints.positive)
+
+    class Family(pyro.nn.PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.child1 = Child(torch.tensor(1.))
+            self.child2 = Child(torch.tensor(2.))
+
+    f = Family()
+    assert_equal(f.child2.a.detach(), torch.tensor(2.))
+
+
 SHAPE_CONSTRAINT = [
     ((), constraints.real),
     ((4,), constraints.real),
