@@ -1,3 +1,4 @@
+import io
 import warnings
 
 import pytest
@@ -44,15 +45,15 @@ def test_svi_smoke():
     trace = poutine.trace(model).get_trace(data)
     assert "loc" in trace.nodes.keys()
     assert trace.nodes["loc"]["type"] == "param"
-    assert "scale_unconstrained" in trace.nodes
-    assert trace.nodes["scale_unconstrained"]["type"] == "param"
+    assert "scale" in trace.nodes
+    assert trace.nodes["scale"]["type"] == "param"
 
     guide = Guide()
     trace = poutine.trace(guide).get_trace(data)
     assert "loc" in trace.nodes.keys()
     assert trace.nodes["loc"]["type"] == "param"
-    assert "scale_unconstrained" in trace.nodes
-    assert trace.nodes["scale_unconstrained"]["type"] == "param"
+    assert "scale" in trace.nodes
+    assert trace.nodes["scale"]["type"] == "param"
 
     optim = Adam({"lr": 0.01})
     svi = SVI(model, guide, optim, Trace_ELBO())
@@ -82,13 +83,7 @@ def test_names():
     assert actual == expected
 
     # Check pyro.param names.
-    expected = {
-        "x",
-        "y_unconstrained",
-        "m$$$u",
-        "p.v",
-        "p.w_unconstrained",
-    }
+    expected = {"x", "y", "m$$$u", "p.v", "p.w"}
     with poutine.trace(param_only=True) as param_capture:
         # trigger .__getattr__()
         root.x
@@ -238,8 +233,10 @@ def test_serialization():
     # Work around https://github.com/pytorch/pytorch/issues/27972
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning)
-        torch.save(module, "/tmp/test_pyro_module.pkl")
-        actual = torch.load("/tmp/test_pyro_module.pkl")
+        f = io.BytesIO()
+        torch.save(module, f)
+        f.seek(0)
+        actual = torch.load(f)
     assert_equal(actual.x, module.x)
     actual_names = {name for name, _ in actual.named_parameters()}
     expected_names = {name for name, _ in module.named_parameters()}

@@ -12,6 +12,7 @@ For example to generate a mean field Gaussian guide::
 Automatic guides can also be combined using :func:`pyro.poutine.block` and
 :class:`AutoGuideList`.
 """
+import warnings
 import weakref
 from contextlib import ExitStack  # python 3
 
@@ -43,26 +44,23 @@ class AutoGuide(PyroModule):
     :class:`AutoGuideList` object.
 
     :param callable model: a pyro model
-    :param str prefix: a prefix that will be prefixed to all param internal sites
-        as part of the module name.
     """
 
-    def __init__(self, model, prefix="auto"):
+    def __init__(self, model):
         super().__init__()
         self.master = None
         # Do not register model as submodule
         self._model = (model,)
-        self._pyro_name = prefix
+        self._pyro_name = type(self).__name__
         self.prototype_trace = None
         self._plates = {}
 
     @property
-    def prefix(self):
-        return self._pyro_name
-
-    @property
     def model(self):
         return self._model[0]
+
+    def _update_master(self, master_ref):
+        self.master = master_ref
 
     def call(self, *args, **kwargs):
         """
@@ -86,11 +84,19 @@ class AutoGuide(PyroModule):
         """
         pass
 
+    def __setattr__(self, name, value):
+        if isinstance(value, AutoGuide):
+            master_ref = self if self.master is None else self.master
+            value._update_master(weakref.ref(master_ref))
+        super().__setattr__(name, value)
+
     def _create_plates(self):
-        if self.master is not None:
-            return self.master().plates
-        return {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
-                for frame in sorted(self._plates.values())}
+        if self.master is None:
+            self.plates = {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
+                           for frame in sorted(self._plates.values())}
+        else:
+            self.plates = self.master().plates
+        return self.plates
 
     def _setup_prototype(self, *args, **kwargs):
         # run the model so we can inspect its structure
@@ -105,7 +111,7 @@ class AutoGuide(PyroModule):
                 if frame.vectorized:
                     self._plates[frame.name] = frame
                 else:
-                    raise NotImplementedError("AutoGuideList does not support sequential pyro.plate")
+                    raise NotImplementedError("AutoGuide does not support sequential pyro.plate")
 
     def median(self, *args, **kwargs):
         """
@@ -117,7 +123,7 @@ class AutoGuide(PyroModule):
         raise NotImplementedError
 
 
-class AutoGuideList(AutoGuide):
+class AutoGuideList(AutoGuide, nn.ModuleList):
     """
     Container class to combine multiple automatic guides.
 
@@ -129,14 +135,7 @@ class AutoGuideList(AutoGuide):
         svi = SVI(model, guide, optim, Trace_ELBO())
 
     :param callable model: a Pyro model
-    :param str prefix: a prefix that will be prefixed to all param internal sites
-        as part of the module name.
     """
-
-    def __init__(self, model, prefix="auto"):
-        super().__init__(model, prefix)
-        self.parts = []
-        self.plates = {}
 
     def _check_prototype(self, part_trace):
         for name, part_site in part_trace.nodes.items():
@@ -147,7 +146,12 @@ class AutoGuideList(AutoGuide):
             assert part_site["fn"].event_shape == self_site["fn"].event_shape
             assert part_site["value"].shape == self_site["value"].shape
 
-    def add(self, part):
+    def _update_master(self, master_ref):
+        self.master = master_ref
+        for submodule in self:
+            submodule._update_master(master_ref)
+
+    def append(self, part):
         """
         Add an automatic guide for part of the model. The guide should
         have been created by blocking the model to restrict to a subset of
@@ -158,17 +162,14 @@ class AutoGuideList(AutoGuide):
         """
         if not isinstance(part, AutoGuide):
             part = AutoCallable(self.model, part)
-        self.parts.append(part)
-        assert part.master is None
-        part.master = weakref.ref(self)
+        if part.master is not None:
+            raise RuntimeError("The module `{}` is already added.".format(self._pyro_name))
+        setattr(self, str(len(self)), part)
 
-    def _setup_prototype(self, *args, **kwargs):
-        super()._setup_prototype(*args, **kwargs)
-        # Initialize all module parameters
-        for part in self.parts:
-            part._setup_prototype(*args, **kwargs)
-            for param, value in part.named_parameters():
-                setattr(self, '{}_{}'.format(part.prefix, param), value)
+    def add(self, part):
+        """Deprecated alias for :meth:`append`."""
+        warnings.warn("The method `.add` has been deprecated in favor of `.append`.", DeprecationWarning)
+        self.append(part)
 
     def forward(self, *args, **kwargs):
         """
@@ -182,12 +183,11 @@ class AutoGuideList(AutoGuide):
             self._setup_prototype(*args, **kwargs)
 
         # create all plates
-        self.plates = {frame.name: pyro.plate(frame.name, frame.size, dim=frame.dim)
-                       for frame in sorted(self._plates.values())}
+        self._create_plates()
 
         # run slave guides
         result = {}
-        for part in self.parts:
+        for part in self:
             result.update(part(*args, **kwargs))
         return result
 
@@ -199,7 +199,7 @@ class AutoGuideList(AutoGuide):
         :rtype: dict
         """
         result = {}
-        for part in self.parts:
+        for part in self:
             result.update(part.median(*args, **kwargs))
         return result
 
@@ -235,7 +235,7 @@ class AutoCallable(AutoGuide):
     """
 
     def __init__(self, model, guide, median=lambda *args, **kwargs: {}):
-        super().__init__(model, prefix="")
+        super().__init__(model)
         self._guide = guide
         self.median = median
 
@@ -272,26 +272,18 @@ class AutoDelta(AutoGuide):
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
     """
-    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median):
+    def __init__(self, model, init_loc_fn=init_to_median):
         self.init_loc_fn = init_loc_fn
-        model = InitMessenger(self._init_loc_fn)(model)
-        super().__init__(model, prefix=prefix)
+        model = InitMessenger(self.init_loc_fn)(model)
+        super().__init__(model)
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
 
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
-            param_name = "{}_{}".format(self.prefix, name)
             value = PyroParam(site["value"].detach(), constraint=site["fn"].support)
-            setattr(self, param_name, value)
-
-    def _init_loc_fn(self, site):
-        name = "{}_{}".format(self.prefix, site["name"])
-        store = pyro.get_param_store()
-        if name in store:
-            return store[name]
-        return self.init_loc_fn(site)
+            setattr(self, name, value)
 
     def forward(self, *args, **kwargs):
         """
@@ -311,8 +303,7 @@ class AutoDelta(AutoGuide):
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
                         stack.enter_context(plates[frame.name])
-                param_name = "{}_{}".format(self.prefix, name)
-                result[name] = pyro.sample(name, dist.Delta(getattr(self, param_name),
+                result[name] = pyro.sample(name, dist.Delta(getattr(self, name),
                                                             event_dim=site["fn"].event_dim))
         return result
 
@@ -352,9 +343,9 @@ class AutoContinuous(AutoGuide):
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
     """
-    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median):
+    def __init__(self, model, init_loc_fn=init_to_median):
         model = InitMessenger(init_loc_fn)(model)
-        super().__init__(model, prefix=prefix)
+        super().__init__(model)
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
@@ -397,7 +388,7 @@ class AutoContinuous(AutoGuide):
         base ``model``.
         """
         pos_dist = self.get_posterior(*args, **kwargs)
-        return pyro.sample("_{}_latent".format(self.prefix), pos_dist, infer={"is_auxiliary": True})
+        return pyro.sample("_{}_latent".format(self._pyro_name), pos_dist, infer={"is_auxiliary": True})
 
     def _unpack_latent(self, latent):
         """
@@ -510,16 +501,14 @@ class AutoMultivariateNormal(AutoContinuous):
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Initial scale for the standard deviation of each
         (unconstrained transformed) latent variable.
-    :param str prefix: a prefix that will be prefixed to all param internal sites
-        as part of the module name.
     """
 
-    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median,
+    def __init__(self, model, init_loc_fn=init_to_median,
                  init_scale=1.0):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
         self._init_scale = init_scale
-        super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
+        super().__init__(model, init_loc_fn=init_loc_fn)
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
@@ -557,16 +546,14 @@ class AutoDiagonalNormal(AutoContinuous):
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Initial scale for the standard deviation of each
         (unconstrained transformed) latent variable.
-    :param str prefix: a prefix that will be prefixed to all param internal sites
-        as part of the module name.
     """
 
-    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median,
+    def __init__(self, model, init_loc_fn=init_to_median,
                  init_scale=1.0):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
         self._init_scale = init_scale
-        super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
+        super().__init__(model, init_loc_fn=init_loc_fn)
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
@@ -607,18 +594,16 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Approximate initial scale for the standard
         deviation of each (unconstrained transformed) latent variable.
-    :param str prefix: a prefix that will be prefixed to all param internal sites
-        as part of the module name.
     """
 
-    def __init__(self, model, prefix="auto", init_loc_fn=init_to_median, init_scale=1.0, rank=1):
+    def __init__(self, model, init_loc_fn=init_to_median, init_scale=1.0, rank=1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
         if not isinstance(rank, int) or not rank > 0:
             raise ValueError("Expected rank > 0 but got {}".format(rank))
         self._init_scale = init_scale
         self.rank = rank
-        super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
+        super().__init__(model, init_loc_fn=init_loc_fn)
 
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
@@ -661,14 +646,12 @@ class AutoIAFNormal(AutoContinuous):
     :param int hidden_dim: number of hidden dimensions in the IAF
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
-    :param str prefix: a prefix that will be prefixed to all param internal sites
-        as part of the module name.
     """
 
-    def __init__(self, model, hidden_dim=None, prefix="auto", init_loc_fn=init_to_median):
+    def __init__(self, model, hidden_dim=None, init_loc_fn=init_to_median):
         self.hidden_dim = hidden_dim
         self.arn = None
-        super().__init__(model, prefix=prefix, init_loc_fn=init_loc_fn)
+        super().__init__(model, init_loc_fn=init_loc_fn)
 
     def get_posterior(self, *args, **kwargs):
         """
@@ -708,8 +691,6 @@ class AutoLaplaceApproximation(AutoContinuous):
     :param callable model: a generative model
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
-    :param str prefix: a prefix that will be prefixed to all param internal sites
-        as part of the module name.
     """
     def _setup_prototype(self, *args, **kwargs):
         super()._setup_prototype(*args, **kwargs)
@@ -737,7 +718,7 @@ class AutoLaplaceApproximation(AutoContinuous):
         loc = self.loc
         scale_tril = cov.cholesky()
 
-        gaussian_guide = AutoMultivariateNormal(self.model, prefix=self.prefix)
+        gaussian_guide = AutoMultivariateNormal(self.model)
         gaussian_guide._setup_prototype(*args, **kwargs)
         # Set loc, scale_tril parameters as computed above.
         gaussian_guide.loc = loc
@@ -786,7 +767,7 @@ class AutoDiscreteParallel(AutoGuide):
         for site, Dist, param_spec in self._discrete_sites:
             name = site["name"]
             for param_name, param_init, param_constraint in param_spec:
-                setattr(self, "{}_{}_{}".format(self.prefix, name, param_name),
+                setattr(self, "{}_{}".format(name, param_name),
                         PyroParam(param_init, constraint=param_constraint))
 
     def forward(self, *args, **kwargs):
@@ -807,7 +788,7 @@ class AutoDiscreteParallel(AutoGuide):
         for site, Dist, param_spec in self._discrete_sites:
             name = site["name"]
             dist_params = {
-                param_name: getattr(self, "{}_{}_{}".format(self.prefix, name, param_name))
+                param_name: getattr(self, "{}_{}".format(name, param_name))
                 for param_name, param_init, param_constraint in param_spec
             }
             discrete_dist = Dist(**dist_params)
