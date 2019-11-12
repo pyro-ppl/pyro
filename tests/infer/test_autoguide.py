@@ -543,11 +543,11 @@ def test_nested_autoguide(Elbo):
     model = Model()
     guide = nested_auto_guide_callable(model)
 
-    # Check master ref.
+    # Check master ref for all nested components.
     for _, m in guide.named_modules():
         if m is guide:
             continue
-        assert m.master is not None and m.master() is guide, "master ref wrong for {}".format(m.prefix)
+        assert m.master is not None and m.master() is guide, "master ref wrong for {}".format(m._pyro_name)
 
     infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
     for _ in range(20):
