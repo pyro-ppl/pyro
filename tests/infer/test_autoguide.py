@@ -11,6 +11,7 @@ from torch.distributions import constraints
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
 from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuide,
                                   AutoGuideList, AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
@@ -183,10 +184,10 @@ def auto_guide_module_callable(model):
 
 def nested_auto_guide_callable(model):
     guide = AutoGuideList(model)
-    guide.x = AutoDelta(poutine.block(model, expose=['x']))
+    guide.append(AutoDelta(poutine.block(model, expose=['x'])))
     guide_y = AutoGuideList(poutine.block(model, expose=['y']))
-    guide_y.z = AutoIAFNormal(poutine.block(model, expose=['y']))
-    guide.y = guide_y
+    guide_y.append(AutoIAFNormal(poutine.block(model, expose=['y'])))
+    guide.append(guide_y)
     return guide
 
 
@@ -540,6 +541,13 @@ def test_nested_autoguide(Elbo):
 
     model = Model()
     guide = nested_auto_guide_callable(model)
+
+    # Check master ref.
+    for _, m in guide.named_modules():
+        if m is guide:
+            continue
+        assert m.master is not None and m.master() is guide, "master ref wrong for {}".format(m.prefix)
+
     infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
     for _ in range(20):
         infer.step()
