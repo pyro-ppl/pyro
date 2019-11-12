@@ -143,8 +143,8 @@ def test_iplate_smoke(auto_class, Elbo):
 
 def auto_guide_list_x(model):
     guide = AutoGuideList(model)
-    guide.x = AutoDelta(poutine.block(model, expose=["x"]))
-    guide.y = AutoDiagonalNormal(poutine.block(model, hide=["x"]))
+    guide.append(AutoDelta(poutine.block(model, expose=["x"])))
+    guide.append(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
     return guide
 
 
