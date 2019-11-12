@@ -4,7 +4,7 @@ import torch
 from tests.common import assert_equal
 import pyro
 from pyro.contrib.timeseries import (IndependentMaternGP, LinearlyCoupledMaternGP, GenericLGSSM,
-                                     GenericLGSSMWithGPNoiseModel, DependentMaternGP, LinearlyCoupledDependentMaternGP)
+                                     GenericLGSSMWithGPNoiseModel, DependentMaternGP)
 from pyro.ops.tensor_utils import block_diag_embed
 import pytest
 
@@ -15,7 +15,7 @@ import pytest
                                                        ('imgp', 1, 1.5), ('imgp', 3, 1.5),
                                                        ('imgp', 1, 2.5), ('imgp', 3, 2.5),
                                                        ('dmgp', 1, 1.5), ('dmgp', 2, 1.5),
-                                                       ('lcdgp', 1, 1.5), ('lcdgp', 3, 1.5),
+                                                       ('dmgp', 3, 1.5),
                                                        ('glgssm', 1, 3), ('glgssm', 3, 1)])
 @pytest.mark.parametrize('T', [11, 37])
 def test_timeseries_models(model, nu_statedim, obs_dim, T):
@@ -41,11 +41,9 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
         gp = GenericLGSSMWithGPNoiseModel(nu=nu_statedim, state_dim=state_dim, obs_dim=obs_dim,
                                           obs_noise_scale_init=0.5 + torch.rand(obs_dim))
     elif model == 'dmgp':
-        gp = DependentMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt,
+        linearly_coupled = bool(torch.rand(1).item() > 0.5)
+        gp = DependentMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt, linearly_coupled=linearly_coupled,
                                length_scale_init=0.5 + torch.rand(obs_dim))
-    elif model == 'lcdgp':
-        gp = LinearlyCoupledDependentMaternGP(nu=nu_statedim, obs_dim=obs_dim, dt=dt,
-                                              length_scale_init=0.5 + torch.rand(obs_dim))
 
     targets = torch.randn(T, obs_dim)
     gp_log_prob = gp.log_prob(targets)

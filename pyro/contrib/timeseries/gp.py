@@ -277,12 +277,15 @@ class DependentMaternGP(TimeSeriesModel):
     A time series model in which each output dimension is modeled as a univariate Gaussian Process
     with a Matern kernel. The different output dimensions become correlated because the Gaussian
     Processes are driven by a correlated Wiener process; see reference [1] for details.
-    The targets are assumed to be evenly spaced in time. Training and inference are logarithmic
-    in the length of the time series T.
+    If, in addition, `linearly_coupled` is True, additional correlation is achieved through
+    linear mixing as in :class:`LinearlyCoupledMaternGP`. The targets are assumed to be evenly
+    spaced in time. Training and inference are logarithmic in the length of the time series T.
 
     :param float nu: The order of the Matern kernel; must be 1.5.
     :param float dt: The time spacing between neighboring observations of the time series.
     :param int obs_dim: The dimension of the targets at each time step.
+    :param bool linearly_coupled: Whether to linearly mix the various gaussian processes in the likelihood.
+        Defaults to False.
     :param torch.Tensor length_scale_init: optional initial values for the kernel length scale
         given as a ``obs_dim``-dimensional tensor
     :param torch.Tensor obs_noise_scale_init: optional initial values for the observation noise scale
@@ -291,7 +294,7 @@ class DependentMaternGP(TimeSeriesModel):
     References
     [1] "Dependent Matern Processes for Multivariate Time Series," Alexander Vandenberg-Rodes, Babak Shahbaba.
     """
-    def __init__(self, nu=1.5, dt=1.0, obs_dim=1,
+    def __init__(self, nu=1.5, dt=1.0, obs_dim=1, linearly_coupled=False,
                  length_scale_init=None, obs_noise_scale_init=None):
 
         if nu != 1.5:
@@ -321,13 +324,22 @@ class DependentMaternGP(TimeSeriesModel):
                                            0.03 * torch.randn(obs_dim, obs_dim).tril(-1),
                                            constraint=constraints.lower_cholesky)
 
-        obs_matrix = torch.zeros(self.full_state_dim, obs_dim)
-        for i in range(obs_dim):
-            obs_matrix[self.kernel.state_dim * i, i] = 1.0
-        self.register_buffer("obs_matrix", obs_matrix)
+        if linearly_coupled:
+            self.obs_matrix = nn.Parameter(0.3 * torch.randn(self.obs_dim, self.obs_dim))
+        else:
+            obs_matrix = torch.zeros(self.full_state_dim, obs_dim)
+            for i in range(obs_dim):
+                obs_matrix[self.kernel.state_dim * i, i] = 1.0
+            self.register_buffer("obs_matrix", obs_matrix)
 
     def _get_obs_matrix(self):
-        return self.obs_matrix
+        if self.obs_matrix.size(0) == self.obs_dim:
+            # (num_gps, obs_dim) => (state_dim * num_gps, obs_dim)
+            selector = [1.0] + [0.0] * (self.kernel.state_dim - 1)
+            return self.obs_matrix.repeat_interleave(self.kernel.state_dim, dim=0) * \
+                self.obs_matrix.new_tensor(selector).repeat(self.obs_dim).unsqueeze(-1)
+        else:
+            return self.obs_matrix
 
     def _get_init_dist(self, stationary_covariance):
         return torch.distributions.MultivariateNormal(self.obs_matrix.new_zeros(self.full_state_dim),
@@ -429,59 +441,3 @@ class DependentMaternGP(TimeSeriesModel):
         filtering_state = self._filter(targets)
         predicted_mean, predicted_covar = self._forecast(dts, filtering_state)
         return MultivariateNormal(predicted_mean, predicted_covar)
-
-
-class LinearlyCoupledDependentMaternGP(DependentMaternGP):
-    """
-    A time series model in which each output dimension is modeled as a linear combination
-    of univariate Gaussian Processes with Matern kernels. The different output dimensions
-    are additionally correlated because the Gaussian Processes are driven by a correlated
-    Wiener process. That is, this time series model combines the structure of the
-    :class:`LinearlyCoupledMaternGP` (with ``num_gps`` equal to ``obs_dim``) with that of the
-    :class:`DependentMaternGP`. The targets are assumed to be evenly spaced in time. Training
-    and inference are logarithmic in the length of the time series T.
-
-    :param float nu: The order of the Matern kernel; must be 1.5.
-    :param float dt: The time spacing between neighboring observations of the time series.
-    :param int obs_dim: The dimension of the targets at each time step.
-    :param torch.Tensor length_scale_init: optional initial values for the kernel length scale
-        given as a ``obs_dim``-dimensional tensor
-    :param torch.Tensor obs_noise_scale_init: optional initial values for the observation noise scale
-        given as a ``obs_dim``-dimensional tensor
-    """
-    def __init__(self, nu=1.5, dt=1.0, obs_dim=1,
-                 length_scale_init=None, obs_noise_scale_init=None):
-
-        if nu != 1.5:
-            raise NotImplementedError("The only supported value of nu is 1.5")
-
-        self.dt = dt
-        self.obs_dim = obs_dim
-
-        if obs_noise_scale_init is None:
-            obs_noise_scale_init = 0.2 * torch.ones(obs_dim)
-        assert obs_noise_scale_init.shape == (obs_dim,)
-
-        nn.Module.__init__(self)
-
-        self.kernel = MaternKernel(nu=nu, num_gps=obs_dim,
-                                   length_scale_init=length_scale_init)
-        self.full_state_dim = self.kernel.state_dim * obs_dim
-
-        # we demote self.kernel.kernel_scale from being a nn.Parameter
-        # since the relevant scales are now encoded in the wiener noise matrix
-        del self.kernel.kernel_scale
-        self.kernel.register_buffer("kernel_scale", torch.zeros(obs_dim))
-
-        self.obs_noise_scale = PyroParam(obs_noise_scale_init,
-                                         constraint=constraints.positive)
-        self.wiener_noise_tril = PyroParam(torch.eye(obs_dim) +
-                                           0.03 * torch.randn(obs_dim, obs_dim).tril(-1),
-                                           constraint=constraints.lower_cholesky)
-        self.obs_matrix = nn.Parameter(0.3 * torch.randn(self.obs_dim, self.obs_dim))
-
-    def _get_obs_matrix(self):
-        # (num_gps, obs_dim) => (state_dim * num_gps, obs_dim)
-        selector = [1.0] + [0.0] * (self.kernel.state_dim - 1)
-        return self.obs_matrix.repeat_interleave(self.kernel.state_dim, dim=0) * \
-            self.obs_matrix.new_tensor(selector).repeat(self.obs_dim).unsqueeze(-1)
