@@ -5,13 +5,68 @@ from .messenger import Messenger
 from .runtime import _ENUM_ALLOCATOR
 
 
+def _tmc_sample(msg):
+    dist, num_samples = msg["fn"], msg["infer"].get("num_samples")
+
+    # find batch dims that aren't plate dims
+    batch_shape = [1] * len(dist.batch_shape)
+    for f in msg["cond_indep_stack"]:
+        if f.vectorized:
+            batch_shape[f.dim] = f.size
+    batch_shape = tuple(batch_shape)
+
+    # sample a batch
+    sample_shape = (num_samples,) if batch_shape == dist.batch_shape else ()
+    fat_sample = dist(sample_shape=sample_shape)  # TODO thin before sampling
+    assert fat_sample.shape == sample_shape + dist.batch_shape + dist.event_shape
+    assert any(d > 1 for d in fat_sample.shape)
+
+    fat_sample = fat_sample.unsqueeze(0) if not sample_shape else fat_sample
+    target_shape = (num_samples,) + batch_shape + dist.event_shape
+
+    # forget particle IDs for all sample_shape dims
+    thin_sample = fat_sample
+    while thin_sample.shape != target_shape:
+
+        for squashed_dim1, squashed_size1 in enumerate(thin_sample.shape):
+            if squashed_size1 > 1 and (target_shape[squashed_dim1] == 1 or squashed_dim1 == 0):
+                break
+
+        for squashed_dim2, squashed_size2 in zip(range(squashed_dim1+1, len(thin_sample.shape)),
+                                                 thin_sample.shape[squashed_dim1+1:]):
+            if squashed_size2 > 1 and target_shape[squashed_dim2] == 1:
+                break
+        else:
+            squashed_dim2 = len(thin_sample.shape)
+
+        thin_sample = thin_sample.transpose(0, squashed_dim1)
+
+        # don't squash plate or event dimensions
+        if squashed_dim2 >= len(target_shape) - len(dist.event_shape) or \
+                thin_sample.shape == target_shape:  # XXX not fully general?
+            continue
+
+        # permute dims to left if necessary
+        thin_sample = thin_sample.transpose(1, squashed_dim2)
+
+        thin_sample = thin_sample.diagonal(dim1=0, dim2=1).unsqueeze(-1)
+
+        # move particles to leftmost dim to mimic output shape of enumerate_support
+        thin_sample = thin_sample.permute((-2, -1,) + tuple(range(0, len(thin_sample.shape) - 2)))
+
+    assert thin_sample.shape == target_shape
+    return thin_sample
+
+
 def enumerate_site(msg):
     dist = msg["fn"]
-    num_samples = msg["infer"].get("num_samples")
+    num_samples = msg["infer"].get("num_samples", None)
     if num_samples is None:
         # Enumerate over the support of the distribution.
         value = dist.enumerate_support(expand=msg["infer"].get("expand", False))
-    else:
+    elif num_samples > 1 and not msg["infer"].get("expand", False):
+        value = _tmc_sample(msg)
+    elif num_samples > 1:
         # Monte Carlo sample the distribution.
         value = dist(sample_shape=(num_samples,))
     assert value.dim() == 1 + len(dist.batch_shape) + len(dist.event_shape)

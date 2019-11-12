@@ -89,7 +89,8 @@ def _config_fn(default, expand, num_samples, site):
         return {}
     if num_samples is not None:
         return {"enumerate": site["infer"].get("enumerate", default),
-                "num_samples": site["infer"].get("num_samples", num_samples)}
+                "num_samples": site["infer"].get("num_samples", num_samples),
+                "expand": site["infer"].get("expand", expand)}
     if getattr(site["fn"], "has_enumerate_support", False):
         return {"enumerate": site["infer"].get("enumerate", default),
                 "expand": site["infer"].get("expand", expand)}
