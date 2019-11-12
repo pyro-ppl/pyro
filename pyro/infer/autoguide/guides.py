@@ -199,9 +199,7 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
         :rtype: dict
         """
         result = {}
-        for _, part in self.named_modules():
-            if part is self:
-                continue
+        for part in self:
             result.update(part.median(*args, **kwargs))
         return result
 
