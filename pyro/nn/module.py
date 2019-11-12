@@ -76,7 +76,7 @@ class PyroModule(torch.nn.Module):
         scale = my_module.scale  # Triggers another pyro.param statement.
 
     Note that, unlike normal :class:`torch.nn.Module` s, :class:`PyroModule` s
-    should note be registered with :func:`pyro.module` statements.
+    should not be registered with :func:`pyro.module` statements.
     :class:`PyroModule` s can contain normal :class:`torch.nn.Module` s, but not
     vice versa. Accessing a normal :class:`torch.nn.Module` attribute of
     a :class:`PyroModule` triggers a :func:`pyro.module` statement.
