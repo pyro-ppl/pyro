@@ -1,3 +1,4 @@
+import io
 import warnings
 
 import pytest
@@ -232,8 +233,10 @@ def test_serialization():
     # Work around https://github.com/pytorch/pytorch/issues/27972
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning)
-        torch.save(module, "/tmp/test_pyro_module.pkl")
-        actual = torch.load("/tmp/test_pyro_module.pkl")
+        f = io.BytesIO()
+        torch.save(module, f)
+        f.seek(0)
+        actual = torch.load(f)
     assert_equal(actual.x, module.x)
     actual_names = {name for name, _ in actual.named_parameters()}
     expected_names = {name for name, _ in module.named_parameters()}
