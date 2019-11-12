@@ -156,7 +156,7 @@ class PyroModule(torch.nn.Module):
             _pyro_params = self.__dict__['_pyro_params']
             if name in _pyro_params:
                 constraint, event_dim = _pyro_params[name]
-                unconstrained_value = super().__getattr__(name + "_unconstrained")
+                unconstrained_value = getattr(self, name + "_unconstrained")
                 return _force_pyro_param(_make_name(self._pyro_name, name),
                                          unconstrained_value, constraint, event_dim)
 
@@ -172,7 +172,7 @@ class PyroModule(torch.nn.Module):
         result = super().__getattr__(name)
 
         # Regular nn.Parameters trigger pyro.param statements.
-        if isinstance(result, torch.nn.Parameter):
+        if isinstance(result, torch.nn.Parameter) and not name.endswith("_unconstrained"):
             _force_pyro_param(_make_name(self._pyro_name, name), result)
 
         # Regular nn.Modules trigger pyro.module statements.
@@ -227,7 +227,7 @@ class PyroModule(torch.nn.Module):
                 if name in _pyro_params:
                     # Update value of an existing PyroParam.
                     constraint, event_dim = _pyro_params[name]
-                    unconstrained_value = super().__getattr__(name + "_unconstrained")
+                    unconstrained_value = getattr(self, name + "_unconstrained")
                     with torch.no_grad():
                         unconstrained_value.data = transform_to(constraint).inv(value.detach())
                     return
@@ -238,7 +238,7 @@ class PyroModule(torch.nn.Module):
         if '_pyro_params' in self.__dict__:
             _pyro_params = self.__dict__['_pyro_params']
             if name in _pyro_params:
-                super().__delattr__(name + "_unconstrained")
+                delattr(self, name + "_unconstrained")
                 del _pyro_params[name]
                 return
 
