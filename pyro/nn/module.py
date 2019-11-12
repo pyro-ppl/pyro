@@ -203,8 +203,12 @@ class PyroModule(torch.nn.Module):
             _pyro_params[name] = constraint, event_dim
             fullname = _make_name(self._pyro_name, name)
             pyro.param(fullname, constrained_value, constraint=constraint, event_dim=event_dim)
-            unconstrained_value = torch.nn.Parameter(_PYRO_PARAM_STORE._params[fullname])
-            super().__setattr__(name, unconstrained_value)
+            param = _PYRO_PARAM_STORE._params[fullname]
+            if not isinstance(param, torch.nn.Parameter):
+                param = torch.nn.Parameter(param)
+                _PYRO_PARAM_STORE._params[fullname] = param
+                _PYRO_PARAM_STORE._param_to_name[param] = fullname
+            super().__setattr__(name, param)
             return
 
         if isinstance(value, PyroSample):
