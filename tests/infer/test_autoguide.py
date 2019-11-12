@@ -18,8 +18,9 @@ from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, A
                                   AutoGuideList, AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
                                   AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
                                   init_to_sample)
-from pyro.nn.module import PyroModule, PyroParam
+from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.optim import Adam
+from pyro.util import check_model_guide_match
 from tests.common import assert_close, assert_equal
 
 
@@ -172,7 +173,6 @@ def auto_guide_module_callable(model):
             self.x_scale = PyroParam(torch.tensor(.1), constraint=constraints.positive)
 
         def forward(self, *args, **kwargs):
-            pyro.module("", self)
             return {"x": pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))}
 
         def median(self, *args, **kwargs):
@@ -568,10 +568,53 @@ def test_nested_autoguide(Elbo):
     for _ in range(20):
         infer.step()
 
-    tr = poutine.trace(guide).get_trace()
-    assert all(p.startswith("AutoGuideList.0") or p.startswith("AutoGuideList.1.z") for p in tr.param_nodes)
-    stochastic_nodes = set(tr.stochastic_nodes)
+    guide_trace = poutine.trace(guide).get_trace()
+    model_trace = poutine.trace(model).get_trace()
+    check_model_guide_match(model_trace, guide_trace)
+    assert all(p.startswith("AutoGuideList.0") or p.startswith("AutoGuideList.1.z")
+               for p in guide_trace.param_nodes)
+    stochastic_nodes = set(guide_trace.stochastic_nodes)
     assert "x" in stochastic_nodes
     assert "y" in stochastic_nodes
     # Only latent sampled is for the IAF.
     assert "_AutoGuideList.1.z_latent" in stochastic_nodes
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+    auto_guide_list_x,
+    auto_guide_callable,
+    auto_guide_module_callable,
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_linear_regression_smoke(auto_class, Elbo):
+    N, D = 10, 3
+
+    class RandomLinear(nn.Linear, PyroModule):
+        def __init__(self, in_features, out_features):
+            super().__init__(in_features, out_features)
+            self.weight = PyroSample(lambda self: dist.Normal(0., 1.).expand([out_features, in_features])
+                                     .to_event(2))
+            self.bias = PyroSample(lambda self: dist.Normal(0., 10.).expand([out_features]).to_event(1))
+
+    class LinearRegression(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.linear = RandomLinear(D, 1)
+
+        def forward(self, x, y):
+            mean = self.linear(x).unsqueeze(-1)
+            with pyro.plate('plate', N):
+                return pyro.sample('obs', dist.Normal(mean, 1.), obs=y)
+
+    x, y = torch.randn(N, D), torch.randn(N, D)
+    model = LinearRegression()
+    guide = auto_class(model)
+    infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
+    infer.step(x, y)
