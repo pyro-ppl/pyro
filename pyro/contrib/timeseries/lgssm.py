@@ -25,7 +25,7 @@ class GenericLGSSM(TimeSeriesModel):
         self.state_dim = state_dim
 
         if obs_noise_scale_init is None:
-            obs_noise_scale_init = -2.0 * torch.ones(obs_dim)
+            obs_noise_scale_init = 0.2 * torch.ones(obs_dim)
         assert obs_noise_scale_init.shape == (obs_dim,)
 
         super().__init__()
@@ -46,8 +46,7 @@ class GenericLGSSM(TimeSeriesModel):
 
     def _get_init_dist(self):
         loc = self.obs_matrix.new_zeros(self.state_dim)
-        eye = torch.eye(self.state_dim, device=loc.device, dtype=loc.dtype)
-        return MultivariateNormal(loc, self.init_noise_scale_sq * eye)
+        return MultivariateNormal(loc, self.init_noise_scale_sq.diag_embed())
 
     def _get_obs_dist(self):
         return dist.Normal(self.obs_loc, self.obs_noise_scale).to_event(1)
@@ -106,8 +105,7 @@ class GenericLGSSM(TimeSeriesModel):
         predicted_covar = predicted_covar1 + torch.cumsum(predicted_covar2, dim=0)
 
         if include_observation_noise:
-            eye = torch.eye(self.obs_dim, device=self.obs_matrix.device, dtype=self.obs_matrix.dtype)
-            predicted_covar = predicted_covar + self.obs_noise_scale.pow(2.0) * eye
+            predicted_covar = predicted_covar + self.obs_noise_scale.pow(2.0).diag_embed()
 
         return predicted_mean, predicted_covar
 

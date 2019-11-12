@@ -36,7 +36,7 @@ class IndependentMaternGP(TimeSeriesModel):
         self.obs_dim = obs_dim
 
         if obs_noise_scale_init is None:
-            obs_noise_scale_init = -2.0 * torch.ones(obs_dim)
+            obs_noise_scale_init = 0.2 * torch.ones(obs_dim)
         assert obs_noise_scale_init.shape == (obs_dim,)
 
         super().__init__()
@@ -160,7 +160,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         self.num_gps = num_gps
 
         if obs_noise_scale_init is None:
-            obs_noise_scale_init = -2.0 * torch.ones(obs_dim)
+            obs_noise_scale_init = 0.2 * torch.ones(obs_dim)
         assert obs_noise_scale_init.shape == (obs_dim,)
 
         self.dt = dt
@@ -246,8 +246,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
             torch.matmul(obs_matrix.transpose(-1, -2), torch.matmul(process_covar, obs_matrix))
 
         if include_observation_noise:
-            eye = torch.eye(self.obs_dim, dtype=self.A.dtype, device=self.A.device)
-            obs_noise = self.obs_noise_scale.pow(2.0) * eye
+            obs_noise = self.obs_noise_scale.pow(2.0).diag_embed()
             predicted_function_covar = predicted_function_covar + obs_noise
         if not full_covar:
             predicted_function_covar = predicted_function_covar.diagonal(dim1=-1, dim2=-2)
@@ -302,7 +301,7 @@ class DependentMaternGP(TimeSeriesModel):
         self.obs_dim = obs_dim
 
         if obs_noise_scale_init is None:
-            obs_noise_scale_init = -2.0 * torch.ones(obs_dim)
+            obs_noise_scale_init = 0.2 * torch.ones(obs_dim)
         assert obs_noise_scale_init.shape == (obs_dim,)
 
         super().__init__()
@@ -460,7 +459,7 @@ class LinearlyCoupledDependentMaternGP(DependentMaternGP):
         self.obs_dim = obs_dim
 
         if obs_noise_scale_init is None:
-            obs_noise_scale_init = -2.0 * torch.ones(obs_dim)
+            obs_noise_scale_init = 0.2 * torch.ones(obs_dim)
         assert obs_noise_scale_init.shape == (obs_dim,)
 
         nn.Module.__init__(self)

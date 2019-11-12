@@ -45,7 +45,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         self.nu = nu
 
         if obs_noise_scale_init is None:
-            obs_noise_scale_init = -2.0 * torch.ones(obs_dim)
+            obs_noise_scale_init = 0.2 * torch.ones(obs_dim)
         assert obs_noise_scale_init.shape == (obs_dim,)
 
         super().__init__()
@@ -163,7 +163,6 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
 
         # next compute the contribution from process noise that is injected at each timestep.
         # (we need to do a cumulative sum to integrate across time for the z-state contribution)
-        eye = torch.eye(self.state_dim, device=fs_cov.device, dtype=fs_cov.dtype)
         z_process_covar = self.trans_noise_scale_sq.diag_embed()
         N_trans_obs_shift = torch.cat([self.z_obs_matrix.unsqueeze(0), N_trans_obs[0:-1]])
         predicted_covar2z = torch.matmul(N_trans_obs_shift.transpose(-1, -2),
@@ -173,8 +172,7 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
             torch.cumsum(predicted_covar2z, dim=0)
 
         if include_observation_noise:
-            eye = torch.eye(self.obs_dim, device=fs_cov.device, dtype=fs_cov.dtype)
-            predicted_covar = predicted_covar + self.obs_noise_scale.pow(2.0) * eye
+            predicted_covar = predicted_covar + self.obs_noise_scale.pow(2.0).diag_embed()
 
         return predicted_mean, predicted_covar
 

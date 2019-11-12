@@ -1,10 +1,9 @@
 import math
 
 import torch
-import torch.nn as nn
 from torch.distributions import constraints
 
-from pyro.nn import PyroModule, pyro_method
+from pyro.nn import PyroModule, pyro_method, PyroParam
 
 root_three = math.sqrt(3.0)
 root_five = math.sqrt(5.0)
@@ -70,35 +69,34 @@ class MaternKernel(PyroModule):
         :returns torch.Tensor: a 3-dimensional tensor of transition matrices of shape
             (num_gps, state_dim, state_dim).
         """
-        with self._pyro_context:
-            if self.nu == 0.5:
-                rho = self.length_scale.unsqueeze(-1).unsqueeze(-1)
-                return torch.exp(-dt / rho)
-            elif self.nu == 1.5:
-                rho = self.length_scale.unsqueeze(-1).unsqueeze(-1)
-                dt_rho = dt / rho
-                trans = (1.0 + root_three * dt_rho) * self.mask00 + \
-                    (-3.0 * dt_rho / rho) * self.mask01 + \
-                    dt * self.mask10 + \
-                    (1.0 - root_three * dt_rho) * self.mask11
-                return torch.exp(-root_three * dt_rho) * trans
-            elif self.nu == 2.5:
-                rho = self.length_scale.unsqueeze(-1).unsqueeze(-1)
-                dt_rho = root_five * dt / rho
-                dt_rho_sq = dt_rho.pow(2.0)
-                dt_rho_cu = dt_rho.pow(3.0)
-                dt_rho_qu = dt_rho.pow(4.0)
-                dt_sq = dt ** 2.0
-                trans = (1.0 + dt_rho + 0.5 * dt_rho_sq) * self.mask00 + \
-                    (-0.5 * dt_rho_cu / dt) * self.mask01 + \
-                    ((0.5 * dt_rho_qu - dt_rho_cu) / dt_sq) * self.mask02 + \
-                    ((dt_rho + 1.0) * dt) * self.mask10 + \
-                    (1.0 + dt_rho - dt_rho_sq) * self.mask11 + \
-                    ((dt_rho_cu - 3.0 * dt_rho_sq) / dt) * self.mask12 + \
-                    (0.5 * dt_sq) * self.mask20 + \
-                    ((1.0 - 0.5 * dt_rho) * dt) * self.mask21 + \
-                    (1.0 - 2.0 * dt_rho + 0.5 * dt_rho_sq) * self.mask22
-                return torch.exp(-dt_rho) * trans
+        if self.nu == 0.5:
+            rho = self.length_scale.unsqueeze(-1).unsqueeze(-1)
+            return torch.exp(-dt / rho)
+        elif self.nu == 1.5:
+            rho = self.length_scale.unsqueeze(-1).unsqueeze(-1)
+            dt_rho = dt / rho
+            trans = (1.0 + root_three * dt_rho) * self.mask00 + \
+                (-3.0 * dt_rho / rho) * self.mask01 + \
+                dt * self.mask10 + \
+                (1.0 - root_three * dt_rho) * self.mask11
+            return torch.exp(-root_three * dt_rho) * trans
+        elif self.nu == 2.5:
+            rho = self.length_scale.unsqueeze(-1).unsqueeze(-1)
+            dt_rho = root_five * dt / rho
+            dt_rho_sq = dt_rho.pow(2.0)
+            dt_rho_cu = dt_rho.pow(3.0)
+            dt_rho_qu = dt_rho.pow(4.0)
+            dt_sq = dt ** 2.0
+            trans = (1.0 + dt_rho + 0.5 * dt_rho_sq) * self.mask00 + \
+                (-0.5 * dt_rho_cu / dt) * self.mask01 + \
+                ((0.5 * dt_rho_qu - dt_rho_cu) / dt_sq) * self.mask02 + \
+                ((dt_rho + 1.0) * dt) * self.mask10 + \
+                (1.0 + dt_rho - dt_rho_sq) * self.mask11 + \
+                ((dt_rho_cu - 3.0 * dt_rho_sq) / dt) * self.mask12 + \
+                (0.5 * dt_sq) * self.mask20 + \
+                ((1.0 - 0.5 * dt_rho) * dt) * self.mask21 + \
+                (1.0 - 2.0 * dt_rho + 0.5 * dt_rho_sq) * self.mask22
+            return torch.exp(-dt_rho) * trans
 
     @pyro_method
     def stationary_covariance(self):
