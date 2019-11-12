@@ -1,4 +1,5 @@
 import functools
+import io
 import warnings
 from operator import attrgetter
 
@@ -256,14 +257,28 @@ def test_autoguide_serialization(auto_class, Elbo):
     guide()
     if auto_class is AutoLaplaceApproximation:
         guide = guide.laplace_approximation()
+    pyro.set_rng_seed(0)
+    expected = guide.call()
+    names = sorted(guide())
 
     # Ignore tracer warnings
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
         # XXX: check_trace=True fails for AutoLaplaceApproximation
         traced_guide = torch.jit.trace_module(guide, {"call": ()}, check_trace=False)
-    torch.jit.save(traced_guide, "/tmp/test_guide_serialization.pt")
-    guide_deser = torch.jit.load("/tmp/test_guide_serialization.pt")
+    f = io.BytesIO()
+    torch.jit.save(traced_guide, f)
+    f.seek(0)
+    guide_deser = torch.jit.load(f)
+
+    # Check .call() result.
+    pyro.set_rng_seed(0)
+    actual = guide_deser.call()
+    assert len(actual) == len(expected)
+    for name, a, e in zip(names, actual, expected):
+        assert_equal(a, e, msg="{}: {} vs {}".format(name, a, e))
+
+    # Check named_parameters.
     expected_names = {name for name, _ in guide.named_parameters()}
     actual_names = {name for name, _ in guide_deser.named_parameters()}
     assert actual_names == expected_names
