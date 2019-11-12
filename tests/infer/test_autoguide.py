@@ -254,7 +254,7 @@ def test_autoguide_serialization(auto_class, Elbo):
     guide_deser = torch.jit.load("/tmp/test_guide_serialization.pt")
 
     actual = guide_deser()
-    assert set(actual) == set(expected_names)
+    assert set(actual) == set(expected)
     for name in actual:
         assert_equal(actual[name], expected[name])
 
