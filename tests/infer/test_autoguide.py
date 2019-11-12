@@ -613,7 +613,7 @@ def test_linear_regression_smoke(auto_class, Elbo):
             with pyro.plate('plate', N):
                 return pyro.sample('obs', dist.Normal(mean, 1.), obs=y)
 
-    x, y = torch.randn(N, D), torch.randn(N, D)
+    x, y = torch.randn(N, D), torch.randn(N)
     model = LinearRegression()
     guide = auto_class(model)
     infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
