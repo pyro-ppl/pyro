@@ -263,9 +263,18 @@ def main(args):
 
     # since we enumerate the discrete random variables,
     # we need to use TraceEnum_ELBO.
-    elbo = TraceEnum_ELBO(max_plate_nesting=1, num_particles=20, vectorize_particles=True)
-    optim = Adam({'lr': args.learning_rate})
-    svi = SVI(model, guide, optim, elbo)
+    if args.tmc:
+        from pyro.infer.tmc import TensorMonteCarlo
+        elbo = TensorMonteCarlo(max_plate_nesting=1)
+        tmc_model = poutine.infer_config(
+            model,
+            lambda msg: {"num_samples": args.tmc_num_samples, "expand": False} if msg["infer"].get("enumerate", None) == "parallel" else {})  # noqa: E501
+        optim = Adam({'lr': args.learning_rate})
+        svi = SVI(tmc_model, guide, optim, elbo)
+    else:
+        elbo = TraceEnum_ELBO(max_plate_nesting=1, num_particles=20, vectorize_particles=True)
+        optim = Adam({'lr': args.learning_rate})
+        svi = SVI(model, guide, optim, elbo)
 
     losses = []
 
@@ -290,5 +299,7 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--dataset", default="dipper", type=str)
     parser.add_argument("-n", "--num-steps", default=400, type=int)
     parser.add_argument("-lr", "--learning-rate", default=0.002, type=float)
+    parser.add_argument("--tmc", action='store_true')
+    parser.add_argument("--tmc-num-samples", default=10, type=int)
     args = parser.parse_args()
     main(args)

@@ -5,7 +5,8 @@ import torch
 
 import pyro
 import pyro.distributions as dist
-from pyro.infer import SMCFilter
+from pyro.infer import SMCFilter, config_enumerate
+from pyro.infer.tmc import TensorMonteCarlo
 
 logging.basicConfig(format='%(relativeCreated) 9d %(message)s', level=logging.INFO)
 
@@ -76,10 +77,7 @@ def generate_data(args):
     return zs, ys
 
 
-def main(args):
-    pyro.set_rng_seed(args.seed)
-    pyro.enable_validation(__debug__)
-
+def smc_run(args):
     model = SimpleHarmonicModel(args.process_noise, args.measurement_noise)
     guide = SimpleHarmonicModel_Guide(model)
 
@@ -100,6 +98,43 @@ def main(args):
         logging.info("{}\t{}\t{}\t{}".format(t, zs[t], z.mean, z.variance))
 
 
+def tmc_run(args):
+    model = SimpleHarmonicModel(args.process_noise, args.measurement_noise)
+    guide = SimpleHarmonicModel_Guide(model)
+
+    tmc = TensorMonteCarlo(max_plate_nesting=1)
+
+    def tmc_model(ys, initial=None):
+        model.init(initial=initial)
+        for y in pyro.markov(ys[1:]):
+            z, _ = model.step(y)
+
+    @config_enumerate(default="parallel", num_samples=args.num_particles, expand=False)
+    def tmc_guide(ys, initial=None):
+        guide.init(initial=initial)
+        for y in pyro.markov(ys[1:]):
+            guide.step(y)
+
+    logging.info('Generating data')
+    zs, ys = generate_data(args)
+    initial = torch.tensor([1., 0.], requires_grad=True)
+
+    logging.info('Smoothing')
+    logp = -tmc.loss(tmc_model, tmc_guide, ys, initial=initial)
+
+    logging.info('logp: {}'.format(logp))
+
+
+def main(args):
+    pyro.set_rng_seed(args.seed)
+    pyro.enable_validation(__debug__)
+
+    if args.tmc:
+        tmc_run(args)
+    else:
+        smc_run(args)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Simple Harmonic Oscillator w/ SMC Filtering Inference")
     parser.add_argument("-n", "--num-timesteps", default=50, type=int)
@@ -107,5 +142,6 @@ if __name__ == "__main__":
     parser.add_argument("--process-noise", default=1., type=float)
     parser.add_argument("--measurement-noise", default=1., type=float)
     parser.add_argument("--seed", default=0, type=int)
+    parser.add_argument("--tmc", action="store_true")
     args = parser.parse_args()
     main(args)
