@@ -44,15 +44,15 @@ def test_svi_smoke():
     trace = poutine.trace(model).get_trace(data)
     assert "loc" in trace.nodes.keys()
     assert trace.nodes["loc"]["type"] == "param"
-    assert "scale_unconstrained" in trace.nodes
-    assert trace.nodes["scale_unconstrained"]["type"] == "param"
+    assert "scale" in trace.nodes
+    assert trace.nodes["scale"]["type"] == "param"
 
     guide = Guide()
     trace = poutine.trace(guide).get_trace(data)
     assert "loc" in trace.nodes.keys()
     assert trace.nodes["loc"]["type"] == "param"
-    assert "scale_unconstrained" in trace.nodes
-    assert trace.nodes["scale_unconstrained"]["type"] == "param"
+    assert "scale" in trace.nodes
+    assert trace.nodes["scale"]["type"] == "param"
 
     optim = Adam({"lr": 0.01})
     svi = SVI(model, guide, optim, Trace_ELBO())
@@ -71,24 +71,12 @@ def test_names():
     root.p.w = PyroParam(torch.tensor(4.), constraint=constraints.positive)
 
     # Check named_parameters.
-    expected = {
-        "x",
-        "y_unconstrained",
-        "m.u",
-        "p.v",
-        "p.w_unconstrained",
-    }
+    expected = {"x", "y", "m.u", "p.v", "p.w"}
     actual = set(name for name, _ in root.named_parameters())
     assert actual == expected
 
     # Check pyro.param names.
-    expected = {
-        "x",
-        "y_unconstrained",
-        "m$$$u",
-        "p.v",
-        "p.w_unconstrained",
-    }
+    expected = {"x", "y", "m$$$u", "p.v", "p.w"}
     with poutine.trace(param_only=True) as param_capture:
         # trigger .__getattr__()
         root.x
@@ -139,25 +127,24 @@ def test_constraints(shape, constraint_):
     module.x = PyroParam(torch.full(shape, 1e-4), constraint_)
 
     assert isinstance(module.x, torch.Tensor)
-    assert isinstance(module.x_unconstrained, nn.Parameter)
+    assert isinstance(module._parameters['x'], nn.Parameter)
     assert module.x.shape == shape
     assert constraint_.check(module.x).all()
 
     module.x = torch.randn(shape).exp() * 1e-6
-    assert isinstance(module.x_unconstrained, nn.Parameter)
+    assert isinstance(module._parameters['x'], nn.Parameter)
     assert isinstance(module.x, torch.Tensor)
     assert module.x.shape == shape
     assert constraint_.check(module.x).all()
 
-    assert isinstance(module.x_unconstrained, torch.Tensor)
-    y = module.x_unconstrained.data.normal_()
+    assert isinstance(module._parameters['x'], torch.Tensor)
+    y = module._parameters['x'].data.normal_()
     assert_equal(module.x.data, transform_to(constraint_)(y))
     assert constraint_.check(module.x).all()
 
     del module.x
     assert 'x' not in module._pyro_params
     assert not hasattr(module, 'x')
-    assert not hasattr(module, 'x_unconstrained')
 
 
 def test_sample():

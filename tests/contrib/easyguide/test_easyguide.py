@@ -87,6 +87,8 @@ def test_serialize():
         actual = torch.load("/tmp/test_easyguide.pkl")
 
     assert type(actual) == type(guide)
+    assert dir(actual) == dir(guide)
+    check_guide(guide)
     check_guide(actual)
 
 

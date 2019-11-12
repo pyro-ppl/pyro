@@ -12,14 +12,14 @@ import pyro.poutine as poutine
 import pyro.poutine.runtime as runtime
 from pyro.distributions.util import broadcast_shape, sum_rightmost
 from pyro.infer.autoguide.initialization import InitMessenger
-from pyro.params.constrained_parameter import ConstrainedModule
-from pyro.poutine.runtime import _MODULE_NAMESPACE_DIVIDER
+from pyro.nn.module import PyroModule, PyroParam
 from pyro.poutine.util import prune_subsample_sites
 
 
-class EasyGuide(ConstrainedModule, metaclass=ABCMeta):
+class EasyGuide(PyroModule, metaclass=ABCMeta):
     """
-    Base class for "easy guides".
+    Base class for "easy guides", which are more flexible than
+    :class:`~pyro.infer.AutoGuide` s, but are easier to write than raw Pyro guides.
 
     Derived classes should define a :meth:`guide` method. This :meth:`guide`
     method can combine ordinary guide statements (e.g. ``pyro.sample`` and
@@ -37,6 +37,7 @@ class EasyGuide(ConstrainedModule, metaclass=ABCMeta):
     """
     def __init__(self, model):
         super().__init__()
+        self._pyro_name = type(self).__name__
         self._model = (model,)
         self.prototype_trace = None
         self.frames = {}
@@ -86,7 +87,6 @@ class EasyGuide(ConstrainedModule, metaclass=ABCMeta):
         """
         if self.prototype_trace is None:
             self._setup_prototype(*args, **kwargs)
-        pyro.module("easyguide", self)
         result = self.guide(*args, **kwargs)
         self.plates.clear()
         return result
@@ -129,34 +129,26 @@ class EasyGuide(ConstrainedModule, metaclass=ABCMeta):
         """
         site = self.prototype_trace.nodes[name]
         fn = site["fn"]
-        param_name = "auto_{}".format(name)
-        param_name_unconstrained = "auto_{}_unconstrained".format(name)
-        init_value = None
-        init_value_unconstrained = None
-        if not hasattr(self, param_name):
+        event_dim = fn.event_dim
+        init_needed = not hasattr(self, name)
+        if init_needed:
             init_value = site["value"].detach()
         with ExitStack() as stack:
             for frame in site["cond_indep_stack"]:
                 plate = self.plate(frame.name)
                 if plate not in runtime._PYRO_STACK:
                     stack.enter_context(plate)
-                elif init_value is not None and plate.subsample_size < plate.size:
+                elif init_needed and plate.subsample_size < plate.size:
                     # Repeat the init_value to full size.
-                    dim = plate.dim - fn.event_dim
+                    dim = plate.dim - event_dim
                     assert init_value.size(dim) == plate.subsample_size
                     ind = torch.arange(plate.size, device=init_value.device)
                     ind = ind % plate.subsample_size
                     init_value = init_value.index_select(dim, ind)
-
-            if init_value is not None:
-                init_value_unconstrained = transform_to(fn.support).inv(init_value)
-                setattr(self, param_name_unconstrained, ConstrainedParameter(init_value, fn.support))
-            full_name = "easyguide{}{}".format(_MODULE_NAMESPACE_DIVIDER, param_name_unconstrained)
-            value_unconstrained = pyro.param(full_name, init_value_unconstrained)
-            event_dim = fn.event_dim + value_unconstrained.dim() - value.dim
-            value = pyro.param(param_name, init_value,
-                               constraint=fn.support, event_dim=fn.event_dim)
-            return pyro.sample(name, dist.Delta(value, event_dim=fn.event_dim))
+            if init_needed:
+                setattr(self, name, PyroParam(init_value, fn.support, event_dim))
+            value = getattr(self, name)
+            return pyro.sample(name, dist.Delta(value, event_dim=event_dim))
 
 
 class Group:
