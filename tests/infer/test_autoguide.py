@@ -42,9 +42,10 @@ def test_scores(auto_class):
     guide_trace.compute_log_prob()
     model_trace.compute_log_prob()
 
-    assert '_auto_latent' not in model_trace.nodes
+    prefix = auto_class.__name__
+    assert '_{}_latent'.format(prefix) not in model_trace.nodes
     assert model_trace.nodes['z']['log_prob_sum'].item() != 0.0
-    assert guide_trace.nodes['_auto_latent']['log_prob_sum'].item() != 0.0
+    assert guide_trace.nodes['_{}_latent'.format(prefix)]['log_prob_sum'].item() != 0.0
     assert guide_trace.nodes['z']['log_prob_sum'].item() == 0.0
 
 
@@ -553,9 +554,9 @@ def test_nested_autoguide(Elbo):
         infer.step()
 
     tr = poutine.trace(guide).get_trace()
-    assert all(p.startswith("auto.x") or p.startswith("auto.y.z") for p in tr.param_nodes)
+    assert all(p.startswith("AutoGuideList.0") or p.startswith("AutoGuideList.1.0") for p in tr.param_nodes)
     stochastic_nodes = set(tr.stochastic_nodes)
     assert "x" in stochastic_nodes
     assert "y" in stochastic_nodes
     # Only latent sampled is for the IAF.
-    assert "_auto.y.z_latent" in stochastic_nodes
+    assert "_AutoGuideList.1.0_latent" in stochastic_nodes

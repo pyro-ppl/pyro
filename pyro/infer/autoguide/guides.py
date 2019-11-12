@@ -51,7 +51,7 @@ class AutoGuide(PyroModule):
         self.master = None
         # Do not register model as submodule
         self._model = (model,)
-        self._pyro_name = "auto"
+        self._pyro_name = type(self).__name__
         self.prototype_trace = None
         self._plates = {}
 
@@ -131,10 +131,6 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
     :param callable model: a Pyro model
     """
 
-    def __init__(self, model):
-        super().__init__(model)
-        self.plates = {}
-
     def _check_prototype(self, part_trace):
         for name, part_site in part_trace.nodes.items():
             if part_site["type"] != "sample":
@@ -162,7 +158,7 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
             part = AutoCallable(self.model, part)
         if part.master is not None:
             raise RuntimeError("The module `{}` is already added.".format(self._pyro_name))
-        super().append(part)
+        setattr(self, str(len(self)), part)
         master_ref = self if self.master is None else self.master
         part._update_master(weakref.ref(master_ref))
 
@@ -183,7 +179,7 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
             self._setup_prototype(*args, **kwargs)
 
         # create all plates
-        self.plates = self._create_plates()
+        self._create_plates()
 
         # run slave guides
         result = {}
@@ -274,7 +270,7 @@ class AutoDelta(AutoGuide):
     """
     def __init__(self, model, init_loc_fn=init_to_median):
         self.init_loc_fn = init_loc_fn
-        model = InitMessenger(self._init_loc_fn)(model)
+        model = InitMessenger(self.init_loc_fn)(model)
         super().__init__(model)
 
     def _setup_prototype(self, *args, **kwargs):
@@ -284,13 +280,6 @@ class AutoDelta(AutoGuide):
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             value = PyroParam(site["value"].detach(), constraint=site["fn"].support)
             setattr(self, name, value)
-
-    def _init_loc_fn(self, site):
-        name = "{}.{}".format(self._pyro_name, site["name"])
-        store = pyro.get_param_store()
-        if name in store:
-            return store[name]
-        return self.init_loc_fn(site)
 
     def forward(self, *args, **kwargs):
         """
