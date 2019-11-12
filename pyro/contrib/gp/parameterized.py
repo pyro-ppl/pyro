@@ -44,19 +44,11 @@ class _Mode:
 
 class Parameterized(PyroModule):
     """
-    A wrapper of :class:`torch.nn.Module` whose parameters can be set
+    A wrapper of :class:`~pyro.nn.module.PyroModule` whose parameters can be set
     constraints, set priors.
-
-    Under the hood, we move parameters to a buffer store and create "root"
-    parameters which are used to generate that parameter's value. For example,
-    if we set a contraint to a parameter, an "unconstrained" parameter will be
-    created, and the constrained value will be transformed from that
-    "unconstrained" parameter.
 
     By default, when we set a prior to a parameter, an auto Delta guide will be
     created. We can use the method :meth:`autoguide` to setup other auto guides.
-    To fix a parameter to a specific value, it is enough to turn off its "root"
-    parameters' ``requires_grad`` flags.
 
     Example::
 
@@ -70,15 +62,12 @@ class Parameterized(PyroModule):
         ...         return self.a * x + self.b
         ...
         >>> linear = Linear(torch.tensor(1.), torch.tensor(0.))
-        >>> linear.set_constraint("a", constraints.positive)
-        >>> linear.set_prior("b", dist.Normal(0, 1))
+        >>> linear.a = PyroParam(torch.tensor(1.), constraints.positive)
+        >>> linear.b = PyroSample(dist.Normal(0, 1))
         >>> linear.autoguide("b", dist.Normal)
         >>> assert "a_unconstrained" in dict(linear.named_parameters())
         >>> assert "b_loc" in dict(linear.named_parameters())
         >>> assert "b_scale_unconstrained" in dict(linear.named_parameters())
-        >>> assert "a" in dict(linear.named_buffers())
-        >>> assert "b" in dict(linear.named_buffers())
-        >>> assert "b_scale" in dict(linear.named_buffers())
 
     Note that by default, data of a parameter is a float :class:`torch.Tensor`
     (unless we use :func:`torch.set_default_tensor_type` to change default
@@ -95,14 +84,13 @@ class Parameterized(PyroModule):
         self.set_mode = partial(_Mode, self)
 
     def __setattr__(self, name, value):
-        super().__setattr__(name, value)
         if isinstance(value, PyroSample):
             prior = value.prior
             self._priors[name] = prior
             self.autoguide(name, dist.Delta)
             value = PyroSample(lambda self: prior if self.mode == "model" else
                                self._get_guide(name, _make_name(self._pyro_name, name)))
-            super().__setattr__(name, value)
+        super().__setattr__(name, value)
 
     def autoguide(self, name, dist_constructor):
         """
@@ -126,14 +114,13 @@ class Parameterized(PyroModule):
             raise NotImplementedError("Unsupported distribution type: {}"
                                       .format(dist_constructor))
 
-        p = getattr(self, name)
-
         # delete old guide
         if name in self._guides:
             dist_args = self._guides[name][1]
             for arg in dist_args:
                 delattr(self, "{}_{}".format(name, arg))
 
+        p = self._priors[name]()  # init_to_sample strategy
         if dist_constructor is dist.Delta:
             support = _get_independent_support(self._priors[name])
             if support is constraints.real:
