@@ -297,14 +297,15 @@ def test_pyro_serialize():
     actual = module()  # triggers saving in param store
     assert_equal(actual[0], module.x)
     assert_equal(actual[1], module.y)
-    assert len(pyro.get_param_store()) == 2
+    assert set(pyro.get_param_store().keys()) == {"x", "y"}
+    assert_equal(pyro.param("x").detach(), module.x.detach())
+    assert_equal(pyro.param("y").detach(), module.y.detach())
 
-    # Work around https://github.com/pytorch/pytorch/issues/27972
     pyro.get_param_store().save("/tmp/pyro_module.pt")
     pyro.clear_param_store()
     assert len(pyro.get_param_store()) == 0
     pyro.get_param_store().load("/tmp/pyro_module.pt")
-    assert len(pyro.get_param_store()) == 2
+    assert set(pyro.get_param_store().keys()) == {"x", "y"}
     actual = MyModule()
     actual()
 
