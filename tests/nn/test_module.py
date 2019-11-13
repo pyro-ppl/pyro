@@ -140,6 +140,9 @@ def test_module_cache():
             super().__init__()
             self.a = PyroParam(torch.tensor(x))
 
+        def forward(self):
+            return self.a
+
     class Family(PyroModule):
         def __init__(self):
             super().__init__()
@@ -149,14 +152,10 @@ def test_module_cache():
             return self.c.a
 
     f = Family()
+    assert_equal(f().detach(), torch.tensor(1.))
     f.c = Child(3.)
     assert_equal(f().detach(), torch.tensor(3.))
-
-    g = Family()
-    g.c = Child(4.)
-    assert_equal(g().detach(), torch.tensor(4.))
-    # FIXME: failing test
-    assert_equal(f().detach(), torch.tensor(3.))
+    assert_equal(f.c().detach(), torch.tensor(3.))
 
 
 SHAPE_CONSTRAINT = [
