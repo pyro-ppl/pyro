@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from functools import partial
 
+import torch
 from torch.distributions import biject_to, constraints
 from torch.nn import Parameter
 
@@ -31,7 +32,7 @@ class _Mode:
     def __enter__(self):
         self.fn._pyro_cache.__enter__()
         for m in self.fn.modules():
-            if "_pyro_samples" in m.__dict__:
+            if isinstance(m, Parameterized):
                 for name in m._pyro_samples:
                     getattr(m, name)
 
@@ -86,11 +87,18 @@ class Parameterized(PyroModule):
     def __setattr__(self, name, value):
         if isinstance(value, PyroSample):
             prior = value.prior
-            self._priors[name] = prior
-            self.autoguide(name, dist.Delta)
-            value = PyroSample(lambda self: prior if self.mode == "model" else
-                               self._get_guide(name, _make_name(self._pyro_name, name)))
+            if isinstance(prior, (dist.Distribution, torch.distributions.Distribution)):
+                self._priors[name] = prior
+                self.autoguide(name, dist.Delta)
+                value = PyroSample(lambda self: prior if self.mode == "model" else self._guides[name])
         super().__setattr__(name, value)
+
+    def __delattr__(self, name):
+        if name in self._priors:
+            del self._priors[name]
+            del self._guides[name]
+
+        super().__delattr__(name)
 
     def autoguide(self, name, dist_constructor):
         """
