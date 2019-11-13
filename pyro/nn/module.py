@@ -8,6 +8,7 @@ use either the :class:`PyroParam` struct or the :class:`PyroSample` struct::
     my_module.y = PyroSample(dist.Normal(0, 1))
 
 """
+import functools
 from collections import OrderedDict, namedtuple
 
 import torch
@@ -90,7 +91,7 @@ class PyroModule(torch.nn.Module):
         scale = my_module.scale  # Triggers another pyro.param statement.
 
     Note that, unlike normal :class:`torch.nn.Module` s, :class:`PyroModule` s
-    should note be registered with :func:`pyro.module` statements.
+    should not be registered with :func:`pyro.module` statements.
     :class:`PyroModule` s can contain normal :class:`torch.nn.Module` s, but not
     vice versa. Accessing a normal :class:`torch.nn.Module` attribute of
     a :class:`PyroModule` triggers a :func:`pyro.module` statement. Parameters
@@ -266,3 +267,20 @@ class PyroModule(torch.nn.Module):
                 return
 
         super().__delattr__(name)
+
+
+def pyro_method(fn):
+    """
+    Decorator for top-level methods of a :class:`PyroModule` to cache
+    ``pyro.sample`` statements.
+
+    This should be applied to all public methods that read Pyro-managed
+    attributes, but is not needed for ``.forward()``.
+    """
+
+    @functools.wraps(fn)
+    def cached_fn(self, *args, **kwargs):
+        with self._pyro_cache:
+            return fn(self, *args, **kwargs)
+
+    return cached_fn
