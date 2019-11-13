@@ -586,9 +586,6 @@ def test_nested_autoguide(Elbo):
     AutoMultivariateNormal,
     AutoLowRankMultivariateNormal,
     AutoLaplaceApproximation,
-    auto_guide_list_x,
-    auto_guide_callable,
-    auto_guide_module_callable,
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
 ])
@@ -609,7 +606,7 @@ def test_linear_regression_smoke(auto_class, Elbo):
             self.linear = RandomLinear(D, 1)
 
         def forward(self, x, y):
-            mean = self.linear(x).unsqueeze(-1)
+            mean = self.linear(x).squeeze(-1)
             with pyro.plate('plate', N):
                 return pyro.sample('obs', dist.Normal(mean, 1.), obs=y)
 
