@@ -1,3 +1,4 @@
+import warnings
 from collections import OrderedDict
 from functools import partial
 
@@ -30,14 +31,14 @@ class _Mode:
                 m.mode = mode
 
     def __enter__(self):
-        self.fn._pyro_cache.__enter__()
+        self.fn._pyro_context.__enter__()
         for m in self.fn.modules():
-            if isinstance(m, Parameterized):
+            if "_pyro_samples" in m.__dict__:
                 for name in m._pyro_samples:
                     getattr(m, name)
 
     def __exit__(self, type, value, traceback):
-        self.fn._pyro_cache.__exit__(type, value, traceback)
+        self.fn._pyro_context.__exit__(type, value, traceback)
         for m in self.fn.modules():
             if isinstance(m, Parameterized):
                 m.mode = self.current_mode
@@ -84,21 +85,26 @@ class Parameterized(PyroModule):
         self._mode = "model"
         self.set_mode = partial(_Mode, self)
 
+    def set_prior(self, name, prior):
+        """
+        Sets prior for a parameter.
+
+        :param str name: Name of the parameter.
+        :param ~pyro.distributions.distribution.Distribution prior: A Pyro prior
+            distribution.
+        """
+        warnings.warn("The method `self.set_prior({}, prior)` has been deprecated"
+                      " in favor of `self.{} = PyroSample(prior)`.".format(name, name), DeprecationWarning)
+        setattr(self, name, PyroSample(prior))
+
     def __setattr__(self, name, value):
         if isinstance(value, PyroSample):
             prior = value.prior
             if isinstance(prior, (dist.Distribution, torch.distributions.Distribution)):
                 self._priors[name] = prior
                 self.autoguide(name, dist.Delta)
-                value = PyroSample(lambda self: prior if self.mode == "model" else self._guides[name])
+                value = PyroSample(lambda self: prior if self.mode == "model" else self._get_guide(name))
         super().__setattr__(name, value)
-
-    def __delattr__(self, name):
-        if name in self._priors:
-            del self._priors[name]
-            del self._guides[name]
-
-        super().__delattr__(name)
 
     def autoguide(self, name, dist_constructor):
         """
@@ -156,7 +162,7 @@ class Parameterized(PyroModule):
 
         self._guides[name] = (dist_constructor, dist_args)
 
-    def _get_guide(self, name, full_name):
+    def _get_guide(self, name):
         dist_constructor, dist_args = self._guides[name]
 
         if dist_constructor is dist.Delta:
@@ -174,7 +180,8 @@ class Parameterized(PyroModule):
         # otherwise, we do inference in unconstrained space and transform the value
         # back to original space
         # TODO: move this logic to infer.autoguide or somewhere else
-        unconstrained_value = pyro.sample("{}_latent".format(full_name), guide.to_event(),
+        unconstrained_value = pyro.sample("{}_latent".format(_make_name(self._pyro_name, name)),
+                                          guide.to_event(),
                                           infer={"is_auxiliary": True})
         transform = biject_to(self._priors[name].support)
         value = transform(unconstrained_value)

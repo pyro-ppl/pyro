@@ -6,7 +6,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
-from pyro.nn.module import PyroParam
+from pyro.nn.module import PyroParam, pyro_method
 from pyro.util import warn_if_nan
 
 
@@ -68,28 +68,30 @@ class GPRegression(GPModel):
         noise = self.X.new_tensor(1.) if noise is None else noise
         self.noise = PyroParam(noise, constraints.positive)
 
+    @pyro_method
     def model(self):
-        with self.set_mode("model"):
-            N = self.X.size(0)
-            Kff = self.kernel(self.X)
-            Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to diagonal
-            Lff = Kff.cholesky()
+        self.set_mode("model")
 
-            zero_loc = self.X.new_zeros(self.X.size(0))
-            f_loc = zero_loc + self.mean_function(self.X)
-            if self.y is None:
-                f_var = Lff.pow(2).sum(dim=-1)
-                return f_loc, f_var
-            else:
-                return pyro.sample("y",
-                                   dist.MultivariateNormal(f_loc, scale_tril=Lff)
-                                       .expand_by(self.y.shape[:-1])
-                                       .to_event(self.y.dim() - 1),
-                                   obs=self.y)
+        N = self.X.size(0)
+        Kff = self.kernel(self.X)
+        Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to diagonal
+        Lff = Kff.cholesky()
 
+        zero_loc = self.X.new_zeros(self.X.size(0))
+        f_loc = zero_loc + self.mean_function(self.X)
+        if self.y is None:
+            f_var = Lff.pow(2).sum(dim=-1)
+            return f_loc, f_var
+        else:
+            return pyro.sample("y",
+                               dist.MultivariateNormal(f_loc, scale_tril=Lff)
+                                   .expand_by(self.y.shape[:-1])
+                                   .to_event(self.y.dim() - 1),
+                               obs=self.y)
+
+    @pyro_method
     def guide(self):
-        with self.set_mode("guide"):
-            pass
+        self.set_mode("guide")
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
