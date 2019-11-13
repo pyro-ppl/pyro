@@ -185,7 +185,7 @@ def test_inference(model_class, X, y, kernel, likelihood):
 
     y_cov = gp.kernel(X)
     target_y_cov = kernel(X)
-    assert_equal(y_cov, target_y_cov, prec=0.1)
+    assert_equal(y_cov, target_y_cov, prec=0.15)
 
 
 @pytest.mark.init(rng_seed=0)
