@@ -48,11 +48,11 @@ def _deep_setattr(obj, key, val):
         setattr(obj, attr, PyroModule())
         return getattr(obj, attr)
 
-    path, _, attr = key.rpartition(".")
+    lpart, _, rpart = key.rpartition(".")
     # Recursive getattr while setting any prefix attributes to PyroModule
-    if path:
-        obj = functools.reduce(_getattr, [obj] + key.split('.'))
-    setattr(obj, attr, val)
+    if lpart:
+        obj = functools.reduce(_getattr, [obj] + lpart.split('.'))
+    setattr(obj, rpart, val)
 
 
 class AutoGuide(PyroModule):
