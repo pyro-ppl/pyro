@@ -34,7 +34,8 @@ class DoMessenger(Messenger):
 
     def _pyro_sample(self, msg):
         if msg.get('_intervener_id', None) != self._intervener_id and \
-                msg['name'] in self.data:
+                msg['name'] in self.data and \
+                self.data[msg['name']] is not None:
             # split node, avoid reapplying self recursively to new node
             new_msg = msg.copy()
             new_msg['_intervener_id'] = self._intervener_id

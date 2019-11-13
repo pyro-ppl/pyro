@@ -1,53 +1,57 @@
 import logging
 
-import torch
+import pytest
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
-from tests.common import assert_equal, assert_close
+from tests.common import assert_equal, assert_not_equal
 
 logger = logging.getLogger(__name__)
 
 
-def test_decorator_interface_do():
+@pytest.mark.parametrize('intervene', [True, False])
+@pytest.mark.parametrize('observe', [True, False])
+def test_counterfactual_query(intervene, observe):
+    # x -> y -> z -> w
 
-    sites = ["x", "y", "z", "_INPUT", "_RETURN"]
-    data = {"x": torch.ones(1)}
+    sites = ["x", "y", "z", "w"]
+    observations = {"x": 1., "y": None, "z": 1., "w": 1.}
+    interventions = {"x": None, "y": 0., "z": 2., "w": 1.}
 
-    @poutine.do(data=data)
     def model():
-        p = torch.tensor([0.5])
-        loc = torch.zeros(1)
-        scale = torch.ones(1)
+        x = pyro.sample("x", dist.Normal(0, 1))
+        y = pyro.sample("y", dist.Normal(x, 1))
+        z = pyro.sample("z", dist.Normal(y, 1))
+        w = pyro.sample("w", dist.Normal(z, 1))
+        return dict(x=x, y=y, z=z, w=w)
 
-        x = pyro.sample("x", dist.Normal(loc, scale))
-        y = pyro.sample("y", dist.Bernoulli(p))
-        z = pyro.sample("z", dist.Normal(loc, scale))
-        return dict(x=x, y=y, z=z)
+    if intervene:
+        model = poutine.do(model, data=interventions)
+    if observe:
+        model = poutine.condition(model, data=observations)
 
     tr = poutine.trace(model).get_trace()
+    actual_values = tr.nodes["_RETURN"]["value"]
     for name in sites:
-        if name not in data:
-            assert name in tr
-        else:
-            assert name not in tr
-            assert_equal(tr.nodes["_RETURN"]["value"][name], data[name])
-
-
-def test_do_propagation():
-    pyro.clear_param_store()
-
-    def model():
-        z = pyro.sample("z", dist.Normal(10.0 * torch.ones(1), 0.0001 * torch.ones(1)))
-        latent_prob = torch.exp(z) / (torch.exp(z) + torch.ones(1))
-        flip = pyro.sample("flip", dist.Bernoulli(latent_prob))
-        return flip
-
-    sample_from_model = model()
-    z_data = {"z": -10.0 * torch.ones(1)}
-    # under model flip = 1 with high probability; so do indirect DO surgery to make flip = 0
-    sample_from_do_model = poutine.trace(poutine.do(model, data=z_data))()
-
-    assert_close(sample_from_model, torch.ones(1))
-    assert_close(sample_from_do_model, torch.zeros(1))
+        if not intervene and observe:
+            if observations[name] is not None:
+                assert tr.nodes[name]['is_observed']
+                assert_equal(observations[name], actual_values[name])
+                assert_equal(observations[name], tr.nodes[name]['value'])
+            if interventions[name] != observations[name]:
+                assert_not_equal(interventions[name], actual_values[name])
+        elif intervene and not observe:
+            assert not tr.nodes[name]['is_observed']
+            if interventions[name] is not None:
+                assert_equal(interventions[name], actual_values[name])
+            assert_not_equal(observations[name], tr.nodes[name]['value'])
+            assert_not_equal(interventions[name], tr.nodes[name]['value'])
+        elif intervene and observe:
+            if observations[name] is not None:
+                assert tr.nodes[name]['is_observed']
+                assert_equal(observations[name], tr.nodes[name]['value'])
+            if interventions[name] is not None:
+                assert_equal(interventions[name], actual_values[name])
+            if interventions[name] != observations[name]:
+                assert_not_equal(interventions[name], tr.nodes[name]['value'])
