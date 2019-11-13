@@ -44,6 +44,10 @@ class _Mode:
                 m.mode = self.current_mode
 
 
+def _get_sample_fn(module, name, prior):
+    return prior if module.mode == "model" else module._get_guide(name)
+
+
 class Parameterized(PyroModule):
     """
     A wrapper of :class:`~pyro.nn.module.PyroModule` whose parameters can be set
@@ -103,7 +107,7 @@ class Parameterized(PyroModule):
             if isinstance(prior, (dist.Distribution, torch.distributions.Distribution)):
                 self._priors[name] = prior
                 self.autoguide(name, dist.Delta)
-                value = PyroSample(lambda self: prior if self.mode == "model" else self._get_guide(name))
+                value = PyroSample(partial(_get_sample_fn, name=name, prior=prior))
         super().__setattr__(name, value)
 
     def autoguide(self, name, dist_constructor):

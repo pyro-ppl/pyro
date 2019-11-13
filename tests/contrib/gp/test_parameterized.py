@@ -39,8 +39,8 @@ def test_parameterized():
     assert "d_scale_tril_unconstrained" in parameters
 
     def model(x):
-        with linear.set_mode("model"):
-            return linear(x)
+        linear.set_mode("model")
+        return linear(x)
 
     def guide(x):
         with linear.set_mode("guide"):
@@ -110,10 +110,10 @@ def test_inference():
     linear.autoguide("a", dist.Normal)
 
     def model(x, y):
-        with linear.set_mode("model"):
-            mu = linear(x)
-            with pyro.plate("plate"):
-                return pyro.sample("y", dist.Normal(mu, 0.1), obs=y)
+        linear.set_mode("model")
+        mu = linear(x)
+        with pyro.plate("plate"):
+            return pyro.sample("y", dist.Normal(mu, 0.1), obs=y)
 
     def guide(x, y):
         with linear.set_mode("guide"):
