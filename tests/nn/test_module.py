@@ -62,14 +62,27 @@ def test_svi_smoke():
 
 
 def test_names():
-    root = PyroModule()
-    root.x = nn.Parameter(torch.tensor(0.))
-    root.y = PyroParam(torch.tensor(1.), constraint=constraints.positive)
-    root.m = nn.Module()
-    root.m.u = nn.Parameter(torch.tensor(2.0))
-    root.p = PyroModule()
-    root.p.v = nn.Parameter(torch.tensor(3.))
-    root.p.w = PyroParam(torch.tensor(4.), constraint=constraints.positive)
+
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.x = nn.Parameter(torch.tensor(0.))
+            self.y = PyroParam(torch.tensor(1.), constraint=constraints.positive)
+            self.m = nn.Module()
+            self.m.u = nn.Parameter(torch.tensor(2.0))
+            self.p = PyroModule()
+            self.p.v = nn.Parameter(torch.tensor(3.))
+            self.p.w = PyroParam(torch.tensor(4.), constraint=constraints.positive)
+
+        def forward(self):
+            # trigger .__getattr__()
+            self.x
+            self.y
+            self.m
+            self.p.v
+            self.p.w
+
+    model = Model()
 
     # Check named_parameters.
     expected = {
@@ -79,18 +92,13 @@ def test_names():
         "p.v",
         "p.w_unconstrained",
     }
-    actual = set(name for name, _ in root.named_parameters())
+    actual = set(name for name, _ in model.named_parameters())
     assert actual == expected
 
     # Check pyro.param names.
     expected = {"x", "y", "m$$$u", "p.v", "p.w"}
     with poutine.trace(param_only=True) as param_capture:
-        # trigger .__getattr__()
-        root.x
-        root.y
-        root.m
-        root.p.v
-        root.p.w
+        model()
     actual = {name for name, site in param_capture.trace.nodes.items()
               if site["type"] == "param"}
     assert actual == expected
@@ -235,7 +243,7 @@ def test_cache():
     module.p.e = PyroParam(torch.tensor(4.), constraint=constraints.positive)
     module.p.f = PyroSample(dist.Normal(0, 1))
 
-    assert module._pyro_cache is module.p._pyro_cache
+    assert module._pyro_context is module.p._pyro_context
 
     # Check that results are cached with an invocation of .__call__().
     result1 = module()
@@ -249,10 +257,10 @@ def test_cache():
         assert result1[0] is not result2[0], key
 
 
-def test_serialization():
-
+def test_torch_serialize():
     module = PyroModule()
     module.x = PyroParam(torch.tensor(1.234), constraints.positive)
+    module.y = nn.Parameter(torch.randn(3))
     assert isinstance(module.x, torch.Tensor)
 
     # Work around https://github.com/pytorch/pytorch/issues/27972
@@ -260,8 +268,47 @@ def test_serialization():
         warnings.filterwarnings("ignore", category=UserWarning)
         f = io.BytesIO()
         torch.save(module, f)
+        pyro.clear_param_store()
         f.seek(0)
         actual = torch.load(f)
+
+    assert_equal(actual.x, module.x)
+    actual_names = {name for name, _ in actual.named_parameters()}
+    expected_names = {name for name, _ in module.named_parameters()}
+    assert actual_names == expected_names
+
+
+def test_pyro_serialize():
+    class MyModule(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.x = PyroParam(torch.tensor(1.234), constraints.positive)
+            self.y = nn.Parameter(torch.randn(3))
+
+        def forward(self):
+            return self.x, self.y
+
+    module = MyModule()
+    assert len(pyro.get_param_store()) == 0
+
+    assert isinstance(module.x, torch.Tensor)
+    assert len(pyro.get_param_store()) == 0
+
+    actual = module()  # triggers saving in param store
+    assert_equal(actual[0], module.x)
+    assert_equal(actual[1], module.y)
+    assert set(pyro.get_param_store().keys()) == {"x", "y"}
+    assert_equal(pyro.param("x").detach(), module.x.detach())
+    assert_equal(pyro.param("y").detach(), module.y.detach())
+
+    pyro.get_param_store().save("/tmp/pyro_module.pt")
+    pyro.clear_param_store()
+    assert len(pyro.get_param_store()) == 0
+    pyro.get_param_store().load("/tmp/pyro_module.pt")
+    assert set(pyro.get_param_store().keys()) == {"x", "y"}
+    actual = MyModule()
+    actual()
+
     assert_equal(actual.x, module.x)
     actual_names = {name for name, _ in actual.named_parameters()}
     expected_names = {name for name, _ in module.named_parameters()}

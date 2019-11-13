@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
-from torch.distributions import MultivariateNormal
+from torch.distributions import MultivariateNormal, constraints
 
 import pyro.distributions as dist
 from pyro.contrib.timeseries.base import TimeSeriesModel
+from pyro.nn import PyroParam, pyro_method
 from pyro.ops.tensor_utils import repeated_matmul
 
 
@@ -18,43 +19,41 @@ class GenericLGSSM(TimeSeriesModel):
     :param bool learnable_observation_loc: whether the mean of the observation model should be learned or not;
         defaults to False.
     """
-    def __init__(self, obs_dim=1, state_dim=2, log_obs_noise_scale_init=None,
+    def __init__(self, obs_dim=1, state_dim=2, obs_noise_scale_init=None,
                  learnable_observation_loc=False):
         self.obs_dim = obs_dim
         self.state_dim = state_dim
 
-        if log_obs_noise_scale_init is None:
-            log_obs_noise_scale_init = -2.0 * torch.ones(obs_dim)
-        assert log_obs_noise_scale_init.shape == (obs_dim,)
+        if obs_noise_scale_init is None:
+            obs_noise_scale_init = 0.2 * torch.ones(obs_dim)
+        assert obs_noise_scale_init.shape == (obs_dim,)
 
         super().__init__()
 
-        self.log_obs_noise_scale = nn.Parameter(log_obs_noise_scale_init)
-        self.log_trans_noise_scale_sq = nn.Parameter(torch.zeros(state_dim))
+        self.obs_noise_scale = PyroParam(obs_noise_scale_init,
+                                         constraint=constraints.positive)
+        self.trans_noise_scale_sq = PyroParam(torch.ones(state_dim),
+                                              constraint=constraints.positive)
         self.trans_matrix = nn.Parameter(torch.eye(state_dim) + 0.03 * torch.randn(state_dim, state_dim))
         self.obs_matrix = nn.Parameter(0.3 * torch.randn(state_dim, obs_dim))
-        self.log_init_noise_scale_sq = nn.Parameter(torch.zeros(state_dim))
+        self.init_noise_scale_sq = PyroParam(torch.ones(state_dim),
+                                             constraint=constraints.positive)
 
         if learnable_observation_loc:
             self.obs_loc = nn.Parameter(torch.zeros(obs_dim))
         else:
             self.register_buffer('obs_loc', torch.zeros(obs_dim))
 
-    def _get_obs_noise_scale(self):
-        return self.log_obs_noise_scale.exp()
-
     def _get_init_dist(self):
         loc = self.obs_matrix.new_zeros(self.state_dim)
-        eye = torch.eye(self.state_dim, device=loc.device, dtype=loc.dtype)
-        return MultivariateNormal(loc, self.log_init_noise_scale_sq.exp() * eye)
+        return MultivariateNormal(loc, self.init_noise_scale_sq.diag_embed())
 
     def _get_obs_dist(self):
-        return dist.Normal(self.obs_loc, self._get_obs_noise_scale()).to_event(1)
+        return dist.Normal(self.obs_loc, self.obs_noise_scale).to_event(1)
 
     def _get_trans_dist(self):
         loc = self.obs_matrix.new_zeros(self.state_dim)
-        eye = torch.eye(self.state_dim, device=loc.device, dtype=loc.dtype)
-        return MultivariateNormal(loc, self.log_trans_noise_scale_sq.exp() * eye)
+        return MultivariateNormal(loc, self.trans_noise_scale_sq.diag_embed())
 
     def _get_dist(self):
         """
@@ -63,6 +62,7 @@ class GenericLGSSM(TimeSeriesModel):
         return dist.GaussianHMM(self._get_init_dist(), self.trans_matrix, self._get_trans_dist(),
                                 self.obs_matrix, self._get_obs_dist())
 
+    @pyro_method
     def log_prob(self, targets):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets
@@ -105,11 +105,11 @@ class GenericLGSSM(TimeSeriesModel):
         predicted_covar = predicted_covar1 + torch.cumsum(predicted_covar2, dim=0)
 
         if include_observation_noise:
-            eye = torch.eye(self.obs_dim, device=self.obs_matrix.device, dtype=self.obs_matrix.dtype)
-            predicted_covar = predicted_covar + self._get_obs_noise_scale().pow(2.0) * eye
+            predicted_covar = predicted_covar + self.obs_noise_scale.pow(2.0).diag_embed()
 
         return predicted_mean, predicted_covar
 
+    @pyro_method
     def forecast(self, targets, N_timesteps):
         """
         :param torch.Tensor targets: A 2-dimensional tensor of real-valued targets

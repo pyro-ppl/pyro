@@ -14,13 +14,13 @@ def test_generic_lgssm_forecast(model_class, state_dim, obs_dim, T):
 
     if model_class == 'lgssm':
         model = GenericLGSSM(state_dim=state_dim, obs_dim=obs_dim,
-                             log_obs_noise_scale_init=torch.randn(obs_dim))
+                             obs_noise_scale_init=0.1 + torch.rand(obs_dim))
     elif model_class == 'lgssmgp':
         model = GenericLGSSMWithGPNoiseModel(state_dim=state_dim, obs_dim=obs_dim, nu=1.5,
-                                             log_obs_noise_scale_init=torch.randn(obs_dim))
+                                             obs_noise_scale_init=0.1 + torch.rand(obs_dim))
         # with these hyperparameters we essentially turn off the GP contributions
-        model.kernel.log_length_scale.data = -9.9 * torch.ones(obs_dim)
-        model.kernel.log_kernel_scale.data = -9.9 * torch.ones(obs_dim)
+        model.kernel.length_scale = 1.0e-6 * torch.ones(obs_dim)
+        model.kernel.kernel_scale = 1.0e-6 * torch.ones(obs_dim)
 
     targets = torch.randn(T, obs_dim)
     filtering_state = model._filter(targets)
@@ -55,7 +55,7 @@ def test_generic_lgssm_forecast(model_class, state_dim, obs_dim, T):
         fs_covar = filtering_state.covariance_matrix
     elif model_class == 'lgssmgp':
         # we only compute contributions for the state space portion
-        process_covar = model.log_trans_noise_scale_sq.exp() * torch.eye(state_dim)
+        process_covar = model.trans_noise_scale_sq.diag_embed()
         fs_covar = filtering_state.covariance_matrix[-state_dim:, -state_dim:]
 
     predicted_covar1 = torch.mm(trans_obs.t(), torch.mm(fs_covar, trans_obs)) + \
