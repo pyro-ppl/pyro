@@ -8,8 +8,7 @@ import pyro.distributions as dist
 from pyro.infer.mcmc import NUTS
 from pyro.infer.mcmc.api import MCMC
 from pyro.contrib.timeseries import IndependentMaternGP
-from pyro.ops.ssm_gp import MaternKernel
-from pyro.nn.module import PyroModule, PyroSample
+from pyro.nn.module import PyroSample
 
 from gp_models import download_data
 
@@ -17,21 +16,17 @@ from gp_models import download_data
 pyro.enable_validation(__debug__)
 
 
-class RandomMaternKernel(MaternKernel, PyroModule):
-    pass
-
-
-class RandomGP(IndependentMaternGP, PyroModule):
-    Kernel = RandomMaternKernel
+class RandomGP(IndependentMaternGP):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        prior_dist = dist.Normal(0.0, 2 * torch.ones(self.obs_dim)).to_event(1)
-        self.kernel.log_length_scale = PyroSample(prior_dist)
-        self.kernel.log_kernel_scale = PyroSample(prior_dist)
-        self.log_obs_noise_scale = PyroSample(prior_dist)
+        prior_dist = dist.LogNormal(0.0, 2 * torch.ones(self.obs_dim)).to_event(1)
+        self.kernel.length_scale = PyroSample(prior_dist)
+        self.kernel.kernel_scale = PyroSample(prior_dist)
+        self.obs_noise_scale = PyroSample(prior_dist)
 
     def forward(self, data):
         return self.log_prob(data).sum(-1)
+
 
 def main(args):
     download_data()
