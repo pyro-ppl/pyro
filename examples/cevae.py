@@ -127,7 +127,7 @@ def train(args, x, t, y):
     for epoch in range(args.num_epochs):
         loss = 0
         for x, t, y in dataloader:
-            do_data.update(t=t, y=y)  # Pass t,y via Pear's do operator.
+            do_data.update(t=t, y=y)  # Pass t,y via Pearl's do operator.
             loss += svi.step(x, size=len(dataset))  # Pass x as observations.
         print("epoch {: >3d} loss = {:0.6g}".format(loss / len(dataloader)))
     return model, guide
