@@ -12,6 +12,8 @@ For example to generate a mean field Gaussian guide::
 Automatic guides can also be combined using :func:`pyro.poutine.block` and
 :class:`AutoGuideList`.
 """
+import functools
+import operator
 import warnings
 import weakref
 from contextlib import ExitStack  # python 3
@@ -31,6 +33,26 @@ from pyro.infer.enum import config_enumerate
 from pyro.nn import AutoRegressiveNN, PyroModule, PyroParam
 from pyro.ops.hessian import hessian
 from pyro.poutine.util import prune_subsample_sites
+
+
+def _deep_setattr(obj, key, val):
+    """
+    Set an attribute `key` on the object. If any of the prefix attributes do
+    not exist, they are set to :class:`~pyro.nn.PyroModule`.
+    """
+
+    def _getattr(obj, attr):
+        obj_next = getattr(obj, attr, None)
+        if obj_next is not None:
+            return obj_next
+        setattr(obj, attr, PyroModule())
+        return getattr(obj, attr)
+
+    path, _, attr = key.rpartition(".")
+    # Recursive getattr while setting any prefix attributes to PyroModule
+    if path:
+        obj = functools.reduce(_getattr, [obj] + key.split('.'))
+    setattr(obj, attr, val)
 
 
 class AutoGuide(PyroModule):
@@ -283,7 +305,7 @@ class AutoDelta(AutoGuide):
         # Initialize guide params
         for name, site in self.prototype_trace.iter_stochastic_nodes():
             value = PyroParam(site["value"].detach(), constraint=site["fn"].support)
-            setattr(self, name, value)
+            _deep_setattr(self, name, value)
 
     def forward(self, *args, **kwargs):
         """
@@ -303,7 +325,8 @@ class AutoDelta(AutoGuide):
                 for frame in site["cond_indep_stack"]:
                     if frame.vectorized:
                         stack.enter_context(plates[frame.name])
-                result[name] = pyro.sample(name, dist.Delta(getattr(self, name),
+                attr_get = operator.attrgetter(name)
+                result[name] = pyro.sample(name, dist.Delta(attr_get(self),
                                                             event_dim=site["fn"].event_dim))
         return result
 
@@ -767,8 +790,8 @@ class AutoDiscreteParallel(AutoGuide):
         for site, Dist, param_spec in self._discrete_sites:
             name = site["name"]
             for param_name, param_init, param_constraint in param_spec:
-                setattr(self, "{}_{}".format(name, param_name),
-                        PyroParam(param_init, constraint=param_constraint))
+                _deep_setattr(self, "{}_{}".format(name, param_name),
+                              PyroParam(param_init, constraint=param_constraint))
 
     def forward(self, *args, **kwargs):
         """
@@ -788,7 +811,7 @@ class AutoDiscreteParallel(AutoGuide):
         for site, Dist, param_spec in self._discrete_sites:
             name = site["name"]
             dist_params = {
-                param_name: getattr(self, "{}_{}".format(name, param_name))
+                param_name: operator.attrgetter("{}_{}".format(name, param_name))(self)
                 for param_name, param_init, param_constraint in param_spec
             }
             discrete_dist = Dist(**dist_params)
