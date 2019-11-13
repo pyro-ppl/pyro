@@ -150,8 +150,6 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
     :param torch.Tensor obs_noise_scale_init: optional initial values for the observation noise scale
         given as a ``obs_dim``-dimensional tensor
     """
-    Kernel = MaternKernel
-
     def __init__(self, nu=1.5, dt=1.0, obs_dim=2, num_gps=1,
                  length_scale_init=None, kernel_scale_init=None,
                  obs_noise_scale_init=None):
