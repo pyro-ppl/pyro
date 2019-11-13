@@ -103,6 +103,11 @@ def test_names():
               if site["type"] == "param"}
     assert actual == expected
 
+    # Check pyro_parameters method
+    expected = {"x", "y", "m.u", "p.v", "p.w"}
+    actual = set(k for k, v in model.named_pyro_params())
+    assert actual == expected
+
 
 def test_delete():
     m = PyroModule()
@@ -127,6 +132,30 @@ def test_nested():
     f = Family()
     assert_equal(f.child1.a.detach(), torch.tensor(1.))
     assert_equal(f.child2.a.detach(), torch.tensor(2.))
+
+
+def test_module_cache():
+    class Child(PyroModule):
+        def __init__(self, x):
+            super().__init__()
+            self.a = PyroParam(torch.tensor(x))
+
+        def forward(self):
+            return self.a
+
+    class Family(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.c = Child(1.0)
+
+        def forward(self):
+            return self.c.a
+
+    f = Family()
+    assert_equal(f().detach(), torch.tensor(1.))
+    f.c = Child(3.)
+    assert_equal(f().detach(), torch.tensor(3.))
+    assert_equal(f.c().detach(), torch.tensor(3.))
 
 
 SHAPE_CONSTRAINT = [

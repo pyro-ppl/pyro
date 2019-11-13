@@ -69,6 +69,16 @@ class _Context:
             self.cache[name] = value
 
 
+def _get_pyro_params(module):
+    for name in module._parameters:
+        if name.endswith("_unconstrained"):
+            constrained_name = name[:-len("_unconstrained")]
+            if isinstance(module, PyroModule) and constrained_name in module._pyro_params:
+                yield constrained_name, getattr(module, constrained_name)
+                continue
+        yield name, module._parameters[name]
+
+
 class PyroModule(torch.nn.Module):
     """
     Subclass of :class:`torch.nn.Module` that supports setting of
@@ -130,6 +140,21 @@ class PyroModule(torch.nn.Module):
         self._pyro_params = OrderedDict()
         self._pyro_samples = OrderedDict()
         super().__init__()
+
+    def named_pyro_params(self, prefix='', recurse=True):
+        """
+        Returns an iterator over PyroModule parameters, yielding both the
+        name of the parameter as well as the parameter itself.
+
+        :param str prefix: prefix to prepend to all parameter names.
+        :param bool recurse: if True, then yields parameters of this module
+            and all submodules. Otherwise, yields only parameters that
+            are direct members of this module.
+        :returns: a generator which yields tuples containing the name and parameter
+        """
+        gen = self._named_members(_get_pyro_params, prefix=prefix, recurse=recurse)
+        for elem in gen:
+            yield elem
 
     def _pyro_set_supermodule(self, name, context):
         self._pyro_name = name
@@ -298,6 +323,14 @@ class PyroModule(torch.nn.Module):
 
         if name in self._pyro_samples:
             del self._pyro_samples[name]
+            return
+
+        if name in self._modules:
+            del self._modules[name]
+            fullname = _make_name(self._pyro_name, name)
+            for p in list(_PYRO_PARAM_STORE.keys()):
+                if p.startswith(fullname):
+                    del _PYRO_PARAM_STORE[p]
             return
 
         super().__delattr__(name)
