@@ -24,14 +24,14 @@ class Model(PyroModule):
         self.y1_nn = TODO()
         self.t_nn = TODO()
 
-    def forward(self, x, t=None, y=None, size=None):
+    def forward(self, x, t=None, size=None):
         if size is None:
             size = x.size(0)
         with pyro.plate("data", size, subsample=x):
             z = pyro.sample("z", self.z_dist)
             x = pyro.sample("x", self.x_dist(z), obs=x)
             t = pyro.sample("t", self.t_dist(z), obs=t)
-            y = pyro.sample("y", self.y_dist(t, z), obs=y)
+            y = pyro.sample("y", self.y_dist(t, z))
         return y
 
     def z_dist(self):
@@ -64,12 +64,12 @@ class Guide(PyroModule):
         self.z0_nn = TODO()
         self.z1_nn = TODO()
 
-    def forward(self, x, t=None, y=None, size=None):
+    def forward(self, x, t=None, size=None):
         if size is None:
             size = x.size(0)
         with pyro.plate("data", size, subsample=x):
             t = pyro.sample("t", self.t_dist(x), obs=t)
-            y = pyro.sample("y", self.y_dist(t, x), obs=y)
+            y = pyro.sample("y", self.y_dist(t, x))
             pyro.sample("z", self.z_dist(t, y, x))
 
     def t_dist(self, x):
@@ -83,7 +83,7 @@ class Guide(PyroModule):
         logits0 = self.y0_nn(hidden)  # single layer
         logits1 = self.y1_nn(hidden)  # single layer
         logits = torch.where(t, logits1, logits0)
-        return Bernoulli(logits)
+        return Bernoulli(logits=logits)
 
     def z_dist(self, t, y, x):
         # Parameters are not shared among t values.
@@ -113,16 +113,22 @@ def ite(model, guide, x, num_samples=100):
 def train(args, x, t, y):
     model = Model(args)
     guide = Guide(args)
+
     dataset = TensorDataset(x, t, y)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
     num_steps = args.num_epochs * len(dataloader)
     optim = ClippedAdam({"lr": args.learning_ratee,
                          "lrd": args.learning_rate_decay ** (1 / num_steps)})
-    svi = SVI(model, guide, optim, Trace_ELBO())
+
+    # We construct the CEVAE loss by applying poutine.do to the guide.
+    # The resulting ELBO thus consists of ELBO + log q(t|x) + log q(y|t,x).
+    do_data = dict(t=t, y=y)  # We will update this in-place with each minibatch.
+    svi = SVI(model, poutine.do(guide, do_data), optim, Trace_ELBO())
     for epoch in range(args.num_epochs):
         loss = 0
         for x, t, y in dataloader:
-            loss += svi.step(x, t, y, size=len(dataset))
+            do_data.update(t=t, y=y)  # Pass t,y via Pear's do operator.
+            loss += svi.step(x, size=len(dataset))  # Pass x as observations.
         print("epoch {: >3d} loss = {:0.6g}".format(loss / len(dataloader)))
     return model, guide
 
