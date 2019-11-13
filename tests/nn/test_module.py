@@ -134,7 +134,7 @@ def test_nested():
     assert_equal(f.child2.a.detach(), torch.tensor(2.))
 
 
-def test_module_delete():
+def test_module_cache():
     class Child(PyroModule):
         def __init__(self, x):
             super().__init__()
@@ -150,6 +150,12 @@ def test_module_delete():
 
     f = Family()
     f.c = Child(3.)
+    assert_equal(f().detach(), torch.tensor(3.))
+
+    g = Family()
+    g.c = Child(4.)
+    assert_equal(g().detach(), torch.tensor(4.))
+    # FIXME: failing test
     assert_equal(f().detach(), torch.tensor(3.))
 
 
