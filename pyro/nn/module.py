@@ -318,3 +318,27 @@ def pyro_method(fn):
             return fn(self, *args, **kwargs)
 
     return cached_fn
+
+
+def pyro_sample(fn):
+    """
+    Decorator for random attributes.
+    The following are equivalent::
+
+        class MyModule(PyroModule):
+            def __init__(self):
+                super().__init__()
+                self.x = PyroSample(lambda self: fn(self))
+
+        class MyModule(PyroModule):
+            @pyro_sample
+            def x(self):
+                return fn(self)
+    """
+
+    @functools.wraps(fn)
+    def lazy_fn(self):
+        setattr(self, fn.__name__, PyroSample(fn))
+        return getattr(self, fn.__nam__)
+
+    return lazy_fn
