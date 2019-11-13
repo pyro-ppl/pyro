@@ -15,12 +15,3 @@ ParamStore
     :undoc-members:
     :show-inheritance:
     :member-order: bysource
-
-Constraints
------------
-
-.. automodule:: pyro.params.constrained_parameter
-    :members:
-    :undoc-members:
-    :show-inheritance:
-    :member-order: bysource
