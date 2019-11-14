@@ -137,12 +137,9 @@ class PyroModule(torch.nn.Module):
     def __init__(self):
         self._pyro_name = ""
         self._pyro_context = _Context()  # shared among sub-PyroModules
-        self._reset()
-        super().__init__()
-
-    def _reset(self):
         self._pyro_params = OrderedDict()
         self._pyro_samples = OrderedDict()
+        super().__init__()
 
     def named_pyro_params(self, prefix='', recurse=True):
         """
@@ -164,11 +161,8 @@ class PyroModule(torch.nn.Module):
         self._pyro_context = context
         for key, value in self._modules.items():
             assert isinstance(value, PyroModule)
-            assert not value._pyro_context.active, \
+            assert not value._pyro_context.used, \
                 "submodule {} has executed outside of supermodule".format(name)
-            if value._pyro_context.used:
-                value._reset()
-                value._pyro_context.used = False
             value._pyro_set_supermodule(_make_name(name, key), context)
 
     def __call__(self, *args, **kwargs):
