@@ -31,8 +31,6 @@ class ConditionMessenger(Messenger):
         name = msg["name"]
 
         if name in self.data:
-            assert not msg["is_observed"], \
-                "should not change values of existing observes"
             if isinstance(self.data, Trace):
                 msg["value"] = self.data.nodes[name]["value"]
             else:
