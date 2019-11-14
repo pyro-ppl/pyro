@@ -517,7 +517,7 @@ class AutoMultivariateNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the mean vector is initialized by ``init_loc_fn()`` and the
-    Cholesky factor is initialized to the identity.
+    Cholesky factor is initialized to the identity times a small factor.
 
     :param callable model: A generative model.
     :param callable init_loc_fn: A per-site initialization function.
