@@ -366,7 +366,8 @@ TransformModule
 Transform Factories
 ~~~~~~~~~~~~~~~~~~~
 
-Each Transform and TransformModule includes a corresponding helper function in lower case that inputs, at minimum, the input dimensions of the transform, and possibly additional arguments to customize the transform in an intuitive way. The purpose of these helper functions is to hide from the user whether or not the transform requires the construction of a hypernet, and if so, the input and output dimensions of that hypernet.
+Each :class:`~torch.distributions.transforms.Transform` and :class:`~pyro.distributions.TransformModule` includes a corresponding helper function in lower case that inputs, at minimum, the input dimensions of the transform, and possibly additional arguments to customize the transform in an intuitive way. The purpose of these helper functions is to hide from the user whether or not the transform requires the construction of a hypernet, and if so, the input and output dimensions of that hypernet.
+
 
 affine_autoregressive
 ---------------------
