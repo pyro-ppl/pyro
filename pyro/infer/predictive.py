@@ -107,7 +107,8 @@ def _predictive(model, posterior_samples, num_samples, return_sites=(),
 class Predictive(torch.nn.Module):
     """
     This class is used to construct predictive distribution. The predictive distribution is obtained
-    by running model conditioned on latent samples from `posterior_samples`.
+    by running the `model` conditioned on latent samples from `posterior_samples`. If a `guide` is
+    provided, then samples from all the latent sites are returned.
 
     .. warning::
         The interface for the :class:`Predictive` class is experimental, and
@@ -148,6 +149,9 @@ class Predictive(torch.nn.Module):
         if num_samples is None:
             raise ValueError("No sample sites in posterior samples to infer `num_samples`.")
 
+        if guide is not None and posterior_samples:
+            raise ValueError("`posterior_samples` cannot be provided with the `guide` argument.")
+
         if return_sites is not None:
             assert isinstance(return_sites, (list, tuple, set))
 
@@ -185,6 +189,7 @@ class Predictive(torch.nn.Module):
         posterior_samples = self.posterior_samples
         return_sites = self.return_sites
         if self.guide is not None:
+            # return all sites by default if a guide is provided.
             return_sites = None if not return_sites else return_sites
             posterior_samples = _predictive(self.guide, posterior_samples, self.num_samples, return_sites=None,
                                             parallel=self.parallel, model_args=args, model_kwargs=kwargs)
