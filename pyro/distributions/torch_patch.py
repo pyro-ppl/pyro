@@ -42,18 +42,6 @@ def _Transform__getstate__(self):
     return attrs
 
 
-# This can be removed after release of https://github.com/pytorch/pytorch/pull/24131
-@patch_dependency('torch.distributions.LowerCholeskyTransform._call')
-def _LowerCholeskyTransform_call(self, x):
-    return x.tril(-1) + x.diagonal(dim1=-2, dim2=-1).exp().diag_embed()
-
-
-# This can be removed after release of https://github.com/pytorch/pytorch/pull/24131
-@patch_dependency('torch.distributions.LowerCholeskyTransform._inverse')
-def _LowerCholeskyTransform_inverse(self, y):
-    return y.tril(-1) + y.diagonal(dim1=-2, dim2=-1).log().diag_embed()
-
-
 # Fixes a shape error in Multinomial.support with inhomogeneous .total_count
 @patch_dependency('torch.distributions.Multinomial.support')
 @torch.distributions.constraints.dependent_property

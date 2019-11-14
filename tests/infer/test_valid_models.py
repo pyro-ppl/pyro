@@ -1765,6 +1765,21 @@ def test_mean_field_ok():
     assert_ok(model, guide, TraceMeanField_ELBO())
 
 
+@pytest.mark.parametrize('mask', [True, False])
+def test_mean_field_mask_ok(mask):
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0., 1.).mask(mask))
+        pyro.sample("y", dist.Normal(x, 1.))
+
+    def guide():
+        loc = pyro.param("loc", torch.tensor(0.))
+        x = pyro.sample("x", dist.Normal(loc, 1.).mask(mask))
+        pyro.sample("y", dist.Normal(x, 1.))
+
+    assert_ok(model, guide, TraceMeanField_ELBO())
+
+
 def test_mean_field_warn():
 
     def model():

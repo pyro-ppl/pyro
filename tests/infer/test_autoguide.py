@@ -1,19 +1,26 @@
 import functools
+import io
+import warnings
+from operator import attrgetter
 
 import numpy as np
 import pytest
 import torch
+from torch import nn
 from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
-from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuideList,
-                                  AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
+from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuide,
+                                  AutoGuideList, AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
                                   AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
                                   init_to_sample)
+from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.optim import Adam
+from pyro.util import check_model_guide_match
 from tests.common import assert_close, assert_equal
 
 
@@ -37,9 +44,10 @@ def test_scores(auto_class):
     guide_trace.compute_log_prob()
     model_trace.compute_log_prob()
 
-    assert '_auto_latent' not in model_trace.nodes
+    prefix = auto_class.__name__
+    assert '_{}_latent'.format(prefix) not in model_trace.nodes
     assert model_trace.nodes['z']['log_prob_sum'].item() != 0.0
-    assert guide_trace.nodes['_auto_latent']['log_prob_sum'].item() != 0.0
+    assert guide_trace.nodes['_{}_latent'.format(prefix)]['log_prob_sum'].item() != 0.0
     assert guide_trace.nodes['z']['log_prob_sum'].item() == 0.0
 
 
@@ -95,6 +103,9 @@ def test_shapes(auto_class, init_loc_fn, Elbo):
         pyro.sample("z2", dist.Normal(torch.zeros(2), torch.ones(2)).to_event(1))
         with pyro.plate("plate", 3):
             pyro.sample("z3", dist.Normal(torch.zeros(3), torch.ones(3)))
+        pyro.sample("z4", dist.MultivariateNormal(torch.zeros(2), torch.eye(2)))
+        pyro.sample("z5", dist.Dirichlet(torch.ones(3)))
+        pyro.sample("z6", dist.Normal(0, 1).expand((2,)).mask(torch.arange(2) > 0).to_event(1))
 
     guide = auto_class(model, init_loc_fn=init_loc_fn)
     elbo = Elbo(strict_enumeration_warning=False)
@@ -134,8 +145,8 @@ def test_iplate_smoke(auto_class, Elbo):
 
 def auto_guide_list_x(model):
     guide = AutoGuideList(model)
-    guide.add(AutoDelta(poutine.block(model, expose=["x"])))
-    guide.add(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    guide.append(AutoDelta(poutine.block(model, expose=["x"])))
+    guide.append(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
     return guide
 
 
@@ -149,8 +160,36 @@ def auto_guide_callable(model):
         return {"x": pyro.param("x_loc", torch.tensor(1.))}
 
     guide = AutoGuideList(model)
-    guide.add(AutoCallable(model, guide_x, median_x))
-    guide.add(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    guide.append(AutoCallable(model, guide_x, median_x))
+    guide.append(AutoDiagonalNormal(poutine.block(model, hide=["x"])))
+    return guide
+
+
+def auto_guide_module_callable(model):
+    class GuideX(AutoGuide):
+        def __init__(self, model):
+            super().__init__(model)
+            self.x_loc = nn.Parameter(torch.tensor(1.))
+            self.x_scale = PyroParam(torch.tensor(.1), constraint=constraints.positive)
+
+        def forward(self, *args, **kwargs):
+            return {"x": pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))}
+
+        def median(self, *args, **kwargs):
+            return {"x": self.x_loc.detach()}
+
+    guide = AutoGuideList(model)
+    guide.custom = GuideX(model)
+    guide.diagnorm = AutoDiagonalNormal(poutine.block(model, hide=["x"]))
+    return guide
+
+
+def nested_auto_guide_callable(model):
+    guide = AutoGuideList(model)
+    guide.append(AutoDelta(poutine.block(model, expose=['x'])))
+    guide_y = AutoGuideList(poutine.block(model, expose=['y']))
+    guide_y.z = AutoIAFNormal(poutine.block(model, expose=['y']))
+    guide.append(guide_y)
     return guide
 
 
@@ -162,6 +201,7 @@ def auto_guide_callable(model):
     AutoLaplaceApproximation,
     auto_guide_list_x,
     auto_guide_callable,
+    auto_guide_module_callable,
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_feasible),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
     functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
@@ -190,6 +230,62 @@ def test_median(auto_class, Elbo):
     else:
         assert_equal(median["y"], torch.tensor(1.0), prec=0.1)
     assert_equal(median["z"], torch.tensor(0.5), prec=0.1)
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+    auto_guide_list_x,
+    auto_guide_module_callable,
+    nested_auto_guide_callable,
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_feasible),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_sample),
+])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_autoguide_serialization(auto_class, Elbo):
+    def model():
+        pyro.sample("x", dist.Normal(0.0, 1.0))
+        with pyro.plate("plate", 2):
+            pyro.sample("y", dist.LogNormal(0.0, 1.0))
+            pyro.sample("z", dist.Beta(2.0, 2.0))
+    guide = auto_class(model)
+    guide()
+    if auto_class is AutoLaplaceApproximation:
+        guide = guide.laplace_approximation()
+    pyro.set_rng_seed(0)
+    expected = guide.call()
+    names = sorted(guide())
+
+    # Ignore tracer warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+        # XXX: check_trace=True fails for AutoLaplaceApproximation
+        traced_guide = torch.jit.trace_module(guide, {"call": ()}, check_trace=False)
+    f = io.BytesIO()
+    torch.jit.save(traced_guide, f)
+    f.seek(0)
+    guide_deser = torch.jit.load(f)
+
+    # Check .call() result.
+    pyro.set_rng_seed(0)
+    actual = guide_deser.call()
+    assert len(actual) == len(expected)
+    for name, a, e in zip(names, actual, expected):
+        assert_equal(a, e, msg="{}: {} vs {}".format(name, a, e))
+
+    # Check named_parameters.
+    expected_names = {name for name, _ in guide.named_parameters()}
+    actual_names = {name for name, _ in guide_deser.named_parameters()}
+    assert actual_names == expected_names
+    for name in actual_names:
+        # Get nested attributes.
+        attr_get = attrgetter(name)
+        assert_equal(attr_get(guide_deser), attr_get(guide).data)
 
 
 @pytest.mark.parametrize("auto_class", [
@@ -259,8 +355,8 @@ def test_discrete_parallel(continuous_class):
             pyro.sample('obs', dist.Normal(locs[assignment], scale), obs=data)
 
     guide = AutoGuideList(model)
-    guide.add(continuous_class(poutine.block(model, hide=["assignment"])))
-    guide.add(AutoDiscreteParallel(poutine.block(model, expose=["assignment"])))
+    guide.append(continuous_class(poutine.block(model, hide=["assignment"])))
+    guide.append(AutoDiscreteParallel(poutine.block(model, expose=["assignment"])))
 
     elbo = TraceEnum_ELBO(max_plate_nesting=1)
     loss = elbo.loss_and_grads(model, guide, data)
@@ -282,8 +378,8 @@ def test_guide_list(auto_class):
         pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
 
     guide = AutoGuideList(model)
-    guide.add(auto_class(poutine.block(model, expose=["x"]), prefix="auto_x"))
-    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide.append(auto_class(poutine.block(model, expose=["x"])))
+    guide.append(auto_class(poutine.block(model, expose=["y"])))
     guide()
 
 
@@ -305,8 +401,8 @@ def test_callable(auto_class):
         pyro.sample("x", dist.Delta(x_loc))
 
     guide = AutoGuideList(model)
-    guide.add(guide_x)
-    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide.append(guide_x)
+    guide.append(auto_class(poutine.block(model, expose=["y"])))
     values = guide()
     assert set(values) == set(["y"])
 
@@ -330,8 +426,8 @@ def test_callable_return_dict(auto_class):
         return {"x": x}
 
     guide = AutoGuideList(model)
-    guide.add(guide_x)
-    guide.add(auto_class(poutine.block(model, expose=["y"]), prefix="auto_y"))
+    guide.append(guide_x)
+    guide.append(auto_class(poutine.block(model, expose=["y"])))
     values = guide()
     assert set(values) == set(["x", "y"])
 
@@ -352,3 +448,170 @@ def test_unpack_latent():
     assert guide()['x'].shape == model().shape
     latent = guide.sample_latent()
     assert list(guide._unpack_latent(latent))[0][1].shape == (1,)
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+])
+def test_init_loc_fn(auto_class):
+
+    def model():
+        pyro.sample("x", dist.Normal(0., 1.))
+        pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
+
+    inits = {"x": torch.randn(()), "y": torch.randn(5)}
+
+    def init_loc_fn(site):
+        return inits[site["name"]]
+
+    guide = auto_class(model, init_loc_fn=init_loc_fn)
+    guide()
+    median = guide.median()
+    assert_equal(median["x"], inits["x"])
+    assert_equal(median["y"], inits["y"])
+
+
+# testing helper
+class AutoLowRankMultivariateNormal_100(AutoLowRankMultivariateNormal):
+    def __init__(self, *args, **kwargs):
+        return super().__init__(*args, **kwargs, rank=100)
+
+
+@pytest.mark.parametrize("init_scale", [1e-1, 1e-4, 1e-8])
+@pytest.mark.parametrize("auto_class", [
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLowRankMultivariateNormal_100,
+])
+def test_init_scale(auto_class, init_scale):
+
+    def model():
+        pyro.sample("x", dist.Normal(0., 1.))
+        pyro.sample("y", dist.MultivariateNormal(torch.zeros(5), torch.eye(5, 5)))
+        with pyro.plate("plate", 100):
+            pyro.sample("z", dist.Normal(0., 1.))
+
+    guide = auto_class(model, init_scale=init_scale)
+    guide()
+    loc, scale = guide._loc_scale()
+    scale_rms = scale.pow(2).mean().sqrt().item()
+    assert init_scale * 0.5 < scale_rms < 2.0 * init_scale
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+    auto_guide_list_x,
+    auto_guide_callable,
+    auto_guide_module_callable,
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_median_module(auto_class, Elbo):
+
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.x_loc = nn.Parameter(torch.tensor(1.))
+            self.x_scale = PyroParam(torch.tensor(0.1), constraints.positive)
+
+        def forward(self):
+            pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))
+            pyro.sample("y", dist.Normal(2., 0.1))
+
+    model = Model()
+    guide = auto_class(model)
+    infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
+    for _ in range(20):
+        infer.step()
+
+    if auto_class is AutoLaplaceApproximation:
+        guide = guide.laplace_approximation()
+
+    median = guide.median()
+    assert_equal(median["x"].detach(), torch.tensor(1.0), prec=0.1)
+    assert_equal(median["y"].detach(), torch.tensor(2.0), prec=0.1)
+
+
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_nested_autoguide(Elbo):
+
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.x_loc = nn.Parameter(torch.tensor(1.))
+            self.x_scale = PyroParam(torch.tensor(0.1), constraints.positive)
+
+        def forward(self):
+            pyro.sample("x", dist.Normal(self.x_loc, self.x_scale))
+            with pyro.plate("plate", 2):
+                pyro.sample("y", dist.Normal(2., 0.1))
+
+    model = Model()
+    guide = nested_auto_guide_callable(model)
+
+    # Check master ref for all nested components.
+    for _, m in guide.named_modules():
+        if m is guide:
+            continue
+        assert m.master is not None and m.master() is guide, "master ref wrong for {}".format(m._pyro_name)
+
+    infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
+    for _ in range(20):
+        infer.step()
+
+    guide_trace = poutine.trace(guide).get_trace()
+    model_trace = poutine.trace(model).get_trace()
+    check_model_guide_match(model_trace, guide_trace)
+    assert all(p.startswith("AutoGuideList.0") or p.startswith("AutoGuideList.1.z")
+               for p in guide_trace.param_nodes)
+    stochastic_nodes = set(guide_trace.stochastic_nodes)
+    assert "x" in stochastic_nodes
+    assert "y" in stochastic_nodes
+    # Only latent sampled is for the IAF.
+    assert "_AutoGuideList.1.z_latent" in stochastic_nodes
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
+def test_linear_regression_smoke(auto_class, Elbo):
+    N, D = 10, 3
+
+    class RandomLinear(nn.Linear, PyroModule):
+        def __init__(self, in_features, out_features):
+            super().__init__(in_features, out_features)
+            self.weight = PyroSample(lambda self: dist.Normal(0., 1.).expand([out_features, in_features])
+                                     .to_event(2))
+            self.bias = PyroSample(lambda self: dist.Normal(0., 10.).expand([out_features]).to_event(1))
+
+    class LinearRegression(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.linear = RandomLinear(D, 1)
+
+        def forward(self, x, y):
+            mean = self.linear(x).squeeze(-1)
+            with pyro.plate('plate', N):
+                return pyro.sample('obs', dist.Normal(mean, 1.), obs=y)
+
+    x, y = torch.randn(N, D), torch.randn(N)
+    model = LinearRegression()
+    guide = auto_class(model)
+    infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
+    infer.step(x, y)

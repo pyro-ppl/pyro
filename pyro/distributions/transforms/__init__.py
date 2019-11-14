@@ -1,4 +1,6 @@
-from __future__ import absolute_import
+from torch.distributions import biject_to, transform_to
+from torch.distributions.transforms import *  # noqa F403
+from torch.distributions.transforms import __all__ as torch_transforms
 
 from pyro.distributions.transforms.affine_autoregressive import AffineAutoregressive, affine_autoregressive
 from pyro.distributions.transforms.affine_coupling import AffineCoupling, affine_coupling
@@ -14,6 +16,21 @@ from pyro.distributions.transforms.polynomial import Polynomial, polynomial
 from pyro.distributions.transforms.planar import Planar, ConditionalPlanar, planar, conditional_planar
 from pyro.distributions.transforms.radial import Radial, radial
 from pyro.distributions.transforms.sylvester import Sylvester, sylvester
+from pyro.distributions.constraints import IndependentConstraint, corr_cholesky_constraint
+from pyro.distributions.transforms.cholesky import CorrLCholeskyTransform
+
+########################################
+# register transforms
+
+biject_to.register(IndependentConstraint, lambda c: biject_to(c.base_constraint))
+transform_to.register(IndependentConstraint, lambda c: transform_to(c.base_constraint))
+
+
+@biject_to.register(corr_cholesky_constraint)
+@transform_to.register(corr_cholesky_constraint)
+def _transform_to_corr_cholesky(constraint):
+    return CorrLCholeskyTransform()
+
 
 __all__ = [
     'AffineAutoregressive',
@@ -21,6 +38,7 @@ __all__ = [
     'BatchNorm',
     'BlockAutoregressive',
     'ConditionalPlanar',
+    'CorrLCholeskyTransform',
     'ELUTransform',
     'Householder',
     'LeakyReLUTransform',
@@ -47,3 +65,6 @@ __all__ = [
     'sylvester',
     'tanh',
 ]
+
+__all__.extend(torch_transforms)
+del torch_transforms

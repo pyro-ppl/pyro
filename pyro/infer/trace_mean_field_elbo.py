@@ -98,8 +98,12 @@ class TraceMeanField_ELBO(Trace_ELBO):
                     try:
                         kl_qp = kl_divergence(guide_site["fn"], model_site["fn"])
                         kl_qp = scale_and_mask(kl_qp, scale=guide_site["scale"], mask=guide_site["mask"])
-                        assert kl_qp.shape == guide_site["fn"].batch_shape
-                        elbo_particle = elbo_particle - kl_qp.sum()
+                        if torch.is_tensor(kl_qp):
+                            assert kl_qp.shape == guide_site["fn"].batch_shape
+                            kl_qp_sum = kl_qp.sum()
+                        else:
+                            kl_qp_sum = kl_qp * torch.Size(guide_site["fn"].batch_shape).numel()
+                        elbo_particle = elbo_particle - kl_qp_sum
                     except NotImplementedError:
                         entropy_term = guide_site["score_parts"].entropy_term
                         elbo_particle = elbo_particle + model_site["log_prob_sum"] - entropy_term.sum()

@@ -143,7 +143,7 @@ def main(args):
     # Turns on "whiten" flag will help optimization for variational models.
     gpmodule = gp.models.VariationalSparseGP(X=Xu, y=None, kernel=deep_kernel, Xu=Xu,
                                              likelihood=likelihood, latent_shape=latent_shape,
-                                             num_data=60000, whiten=True)
+                                             num_data=60000, whiten=True, jitter=2e-6)
     if args.cuda:
         gpmodule.cuda()
 
@@ -162,7 +162,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('0.4.1')
+    assert pyro.__version__.startswith('0.5.1')
     parser = argparse.ArgumentParser(description='Pyro GP MNIST Example')
     parser.add_argument('--data-dir', type=str, default=None, metavar='PATH',
                         help='default directory to cache MNIST data')

@@ -26,7 +26,7 @@ class _SVGDGuide(AutoContinuous):
     :class:`SVGD` inference algorithm.
     """
     def __init__(self, model):
-        super(_SVGDGuide, self).__init__(model, prefix="svgd", init_loc_fn=init_to_sample)
+        super(_SVGDGuide, self).__init__(model, init_loc_fn=init_to_sample)
 
     def get_posterior(self, *args, **kwargs):
         svgd_particles = pyro.param("svgd_particles", self._init_loc)
@@ -191,7 +191,7 @@ class SVGD(object):
     :param model: The model (callable containing Pyro primitives). Model must be fully vectorized
         and may only contain continuous latent variables.
     :param kernel: a SVGD compatible kernel like :class:`RBFSteinKernel`.
-    :param optim: A wrapper a for a PyTorch optimizer.
+    :param optim: A wrapper for a PyTorch optimizer.
     :type optim: pyro.optim.PyroOptim
     :param int num_particles: The number of particles used in SVGD.
     :param int max_plate_nesting: The max number of nested :func:`pyro.plate` contexts in the model.

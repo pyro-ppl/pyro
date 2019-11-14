@@ -1,5 +1,5 @@
 from .handlers import (block, broadcast, condition, do, enum, escape, infer_config, lift, markov, mask, queue, replay,
-                       scale, trace, uncondition)
+                       scale, seed, trace, uncondition)
 from .runtime import NonlocalExit
 from .trace_struct import Trace
 from .util import enable_validation, is_validation_enabled
@@ -21,6 +21,7 @@ __all__ = [
     "replay",
     "queue",
     "scale",
+    "seed",
     "trace",
     "Trace",
     "uncondition",

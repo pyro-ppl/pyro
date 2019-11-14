@@ -418,21 +418,22 @@ def _safe(fn):
     return wrapped
 
 
-def diagnostics(samples, num_chains=1):
+def diagnostics(samples, group_by_chain=True):
     """
     Gets diagnostics statistics such as effective sample size and
     split Gelman-Rubin using the samples drawn from the posterior
     distribution.
 
     :param dict samples: dictionary of samples keyed by site name.
-    :param int num_chains: number of chains. For more than a single chain,
-        the leading dimension of samples in `samples` must match
-        the number of chains.
+    :param bool group_by_chain: If True, each variable in `samples`
+        will be treated as having shape `num_chains x num_samples x sample_shape`.
+        Otherwise, the corresponding shape will be `num_samples x sample_shape`
+        (i.e. without chain dimension).
     :return: dictionary of diagnostic stats for each sample site.
     """
     diagnostics = {}
     for site, support in samples.items():
-        if num_chains == 1:
+        if not group_by_chain:
             support = support.unsqueeze(0)
         site_stats = OrderedDict()
         site_stats["n_eff"] = _safe(stats.effective_sample_size)(support)
@@ -441,7 +442,7 @@ def diagnostics(samples, num_chains=1):
     return diagnostics
 
 
-def summary(samples, prob=0.9, num_chains=1):
+def summary(samples, prob=0.9, group_by_chain=True):
     """
     Prints a summary table displaying diagnostics of ``samples`` from the
     posterior. The diagnostics displayed are mean, standard deviation, median,
@@ -450,11 +451,12 @@ def summary(samples, prob=0.9, num_chains=1):
 
     :param dict samples: dictionary of samples keyed by site name.
     :param float prob: the probability mass of samples within the credibility interval.
-    :param int num_chains: number of chains. For more than a single chain,
-        the leading dimension of samples in `samples` must match
-        the number of chains.
+    :param bool group_by_chain: If True, each variable in `samples`
+        will be treated as having shape `num_chains x num_samples x sample_shape`.
+        Otherwise, the corresponding shape will be `num_samples x sample_shape`
+        (i.e. without chain dimension).
     """
-    if num_chains == 1:
+    if not group_by_chain:
         samples = {k: v.unsqueeze(0) for k, v in samples.items()}
 
     row_names = {k: k + '[' + ','.join(map(lambda x: str(x - 1), v.shape[2:])) + ']'

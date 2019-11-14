@@ -57,9 +57,11 @@ class MultiClass(Likelihood):
             raise ValueError("Number of Gaussian processes should be equal to the "
                              "number of classes. Expected {} but got {}."
                              .format(self.num_classes, f_swap.size(-1)))
-        f_res = self.response_function(f_swap)
-
-        y_dist = dist.Categorical(f_res)
+        if self.response_function is _softmax:
+            y_dist = dist.Categorical(logits=f_swap)
+        else:
+            f_res = self.response_function(f_swap)
+            y_dist = dist.Categorical(f_res)
         if y is not None:
-            y_dist = y_dist.expand_by(y.shape[:-f_res.dim() + 1]).to_event(y.dim())
+            y_dist = y_dist.expand_by(y.shape[:-f.dim() + 1]).to_event(y.dim())
         return pyro.sample("y", y_dist, obs=y)

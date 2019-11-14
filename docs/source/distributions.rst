@@ -105,6 +105,13 @@ EmpiricalDistribution
     :undoc-members:
     :show-inheritance:
 
+FoldedDistribution
+---------------------
+.. autoclass:: pyro.distributions.FoldedDistribution
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 GammaPoisson
 ------------
 .. autoclass:: pyro.distributions.GammaPoisson
@@ -237,6 +244,13 @@ Transforms
 ConditionalTransform
 --------------------
 .. autoclass:: pyro.distributions.ConditionalTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+CorrLCholeskyTransform
+----------------------
+.. autoclass:: pyro.distributions.transforms.CorrLCholeskyTransform
     :members:
     :undoc-members:
     :show-inheritance:

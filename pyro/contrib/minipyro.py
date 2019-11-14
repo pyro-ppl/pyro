@@ -11,6 +11,7 @@ module.
 An accompanying example that makes use of this implementation can be
 found at examples/minipyro.py.
 """
+import random
 import warnings
 import weakref
 from collections import OrderedDict
@@ -108,6 +109,31 @@ class block(Messenger):
             msg["stop"] = True
 
 
+# seed is used to fix the RNG state when calling a model.
+class seed(Messenger):
+    def __init__(self, fn=None, rng_seed=None):
+        self.rng_seed = rng_seed
+        super(seed, self).__init__(fn)
+
+    def __enter__(self):
+        self.old_state = {'torch': torch.get_rng_state(), 'random': random.getstate()}
+        torch.manual_seed(self.rng_seed)
+        random.seed(self.rng_seed)
+        try:
+            import numpy as np
+            np.random.seed(self.rng_seed)
+            self.old_state['numpy'] = np.random.get_state()
+        except ImportError:
+            pass
+
+    def __exit__(self, type, value, traceback):
+        torch.set_rng_state(self.old_state['torch'])
+        random.setstate(self.old_state['random'])
+        if 'numpy' in self.old_state:
+            import numpy as np
+            np.random.set_state(self.old_state['numpy'])
+
+
 # This limited implementation of PlateMessenger only implements broadcasting.
 class PlateMessenger(Messenger):
     def __init__(self, fn, size, dim):
@@ -150,18 +176,20 @@ def apply_stack(msg):
 
 # sample is an effectful version of Distribution.sample(...)
 # When any effect handlers are active, it constructs an initial message and calls apply_stack.
-def sample(name, fn, obs=None):
+def sample(name, fn, *args, **kwargs):
+    obs = kwargs.pop('obs', None)
 
     # if there are no active Messengers, we just draw a sample and return it as expected:
     if not PYRO_STACK:
-        return fn()
+        return fn(*args, **kwargs)
 
     # Otherwise, we initialize a message...
     initial_msg = {
         "type": "sample",
         "name": name,
         "fn": fn,
-        "args": (),
+        "args": args,
+        "kwargs": kwargs,
         "value": obs,
     }
 
@@ -172,7 +200,9 @@ def sample(name, fn, obs=None):
 
 # param is an effectful version of PARAM_STORE.setdefault that also handles constraints.
 # When any effect handlers are active, it constructs an initial message and calls apply_stack.
-def param(name, init_value=None, constraint=torch.distributions.constraints.real):
+def param(name, init_value=None, constraint=torch.distributions.constraints.real, event_dim=None):
+    if event_dim is not None:
+        raise NotImplementedError("minipyro.plate does not support the event_dim arg")
 
     def fn(init_value, constraint):
         if name in PARAM_STORE:
@@ -210,7 +240,9 @@ def param(name, init_value=None, constraint=torch.distributions.constraints.real
 
 
 # boilerplate to match the syntax of actual pyro.plate:
-def plate(name, size, dim):
+def plate(name, size, dim=None):
+    if dim is None:
+        raise NotImplementedError("minipyro.plate requires a dim arg")
     return PlateMessenger(fn=None, size=size, dim=dim)
 
 
