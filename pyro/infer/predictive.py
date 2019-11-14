@@ -5,6 +5,7 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
+from pyro.nn import PyroModule
 from pyro.poutine.util import prune_subsample_sites
 
 
@@ -66,12 +67,12 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
     for site in model_trace.stochastic_nodes + model_trace.observation_nodes:
         append_ndim = max_plate_nesting - len(model_trace.nodes[site]["fn"].batch_shape)
         site_shape = (num_samples,) + (1,) * append_ndim + model_trace.nodes[site]['value'].shape
-        if isinstance(return_sites, (list, tuple, set)):
+        if return_sites is not None:
             if site in return_sites:
                 return_site_shapes[site] = site_shape
         else:
-            if (return_sites is not None) or (site not in reshaped_samples):
-                return_site_shapes[site] = site_shape
+            # include all sites by default
+            return_site_shapes[site] = site_shape
 
     # handle _RETURN site
     if isinstance(return_sites, (list, tuple, set)) and '_RETURN' in return_sites:
@@ -99,7 +100,7 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
     return predictions
 
 
-class Predictive:
+class Predictive(PyroModule):
     """
     This class is used to construct predictive distribution. The predictive distribution is obtained
     by running model conditioned on latent samples from `posterior_samples`.
@@ -124,6 +125,7 @@ class Predictive:
     """
     def __init__(self, model, posterior_samples=None, guide=None, num_samples=None,
                  return_sites=None, parallel=False):
+        super().__init__()
         if posterior_samples is None and num_samples is None:
             raise ValueError("Either posterior_samples or num_samples must be specified.")
 
@@ -163,10 +165,8 @@ class Predictive:
         """
         posterior_samples = self.posterior_samples
         if self.guide is not None:
-            # use return_sites='' as a special signal to return all sites
             posterior_samples = _predictive(self.guide, posterior_samples, self.num_samples,
-                                            return_sites='', parallel=self.parallel,
-                                            model_args=args, model_kwargs=kwargs)
+                                            parallel=self.parallel, model_args=args, model_kwargs=kwargs)
         return _predictive(self.model, posterior_samples, self.num_samples,
                            return_sites=self.return_sites, parallel=self.parallel,
                            model_args=args, model_kwargs=kwargs)
@@ -181,9 +181,7 @@ class Predictive:
         """
         posterior_samples = self.posterior_samples
         if self.guide is not None:
-            # use return_sites='' as a special signal to return all sites
             posterior_samples = _predictive(self.guide, posterior_samples, self.num_samples,
-                                            return_sites='', parallel=self.parallel,
-                                            model_args=args, model_kwargs=kwargs)
+                                            parallel=self.parallel, model_args=args, model_kwargs=kwargs)
         return _predictive(self.model, posterior_samples, self.num_samples,
                            return_trace=True, model_args=args, model_kwargs=kwargs)
