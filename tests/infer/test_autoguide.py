@@ -216,8 +216,11 @@ def test_median(auto_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = auto_class(model)
-    infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
-    for _ in range(800):
+    optim = Adam({'lr': 0.05, 'betas': (0.8, 0.99)})
+    elbo = Elbo(strict_enumeration_warning=False,
+                num_particles=100, vectorize_particles=True)
+    infer = SVI(model, guide, optim, elbo)
+    for _ in range(100):
         infer.step()
 
     if auto_class is AutoLaplaceApproximation:
@@ -303,7 +306,10 @@ def test_quantiles(auto_class, Elbo):
         pyro.sample("z", dist.Beta(2.0, 2.0))
 
     guide = auto_class(model)
-    infer = SVI(model, guide, Adam({'lr': 0.01}), Elbo(strict_enumeration_warning=False))
+    optim = Adam({'lr': 0.05, 'betas': (0.8, 0.99)})
+    elbo = Elbo(strict_enumeration_warning=False,
+                num_particles=100, vectorize_particles=True)
+    infer = SVI(model, guide, optim, elbo)
     for _ in range(100):
         infer.step()
 
