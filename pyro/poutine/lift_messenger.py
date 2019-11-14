@@ -1,7 +1,7 @@
 import warnings
 
 from pyro import params
-from pyro.distributions import Distribution
+from pyro.distributions.distribution import Distribution
 from pyro.poutine.util import is_validation_enabled
 
 from .messenger import Messenger
