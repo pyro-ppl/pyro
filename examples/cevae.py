@@ -7,6 +7,7 @@ import pyro
 from pyro import poutine
 from pyro.distributions import Bernoulli, Normal
 from pyro.infer import SVI, Trace_ELBO
+from pyro.infer.util import torch_item
 from pyro.nn import PyroModule
 from pyro.optim import ClippedAdam
 
@@ -24,14 +25,14 @@ class Model(PyroModule):
         self.y1_nn = TODO()
         self.t_nn = TODO()
 
-    def forward(self, x, t=None, size=None):
+    def forward(self, x, t=None, y=None, size=None):
         if size is None:
             size = x.size(0)
         with pyro.plate("data", size, subsample=x):
             z = pyro.sample("z", self.z_dist)
             x = pyro.sample("x", self.x_dist(z), obs=x)
             t = pyro.sample("t", self.t_dist(z), obs=t)
-            y = pyro.sample("y", self.y_dist(t, z))
+            y = pyro.sample("y", self.y_dist(t, z), obs=y)
         return y
 
     def z_dist(self):
@@ -64,12 +65,12 @@ class Guide(PyroModule):
         self.z0_nn = TODO()
         self.z1_nn = TODO()
 
-    def forward(self, x, t=None, size=None):
+    def forward(self, x, t=None, y=None, size=None):
         if size is None:
             size = x.size(0)
         with pyro.plate("data", size, subsample=x):
             t = pyro.sample("t", self.t_dist(x), obs=t)
-            y = pyro.sample("y", self.y_dist(t, x))
+            y = pyro.sample("y", self.y_dist(t, x), obs=y)
             pyro.sample("z", self.z_dist(t, y, x))
 
     def t_dist(self, x):
@@ -92,6 +93,35 @@ class Guide(PyroModule):
         loc = torch.where(t, loc1, loc0)
         scale = torch.where(t, scale1, scale0)
         return Normal(loc, scale)
+
+
+class TraceCausalEffect_ELBO(Trace_ELBO):
+    """
+    The CEVAE objective (to maximize) is::
+
+        -loss = ELBO + log q(t|x) + log q(y|t,x)
+    """
+    def _differentiable_loss_particle(self, model_trace, guide_trace):
+        # Construct -ELBO part.
+        blocked_names = [name for name, site in guide_trace.nodes.items()
+                         if site["type"] == "sample" and site["is_observed"]]
+        blocked_guide_trace = guide_trace.copy()
+        for name in blocked_names:
+            del blocked_guide_trace.nodes[name]
+        loss, surrogate_loss = super()._differentiable_loss_particle(
+            model_trace, blocked_guide_trace)
+
+        # Add log q terms.
+        for name in blocked_names:
+            log_q = guide_trace.nodes[name]["log_prob"]
+            loss = loss - torch_item(log_q)
+            surrogate_loss = surrogate_loss - log_q
+
+        return loss, surrogate_loss
+
+    @torch.no_grad()
+    def loss(self, model, guide, *args, **kwargs):
+        return torch_item(self.differentiable_loss(model, guide, *args, **kwargs))
 
 
 def ite(model, guide, x, num_samples=100):
@@ -119,18 +149,11 @@ def train(args, x, t, y):
     num_steps = args.num_epochs * len(dataloader)
     optim = ClippedAdam({"lr": args.learning_ratee,
                          "lrd": args.learning_rate_decay ** (1 / num_steps)})
-
-    # We construct the CEVAE loss by wrapping the guide with poutine.replay.
-    # The resulting ELBO thus consists of ELBO + log q(t|x) + log q(y|t,x).
-    replay_data = dict(t=t, y=y)  # We will update this in-place each svi step.
-    replay_guide = poutine.replay(guide, samples=replay_data)
-
-    svi = SVI(model, replay_guide, optim, Trace_ELBO())
+    svi = SVI(model, guide, optim, TraceCausalEffect_ELBO())
     for epoch in range(args.num_epochs):
         loss = 0
         for x, t, y in dataloader:
-            replay_data.update(t=t, y=y)  # Pass t,y via replay.
-            loss += svi.step(x, size=len(dataset))  # Pass x as observations.
+            loss += svi.step(x, t, y, size=len(dataset))
         print("epoch {: >3d} loss = {:0.6g}".format(loss / len(dataloader)))
     return model, guide
 
