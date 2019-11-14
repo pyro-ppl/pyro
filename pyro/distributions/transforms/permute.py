@@ -100,5 +100,5 @@ def permute(input_dim, permutation=None):
     """
 
     if permutation is None:
-        permutation = torch.randperm(input_dim, device='cpu').to(torch.Tensor().device)
+        permutation = torch.randperm(input_dim)
     return Permute(permutation)
