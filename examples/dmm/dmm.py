@@ -25,7 +25,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.distributions import TransformedDistribution
-from pyro.distributions.transforms import AffineAutoregressive
+from pyro.distributions.transforms import affine_autoregressive
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
 from pyro.nn import AutoRegressiveNN
 from pyro.optim import ClippedAdam
@@ -156,7 +156,7 @@ class DMM(nn.Module):
                           dropout=rnn_dropout_rate)
 
         # if we're using normalizing flows, instantiate those too
-        self.iafs = [AffineAutoregressive(AutoRegressiveNN(z_dim, [iaf_dim])) for _ in range(num_iafs)]
+        self.iafs = [affine_autoregressive(z_dim, hidden_dims=[iaf_dim]) for _ in range(num_iafs)]
         self.iafs_modules = nn.ModuleList(self.iafs)
 
         # define a (trainable) parameters z_0 and z_q_0 that help define the probability
