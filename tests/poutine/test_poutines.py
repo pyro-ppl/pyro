@@ -2,12 +2,13 @@ import functools
 import logging
 import pickle
 import warnings
+from queue import Queue
 from unittest import TestCase
 
 import pytest
 import torch
 import torch.nn as nn
-from queue import Queue
+from torch.distributions import constraints
 
 import pyro
 import pyro.distributions as dist
@@ -15,7 +16,7 @@ import pyro.poutine as poutine
 from pyro.distributions import Bernoulli, Categorical, Normal
 from pyro.poutine.runtime import _DIM_ALLOCATOR, NonlocalExit
 from pyro.poutine.util import all_escape, discrete_escape
-from tests.common import assert_equal, assert_not_equal, assert_close
+from tests.common import assert_close, assert_equal, assert_not_equal
 
 logger = logging.getLogger(__name__)
 
@@ -726,6 +727,32 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
         actual_shape = log_prob.shape
         expected_shape = (2,) * depth + (3,) + (2,) * depth + (1,) * (-1 - first_available_dim)
         assert actual_shape == expected_shape, 'error on iteration {}'.format(i)
+
+
+def test_replay_types():
+
+    def model():
+        a = pyro.param("a", torch.tensor(1.), constraint=constraints.positive)
+        b = pyro.param("b", torch.tensor(2.), constraint=constraints.positive)
+        c = pyro.param("c", torch.tensor(3.), constraint=constraints.positive)
+        x = pyro.sample("x", dist.Normal(0, 1))
+        y = pyro.sample("y", dist.Normal(0, 1))
+        z = pyro.sample("z", dist.Normal(0, 1))
+        return a, b, c, x, y, z
+
+    trace = poutine.trace(poutine.block(model, expose=["a", "x", "z"])).get_trace()
+    params = {"b": pyro.param("b")}
+    samples = {"y": torch.tensor(5.), "z": torch.tensor(6.)}
+
+    pyro.param("a").unconstrained().data += 1
+    pyro.param("b").unconstrained().data += 1
+    a, b, c, x, y, z = poutine.replay(model, trace, params, samples)()
+    assert_equal(a, pyro.param("a"))
+    assert_equal(b, params["b"])
+    assert_equal(c, pyro.param("c"))
+    assert x is trace.nodes["x"]["value"]
+    assert y is samples["y"]
+    assert z is trace.nodes["z"]["value"]  # trace overrides samples
 
 
 def test_plate_error_on_enter():
