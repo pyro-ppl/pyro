@@ -5,7 +5,6 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
-from pyro.nn import PyroModule
 from pyro.poutine.util import prune_subsample_sites
 
 
@@ -46,7 +45,7 @@ def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
                 for site, shape in return_site_shapes.items()}
 
 
-def _predictive(model, posterior_samples, num_samples, return_sites=None,
+def _predictive(model, posterior_samples, num_samples, return_sites=(),
                 return_trace=False, parallel=False, model_args=(), model_kwargs={}):
     max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
     vectorize = pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting-1)
@@ -67,10 +66,15 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
     for site in model_trace.stochastic_nodes + model_trace.observation_nodes:
         append_ndim = max_plate_nesting - len(model_trace.nodes[site]["fn"].batch_shape)
         site_shape = (num_samples,) + (1,) * append_ndim + model_trace.nodes[site]['value'].shape
-        if return_sites is not None:
+        # non-empty return-sites
+        if return_sites:
             if site in return_sites:
                 return_site_shapes[site] = site_shape
-        # include all sites not in posterior samples by default
+        # special case (for guides): include all sites
+        elif return_sites is None:
+            return_site_shapes[site] = site_shape
+        # default case: return sites = ()
+        # include all sites not in posterior samples
         elif site not in posterior_samples:
             return_site_shapes[site] = site_shape
 
@@ -100,7 +104,7 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
     return predictions
 
 
-class Predictive(PyroModule):
+class Predictive(torch.nn.Module):
     """
     This class is used to construct predictive distribution. The predictive distribution is obtained
     by running model conditioned on latent samples from `posterior_samples`.
@@ -124,7 +128,7 @@ class Predictive(PyroModule):
         all batch dims correctly annotated via :class:`~pyro.plate`. Default is `False`.
     """
     def __init__(self, model, posterior_samples=None, guide=None, num_samples=None,
-                 return_sites=None, parallel=False):
+                 return_sites=(), parallel=False):
         super().__init__()
         if posterior_samples is None:
             if num_samples is None:
@@ -166,7 +170,7 @@ class Predictive(PyroModule):
             `dict` as valid return types. See
             `issue <https://github.com/pytorch/pytorch/issues/27743>_`.
         """
-        result = self(*args, **kwargs)
+        result = self.forward(*args, **kwargs)
         return tuple(v for _, v in sorted(result.items()))
 
     def forward(self, *args, **kwargs):
@@ -179,10 +183,12 @@ class Predictive(PyroModule):
         :param kwargs: model keyword arguments.
         """
         posterior_samples = self.posterior_samples
+        return_sites = self.return_sites
         if self.guide is not None:
-            posterior_samples = _predictive(self.guide, posterior_samples, self.num_samples,
+            return_sites = None if not return_sites else return_sites
+            posterior_samples = _predictive(self.guide, posterior_samples, self.num_samples, return_sites=None,
                                             parallel=self.parallel, model_args=args, model_kwargs=kwargs)
-        return _predictive(self.model, posterior_samples, self.num_samples, return_sites=self.return_sites,
+        return _predictive(self.model, posterior_samples, self.num_samples, return_sites=return_sites,
                            parallel=self.parallel, model_args=args, model_kwargs=kwargs)
 
     def get_samples(self, *args, **kwargs):
