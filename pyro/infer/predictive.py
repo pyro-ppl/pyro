@@ -70,8 +70,8 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
         if return_sites is not None:
             if site in return_sites:
                 return_site_shapes[site] = site_shape
-        else:
-            # include all sites by default
+        # include all sites not in posterior samples by default
+        elif site not in posterior_samples:
             return_site_shapes[site] = site_shape
 
     # handle _RETURN site
