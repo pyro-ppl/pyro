@@ -27,7 +27,6 @@ import pyro.poutine as poutine
 from pyro.distributions import TransformedDistribution
 from pyro.distributions.transforms import affine_autoregressive
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO
-from pyro.nn import AutoRegressiveNN
 from pyro.optim import ClippedAdam
 from util import get_logger
 

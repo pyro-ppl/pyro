@@ -26,7 +26,6 @@ import pyro
 import pyro.distributions as dist
 import pyro.distributions.transforms as transforms
 import pyro.poutine as poutine
-from pyro.distributions import transforms
 from pyro.distributions.util import broadcast_shape, eye_like, sum_rightmost
 from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
 from pyro.infer.autoguide.utils import _product
