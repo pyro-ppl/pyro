@@ -15,7 +15,6 @@ import torch
 from torch.distributions import constraints, transform_to
 
 import pyro
-import pyro.distributions as dist
 from pyro.poutine.runtime import _PYRO_PARAM_STORE
 
 PyroParam = namedtuple("PyroParam", ("init_value", "constraint", "event_dim"))
@@ -47,13 +46,11 @@ class _Context:
     def __init__(self):
         self.active = 0
         self.cache = {}
-        if __debug__:
-            self.used = False
+        self.used = False
 
     def __enter__(self):
         self.active += 1
-        if __debug__:
-            self.used = True
+        self.used = True
 
     def __exit__(self, type, value, traceback):
         self.active -= 1
@@ -165,6 +162,10 @@ class PyroModule(torch.nn.Module):
                 "submodule {} has executed outside of supermodule".format(name)
             value._pyro_set_supermodule(_make_name(name, key), context)
 
+    def _pyro_get_fullname(self, name):
+        assert self.__dict__['_pyro_context'].used, "fullname is not yet defined"
+        return _make_name(self.__dict__['_pyro_name'], name)
+
     def __call__(self, *args, **kwargs):
         with self._pyro_context:
             return super().__call__(*args, **kwargs)
@@ -177,7 +178,7 @@ class PyroModule(torch.nn.Module):
                 constraint, event_dim = _pyro_params[name]
                 unconstrained_value = getattr(self, name + "_unconstrained")
                 if self._pyro_context.active:
-                    fullname = _make_name(self._pyro_name, name)
+                    fullname = self._pyro_get_fullname(name)
                     if fullname in _PYRO_PARAM_STORE:
                         if _PYRO_PARAM_STORE._params[fullname] is not unconstrained_value:
                             # Update PyroModule <--- ParamStore.
@@ -202,11 +203,11 @@ class PyroModule(torch.nn.Module):
             _pyro_samples = self.__dict__['_pyro_samples']
             if name in _pyro_samples:
                 prior = _pyro_samples[name]
-                if not isinstance(prior, (dist.Distribution, torch.distributions.Distribution)):
+                if not hasattr(prior, "sample"):  # if not a distribution
                     prior = prior(self)
                 context = self._pyro_context
                 if context.active:
-                    fullname = _make_name(self._pyro_name, name)
+                    fullname = self._pyro_get_fullname(name)
                     value = context.get(fullname)
                     if value is None:
                         value = pyro.sample(fullname, prior)
@@ -220,12 +221,12 @@ class PyroModule(torch.nn.Module):
         # Regular nn.Parameters trigger pyro.param statements.
         if isinstance(result, torch.nn.Parameter) and not name.endswith("_unconstrained"):
             if self._pyro_context.active:
-                pyro.param(_make_name(self._pyro_name, name), result)
+                pyro.param(self._pyro_get_fullname(name), result)
 
         # Regular nn.Modules trigger pyro.module statements.
         if isinstance(result, torch.nn.Module) and not isinstance(result, PyroModule):
             if self._pyro_context.active:
-                pyro.module(_make_name(self._pyro_name, name), result)
+                pyro.module(self._pyro_get_fullname(name), result)
 
         return result
 
@@ -249,7 +250,7 @@ class PyroModule(torch.nn.Module):
             constrained_value, constraint, event_dim = value
             self._pyro_params[name] = constraint, event_dim
             if self._pyro_context.active:
-                fullname = _make_name(self._pyro_name, name)
+                fullname = self._pyro_get_fullname(name)
                 if fullname in _PYRO_PARAM_STORE:
                     # Update PyroModule <--- ParamStore.
                     unconstrained_value = _PYRO_PARAM_STORE._params[fullname]
@@ -272,7 +273,7 @@ class PyroModule(torch.nn.Module):
             except AttributeError:
                 pass
             if self._pyro_context.active:
-                fullname = _make_name(self._pyro_name, name)
+                fullname = self._pyro_get_fullname(name)
                 value = pyro.param(fullname, value)
                 if not isinstance(value, torch.nn.Parameter):
                     # Update PyroModule ---> ParamStore (type only; data is preserved).
@@ -306,19 +307,21 @@ class PyroModule(torch.nn.Module):
     def __delattr__(self, name):
         if name in self._parameters:
             del self._parameters[name]
-            fullname = _make_name(self._pyro_name, name)
-            if fullname in _PYRO_PARAM_STORE:
-                # Update PyroModule ---> ParamStore.
-                del _PYRO_PARAM_STORE[fullname]
+            if self._pyro_context.used:
+                fullname = self._pyro_get_fullname(name)
+                if fullname in _PYRO_PARAM_STORE:
+                    # Update PyroModule ---> ParamStore.
+                    del _PYRO_PARAM_STORE[fullname]
             return
 
         if name in self._pyro_params:
             delattr(self, name + "_unconstrained")
             del self._pyro_params[name]
-            fullname = _make_name(self._pyro_name, name)
-            if fullname in _PYRO_PARAM_STORE:
-                # Update PyroModule ---> ParamStore.
-                del _PYRO_PARAM_STORE[fullname]
+            if self._pyro_context.used:
+                fullname = self._pyro_get_fullname(name)
+                if fullname in _PYRO_PARAM_STORE:
+                    # Update PyroModule ---> ParamStore.
+                    del _PYRO_PARAM_STORE[fullname]
             return
 
         if name in self._pyro_samples:
@@ -327,10 +330,11 @@ class PyroModule(torch.nn.Module):
 
         if name in self._modules:
             del self._modules[name]
-            fullname = _make_name(self._pyro_name, name)
-            for p in list(_PYRO_PARAM_STORE.keys()):
-                if p.startswith(fullname):
-                    del _PYRO_PARAM_STORE[p]
+            if self._pyro_context.used:
+                fullname = self._pyro_get_fullname(name)
+                for p in list(_PYRO_PARAM_STORE.keys()):
+                    if p.startswith(fullname):
+                        del _PYRO_PARAM_STORE[p]
             return
 
         super().__delattr__(name)
