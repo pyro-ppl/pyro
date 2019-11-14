@@ -13,13 +13,14 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 
-from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO
+from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, TraceGraph_ELBO, Predictive
 from pyro.infer.autoguide import (AutoCallable, AutoDelta, AutoDiagonalNormal, AutoDiscreteParallel, AutoGuide,
                                   AutoGuideList, AutoIAFNormal, AutoLaplaceApproximation, AutoLowRankMultivariateNormal,
                                   AutoMultivariateNormal, init_to_feasible, init_to_mean, init_to_median,
                                   init_to_sample)
 from pyro.nn.module import PyroModule, PyroParam, PyroSample
 from pyro.optim import Adam
+from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_model_guide_match
 from tests.common import assert_close, assert_equal
 
@@ -602,22 +603,77 @@ def test_linear_regression_smoke(auto_class, Elbo):
     class RandomLinear(nn.Linear, PyroModule):
         def __init__(self, in_features, out_features):
             super().__init__(in_features, out_features)
-            self.weight = PyroSample(lambda self: dist.Normal(0., 1.).expand([out_features, in_features])
-                                     .to_event(2))
-            self.bias = PyroSample(lambda self: dist.Normal(0., 10.).expand([out_features]).to_event(1))
+            self.weight = PyroSample(dist.Normal(0., 1.).expand([out_features, in_features]).to_event(2))
+            self.bias = PyroSample(dist.Normal(0., 10.).expand([out_features]).to_event(1))
 
     class LinearRegression(PyroModule):
         def __init__(self):
             super().__init__()
             self.linear = RandomLinear(D, 1)
 
-        def forward(self, x, y):
+        def forward(self, x, y=None):
             mean = self.linear(x).squeeze(-1)
+            sigma = pyro.sample("sigma", dist.LogNormal(0., 1.))
             with pyro.plate('plate', N):
-                return pyro.sample('obs', dist.Normal(mean, 1.), obs=y)
+                return pyro.sample('obs', dist.Normal(mean, sigma), obs=y)
 
     x, y = torch.randn(N, D), torch.randn(N)
     model = LinearRegression()
     guide = auto_class(model)
     infer = SVI(model, guide, Adam({'lr': 0.005}), Elbo(strict_enumeration_warning=False))
     infer.step(x, y)
+
+
+@pytest.mark.parametrize("auto_class", [
+    AutoDelta,
+    AutoDiagonalNormal,
+    AutoMultivariateNormal,
+    AutoLowRankMultivariateNormal,
+    AutoLaplaceApproximation,
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_mean),
+    functools.partial(AutoDiagonalNormal, init_loc_fn=init_to_median),
+])
+def test_predictive(auto_class):
+    N, D = 3, 2
+
+    class RandomLinear(nn.Linear, PyroModule):
+        def __init__(self, in_features, out_features):
+            super().__init__(in_features, out_features)
+            self.weight = PyroSample(dist.Normal(0., 1.).expand([out_features, in_features]).to_event(2))
+            self.bias = PyroSample(dist.Normal(0., 10.).expand([out_features]).to_event(1))
+
+    class LinearRegression(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.linear = RandomLinear(D, 1)
+
+        def forward(self, x, y=None):
+            mean = self.linear(x).squeeze(-1)
+            sigma = pyro.sample("sigma", dist.LogNormal(0., 1.))
+            with pyro.plate('plate', N):
+                return pyro.sample('obs', dist.Normal(mean, sigma), obs=y)
+
+    x, y = torch.randn(N, D), torch.randn(N)
+    model = LinearRegression()
+    guide = auto_class(model)
+    # XXX: Record `y` as observed in the prototype trace
+    # Is there a better pattern to follow?
+    guide(x, y=y)
+    # Test predictive module
+    model_trace = poutine.trace(model).get_trace(x, y=None)
+    predictive = Predictive(model, guide=guide, num_samples=10)
+    pyro.set_rng_seed(0)
+    samples = predictive(x)
+    for site in prune_subsample_sites(model_trace).stochastic_nodes:
+        assert site in samples
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+        traced_predictive = torch.jit.trace_module(predictive, {"call": (x,)})
+    f = io.BytesIO()
+    torch.jit.save(traced_predictive, f)
+    f.seek(0)
+    predictive_deser = torch.jit.load(f)
+    pyro.set_rng_seed(0)
+    samples_deser = predictive_deser.call(x)
+    # Note that the site values are different in the serialized guide
+    assert len(samples) == len(samples_deser)
