@@ -69,11 +69,10 @@ class AutoGuide(PyroModule):
     """
 
     def __init__(self, model):
-        super().__init__()
+        super().__init__(name=type(self).__name__)
         self.master = None
         # Do not register model as submodule
         self._model = (model,)
-        self._pyro_name = type(self).__name__
         self.prototype_trace = None
         self._plates = {}
 
