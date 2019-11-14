@@ -203,7 +203,7 @@ def affine_autoregressive(input_dim, hidden_dims=None, **kwargs):
 
     :param input_dim: Dimension of input variable
     :type input_dim: int
-    :param hidden_dims: The desired hidden dimensions of of the autoregressive network. Defaults
+    :param hidden_dims: The desired hidden dimensions of the autoregressive network. Defaults
         to using [3*input_dim + 1]
     :type hidden_dims: list[int]
     :param log_scale_min_clip: The minimum value for clipping the log(scale) from the autoregressive NN
