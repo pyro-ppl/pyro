@@ -404,5 +404,7 @@ def clear(mod):
     assert isinstance(mod, PyroModule)
     for name in list(mod._pyro_params):
         delattr(mod, name)
+    for name in list(mod._parameters):
+        delattr(mod, name)
     for name in list(mod._modules):
         delattr(mod, name)

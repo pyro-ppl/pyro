@@ -232,8 +232,10 @@ def test_clear():
         def forward(self):
             return [x.clone() for x in [self.x, self.m.weight, self.m.bias, self.p.x]]
 
+    assert set(pyro.get_param_store().keys()) == set()
     m = Model()
     state0 = m()
+    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
 
     # mutate
     for x in pyro.get_param_store().values():
@@ -241,11 +243,15 @@ def test_clear():
     state1 = m()
     for x, y in zip(state0, state1):
         assert not (x == y).all()
+    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
 
     clear(m)
     del m
+    assert set(pyro.get_param_store().keys()) == set()
+
     m = Model()
     state2 = m()
+    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
     for actual, expected in zip(state2, state0):
         assert_equal(actual, expected)
 
