@@ -120,14 +120,16 @@ def train(args, x, t, y):
     optim = ClippedAdam({"lr": args.learning_ratee,
                          "lrd": args.learning_rate_decay ** (1 / num_steps)})
 
-    # We construct the CEVAE loss by applying poutine.do to the guide.
+    # We construct the CEVAE loss by wrapping the guide with poutine.replay.
     # The resulting ELBO thus consists of ELBO + log q(t|x) + log q(y|t,x).
-    do_data = dict(t=t, y=y)  # We will update this in-place with each minibatch.
-    svi = SVI(model, poutine.do(guide, do_data), optim, Trace_ELBO())
+    replay_data = dict(t=t, y=y)  # We will update this in-place each svi step.
+    replay_guide = poutine.replay(guide, samples=replay_data)
+
+    svi = SVI(model, replay_guide, optim, Trace_ELBO())
     for epoch in range(args.num_epochs):
         loss = 0
         for x, t, y in dataloader:
-            do_data.update(t=t, y=y)  # Pass t,y via Pearl's do operator.
+            replay_data.update(t=t, y=y)  # Pass t,y via replay.
             loss += svi.step(x, size=len(dataset))  # Pass x as observations.
         print("epoch {: >3d} loss = {:0.6g}".format(loss / len(dataloader)))
     return model, guide
