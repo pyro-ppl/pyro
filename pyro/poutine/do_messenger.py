@@ -1,3 +1,5 @@
+import warnings
+
 from .messenger import Messenger
 from .runtime import apply_stack
 
@@ -36,6 +38,13 @@ class DoMessenger(Messenger):
         if msg.get('_intervener_id', None) != self._intervener_id and \
                 msg['name'] in self.data and \
                 self.data[msg['name']] is not None:
+
+            if msg.get('_intervener_id', None) is not None:
+                warnings.warn(
+                    "Attempting to intervene on variable {} multiple times,"
+                    "this is almost certainly incorrect behavior".format(msg['name']),
+                    RuntimeWarning)
+
             # split node, avoid reapplying self recursively to new node
             new_msg = msg.copy()
             new_msg['_intervener_id'] = self._intervener_id
