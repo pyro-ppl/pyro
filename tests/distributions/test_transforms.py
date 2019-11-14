@@ -129,7 +129,7 @@ class TransformTests(TestCase):
 
     def test_householder_inverses(self):
         for input_dim in [2, 5, 10]:
-            self._test_inverse(input_dim, T.householder(input_dim, count_transforms=3))
+            self._test_inverse(input_dim, T.householder(input_dim, count_transforms=2))
 
     def test_batchnorm_inverses(self):
         for input_dim in [2, 5, 10]:
