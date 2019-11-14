@@ -9,7 +9,7 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import eye_like
-from pyro.nn.module import PyroModule, PyroParam, PyroSample, _make_name
+from pyro.nn.module import PyroModule, PyroParam, PyroSample, pyro_method, _make_name
 
 
 def _get_independent_support(dist_instance):
@@ -19,33 +19,34 @@ def _get_independent_support(dist_instance):
         return dist_instance.support
 
 
-class _Mode:
-    """
-    Sometimes-active cache for ``Parameterized.set_mode(mode)`` contexts.
-    """
-    def __init__(self, fn, mode):
-        self.fn = fn
-        self.current_mode = fn.mode
-        for m in self.fn.modules():
-            if isinstance(m, Parameterized):
-                m.mode = mode
+def _get_sample_fn(module, name):
+    if module.mode == "model":
+        return module._priors[name]
 
-    def __enter__(self):
-        self.fn._pyro_context.__enter__()
-        for m in self.fn.modules():
-            if "_pyro_samples" in m.__dict__:
-                for name in m._pyro_samples:
-                    getattr(m, name)
+    dist_constructor, dist_args = module._guides[name]
 
-    def __exit__(self, type, value, traceback):
-        self.fn._pyro_context.__exit__(type, value, traceback)
-        for m in self.fn.modules():
-            if isinstance(m, Parameterized):
-                m.mode = self.current_mode
+    if dist_constructor is dist.Delta:
+        p_map = getattr(module, "{}_map".format(name))
+        return dist.Delta(p_map, event_dim=p_map.dim())
 
+    # create guide
+    dist_args = {arg: getattr(module, "{}_{}".format(name, arg)) for arg in dist_args}
+    guide = dist_constructor(**dist_args)
 
-def _get_sample_fn(module, name, prior):
-    return prior if module.mode == "model" else module._get_guide(name)
+    # no need to do transforms when support is real (for mean field ELBO)
+    if _get_independent_support(module._priors[name]) is constraints.real:
+        guide = guide.to_event()
+
+    # otherwise, we do inference in unconstrained space and transform the value
+    # back to original space
+    # TODO: move this logic to infer.autoguide or somewhere else
+    unconstrained_value = pyro.sample("{}_latent".format(_make_name(module._pyro_name, name)),
+                                      guide.to_event(),
+                                      infer={"is_auxiliary": True})
+    transform = biject_to(module._priors[name].support)
+    value = transform(unconstrained_value)
+    log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
+    return dist.Delta(value, log_density.sum(), event_dim=value.dim())
 
 
 class Parameterized(PyroModule):
@@ -87,7 +88,6 @@ class Parameterized(PyroModule):
         self._priors = OrderedDict()
         self._guides = OrderedDict()
         self._mode = "model"
-        self.set_mode = partial(_Mode, self)
 
     def set_prior(self, name, prior):
         """
@@ -98,7 +98,7 @@ class Parameterized(PyroModule):
             distribution.
         """
         warnings.warn("The method `self.set_prior({}, prior)` has been deprecated"
-                      " in favor of `self.{} = PyroSample(prior)`.".format(name, name), DeprecationWarning)
+                      " in favor of `self.{} = PyroSample(prior)`.".format(name, name), UserWarning)
         setattr(self, name, PyroSample(prior))
 
     def __setattr__(self, name, value):
@@ -107,7 +107,7 @@ class Parameterized(PyroModule):
             if isinstance(prior, (dist.Distribution, torch.distributions.Distribution)):
                 self._priors[name] = prior
                 self.autoguide(name, dist.Delta)
-                value = PyroSample(partial(_get_sample_fn, name=name, prior=prior))
+                value = PyroSample(partial(_get_sample_fn, name=name))
         super().__setattr__(name, value)
 
     def autoguide(self, name, dist_constructor):
@@ -166,31 +166,31 @@ class Parameterized(PyroModule):
 
         self._guides[name] = (dist_constructor, dist_args)
 
-    def _get_guide(self, name):
-        dist_constructor, dist_args = self._guides[name]
+    @pyro_method
+    def load_pyro_samples(self):
+        """
+        Runs `pyro.sample` primitives for all `PyroSample` attributes.
+        """
+        for module in self.modules():
+            if "_pyro_samples" in module.__dict__:
+                for name in module._pyro_samples:
+                    getattr(module, name)
 
-        if dist_constructor is dist.Delta:
-            p_map = getattr(self, "{}_map".format(name))
-            return dist.Delta(p_map, event_dim=p_map.dim())
+    def set_mode(self, mode):
+        """
+        Sets ``mode`` of this object to be able to use its parameters in
+        stochastic functions. If ``mode="model"``, a parameter will get its
+        value from its prior. If ``mode="guide"``, the value will be drawn from
+        its guide.
 
-        # create guide
-        dist_args = {arg: getattr(self, "{}_{}".format(name, arg)) for arg in dist_args}
-        guide = dist_constructor(**dist_args)
+        .. note:: This method automatically sets ``mode`` for submodules which
+            belong to :class:`Parameterized` class.
 
-        # no need to do transforms when support is real (for mean field ELBO)
-        if _get_independent_support(self._priors[name]) is constraints.real:
-            return guide.to_event()
-
-        # otherwise, we do inference in unconstrained space and transform the value
-        # back to original space
-        # TODO: move this logic to infer.autoguide or somewhere else
-        unconstrained_value = pyro.sample("{}_latent".format(_make_name(self._pyro_name, name)),
-                                          guide.to_event(),
-                                          infer={"is_auxiliary": True})
-        transform = biject_to(self._priors[name].support)
-        value = transform(unconstrained_value)
-        log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
-        return dist.Delta(value, log_density.sum(), event_dim=value.dim())
+        :param str mode: Either "model" or "guide".
+        """
+        for module in self.modules():
+            if isinstance(module, Parameterized):
+                module.mode = mode
 
     @property
     def mode(self):

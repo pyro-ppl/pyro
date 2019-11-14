@@ -7,7 +7,7 @@ import pyro.distributions as dist
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
 from pyro.distributions.util import eye_like
-from pyro.nn.module import PyroParam, pyro_method
+from pyro.nn.module import PyroParam, pyro_method, _make_name
 
 
 class VariationalGP(GPModel):
@@ -88,13 +88,13 @@ class VariationalGP(GPModel):
         zero_loc = self.X.new_zeros(self.f_loc.shape)
         if self.whiten:
             identity = eye_like(self.X, N)
-            pyro.sample("f",
+            pyro.sample(_make_name(self._pyro_name, "f"),
                         dist.MultivariateNormal(zero_loc, scale_tril=identity)
                             .to_event(zero_loc.dim() - 1))
             f_scale_tril = Lff.matmul(self.f_scale_tril)
             f_loc = Lff.matmul(self.f_loc.unsqueeze(-1)).squeeze(-1)
         else:
-            pyro.sample("f",
+            pyro.sample(_make_name(self._pyro_name, "f"),
                         dist.MultivariateNormal(zero_loc, scale_tril=Lff)
                             .to_event(zero_loc.dim() - 1))
             f_scale_tril = self.f_scale_tril
@@ -107,11 +107,11 @@ class VariationalGP(GPModel):
         else:
             return self.likelihood(f_loc, f_var, self.y)
 
-    @pyro_method
     def guide(self):
         self.set_mode("guide")
+        self.load_pyro_samples()
 
-        pyro.sample("f",
+        pyro.sample(_make_name(self._pyro_name, "f"),
                     dist.MultivariateNormal(self.f_loc, scale_tril=self.f_scale_tril)
                         .to_event(self.f_loc.dim()-1))
 

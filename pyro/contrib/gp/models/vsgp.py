@@ -8,7 +8,7 @@ import pyro.poutine as poutine
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
 from pyro.distributions.util import eye_like
-from pyro.nn.module import PyroParam, pyro_method
+from pyro.nn.module import PyroParam, pyro_method, _make_name
 
 
 class VariationalSparseGP(GPModel):
@@ -109,16 +109,16 @@ class VariationalSparseGP(GPModel):
         zero_loc = self.Xu.new_zeros(self.u_loc.shape)
         if self.whiten:
             identity = eye_like(self.Xu, M)
-            pyro.sample("u",
+            pyro.sample(_make_name(self._pyro_name, "u"),
                         dist.MultivariateNormal(zero_loc, scale_tril=identity)
                             .to_event(zero_loc.dim() - 1))
         else:
-            pyro.sample("u",
+            pyro.sample(_make_name(self._pyro_name, "u"),
                         dist.MultivariateNormal(zero_loc, scale_tril=Luu)
                             .to_event(zero_loc.dim() - 1))
 
         f_loc, f_var = conditional(self.X, self.Xu, self.kernel, self.u_loc, self.u_scale_tril,
-                                    Luu, full_cov=False, whiten=self.whiten, jitter=self.jitter)
+                                   Luu, full_cov=False, whiten=self.whiten, jitter=self.jitter)
 
         f_loc = f_loc + self.mean_function(self.X)
         if self.y is None:
@@ -127,11 +127,11 @@ class VariationalSparseGP(GPModel):
             with poutine.scale(scale=self.num_data / self.X.size(0)):
                 return self.likelihood(f_loc, f_var, self.y)
 
-    @pyro_method
     def guide(self):
         self.set_mode("guide")
+        self.load_pyro_samples()
 
-        pyro.sample("u",
+        pyro.sample(_make_name(self._pyro_name, "u"),
                     dist.MultivariateNormal(self.u_loc, scale_tril=self.u_scale_tril)
                         .to_event(self.u_loc.dim()-1))
 

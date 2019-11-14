@@ -160,10 +160,10 @@ class PyroModule(torch.nn.Module):
         self._pyro_name = name
         self._pyro_context = context
         for key, value in self._modules.items():
-            assert isinstance(value, PyroModule)
-            assert not value._pyro_context.used, \
-                "submodule {} has executed outside of supermodule".format(name)
-            value._pyro_set_supermodule(_make_name(name, key), context)
+            if isinstance(value, PyroModule):
+                assert not value._pyro_context.used, \
+                    "submodule {} has executed outside of supermodule".format(name)
+                value._pyro_set_supermodule(_make_name(name, key), context)
 
     def __call__(self, *args, **kwargs):
         with self._pyro_context:

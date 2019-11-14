@@ -39,12 +39,12 @@ def test_parameterized():
     assert "d_scale_tril_unconstrained" in parameters
 
     def model(x):
-        linear.set_mode("model")
+        linear.mode = "model"
         return linear(x)
 
     def guide(x):
-        with linear.set_mode("guide"):
-            pass
+        linear.mode = "guide"
+        return linear(x)
 
     model_trace = pyro.poutine.trace(model).get_trace(torch.tensor(5.))
     guide_trace = pyro.poutine.trace(guide).get_trace(torch.tensor(5.))
@@ -85,6 +85,7 @@ def test_nested_parameterized():
     q.a = PyroSample(dist.Cauchy(0, 1))
 
     def model(x):
+        q.set_mode("model")
         return q(x)
 
     trace = pyro.poutine.trace(model).get_trace(torch.tensor(5.))
@@ -116,8 +117,8 @@ def test_inference():
             return pyro.sample("y", dist.Normal(mu, 0.1), obs=y)
 
     def guide(x, y):
-        with linear.set_mode("guide"):
-            pass
+        linear.set_mode("guide")
+        linear.load_pyro_samples()
 
     loss_fn = pyro.infer.Trace_ELBO().differentiable_loss
     optimizer = torch.optim.Adam(linear.parameters(), lr=0.5)
@@ -131,5 +132,5 @@ def test_inference():
     for i in range(200):
         optimizer.step(closure)
 
-    with linear.set_mode("guide"):
-        assert_equal(linear.a, target_a, prec=0.05)
+    linear.mode = "guide"
+    assert_equal(linear.a, target_a, prec=0.05)

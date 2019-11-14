@@ -5,7 +5,7 @@ import pyro
 import pyro.distributions as dist
 
 from pyro.contrib.gp.likelihoods.likelihood import Likelihood
-from pyro.nn.module import PyroParam
+from pyro.nn.module import PyroParam, _make_name
 
 
 class Gaussian(Likelihood):
@@ -42,4 +42,4 @@ class Gaussian(Likelihood):
         y_dist = dist.Normal(f_loc, y_var.sqrt())
         if y is not None:
             y_dist = y_dist.expand_by(y.shape[:-f_loc.dim()]).to_event(y.dim())
-        return pyro.sample("y", y_dist, obs=y)
+        return pyro.sample(_make_name(self._pyro_name, "y"), y_dist, obs=y)

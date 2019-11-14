@@ -1,6 +1,6 @@
 import pyro.distributions as dist
 from pyro.contrib.gp.parameterized import Parameterized
-from pyro.nn.module import PyroSample
+from pyro.nn.module import PyroSample, pyro_method
 
 
 class GPLVM(Parameterized):
@@ -63,12 +63,14 @@ class GPLVM(Parameterized):
         self.autoguide("X", dist.Normal)
         self.X_loc.data = base_model.X
 
+    @pyro_method
     def model(self):
         self.mode = "model"
         # X is sampled from prior will be put into base_model
         self.base_model.set_data(self.X, self.base_model.y)
         self.base_model.model()
 
+    @pyro_method
     def guide(self):
         self.mode = "guide"
         # X is sampled from guide will be put into base_model

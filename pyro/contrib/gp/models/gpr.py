@@ -6,7 +6,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.contrib.gp.models.model import GPModel
 from pyro.contrib.gp.util import conditional
-from pyro.nn.module import PyroParam, pyro_method
+from pyro.nn.module import PyroParam, pyro_method, _make_name
 from pyro.util import warn_if_nan
 
 
@@ -83,15 +83,15 @@ class GPRegression(GPModel):
             f_var = Lff.pow(2).sum(dim=-1)
             return f_loc, f_var
         else:
-            return pyro.sample("y",
+            return pyro.sample(_make_name(self._pyro_name, "y"),
                                dist.MultivariateNormal(f_loc, scale_tril=Lff)
                                    .expand_by(self.y.shape[:-1])
                                    .to_event(self.y.dim() - 1),
                                obs=self.y)
 
-    @pyro_method
     def guide(self):
         self.set_mode("guide")
+        self.load_pyro_samples()
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""
