@@ -75,7 +75,7 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
             return_site_shapes[site] = site_shape
 
     # handle _RETURN site
-    if isinstance(return_sites, (list, tuple, set)) and '_RETURN' in return_sites:
+    if return_sites is not None and '_RETURN' in return_sites:
         value = model_trace.nodes['_RETURN']['value']
         shape = (num_samples,) + value.shape if torch.is_tensor(value) else None
         return_site_shapes['_RETURN'] = shape
@@ -126,10 +126,10 @@ class Predictive(PyroModule):
     def __init__(self, model, posterior_samples=None, guide=None, num_samples=None,
                  return_sites=None, parallel=False):
         super().__init__()
-        if posterior_samples is None and num_samples is None:
-            raise ValueError("Either posterior_samples or num_samples must be specified.")
-
-        posterior_samples = {} if posterior_samples is None else posterior_samples
+        if posterior_samples is None:
+            if num_samples is None:
+                raise ValueError("Either posterior_samples or num_samples must be specified.")
+            posterior_samples = {}
 
         for name, sample in posterior_samples.items():
             batch_size = sample.shape[0]
@@ -154,7 +154,22 @@ class Predictive(PyroModule):
         self.return_sites = return_sites
         self.parallel = parallel
 
-    def get_samples(self, *args, **kwargs):
+    def call(self, *args, **kwargs):
+        """
+        Method that calls :meth:`forward` and returns parameter values of the
+        guide as a `tuple` instead of a `dict`, which is a requirement for
+        JIT tracing. Unlike :meth:`forward`, this method can be traced by
+        :func:`torch.jit.trace_module`.
+
+        .. warning::
+            This method may be removed once PyTorch JIT tracer starts accepting
+            `dict` as valid return types. See
+            `issue <https://github.com/pytorch/pytorch/issues/27743>_`.
+        """
+        result = self(*args, **kwargs)
+        return tuple(v for _, v in sorted(result.items()))
+
+    def forward(self, *args, **kwargs):
         """
         Returns dict of samples from the predictive distribution. By default, only sample sites not
         contained in `posterior_samples` are returned. This can be modified by changing the
@@ -167,9 +182,13 @@ class Predictive(PyroModule):
         if self.guide is not None:
             posterior_samples = _predictive(self.guide, posterior_samples, self.num_samples,
                                             parallel=self.parallel, model_args=args, model_kwargs=kwargs)
-        return _predictive(self.model, posterior_samples, self.num_samples,
-                           return_sites=self.return_sites, parallel=self.parallel,
-                           model_args=args, model_kwargs=kwargs)
+        return _predictive(self.model, posterior_samples, self.num_samples, return_sites=self.return_sites,
+                           parallel=self.parallel, model_args=args, model_kwargs=kwargs)
+
+    def get_samples(self, *args, **kwargs):
+        warnings.warn("The method `.get_samples` has been deprecated in favor of `.forward`.",
+                      DeprecationWarning)
+        return self.forward(*args, **kwargs)
 
     def get_vectorized_trace(self, *args, **kwargs):
         """
