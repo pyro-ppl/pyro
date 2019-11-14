@@ -107,9 +107,8 @@ over-parametrization!".format(count_transforms, input_dim))
 
         x = y
         u = self.u()
-        for idx in range(self.count_transforms):
+        for jdx in reversed(range(self.count_transforms)):
             # NOTE: Need to apply transforms in reverse order as forward operation!
-            jdx = self.count_transforms - idx - 1
             projection = (u[jdx] * x).sum(dim=-1, keepdim=True) * u[jdx]
             x = x - 2. * projection
         return x
@@ -136,4 +135,4 @@ def householder(input_dim, count_transforms=None):
 
     if count_transforms is None:
         count_transforms = input_dim // 2 + 1
-    return Householder(input_dim, count_transforms=2)
+    return Householder(input_dim, count_transforms=count_transforms)
