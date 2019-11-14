@@ -606,7 +606,7 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the ``cov_diag`` is initialized to a small constant and the
-    ``cov_factor`` is intialized randomly such that on average
+    ``cov_factor`` is initialized randomly such that on average
     ``cov_factor.matmul(cov_factor.t())`` has the same scale as ``cov_diag``.
 
     :param callable model: A generative model.
