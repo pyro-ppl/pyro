@@ -89,8 +89,9 @@ class BatchNorm(TransformModule):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous transform)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
         # Enforcing the constraint that gamma is positive
         return (x - self.beta) / self.constrained_gamma * \
@@ -119,7 +120,7 @@ class BatchNorm(TransformModule):
 
     def log_abs_det_jacobian(self, x, y):
         """
-        Calculates the elementwise determinant of the log jacobian, dx/dy
+        Calculates the elementwise determinant of the log Jacobian, dx/dy
         """
         if self.training:
             var = torch.var(y, dim=0, keepdim=True)
@@ -131,7 +132,8 @@ class BatchNorm(TransformModule):
 
 def batchnorm(input_dim, **kwargs):
     """
-    A helper function to create a BatchNorm object for consistency with other helpers.
+    A helper function to create a :class:`~pyro.distributions.transforms.BatchNorm` object for consistency with other
+    helpers.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int

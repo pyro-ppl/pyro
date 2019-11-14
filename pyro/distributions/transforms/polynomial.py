@@ -20,7 +20,8 @@ class Polynomial(TransformModule):
     :math:`\\left{a^{(n)}_{r,k}\\in\\mathbb{R}\\right}` are learnable parameters that are the output of an
     autoregressive NN inputting :math:`x_{\\prec n}={x_1,x_2,\\ldots,x_{n-1}}`.
 
-    Together with `TransformedDistribution` this provides a way to create richer variational approximations.
+    Together with :class:`~pyro.distributions.TransformedDistribution` this provides a way to create richer
+    variational approximations.
 
     Example usage:
 
@@ -94,8 +95,9 @@ class Polynomial(TransformModule):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous transform)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
         # Calculate the polynomial coefficients
         # ~ (batch_size, count_sum, count_degree+1, input_dim)
@@ -141,8 +143,8 @@ class Polynomial(TransformModule):
 
 def polynomial(input_dim, hidden_dims=None):
     """
-    A helper function to create a Polynomial object that takes care of constructing
-    an autoregressive network with the correct input/output dimensions.
+    A helper function to create a :class:`~pyro.distributions.transforms.Polynomial` object that takes care of
+    constructing an autoregressive network with the correct input/output dimensions.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int

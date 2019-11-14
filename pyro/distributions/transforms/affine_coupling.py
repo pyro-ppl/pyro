@@ -15,14 +15,15 @@ class AffineCoupling(TransformModule):
         :math:`\\mathbf{y}_{1:d} = \\mathbf{x}_{1:d}`
         :math:`\\mathbf{y}_{(d+1):D} = \\mu + \\sigma\\odot\\mathbf{x}_{(d+1):D}`
 
-    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, e.g. :math:`\\mathbf{x}_{1:d}
+    where :math:`\\mathbf{x}` are the inputs, :math:`\\mathbf{y}` are the outputs, e.g. :math:`\\mathbf{x}_{1:d}`
     represents the first :math:`d` elements of the inputs, and :math:`\\mu,\\sigma` are shift and translation
     parameters calculated as the output of a function inputting only :math:`\\mathbf{x}_{1:d}`.
 
     That is, the first :math:`d` components remain unchanged, and the subsequent :math:`D-d` are shifted and
     translated by a function of the previous components.
 
-    Together with `TransformedDistribution` this provides a way to create richer variational approximations.
+    Together with :class:`~pyro.distributions.TransformedDistribution` this provides a way to create richer
+    variational approximations.
 
     Example usage:
 
@@ -39,13 +40,13 @@ class AffineCoupling(TransformModule):
                 0.1389, -0.4629,  0.0986])
 
     The inverse of the Bijector is required when, e.g., scoring the log density of a sample with
-    `TransformedDistribution`. This implementation caches the inverse of the Bijector when its forward
-    operation is called, e.g., when sampling from `TransformedDistribution`. However, if the cached value
-    isn't available, either because it was overwritten during sampling a new value or an arbitary value is
-    being scored, it will calculate it manually.
+    :class:`~pyro.distributions.TransformedDistribution`. This implementation caches the inverse of the Bijector when
+    its forward operation is called, e.g., when sampling from :class:`~pyro.distributions.TransformedDistribution`.
+    However, if the cached value isn't available, either because it was overwritten during sampling a new value or an
+    arbitary value is being scored, it will calculate it manually.
 
     This is an operation that scales as O(1), i.e. constant in the input dimension. So in general, it is cheap
-    to sample *and* score (an arbitrary value) from AffineCoupling.
+    to sample *and* score (an arbitrary value) from :class:`~pyro.distributions.transforms.AffineCoupling`.
 
     :param split_dim: Zero-indexed dimension :math:`d` upon which to perform input/output split for transformation.
     :type split_dim: int
@@ -82,8 +83,9 @@ class AffineCoupling(TransformModule):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous transform)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
         x1, x2 = x[..., :self.split_dim], x[..., self.split_dim:]
 
@@ -127,8 +129,8 @@ class AffineCoupling(TransformModule):
 
 def affine_coupling(input_dim, hidden_dims=None, split_dim=None, **kwargs):
     """
-    A helper function to create an AffineCoupling object that takes care of constructing
-    a dense network with the correct input/output dimensions.
+    A helper function to create an :class:`~pyro.distributions.transforms.AffineCoupling` object that takes care of
+    constructing a dense network with the correct input/output dimensions.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int

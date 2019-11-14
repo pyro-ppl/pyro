@@ -22,7 +22,8 @@ class Sylvester(Householder):
     Householder type of the Sylvester transform, the orthogonality of :math:`Q` is enforced by representing it as
     the product of Householder transformations.
 
-    Together with `TransformedDistribution` it provides a way to create richer variational approximations.
+    Together with :class:`~pyro.distributions.TransformedDistribution` it provides a way to create richer
+    variational approximations.
 
     Example usage:
 
@@ -102,8 +103,9 @@ class Sylvester(Householder):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous transform)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
         Q = self.Q(x)
         R = self.R()
@@ -131,7 +133,7 @@ class Sylvester(Householder):
 
     def log_abs_det_jacobian(self, x, y):
         """
-        Calculates the elementwise determinant of the log jacobian
+        Calculates the elementwise determinant of the log Jacobian
         """
 
         return self._cached_logDetJ
@@ -139,7 +141,8 @@ class Sylvester(Householder):
 
 def sylvester(input_dim, count_transforms=None):
     """
-    A helper function to create a Sylvester object for consistency with other helpers.
+    A helper function to create a :class:`~pyro.distributions.transforms.Sylvester` object for consistency with
+    other helpers.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int

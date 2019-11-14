@@ -21,7 +21,8 @@ class Radial(TransformModule):
     for input dimension :math:`D`, :math:`r=||\\mathbf{x}-\\mathbf{x}_0||_2`, :math:`h(\\alpha,r)=1/(\\alpha+r)`.
     For this to be an invertible transformation, the condition :math:`\\beta>-\\alpha` is enforced.
 
-    Together with `TransformedDistribution` this provides a way to create richer variational approximations.
+    Together with :class:`~pyro.distributions.TransformedDistribution` this provides a way to create richer
+    variational approximations.
 
     Example usage:
 
@@ -75,8 +76,9 @@ class Radial(TransformModule):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous transform)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
         # Ensure invertibility using approach in appendix A.2
         alpha = F.softplus(self.alpha_prime)
@@ -107,7 +109,7 @@ class Radial(TransformModule):
 
     def log_abs_det_jacobian(self, x, y):
         """
-        Calculates the elementwise determinant of the log jacobian
+        Calculates the elementwise determinant of the log Jacobian
         """
 
         return self._cached_logDetJ
@@ -115,7 +117,8 @@ class Radial(TransformModule):
 
 def radial(input_dim):
     """
-    A helper function to create a Radial object for consistency with other helpers.
+    A helper function to create a :class:`~pyro.distributions.transforms.Radial` object for consistency with other
+    helpers.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int

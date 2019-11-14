@@ -39,7 +39,8 @@ class ELUTransform(Transform):
 
 def elu():
     """
-    A helper function to create an ELUTransform object for consistency with other helpers.
+    A helper function to create an :class:`~pyro.distributions.transform.ELUTransform` object for consistency with
+    other helpers.
     """
     return ELUTransform()
 
@@ -68,7 +69,8 @@ class LeakyReLUTransform(Transform):
 
 def leaky_relu():
     """
-    A helper function to create a LeakyReLUTransform object for consistency with other helpers.
+    A helper function to create a :class:`~pyro.distributions.transforms.LeakyReLUTransform` object for consistency
+    with other helpers.
     """
     return LeakyReLUTransform()
 
@@ -102,7 +104,8 @@ class TanhTransform(Transform):
 
 def tanh():
     """
-    A helper function to create a TanhTransform object for consistency with other helpers.
+    A helper function to create a :class:`~pyro.distributions.transforms.TanhTransform` object for consistency with
+    other helpers.
     """
     return TanhTransform()
 
@@ -176,8 +179,9 @@ class NeuralAutoregressive(TransformModule):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous transform)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
         # A, W, b ~ batch_shape x hidden_units x event_shape
         A, W_pre, b = self.arn(x)
@@ -202,7 +206,7 @@ class NeuralAutoregressive(TransformModule):
     # This method returns log(abs(det(dy/dx)), which is equal to -log(abs(det(dx/dy))
     def log_abs_det_jacobian(self, x, y):
         """
-        Calculates the elementwise determinant of the log jacobian
+        Calculates the elementwise determinant of the log Jacobian
         """
 
         A = self._cached_A
@@ -220,8 +224,8 @@ class NeuralAutoregressive(TransformModule):
 
 def neural_autoregressive(input_dim, hidden_dims=None, activation='sigmoid', width=16):
     """
-    A helper function to create a NeuralAutoregressive object that takes care of constructing
-    an autoregressive network with the correct input/output dimensions.
+    A helper function to create a :class:`~pyro.distributions.transforms.NeuralAutoregressive` object that takes care
+    of constructing an autoregressive network with the correct input/output dimensions.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int

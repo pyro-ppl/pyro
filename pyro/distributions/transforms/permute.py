@@ -14,8 +14,8 @@ class Permute(Transform):
     flexibility of the resulting distribution and stabilize learning. Whilst not being an autoregressive transform,
     the log absolute determinate of the Jacobian is easily calculable as 0. Note that reordering the input dimension
     between two layers of :class:`~pyro.distributions.transforms.AffineAutoregressive` is not equivalent to reordering
-    the dimension inside the MADE networks that those IAFs use; using a PermuteTransform results in a distribution
-    with more flexibility.
+    the dimension inside the MADE networks that those IAFs use; using a :class:`~pyro.distributions.transforms.Permute`
+    transform results in a distribution with more flexibility.
 
     Example usage:
 
@@ -58,8 +58,9 @@ class Permute(Transform):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous transform)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
 
         return x[..., self.permutation]
@@ -87,7 +88,8 @@ class Permute(Transform):
 
 def permute(input_dim, permutation=None):
     """
-    A helper function to create a Permute object for consistency with other helpers.
+    A helper function to create a :class:`~pyro.distributions.transforms.Permute` object for consistency with other
+    helpers.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int

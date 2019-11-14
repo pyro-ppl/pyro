@@ -28,7 +28,8 @@ class AffineAutoregressive(TransformModule):
     distributions that can be represented, presumably since the input is restricted to rescaling by a number
     on :math:`(0,1)`.
 
-    Together with `TransformedDistribution` this provides a way to create richer variational approximations.
+    Together with :class:`~pyro.distributions.TransformedDistribution` this provides a way to create richer
+    variational approximations.
 
     Example usage:
 
@@ -42,12 +43,13 @@ class AffineAutoregressive(TransformModule):
                 0.1389, -0.4629,  0.0986])
 
     The inverse of the Bijector is required when, e.g., scoring the log density of a sample with
-    `TransformedDistribution`. This implementation caches the inverse of the Bijector when its forward
-    operation is called, e.g., when sampling from `TransformedDistribution`. However, if the cached value
-    isn't available, either because it was overwritten during sampling a new value or an arbitary value is
-    being scored, it will calculate it manually. Note that this is an operation that scales as O(D) where D is
-    the input dimension, and so should be avoided for large dimensional uses. So in general, it is cheap
-    to sample from IAF and score a value that was sampled by IAF, but expensive to score an arbitrary value.
+    :class:`~pyro.distributions.TransformedDistribution`. This implementation caches the inverse of the Bijector
+    when its forward operation is called, e.g., when sampling from
+    :class:`~pyro.distributions.TransformedDistribution`. However, if the cached value isn't available, either because
+    it was overwritten during sampling a new value or an arbitary value is being scored, it will calculate it manually.
+    Note that this is an operation that scales as O(D) where D is the input dimension, and so should be avoided for
+    large dimensional uses. So in general, it is cheap to sample from IAF and score a value that was sampled by IAF,
+    but expensive to score an arbitrary value.
 
     :param autoregressive_nn: an autoregressive neural network whose forward call returns a real-valued
         mean and logit-scale as a tuple
@@ -106,8 +108,9 @@ class AffineAutoregressive(TransformModule):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous transform)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
         mean, log_scale = self.arn(x)
         log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
@@ -144,7 +147,7 @@ class AffineAutoregressive(TransformModule):
 
     def log_abs_det_jacobian(self, x, y):
         """
-        Calculates the elementwise determinant of the log jacobian
+        Calculates the elementwise determinant of the log Jacobian
         """
         if self._cached_log_scale is not None:
             log_scale = self._cached_log_scale
@@ -161,8 +164,9 @@ class AffineAutoregressive(TransformModule):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous transform)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
         mean, logit_scale = self.arn(x)
         logit_scale = logit_scale + self.sigmoid_bias
@@ -198,8 +202,8 @@ class AffineAutoregressive(TransformModule):
 
 def affine_autoregressive(input_dim, hidden_dims=None, **kwargs):
     """
-    A helper function to create an AffineAutoregressive object that takes care of constructing
-    an autoregressive network with the correct input/output dimensions.
+    A helper function to create an :class:`~pyro.distributions.transforms.AffineAutoregressive` object that takes care
+    of constructing an autoregressive network with the correct input/output dimensions.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int

@@ -362,3 +362,68 @@ TransformModule
     :members:
     :undoc-members:
     :show-inheritance:
+
+Transform Factories
+~~~~~~~~~~~~~~~~~~~
+
+Each Transform and TransformModule includes a corresponding helper function in lower case that inputs, at minimum, the input dimensions of the transform, and possibly additional arguments to customize the transform in an intuitive way. The purpose of these helper functions is to hide from the user whether or not the transform requires the construction of a hypernet, and if so, the input and output dimensions of that hypernet.
+
+affine_autoregressive
+---------------------
+.. autofunction:: pyro.distributions.transforms.affine_autoregressive
+
+affine_coupling
+---------------
+.. autofunction:: pyro.distributions.transforms.affine_coupling
+
+batchnorm
+---------
+.. autofunction:: pyro.distributions.transforms.batchnorm
+
+block_autoregressive
+--------------------
+.. autofunction:: pyro.distributions.transforms.block_autoregressive
+
+conditional_planar
+------------------
+.. autofunction:: pyro.distributions.transforms.conditional_planar
+
+elu
+---
+.. autofunction:: pyro.distributions.transforms.elu
+
+householder
+-----------
+.. autofunction:: pyro.distributions.transforms.householder
+
+leaky_relu
+----------
+.. autofunction:: pyro.distributions.transforms.leaky_relu
+
+neural_autoregressive
+---------------------
+.. autofunction:: pyro.distributions.transforms.neural_autoregressive
+
+permute
+-------
+.. autofunction:: pyro.distributions.transforms.permute
+
+planar
+------
+.. autofunction:: pyro.distributions.transforms.planar
+
+polynomial
+----------
+.. autofunction:: pyro.distributions.transforms.polynomial
+
+radial
+------
+.. autofunction:: pyro.distributions.transforms.radial
+
+sylvester
+---------
+.. autofunction:: pyro.distributions.transforms.sylvester
+
+tanh
+----
+.. autofunction:: pyro.distributions.transforms.tanh

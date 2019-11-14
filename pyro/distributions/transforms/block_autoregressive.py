@@ -28,7 +28,8 @@ class BlockAutoregressive(TransformModule):
     Block-NAF uses a similar transformation to deep dense NAF, building the autoregressive NN into the structure
     of the transform, in a sense.
 
-    Together with `TransformedDistribution` this provides a way to create richer variational approximations.
+    Together with :class:`~pyro.distributions.TransformedDistribution` this provides a way to create richer
+    variational approximations.
 
     Example usage:
 
@@ -104,8 +105,9 @@ class BlockAutoregressive(TransformModule):
         :param x: the input into the bijection
         :type x: torch.Tensor
 
-        Invokes the bijection x=>y; in the prototypical context of a TransformedDistribution `x` is a
-        sample from the base distribution (or the output of a previous transform)
+        Invokes the bijection x=>y; in the prototypical context of a
+        :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from the base distribution (or the output
+        of a previous transform)
         """
         y = x
         for idx in range(len(self.layers)):
@@ -241,7 +243,8 @@ class MaskedBlockLinear(torch.nn.Module):
 
 def block_autoregressive(input_dim, **kwargs):
     """
-    A helper function to create a BlockAutoregressive object for consistency with other helpers.
+    A helper function to create a :class:`~pyro.distributions.transforms.BlockAutoregressive` object for consistency
+    with other helpers.
 
     :param input_dim: Dimension of input variable
     :type input_dim: int
