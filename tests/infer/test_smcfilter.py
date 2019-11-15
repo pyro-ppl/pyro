@@ -5,6 +5,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from pyro.infer import SMCFilter
+from tests.common import assert_close
 
 
 class SmokeModel:
@@ -171,3 +172,58 @@ def test_likelihood_ratio():
     assert(score_latent(zs_true, ys_true) > score_latent(zs, ys_true))
     assert(score_latent(zs_pred, ys_true) > score_latent(zs_pred, ys))
     assert(score_latent(zs_pred, ys_true) > score_latent(zs, ys_true))
+
+
+def test_gaussian_filter():
+    dim = 4
+    init_dist = dist.MultivariateNormal(torch.zeros(dim), scale_tril=torch.eye(dim) * 10)
+    trans_mat = torch.eye(dim)
+    trans_dist = dist.MultivariateNormal(torch.zeros(dim), scale_tril=torch.eye(dim))
+    obs_mat = torch.eye(dim)
+    obs_dist = dist.MultivariateNormal(torch.zeros(dim), scale_tril=torch.eye(dim) * 2)
+    hmm = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
+
+    class Model:
+        def init(self, state):
+            state["z"] = pyro.sample("z_init", init_dist)
+            self.t = 0
+
+        def step(self, state, datum=None):
+            state["z"] = pyro.sample("z_{}".format(self.t),
+                                     dist.MultivariateNormal(state["z"], scale_tril=trans_dist.scale_tril))
+            datum = pyro.sample("obs_{}".format(self.t),
+                                dist.MultivariateNormal(state["z"], scale_tril=obs_dist.scale_tril),
+                                obs=datum)
+            self.t += 1
+            return datum
+
+    class Guide:
+        def init(self, state):
+            pyro.sample("z_init", init_dist)
+            self.t = 0
+
+        def step(self, state, datum):
+            pyro.sample("z_{}".format(self.t),
+                        dist.MultivariateNormal(state["z"], scale_tril=trans_dist.scale_tril * 2))
+            self.t += 1
+
+    # Generate data.
+    num_steps = 10
+    model = Model()
+    state = {}
+    model.init(state)
+    data = torch.stack([model.step(state) for _ in range(num_steps)])
+
+    # Perform inference.
+    model = Model()
+    guide = Guide()
+    smc = SMCFilter(model, guide, num_particles=10000, max_plate_nesting=0)
+    smc.init()
+    for t, datum in enumerate(data):
+        print(t)
+        smc.step(datum)
+        expected = hmm.filter(data)
+        actual = smc.get_empirical()["z"]
+        assert_close(actual.variance ** 0.5, expected.variance ** 0.5, rtol=1.5)
+        atol = actual.variance.max().item() ** 0.5
+        assert_close(actual.mean, expected.mean, atol=atol)
