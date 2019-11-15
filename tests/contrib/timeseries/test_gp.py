@@ -64,7 +64,8 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
                       1.5: pyro.contrib.gp.kernels.Matern32,
                       2.5: pyro.contrib.gp.kernels.Matern52}[nu_statedim]
             kernel = kernel(input_dim=1, lengthscale=lengthscale, variance=variance)
-            kernel = kernel(times) + obs_noise * torch.eye(T)
+            # XXX kernel(times) loads old parameters from param store
+            kernel = kernel.forward(times) + obs_noise * torch.eye(T)
 
             mvn = torch.distributions.MultivariateNormal(torch.zeros(T), kernel)
             mvn_log_prob = mvn.log_prob(targets[:, dim])

@@ -155,7 +155,7 @@ class SparseGPRegression(GPModel):
 
     def guide(self):
         self.set_mode("guide")
-        self.load_pyro_samples()
+        self._load_pyro_samples()
 
     def forward(self, Xnew, full_cov=False, noiseless=True):
         r"""

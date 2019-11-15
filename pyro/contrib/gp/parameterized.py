@@ -2,7 +2,6 @@ import warnings
 from collections import OrderedDict
 from functools import partial
 
-import torch
 from torch.distributions import biject_to, constraints
 from torch.nn import Parameter
 
@@ -12,11 +11,11 @@ from pyro.distributions.util import eye_like
 from pyro.nn.module import PyroModule, PyroParam, PyroSample, pyro_method, _make_name
 
 
-def _get_independent_support(dist_instance):
-    if isinstance(dist_instance, dist.Independent):
-        return _get_independent_support(dist_instance.base_dist)
+def _is_real_support(support):
+    if isinstance(support, pyro.distributions.constraints.IndependentConstraint):
+        return _is_real_support(support.base_constraint)
     else:
-        return dist_instance.support
+        return support in [constraints.real, constraints.real_vector]
 
 
 def _get_sample_fn(module, name):
@@ -34,8 +33,9 @@ def _get_sample_fn(module, name):
     guide = dist_constructor(**dist_args)
 
     # no need to do transforms when support is real (for mean field ELBO)
-    if _get_independent_support(module._priors[name]) is constraints.real:
-        guide = guide.to_event()
+    support = module._priors[name].support
+    if _is_real_support(support):
+        return guide.to_event()
 
     # otherwise, we do inference in unconstrained space and transform the value
     # back to original space
@@ -43,7 +43,7 @@ def _get_sample_fn(module, name):
     unconstrained_value = pyro.sample("{}_latent".format(_make_name(module._pyro_name, name)),
                                       guide.to_event(),
                                       infer={"is_auxiliary": True})
-    transform = biject_to(module._priors[name].support)
+    transform = biject_to(support)
     value = transform(unconstrained_value)
     log_density = transform.inv.log_abs_det_jacobian(value, unconstrained_value)
     return dist.Delta(value, log_density.sum(), event_dim=value.dim())
@@ -104,7 +104,7 @@ class Parameterized(PyroModule):
     def __setattr__(self, name, value):
         if isinstance(value, PyroSample):
             prior = value.prior
-            if isinstance(prior, (dist.Distribution, torch.distributions.Distribution)):
+            if hasattr(prior, "sample"):
                 self._priors[name] = prior
                 self.autoguide(name, dist.Delta)
                 value = PyroSample(partial(_get_sample_fn, name=name))
@@ -140,8 +140,8 @@ class Parameterized(PyroModule):
 
         p = self._priors[name]()  # init_to_sample strategy
         if dist_constructor is dist.Delta:
-            support = _get_independent_support(self._priors[name])
-            if support is constraints.real:
+            support = self._priors[name].support
+            if _is_real_support(support):
                 p_map = Parameter(p.detach())
             else:
                 p_map = PyroParam(p.detach(), support)
@@ -167,7 +167,7 @@ class Parameterized(PyroModule):
         self._guides[name] = (dist_constructor, dist_args)
 
     @pyro_method
-    def load_pyro_samples(self):
+    def _load_pyro_samples(self):
         """
         Runs `pyro.sample` primitives for all `PyroSample` attributes.
         """

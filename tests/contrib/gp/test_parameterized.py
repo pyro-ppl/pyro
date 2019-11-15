@@ -18,25 +18,23 @@ def test_parameterized():
             self.b = PyroSample(dist.Normal(0, 1))
             self.c = PyroSample(dist.Normal(0, 1))
             self.d = PyroSample(dist.Normal(0, 4).expand([1]).to_event())
+            self.e = PyroSample(dist.LogNormal(0, 1))
+            self.f = PyroSample(dist.MultivariateNormal(torch.zeros(2), torch.eye(2)))
+            self.g = PyroSample(dist.Exponential(1))
 
         def forward(self, x):
-            return self.a * x + self.b + self.c + self.d + self.c
+            return self.a * x + self.b + self.c + self.d + self.e + self.f + self.g + self.e
 
     linear = Linear()
     linear.autoguide("c", dist.Normal)
     linear.autoguide("d", dist.MultivariateNormal)
+    linear.autoguide("e", dist.Normal)
 
-    parameters = dict(linear.named_parameters())
-
-    assert "a_unconstrained" in parameters
-    for p in ["a", "b", "c", "d"]:
-        assert p not in parameters
-
-    assert "b_map" in parameters
-    assert "c_loc" in parameters
-    assert "c_scale_unconstrained" in parameters
-    assert "d_loc" in parameters
-    assert "d_scale_tril_unconstrained" in parameters
+    assert set(dict(linear.named_parameters()).keys()) == {
+        "a_unconstrained", "b_map", "c_loc", "c_scale_unconstrained",
+        "d_loc", "d_scale_tril_unconstrained",
+        "e_loc", "e_scale_unconstrained", "f_map", "g_map_unconstrained"
+    }
 
     def model(x):
         linear.mode = "model"
@@ -118,7 +116,7 @@ def test_inference():
 
     def guide(x, y):
         linear.set_mode("guide")
-        linear.load_pyro_samples()
+        linear._load_pyro_samples()
 
     loss_fn = pyro.infer.Trace_ELBO().differentiable_loss
     optimizer = torch.optim.Adam(linear.parameters(), lr=0.5)

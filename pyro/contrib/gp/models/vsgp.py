@@ -129,7 +129,7 @@ class VariationalSparseGP(GPModel):
 
     def guide(self):
         self.set_mode("guide")
-        self.load_pyro_samples()
+        self._load_pyro_samples()
 
         pyro.sample(_make_name(self._pyro_name, "u"),
                     dist.MultivariateNormal(self.u_loc, scale_tril=self.u_scale_tril)
