@@ -22,7 +22,7 @@ import pyro
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.nuts import NUTS
 from pyro.infer.mcmc.logger import initialize_logger, DIAGNOSTIC_MSG, TqdmHandler, ProgressBar
-from pyro.infer.mcmc.util import diagnostics, initialize_model, summary
+from pyro.infer.mcmc.util import diagnostics, initialize_model, print_summary
 import pyro.poutine as poutine
 
 MAX_SEED = 2**32 - 1
@@ -445,4 +445,7 @@ class MCMC(object):
 
         :param float prob: the probability mass of samples within the credibility interval.
         """
-        summary(self._samples, prob=prob)
+        print_summary(self._samples, prob=prob)
+        if 'divergences' in self._diagnostics[0]:
+            print("Number of divergences: {}".format(
+                sum([len(self._diagnostics[i]['divergences']) for i in range(self.num_chains)])))
