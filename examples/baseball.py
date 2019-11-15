@@ -1,7 +1,6 @@
 import argparse
 import logging
 import math
-import os
 
 import pandas as pd
 import torch
@@ -346,16 +345,19 @@ if __name__ == "__main__":
                         help="run this example in GPU")
     args = parser.parse_args()
 
-    # work around the error "CUDA error: initialization error" in Linux
+    # work around the error "CUDA error: initialization error"
     # see https://github.com/pytorch/pytorch/issues/2517
-    if args.cuda:
-        torch.multiprocessing.set_start_method("spawn")
-        torch.set_default_tensor_type(torch.cuda.FloatTensor)
-    else:
-        os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    torch.multiprocessing.set_start_method("spawn")
 
     pyro.set_rng_seed(args.rng_seed)
     # Enable validation checks
     pyro.enable_validation(__debug__)
+
+    # work around with the error "RuntimeError: received 0 items of ancdata"
+    # see https://discuss.pytorch.org/t/received-0-items-of-ancdata-pytorch-0-4-0/19823
+    torch.multiprocessing.set_sharing_strategy("file_system")
+
+    if args.cuda:
+        torch.set_default_tensor_type(torch.cuda.FloatTensor)
 
     main(args)
