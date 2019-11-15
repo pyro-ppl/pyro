@@ -525,13 +525,14 @@ class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
             tr2.nodes["latent2"]["is_observed"]
         assert tr2.nodes["latent2"]["value"] is tr1.nodes["latent2"]["value"]
 
-    def test_stack_overwrite_failure(self):
+    def test_stack_overwrite_behavior(self):
         data1 = {"latent2": torch.randn(2)}
         data2 = {"latent2": torch.randn(2)}
-        cm = poutine.condition(poutine.condition(self.model, data=data1),
-                               data=data2)
-        with pytest.raises(AssertionError):
+        with poutine.trace() as tr:
+            cm = poutine.condition(poutine.condition(self.model, data=data1),
+                                   data=data2)
             cm()
+        assert tr.trace.nodes['latent2']['value'] is data2['latent2']
 
     def test_stack_success(self):
         data1 = {"latent1": torch.randn(2)}
