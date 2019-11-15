@@ -82,12 +82,15 @@ class DoMessenger(Messenger):
                 msg['value'] = None
                 msg['is_observed'] = False
                 msg['fn'] = intervention
-            else:
+            elif isinstance(intervention, (numbers.Number, torch.Tensor)):
                 if isinstance(intervention, numbers.Number):
                     # Delta doesn't automatically convert its argument to tensor
                     intervention = torch.tensor(float(intervention))
                 msg['value'] = intervention
                 msg['fn'] = Delta(intervention, event_dim=len(msg['fn'].event_shape))
                 msg['is_observed'] = True  # keep inference algorithms from complaining about Deltas
+            else:
+                raise NotImplementedError(
+                    "Interventions of type {} not implemented".format(type(intervention)))
 
         return None
