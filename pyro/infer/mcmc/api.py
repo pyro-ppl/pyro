@@ -301,6 +301,8 @@ class MCMC(object):
         self.transforms = transforms
         self.disable_validation = disable_validation
         self._samples = None
+        self._args = None
+        self._kwargs = None
         if isinstance(self.kernel, (HMC, NUTS)) and self.kernel.potential_fn is not None:
             if initial_params is None:
                 raise ValueError("Must provide valid initial parameters to begin sampling"
