@@ -1,8 +1,8 @@
 import torch
 from torch.distributions import constraints
-from torch.nn import Parameter
 
-from .kernel import Kernel
+from pyro.contrib.gp.kernels.kernel import Kernel
+from pyro.nn.module import PyroParam
 
 
 def _torch_sqrt(x, eps=1e-12):
@@ -29,12 +29,10 @@ class Isotropy(Kernel):
         super(Isotropy, self).__init__(input_dim, active_dims)
 
         variance = torch.tensor(1.) if variance is None else variance
-        self.variance = Parameter(variance)
-        self.set_constraint("variance", constraints.positive)
+        self.variance = PyroParam(variance, constraints.positive)
 
         lengthscale = torch.tensor(1.) if lengthscale is None else lengthscale
-        self.lengthscale = Parameter(lengthscale)
-        self.set_constraint("lengthscale", constraints.positive)
+        self.lengthscale = PyroParam(lengthscale, constraints.positive)
 
     def _square_scaled_dist(self, X, Z=None):
         r"""
@@ -103,8 +101,7 @@ class RationalQuadratic(Isotropy):
 
         if scale_mixture is None:
             scale_mixture = torch.tensor(1.)
-        self.scale_mixture = Parameter(scale_mixture)
-        self.set_constraint("scale_mixture", constraints.positive)
+        self.scale_mixture = PyroParam(scale_mixture, constraints.positive)
 
     def forward(self, X, Z=None, diag=False):
         if diag:
