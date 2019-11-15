@@ -50,13 +50,13 @@ class SimpleHarmonicModel_Guide:
 
     def init(self, state, initial):
         self.t = 0
-        state["z"] = pyro.sample("z_init", dist.Delta(initial, event_dim=1))
+        pyro.sample("z_init", dist.Delta(initial, event_dim=1))
 
     def step(self, state, y=None):
         self.t += 1
 
         # Proposal distribution
-        state["z"] = pyro.sample(
+        pyro.sample(
             "z_{}".format(self.t),
             dist.Normal(state["z"].matmul(self.model.A), torch.tensor([1., 1.])).to_event(1))
 
@@ -104,7 +104,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Simple Harmonic Oscillator w/ SMC Filtering Inference")
-    parser.add_argument("-n", "--num-timesteps", default=50, type=int)
+    parser.add_argument("-n", "--num-timesteps", default=500, type=int)
     parser.add_argument("-p", "--num-particles", default=100, type=int)
     parser.add_argument("--process-noise", default=1., type=float)
     parser.add_argument("--measurement-noise", default=1., type=float)
