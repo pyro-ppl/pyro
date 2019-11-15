@@ -10,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
-from pyro.nn.module import PyroModule, PyroParam, PyroSample, clear
+from pyro.nn.module import Pyro, PyroModule, PyroParam, PyroSample, clear
 from pyro.optim import Adam
 from tests.common import assert_equal
 
@@ -323,6 +323,44 @@ def test_cache():
     result2 = module()
     for key in ["b", "c", "p.e", "p.f"]:
         assert result1[0] is not result2[0], key
+
+
+def test_mixin_factory():
+    assert Pyro(nn.Module) is PyroModule
+    assert Pyro(PyroModule) is PyroModule
+
+    module = Pyro(nn.Sequential)(
+        Pyro(nn.Linear)(28 * 28, 200),
+        Pyro(nn.Sigmoid)(),
+        Pyro(nn.Linear)(200, 200),
+        Pyro(nn.Sigmoid)(),
+        Pyro(nn.Linear)(200, 10),
+    )
+
+    assert isinstance(module, nn.Sequential)
+    assert isinstance(module, PyroModule)
+    assert type(module).__name__ == "PyroSequential"
+    assert Pyro(type(module)) is type(module)
+
+    assert isinstance(module[0], nn.Linear)
+    assert isinstance(module[0], PyroModule)
+    assert type(module[0]).__name__ == "PyroLinear"
+    assert type(module[2]) is type(module[0])  # noqa: E721
+
+    # Ensure new types are serializable.
+    data = torch.randn(28 * 28)
+    expected = module(data)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        f = io.BytesIO()
+        torch.save(module, f)
+        del module
+        pyro.clear_param_store()
+        f.seek(0)
+        module = torch.load(f)
+    assert type(module).__name__ == "PyroSequential"
+    actual = module(data)
+    assert_equal(actual, expected)
 
 
 def test_torch_serialize():

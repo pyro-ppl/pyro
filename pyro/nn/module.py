@@ -412,3 +412,58 @@ def clear(mod):
         delattr(mod, name)
     for name in list(mod._modules):
         delattr(mod, name)
+
+
+class Pyro(type):
+    """
+    Factory for :class:`torch.nn.Module`` subclasses that mix in
+    :class:`PyroModule` . For example::
+
+        model = Pyro(nn.Sequential)(
+            Pyro(nn.Linear)(28 * 28, 200),
+            Pyro(nn.Sigmoid)(),
+            Pyro(nn.Linear)(200, 200),
+            Pyro(nn.Sigmoid)(),
+            Pyro(nn.Linear)(200, 10),
+        )
+        assert isinstance(model, nn.Sequential)
+        assert isinstance(model, PyroModel)
+
+        # Now we can be Bayesian about weights on the first layer.
+        model[0].weight = PyroSample(
+            prior=dist.Normal(0, 1).expand([28 * 28, 200]).to_event(2))
+        guide = AutoDiagonalNormal(model)
+
+    Note that this does not recursively mix in :class:`PyroModule` to
+    submodules of the input ``Module``; hence we needed to wrap each part of
+    the ``nn.Sequential`` above.
+
+    :param type Module: A subclass of :class:`torch.nn.Module` .
+    :returns: A new subclass of both ``Module`` and :class:`PyroMixin` .
+    :rtype: type
+    """
+    _cache = {torch.nn.Module: PyroModule}  # Pyro(nn.Module) == PyroModule
+
+    # Unpickling helper to create a new object of type Pyro(Module) with empty state.
+    class _New:
+        def __init__(self, Module):
+            self.__class__ = Pyro(Module)
+
+    def __new__(cls, Module):
+        assert issubclass(Module, torch.nn.Module)
+        if issubclass(Module, PyroModule):
+            return Module
+        if Module in Pyro._cache:
+            return Pyro._cache[Module]
+
+        # Unpickling helper to load an object of runtime-defined type Pyro(Module).
+        def __reduce__(self):
+            state = getattr(self, '__getstate__', self.__dict__.copy)()
+            return Pyro._New, (Module,), state
+
+        name = "Pyro" + Module.__name__
+        bases = (Module, PyroModule)
+        dct = {"__reduce__": __reduce__}
+        result = super().__new__(cls, name, bases, dct)
+        Pyro._cache[Module] = result
+        return result
