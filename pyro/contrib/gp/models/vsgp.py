@@ -124,6 +124,8 @@ class VariationalSparseGP(GPModel):
         if self.y is None:
             return f_loc, f_var
         else:
+            # we would like to load likelihood's parameters outside poutine.scale context
+            self.likelihood._load_pyro_samples()
             with poutine.scale(scale=self.num_data / self.X.size(0)):
                 return self.likelihood(f_loc, f_var, self.y)
 
