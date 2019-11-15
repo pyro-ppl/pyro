@@ -38,6 +38,8 @@ def test_nesting():
     assert len(tp.trace.nodes) == 0
 
 
+# TODO: Make this available directly in `SVI` if needed.
+@pytest.mark.filterwarnings('ignore:This method is deprecated:UserWarning')
 def test_information_criterion():
     # milk dataset: https://github.com/rmcelreath/rethinking/blob/master/data/milk.csv
     kcal = torch.tensor([0.49, 0.47, 0.56, 0.89, 0.92, 0.8, 0.46, 0.71, 0.68,
