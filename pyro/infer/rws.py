@@ -155,7 +155,6 @@ class ReweightedWakeSleep(ELBO):
                     if site["type"] == "sample":
                         site["value"] = site["value"].detach()
                 _guide_trace = self._get_matched_trace(_model_trace, _guide, *args, **kwargs)
-                # TODO: check whether sum or mean over batch dim (currently sum)
                 _log_q += _guide_trace.log_prob_sum()
             if should_vectorize:
                 self.num_particles = old_num_particles
@@ -169,6 +168,7 @@ class ReweightedWakeSleep(ELBO):
             # sleep_phi_loss = -_log_q / self.num_sleep_particles <-- TA: I think this is right
             warn_if_nan(sleep_phi_loss, "sleep phi loss")
 
+        # COMPUTE PHI LOSS
         phi_loss = sleep_phi_loss if self.insomnia == 0 \
             else wake_phi_loss if self.insomnia == 1 \
             else self.insomnia * wake_phi_loss + (1. - self.insomnia) * sleep_phi_loss
