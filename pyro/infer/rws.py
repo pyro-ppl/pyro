@@ -160,7 +160,13 @@ class ReweightedWakeSleep(ELBO):
             if should_vectorize:
                 self.num_particles = old_num_particles
 
+            # TODO: check whether sum or mean over batch dim (currently sum)
+            #   the following line sums over particles and
+            #   sums over all other plate dims in the model
             sleep_phi_loss = -_log_q
+            #   the following line means over particles and
+            #   sums over all other plate dims in the model
+            # sleep_phi_loss = -_log_q / self.num_sleep_particles <-- TA: I think this is right
             warn_if_nan(sleep_phi_loss, "sleep phi loss")
 
         phi_loss = sleep_phi_loss if self.insomnia == 0 \
