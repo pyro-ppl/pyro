@@ -158,6 +158,31 @@ def test_module_cache():
     assert_equal(f.c().detach(), torch.tensor(3.))
 
 
+def test_submodule_contains_torch_module():
+    submodule = PyroModule()
+    submodule.linear = nn.Linear(1, 1)
+    module = PyroModule()
+    module.child = submodule
+
+
+def test_hierarchy_prior_cached():
+    def hierarchy_prior(self):
+        latent = pyro.sample("a", dist.Normal(0, 1))
+        return dist.Normal(latent, 1)
+
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.b = PyroSample(hierarchy_prior)
+
+        def forward(self):
+            return self.b + self.b
+
+    model = Model()
+    trace = poutine.trace(model).get_trace()
+    assert "a" in trace.nodes
+
+
 SHAPE_CONSTRAINT = [
     ((), constraints.real),
     ((4,), constraints.real),
