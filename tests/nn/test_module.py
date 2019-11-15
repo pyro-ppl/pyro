@@ -10,7 +10,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
-from pyro.nn.module import PyroModule, PyroParam, PyroSample
+from pyro.nn.module import PyroModule, PyroParam, PyroSample, clear
 from pyro.optim import Adam
 from tests.common import assert_equal
 
@@ -158,6 +158,31 @@ def test_module_cache():
     assert_equal(f.c().detach(), torch.tensor(3.))
 
 
+def test_submodule_contains_torch_module():
+    submodule = PyroModule()
+    submodule.linear = nn.Linear(1, 1)
+    module = PyroModule()
+    module.child = submodule
+
+
+def test_hierarchy_prior_cached():
+    def hierarchy_prior(module):
+        latent = pyro.sample("a", dist.Normal(0, 1))
+        return dist.Normal(latent, 1)
+
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.b = PyroSample(hierarchy_prior)
+
+        def forward(self):
+            return self.b + self.b
+
+    model = Model()
+    trace = poutine.trace(model).get_trace()
+    assert "a" in trace.nodes
+
+
 SHAPE_CONSTRAINT = [
     ((), constraints.real),
     ((4,), constraints.real),
@@ -215,6 +240,45 @@ def test_constraints(shape, constraint_):
     assert 'x' not in module._pyro_params
     assert not hasattr(module, 'x')
     assert not hasattr(module, 'x_unconstrained')
+
+
+def test_clear():
+
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.x = nn.Parameter(torch.tensor(0.))
+            self.m = torch.nn.Linear(2, 3)
+            self.m.weight.data.fill_(1.)
+            self.m.bias.data.fill_(2.)
+            self.p = PyroModule()
+            self.p.x = nn.Parameter(torch.tensor(3.))
+
+        def forward(self):
+            return [x.clone() for x in [self.x, self.m.weight, self.m.bias, self.p.x]]
+
+    assert set(pyro.get_param_store().keys()) == set()
+    m = Model()
+    state0 = m()
+    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+
+    # mutate
+    for x in pyro.get_param_store().values():
+        x.unconstrained().data += torch.randn(())
+    state1 = m()
+    for x, y in zip(state0, state1):
+        assert not (x == y).all()
+    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+
+    clear(m)
+    del m
+    assert set(pyro.get_param_store().keys()) == set()
+
+    m = Model()
+    state2 = m()
+    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+    for actual, expected in zip(state2, state0):
+        assert_equal(actual, expected)
 
 
 def test_sample():

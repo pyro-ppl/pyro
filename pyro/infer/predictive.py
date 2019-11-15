@@ -45,7 +45,7 @@ def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
                 for site, shape in return_site_shapes.items()}
 
 
-def _predictive(model, posterior_samples, num_samples, return_sites=None,
+def _predictive(model, posterior_samples, num_samples, return_sites=(),
                 return_trace=False, parallel=False, model_args=(), model_kwargs={}):
     max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
     vectorize = pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting-1)
@@ -66,15 +66,20 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
     for site in model_trace.stochastic_nodes + model_trace.observation_nodes:
         append_ndim = max_plate_nesting - len(model_trace.nodes[site]["fn"].batch_shape)
         site_shape = (num_samples,) + (1,) * append_ndim + model_trace.nodes[site]['value'].shape
-        if isinstance(return_sites, (list, tuple, set)):
+        # non-empty return-sites
+        if return_sites:
             if site in return_sites:
                 return_site_shapes[site] = site_shape
-        else:
-            if (return_sites is not None) or (site not in reshaped_samples):
-                return_site_shapes[site] = site_shape
+        # special case (for guides): include all sites
+        elif return_sites is None:
+            return_site_shapes[site] = site_shape
+        # default case: return sites = ()
+        # include all sites not in posterior samples
+        elif site not in posterior_samples:
+            return_site_shapes[site] = site_shape
 
     # handle _RETURN site
-    if isinstance(return_sites, (list, tuple, set)) and '_RETURN' in return_sites:
+    if return_sites is not None and '_RETURN' in return_sites:
         value = model_trace.nodes['_RETURN']['value']
         shape = (num_samples,) + value.shape if torch.is_tensor(value) else None
         return_site_shapes['_RETURN'] = shape
@@ -99,10 +104,11 @@ def _predictive(model, posterior_samples, num_samples, return_sites=None,
     return predictions
 
 
-class Predictive:
+class Predictive(torch.nn.Module):
     """
     This class is used to construct predictive distribution. The predictive distribution is obtained
-    by running model conditioned on latent samples from `posterior_samples`.
+    by running the `model` conditioned on latent samples from `posterior_samples`. If a `guide` is
+    provided, then samples from all the latent sites are returned.
 
     .. warning::
         The interface for the :class:`Predictive` class is experimental, and
@@ -123,11 +129,12 @@ class Predictive:
         all batch dims correctly annotated via :class:`~pyro.plate`. Default is `False`.
     """
     def __init__(self, model, posterior_samples=None, guide=None, num_samples=None,
-                 return_sites=None, parallel=False):
-        if posterior_samples is None and num_samples is None:
-            raise ValueError("Either posterior_samples or num_samples must be specified.")
-
-        posterior_samples = {} if posterior_samples is None else posterior_samples
+                 return_sites=(), parallel=False):
+        super().__init__()
+        if posterior_samples is None:
+            if num_samples is None:
+                raise ValueError("Either posterior_samples or num_samples must be specified.")
+            posterior_samples = {}
 
         for name, sample in posterior_samples.items():
             batch_size = sample.shape[0]
@@ -142,6 +149,9 @@ class Predictive:
         if num_samples is None:
             raise ValueError("No sample sites in posterior samples to infer `num_samples`.")
 
+        if guide is not None and posterior_samples:
+            raise ValueError("`posterior_samples` cannot be provided with the `guide` argument.")
+
         if return_sites is not None:
             assert isinstance(return_sites, (list, tuple, set))
 
@@ -152,7 +162,22 @@ class Predictive:
         self.return_sites = return_sites
         self.parallel = parallel
 
-    def get_samples(self, *args, **kwargs):
+    def call(self, *args, **kwargs):
+        """
+        Method that calls :meth:`forward` and returns parameter values of the
+        guide as a `tuple` instead of a `dict`, which is a requirement for
+        JIT tracing. Unlike :meth:`forward`, this method can be traced by
+        :func:`torch.jit.trace_module`.
+
+        .. warning::
+            This method may be removed once PyTorch JIT tracer starts accepting
+            `dict` as valid return types. See
+            `issue <https://github.com/pytorch/pytorch/issues/27743>_`.
+        """
+        result = self.forward(*args, **kwargs)
+        return tuple(v for _, v in sorted(result.items()))
+
+    def forward(self, *args, **kwargs):
         """
         Returns dict of samples from the predictive distribution. By default, only sample sites not
         contained in `posterior_samples` are returned. This can be modified by changing the
@@ -162,14 +187,19 @@ class Predictive:
         :param kwargs: model keyword arguments.
         """
         posterior_samples = self.posterior_samples
+        return_sites = self.return_sites
         if self.guide is not None:
-            # use return_sites='' as a special signal to return all sites
-            posterior_samples = _predictive(self.guide, posterior_samples, self.num_samples,
-                                            return_sites='', parallel=self.parallel,
-                                            model_args=args, model_kwargs=kwargs)
-        return _predictive(self.model, posterior_samples, self.num_samples,
-                           return_sites=self.return_sites, parallel=self.parallel,
-                           model_args=args, model_kwargs=kwargs)
+            # return all sites by default if a guide is provided.
+            return_sites = None if not return_sites else return_sites
+            posterior_samples = _predictive(self.guide, posterior_samples, self.num_samples, return_sites=None,
+                                            parallel=self.parallel, model_args=args, model_kwargs=kwargs)
+        return _predictive(self.model, posterior_samples, self.num_samples, return_sites=return_sites,
+                           parallel=self.parallel, model_args=args, model_kwargs=kwargs)
+
+    def get_samples(self, *args, **kwargs):
+        warnings.warn("The method `.get_samples` has been deprecated in favor of `.forward`.",
+                      DeprecationWarning)
+        return self.forward(*args, **kwargs)
 
     def get_vectorized_trace(self, *args, **kwargs):
         """
@@ -181,9 +211,7 @@ class Predictive:
         """
         posterior_samples = self.posterior_samples
         if self.guide is not None:
-            # use return_sites='' as a special signal to return all sites
             posterior_samples = _predictive(self.guide, posterior_samples, self.num_samples,
-                                            return_sites='', parallel=self.parallel,
-                                            model_args=args, model_kwargs=kwargs)
+                                            parallel=self.parallel, model_args=args, model_kwargs=kwargs)
         return _predictive(self.model, posterior_samples, self.num_samples,
                            return_trace=True, model_args=args, model_kwargs=kwargs)
