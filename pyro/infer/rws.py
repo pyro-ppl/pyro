@@ -91,6 +91,8 @@ class ReweightedWakeSleep(ELBO):
           guide (insomnia * wake-phi + (1 - insomnia) * sleep-phi).
         Performs backward as appropriate on both, over the specified number of particles.
         """
+
+        # COMPUTE QUANTITIES FOR WAKE THETA AND WAKE PHI
         log_joints = []
         log_qs = []
 
@@ -115,17 +117,25 @@ class ReweightedWakeSleep(ELBO):
         log_qs = log_qs[0] if self.vectorize_particles else torch.stack(log_qs)
         log_weights = log_joints - log_qs.detach()
 
-        # wake theta = iwae:
+        # COMPUTE WAKE THETA LOSS
         log_sum_weight = torch.logsumexp(log_weights, dim=0)
         # TODO: check whether sum or mean over batch dim (currently sum)
-        wake_theta_loss = -(log_sum_weight - math.log(self.num_particles)).sum()
+        #   the following line sums IWAE ELBO over all plate dims in the model
+        wake_theta_loss = -(log_sum_weight - math.log(self.num_particles)).sum()  # <-- TA: I think this is right
+        #   the following line means IWAE ELBO over all plate dims in the model
+        # wake_theta_loss = -(log_sum_weight - math.log(self.num_particles)).mean()
         warn_if_nan(wake_theta_loss, "wake theta loss")
 
         if self.insomnia > 0:
-            # wake phi = reweighted csis:
+            # COMPUTE WAKE PHI LOSS
             normalised_weights = (log_weights - log_sum_weight).exp().detach()
             # TODO: check whether sum or mean over batch dim (currently sum)
-            wake_phi_loss = -(normalised_weights * log_qs).sum(0).sum(0)
+            #   the following line sums over the particle dimension
+            #   and sums over all other plate dimensions in the model
+            wake_phi_loss = -(normalised_weights * log_qs).sum(0).sum()  # <-- TA: I think this is right
+            #   the following line sums over the particle dimension
+            #   and means over all other plate dimensions in the model
+            # wake_phi_loss = -(normalised_weights * log_qs).sum(0).mean()
             warn_if_nan(wake_phi_loss, "wake phi loss")
 
         if self.insomnia < 1:
