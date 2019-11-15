@@ -37,12 +37,17 @@ class SVI(TracePosterior):
                  optim,
                  loss,
                  loss_and_grads=None,
-                 num_samples=10,
-                 num_steps=0,
+                 num_samples=None,
+                 num_steps=None,
                  **kwargs):
-        if num_steps > 0:
-            warnings.warn('The `num_steps` argument is deprecated and will be removed. '
-                          'Use `SVI.step` directly to control the number of iterations.')
+        if num_steps:
+            warnings.warn('The `num_steps` argument to SVI is deprecated and will be removed in '
+                          'a future release. Use `SVI.step` directly to control the '
+                          'number of iterations.', FutureWarning)
+        if num_samples:
+            warnings.warn('The `num_samples` argument to SVI is deprecated and will be removed in '
+                          'a future release. Use `pyro.infer.Predictive` class to draw '
+                          'samples from the posterior.', FutureWarning)
 
         self.model = model
         self.guide = guide
@@ -70,11 +75,14 @@ class SVI(TracePosterior):
     def run(self, *args, **kwargs):
         """
         .. warning::
-            This method is deprecated. For inference, use :meth:`step` directly,
-            and for predictions, use the :class:`~pyro.infer.predictive.Predictive` class.
+            This method is deprecated, and will be removed in a future release.
+            For inference, use :meth:`step` directly, and for predictions,
+            use the :class:`~pyro.infer.predictive.Predictive` class.
         """
-        warnings.warn('This method is deprecated. For inference, use `SVI.step` directly, '
-                      'and for predictions, use the `pyro.infer.Predictive` class.')
+        warnings.warn('The `SVI.run` method is deprecated and will be removed in a '
+                      'future release. For inference, use `SVI.step` directly, '
+                      'and for predictions, use the `pyro.infer.Predictive` class.',
+                      FutureWarning)
         if self.num_steps > 0:
             with poutine.block():
                 for i in range(self.num_steps):

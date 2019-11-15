@@ -507,7 +507,7 @@ def _predictive_sequential(model, posterior_samples, model_args, model_kwargs,
 def predictive(model, posterior_samples, *args, **kwargs):
     """
     .. warning::
-        This function is deprecated and will be removed in the next release.
+        This function is deprecated and will be removed in a future release.
         Use the :class:`~pyro.infer.predictive.Predictive` class instead.
 
     Run model by sampling latent parameters from `posterior_samples`, and return
@@ -535,8 +535,9 @@ def predictive(model, posterior_samples, *args, **kwargs):
     :return: dict of samples from the predictive distribution, or a single vectorized
         `trace` (if `return_trace=True`).
     """
-    warnings.warn('This function is deprecated and will be removed in the next release. '
-                  'Use the `pyro.infer.Predictive` class instead.')
+    warnings.warn('The `mcmc.predictive` function is deprecated and will be removed in '
+                  'a future release. Use the `pyro.infer.Predictive` class instead.',
+                  FutureWarning)
     num_samples = kwargs.pop('num_samples', None)
     return_sites = kwargs.pop('return_sites', None)
     return_trace = kwargs.pop('return_trace', False)
