@@ -350,6 +350,44 @@ def test_cache():
         assert result1[0] is not result2[0], key
 
 
+def test_mixin_factory():
+    assert PyroModule[nn.Module] is PyroModule
+    assert PyroModule[PyroModule] is PyroModule
+
+    module = PyroModule[nn.Sequential](
+        PyroModule[nn.Linear](28 * 28, 200),
+        PyroModule[nn.Sigmoid](),
+        PyroModule[nn.Linear](200, 200),
+        PyroModule[nn.Sigmoid](),
+        PyroModule[nn.Linear](200, 10),
+    )
+
+    assert isinstance(module, nn.Sequential)
+    assert isinstance(module, PyroModule)
+    assert type(module).__name__ == "PyroSequential"
+    assert PyroModule[type(module)] is type(module)
+
+    assert isinstance(module[0], nn.Linear)
+    assert isinstance(module[0], PyroModule)
+    assert type(module[0]).__name__ == "PyroLinear"
+    assert type(module[2]) is type(module[0])  # noqa: E721
+
+    # Ensure new types are serializable.
+    data = torch.randn(28 * 28)
+    expected = module(data)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        f = io.BytesIO()
+        torch.save(module, f)
+        del module
+        pyro.clear_param_store()
+        f.seek(0)
+        module = torch.load(f)
+    assert type(module).__name__ == "PyroSequential"
+    actual = module(data)
+    assert_equal(actual, expected)
+
+
 def test_torch_serialize():
     module = PyroModule()
     module.x = PyroParam(torch.tensor(1.234), constraints.positive)
