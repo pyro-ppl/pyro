@@ -10,6 +10,7 @@ effects.  To create a poutine-aware attribute, use either the
 
 """
 import functools
+from abc import ABCMeta
 from collections import OrderedDict, namedtuple
 
 import torch
@@ -77,7 +78,9 @@ def _get_pyro_params(module):
         yield name, module._parameters[name]
 
 
-class _PyroModuleMeta(type):
+# Inherit from ABCMeta because many practical nn.Module subclasses also inherit
+# from ABCMeta (e.g. EasyGuide), and this will avoid metclass conflict errors.
+class _PyroModuleMeta(ABCMeta):
     _pyro_mixin_cache = {}
 
     # Unpickling helper to create an empty object of type PyroModule[Module].
@@ -218,12 +221,12 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
     This notation can be used recursively to create Bayesian modules, e.g.::
 
-        model = Pyro(nn.Sequential)(
-            Pyro(nn.Linear)(28 * 28, 100),
-            Pyro(nn.Sigmoid)(),
-            Pyro(nn.Linear)(100, 100),
-            Pyro(nn.Sigmoid)(),
-            Pyro(nn.Linear)(100, 10),
+        model = PyroModule[nn.Sequential](
+            PyroModule[nn.Linear](28 * 28, 100),
+            PyroModule[nn.Sigmoid](),
+            PyroModule[nn.Linear](100, 100),
+            PyroModule[nn.Sigmoid](),
+            PyroModule[nn.Linear](100, 10),
         )
         assert isinstance(model, nn.Sequential)
         assert isinstance(model, PyroModule)
