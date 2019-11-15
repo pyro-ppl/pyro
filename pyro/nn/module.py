@@ -1,7 +1,8 @@
 """
-Pyro includes a special class :class:`~pyro.nn.module.PyroModule` whose
-attributes can be modified by Pyro effects. To create one of these attributes,
-use either the :class:`PyroParam` struct or the :class:`PyroSample` struct::
+Pyro includes an experimental class :class:`~pyro.nn.module.PyroModule`, a
+subclass of :class:`torch.nn.Module`, whose attributes can be modified by Pyro
+effects.  To create a poutine-aware attribute, use either the
+:class:`PyroParam` struct or the :class:`PyroSample` struct::
 
     my_module = PyroModule()
     my_module.x = PyroParam(torch.tensor(1.), constraint=constraints.positive)
@@ -15,7 +16,6 @@ import torch
 from torch.distributions import constraints, transform_to
 
 import pyro
-import pyro.distributions as dist
 from pyro.poutine.runtime import _PYRO_PARAM_STORE
 
 PyroParam = namedtuple("PyroParam", ("init_value", "constraint", "event_dim"))
@@ -47,13 +47,11 @@ class _Context:
     def __init__(self):
         self.active = 0
         self.cache = {}
-        if __debug__:
-            self.used = False
+        self.used = False
 
     def __enter__(self):
         self.active += 1
-        if __debug__:
-            self.used = True
+        self.used = True
 
     def __exit__(self, type, value, traceback):
         self.active -= 1
@@ -81,16 +79,21 @@ def _get_pyro_params(module):
 
 class PyroModule(torch.nn.Module):
     """
-    Subclass of :class:`torch.nn.Module` that supports setting of
-    :class:`PyroParam` and :class:`PyroSample` .
+    EXPERIMENTAL Subclass of :class:`torch.nn.Module` whose attributes can be
+    modified by Pyro effects. Attributes can be set using helpers
+    :class:`PyroParam` and :class:`PyroSample` , and methods can be decorated
+    by :func:`pyro_method` .
 
-    To create a Pyro-managed parameter attribute, set that attribute using the
-    :class:`PyroParam` helper. Reading that attribute will then trigger a
-    :func:`pyro.param` statement. For example::
+    **Parameters**
+
+    To create a Pyro-managed parameter attribute, set that attribute using
+    either :class:`torch.nn.Parameter` (for unconstrained parameters) or
+    :class:`PyroParam` (for constrained parameters). Reading that attribute
+    will then trigger a :func:`pyro.param` statement. For example::
 
         # Create Pyro-managed parameter attributes.
         my_module = PyroModule()
-        my_module.loc = PyroParam(torch.tensor(0.))
+        my_module.loc = nn.Parameter(torch.tensor(0.))
         my_module.scale = PyroParam(torch.tensor(1.),
                                     constraint=constraints.positive)
         # Read the attributes.
@@ -99,11 +102,43 @@ class PyroModule(torch.nn.Module):
 
     Note that, unlike normal :class:`torch.nn.Module` s, :class:`PyroModule` s
     should not be registered with :func:`pyro.module` statements.
-    :class:`PyroModule` s can contain normal :class:`torch.nn.Module` s, but not
-    vice versa. Accessing a normal :class:`torch.nn.Module` attribute of
-    a :class:`PyroModule` triggers a :func:`pyro.module` statement. Parameters
-    in :class:`PyroModule` s are read from the param store if they exist there,
-    otherwise are written to the param store.
+    :class:`PyroModule` s can contain other :class:`PyroModule` s and normal
+    :class:`torch.nn.Module` s.  Accessing a normal :class:`torch.nn.Module`
+    attribute of a :class:`PyroModule` triggers a :func:`pyro.module`
+    statement.  If multiple :class:`PyroModule` s appear in a single Pyro model
+    or guide, they should be included in a single root :class:`PyroModule` for
+    that model.
+
+    :class:`PyroModule` s synchronize data with the param store at each
+    ``setattr``, ``getattr``, and ``delattr`` event, based on the nested name
+    of an attribute:
+
+    -   Setting ``mod.x = x_init`` tries to read ``x`` from the param store. If a
+        value is found in the param store, that value is copied into ``mod``
+        and ``x_init`` is ignored; otherwise ``x_init`` is copied into both
+        ``mod`` and the param store.
+    -   Reading ``mod.x`` tries to read ``x`` from the param store. If a
+        value is found in the param store, that value is copied into ``mod``;
+        otherwise ``mod``'s value is copied into the param store. Finally
+        ``mod`` and the param store agree on a single value to return.
+    -   Deleting ``del mod.x`` removes a value from both ``mod`` and the param
+        store.
+
+    Note two :class:`PyroModule` of the same name will both synchronize with
+    the global param store and thus contain the same data.  When creating a
+    :class:`PyroModule`, then deleting it, then creating another with the same
+    name, the latter will be populated with the former's data from the param
+    store. To avoid this persistence, either ``pyro.clear_param_store()`` or
+    call :func:`clear` before deleting a :class:`PyroModule` .
+
+    :class:`PyroModule` s can be saved and loaded either directly using
+    :func:`torch.save` / :func:`torch.load` or indirectly using the param
+    store's :meth:`~pyro.params.param_store.ParamStoreDict.save` /
+    :meth:`~pyro.params.param_store.ParamStoreDict.load` . Note that
+    :func:`torch.load` will be overridden by any values in the param store, so
+    it is safest to ``pyro.clear_param_store()`` before loading.
+
+    **Samples**
 
     To create a Pyro-managed random attribute, set that attribute using the
     :class:`PyroSample` helper, specifying a prior distribution. Reading that
@@ -117,25 +152,29 @@ class PyroModule(torch.nn.Module):
         x = my_module.x  # Triggers a pyro.sample statement.
         y = my_module.y  # Triggers one pyro.sample + two pyro.param statements.
 
-    Note that param and sample attribute access is cached within each
-    invocation of ``.__call__()``. Because sample statements can appear only
-    once in a Pyro trace, you should ensure that traced access to sample
-    attributes is wrapped in a single invocation of ``.__call__()``.
+    Sampling is cached within each invocation of ``.__call__()`` or method
+    decorated by :func:`pyro_method` .  Because sample statements can appear
+    only once in a Pyro trace, you should ensure that traced access to sample
+    attributes is wrapped in a single invocation of ``.__call__()`` or method
+    decorated by :func:`pyro_method` .
 
     To make an existing module probabilistic, you can create a subclass and
     overwrite some parameters with :class:`PyroSample` s::
 
-        class RandomLinear(nn.Linear, PyroModule):
-            def __init__(in_features, out_features):
+        class RandomLinear(nn.Linear, PyroModule):  # used as a mixin
+            def __init__(self, in_features, out_features):
                 super().__init__(in_features, out_features)
                 self.weight = PyroSample(
                     lambda self: dist.Normal(0, 1)
                                      .expand([self.out_features,
                                               self.in_features])
                                      .to_event(2))
+
+    :param str name: Optional name for a root PyroModule. This is ignored in
+        sub-PyroModules of another PyroModule.
     """
-    def __init__(self):
-        self._pyro_name = ""
+    def __init__(self, name=""):
+        self._pyro_name = name
         self._pyro_context = _Context()  # shared among sub-PyroModules
         self._pyro_params = OrderedDict()
         self._pyro_samples = OrderedDict()
@@ -165,6 +204,10 @@ class PyroModule(torch.nn.Module):
                     "submodule {} has executed outside of supermodule".format(name)
                 value._pyro_set_supermodule(_make_name(name, key), context)
 
+    def _pyro_get_fullname(self, name):
+        assert self.__dict__['_pyro_context'].used, "fullname is not yet defined"
+        return _make_name(self.__dict__['_pyro_name'], name)
+
     def __call__(self, *args, **kwargs):
         with self._pyro_context:
             return super().__call__(*args, **kwargs)
@@ -177,7 +220,7 @@ class PyroModule(torch.nn.Module):
                 constraint, event_dim = _pyro_params[name]
                 unconstrained_value = getattr(self, name + "_unconstrained")
                 if self._pyro_context.active:
-                    fullname = _make_name(self._pyro_name, name)
+                    fullname = self._pyro_get_fullname(name)
                     if fullname in _PYRO_PARAM_STORE:
                         if _PYRO_PARAM_STORE._params[fullname] is not unconstrained_value:
                             # Update PyroModule <--- ParamStore.
@@ -202,17 +245,19 @@ class PyroModule(torch.nn.Module):
             _pyro_samples = self.__dict__['_pyro_samples']
             if name in _pyro_samples:
                 prior = _pyro_samples[name]
-                if not isinstance(prior, (dist.Distribution, torch.distributions.Distribution)):
-                    prior = prior(self)
                 context = self._pyro_context
                 if context.active:
-                    fullname = _make_name(self._pyro_name, name)
+                    fullname = self._pyro_get_fullname(name)
                     value = context.get(fullname)
                     if value is None:
+                        if not hasattr(prior, "sample"):  # if not a distribution
+                            prior = prior(self)
                         value = pyro.sample(fullname, prior)
                         context.set(fullname, value)
                     return value
                 else:  # Cannot determine supermodule and hence cannot compute fullname.
+                    if not hasattr(prior, "sample"):  # if not a distribution
+                        prior = prior(self)
                     return prior()
 
         result = super().__getattr__(name)
@@ -220,12 +265,12 @@ class PyroModule(torch.nn.Module):
         # Regular nn.Parameters trigger pyro.param statements.
         if isinstance(result, torch.nn.Parameter) and not name.endswith("_unconstrained"):
             if self._pyro_context.active:
-                pyro.param(_make_name(self._pyro_name, name), result)
+                pyro.param(self._pyro_get_fullname(name), result)
 
         # Regular nn.Modules trigger pyro.module statements.
         if isinstance(result, torch.nn.Module) and not isinstance(result, PyroModule):
             if self._pyro_context.active:
-                pyro.module(_make_name(self._pyro_name, name), result)
+                pyro.module(self._pyro_get_fullname(name), result)
 
         return result
 
@@ -249,7 +294,7 @@ class PyroModule(torch.nn.Module):
             constrained_value, constraint, event_dim = value
             self._pyro_params[name] = constraint, event_dim
             if self._pyro_context.active:
-                fullname = _make_name(self._pyro_name, name)
+                fullname = self._pyro_get_fullname(name)
                 if fullname in _PYRO_PARAM_STORE:
                     # Update PyroModule <--- ParamStore.
                     unconstrained_value = _PYRO_PARAM_STORE._params[fullname]
@@ -272,7 +317,7 @@ class PyroModule(torch.nn.Module):
             except AttributeError:
                 pass
             if self._pyro_context.active:
-                fullname = _make_name(self._pyro_name, name)
+                fullname = self._pyro_get_fullname(name)
                 value = pyro.param(fullname, value)
                 if not isinstance(value, torch.nn.Parameter):
                     # Update PyroModule ---> ParamStore (type only; data is preserved).
@@ -306,19 +351,21 @@ class PyroModule(torch.nn.Module):
     def __delattr__(self, name):
         if name in self._parameters:
             del self._parameters[name]
-            fullname = _make_name(self._pyro_name, name)
-            if fullname in _PYRO_PARAM_STORE:
-                # Update PyroModule ---> ParamStore.
-                del _PYRO_PARAM_STORE[fullname]
+            if self._pyro_context.used:
+                fullname = self._pyro_get_fullname(name)
+                if fullname in _PYRO_PARAM_STORE:
+                    # Update PyroModule ---> ParamStore.
+                    del _PYRO_PARAM_STORE[fullname]
             return
 
         if name in self._pyro_params:
             delattr(self, name + "_unconstrained")
             del self._pyro_params[name]
-            fullname = _make_name(self._pyro_name, name)
-            if fullname in _PYRO_PARAM_STORE:
-                # Update PyroModule ---> ParamStore.
-                del _PYRO_PARAM_STORE[fullname]
+            if self._pyro_context.used:
+                fullname = self._pyro_get_fullname(name)
+                if fullname in _PYRO_PARAM_STORE:
+                    # Update PyroModule ---> ParamStore.
+                    del _PYRO_PARAM_STORE[fullname]
             return
 
         if name in self._pyro_samples:
@@ -327,10 +374,11 @@ class PyroModule(torch.nn.Module):
 
         if name in self._modules:
             del self._modules[name]
-            fullname = _make_name(self._pyro_name, name)
-            for p in list(_PYRO_PARAM_STORE.keys()):
-                if p.startswith(fullname):
-                    del _PYRO_PARAM_STORE[p]
+            if self._pyro_context.used:
+                fullname = self._pyro_get_fullname(name)
+                for p in list(_PYRO_PARAM_STORE.keys()):
+                    if p.startswith(fullname):
+                        del _PYRO_PARAM_STORE[p]
             return
 
         super().__delattr__(name)
@@ -338,8 +386,8 @@ class PyroModule(torch.nn.Module):
 
 def pyro_method(fn):
     """
-    Decorator for top-level methods of a :class:`PyroModule` to cache
-    ``pyro.sample`` statements.
+    Decorator for top-level methods of a :class:`PyroModule` to enable pyro
+    effects and cache ``pyro.sample`` statements.
 
     This should be applied to all public methods that read Pyro-managed
     attributes, but is not needed for ``.forward()``.
@@ -351,3 +399,18 @@ def pyro_method(fn):
             return fn(self, *args, **kwargs)
 
     return cached_fn
+
+
+def clear(mod):
+    """
+    Removes data from both a :class:`PyroModule` and the param store.
+
+    :param PyroModule mod: A module to clear.
+    """
+    assert isinstance(mod, PyroModule)
+    for name in list(mod._pyro_params):
+        delattr(mod, name)
+    for name in list(mod._parameters):
+        delattr(mod, name)
+    for name in list(mod._modules):
+        delattr(mod, name)

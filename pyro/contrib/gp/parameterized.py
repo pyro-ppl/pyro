@@ -8,7 +8,7 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.util import eye_like
-from pyro.nn.module import PyroModule, PyroParam, PyroSample, pyro_method, _make_name
+from pyro.nn.module import PyroModule, PyroParam, PyroSample, pyro_method
 
 
 def _is_real_support(support):
@@ -40,7 +40,7 @@ def _get_sample_fn(module, name):
     # otherwise, we do inference in unconstrained space and transform the value
     # back to original space
     # TODO: move this logic to infer.autoguide or somewhere else
-    unconstrained_value = pyro.sample("{}_latent".format(_make_name(module._pyro_name, name)),
+    unconstrained_value = pyro.sample(module._pyro_get_fullname("{}_latent".format(name)),
                                       guide.to_event(),
                                       infer={"is_auxiliary": True})
     transform = biject_to(support)

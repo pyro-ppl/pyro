@@ -69,11 +69,10 @@ class AutoGuide(PyroModule):
     """
 
     def __init__(self, model):
-        super().__init__()
+        super().__init__(name=type(self).__name__)
         self.master = None
         # Do not register model as submodule
         self._model = (model,)
-        self._pyro_name = type(self).__name__
         self.prototype_trace = None
         self._plates = {}
 
@@ -517,7 +516,7 @@ class AutoMultivariateNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the mean vector is initialized by ``init_loc_fn()`` and the
-    Cholesky factor is initialized to the identity.
+    Cholesky factor is initialized to the identity times a small factor.
 
     :param callable model: A generative model.
     :param callable init_loc_fn: A per-site initialization function.
@@ -526,8 +525,7 @@ class AutoMultivariateNormal(AutoContinuous):
         (unconstrained transformed) latent variable.
     """
 
-    def __init__(self, model, init_loc_fn=init_to_median,
-                 init_scale=1.0):
+    def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
         self._init_scale = init_scale
@@ -562,7 +560,7 @@ class AutoDiagonalNormal(AutoContinuous):
         svi = SVI(model, guide, ...)
 
     By default the mean vector is initialized to zero and the scale is
-    initialized to the identity.
+    initialized to the identity times a small factor.
 
     :param callable model: A generative model.
     :param callable init_loc_fn: A per-site initialization function.
@@ -571,8 +569,7 @@ class AutoDiagonalNormal(AutoContinuous):
         (unconstrained transformed) latent variable.
     """
 
-    def __init__(self, model, init_loc_fn=init_to_median,
-                 init_scale=1.0):
+    def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
         self._init_scale = init_scale
@@ -607,22 +604,24 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         guide = AutoLowRankMultivariateNormal(model, rank=10)
         svi = SVI(model, guide, ...)
 
-    By default the ``cov_diag`` is initialized to 1/2 and the ``cov_factor`` is
-    intialized randomly such that ``cov_factor.matmul(cov_factor.t())`` is half the
-    identity matrix.
+    By default the ``cov_diag`` is initialized to a small constant and the
+    ``cov_factor`` is initialized randomly such that on average
+    ``cov_factor.matmul(cov_factor.t())`` has the same scale as ``cov_diag``.
 
     :param callable model: A generative model.
-    :param int rank: The rank of the low-rank part of the covariance matrix.
+    :param rank: The rank of the low-rank part of the covariance matrix.
+        Defaults to approximately ``sqrt(latent dim)``.
+    :type rank: int or None
     :param callable init_loc_fn: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
     :param float init_scale: Approximate initial scale for the standard
         deviation of each (unconstrained transformed) latent variable.
     """
 
-    def __init__(self, model, init_loc_fn=init_to_median, init_scale=1.0, rank=1):
+    def __init__(self, model, init_loc_fn=init_to_median, init_scale=0.1, rank=None):
         if not isinstance(init_scale, float) or not (init_scale > 0):
             raise ValueError("Expected init_scale > 0. but got {}".format(init_scale))
-        if not isinstance(rank, int) or not rank > 0:
+        if not (rank is None or isinstance(rank, int) and rank > 0):
             raise ValueError("Expected rank > 0 but got {}".format(rank))
         self._init_scale = init_scale
         self.rank = rank
@@ -632,6 +631,8 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         super()._setup_prototype(*args, **kwargs)
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
+        if self.rank is None:
+            self.rank = int(round(self.latent_dim ** 0.5))
         self.scale = PyroParam(
             self.loc.new_full((self.latent_dim,), 0.5 ** 0.5 * self._init_scale),
             constraint=constraints.positive)

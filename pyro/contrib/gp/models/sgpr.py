@@ -5,7 +5,7 @@ from torch.nn import Parameter
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.gp.models.model import GPModel
-from pyro.nn.module import PyroParam, pyro_method, _make_name
+from pyro.nn.module import PyroParam, pyro_method
 
 
 class SparseGPRegression(GPModel):
@@ -145,9 +145,9 @@ class SparseGPRegression(GPModel):
             return f_loc, f_var
         else:
             if self.approx == "VFE":
-                pyro.factor(_make_name(self._pyro_name, "trace_term"), -trace_term / 2.)
+                pyro.factor(self._pyro_get_fullname("trace_term"), -trace_term / 2.)
 
-            return pyro.sample(_make_name(self._pyro_name, "y"),
+            return pyro.sample(self._pyro_get_fullname("y"),
                                dist.LowRankMultivariateNormal(f_loc, W, D)
                                    .expand_by(self.y.shape[:-1])
                                    .to_event(self.y.dim() - 1),
