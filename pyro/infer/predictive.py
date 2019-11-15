@@ -106,9 +106,10 @@ def _predictive(model, posterior_samples, num_samples, return_sites=(),
 
 class Predictive(torch.nn.Module):
     """
-    This class is used to construct predictive distribution. The predictive distribution is obtained
-    by running the `model` conditioned on latent samples from `posterior_samples`. If a `guide` is
-    provided, then samples from all the latent sites are returned.
+    EXPERIMENTAL class used to construct predictive distribution. The predictive
+    distribution is obtained by running the `model` conditioned on latent samples
+    from `posterior_samples`. If a `guide` is provided, then posterior samples
+    from all the latent sites are also returned.
 
     .. warning::
         The interface for the :class:`Predictive` class is experimental, and
