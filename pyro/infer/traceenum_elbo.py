@@ -54,8 +54,8 @@ def _check_tmc_elbo_constraint(model_trace, guide_trace):
     num_samples = frozenset(
         site["infer"].get("num_samples")
         for site in guide_trace.nodes.values()
-        if site["type"] == "sample" and \
-        site["infer"].get("enumerate") == "parallel" and \
+        if site["type"] == "sample" and
+        site["infer"].get("enumerate") == "parallel" and
         site["infer"].get("num_samples") is not None)
     if len(num_samples) > 1:
         warnings.warn('\n'.join([
