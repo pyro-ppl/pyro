@@ -8,9 +8,10 @@ import torch
 import pyro
 from pyro.distributions import Beta, Binomial, HalfCauchy, Normal, Pareto, Uniform
 from pyro.distributions.util import scalar_like, sum_rightmost
+from pyro.infer import Predictive
 from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc import NUTS
-from pyro.infer.mcmc.util import predictive, initialize_model
+from pyro.infer.mcmc.util import initialize_model
 from pyro.poutine.util import site_is_subsample
 from pyro.util import ignore_experimental_warning
 
@@ -202,7 +203,7 @@ def sample_posterior_predictive(model, posterior_samples, baseball_dataset):
     logging.info("-----------------------------")
     # set hits=None to convert it from observation node to sample node
     with ignore_experimental_warning():
-        train_predict = predictive(model, posterior_samples, at_bats, None)
+        train_predict = Predictive(model, posterior_samples)(at_bats, None)
     train_summary = summary(train_predict,
                             sites=["obs"],
                             player_names=player_names)["obs"]
@@ -210,8 +211,7 @@ def sample_posterior_predictive(model, posterior_samples, baseball_dataset):
     logging.info(train_summary)
     logging.info("\nHit Rate - Season Predictions")
     logging.info("-----------------------------")
-    with ignore_experimental_warning():
-        test_predict = predictive(model, posterior_samples, at_bats_season, None)
+    test_predict = Predictive(model, posterior_samples)(at_bats_season, None)
     test_summary = summary(test_predict,
                            sites=["obs"],
                            player_names=player_names)["obs"]
@@ -226,9 +226,7 @@ def evaluate_log_posterior_density(model, posterior_samples, baseball_dataset):
     """
     _, test, player_names = train_test_split(baseball_dataset)
     at_bats_season, hits_season = test[:, 0], test[:, 1]
-    with ignore_experimental_warning():
-        trace = predictive(model, posterior_samples, at_bats_season, hits_season,
-                           parallel=True, return_trace=True)
+    trace = Predictive(model, posterior_samples, parallel=True).get_vectorized_trace(at_bats_season, hits_season)
     # Use LogSumExp trick to evaluate $log(1/num_samples \sum_i p(new_data | \theta^{i})) $,
     # where $\theta^{i}$ are parameter samples from the model's posterior.
     trace.compute_log_prob()
