@@ -742,7 +742,7 @@ def test_elbo_plate_plate(outer_dim, inner_dim, enumerate1, enumerate2, enumerat
     for e1 in [None, "sequential", "parallel"]
     for e2 in [None, "sequential", "parallel"]
     for e3 in [None, "sequential", "parallel"]
-    for num_samples in [None, 10000]
+    for num_samples in [None, 2000]
     if num_samples is None or (e1, e2, e3) == ("parallel",) * 3
 ])
 @pytest.mark.parametrize("inner_dim", [2])
