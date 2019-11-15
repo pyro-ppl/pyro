@@ -199,10 +199,10 @@ class PyroModule(torch.nn.Module):
         self._pyro_name = name
         self._pyro_context = context
         for key, value in self._modules.items():
-            assert isinstance(value, PyroModule)
-            assert not value._pyro_context.used, \
-                "submodule {} has executed outside of supermodule".format(name)
-            value._pyro_set_supermodule(_make_name(name, key), context)
+            if isinstance(value, PyroModule):
+                assert not value._pyro_context.used, \
+                    "submodule {} has executed outside of supermodule".format(name)
+                value._pyro_set_supermodule(_make_name(name, key), context)
 
     def _pyro_get_fullname(self, name):
         assert self.__dict__['_pyro_context'].used, "fullname is not yet defined"
@@ -245,17 +245,19 @@ class PyroModule(torch.nn.Module):
             _pyro_samples = self.__dict__['_pyro_samples']
             if name in _pyro_samples:
                 prior = _pyro_samples[name]
-                if not hasattr(prior, "sample"):  # if not a distribution
-                    prior = prior(self)
                 context = self._pyro_context
                 if context.active:
                     fullname = self._pyro_get_fullname(name)
                     value = context.get(fullname)
                     if value is None:
+                        if not hasattr(prior, "sample"):  # if not a distribution
+                            prior = prior(self)
                         value = pyro.sample(fullname, prior)
                         context.set(fullname, value)
                     return value
                 else:  # Cannot determine supermodule and hence cannot compute fullname.
+                    if not hasattr(prior, "sample"):  # if not a distribution
+                        prior = prior(self)
                     return prior()
 
         result = super().__getattr__(name)
