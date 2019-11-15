@@ -468,7 +468,11 @@ def summary(samples, prob=0.9, group_by_chain=True):
         hpdi = stats.hpdi(value_flat, prob=prob)
         n_eff = _safe(stats.effective_sample_size)(value)
         r_hat = stats.split_gelman_rubin(value)
-        summary_dict[name] = dict(mean=mean, std=std, median=median, hpdi=hpdi, n_eff=n_eff, r_hat=r_hat)
+        hpd_lower = '{:.1f}%'.format(50 * (1 - prob))
+        hpd_upper = '{:.1f}%'.format(50 * (1 + prob))
+        summary_dict[name] = OrderedDict([("mean", mean), ("std", std), ("median", median),
+                                          (hpd_lower, hpdi[0]), (hpd_upper, hpdi[1]),
+                                          ("n_eff", n_eff), ("r_hat", r_hat)])
     return summary_dict
 
 
@@ -492,9 +496,9 @@ def print_summary(samples, prob=0.9, group_by_chain=True):
                  for k, v in samples.items()}
     max_len = max(max(map(lambda x: len(x), row_names.values())), 10)
     name_format = '{:>' + str(max_len) + '}'
-    header_format = name_format + ' {:>9} {:>9} {:>9} {:>9} {:>9} {:>9} {:>9}'
-    columns = ['', 'mean', 'std', 'median', '{:.1f}%'.format(50 * (1 - prob)),
-               '{:.1f}%'.format(50 * (1 + prob)), 'n_eff', 'r_hat']
+    header_format = name_format + ' {:>9}' * 7
+    columns = [''] + list(list(summary_dict.values())[0].keys())
+
     print()
     print(header_format.format(*columns))
 
@@ -502,17 +506,11 @@ def print_summary(samples, prob=0.9, group_by_chain=True):
     for name, stats_dict in summary_dict.items():
         shape = stats_dict["mean"].shape
         if len(shape) == 0:
-            print(row_format.format(name, stats_dict["mean"],
-                                    stats_dict["std"], stats_dict["median"],
-                                    stats_dict["hpdi"][0], stats_dict["hpdi"][1],
-                                    stats_dict["n_eff"], stats_dict["r_hat"]))
+            print(row_format.format(name, *stats_dict.values()))
         else:
             for idx in product(*map(range, shape)):
                 idx_str = '[{}]'.format(','.join(map(str, idx)))
-                print(row_format.format(name + idx_str, stats_dict["mean"][idx],
-                                        stats_dict["std"][idx], stats_dict["median"][idx],
-                                        stats_dict["hpdi"][0][idx], stats_dict["hpdi"][1][idx],
-                                        stats_dict["n_eff"][idx], stats_dict["r_hat"][idx]))
+                print(row_format.format(name + idx_str, *[v[idx] for v in stats_dict.values()]))
     print()
 
 
