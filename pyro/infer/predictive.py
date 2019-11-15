@@ -63,7 +63,7 @@ def _predictive(model, posterior_samples, num_samples, return_sites=(),
         return trace
 
     return_site_shapes = {}
-    for site in model_trace.stochastic_nodes + model_trace.observation_nodes:
+    for site in model_trace.stochastic_nodes:
         append_ndim = max_plate_nesting - len(model_trace.nodes[site]["fn"].batch_shape)
         site_shape = (num_samples,) + (1,) * append_ndim + model_trace.nodes[site]['value'].shape
         # non-empty return-sites
