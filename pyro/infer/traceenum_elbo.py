@@ -61,7 +61,7 @@ def _check_tmc_elbo_constraint(model_trace, guide_trace):
         warnings.warn('\n'.join([
             "Using different numbers of Monte Carlo samples for different guide sites in TraceEnum_ELBO.",
             "This may be biased if the guide is not factorized",
-        ]), RuntimeWarning)
+        ]), UserWarning)
     for name, site in model_trace.nodes.items():
         if site["type"] == "sample" and \
                 site["infer"].get("enumerate", None) == "parallel" and \
