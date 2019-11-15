@@ -1,13 +1,9 @@
-import logging
-
 import pytest
 
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
 from tests.common import assert_equal, assert_not_equal
-
-logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize('intervene,observe,flip', [

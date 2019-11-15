@@ -383,17 +383,18 @@ def enum(fn=None, first_available_dim=None):
     return msngr(fn) if fn is not None else msngr
 
 
-#########################################
-# Begin composite operations
-#########################################
-
 def do(fn=None, data=None):
     """
     Given a stochastic function with some sample statements
     and a dictionary of values at names,
     set the return values of those sites equal to the values
-    and hide them from the rest of the handler stack
-    as if they were hard-coded to those values.
+    as if they were hard-coded to those values
+    and introduce fresh sample sites with the same names
+    whose values do not propagate.
+
+    Composes freely with :function:`~pyro.poutine.handlers.condition`
+    to represent counterfactual distributions over potential outcomes.
+    See Single World Intervention Graphs [1] for additional details and theory.
 
     Consider the following Pyro program:
 
@@ -406,7 +407,13 @@ def do(fn=None, data=None):
 
         >>> intervened_model = do(model, data={"z": torch.tensor(1.)})
 
-    This is equivalent to replacing `z = pyro.sample("z", ...)` with `z = value`.
+    This is equivalent to replacing `z = pyro.sample("z", ...)` with `z = value`
+    and introducing a fresh sample site pyro.sample("z", ...) whose value is not used elsewhere.
+
+    References
+
+    [1] `Single World Intervention Graphs: A Primer`,
+        Thomas Richardson, James Robins
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param data: a ``dict`` mapping sample site names to interventions
@@ -415,6 +422,10 @@ def do(fn=None, data=None):
     msngr = DoMessenger(data=data)
     return msngr(fn) if fn is not None else msngr
 
+
+#########################################
+# Begin composite operations
+#########################################
 
 def queue(fn=None, queue=None, max_tries=None,
           extend_fn=None, escape_fn=None, num_samples=None):
