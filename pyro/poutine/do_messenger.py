@@ -47,8 +47,7 @@ class DoMessenger(Messenger):
 
     def _pyro_sample(self, msg):
         if msg.get('_intervener_id', None) != self._intervener_id and \
-                msg['name'] in self.data and \
-                self.data[msg['name']] is not None:
+                self.data.get(msg['name']) is not None:
 
             if msg.get('_intervener_id', None) is not None:
                 warnings.warn(
