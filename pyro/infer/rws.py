@@ -47,7 +47,7 @@ class ReweightedWakeSleep(ELBO):
     def __init__(self,
                  num_particles=2,
                  insomnia=1.,
-                 num_sleep_particles=1,
+                 num_sleep_particles=None,
                  max_plate_nesting=float('inf'),
                  max_iarange_nesting=None,  # DEPRECATED
                  vectorize_particles=True,
@@ -66,6 +66,8 @@ class ReweightedWakeSleep(ELBO):
                                                   vectorize_particles=vectorize_particles,
                                                   strict_enumeration_warning=strict_enumeration_warning)
         self.insomnia = insomnia
+        if num_sleep_particles is None:
+            num_sleep_particles = num_particles
         self.num_sleep_particles = num_sleep_particles
         assert(insomnia >= 0 and insomnia <= 1), \
             "insomnia should be in [0, 1]"
