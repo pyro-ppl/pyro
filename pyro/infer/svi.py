@@ -37,8 +37,8 @@ class SVI(TracePosterior):
                  optim,
                  loss,
                  loss_and_grads=None,
-                 num_samples=None,
-                 num_steps=None,
+                 num_samples=0,
+                 num_steps=0,
                  **kwargs):
         if num_steps:
             warnings.warn('The `num_steps` argument to SVI is deprecated and will be removed in '

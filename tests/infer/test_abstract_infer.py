@@ -39,7 +39,7 @@ def test_nesting():
 
 
 # TODO: Make this available directly in `SVI` if needed.
-@pytest.mark.filterwarnings('ignore:This method is deprecated:UserWarning')
+@pytest.mark.filterwarnings('ignore::FutureWarning')
 def test_information_criterion():
     # milk dataset: https://github.com/rmcelreath/rethinking/blob/master/data/milk.csv
     kcal = torch.tensor([0.49, 0.47, 0.56, 0.89, 0.92, 0.8, 0.46, 0.71, 0.68,
@@ -55,7 +55,8 @@ def test_information_criterion():
 
     delta_guide = AutoLaplaceApproximation(model)
 
-    svi = SVI(model, delta_guide, optim.Adam({"lr": 0.05}), loss=Trace_ELBO(), num_samples=3000)
+    svi = SVI(model, delta_guide, optim.Adam({"lr": 0.05}), loss=Trace_ELBO(),
+              num_steps=0, num_samples=3000)
     for i in range(100):
         svi.step()
 
