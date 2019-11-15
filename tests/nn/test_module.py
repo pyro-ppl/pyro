@@ -166,7 +166,7 @@ def test_submodule_contains_torch_module():
 
 
 def test_hierarchy_prior_cached():
-    def hierarchy_prior(self):
+    def hierarchy_prior(module):
         latent = pyro.sample("a", dist.Normal(0, 1))
         return dist.Normal(latent, 1)
 
